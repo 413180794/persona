@@ -11,8 +11,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// imessageHub is a hub with two Macs (mac 「示例 Mac」, mac2 「另一台 Mac」), hub.json's imessage.machine set to
-// fromHubJSON ("" none), on store, started.
+// imessageHub is a hub with two Macs (mac "Example Mac", mac2 "Another Mac", in Chinese), hub.json's imessage.machine
+// set to fromHubJSON ("" none), on store, started.
 func imessageHub(t *testing.T, store *extensionStore, fromHubJSON string) *Manager {
 	t.Helper()
 	h := newTestManager(t)
@@ -36,8 +36,8 @@ func imessageMacOf(h *Manager) string {
 	return ""
 }
 
-// hub.json's imessage.machine moves into 设置 › 扩展 › 信息 once (the name becomes the Mac's id, the extension on), and
-// is not put back after the user turns it off; turned off, 信息 reads hub.json's again.
+// hub.json's imessage.machine moves into Settings › Extensions › Messages once (the name becomes the Mac's id, the
+// extension on), and is not put back after the user turns it off; turned off, Messages reads hub.json's again.
 func TestIMessageMigratesOnce(t *testing.T) {
 	ctx := context.Background()
 	store := newExtensionStore()
@@ -52,7 +52,7 @@ func TestIMessageMigratesOnce(t *testing.T) {
 	if ok, _ := store.Setting(ctx, imessageMigratedKey, &done); !ok || !done {
 		t.Fatal("not marked")
 	}
-	// The user turns it off: 信息 goes back to hub.json's.
+	// The user turns it off: Messages goes back to hub.json's.
 	if err := h.extensions.reg.SetEnabled(ctx, imessageExtensionID, false, "app"); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestIMessageMigratesOnce(t *testing.T) {
 	}
 }
 
-// A move that cannot be made leaves 信息 on hub.json's: never cut off.
+// A move that cannot be made leaves Messages on hub.json's: never cut off.
 func TestIMessageMigrationThatFailsKeepsHubJSON(t *testing.T) {
 	ctx := context.Background()
 	// A name that is no machine: nothing moved, not marked (tried at the next start), hub.json's read.

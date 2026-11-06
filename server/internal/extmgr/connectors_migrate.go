@@ -9,10 +9,10 @@ import (
 )
 
 // A plugin may take over one of the hub's own connectors while it moves out of the hub (connector.MigratableConnectors:
-// Feishu through the Lark extension, docs/plan-extensions.md「第 3 步」). The id stays (the knowledge base's chats lark-<feed>,
-// the inbox's source and mutes, 设置 › 连接器 all go by it): while the plugin's connector is registered the hub's own
-// is out of the registry, and the hub's own loops for it stand down (h.migrated holds it); when the plugin is switched
-// off or removed, the hub's comes back.
+// Feishu through the Lark extension, docs/plan-extensions.md "Step 3"). The id stays (the knowledge base's chats
+// lark-<feed>, the inbox's source and mutes, Settings › Connectors all go by it): while the plugin's connector is
+// registered the hub's own is out of the registry, and the hub's own loops for it stand down (h.migrated holds it);
+// when the plugin is switched off or removed, the hub's comes back.
 
 // yieldOwnConnector takes the hub's own connector id out of the registry for a plugin's (a migratable id only).
 func (h *Manager) yieldOwnConnector(id string) {

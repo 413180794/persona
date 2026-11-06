@@ -431,7 +431,7 @@ func TestCoalescerNeedsYouBothWays(t *testing.T) {
 }
 
 // Past fleetMaxItems the items are the same three agents whether three or four need the user: a fourth arriving, or
-// one past the three answered, changes only NeedsYou. The island's 「N 个需要你」 must follow at once all the same
+// one past the three answered, changes only NeedsYou. The island's "N need you" must follow at once all the same
 // (#4604), not after fleetMinGap at priority 5.
 func TestCoalescerNeedsYouCountPastTheItems(t *testing.T) {
 	var c coalescer
@@ -751,7 +751,7 @@ func TestFleetRefreshPerDevice(t *testing.T) {
 }
 
 // TestFleetAssistantHoldsActivity: only the assistant answering is something to show on an island that shows it
-// (思考中): the hub pushes it there and does not end that activity while it answers, nor until fleetEndAfter after it
+// ("Thinking"): the hub pushes it there and does not end that activity while it answers, nor until fleetEndAfter after it
 // stopped. A device whose island does not show the assistant ends as with an empty fleet, and none is started for it
 // (#4398).
 func TestFleetAssistantHoldsActivity(t *testing.T) {

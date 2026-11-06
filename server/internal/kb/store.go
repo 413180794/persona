@@ -101,7 +101,7 @@ type Project struct {
 	Items      []string `json:"items,omitempty"` // "<kind>/<id>" of docs, meetings, events
 	Dirs       []string `json:"dirs,omitempty"`  // code directories ("<machine>:<path>"): Agents working there belong to it
 	// Keywords: words the project goes by in public talk (product, feature names), from the project rewrite; what
-	// finds its 公司圈 posts. Moments are the posts the model judged to be about it (LinkMoments).
+	// finds its Moments posts. Moments are the posts the model judged to be about it (LinkMoments).
 	Keywords []string        `json:"keywords,omitempty"`
 	Moments  []ProjectMoment `json:"moments,omitempty"`
 	Dirty    bool            `json:"dirty,omitempty"` // has news its summary does not reflect yet
@@ -111,7 +111,7 @@ type Project struct {
 	Tagging
 }
 
-// ProjectMoment is a 公司圈 post about a project, with the model's one line on how.
+// ProjectMoment is a Moments post about a project, with the model's one line on how.
 type ProjectMoment struct {
 	ID   string    `json:"id"`
 	Note string    `json:"note,omitempty"`
@@ -401,7 +401,7 @@ type Line struct {
 	Text   string
 }
 
-// Format renders a message line: "- 14:03 张三: text" (the time in zone), continuation lines indented.
+// Format renders a message line: "- 14:03 Alice: text" (the time in zone), continuation lines indented.
 func (l Line) Format(zone *time.Location) string {
 	text := strings.TrimSpace(l.Text)
 	text = strings.ReplaceAll(text, "\n", "\n  ")

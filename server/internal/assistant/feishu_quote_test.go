@@ -51,7 +51,7 @@ func sentImages(f *fakeHub) []any {
 }
 
 // Replying to a picture to ask about it: the picture goes to the model with the question, downloaded with the
-// message it is in, not only the line 「[图片]」 in the quote.
+// message it is in, not only the "[image]" line in the quote.
 func TestFeishuReplyToAPictureCarriesThePicture(t *testing.T) {
 	var asked []string
 	f, s := quoteHub(t, func(p json.RawMessage) (any, error) {

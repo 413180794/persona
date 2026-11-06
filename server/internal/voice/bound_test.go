@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Protocol 2 (docs/voice.md「协议变更」, 4.2–4.6, 4.10): a call bound to the conversation it was opened from.
+// Protocol 2 (docs/voice.md "Protocol changes", 4.2–4.6, 4.10): a call bound to the conversation it was opened from.
 
 // boundUpstream is a live-dialect service whose model hands every line the user types over: as a client delegation
 // (dlg1, dlg2…), or with tools as a delegate_task call on it (c1, c2…). What the extension sends (it has an event id)
@@ -209,7 +209,7 @@ func TestExtensionCallerStaysOnProtocolOne(t *testing.T) {
 }
 
 // 409 input_draft: the run is refused with the draft and what of it can be cleared (an IDE's selection marker in the
-// box is not), the model is told; the app's resend (清空并发送) sends it again under the same id with clear_draft the
+// box is not), the model is told; the app's resend ("Clear and send") sends it again under the same id with clear_draft the
 // hub's clearable (whether the app hands back clearable, as documented, or the draft), and its answer is said (its
 // call had the refusal).
 func TestInputDraftAndResend(t *testing.T) {
@@ -275,7 +275,7 @@ func TestResendLongAfterWaitsForItsTurn(t *testing.T) {
 	refused := a.until(runIn(runRefused))
 	id, _ := refused["id"].(string)
 	up.nextMatch(on("dlg1"))
-	skew.Store(int64(channel.QueuedMost + time.Minute)) // the user taps 清空并发送 eleven minutes later
+	skew.Store(int64(channel.QueuedMost + time.Minute)) // the user taps "Clear and send" eleven minutes later
 	a.send(map[string]any{"type": "resend", "id": id, "clear_draft": "半句话"})
 	sent := a.until(func(f map[string]any) bool { return f["type"] == "run" && f["id"] == id && f["state"] == runSent })
 	if at, ok := startedAt(mustJSON(sent["started_at"])); !ok || clock().Sub(at) > time.Minute {
@@ -371,7 +371,7 @@ func TestApprovalWordIsNotSent(t *testing.T) {
 	}
 }
 
-// 「状态：」 is answered from the live state: nothing sent, no run, the activity's category only.
+// The "Status:" prefix is answered from the live state: nothing sent, no run, the activity's category only.
 func TestStatusIsNotSent(t *testing.T) {
 	hub := agentHub(t)
 	since := time.Now().Add(-2*time.Minute - 10*time.Second)
@@ -450,7 +450,7 @@ func TestStatusSaysTheActivityInTheCallsLanguage(t *testing.T) {
 	}
 }
 
-// 「停止：」 stops the conversation's turn once the user asked, and says so after; one nobody asked for does not.
+// "Stop:" stops the conversation's turn once the user asked, and says so after; one nobody asked for does not.
 func TestStopInterrupts(t *testing.T) {
 	setVar(t, &gateWait, 300*time.Millisecond)
 	hub := agentHub(t)
@@ -489,7 +489,7 @@ func TestStopInterrupts(t *testing.T) {
 	hub.mu.Unlock()
 }
 
-// 「停止：」 on a turn stopped on the user (a permission, a plan, a card) interrupts it too, as the app's 停止 does: its
+// "Stop:" on a turn stopped on the user (a permission, a plan, a card) interrupts it too, as the app's "Stop" does: its
 // turn is open, it has not finished. One that is idle is not interrupted.
 func TestStopATurnWaitingOnTheUser(t *testing.T) {
 	for _, c := range []struct {
@@ -546,7 +546,7 @@ func TestSplitMark(t *testing.T) {
 	}
 }
 
-// A run stopped (「停止：」) ends there: its turn, stopped before it wrote anything, would never read as answered.
+// A run stopped ("Stop:") ends there: its turn, stopped before it wrote anything, would never read as answered.
 func TestStopEndsTheRun(t *testing.T) {
 	hub := agentHub(t)
 	hub.manual = true

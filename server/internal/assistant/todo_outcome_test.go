@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// outcomeEnv is an assistant with a knowledge base whose project 天气 App keeps its code in box:/code/weather, and a
+// outcomeEnv is an assistant with a knowledge base whose weather App project keeps its code in box:/code/weather, and a
 // task (a todo from conversation conv1) whose agent box/s1 worked there and said reply last.
 func outcomeEnv(t *testing.T, st Store, reply string) (*Service, *fakeHub, Todo) {
 	t.Helper()
@@ -105,7 +105,7 @@ func TestTaskOutcomeRecorded(t *testing.T) {
 		t.Fatalf("decisions handed on = %q", res.Text)
 	}
 
-	// A new agent for the project, through the hub (App 交给 Agent → 新开): the background goes first.
+	// A new agent for the project, through the hub (App "Hand to agent" → "New"): the background goes first.
 	other, _ := s.createTodo(context.Background(), "加深色模式", "", "", "")
 	res, err := s.TodoHandoff(context.Background(), TodoHandoff{TodoID: other.ID, Text: "加深色模式", New: true, MachineID: "box", Cwd: "/code/weather"})
 	if err != nil {

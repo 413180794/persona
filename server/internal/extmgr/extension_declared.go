@@ -6,9 +6,9 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// What the extensions that are on declare for the apps (docs/extensions.md「纯声明贡献」, #1854): quick prompts for
-// the message box, themes (主题色), and templates of an inbox source's triage rules. Skills and instructions go to the
-// assistant with the assistant contributions' (extension_assistant.go).
+// What the extensions that are on declare for the apps (docs/extensions.md "Purely declarative contributions", #1854):
+// quick prompts for the message box, themes (theme colors), and templates of an inbox source's triage rules. Skills and
+// instructions go to the assistant with the assistant contributions' (extension_assistant.go).
 
 // QuickPromptView is a quick prompt as the apps list it.
 type QuickPromptView struct {

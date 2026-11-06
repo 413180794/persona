@@ -85,7 +85,7 @@ func TestMigratedInbox(t *testing.T) {
 }
 
 // A plugin connector's thing with its own fallback (extra.rule_tier, capability fallback) and no tier is still sorted
-// by the model; when the model cannot, it comes in with that fallback (按规则) instead of being held back.
+// by the model; when the model cannot, it comes in with that fallback ("By rule") instead of being held back.
 func TestExtensionThingFallbackTier(t *testing.T) {
 	_, client := newTriageModel(t, "fail", `{"tier":"action","summary":"示例","reason":"示例"}`)
 	th := genericThing("example-org/example-repo#8", "a", "示例：一条评论")

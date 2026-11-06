@@ -241,7 +241,7 @@ type doctorItem struct {
 	Detail string `json:"detail"`
 }
 
-// parseDoctor turns `jarvisd hub doctor`'s report (doctor.go: 正常｜item：detail, 有问题｜item：action, then 下一步：
+// parseDoctor turns `jarvisd hub doctor`'s report (doctor.go: "OK | item: detail", "Problem | item: action", then "Next:"
 // and its - lines) into items for the page; any other line is information about the item before it.
 func parseDoctor(text string) (items []doctorItem, next []string) {
 	items, next = []doctorItem{}, []string{}

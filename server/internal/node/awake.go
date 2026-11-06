@@ -1,6 +1,6 @@
 package node
 
-// Keeping a Mac awake while it is operated or watched (docs/computer-use.md「锁屏、防睡眠、按 App 批准」): one
+// Keeping a Mac awake while it is operated or watched (docs/computer-use.md "Lock screen, staying awake, approval per app"): one
 // caffeinate -dimsu at a time, held for awakeAfter past the last operation and for as long as its live screen is
 // open, then let go. macOS locks when the display dims from idleness; Cua Driver holds that off itself for its own
 // calls (0.37+), but not while someone only watches the screen. No system setting is changed: the assertion is
@@ -164,7 +164,7 @@ func (c *watchedConn) Close() error {
 	return c.Conn.Close()
 }
 
-// noLockFor: how long 「扩展开着时不自动锁屏」 holds without the hub saying so again (it does every few minutes,
+// noLockFor: how long "Don't auto-lock while the extension is on" holds without the hub saying so again (it does every few minutes,
 // computer.nolock), so the Mac goes back to locking by itself that long after the hub is gone.
 var noLockFor = 30 * time.Minute
 

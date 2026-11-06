@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 )
 
-// Plugin skills (docs/extensions.md「助手」): skills from the hub's plugins, kept on this machine in PluginDir as the hub
+// Plugin skills (docs/extensions.md "Assistant"): skills from the hub's plugins, kept on this machine in PluginDir as the hub
 // sends them (assistant.prepare) and copied into the assistant's directory like the built-in ones. The user's own
 // skill of the same name wins.
 

@@ -6,8 +6,8 @@ import (
 	"errors"
 )
 
-// The web machine page's 这台电脑能做什么 card asks the node for the same report `personad node doctor` prints
-// (docs/machines.md「自检」). The checks run in this process, so the sockets are looked at by the node that owns them.
+// The web machine page's "What this computer can do" card asks the node for the same report `personad node doctor` prints
+// (docs/machines.md "Self-check"). The checks run in this process, so the sockets are looked at by the node that owns them.
 // node.doctor reads and nothing else; the only thing either method may write is what `--fix` writes
 // (writeGeneratedConfig, Persona's own generated files), and only when the caller says fix.
 

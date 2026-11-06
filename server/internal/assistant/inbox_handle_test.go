@@ -164,7 +164,7 @@ func TestInboxSuggestionConfirmReply(t *testing.T) {
 	}
 }
 
-// Reject and 说一句话 hand it back to the conversation (a turn); instruct needs words.
+// Reject and Say something hand it back to the conversation (a turn); instruct needs words.
 func TestInboxSuggestionRejectInstruct(t *testing.T) {
 	h, _, it := handledHub(t)
 	if _, err := suggestTool(t, h, `{"kind":"reply","text":"好的"}`); err != nil {
@@ -202,7 +202,7 @@ func TestInboxSuggestionRejectInstruct(t *testing.T) {
 	}
 }
 
-// A send that fails leaves the event 需要你 without a suggestion, the chain says so.
+// A send that fails leaves the event Needs you without a suggestion, the chain says so.
 func TestInboxSuggestionSendFails(t *testing.T) {
 	h, _, it := handledHub(t)
 	h.in.mu.Lock()
@@ -252,7 +252,7 @@ func TestInboxSuggestionWatch(t *testing.T) {
 	}
 }
 
-// Conclusions: 知悉即可 lists it there with the conclusion until 知道了; 已处理 files it at once.
+// Conclusions: FYI lists it there with the conclusion until Got it; Done files it at once.
 func TestInboxSuggestionConclusion(t *testing.T) {
 	h, _, it := handledHub(t)
 	if _, err := suggestTool(t, h, `{"kind":"conclusion","text":"周报里你的两项都按计划","outcome":"fyi"}`); err != nil {
@@ -399,7 +399,7 @@ func (h *inboxHub) originsForget(t *testing.T, sid string) {
 	h.origins.mu.Unlock()
 }
 
-// An Agent the event's conversation starts: the chain links it, the event is 进行中 (Agent 在做).
+// An Agent the event's conversation starts: the chain links it, the event is In progress (Agent is working).
 func TestInboxConversationStartsAnAgent(t *testing.T) {
 	h, _, it := handledHub(t)
 	h.inboxAgentStarted(context.Background(), "s1", "box", "s-sub", "查构建失败的原因")
@@ -426,7 +426,7 @@ func TestInboxFilingStopsTheConversation(t *testing.T) {
 	}
 }
 
-// Urgent: 需要你 at once while the manager prepares, the suggestion lands on it.
+// Urgent: Needs you at once while the manager prepares, the suggestion lands on it.
 func TestInboxUrgentStaysNeedsYou(t *testing.T) {
 	h, _, it := handledHub(t)
 	h.inbox.mu.Lock()

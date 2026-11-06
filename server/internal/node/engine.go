@@ -19,7 +19,7 @@ import (
 
 // A machine's node drives exactly one terminal host, its engine: herdr (the default, as every node did before),
 // herdr-core (the Herdr desktop app) or orca (the Orca desktop app). The user picks it per machine in the app; the hub stores it and tells the node
-// with engine.use when it connects and when it changes (docs/protocol.md「引擎」). Running both side by side made each
+// with engine.use when it connects and when it changes (docs/protocol.md "Engines"). Running both side by side made each
 // slow the other down, so they never are.
 
 // engineState is the engine in use and the change stream watching it.

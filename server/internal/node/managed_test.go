@@ -132,7 +132,7 @@ func TestRedactSecrets(t *testing.T) {
 }
 
 // Plain claude starts in the machine's claude_start_dir (node.configure) when one is set: a computer logged in under
-// a profile directory, not ~/.claude, answers 「Not logged in」 otherwise (#1459). Other launchers keep their own, a
+// a profile directory, not ~/.claude, answers "Not logged in" otherwise (#1459). Other launchers keep their own, a
 // call that says nothing of it leaves it, and "" clears it.
 func TestPlainClaudeStartsInTheConfiguredDir(t *testing.T) {
 	n, _ := testNode(t)

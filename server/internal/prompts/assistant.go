@@ -14,9 +14,9 @@ type AssistantMachine struct {
 
 // AssistantClaudeMD is the assistant directory's CLAUDE.md (assistant/claude_md).
 type AssistantClaudeMD struct {
-	Owner        string // "" is 用户
+	Owner        string // "" is "user"
 	Machines     []AssistantMachine
-	Notes        string // 设置 › 助手 › 关于我, trimmed
+	Notes        string // Settings › Assistant › About me, trimmed
 	ExtraDirs    []string
 	StateDir     string
 	KnowledgeDir string
@@ -26,7 +26,7 @@ type AssistantClaudeMD struct {
 	// PersonaView: every app draws ```persona-view (hub.json assistant.persona_view); else the assistant writes
 	// ```persona-card, which they all draw.
 	PersonaView bool
-	// Language is the language the user reads, by its own name ("English", "日本語"); "" is Chinese, as before i18n.
+	// Language is the language the user reads, by its own name ("English", or Japanese written in Japanese); "" is Chinese, as before i18n.
 	Language string
 }
 
@@ -34,8 +34,8 @@ func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assist
 
 // AssistantHealthClaudeMD is the health space's CLAUDE.md (docs/health.md).
 type AssistantHealthClaudeMD struct {
-	Owner    string // "" is 用户
-	Notes    string // 设置 › 助手 › 关于我, trimmed
+	Owner    string // "" is "user"
+	Notes    string // Settings › Assistant › About me, trimmed
 	StateDir string
 	Language string
 }
@@ -88,10 +88,10 @@ type SnapshotCalendar struct {
 type SnapshotFollowup struct {
 	At    time.Time // in the user's zone
 	Label string
-	Every string // "30 分钟" for a repeating one
+	Every string // "30 minutes" for a repeating one
 }
 
-// SnapshotPlan is a plan card in the main conversation still waiting for the user's 开始 (#4453): nothing of it has
+// SnapshotPlan is a plan card in the main conversation still waiting for the user's "Start" (#4453): nothing of it has
 // started, and it shows nowhere else.
 type SnapshotPlan struct {
 	At     time.Time // when it was put up, in the user's zone
@@ -99,7 +99,7 @@ type SnapshotPlan struct {
 	Tasks  int       // how many tasks it has
 }
 
-// SnapshotRoutine is a daily scheduled task (早报, 晚报…): its rule, and how its last run went (LastAt zero: it never
+// SnapshotRoutine is a daily scheduled task (morning brief, evening brief…): its rule, and how its last run went (LastAt zero: it never
 // ran). LastStatus is the run's status (ok / failed / skipped), LastWhy why it failed or was skipped, in short.
 type SnapshotRoutine struct {
 	Label, Rule         string
@@ -108,7 +108,7 @@ type SnapshotRoutine struct {
 }
 
 // SnapshotMiss is a scheduled run that failed or was skipped since yesterday evening, with why, in short (#4124): the
-// 早报 says 「昨晚巡检失败了」 without calling list_followups.
+// The morning brief says "last night's check failed" without calling list_followups.
 type SnapshotMiss struct {
 	At         time.Time // in the user's zone
 	Label, Why string
@@ -121,18 +121,18 @@ type SnapshotTask struct {
 	Machine, Session string // its latest agent, when it has one
 	Last             string // what that agent said last, in a line
 	// Doing: the step that agent is on (its latest tool call, transcript.Activity) while it works or has said nothing
-	// yet, and DoingFor how long that step has gone on ("3 分钟"), "" when unknown or not working.
+	// yet, and DoingFor how long that step has gone on ("3 minutes"), "" when unknown or not working.
 	Doing, DoingFor string
 	Subagents       []string // that agent's running subagents, what each is for: on top of its own step, never instead
 	// Workflows: that agent's background workflow runs still running (#2935): its turn ended to wait for them.
 	Workflows []SnapshotWorkflow
 	Link      string // the todo's page in the hub's web app ("" when the hub has no public_url)
-	// Health: how a task the main conversation supervises stands (正常, 卡住 N 分钟, 等回答, 待验收, 返工第 N 轮, 等你决定,
-	// 已验收; #3124), "" for any other; DoneWhen how many criteria it has.
+	// Health: how a task the main conversation supervises stands (normal, stuck N minutes, waiting for an answer, to accept, rework round N, your call,
+	// accepted; #3124), "" for any other; DoneWhen how many criteria it has.
 	Health   string
 	DoneWhen int
-	// Delivery: how far its finished work was delivered when that is short of live ("停在 PR，卡在「CI 排队」"), ""
-	// otherwise (docs/todos.md「交付」).
+	// Delivery: how far its finished work was delivered when that is short of live ("stopped at the PR, stuck on 'CI queued'"), ""
+	// otherwise (docs/todos.md "Delivery").
 	Delivery string
 }
 
@@ -143,7 +143,7 @@ type SnapshotWorkflow struct {
 	Name, Phase             string
 	PhaseIndex, Phases      int    // Phase's 1-based place among the script's phases; 0 when not known
 	Done, Started           int    // its agents that returned, and started so far
-	For                     string // how long it has run ("12 分钟"), "" under a minute
+	For                     string // how long it has run ("12 minutes"), "" under a minute
 }
 
 // Snapshot is the live context a starting assistant gets in its system prompt.
@@ -153,7 +153,7 @@ type Snapshot struct {
 	Machines      []SnapshotMachine
 	Needs, Unread []SnapshotAgent
 	// Waiting: stopped on something the hub waits out for them (a retry, a deploy, another agent); Done: finished
-	// within a day, with the conclusion (docs/agent-work.md「Persona 知道」).
+	// within a day, with the conclusion (docs/agent-work.md "Persona knows").
 	Waiting, Done []SnapshotAgent
 	// Muted: agents (or their spaces) the user turned notifications off for that would be in one of the above; in
 	// none of them, as the Live Activity and the Agents badge count none of them (#4562).
@@ -170,14 +170,14 @@ type Snapshot struct {
 	Missed        []SnapshotMiss    // scheduled runs that failed or were skipped since yesterday 18:00, newest first
 	MissedTotal   int               // all of them (Missed is the newest six)
 	Tasks         []SnapshotTask    // tasks opened from assistant conversations (task_plan), newest first
-	Plans         []SnapshotPlan    // plan cards in the main conversation waiting for 开始, newest first (at most five)
+	Plans         []SnapshotPlan    // plan cards in the main conversation waiting for "Start", newest first (at most five)
 	PlansTotal    int
-	// Unaccepted: deployed tasks whose 请验收 card the user has not passed yet (#2768), oldest first; the morning
+	// Unaccepted: deployed tasks whose "Please accept" card the user has not passed yet (#2768), oldest first; the morning
 	// briefing brings them up again.
 	Unaccepted      []SnapshotAccept
 	UnacceptedTotal int // all of them (Unaccepted is the oldest eight)
 	// Approvals: open tasks whose finished work waits for the user's nod to go live (merge, deploy, turn on, send),
-	// oldest first: told to the user as one list to approve at once (docs/todos.md「交付」).
+	// oldest first: told to the user as one list to approve at once (docs/todos.md "Delivery").
 	Approvals []SnapshotApproval
 }
 
@@ -222,7 +222,7 @@ func (s Snapshot) Upcoming() *SnapshotCalendar {
 
 func RenderSnapshot(s Snapshot) string { return render("assistant/snapshot", s) }
 
-// RenderSnapshotWorkflow is one running workflow, in a line ("「parity-audit」阶段 Verify（2/2），169/185 个 agent 完成，已跑 14 分钟").
+// RenderSnapshotWorkflow is one running workflow, in a line ("'parity-audit' stage Verify (2/2), 169/185 agents done, running 14 minutes").
 func RenderSnapshotWorkflow(w SnapshotWorkflow) string {
 	return render("assistant/snapshot_workflow", w)
 }
@@ -241,8 +241,8 @@ func RenderAssistantContext(c AssistantContext) string { return render("assistan
 type TaskRun struct {
 	Label          string
 	Once, Interval bool   // neither: daily
-	Every          string // interval: "30 分钟"
-	Late           string // "" when on time; else how late ("25 分钟")
+	Every          string // interval: "30 minutes"
+	Late           string // "" when on time; else how late ("25 minutes")
 	Due            time.Time
 	Prompt         string
 	KBHint         bool // daily runs with the knowledge base on
@@ -283,7 +283,7 @@ func RenderUsageRetry() string { return render("assistant/usage_retry", nil) }
 type TaskNotice struct {
 	Title, Machine string
 	State          string   // done | needs | interrupted | failed
-	Earlier        []string // what else it went through since the last notice ("在等用户", "做完了"), oldest first
+	Earlier        []string // what else it went through since the last notice ("waiting on the user", "done"), oldest first
 	Ask            string   // needs: what it asks
 	Text           string   // what its agent said last, or why it did not start
 	// Reporting: the notice goes into the conversation that opened the task (one started with report_tasks, such as
@@ -293,7 +293,7 @@ type TaskNotice struct {
 
 func RenderTaskNotice(n TaskNotice) string { return render("assistant/task_notice", n) }
 
-// Supervise is a 督办 message: the tasks the main conversation handed out that need it now (#3124), what waits on a
+// Supervise is a supervise message: the tasks the main conversation handed out that need it now (#3124), what waits on a
 // decision first.
 type Supervise struct {
 	Entries []SuperviseEntry
@@ -395,10 +395,10 @@ type TurnContext struct {
 func RenderTurnContext(c TurnContext) string { return render("assistant/turn_context", c) }
 
 // TaskDone is the system prompt deciding whether a task opened from an assistant conversation is finished, so the
-// hub can mark its todo done (assistant/task_done, docs/todos.md「自动完成」).
+// hub can mark its todo done (assistant/task_done, docs/todos.md "Auto-complete").
 type TaskDone struct {
 	Owner string
-	// Delivery: also say how far the work was delivered (assistant.done_needs_delivery, docs/todos.md「交付」): only
+	// Delivery: also say how far the work was delivered (assistant.done_needs_delivery, docs/todos.md "Delivery"): only
 	// live or nothing to ship closes the task.
 	Delivery bool
 }
@@ -406,7 +406,7 @@ type TaskDone struct {
 func RenderTaskDone(d TaskDone) string { return render("assistant/task_done", d) }
 
 // RenderTaskDelivery is the delivery standard a task's agent is handed after its prompt (assistant/task_delivery,
-// docs/todos.md「交付」): done is live and checked, and its last line says how far it got.
+// docs/todos.md "Delivery"): done is live and checked, and its last line says how far it got.
 func RenderTaskDelivery() string { return render("assistant/task_delivery", nil) }
 
 // TaskDoneInput is the task as it was handed out and what its agents said when they stopped (assistant/task_done_input).
@@ -426,7 +426,7 @@ type TaskDoneReply struct {
 func RenderTaskDoneInput(in TaskDoneInput) string { return render("assistant/task_done_input", in) }
 
 // MainHandoff is the first message of a new main conversation: what the old one left (its last compaction summary,
-// the messages after it), behind a note, then what the user wrote (docs/assistant.md「新建主对话」).
+// the messages after it), behind a note, then what the user wrote (docs/assistant.md "New main chat").
 type MainHandoff struct {
 	FromID  string
 	Until   string // when the old one was archived, in the user's words
@@ -444,8 +444,8 @@ type HandoffTurn struct {
 // RenderMainHandoff is assistant/main_handoff.
 func RenderMainHandoff(h MainHandoff) string { return render("assistant/main_handoff", h) }
 
-// Acceptance is a deployed task, for the three lines of its 「请验收」 card (assistant/acceptance_input; the system
-// prompt is assistant/acceptance; docs/bots.md「请验收」).
+// Acceptance is a deployed task, for the three lines of its "Please accept" card (assistant/acceptance_input; the system
+// prompt is assistant/acceptance; docs/bots.md "Please accept").
 type Acceptance struct {
 	Title, Prompt, Reply string
 	Links                []string // the only links it may pick

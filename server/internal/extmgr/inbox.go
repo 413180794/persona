@@ -21,7 +21,7 @@ import (
 )
 
 // The unified inbox (docs/inbox.md) is the manager's (internal/assistant's inbox*.go): the items and their state,
-// triage, events, mutes, the AI 分身, translations and the /api/v1/inbox… routes, which the hub relays. The hub keeps
+// triage, events, mutes, the AI double, translations and the /api/v1/inbox… routes, which the hub relays. The hub keeps
 // the sources: it reads them when a round is due — its poll, a connector's changed, a pull to refresh the manager asks
 // for (inbox.collect) — and hands what it read to the manager (inbox.collected); it runs what the inbox asks of the
 // sources and of its other parts (app.call inbox.*: inboxAppCall), and tells the extensions and the apps when items
@@ -93,9 +93,9 @@ func (b *inboxSources) init() {
 type inboxRound int
 
 const (
-	// roundChats follows a Feishu realtime event: the Feishu chats only. Document and 公司圈 notices and the other
-	// connectors wait for the next poll; reading them on every event was most of the hub's Lark gateway calls in a
-	// busy group (#674).
+	// roundChats follows a Feishu realtime event: the Feishu chats only. Document and Moments (company feed) notices
+	// and the other connectors wait for the next poll; reading them on every event was most of the hub's Lark gateway
+	// calls in a busy group (#674).
 	roundChats inboxRound = iota
 	roundPoll             // every inboxPoll and on a connector's kick: every source but the slow ones
 	roundFull             // every inboxMailPoll, when the manager connects and on a refresh: mail too
@@ -397,8 +397,8 @@ func mailAddresses(list []mail.Address) []assistantwire.MailAddress {
 	return out
 }
 
-// readConnectors reads every connector with an inbox: its things and what it can do with them. One the user turned
-// 进收件箱 off for, not signed in, or a hub.json plugin's waiting for the triage model is read with nothing (nothing
+// readConnectors reads every connector with an inbox: its things and what it can do with them. One the user turned "Add
+// to Inbox" off for, not signed in, or a hub.json plugin's waiting for the triage model is read with nothing (nothing
 // of it waits); one whose Collect failed is left out (it keeps what it had).
 func (h *Manager) readConnectors(ctx context.Context) []assistantwire.InboxSource {
 	out := []assistantwire.InboxSource{}
@@ -457,7 +457,7 @@ func readErrorOf(err error) string {
 func isMigrated(id string) bool { return slices.Contains(connector.MigratableConnectors, id) }
 
 // thingRulesMost is the most of a thing's rules the model gets (runes; the rest is cut): what the convention's
-// triage_rules setting allows (docs/extensions.md「约定的设置项」).
+// triage_rules setting allows (docs/extensions.md "Agreed settings").
 const thingRulesMost = 4000
 
 // vetThings holds a connector's things to its manifest: a tier the inbox does not know is dropped (the model
@@ -724,7 +724,7 @@ func (h *Manager) connectorOf(id string) connector.Connector {
 	return h.connectors.Get(id)
 }
 
-// inboxConfigView is what the inbox goes by of the hub's: the triage rules and the AI 分身's (settings over hub.json),
+// inboxConfigView is what the inbox goes by of the hub's: the triage rules and the AI twin's (settings over hub.json),
 // hub.json's inbox.agent, the default Feishu account (the Feishu extension's, inboxLarkAccount), the plugins'
 // connectors, and the languages the devices want mail translated into.
 func (h *Manager) inboxConfigView(ctx context.Context) assistantwire.InboxConfig {

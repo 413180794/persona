@@ -20,7 +20,7 @@ import (
 )
 
 // RenderMessage builds the RFC 5322 message for a send request. Sender is the
-// From address, e.g. "张三 <me@example.com>".
+// From address, e.g. "Alice <me@example.com>".
 func RenderMessage(req SendRequest, from Address) ([]byte, error) {
 	if len(req.To) == 0 && len(req.Cc) == 0 && len(req.Bcc) == 0 {
 		return nil, errors.New("mail: no recipients")

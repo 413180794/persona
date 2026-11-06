@@ -18,9 +18,9 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Places outside the app (docs/extensions.md「系统级位置」): an extension's widgets (the ui slot widget: a home screen
-// widget, a Lock Screen or watch face complication) and its shortcuts (actions Shortcuts and Siri run). The apps list
-// them, draw a widget for a family (held to what the family draws, kept until it is due again) and run a shortcut;
+// Places outside the app (docs/extensions.md "System-level places"): an extension's widgets (the ui slot widget: a home
+// screen widget, a Lock Screen or watch face complication) and its shortcuts (actions Shortcuts and Siri run). The apps
+// list them, draw a widget for a family (held to what the family draws, kept until it is due again) and run a shortcut;
 // each device says which widgets it has, so an extension's ui.invalidate wakes the devices that show it.
 
 // widgetPushEvery is how often one device is woken for one widget at most: iOS budgets background pushes and widget

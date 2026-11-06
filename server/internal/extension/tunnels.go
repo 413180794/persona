@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 )
 
-// In-app tunnels (docs/extensions.md「App 内隧道」): an extension that names a tunnel the apps can reach this hub through
+// In-app tunnels (docs/extensions.md"In-app tunnels"): an extension that names a tunnel the apps can reach this hub through
 // when its own addresses do not answer. The tunnel itself is a core built into the app; the hub only says it has one
 // and where it goes (the configuration's target_host and target_port). Declarative: nothing runs on the hub.
 

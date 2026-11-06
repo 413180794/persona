@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What a new or resumed Agent runs on and what its tab is called (docs/model-config.md「新建 Agent 选模型」): the
+// What a new or resumed Agent runs on and what its tab is called (docs/model-config.md "Picking a model for a new Agent"): the
 // manager's. The hub asks before it starts one the app asked for (agents.start_params), before a message resumes one
 // nothing says the launcher of (agents.resume_params), and for a tab's name (agents.tab_name: an Agent started in the
 // background, the Feishu card's); the assistant's own starts (agents_start, a task's agents) come here directly.
@@ -36,7 +36,7 @@ const (
 	CodeGone                = assistantwire.CodeGone
 )
 
-// AgentStartParams is agents.start_params: the start's params with what the Agent runs on (模型配置 › Agents, over it
+// AgentStartParams is agents.start_params: the start's params with what the Agent runs on (Model Settings › Agents, over it
 // the launcher, model and effort the app picked for this start) and, when asked, its tab's name. A resumed session
 // keeps what it runs on (the node knows). A model configuration that cannot run is the app's to hear (bad_request).
 func (s *Service) AgentStartParams(ctx context.Context, p AgentStartParams) (map[string]any, error) {
@@ -58,7 +58,7 @@ func (s *Service) AgentStartParams(ctx context.Context, p AgentStartParams) (map
 }
 
 // AgentResumeParams is agents.resume_params: a message that resumes an Agent started outside Persona (nothing on its
-// machine says its launcher) goes on 模型配置 › Agents' launcher and model rather than plain claude, which may not be
+// machine says its launcher) goes on Model Settings › Agents' launcher and model rather than plain claude, which may not be
 // signed in there (node/sendsafe.go resumeLauncher). When that cannot run as a launcher the message goes as it was.
 func (s *Service) AgentResumeParams(ctx context.Context, p AgentResumeParams) (map[string]any, error) {
 	params := p.Params

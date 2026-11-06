@@ -364,7 +364,7 @@ func TestRedialConnectsAgainAtOnce(t *testing.T) {
 	}
 }
 
-// A ping that is out (a slow link's heartbeat may wait a long time for its pong) does not hold up「立即重连」.
+// A ping that is out (a slow link's heartbeat may wait a long time for its pong) does not hold up "Reconnect now".
 func TestRedialDoesNotWaitForAPingThatIsOut(t *testing.T) {
 	srv, n := fakeHub(t, func(c *websocket.Conn) {
 		_ = c.Write(context.Background(), websocket.MessageText, []byte(`{"type":"endpoints","ping_ms":50,"ping_timeout_ms":60000}`))

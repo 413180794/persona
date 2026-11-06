@@ -3,7 +3,7 @@ package prompts
 // AgentTriage is the system prompt that reads a stopped agent's last reply and says where its work stands
 // (agents/triage, docs/agent-work.md).
 type AgentTriage struct {
-	Owner string // "" is 用户
+	Owner string // "" is the user
 }
 
 func RenderAgentTriage(t AgentTriage) string { return render("agents/triage", t) }
@@ -45,7 +45,7 @@ func RenderAgentWake(w AgentWake) string { return render("agents/wake", w) }
 // AgentAnswer is the user's answers to the hub's decision card, sent on to the agent (agents/answer).
 type AgentAnswer struct {
 	Items []AgentAnswerItem
-	// ByAssistant: the assistant answered for the user (docs/assistant.md「提问先由助手代答」), Reason says why.
+	// ByAssistant: the assistant answered for the user (docs/assistant.md "The assistant answers questions first"), Reason says why.
 	ByAssistant bool
 	Reason      string
 }
@@ -77,7 +77,7 @@ type LauncherRepairItem struct {
 func RenderLauncherRepair(r LauncherRepair) string { return render("agents/launcher_repair", r) }
 
 // AgentReanswer is the user's answers to questions the assistant answered for them, sent on to the agent, which went
-// on with the assistant's (agents/reanswer, docs/assistant.md「提问先由助手代答」).
+// on with the assistant's (agents/reanswer, docs/assistant.md "The assistant answers questions first").
 type AgentReanswer struct {
 	Items []AgentReanswerItem
 }
@@ -89,9 +89,9 @@ type AgentReanswerItem struct {
 func RenderAgentReanswer(a AgentReanswer) string { return render("agents/reanswer", a) }
 
 // AgentDelegate is the system prompt that decides whether the assistant answers an agent's question for the user
-// (agents/delegate, docs/assistant.md「提问先由助手代答」).
+// (agents/delegate, docs/assistant.md "The assistant answers questions first").
 type AgentDelegate struct {
-	Owner string // "" is 用户
+	Owner string // "" is the user
 	Rules string // the user's own rules, trimmed: hub.json agents.delegate.rules
 }
 

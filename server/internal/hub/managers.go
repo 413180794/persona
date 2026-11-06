@@ -237,7 +237,7 @@ func managerName(s string) (string, error) {
 	return s, nil
 }
 
-// managerRoutes are the roster's endpoints for the apps (docs/protocol.md「管理者」). Reading is open to every
+// managerRoutes are the roster's endpoints for the apps (docs/protocol.md "Managers"). Reading is open to every
 // signed-in device; changing it needs a full device (allowed()).
 func (h *Hub) managerRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/managers", func(w http.ResponseWriter, r *http.Request) {

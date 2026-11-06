@@ -414,7 +414,7 @@ func stateText(s *link.Status, now time.Time) string {
 	return t
 }
 
-// errorParts: jarvis-link joins why each candidate failed with "；".
+// errorParts: jarvis-link joins why each candidate failed with a full-width semicolon.
 func errorParts(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, "；") {

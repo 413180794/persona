@@ -331,7 +331,7 @@ func nonNil(s []string) []string {
 	return s
 }
 
-// pickerDefault is GET /api/v1/machines/{mid}/launchers's default: ?purpose= (assistant, or 新建 Agent's agent.new
+// pickerDefault is GET /api/v1/machines/{mid}/launchers's default: ?purpose= (assistant, or "New Agent"'s agent.new
 // when absent).
 func (s *Service) pickerDefault(ctx context.Context, r *http.Request) map[string]any {
 	purpose := r.URL.Query().Get("purpose")
@@ -341,8 +341,8 @@ func (s *Service) pickerDefault(ctx context.Context, r *http.Request) map[string
 	return s.launcherDefault(ctx, purpose)
 }
 
-// launcherDefault is what a launcher picker shows as 「默认：…」: purpose's effective provider (the launcher's name),
-// model and effort, and for 主对话 its runtime. Nil when purpose is not a launcher use.
+// launcherDefault is what a launcher picker shows as "Default: …": purpose's effective provider (the launcher's name),
+// model and effort, and for the main chat its runtime. Nil when purpose is not a launcher use.
 func (s *Service) launcherDefault(ctx context.Context, purpose string) map[string]any {
 	p, err := s.modelPurpose(ctx, purpose, s.modelProviders(ctx))
 	if err != nil || p.Kind != "launcher" {

@@ -10,9 +10,9 @@ import (
 )
 
 // healthDenyRules are the permission rules that keep an assistant conversation outside the health space off the
-// health space's files (docs/health.md「目录和记忆怎么隔离」, #3282): its directory (the assistant directory's sibling,
+// health space's files (docs/health.md "How the directory and memory are isolated", #3282): its directory (the assistant directory's sibling,
 // and the data directory's in case they differ) and its Claude project directories (auto memory, transcripts). Deny
-// rules hold over any allow rule: 本会话总是允许 and bypassPermissions included. A health conversation itself gets
+// rules hold over any allow rule: "Always allow in this session" and bypassPermissions included. A health conversation itself gets
 // none. Bash is not covered: a command can name a path any way it likes (the issue says what would).
 func (n *Node) healthDenyRules(cwd string) []string {
 	if cwd == "" || identity.SpaceOf(cwd) == identity.SpaceHealth {
@@ -54,7 +54,7 @@ func (n *Node) healthDenyRules(cwd string) []string {
 }
 
 // healthReportRules let a health conversation write the records of the reports uploaded to it (reports/, docs/health.md
-// 「体检报告」) without the phone asking each time; nil outside the health space, and for a path the comma-joined
+// "checkup reports") without the phone asking each time; nil outside the health space, and for a path the comma-joined
 // --allowedTools could not carry.
 func healthReportRules(cwd string) []string {
 	if cwd == "" || identity.SpaceOf(cwd) != identity.SpaceHealth || strings.Contains(cwd, ",") {

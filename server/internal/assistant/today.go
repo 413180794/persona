@@ -12,10 +12,10 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 )
 
-// The 「今天」 card at the top of the day in an assistant conversation, and the kinds of tasks the user lets start
-// without asking (docs/unified-entry.md「对话的形状」, decision 1).
+// The "Today" card at the top of the day in an assistant conversation, and the kinds of tasks the user lets start
+// without asking (docs/unified-entry.md "The shape of a chat", decision 1).
 
-// todayBody is what the 今天 card shows: built from what the assistant can read already, no model in between.
+// todayBody is what the "Today" card shows: built from what the assistant can read already, no model in between.
 type todayBody struct {
 	Date string `json:"date"` // the user's day, 2006-01-02
 	// Done: tasks of this conversation that finished since yesterday evening.
@@ -36,7 +36,7 @@ type todayBody struct {
 // todayFailedMax: how many of them the card lists.
 const todayFailedMax = 8
 
-// todayFailed is one thing that did not go through overnight (#4124): the 今天 card says it, so the user does not have
+// todayFailed is one thing that did not go through overnight (#4124): the "Today" card says it, so the user does not have
 // to piece it together from the pushes they got at the time.
 type todayFailed struct {
 	Kind  string    `json:"kind"`          // "task": a dispatched task whose agent did not start; "routine": a scheduled run
@@ -68,7 +68,7 @@ type todayChat struct {
 
 const feedToday = "today" // ref: the user's date; body: todayBody
 
-// ensureToday is the conversation's 今天 card for the user's day: the one already there, or a new one.
+// ensureToday is the conversation's "Today" card for the user's day: the one already there, or a new one.
 func (s *Service) ensureToday(ctx context.Context, conversation string) (FeedItem, bool, error) {
 	loc := s.location(ctx)
 	now := time.Now().In(loc)

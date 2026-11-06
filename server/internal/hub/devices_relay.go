@@ -88,7 +88,7 @@ func (h *Hub) linkCaller(w http.ResponseWriter, r *http.Request) (principal, boo
 
 // plainLinkAllowed: a link request that reached the hub without TLS is let in from this machine (a reverse proxy beside
 // the hub), or from the LAN when it came through a reverse proxy that took it over HTTPS (X-Forwarded-Proto or
-// Forwarded proto=https; docs/link.md「hub 在反向代理后面」). The header is never trusted from the internet: that is
+// Forwarded proto=https; docs/link.md "Hub behind a reverse proxy"). The header is never trusted from the internet: that is
 // refused before (gate) and here. A client lying in it only gets to send its own link credential in plaintext over
 // the LAN; Persona Link itself only speaks HTTPS.
 func (h *Hub) plainLinkAllowed(r *http.Request) bool {

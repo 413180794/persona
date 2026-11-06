@@ -14,7 +14,7 @@ import (
 // sniffBytes is how much of a file's start decides its type (what http.DetectContentType looks at).
 const sniffBytes = 512
 
-// previewMimes are the types the apps' viewers switch on (docs/protocol.md「文件预览」). Go's own extension table is
+// previewMimes are the types the apps' viewers switch on (docs/protocol.md "File preview"). Go's own extension table is
 // read from the machine (/etc/mime.types, the registry) and differs between machines, so these are fixed here.
 var previewMimes = map[string]string{
 	".md": "text/markdown", ".markdown": "text/markdown", ".txt": "text/plain", ".log": "text/plain",

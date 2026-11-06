@@ -3,12 +3,12 @@ package node
 import "github.com/nwverse/persona/server/internal/proto"
 
 // A restart takes herdr's panes with it: the agents that ran in them are gone, and herdr brings one back only once a
-// client attaches — which nobody does to a headless server (#1879). The conversation then just reads 已结束, and the
+// client attaches — which nobody does to a headless server (#1879). The conversation then just reads "Ended", and the
 // only way to carry on is to dig it out of the history, which is not how the user thinks of it: they had it open.
 //
 // The hub keeps, per session, the pane Persona started it in (state.put, sessions.go). A session with a pane in that
 // record, started before this node ran, that has no live agent now is one the restart cut off. It is listed with
-// StatusInterrupted so the apps can offer 继续 — and 继续 is the ordinary path for a session that is not running
+// StatusInterrupted so the apps can offer "Continue" — and "Continue" is the ordinary path for a session that is not running
 // (session.start with resume, herdrresume.go). Nothing is resumed on its own: a restart can land in the middle of a
 // tool call, and continuing that without the user asking is not ours to do.
 

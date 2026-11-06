@@ -14,12 +14,12 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// 信息 (connector/imessage, docs/plan-connectors.md「五」): the app reads one Mac's Messages through that Mac's node;
-// the hub passes the pages along and keeps none of them. With 交给 Persona on (the user's switch, on by default,
+// Messages (connector/imessage, docs/plan-connectors.md "5"): the app reads one Mac's Messages through that Mac's node;
+// the hub passes the pages along and keeps none of them. With "Hand to Persona" on (the user's switch, on by default,
 // imessageAIKey) the real conversations also go to the knowledge base, the inbox and the assistant's tools
 // (connector/imessage/jarvis.go). No number or message is logged (only the connector, the Mac and the kind of failure).
 
-// imessageAIKey is the settings key of 交给 Persona: absent means on.
+// imessageAIKey is the settings key of "Hand to Persona": absent means on.
 const imessageAIKey = "imessage.ai"
 
 func (h *Manager) addIMessage(cfg imessage.Config) error {
@@ -33,7 +33,7 @@ func (h *Manager) addIMessage(cfg imessage.Config) error {
 	return h.addConnector(c)
 }
 
-// imessageAI is the user's 交给 Persona choice: on unless they turned it off.
+// imessageAI is the user's "Hand to Persona" choice: on unless they turned it off.
 func (h *Manager) imessageAI(ctx context.Context) bool {
 	on := true
 	if h.store != nil {
@@ -78,8 +78,8 @@ func (h *Manager) imessage() *imessage.Remote {
 }
 
 func (h *Manager) imessageRoutes(api *http.ServeMux) {
-	// GET /api/v1/imessage: the status with the steps to fix it (设置 › 连接器 › 信息), asked of the Mac now: the page
-	// is opened (or 重新检查 is tapped) right after the permission was given.
+	// GET /api/v1/imessage: the status with the steps to fix it (Settings › Connectors › Messages), asked of the Mac
+	// now: the page is opened (or "Check again" is tapped) right after the permission was given.
 	api.HandleFunc("GET /api/v1/imessage", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
@@ -89,8 +89,8 @@ func (h *Manager) imessageRoutes(api *http.ServeMux) {
 		c.Check(r.Context())
 		writeJSON(w, c.Detail(r.Context()))
 	})
-	// PUT /api/v1/imessage/settings {"ai": bool}: 交给 Persona on or off. Off stops what goes to Persona at once; what
-	// the hub already keeps stays until DELETE /api/v1/imessage/data.
+	// PUT /api/v1/imessage/settings {"ai": bool}: "Hand to Persona" on or off. Off stops what goes to Persona at once;
+	// what the hub already keeps stays until DELETE /api/v1/imessage/data.
 	api.HandleFunc("PUT /api/v1/imessage/settings", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
@@ -121,7 +121,7 @@ func (h *Manager) imessageRoutes(api *http.ServeMux) {
 		writeJSON(w, c.Detail(r.Context()))
 	})
 	// DELETE /api/v1/imessage/data: what the hub kept of iMessage (the knowledge base's chats and people, inbox items),
-	// once 交给 Persona is off — on, the next sync would bring it back.
+	// once "Hand to Persona" is off — on, the next sync would bring it back.
 	api.HandleFunc("DELETE /api/v1/imessage/data", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {

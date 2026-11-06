@@ -1,6 +1,6 @@
 package node
 
-// Plugins' programs on this computer (docs/plan-extensions.md「七」, #1830). The hub sends a package
+// Plugins' programs on this computer (docs/plan-extensions.md "Seven", #1830). The hub sends a package
 // (plugin.node.put.*), says what should run (plugin.node.start, …sync), renews the lease (…renew), and relays calls
 // (…call); the programs' events go back as plugin.node.event. They belong to this process, not to one connection: a
 // hub that reconnects finds them running; one gone longer than their lease finds them stopped (keep "always": still
@@ -38,7 +38,7 @@ import (
 const (
 	pluginStateMissing = "missing"       // no package of that version here
 	pluginLeaseExpired = "lease_expired" // the hub did not renew it in time
-	// pluginLeaseDefault is a lease when the hub names none: what it renews every 10 minutes (plan「拍板结果」).
+	// pluginLeaseDefault is a lease when the hub names none: what it renews every 10 minutes (plan "Decisions").
 	pluginLeaseDefault = 30 * time.Minute
 	pluginUploadTTL    = 10 * time.Minute
 	// pluginNotRunning is the code of a call to a program that is not running here.

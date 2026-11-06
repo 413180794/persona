@@ -19,7 +19,7 @@ const maxBlobBytes = 200 << 20
 var blobRev = regexp.MustCompile(`^(HEAD|INDEX|[0-9a-f]{4,64}\^?)$`)
 
 // gitBlob writes one version of a file into the node's cache so a client can read it like any file (file/download):
-// the web compares a changed PDF / docx / pptx / picture with the version before (docs/protocol.md「文件预览」).
+// the web compares a changed PDF / docx / pptx / picture with the version before (docs/protocol.md "File preview").
 // path is relative to the repository's root, as git/status and git/show give it. A version where the file does not
 // exist (added, deleted) answers Missing.
 func (n *Node) gitBlob(ctx context.Context, p proto.GitBlobRequest) (*proto.GitBlob, error) {

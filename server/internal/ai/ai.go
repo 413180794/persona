@@ -61,7 +61,7 @@ func (c Config) configured() bool {
 	return c.BaseURL != "" && c.Model != "" && (c.APIKeyFile != "" || c.APIKey != "")
 }
 
-// errNotConfigured is shown in the app as is (e.g. under AI 草拟回复), so it says where to fix it there.
+// errNotConfigured is shown in the app as is (e.g. under "AI Draft Reply"), so it says where to fix it there.
 var errNotConfigured = errors.New("还没有能直接调用的模型：在 设置 › 模型供应商 添加带 Key 的接入，再到 设置 › 模型配置 为这项选择它" +
 	`（或在 hub.json 写 "ai"）`)
 

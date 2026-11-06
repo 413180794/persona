@@ -206,7 +206,7 @@ func TestHeldRunsNextTurnIsAProgressCard(t *testing.T) {
 }
 
 // A turn that starts with a tool call hangs it under a paragraph that says so (botmux's shape: a whole paragraph
-// before the call), not 「处理中…」.
+// before the call), not "Working…".
 func TestCotFirstToolCallHasItsParagraph(t *testing.T) {
 	s, _, _ := cotHub(t, false)
 	r, prog := cotRun(s)

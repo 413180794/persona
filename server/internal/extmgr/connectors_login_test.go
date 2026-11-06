@@ -179,7 +179,7 @@ func TestConnectorWithoutLogin(t *testing.T) {
 	}
 }
 
-// The switch in 设置 › 连接器: off stops the connector and is kept, so the next hub starts it switched off.
+// The switch in Settings › Connectors: off stops the connector and is kept, so the next hub starts it switched off.
 func TestConnectorSwitchIsKept(t *testing.T) {
 	h := newTestManager(t)
 	st := newKeepStore()
@@ -236,7 +236,8 @@ func TestConnectorThatStartsOff(t *testing.T) {
 	}
 }
 
-// 删除已存的数据: the connector is switched off (and stays off), its chats, people and inbox items go, the rest stays.
+// "Delete saved data": the connector is switched off (and stays off), its chats, people and inbox items go, the rest
+// stays.
 func TestConnectorDataDelete(t *testing.T) {
 	h := newTestManager(t)
 	st := newKeepStore()

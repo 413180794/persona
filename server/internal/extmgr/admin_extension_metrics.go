@@ -11,9 +11,9 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// How the extensions run, for the admin UI (docs/admin.md「扩展」「运行情况」, extension_metrics.go): the counts over a
-// window, the last lines of an extension's log and a stream of the new ones. Only a signed-in admin session gets here
-// (adminRoutes): the log is the extensions' own, and may say more than the apps should see.
+// How the extensions run, for the admin UI (docs/admin.md "Extensions" "How they run", extension_metrics.go): the
+// counts over a window, the last lines of an extension's log and a stream of the new ones. Only a signed-in admin
+// session gets here (adminRoutes): the log is the extensions' own, and may say more than the apps should see.
 
 // logStreamBeat is how often the stream says it is still there (proxies close a quiet connection).
 var logStreamBeat = 25 * time.Second

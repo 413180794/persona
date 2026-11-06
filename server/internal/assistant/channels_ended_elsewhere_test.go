@@ -20,7 +20,7 @@ func endAskElsewhere(s *Service, f *fakeHub, ix proto.Interaction, ended bool) {
 	}
 }
 
-// A card answered in the app, then a late 「允许」 / number in a text channel: the owner is told it was handled
+// A card answered in the app, then a late "Allow" / number in a text channel: the owner is told it was handled
 // elsewhere, and the words do not go into the conversation as a new message (#5093).
 func TestChannelReplyToAnAskAnsweredElsewhereIsNotForwarded(t *testing.T) {
 	for _, c := range []struct {

@@ -133,7 +133,7 @@ func loadPlan(h *Hub, id string) *assistant.TaskPlan {
 	return got.Plan
 }
 
-// taskLine is the task's line in the live context a message to conv1 starts with: 「标题（id）：状态…」.
+// taskLine is the task's line in the live context a message to conv1 starts with: "title (id): state…" (in Chinese).
 func taskLine(h *Hub, todo Todo) string {
 	if a, ok := testAssistants.Load(h); ok {
 		a.(*testAssistant).svc.ProfileChanged(context.Background()) // a fresh snapshot, not the one kept for 45 s
@@ -357,7 +357,7 @@ func TestTaskRetryFailsAgain(t *testing.T) {
 	waitFor(t, "a third start", func() bool { starts, _ := tn.calls(); return len(starts) == 3 })
 }
 
-// Tapping 重试 again and again while the agent starts starts it once: every tap answers the task as starting.
+// Tapping "Retry" again and again while the agent starts starts it once: every tap answers the task as starting.
 func TestTaskRetryTwiceStartsOnce(t *testing.T) {
 	h, tn := newTaskHub(t)
 	tn.failStart = errors.New("claude did not become ready within 1m0s")
@@ -594,7 +594,7 @@ func TestTaskAnsweredAndRouted(t *testing.T) {
 	}
 }
 
-// todoState is a task's state as far as its todo tells it (docs/todos.md「状态计算规则」): failed, done, not started.
+// todoState is a task's state as far as its todo tells it (docs/todos.md "How state is computed"): failed, done, not started.
 func todoState(t Todo) string {
 	switch {
 	case t.DoneAt != nil && t.StartError != "":

@@ -196,7 +196,7 @@ func TestTriageRulesCodexTurnError(t *testing.T) {
 	}
 }
 
-// A Codex turn the model service cut off gets 继续 like Claude Code's, though its answer is no error (#2185).
+// A Codex turn the model service cut off gets "Continue" like Claude Code's, though its answer is no error (#2185).
 func TestCodexTurnErrorIsContinued(t *testing.T) {
 	s, f := workService(t)
 	f.setSessions("box", codexFailedTurn("s1", "unexpected status 503 Service Unavailable", proto.TurnErrorTransient))
@@ -211,7 +211,7 @@ func TestCodexTurnErrorIsContinued(t *testing.T) {
 	}
 }
 
-// A 503 gets 继续 after the backoff, once; three runs of it and the user is asked.
+// A 503 gets "Continue" after the backoff, once; three runs of it and the user is asked.
 // Claude Code's own words for a network blip (no "connection" / "timeout" in them) are retried, not a card (#4644).
 func TestUnreachableAPIIsContinued(t *testing.T) {
 	s, f := workService(t)
@@ -249,7 +249,7 @@ func TestTransientErrorIsContinued(t *testing.T) {
 		t.Fatalf("sent %v", got)
 	}
 
-	// It errs again after each 继续 (a new turn each time): the count carries over, and after the cap it is a card.
+	// It errs again after each "Continue" (a new turn each time): the count carries over, and after the cap it is a card.
 	for i := 1; ; i++ {
 		s.workStarted(ctx, "box", "s1", time.Now())
 		c := apiErrorTurn("s1", errText)
@@ -305,7 +305,7 @@ func TestWorkGuardYieldsToTheUser(t *testing.T) {
 	}
 }
 
-// 「部署完我再跑线上测试」: the manager wakes it after the wait it named, and later ones double.
+// "I'll run the live tests after the deploy": the manager wakes it after the wait it named, and later ones double.
 func TestExternalWaitWakes(t *testing.T) {
 	s, f := workService(t)
 	f.triage = `{"phase":"blocked","on":"external","line":"等部署跑完再跑线上测试",
@@ -1106,7 +1106,7 @@ func TestWakeLooksRightBefore(t *testing.T) {
 	}
 }
 
-// The user's 等好了就去做 holds while the agent keeps waiting: the next turn, still waiting (asked as the user's again,
+// The user's "Do it once it's ready" holds while the agent keeps waiting: the next turn, still waiting (asked as the user's again,
 // in other words), is woken instead of carded again, and the wake says the step is approved (#3824). The user's own
 // message ends it.
 func TestApprovedWaitIsNotAskedAgain(t *testing.T) {
@@ -1165,7 +1165,7 @@ func TestApprovedWaitIsNotAskedAgain(t *testing.T) {
 	if e := entryOf(t, s3, "s1"); e.InteractionID == "" || e.WakeAt != nil {
 		t.Fatalf("another target rode on the approval: %+v", e)
 	}
-	// 先别做 on that card takes the earlier yes back.
+	// "Don't do it yet" on that card takes the earlier yes back.
 	card = s3.workCards()[0]
 	answerCard(t, s3, card.ID, proto.Resolution{Answers: map[string]string{card.Questions[0].Question: answerHold}})
 	s3.work.mu.Lock()

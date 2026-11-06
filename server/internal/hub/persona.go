@@ -22,7 +22,7 @@ import (
 
 // Personas (docs/persona.md): a look for Persona — its name, face, the animated dot in the Persona tab's top bar and the
 // colors — as a package: persona.json and the files it names. A package is a directory in ~/.persona/personas/<id>/ or
-// one built into personad (personas/ beside this file: a look the project ships to every hub, 奶蛙); a directory of the
+// one built into personad (personas/ beside this file: a look the project ships to every hub, nwverse); a directory of the
 // same id wins, so a look can be tried on one hub before it ships. The phone pulls the one it shows and caches it; the
 // hub only lists and serves them. A package that does not parse, names a file it does not have or is too big is left
 // out of the list (and logged), so the phone never gets half a look.
@@ -45,7 +45,7 @@ var builtinPersonas embed.FS
 
 var personaIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 
-// personaBuiltins are the looks the apps draw themselves (团子, the default; 面罩; 汇流): a package may not take their ids.
+// personaBuiltins are the looks the apps draw themselves (Mochi, the default; Visor; Circuit): a package may not take their ids.
 var personaBuiltins = map[string]bool{"persona": true, "jarvis": true, "jarvis-circuit": true, "jarvis-pixel": true, "jarvis-facet": true, "jarvis-blob": true}
 
 // personaStates are the dot's states; idle is the one a package must have (the app shows it for any it lacks).

@@ -28,7 +28,7 @@ import (
 // The assistant on a Codex launcher runs `codex app-server` (Codex's JSON-RPC server for IDEs, newline-delimited JSON
 // on stdio; protocol: `codex app-server generate-ts`) instead of claude -p. One app-server per conversation, one
 // thread in it: the thread id is the session id, its rollout is the transcript (transcript/codex.go), so the app
-// shows it like any other conversation. docs/assistant.md「Codex」.
+// shows it like any other conversation. docs/assistant.md "Codex".
 //
 // What the node does in between, compared with the Claude version:
 //   - messages: turn/start when idle, turn/steer while a turn runs (Claude's queued messages are taken up mid-turn too);
@@ -167,7 +167,7 @@ func codexArgs(bin, key string) []string {
 		// would fail.
 		"-c", "shell_environment_policy.inherit=" + q("all"),
 		"-c", "shell_environment_policy.ignore_default_excludes=true",
-		// The assistant's memory is the one the app's 记忆 page shows, shared with Claude (codexMemoryPrompt); Codex's
+		// The assistant's memory is the one the app's "Memory" page shows, shared with Claude (codexMemoryPrompt); Codex's
 		// own (~/.codex/memories) is one store for every Codex on the machine, so it stays off here.
 		"-c", "features.memories=false",
 		// Compact at about 200K like Claude (assistant.go assistantCompactWindow), not near the model's whole window.
@@ -960,7 +960,7 @@ var memoryReaders = map[string][]string{"cat": nil, "head": nil, "tail": {"-f", 
 	"grep": nil, "rg": {"--pre", "--pre-glob"}, "sed": {"-i", "--in-place"}}
 
 // readsOnlyMemory: a command that only reads, and only the memory directory (cat / head / rg … on paths in it, a
-// timeout in front, output to /dev/null at most). What it reads is what the 记忆 page shows anyway.
+// timeout in front, output to /dev/null at most). What it reads is what the "Memory" page shows anyway.
 func readsOnlyMemory(command, cwd, dir string) bool {
 	if dir == "" {
 		return false
@@ -1040,7 +1040,7 @@ func realPath(p string) string {
 
 // codexMemoryPrompt tells Codex about the assistant's memory: the same directory and format as Claude Code's
 // auto-memory for the assistant's directory (memory.go), so both agents read and write one memory and the app's
-// 记忆 page shows it whichever runs. The index (MEMORY.md) goes in as it is now; the files are read when needed.
+// "Memory" page shows it whichever runs. The index (MEMORY.md) goes in as it is now; the files are read when needed.
 func codexMemoryPrompt(dir string) string {
 	m := prompts.CodexMemory{Dir: dir}
 	index, _ := os.ReadFile(filepath.Join(dir, "MEMORY.md"))

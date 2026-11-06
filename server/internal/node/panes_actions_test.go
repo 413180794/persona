@@ -102,7 +102,7 @@ func TestPaneCloseShells(t *testing.T) {
 	}
 }
 
-// An agent's pane is closed the way 关闭 Agent does: asked to quit first, then closed.
+// An agent's pane is closed the way "Close Agent" does: asked to quit first, then closed.
 func TestPaneCloseAnAgentQuitsItFirst(t *testing.T) {
 	n, f, _ := actionNode(t)
 	f.reply("pane.list", map[string]any{"panes": []any{map[string]any{"tab_id": "w1:t1"}}})
@@ -142,7 +142,7 @@ func TestPaneSplitStartsInThePanesDirectory(t *testing.T) {
 	}
 }
 
-// 在这里运行 Agent: the launcher runs in the pane itself, not in a new tab. The pane is a herdr pane like a new tab:
+// "Run Agent here": the launcher runs in the pane itself, not in a new tab. The pane is a herdr pane like a new tab:
 // herdr is told the agent is Claude, unless the pane's shell cannot take `VAR=val cmd` (tcsh).
 func TestRunAgentInAShellPane(t *testing.T) {
 	for _, tc := range []struct{ shell, typed string }{

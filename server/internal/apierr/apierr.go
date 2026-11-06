@@ -1,4 +1,4 @@
-// Package apierr writes the JSON bodies of the hub's HTTP API (docs/protocol.md「错误」): a result, or an error with a
+// Package apierr writes the JSON bodies of the hub's HTTP API (docs/protocol.md "Errors"): a result, or an error with a
 // stable code. It is shared by the hub and the services whose requests the hub relays (internal/assistant), so an
 // error reads the same whichever of them answered.
 package apierr
@@ -31,7 +31,7 @@ func Write(w http.ResponseWriter, status int, err error) {
 }
 
 // WriteCode preserves error for old clients and adds a stable machine-readable code.
-// An i18n.Message reads in the request's language (docs/i18n.md「协议」).
+// An i18n.Message reads in the request's language (docs/i18n.md "Protocol").
 func WriteCode(w http.ResponseWriter, status int, code string, err error) {
 	body := Body(status, code, err)
 	if l := i18n.OfWriter(w); l != "" {
@@ -171,7 +171,7 @@ var codeActions = map[string]string{
 }
 
 // OnMachine is err naming the machine (its display name) it was refused on, when it is one of the refusals the hub
-// words itself and does not name one yet: what the sentence says instead of 「这台电脑」. Anything else is err.
+// words itself and does not name one yet: what the sentence says instead of "this computer". Anything else is err.
 func OnMachine(err error, name string) error {
 	var re *rpc.Error
 	if name == "" || !errors.As(err, &re) {
@@ -196,14 +196,14 @@ func OnMachine(err error, name string) error {
 }
 
 // explain makes body say code's refusal in plain words in l (none: the default language): error is the sentence for
-// people, detail what the caller wrote (the shell's own words: only for the 详情), action what to do unless the caller
-// said. The caller's data may name the machine (machine_name, OnMachine; else the text says 这台电脑) and the launcher.
+// people, detail what the caller wrote (the shell's own words: only for the "Details"), action what to do unless the caller
+// said. The caller's data may name the machine (machine_name, OnMachine; else the text says "this computer") and the launcher.
 func explain(body map[string]any, code, message string, l i18n.Lang) {
 	name, _ := body["machine_name"].(string)
 	launcher, _ := body["launcher"].(string)
 	key := "apierr-apierr." + code
 	if name == "" && i18n.Has(key+"_here") {
-		key += "_here" // 这台电脑
+		key += "_here" // "this computer"
 	}
 	body["error"] = i18n.T(l, key, i18n.Args{"machine": name, "launcher": launcher})
 	if d, _ := body["detail"].(string); d == "" {

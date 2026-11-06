@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// What a device has open through the manager (docs/extensions.md「转发时的调用方」): every request the hub relays to
+// What a device has open through the manager (docs/extensions.md "The caller when relaying"): every request the hub relays to
 // the manager (relayToManager), an extension's WebSocket or stream above all, is kept under the id of the credential
 // that made it, so revoking that credential ends them at once instead of when the phone hangs up (a voice call, #3498).
 // Ending the hub's side is enough: the relay stream closes and the manager's proxy closes the extension's side.

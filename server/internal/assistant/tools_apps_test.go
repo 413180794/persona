@@ -82,7 +82,7 @@ func TestKBToolsFormatTheData(t *testing.T) {
 		t.Fatalf("list, empty: %q %v", out, err)
 	}
 
-	// A project's 公司圈 posts, dated in the user's zone (20:00 UTC is the next day in Shanghai).
+	// A project's Moments (company feed) posts, dated in the user's zone (20:00 UTC is the next day in Shanghai).
 	if err := e.Store.PutMomentPost(&kb.MomentPost{ID: "p1", Author: "王五", Text: "发布了", CommentCount: 2,
 		At: time.Date(2026, 11, 3, 20, 0, 0, 0, time.UTC)}, nil); err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestKBToolsKnowledgeBaseOff(t *testing.T) {
 
 // ---- interaction_answer ----
 
-// answerService is an assistant whose hub has machine mac with an agent (abcdef12-agent) whose question 发吗？ waits,
+// answerService is an assistant whose hub has machine mac with an agent (abcdef12-agent) whose question "Send?" waits,
 // and the assistant's own conversation conv-assistant there.
 func answerService(t *testing.T) (*Service, *fakeHub, *fakeQueue, proto.Interaction) {
 	t.Helper()
@@ -363,7 +363,7 @@ func TestInteractionAnswerKeepsToItsTarget(t *testing.T) {
 // ---- inbox_draft ----
 
 // inbox_draft's rules: a draft with text and no blank left to fill in, trimmed, the note clipped; it goes on the item
-// whose AI 分身 runs in the conversation, and a change the item does not offer is refused.
+// whose AI twin runs in the conversation, and a change the item does not offer is refused.
 func TestInboxDraftRules(t *testing.T) {
 	h := newInboxHub(t)
 	old := inboxDraftWait

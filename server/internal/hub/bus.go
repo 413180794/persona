@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The bus (docs/protocol.md「总线」): a service — the assistant (a manager) for now — dials GET /api/v1/bus with a
+// The bus (docs/protocol.md "Bus"): a service — the assistant (a manager) for now — dials GET /api/v1/bus with a
 // token of its own (bustokens.go) and keeps the connection up; the hub starts nothing anywhere. Over it runs
 // internal/rpc, one JSON line per WebSocket text message, calls going both ways. A connection first says
 // manager.hello; after that the service calls the methods registered with handleBus and publishes the events

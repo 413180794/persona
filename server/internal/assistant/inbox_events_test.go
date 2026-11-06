@@ -106,7 +106,7 @@ func waitTriage(h *inboxHub) {
 	h.inbox.triaging.Unlock() //nolint:staticcheck // waiting for the pass
 }
 
-// A reply the user wrote in Feishu itself files the item and says so; reading elsewhere or filing records 已处理.
+// A reply the user wrote in Feishu itself files the item and says so; reading elsewhere or filing records "Done".
 func TestInboxChainSelfReplyAndDone(t *testing.T) {
 	_, model := newTriageModel(t, "ok", `{"tier":"action","summary":"Alice 问","reason":"私聊"}`)
 	lark := &extensionLark{}

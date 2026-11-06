@@ -122,7 +122,7 @@ func TestRevokedCredentialGetsNoPushes(t *testing.T) {
 		t.Fatalf("registered by %q, want %q", d.Credential, cred["id"])
 	}
 	h.push.notifyDone("m1", "Persona", "s1", "提醒", "该走了", nil)
-	// The new credential was announced to the devices already there (有新设备配对): two more before the reminder's three.
+	// The new credential was announced to the devices already there ("New device paired"): two more before the reminder's three.
 	if got := pushedTo(t, f, 0, 5); !same(got, "devtok", "devtok", "mac2tok", "mactok", "mactok") {
 		t.Fatalf("before signing out: %v", got)
 	}

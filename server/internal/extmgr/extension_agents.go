@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The agent_sources extension point (docs/extensions.md「个人 Agent 来源」): a plugin's contribution is a source of
+// The agent_sources extension point (docs/extensions.md "Personal agent sources"): a plugin's contribution is a source of
 // personal agents' sessions in the Agents tab (the hub has none of its own). The hub calls agentsrc.<method> on the
 // plugin for what the apps ask (the shapes of agents/wire.go), and the plugin's agentsrc.updated event re-pulls
 // sessions in the apps at once, so a plugin with a live connection to its agents needs no polling.

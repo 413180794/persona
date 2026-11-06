@@ -47,6 +47,6 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 func assistantSpace(cwd string) string { return identity.SpaceOf(cwd) }
 
 // inHealth: an assistant conversation working in cwd is in the health space. What it says leaves the space only with
-// the user knowing (docs/health.md「外发」): its pushes say there is news, not the news, and its writes are confirmed
+// the user knowing (docs/health.md "Outbound"): its pushes say there is news, not the news, and its writes are confirmed
 // on the phone each time, whatever the gate rules allow.
 func inHealth(cwd string) bool { return cwd != "" && assistantSpace(cwd) == identity.SpaceHealth }

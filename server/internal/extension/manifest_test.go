@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// exampleManifest is the plan's example (docs/plan-extensions.md「三」), a made-up notes service.
+// exampleManifest is the plan's example (docs/plan-extensions.md "3"), a made-up notes service.
 const exampleManifest = `{
   "manifest_version": 1,
   "id": "example-notes",
@@ -628,7 +628,7 @@ func TestUISurfaces(t *testing.T) {
 	}
 }
 
-// The channel point (docs/channels.md「清单」): a chat app's bot bound through the plugin's own connector, or running
+// The channel point (docs/channels.md "Manifest"): a chat app's bot bound through the plugin's own connector, or running
 // from the start without one.
 func TestChannelPoint(t *testing.T) {
 	ch := func(extra map[string]any) map[string]any {

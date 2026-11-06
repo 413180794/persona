@@ -15,9 +15,9 @@ import (
 )
 
 // A channel without buttons (asks: text) gets what an agent asks — a question, a permission, a plan, a terminal
-// dialog — as text, and the owner's next message answers it: a number, 允许 / 拒绝, 批准, or words. The latest one
+// dialog — as text, and the owner's next message answers it: a number, "allow" / "deny", "approve" (in Chinese), or words. The latest one
 // asked is the one a reply answers; one answered somewhere else (the app) is let go, and the reply is then an
-// ordinary message (docs/channels.md「提问和批准」).
+// ordinary message (docs/channels.md "Questions and approvals").
 
 // Ask is something asked in a channel as text, waiting for the owner's reply.
 type Ask struct {
@@ -42,7 +42,7 @@ func NewAsk(channel string, ix proto.Interaction, now time.Time) *Ask {
 		Questions: ix.Questions, At: now}
 }
 
-// askTitle is the 【…】 an ask starts with: its conversation's title without the blocks a first message starts with
+// askTitle is the bracketed title (full-width lenticular brackets) an ask starts with: its conversation's title without the blocks a first message starts with
 // (stripped before anything clips it), else the project.
 func askTitle(ix proto.Interaction) string {
 	if t := transcript.Title(ix.SessionTitle); t != "" || ix.SessionTitle == "" || ix.Cwd == "" {
@@ -142,7 +142,7 @@ func is(text string, words []string) bool {
 
 // IsApprovalWord says whether text is only a word that approves or refuses a card (yes, no, the plan's approve), in
 // any of the three languages: a voice conversation does not send it on while its conversation waits on such a card,
-// since a card is answered on the screen (docs/voice.md「发送、门槛和 409」).
+// since a card is answered on the screen (docs/voice.md "Sending, the gate and 409").
 func IsApprovalWord(text string) bool {
 	return is(text, yes) || is(text, no) || is(text, planApprove)
 }
@@ -157,8 +157,9 @@ const (
 	circledMax = 20
 )
 
-// numberWrappers are the paired brackets a phone puts around a typed number, whole: （1） (1) 【1】 [1] 「1」 『1』. A
-// right parenthesis after the bare digits, 1) / 1）, is stripped below.
+// numberWrappers are the paired brackets a phone puts around a typed number, whole: (1) and [1] in
+// half- and full-width forms, and the CJK corner and lenticular brackets. A right parenthesis after the bare digits,
+// 1) in half- or full-width, is stripped below.
 var numberWrappers = [][2]rune{
 	{'（', '）'}, {'(', ')'}, {'【', '】'}, {'[', ']'}, {'「', '」'}, {'『', '』'},
 }
@@ -196,7 +197,7 @@ func number(text string) (int, bool) {
 	return 0, false
 }
 
-// unwrappedNumber takes the phone shapes off a number typed whole: a paired bracket around it （1）, or a right
+// unwrappedNumber takes the phone shapes off a number typed whole: a paired bracket around it (full-width or not), or a right
 // parenthesis after it 1). Anything that is not exactly the wrapper around the digits is returned as it was.
 func unwrappedNumber(text string) string {
 	r := []rune(text)
@@ -272,7 +273,7 @@ func ReadAnswer(l i18n.Lang, a *Ask, text string) (r proto.Resolution, done bool
 	return r, false, i18n.T(l, "channel-asks.again_app")
 }
 
-// ReadsAsAnswer says whether text reads as a reply to a, not an ordinary message: 允许 / 拒绝, a plan's numbers or
+// ReadsAsAnswer says whether text reads as a reply to a, not an ordinary message: Allow / Deny, a plan's numbers or
 // approve words, a terminal dialog's option number, or one of the current question's options. Free words do not: they
 // may be a new message. It is used for an ask that ended elsewhere, whose late reply must not go into the conversation.
 func ReadsAsAnswer(a *Ask, text string) bool {

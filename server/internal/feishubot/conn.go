@@ -16,7 +16,7 @@ import (
 	"github.com/coder/websocket"
 )
 
-// The long connection (开放平台「使用长连接接收事件」): the app asks for a WebSocket address with its id and secret, and
+// The long connection (Open Platform "Receive events through a persistent connection"): the app asks for a WebSocket address with its id and secret, and
 // events and card callbacks arrive on it as protobuf frames. The hub needs no public address; Feishu keeps the
 // connection's events for the app, so one lost while reconnecting is delivered again (by event id: handlers dedupe).
 //

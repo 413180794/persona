@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// An extension's sign-in (manifest.auth, docs/extensions.md「登录（auth）」, #4507): its program answers auth.status,
+// An extension's sign-in (manifest.auth, docs/extensions.md "Sign-in (auth)", #4507): its program answers auth.status,
 // auth.step and auth.logout; the hub keeps the last status it heard, shows it on the extension, tells the apps when
 // it changes (extension_auth) and passes the apps' sign-in steps on. What signing in yields stays with the program, in
 // its data directory: the values of a step go to it only, never into a log, an audit or an answer.

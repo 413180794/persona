@@ -68,8 +68,8 @@ func sameTags(t *testing.T, got []proto.Item, want map[string]string) {
 	}
 }
 
-// Two sends with the same words ("继续") are tied to their own lines, in the order sent; a line from before the send
-// (an older 继续) and one typed at the computer with other words get nothing.
+// Two sends with the same words ("continue") are tied to their own lines, in the order sent; a line from before the send
+// (an older "continue") and one typed at the computer with other words get nothing.
 func TestEchoTiesSendsInOrder(t *testing.T) {
 	t0 := time.Now()
 	var l echoLog

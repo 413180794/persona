@@ -72,7 +72,7 @@ func (h *Hub) routes() http.Handler {
 		return map[string]any{"cwd": r.URL.Query().Get("cwd")}
 	}))
 	api.HandleFunc("POST /api/v1/machines/{mid}/git/pull", h.proxyBody("git.pull"))
-	// One version of a file, written into the node's cache for comparing (docs/protocol.md「文件预览」).
+	// One version of a file, written into the node's cache for comparing (docs/protocol.md "File preview").
 	api.HandleFunc("GET /api/v1/machines/{mid}/git/blob", h.proxy("git.blob", func(r *http.Request) any {
 		q := r.URL.Query()
 		return map[string]any{"cwd": q.Get("cwd"), "path": q.Get("path"), "rev": q.Get("rev")}
@@ -104,7 +104,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
 	// #2436: rewind a Claude session to before one of its messages (rewind.go); a full device only, it restores files
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rewind", h.withClientOp("rewind", h.withMachine(h.rewindSession)))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/fork", h.withClientOp("fork", h.proxyBody("session.fork"))) // 分支到新聊天 (node/fork.go)
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/fork", h.withClientOp("fork", h.proxyBody("session.fork"))) // "Branch to new chat" (node/fork.go)
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.withClientOp("close", h.proxyBody("session.close")))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.withClientOp("rename", h.withMachine(h.renameSession)))
@@ -120,8 +120,8 @@ func (h *Hub) routes() http.Handler {
 		q := r.URL.Query()
 		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source"), "format": q.Get("format")}
 	})))
-	// The terminal browser (docs/terminal.md「独立终端」): a machine's workspaces, tabs and panes with plain shells, and
-	// 新建终端. A pane is full shell access on the computer: full devices only (paneRoutesFullOnly).
+	// The terminal browser (docs/terminal.md "Standalone terminals"): a machine's workspaces, tabs and panes with plain shells, and
+	// "New terminal". A pane is full shell access on the computer: full devices only (paneRoutesFullOnly).
 	api.HandleFunc("GET /api/v1/machines/{mid}/panes", h.proxy("panes.list", nil))
 	api.HandleFunc("POST /api/v1/machines/{mid}/panes", h.withMachine(h.newShell))
 	// close / split / run an agent / git in a pane, close / rename a tab: full devices only (panes.go)
@@ -134,7 +134,7 @@ func (h *Hub) routes() http.Handler {
 	// #2429 node self-check (node_doctor.go): the report, and rewriting Persona's own generated files; full devices only
 	api.HandleFunc("GET /api/v1/machines/{mid}/doctor", h.nodeDoctor("node.doctor", 45*time.Second))
 	api.HandleFunc("POST /api/v1/machines/{mid}/doctor/fix", h.nodeDoctor("node.doctor.fix", 60*time.Second))
-	// #2431 新建 worktree…: what the dialog starts from, and the worktree (full devices only, panes.go)
+	// #2431 "New worktree…": what the dialog starts from, and the worktree (full devices only, panes.go)
 	api.HandleFunc("POST /api/v1/machines/{mid}/worktree/prepare", h.nodeAction(nodeActions["worktree/prepare"]))
 	api.HandleFunc("POST /api/v1/machines/{mid}/worktree/create", h.nodeAction(nodeActions["worktree/create"]))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +161,7 @@ func (h *Hub) routes() http.Handler {
 	h.metricsRoutesRelayed(api) // the monitoring is the manager's (devices_link.go)
 	api.HandleFunc("GET /api/v1/devices/{id}/sessions", h.serveDeviceSessions)
 	h.lockTestRoutes(api)
-	// Which pushes this device wants (notify.go NotifyPrefs); the app's 设置 › 通知.
+	// Which pushes this device wants (notify.go NotifyPrefs); the app's Settings › Notifications.
 	api.HandleFunc("GET /api/v1/devices/{id}/prefs", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, h.prefsView(h.push.prefs(r.PathValue("id"))))
 	})
@@ -550,7 +550,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		Cwd             string `json:"cwd"`
 		Launcher        string `json:"launcher"`
 		AgentType       string `json:"agent_type,omitempty"`
-		Model           string `json:"model,omitempty"` // picked in 新建 Agent for this start; empty: applyModel's
+		Model           string `json:"model,omitempty"` // picked in "New agent" for this start; empty: applyModel's
 		Prompt          string `json:"prompt"`
 		ResumeSessionID string `json:"resume_session_id"`
 		WorkspaceID     string `json:"workspace_id"`
@@ -639,7 +639,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	if !async && p.TabName == "" && p.ResumeSessionID == "" {
 		name = nameFrom
 	}
-	// The manager says what it runs on (模型配置 › Agents, a model picked for this start) and names its tab
+	// The manager says what it runs on (Models › Agents, a model picked for this start) and names its tab
 	// (agents_link.go).
 	if err := h.agentStartParams(ctx, m, params, name); err != nil {
 		var refused *startRefused
@@ -1061,7 +1061,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		Rows  int    `json:"rows"`
 		Bytes int64  `json:"bytes"`
 		Focus bool   `json:"focus"`
-		// terminal_input: one mouse event on a terminal the app drives (feature terminal_mouse, docs/terminal.md「鼠标」)
+		// terminal_input: one mouse event on a terminal the app drives (feature terminal_mouse, docs/terminal.md "Mouse")
 		Mouse *termMouse `json:"mouse"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
@@ -1152,7 +1152,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		}
 		tools, cli := splitRuntimeCLI(msg.Tools)
 		if cli && len(tools) == 0 {
-			// Only the runtime CLI: a simulator driven by a script (docs/runtime-cli.md「经 hub 连真机」). Not the
+			// Only the runtime CLI: a simulator driven by a script (docs/runtime-cli.md "Reaching a real device through the hub"). Not the
 			// phone: it takes no phone_* call and changes nothing about pushes.
 			h.mu.Lock()
 			c.runtimeCLI, c.sim, c.name, c.since = true, msg.Simulator, msg.DeviceName, time.Now()

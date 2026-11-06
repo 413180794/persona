@@ -33,8 +33,8 @@ func TestCallApps(t *testing.T) {
 	}
 }
 
-// The first time an app is operated on a Mac the phone is asked; 一直允许 keeps it (by bundle id) until removed. A
-// terminal is asked about every time, with no 一直允许, and so is a script whose apps cannot all be read.
+// The first time an app is operated on a Mac the phone is asked; "Always allow" keeps it (by bundle id) until removed. A
+// terminal is asked about every time, with no "Always allow", and so is a script whose apps cannot all be read.
 func TestComputerAppsAreAskedOnce(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	h.opts.AssistantMachine = func() string { return "assistant-box" } // where the assistant's conversations run

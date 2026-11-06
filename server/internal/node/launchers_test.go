@@ -164,7 +164,7 @@ func TestProbeOfAnAlias(t *testing.T) {
 	}
 }
 
-// What 查看定义 shows for an alias (whence -f prints its text): keys masked, a token starting with "-" too.
+// What "View definition" shows for an alias (whence -f prints its text): keys masked, a token starting with "-" too.
 func TestRedactAliasDefinition(t *testing.T) {
 	def := `CLAUDE_CODE_NO_FLICKER=1 ANTHROPIC_BASE_URL=https://gw-b.example.com ANTHROPIC_AUTH_TOKEN=-fakeTokenWithALeadingDash000000000000 claude --dangerously-skip-permissions`
 	got := redactSecrets(def)

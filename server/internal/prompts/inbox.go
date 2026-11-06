@@ -13,11 +13,11 @@ type InboxItem struct {
 
 func RenderInboxItem(it InboxItem) string { return render("inbox/item", it) }
 
-// InboxTriage is the system prompt that sorts an item into 需要你 / 知悉即可 / 噪音 (inbox/triage).
+// InboxTriage is the system prompt that sorts an item into "Needs You" / "FYI" / "Noise" (inbox/triage).
 type InboxTriage struct {
-	Owner string // "" is 你
+	Owner string // "" is the Chinese "you"
 	Rules string // the user's own rules, trimmed: the item's source's (InboxThing.Rules), else inbox.rules
-	// Language is the summary's language by its own name ("English", "日本語"); "" is Chinese, as before i18n.
+	// Language is the summary's language by its own name ("English", "Japanese" written in Japanese); "" is Chinese, as before i18n.
 	Language string
 }
 
@@ -25,13 +25,13 @@ func RenderInboxTriage(t InboxTriage) string { return render("inbox/triage", t) 
 
 // InboxGroup is the system prompt that relates a conversation's new messages to its events (inbox/group, #1680).
 type InboxGroup struct {
-	Owner string // "" is 你
+	Owner string // "" is the Chinese "you"
 	// MetaDescription is what the connector says its events' meta is (its manifest's meta_description), trimmed.
 	MetaDescription string
 	Rules           string // the user's own rules, trimmed: the batch's source's (InboxThing.Rules), else inbox.rules
 	MaxCalls        int    // tool calls the batch may make
 	NewMax          int    // new events one batch may open
-	// Language is the titles' and summaries' language by its own name ("English", "日本語"); "" leaves the title's
+	// Language is the titles' and summaries' language by its own name ("English", "Japanese" in Japanese); "" leaves the title's
 	// unsaid and the summary in Chinese, as before i18n.
 	Language string
 }
@@ -57,9 +57,9 @@ func RenderInboxGroupInput(in InboxGroupInput) string { return render("inbox/gro
 
 // InboxDraft is the system prompt for drafting a reply in the user's voice (inbox/draft).
 type InboxDraft struct {
-	Owner string // "" is 你
+	Owner string // "" is the Chinese "you"
 	Notes string // what the assistant knows about the user, trimmed
-	// Language is the user's language by its own name ("English", "日本語"), for a WeChat reply when the other side's
+	// Language is the user's language by its own name ("English", "Japanese" in Japanese), for a WeChat reply when the other side's
 	// is unclear; "" keeps WeChat replies in Chinese, as before i18n.
 	Language string
 }
@@ -75,7 +75,7 @@ type InboxDraftInput struct {
 func RenderInboxDraftInput(in InboxDraftInput) string { return render("inbox/draft_input", in) }
 
 // InboxJudge is the system prompt that links an item to one of the user's tasks (inbox/judge): since phase 1 every
-// 需要你 item goes to the manager, so only its task_id is used.
+// Needs you item goes to the manager, so only its task_id is used.
 type InboxJudge struct {
 	Owner string
 	Rules string // hub.json inbox.agent.rules, trimmed
@@ -98,7 +98,7 @@ type InboxTask struct {
 
 func RenderInboxJudgeInput(in InboxJudgeInput) string { return render("inbox/judge_input", in) }
 
-// InboxAgent is the first message of the AI 分身's conversation for an item (inbox/agent). At most one of Lark, Doc,
+// InboxAgent is the first message of the AI twin's conversation for an item (inbox/agent). At most one of Lark, Doc,
 // Moment and Mail is set: where the item came from.
 type InboxAgent struct {
 	Owner   string

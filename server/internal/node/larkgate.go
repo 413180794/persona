@@ -19,7 +19,7 @@ import (
 )
 
 // The assistant's skills call HTTP APIs as the user through commands (`<command> METHOD PATH [BODY]`, the
-// command gates the hub hands over: plugins' assistant.gate, docs/extensions.md「助手」) and through lark-cli. Every Bash
+// command gates the hub hands over: plugins' assistant.gate, docs/extensions.md "Assistant") and through lark-cli. Every Bash
 // call of the assistant passes a PreToolUse hook that reads the command (docs/assistant.md):
 //
 //   - only gated calls (and a few output filters): each call goes by its gate's rules (the first match: allow, confirm
@@ -35,7 +35,7 @@ type larkCall struct {
 	Method string // HTTP method; "CLI" for a lark-cli command (larkcligate.go)
 	Path   string // without /agent/v1 and the query string; a lark-cli command's words joined by "/"
 	Query  string
-	Body   string // JSON text, a file's content (@file, cut), or "上传文件 X"
+	Body   string // JSON text, a file's content (@file, cut), or "upload file X" (in Chinese)
 
 	CLI  bool     // lark-cli
 	Risk string   // lark-cli's own risk level for a "CLI" call: read | write | high-risk-write ("" unknown)
@@ -419,7 +419,7 @@ func bodyMatches(want map[string]any, body string) bool {
 	return true
 }
 
-// larkPattern: the call's route with its ids blanked, what 本会话总是允许 remembers.
+// larkPattern: the call's route with its ids blanked, what "Always allow for this session" remembers.
 func larkPattern(c larkCall) string {
 	segs := strings.Split(strings.Trim(c.Path, "/"), "/")
 	for i, s := range segs {
@@ -551,7 +551,7 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		}
 		return "", "", nil
 	}
-	// A health conversation's writes are confirmed each time: no rule's allow, no 本会话总是允许 (docs/health.md「外发」).
+	// A health conversation's writes are confirmed each time: no rule's allow, no "Always allow for this session" (docs/health.md "Outgoing").
 	health := identity.SpaceOf(cwd) == identity.SpaceHealth
 	// through: the calls to confirm; once let through here, the gate proxy lets each go once (gateproxy.go).
 	var ask, through []larkCall
@@ -572,14 +572,14 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		}
 	}
 	if len(ask) == 0 {
-		n.grantGateCalls(cfg, through) // 本会话总是允许 covers them
+		n.grantGateCalls(cfg, through) // "Always allow for this session" covers them
 		if v.unsure {
 			return "", "", nil // reads, but $(…) could run anything: the usual flow asks about the whole command
 		}
 		return "allow", "读操作", nil
 	}
 	ix.Kind, ix.ToolName, ix.Summary = proto.IxPermission, callTitle(cfg.Gates, ask[0]), larkSummary(cfg.Gates, ask)
-	// The routes 本会话总是允许 lets through, kept by the hub too: this node's memory of them ends when it restarts.
+	// The routes "Always allow for this session" lets through, kept by the hub too: this node's memory of them ends when it restarts.
 	ix.AlwaysKeys = nil
 	for _, c := range ask {
 		if k := "lark:" + larkPattern(c); !health && !slices.Contains(ix.AlwaysKeys, k) {
@@ -588,7 +588,7 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 	}
 	remember := ask
 	if health {
-		remember = nil // nothing for 本会话总是允许 to keep
+		remember = nil // nothing for "Always allow for this session" to keep
 	}
 	decision, reason, err := n.confirmLark(ctx, session, ix, remember)
 	if decision == "allow" {
@@ -648,7 +648,7 @@ func callTitle(gates []proto.CommandGate, c larkCall) string {
 	return "飞书" // lark-cli
 }
 
-// confirmLark asks the phone; "本会话总是允许" remembers the calls' routes (not for whole commands).
+// confirmLark asks the phone; "Always allow for this session" remembers the calls' routes (not for whole commands).
 func (n *Node) confirmLark(ctx context.Context, session string, ix proto.Interaction, ask []larkCall) (string, string, error) {
 	res, ok, err := n.ask(ctx, ix)
 	if err != nil {

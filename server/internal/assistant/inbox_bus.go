@@ -64,7 +64,7 @@ func (b *BusHub) InboxChanged(_ context.Context, c assistantwire.InboxChanged) {
 	}
 }
 
-// sendFromCard is 发送 on a message card (POST /api/v1/inbox/{id}/reply with card): the reply goes out once per
+// sendFromCard is "Send" on a message card (POST /api/v1/inbox/{id}/reply with card): the reply goes out once per
 // card however many taps, devices or retries ask — a card already sent answers with the item as it is (already).
 func (s *Service) sendFromCard(ctx context.Context, cardID, itemID string, send func() (InboxItem, error)) (it InboxItem, already bool, err error) {
 	b := &s.inbox
@@ -84,8 +84,8 @@ func (s *Service) sendFromCard(ctx context.Context, cardID, itemID string, send 
 		b.mu.Unlock()
 		return it, true, nil
 	}
-	// A card put in before its item was filed (已处理, 忽略, read elsewhere, archived) is not a way to reply to it:
-	// the reply would go out unasked and the item's mark would become 已回复. Moved back to the inbox, it sends.
+	// A card put in before its item was filed ("Done", "Ignore", read elsewhere, archived) is not a way to reply to it:
+	// the reply would go out unasked and the item's mark would become "Replied". Moved back to the inbox, it sends.
 	b.mu.Lock()
 	ib := b.items[itemID]
 	filed := ib != nil && !ib.open()

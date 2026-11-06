@@ -27,7 +27,7 @@ func TestChangesFromTheStart(t *testing.T) {
 		}
 		got = append(got, b.Chat.Name+":"+strings.Join(ids, ","))
 	}
-	// 张三 over SMS then iMessage (4 is a tapback), Alice, the named group, the unnamed one (李四 is a contact); the
+	// Zhang San over SMS then iMessage (4 is a tapback), Alice, the named group, the unnamed one (Li Si is a contact); the
 	// short code nobody saved is left out.
 	want := "张三:1,2,3,5,6,7,8,9|Alice Example:10,11,12|周末徒步:13,14,15,16,17|李四、+15550102:18,19"
 	if strings.Join(got, "|") != want || page.Next != "22" || page.More {

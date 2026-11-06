@@ -14,10 +14,10 @@ import (
 // tell apart, from the item's structured fields (a task note's kind and status) or from the node's exact Chinese
 // wording, into the reader's language (docs/i18n.md). zh-Hans, and anything the hub does not recognize (an older or
 // newer node's wording), go out as the node wrote them. The items the assistant and the channels read are not touched:
-// they match some of these lines (assistant/done.go's 已中断).
+// they match some of these lines (assistant/done.go's interrupted marker).
 //
-// Kept in Chinese because the apps parse them: 上下文已压缩 / 已从压缩的上下文继续 (the compaction divider), API 错误：…
-// (the API error card), …（已截断…） (cut text), 压缩上下文 (the /compact echo).
+// Kept in Chinese because the apps parse them: the compaction divider lines, the API error prefix
+// (the API error card), the truncation marker (cut text) and the /compact echo.
 
 const transcriptNS = "hub-transcript_text."
 
@@ -146,7 +146,7 @@ func taskNoteHead(n *proto.TaskNote) (key string, args i18n.Args) {
 }
 
 // taskNoteText is a task note's line in l: its heading rewritten from the note's kind and status when text is what the
-// node wrote for them (「后台命令完成 · <title>」), what follows the heading (the title, a Monitor's event) kept.
+// node wrote for them (the "background command finished · <title>" heading), what follows the heading (the title, a Monitor's event) kept.
 func taskNoteText(l i18n.Lang, n *proto.TaskNote, text string) string {
 	key, args := taskNoteHead(n)
 	if key == "" {
@@ -179,7 +179,7 @@ func fromName(l i18n.Lang, from string) string {
 }
 
 // teammateLabels are the bold headings transcript/teammate.go puts on an agent-teams note, by key; labeled ones are
-// followed by 「：<what>」.
+// followed by a full-width colon and "<what>".
 var (
 	teammateLabels = map[string]string{"被中断": "tm_interrupted", "同意结束": "tm_shutdown_approved",
 		"提交了计划，等批准": "tm_plan_submitted", "计划已批准": "tm_plan_approved", "计划被退回": "tm_plan_rejected", "分配任务": "tm_assigned"}
@@ -222,7 +222,7 @@ func teammateText(l i18n.Lang, s string) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// teammateHead is one of teammateNote's headings in l (「分配任务 #3」 with its task's number).
+// teammateHead is one of teammateNote's headings in l ("assigned task #3" with its task's number).
 func teammateHead(l i18n.Lang, label string) (string, bool) {
 	if id, ok := strings.CutPrefix(label, "分配任务 #"); ok && id != "" {
 		return tt(l, "tm_assigned_id", i18n.Args{"id": id}), true
@@ -241,7 +241,7 @@ const codexNewChatLink = "[打开新建的对话](jarvis://session/"
 
 const loadedToolPrefix = "已加载工具 "
 
-// loadedTools rewrites the 「已加载工具 <name>」 lines of a ToolSearch result (transcript.go's tool_reference).
+// loadedTools rewrites the "loaded tool <name>" lines of a ToolSearch result (transcript.go's tool_reference).
 func loadedTools(l i18n.Lang, s string) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {

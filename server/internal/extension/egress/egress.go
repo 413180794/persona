@@ -1,4 +1,4 @@
-// Package egress is the hub's proxy for extensions' outbound connections (docs/extensions.md「出网」): each extension
+// Package egress is the hub's proxy for extensions' outbound connections (docs/extensions.md "Egress"): each extension
 // it knows reaches only the hosts of its permissions.network, the hub's own API under the name HubHost when it was
 // granted any of it, and the hub machine's loopback under the name LocalHost when its permissions.network lists a
 // loopback address. A sandboxed extension has no other way out; one outside a sandbox is pointed at it.
@@ -71,7 +71,7 @@ type Proxy struct {
 	// Upstream is the proxy the hub itself goes out through for u (nil, nil: straight). Default: the hub's
 	// environment (HTTPS_PROXY / HTTP_PROXY / NO_PROXY).
 	Upstream func(u *url.URL) (*url.URL, error)
-	// OnDecision is told each connection allowed or denied (the hub's metrics, docs/extensions.md「可观测」).
+	// OnDecision is told each connection allowed or denied (the hub's metrics, docs/extensions.md "Observability").
 	OnDecision func(ext, host string, allowed bool)
 	// Resolve and Dial: tests replace them.
 	Resolve func(ctx context.Context, host string) ([]net.IP, error)

@@ -1,4 +1,4 @@
-// Package sandbox runs an extension's program walled off from the hub's machine (docs/extensions.md「沙箱」): on Linux
+// Package sandbox runs an extension's program walled off from the hub's machine (docs/extensions.md "Sandbox"): on Linux
 // in bubblewrap (the system read-only, its package read-only, its own data and run directories writable, no network
 // but the hub's egress proxy) inside a systemd user scope that caps its memory and CPU; on macOS under sandbox-exec.
 package sandbox

@@ -67,7 +67,7 @@ const (
 	MSettle = "inbox.settle"
 	// One of the user's computers connected (connector.Machines): MachineParams → {}.
 	MMachineOnline = "machines.online"
-	// Where the connector's sign-in comes from, the hub keeping the user's choice (GitHub's 授权来自哪里,
+	// Where the connector's sign-in comes from, the hub keeping the user's choice (GitHub's "Authorized from",
 	// docs/connector-protocol.md): {} → AuthView, AuthSource → AuthView.
 	MAuthGet = "auth.get"
 	MAuthSet = "auth.set"
@@ -262,7 +262,7 @@ type Init struct {
 }
 
 // Listener is a connector that also hears the hub's events: a plugin that contributes the events extension point
-// (docs/extensions.md「事件」) next to its connector. Hear gets the event's name without its namespace
+// (docs/extensions.md "Events") next to its connector. Hear gets the event's name without its namespace
 // ("agent.needs_you") and its parameters, on a goroutine of its own; nothing is answered.
 type Listener interface {
 	Hear(ctx context.Context, event string, params json.RawMessage)

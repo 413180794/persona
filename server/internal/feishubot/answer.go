@@ -12,7 +12,7 @@ import (
 
 // A model's final answer laid out as cards by plain rules (no model call): the first "# " heading becomes the
 // header, a status word in it (or on a short line of its own) a tag on the header, "## " headings and lines like
-// "一、…" start sections with a divider between them, pipe tables become table elements, "备注：" lines small grey
+// Chinese-numeral lines ("1." with an ideographic comma) start sections with a divider between them, pipe tables become table elements, "Note:" lines small grey
 // text, and the answer's web links a row of open_url buttons on the last card. What does not fit one card goes on to
 // the next; past maxParts cards the rest is left out (Answer.Clipped) and the app has the whole answer.
 
@@ -80,7 +80,7 @@ type answerStatus struct {
 	template string // the header's color
 }
 
-var answerStatuses = []answerStatus{ // in order: "没有变动" holds "有变动"
+var answerStatuses = []answerStatus{ // in order: the longer "no changes" wording contains the "changed" one
 	{[]string{"请验收", "待验收"}, "请验收", "orange", Orange},
 	{[]string{"无变动", "没有变动", "没变动", "无改动", "没有改动"}, "无变动", "neutral", Grey},
 	{[]string{"有变动", "有改动"}, "有变动", "blue", Blue},
@@ -90,7 +90,7 @@ var (
 	answerSectionRe = regexp.MustCompile(`^[一二三四五六七八九十]{1,3}[、.．]\s*\S`)
 	answerNoteRe    = regexp.MustCompile(`^(?:>\s*)?(?:备注|注|附注|PS|P\.S\.)\s*[:：]`)
 	answerStatusRe  = regexp.MustCompile(`^(?:当前状态|状态|结论)\s*[:：]\s*`)
-	// answerStatusLabelRe: what is left of a heading that was a status after its label (「状态：请验收」).
+	// answerStatusLabelRe: what is left of a heading that was a status after its label ("Status: please review").
 	answerStatusLabelRe = regexp.MustCompile(`^(?:当前状态|状态|结论)\s*[:：]?$`)
 	// answerEmptyBracketsRe: brackets a status was taken out of.
 	answerEmptyBracketsRe = regexp.MustCompile(`[【（(\[]\s*[】）)\]]`)
@@ -446,7 +446,7 @@ func answerTableRowCap(ncol int) int {
 	return min(answerTableRows, max(1, (answerMaxComponents-1)/ncol-1))
 }
 
-// tableFallback renders a table as "- 列名：值，…" bullet lines, never pipe source (the refused-card fallback is rich text, no GFM tables).
+// tableFallback renders a table as "- column: value, …" bullet lines, never pipe source (the refused-card fallback is rich text, no GFM tables).
 func tableFallback(names, bodyLines []string) string {
 	var lines []string
 	if len(bodyLines) == 0 {
@@ -535,13 +535,13 @@ func fenceMarker(t string) string {
 	return ""
 }
 
-// isSectionLine: a line like "一、背景" or "**二、结论**" (short and without sentence punctuation: a heading).
+// isSectionLine: a line like "1. Background" or "**2. Conclusion**" in Chinese numerals (short and without sentence punctuation: a heading).
 func isSectionLine(t string) bool {
 	s := stripBold(t)
 	if !answerSectionRe.MatchString(s) || utf8.RuneCountInString(s) > 24 {
 		return false
 	}
-	return !strings.ContainsAny(s, "。！？；，!?;") // "一、本周处理了两次，都解决了。" is a sentence
+	return !strings.ContainsAny(s, "。！？；，!?;") // "1. Handled twice this week, both resolved." (full-width punctuation) is a sentence
 }
 
 // plainHeading is a heading line's text: no "#", no bold.
@@ -571,10 +571,10 @@ func titleStatus(title string) string {
 	return ""
 }
 
-// lineStatus is the status a line of the body starts with ("状态：无变动", "**请验收**", "【有变动】…"): only at the
-// start, so "这次没有变动的文件" in a sentence does not count.
+// lineStatus is the status a line of the body starts with ("Status: no changes", "**please review**", "[changed]…"): only at the
+// start, so "the files with no changes this time" in a sentence does not count.
 func lineStatus(t string) string {
-	if answerListRe.MatchString(t) { // "- 无变动的文件已跳过" is an item, not the answer's status
+	if answerListRe.MatchString(t) { // "- files with no changes were skipped" is an item, not the answer's status
 		return ""
 	}
 	s := strings.Trim(t, " >*_#`【】[]()（）-•·")
@@ -639,16 +639,16 @@ func trimURL(u string) string {
 	}
 }
 
-// withoutStatus is title without the status word the tag beside it already says ("登录页改版（请验收）" → "登录页改版"),
+// withoutStatus is title without the status word the tag beside it already says ("Login redesign (please review)" → "Login redesign"),
 // or title as it is when that would leave nothing.
 func withoutStatus(title string, st answerStatus) string {
 	for _, w := range st.words {
 		if i := strings.Index(title, w); i >= 0 {
 			t := strings.TrimSpace(title[:i]) + " " + strings.TrimSpace(title[i+len(w):])
-			t = answerEmptyBracketsRe.ReplaceAllString(t, "") // 「【请验收】」 leaves 【 】
+			t = answerEmptyBracketsRe.ReplaceAllString(t, "") // "[please review]" in full-width brackets leaves the empty brackets
 			t = strings.Trim(t, " -—·|:：，,")
 			if answerStatusLabelRe.MatchString(t) {
-				t = "" // 「状态：请验收」 leaves only its label
+				t = "" // "Status: please review" leaves only its label
 			}
 			if t = strings.TrimSpace(t); t != "" {
 				return t
@@ -660,7 +660,7 @@ func withoutStatus(title string, st answerStatus) string {
 }
 
 // Retitle puts icon+title (in template's color, cut to 60 runes) over a card laid out by RenderAnswer, keeping what its
-// own header said: a status (请验收 / 无变动 / 有变动) stays as its tag and color, and its own title, when it is
+// own header said: a status (please review / no changes / changed) stays as its tag and color, and its own title, when it is
 // neither title nor only the status, becomes the card's first line instead of being lost.
 func (c *Card) Retitle(icon, title, template string) *Card {
 	title = strings.TrimSpace(title)
@@ -686,7 +686,7 @@ func (c *Card) Retitle(icon, title, template string) *Card {
 	return c
 }
 
-// statusOnly: a heading that says nothing but one of the statuses (「请验收」, 「状态：无变动」…).
+// statusOnly: a heading that says nothing but one of the statuses ("please review", "Status: no changes"…).
 func statusOnly(heading string) (answerStatus, bool) {
 	for _, st := range answerStatuses {
 		for _, w := range st.words {

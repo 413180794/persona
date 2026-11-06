@@ -41,8 +41,9 @@ func listedExample(t *testing.T, h *Manager) map[string]any {
 	return nil
 }
 
-// 进知识库 off: the archive is not asked at all, while the inbox goes on; 进收件箱 off: nothing new comes and what
-// came stays. Both are kept for the next start, and only a connector that has the feed can turn it off.
+// "Add to knowledge base" off: the archive is not asked at all, while the inbox goes on; "Add to Inbox" off: nothing
+// new comes and what came stays. Both are kept for the next start, and only a connector that has the feed can turn it
+// off.
 func TestConnectorFeedsTurnedOff(t *testing.T) {
 	ctx := context.Background()
 	h := newTestManager(t)
@@ -121,8 +122,8 @@ func TestConnectorFeedsTurnedOff(t *testing.T) {
 	}
 }
 
-// 删除已存的知识库内容 removes the connector's chats and people from the knowledge base and turns 进知识库 off for
-// good; the connector keeps running and its inbox items stay.
+// "Delete saved knowledge base content" removes the connector's chats and people from the knowledge base and turns "Add
+// to knowledge base" off for good; the connector keeps running and its inbox items stay.
 func TestConnectorArchiveDelete(t *testing.T) {
 	h := newTestManager(t)
 	st := newKeepStore()

@@ -20,7 +20,7 @@ import (
 )
 
 // Launcher health (docs/launcher-health.md): every launcher on every machine is checked now and then with the same
-// one-word request 测试可用性 sends (launchers.check); a failed start counts too. A launcher whose latest result is a
+// one-word request "Test availability" sends (launchers.check); a failed start counts too. A launcher whose latest result is a
 // failure is not used for a new agent while another machine has a healthy one; known errors are repaired (the node
 // updates its CLI, else an agent with the configured skill), and what stays broken is blocked for the user to see.
 // Nothing is pushed.
@@ -445,7 +445,7 @@ func (s *Service) healthLaunchers(ctx context.Context, machine string) ([]string
 	return out, nil
 }
 
-// startLauncher is the launcher a start with launcher runs: itself, else 模型配置 › Agents', else claude.
+// startLauncher is the launcher a start with launcher runs: itself, else model settings › Agents', else claude.
 func (s *Service) startLauncher(ctx context.Context, launcher string) string {
 	if launcher != "" {
 		return launcher
@@ -616,7 +616,7 @@ func (s *Service) healthLines(ctx context.Context, machine string) string {
 	return b.String()
 }
 
-// launcherWithHealth is a launcher of 新建 Agent's picker with how its last check went on that machine.
+// launcherWithHealth is a launcher of the "New Agent" picker with how its last check went on that machine.
 type launcherWithHealth struct {
 	ConfiguredLauncher
 	Health *launcherHealthView `json:"health,omitempty"`

@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// InteractionRecord is fleetMem's interaction with its outcome (the 改答 route reads it).
+// InteractionRecord is fleetMem's interaction with its outcome (the "Change answer" route reads it).
 func (m *fleetMem) InteractionRecord(_ context.Context, id string) (*db.InteractionRecord, error) {
 	m.fmu.Lock()
 	defer m.fmu.Unlock()
@@ -264,7 +264,7 @@ func TestDelegateOnlyQuestions(t *testing.T) {
 	}
 }
 
-// 改答: the user's answer to a question the assistant answered goes to the agent as a message (with what the
+// "Change answer": the user's answer to a question the assistant answered goes to the agent as a message (with what the
 // assistant had said), once; one the user answered themselves is refused.
 func TestReanswer(t *testing.T) {
 	df := newDelegateFleet(t, func(DelegateParams) (DelegateResult, error) {

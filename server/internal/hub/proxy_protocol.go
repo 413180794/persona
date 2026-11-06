@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proxyproto"
 )
 
-// ProxyProtocolConfig is security.proxy_protocol (docs/network.md「PROXY protocol」): the hub sits behind a TCP proxy
+// ProxyProtocolConfig is security.proxy_protocol (docs/network.md "PROXY protocol"): the hub sits behind a TCP proxy
 // or port forward that passes each client's address on with the PROXY protocol, so that sourceOf, the admin UI's
 // scope, rate limits and logs see the client rather than the proxy (on the same machine: loopback, trusted with
 // everything). Unset, no header is read anywhere, as before.

@@ -13,7 +13,7 @@ import (
 )
 
 // newQuietService is newTaskService with the main conversation conv1 (idle, on machine server), a short notice
-// delay and 督办 messages (supervise.go) that come at once and often.
+// delay and supervision messages (supervise.go) that come at once and often.
 func newQuietService(t *testing.T) (*Service, *fakeHub) {
 	t.Helper()
 	old := quietNoticeDelay
@@ -77,7 +77,7 @@ func agentTurn(s *Service, f *fakeHub, status, text string, pending int) {
 	}
 }
 
-// A task the main conversation opens is quiet and supervised: when it is done, the main conversation gets one 督办
+// A task the main conversation opens is quiet and supervised: when it is done, the main conversation gets one supervision
 // message with what its agent said, as is (not wrapped like a message from another conversation), and the task waits
 // for review (not closed); the receipt is there as always.
 func TestQuietTaskTellsTheMainConversation(t *testing.T) {
@@ -637,7 +637,7 @@ func TestReportingConversationAgentStartIsToldThere(t *testing.T) {
 }
 
 // A reporting conversation's task_review on its own unsupervised task closes it without making a ledger, so the task
-// never joins the main conversation's 督办 messages; rework and needs_user are refused (#4262).
+// never joins the main conversation's supervision messages; rework and needs_user are refused (#4262).
 func TestReportingConversationTaskReviewMakesNoLedger(t *testing.T) {
 	s, f := newQuietService(t)
 	ctx := context.Background()

@@ -15,9 +15,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The model providers 设置 › 模型供应商 adds a provider from (the user fills in only the key): the built-in ones
-// (presets_builtin.json, docs/onboarding.md 4.3) and the plugins' (docs/extensions.md「模型供应商」, as the hub has them:
-// plugins.presets). A launcher on a preset's gateway offers the gateway's models in 新建 Agent.
+// The model providers Settings › Model providers adds a provider from (the user fills in only the key): the built-in ones
+// (presets_builtin.json, docs/onboarding.md 4.3) and the plugins' (docs/extensions.md "Model providers", as the hub has them:
+// plugins.presets). A launcher on a preset's gateway offers the gateway's models in "New Agent".
 
 type LauncherPreset = assistantwire.LauncherPreset
 
@@ -151,8 +151,8 @@ func (s *Service) presetFill(ctx context.Context, in *launcherInput) error {
 }
 
 // presetDisplayName is the display name a provider gets when the hub named it from preset (launcherNameFor gave it
-// n, 1 for the bare slug): the preset's localized name, with the same number after it when n > 1 (「智谱 GLM 2」), so
-// two providers from one preset tell apart in 模型配置. A provider the user named keeps showing that name.
+// n, 1 for the bare slug): the preset's localized name, with the same number after it when n > 1 ("Zhipu GLM 2"), so
+// two providers from one preset tell apart in Model configuration. A provider the user named keeps showing that name.
 func (s *Service) presetDisplayName(ctx context.Context, preset string, n int) string {
 	pr, ok := s.presetByID(ctx, preset)
 	if !ok {
@@ -227,7 +227,7 @@ func normalGateway(u string) string {
 }
 
 // withPresetModels adds a preset's models to a launcher's /model list (its own entries first, then the gateway's that
-// are not among them): a gateway with a hundred models otherwise shows only the launcher's one in 新建 Agent.
+// are not among them): a gateway with a hundred models otherwise shows only the launcher's one in "New Agent".
 func withPresetModels(res proto.LauncherModels, pr LauncherPreset) proto.LauncherModels {
 	seen := map[string]bool{}
 	for _, m := range res.Models {

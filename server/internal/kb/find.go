@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Searching for the app (docs/knowledge.md「搜索」): results are entries, not lines. Every line containing all the
+// Searching for the app (docs/knowledge.md "Search"): results are entries, not lines. Every line containing all the
 // words is found (archived messages newest day first), grouped by the entry it belongs to, the entries ranked
 // (name matches, then importance, relevance, how much matched, recency), a few lines kept for each. Opening one, Matches
 // gives every place in that entry with a few messages around each, and Day the whole day a message is in.

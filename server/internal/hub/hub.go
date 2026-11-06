@@ -65,7 +65,7 @@ type Hub struct {
 	// stopping: a planned stop has begun (beginStop, docs/hub-restart.md): what the stop itself causes (machines going
 	// offline, their questions ending) is not news for the apps, which reconnect to the next hub in a moment.
 	stopping atomic.Bool
-	// slot: the hub's edge started this process (hub_edge.go, docs/hub-restart.md「蓝绿切换」); it listens on the edge's
+	// slot: the hub's edge started this process (hub_edge.go, docs/hub-restart.md "Blue-green switch"); it listens on the edge's
 	// sockets, and an update or a rollback hands over to the next slot instead of exec'ing. nil: the hub listens itself.
 	slot *hubedge.Slot
 	// deltas: the live text of each session's message being generated, as last relayed (machine, session -> text): a
@@ -402,7 +402,7 @@ var (
 	phoneConfirmWait = 30 * time.Minute
 )
 
-// phoneConfirmedTools are the phone's tools that ask the user before they run (docs/phone-tools.md「确认流程」).
+// phoneConfirmedTools are the phone's tools that ask the user before they run (docs/phone-tools.md "Confirmation flow").
 var phoneConfirmedTools = map[string]bool{
 	"phone_calendar_create_event": true,
 	"phone_reminders_create":      true,

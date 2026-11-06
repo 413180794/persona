@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Delivery (#3306, docs/todos.md「交付」): a task's work is done when it is live and checked, not when a PR is open or
+// Delivery (#3306, docs/todos.md "Delivery"): a task's work is done when it is live and checked, not when a PR is open or
 // merged. A task's agent is told so with its prompt (assistant/task_delivery) and ends its last reply with a line
 // saying how far it got; the done judge reads that line and the replies and says the delivery too. A finished task
 // stopped at a PR, merged but not deployed, or deployed but off by default stays open with where it is held and who

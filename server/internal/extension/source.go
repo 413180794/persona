@@ -25,7 +25,7 @@ const (
 	PackageFiles = 20000
 )
 
-// Source is where a package comes from (docs/plan-extensions.md「来源」).
+// Source is where a package comes from (docs/plan-extensions.md "Sources").
 type Source struct {
 	Kind string // dir | file | https | remote | upload | market
 	Path string // dir, file: a path on the hub's machine; https: the URL without the fragment; upload: the file's name

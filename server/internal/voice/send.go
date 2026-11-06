@@ -15,12 +15,12 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Handing work to the bound conversation (protocol 2, docs/voice.md「发送、门槛和 409」). A delegation is sent at once,
+// Handing work to the bound conversation (protocol 2, docs/voice.md "Sending, the gate and 409"). A delegation is sent at once,
 // as the model made it, once the user-speech gate lets it (gate.go); what it starts with decides what it is:
-//   - 「状态：」 asks how the conversation stands: answered from its live state (status.go), never sent, no gate;
-//   - 「停止：」 stops it (the app's 停止 button), behind the gate;
+//   - "Status:" asks how the conversation stands: answered from its live state (status.go), never sent, no gate;
+//   - "Stop:" stops it (the app's "Stop" button), behind the gate;
 //   - while a question of it is asked by voice, anything else is the answer (asks.go), behind the gate;
-//   - 「回答：」 otherwise is the user's answer to what it asked in words: sent without the mark;
+//   - "Answer:" otherwise is the user's answer to what it asked in words: sent without the mark;
 //   - anything else is an instruction, sent as it is: refused by the hub (409) it is told why and the app may send it
 //     again (resend); while a card waits, a word that only approves or refuses is not sent (cards are tapped).
 // A run that the hub took (200) folds the ones not answered yet on the same conversation (tracker.adopt): one refused
@@ -37,14 +37,14 @@ var leadMarks = []struct {
 }
 
 // openQuotes and closeQuotes are what a model may wrap a mark, or the whole task, in: the instructions write the marks
-// in corner brackets (「状态：」), and a model may copy them.
+// in full-width corner brackets (around "Status:"), and a model may copy them.
 const (
 	openQuotes  = "「『\"“'‘"
 	closeQuotes = "」』\"”'’"
 )
 
-// splitMark is what a delegation's text starts with ("" none) and the rest of it. The mark may be quoted (「状态：…」,
-// "Stop: …", 「停止」：…) and have a space before its colon.
+// splitMark is what a delegation's text starts with ("" none) and the rest of it. The mark may be quoted (corner brackets around mark and colon,
+// "Stop: …", brackets around the mark only with a full-width colon after) and have a space before its colon.
 func splitMark(task string) (kind, rest string) {
 	t := strings.TrimSpace(task)
 	s := strings.TrimLeft(t, openQuotes)
@@ -160,7 +160,7 @@ type sendFail struct {
 	plan, resendable            bool
 }
 
-// boundFailure is what a failed send to the bound conversation was (docs/voice.md「拒绝怎么映射」).
+// boundFailure is what a failed send to the bound conversation was (docs/voice.md "How refusals map").
 func boundFailure(err error) sendFail {
 	var he *hubError
 	var ms maybeSentError
@@ -301,7 +301,7 @@ func (t *tracker) sendTo(ctx context.Context, r *voiceRun, opts sendOpts) error 
 	return nil
 }
 
-// resend sends again a run the hub refused, as the app asks (its 重发 / 清空并发送): the same id, a new run (restart).
+// resend sends again a run the hub refused, as the app asks (its "Resend" / "Clear and send"): the same id, a new run (restart).
 // clearDraft not "": clear the box first, what the refusal said can be cleared (its clearable, which the node checks
 // against the box: an IDE's selection marker in the draft is not part of it). A run this connection does not know (not
 // refused, or before a reconnect) is let be.
@@ -333,7 +333,7 @@ func (r *voiceRun) restart(now time.Time) {
 	r.Seen, r.ended, r.notFound, r.waiting, r.unsent = false, false, false, false, false
 }
 
-// resume follows the runs the app handed back of a call it picked up again (docs/voice.md「重连和续接」): from their
+// resume follows the runs the app handed back of a call it picked up again (docs/voice.md "Reconnecting and resuming"): from their
 // base, unseen, so a turn that ended while the call was away is read at once; their words are said (their calls are
 // gone). One handed back while it was sending is not sent again: its message is looked for, and is unknown when it
 // never shows.
@@ -377,7 +377,7 @@ func (t *tracker) resume(runs []resumeRun) {
 	}
 }
 
-// stopped ends the runs on the bound conversation once its turn was stopped (「停止：」): what the model was told of
+// stopped ends the runs on the bound conversation once its turn was stopped ("Stop:"): what the model was told of
 // the stop is their end, nothing more is said (a run that reads the stop first ends the same way: stopAsked, finish).
 // Nor is the stopped turn observed: the hub's interrupt returns before the conversation is listed as stopped (the
 // agent gets an Esc), and it is no turn begun elsewhere.

@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// Tools only the assistant (the 对话 tab's headless Claude) gets: asking on the phone (headless claude has no
+// Tools only the assistant (the "Chat" tab's headless Claude) gets: asking on the phone (headless claude has no
 // AskUserQuestion), pushing, waking itself up later, its conversations, the tasks it hands out, the coding agents the
 // hub already tracks, the knowledge base, the inbox's drafts, Feishu's /agent replies and Persona's own settings.
 // The hub lists them with its own and sends their calls here (Handler.Tool). Those on the hub's knowledge base,
@@ -74,7 +74,7 @@ func (s *Service) appTool(ctx context.Context, app string, call ToolCall, args j
 }
 
 func (s *Service) runTool(ctx context.Context, machine, self, name string, args json.RawMessage) (string, error) {
-	if name == "kb_update" { // health stays in the health space (docs/health.md「隔离」)
+	if name == "kb_update" { // health stays in the health space (docs/health.md "Isolation")
 		if space, _ := s.selfSpace(ctx, self); space == SpaceHealth {
 			return "", errors.New("the health space doesn't write the knowledge base: health information stays in its conversations and memory")
 		}
@@ -693,7 +693,7 @@ func (s *Service) toolAgentRead(ctx context.Context, machine, id string, turns i
 }
 
 // questionSummary is every question of an interaction with its options, so agents_list carries what answering one
-// (interaction_answer) needs without a second call: 发吗？（发 / 不发）.
+// (interaction_answer) needs without a second call: "Send? (Send / Don't send)".
 func questionSummary(ix proto.Interaction) string {
 	parts := make([]string, 0, len(ix.Questions))
 	for _, q := range ix.Questions {

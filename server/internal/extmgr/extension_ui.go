@@ -23,7 +23,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Declarative UI and events (docs/extensions.md「声明式 UI」「事件」). The apps ask the hub what plugins draw where
+// Declarative UI and events (docs/extensions.md "Declarative UI" "Events"). The apps ask the hub what plugins draw where
 // (GET /api/v1/plugins/-/ui) and for one of them (POST /api/v1/plugins/{id}/-/ui/{ui}); the hub asks the plugin
 // (ui.render, ui.action), holds the View to what the apps draw (plugin.CheckView) and gives it to them. A launcher
 // section may reach the launcher's gateway with its key the way quota does (gateway.http), never seeing the key. An

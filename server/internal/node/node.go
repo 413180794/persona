@@ -120,7 +120,7 @@ type Node struct {
 	typing    typingLocks     // one send at a time per session (sendsafe.go)
 	cx        codexCards      // Codex questions and approvals listed to the hub (codexask.go)
 	kept      map[string]bool // sessions always listed (node.configure keep_sessions)
-	forked    map[string]bool // sessions 分支到新聊天 made (fork.go): listed however short they are
+	forked    map[string]bool // sessions "Branch to new chat" made (fork.go): listed however short they are
 	starts    startLog        // sessions starting in the background (starting.go)
 	ups       uploads         // files arriving from the phone (upload.go)
 	sysOnce   sync.Once       // system: read once (metrics.go)
@@ -167,7 +167,7 @@ type Node struct {
 	fileUse map[string]uint64
 	useTick uint64
 
-	// The Feishu gate for the assistant (larkgate.go): the hub's config, cached, and the writes 本会话总是允许 let through.
+	// The Feishu gate for the assistant (larkgate.go): the hub's config, cached, and the writes "Always allow in this session" lets through.
 	larkCfg     proto.AssistantLark
 	larkCfgAt   time.Time
 	larkAllowed map[string]bool
@@ -364,7 +364,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.handleUpdate(ctx, method, params)
 	}
 	switch method {
-	case "node.doctor": // the machine page's 这台电脑能做什么: node doctor's report, read-only unless {"fix":true} (doctor_rpc.go)
+	case "node.doctor": // the machine page's "What this computer can do": node doctor's report, read-only unless {"fix":true} (doctor_rpc.go)
 		return n.doctor(ctx, params, false)
 	case "node.doctor.fix": // the same path as `node doctor --fix`: Persona's own generated files only
 		return n.doctor(ctx, params, true)
@@ -488,7 +488,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{}, nil
 	case "node.info":
 		return n.info(ctx), nil
-	case "herdr.server.start": // the 启动 button beside 「herdr 没在运行」 (herdrstart.go)
+	case "herdr.server.start": // the "Start" button beside "herdr is not running" (herdrstart.go)
 		return n.startHerdrServer(ctx)
 	case "herdr.server.status": // whether it answers now: the hub asks when an app reads the row (herdrstart.go)
 		running, known := n.herdrRunning(ctx)
@@ -683,7 +683,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", p.AgentType, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 		return map[string]any{"session": s}, err
-	case "session.fork": // 分支到新聊天 (fork.go)
+	case "session.fork": // "Branch to new chat" (fork.go)
 		id, err := n.fork(ctx, p.SessionID, p.AtItemID)
 		return map[string]any{"session_id": id}, err
 	case "assistant.send":
@@ -821,7 +821,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "panes.list": // the terminal browser: every workspace, tab and pane, agent or shell (panes.go)
 		n.configured()
 		return n.listPanes(ctx)
-	case "panes.new": // an explicit 新建终端 from the browser: a shell tab in a workspace (panes.go)
+	case "panes.new": // an explicit "New terminal" from the browser: a shell tab in a workspace (panes.go)
 		var a struct {
 			Kind        string `json:"kind"`
 			WorkspaceID string `json:"workspace_id"`
@@ -832,7 +832,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return ok(n.closePane(ctx, p.Pane))
 	case "panes.split":
 		return n.splitPane(ctx, p.Pane, p.Direction)
-	case "panes.agent": // 在这里运行 Agent…: a launcher's agent in a plain shell pane (panes_actions.go)
+	case "panes.agent": // "Run agent here…": a launcher's agent in a plain shell pane (panes_actions.go)
 		s, err := n.runAgentInPane(ctx, p.Pane, p.Launcher)
 		if err != nil {
 			return nil, err
@@ -844,7 +844,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return n.gitOp(ctx, dir, p.Op)
-	case "worktree.prepare": // 新建 worktree…: what the dialog starts from (worktree.go)
+	case "worktree.prepare": // "New worktree…": what the dialog starts from (worktree.go)
 		return n.worktreePrepare(ctx, p.Kind, p.WorkspaceID)
 	case "worktree.create": // a Git worktree of a workspace's repository, opened as a workspace (worktree.go)
 		return n.worktreeCreate(ctx, p.Kind, p.WorkspaceID, p.Branch, p.Path)
@@ -1044,7 +1044,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "git.log":
 		list, err := n.gitLog(ctx, p.Cwd, p.Skip, p.Limit)
 		return map[string]any{"commits": list}, err
-	case "skills.list": // the skills the assistant gets on this machine (docs/hub-update.md「skill 从二进制里拿出来」)
+	case "skills.list": // the skills the assistant gets on this machine (docs/hub-update.md "Moving skills out of the binary")
 		return map[string]any{"skills": assistantskills.List(assistantskills.UserDir(), n.signedInConnectors())}, nil
 	case "assistant.prepare":
 		var a struct {

@@ -18,8 +18,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The assistant's own settings (settings `assistant`, docs/assistant.md「和 hub 的边界」): the machine its
-// conversations run on, its launcher, the user's time zone, 关于我, the main conversation and the ones it replaced,
+// The assistant's own settings (settings `assistant`, docs/assistant.md "Boundary with the hub"): the machine its
+// conversations run on, its launcher, the user's time zone, "About me", the main conversation and the ones it replaced,
 // and whether tasks from the main conversation are told only there. Only the assistant reads and writes them; hub.json's
 // assistant section is their default (the hub's hello). It reports what the hub's own features need of them in every
 // snapshot (Profile), and serves GET / PUT /api/v1/assistant, the warm-up and the memory routes.
@@ -52,7 +52,7 @@ type Settings struct {
 	// MainTasksQuiet: tasks the main conversation opens are told only there, not pushed, on the Live Activity or in
 	// task badges (#1731). nil is on (the default); the view always says what is in effect.
 	MainTasksQuiet *bool `json:"main_tasks_quiet,omitempty"`
-	// StartRequestedTasks: a task_plan task the user asked for in so many words starts without the card's 开始
+	// StartRequestedTasks: a task_plan task the user asked for in so many words starts without the card's "Start"
 	// (#2559). nil is on (the default).
 	StartRequestedTasks *bool `json:"start_requested_tasks,omitempty"`
 	// RecordingDays: how many days the phone's recordings stay in the knowledge base (#3235); nil is 14.
@@ -137,7 +137,7 @@ func (s *Service) updateSettings(ctx context.Context, fn func(*Settings) error) 
 
 // settings are the settings in effect, what the rest of the package reads (the main conversation, the machine, the time
 // zone; isMain and mainTasksQuiet for short): the machine one the hub has (else the hub's default), the launcher the
-// assistant's own (else hub.json's, else claude; 模型配置 › 主对话 goes over it: launcherNow). A read that fails once
+// assistant's own (else hub.json's, else claude; Model configuration › Main chat goes over it: launcherNow). A read that fails once
 // they were read serves those (settingsLastGood): the zero value would say there is no main conversation, which
 // would let it be archived and title it by its first message for that moment.
 func (s *Service) settings(ctx context.Context) Settings {
@@ -174,7 +174,7 @@ func (s *Service) mainTasksQuiet(ctx context.Context) bool {
 	return quietOn(s.settings(ctx).MainTasksQuiet)
 }
 
-// startRequestedTasks: task_plan starts the tasks the user asked for without waiting for 开始 (start_requested_tasks,
+// startRequestedTasks: task_plan starts the tasks the user asked for without waiting for "Start" (start_requested_tasks,
 // on by default).
 func (s *Service) startRequestedTasks(ctx context.Context) bool {
 	return quietOn(s.settings(ctx).StartRequestedTasks)
@@ -225,7 +225,7 @@ func (s *Service) recordingDaysNow() int {
 	return *v.RecordingDays
 }
 
-// launcherNow is the launcher new conversations start with: 模型配置 › 主对话's, else the assistant's own.
+// launcherNow is the launcher new conversations start with: Model configuration › Main chat's, else the assistant's own.
 func (s *Service) launcherNow(ctx context.Context) string {
 	if rec, err := s.modelRecord(ctx, "assistant"); err == nil && rec.Binding.Provider != "" {
 		return strings.TrimPrefix(rec.Binding.Provider, "launcher.")
@@ -251,9 +251,9 @@ func (s *Service) profile(ctx context.Context, tasks []TaskView, todos *TodoRepo
 
 // keptSessions are the conversations their machines list however long they have been quiet: the main conversation,
 // the main ones it replaced, scheduled tasks' own, and the agents of open todos. Otherwise a busy machine's 80 newest
-// transcripts crowd them out of the list and the Persona tab has no 主对话 (2026-11-01: the main one, quiet for two
+// transcripts crowd them out of the list and the Persona tab has no main chat (2026-11-01: the main one, quiet for two
 // days, was gone), a weekly task's conversation drops out in between, with the app's link to it and the check that its
-// last run still goes, and an open task whose agent finished and exited shows 「正在开 Agent」 for ever: its todo
+// last run still goes, and an open task whose agent finished and exited shows "Starting Agent" for ever: its todo
 // names a session the list no longer has (#4510).
 func keptSessions(v Settings, tasks []TaskView, links []TodoLink) []SessionRef {
 	out := []SessionRef{}
@@ -343,7 +343,7 @@ func (s *Service) profileRoutes() {
 		apierr.WriteJSON(w, s.view(r.Context(), archived == "1" || archived == "true", space))
 	})
 	s.handle("PUT /api/v1/assistant", s.putSettings)
-	// warm: the app opened the 对话 tab; get a process ready so the first message skips claude's startup, and say what
+	// warm: the app opened the chat tab; get a process ready so the first message skips claude's startup, and say what
 	// the main conversation still needs.
 	s.handle("POST /api/v1/assistant/warm", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -392,7 +392,7 @@ func (s *Service) profileRoutes() {
 }
 
 // putSettings is PUT /api/v1/assistant: what the body sets changes ("-" as main clears it); a launcher is checked
-// on the assistant's machine and goes into 模型配置 › 主对话 too.
+// on the assistant's machine and goes into Model configuration › Main chat too.
 func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var in Settings
@@ -478,7 +478,7 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // checkLauncher: the assistant runs Claude Code (claude -p), Codex (codex app-server) or an agent runtime that says it
-// can (its launcher has assistant: docs/runtimes.md「助手」); anything else would fail every message. One that can't
+// can (its launcher has assistant: docs/runtimes.md "Assistant"); anything else would fail every message. One that can't
 // be probed now goes.
 func (s *Service) checkLauncher(ctx context.Context, machine, launcher string) error {
 	if launcher == "claude" {

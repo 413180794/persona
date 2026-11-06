@@ -246,7 +246,7 @@ func agentTitle(sess proto.Session) string {
 	return clip(oneLine(t), 24)
 }
 
-// agentPlace is "机器 · 空间 › 标签", the subtitle pushes use too.
+// agentPlace is "machine · space › tab", the subtitle pushes use too.
 func agentPlace(machine string, sess proto.Session) string {
 	place := machine
 	if sess.SpaceName != "" {

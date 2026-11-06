@@ -14,7 +14,7 @@ import (
 
 // POST /api/v1/notify lets an extension with the notify scope (or any full credential) alert the user's devices, at the level it
 // decides: what deserves a nudge (an agent stuck, a scheduled task failing, the same session not twice in half an
-// hour) is the extension's call, the delivery is the hub's (docs/extensions.md「发通知」, #1477).
+// hour) is the extension's call, the delivery is the hub's (docs/extensions.md "Sending notifications", #1477).
 
 // Notification levels a caller may ask for (UNNotificationInterruptionLevel). "critical" needs an Apple entitlement and
 // is not offered; "passive" never alerts, which is not what this is for.
@@ -59,7 +59,7 @@ const (
 	notifyPayloadMost = 3500
 	// notifyCollapse keeps a caller's ids apart from the hub's own (interaction ids).
 	notifyCollapse = "notify:"
-	// kindAlert is the WebSocket notify event's kind for these (docs/protocol.md「常驻连接通知」).
+	// kindAlert is the WebSocket notify event's kind for these (docs/protocol.md "Persistent connection notifications").
 	kindAlert = "alert"
 )
 
@@ -209,7 +209,7 @@ func (h *Hub) deliverNotify(in notifyRequest, machine, extID string) (map[string
 	if in.ID != "" {
 		collapse = notifyCollapse + in.ID
 	}
-	// Something that needs you: devices that turned off 需要你 (prefs.input) get none of these either.
+	// Something that needs you: devices that turned off "Needs you" (prefs.input) get none of these either.
 	wants := pushWants{Kind: "input"}.fn()
 	h.push.send(payload, collapse, wants)
 	h.notifyWS(kindAlert, payload, wants)

@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The plugin API (docs/extensions.md「hub 的接口」). /api/v1/plugins/<id>/… is relayed to the plugin, so the hub's own
+// The plugin API (docs/extensions.md "The hub's API"). /api/v1/plugins/<id>/… is relayed to the plugin, so the hub's own
 // routes live under the reserved "-" segment: /api/v1/plugins/-/… and /api/v1/plugins/<id>/-/….
 
 // PluginDetail is one plugin with its form, settings and permissions (GET /api/v1/plugins/{id}/-/).
@@ -32,17 +32,18 @@ type ExtensionDetail struct {
 	// UI are the pages it draws, opened from its settings (plugin_page, and nav_page also on the main navigation;
 	// POST /api/v1/plugins/{id}/-/ui/{ui}).
 	UI []UIPlace `json:"ui,omitempty"`
-	// Contributions are every contribution with its switch (docs/extensions.md「贡献的开关」); contributes (the ids by
-	// point) stays as it was.
+	// Contributions are every contribution with its switch (docs/extensions.md "Contribution switches"); contributes
+	// (the ids by point) stays as it was.
 	Contributions []ContributionView          `json:"contributions,omitempty"`
 	Depends       []extension.DependencyState `json:"depends,omitempty"`
 	ExtensionPack []extension.PackMember      `json:"extension_pack,omitempty"`
 	// NodeMachines is the field of Form that picks the computers its program runs on (an extension with one,
-	// docs/extensions.md「在电脑上运行的程序」): the apps show that program's state on each (Nodes) in the field's rows.
+	// docs/extensions.md "Programs that run on computers"): the apps show that program's state on each (Nodes) in the
+	// field's rows.
 	NodeMachines string `json:"node_machines,omitempty"`
 	// SecretsCleared are the secrets this change deleted (PUT …/-/config of the voice extension moving its address to
-	// another host deletes its key, docs/extensions.md「内置语音扩展」; a line in Warnings says so too). An error answer
-	// carries it too when they went before the configuration could not be saved.
+	// another host deletes its key, docs/extensions.md "Built-in voice extension"; a line in Warnings says so too). An
+	// error answer carries it too when they went before the configuration could not be saved.
 	SecretsCleared []string `json:"secrets_cleared,omitempty"`
 }
 
@@ -103,7 +104,7 @@ func actor(r *http.Request) string {
 }
 
 // fromThisMachine says whether r carries the master token over loopback: installing runs code on this machine, so
-// only its owner there (`personad plugin`) may; a phone may not (docs/extensions.md「安装」). The hub judged it and
+// only its owner there (`personad plugin`) may; a phone may not (docs/extensions.md "Installing"). The hub judged it and
 // says so (extwire.HeaderOwner): its credentials stay with it.
 func (h *Manager) fromThisMachine(r *http.Request) bool { return principalOf(r.Context()).Owner }
 
@@ -169,7 +170,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		}
 	}
 	// marketOr is owner for installing, upgrading, rolling back and removing, or a device with full rights when it is a
-	// plugin of a registered market (its package pinned by the market's index; docs/extensions.md「扩展市场」).
+	// plugin of a registered market (its package pinned by the market's index; docs/extensions.md "Extension markets").
 	marketOr := func(w http.ResponseWriter, r *http.Request, ofMarket func() bool) bool {
 		if ps() == nil {
 			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
@@ -213,7 +214,8 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			if fe := h.imessageOneMac(in.Config); fe != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				// The sentence alone as the error too: the web app shows it as is (没有保存：…), not as "machines: …".
+				// The sentence alone as the error too: the web app shows it as is (the Chinese "not saved: …"), not as
+				// "machines: …".
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": fe.Message, "code": "invalid_config", "field": fe.Path, "message": fe.Message})
 				return
 			}
@@ -414,8 +416,8 @@ func (ps *extensions) listCtx(ctx context.Context) []ExtensionView {
 }
 
 // nodeConfirmForm is the form with the computers' field asking before a machine is switched on (x-confirm), unless the
-// manifest asks something of its own: switching one on starts a program there (plan「七」「权限展示」). A copy: the
-// plugin's own schema is shared.
+// manifest asks something of its own: switching one on starts a program there (plan "7" "Showing permissions"). A copy:
+// the plugin's own schema is shared.
 func nodeConfirmForm(l i18n.Lang, s *extension.Schema, m *extension.Manifest) *extension.Schema {
 	if s == nil {
 		return nil

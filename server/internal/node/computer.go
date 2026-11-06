@@ -223,9 +223,9 @@ func computerCall(ctx context.Context, params json.RawMessage) (*proto.ComputerR
 		Session string          `json:"session"`
 		Tool    string          `json:"tool"`
 		Args    json.RawMessage `json:"args"`
-		// The Mac stays awake for a while after (awake.go), as the plugin's 「操作或开着 VNC 时保持唤醒」 says.
+		// The Mac stays awake for a while after (awake.go), as the plugin's "Keep awake while operating or with VNC open" says.
 		KeepAwake bool `json:"keep_awake"`
-		// The plugin's 点击音效: none, foreground or all (cua_extras.go).
+		// The plugin's "Click sound": none, foreground or all (cua_extras.go).
 		ClickSound string `json:"click_sound"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {

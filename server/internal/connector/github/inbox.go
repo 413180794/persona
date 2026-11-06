@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// The inbox (docs/plan-connectors.md「四 · 收件箱」): GitHub's unread notifications that ask something of the user —
+// The inbox (docs/plan-connectors.md "4 · Inbox"): GitHub's unread notifications that ask something of the user —
 // a review request, an @, a new comment or review on their PR / issue, their CI failing, an assignment — one thing
 // per PR / issue. Polled (the hub has no public address for webhooks) at the pace GitHub asks for.
 

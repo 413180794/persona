@@ -717,7 +717,7 @@ func TestDaemonGetsNoPackage(t *testing.T) {
 	}
 }
 
-// A message is one JSON object whatever its whitespace (docs/daemons.md「帧」): a daemon that pretty-prints its JSON
+// A message is one JSON object whatever its whitespace (docs/daemons.md "Frames"): a daemon that pretty-prints its JSON
 // is still heard, and a message that ends without a newline is still its own line.
 func TestDaemonMessagesMaySpanLines(t *testing.T) {
 	got := make(chan json.RawMessage, 1)

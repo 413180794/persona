@@ -13,7 +13,7 @@ import (
 	"github.com/emersion/go-smtp"
 )
 
-// A wrong password or 授权码 is the user's to fix: it says so in words and is a 400, not the server's raw
+// A wrong password or authorization code is the user's to fix: it says so in words and is a 400, not the server's raw
 // "imap: imap: login: imap: NO [AUTHENTICATIONFAILED] …" as a 502 (#3772).
 func TestAddAccountWrongPasswordSaysWhatToFix(t *testing.T) {
 	srv := newTestIMAP(t)
@@ -95,7 +95,7 @@ func TestLoginUnavailableIsNotAWrongPassword(t *testing.T) {
 	}
 }
 
-// Feishu tries two server sets at once: a wrong 授权码 from the reachable one is still told as the user's to fix.
+// Feishu tries two server sets at once: a wrong authorization code from the reachable one is still told as the user's to fix.
 func TestFeishuWrongPasswordIsAUserError(t *testing.T) {
 	rejected := loginRejected(&imap.Error{Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeAuthenticationFailed,
 		Text: "wrong authorization code"})
@@ -106,7 +106,7 @@ func TestFeishuWrongPasswordIsAUserError(t *testing.T) {
 	}
 }
 
-// Only password accounts get the 授权码 wording; an OAuth account's refused SMTP login stays as it was.
+// Only password accounts get the authorization-code wording; an OAuth account's refused SMTP login stays as it was.
 func TestSMTPLoginErrLeavesOAuthAlone(t *testing.T) {
 	refused := &smtp.SMTPError{Code: 535, Message: "Authentication unsuccessful"}
 	if err := smtpLoginErr(&MailAccount{Auth: AuthOAuth2}, refused); strings.Contains(err.Error(), "授权码") {

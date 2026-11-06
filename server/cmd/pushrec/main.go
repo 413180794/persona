@@ -1,5 +1,5 @@
 // Command pushrec records what an app gets from a hub over its WebSocket, for replaying it through the hub's push
-// logic (internal/hub/pushreplay_test.go, docs/testing.md「推送回放」). Run it on the hub's machine:
+// logic (internal/hub/pushreplay_test.go, docs/testing.md "Push replay"). Run it on the hub's machine:
 //
 //	go run ./cmd/pushrec 20m ~/push.jsonl
 //

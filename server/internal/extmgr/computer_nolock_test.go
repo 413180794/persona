@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// 「扩展开着时不自动锁屏」: turned on for a Mac from its page, the node is told to hold it (and again by noLockLoop);
-// off, or the plugin off, it is told to let go.
+// "Don't auto-lock while the extension is on": turned on for a Mac from its page, the node is told to hold it (and
+// again by noLockLoop); off, or the plugin off, it is told to let go.
 func TestNoAutoLock(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	ctx := context.Background()

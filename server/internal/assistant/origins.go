@@ -16,9 +16,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Where an assistant conversation comes from (docs/protocol.md「助手对话的来源」, #3264): the user's own (the app,
-// a channel's /new) or one the hub opened by itself (the inbox's AI 分身, a scheduled task, conversation_new, a
-// plugin's /agent). The apps keep the user's in 最近 and fold the others away. An origin is noted when the hub starts
+// Where an assistant conversation comes from (docs/protocol.md "Where assistant conversations come from", #3264): the user's own (the app,
+// a channel's /new) or one the hub opened by itself (the inbox's AI twin, a scheduled task, conversation_new, a
+// plugin's /agent). The apps keep the user's in "Recent" and fold the others away. An origin is noted when the hub starts
 // the conversation and never changes; conversations from before are backfilled from what the hub can still tell
 // (backfillOrigins), and what it can't is the user's.
 //
@@ -147,7 +147,7 @@ func (s *Service) conversationOrigins() (map[string]shownOrigin, bool) {
 
 // originEvidence is what the hub still knows about the conversations it started before origins were noted.
 type originEvidence struct {
-	inbox map[string]*InboxItem // the AI 分身's conversations, by session id
+	inbox map[string]*InboxItem // the AI twin's conversations, by session id
 	tasks map[string]string     // a task's own conversations → the task's id
 }
 
@@ -371,7 +371,7 @@ type inboxTitle struct {
 	started            time.Time
 }
 
-// inboxTitles are the titles the AI 分身's backfilled conversations get from their items.
+// inboxTitles are the titles the AI twin's backfilled conversations get from their items.
 func inboxTitles(gs []originGuess, ev originEvidence) []inboxTitle {
 	var out []inboxTitle
 	for _, g := range gs {
@@ -388,7 +388,7 @@ func inboxTitles(gs []originGuess, ev originEvidence) []inboxTitle {
 	return out
 }
 
-// backfillInboxTitles names the AI 分身's older conversations after their item, like the new ones (titleFixed): only
+// backfillInboxTitles names the AI twin's older conversations after their item, like the new ones (titleFixed): only
 // those nobody named.
 func (s *Service) backfillInboxTitles(list []inboxTitle) {
 	for _, t := range list {

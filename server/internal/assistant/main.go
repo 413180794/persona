@@ -103,7 +103,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		return fmt.Errorf("database: %w", err)
 	}
 	defer database.Close()
-	// The user's computers are the manager's: it connects them itself (internal/devices, docs/machines.md「谁连电脑」).
+	// The user's computers are the manager's: it connects them itself (internal/devices, docs/machines.md "Who connects the computers").
 	var bh *BusHub
 	var svc *Service
 	var ext *extmgr.Manager

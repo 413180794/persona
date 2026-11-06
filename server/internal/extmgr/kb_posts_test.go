@@ -13,8 +13,8 @@ import (
 )
 
 // The posts a connector's program hands the knowledge base go to the assistant in this process (its archive is the
-// knowledge base's, tested in internal/assistant): the manager checks the connector may write now (进知识库) and
-// passes each call on with the connector's names.
+// knowledge base's, tested in internal/assistant): the manager checks the connector may write now ("Add to knowledge
+// base") and passes each call on with the connector's names.
 
 // postsManager is a manager with a fake assistant and a program connector "feed" (an archive, also filing under
 // "posts").
@@ -47,7 +47,8 @@ func progCall[T any](t *testing.T, c *proc.Conn, method string, params any) (T, 
 }
 
 // posts.put, posts.comments, posts.pending and archive.chats reach the knowledge base with the connector's names, and
-// its answers come back to the program; 进知识库 off, nothing goes; the knowledge base not there: assistant_offline.
+// its answers come back to the program; "Add to knowledge base" off, nothing goes; the knowledge base not there:
+// assistant_offline.
 func TestConnectorPostsIntoTheKnowledgeBase(t *testing.T) {
 	h, a, c := postsManager(t)
 	a.on(assistantwire.MethodKBPostsPut, func(json.RawMessage) (any, error) {
@@ -92,7 +93,7 @@ func TestConnectorPostsIntoTheKnowledgeBase(t *testing.T) {
 		sent.Connector != "feed" {
 		t.Fatalf("archived chats asked: %+v", sent)
 	}
-	// 进知识库 off: nothing goes in.
+	// "Add to knowledge base" off: nothing goes in.
 	if err := h.connectors.SetFeed("feed", connector.FeedArchive, false); err != nil {
 		t.Fatal(err)
 	}

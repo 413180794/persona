@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// ---- extension_metrics (docs/extensions.md「运行情况」) ----
+// ---- extension_metrics (docs/extensions.md "Run stats") ----
 
 // ExtensionMetricsRow is one extension's counts over one 5-minute bucket.
 type ExtensionMetricsRow struct {

@@ -10,17 +10,17 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Inbox events, phase 1 (docs/inbox.md「事件与处理链条（第一期）」): an item is an event. Besides what it always had it
-// keeps its 处理链条 (chain: the key calls in time order, every one recorded by the program where it happens, never
+// Inbox events, phase 1 (docs/inbox.md "Events and the handling chain (phase 1)"): an item is an event. Besides what it always had it
+// keeps its handling chain (chain: the key calls in time order, every one recorded by the program where it happens, never
 // written by a model), whether it is urgent, the manager's recap, the processing conversation bound to it (handling),
 // at most one suggestion, and the items it is related to across atoms. Its section (status) is computed from those.
 
 // Item statuses (InboxItem.Status, listed for open items only).
 const (
-	StatusAction  = "action"  // 需要你
-	StatusWorking = "working" // 进行中
-	StatusFYI     = "fyi"     // 知悉即可
-	StatusNoise   = "noise"   // 已折叠
+	StatusAction  = "action"  // "Needs you"
+	StatusWorking = "working" // "In progress"
+	StatusFYI     = "fyi"     // "FYI"
+	StatusNoise   = "noise"   // "Folded"
 )
 
 // Chain entry kinds (InboxChainEntry.Kind).
@@ -302,7 +302,8 @@ func batchStart(it *InboxItem, prev inboxSeen, n int, fresh bool) string {
 	return it.Last
 }
 
-// contextLine is a message line of a chat's context as the Feishu plugin writes it: 「[01-02 15:04] 张三（@了我）：…」.
+// contextLine is a message line of a chat's context as the Feishu plugin writes it: "[01-02 15:04] <name>(@-mentioned me): ...",
+// with the full-width parentheses and colon matched below.
 var contextLine = regexp.MustCompile(`^\[[^\]]{1,20}\] ([^：]{1,60}?)(（@了我）)?：(.*)$`)
 
 // contextMessages are the newest n message lines of a chat's context; nil when its lines don't read as messages.
@@ -421,8 +422,8 @@ func relate(a, c *InboxItem) bool {
 }
 
 // status is the section of an open item ("" for a done one): a suggestion to act on, a failure, or something urgent
-// the manager is still preparing is 需要你; the manager or its agent working, or a confirmed action waiting for the
-// other side, is 进行中; else the tier's.
+// the manager is still preparing is "Needs you"; the manager or its agent working, or a confirmed action waiting for the
+// other side, is "In progress"; else the tier's.
 func (it *InboxItem) status() string {
 	if !it.open() {
 		return ""

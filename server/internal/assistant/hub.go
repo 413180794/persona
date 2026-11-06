@@ -1,11 +1,11 @@
 // Package assistant is the Persona tab's assistant (docs/assistant.md), a process of its own (`personad assistant`):
 // its conversations (titles, archive, messages between them), what it does on its own (scheduled tasks), the tasks
-// it hands out (plans, the conversation's feed, receipts, the 今天 card), its MCP tools and the live context each
+// it hands out (plans, the conversation's feed, receipts, the "Today" card), its MCP tools and the live context each
 // message starts with. Its runtime (the headless Claude / Codex) is a node's (node/assistant*.go); the hub is only
 // the channel between it and the apps.
 //
 // The package never imports the hub. It reaches the hub through Hub alone, whose methods are bus methods
-// (docs/protocol.md「总线」, the shapes in internal/assistantwire), and the hub reaches it through Handler
+// (docs/protocol.md "Bus", the shapes in internal/assistantwire), and the hub reaches it through Handler
 // (handler.go). BusHub (bus.go) is both on the bus connection; Main (main.go) is the process.
 
 package assistant

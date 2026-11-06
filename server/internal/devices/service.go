@@ -26,7 +26,7 @@ import (
 	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
-// Computers of kind service (docs/plan-hub-center.md 4, docs/link.md「被动模式」): the computer's connector
+// Computers of kind service (docs/plan-hub-center.md 4, docs/link.md "Passive mode"): the computer's connector
 // (Persona Link in passive mode) listens on a TLS port of its own and the manager dials it — no ssh. The manager pins
 // the connector's key (the SPKI SHA-256 pairing gave it), shows the credential made up at pairing, and opens
 // GET /api/v1/connector/stream, which the connector joins to the resident node's attach socket: from there it is
@@ -191,7 +191,7 @@ func connectorError(resp *http.Response) error {
 
 // nodeUnavailable is what the machine's page says when the computer's connector answers that its resident node is not
 // running. A connector since #4020 already says so (link.NodeDownMarker, then how that OS runs the node), so it is said
-// once, and its 「本机」 (the connector's own computer) becomes 「这台电脑」: on the hub's page it reads as the hub
+// once, and its "This machine" (the connector's own computer) becomes "this computer": on the hub's page it reads as the hub
 // (#4080). An older connector's message only follows the hub's own sentence.
 func nodeUnavailable(message string) string {
 	message = oneLine(message)
@@ -338,7 +338,7 @@ func (m *Machine) refused(gen, status int, herr error, withErr bool) {
 
 // svcMovedOnLocked: since a request made with pairing gen's credential went out, the connector was paired again here
 // or ended a stream of pairing gen with 4002 (serviceInvalidated). What that request learned is stale: a probe that
-// answered before the 4002 must not clear 「重新配对」, a refusal of the old credential must not hold off the new one.
+// answered before the 4002 must not clear "Pair again", a refusal of the old credential must not hold off the new one.
 // m.mu held.
 func (m *Machine) svcMovedOnLocked(gen int) bool { return m.svc.invalid || m.svc.pairGen != gen }
 

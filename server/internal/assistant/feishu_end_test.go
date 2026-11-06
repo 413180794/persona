@@ -46,7 +46,7 @@ func TestFeishuEndDoneFooter(t *testing.T) {
 	}
 }
 
-// Ends that are not normal leave the card in a final state with a header saying so, never 「处理中」.
+// Ends that are not normal leave the card in a final state with a header saying so, never "Working".
 func TestFeishuEndStates(t *testing.T) {
 	for _, tc := range []struct {
 		res  *channel.Result
@@ -79,7 +79,7 @@ func checkEnd(t *testing.T, s *Service, f *fakeHub, r *channel.Run, posts *[]map
 	return lastCard(t, r, *posts)
 }
 
-// The conversation's turn error makes the end 「出错了」; an answer that only talks about an error is still 「完成」.
+// The conversation's turn error makes the end "Error"; an answer that only talks about an error is still "Done".
 func TestFeishuCheckEndFailed(t *testing.T) {
 	answer := proto.Item{Seq: 5, Role: "assistant", Kind: proto.KindText, Text: "修好了 API Error: 503 时的崩溃"}
 	s, f, r, posts := endHub(t)

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// A terminal addressed by pane ("pane:<id>", docs/terminal.md「独立终端」) is a shell on the computer, agent or not.
+// A terminal addressed by pane ("pane:<id>", docs/terminal.md "Standalone terminals") is a shell on the computer, agent or not.
 // Only a full device may open one: the streams of agent sessions are watchable by an answer-only device (the watch
 // shows what it is asked about), a shell's screen is more than that. The same goes for tokens an extension holds
 // (agents.read opens an agent's screen, not a shell's).
@@ -54,7 +54,7 @@ func (h *Hub) newShell(w http.ResponseWriter, r *http.Request, m *Machine) {
 	_, _ = w.Write(out)
 }
 
-// The terminal browser's and the sidebar's context menus change things on a computer (docs/terminal.md「节点菜单」):
+// The terminal browser's and the sidebar's context menus change things on a computer (docs/terminal.md "Node menu"):
 // close a tab or a pane, split a pane, rename a tab, run an agent in a plain shell pane, fetch / pull / push. Each is
 // a route of its own that a full device alone may call; an answer-only device (the watch) and the tokens an extension
 // holds are refused here and by the lists of what they may call (devicetokens.go, extension_scopes.go). The body is
@@ -113,7 +113,7 @@ var nodeActions = map[string]nodeAction{
 	"panes/git":   {method: "panes.git", timeout: 90 * time.Second, required: []string{"op"}, optional: []string{"pane", "workspace_id", "kind"}},
 	"tabs/close":  {method: "tabs.close", timeout: 30 * time.Second, required: []string{"tab_id"}, optional: []string{"kind"}},
 	"tabs/rename": {method: "tabs.rename", timeout: 30 * time.Second, required: []string{"tab_id", "label"}, optional: []string{"kind"}},
-	// #2431 新建 worktree…: the repository of a workspace the host lists, and a Git worktree of it opened as a workspace.
+	// #2431 "New worktree…": the repository of a workspace the host lists, and a Git worktree of it opened as a workspace.
 	// The branch and the path are typed in the dialog; the node refuses a path that holds something and never forces.
 	"worktree/prepare": {method: "worktree.prepare", timeout: 30 * time.Second, required: []string{"workspace_id"}, optional: []string{"kind"}},
 	"worktree/create":  {method: "worktree.create", timeout: 150 * time.Second, required: []string{"workspace_id", "branch", "path"}, optional: []string{"kind"}},

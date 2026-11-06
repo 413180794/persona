@@ -736,7 +736,7 @@ func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {
 	}
 }
 
-// Without the hub's web address (no public_url) a card carries no 「打开网页版」 button with an empty link, which does
+// Without the hub's web address (no public_url) a card carries no "Open web version" button with an empty link, which does
 // nothing and may get the whole card refused; a question card keeps its answer buttons. With one, the button is there.
 func TestFeishuOpenButtonNeedsAWebAddress(t *testing.T) {
 	for _, web := range []string{"", "jarvis://x", "https://hub.example.com/"} {
@@ -871,7 +871,7 @@ func TestProgressCardLines(t *testing.T) {
 	}
 }
 
-// Many subtasks: the last six, then 「等 N 个」; the 「前面还有 N 步」 of more than five steps stays.
+// Many subtasks: the last six, then "and N more"; the "N earlier steps" of more than five steps stays.
 func TestProgressCardManySubtasks(t *testing.T) {
 	p := &chanLive{}
 	for i := range 60 {
@@ -908,7 +908,7 @@ func TestHeldRunsNextTurnStartsItsCountsAgain(t *testing.T) {
 	}
 }
 
-// A file counter at its cap says so: 「1000+」.
+// A file counter at its cap says so: "1000+".
 func TestProgressCardFileCountAtItsCap(t *testing.T) {
 	b, _ := json.Marshal(progressCard("", "Persona", time.Second, nil, "", "", liveView{calls: 1, read: liveFilesMost, edited: 3}))
 	if !strings.Contains(string(b), "读了 1000+ 个文件 · 改了 3 个文件") {
@@ -920,7 +920,7 @@ func TestProgressCardFileCountAtItsCap(t *testing.T) {
 	}
 }
 
-// slowReactHub is a fake hub on which putting the 「OnIt」 reaction on message slow takes a while (Feishu slow to
+// slowReactHub is a fake hub on which putting the "OnIt" reaction on message slow takes a while (Feishu slow to
 // answer, as it is now and then).
 type slowReactHub struct {
 	*fakeHub

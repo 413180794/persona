@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/streams"
 )
 
-// A link between two paired hubs (docs/mesh.md「互联链路」): a WebSocket on the TLS port of the hub that was dialed,
+// A link between two paired hubs (docs/mesh.md "Mesh links"): a WebSocket on the TLS port of the hub that was dialed,
 // pinned to its key, with the credential it issued. Either hub may dial; of two links between the same hubs the one
 // dialed by the smaller hub_id stays. On it runs the node protocol's RPC (internal/rpc): records one way (rec), calls
 // both ways (hello, relay, stream.open, unpair), and streams (internal/streams) carrying HTTP between the hubs: the

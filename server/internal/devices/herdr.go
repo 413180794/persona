@@ -11,8 +11,8 @@ import (
 )
 
 // herdrAutostartKey is where a machine's own choice is kept. hub.json's machines[].herdr_autostart is only the
-// default now: the switch in 设置 › 机器 › 引擎 answers for one machine, and an older hub never wrote this key
-// (docs/engines.md「herdr 没在运行时」).
+// default now: the switch in Settings › Machines › Engine answers for one machine, and an older hub never wrote this key
+// (docs/engines.md "When herdr is not running").
 func herdrAutostartKey(machine string) string { return "herdr_autostart/" + machine }
 
 // herdrAutostart is whether the machine's node may start herdr's server when it is not running: what the user chose
@@ -45,7 +45,7 @@ func (m *Machine) setHerdrAutostart(ctx context.Context, on bool) error {
 
 // herdrAutostartState is what GET /api/v1/machines/{mid}/herdr {autostart} answers: the setting in force. Running is
 // whether the machine's herdr answers now, and Known false when the node could not say (it is offline, or older).
-// Installing: the node is installing herdr (a 启动 on a machine without it, node/herdrinstall.go); InstallError why
+// Installing: the node is installing herdr (a "Start" on a machine without it, node/herdrinstall.go); InstallError why
 // the last install failed.
 type herdrAutostartState struct {
 	Autostart    bool   `json:"autostart"`
@@ -77,7 +77,7 @@ func (m *Machine) noteHerdrRunning(running, known bool) {
 
 // refreshHerdrRunning asks the node whether herdr's server answers now. node.info only said so when the node
 // connected: a node that starts herdr itself a moment later (it waits for node.configure, which comes after
-// node.info), a 启动 from another app, or a `herdr server stop` since, all kept the Agents list's notice wrong until
+// node.info), a "Start" from another app, or a `herdr server stop` since, all kept the Agents list's notice wrong until
 // the node reconnected (#1916). An older node has no herdr.server.status: what node.info said stays.
 func (d *Devices) refreshHerdrRunning(ctx context.Context, m *Machine) {
 	m.mu.Lock()
@@ -106,13 +106,13 @@ func (d *Devices) refreshHerdrRunning(ctx context.Context, m *Machine) {
 	m.mu.Unlock()
 }
 
-// getHerdr: GET /api/v1/machines/{mid}/herdr, the machine's engine row: 需要时自动启动 herdr, and whether it runs now.
+// getHerdr: GET /api/v1/machines/{mid}/herdr, the machine's engine row: "Start herdr when needed", and whether it runs now.
 func (d *Devices) getHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
 	d.refreshHerdrRunning(r.Context(), m)
 	writeJSON(w, d.herdrAutostartState(r.Context(), m))
 }
 
-// putHerdr: PUT /api/v1/machines/{mid}/herdr {"autostart": bool}, the switch under 设置 › 机器 › 引擎. Only for a
+// putHerdr: PUT /api/v1/machines/{mid}/herdr {"autostart": bool}, the switch under Settings › Machines › Engine. Only for a
 // machine whose engine is classic herdr: Herdr App runs its own herdr-core and has no server for the node to start.
 func (d *Devices) putHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
@@ -134,7 +134,7 @@ func (d *Devices) putHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
 	writeJSON(w, d.herdrAutostartState(r.Context(), m))
 }
 
-// postHerdrStart: POST /api/v1/machines/{mid}/herdr/start, the 启动 button beside 「这台电脑的 herdr 没在运行」. The
+// postHerdrStart: POST /api/v1/machines/{mid}/herdr/start, the "Start" button beside "herdr is not running on this computer". The
 // node starts it in a clean login shell (node herdr.server.start); the answer says whether it now answers.
 func (d *Devices) postHerdrStart(w http.ResponseWriter, r *http.Request, m *Machine) {
 	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second) // the node waits up to 20s for its socket

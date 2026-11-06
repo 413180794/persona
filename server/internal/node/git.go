@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Git 面板的状态、历史、diff 和安全拉取；所有命令都有超时。
+// Status, history, diff and safe pull for the Git panel; every command has a timeout.
 
 const maxDiffBytes = 512 << 10
 

@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Looks (docs/extensions.md「形象」, docs/persona.md): an extension adds 形象 — Persona's name, face, colors and the dot's
+// Looks (docs/extensions.md "Looks", docs/persona.md): an extension adds looks — Persona's name, face, colors and the dot's
 // states — by declaring them in contributes.looks, with the pictures in its package. The hub serves each as a persona
 // package (format 1), so the apps show an extension's look the way they show one on the hub's disk. A look also says
 // which built-in look's app icon stands for it where an icon has to be in the app already (the home screen icon).
@@ -48,7 +48,7 @@ type LookAvatarDark struct {
 	SVG   string            `json:"svg,omitempty"`
 }
 
-// LookColors are the colors per appearance (docs/persona.md「色系」): primary, secondary, accent, bubble, bubble_text.
+// LookColors are the colors per appearance (docs/persona.md "Color families"): primary, secondary, accent, bubble, bubble_text.
 type LookColors struct {
 	Light map[string]string `json:"light,omitempty"`
 	Dark  map[string]string `json:"dark,omitempty"`
@@ -65,7 +65,7 @@ type LookDotState struct {
 	FPS  float64 `json:"fps,omitempty"`
 }
 
-// The bounds a look's files are held to (the same as a persona package's, docs/persona.md「检查规则」, and a picture's
+// The bounds a look's files are held to (the same as a persona package's, docs/persona.md "Check rules", and a picture's
 // pixels): a mistake (a 4K source image left in, a script in an SVG) stays off the phones.
 const (
 	LookMaxTotal   = 16 << 20
@@ -75,7 +75,7 @@ const (
 	LookMinSide    = wire.LookMinSide
 )
 
-// BuiltinLooks are the looks every app draws itself (团子 the default, 面罩, 汇流): no package takes their ids, and they
+// BuiltinLooks are the looks every app draws itself (the default Mochi, Visor, Circuit): no package takes their ids, and they
 // are what app_icon_fallback names.
 var BuiltinLooks = []string{"persona", "jarvis", "jarvis-circuit"}
 

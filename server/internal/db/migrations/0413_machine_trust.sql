@@ -1,4 +1,4 @@
--- Whether the user said a computer is theirs (docs/onboarding.md 4.2「你的电脑 ↔ hub」, #3347). No row is a confirmed
+-- Whether the user said a computer is theirs (docs/onboarding.md 4.2 "Your computer <-> hub", #3347). No row is a confirmed
 -- computer: every machine from before this, the ones /admin adds and the ones `hub pair --machine` adds. A pending one
 -- gets no Persona-managed keys and runs nothing of the assistant's until it is confirmed, and is removed after a day.
 CREATE TABLE IF NOT EXISTS machine_trust (

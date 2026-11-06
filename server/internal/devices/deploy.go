@@ -220,7 +220,7 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 
 // updateNodes redeploys each connected machine whose node is not the hub's build, one at a time, and queues the
 // update of an offline one reached over its link or connector (devices.update_nodes: the hub updated itself and put
-// the release's node binaries where 重新部署 takes them).
+// the release's node binaries where "Redeploy" takes them).
 func (d *Devices) updateNodes(ctx context.Context) {
 	version := d.hubVersion()
 	for _, m := range d.machinesNow() {

@@ -1,5 +1,5 @@
 // Package assistantskills puts the assistant's skills in its directory (<assistant dir>/.claude/skills,
-// docs/hub-update.md「skill 从二进制里拿出来」): the user's own, kept in ~/.jarvis/skills/<name> on the machine that runs
+// docs/hub-update.md "Skills out of the binary"): the user's own, kept in ~/.jarvis/skills/<name> on the machine that runs
 // the assistant and linked in, and the built-in ones this binary carries, copied in. Built-in skills are only those
 // Persona may redistribute (persona-office, personad office's): a copied one, like an extension's skill a user put
 // there by hand, lives in the user's space. jarvisd never writes that space, so an update cannot touch the user's skills.

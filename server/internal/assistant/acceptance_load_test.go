@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// A failed read of the 请验收 asks leaves them unloaded: the next look reads them again, and nothing is written over
+// A failed read of the "Please verify" asks leaves them unloaded: the next look reads them again, and nothing is written over
 // the stored cards meanwhile (an empty map saved after the failure would forget them for good).
 func TestAcceptanceFailedReadIsRetriedNotSavedOver(t *testing.T) {
 	s, _, st := modelService(t)

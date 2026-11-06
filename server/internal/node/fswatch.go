@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// The web panels' live Files / Git (docs/web.md「文件与 Git 自动刷新」): the hub tells the node which folders the
+// The web panels' live Files / Git (docs/web.md "Files and Git auto-refresh"): the hub tells the node which folders the
 // browsers have open (fs.watch, the whole set each time), the node looks at them every fsWatchEvery and pushes
 // fs.changed {dirs, git} when what a listing shows (names, sizes, times) or what `git status` shows changed.
 //

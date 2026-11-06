@@ -18,7 +18,7 @@ import (
 )
 
 // An agent's question goes to the assistant before the user (hub.json agents.delegate, off by default;
-// docs/assistant.md「提问先由助手代答」): the card shows on the apps at once, marked delegating, but nothing is pushed.
+// docs/assistant.md "The assistant answers questions first"): the card shows on the apps at once, marked delegating, but nothing is pushed.
 // The assistant answers what is the agent's own call (a technical option, a default, whether to run again, which
 // branch) the way interaction_answer does, with why (delegate.go decides); it leaves red lines (irreversible, or seen
 // by other people) and the goal itself to the user, with the context it filled in. When it does not decide in time,
@@ -48,7 +48,7 @@ func (s *Service) delegable(ix proto.Interaction) (forget func()) {
 // asksForInput: ix really asks something. An agent's own question (AskUserQuestion, a Codex request) waits for input
 // by itself. A card the manager made from a stopped turn's text (workCardTool) asks only when one of its questions
 // does: it has a question mark, or options of its own to pick from. A turn that ended on a statement ("waiting for the
-// runner and the release") gets the card with only 好，按你说的做 / 先不管 on it: answering that for the user only
+// runner and the release") gets the card with only "OK, do as you said" / "Not now" on it: answering that for the user only
 // sends the agent its own statement back, and it says the same again.
 func asksForInput(ix proto.Interaction) bool {
 	if ix.ToolName != workCardTool {
@@ -98,7 +98,7 @@ func delegateText(ix proto.Interaction) string {
 }
 
 // sameAsk: a and b (delegateText's) ask the same thing, word for word or nearly (an agent saying its line again
-// rewords a little: 「等 runner 恢复 + 发版」「等 runner 恢复和发版」).
+// rewords a little: "wait for the runner + release", "wait for the runner and release").
 func sameAsk(a, b string) bool {
 	if a == b {
 		return true
@@ -297,7 +297,7 @@ func (s *Service) escalate(ix proto.Interaction) {
 	}
 }
 
-// ---- 改答: the user changes an answer the assistant gave ----
+// ---- "Change answer": the user changes an answer the assistant gave ----
 
 // interactionRecorder is the store's one interaction with its outcome (db.DB).
 type interactionRecorder interface {

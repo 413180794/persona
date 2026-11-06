@@ -14,7 +14,7 @@ import (
 // session id), and the node serves the session's content from it as for an agent in a terminal — items, images, the
 // watch, the session info, subagents: the same parser and the same rendering as in herdr. The runtime keeps the rest
 // (status, sending, interrupting, cards, modes) and pushes the live text (session.delta) while the phone watches. The
-// transcript's own row (a Claude session not running in any pane: 未运行) is not listed beside it. A transcript this
+// transcript's own row (a Claude session not running in any pane: "Not running") is not listed beside it. A transcript this
 // node cannot find (a config directory it does not know) leaves the content to the runtime.
 
 // runtimeTranscripts reads the transcript of each session in a runtime.sessions push: the Claude session holding its
@@ -149,7 +149,7 @@ func (n *Node) runtimeTranscriptCall(ctx context.Context, h *runtimeConn, method
 // transcriptMoved follows a session whose transcript the runtime changed (it names one now, another one, or none
 // any more: a session created from the phone has none until its first turn): what the node read of the old one goes,
 // and while the hub watches the session the watch moves to where its items come from now. The pushes from there carry
-// another history, so the apps take the conversation again from the start (docs/protocol.md「items 的连续性」).
+// another history, so the apps take the conversation again from the start (docs/protocol.md "Continuity of items").
 func (n *Node) transcriptMoved(h *runtimeConn, id string) {
 	n.forgetFile(id)
 	if !n.runtimes.isWatched(id) {

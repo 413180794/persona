@@ -216,7 +216,7 @@ func TestResolutionAnswer(t *testing.T) {
 	}
 }
 
-// The 今天 card: one a day per conversation, at the start of the day, with what finished and what waits.
+// The "Today" card: one a day per conversation, at the start of the day, with what finished and what waits.
 func TestTodayCard(t *testing.T) {
 	s, f := newTaskService(t)
 	todo := startedTask(t, s, f)
@@ -249,7 +249,7 @@ func TestTodayCard(t *testing.T) {
 	}
 }
 
-// The 今天 card says what did not go through overnight (#4124): the conversation's tasks whose agent did not start and
+// The "Today" card says what did not go through overnight (#4124): the conversation's tasks whose agent did not start and
 // the scheduled runs that failed or were skipped since yesterday 18:00, newest first, each with a short reason.
 func TestTodayCardListsWhatFailed(t *testing.T) {
 	old := taskStartRetryDelay
@@ -332,7 +332,7 @@ func TestTodayCardListsWhatFailed(t *testing.T) {
 	}
 }
 
-// Kinds remembered with 这类以后直接开 are listed and can be forgotten (Postgres: on the hub machine).
+// Kinds remembered with "Start these right away from now on" are listed and can be forgotten (Postgres: on the hub machine).
 func TestTaskTrust(t *testing.T) {
 	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
 	if url == "" {
@@ -458,8 +458,8 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 	}
 }
 
-// A task with several agents is shown with the one its state is about (#4192): 等用户 names the agent that waits for
-// the user and what it said, not another one that moved later; so do 中断了, 做完了 and 在做. Stopped: the latest.
+// A task with several agents is shown with the one its state is about (#4192): "waiting for the user" names the agent that waits for
+// the user and what it said, not another one that moved later; so do "interrupted", "done" and "in progress". Stopped: the latest.
 func TestSnapshotTaskShowsTheAgentItsStateIsAbout(t *testing.T) {
 	now := time.Date(2026, 11, 6, 21, 0, 0, 0, time.UTC)
 	todo := Todo{ID: "todo_1", Title: "两台电脑一起改"}
@@ -523,7 +523,7 @@ func TestSnapshotLinks(t *testing.T) {
 	}
 }
 
-// A task the user asked for themselves starts without the card's 开始 while start_requested_tasks is on (the
+// A task the user asked for themselves starts without the card's "Start" while start_requested_tasks is on (the
 // default, #2559); one the assistant came up with still waits, and with the setting off the asked-for one waits too.
 func TestTaskPlanStartsWhatTheUserAskedFor(t *testing.T) {
 	plan := func(requested bool) json.RawMessage {
@@ -582,7 +582,7 @@ func TestTaskFinishedWhileItsAgentStarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 完成, tapped while the start is on its way: PATCH /api/v1/todos/{id} {"done":true}.
+	// "Done", tapped while the start is on its way: PATCH /api/v1/todos/{id} {"done":true}.
 	done := time.Now().UTC()
 	if _, ok := s.applyTodoRow(ctx, todo.ID, db.TodoRow{ID: todo.ID, Title: todo.Title, Notes: todo.Notes,
 		CreatedAt: todo.CreatedAt, UpdatedAt: done, DoneAt: &done}, nil); !ok {
@@ -612,7 +612,7 @@ func TestTaskFinishedWhileItsAgentStarts(t *testing.T) {
 		t.Fatalf("the agent that started is not kept in the task: %+v", got.Agents)
 	}
 
-	// 重试 would reopen the task the user finished: it is not a failed start, so it is refused.
+	// "Retry" would reopen the task the user finished: it is not a failed start, so it is refused.
 	if _, err := s.retryTask(ctx, todo.ID); !errors.Is(err, errTaskNotRetryable) {
 		t.Fatalf("retry answered %v", err)
 	}
@@ -631,7 +631,7 @@ func TestTaskFinishedWhileItsAgentStarts(t *testing.T) {
 	}
 }
 
-// A task that ended several stretches of work overnight has several receipts: the 今天 card lists it once, by its
+// A task that ended several stretches of work overnight has several receipts: the "Today" card lists it once, by its
 // latest receipt, and not as done when that one says it was cut off afterwards.
 func TestTodayCardListsEachTaskOnce(t *testing.T) {
 	s, _ := newTaskService(t)
@@ -660,7 +660,7 @@ func TestTodayCardListsEachTaskOnce(t *testing.T) {
 }
 
 // A start that uses up all its time (a busy machine's shell never ran claude) still ends the task: recording the
-// failure gets its own time. On the start's spent context the store refused the write and the task showed 「正在开」 with
+// failure gets its own time. On the start's spent context the store refused the write and the task showed "starting" with
 // no agent for ever (#4510).
 func TestTaskStartTimingOutStillEndsTheTask(t *testing.T) {
 	old := taskStartTimeout
@@ -695,15 +695,15 @@ func TestTaskStartTimingOutStillEndsTheTask(t *testing.T) {
 	})
 }
 
-// A plan card in the main conversation waiting for the user's 开始 has no todo yet, so nothing else in the snapshot
-// shows it: the snapshot lists it, so the 早报 brings it up (#4453). A started plan, and one from another
+// A plan card in the main conversation waiting for the user's "Start" has no todo yet, so nothing else in the snapshot
+// shows it: the snapshot lists it, so the morning brief brings it up (#4453). A started plan, and one from another
 // conversation, are not listed.
 func TestSnapshotListsPlansWaitingToStart(t *testing.T) {
 	s, f := newTaskService(t)
 	ctx := context.Background()
 	setSettings(t, s, func(v *Settings) { v.Main, v.MachineID = "main1", "box" })
 	_ = f
-	if _, err := s.toolTaskPlan(ctx, "main1", planArgs(false)); err != nil { // edits code: waits for 开始
+	if _, err := s.toolTaskPlan(ctx, "main1", planArgs(false)); err != nil { // edits code: waits for "Start"
 		t.Fatal(err)
 	}
 	if _, err := s.toolTaskPlan(ctx, "conv1", planArgs(false)); err != nil { // another conversation's

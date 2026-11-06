@@ -178,9 +178,9 @@ func TestAgentWorkOverTheBus(t *testing.T) {
 	eventually(t, 10*time.Second, "no work while off", func() bool { return workSession(t, h, m, "s1").Work == nil })
 }
 
-// POST /api/v1/sessions: the manager says what a new Agent runs on (模型配置 › Agents, a model picked for this start
+// POST /api/v1/sessions: the manager says what a new Agent runs on (Models › Agents, a model picked for this start
 // over it) and names its tab. A start waits a little for a manager that is not connected yet (a hub that just
-// started); while there is none the hub applies 模型配置 › Agents itself and the tab gets no name.
+// started); while there is none the hub applies Models › Agents itself and the tab gets no name.
 func TestAgentStartAsksTheManager(t *testing.T) {
 	h := newTestHub(t)
 	h.store = &newAgentStore{memStore: newMemStore(), b: assistantwire.ModelBinding{Provider: "launcher.work", Model: "m-1"}}

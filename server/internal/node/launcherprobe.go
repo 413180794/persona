@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What a ~/.zshrc launcher really sets, for its page in 设置 › 模型: reading the function's text misses everything a
+// What a ~/.zshrc launcher really sets, for its page in Settings › Models: reading the function's text misses everything a
 // helper (`_claude_proxy URL TOKEN MODEL WINDOW`) or a local variable does, so the node runs the launcher in a
 // subshell with `claude`, `codex`, `traex`, `command` and `env` stubbed out: instead of starting anything they print
 // the environment and arguments the agent would have got. probeScript is that harness; parseProbe reads its output.

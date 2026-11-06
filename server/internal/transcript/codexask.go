@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Questions a Codex agent asks the user, followed through its rollout (docs/codex.md「提问和审批」):
+// Questions a Codex agent asks the user, followed through its rollout (docs/codex.md "Questions and approvals"):
 //
 //   - request_user_input_async (Default mode, models whose catalog lists it): the call returns {"accepted":true} at
 //     once and the turn goes on or ends; the item_completed AgentMessage with delivery "async" carries the questions

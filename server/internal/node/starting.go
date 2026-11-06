@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Starting a session in the background (docs/protocol.md「新建会话」). Opening a herdr tab and waiting for claude's
+// Starting a session in the background (docs/protocol.md "New session"). Opening a herdr tab and waiting for claude's
 // input box takes seconds (minutes behind a slow ~/.zshrc on a busy machine, or a trust dialog), so `session.start` with async
 // answers right away with the session as it will be (id, directory, launcher) and starts it after. Until then the
 // session is listed as idle with `starting` (not a turn: nothing is timed or pushed), its chat is empty instead of an error, and messages sent to it wait

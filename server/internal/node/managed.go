@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Launchers kept by the hub (设置 › 模型, docs/launchers.md): the hub sends them (keys included) on connect and on
+// Launchers kept by the hub ("Settings › Model", docs/launchers.md): the hub sends them (keys included) on connect and on
 // every change; they live only in this process's memory. A managed launcher runs as `jarvisd launch <name> …`, which
 // asks this node over the local socket for its settings and execs claude with them: the key is never written to a
 // file, typed into a terminal or put on a command line.
@@ -50,7 +50,7 @@ func (n *Node) managedLauncher(name string) (proto.ManagedLauncher, bool) {
 // launcherCommand is what starts claude for a launcher name in a shell: the name itself (a ~/.zshrc function, or
 // claude), or `jarvisd launch <name>` for a managed one. Plain claude gets the machine's claude_start_dir as its
 // CLAUDE_CONFIG_DIR when one is set: a computer whose claude is logged in under a profile directory, not ~/.claude,
-// would otherwise answer every agent with 「Not logged in」 (#1459).
+// would otherwise answer every agent with "Not logged in" (#1459).
 func (n *Node) launcherCommand(name string) string { return n.launcherCommandQ(name, shellQuote) }
 
 // launcherCommandQ is launcherCommand quoting with q (herdrresume.go quotes without apostrophes).
@@ -163,7 +163,7 @@ func (n *Node) launcherEnv(name string) map[string]any {
 
 var secretValue = regexp.MustCompile(`(?i)((?:key|token|secret|password|passwd|auth)[A-Za-z0-9_]*\s*=\s*)("[^"]*"|'[^']*'|\S+)`)
 
-// launcherDefinition is a ~/.zshrc launcher's function body, for its page in 设置 › 模型, with anything that looks like
+// launcherDefinition is a ~/.zshrc launcher's function body, for its page in "Settings › Model", with anything that looks like
 // a key or token replaced by •••.
 func (n *Node) launcherDefinition(ctx context.Context, name string) (string, error) {
 	if !nameRe.MatchString(name) {

@@ -70,7 +70,7 @@ func Doctor(ctx context.Context, out io.Writer) error {
 type doctorReport struct {
 	out  io.Writer
 	next []string
-	// problems are the "有问题" lines, as "item：action" (`personad hub setup` prints only these).
+	// problems are the "Problem" lines, as "item: action" (`personad hub setup` prints only these).
 	problems []string
 }
 

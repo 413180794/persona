@@ -14,9 +14,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The turns channels wait on (docs/channels.md「跟踪这一轮」): one copy for every channel. A message from a channel
+// The turns channels wait on (docs/channels.md "Following the turn"): one copy for every channel. A message from a channel
 // starts a run; the assistant follows the conversation (the hub sends on its items and the text it writes, like an
-// open chat in the app), shows progress where the channel can (a card it changes, 「正在输入」), and when the turn
+// open chat in the app), shows progress where the channel can (a card it changes, "typing"), and when the turn
 // ends sends its answer back through the channel's sink. The rules are channel.Run's; what reaches the chat app is
 // the sink's.
 
@@ -35,7 +35,7 @@ type channelProgress interface {
 	folded(ctx context.Context, o *channel.Run)
 }
 
-// channelTyping is a sink that shows 「正在输入」 while a run goes on.
+// channelTyping is a sink that shows "typing" while a run goes on.
 type channelTyping interface {
 	typing(ctx context.Context, on bool)
 }
@@ -453,7 +453,7 @@ func (s *Service) sessionNow(ctx context.Context, machine, session string) (prot
 func working(c proto.Session) bool { return c.Status == proto.StatusWorking || c.Starting }
 
 // channelProgressTick shows a run's progress when it is due: the progress message after a few seconds and then every
-// few, 「正在输入」 again every few seconds.
+// few, "typing" again every few seconds.
 func (s *Service) channelProgressTick(id string) {
 	r, prog := s.channelRunByID(id)
 	if r == nil || prog == nil {
@@ -768,8 +768,8 @@ func (s *Service) checkChannelRun(id string) {
 	s.finishChannelRun(r, res)
 }
 
-// askAgain sends the conversation of a turn that ended without an answer (nothing, or a placeholder like 「No
-// response requested.」) a message asking for it, once; the run then waits for that turn. False when it was not
+// askAgain sends the conversation of a turn that ended without an answer (nothing, or a placeholder like "No
+// response requested.") a message asking for it, once; the run then waits for that turn. False when it was not
 // sent (a coding agent's conversation is not asked: the message would land in its work).
 func (s *Service) askAgain(ctx context.Context, r *channel.Run, prog *chanLive, last int) bool {
 	if r.TargetKind == channel.TargetAgent {

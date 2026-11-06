@@ -341,12 +341,12 @@ func Choosing(plain string) bool {
 
 // historyRE starts a row of the conversation above a dialog: the user's prompt at the left edge (`❯ fix it`), the
 // agent's words (⏺), a tool's output (⎿), a finished turn (✻). A dialog's cursor on a numbered choice can be at the
-// left edge too (`❯ 1. 预览`, AskUserQuestion 2.1.316): isHistory leaves it out.
+// left edge too (`❯ 1. Preview`, AskUserQuestion 2.1.316): isHistory leaves it out.
 var historyRE = regexp.MustCompile(`^(?:❯ |\s*[⏺⎿✻])`)
 
 // codexHistoryRE is the same on a Codex screen (#3214), which has no rule under its conversation: a row at the left
 // edge with the agent's or a status's • (`• Ran …`, `• Working (5s • esc to interrupt)`), the user's › (the input box
-// is one too: no dialog is open while it shows), an event's ✔ ✗ ■, or a finished turn's 「Worked for 2s • 9:41 PM」.
+// is one too: no dialog is open while it shows), an event's ✔ ✗ ■, or a finished turn's "Worked for 2s • 9:41 PM".
 // Codex indents its dialogs under them; the › at the edge on an approval's option is the cursor (selectedRE).
 var codexHistoryRE = regexp.MustCompile(`^(?:[•✔✗■] |› )|^\s*Worked for \d`)
 
@@ -392,7 +392,7 @@ func DialogHead(plain string) string {
 	if !Choosing(plain) {
 		return ""
 	}
-	// AskUserQuestion: its first row is the header chip or tab bar (「☐ 环境」), and its cursor can be at the left edge.
+	// AskUserQuestion: its first row is the header chip or tab bar (`☐ Environment`), and its cursor can be at the left edge.
 	if d := ParseDialog(plain); d != nil && d.Question != "" && (len(d.Steps) > 0 || d.Header != "" || d.Multi || d.Review) {
 		return d.Question
 	}
@@ -412,7 +412,7 @@ func pickerEdge(line string) bool { return strings.HasPrefix(strings.TrimSpace(l
 var noticeFooterRE = regexp.MustCompile(`(?i)^enter to continue\b(?:\s*·\s*esc to (?:cancel|close|go back))?$`)
 
 // NoticeOnly: the dialog at the bottom of a plain screen is a notice that Enter only closes (Claude Code's auto mode
-// billing notice, 2.1.309: 「Enter to continue · Esc to cancel」) — its footer says nothing else, and it has no
+// billing notice, 2.1.309: "Enter to continue · Esc to cancel") — its footer says nothing else, and it has no
 // options, cursor or check boxes. Confirmations, permissions and pickers are never one.
 func NoticeOnly(plain string) bool {
 	if ParseDialog(plain) != nil { // options it can read: a choice, whatever its footer says

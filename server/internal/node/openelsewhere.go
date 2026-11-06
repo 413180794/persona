@@ -106,7 +106,7 @@ func (n *Node) openElsewhereRefusal(id string) error {
 	}
 	w := where
 	if w != "" && w[0] < 0x80 {
-		w = " " + w // 「正在 Claude 桌面版里」: a space between Chinese and a Latin word
+		w = " " + w // "in the Claude desktop app" in Chinese: a space between Chinese and a Latin word
 	}
 	return refusal(openElsewhere, "这个会话正在"+w+"里开着，Persona 不会再起一个 Claude 同时写它：在"+w+
 		"里接着用，或者先在那边关掉它再从手机发。这次没有发送。", map[string]any{"pid": pid})

@@ -129,8 +129,8 @@ func upgradeOf(t *testing.T, mux http.Handler, token string) map[string]any {
 	return nil
 }
 
-// A newer version asking for nothing more goes in by itself (audited as 自动升级), not while the plugin is in use, not
-// while it is switched off (for it, or for all); the user sees what happened on the plugin.
+// A newer version asking for nothing more goes in by itself (audited as an automatic upgrade), not while the plugin is
+// in use, not while it is switched off (for it, or for all); the user sees what happened on the plugin.
 func TestExtensionAutoUpgrade(t *testing.T) {
 	h, mux, phone, mk, dir, mid := upgradeHub(t)
 	ctx := context.Background()

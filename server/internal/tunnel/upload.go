@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// The upload port takes a new jarvisd for the node, what the hub's 重新部署 sends over ssh otherwise (devices/deploy.go):
+// The upload port takes a new jarvisd for the node, what the hub's "Redeploy" sends over ssh otherwise (devices/deploy.go):
 // one JSON line {"size","sha256"} of the binary, the binary gzipped, then the node answers one JSON line
 // {"ok"} or {"error"}. On ok the node has replaced its own executable and exits, and its supervisor (launchd,
 // systemd: scripts/deploy/node-launchd.sh) starts the new one.

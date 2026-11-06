@@ -18,15 +18,15 @@ import (
 	"time"
 )
 
-// A machine with no herdr at all (a new computer joined as a service, #2847) had the Agents list's 启动 answer only
+// A machine with no herdr at all (a new computer joined as a service, #2847) had the Agents list's "Start" answer only
 // "herdr is not installed", and someone had to log in and install it. The node installs it itself now: herdr's own
 // release binary for this OS and CPU, of one pinned version (the one the other computers run, not "latest"),
 // checked against the sha256 written here, into ~/.local/bin (no sudo; the node's PATH has it), then starts it as
-// before (docs/engines.md「没装 herdr 时」).
+// before (docs/engines.md "When herdr is not installed").
 //
-// Only when the user asked: the 启动 button always may; the node's own starts (at node start, before a start or
+// Only when the user asked: the "Start" button always may; the node's own starts (at node start, before a start or
 // resume) only when hub.json machines[].herdr_autoinstall is true. A download can take minutes on a slow link: it
-// goes on in the background, 启动 waits herdrInstallWait for it and else says it is installing; once installed the
+// goes on in the background, "Start" waits herdrInstallWait for it and else says it is installing; once installed the
 // node starts herdr itself, so the Agents list's row goes away on its next read.
 
 // herdrRelease is the herdr the node installs: its version, where each target's binary is and its sha256 (taken
@@ -48,7 +48,7 @@ var herdrRelease = struct {
 	},
 }
 
-// herdrInstallWait is how long 启动 waits for an install before saying it goes on (the hub gives the call 40 s,
+// herdrInstallWait is how long "Start" waits for an install before saying it goes on (the hub gives the call 40 s,
 // starting the server takes up to herdrReadyWait more); herdrInstallTimeout bounds one install.
 var herdrInstallWait, herdrInstallTimeout = 15 * time.Second, 15 * time.Minute
 
@@ -61,7 +61,7 @@ var herdrInstallDir = func() (string, error) {
 	return filepath.Join(home, ".local", "bin"), nil
 }
 
-// errHerdrInstalling: 启动 waited and the download still runs; the node starts herdr when it is done.
+// errHerdrInstalling: "Start" waited and the download still runs; the node starts herdr when it is done.
 var errHerdrInstalling = errors.New("正在安装 herdr " + herdrRelease.Version + "（从 GitHub 下载），装好后会自动启动，稍等一会儿再看")
 
 // herdrInstaller is the node's state of installing herdr: one install at a time, the ones asking meanwhile wait for

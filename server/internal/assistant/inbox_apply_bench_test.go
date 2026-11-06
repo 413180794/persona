@@ -29,7 +29,7 @@ func benchInbox(n int, now time.Time) *inboxBook {
 	return b
 }
 
-// BenchmarkInboxApply is one collection of 300 chats (Feishu's 未读 and @me pages) and 300 connector threads that
+// BenchmarkInboxApply is one collection of 300 chats (Feishu's unread and @me pages) and 300 connector threads that
 // moved nowhere, against an inbox of 2000 items of each.
 func BenchmarkInboxApply(b *testing.B) {
 	now := time.Now()

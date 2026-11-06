@@ -1,6 +1,6 @@
-// Package quota is what a launcher's quota looks like (docs/launchers.md「额度」) and how a quota plugin reaches the
+// Package quota is what a launcher's quota looks like (docs/launchers.md "Quota") and how a quota plugin reaches the
 // launcher's gateway without ever seeing its key. Which gateways are read and how is the quota plugins' business
-// (docs/extensions.md「额度」): a plugin answers quota.query with a Report, asking the hub (quota.http) to send requests in
+// (docs/extensions.md "Quota"): a plugin answers quota.query with a Report, asking the hub (quota.http) to send requests in
 // which ${launcher_key} stands for the key. Whoever holds the key — the hub for a launcher added in Persona, the
 // machine for a ~/.zshrc one — puts it in (Do), only toward the launcher's own gateway, and takes it out of the answer.
 package quota
@@ -34,7 +34,7 @@ type Report struct {
 }
 
 type Usage struct {
-	Label    string   `json:"label"` // 今日 / 本周 / 本月
+	Label    string   `json:"label"` // today / this week / this month (in Chinese)
 	Requests int64    `json:"requests"`
 	Tokens   int64    `json:"tokens"`
 	CostUSD  *float64 `json:"cost_usd,omitempty"`
@@ -57,7 +57,7 @@ type ModelWindows struct {
 
 // Window is one quota window: how much of it is used, of what, until when.
 type Window struct {
-	Label string `json:"label"` // 5 小时 / 每周 / 每月 / 累计预算…
+	Label string `json:"label"` // 5 hours / weekly / monthly / total budget… (in Chinese)
 	// UsedRatio is 0…1 when the limit is known.
 	UsedRatio *float64   `json:"used_ratio,omitempty"`
 	Used      *float64   `json:"used,omitempty"`

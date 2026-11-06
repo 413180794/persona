@@ -136,7 +136,7 @@ func (s *Service) ProfileChanged(context.Context) {
 // snapshotAgents sorts the agents by what they need: the work state (agents_work.go, docs/agent-work.md) says what a stopped one
 // waits for or concluded. Each has its page in the web app at web ("" for none). The muted ones (the agent or its
 // space) are in none of the others: the Live Activity, the Agents badge and the inbox leave them out
-// (docs/live-activity.md), so 需要你 here does too; they are told apart, for when the user asks about them (#4562).
+// (docs/live-activity.md), so "Needs you" here does too; they are told apart, for when the user asks about them (#4562).
 func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done, muted []prompts.SnapshotAgent,
 	working []string, workflows []prompts.SnapshotWorkflow) {
 	for _, m := range devices {
@@ -166,8 +166,8 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 					continue
 				}
 				into = &muted
-			// A decision with no card up (cards off, muted, 先不管) is not 需要你: the lists, the badges and the Live
-			// Activity go by the state (docs/agent-states.md), so it stays 完成未看 with what it waits for, or is seen.
+			// A decision with no card up (cards off, muted, "Not now") is not "Needs you": the lists, the badges and the Live
+			// Activity go by the state (docs/agent-states.md), so it stays "Unread" with what it waits for, or is seen.
 			case w != nil && w.Phase == proto.WorkBlocked && w.On != proto.WaitUser && c.State != proto.StateUnread && recent:
 				into = &waiting // the hub waits it out (an unread one is left for the user)
 			case w != nil && w.Phase == proto.WorkDone && recent:
@@ -261,7 +261,7 @@ func (s *Service) snapshotCalendar(ctx context.Context, now time.Time) *prompts.
 }
 
 // snapshotSchedule is the schedule as the snapshot says it: the follow-ups to come, the daily tasks with how their
-// last run went, and the scheduled runs that failed or were skipped since yesterday 18:00 (#4124: the 早报 tells them
+// last run went, and the scheduled runs that failed or were skipped since yesterday 18:00 (#4124: the "Morning briefing" tells them
 // without calling list_followups). Bounded: eight daily tasks and the six newest misses, with the totals. The words
 // for a status are the template's (prompts/assistant/snapshot.md).
 func (s *Service) snapshotSchedule(ctx context.Context, loc *time.Location, now time.Time) (follow []prompts.SnapshotFollowup,
@@ -296,7 +296,7 @@ func (s *Service) snapshotSchedule(ctx context.Context, loc *time.Location, now 
 		follow = append(follow, f)
 	}
 	n := now.In(loc)
-	since := time.Date(n.Year(), n.Month(), n.Day()-1, 18, 0, 0, 0, loc) // as the 今天 card's 「夜里」 (today.go)
+	since := time.Date(n.Year(), n.Month(), n.Day()-1, 18, 0, 0, 0, loc) // as the "Today" card's "overnight" (today.go)
 	// Runs are kept in the order they ended, At is when they started: a long run recorded late sits after a later
 	// one, so the whole history (at most maxRuns) is looked through, not cut at the first run before since.
 	var all []prompts.SnapshotMiss
@@ -315,9 +315,9 @@ func (s *Service) snapshotSchedule(ctx context.Context, loc *time.Location, now 
 	return follow, routines, routinesTotal, all, missed
 }
 
-// snapshotPlans are the plan cards in the main conversation still waiting for the user's 开始 (#4453), newest first:
+// snapshotPlans are the plan cards in the main conversation still waiting for the user's "Start" (#4453), newest first:
 // at most five (total: all of them), of the last seven days. A plan has no todo until it starts, so nothing else in
-// the snapshot shows it, and the 早报 could not bring it up.
+// the snapshot shows it, and the "Morning briefing" could not bring it up.
 func (s *Service) snapshotPlans(ctx context.Context, loc *time.Location, now time.Time) ([]prompts.SnapshotPlan, int) {
 	main := s.settings(ctx).Main
 	if main == "" {

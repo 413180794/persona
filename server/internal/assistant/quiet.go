@@ -12,8 +12,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Quiet tasks (#1731, docs/unified-entry.md「安静的任务」): a task the main conversation opened while the user wanted
-// those told only there (设置 › 助手, assistant.main_tasks_quiet) gets no push, Live Activity or badge from the hub.
+// Quiet tasks (#1731, docs/unified-entry.md "Quiet tasks"): a task the main conversation opened while the user wanted
+// those told only there (Settings › Assistant, assistant.main_tasks_quiet) gets no push, Live Activity or badge from the hub.
 // What would have been pushed — done, waiting for the user, cut off, did not start — is a message into the main
 // conversation instead (prompts/assistant/task_notice.md), and the assistant decides what to tell the user; its
 // answer is pushed like any of its answers.
@@ -42,7 +42,7 @@ type quietBook struct {
 	pending map[string]*quietNotice // by todo id
 }
 
-// noticeStates are the words for a state in the notice's 「这期间它还…」.
+// noticeStates are the words for a state in the notice's "meanwhile it also…".
 var noticeStates = map[string]string{"done": "做完过一次", "needs": "等过用户", "interrupted": "被打断过", "failed": "没开起来过"}
 
 // quietNotify tells the main conversation about quiet task t (a no-op for any other): state, and what it asks (needs)
@@ -235,7 +235,7 @@ func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Dev
 		s.nameTodoLater(ctx, todo.ID, title, prompt)
 	}
 	// The main conversation follows up what it hands out (supervise.go), as task_plan has it; a reporting
-	// conversation's task is not supervised: its notices go back to that conversation, not into a 督办 message for the
+	// conversation's task is not supervised: its notices go back to that conversation, not into a supervision message for the
 	// main one (#4101).
 	if s.isMain(ctx, conversation) {
 		s.superviseTodo(ctx, todo.ID, conversation, nil, 0)

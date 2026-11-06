@@ -12,9 +12,9 @@ import (
 // enough to be a real problem and early enough to act on.
 const streakLimit = 3
 
-// counted: whether r is one of the runs a streak counts (#4658). A failed 立即运行 is answered in the app, and an
+// counted: whether r is one of the runs a streak counts (#4658). A failed "Run now" is answered in the app, and an
 // automatic retry that failed is the same failure once more (watchScheduledRun): neither counts. Any run that went
-// through, a retry or a 立即运行 included, ends the streak: the task works.
+// through, a retry or a "Run now" included, ends the streak: the task works.
 func counted(r ScheduleRun) bool {
 	return r.Status == runOK || !r.Manual && !r.Retried
 }

@@ -2,7 +2,7 @@ package extension
 
 import "strings"
 
-// OfficialMarket is the market every hub has without adding it (docs/extensions.md「官方市场」, #2351): the public
+// OfficialMarket is the market every hub has without adding it (docs/extensions.md "Official market", #2351): the public
 // repository nwverse/persona-extensions. Its key is the repository's market.pub, pinned here rather than trusted on
 // first use.
 type OfficialMarket struct {

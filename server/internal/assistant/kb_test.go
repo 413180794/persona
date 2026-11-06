@@ -76,7 +76,7 @@ func kbServiceOn(t *testing.T, f *fakeHub, st Store, dir string, logf func(strin
 	return s
 }
 
-// What the hub asks of the knowledge base: a chat's context (the inbox's AI 分身), a directory's projects (the
+// What the hub asks of the knowledge base: a chat's context (the inbox's AI twin), a directory's projects (the
 // triage), deleting a source's chats and people with their index rows; anything else is not the knowledge base's.
 func TestKBAnswersTheHub(t *testing.T) {
 	st := newKBStore()

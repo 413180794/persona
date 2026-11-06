@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// The event log (docs/hub-restart.md「事件续传」): every message broadcastTo sends every app carries event_seq, one
+// The event log (docs/hub-restart.md "Event resume"): every message broadcastTo sends every app carries event_seq, one
 // more than the last, and the hub keeps the latest ones. An app that reconnects says which stream and seq it had
 // (?event_stream=&event_seq= on /api/v1/ws) and gets what it missed instead of starting over; its hello says whether
 // that worked (resumed). A stopping hub hands the log to the next one through Postgres (settings "hub.event_log",

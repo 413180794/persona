@@ -10,9 +10,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A status asked for (「状态：…」) is answered from the bound conversation's live state, never sent to it, and is no
-// write: not held to the user-speech gate (docs/voice.md「状态查询」). A stop (「停止：…」) is a write: behind the gate,
-// it interrupts the conversation's turn (the app's 停止 button) and is told once that worked. Both answer on the
+// A status asked for ("status: …") is answered from the bound conversation's live state, never sent to it, and is no
+// write: not held to the user-speech gate (docs/voice.md "Status queries"). A stop ("stop: …") is a write: behind the gate,
+// it interrupts the conversation's turn (the app's "Stop" button) and is told once that worked. Both answer on the
 // delegation that asked, as its one commentary.
 
 const (
@@ -76,7 +76,7 @@ func (c *conversation) stopTarget(delegation string, gen int) {
 	case !working(sess) && !waitingOnUser(sess):
 		st.Do = "idle"
 	default:
-		// Working, or its turn stopped on a card or a dialog: the interrupt (Esc) ends it, as the app's 停止 does. Noted
+		// Working, or its turn stopped on a card or a dialog: the interrupt (Esc) ends it, as the app's "Stop" does. Noted
 		// first: the card asked goes before the hub answers, and the tracker may see that first (asks.go).
 		c.runs.stopAsked.Store(time.Now().UnixNano()) // before the stop can be read back (tracker.finish)
 		c.stopping(true)
@@ -95,8 +95,8 @@ func (c *conversation) stopTarget(delegation string, gen int) {
 	c.tell(&voiceRun{Delegation: delegation, Gen: gen}, plainWords(prompts.RenderVoiceStatus(st)), true, false)
 }
 
-// activityKind is what sort of step an activity is (transcript.Activity: 「在读 tasks.go」 is 在读): never the file,
-// the command or the pattern (docs/voice.md「状态查询」: only the category).
+// activityKind is what sort of step an activity is (transcript.Activity: "reading tasks.go" is reading): never the file,
+// the command or the pattern (docs/voice.md "Status queries": only the category).
 func activityKind(activity string) string {
 	verb, _, _ := strings.Cut(strings.TrimSpace(activity), " ")
 	return verb

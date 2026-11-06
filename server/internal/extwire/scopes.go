@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// An extension's token (docs/extensions.md「权限」) opens the routes of the scopes the user granted the extension and
+// An extension's token (docs/extensions.md "Permissions") opens the routes of the scopes the user granted the extension and
 // no other; the manager made the token and checks it (extensions.authorize), with this table of the hub's routes.
 
 // RouteScopes are the routes an extension's token may call, by the pattern they are registered with, and the scope
@@ -57,7 +57,7 @@ var RouteScopes = map[string]string{
 	"POST /api/v1/sessions/{mid}/{sid}/queue":            extension.ScopeAgentsControl,
 	"POST /api/v1/sessions/{mid}/{sid}/seen":             extension.ScopeAgentsControl,
 	"POST /api/v1/interactions/{id}/resolve":             extension.ScopeAgentsControl,
-	"POST /api/v1/interactions/{id}/reanswer":            extension.ScopeAgentsControl, // 改答: a message to the agent
+	"POST /api/v1/interactions/{id}/reanswer":            extension.ScopeAgentsControl, // "Change answer": a message to the agent
 	"POST /api/v1/agents/sessions/{id}/messages":         extension.ScopeAgentsControl,
 	"POST /api/v1/agents/sessions/{id}/read":             extension.ScopeAgentsControl,
 	"GET /api/v1/machines":                               extension.ScopeMachinesRead,

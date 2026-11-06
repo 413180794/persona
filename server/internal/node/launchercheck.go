@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// launcherCheck answers 设置 › 模型's 测试可用性: runs the launcher once, headless, with a one-word prompt in an empty
+// launcherCheck answers Settings › Models' "Test": runs the launcher once, headless, with a one-word prompt in an empty
 // directory, and says whether an answer came back, how long it took and which model answered. It is a real request
 // (a few tokens).
 func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherCheck {

@@ -16,10 +16,10 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The channels plugins contribute (the channel extension point, docs/channels.md「扩展怎么贡献渠道」), the hub's part:
-// the program talks to its chat app — it hands the hub the owner's messages (channel.receive), which go to the
-// assistant (channels.receive), and sends what the assistant gives it (channels.send → channel.send). Commands, where a
-// message goes, the turn, what is asked in text, pushes and the sync mirror are the assistant's.
+// The channels plugins contribute (the channel extension point, docs/channels.md "How extensions contribute channels"),
+// the hub's part: the program talks to its chat app — it hands the hub the owner's messages (channel.receive), which go
+// to the assistant (channels.receive), and sends what the assistant gives it (channels.send → channel.send). Commands,
+// where a message goes, the turn, what is asked in text, pushes and the sync mirror are the assistant's.
 
 // channelSendTries: a send that fails (not cannot_send) goes again after 1, 2, 4 s, with the same ref.
 var channelSendTries = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}

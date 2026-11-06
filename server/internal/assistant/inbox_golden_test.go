@@ -175,7 +175,7 @@ func TestGoldenInboxAgentPrompt(t *testing.T) {
 	golden(t, "inbox_agent.mail_kb", h.inbox.inboxAgentPrompt(&it, "", h.kbChatContext(ctx, kbChatOf(&it))))
 }
 
-// An item about one of the user's tasks: the judge's input lists the tasks, the AI 分身 is told the linked one.
+// An item about one of the user's tasks: the judge's input lists the tasks, the AI twin is told the linked one.
 func TestGoldenInboxTask(t *testing.T) {
 	items := goldenItems(t)
 	b := newInbox()

@@ -28,7 +28,7 @@ func TestBundleAutoUpgradeRequiresMemberConsent(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundleMarketFixture(t, h, phone, map[string]string{"new-child": bundleGraphPackage(t, "new-child", "1.0.0")})
-	// 复用同一 TLS transport，让两个模拟市场都可下载。
+	// Reuse one TLS transport so both fake markets can be downloaded from.
 	h.extensions.markets.client = mk.srv.Client()
 	dir = bundleGraphPackage(t, "example-ui", "2.0.0", extension.Dependency{ID: "new-child"})
 	mk.publish(dir)

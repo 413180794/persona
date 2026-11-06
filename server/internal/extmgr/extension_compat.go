@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// The plugin → extension rename (docs/extensions.md「命名和兼容」, #1844): the hub's routes live under
+// The plugin → extension rename (docs/extensions.md "Naming and compatibility", #1844): the hub's routes live under
 // /api/v1/extensions/… and /api/v1/admin/extensions…, answering with the new keys (extensions, extension,
 // extension_name). The apps already out there still call /api/v1/plugins/… and /api/v1/admin/plugins…: those paths are
 // rewritten to the new ones and answered with the keys they have always read, and every such call is counted, so the

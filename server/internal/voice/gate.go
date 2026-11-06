@@ -2,14 +2,14 @@ package voice
 
 import "time"
 
-// The user-speech gate (docs/voice.md「发送、门槛和 409」): what the voice model hands over is only done (sent to a
+// The user-speech gate (docs/voice.md "Sending, the gate and 409"): what the voice model hands over is only done (sent to a
 // conversation, sent to an agent) when the user has spoken since the model last took in an agent's words, and lately.
-// An agent's output reaches the model (a result read out); were it to say 「now send X」 and the model did, the agent
+// An agent's output reaches the model (a result read out); were it to say "now send X" and the model did, the agent
 // would be driving itself through the user's voice. Reading (a status, the knowledge base) is not gated.
 //
 // What counts as the user speaking: a caption of theirs (any part of one), or a line they typed. Captions come late on
 // some services: the measured one sends the user's words 1.2–1.4 s after they stop, after the model has begun to answer
-// and called its tool (docs/lessons/voice.md「时间线」), so a handover that does not pass waits gateWait for them first.
+// and called its tool (docs/lessons/voice.md "Timeline"), so a handover that does not pass waits gateWait for them first.
 //
 // When the model took the agent's words in: the measured service holds a commentary sent while the model speaks until
 // that speech is over (26–40 s and more, lessons row 3) and then acks it (session.commentary.appended, evAck). Words
@@ -41,7 +41,7 @@ func (g *speechGate) openSince(agent, now time.Time) bool {
 	return !g.user.IsZero() && g.user.After(agent) && now.Sub(g.user) <= gateWindow
 }
 
-// The insertion gate (docs/voice.md「给快层的上下文」rule 3, its times from docs/lessons/voice.md「常量的建议值」): what
+// The insertion gate (docs/voice.md "Context for the fast layer" rule 3, its times from docs/lessons/voice.md "Suggested constants"): what
 // the extension says to the model by itself (a say: a result whose call is gone, a card waiting on the user) waits
 // until
 //   - the user has been quiet for userQuiet, by the energy of the app's audio: their caption comes 1.2–1.4 s after
@@ -59,7 +59,7 @@ func (g *speechGate) openSince(agent, now time.Time) bool {
 // costs time: it holds the answer that long anyway. A tool's result on its call is not held.
 //
 // The user's voice holds nothing for ever: the app's level can stay over voiceRMS with nobody talking to the model (a
-// TV, a car, people nearby, echo residue; lessons「常量的建议值」asks for real devices), so a frame has a voice in it
+// TV, a car, people nearby, echo residue; lessons "Suggested constants" asks for real devices), so a frame has a voice in it
 // only when it is also well over the quietest the audio has been lately (noiseFloor), and past answerHoldMost (an
 // answer) or sayHoldMost (a say) from when it was queued the user's voice no longer holds it. The model's speech still
 // does: that always ends.
@@ -79,7 +79,7 @@ var (
 )
 
 // voiceRMS is the level of a frame of the app's audio that has the user's voice in it (about -40 dBFS, lessons
-// 「时间线」); a muted app sends zeros.
+// "Timeline"); a muted app sends zeros.
 const voiceRMS = 300
 
 const (
@@ -187,20 +187,20 @@ func meanSquare(pcm []byte) float64 {
 	return sum / float64(n)
 }
 
-// Barging in (docs/voice.md「给快层的上下文」rule 7, its numbers from docs/lessons/voice.md「时间线」and「常量的建议值」,
+// Barging in (docs/voice.md "Context for the fast layer" rule 7, its numbers from docs/lessons/voice.md "Timeline" and "Suggested constants",
 // protocol 2 only): the user talking over the model drops what it has not played yet (clear), as the upstream says. The
 // measured service stops the model by itself when the user cuts in for real (0.64 s and longer stopped it, a 0.43 s
-// 「嗯嗯」 did not) and says so (response.incomplete): clear follows that, at once. An upstream that never says when its
+// "mm-hm" did not) and says so (response.incomplete): clear follows that, at once. An upstream that never says when its
 // replies start, end or are cut off gets the energy rule instead: the app's audio has had the user's voice in it for
 // bargeMin in a row (gaps between words up to bargeGap) while the model's speech still plays (its computed play end).
 // Not by the caption, nor a list of backchannel words: the caption comes 1.2 s after the user stops, too late for
 // 0.5 s; and not the model's own 0.8 s to stop, which misses the 0.64–0.70 s cut-ins it stops for, while its abandoned
-// answer is mostly in the app already (it comes 9–10 times faster than it plays). A long backchannel (「对对对」,
+// answer is mostly in the app already (it comes 9–10 times faster than it plays). A long backchannel ("yeah yeah yeah",
 // 0.7 s) cuts the answer too, as it does the measured model's.
 //
 // What the model says next, its reply to the user, is not dropped with the rest: its audio comes 1.2–1.3 s after they
 // stop (its reply begins 0.9 s after), before the 1.5 s pause that ends a drop otherwise and often before their
-// caption (lessons「时间线」). Audio once they have been quiet replyAfterVoice, after a pause of cutGap in what came (the
+// caption (lessons "Timeline"). Audio once they have been quiet replyAfterVoice, after a pause of cutGap in what came (the
 // rest of the dropped answer comes in one burst, 9–10 times faster than it plays), is that reply.
 var (
 	bargeMin        = 500 * time.Millisecond

@@ -302,7 +302,7 @@ func TestSessionsMessage(t *testing.T) {
 	}
 
 	var many []proto.Session
-	for i := range 150 { // a busy machine's list (docs/server.md「推送给 App 的量」)
+	for i := range 150 { // a busy machine's list (docs/server.md "What is pushed to the apps")
 		many = append(many, proto.Session{SessionID: fmt.Sprintf("s%03d", i), LastText: strings.Repeat("x", 1<<10)})
 	}
 	list = encodeSessions(many)

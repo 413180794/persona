@@ -1,10 +1,11 @@
 package extmgr
 
-// Per-app approval for the assistant operating a Mac (docs/computer-use.md「锁屏、防睡眠、按 App 批准」c, #1507): the
-// first time it operates an app on a Mac (or reads its whole screen) the phone asks once, 允许这一次 / 一直允许 / 拒绝.
-// Apps always allowed are kept by bundle id for that Mac in the hub's settings (computerAppsKey) and listed, and
-// removable, on the machine's page. Some are never remembered and asked about every time (askedEveryTime), and so is
-// a call whose apps cannot all be told (a script naming them by expression, a step with no app).
+// Per-app approval for the assistant operating a Mac (docs/computer-use.md "Lock screen, staying awake, per-app
+// approval" c, #1507): the first time it operates an app on a Mac (or reads its whole screen) the phone asks once,
+// "Allow once" / "Always allow" / "Deny". Apps always allowed are kept by bundle id for that Mac in the hub's settings
+// (computerAppsKey) and listed, and removable, on the machine's page. Some are never remembered and asked about every
+// time (askedEveryTime), and so is a call whose apps cannot all be told (a script naming them by expression, a step
+// with no app).
 
 import (
 	"context"
@@ -60,7 +61,7 @@ var askedEveryTimeNames = []string{
 	"persona", "persona link", "jarvis",
 }
 
-// approval: the plugin's 「第一次操作一个 App 时先问」, on unless turned off.
+// approval: the plugin's "Ask the first time an app is operated", on unless turned off.
 func (s cuaSettings) approval() bool { return s.AppApproval == nil || *s.AppApproval }
 
 var getAppLiteral = regexp.MustCompile(`getApp\(\s*(?:"([^"\\]+)"|'([^'\\]+)')\s*\)`)

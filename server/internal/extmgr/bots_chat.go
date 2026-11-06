@@ -21,10 +21,10 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Messages to the bot (docs/bots.md「一条消息怎么走」), the hub's part: who may talk to it, pairing, and handing the
-// owner's messages and card presses to the assistant (feishu.message, feishu.card_action), which does the rest.
-// A message waits for the assistant while it is not connected (a hub start, an assistant restart: toAssistant); one
-// it can't be handed is answered that the assistant can't be reached.
+// Messages to the bot (docs/bots.md "How a message travels"), the hub's part: who may talk to it, pairing, and handing
+// the owner's messages and card presses to the assistant (feishu.message, feishu.card_action), which does the rest. A
+// message waits for the assistant while it is not connected (a hub start, an assistant restart: toAssistant); one it
+// can't be handed is answered that the assistant can't be reached.
 
 // botEvent takes one event off the long connection. Messages are handled in the background (Feishu waits 3 s for the
 // answer); card buttons answer right away.

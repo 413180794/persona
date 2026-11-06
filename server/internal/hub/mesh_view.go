@@ -4,7 +4,7 @@ import (
 	"sort"
 )
 
-// What every hub of a mesh group knows about the others (docs/mesh.md「记录」): each hub floods a record of itself —
+// What every hub of a mesh group knows about the others (docs/mesh.md "Records"): each hub floods a record of itself —
 // its links to other hubs, which hub it takes for the group's center and under which term, and the computers in its
 // hub.json the center may reach through it — and works out from the records it holds who can be reached and how
 // (computeView, a pure function of the records).

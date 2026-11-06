@@ -10,9 +10,9 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
-// A scheduled task's 「跑完推送」 (#2396, docs/assistant.md「跑完推送」): each run is a turn in a conversation, and the
-// hub pushes every finished turn (hub/machine.go notifyFinished). Right for a 早报, wrong for a task that watches
-// something (「有新邮件时推给我」): every run pushed 「任务名 · 没有新邮件」. A task's push is then
+// A scheduled task's "Push when done" (#2396, docs/assistant.md "Push when done"): each run is a turn in a conversation, and the
+// hub pushes every finished turn (hub/machine.go notifyFinished). Right for a morning briefing, wrong for a task that watches
+// something ("push me when there is new mail"): every run pushed "task name · no new mail". A task's push is then
 //
 //   - pushEvery (""): every run's answer is pushed, as before;
 //   - pushAsked: only what the run pushes itself (notify_user); a run with nothing new is not pushed at all.
@@ -106,7 +106,7 @@ func (s *Service) quietConversation(ctx context.Context, session string) bool {
 // quietTaskTurn: session is a quiet task's own conversation whose turn may go unpushed now
 // (assistantwire.QuietTaskFinish): the channels' mirror leaves it out, as the hub's finished push does.
 func (s *Service) quietTaskTurn(ctx context.Context, machine, session string) bool {
-	if s.supervising(session) { // a 督办 message started its turn (supervise.go): as the hub's finished push leaves it out
+	if s.supervising(session) { // a supervision message started its turn (supervise.go): as the hub's finished push leaves it out
 		sess, ok := s.session(ctx, machine, session)
 		return ok && assistantwire.SupervisedFinish(sess, true)
 	}

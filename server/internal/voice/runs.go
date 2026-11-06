@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A task the voice model hands over is a run (docs/voice.md「一轮跟踪」): one channel.Run, as the assistant's channels
+// A task the voice model hands over is a run (docs/voice.md "Turn tracking"): one channel.Run, as the assistant's channels
 // have, found in the conversation by its message's client_msg_id (voice-<random>) or its first line, followed until
 // that turn is over and then read whole (channel.ReadTurn over the hub's HTTP API), so what the voice model hears is
 // that turn's whole answer: not the conversation's last 200 characters, not another turn's. Its words go back on the
@@ -22,7 +22,7 @@ import (
 // The target is the conversation a protocol 2 call is bound to (target.go), else the Persona main conversation of the
 // moment (protocol 1). Each conversation has a tracker: one goroutine that owns its runs and checks them when the hub
 // link says their conversation changed, and every 5 s regardless. On protocol 2 the app follows each run by its run
-// frames (docs/voice.md「扩展 → App」).
+// frames (docs/voice.md "Extension → App").
 
 // voiceRun is one handed-over task being followed.
 type voiceRun struct {
@@ -32,7 +32,7 @@ type voiceRun struct {
 	// commentary (a held run's second answer is said).
 	Delegation string
 	Gen        int
-	appIDs     []string // the app's 「Persona 主对话处理中」 lines that end with it
+	appIDs     []string // the app's  "Persona main chat working" lines that end with it
 
 	checked  time.Time // its answer was last read
 	notFound bool      // that read did not find its message
@@ -46,7 +46,7 @@ type voiceRun struct {
 	// Draft and Clearable (409 input_draft).
 	State, Code, Message, Draft, Clearable string
 	// unsent: the app handed it back while it was being sent: past channel.QueuedMost without its message in the
-	// conversation it is unknown, not answered with the conversation's last words (docs/voice.md「重连和续接」).
+	// conversation it is unknown, not answered with the conversation's last words (docs/voice.md "Reconnecting and resuming").
 	unsent bool
 	// foldedCalls is how many earlier runs folded into it handed work over on calls that get no answer of their own.
 	foldedCalls int
@@ -60,7 +60,7 @@ type voiceRun struct {
 	foreign  bool
 	from     string
 	// stopAt: its turn was first seen stopped (not on the user) since it last worked, the transcript then stopRev;
-	// transient: a turn of it stopped on a transient model error, continued: it worked again after one (a 继续); waitOn
+	// transient: a turn of it stopped on a transient model error, continued: it worked again after one (a "Continue"); waitOn
 	// what it was last told it waits on outside (said once a wait); lastSpoken when the user last heard of it; failure
 	// the sort of model error its turn ended on (prompts.VoiceReport.Failure).
 	stopAt     time.Time
@@ -76,7 +76,7 @@ type voiceRun struct {
 	toldRev, lastRev int64
 }
 
-// The run frame's states (docs/voice.md「扩展 → App」).
+// The run frame's states (docs/voice.md "Extension → App").
 const (
 	runSending  = "sending"
 	runSent     = "sent"
@@ -329,7 +329,7 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		return
 	}
 	// Stopped, and not on the user: a turn that may not be over yet, as the hub's triage of it says (observe.go
-	// untilTriaged, docs/voice.md「一轮跟踪」Look).
+	// untilTriaged, docs/voice.md "Turn tracking" Look).
 	if sess != nil && !look.Working && !look.Waiting {
 		if r.stopAt.IsZero() || sess.Rev != r.stopRev {
 			// Stopped, or stopped again: a turn may come and go between two looks (woken, gone on from) with its
@@ -417,7 +417,7 @@ func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
 		}
 	}
 	state, empty, told := runDone, strings.TrimSpace(res.Answer) == "", true
-	// The model service failed it: what sort of failure, never its text (docs/voice.md「一轮跟踪」).
+	// The model service failed it: what sort of failure, never its text (docs/voice.md "Turn tracking").
 	failed := res.End == channel.EndError && !res.Held && r.failure != ""
 	switch {
 	case res.Quiet:

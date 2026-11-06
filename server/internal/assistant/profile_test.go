@@ -41,7 +41,7 @@ func TestSettingsAndTheProfile(t *testing.T) {
 		!slices.Equal(p.Keep, want) {
 		t.Fatalf("profile: %+v", p)
 	}
-	// The main conversation is 「Persona」 on the lists the apps get.
+	// The main conversation is "Persona" on the lists the apps get.
 	if i := slices.IndexFunc(f.lastSnapshot().Sessions, func(v SessionView) bool { return v.SessionID == "main-1" }); i < 0 ||
 		f.lastSnapshot().Sessions[i].Title != mainTitle {
 		t.Fatalf("sessions: %+v", f.lastSnapshot().Sessions)
@@ -49,7 +49,7 @@ func TestSettingsAndTheProfile(t *testing.T) {
 }
 
 // PUT /api/v1/assistant checks what it is given (a machine the hub has, a time zone, a launcher that runs Claude
-// Code, Codex or an assistant runtime), puts a launcher into 模型配置 › 主对话 too, and answers the view.
+// Code, Codex or an assistant runtime), puts a launcher into Model configuration › Main chat too, and answers the view.
 func TestPutSettings(t *testing.T) {
 	f := newFakeHub().withMachine()
 	f.devices = []Device{{ID: "server", Name: "server", Kind: "local", Home: "/home/me"}}
@@ -149,7 +149,7 @@ func TestRecordingDaysKeepsLastGoodOnReadFailure(t *testing.T) {
 }
 
 // A message for one of its conversations: one the machine does not list (and not the main one) keeps what it runs
-// on; the main one runs on 主对话's, a gone launcher falls back to the assistant's, a dropped model to the launcher's
+// on; the main one runs on the main chat's, a gone launcher falls back to the assistant's, a dropped model to the launcher's
 // default; the first message to a new main conversation started empty carries what the old one left, once.
 func TestSendParams(t *testing.T) {
 	ctx := context.Background()
@@ -166,7 +166,7 @@ func TestSendParams(t *testing.T) {
 		t.Fatalf("unlisted: %v %v", p, err)
 	}
 	p, err := s.SendParams(ctx, SendParams{MachineID: "server", SessionID: "side", Params: map[string]any{"text": "hi"}})
-	if err != nil || p["launcher"] != "conv" || p["model"] != nil || p["model_fingerprint"] == nil { // 主对话's
+	if err != nil || p["launcher"] != "conv" || p["model"] != nil || p["model_fingerprint"] == nil { // the main chat's
 		t.Fatalf("a gone launcher: %v %v", p, err)
 	}
 	p, err = s.SendParams(ctx, SendParams{MachineID: "server", SessionID: "side2", Params: map[string]any{"text": "hi"}})
@@ -280,7 +280,7 @@ func TestSettingsTool(t *testing.T) {
 }
 
 // The agents of open todos are kept listed however long they have been quiet (#4510): a busy machine's newest
-// transcripts crowded a finished, exited task agent out of the list and its task showed 「正在开 Agent」 for ever. A
+// transcripts crowded a finished, exited task agent out of the list and its task showed "Starting Agent" for ever. A
 // done todo's or a released agent is not kept.
 func TestProfileKeepsOpenTodoAgents(t *testing.T) {
 	ctx := context.Background()

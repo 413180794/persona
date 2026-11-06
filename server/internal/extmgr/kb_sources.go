@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kb"
 )
 
-// The hub keeps the knowledge base's sources (docs/knowledge.md「谁管什么」): the knowledge base, the assistant's,
+// The hub keeps the knowledge base's sources (docs/knowledge.md "Who owns what"): the knowledge base, the assistant's,
 // asks which connectors to read now and reads them through the hub (app.call connectors.*), data in, data out. The
 // cursors are the knowledge base's: what it did not ingest it reads again next time, so nothing waits here.
 
@@ -105,7 +105,7 @@ func (h *Manager) kbSourcesCall(ctx context.Context, p assistantwire.AppCall) (j
 }
 
 // kbArchives are the connectors whose conversations the knowledge base reads now: signed in, with an archive the user
-// lets into it (进知识库; off, it is not asked at all), and those with documents, meetings and events.
+// lets into it ("Add to knowledge base"; off, it is not asked at all), and those with documents, meetings and events.
 func (h *Manager) kbArchives(ctx context.Context) assistantwire.Archives {
 	out := assistantwire.Archives{Archives: []assistantwire.ArchiveSource{}, Items: []string{}}
 	if h.connectors == nil {
@@ -141,9 +141,9 @@ func (h *Manager) kbArchive(id string) (connector.Archive, error) {
 
 var errArchiveOff = i18n.Err("hub-kb_sources.archive_off")
 
-// kbMediaMost is the largest attachment connectors.archive_media hands over (a bigger one stays [附件]): the whole of
-// connector.ArchiveMediaMost wherever the manager runs, since the knowledge base is in its process (no bus message
-// carries it; before the move an assistant on another machine got at most 4 MB over the bus).
+// kbMediaMost is the largest attachment connectors.archive_media hands over (a bigger one stays an attachment
+// placeholder): the whole of connector.ArchiveMediaMost wherever the manager runs, since the knowledge base is in its
+// process (no bus message carries it; before the move an assistant on another machine got at most 4 MB over the bus).
 func (h *Manager) kbMediaMost() int { return connector.ArchiveMediaMost }
 
 // connectorByID is the registered connector id; nil when there is none (or no registry, in tests).

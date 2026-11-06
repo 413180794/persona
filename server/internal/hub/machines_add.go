@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Adding a computer (docs/onboarding.md 4.2「你的电脑 ↔ hub」, 5.3). The admin page adds one (admin_machines.go), and so
+// Adding a computer (docs/onboarding.md 4.2 "Your computer ↔ hub", 5.3). The admin page adds one (admin_machines.go), and so
 // does a signed-in full device or `personad hub pair --machine <id> --add` through POST /api/v1/auth/pair-codes with
 // {"add": …}: one function writes the hub.json entry and hands it to the manager (addMachine). A computer a device
 // adds is pending (machine_trust.go) until the user confirms it; one the master token adds over loopback, or the admin
@@ -339,7 +339,7 @@ func (h *Hub) computerInstall(pairURL string) map[string]string {
 }
 
 // notifyComputerCode tells the other paired devices that one made a code for a computer: a code was handed out
-// that lets a computer in (docs/onboarding.md 4.2 回执). It is a security receipt, so it goes out on purpose without
+// that lets a computer in (docs/onboarding.md 4.2 "Receipt"). It is a security receipt, so it goes out on purpose without
 // the devices' notification prefs, mute or desktop-open suppression (sendBuilt, not sendLocalized).
 func (h *Hub) notifyComputerCode(by principal, machine string) {
 	name := machine
@@ -359,8 +359,8 @@ func (h *Hub) notifyComputerCode(by principal, machine string) {
 	}, "", "alert", "10", func(d Device) bool { return d.Credential != by.ID && d.CredentialID != by.ID })
 }
 
-// Pairing receipts (docs/protocol.md「配对的回执推送」): aps.category picks the notification's buttons
-// (不是你？撤销, 是我的电脑 / 不是), and the ids those buttons act on are only in `pair`, never in the alert text.
+// Pairing receipts (docs/protocol.md "Pairing receipt pushes"): aps.category picks the notification's buttons
+// ("Not you? Revoke", "My computer" / "Not mine"), and the ids those buttons act on are only in `pair`, never in the alert text.
 const (
 	pairCategoryReceipt = "pair_receipt"
 	pairCategoryJoining = "computer_joining"

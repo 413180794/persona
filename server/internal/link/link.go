@@ -119,8 +119,8 @@ type Config struct {
 	// With FP set every candidate is checked against it and nothing else.
 	FP string `json:"fp"`
 	// Trust is TrustSystem when the pairing link had no FP: the hub has no TLS of its own and sits behind an HTTPS
-	// reverse proxy, whose certificate is checked against the system's CAs and the host name (docs/link.md「hub 在反向
-	// 代理后面」). Ignored while FP is set.
+	// reverse proxy, whose certificate is checked against the system's CAs and the host name (docs/link.md "Hub behind a
+	// reverse proxy"). Ignored while FP is set.
 	Trust     string     `json:"trust,omitempty"`
 	Token     string     `json:"token"`
 	Endpoints []Endpoint `json:"endpoints"`
@@ -129,7 +129,7 @@ type Config struct {
 	Passive *Passive `json:"passive,omitempty"`
 }
 
-// The two modes (docs/link.md「被动模式」).
+// The two modes (docs/link.md "Passive mode").
 const (
 	ModeActive  = "active"  // jarvis-link dials the hub's /api/v1/link
 	ModePassive = "passive" // the hub dials the TLS port jarvis-link listens on
@@ -240,7 +240,7 @@ func Update(path string, change func(*Config) error) error {
 	return os.Rename(tmp, path)
 }
 
-// kindOf says what kind of address a hub URL is: the link tries lan first (docs/link.md「选路」).
+// kindOf says what kind of address a hub URL is: the link tries lan first (docs/link.md "Route choice").
 func kindOf(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {

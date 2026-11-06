@@ -7,7 +7,7 @@ import (
 )
 
 // TodoLogSource starts the source of a project's timeline line written when a todo's task was finished
-// ("待办 · <title>", #2820); a new agent for the project is handed the latest of them (TodoOutcomes).
+// ("to-do · <title>" in Chinese, #2820); a new agent for the project is handed the latest of them (TodoOutcomes).
 const TodoLogSource = "待办 · "
 
 // TodoOutcomePrefix starts the text of a todo's timeline line; a line of another writer whose source happens to start
@@ -85,7 +85,7 @@ func (s *Store) TodoOutcomes(slug string, n int) []TodoOutcome {
 	return out
 }
 
-// parseTodoLine reads "- 2006-01-02 15:04 · 待办 · <title> · <text>"; the title has no separator (TodoLogTitle).
+// parseTodoLine reads "- 2006-01-02 15:04 · <to-do> · <title> · <text>" (the to-do word in Chinese); the title has no separator (TodoLogTitle).
 func parseTodoLine(l string) (TodoOutcome, bool) {
 	rest, ok := strings.CutPrefix(l, "- ")
 	if !ok || len(rest) < 16 {

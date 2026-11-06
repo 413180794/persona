@@ -158,7 +158,7 @@ func TestAskFallsBackToTheTerminal(t *testing.T) {
 	if r = ask(down(), true, "y\n", "Go on?", "--require-remote"); r.code != ExitUnreachable {
 		t.Fatalf("--require-remote: %+v", r)
 	}
-	// "交回电脑" on the phone is the same hand back.
+	// "Hand back to computer" on the phone is the same hand back.
 	handed := &fake{reply: `{"status":"dismissed"}`}
 	if r = ask(handed, true, "y\n", "Go on?"); r.code != ExitOK {
 		t.Fatalf("handed back to the terminal: %+v", r)

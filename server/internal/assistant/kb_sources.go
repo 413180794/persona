@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kb"
 )
 
-// The sources are the hub's connectors (docs/knowledge.md「流水线」): the knowledge base asks the hub which of them
+// The sources are the hub's connectors (docs/knowledge.md "Pipeline"): the knowledge base asks the hub which of them
 // to read now and reads them through it (app.call connectors.*), as data. Each connector's cursor is a file in the
 // data dir, its batches are ingested as chats "<id>-<chat id>"; compressing, tagging and projects follow as for any
 // chat. The cursor only moves past what was ingested, so while the assistant is away nothing is lost: the next run
@@ -28,7 +28,7 @@ const (
 	kbConnectorLimit = 20               // conversations per call
 )
 
-// kbConnectors archives what moved in every connector the hub lists (signed in, 进知识库 on) that is due: its
+// kbConnectors archives what moved in every connector the hub lists (signed in, "Send to knowledge base" on) that is due: its
 // manifest's Poll, else kbConnectorPoll, since it was last asked.
 func (s *Service) kbConnectors(ctx context.Context, e *kb.Engine) {
 	var list assistantwire.Archives
@@ -136,7 +136,7 @@ func (b busItems) DocTitle(ctx context.Context, url string) string {
 }
 
 // kbConnectorSource names a connector's chats for Ingest; their attachments come from the connector when it can hand
-// them over (connector.ArchiveMedia), else the line keeps [附件].
+// them over (connector.ArchiveMedia), else the line keeps the attachment placeholder.
 type kbConnectorSource struct {
 	id    string
 	media connector.ArchiveMedia // nil: no attachments

@@ -51,7 +51,7 @@ func (s *assistantStore) PutSetting(_ context.Context, key string, v any) error 
 	return nil
 }
 
-// A message to Persona' main conversation without a launcher goes out on 设置 › 助手's launcher (it used to keep the
+// A message to Persona' main conversation without a launcher goes out on "Settings › Assistant"'s launcher (it used to keep the
 // one it started with, so switching seemed to do nothing), also when it last ran on another one (#1518: a follow-up
 // had moved it onto plain claude, and every message after stayed there); a launcher the app picked wins; other
 // conversations are left alone.
@@ -160,7 +160,7 @@ func TestAnswerRoleSendsOnlyText(t *testing.T) {
 	m.peer, m.online = hubPeer, true
 	m.sessions = []proto.Session{{SessionID: "s1"}, {SessionID: "s2", Status: proto.StatusOffline}}
 	m.mu.Unlock()
-	connectAssistant(t, h) // a session resumed without a launcher runs on 新建 Agent's, the assistant's to say
+	connectAssistant(t, h) // a session resumed without a launcher runs on "New Agent"'s, the assistant's to say
 
 	mux := h.routes()
 	_, phone := call(t, mux, "POST", "/api/v1/auth/tokens", h.cfg.Token, `{"name":"iPhone","kind":"phone"}`)
@@ -269,7 +269,7 @@ func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
 	}
 }
 
-// newAgentStore answers 新建 Agent's model setting (the assistant's to read) with b.
+// newAgentStore answers "New Agent"'s model setting (the assistant's to read) with b.
 type newAgentStore struct {
 	*memStore
 	b assistantwire.ModelBinding
@@ -283,7 +283,7 @@ func (s *newAgentStore) Setting(_ context.Context, key string, out any) (bool, e
 	return true, json.Unmarshal(raw, out)
 }
 
-// A message to a session that is not running and whose launcher nobody knows (started outside Jarvis) carries 新建
+// A message to a session that is not running and whose launcher nobody knows (started outside Jarvis) carries "New
 // Agent's launcher and model, so the node resumes it on them instead of plain claude; a known launcher, a running
 // session and a launcher the app picked are left alone. Which launcher and model that is is the manager's to say
 // (agents.resume_params); while it is not connected the hub adds nothing.

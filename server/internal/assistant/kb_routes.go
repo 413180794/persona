@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The apps' knowledge-base routes (docs/protocol.md「知识库 API」, docs/knowledge.md「App 接口」): the hub relays them
+// The apps' knowledge-base routes (docs/protocol.md "Knowledge base API", docs/knowledge.md "App API"): the hub relays them
 // here unchanged (assistantwire.Routes), the same shapes as when the hub answered them.
 
 var (
@@ -56,7 +56,7 @@ func (s *Service) kbRoutes() {
 		}
 		apierr.WriteJSON(w, map[string]any{"items": list, "tags": kb.KindTags(all, 30)})
 	})
-	// One archived 公司圈 post (a project's 相关公司圈): what the crawler kept, text and comments as Markdown.
+	// One archived Moments post (a project's related Moments): what the crawler kept, text and comments as Markdown.
 	s.handle("GET /api/v1/kb/moments/{id}", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w, r)
 		if e == nil {
@@ -115,7 +115,7 @@ func (s *Service) kbRoutes() {
 		apierr.WriteJSON(w, out)
 	})
 	// What the knowledge base knows about one chat, for a prompt about it (a plugin's /agent): the chat's summary and
-	// its first three projects' (the same the inbox's AI 分身 starts with, kbContext). Read only.
+	// its first three projects' (the same the inbox's AI twin starts with, kbContext). Read only.
 	s.handle("GET /api/v1/kb/chats/{id}/context", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w, r)
 		if e == nil {

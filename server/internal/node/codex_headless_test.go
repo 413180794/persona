@@ -83,7 +83,7 @@ func TestCodexExecRunOnAnAppServerIsListed(t *testing.T) {
 }
 
 // #4745: a parent's subagents (a reviewer skill's thread_spawn children) were listed as agents of their own, titled
-// after their directory: each pushed 完成了 and stayed 完成未看. session_meta marks them; the parent stays.
+// after their directory: each pushed "Done" and stayed "Unread". session_meta marks them; the parent stays.
 func TestCodexSubagentRolloutsAreNotListed(t *testing.T) {
 	n := remoteTestNode(t)
 	home := t.TempDir()

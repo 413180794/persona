@@ -2,7 +2,7 @@ package screen
 
 import "testing"
 
-// #2553: the first line of the dialog holding the terminal, for 需要你's reason.
+// #2553: the first line of the dialog holding the terminal, for "Needs You"'s reason.
 func TestDialogHead(t *testing.T) {
 	for name, want := range map[string]string{
 		"claude-2.1.309-auto-mode-notice-120.txt":   "We're changing auto mode to no longer charge for classifier requests in Claude Code.",

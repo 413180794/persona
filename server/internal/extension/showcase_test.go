@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Every page of the 组件展示 extension (schema/extension/examples/showcase, copied from its snapshots/, #1852) is a view
+// Every page of the "Component showcase" extension (schema/extension/examples/showcase, copied from its snapshots/, #1852) is a view
 // this hub draws: CheckView holds, and Fit keeps all of it for an app of UI version 3 (the card in its slot, a
 // widget in its family) and fits it for an app of UI version 2. The schema allows a few things the hub refuses
 // (markdown images, http links); the showcase must not have them, or the apps' screenshots show views no hub sends.

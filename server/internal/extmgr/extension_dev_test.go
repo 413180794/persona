@@ -55,7 +55,7 @@ func TestDevExtension(t *testing.T) {
 	}
 	defer res.Body.Close()
 	lines := bufio.NewScanner(res.Body)
-	lines.Scan() // 已连上
+	lines.Scan() // "connected"
 	go func() {
 		_ = h.extensions.get("example-notes").proc.Call(ctx, "connector.status", map[string]string{"contribution": "examplenotes"}, nil)
 	}()

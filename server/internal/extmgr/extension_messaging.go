@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// The messaging extension point (docs/extension-messaging.md, #2138): an extension gives the apps' 消息 entry its
+// The messaging extension point (docs/extension-messaging.md, #2138): an extension gives the apps' "Messages" entry its
 // data and actions. The hub lists the sources (GET /api/v1/messaging), hands /api/v1/messaging/<source>/… to the
 // extension that has the source, checks what it answers against schema/extension/messaging.schema.json before the
 // apps see it, and pushes the extension's messaging.changed to the apps.
@@ -27,7 +27,7 @@ type messagingRoute struct {
 }
 
 // messagingRoutes are the routes the hub passes on; anything else under a source is 404, so a source cannot grow a
-// vendor's own API the apps would then depend on (docs「四、接口」).
+// vendor's own API the apps would then depend on (docs "4. API").
 var messagingRoutes = []messagingRoute{
 	{"GET", "status", "MessagingStatus"},
 	{"GET", "me", "MessagingMe"},
@@ -177,8 +177,8 @@ func (h *Manager) serveMessaging(w http.ResponseWriter, r *http.Request) {
 	p := principalOf(r.Context())
 	r.Header.Set("X-Persona-Device", p.ID)
 	r.Header.Set("X-Persona-Role", p.Role)
-	// No receipt for sends (docs「发送不重复」): one would keep a refusal the user can fix (the switch off, a sealed
-	// token expired) and replay it for the client_id; the extension drops a repeat by its client_id itself.
+	// No receipt for sends (docs "Sends are not repeated"): one would keep a refusal the user can fix (the switch off,
+	// a sealed token expired) and replay it for the client_id; the extension drops a repeat by its client_id itself.
 	h.messagingAnswer(w, r, hp, rt)
 }
 
@@ -217,9 +217,9 @@ func (h *Manager) messagingAnswer(w http.ResponseWriter, r *http.Request, hp *hu
 	rec.copyTo(w)
 }
 
-// fitMessagingAnswer turns what this hub does not know of a newer extension's answer into what it does (docs「十二、
-// 版本和兼容」): a part of an unknown kind becomes a text part of its text (dropped when it has none), a document
-// block of an unknown kind a paragraph. changed says whether anything was.
+// fitMessagingAnswer turns what this hub does not know of a newer extension's answer into what it does (docs "12.
+// Versions and compatibility"): a part of an unknown kind becomes a text part of its text (dropped when it has none), a
+// document block of an unknown kind a paragraph. changed says whether anything was.
 func fitMessagingAnswer(raw []byte) ([]byte, bool) {
 	var v any
 	if json.Unmarshal(raw, &v) != nil {
@@ -303,8 +303,8 @@ func (b *bufferedAnswer) copyTo(w http.ResponseWriter) {
 	_, _ = w.Write(b.body.Bytes())
 }
 
-// messagingFeature is in the hub's features while some extension has a messaging source: the apps use the 消息 entry
-// of the protocol then (and the old /api/v1/lark otherwise).
+// messagingFeature is in the hub's features while some extension has a messaging source: the apps use the "Messages"
+// entry of the protocol then (and the old /api/v1/lark otherwise).
 const messagingFeature = "messaging"
 
 // messagingChanges coalesces an extension's messaging.changed over a second per source and account before pushing it.

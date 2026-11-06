@@ -112,7 +112,7 @@ func TestDropNonDesktopIsQuiet(t *testing.T) {
 	}
 }
 
-// 手机静音 (WeChat's): while a desktop is online a phone that chose it gets none of the pushes its settings pick;
+// "Phone Muted" (WeChat's): while a desktop is online a phone that chose it gets none of the pushes its settings pick;
 // with no desktop, or without the choice, the settings decide as before; what was asked for explicitly still goes.
 func TestMuteWhileDesktop(t *testing.T) {
 	input := func(p NotifyPrefs) bool { return p.Input }

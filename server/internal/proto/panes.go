@@ -1,6 +1,6 @@
 package proto
 
-// PanesResponse is a machine's terminal host layout for the terminal browser (docs/terminal.md「独立终端」): every
+// PanesResponse is a machine's terminal host layout for the terminal browser (docs/terminal.md "Standalone terminal"): every
 // workspace, tab and pane of each host, agent or plain shell. It is read from the snapshot the node already takes;
 // ids are host-local.
 type PanesResponse struct {
@@ -12,7 +12,7 @@ type PaneHost struct {
 	Kind string `json:"kind"`
 	// Stream: the host streams a pane's terminal (observe); without it a pane can only be read once a second.
 	Stream bool `json:"stream"`
-	// Control: a phone can drive a pane at its own size (接管).
+	// Control: a phone can drive a pane at its own size ("Take over").
 	Control bool `json:"control"`
 	// NewTab: the host can open a new shell tab in a workspace (panes.new).
 	NewTab bool `json:"new_tab"`
@@ -38,7 +38,7 @@ type PaneTab struct {
 	Number      int    `json:"number,omitempty"`
 }
 
-// PaneItem is one pane. Terminal is what the terminal stream calls it ("pane:<pane>", docs/protocol.md「终端流」);
+// PaneItem is one pane. Terminal is what the terminal stream calls it ("pane:<pane>", docs/protocol.md "Terminal stream");
 // SessionID is set when an agent session of this machine runs in it (open that one instead: it shares the stream the
 // agent's own terminal panel uses).
 type PaneItem struct {
@@ -75,7 +75,7 @@ type PaneGitResult struct {
 	Output  string `json:"output,omitempty"`
 }
 
-// WorktreePrepare is what worktree.prepare knows of a workspace's repository, for 新建 worktree…'s dialog. Path is the
+// WorktreePrepare is what worktree.prepare knows of a workspace's repository, for the "New worktree…" dialog. Path is the
 // directory the host puts a repository's checkouts under (`<dir>/<repo>`): a checkout of branch b goes in
 // Path + "/" + Slug(b), the host's own naming, which is what the dialog fills in from the branch.
 type WorktreePrepare struct {

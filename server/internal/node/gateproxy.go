@@ -27,7 +27,7 @@ import (
 // BaseEnv pointing at this proxy (http://127.0.0.1:<port>/<key>, a key of its own that goes when the process ends)
 // and none of the credentials. The proxy adds them and holds every request to the gate's rules, however it was sent
 // (the gated command, curl, a script): allow goes, deny is refused, and a call to confirm goes only once, after
-// larkCheck let that very call through (the phone confirmed it, or 本会话总是允许 covers it). Printing the
+// larkCheck let that very call through (the phone confirmed it, or "Always allow in this session" covers it). Printing the
 // environment so yields an address that works on this machine only and skips nothing.
 
 const (

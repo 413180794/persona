@@ -9,8 +9,8 @@ import (
 )
 
 // A Claude Code dialog that is not a tool's question can hold its terminal while herdr calls the agent done or idle:
-// 2026-11-05, Claude Code 2.1.309's auto mode billing notice (「We're changing auto mode… Enter to continue · Esc to
-// cancel」) stopped three agents for minutes, listed as 完成未看, and messages to them were refused as dialog_open
+// 2026-11-05, Claude Code 2.1.309's auto mode billing notice ("We're changing auto mode… Enter to continue · Esc to
+// cancel") stopped three agents for minutes, listed as "Done, unseen", and messages to them were refused as dialog_open
 // (#2553). So the node looks at a resting Claude's screen now and then (paneDialogEvery, in the background: the list
 // never waits for a read) and lists one with a dialog at the bottom as blocked, the dialog's first line its reason.
 

@@ -64,7 +64,7 @@ func (r *Reader) loadContacts(ctx context.Context) (*contacts, error) {
 	return c, nil
 }
 
-// name is a contact's name as Contacts shows it: 张三 (family name first, together) or Alice Example; else the
+// name is a contact's name as Contacts shows it: a Chinese name (family name first, together) or Alice Example; else the
 // nickname or the company.
 func (row contactRow) name() string {
 	first, last := strings.TrimSpace(str(row.First)), strings.TrimSpace(str(row.Last))

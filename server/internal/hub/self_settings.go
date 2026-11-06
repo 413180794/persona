@@ -14,8 +14,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The hub's own settings jarvis_settings offers (docs/assistant.md「操作 Persona 自己」, 2026-11-01): the tool is the
-// assistant's (its own settings are its own: 关于我, its launcher, …), which lists these (app.call settings.list) and
+// The hub's own settings jarvis_settings offers (docs/assistant.md "Operating Persona itself", 2026-11-01): the tool is the
+// assistant's (its own settings are its own: "About me", its launcher, …), which lists these (app.call settings.list) and
 // hands the actions on them to the hub (app.tool jarvis_settings). One registry: each setting says what it is, how to
 // read it and how a change is made. Reads are free; every change is a card on the phone that says what changes (before
 // → after) and is applied only when approved. What the card needs filled in (a password) is typed on the phone and
@@ -173,7 +173,7 @@ func clipped(l i18n.Lang, s string) string {
 	return clip(oneLine(s), 120)
 }
 
-// changeSummary is the card's「改 title：before → after」.
+// changeSummary is the card's "change title: before → after".
 func changeSummary(l i18n.Lang, title, before, after string) string {
 	return ss(l, "change", i18n.Args{"title": title, "before": clipped(l, before), "after": clipped(l, after)})
 }

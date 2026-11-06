@@ -57,7 +57,7 @@ func sentText(sent []map[string]any) string {
 }
 
 // A turn reported over before its last words are in the transcript waits for them (the owner's 20:52 turn: tool
-// calls, then a long answer, shown as 「没有文字回答」).
+// calls, then a long answer, shown as "no text answer").
 func TestTurnOverBeforeItsWordsAreWrittenWaitsForThem(t *testing.T) {
 	s, h, sent, r, clock := endedRunHub(t)
 	s.checkChannelRun(r.ID)
@@ -92,7 +92,7 @@ func TestNoAnswerAsksTheConversationAgain(t *testing.T) {
 	}
 }
 
-// A placeholder (「No response requested.」) is no answer; asked again and still a placeholder, the owner is told why.
+// A placeholder ("No response requested.") is no answer; asked again and still a placeholder, the owner is told why.
 func TestPlaceholderAnswerSaysWhy(t *testing.T) {
 	s, h, sent, r, clock := endedRunHub(t)
 	h.items = append(h.items, proto.Item{ID: "a4", Seq: 4, Role: "assistant", Kind: proto.KindText, Text: "No response requested."})

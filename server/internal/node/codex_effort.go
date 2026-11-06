@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Thinking effort of a Codex thread Persona drives through its app-server (docs/codex.md「思考强度」): a session listed
+// Thinking effort of a Codex thread Persona drives through its app-server (docs/codex.md "Thinking effort"): a session listed
 // from an app-server (source_kind codex_app_server) or a herdr pane joined on one (codex_daemon.go). The phone's
 // messages are turn/start / turn/steer there, so the effort is the thread's own setting, not keys typed into a TUI:
 //

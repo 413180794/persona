@@ -14,10 +14,10 @@ import (
 	"github.com/nwverse/persona/server/internal/voice"
 )
 
-// The built-in voice extension, `personad voice` (docs/extensions.md「内置语音扩展」, docs/voice.md「可配置的 GPT-Live
-// 上游」): a built-in extension with a settings form and a secret key, so its realtime service can be set from the
-// apps. hub.json's first entry of it is taken over under its own id (its upstreams stay, and come first); without one
-// the extension is there, switched off, as "voice".
+// The built-in voice extension, `personad voice` (docs/extensions.md "Built-in voice extension", docs/voice.md
+// "Configurable GPT-Live upstream"): a built-in extension with a settings form and a secret key, so its realtime
+// service can be set from the apps. hub.json's first entry of it is taken over under its own id (its upstreams stay,
+// and come first); without one the extension is there, switched off, as "voice".
 
 // voiceExtensionID is its id when hub.json has no entry of it.
 const voiceExtensionID = "voice"
@@ -41,7 +41,8 @@ const voiceConfig = `{
   }
 }`
 
-// voiceManifest is the built-in voice extension under id, named name (hub.json's entry's, or 实时语音).
+// voiceManifest is the built-in voice extension under id, named name (hub.json's entry's, or the Chinese for "Realtime
+// voice").
 func voiceManifest(h *Manager, id, name string) *extension.Manifest {
 	if name == "" {
 		name = "实时语音"
@@ -115,9 +116,10 @@ func (ps *extensions) isVoice(p *extension.Extension) bool {
 	return p != nil && ps.voiceID != "" && p.Record.ID == ps.voiceID && p.Record.Source == extension.SourceBuiltin
 }
 
-// voiceSpec gives the built-in voice extension what the hub.json entry it took over had (docs/voice.md「扩展怎么拿到
-// 配置」): its config as PERSONA_VOICE_HUB_CONFIG (upstreams, default, owner, notes), its env and its directory. The
-// form's settings and key come as any extension's (PERSONA_EXTENSION_CONFIG, PERSONA_EXTENSION_SECRETS).
+// voiceSpec gives the built-in voice extension what the hub.json entry it took over had (docs/voice.md "How the
+// extension gets its configuration"): its config as PERSONA_VOICE_HUB_CONFIG (upstreams, default, owner, notes), its
+// env and its directory. The form's settings and key come as any extension's (PERSONA_EXTENSION_CONFIG,
+// PERSONA_EXTENSION_SECRETS).
 func (ps *extensions) voiceSpec(p *extension.Extension, s *host.Spec) {
 	c := ps.voice
 	if c == nil || !ps.isVoice(p) {
@@ -177,7 +179,7 @@ func (ps *extensions) voiceView(ctx context.Context, p *extension.Extension, v *
 }
 
 // voiceKeyFollowsURL keeps the settings' key to the address it was set for (the registry's BoundSecrets,
-// docs/voice.md「清单」): a configuration that moves the address to another origin (scheme, host, port) deletes the
+// docs/voice.md "Manifest"): a configuration that moves the address to another origin (scheme, host, port) deletes the
 // key before it is saved, whoever saves it, in the same registry operation a key is set in, so the key is never sent
 // as a Bearer to a host it was not given for.
 func (ps *extensions) voiceKeyFollowsURL(p *extension.Extension, old, next json.RawMessage) []string {

@@ -1,6 +1,6 @@
 // Package tunnel is the hub↔node link over tailcat (github.com/tailscale/tailcat): WireGuard through Tailscale's DERP
 // relays, upgraded to a direct path when NAT traversal works, with no public IP, open port or ssh needed on either side.
-// It is the fallback when the hub cannot ssh to a machine (docs/server.md「tailcat 打洞」).
+// It is the fallback when the hub cannot ssh to a machine (docs/server.md "tailcat hole punching").
 //
 // A node keeps a fixed identity in ~/.jarvis/tailcat.json and serves only the hub keys listed there; the hub keeps its
 // own in ~/.jarvis/tailcat-hub.json and dials a node's address (hub.json machines[].tailcat_addr). The address holds

@@ -17,9 +17,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The assistant extension point (docs/extensions.md「助手」): a plugin's skills go to the machine that runs the assistant
-// with assistant.prepare (the files only when that machine does not have them yet), and its instructions are added to
-// the assistant's CLAUDE.md; the assistant asks for both (app.call plugins.assistant, assistant_apps.go).
+// The assistant extension point (docs/extensions.md "Assistant"): a plugin's skills go to the machine that runs the
+// assistant with assistant.prepare (the files only when that machine does not have them yet), and its instructions are
+// added to the assistant's CLAUDE.md; the assistant asks for both (app.call plugins.assistant, assistant_apps.go).
 
 // pluginSkillMost is the most a plugin's skills may weigh, all files together.
 const extensionSkillMost = 8 << 20

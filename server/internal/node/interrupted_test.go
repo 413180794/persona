@@ -8,7 +8,7 @@ import (
 )
 
 // A restart takes herdr's panes with it. Sessions Persona had started in one are shown as interrupted, so the apps
-// can offer 继续; everything else keeps the status it had.
+// can offer "Continue"; everything else keeps the status it had.
 func TestMarkInterrupted(t *testing.T) {
 	n, _ := testNode(t)
 	n.bootAt = time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)

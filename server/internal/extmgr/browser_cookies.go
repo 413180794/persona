@@ -1,8 +1,8 @@
 package extmgr
 
-// Sign-ins in ego lite on a Mac (#1304, docs/plan-ego-browser.md「导入 cookies」): the machine page's 浏览器登录 lists
-// the sites with cookies there, imports cookies the user picked in a file on their phone or in the web app, and clears
-// a site's or all. Cookies are credentials:
+// Sign-ins in ego lite on a Mac (#1304, docs/plan-ego-browser.md "Importing cookies"): the machine page's "Browser
+// sign-ins" lists the sites with cookies there, imports cookies the user picked in a file on their phone or in the web
+// app, and clears a site's or all. Cookies are credentials:
 //   - only the user's own signed-in apps may do any of it (byOwnDevice): not the pairing token in hub.json the CLI and
 //     the assistant's processes hold, not a watch, a machine or another hub; and no tool of the assistant's reaches it;
 //   - the hub passes an import straight to the node and keeps nothing: not in the database, not on disk, not in a log

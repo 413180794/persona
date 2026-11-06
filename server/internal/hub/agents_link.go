@@ -11,8 +11,8 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The Agents business is the manager's (internal/assistant, agents_*.go; docs/agent-work.md「谁管什么」): the triage of
-// an agent's turn, 继续 after a transient model error, the wakes, the cards it opens and their answers, its switches,
+// The Agents business is the manager's (internal/assistant, agents_*.go; docs/agent-work.md "Who owns what"): the triage of
+// an agent's turn, "Continue" after a transient model error, the wakes, the cards it opens and their answers, its switches,
 // state and history; the tab names of new agents; what a new or resumed agent runs on. The hub carries it: it tells
 // the manager what happened (session.turn_started / turn_ended, session.seen), shows what it reports (the snapshot's
 // work on the session lists, its cards with the other interactions) and asks it to fill in a start
@@ -89,7 +89,7 @@ func (h *Hub) managerConnected() {
 }
 
 // agentStartParams has the manager fill in params, an Agent the app starts on m (POST /api/v1/sessions): what it runs
-// on (模型配置 › Agents, the launcher / model / effort picked for this start over it) and, from nameFrom when it is not
+// on (Models › Agents, the launcher / model / effort picked for this start over it) and, from nameFrom when it is not
 // "", its tab's name. An error is the start's refusal (*startRefused, the app's to see: 400), errManagerOffline (the
 // manager is not connected after waiting for it while the hub starts, and without it nothing reaches the machine:
 // 503), or the manager's failure to answer (502).
@@ -125,7 +125,7 @@ type startRefused struct{ msg string }
 
 func (e *startRefused) Error() string { return e.msg }
 
-// applyResumeLauncher adds 新建 Agent's launcher and model to p, a message that resumes sid on m (the manager's
+// applyResumeLauncher adds "New agent"'s launcher and model to p, a message that resumes sid on m (the manager's
 // agents.resume_params: asked with no params, what it answers goes over p's). Without the manager nothing is added:
 // the send that follows goes through it too and is answered 503 assistant_offline.
 func (h *Hub) applyResumeLauncher(ctx context.Context, m *Machine, sid string, p map[string]any) {

@@ -1,6 +1,6 @@
 package node
 
-// Sign-ins in ego lite's default profile (#1304, docs/plan-ego-browser.md「导入 cookies」): the sites that have
+// Sign-ins in ego lite's default profile (#1304, docs/plan-ego-browser.md "Importing cookies"): the sites that have
 // cookies there (never a value), importing cookies the user picked on their phone or in the web app, and clearing a
 // site's or all of them. Cookies are credentials: they reach ego through the script's stdin (never a command line or
 // a file), and nothing here logs or returns a value. The work happens in a task space of Persona's own, through CDP's

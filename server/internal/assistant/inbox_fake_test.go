@@ -36,7 +36,7 @@ type fakeInbox struct {
 	conns     []connector.Connector
 	extension map[string]bool   // the plugins' connectors
 	kinds     map[string]string // "<connector>/<kind>" → how a plugin describes it
-	off       map[string]bool   // read with nothing: 进收件箱 off, not signed in, waiting for the triage model
+	off       map[string]bool   // read with nothing: "Send to inbox" off, not signed in, waiting for the triage model
 	failing   map[string]error  // Collect fails
 	cfg       assistantwire.InboxConfig
 	// model is every inbox purpose's model (nil: none set up), models by purpose over it: hub.json's "ai" and its

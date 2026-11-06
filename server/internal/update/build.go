@@ -78,7 +78,7 @@ func (b Build) Newer(latest int64) bool { return b.Number > 0 && latest > b.Numb
 // Hold says why this build must not install release m by itself, or "" when it may: m's code has to include the
 // commit this build was made from. A release published from older code (a checkout behind the master a hub was
 // deployed from) has the larger build number all the same, and would take that hub back (docs/hub-update.md
-// 「防退回」). The reason is for people: the app shows it, the update history keeps it.
+// "No rollback"). The reason is for people: the app shows it, the update history keeps it.
 func (b Build) Hold(m *Manifest) string {
 	commit, dirty := strings.CutSuffix(b.Commit, "-dirty")
 	if commit == "" {

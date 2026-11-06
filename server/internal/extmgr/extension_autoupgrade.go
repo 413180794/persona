@@ -15,10 +15,10 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Plugins upgrade themselves from their markets (docs/extensions.md「自动升级」): the hub reads the registered markets
-// every few hours and installs a newer version of a plugin it installed from one, when the version asks for nothing
-// more than the user granted and nothing is using the plugin. One that asks for more waits for the user; one that
-// does not come up is rolled back (watchUpgrade) and not tried again. Built-in, hub.json's and plugins installed
+// Plugins upgrade themselves from their markets (docs/extensions.md "Automatic upgrades"): the hub reads the registered
+// markets every few hours and installs a newer version of a plugin it installed from one, when the version asks for
+// nothing more than the user granted and nothing is using the plugin. One that asks for more waits for the user; one
+// that does not come up is rolled back (watchUpgrade) and not tried again. Built-in, hub.json's and plugins installed
 // from elsewhere (a directory, a file, a URL, a remote socket) are never upgraded by the hub.
 
 const (
@@ -371,7 +371,7 @@ func morePermissionsText(l i18n.Lang, added []extension.PermissionLine) string {
 	}
 	n := len(added)
 	text := i18n.T(l, ns+"more_permissions", i18n.Args{"count": n})
-	if n <= 5 { // a small number reads as a word ("要多一项权限")
+	if n <= 5 { // a small number reads as a word (the Chinese for "one more permission")
 		text = i18n.T(l, ns+"more_permissions_few", i18n.Args{"count": n, "word": i18n.T(l, ns+"number_"+strconv.Itoa(n))})
 	}
 	for i, p := range added {

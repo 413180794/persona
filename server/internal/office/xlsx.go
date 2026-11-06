@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 )
 
-// A workbook from JSON or CSV. JSON: {"sheets":[{"name":"销售","header":["月份","收入"],"rows":[["1月",1200],["合计","=SUM(B2:B2)"]],
+// A workbook from JSON or CSV. JSON: {"sheets":[{"name":"Sales","header":["Month","Revenue"],"rows":[["Jan",1200],["Total","=SUM(B2:B2)"]],
 // "widths":[10,14],"formats":["","#,##0.00"],"freeze":true}]}. A cell is text, a number, true/false, or a formula
 // ("=…"): formulas are worked out by Excel and Numbers when the file is opened (fullCalcOnLoad), so the totals stay
 // formulas instead of numbers typed in. A header is bold, shaded and frozen; columns are as wide as what is in them

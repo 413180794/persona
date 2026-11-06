@@ -63,7 +63,7 @@ func TestARepeatingTaskThatKeepsNotGoingThroughIsToldOnce(t *testing.T) {
 	}
 }
 
-// Only the runs that were meant to happen count: 立即运行 is answered in the app (and a failure of it there), and a
+// Only the runs that were meant to happen count: "Run now" is answered in the app (and a failure of it there), and a
 // one-off is not a repeating task (its failure is pushed and retried by the run itself).
 func TestOnlyRepeatingTasksAndTheirScheduledRunsCountTowardsTheStreak(t *testing.T) {
 	n := newFakeHub().withMachine()
@@ -149,7 +149,7 @@ func TestAStreakThatJumpsPastTheLimitIsStillToldOnce(t *testing.T) {
 }
 
 // In a muted conversation the streak notice stays quiet like the conversation's other pushes, but the run's own
-// 「定时任务失败」 still goes out, as it did before the streak notice (#4785): it is not left out for a notice that
+// "Scheduled task failed" still goes out, as it did before the streak notice (#4785): it is not left out for a notice that
 // was never sent.
 func TestAFailureInAMutedConversationIsStillPushed(t *testing.T) {
 	n := newFakeHub().withMachine()

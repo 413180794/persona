@@ -40,7 +40,7 @@ type UsageAccount struct {
 
 	// Where the numbers came from (#2595), set by the hub. Local: an agent's own files on one of the machines
 	// (docs/usage-windows.md); Sources: the names of the account-pool gateways that reported it
-	// (docs/usage-windows.md「账号池网关」). An account both saw lists both.
+	// (docs/usage-windows.md "Account pool gateways"). An account both saw lists both.
 	Local   bool     `json:"local,omitempty"`
 	Sources []string `json:"sources,omitempty"`
 	// Problem: "error" when the gateway could not read the account's numbers just now (it kept the stored ones),

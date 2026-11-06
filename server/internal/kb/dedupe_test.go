@@ -167,7 +167,7 @@ func TestLinkMoments(t *testing.T) {
 	}
 }
 
-// A 公司圈 post archived long after it was written is compressed whole (back to a year), not only its last 30 days.
+// A Moments post archived long after it was written is compressed whole (back to a year), not only its last 30 days.
 func TestCompressAnOldMomentChat(t *testing.T) {
 	m := &scriptModel{replies: []string{`{"summary":"## 这是什么\n帖子","one_line":"一条帖子","importance":"P2","relevance":40}`}}
 	e := testEngine(t, m)

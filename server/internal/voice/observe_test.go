@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// docs/voice.md「一轮跟踪」「播报」(#3503): turns the call did not hand over, turns that stopped and are not over, a
+// docs/voice.md "Turn tracking", "Announcements" (#3503): turns the call did not hand over, turns that stopped and are not over, a
 // heartbeat while it works, and the user cutting in on the model.
 
 const appMsgID = "0c0ffee0-1111-4222-8333-444455556666" // a message the phone sent (its id a UUID)
@@ -229,7 +229,7 @@ func triageLater(hub *fakeHub, at time.Time, w *proto.WorkState) {
 }
 
 // A turn of Claude Code that stopped on a model error (it says nothing of the error's kind) is not over while the
-// hub's triage of it, which comes a while after the stop, may still say a 继续 is due: it says so, the manager goes
+// hub's triage of it, which comes a while after the stop, may still say a "Continue" is due: it says so, the manager goes
 // on, and the answer is the turn's after that, the error never said.
 func TestTransientErrorWaitsForTheTriage(t *testing.T) {
 	setVar(t, &lookEvery, 100*time.Millisecond)
@@ -252,7 +252,7 @@ func TestTransientErrorWaitsForTheTriage(t *testing.T) {
 		t.Fatal("a model error was taken for the turn's end before its triage was in")
 	}
 
-	hub.edit("a1", func(s *fakeSession) { s.turnError, s.work, s.status = "", nil, "working" }) // the manager's 继续
+	hub.edit("a1", func(s *fakeSession) { s.turnError, s.work, s.status = "", nil, "working" }) // the manager's "Continue"
 	hub.add("a1", proto.Item{Role: "user", Kind: proto.KindText, Text: "继续"})
 	time.Sleep(300 * time.Millisecond)
 	stopOn(t, hub, "a1", "全部测试都过了。", nil)
@@ -463,7 +463,7 @@ func TestToldTurnTheTriageSaysIsDone(t *testing.T) {
 	}
 }
 
-// After 「停止：」 the turn the user stopped is not told again as a turn begun elsewhere, though the hub lists it as
+// After "stop:" the turn the user stopped is not told again as a turn begun elsewhere, though the hub lists it as
 // working a while after the stop; what the agent does after it is.
 func TestStoppedTurnIsNotObserved(t *testing.T) {
 	setVar(t, &lookEvery, 100*time.Millisecond)
@@ -631,7 +631,7 @@ func TestBargeInByTheUsersVoice(t *testing.T) {
 	a.until(ofType("ready"))
 	a.send(map[string]any{"type": "text", "text": "讲个长故事"})
 	a.heardAudio()
-	a.speak(400*time.Millisecond, true) // 「嗯嗯」
+	a.speak(400*time.Millisecond, true) // a short "uh-huh"
 	a.speak(200*time.Millisecond, false)
 	if a.cleared(300 * time.Millisecond) {
 		t.Fatal("a backchannel cut the model off")
@@ -662,7 +662,7 @@ func TestBargeInByTheUsersVoice(t *testing.T) {
 	}
 }
 
-// After the energy rule cut the model off for a short 「等一下」, the rest of the answer it dropped is not played, and
+// After the energy rule cut the model off for a short "wait a moment", the rest of the answer it dropped is not played, and
 // its reply to the user, which comes 1.2 s after they stop (before the 1.5 s pause that ends a drop otherwise, and
 // with no caption first on some services), is.
 func TestBargeInKeepsTheReply(t *testing.T) {
@@ -697,7 +697,7 @@ func TestBargeInKeepsTheReply(t *testing.T) {
 	a.until(ofType("ready"))
 	a.send(map[string]any{"type": "text", "text": "讲个长故事"})
 	a.heardAudio()
-	a.speak(640*time.Millisecond, true) // 「等一下」
+	a.speak(640*time.Millisecond, true) // "wait a moment"
 	a.until(ofType("clear"))
 	drain := func() int {
 		n := 0

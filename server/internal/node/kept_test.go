@@ -10,7 +10,7 @@ import (
 )
 
 // The assistant's main conversation stays listed when 80 newer transcripts and a week of quiet would push it out
-// (2026-11-01: the Persona tab had no 主对话 on a busy machine).
+// (2026-11-01: the Persona tab had no main chat on a busy machine).
 func TestKeptSessionOutlastsTheOfflineCut(t *testing.T) {
 	n, _ := claudeHome(t)
 	n.metas, n.bgScans = map[string]quickMeta{}, map[string]*bgScan{}
@@ -51,7 +51,7 @@ func TestKeptSessionOutlastsTheOfflineCut(t *testing.T) {
 
 // A transcript whose tail holds no words is still listed when it is bigger than the tail read: the main conversation
 // whose last turn stopped mid tool call under one of Claude Code's huge api-request-blob lines went missing from every
-// list, and the app and the web had no session for 主对话 (#1163). A small probe that never said anything is still left
+// list, and the app and the web had no session for the main chat (#1163). A small probe that never said anything is still left
 // out.
 func TestTailWithoutWordsKeepsBigTranscriptsListed(t *testing.T) {
 	n, _ := claudeHome(t)
@@ -88,7 +88,7 @@ func TestTailWithoutWordsKeepsBigTranscriptsListed(t *testing.T) {
 }
 
 // The assistant's conversations are counted apart from every other directory's: 85 newer sessions a script started
-// elsewhere do not push the assistant's quieter ones out of the list (#2105: the 对话 tab kept only the main one and
+// elsewhere do not push the assistant's quieter ones out of the list (#2105: the "Chat" tab kept only the main one and
 // the scheduled tasks').
 func TestAssistantConversationsOutlastOtherDirectories(t *testing.T) {
 	n, _ := claudeHome(t)

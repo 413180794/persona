@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Where a sent message landed in the transcript (docs/protocol.md「待发消息的对应」). The node ties a send with a
+// Where a sent message landed in the transcript (docs/protocol.md "Matching pending messages"). The node ties a send with a
 // client_msg_id to the transcript line that is its copy and puts the id on that line's items (node/echo.go); it tells
 // the hub what it expects and what it found (session.echo), which the hub keeps with the send (sent_messages.echo),
 // and hands back to a node that started again (session.echoes, on every connect): the items keep their id, and a

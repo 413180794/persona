@@ -16,9 +16,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// mailConnector is mail as a connector (docs/plan-connectors.md「三、迁移」): so far what goes into the knowledge
+// mailConnector is mail as a connector (docs/plan-connectors.md "3. Migration"): so far what goes into the knowledge
 // base, by one cursor per account (the newest UID archived, see Changes), its inbox, its tools and mail_send through the gate;
-// 设置 › 连接器 draws its row from the connectors list (?all=1, migration M3–M6).
+// Settings › Connectors draws its row from the connectors list (?all=1, migration M3–M6).
 type mailConnector struct{ h *Manager }
 
 // kbMailPoll is how often the knowledge base asks mail for changes (its manifest's Poll).

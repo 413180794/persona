@@ -10,10 +10,11 @@ import (
 )
 
 // A connector's program writes a feed's public posts into the knowledge base's post archive and reads which posts'
-// comments to read again (connector.KnowledgeBase, docs/knowledge.md「外部帖子」). The archive is the knowledge
-// base's, the assistant's: the hub checks the connector may write now (进知识库) and passes each call on with the
-// connector's names (kb.posts_*, kb.archived_chats). While the assistant is not connected a call waits for it a while
-// (kbPostsWait), then fails (assistant_offline): the program's round ends there and it reads the same again next round.
+// comments to read again (connector.KnowledgeBase, docs/knowledge.md "External posts"). The archive is the knowledge
+// base's, the assistant's: the hub checks the connector may write now ("Add to knowledge base") and passes each call on
+// with the connector's names (kb.posts_*, kb.archived_chats). While the assistant is not connected a call waits for it
+// a while (kbPostsWait), then fails (assistant_offline): the program's round ends there and it reads the same again
+// next round.
 
 // kbFor is the knowledge base as connector id's program sees it.
 func (h *Manager) kbFor(id string) connector.KnowledgeBase { return kbPosts{h: h, id: id} }

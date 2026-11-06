@@ -2,7 +2,7 @@ package node
 
 import "sync"
 
-// A resident node keeps its headless conversations when the hub's connection ends (docs/hub-restart.md「对话不中断」):
+// A resident node keeps its headless conversations when the hub's connection ends (docs/hub-restart.md "Conversations are not interrupted"):
 // a hub restart or a reconnect replaces the connection, and with it the Node serving it (attach.go), but the claude
 // processes go on — their turn, their background tasks and monitors — and the Node serving the next connection takes
 // them over: what they say from then on reaches the new hub, the answer being generated included. Without a resident

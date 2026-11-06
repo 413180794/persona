@@ -1,4 +1,4 @@
--- Supervised tasks (#3124, docs/unified-entry.md「督办」): a task the main conversation handed out remembers that
+-- Supervised tasks (#3124, docs/unified-entry.md "Supervision"): a task the main conversation handed out remembers that
 -- conversation as its supervisor, what done means (done_when), how long it should take, and where its review stands.
 -- Kept apart from todos: a todo made by hand or by another conversation has no row.
 CREATE TABLE IF NOT EXISTS todo_supervision (

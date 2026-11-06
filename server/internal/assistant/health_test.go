@@ -182,7 +182,7 @@ func answerOutbound(t *testing.T, s *Service, self, tool, says string, allow boo
 	}()
 }
 
-// What leaves the health space leaves with the user knowing (docs/health.md「外发」, #3194): notify_user says there is
+// What leaves the health space leaves with the user knowing (docs/health.md "Sharing out", #3194): notify_user says there is
 // news, not the news; a hand-off to a coding agent is confirmed on the phone each time; the schedule tools see only
 // the space's own tasks. The assistant's own conversations are as before.
 func TestHealthSpaceOutbound(t *testing.T) {

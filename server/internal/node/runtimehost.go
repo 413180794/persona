@@ -385,7 +385,7 @@ func resumeArgvs(params json.RawMessage) map[string][]string {
 	return out
 }
 
-// packageOffer is the update a runtime gets in its hello reply (docs/runtimes.md「自动更新」): this node's package of
+// packageOffer is the update a runtime gets in its hello reply (docs/runtimes.md "Auto-update"): this node's package of
 // the name the runtime runs, when the hashes differ. A daemon gets none: its code is not this machine's to replace
 // (its link does not pass the package on either).
 func (rh *RuntimeHost) packageOffer(h *runtimeConn, hello runtimeHello) map[string]any {

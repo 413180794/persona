@@ -67,14 +67,14 @@ func (s *Service) agentRoutes() {
 	})
 }
 
-// workStats is GET /api/v1/agents/work/stats: how the triage did over the last hours (docs/agent-work.md「评估」).
+// workStats is GET /api/v1/agents/work/stats: how the triage did over the last hours (docs/agent-work.md "Evaluation").
 type workStats struct {
 	Hours    int            `json:"hours"`
 	Triaged  map[string]int `json:"triaged"` // "done", "blocked/user", … "unsure", "failed"
 	By       map[string]int `json:"by"`      // rule, model
 	Actions  map[string]int `json:"actions"` // continued, woke, asked, answered, withdrawn
 	Resumed  map[string]int `json:"resumed"` // by user / hub after a triaged turn
-	Unread   sampleStats    `json:"unread"`  // 完成未看 over the hours
+	Unread   sampleStats    `json:"unread"`  // "Unread" over the hours
 	NeedsYou sampleStats    `json:"needs_you"`
 	// Waits: how long a triaged turn waited for the user's first look or reply (seconds), by what it was.
 	Waits map[string]waitStats `json:"waits"`

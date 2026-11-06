@@ -17,7 +17,7 @@ import (
 const exitNoEdge = 3
 
 // runHubSwitch is `personad hub switch`: the running edge starts a binary next to the hub serving and switches to it
-// once it is up (docs/hub-restart.md「蓝绿切换」). One line per phase, then one with the outcome.
+// once it is up (docs/hub-restart.md "Blue-green switch"). One line per phase, then one with the outcome.
 func runHubSwitch(args []string) error {
 	fs := flag.NewFlagSet("hub switch", flag.ContinueOnError)
 	binary := fs.String("binary", "", "the binary to switch to (default: this one)")

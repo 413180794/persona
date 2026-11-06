@@ -15,7 +15,7 @@ import (
 // days before 2026-11-01) the files are moved into the new zone before anything reads or writes them in it:
 //   - a chat: messages/.zone names the zone (no file: written before zones were recorded, in the hub's own zone,
 //     time.Local). Moving re-buckets every line into the new zone's days, written to messages.rezone and swapped in.
-//   - a timeline: its header names the zone ("# 时间线 · Asia/Shanghai"; "# 时间线" alone: time.Local).
+//   - a timeline: its header names the zone (the Chinese "Timeline" heading, then " · Asia/Shanghai"; the heading alone: time.Local).
 // Attachments keep the directory of the day they were saved under (lines link them by path).
 
 const zoneFile = ".zone"

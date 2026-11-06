@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What comes from the nodes is the manager's (internal/assistant fleet_*.go; docs/machines.md「谁处理电脑的事件」):
+// What comes from the nodes is the manager's (internal/assistant fleet_*.go; docs/machines.md "Who handles computer events"):
 // the interactions, each Agent's state, which pushes go and when, the Live Activity's content, the nodes' MCP tools,
 // the machines' monitoring. The hub shows and delivers what it reports:
 //
@@ -84,10 +84,10 @@ func init() {
 		if p.AnsweredBy != "" {
 			event["answered_by"] = p.AnsweredBy // the app marks a question the assistant answered (docs/assistant.md)
 			if p.Reason != "" {
-				event["reason"] = p.Reason // 助手代答：X，因为 Y
+				event["reason"] = p.Reason // "Assistant answered: X, because Y"
 			}
 			if len(p.Answers) > 0 {
-				event["answers"] = p.Answers // what 改答 (POST …/reanswer) starts from
+				event["answers"] = p.Answers // what "Change answer" (POST …/reanswer) starts from
 			}
 		}
 		h.broadcast(event)
@@ -343,7 +343,7 @@ func (h *Hub) fleetRoutesRelayed(api *http.ServeMux) {
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		h.forwardOwned(w, r, h.byInteraction)
 	}))
-	// 改答: a question the assistant answered gets the user's answer (assistant/fleet_delegate.go); a device that may
+	// "Change answer": a question the assistant answered gets the user's answer (assistant/fleet_delegate.go); a device that may
 	// only answer cards does not send agents messages.
 	api.HandleFunc("POST /api/v1/interactions/{id}/reanswer", func(w http.ResponseWriter, r *http.Request) {
 		if answerOnly(r) {

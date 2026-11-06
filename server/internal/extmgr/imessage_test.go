@@ -191,7 +191,7 @@ func TestIMessageOldOrOfflineMac(t *testing.T) {
 	}
 }
 
-// 交给 Persona: on unless the user turned it off; the choice is kept and applied at once.
+// "Hand to Persona": on unless the user turned it off; the choice is kept and applied at once.
 func TestIMessageAISwitch(t *testing.T) {
 	h := newTestManager(t)
 	h.store = newMemStore() // the choice is kept
@@ -285,8 +285,9 @@ func TestIMessageArchive(t *testing.T) {
 	}
 }
 
-// Deleting what was kept: only once 交给 Persona is off; the knowledge base's iMessage chats and people (kb.forget) and
-// the inbox's iMessage items (inbox.forget), both the assistant's in this process, go; the counts are theirs.
+// Deleting what was kept: only once "Hand to Persona" is off; the knowledge base's iMessage chats and people
+// (kb.forget) and the inbox's iMessage items (inbox.forget), both the assistant's in this process, go; the counts are
+// theirs.
 func TestIMessageDelete(t *testing.T) {
 	h := newTestManager(t)
 	h.store = newMemStore()

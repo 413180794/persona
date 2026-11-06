@@ -278,7 +278,7 @@ func TestQuestionWithPreviews(t *testing.T) {
 	}
 }
 
-// #2872: the agent's own answer above a dialog is often a numbered list (「I'll do three things: 1. … 2. …」). Those
+// #2872: the agent's own answer above a dialog is often a numbered list ("I'll do three things: 1. … 2. …"). Those
 // numbers are the conversation's words, not the dialog's options: the options start under the rule that opens the
 // dialog (dialogTop), and the dialog is the last thing on screen. Read as options they made the auto mode notice a
 // choice, so NoticeOnly said no and dismiss_notice refused to close it (#2612, #2553).

@@ -6,7 +6,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// legacyConnectors had rows of their own in 设置 › 连接器 before the app drew them from GET /api/v1/connectors
+// legacyConnectors had rows of their own in Settings › Connectors before the app drew them from GET /api/v1/connectors
 // (migration M6): an app from before draws every connector listed as a row of its own, so they are listed only when
 // asked for (?all=1), or it would show them twice.
 var legacyConnectors = map[string]bool{"lark": true, "mail": true}

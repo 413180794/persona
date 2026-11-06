@@ -213,7 +213,7 @@ func TestReadinessStartRefusal(t *testing.T) {
 	}
 }
 
-// The main conversation's last turn was Claude Code's「Not logged in」: the model step says sign in (or use a key),
+// The main conversation's last turn was Claude Code's "Not logged in": the model step says sign in (or use a key),
 // and so does the first message.
 func TestReadinessNotLoggedIn(t *testing.T) {
 	_, s, _ := readyMachine(t, proto.Session{SessionID: "m1", State: proto.StateIdle, LastText: "Not logged in · Please run /login",
@@ -276,7 +276,7 @@ func TestReadinessProbe(t *testing.T) {
 	}
 }
 
-// 以后再说 is kept in the settings (assistant.readiness), with the last result.
+// "Later" is kept in the settings (assistant.readiness), with the last result.
 func TestReadinessDismiss(t *testing.T) {
 	f, s, st := readyMachine(t)
 	if status, body := serveJSON(t, s, "POST", "/api/v1/assistant/readiness/dismiss", "", `{"dismissed":true}`); status != 200 || body["ok"] != true {
@@ -347,7 +347,7 @@ func TestReadinessManagedAPILauncher(t *testing.T) {
 	}
 }
 
-// A record that cannot be read is not written over: what was kept (以后再说) survives a database hiccup.
+// A record that cannot be read is not written over: what was kept ("Later") survives a database hiccup.
 func TestReadinessUnreadRecordKept(t *testing.T) {
 	_, s, st := readyMachine(t)
 	if status, _ := serveJSON(t, s, "POST", "/api/v1/assistant/readiness/dismiss", "", `{}`); status != 200 {

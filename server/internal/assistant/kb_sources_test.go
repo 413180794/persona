@@ -115,7 +115,7 @@ func (a *mediaArchive) ArchiveMedia(_ context.Context, ref string) (connector.Me
 }
 
 // An archived message's attachments come from the connector (archive.media): kept next to the chat and linked from
-// the line; one it cannot hand over stays [附件].
+// the line; one it cannot hand over stays the attachment placeholder.
 func TestArchiveConnectorKeepsAttachments(t *testing.T) {
 	st, err := kb.NewStore(t.TempDir())
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// uploadFile streams a file from the phone to a machine's temp directory (docs/protocol.md「发送文件」):
+// uploadFile streams a file from the phone to a machine's temp directory (docs/protocol.md "Sending files"):
 // POST /api/v1/machines/{mid}/files?name=<file name>, the raw bytes as the body. The body is read a chunk at a time
 // and each chunk is one file.upload.chunk call, so neither side holds the file and no JSON line carries all of it.
 // The app cancelling the request (or going away) aborts the upload and the node removes what it wrote.

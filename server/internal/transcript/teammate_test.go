@@ -43,7 +43,7 @@ func TestTeammateNote(t *testing.T) {
 	}
 }
 
-// A teammate's JSON note in the transcript reads as its words in the 「来自」 card.
+// A teammate's JSON note in the transcript reads as its words in the "From" card.
 func TestTeammateNoteInTranscript(t *testing.T) {
 	note := `{"type":"idle_notification","from":"docs","timestamp":"t","summary":"done","result":"Report is in /tmp/r.md"}`
 	content, _ := json.Marshal("<teammate-message teammate_id=\"docs\" color=\"blue\" summary=\"done\">\n" + note + "\n</teammate-message>")

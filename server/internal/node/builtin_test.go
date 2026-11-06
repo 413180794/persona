@@ -49,7 +49,7 @@ func TestBuiltinProgramsAnswerLikeTheirOldNames(t *testing.T) {
 			t.Errorf("%s: %s\n  plugin.node.call: %s", c.old, a, b)
 		}
 	}
-	// A method the program does not have: unknown either way (the hub's 「personad 太旧」 reads "unknown method").
+	// A method the program does not have: unknown either way (the hub's "personad is too old" reads "unknown method").
 	if _, err := pluginCall(t, n, "computer.nope", map[string]any{}); err == nil || err.Error() != "unknown method computer.nope" {
 		t.Errorf("computer.nope: %v", err)
 	}

@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// fakeHub is the Persona hub's API as the voice extension uses it (docs/voice.md「扩展调 hub」): the main conversation
+// fakeHub is the Persona hub's API as the voice extension uses it (docs/voice.md "Extension calls the hub"): the main conversation
 // and its transcript, sends, the sessions list, the items pages and /full, the machines, and /api/v1/ws pushing what
 // changes to its subscribers. A message the main conversation takes is worked on for work, then answered with
 // reply(text) and a turn_duration line, unless the test drives the conversation itself (manual).
@@ -34,7 +34,7 @@ type fakeHub struct {
 	delivered map[string]bool
 	full      map[string]string // item id -> its whole text (a page cuts it)
 
-	reply  func(text string) string       // the main conversation's answer (nil: 明天下午三点有会)
+	reply  func(text string) string       // the main conversation's answer (nil: a fixed Chinese line, "a meeting at 3 pm tomorrow")
 	onSend func(m sentMsg) (int, string)  // answers a send instead of taking it (status 0: take it)
 	manual bool                           // a message is put in the transcript and left there: the test answers it
 	work   time.Duration                  // how long a turn works (0: 50 ms)

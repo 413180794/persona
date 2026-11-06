@@ -10,12 +10,12 @@ import (
 )
 
 // The inbox items of connectors (GitHub…): their things become items with one generic block the apps draw without
-// knowing the source (docs/plan-connectors.md「一 · 5. 收件箱」). Feishu and mail keep their own blocks.
+// knowing the source (docs/plan-connectors.md "1 · 5. Inbox"). Feishu and mail keep their own blocks.
 
 // InboxConnector is an item's thread in a connector, and how it is answered.
 type InboxConnector struct {
 	Thread   string `json:"thread"`
-	Label    string `json:"label,omitempty"`    // the row's tag: 请你 review
+	Label    string `json:"label,omitempty"`    // the row's tag: "Review requested"
 	URL      string `json:"url,omitempty"`      // the thread on the web, opened in the app
 	OpenURL  string `json:"open_url,omitempty"` // a link the system opens (sms:…), not the app
 	ReplyTo  string `json:"reply_to,omitempty"` // where a reply goes and who sees it
@@ -146,7 +146,7 @@ func (b *inboxBook) settleThing(open *InboxItem, t connector.InboxThing, now tim
 		}
 		b.noteSelfReplied(open, now)
 		open.done(now, t.Done)
-		b.closeHandling(open, "self_replied", now) // told on the AI 分身's next pass (deliverPending)
+		b.closeHandling(open, "self_replied", now) // told on the AI twin's next pass (deliverPending)
 	} else {
 		b.file(open, now, t.Done)
 		b.closeHandling(open, t.Done, now)

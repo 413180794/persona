@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
-// Passive mode (docs/link.md「被动模式」): the hub dials this computer instead. jarvis-link listens on a TLS port with its
+// Passive mode (docs/link.md "Passive mode"): the hub dials this computer instead. jarvis-link listens on a TLS port with its
 // own identity (tlsid.go) and offers three things there, nothing else: pairing, a little about itself, and streams
 // to the resident node (listen.go). Pairing goes the other way round from active mode, as the computer may not reach
 // the hub: `jarvis-link pair --listen` makes a one-time code and prints a link for the hub's admin page; the hub dials
@@ -183,7 +183,7 @@ func NormalizeListen(raw string) (string, error) {
 var localAddrs = netaddr.List
 
 // ListenCandidates are the addresses the hub may reach a listener on listen at, best first by the rule active mode
-// tries the hub's in (内网 → 公网 IPv6 → 公网 IPv4): this computer's addresses that are not loopback, link-local, on a
+// tries the hub's in (intranet → public IPv6 → public IPv4): this computer's addresses that are not loopback, link-local, on a
 // virtual interface (Docker, VPN tunnels) or temporary IPv6, each with the port. Where every interface is virtual (a
 // container's eth0, a NAS whose network card hangs off a virtual switch) the virtual ones count too, except tunnels and
 // bridges. A listener on one address has just that one. Nothing here says the hub can reach them.

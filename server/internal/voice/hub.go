@@ -256,8 +256,8 @@ func (h *hubClient) channels(ctx context.Context) ([]channel.View, error) {
 	return out.Channels, err
 }
 
-// triageSwitches are the hub's session triage switches (GET /api/v1/agents/triage, docs/agent-work.md「开关」): whether
-// it triages an agent's stopped turn at all, and whether it goes on (继续) after a transient model error.
+// triageSwitches are the hub's session triage switches (GET /api/v1/agents/triage, docs/agent-work.md "Switches"): whether
+// it triages an agent's stopped turn at all, and whether it goes on ("Continue") after a transient model error.
 type triageSwitches struct {
 	Enabled      bool `json:"enabled"`
 	AutoContinue bool `json:"auto_continue"`
@@ -269,7 +269,7 @@ func (h *hubClient) triage(ctx context.Context) (triageSwitches, error) {
 	return out, err
 }
 
-// interrupt stops the conversation's turn (the app's 停止 button).
+// interrupt stops the conversation's turn (the app's "Stop" button).
 func (h *hubClient) interrupt(ctx context.Context, machine, session string) error {
 	return h.call(ctx, "POST", sessionPath(machine, session)+"/interrupt", map[string]any{}, nil)
 }
@@ -324,7 +324,7 @@ func (h *hubClient) itemFull(ctx context.Context, machine, session, id string) (
 	return it, err
 }
 
-// sendOpts are a send's options (docs/protocol.md「发消息」): the draft in the agent's input box to clear first (as
+// sendOpts are a send's options (docs/protocol.md "Sending messages"): the draft in the agent's input box to clear first (as
 // the refusal gave it), and closing a notice that Enter only closes.
 type sendOpts struct {
 	ClearDraft    string
@@ -332,7 +332,7 @@ type sendOpts struct {
 }
 
 // send types text into a conversation as message id (voice-…: the conversation shows it came by voice,
-// docs/channels.md「来源标记」; the hub sends an id once, and forgets one it refused: the same id goes again).
+// docs/channels.md "Source marks"; the hub sends an id once, and forgets one it refused: the same id goes again).
 func (h *hubClient) send(ctx context.Context, machine, session, text, id string, opts ...sendOpts) error {
 	body := map[string]any{"text": text, "client_msg_id": id}
 	for _, o := range opts {

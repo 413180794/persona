@@ -7,7 +7,7 @@ import (
 )
 
 // The blocks of inbox items a connector moving out of the hub hands over in its things' extra (connector.MigratableConnectors,
-// docs/connector-protocol.md「迁出 hub 的连接器」): the apps draw a document item's rows and a feed post's notices from
+// docs/connector-protocol.md "Connectors moved out of the hub"): the apps draw a document item's rows and a feed post's notices from
 // them, and a document item's status changes go back to the connector (inbox.reply's changes, through the hub).
 
 // InboxDoc is a document item: which document, what happened, the rows about me and where a reply goes.
@@ -18,7 +18,7 @@ type InboxDoc struct {
 	Notice   string     `json:"notice"`         // mention | comment | reply | share
 	NoticeID string     `json:"notice_id"`
 	Rows     []DocRow   `json:"rows,omitempty"`
-	Reply    *DocReply  `json:"reply,omitempty"` // where 发送 posts the reply; nil: nowhere
+	Reply    *DocReply  `json:"reply,omitempty"` // where "Send" posts the reply; nil: nowhere
 	Error    string     `json:"error,omitempty"` // the document could not be read
 	ReadAt   *time.Time `json:"read_at,omitempty"`
 }
@@ -62,7 +62,7 @@ type DocReply struct {
 	Column int    `json:"column,omitempty"`
 }
 
-// DocChange moves one row's status (the user's tap, or the AI 分身's proposal).
+// DocChange moves one row's status (the user's tap, or the AI twin's proposal).
 type DocChange struct {
 	Ref   string `json:"ref"`
 	Field string `json:"field"`
@@ -77,7 +77,7 @@ type InboxMoment struct {
 	PostID    string     `json:"post_id"`
 	Notice    string     `json:"notice"`              // the newest one's kind: comment | reply | atInPost | atInComment
 	Notices   []string   `json:"notices"`             // notification ids in the item, oldest first
-	ReplyTo   string     `json:"reply_to,omitempty"`  // the comment 发送 replies to; "" comments on the post itself
+	ReplyTo   string     `json:"reply_to,omitempty"`  // the comment "Send" replies to; "" comments on the post itself
 	MyPost    bool       `json:"my_post,omitempty"`   // the post is mine
 	PostText  string     `json:"post_text,omitempty"` // as the notification quotes it
 	Anonymous bool       `json:"anonymous,omitempty"` // the newest actor posted anonymously

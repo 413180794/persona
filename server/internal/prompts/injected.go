@@ -11,7 +11,7 @@ import (
 // The hub types some messages into conversations as the user would, for the model: a quiet task's notice
 // (assistant/task_notice), a scheduled task's run (assistant/task_run), a wake-up (agents/wake), the background tasks
 // a node restart stopped (assistant/lost_tasks). The model reads them as they are; the apps show one line instead
-// (docs/protocol.md「Persona 注入的消息」). ParseInjected reads them back off the transcript's text, so old lines are
+// (docs/protocol.md "Messages Persona injects"). ParseInjected reads them back off the transcript's text, so old lines are
 // known too; its tests render every template and parse the result, which keeps the two in step.
 
 var (
@@ -25,7 +25,7 @@ var (
 // noticeMarker is in every task notice (assistant/task_notice): a first line alone could be the user's.
 const noticeMarker = "这是 Persona 的任务通知"
 
-// superviseMarker is in every 督办 message (assistant/supervise, #3124).
+// superviseMarker is in every supervise (follow-up) message (assistant/supervise, #3124).
 const superviseMarker = "这是 Persona 的督办消息"
 
 // lostTasksHead starts assistant/lost_tasks.

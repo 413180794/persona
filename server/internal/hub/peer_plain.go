@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Plaintext hub links (docs/mesh.md「明文链路」, #4514): off unless hub.json lists mesh.plaintext.allow. Then pairing
+// Plaintext hub links (docs/mesh.md "Plaintext links", #4514): off unless hub.json lists mesh.plaintext.allow. Then pairing
 // and the link may also go over http:// and ws://, in and out, but only with the addresses listed; everything else
 // still needs TLS. Nothing on such a link is encrypted or pinned: the peer credential, the apps' requests a member
 // passes on (with their credentials) and node streams can be read and changed on the way. The credentials each hub

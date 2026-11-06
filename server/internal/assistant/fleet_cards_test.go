@@ -1333,7 +1333,7 @@ func TestScreenCardJustAnsweredIsNotAskedAgain(t *testing.T) {
 	}
 }
 
-// A screen card handed back to the computer (交回电脑, a dismiss): nothing is pressed and the dialog stays on screen, so
+// A screen card handed back to the computer ("Hand back to the computer", a dismiss): nothing is pressed and the dialog stays on screen, so
 // the node keeps listing the agent blocked. The same dialog gets no new card and no second push, however long it
 // stays; once the agent moves on, the next dialog is asked as usual (#4867).
 func TestScreenCardHandedBackIsNotAskedAgain(t *testing.T) {

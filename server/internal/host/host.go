@@ -160,7 +160,7 @@ type Controller interface {
 }
 
 // FullClienter runs the host's own interactive client in a terminal of the node's, for the web's full herdr view: the
-// host's sidebar, tabs and splits instead of one pane (docs/terminal.md「完整 herdr 界面」).
+// host's sidebar, tabs and splits instead of one pane (docs/terminal.md "Full herdr UI").
 type FullClienter interface {
 	// CanFullClient reports whether this host can, on this machine (herdr on Unix, with sessions to attach to).
 	CanFullClient() bool
@@ -194,7 +194,7 @@ type FocusState struct {
 }
 
 // Focuser moves and reports the focus a host shares among its clients (herdr: pane.focus, and the focus events with
-// the snapshot's focused_* ids). The web's full herdr view follows it and moves it (docs/terminal.md「焦点联动」).
+// the snapshot's focused_* ids). The web's full herdr view follows it and moves it (docs/terminal.md "Focus sync").
 type Focuser interface {
 	// Focused is what the host shows now; Pane is empty when the host does not say.
 	Focused(ctx context.Context) (FocusState, error)
@@ -233,7 +233,7 @@ type MouseEvent struct {
 	Modifiers int
 }
 
-// Mouser is a Control that takes mouse events beyond Click (herdr: terminal.mouse; docs/terminal.md「鼠标」).
+// Mouser is a Control that takes mouse events beyond Click (herdr: terminal.mouse; docs/terminal.md "Mouse").
 type Mouser interface {
 	Mouse(MouseEvent) error
 }
@@ -402,7 +402,7 @@ type Layout struct {
 	// Panes is every pane, agent or not (Agent ""): where agents the host does not detect (TRAEX) are found.
 	Panes []Agent
 	// PaneIndex is each pane's 0-based place in its slot by layout, top left first (herdr: its split tree), keyed by
-	// PaneID; nil when the host does not say where its panes sit (docs/agent-states.md「一个 tab 里的几个 pane」).
+	// PaneID; nil when the host does not say where its panes sit (docs/agent-states.md "Several panes in one tab").
 	PaneIndex map[string]int
 }
 

@@ -6,14 +6,14 @@ import (
 )
 
 // What a connector's program may ask of the knowledge base, besides handing it conversations (Archive): keep a
-// feed's public posts in its post archive (docs/knowledge.md「外部帖子」), find which posts' comments to read again,
+// feed's public posts in its post archive (docs/knowledge.md "External posts"), find which posts' comments to read again,
 // and see the conversations already archived under its names (to go on from where they are). Only for a connector
-// that declares an archive, and only while the user lets it into the knowledge base (进知识库).
+// that declares an archive, and only while the user lets it into the knowledge base ("Add to knowledge base").
 
 // Post is one public post of a feed (a company's internal social feed, say) as a connector hands it over.
 type Post struct {
 	ID string `json:"id"`
-	// Feed is what the feed is called, for the archive's heading ("" is 帖子).
+	// Feed is what the feed is called, for the archive's heading ("" is "Posts", in Chinese).
 	Feed         string    `json:"feed,omitempty"`
 	Author       string    `json:"author,omitempty"`
 	AuthorID     string    `json:"author_id,omitempty"`
@@ -27,7 +27,7 @@ type Post struct {
 	Mine         bool      `json:"mine,omitempty"` // the user's own post
 }
 
-// PostComment is one comment on a post, as it is to be written (the connector names the user 我 and hides who is
+// PostComment is one comment on a post, as it is to be written (the connector names the user "me" and hides who is
 // anonymous).
 type PostComment struct {
 	Author  string    `json:"author,omitempty"`

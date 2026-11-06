@@ -412,7 +412,7 @@ func TestListKeySeesANewStep(t *testing.T) {
 }
 
 // An agent that said a line and then only ran tools, whose results pushed that line out of the tail: the list still
-// has its words (they were gone, and the task card said 还没有动静 for 7 minutes, #1583), and its step.
+// has its words (they were gone, and the task card said "No activity yet" for 7 minutes, #1583), and its step.
 func TestQuickMetaKeepsWordsOutOfTheTail(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.jsonl")
 	lines := []string{

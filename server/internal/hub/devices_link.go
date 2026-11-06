@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/streams"
 )
 
-// The computers are the manager's (docs/machines.md「谁连电脑」, devicewire): the manager that carries them — the
+// The computers are the manager's (docs/machines.md "Who connects the computers", devicewire): the manager that carries them — the
 // chief, the assistant's process, during the migration to managers — connects every one and holds what is known of it.
 // The hub hands it hub.json's machines as defaults (the hello's devices section, devices.config when they change),
 // relays the apps' calls and streams to it (busNode: devices.call, devices.notify), and keeps what it reports

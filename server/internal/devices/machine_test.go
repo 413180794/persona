@@ -26,7 +26,7 @@ func TestFakeNode(t *testing.T) {
 	os.Exit(0)
 }
 
-// 「重连」 closed the peer but kept waiting for the ssh process to end, which it never did: the machine stayed
+// "Reconnect" closed the peer but kept waiting for the ssh process to end, which it never did: the machine stayed
 // online with every call failing (rpc: connection closed) until the hub restarted (2026-10-31, found sending a
 // message during a reconnect). A reconnect must end in a new, working connection.
 func TestReconnectGivesAWorkingConnection(t *testing.T) {

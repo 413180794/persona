@@ -197,7 +197,7 @@ func TestAnswerIsTheLastWords(t *testing.T) {
 	}
 }
 
-// A turn that ends on the conversation's own notice (an API error, 已中断) says why it stopped; one that ends on
+// A turn that ends on the conversation's own notice (an API error, "interrupted") says why it stopped; one that ends on
 // words, a tool call, or a notice that is no reason (a compaction, a task reporting back) does not.
 func TestStoppedIsTheClosingNotice(t *testing.T) {
 	apiErr := []proto.Item{
@@ -219,7 +219,7 @@ func TestStoppedIsTheClosingNotice(t *testing.T) {
 		"compacted": {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: "上下文已压缩", Compact: &proto.Compact{}}},
 		"task":      {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: "后台任务完成", Task: &proto.TaskNote{}}},
 		"nothing":   nil,
-		// Notices that end a turn's items but say nothing of why it stopped (only API errors and 已中断 count).
+		// Notices that end a turn's items but say nothing of why it stopped (only API errors and "interrupted" count).
 		"compact summary": {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: transcript.CompactSummaryNotice}},
 		"compact notice":  {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: transcript.CompactNotice}},
 		"codex compacted": {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: transcript.CompactedNotice}},
@@ -248,7 +248,7 @@ func TestStoppedIsTheClosingNotice(t *testing.T) {
 	if got := Stopped(bare); got != "API 错误：x" {
 		t.Fatalf("codex compaction: %q", got)
 	}
-	// An earlier turn's 已中断 is not this turn's reason: the owner's message comes between.
+	// An earlier turn's "interrupted" is not this turn's reason: the owner's message comes between.
 	earlier := []proto.Item{{Role: "system", Kind: proto.KindNotice, Text: transcript.InterruptedNotice}, {Role: "user", Kind: proto.KindText, Text: "再试一次"},
 		{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactSummaryNotice}}
 	if got := Stopped(earlier); got != "" {
@@ -383,7 +383,7 @@ func TestAskInLanguages(t *testing.T) {
 }
 
 // An option number typed on a Chinese keyboard (full-width) or with a full stop is still that number: a plan is not
-// sent back with "１" as the note, a terminal dialog is answered, a question's option becomes its label (#3413).
+// sent back with a full-width "1" as the note, a terminal dialog is answered, a question's option becomes its label (#3413).
 func TestOptionNumbersFullWidthAndPunctuated(t *testing.T) {
 	for text, mode := range map[string]string{"１": "bypassPermissions", "1。": "bypassPermissions", " 1. ": "bypassPermissions",
 		"２": "acceptEdits", "2！": "acceptEdits", "２。": "acceptEdits", "1、": "bypassPermissions", "１．": "bypassPermissions"} {
@@ -428,9 +428,9 @@ func TestOptionNumbersFullWidthAndPunctuated(t *testing.T) {
 	}
 }
 
-// A phone keyboard types a list number in a shape: a circled digit ①②, a paired bracket around it （1） 【1】 [1] 「1」
-// 『1』, or a right parenthesis after it 1) 1）. They answer a plan, a terminal dialog and a question like a plain
-// digit (#4327).
+// A phone keyboard types a list number in a shape: a circled digit, a paired bracket around it (half- or full-width,
+// CJK corner or lenticular), or a right parenthesis after it, 1) in half- or full-width. They answer a plan, a
+// terminal dialog and a question like a plain digit (#4327).
 func TestOptionNumberPhoneShapes(t *testing.T) {
 	for text, mode := range map[string]string{
 		"①": "bypassPermissions", "②": "acceptEdits", "①。": "bypassPermissions", "②、": "acceptEdits",
@@ -492,7 +492,7 @@ func TestOptionNumberPhoneShapes(t *testing.T) {
 	}
 }
 
-// Other everyday ways to say it answer a permission or a plan: 批准, approved/okay/yeah/yep, 好了/好吧/行吧, and a
+// Other everyday ways to say it answer a permission or a plan: "approve" in Chinese, approved/okay/yeah/yep, Chinese okay/fine/alright, and a
 // comma, enumeration comma or a wave left at the end. The match is exact: a negation never becomes an approval just
 // for holding a positive word (#4375).
 func TestAnswerApprovalWordVariants(t *testing.T) {
@@ -515,7 +515,7 @@ func TestAnswerApprovalWordVariants(t *testing.T) {
 			t.Errorf("permission %q was taken: done=%v", text, done)
 		}
 	}
-	// A plan: the run words bypass; 批准 alone still answers option 2; the negation sends it back with no note.
+	// A plan: the run words bypass; "approve" in Chinese alone still answers option 2; the negation sends it back with no note.
 	for text, mode := range map[string]string{
 		"批准并运行": "bypassPermissions", "批准运行": "bypassPermissions", "批准并运行，": "bypassPermissions",
 		"批准运行~": "bypassPermissions", "批准并自动执行": "bypassPermissions",

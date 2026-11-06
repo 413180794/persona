@@ -1,7 +1,7 @@
 package node
 
 // Installing Cua Driver and asking for its permissions from the app (computer.install, computer.grant, computer.cancel;
-// docs/computer-use.md「一键安装」): one background job at a time, whose state comes back with computer.status.
+// docs/computer-use.md "One-tap install"): one background job at a time, whose state comes back with computer.status.
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ var (
 
 var jobTimeout = map[string]time.Duration{"install": 15 * time.Minute, "grant": 10 * time.Minute, "open": time.Minute}
 
-// jobVerbs say a job's kind in Chinese, for 「正在…，等它做完」.
+// jobVerbs say a job's kind in Chinese, for "…in progress, wait for it to finish".
 var jobVerbs = map[string]string{"install": "安装", "grant": "请求授权", "open": "打开"}
 
 // jobSlot is one background job at a time (an install, a grant…): the running one, or the last. Cua Driver and ego

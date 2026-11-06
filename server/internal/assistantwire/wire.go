@@ -1,5 +1,5 @@
 // Package assistantwire is what the hub and the assistant (internal/assistant, its own process) say to each other
-// over the bus (docs/protocol.md「总线」, docs/assistant.md「和 hub 的边界」): each method's and event's name, params
+// over the bus (docs/protocol.md "Bus", docs/assistant.md "The boundary with the hub"): each method's and event's name, params
 // and result, the error codes that cross it, and the routes the hub relays. Both sides import it; neither imports
 // the other.
 package assistantwire
@@ -18,7 +18,7 @@ import (
 // hub knows that it needs.
 type Hello struct {
 	Owner string `json:"owner"`
-	// OwnerNotes is hub.json's assistant.notes: what the assistant knows about the user until 关于我 is edited.
+	// OwnerNotes is hub.json's assistant.notes: what the assistant knows about the user until "About me" is edited.
 	OwnerNotes string `json:"owner_notes"`
 	// Assistant is where the hub would run the assistant's conversations by default.
 	Assistant Placement `json:"assistant"`
@@ -75,7 +75,7 @@ type DeviceCall struct {
 // The machine methods the assistant calls. The node's own methods go to the machine's node as they are; the hub
 // answers the others from what it holds about the machine.
 const (
-	// The node's (docs/protocol.md「hub ↔ node」).
+	// The node's (docs/protocol.md "hub ↔ node").
 	DeviceSessionItems  = "session.items"  // {session_id, turns} → {items}
 	DeviceSessionRename = "session.rename" // {session_id, title} → {ok}
 	DeviceAssistantSend = "assistant.send" // {session_id, text, resume_only?, permission_mode?, …model} → {session_id}
@@ -108,7 +108,7 @@ type Device struct {
 	// Reachable: a call to it would go out now (its link is up; Online can lag a reconnect).
 	Reachable bool `json:"reachable"`
 	// Version is its node's build ("" while not reported); ModelConfiguration: that node takes a launcher's model
-	// (--model) and effort, which 模型配置 needs of the machine a launcher purpose runs on.
+	// (--model) and effort, which "Models" needs of the machine a launcher purpose runs on.
 	Version            string `json:"version,omitempty"`
 	ModelConfiguration bool   `json:"model_configuration,omitempty"`
 }
@@ -164,7 +164,7 @@ type ModelBinding struct {
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
 	Effort   string `json:"effort,omitempty"`
-	Runtime  string `json:"runtime,omitempty"` // 主对话 only: cli (default) or agentsdk; kept across a provider change
+	Runtime  string `json:"runtime,omitempty"` // main chat only: cli (default) or agentsdk; kept across a provider change
 }
 
 // NotifyRequest is notify.request's params.
@@ -216,7 +216,7 @@ type Snapshot struct {
 	// cards about agents' turns (WorkCardTool). The hub shows each like any agent's and sends the answer back
 	// (Handler.Action); one that leaves the list is withdrawn.
 	Interactions []proto.Interaction `json:"interactions"`
-	// Tasks are its scheduled tasks, as the hub's other parts need them (the model configuration's 「定时任务」); null
+	// Tasks are its scheduled tasks, as the hub's other parts need them (the model configuration's "Scheduled tasks"); null
 	// while they could not be read.
 	Tasks []TaskView `json:"tasks"`
 	// Todos is which todo each agent works for (TodoReport); null while the todos could not be read.
@@ -252,7 +252,7 @@ const PushAsked = "asked"
 
 // FinishedText is the words the finished push carries for s's turn, chosen as hub/machine.go notifyFinished chooses
 // them: the work line it ended on (done or stuck), else its last words; "" when it said nothing (the push then says a
-// localised 完成了, which is never a cut-off). NormalFinish judges a cut-off on them.
+// localised "done", which is never a cut-off). NormalFinish judges a cut-off on them.
 func FinishedText(s proto.Session) string {
 	if w := s.Work; w != nil && w.Line != "" && (w.Phase == proto.WorkDone || w.Phase == proto.WorkBlocked) {
 		return w.Line
@@ -275,7 +275,7 @@ func QuietTaskFinish(s proto.Session, main string) bool {
 	return reportsFailures(s) && (main == "" || s.SessionID != main) && NormalFinish(s)
 }
 
-// SupervisedFinish: s, a conversation whose current turn a 督办 message started (SessionView.Supervising), may go
+// SupervisedFinish: s, a conversation whose current turn a supervision message started (SessionView.Supervising), may go
 // unpushed now: a normal finish (NormalFinish); an error, a cut-off or a stuck turn is pushed as ever.
 func SupervisedFinish(s proto.Session, supervising bool) bool {
 	return supervising && reportsFailures(s) && NormalFinish(s)
@@ -292,16 +292,16 @@ func reportsFailures(s proto.Session) bool {
 type SessionView struct {
 	MachineID string `json:"machine_id"`
 	SessionID string `json:"session_id"`
-	// Title is 「MMDD | 类型 | 主题」 or the user's own (titles.go); the main conversation's is always 「Persona」.
+	// Title is "MMDD | kind | topic" or the user's own (titles.go); the main conversation's is always "Persona".
 	Title    string   `json:"title,omitempty"`
 	Archived bool     `json:"archived,omitempty"`
 	Queued   []string `json:"queued,omitempty"` // messages from other conversations waiting for its turn to end
-	// Origin is who opened the conversation (docs/protocol.md「助手对话的来源」: user, channel, inbox, task, spawned,
+	// Origin is who opened the conversation (docs/protocol.md "Where assistant chats come from": user, channel, inbox, task, spawned,
 	// lark_agent, extension) and OriginRef what of (the inbox item, the task, the conversation, the channel, the
 	// extension); both "" while it is not known.
 	Origin    string `json:"origin,omitempty"`
 	OriginRef string `json:"origin_ref,omitempty"`
-	// Supervising: its current turn was started by a 督办 message about the tasks it handed out (#3124): the assistant
+	// Supervising: its current turn was started by a supervision message about the tasks it handed out (#3124): the assistant
 	// does not push its normal finish (SupervisedFinish); it pushes what the user needs to know (notify_user).
 	Supervising bool `json:"supervising,omitempty"`
 }
@@ -354,7 +354,7 @@ type ContextParams struct {
 }
 
 // ContextResult is assistant.context's answer: the <persona-context> text, and the <persona-view-errors> block of the
-// conversation's rich views that failed their check and were not reported yet (docs/assistant-views.md「下一轮反馈」).
+// conversation's rich views that failed their check and were not reported yet (docs/assistant-views.md "Feedback next turn").
 // Reading it consumes nothing: the node acks Receipts once the message is delivered.
 type ContextResult struct {
 	Text       string             `json:"text"`
@@ -399,13 +399,13 @@ type InteractionRaised struct {
 	Interaction proto.Interaction `json:"interaction"`
 }
 
-// MessageCard is a message the inbox's AI 分身 drafted a reply to, about one of the user's tasks: what the card in the
+// MessageCard is a message the inbox's AI twin drafted a reply to, about one of the user's tasks: what the card in the
 // task's conversation shows until the item is sent or done (the app sends the draft through the inbox, by the item's
 // id).
 type MessageCard struct {
 	TodoID  string `json:"todo_id"`
 	Source  string `json:"source"`            // lark | mail | …
-	Account string `json:"account,omitempty"` // 飞书 / the mail address
+	Account string `json:"account,omitempty"` // Lark / the mail address
 	Chat    string `json:"chat"`              // the chat's name / the mail's subject
 	Sender  string `json:"sender,omitempty"`
 	Text    string `json:"text"` // the message, clipped
@@ -648,7 +648,7 @@ var Routes = []string{
 	"POST /api/v1/assistant/conversations/{id}/compact",
 	"POST /api/v1/assistant/main/new",
 	"POST /api/v1/assistant/origins/backfill",
-	// The channels (channels.go there, docs/channels.md「接口」).
+	// The channels (channels.go there, docs/channels.md "API").
 	"GET /api/v1/channels",
 	"GET /api/v1/channels/{id}",
 	"PUT /api/v1/channels/{id}",
@@ -656,7 +656,7 @@ var Routes = []string{
 	"POST /api/v1/assistant/conversations/{id}/views/{key}/actions",
 	"POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions",
 	"POST /api/v1/channels/{id}/test",
-	// The knowledge base (the assistant's kb_routes.go, docs/knowledge.md「App 接口」).
+	// The knowledge base (the assistant's kb_routes.go, docs/knowledge.md "App API").
 	"GET /api/v1/kb/{kind}",
 	"GET /api/v1/kb/{kind}/{id}",
 	"PUT /api/v1/kb/{kind}/{id}",
@@ -664,23 +664,23 @@ var Routes = []string{
 	"GET /api/v1/kb/chats/{id}/context",
 	"GET /api/v1/kb/chats/{id}/days/{day}",
 	"GET /api/v1/kb-search",
-	// The phone's recordings (kb_recordings.go there, docs/protocol.md「录音同步」).
+	// The phone's recordings (kb_recordings.go there, docs/protocol.md "Recording sync").
 	"PUT /api/v1/recordings/{id}",
 	"DELETE /api/v1/recordings/{id}",
 	"GET /api/v1/recordings",
 }
 
-// ---- the assistant's settings, and the conversations the hub's features start (docs/assistant.md「和 hub 的边界」) ----
+// ---- the assistant's settings, and the conversations the hub's features start (docs/assistant.md "The boundary with the hub") ----
 
 // Profile is the assistant's settings (settings `assistant`, its own) as the hub's own features need them, in every
-// snapshot: a phone's message to the main conversation is told apart, the model configuration's 主对话 runs on its
+// snapshot: a phone's message to the main conversation is told apart, the model configuration's main chat runs on its
 // machine, the hub reads times in the user's zone, and the nodes keep listing Keep (the Feishu bot and the channels are
 // the assistant's own). The hub keeps the last
 // one; before one came in it goes by hub.json's assistant section, its own time zone and no main conversation.
 type Profile struct {
 	MachineID string `json:"machine_id"` // where its conversations run
 	Main      string `json:"main,omitempty"`
-	// Launcher is the one it runs on when 模型配置 › 主对话 names none (its own setting, else hub.json's, else claude):
+	// Launcher is the one it runs on when "Models" › main chat names none (its own setting, else hub.json's, else claude):
 	// that purpose's default.
 	Launcher string `json:"launcher"`
 	Timezone string `json:"timezone,omitempty"` // the user's (the phone reports it), IANA; "" while not known
@@ -691,7 +691,7 @@ type Profile struct {
 
 // The hub asks the assistant (Handler) for what its own features need of the assistant's conversations.
 const (
-	// MethodStart: StartParams → {session}: a conversation the hub's features start (the inbox's AI 分身).
+	// MethodStart: StartParams → {session}: a conversation the hub's features start (the inbox's AI twin).
 	MethodStart = "assistant.start"
 	// MethodSendParams: SendParams → {params}: a message for one of its conversations (the phone's, one the node sends
 	// by itself) with the launcher and model it runs on, and what
@@ -703,7 +703,7 @@ const (
 )
 
 // The node's methods the assistant calls for its directory, its conversations and its settings
-// (docs/protocol.md「hub ↔ node」), passed through by the hub's device.call like the others.
+// (docs/protocol.md "hub ↔ node"), passed through by the hub's device.call like the others.
 const (
 	// DeviceAssistantPrepare: {dir, claude_md, connectors, clis, plugin_skills} → {cwd, plugin_skills_need}.
 	DeviceAssistantPrepare = "assistant.prepare"
@@ -728,14 +728,14 @@ type StartParams struct {
 	Launcher       string        `json:"launcher,omitempty"`
 	PermissionMode string        `json:"permission_mode,omitempty"`
 	Effort         string        `json:"effort,omitempty"`
-	Purpose        string        `json:"purpose,omitempty"`    // the model configuration's purpose; "" is 主对话's
+	Purpose        string        `json:"purpose,omitempty"`    // the model configuration's purpose; "" is the main chat's
 	MachineID      string        `json:"machine_id,omitempty"` // "" is the assistant's machine
 	// Space: "health" starts it in the health space (its own directory, instructions and memory, docs/health.md);
 	// "" is the assistant's own.
 	Space string `json:"space,omitempty"`
 	// Main: it becomes the main conversation (what the old one left goes before Text).
 	Main bool `json:"main,omitempty"`
-	// Untitled: not one of the conversations it names and lists as its own (the inbox's AI 分身: its result is the
+	// Untitled: not one of the conversations it names and lists as its own (the inbox's AI twin: its result is the
 	// draft in the inbox).
 	Untitled bool `json:"untitled,omitempty"`
 	// Origin and OriginRef: who opens it (SessionView.Origin); "" is the user's.
@@ -767,7 +767,7 @@ const (
 	// counts), their command lines (name → connector id), and whether hub.json sets up lark-cli.
 	ConnectorsSignedIn = "connectors.signed_in"
 
-	// AppPlugins is the hub's plugins (docs/plugins.md「助手」).
+	// AppPlugins is the hub's plugins (docs/plugins.md "Assistant").
 	AppPlugins = "plugins"
 	// PluginsAssistant: {machine_id} → {instructions, skills}: the plugins' parts of the assistant's instructions, and
 	// their skills for that machine (files only with those it was not sent yet).
@@ -865,7 +865,7 @@ const (
 	// FeishuSave: {message_id, key, kind, name, machine_id} → {path}: a file (or a large image) of a message saved on
 	// a machine (its temp directory, like the apps' uploads), at most 50 MB.
 	FeishuSave = "feishu.save"
-	// FeishuUserName: {open_id} → {name}: a user's name ("某人" when it can't be read; the owner's falls back to hub.json's).
+	// FeishuUserName: {open_id} → {name}: a user's name (the Chinese for "someone" when it can't be read; the owner's falls back to hub.json's).
 	FeishuUserName = "feishu.user_name"
 	// FeishuConfigure: {enabled?, features?: {id: on}} → {}: the bot switched, its feature switches changed (only
 	// those given).
@@ -977,7 +977,7 @@ type FeishuStatus struct {
 	// PairedAt is when the owner paired: with Owner, which pairing the chat's state belongs to (a new one, or none,
 	// starts it afresh).
 	PairedAt time.Time `json:"paired_at,omitzero"`
-	// PublicURL is the hub's web app (a card's 「打开网页版」).
+	// PublicURL is the hub's web app (a card's "Open web app").
 	PublicURL string `json:"public_url,omitempty"`
 }
 

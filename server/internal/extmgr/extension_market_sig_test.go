@@ -39,7 +39,7 @@ func keyIDText(t *testing.T, text string) string {
 	return extension.KeyID(k)
 }
 
-// A signed market (docs/extensions.md「签名」): its key is trusted on first use; an index that was changed, lost its
+// A signed market (docs/extensions.md "Signatures"): its key is trusted on first use; an index that was changed, lost its
 // signature or is signed by another key is not taken (the last good one stays) and nothing installs from it; the owner
 // trusts a new key, never a signature that does not verify.
 func TestExtensionMarketSignature(t *testing.T) {

@@ -159,7 +159,7 @@ func (d *fleetDevs) Usage() assistantwire.UsageSummary {
 	return d.usage
 }
 
-// fleetMem is the in-memory store of the fleet's tests: the assistant's settings, the interactions table, 本会话总是允许,
+// fleetMem is the in-memory store of the fleet's tests: the assistant's settings, the interactions table, "Always Allow in Session",
 // the seen times.
 type fleetMem struct {
 	memStore

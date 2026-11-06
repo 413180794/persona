@@ -9,7 +9,7 @@ import (
 )
 
 // An agent message (the open platform's message_cot): Feishu draws it as its own collapsible process bubble — one
-// line (「任务已完成 >」 once it ends) that opens onto the process, each paragraph followed by its folded tool calls. It
+// line ("Task completed >" once it ends) that opens onto the process, each paragraph followed by its folded tool calls. It
 // is created empty, then fed AG-UI events (PUT, at most 50 a call), and ends with RUN_FINISHED (or Complete when it
 // went wrong). Clients older than PC 7.70 / mobile 7.74 get a plain post Feishu writes itself.
 

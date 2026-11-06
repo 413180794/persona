@@ -11,16 +11,17 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The inbox's common rules for plugins (#1730, docs/extensions.md「收件箱的通用规则」). A plugin connector with an inbox and
-// no fallback of its own (capability fallback) leaves sorting to the assistant's model (inbox.triage, 信息筛选): its new
-// items without a tier are not let in while the model cannot sort them (the manager's inbox_admit.go). So such a plugin is not
-// switched on while that model cannot be called, and the model is not cleared while one is on. A hub.json plugin
-// cannot be switched: it runs, but its inbox is not collected until the model is there.
+// The inbox's common rules for plugins (#1730, docs/extensions.md "Common inbox rules"). A plugin connector with an
+// inbox and no fallback of its own (capability fallback) leaves sorting to the assistant's model (inbox.triage,
+// "message triage"): its new items without a tier are not let in while the model cannot sort them (the manager's
+// inbox_admit.go). So such a plugin is not switched on while that model cannot be called, and the model is not cleared
+// while one is on. A hub.json plugin cannot be switched: it runs, but its inbox is not collected until the model is
+// there.
 
 // errNeedsTriageModel refuses to switch on (or install, or upgrade while on) a plugin that needs the triage model.
 var errNeedsTriageModel = i18n.Err("hub-extension_inbox.needs_triage_model")
 
-// needsTriageModelSetup is what 设置 › 扩展 says of a hub.json plugin waiting for the model (needs_setup).
+// needsTriageModelSetup is what Settings › Extensions says of a hub.json plugin waiting for the model (needs_setup).
 func needsTriageModelSetup(l i18n.Lang) string {
 	return i18n.T(l, "hub-extension_inbox.needs_triage_setup")
 }
@@ -80,7 +81,7 @@ func (h *Manager) triageUsableNow(ctx context.Context) bool {
 	return err == nil && usable
 }
 
-// hubJSONWaitsForTriageModel is waitsForTriageModel for a plugin (its status in 设置 › 扩展).
+// hubJSONWaitsForTriageModel is waitsForTriageModel for a plugin (its status in Settings › Extensions).
 func (h *Manager) hubJSONWaitsForTriageModel(ctx context.Context, p *extension.Extension) bool {
 	if p.Record.Source != extension.SourceHubJSON {
 		return false

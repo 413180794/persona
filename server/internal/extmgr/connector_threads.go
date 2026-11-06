@@ -21,10 +21,10 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A connector's inbox thread opened as a conversation (connector.Threads, docs/connectors.md「会话页」): a page of
-// messages at a time, the pictures they show through the hub (kept on disk: a media ref always names the same bytes),
-// and a reply through the connector's own action, behind the gate. Every request the connector makes goes through
-// its own limits (Telegram's gate).
+// A connector's inbox thread opened as a conversation (connector.Threads, docs/connectors.md "Conversation page"): a
+// page of messages at a time, the pictures they show through the hub (kept on disk: a media ref always names the same
+// bytes), and a reply through the connector's own action, behind the gate. Every request the connector makes goes
+// through its own limits (Telegram's gate).
 
 const (
 	threadDefault  = 30

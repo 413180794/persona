@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// An older item moved back (移回) while a newer one of the same thread is open: the newer one gathers what comes
+// An older item moved back ("Move back") while a newer one of the same thread is open: the newer one gathers what comes
 // next, every collection; the older one keeps what it held (map order picked either before, and the older one
 // became a copy of the newer, #3796).
 func TestReopenedItemDoesNotTakeTheThread(t *testing.T) {

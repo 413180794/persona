@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 本会话总是允许 on an assistant conversation: a card is allowed only when every key it names was granted there.
+// "Always allow in this conversation" on an assistant conversation: a card is allowed only when every key it names was granted there.
 func TestAssistantAlways(t *testing.T) {
 	d := open(t)
 	ctx := context.Background()

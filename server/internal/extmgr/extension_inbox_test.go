@@ -162,7 +162,7 @@ func (c *chatInbox) Collect(context.Context) ([]connector.InboxThing, error) {
 func (*chatInbox) Reply(context.Context, connector.InboxReply) error { return nil }
 
 // A hub.json plugin cannot be switched off: one whose inbox needs the triage model runs, but its inbox is not collected
-// and 设置 › 扩展 says why, until the model can be called.
+// and Settings › Extensions says why, until the model can be called.
 func TestHubJSONInboxExtensionWaitsForTheModel(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	withTriageModel(t, h, false)

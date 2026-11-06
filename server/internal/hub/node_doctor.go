@@ -8,11 +8,11 @@ import (
 	"time"
 )
 
-// #2429: the machine page's 这台电脑能做什么 card shows what `personad node doctor` finds on a computer (docs/machines.md
-// 「自检」). The report names paths and the commands of the user's own hooks, and the fix rewrites files on the computer,
+// #2429: the machine page's "What this computer can do" card shows what `personad node doctor` finds on a computer (docs/machines.md
+// "Self-check"). The report names paths and the commands of the user's own hooks, and the fix rewrites files on the computer,
 // so both routes are for a full device alone; an answer-only device and the tokens an extension holds are refused
 // before the node hears of it. GET only reads: the hub never sends fix to node.doctor, so a query string cannot ask
-// for a write. The old node that does not know the method answers "unknown method", which the web turns into 更新 node.
+// for a write. The old node that does not know the method answers "unknown method", which the web turns into "Update node".
 
 // nodeDoctor relays method (no parameters) to the machine's node and returns the report as it is.
 func (h *Hub) nodeDoctor(method string, timeout time.Duration) http.HandlerFunc {

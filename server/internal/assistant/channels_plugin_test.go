@@ -100,7 +100,7 @@ func sendOnceText(f *fakeHub) string {
 	return text
 }
 
-// A command the bot does not handle ("/new 帮我…") leaves the text for the conversation without its name. With an ask
+// A command the bot does not handle ("/new help me…") leaves the text for the conversation without its name. With an ask
 // waiting, that text answers it: the name must not be read as part of the answer, and the message is answered, not
 // swallowed or sent on.
 func TestChannelReceiveCommandRestAnswersAsk(t *testing.T) {

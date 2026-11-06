@@ -191,7 +191,7 @@ func (a *app) until(match func(map[string]any) bool) map[string]any {
 	}
 }
 
-// protocolOne: the app got only protocol 1's frames (docs/extensions.md「语音」): no run, ask or link.
+// protocolOne: the app got only protocol 1's frames (docs/extensions.md "Voice"): no run, ask or link.
 func (a *app) protocolOne() {
 	a.t.Helper()
 	a.mu.Lock()

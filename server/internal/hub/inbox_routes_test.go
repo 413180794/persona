@@ -19,7 +19,7 @@ import (
 
 // The hub's part of the inbox, which is the manager's (the assistant's items, the extensions' sources): it relays the
 // inbox's routes (the watch held to text replies, a reply's receipt, a reply cut off in doubt), answers the manager's
-// model calls within the time it waits, and keeps from the snapshot which conversations are the AI 分身's.
+// model calls within the time it waits, and keeps from the snapshot which conversations are the AI twin's.
 
 // The inbox's routes while the manager is away: 503 assistant_offline.
 func TestInboxRoutesWithoutTheManager(t *testing.T) {

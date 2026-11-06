@@ -124,7 +124,7 @@ func TestAwakeOnThisMac(t *testing.T) {
 	t.Logf("caffeinate %d held PreventUserIdleDisplaySleep, then let go", pid)
 }
 
-// 锁上: the operations' hold goes, then the display sleeps now.
+// "Lock": the operations' hold goes, then the display sleeps now.
 func TestLockScreen(t *testing.T) {
 	fakeCaffeinate(t)
 	dir := t.TempDir()
@@ -149,7 +149,7 @@ func TestLockScreen(t *testing.T) {
 	}
 }
 
-// 「扩展开着时不自动锁屏」: held for its window, renewed by each word from the hub, let go when off, by itself when the
+// "No auto-lock while the extension is on": held for its window, renewed by each word from the hub, let go when off, by itself when the
 // hub says nothing more.
 func TestNoLockHoldsUntilLetGoOrRunOut(t *testing.T) {
 	log := fakeCaffeinate(t)

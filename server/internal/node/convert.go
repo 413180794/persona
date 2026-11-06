@@ -54,7 +54,7 @@ func convertDir() string {
 }
 
 // convertFile turns a document a browser cannot show (doc, ppt, rtf, odt, pages, key, or a docx / pptx the web's
-// renderer could not draw) into a PDF with LibreOffice, when the machine has it (docs/protocol.md「文件预览」). The
+// renderer could not draw) into a PDF with LibreOffice, when the machine has it (docs/protocol.md "File preview"). The
 // PDF lands in the node's cache and is read back like any file (file/download).
 func (n *Node) convertFile(ctx context.Context, p proto.FileConvertRequest) (*proto.FileConverted, error) {
 	if p.To != "" && p.To != "pdf" {

@@ -28,7 +28,7 @@ import (
 	"github.com/nwverse/persona/server/internal/update"
 )
 
-// The hub updating itself to the publisher's release (docs/hub-update.md「更新」): check the manifest every 6 hours, download and verify, wait until the assistant and every agent are idle, swap the binary (keeping the old
+// The hub updating itself to the publisher's release (docs/hub-update.md"Updates"): check the manifest every 6 hours, download and verify, wait until the assistant and every agent are idle, swap the binary (keeping the old
 // one), restart into the new one, and count it a success only once the machines that were connected are back;
 // otherwise go back to the old binary, by the new process itself or by the old one's watchdog. A build that went
 // back is not tried again automatically. Then the nodes follow, through deploy.go.
@@ -53,7 +53,7 @@ var (
 	errUpdateAgain = i18n.Err("hub-selfupdate.err_auto_off")
 )
 
-// updateRecord is one update in the history (设置 › hub › 更新记录).
+// updateRecord is one update in the history (Settings › hub › Update history).
 type updateRecord struct {
 	FromVersion string    `json:"from_version"`
 	ToVersion   string    `json:"to_version"`
@@ -113,7 +113,7 @@ type updater struct {
 	lastCheck   time.Time
 	busy        []busyItem
 	running     bool
-	now         bool // the user confirmed 现在就更新: stop waiting for idle
+	now         bool // the user confirmed "Update now": stop waiting for idle
 	confirmed   bool // no update to confirm, or this process confirmed it
 }
 
@@ -365,7 +365,7 @@ func (u *updater) rollback(p update.Pending, reason string) {
 	}
 }
 
-// updateNodes puts the release's node binaries where 重新部署 takes them (the manager's, internal/devices deploy.go)
+// updateNodes puts the release's node binaries where "Redeploy" takes them (the manager's, internal/devices deploy.go)
 // and has the manager redeploy each connected machine whose node is not this build, one at a time.
 func (u *updater) updateNodes(ctx context.Context, staged string) {
 	if staged != "" {
@@ -486,7 +486,7 @@ func (u *updater) check(ctx context.Context) (*update.Published, error) {
 	return r, nil
 }
 
-// begin starts an update the user asked for; now skips waiting for idle (二级确认的「现在就更新」).
+// begin starts an update the user asked for; now skips waiting for idle ("Update now" in the second confirmation).
 func (u *updater) begin(ctx context.Context, now bool) error {
 	if !u.h.build.SelfUpdates() {
 		return u.whyNot()
@@ -617,7 +617,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		}
 		programs[name] = pb
 	}
-	// Wait until nothing the restart would interrupt is going on (or the user said 现在就更新).
+	// Wait until nothing the restart would interrupt is going on (or the user said "Update now").
 	waitStarted := time.Now()
 	for {
 		busy := u.h.updateBusy()
@@ -674,7 +674,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		return
 	}
 	if u.handover != nil {
-		// Blue-green (docs/hub-restart.md「蓝绿切换」): the edge starts the new binary next to this one and hands over
+		// Blue-green (docs/hub-restart.md "Blue-green switch"): the edge starts the new binary next to this one and hands over
 		// only once it checked itself; this process goes on serving until then, and stops when the edge releases it.
 		// The edge is the watchdog too (it goes back when the new one does not confirm the update in time).
 		u.set("restarting", "", "")
@@ -808,7 +808,7 @@ type latestView struct {
 	Notes    string     `json:"notes,omitempty"`
 	Newer    bool       `json:"newer"`
 	Bad      bool       `json:"bad"` // went back before: not installed automatically
-	// Held: why a newer release is not installed automatically even with 自动更新 on (Build.Hold), for people.
+	// Held: why a newer release is not installed automatically even with auto-update on (Build.Hold), for people.
 	Held string `json:"held,omitempty"`
 }
 
@@ -869,7 +869,7 @@ func (u *updater) dockerImage() (update.Image, error) {
 	return update.ParseImage(s)
 }
 
-// checkImage asks the registry for the newest release of the image this Docker hub runs (docs/hub-update.md「Docker」).
+// checkImage asks the registry for the newest release of the image this Docker hub runs (docs/hub-update.md "Docker").
 // A private image needs JARVIS_REGISTRY_TOKEN (a read token) in the container's environment.
 func (u *updater) checkImage(ctx context.Context) error {
 	im, err := u.dockerImage()

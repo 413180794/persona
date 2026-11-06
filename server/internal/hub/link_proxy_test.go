@@ -19,7 +19,7 @@ import (
 )
 
 // A link request without TLS: from this machine, or from the LAN when a reverse proxy says it took it over HTTPS;
-// never from the internet, whatever the headers say (docs/link.md「hub 在反向代理后面」).
+// never from the internet, whatever the headers say (docs/link.md "Hub behind a reverse proxy").
 func TestPlainLinkOnlyThroughAProxy(t *testing.T) {
 	h, _, _ := newLinkHub(t)
 	token, _ := linkToken(t, h, "laptop")

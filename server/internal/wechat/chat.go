@@ -20,7 +20,7 @@ import (
 const (
 	maxSeen     = 200
 	strangerGap = 10 * time.Minute
-	// typingFor: 「正在输入」 is let go when the hub has not asked for it again in this long (it asks every 5 s while a
+	// typingFor: "typing…" is let go when the hub has not asked for it again in this long (it asks every 5 s while a
 	// turn goes on): a hub that went away does not leave it on.
 	typingFor = 30 * time.Second
 )

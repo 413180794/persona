@@ -24,7 +24,7 @@ import (
 //     sent together, or run as a command (input_draft, with the box's text). The app may ask to clear that exact
 //     draft and send (clear_draft).
 // Sends carry the app's client_msg_id: a retry of one already delivered (the response was lost) is acknowledged
-// without typing it again. See docs/protocol.md「发消息」.
+// without typing it again. See docs/protocol.md "Sending messages".
 
 // dialogKeys checks that the session's screen still shows the dialog a card was made from (same revision) and
 // returns the keys for option, worked out from the screen as it is now (an unnumbered list moves from where the cursor
@@ -65,7 +65,7 @@ type sendOpts struct {
 	// typed. Any other dialog is refused as before.
 	DismissNotice bool `json:"dismiss_notice"`
 	// Launcher (and its model) resumes a session that is not running when nothing on this machine says which
-	// launcher it ran with: the hub sends 新建 Agent's (hub/send.go). A recorded or inferred launcher wins.
+	// launcher it ran with: the hub sends "New Agent"'s (hub/send.go). A recorded or inferred launcher wins.
 	Launcher         string `json:"launcher"`
 	Model            string `json:"model"`
 	Effort           string `json:"effort"`

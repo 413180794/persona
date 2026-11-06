@@ -54,9 +54,9 @@ type Pusher struct {
 	// (postRelayRetrying); tests shorten them.
 	retryWaits []time.Duration
 	now        func() time.Time
-	// desktopOnline: a desktop app is connected (Hub.desktopOnline), for 手机静音.
+	// desktopOnline: a desktop app is connected (Hub.desktopOnline), for "Phone Muted".
 	desktopOnline func() bool
-	// hubID is this hub's hub_id: every push says which hub sent it, so the app knows the group (plan 2.6「推送」).
+	// hubID is this hub's hub_id: every push says which hub sent it, so the app knows the group (plan 2.6 "Pushes").
 	hubID func() string
 	// userLang is the user's language (Hub.userLang): pushes to a device that registered without one read in it.
 	userLang func() i18n.Lang
@@ -178,7 +178,7 @@ func (p *Pusher) reachable(d Device) bool {
 }
 
 // send alerts every device whose settings take it (nil: all of them).
-// A device that chose 手机静音 gets none while a desktop app is connected (desktops.go), and a desktop app that is
+// A device that chose "Phone Muted" gets none while a desktop app is connected (desktops.go), and a desktop app that is
 // connected gets none of these: it shows them itself. What was asked for explicitly (nil) goes to it all the same.
 func (p *Pusher) send(payload map[string]any, collapseID string, wants func(NotifyPrefs) bool) {
 	p.sendLocalized(func(i18n.Lang) map[string]any { return payload }, collapseID, wants)
@@ -206,7 +206,7 @@ func (p *Pusher) device(id string) (Device, bool) {
 	return d, ok
 }
 
-// signedOut forgets the devices a revoked credential registered (退出那台 Mac, 设置 › 设备): an app signed out gets
+// signedOut forgets the devices a revoked credential registered (signing out that Mac, Settings › Devices): an app signed out gets
 // no more pushes, its Live Activity included. Its notification settings go with it; pairing again starts from the
 // defaults.
 func (p *Pusher) signedOut(credential string) {
@@ -264,7 +264,7 @@ func (p *Pusher) forgetIfCurrent(d Device) {
 
 // sendLiveActivity pushes to a Live Activity token (an activity's own, or the push-to-start one): its own push type and
 // topic, the device's APNs environment. gone runs when APNs says the token is dead. Through the relay the payload is
-// not sealed: iOS reads a Live Activity's content-state itself (docs/push-relay.md「Live Activity 是明文」).
+// not sealed: iOS reads a Live Activity's content-state itself (docs/push-relay.md "Live Activity is plaintext").
 func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any, priority string, gone func()) {
 	if p == nil || token == "" || !p.reachable(d) {
 		return
@@ -329,7 +329,7 @@ func directRetryable(status int) bool {
 
 type relayResult struct{ gone bool }
 
-// postRelay hands one push to the device's relay (relayproto.PushRequest, docs/push-relay.md「接口」). A grant the relay
+// postRelay hands one push to the device's relay (relayproto.PushRequest, docs/push-relay.md "API"). A grant the relay
 // no longer takes (its secret was replaced) is renewed once with the device's token, which the hub already has. A
 // failure that may pass is tried again (postRelayRetrying): one dropped connection used to lose the push (#2150).
 func (p *Pusher) postRelay(d Device, req relayproto.PushRequest) (relayResult, error) {
@@ -451,7 +451,7 @@ func (p *Pusher) renewGrant(d Device) (Device, error) {
 }
 
 // sealFor seals a push's payload to the device's key, stamped with when it was sealed (the phone shows only
-// 「有新消息」 for one older than a day, so a replayed old one tells nothing new). Texts too long for one push (an
+// "New messages" for one older than a day, so a replayed old one tells nothing new). Texts too long for one push (an
 // ask_user question, a long command) are shortened until it fits: the full text is in the app.
 func (p *Pusher) sealFor(d Device, payload map[string]any) (string, error) {
 	pub, err := pushcrypto.PublicKey(d.PushKey)
@@ -537,7 +537,7 @@ func (p *Pusher) prefs(id string) NotifyPrefs {
 func (p *Pusher) setPrefs(id string, prefs NotifyPrefs) error { return p.setPrefsBy(id, "", prefs) }
 
 // setPrefsBy is setPrefs written with a device token (`credential`): a device that has none recorded takes it, so
-// revoking the token forgets a device only its prefs made (a browser's 设置 › 通知, which never registers a push token).
+// revoking the token forgets a device only its prefs made (a browser's Settings › Notifications, which never registers a push token).
 // The row is written under saveMu, not mu: a slow database holds this one save (up to storeTimeout), not every
 // other device's settings and every push. The settings take effect once the row is written.
 func (p *Pusher) setPrefsBy(id, credential string, prefs NotifyPrefs) error {
@@ -566,7 +566,7 @@ func (p *Pusher) setPrefsBy(id, credential string, prefs NotifyPrefs) error {
 	return nil
 }
 
-// mailTargets are the languages some device wants its mail translated into (设置 › 翻译 on, mail in scope).
+// mailTargets are the languages some device wants its mail translated into (Settings › Translation on, mail in scope).
 func (p *Pusher) mailTargets() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -739,7 +739,7 @@ func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
 }
 
 // interactionPayload is the alert for a new interaction. `category` must match a UNNotificationCategory the app
-// registers (apple/Persona/App/NotificationActions.swift): that is what puts 允许 / 拒绝 / 批准 on the notification, and the
+// registers (apple/Persona/App/NotificationActions.swift): that is what puts Allow / Deny / Approve on the notification, and the
 // buttons answer `interaction_id` through the resolve API.
 func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	return interactionPayloadIn(i18n.Default, ix, machine)
@@ -762,7 +762,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	}
 	name := map[string]string{"codex": "Codex", "traex": "TRAEX"}[ix.Agent]
 	if name == "" && ix.Agent != "" && ix.Agent != "claude" {
-		name = ix.AgentLabel // an agent runtime's card (docs/runtimes.md): "DSH 需要你授权"
+		name = ix.AgentLabel // an agent runtime's card (docs/runtimes.md): "DSH needs your permission"
 	}
 	if name != "" {
 		switch ix.Kind {
@@ -885,7 +885,7 @@ func donePayloadIn(l i18n.Lang, machineID, machine, sessionID, title, text strin
 	}
 }
 
-// joinPlace is "会话 · 机器" without the parts that are empty.
+// joinPlace is "Chat · Machine" without the parts that are empty.
 func joinPlace(parts ...string) string {
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return strings.TrimSpace(s) == "" }), " · ")
 }

@@ -49,7 +49,7 @@ func copyFile(from, to string) error {
 	return os.Rename(tmp, to)
 }
 
-// Pending is an update under way, kept next to the binary across the restart (docs/hub-update.md「准备」): the one
+// Pending is an update under way, kept next to the binary across the restart (docs/hub-update.md "Preparing"): the one
 // piece of hub state outside Postgres, because going back must work when the new version cannot reach the database
 // or does not start at all.
 type Pending struct {

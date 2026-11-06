@@ -218,7 +218,7 @@ func TestGateProxyHoldsRequestsToTheRules(t *testing.T) {
 	}
 }
 
-// What the phone confirms is what the proxy lets through, once; a refusal lets nothing through; 本会话总是允许 lets
+// What the phone confirms is what the proxy lets through, once; a refusal lets nothing through; "Always allow for this session" lets
 // the same route through again without asking.
 func TestGateLetsThroughWhatThePhoneConfirmed(t *testing.T) {
 	api := newFakeAPI(t)

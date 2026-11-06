@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/screen"
 )
 
-// One credential per device (docs/protocol.md「鉴权」). The pairing token in hub.json still opens everything (the CLI,
+// One credential per device (docs/protocol.md "Authentication"). The pairing token in hub.json still opens everything (the CLI,
 // apps from before this); an app trades it for a token of its own right after pairing and stops keeping it, so a lost
 // phone is revoked alone instead of re-pairing every device. A watch gets an answer-only token: it can do what the
 // watch app does (answerReads, answerWrites) and nothing else.
@@ -226,7 +226,7 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 var (
 	answerReads = regexp.MustCompile(`^/api/v1/(machines|sessions|interactions|inbox|workspace-board|workspaces|sessions/[^/]+/[^/]+/items|` +
 		`extensions/-/(widgets|shortcuts))$`)
-	// The watch draws extensions' widgets on its faces and runs their shortcuts (docs/extensions.md「系统级位置」).
+	// The watch draws extensions' widgets on its faces and runs their shortcuts (docs/extensions.md "System-level places").
 	answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/resolve|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +
 		`inbox/[^/]+/(done|reply|draft|suggestion)|extensions/[^/]+/-/(widget|shortcut)/[^/]+)$`)
 	answerPuts = regexp.MustCompile(`^/api/v1/devices/[^/]+/widgets$`)
@@ -287,7 +287,7 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 	// Trade the caller's credential for a device token. kind "watch" gets an answer-only one; kind "link" a
 	// jarvis-link credential for the link machine named in "machine" (link.go). A browser signing in again names its
 	// earlier credential in "replaces", and that one is revoked once the new one is made, when it is a web one: a
-	// browser keeps one device instead of a row of them with the same name (docs/protocol.md「鉴权」).
+	// browser keeps one device instead of a row of them with the same name (docs/protocol.md "Authentication").
 	api.HandleFunc("POST /api/v1/auth/tokens", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Name     string `json:"name"`

@@ -87,7 +87,7 @@ func taskNote(xml string) (*proto.TaskNote, string) {
 	return n, noteText(n)
 }
 
-// noteText is the notice's one line: "后台命令完成 · <title>", "Monitor 事件 · <the event's first line>"….
+// noteText is the notice's one line: "Background command done · <title>", "Monitor event · <the event's first line>"… (in Chinese).
 func noteText(n *proto.TaskNote) string {
 	failed := "失败"
 	if n.ExitCode != nil {

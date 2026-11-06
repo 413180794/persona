@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The manager's part of jarvis_settings (docs/assistant.md「操作 Persona 自己」): the settings of what moved here
+// The manager's part of jarvis_settings (docs/assistant.md "Operating Persona itself"): the settings of what moved here
 // from the hub — the mail accounts, a source's own triage rules (self_settings_sources.go). The hub lists them with
 // its own (extwire.HubSettingsList) and hands an action on one of them here (extwire.HubSettingsTool); the card on
 // the phone is the hub's (waitInteraction). The registry is the hub's, moved as it was.
@@ -96,7 +96,7 @@ func clipped(l i18n.Lang, s string) string {
 	return clip(oneLine(s), 120)
 }
 
-// changeSummary is the card's「改 title：before → after」.
+// changeSummary is the card's "change title: before → after" (in Chinese).
 func changeSummary(l i18n.Lang, title, before, after string) string {
 	return ss(l, "change", i18n.Args{"title": title, "before": clipped(l, before), "after": clipped(l, after)})
 }

@@ -142,8 +142,8 @@ func (h *Manager) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine)
 	writeJSON(w, h.refreshBrowser(r.Context(), m))
 }
 
-// postBrowserJob: POST /api/v1/machines/{mid}/browser/{install|open|cancel}, the machine page's 安装 ego lite, 打开
-// ego lite and 取消; the node runs it in the background, its state comes back as Browser.job.
+// postBrowserJob: POST /api/v1/machines/{mid}/browser/{install|open|cancel}, the machine page's "Install ego lite", "Open
+// ego lite" and "Cancel"; the node runs it in the background, its state comes back as Browser.job.
 func (h *Manager) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Machine) {
 	action := r.PathValue("action")
 	if action != "install" && action != "open" && action != "cancel" {

@@ -21,7 +21,7 @@ type KBConfig struct {
 	ExtraDirs []string `json:"extra_dirs,omitempty"`
 }
 
-// The knowledge base is the assistant's (docs/knowledge.md「谁管什么」): its engine, its loop, its files and its
+// The knowledge base is the assistant's (docs/knowledge.md"Responsibilities"): its engine, its loop, its files and its
 // index rows. Its sources, the connectors' posts and the kicks are the manager's (internal/extmgr). What is left
 // here is the hub's side: hub.json's kb section (KBConfig), whether it is off (kbOff), the settings it hands the
 // assistant in its hello (kbSettings), and kbAsk, through which the hub's own features read the knowledge base

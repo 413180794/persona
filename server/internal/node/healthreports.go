@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The reports the health page lists and deletes (docs/health.md「体检报告」): what is in reports/, an original with the
+// The reports the health page lists and deletes (docs/health.md"Health reports"): what is in reports/, an original with the
 // .md record the health conversation wrote beside it, or a record alone (a photo sent in a conversation has no original).
 
 const healthRecordExt = ".md"

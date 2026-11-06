@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Connectors whose data is only on this computer (docs/plan-connectors.md「第三种：node 当本地连接器」): the hub
+// Connectors whose data is only on this computer (docs/plan-connectors.md "Third kind: the node as a local connector"): the hub
 // asks, this node reads. For now that is Messages on a Mac, read-only (connector/imessage). Only the hub asks — these
 // are hub → node RPCs; the node socket of hooks and MCP does not route here — and nothing is logged: no number, no
 // message.

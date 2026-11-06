@@ -67,7 +67,7 @@ func (h *Hub) downloadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 }
 
 // inlineMime: what a browser may show in place (?inline=1: <img>, <video>, <audio>, a PDF in a frame); anything
-// else is always downloaded. HTML is previewed from file.read text in a sandboxed frame (docs/protocol.md「文件预览」).
+// else is always downloaded. HTML is previewed from file.read text in a sandboxed frame (docs/protocol.md "File preview").
 func inlineMime(m string) bool {
 	return strings.HasPrefix(m, "image/") || strings.HasPrefix(m, "video/") || strings.HasPrefix(m, "audio/") ||
 		strings.HasPrefix(m, "application/pdf")

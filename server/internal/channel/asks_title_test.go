@@ -11,7 +11,7 @@ import (
 )
 
 // A conversation titled by a clip of its first message (a node from before titles were stripped first) asked in a
-// channel: the 【…】 has no injected tag, whole or cut off.
+// channel: the bracketed title has no injected tag, whole or cut off.
 func TestAskTextTitleWithoutInjectedBlocks(t *testing.T) {
 	q := []proto.Question{{Question: "Codebase 扩展 1.1.1 已经合并，要发版吗？", Header: "Codebase",
 		Options: []proto.QuestionOption{{Label: "发"}, {Label: "先不发"}}}}

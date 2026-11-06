@@ -11,7 +11,7 @@ import (
 )
 
 // The app reads what the hub is from /api/v1/health (and the hello): its channel, build number and protocol, to
-// show the version and say when one of them is too old (docs/hub-update.md「兼容」).
+// show the version and say when one of them is too old (docs/hub-update.md "Compatibility").
 func TestHealthReportsTheBuild(t *testing.T) {
 	h := newTestHub(t)
 	h.build = update.Make("v0.2.0-3-gabc-202611021530", "release", "202611021530", "https://example.com/dl")

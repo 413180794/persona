@@ -15,11 +15,11 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Task reports in Feishu (#2768, docs/bots.md「任务进展」): the user reads the bot's chat, not the app, so how the
+// Task reports in Feishu (#2768, docs/bots.md "Task progress"): the user reads the bot's chat, not the app, so how the
 // main conversation's tasks go — done, waiting for the user, cut off, did not start, closed by the judge — is told
 // there by the bot itself (no lark-cli, nothing to approve per message). Changes within reportDelay are one card:
 // what needs the user's decision on top (each with its own answerable card below it), then each task with its stage
-// (方案 → 开发 → 审查 → 合入 → 部署 → 已验证), a line of what happened and links to its page, its PR and its agent.
+// (plan → develop → review → merge → deploy → verified), a line of what happened and links to its page, its PR and its agent.
 // The bot's reports switch turns it off (on by default).
 
 // reportDelay is how long a change waits for others before the card goes out (reportBook.delay overrides it).
@@ -64,8 +64,8 @@ var (
 	deployWords = regexp.MustCompile(`(?i)\bdeployed\b|\bis live\b|\bwent live\b|已部署|已经部署|完成部署|部署好|部署了|部署完|部署到|部署上线|上线了|已上线|发布了|已发布|发版了`)
 	verifyWords = regexp.MustCompile(`(?i)\bverified\b|已验证|验证通过|实测通过|实测.{0,6}(通过|成功|收到)|截图.{0,4}(确认|为证)`)
 	// A deploy or verify phrase does not count when, in its own clause, the few words right before it negate or defer
-	// it (还没部署到, 先别部署, 等你确认后再部署, not yet deployed, it will be deployed) or what follows asks or says
-	// "yet" (部署了吗, deployed yet): a false 已部署 would ask the user to check something that is not there.
+	// it ("not deployed to … yet", "don't deploy yet", "deploy after you confirm", not yet deployed, it will be deployed) or what follows asks or says
+	// "yet" ("deployed?", deployed yet): a false "deployed" would ask the user to check something that is not there.
 	notYetZh = regexp.MustCompile(`没|未|不|别|无需|暂不|无法|待|等|还要|需要|准备`)
 	notYetEn = regexp.MustCompile(`(?i)\b(not|never|nothing|before|will|once|awaiting|pending)\b|n't\b|\byet to\b|\bto be\b`)
 	askAfter = regexp.MustCompile(`(?i)^\s*(吗|么|没有?|与否|\?|？|yet\b)`)

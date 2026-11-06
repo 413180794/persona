@@ -52,17 +52,18 @@ type cuaSettings struct {
 	On       bool     `json:"-"`
 	Machines []string `json:"machines"`
 	Confirm  bool     `json:"confirm"`
-	// KeepAwake: 「操作或开着 VNC 时保持唤醒」, on unless turned off (nil); the node holds caffeinate (node/awake.go).
+	// KeepAwake: "Keep awake while operating or while VNC is open", on unless turned off (nil); the node holds
+	// caffeinate (node/awake.go).
 	KeepAwake *bool `json:"keep_awake"`
-	// AppApproval: 「第一次操作一个 App 时先问」, on unless turned off (computer_apps.go).
+	// AppApproval: "Ask the first time an app is operated", on unless turned off (computer_apps.go).
 	AppApproval *bool `json:"app_approval"`
-	// NoAutoLock: the Macs 「扩展开着时不自动锁屏」 is on for (computer_nolock.go).
+	// NoAutoLock: the Macs "Don't auto-lock while the extension is on" is on for (computer_nolock.go).
 	NoAutoLock []string `json:"no_auto_lock"`
-	// ClickSound: 「点击音效」, none (or empty), foreground or all; the node plays it (node/cua_extras.go).
+	// ClickSound: "Click sound", none (or empty), foreground or all; the node plays it (node/cua_extras.go).
 	ClickSound string `json:"click_sound"`
 	// Backend: cua (Cua Driver, the default), lcu, or auto (lcu_status.go).
 	Backend string `json:"backend"`
-	// ShowCursor: 「显示 Agent 的光标」, on unless turned off (computer_cursor.go).
+	// ShowCursor: "Show the agent's cursor", on unless turned off (computer_cursor.go).
 	ShowCursor *bool `json:"show_cursor"`
 }
 
@@ -204,7 +205,7 @@ func (h *Manager) getComputer(w http.ResponseWriter, r *http.Request, m *Machine
 func (h *Manager) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
 		Enabled *bool `json:"enabled"`
-		// 「扩展开着时不自动锁屏」 for this Mac (the app asked first).
+		// "Don't auto-lock while the extension is on" for this Mac (the app asked first).
 		NoAutoLock *bool `json:"no_auto_lock"`
 	}
 	if err := decodeJSONBody(w, r, &in, 4<<10); err != nil {
@@ -258,11 +259,11 @@ func (h *Manager) setExtensionList(ctx context.Context, extension, key, machine 
 	return h.extensions.reg.SetConfig(ctx, extension, raw, "app")
 }
 
-// postComputerJob: POST /api/v1/machines/{mid}/computer/{install|grant|cancel}, the machine page's 安装 Cua Driver,
-// 去授权 and 取消. The node runs the job in the background; its state comes back as Computer.job (the page asks
-// again while it runs).
-// Also 锁上 (lock: the node sleeps the display now) and the app's word that it is unlocking the Mac over its live
-// screen (unlocking: only logged, who and which Mac; the password goes to the Mac alone), #1507 a-2.
+// postComputerJob: POST /api/v1/machines/{mid}/computer/{install|grant|cancel}, the machine page's "Install Cua
+// Driver", "Grant access" and "Cancel". The node runs the job in the background; its state comes back as Computer.job
+// (the page asks again while it runs). Also "Lock" (lock: the node sleeps the display now) and the app's word that it
+// is unlocking the Mac over its live screen (unlocking: only logged, who and which Mac; the password goes to the Mac
+// alone), #1507 a-2.
 func (h *Manager) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine) {
 	action := r.PathValue("action")
 	if action != "install" && action != "grant" && action != "cancel" && action != "lock" && action != "unlocking" {

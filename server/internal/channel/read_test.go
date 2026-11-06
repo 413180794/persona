@@ -194,7 +194,7 @@ func TestFoldedRunAnswer(t *testing.T) {
 	}
 }
 
-// A turn stopped before the agent said anything (#4505): its message is followed only by the 已中断 notice. The turn is
+// A turn stopped before the agent said anything (#4505): its message is followed only by the "Interrupted" notice. The turn is
 // over: found, without words, stopped, so the run ends now instead of waiting as one still queued.
 func TestReadTurnStoppedBeforeWords(t *testing.T) {
 	stopped := proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.InterruptedNotice}

@@ -19,7 +19,7 @@ const Protocol = 1
 const ManifestVersion = 1
 
 // ManifestFile is the manifest's name at the root of an extension package; LegacyManifestFile is its name before
-// #1844, still read when a package has no ManifestFile (docs/extensions.md「命名和兼容」).
+// #1844, still read when a package has no ManifestFile (docs/extensions.md "Naming and compatibility").
 const (
 	ManifestFile       = "persona-extension.json"
 	LegacyManifestFile = "persona-plugin.json"
@@ -77,7 +77,7 @@ type InitializeParams struct {
 	Granted Permissions `json:"granted"`
 	// Active are the contributions this run is for, by extension point (a switched-off connector is not in it).
 	Active map[string][]string `json:"active,omitempty"`
-	// ContributionsToMe are the other extensions' contributions to the points it exports (docs/extensions.md「导出扩展点」),
+	// ContributionsToMe are the other extensions' contributions to the points it exports (docs/extensions.md "Exported extension points"),
 	// by point id; the event extension.contributions_changed says them again when they change.
 	ContributionsToMe map[string][]ExportedContribution `json:"contributions_to_me,omitempty"`
 }
@@ -119,11 +119,11 @@ type HubInfo struct {
 	// Timezone is the user's time zone by name (IANA, as their devices say it): for the times a plugin shows people
 	// ("today", a message's time). Empty while only the hub's own clock is known. Read at each start.
 	Timezone string `json:"timezone,omitempty"`
-	// Locale is the user's language (zh-Hans, en, ja; docs/i18n.md「协议」): what a plugin writes for people itself
+	// Locale is the user's language (zh-Hans, en, ja; docs/i18n.md "Protocol"): what a plugin writes for people itself
 	// (its status, sign-in hints, a bot's replies) reads in it. Read at each start; empty means zh-Hans.
 	Locale string `json:"locale,omitempty"`
 	// Capabilities are what this hub does that a plugin may go by ("inbox_group": it relates a connector's batches of
-	// new messages to inbox events, docs/inbox.md「事件合成」). Absent or without one: the hub does not do it.
+	// new messages to inbox events, docs/inbox.md "Event synthesis"). Absent or without one: the hub does not do it.
 	Capabilities []string `json:"capabilities,omitempty"`
 	// URL and Token are the hub's API on this machine and a token of the scopes it was granted (permissions.hub; also
 	// PERSONA_HUB_URL / PERSONA_HUB_TOKEN when the hub runs it): a new one each start, revoked when it stops for good.

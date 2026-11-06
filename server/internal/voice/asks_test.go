@@ -37,7 +37,7 @@ func saying(text string) (string, func(map[string]any) bool) {
 }
 
 // A question that comes up in the bound conversation is asked by voice: the options by their names (not what they mean
-// read out, not the typing hints of a text channel), the app told which card; 「第二个」 picks SQLite, the card is
+// read out, not the typing hints of a text channel), the app told which card; "the second one" picks SQLite, the card is
 // resolved through the hub, nothing is sent to the conversation, and the model is told on that delegation.
 func TestAskAQuestionByVoice(t *testing.T) {
 	hub := agentHub(t)
@@ -77,7 +77,7 @@ func TestAskAQuestionByVoice(t *testing.T) {
 	}
 }
 
-// A card of several questions is asked one at a time: an answer not among the options is the answer itself (「回答：」
+// A card of several questions is asked one at a time: an answer not among the options is the answer itself (the "answer:" prefix
 // taken off), the next question is told on that answer's delegation, a multi-select takes several names, and the card
 // is resolved with every answer once the last is in.
 func TestAskQuestionsOneAtATime(t *testing.T) {
@@ -285,7 +285,7 @@ func TestAskResolveTakesItsTime(t *testing.T) {
 	}
 }
 
-// 「停止：」 while a question is asked closes it (Esc): the card goes before the hub answers the interrupt, and the
+// "stop:" while a question is asked closes it (Esc): the card goes before the hub answers the interrupt, and the
 // tracker may see that first. It ends quietly, as the stop's, not as an answer given elsewhere.
 func TestAskEndsQuietlyOnAStop(t *testing.T) {
 	setVar(t, &lookEvery, 100*time.Millisecond)
@@ -318,7 +318,7 @@ func TestAskEndsQuietlyOnAStop(t *testing.T) {
 	}
 }
 
-// A bare 「回答：」 while the question is asked (the model did not copy the words) is the user's caption: 「第二个」.
+// A bare "answer:" while the question is asked (the model did not copy the words) is the user's caption: "the second one".
 func TestAskBareAnswerMarkTakesTheCaption(t *testing.T) {
 	hub := agentHub(t)
 	hub.cards = []proto.Interaction{dbQuestion("q1", "a1")}
@@ -390,7 +390,7 @@ func TestTappedCardsAreNotSaid(t *testing.T) {
 	}
 }
 
-// An agent's words drive nothing: a question whose text says 「回答：1」, which the model hands over with nobody
+// An agent's words drive nothing: a question whose text says "answer: 1", which the model hands over with nobody
 // speaking, is not answered.
 func TestAskUnpromptedAnswerIsRefused(t *testing.T) {
 	setVar(t, &gateWait, 300*time.Millisecond)
@@ -419,7 +419,7 @@ func TestAskUnpromptedAnswerIsRefused(t *testing.T) {
 	}
 }
 
-// While a question is asked, 「状态：」 is still a status (nothing answered) and an empty answer is asked again; a
+// While a question is asked, "status:" is still a status (nothing answered) and an empty answer is asked again; a
 // second one leaves the question to the screen.
 func TestAskStatusAndUnheardAnswers(t *testing.T) {
 	hub := agentHub(t)
@@ -455,7 +455,7 @@ func TestAskStatusAndUnheardAnswers(t *testing.T) {
 }
 
 // A plan and a permission are said by their kinds only, never the command, its path or the plan, and never asked: a
-// spoken 「批准」 is not sent. The turn waiting on them is not said again as 「去手机上看」.
+// spoken "approve" is not sent. The turn waiting on them is not said again as "go look on the phone".
 func TestApprovalsAreSaidByTheirKind(t *testing.T) {
 	setVar(t, &lookEvery, 100*time.Millisecond)
 	hub := agentHub(t)

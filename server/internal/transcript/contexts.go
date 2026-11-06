@@ -11,13 +11,13 @@ import (
 // A message can carry <jarvis-context kind="…" title="…" url="…"> blocks: context picked on the phone, or everything
 // a Feishu /agent request hands its agent (prompts/lark). The tag is being renamed <persona-context> (#3182): readers
 // take either name. The apps show only the text outside the blocks as what the
-// user wrote and fold the blocks into one row (docs/lark-agent.md「在 App 里怎么显示」).
+// user wrote and fold the blocks into one row (docs/lark-agent.md "How the app shows it").
 
 // contextBlockRe is one attributed block (the bare snapshot, ContextRe, is dropped before this).
 var contextBlockRe = regexp.MustCompile(`(?s)(<(?:jarvis|persona)-context\b[^>]*>)(.*?)(</(?:jarvis|persona)-context>)`)
 
 // legacyLarkAgentRe is a Feishu /agent prompt as hub wrote it before the instructions moved into a block: an intro line,
-// then ## 请求 (what was asked), ## 上下文 (blocks, plus a loose line or two), ## 怎么做 (the rules).
+// then a request heading (what was asked), a context heading (blocks, plus a loose line or two), and a how-to heading (the rules).
 var legacyLarkAgentRe = regexp.MustCompile(`(?s)^([^\n]*(?:用 /agent 叫你|又(?:发|写)了一条 /agent 请求)[^\n]*)\n+## 请求\n+(.*?)\n+## 上下文\n+(.*)\n+## 怎么做\n+(.*?)\s*$`)
 
 // legacyLarkAgent rewrites an old Feishu /agent prompt into today's shape, so conversations started before the change
@@ -162,8 +162,8 @@ func cutPartialTag(s string) string {
 var blockTitleRe = regexp.MustCompile(`<(?:jarvis|persona)-context\b[^>]*?\stitle="([^"]*)"[^>]*>`)
 
 // Title is a message (or a title someone made of one) as a title or a preview line: what the user wrote, else the
-// title of the first attributed block (「接上旧主对话」 for a main conversation handed over), else "" (the caller
-// falls back to the agent's project). A tag cut off by a clip ("<jarvis-context kind="context" title="接上…") has
+// title of the first attributed block ("Continuing the old main chat" for a main conversation handed over), else "" (the caller
+// falls back to the agent's project). A tag cut off by a clip ("<jarvis-context kind="context" title="Continuing…") has
 // no title to take: it is dropped. Strip first, then clip: a clip first can end inside a tag.
 func Title(s string) string {
 	if t := StripInjected(s); t != "" {

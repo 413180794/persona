@@ -19,7 +19,7 @@ import (
 )
 
 // The whole way with real jarvisd binaries over Tailscale's public relays: a machine the hub cannot ssh to is set up
-// with `jarvisd node tailcat init`, its resident node serves the hub over tailcat, and 重新部署 sends it the hub's
+// with `jarvisd node tailcat init`, its resident node serves the hub over tailcat, and "Redeploy" sends it the hub's
 // build over tailcat too. Needs the network and two builds of jarvisd:
 //
 //	go build -ldflags "-X main.version=v1" -o /tmp/jarvisd-v1 ./cmd/jarvisd
@@ -120,7 +120,7 @@ func TestTailcatEndToEnd(t *testing.T) {
 	}
 	ccancel()
 
-	// 重新部署 over tailcat: the hub's build v2 replaces v1, the node restarts on it and comes back.
+	// "Redeploy" over tailcat: the hub's build v2 replaces v1, the node restarts on it and comes back.
 	copyFile(t, v2, filepath.Join(nodeBinaryDir(), "jarvisd-"+runtime.GOOS+"-"+runtime.GOARCH))
 	if err := m.startDeploy(); err != nil {
 		t.Fatal(err)

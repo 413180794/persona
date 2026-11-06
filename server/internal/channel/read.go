@@ -11,7 +11,7 @@ import (
 
 // Reading a run's answer out of the conversation is the same wherever the transcript comes from: the assistant reads it
 // over the hub's bus (session.items), the voice extension over the hub's HTTP API (…/items?after_seq=, …/full). An
-// ItemSource is that transcript; ReadTurn and RunAnswer are the one copy of the rules (docs/channels.md「跟踪这一轮」).
+// ItemSource is that transcript; ReadTurn and RunAnswer are the one copy of the rules (docs/channels.md "Following this turn").
 
 // ItemSource is one conversation's transcript, read a page at a time.
 type ItemSource interface {
@@ -88,7 +88,7 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 	if named && found && !slices.ContainsFunc(kept, func(it proto.Item) bool { return it.Role == "assistant" }) {
 		// Its message is in, nothing after it yet: its turn has not answered (the session's status can come before its
 		// lines, two messages one right after the other): as one still waiting. Unless the turn was stopped before it
-		// said anything (#4505): only the 已中断 notice follows it, and the turn is over without words.
+		// said anything (#4505): only the "Interrupted" notice follows it, and the turn is over without words.
 		// Only once all of a folded run's messages are in (a later one's turn is still to come), and not for an API
 		// error Claude Code is still retrying (the turn goes on).
 		if why := Stopped(kept); why != "" && !retrying(kept) {

@@ -118,7 +118,7 @@ type fakeHub struct {
 type modelCall struct{ System, User string }
 
 func newFakeHub() *fakeHub {
-	// 主对话派的任务只在主对话里通知 is on by default (tasks from the main conversation are quiet, #1731).
+	// "Notify tasks from the main chat only in the main chat" is on by default (tasks from the main conversation are quiet, #1731).
 	return &fakeHub{sessions: map[string][]proto.Session{}, sessionsFail: map[string]int{}, known: map[string]bool{},
 		offline: map[string]bool{}, tokens: map[string][]map[string]map[string]string{}, managed: map[string][]proto.ManagedLauncher{}}
 }

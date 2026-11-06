@@ -14,7 +14,7 @@ import (
 // A container's gateway is not a LAN client. Docker's userland proxy (docker-proxy) hands a container every
 // connection it relays from the bridge's gateway address (172.x.0.1): the host's own, Docker Desktop's and OrbStack's
 // (all of them), and on Linux the IPv6 ones when Docker's IPv6 is off. That address is private, so without this a
-// request from the internet would count as the LAN (docs/admin.md「Docker 桥接网络」).
+// request from the internet would count as the LAN (docs/admin.md "Docker bridge network").
 
 // containerGateway reports whether ip is a gateway of the container this hub runs in: the default routes' next hops
 // and the first address of every network the container is on (where Docker puts a bridge's gateway). Outside a

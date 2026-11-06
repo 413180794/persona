@@ -34,7 +34,7 @@ func (l *logBuffer) String() string {
 	return l.b.String()
 }
 
-// An upstream out of quota (docs/model-config.md「上游限流」): the first triage pass sends a few requests at most and
+// An upstream out of quota (docs/model-config.md "Upstream rate limits"): the first triage pass sends a few requests at most and
 // logs nothing; every item stays untriaged (sorted by rule meanwhile); later passes in the pause send nothing. Once
 // the quota is back every item is triaged, each asked once.
 func TestInboxTriageWaitsOutAnExhaustedQuota(t *testing.T) {

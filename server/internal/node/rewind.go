@@ -20,7 +20,7 @@ import (
 //
 // Claude Code does not delete the rewound part of the transcript: the file is a tree (parentUuid) and the next prompt
 // is written as a child of the one before the target. The rewound turns stay in the file, and a session read straight
-// through shows them (docs/lessons/agents.md「回退」).
+// through shows them (docs/lessons/agents.md "Rewind").
 
 // Restore choices of session.rewind.
 const (

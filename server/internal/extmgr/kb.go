@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The knowledge base is the assistant's, in this process (docs/knowledge.md「谁管什么」): the connectors' sources and
+// The knowledge base is the assistant's, in this process (docs/knowledge.md "Who owns what"): the connectors' sources and
 // posts are handed to it here (kb_sources.go, kb_posts.go) as the hub used to hand them over the bus.
 
 // errKBOff is what the knowledge base's sources answer while hub.json turns it off.

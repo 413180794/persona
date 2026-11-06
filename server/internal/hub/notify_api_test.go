@@ -277,7 +277,7 @@ func TestNotifyAPI(t *testing.T) {
 		t.Fatalf("muted session notified: %v", m)
 	}
 
-	// A device that turned 需要你 off gets none.
+	// A device that turned "Needs you" off gets none.
 	if err := h.push.setPrefs("phone-1", NotifyPrefs{Input: false, Done: DoneLong}); err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +296,7 @@ func TestNotifyNotForAnswerOnly(t *testing.T) {
 	}
 }
 
-// Through APNs: the level and the prefixed collapse id reach the push; 手机静音 holds it while a desktop is online.
+// Through APNs: the level and the prefixed collapse id reach the push; "Phone Muted" holds it while a desktop is online.
 func TestNotifyAPNs(t *testing.T) {
 	h, f := macHub(t)
 	srv := httptest.NewServer(h.routes())
@@ -370,7 +370,7 @@ func TestNotifyAPNs(t *testing.T) {
 		}
 	}
 
-	// 手机静音 with the Mac app connected: the phone gets nothing.
+	// "Phone Muted" with the Mac app connected: the phone gets nothing.
 	if err := h.push.setPrefs("phone", NotifyPrefs{Input: true, Done: DoneLong, MuteWhileDesktop: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -461,8 +461,8 @@ func TestNodeScriptNotify(t *testing.T) {
 	}
 }
 
-// A browser only ever writes its prefs (设置 › 通知) and never registers a push token: the device row its prefs made
-// takes the device token that wrote them, so revoking that token (设置 › 设备) forgets it, as it does a phone.
+// A browser only ever writes its prefs (Settings › Notifications) and never registers a push token: the device row its prefs made
+// takes the device token that wrote them, so revoking that token (Settings › Devices) forgets it, as it does a phone.
 // A device already registered keeps the credential it registered with.
 func TestPrefsOnlyDeviceGoesWithItsCredential(t *testing.T) {
 	h := newTestHub(t)

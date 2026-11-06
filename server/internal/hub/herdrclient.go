@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The web's full herdr view (docs/terminal.md「完整 herdr 界面」). A browser asks for one with herdr_open; the node
+// The web's full herdr view (docs/terminal.md "Full herdr UI"). A browser asks for one with herdr_open; the node
 // runs herdr's own client in a PTY and its bytes come back here (herdr.client.data) and go on to the browser as
 // herdr_data. This is not the terminal relay (terminal.go): that one keeps frames to replay to apps that come back and
 // shares one stream between its subscribers, while a full client is one process per browser view, a raw byte stream
@@ -33,7 +33,7 @@ import (
 // herdr_focus {machine_id, workspace_id, tab_id, pane_id, session_id?, source, mine}: herdr's focus moved. source:
 // "client" (a full view was just typed into), "persona" (a herdr_focus asked for it), "other" (the computer's own
 // window, anything else); mine: the view this goes to is the one that did it. A view follows only a change that is
-// its own (docs/terminal.md「焦点联动」).
+// its own (docs/terminal.md "Focus sync").
 //
 // Only a full device may open one: the client can do anything on that computer's herdr (run in any pane, close them).
 // An answer-only device is refused, and the extension tokens cannot reach the WebSocket at all.

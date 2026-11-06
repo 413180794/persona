@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// Declarative contributions (docs/extensions.md「纯声明贡献」, #1854): an extension made of a manifest and a few files,
+// Declarative contributions (docs/extensions.md "Declarative-only contributions", #1854): an extension made of a manifest and a few files,
 // running no program, can give the assistant skills and instructions, the apps quick prompts and a theme, and the
 // inbox's triage settings templates.
 
@@ -40,7 +40,7 @@ type PromptItem struct {
 // arbitrary colors).
 var ThemeRoles = []string{"accent", "positive", "caution", "danger", "ai"}
 
-// ThemeItem is a contribution to themes: one more 主题色, each role a #RRGGBB for light and dark.
+// ThemeItem is a contribution to themes: one more theme color, each role a #RRGGBB for light and dark.
 type ThemeItem struct {
 	ID    string            `json:"id"`
 	Name  string            `json:"name"`

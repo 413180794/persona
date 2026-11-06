@@ -11,17 +11,18 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Answering a question's options in words, typed or spoken: an option number (2, ２), an ordinal (第二个, 第2个, 二,
-// second, 2nd, 2番目, the last one), or the option's label (case, spaces and punctuation aside; 「用 SQLite 吧」 holds
-// the label SQLite and nothing else, 「Postgres」 starts the label PostgreSQL). A multi-select takes several, split on
-// 、，, 和 and. Whatever it is not sure of stays the answer itself: the agent that asked reads that as well as anyone,
-// and a free answer drops nothing the user said, a wrong option or a bare label does.
+// Answering a question's options in words, typed or spoken: an option number (2, or a full-width 2), an ordinal
+// (a Chinese "the second" / "two", second, 2nd, the Japanese counter form, the last one), or the option's label (case,
+// spaces and punctuation aside; "I'd go with SQLite" holds the label SQLite and nothing else, "Postgres" starts the
+// label PostgreSQL). A multi-select takes several, split on commas (full-width and enumeration commas too), the
+// Chinese "and" and "and". Whatever it is not sure of stays the answer itself: the agent that asked reads that as
+// well as anyone, and a free answer drops nothing the user said, a wrong option or a bare label does.
 
 // MatchOption reads text as a choice among q's options: the label (several joined with ", " for a multi-select, in the
 // order said); ok false when it is not one, and text is then the answer itself (a free answer). A bare number is the
-// option's number while there is such an option, unless another option's label is that number (「3」 among 1 / 3 / 5
-// replicas). A sentence that turns an option down (「不要 SQLite」), says more than the option (「SQLite，加密」) or
-// asks about it (「SQLite?」) is not that option.
+// option's number while there is such an option, unless another option's label is that number ("3" among 1 / 3 / 5
+// replicas). A sentence that turns an option down ("not SQLite"), says more than the option ("SQLite, encrypted") or
+// asks about it ("SQLite?") is not that option.
 func MatchOption(q proto.Question, text string) (label string, ok bool) {
 	if len(q.Options) == 0 {
 		return "", false
@@ -43,8 +44,8 @@ func MatchOption(q proto.Question, text string) (label string, ok bool) {
 }
 
 // optionSplits split a multi-select's answer, from the strongest: commas, then the words joining a list, then slashes,
-// then spaces. A piece is split further only when it is not an option as it is (a label may hold a space, an 「和」 or
-// a slash: 「CI/CD」).
+// then spaces. A piece is split further only when it is not an option as it is (a label may hold a space, a Chinese
+// "and" or a slash: "CI/CD").
 var optionSplits = []func(string) []string{
 	func(s string) []string {
 		return strings.FieldsFunc(s, func(r rune) bool { return strings.ContainsRune(",，、;；", r) })
@@ -56,7 +57,7 @@ var optionSplits = []func(string) []string{
 	strings.Fields,
 }
 
-// listWords join a list of options: 「A 和 B」「A and B」「AとB」.
+// listWords join a list of options: "A and B" in Chinese, English and Japanese (and "plus", "&").
 var listWords = regexp.MustCompile(`(?i)\s+(?:and|plus)\s+|\s*(?:&|＆|和|跟|与|以及|还有|と)\s*`)
 
 // matchOptions is text as one option, else (split from level on) as several, every piece an option.
@@ -126,7 +127,7 @@ func matchOne(opts []proto.QuestionOption, text string) (int, bool) {
 			held = append(held, i)
 		}
 	}
-	// One label in another (Java in 「用 JavaScript」): the longer is the one said.
+	// One label in another (Java in "use JavaScript"): the longer is the one said.
 	held = slices.DeleteFunc(held, func(i int) bool {
 		li := squash(opts[i].Label)
 		return slices.ContainsFunc(held, func(j int) bool {
@@ -144,13 +145,13 @@ func matchOne(opts []proto.QuestionOption, text string) (int, bool) {
 	return startOf(opts, t, s)
 }
 
-// asks: t (folded) ends in a question mark. 「SQLite?」「第二个？」 ask about an option rather than take it, as 「1?」 asks
+// asks: t (folded) ends in a question mark. "SQLite?", "the second?" ask about an option rather than take it, as "1?" asks
 // what 1 is (numberEnd); speech recognition writes one for a rising voice.
 func asks(t string) bool {
 	return strings.HasSuffix(strings.TrimRight(t, " 。.!"), "?")
 }
 
-// byNumber is option n (from 1), unless another option's label is that number (「3」 among 1 / 3 / 5 replicas, 「2」
+// byNumber is option n (from 1), unless another option's label is that number ("3" among 1 / 3 / 5 replicas, "2"
 // among 2 / 4 / 8 workers): which one was meant is then for the agent to read, from the answer itself.
 func byNumber(opts []proto.QuestionOption, n int) (int, bool) {
 	for j, o := range opts {
@@ -161,8 +162,9 @@ func byNumber(opts []proto.QuestionOption, n int) (int, bool) {
 	return n - 1, true
 }
 
-// What a label may start with that makes it a number: digits that are a whole number (「2 workers」「1. Fix」, not
-// 「1.5x」「1,000 rows」), or a Chinese numeral counting something (「三个副本」「两台」, not 「一键部署」).
+// What a label may start with that makes it a number: digits that are a whole number ("2 workers", "1. Fix", not
+// "1.5x", "1,000 rows"), or a Chinese numeral with a measure word ("three replicas", "two machines"; not "one-click
+// deploy", where the numeral is part of a word).
 var (
 	leadingDigits = regexp.MustCompile(`^(\d+)(?:$|[^\d.,]|[.,](?:$|\D))`)
 	leadingCount  = regexp.MustCompile(`^(两|[一二三四五六七八九十]+)(?:个|位|台|份|次|天|周|年|月|倍|条|项|种|小时|分钟|秒)`)
@@ -184,8 +186,8 @@ func leadingNumber(label string) (int, bool) {
 	return 0, false
 }
 
-// labelIn is t (folded) without label when t holds it, false when not: an ASCII label as whole words (「go」 is not in
-// 「good」), any other anywhere (Chinese and Japanese have no spaces). A label of one letter or one character is too
+// labelIn is t (folded) without label when t holds it, false when not: an ASCII label as whole words ("go" is not in
+// "good"), any other anywhere (Chinese and Japanese have no spaces). A label of one letter or one character is too
 // easily in a sentence by chance: it is only ever matched whole.
 func labelIn(t, label string) (rest string, ok bool) {
 	l := squash(label)
@@ -217,7 +219,7 @@ func labelIn(t, label string) (rest string, ok bool) {
 	spans := wordSpans(t)
 	for _, sp := range spans {
 		if t[sp[0]:sp[1]] == whole {
-			return t[:sp[0]] + " " + t[sp[1]:], true // 「nodejs」 says Node.js
+			return t[:sp[0]] + " " + t[sp[1]:], true // "nodejs" says Node.js
 		}
 	}
 	for i := 0; i+len(lw) <= len(spans); i++ {
@@ -228,8 +230,9 @@ func labelIn(t, label string) (rest string, ok bool) {
 	return "", false
 }
 
-// What a sentence holding a label may say besides it and still be that option, nothing more: 「用 SQLite 吧」「I'd go
-// with sqlite」「SQLiteで」. Anything else (「SQLite，加密」「备份后删除」「approve but rename it」「MySQL 8.0」) is a
+// What a sentence holding a label may say besides it and still be that option, nothing more: "use SQLite" in
+// Chinese, "I'd go with sqlite", "SQLite, please" in Japanese. Anything else ("SQLite, encrypted", "delete after a
+// backup", "approve but rename it", "MySQL 8.0") is a
 // condition or an instruction, and the sentence is the answer itself.
 var (
 	fillerWords = []string{"i", "i'd", "i'll", "i'm", "let's", "lets", "we", "we'll", "go", "going", "for", "with", "use",
@@ -297,7 +300,7 @@ func tokens(s string) []string {
 	return out
 }
 
-// Words that only say how many or which (「all」 starts 「All tests」 but means every option): never the start of a
+// Words that only say how many or which ("all" starts "All tests" but means every option): never the start of a
 // label on their own.
 var (
 	functionWords = []string{"the", "a", "an", "all", "any", "both", "none", "either", "neither", "and", "or", "of", "it",
@@ -306,10 +309,10 @@ var (
 		"すべて", "全て", "ぜんぶ", "全部で", "両方"}
 )
 
-// startOf is the one option whose label t is the start of (「Postgres」 of 「PostgreSQL (recommended)」, 「the cache」
-// of 「Use the cache」), in no other label anywhere: for ASCII from a word's start (「all」 is not in 「small」, 「prove」
-// not in 「Approve」), for Chinese and Japanese from the label's. Too short to tell, or only saying how many (all,
-// 全部), it is none.
+// startOf is the one option whose label t is the start of ("Postgres" of "PostgreSQL (recommended)", "the cache"
+// of "Use the cache"), in no other label anywhere: for ASCII from a word's start ("all" is not in "small", "prove"
+// not in "Approve"), for Chinese and Japanese from the label's. Too short to tell, or only saying how many (all,
+// in any of the three languages), it is none.
 func startOf(opts []proto.QuestionOption, t, s string) (int, bool) {
 	if isASCII(s) {
 		tw := asciiWords(t)
@@ -330,7 +333,7 @@ func startOf(opts []proto.QuestionOption, t, s string) (int, bool) {
 	return i, isASCII(s) && wordsStart(asciiWords(l), asciiWords(t))
 }
 
-// wordsStart: tw are a run of lw, the last of them only its start (「the cache」 of use the cache, 「post」 of postgresql).
+// wordsStart: tw are a run of lw, the last of them only its start ("the cache" of use the cache, "post" of postgresql).
 func wordsStart(lw, tw []string) bool {
 	n := len(tw)
 	if n == 0 {
@@ -344,7 +347,8 @@ func wordsStart(lw, tw []string) bool {
 	return false
 }
 
-// wordSpans are where t's ASCII words are: runs of ASCII letters and digits (「用sqlite吧」 holds the word sqlite).
+// wordSpans are where t's ASCII words are: runs of ASCII letters and digits (a Chinese sentence with no spaces around
+// sqlite still holds the word sqlite).
 func wordSpans(t string) [][2]int {
 	var spans [][2]int
 	start := -1
@@ -406,7 +410,7 @@ func loose(s string) string {
 	return strings.TrimFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsPunct(r) })
 }
 
-// squash is s folded, without spaces and punctuation: 「Node.js」 and 「node js」 are the same.
+// squash is s folded, without spaces and punctuation: "Node.js" and "node js" are the same.
 func squash(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) || unicode.IsPunct(r) {
@@ -440,9 +444,10 @@ func negated(t string) bool {
 	return slices.ContainsFunc(negationPieces, func(p string) bool { return strings.Contains(t, p) })
 }
 
-// Ordinals in the three languages, with what may come around one (「我选第二个吧」「the second one」「2番目で」). A
-// count (「1个」「一个」) is not a place: a measure word needs 第 or 选项 before the numeral. 「号」 names a place itself,
-// so a bare 「二号」「2号」 is one too.
+// Ordinals in the three languages, with what may come around one ("I'll pick the second one" in Chinese, "the
+// second one", "number 2, please" in Japanese). A Chinese count ("1 of", "one of") is not a place: a measure word
+// needs the ordinal prefix or "option" before the numeral. The "number" suffix names a place itself, so a bare
+// "No. 2" is one too.
 var (
 	ordinalZh = regexp.MustCompile(`^(?:我|就)?(?:选|选择|要|用)?(?:(?:第|选项|序号)(\d+|[一二三四五六七八九十]+)(?:个|项|条|种|号|款|位)?(?:选项)?|(\d+|[一二三四五六七八九十]+))(?:号)?(?:吧|呢|啊|呀|的|就行|就好|好了)?$`)
 	ordinalJa = regexp.MustCompile(`^(選択肢)?(\d+|[一二三四五六七八九十]+)(番目|番|つ目|個目)?(?:の(?:選択肢|もの|やつ))?(?:で|にします|でお願いします)?$`)
@@ -455,7 +460,8 @@ var (
 )
 
 // ordinal reads t (folded) as an option's place among count, from 1; false when it is not one. bare: only a number
-// (二, two, 选2, 二で), which may as well mean a label that is that number; not 第二, second, option 2, 2番目. Digits
+// (a Chinese or Japanese "two", two, "pick 2"), which may as well mean a label that is that number; not a Chinese or
+// Japanese ordinal, second, option 2. Digits
 // alone are not an ordinal: number reads those.
 func ordinal(t string, count int) (n int, bare, ok bool) {
 	t = strings.TrimFunc(t, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsPunct(r) && r != '#' })
@@ -502,7 +508,7 @@ func ordinal(t string, count int) (n int, bare, ok bool) {
 
 func digits(s string) bool { return s != "" && strings.Trim(s, "0123456789") == "" }
 
-// cjkNumber reads digits (not with a leading zero), or a Chinese numeral up to 九十九 (二, 十, 十二, 二十, 二十三).
+// cjkNumber reads digits (not with a leading zero), or a Chinese numeral up to 99 (2, 10, 12, 20, 23).
 func cjkNumber(s string) (int, bool) {
 	if digits(s) {
 		if s[0] == '0' {
@@ -511,7 +517,7 @@ func cjkNumber(s string) (int, bool) {
 		n, err := strconv.Atoi(s)
 		return n, err == nil
 	}
-	digit := func(r rune) int { return slices.Index([]rune("一二三四五六七八九"), r) + 1 } // 0: not 一…九
+	digit := func(r rune) int { return slices.Index([]rune("一二三四五六七八九"), r) + 1 } // 0: not a Chinese digit 1-9
 	r := []rune(s)
 	switch {
 	case len(r) == 1 && r[0] == '十':

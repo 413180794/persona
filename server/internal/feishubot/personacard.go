@@ -10,13 +10,13 @@ import (
 
 // The assistant's ```persona-card blocks (#886) are charts the apps draw (sdk/go/wire/personacard.go); a Feishu card
 // cannot draw them, and their JSON is no answer, so each one is written as what a reader takes in at a glance
-// (docs/bots.md「图表卡片」):
+// (docs/bots.md "Chart cards"):
 //
-//   - stat: one line, the number in bold: 今天步数：**8,432 步** · 比昨天 +12%
+//   - stat: one line, the number in bold: Steps today: **8,432 steps** · +12% vs yesterday
 //   - line, bar: the title and a sparkline (▁…█; a line from its lowest point to its highest, bars from 0), then the
-//     points on one line (the last 31, … marking the cut) with the unit once; 当前 and the note under them
+//     points on one line (the last 31, … marking the cut) with the unit once; "Now" and the note under them
 //   - stacked_bar: a two-column table, the total first, then each part with its note (past 31 rows the rest are
-//     summed into one 其他 row); the card's note after it
+//     summed into one "Other" row); the card's note after it
 //   - a card the apps cannot draw either (View is nil): its title alone, or nothing
 //
 // The model's words are escaped (EscapeMarkdown), numbers are written as the apps write them (wire.Number). Only

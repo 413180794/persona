@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// botmuxHost is botmux, the Feishu topic ↔ AI CLI bridge (docs/engines.md「botmux」): each topic is a session of a
+// botmuxHost is botmux, the Feishu topic ↔ AI CLI bridge (docs/engines.md "botmux"): each topic is a session of a
 // coding CLI that botmux runs (in tmux) and answers in Feishu. It is not an engine to choose: a node on a machine with
 // botmux registers it next to the engine's hosts (nodeHosts). A pane is a botmux session, its id the botmux session
 // id: for Claude Code also the Claude session id botmux starts claude with; for Codex and TRAEX the thread is found in
@@ -336,7 +336,7 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 	return a, true
 }
 
-// botmuxCard is how botmux records a card it posted: "[卡片: <title>]" on the first line, then the card's text.
+// botmuxCard is how botmux records a card it posted: "[card: <title>]" (the Chinese word for card) on the first line, then the card's text.
 var botmuxCard = regexp.MustCompile(`^\[卡片: ([^\]\n]*)\]`)
 
 // botmuxReply is a reply as botmux recorded it, a card's title without botmux's label (the first words are the summary).

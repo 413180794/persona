@@ -228,7 +228,7 @@ func TestAddFromABuiltinPresetWithOnlyTheKey(t *testing.T) {
 	}
 }
 
-// Two providers the hub names from one preset tell apart in 模型配置; one the user named keeps that name.
+// Two providers the hub names from one preset tell apart in Model configuration; one the user named keeps that name.
 func TestProvidersFromOnePresetKeepDistinctNames(t *testing.T) {
 	s, f, _ := modelService(t)
 	f.presets = []LauncherPreset{{ID: "team/gw", Extension: "team", Name: "Team Gateway", Kind: "launcher",
@@ -328,7 +328,7 @@ func TestAssignOnlyChangesCategoriesStillAtTheirDefault(t *testing.T) {
 		t.Fatalf("主对话 moved: %+v", b)
 	}
 
-	// A model picked for Agents counts as a choice; 主对话 with nothing chosen still moves.
+	// A model picked for Agents counts as a choice; the main chat with nothing chosen still moves.
 	s, _, _ = modelService(t)
 	if r := modelRequest(s, "PATCH", "agent.new", `{"revision":0,"model":"claude-opus-5-5"}`); r.Code != 200 {
 		t.Fatal(r.Body.String())
@@ -345,7 +345,7 @@ func TestAssignOnlyChangesCategoriesStillAtTheirDefault(t *testing.T) {
 		t.Fatalf("Agents' choice kept: %+v", b)
 	}
 
-	// 主对话's launcher chosen in 设置 › 助手 (or hub.json) is a choice too.
+	// The main chat's launcher chosen in Settings › Assistant (or hub.json) is a choice too.
 	s, f, _ = modelService(t)
 	f.hello.Assistant.Launcher = "work"
 	code, out = postLauncher(t, s, "zh-Hans", `{"preset":"builtin/glm","api_key":"sk-test","assign":["assistant"]}`)

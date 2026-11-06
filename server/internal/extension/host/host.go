@@ -1,4 +1,4 @@
-// Package host runs plugins for the hub (docs/plan-extensions.md「四」「六」): it starts a plugin's program when
+// Package host runs plugins for the hub (docs/plan-extensions.md "4" and "6"): it starts a plugin's program when
 // something needs it and stops it when nothing does, restarts it with a backoff when it exits, speaks the plugin
 // protocol with it (initialize, ping, namespaced calls over internal/rpc), and keeps the HTTP side of a plugin that
 // serves one (GET /health). A plugin elsewhere is reached on its sockets instead of started.
@@ -99,7 +99,7 @@ type Spec struct {
 	// OnUp is called each time it becomes ready.
 	OnUp func()
 	Logf func(string, ...any)
-	// Observe, when set, is told what the host sees of the plugin (docs/extensions.md「运行情况」): every call, every
+	// Observe, when set, is told what the host sees of the plugin (docs/extensions.md "Runtime status"): every call, every
 	// run, every line of its log and of the host's own about it.
 	Observe Observer
 }

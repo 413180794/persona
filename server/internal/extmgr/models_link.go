@@ -12,11 +12,12 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The model configuration is the assistant's (docs/model-config.md「谁管模型」), in this process: what the extensions
-// have for it (their providers, their voice models, which of them need 信息筛选, their quota readers) it asks here
-// (app.call plugins.*, answered in-process: AppCall), and what the extensions need of it (whether 信息筛选 can be called,
-// which launchers have a gateway, requests to a launcher's gateway sent with its key) is asked of it directly
-// (models.usable, models.launchers, models.launcher_http), as the hub asked it over the bus before the move.
+// The model configuration is the assistant's (docs/model-config.md "Who owns the models"), in this process: what the
+// extensions have for it (their providers, their voice models, which of them need "message triage", their quota
+// readers) it asks here (app.call plugins.*, answered in-process: AppCall), and what the extensions need of it (whether
+// "message triage" can be called, which launchers have a gateway, requests to a launcher's gateway sent with its key)
+// is asked of it directly (models.usable, models.launchers, models.launcher_http), as the hub asked it over the bus
+// before the move.
 
 // modelsAppCall answers the manager's plugins.presets / plugins.voice / plugins.quota / plugins.need_triage; false for
 // the others.
@@ -75,8 +76,8 @@ func (h *Manager) modelsAppCall(ctx context.Context, p assistantwire.AppCall) (j
 	return b, true, err
 }
 
-// triageUsable says whether inbox.triage (信息筛选) can be called now, as the assistant resolves it; an error while it
-// can't be asked (not connected: assistant_offline).
+// triageUsable says whether inbox.triage ("message triage") can be called now, as the assistant resolves it; an error
+// while it can't be asked (not connected: assistant_offline).
 func (h *Manager) triageUsable(ctx context.Context) (bool, error) {
 	var res struct {
 		Usable bool `json:"usable"`

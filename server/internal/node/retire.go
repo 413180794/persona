@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Retiring a finished task's agent (hub tasks_close.go, docs/todos.md「做完的任务关掉 Agent」): its pane closes and
+// Retiring a finished task's agent (hub tasks_close.go, docs/todos.md "Closing the agent of a finished task"): its pane closes and
 // the agent process with it, while everything needed to bring it back stays — the session id, its transcript, and in
 // the node's state the launcher, directory and model it ran with. The next message to it resumes it (send: claude
 // --resume, codex resume, traex resume) in a new tab of the same engine. Only an agent that can come back that way is
@@ -181,7 +181,7 @@ func (n *Node) resumeCodex(ctx context.Context, launch host.Launcher, id string,
 // newTab opens a tab in workspace ws for cwd, named tabName (or agent-<n>); with no workspace, a new one named after
 // the directory, whose first tab it is.
 func (n *Node) newTab(ctx context.Context, launch host.Launcher, cwd, ws, tabName string) (*host.Created, error) {
-	if c := adoptedPane(ctx); c != nil { // 在这里运行 Agent: the pane the user picked, not a new tab (panes_actions.go)
+	if c := adoptedPane(ctx); c != nil { // "Run Agent Here": the pane the user picked, not a new tab (panes_actions.go)
 		return c, nil
 	}
 	var created *host.Created

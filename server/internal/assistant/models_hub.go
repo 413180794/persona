@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// What the hub's plugins ask of the model configuration (assistantwire.MethodModels*): whether 信息筛选 can be called
+// What the hub's plugins ask of the model configuration (assistantwire.MethodModels*): whether "Sorting" can be called
 // (a plugin whose inbox needs it is switched on only then), which launchers have a gateway, and requests to a launcher's gateway sent with its key
 // (the quota plugins, the plugins' launcher sections). The hub never gets a key or a model call.
 

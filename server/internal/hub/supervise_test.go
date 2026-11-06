@@ -21,7 +21,7 @@ import (
 // A supervised task end to end (#3124): the hub's HTTP stack, the assistant over the bus with its state in Postgres,
 // fake nodes for the main conversation's machine and the agent's, a judge model whose verdict the test sets. The main
 // conversation hands out a task with done_when; its agent stops asking which way to go and the main conversation
-// gets a 督办 message whose turn is not pushed; the agent is done and the task waits for review (not closed); rework
+// gets a supervise message whose turn is not pushed; the agent is done and the task waits for review (not closed); rework
 // goes back to the agent; the next stop waits for review again; accepted closes it, done by review.
 func TestSupervisedTaskOverTheBus(t *testing.T) {
 	h, srv, store := newBusHub(t)

@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The channels plugins contribute (the channel extension point, docs/channels.md「扩展怎么贡献渠道」): the program
+// The channels plugins contribute (the channel extension point, docs/channels.md "How extensions contribute channels"): the program
 // talks to its chat app through the hub — the owner's messages come as channels.receive, what is sent goes as
 // channels.send — and everything else is here: commands, where a message goes, the turn (channels_runs.go), what is
 // asked answered in text, pushes and the sync mirror.
@@ -65,7 +65,7 @@ func (s *Service) channelTell(ctx context.Context, id, replyTo, text, kind strin
 	return err
 }
 
-// extensionSink is a plugin's channel as the pipeline's sink: text, and 「正在输入」 when it has it.
+// extensionSink is a plugin's channel as the pipeline's sink: text, and "typing" when it has it.
 type extensionSink struct {
 	s  *Service
 	id string
@@ -106,7 +106,7 @@ func (s *Service) channelReceive(id string, m channel.Message, action string) {
 		if handled {
 			return
 		}
-		// What a command did not take ("/new 帮我…") goes on without its name: answering a pending ask must not
+		// What a command did not take ("/new help me…") goes on without its name: answering a pending ask must not
 		// read "/new" as part of the answer. An unknown command returns the text unchanged, so non-command paths
 		// are identical.
 		text = strings.TrimSpace(rest)
@@ -148,7 +148,7 @@ func (s *Service) channelCommand(ctx context.Context, id string, m channel.Messa
 			reply(i18n.T(l, "assistant-channels_plugin.next_is_new"))
 			return true, ""
 		}
-		return false, rest // "/new 帮我…": the rest starts it
+		return false, rest // "/new help me…": the rest starts it
 	case "/stop", "/停":
 		rt, err := s.channelTarget(ctx, id)
 		switch {
@@ -407,7 +407,7 @@ func (s *Service) channelInteraction(ix proto.Interaction) {
 		if v.Capabilities.Asks != channel.AsksText || !featureOn(v, channel.FeatureAsks) {
 			continue
 		}
-		// 全部提问 does not take a health conversation's: only one the channel drives itself (health.go).
+		// "All questions" does not take a health conversation's: only one the channel drives itself (health.go).
 		if !s.channelDrives(ctx, v.ID, ix.MachineID, ix.SessionID) && (!featureOn(v, channel.FeatureAllAsks) || s.ixInHealth(ctx, ix)) {
 			continue
 		}

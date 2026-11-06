@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Closing a finished task (docs/todos.md「自动完成」, #1092). Every test runs without a store (h.store nil: nothing
+// Closing a finished task (docs/todos.md "Auto-complete", #1092). Every test runs without a store (h.store nil: nothing
 // reaches a database) and with a stubbed judge model.
 
 // judgeStub answers the judge's calls with reply (status 200) or fails them (status ≠ 200), counting them and keeping
@@ -51,7 +51,7 @@ func stubJudge(t *testing.T, h *Hub, status int, reply string) *judgeStub {
 	t.Cleanup(srv.Close)
 	key := filepath.Join(t.TempDir(), "key")
 	_ = os.WriteFile(key, []byte("k"), 0o600)
-	// inbox.judge inherits 信息筛选 (inbox.triage) when nothing else is set, as in the inbox's own tests.
+	// inbox.judge inherits "Triage" (inbox.triage) when nothing else is set, as in the inbox's own tests.
 	triage := ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"}
 	h.cfg.Inbox.TriageAI = &triage
 	// Naming inherits kb; its requests must not change the judge's count or input.
@@ -341,7 +341,7 @@ func TestTaskDoneReadsTheLatestTurn(t *testing.T) {
 
 // A turn the model service cut off (#1516) is no end of the work: the receipt says the task was interrupted (not the
 // error as its summary), nothing judges or closes it, the snapshot and the today card say it waits for the user, and
-// 重试 tells its agent 「继续」 once however many taps come in. Once the agent works again the task is in progress, and
+// "Retry" tells its agent "continue" once however many taps come in. Once the agent works again the task is in progress, and
 // a turn that ends normally is a done receipt and closes it as before.
 func TestTaskInterruptedByAPIError(t *testing.T) {
 	h, tn := newTaskHub(t)
@@ -381,7 +381,7 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 		t.Fatalf("today = %+v", tb)
 	}
 
-	// 重试: 「继续」 to the agent, once for eight taps; the todo is answered as it is.
+	// "Retry": "continue" to the agent, once for eight taps; the todo is answered as it is.
 	mux := h.routes()
 	var wg sync.WaitGroup
 	for range 8 {
@@ -415,7 +415,7 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	}
 }
 
-// 重试 on an interrupted task whose machine is offline is refused and sends nothing; one that is not interrupted (in
+// "Retry" on an interrupted task whose machine is offline is refused and sends nothing; one that is not interrupted (in
 // progress) is answered as it is.
 func TestTaskContinueRefusedOrNotNeeded(t *testing.T) {
 	h, tn := newTaskHub(t)
@@ -440,7 +440,7 @@ func TestTaskContinueRefusedOrNotNeeded(t *testing.T) {
 	if _, sends := tn.calls(); len(sends) != 0 {
 		t.Fatalf("sends = %v", sends)
 	}
-	// Back online, 重试 goes through (the refusal left no claim behind).
+	// Back online, "Retry" goes through (the refusal left no claim behind).
 	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 		t.Fatalf("retry: %d %s", w.Code, w.Body)
 	}

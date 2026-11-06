@@ -18,7 +18,7 @@ import (
 )
 
 // serveInboxUIPluginForTest has a connector (examplechat) and draws the page of its inbox items: it writes back what
-// the hub told it of the item, and its 已处理 says which item it was pressed on.
+// the hub told it of the item, and its "Handled" says which item it was pressed on.
 func serveInboxUIExtensionForTest() {
 	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "example-chat", Version: "1.0.0",
 		Namespaces: map[string]pserve.Handler{

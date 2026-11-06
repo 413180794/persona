@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Point is an extension point: a place in the hub a plugin contributes to (docs/plan-extensions.md「contributes」).
+// Point is an extension point: a place in the hub a plugin contributes to (docs/plan-extensions.md "contributes").
 type Point struct {
 	Name string // the key under contributes ("connectors")
 	// Namespace is the prefix of its methods ("connector": connector.status).
@@ -45,7 +45,7 @@ type ConnectorItem struct {
 	ConfirmAlways []string `json:"confirm_always,omitempty"`
 	PollSeconds   int      `json:"poll_seconds,omitempty"`
 	Kinds         []string `json:"kinds,omitempty"`
-	// KindDescriptions tell the models what each kind of its inbox things is ("类型：…" in the inbox's prompts), by
+	// KindDescriptions tell the models what each kind of its inbox things is (the "kind: ..." line in the inbox's prompts), by
 	// kind: a plugin's connector says it itself (a built-in one has prompts/inbox/kinds/<id>.md).
 	KindDescriptions map[string]string `json:"kind_descriptions,omitempty"`
 	// ArchiveSources are other names its archive files conversations under (connector.Manifest.ArchiveSources).
@@ -60,7 +60,7 @@ type ConnectorItem struct {
 // metaDescriptionMost is the longest meta_description (runes): a paragraph the relating prompt carries every time.
 const metaDescriptionMost = 4000
 
-// VoiceItem is a contribution to voice: the voice conversation's contract (docs/extensions.md「语音」).
+// VoiceItem is a contribution to voice: the voice conversation's contract (docs/extensions.md "Voice").
 type VoiceItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
@@ -74,7 +74,7 @@ type ComputerItem struct {
 }
 
 // ShortcutItem is a contribution to shortcuts: an action of the extension the system runs — Shortcuts and Siri on
-// iPhone, Mac and Apple Watch (docs/extensions.md「系统级位置」). The hub asks shortcut.run with its values.
+// iPhone, Mac and Apple Watch (docs/extensions.md "System-level places"). The hub asks shortcut.run with its values.
 type (
 	ShortcutItem  = wire.ShortcutItem
 	ShortcutParam = wire.ShortcutParam
@@ -110,7 +110,7 @@ func checkShortcut(s ShortcutItem) error {
 	return nil
 }
 
-// QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/extensions.md「额度」).
+// QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/extensions.md "Quota").
 type QuotaItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -120,7 +120,7 @@ type QuotaItem struct {
 }
 
 // AgentSourceItem is a contribution to agent_sources: a source of personal agents' sessions in the Agents tab, next
-// to the hub's own (docs/extensions.md「个人 Agent 来源」). Its id is the source part of the sessions' ids
+// to the hub's own (docs/extensions.md "Personal Agent sources"). Its id is the source part of the sessions' ids
 // (<id>:<sessionKey>).
 type AgentSourceItem struct {
 	ID   string `json:"id"`
@@ -131,8 +131,8 @@ type AgentSourceItem struct {
 
 var providerPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 
-// ProviderItem is a contribution to providers: a model provider the user can add a launcher from (设置 › 模型供应商),
-// its address and models filled in (docs/extensions.md「模型供应商」).
+// ProviderItem is a contribution to providers: a model provider the user can add a launcher from (Settings › Model providers),
+// its address and models filled in (docs/extensions.md "Model providers").
 type ProviderItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -147,7 +147,7 @@ type ProviderItem struct {
 	Models     []ProviderModel `json:"models,omitempty"`
 	// DynamicModels: the plugin lists the models itself (provider.models), on top of Models.
 	DynamicModels bool `json:"dynamic_models,omitempty"`
-	// KeyHint says where to get a key ("在控制台 › API Keys 里创建").
+	// KeyHint says where to get a key ("Create one in Console › API Keys").
 	KeyHint string `json:"key_hint,omitempty"`
 }
 
@@ -158,7 +158,7 @@ type ProviderModel struct {
 }
 
 // APIItem is a contribution to api: a part of the app's API the plugin serves on its HTTP side, under /api/v1/<prefix>/
-// (docs/extensions.md「App 接口」).
+// (docs/extensions.md "App API").
 type APIItem struct {
 	ID     string `json:"id"`
 	Prefix string `json:"prefix"`
@@ -197,7 +197,7 @@ func (r APIReceipt) Matches(method, path string) bool {
 }
 
 // AssistantItem is a contribution to assistant: skills and a part of the assistant's instructions, in the package
-// (docs/extensions.md「助手」).
+// (docs/extensions.md "Assistant").
 type AssistantItem struct {
 	ID string `json:"id"`
 	// Skills are directories in the package, each a skill (SKILL.md first), put in with the assistant's.
@@ -210,7 +210,7 @@ type AssistantItem struct {
 }
 
 // MCPServerItem is a contribution to mcp_servers: a command line on the assistant's machine that the Claude assistant
-// gets as an MCP server of its own, its tools as mcp__<id>__<tool> (docs/extensions.md「MCP 服务器」). The command reads
+// gets as an MCP server of its own, its tools as mcp__<id>__<tool> (docs/extensions.md "MCP servers"). The command reads
 // its own configuration; Persona adds nothing to its environment (Claude starts it with the assistant process's, as
 // any MCP server). Without the command there (or when `<command> --help` does not mention every word of Requires)
 // nothing is added. Installing the extension trusts it to run that command on the assistant's machine, as its
@@ -571,7 +571,7 @@ var Points = map[string]Point{
 		}
 		return m.ID, nil
 	}},
-	// messaging: a messaging source (docs/extension-messaging.md, #2138): the app's 消息 entry, its API under
+	// messaging: a messaging source (docs/extension-messaging.md, #2138): the app's "Messages" entry, its API under
 	// /api/v1/messaging/<id>/ on the extension's HTTP side.
 	"messaging": {Name: "messaging", Namespace: "messaging", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
 		var m wire.MessagingItem
@@ -676,7 +676,7 @@ var Points = map[string]Point{
 		}
 		return c.ID, nil
 	}},
-	// channel: a way to talk to Persona, a chat app's bot (docs/channels.md「扩展怎么贡献渠道」). The hub follows the
+	// channel: a way to talk to Persona, a chat app's bot (docs/channels.md "How extensions contribute channels"). The hub follows the
 	// turns; the program only talks to the chat app.
 	"channel": {Name: "channel", Namespace: "channel", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
 		var c channel.Item

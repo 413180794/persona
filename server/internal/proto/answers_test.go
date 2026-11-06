@@ -11,7 +11,7 @@ func TestHasDuplicateQuestionText(t *testing.T) {
 		{[]Question{{Question: "a?"}, {Question: "b?"}}, false},
 		{[]Question{{Question: "a?"}, {Question: "a?"}}, true},
 		{[]Question{{Question: "a?"}, {Question: " a? "}}, true},
-		{[]Question{{Question: "a?"}, {Question: " 　a？ "}}, false}, // ？ differs from ?: no punctuation folding
+		{[]Question{{Question: "a?"}, {Question: " 　a？ "}}, false}, // a full-width question mark differs from ?: no punctuation folding
 		{[]Question{{Question: "a?", MultiSelect: true}, {Question: "a?", MultiSelect: true}}, true},
 		{[]Question{{Question: ""}, {Question: " "}}, true},
 	}

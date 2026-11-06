@@ -11,7 +11,7 @@ import (
 )
 
 // #2553: Claude Code 2.1.309's auto mode notice held three terminals while herdr called the agents done, so they
-// were listed as 完成未看. A resting Claude whose screen shows a dialog is now blocked, the dialog's first line its
+// were listed as "Unread". A resting Claude whose screen shows a dialog is now blocked, the dialog's first line its
 // reason; once the dialog is gone it is done again.
 func TestADialogOnARestingClaudeNeedsYou(t *testing.T) {
 	old := paneDialogEvery
@@ -123,7 +123,7 @@ func TestDismissNoticePressesEnterOnce(t *testing.T) {
 	}
 }
 
-// #2872: the answer Claude leaves above a notice is often a numbered list (「I'll do three things: 1. … 2. …」). Its
+// #2872: the answer Claude leaves above a notice is often a numbered list ("I'll do three things: 1. … 2. …"). Its
 // numbers are the conversation's, not the notice's options: dismiss_notice still closes the notice with one Enter and
 // the send goes on instead of being refused with notice:false.
 func TestDismissNoticeUnderANumberedAnswer(t *testing.T) {

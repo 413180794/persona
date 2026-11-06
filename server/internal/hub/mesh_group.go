@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// One center per group (docs/plan-hub-center.md 2, docs/mesh.md「中心」): every hub of a mesh group keeps which hub
+// One center per group (docs/plan-hub-center.md 2, docs/mesh.md "Center"): every hub of a mesh group keeps which hub
 // it takes for the center and a term; the larger term wins wherever records meet, so the whole group comes to agree.
 // A hub alone is its own center. Using another hub's code joins this hub (with its whole group) to that hub's group:
 // the center becomes that group's, under a term larger than both had. "Set as center" in the admin page adds one to
@@ -179,7 +179,7 @@ func (h *Hub) dropAppConnections(why string) {
 	}
 }
 
-// setCenter makes hub target the group's center (the admin page's 设为中心). The center now in place hears the
+// setCenter makes hub target the group's center (the admin page's "Make primary"). The center now in place hears the
 // larger term and becomes a member; when it cannot be reached that needs confirm (it becomes a member when it is back).
 func (h *Hub) setCenter(ctx context.Context, target string, confirm bool) (meshGroup, error) {
 	g := h.group()
@@ -218,7 +218,7 @@ const meshSettle = 10 * time.Second
 var credsHandoverRetryEvery = 30 * time.Second
 
 // handOverCredentials gives the center the device credentials this hub knows (once per center and term): the apps
-// paired with this hub keep working when their requests reach the center (plan 3「设备凭据」).
+// paired with this hub keep working when their requests reach the center (plan 3 "Device credentials").
 func (h *Hub) handOverCredentials() {
 	if !h.isMember() || !h.centerReachable() {
 		return

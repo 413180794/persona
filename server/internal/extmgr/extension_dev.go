@@ -14,8 +14,8 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Extensions being written (`personad extension dev`, docs/extensions.md「命令行」): run from their own directory, kept
-// in memory only, and what they log and the hub's calls to them streamed to the command. Only over loopback with
+// Extensions being written (`personad extension dev`, docs/extensions.md "Command line"): run from their own directory,
+// kept in memory only, and what they log and the hub's calls to them streamed to the command. Only over loopback with
 // the master token, like installing.
 
 // devTaps are the streams of each dev extension's log lines.

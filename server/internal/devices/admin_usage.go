@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/usagesource"
 )
 
-// The admin UI's usage sources page (#2595, docs/usage-windows.md「账号池网关」, docs/admin.md): add, edit and remove the
+// The admin UI's usage sources page (#2595, docs/usage-windows.md "Account-pool gateways", docs/admin.md): add, edit and remove the
 // account-pool gateways whose usage windows join the sidebar's, and try one with a single read. Moved from the hub as
 // it was: the hub relays the routes (devicewire.AdminUsageRoutes) from its admin UI only, so only a signed-in admin
 // session gets here (every /api/v1/admin/ route; a device token, even a full one, does not open them), and says so

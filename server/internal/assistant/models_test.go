@@ -204,7 +204,7 @@ func TestModelConfigurationPreservesLegacyBaselines(t *testing.T) {
 	if b, _ := s.resolveModel(ctx, "lark.agent"); b.Provider != "launcher.new" {
 		t.Fatal("category selection did not reach the slash agent")
 	}
-	// hub.json's inbox.agent.machine (the hub has it) is where the AI 分身 runs.
+	// hub.json's inbox.agent.machine (the hub has it) is where the AI twin runs.
 	f.hello.Models.InboxAgentMachine = "server"
 	f.hello.Assistant.Machines = []string{"server"}
 	if p := purposeOf(t, s, "inbox.agent"); p.MachineID != "server" {
@@ -436,7 +436,7 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 	}
 }
 
-// 信息筛选 is not changed to one that cannot be called while plugins that need it are on (the hub names them).
+// "Sorting" is not changed to one that cannot be called while plugins that need it are on (the hub names them).
 func TestTriageModelInUseByPlugins(t *testing.T) {
 	s, f, _ := modelService(t)
 	f.needTriage = []string{"Example Notes"}
@@ -518,7 +518,7 @@ func TestModelUsesAreReadOnlyAndIgnoreDeprecatedOverrides(t *testing.T) {
 }
 
 // A runtime's launcher (DSH) is offered in the new-chat picker under its own source, and is not listed among the
-// models of 设置 › 模型 (it is not a ~/.zshrc function to probe, edit or hide).
+// models of Settings › Models (it is not a ~/.zshrc function to probe, edit or hide).
 func TestRuntimeLauncherKeepsItsSource(t *testing.T) {
 	s, f, _ := modelService(t)
 	ctx := context.Background()

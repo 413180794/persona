@@ -15,7 +15,8 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// 先选择完整可达图，再下载包。版本变化后重新收集约束，不保留旧候选的依赖。
+// Pick the whole reachable graph first, then download packages. When a version changes, collect the constraints again
+// and drop the old candidate's dependencies.
 type bundleRequirement struct {
 	version, spec, prefer string
 	depth                 int

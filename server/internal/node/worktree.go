@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// 新建 worktree… (docs/terminal.md「新建 worktree」): a Git worktree of a workspace's repository, opened as a workspace of
+// "New worktree…" (docs/terminal.md "New worktree"): a Git worktree of a workspace's repository, opened as a workspace of
 // the terminal host. The host does it when it can (herdr: `worktree create`, which groups the checkout under the
 // repository's workspace); a host that cannot gets `git worktree add` and a plain new workspace. The hub lets only a
 // full device call it. The request names a workspace the host lists, a branch and a path; the checkout is never forced
@@ -177,7 +177,7 @@ func (n *Node) worktreeCreate(ctx context.Context, kind, workspace, branch, path
 		created, err = n.worktreeByGit(ctx, h, repo, branch, dest)
 	}
 	if err != nil {
-		return res, errors.New(gitFailure(err)) // the dialog says 没能新建 worktree before it
+		return res, errors.New(gitFailure(err)) // the dialog says "Couldn't create the worktree" before it
 	}
 	_ = n.refreshHosts(ctx, h) // the new workspace is in the layout the terminal page lists
 	res = proto.WorktreeCreateResult{WorkspaceID: created.SpaceID, TabID: created.SlotID, Path: dest, Branch: branch}

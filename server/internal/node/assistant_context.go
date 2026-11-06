@@ -11,7 +11,7 @@ import (
 )
 
 // The assistant's live snapshot (the time, agents waiting, unread chats, today's meetings…) goes at the start of each
-// message, in a <persona-context> block, not into the system prompt (docs/assistant.md「实时快照」). The prompt cache
+// message, in a <persona-context> block, not into the system prompt (docs/assistant.md "Live snapshot"). The prompt cache
 // is a prefix: the system prompt comes before the whole conversation, so a system prompt that differs from one start
 // to the next would make every request after a restart write the entire history again. Claude Code (2.1.314) keeps a
 // resumed conversation on the system prompt it was first started with instead, so the snapshot there was the one
@@ -22,7 +22,7 @@ import (
 // node restart forgets it too, and the next message carries the whole snapshot again.
 
 // snapshotSection is one top-level line of the snapshot with the indented lines under it; key is what it is about
-// ("- 飞书日历" of "- 飞书日历今天接下来：…" or "- 飞书日历：…").
+// (the "- Lark calendar" part of "- Lark calendar today next: ..." or "- Lark calendar: ...", in Chinese).
 type snapshotSection struct{ key, text string }
 
 func snapshotSections(text string) []snapshotSection {
@@ -40,8 +40,8 @@ func snapshotSections(text string) []snapshotSection {
 	return out
 }
 
-// sectionKey is a line's subject: up to the first full-width colon, cut before「今天」so 「飞书日历今天接下来：」and
-// 「飞书日历：今天接下来没有会」are the same section.
+// sectionKey is a line's subject: up to the first full-width colon, cut before the word "today", so "Lark calendar today next:" and
+// "Lark calendar: no more meetings today" (both in Chinese) are the same section.
 func sectionKey(line string) string {
 	k, _, _ := strings.Cut(line, "：")
 	k, _, _ = strings.Cut(k, "今天")

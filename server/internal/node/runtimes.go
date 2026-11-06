@@ -1,6 +1,6 @@
 package node
 
-// Runtimes (docs/runtimes.md, wire in docs/protocol.md「Runtime ↔ node」): agent runtimes without a terminal that keep
+// Runtimes (docs/runtimes.md, wire in docs/protocol.md "Runtime ↔ node"): agent runtimes without a terminal that keep
 // their own sessions — DSH's Web plugin first (docs/dsh.md) — connect to ~/.jarvis/runtime.sock and hang their
 // sessions, status and interactions into this node. They are not hosts in the internal/host sense (where a terminal
 // lives, the machine's engine): a runtime has no panes, it reports its own sessions and content, and it runs beside
@@ -65,7 +65,7 @@ type runtimeHello struct {
 	// Launchers are more entries for the form, each with the agent it starts and its models: a runtime running
 	// several agents (Paseo: one per provider, runtimecontrol.go). runtime.launchers replaces them later.
 	Launchers []runtimeLauncher `json:"launchers,omitempty"`
-	// Package is the code the runtime runs when this node can keep it up to date (runtimepkg, docs/runtimes.md「自动更新」):
+	// Package is the code the runtime runs when this node can keep it up to date (runtimepkg, docs/runtimes.md "Auto-update"):
 	// its package name and hash. A different hash than the node's gets an update offer in the reply.
 	Package *struct {
 		Name string `json:"name"`
@@ -77,14 +77,14 @@ type runtimeHello struct {
 		Interrupt bool `json:"interrupt"`
 		Rename    bool `json:"rename"`
 		Close     bool `json:"close"`
-		// Assistant: its launcher may run the Persona assistant (assistant_runtime.go; docs/runtimes.md「助手」).
+		// Assistant: its launcher may run the Persona assistant (assistant_runtime.go; docs/runtimes.md "Assistant").
 		Assistant bool `json:"assistant"`
 		// Modes: the phone's permission mode and effort for its sessions go to it (session.modes).
 		Modes bool `json:"modes"`
 		// Resume: session.start with resume takes a Claude session it does not have over, under that id (the machine's
 		// engine continuing a session not running anywhere, runtimecontrol.go).
 		Resume bool `json:"resume"`
-		// KeepAlways: the runtime keeps no session rule of its own and asks the hub to remember 本会话总是允许 for it
+		// KeepAlways: the runtime keeps no session rule of its own and asks the hub to remember "Always allow for this session" for it
 		// (#3974): its permission cards that offer always get the node's key for the tool. A runtime that keeps its own
 		// rule (opencode's save rule, Paseo's suggestions) does not say it, so its grant is never widened to the tool.
 		KeepAlways bool `json:"keep_always"`
@@ -342,7 +342,7 @@ func (b *runtimeRegistry) belongs(id string) (h *runtimeConn, label string, know
 }
 
 // splitRuntimeChild splits the id of a runtime session's subagent, "<parent>@<child>" (the id Claude's subagents have
-// too: docs/protocol.md「Runtime ↔ node」); false for any other id.
+// too: docs/protocol.md "Runtime ↔ node"); false for any other id.
 func splitRuntimeChild(id string) (parent, child string, ok bool) {
 	parent, child, ok = strings.Cut(id, "@")
 	return parent, child, ok && runtimeIDRe.MatchString(parent) && runtimeIDRe.MatchString(child)
@@ -811,7 +811,7 @@ func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Sess
 		if s.SpaceKind == "" {
 			s.SpaceKind = rt
 		}
-		// The source fields Codex app-server sessions use too (docs/protocol.md「Codex 来源与能力」): the apps gate
+		// The source fields Codex app-server sessions use too (docs/protocol.md "Codex sources and capabilities"): the apps gate
 		// sending, interrupting, answering cards and every terminal control on capabilities, the hub guards sends.
 		// What a runtime declared, never more: no terminal, no attach, cards always answerable (they are its own asks).
 		s.SourceKind, s.SourceInstanceID, s.SourceThreadID, s.ParentThreadID = proto.SourceRuntime, rt, "", ""
@@ -885,7 +885,7 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 		ix.ID = "ix_" + hex.EncodeToString(sum[:])[:16]
 	}
 	// Who asks, as on a Codex card (proto.Interaction.Agent): the apps draw a runtime's card as its own agent's
-	// (同意 / 拒绝, its reason, 总是同意 only with an always_label it gives), not as Claude's, whose 本会话总是允许 a
+	// ("Allow" / "Deny", its reason, "Always allow" only with an always_label it gives), not as Claude's, whose "Always allow for this session" a
 	// runtime cannot keep. A runtime hosting Claude Code (agent "claude") gets Claude's card.
 	h.mu.Lock()
 	agent, label := h.hello.Agent, h.hello.Name
@@ -911,7 +911,7 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 	}
 	now := time.Now().UTC()
 	ix.MachineID, ix.Screen, ix.Dialog, ix.Secret = "", "", nil, false
-	// 本会话总是允许 kept by the hub for a runtime's permission card (#3974): what it grants is the node's word, never
+	// "Always allow for this session" kept by the hub for a runtime's permission card (#3974): what it grants is the node's word, never
 	// the runtime's — one key for this runtime's tool, which the manager keeps under this session id, so it never
 	// reaches another session or another tool. Only for a runtime that asked for it in its hello (caps.keep_always: it
 	// keeps no rule itself; a runtime whose always is a narrower rule of its own must not get the whole tool), only
@@ -955,7 +955,7 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 }
 
 // runtimeHealth: the card's session is in the health space (its cwd or the row's), where every write is confirmed
-// (docs/health.md「外发」).
+// (docs/health.md "Outgoing").
 func runtimeHealth(h *runtimeConn, ix proto.Interaction) bool {
 	if identity.SpaceOf(ix.Cwd) == identity.SpaceHealth {
 		return true

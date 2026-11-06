@@ -11,8 +11,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// An agent's question comes here before the user (fleet_delegate.go, docs/assistant.md「提问先由助手代答」): a model
-// (purpose agent.delegate, 「模型配置 › 提问代答」) reads the question with what is known around it — the agent's
+// An agent's question comes here before the user (fleet_delegate.go, docs/assistant.md "The assistant answers questions first"): a model
+// (purpose agent.delegate, "Model Settings › Answering questions") reads the question with what is known around it — the agent's
 // recent turns, its task and the calls the user made on it, the project — and answers it for the user when it is the
 // agent's own call, or leaves it to the user with the context filled in. What it may answer is checked here as well:
 // the options it picks must be the question's, and none of them may set off a red line (riskyWords). The hub waits a
@@ -104,7 +104,7 @@ func delegateResult(ix proto.Interaction, out delegateOut, now time.Time) Delega
 }
 
 // picksRisky: one of the options picked, by its label or its description, is a step the assistant must not set off
-// (riskyWords: push, deploy, merge, a message to someone…). Holding off (「先不合并」「别发」) sets off nothing.
+// (riskyWords: push, deploy, merge, a message to someone…). Holding off ("Don't merge yet", "Don't send") sets off nothing.
 func picksRisky(ix proto.Interaction, answers map[string]string) bool {
 	for _, q := range ix.Questions {
 		for _, label := range strings.Split(answers[q.Question], ", ") {
@@ -125,7 +125,7 @@ func picksRisky(ix proto.Interaction, answers map[string]string) bool {
 	return false
 }
 
-// answerLine is answers in a line, the questions' order ("A；B").
+// answerLine is answers in a line, the questions' order ("A; B" with a full-width semicolon).
 func answerLine(ix proto.Interaction, answers map[string]string) string {
 	var parts []string
 	for _, q := range ix.Questions {
@@ -223,8 +223,8 @@ func (s *Service) todoOfSession(ctx context.Context, machine, sid string) (Todo,
 // holdOffWords start an option that has the agent not do something.
 var holdOffWords = []string{"先不", "暂不", "不要", "不用", "别", "先别", "不", "skip", "don't", "do not", "not now", "hold"}
 
-// holdsOff: label is a short option that starts with not doing something (「先不合并」「Not now」). A longer one may go
-// on to something else (「不用等测试，直接发布」): it is not taken for one.
+// holdsOff: label is a short option that starts with not doing something ("Don't merge yet", "Not now"). A longer one may go
+// on to something else ("no need to wait for tests, just release"): it is not taken for one.
 func holdsOff(label string) bool {
 	l := strings.ToLower(strings.TrimSpace(label))
 	if utf8.RuneCountInString(l) > 10 {

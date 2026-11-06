@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The assistant on the hub's bus (docs/protocol.md「总线」): BusHub is Hub over a bus.Client connection, and serves
+// The assistant on the hub's bus (docs/protocol.md "Bus"): BusHub is Hub over a bus.Client connection, and serves
 // the hub's calls and events with a Service. The connection stays up while Run runs: it dials with the assistant's
 // token, says manager.hello, keeps the answer (manager.updated replaces it), reports the whole snapshot, and dials
 // again when it drops.

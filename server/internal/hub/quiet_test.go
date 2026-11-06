@@ -37,7 +37,7 @@ func quietTodo(t *testing.T, h *Hub, conv string, n int) Todo {
 	return last
 }
 
-// A task the main conversation opens is quiet while 主对话派的任务只在主对话里通知 is on (the default), kept in the
+// A task the main conversation opens is quiet while "Notify main chat tasks in the main chat only" is on (the default), kept in the
 // store; one from another conversation is not; turning the setting off leaves the tasks there are. A quiet task's
 // agent is flagged on the session list, stays off the Live Activity and gets no notify event (#1731).
 func TestQuietTasksFromTheMainConversation(t *testing.T) {

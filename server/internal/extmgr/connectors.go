@@ -21,7 +21,7 @@ import (
 )
 
 // Connectors: each source of the user's information plugs in as a connector, and the hub's pipes pick up what it
-// implements — the assistant's tools (writes behind the gate), 设置 › 连接器's status, realtime kicks
+// implements — the assistant's tools (writes behind the gate), Settings › Connectors' status, realtime kicks
 // (internal/connector, docs/plan-connectors.md).
 
 // addConnector registers c, refusing one that offers a tool the hub has itself ("kb_search", "phone_…"): calls go
@@ -113,7 +113,8 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
-	// 设置 › 连接器's switch: off, the connector stops and brings nothing in (Registry.SetEnabled); kept in settings.
+	// Settings › Connectors' switch: off, the connector stops and brings nothing in (Registry.SetEnabled); kept in
+	// settings.
 	api.HandleFunc("PUT /api/v1/connectors/{id}/settings", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if h.connectors.Get(id) == nil {
@@ -123,8 +124,8 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 		var body struct {
 			Enabled *bool           `json:"enabled"`
 			Options json.RawMessage `json:"options"` // the connector's own settings (connector.Options)
-			Archive *bool           `json:"archive"` // 进知识库
-			Inbox   *bool           `json:"inbox"`   // 进收件箱
+			Archive *bool           `json:"archive"` // "Add to knowledge base"
+			Inbox   *bool           `json:"inbox"`   // "Add to Inbox"
 		}
 		if err := decodeJSONBody(w, r, &body, 64<<10); err != nil {
 			writeBodyErr(w, err, err)
@@ -158,8 +159,8 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 			}
 		}
 	})
-	// 删除已存的数据 for any connector: switched off first (and kept off: on, the next sync would bring it back), then
-	// what the hub kept of it goes (forgetSource, as for iMessage). Signing out is apart (/logout).
+	// "Delete saved data" for any connector: switched off first (and kept off: on, the next sync would bring it back),
+	// then what the hub kept of it goes (forgetSource, as for iMessage). Signing out is apart (/logout).
 	api.HandleFunc("DELETE /api/v1/connectors/{id}/data", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if h.connectors.Get(id) == nil {
@@ -179,8 +180,9 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 		h.logf("connector %s: deleted %d chat(s), %d person(s), %d inbox item(s)", id, res.Chats, res.People, res.Inbox)
 		writeJSON(w, res)
 	})
-	// 删除已存的知识库内容: 进知识库 turned off first (and kept off: on, the next round would bring it back), then the
-	// knowledge base's chats and people of it go. The connector keeps running: the inbox and the tools are untouched.
+	// "Delete saved knowledge base content": "Add to knowledge base" turned off first (and kept off: on, the next round
+	// would bring it back), then the knowledge base's chats and people of it go. The connector keeps running: the inbox
+	// and the tools are untouched.
 	api.HandleFunc("DELETE /api/v1/connectors/{id}/archive", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if h.connectors.Get(id) == nil {
@@ -508,8 +510,8 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 func (h *Manager) startConnectors(ctx context.Context) {
 	h.registerConnectors()
 	h.attachExtensions(ctx) // the plugins' connectors, after the hub's own: those ids are taken
-	h.migrateIMessage(ctx)  // hub.json's imessage.machine into 设置 › 扩展 › 信息, once (imessage_extension.go)
-	h.applyIMessage()       // 信息 on the Mac picked there, else hub.json's
+	h.migrateIMessage(ctx)  // hub.json's imessage.machine into Settings › Extensions › Messages, once (imessage_extension.go)
+	h.applyIMessage()       // Messages on the Mac picked there, else hub.json's
 	h.restoreConnectorSwitches(ctx)
 	h.restoreGitHubSource(ctx)
 	h.connectors.Start(ctx, h.connectorChanged, h.logf) // GitHub's old muted repositories move when the manager connects
@@ -545,7 +547,7 @@ func (h *Manager) registerConnectors() {
 	if err := h.addConnector(ghc); err != nil {
 		h.logf("github connector: %v", err)
 	}
-	// 信息 (imessage) is registered once the extensions are there: its Mac is the extension's, else hub.json's
+	// Messages (imessage) is registered once the extensions are there: its Mac is the extension's, else hub.json's
 	// (applyIMessage, startConnectors).
 }
 

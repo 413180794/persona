@@ -23,7 +23,7 @@ import (
 // what is asked there, the commands, pushes and the sync mirror — is the assistant's (internal/assistant, feishu*.go):
 // the owner's messages and card presses go to it over the bus (assistant_channels.go), and it posts through the hub.
 // Only the paired user is answered, only in the bot's private chat. Everything is off until switched on in the app
-// (设置 › 连接器 › 飞书机器人).
+// (Settings › Connectors › Lark bot).
 
 // BotsConfig is hub.json "bots".
 type BotsConfig struct {
@@ -380,7 +380,7 @@ func (h *Manager) unpairBot(ctx context.Context) {
 var errBotOff = i18n.Err("hub-bots.bot_off")
 
 // botLang is the language of what the bots and the channels write: the request's when the context carries one, else
-// the user's (docs/i18n.md「协议」).
+// the user's (docs/i18n.md "Protocol").
 func (h *Manager) botLang(ctx context.Context) i18n.Lang {
 	return i18n.From(ctx).Or(h.userLang())
 }

@@ -13,11 +13,11 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The mock hub's readiness scenarios (scripts/mock/readiness_mock.py, docs/testing.md「就绪度场景」) are pinned to what
+// The mock hub's readiness scenarios (scripts/mock/readiness_mock.py, docs/testing.md "Readiness scenarios") are pinned to what
 // this code answers: each scenario is set up here on a fake hub, and its readiness in the three languages and its
 // coded start refusal are kept in testdata/readiness_scenarios/<name>.json (UPDATE_GOLDEN=1 writes them, checked_at
 // blanked). scripts/mock/test_readiness_mock.py checks the mock against the same files, so a change to the readiness
-// fails here first and then there until the mock follows. The computer is 小林的 MacBook (mbp).
+// fails here first and then there until the mock follows. The computer is a sample user's MacBook (mbp).
 
 type readinessScenario struct {
 	name string

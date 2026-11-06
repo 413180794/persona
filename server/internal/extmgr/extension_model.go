@@ -11,14 +11,15 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The extension model in the hub (docs/extensions.md「依赖、导出和合集」, #1854): what installs together (a preview's
-// bundle: missing dependencies, a pack's members), what a switch-off or removal takes with it (dependents), and
-// telling an exporter its contributions changed.
+// The extension model in the hub (docs/extensions.md "Dependencies, exports and bundles", #1854): what installs
+// together (a preview's bundle: missing dependencies, a pack's members), what a switch-off or removal takes with it
+// (dependents), and telling an exporter its contributions changed.
 
 // bundleDepth is how deep dependencies of dependencies are followed.
 const bundleDepth = 4
 
-// resolveBundle 在下载前汇总完整图中的约束，再按依赖顺序生成确认预览。
+// resolveBundle gathers the constraints of the whole graph before downloading, then builds the confirmation preview in
+// dependency order.
 func (h *Manager) resolveBundle(ctx context.Context, pv *extension.Preview, market string) {
 	if h.extensions == nil || h.marketStore() == nil {
 		return

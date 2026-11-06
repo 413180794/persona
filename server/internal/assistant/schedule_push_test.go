@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The app sets a task's 「跑完推送」 (#2396): POST and PUT take push; a PUT without it — an app that does not know the
+// The app sets a task's "Push when done" (#2396): POST and PUT take push; a PUT without it — an app that does not know the
 // field — keeps it, so does the old app's routines PUT; null, a number or an unknown word is refused, not taken for
 // "every".
 func TestTaskPushThroughTheApp(t *testing.T) {

@@ -56,7 +56,7 @@ func TestMatchOptionOne(t *testing.T) {
 	}
 }
 
-// A label inside another (Java, JavaScript), a short label (Go in 「good」, a letter in a sentence).
+// A label inside another (Java, JavaScript), a short label (Go in "good", a letter in a sentence).
 func TestMatchOptionLabelsThatLookAlike(t *testing.T) {
 	lang := question(false, "Java", "JavaScript", "Go")
 	for text, want := range map[string]string{"用 JavaScript": "JavaScript", "javascript 吧": "JavaScript", "java": "Java",
@@ -112,7 +112,7 @@ func TestMatchOptionNumbersAsLabels(t *testing.T) {
 	}
 }
 
-// A count (「1个」「一个」) is not a place: a measure word takes 第 before the numeral; without it, it may be a label.
+// A count ("1 of", "one of" in Chinese) is not a place: a measure word takes the ordinal prefix before the numeral; without it, it may be a label.
 func TestMatchOptionCountsAreNotPlaces(t *testing.T) {
 	for _, c := range []struct {
 		q    proto.Question
@@ -132,8 +132,8 @@ func TestMatchOptionCountsAreNotPlaces(t *testing.T) {
 	}
 }
 
-// A label in a sentence is that option only when nothing else is said but words like 用, 吧, I'd go with, で: a
-// condition or an instruction besides it (「SQLite，加密」「备份后删除」) is the answer itself, every word of it.
+// A label in a sentence is that option only when nothing else is said but filler words (Chinese "use", a closing particle, I'd go with, Japanese "with"): a
+// condition or an instruction besides it ("SQLite, encrypted", "delete after a backup") is the answer itself, every word of it.
 func TestMatchOptionHeldLabelOnlyWithFiller(t *testing.T) {
 	for _, c := range []struct {
 		q    proto.Question
@@ -166,7 +166,7 @@ func TestMatchOptionHeldLabelOnlyWithFiller(t *testing.T) {
 	}
 }
 
-// What a label starts with is that option (「Postgres」 of PostgreSQL), from a word's start for ASCII and the label's
+// What a label starts with is that option ("Postgres" of PostgreSQL), from a word's start for ASCII and the label's
 // for Chinese and Japanese; a piece inside a word, a function word, or a word saying how many is not.
 func TestMatchOptionStartOfALabel(t *testing.T) {
 	for _, c := range []struct {
@@ -200,7 +200,7 @@ func TestMatchOptionStartOfALabel(t *testing.T) {
 	}
 }
 
-// A question mark asks about an option rather than takes it (「2?」 never was a choice): 「SQLite?」「第二个？」 are free
+// A question mark asks about an option rather than takes it ("2?" never was a choice): "SQLite?", "the second?" are free
 // answers, unless the label is itself a question said as it is.
 func TestMatchOptionQuestionMarks(t *testing.T) {
 	db := question(false, "PostgreSQL", "SQLite", "MySQL")
@@ -221,7 +221,7 @@ func TestMatchOptionQuestionMarks(t *testing.T) {
 	}
 }
 
-// A multi-select takes several, split on 、，, 和 and (and slashes, spaces between numbers), in the order said; a label
+// A multi-select takes several, split on commas (full-width and enumeration commas too), the Chinese "and" and "and" (and slashes, spaces between numbers), in the order said; a label
 // holding one of those is still one option.
 func TestMatchOptionSeveral(t *testing.T) {
 	parts := question(true, "进展", "风险", "计划")
@@ -295,7 +295,7 @@ func TestReadAnswerTakesOrdinalsAndLabels(t *testing.T) {
 	}
 }
 
-// A phone keyboard shapes a number as ①, （1）, 1), and Chinese says a bare 二号 / 2号: all name the option. A question
+// A phone keyboard shapes a number as a circled 1, a full-width (1), 1), and Chinese says a bare "No. 2": all name the option. A question
 // mark, a shape out of range, a counting measure word, and a label that is itself the number keep the usual rules.
 func TestMatchOptionNumberShapes(t *testing.T) {
 	db := question(false, "PostgreSQL", "SQLite", "MySQL")
@@ -320,7 +320,7 @@ func TestMatchOptionNumberShapes(t *testing.T) {
 			t.Errorf("%q: %q, but it is not a choice", text, got)
 		}
 	}
-	// Another option's label is the number 2: a bare 2号 is then ambiguous and stays the answer itself.
+	// Another option's label is the number 2: a bare "No. 2" is then ambiguous and stays the answer itself.
 	collide := question(false, "2", "4", "8")
 	if got, ok := MatchOption(collide, "2号"); ok {
 		t.Errorf("2号 with a label 2: %q, %v", got, ok)

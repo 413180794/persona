@@ -28,7 +28,7 @@ func Manifest() connector.Manifest {
 }
 
 // Channel is the channel it contributes (docs/channels.md): pictures and voice (WeChat's own transcript) come in, plain
-// text goes out in pieces WeChat takes, what agents ask is answered in text, 「正在输入」 while a turn goes on.
+// text goes out in pieces WeChat takes, what agents ask is answered in text, "typing…" while a turn goes on.
 func Channel() channel.Item {
 	return channel.Item{ID: ID, Name: Name, Kind: channel.KindIM, Connector: ID, Bind: channel.BindQR,
 		Description: "在个人微信里私聊机器人：扫码绑定，消息进主对话，回答以纯文字发回",

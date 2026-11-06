@@ -73,7 +73,7 @@ func probeWhile(t *testing.T, m *Machine, sc *slowConnector, meanwhile func()) {
 }
 
 // A probe that was out when the connector ended the stream with 4002 (paired with another hub) answers too late to
-// count: the machine still says to pair it again (TestCenterServiceConnector lost 「重新配对」 that way under load).
+// count: the machine still says to pair it again (TestCenterServiceConnector lost "Pair again" that way under load).
 func TestServiceProbeAfterRevokeKeepsPairAgain(t *testing.T) {
 	sc := newSlowConnector(t, http.StatusOK)
 	m := serviceMachine(t, sc, "jc_old")
@@ -186,7 +186,7 @@ func revokingMachine(t *testing.T, rc *revokingConnector) *Machine {
 }
 
 // The connector ends the old credential's streams with 4002 when it is paired again, here too. A close read after
-// PairConnector moved on is of the old pairing: the computer just paired is not marked 「重新配对」 and keeps its new
+// PairConnector moved on is of the old pairing: the computer just paired is not marked "Pair again" and keeps its new
 // credential.
 func TestServiceStaleStreamRevokeKeepsNewPairing(t *testing.T) {
 	rc := newRevokingConnector(t)
@@ -434,7 +434,7 @@ func TestServiceDialTellsTheConnectorTheHeartbeat(t *testing.T) {
 }
 
 // A connector whose resident node is down already says so and how its OS runs it; the machine's page says it once,
-// and about that computer, not 「本机」 (on the hub's page that reads as the hub, #4080).
+// and about that computer, not "This machine" (on the hub's page that reads as the hub, #4080).
 func TestConnectorNodeUnavailableSaidOnce(t *testing.T) {
 	answer := func(message string) string {
 		rec := httptest.NewRecorder()

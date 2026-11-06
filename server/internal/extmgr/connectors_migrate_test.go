@@ -53,7 +53,8 @@ func TestExtensionTakesOverLark(t *testing.T) {
 }
 
 // GitHub moves out of the hub (#2830): an extension's connector github takes the hub's place while it is there, the
-// hub's own is kept aside (it still checks the computers' gh logins for 设置 › 连接器 › GitHub) and comes back after.
+// hub's own is kept aside (it still checks the computers' gh logins for Settings › Connectors › GitHub) and comes back
+// after.
 func TestExtensionTakesOverGitHub(t *testing.T) {
 	h := newTestManager(t)
 	h.connectors = connector.NewRegistry(nil)

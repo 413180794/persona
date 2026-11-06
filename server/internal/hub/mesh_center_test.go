@@ -213,7 +213,7 @@ func TestCenterUnreachable(t *testing.T) {
 }
 
 // The headers a hub opens a node stream with mean nothing from outside: a request that carries them is still an app's,
-// and without a credential a member answers it 401 like any other (docs/mesh.md「安全边界」).
+// and without a credential a member answers it 401 like any other (docs/mesh.md "Security boundary").
 func TestCenterMemberDropsNodeStreamHeaders(t *testing.T) {
 	box := newMeshNode("uid-box", "box", "s1")
 	lap := newMeshNode("uid-lap", "lap", "s2")
@@ -380,7 +380,7 @@ func TestCenterRevocationReachesHubThatWasAway(t *testing.T) {
 
 // A center that took over without hearing of a revocation (the old one went away before it got out) takes the
 // credential until the old one is back; then it dies there, and its live connection with it (docs/mesh.md
-// 「没做的 / 已知限制」).
+// "Not done / known limits").
 func TestCenterRevocationCatchesUpWhenOldCenterReturns(t *testing.T) {
 	bStore, bDir := newMeshStore(), t.TempDir()
 	center := startTestHubWith(t, hubB, "Office", bStore, bDir, nil, nil)
@@ -570,7 +570,7 @@ func TestCenterTwoEntriesOneComputer(t *testing.T) {
 	}
 }
 
-// fakeConnector plays a computer's connector in passive mode (docs/link.md「被动模式」): TLS on its own key, a
+// fakeConnector plays a computer's connector in passive mode (docs/link.md "Passive mode"): TLS on its own key, a
 // one-time code, the hub's credential (its hash only), and the stream joined to the node.
 type fakeConnector struct {
 	t      *testing.T

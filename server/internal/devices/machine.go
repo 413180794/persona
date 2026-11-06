@@ -175,7 +175,7 @@ func (m *Machine) snapshot() proto.Machine {
 	}
 	canDeploy, deployReason := m.canDeployLocked()
 	// A failed update is moot once the node runs the hub's own build (it was updated by hand, or the try that failed
-	// was made while the machine was away): the card would keep 「上次部署没成」 until another deploy (#2868).
+	// was made while the machine was away): the card would keep "Last deploy failed" until another deploy (#2868).
 	deployErr := m.deployErr
 	if m.online && version != "" && m.info.Version == version {
 		deployErr = ""

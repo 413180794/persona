@@ -11,10 +11,10 @@ import (
 	"time"
 )
 
-// An interactive Claude Code that finds ANTHROPIC_API_KEY set and has not seen that key before stops at「Detected a
-// custom API key in your environment … Do you want to use this API key?」, with「No (recommended)」selected. Enter (or
+// An interactive Claude Code that finds ANTHROPIC_API_KEY set and has not seen that key before stops at "Detected a
+// custom API key in your environment … Do you want to use this API key?", with "No (recommended)" selected. Enter (or
 // the phone's first option) answers No, Claude remembers it, and from then on every claude of that launcher has no
-// credentials (Not logged in). A managed launcher's key is the one the user entered for it in 设置 › 模型, so
+// credentials (Not logged in). A managed launcher's key is the one the user entered for it in Settings › Models, so
 // `jarvisd launch` records it as approved before claude starts, as answering Yes does: the key's last 20 characters
 // (how Claude Code names a key) in customApiKeyResponses.approved of Claude's global config, and out of rejected.
 // Print mode (-p, the assistant) never asks, so this only matters to sessions in a terminal.

@@ -6,11 +6,11 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// ---- the Agents business: the manager's (docs/agent-work.md「谁管什么」) ----
+// ---- the Agents business: the manager's (docs/agent-work.md "Who owns what") ----
 //
-// The manager triages an agent's turn once it ends (rules first, then a model), sends 继续 after a transient model
+// The manager triages an agent's turn once it ends (rules first, then a model), sends "Continue" after a transient model
 // error, wakes an agent when what it waits for should be over, and opens a card for what the user is to decide; it
-// names the tabs of new agents and says what a new or resumed agent runs on (模型配置 › Agents, a model picked for one
+// names the tabs of new agents and says what a new or resumed agent runs on ("Models" › Agents, a model picked for one
 // start). The hub only carries it: it tells the manager what happened (session.turn_started / turn_ended,
 // session.seen), shows what the manager reports (Snapshot.Work on the session lists, the cards among
 // Snapshot.Interactions) and asks it to fill in a start (agents.start_params, agents.resume_params, agents.tab_name).
@@ -46,13 +46,13 @@ type LauncherRepairConfig struct {
 }
 
 // DelegateConfig is hub.json agents.delegate: an agent's question goes to the assistant before the user
-// (docs/assistant.md「提问先由助手代答」).
+// (docs/assistant.md "The assistant answers questions first").
 type DelegateConfig struct {
 	// Enabled: off unless true.
 	Enabled *bool `json:"enabled,omitempty"`
 	// TimeoutSeconds: how long the hub waits for the assistant before it asks the user as it would have. Default 180.
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
-	// Rules are the user's own, read with the built-in ones ("缺测试就补上，不用问我" …). They cannot take a red line off
+	// Rules are the user's own, read with the built-in ones ("add the missing tests, don't ask me" …). They cannot take a red line off
 	// the user: an answer that would set one off is left to them all the same.
 	Rules string `json:"rules,omitempty"`
 }
@@ -75,7 +75,7 @@ type TriageConfig struct {
 	AutoContinue *bool `json:"auto_continue,omitempty"`
 	Wake         *bool `json:"wake,omitempty"`
 	Decide       *bool `json:"decide,omitempty"`
-	// MaxRetries: 继续 sent for one run of transient errors before asking the user. Default 3.
+	// MaxRetries: "Continue" sent for one run of transient errors before asking the user. Default 3.
 	MaxRetries int `json:"max_retries,omitempty"`
 	// MaxWakes: wakes for one wait before asking the user. Default 6.
 	MaxWakes int `json:"max_wakes,omitempty"`
@@ -87,7 +87,7 @@ type TriageConfig struct {
 // found it. The hub puts a session's on the lists while the session is still stopped on that turn (Work.TurnAt), and
 // none at all while On is false; what an agent shows while it works or asks on its own card is the hub's to say.
 type WorkReport struct {
-	On       bool          `json:"on"` // 设置 › 会话分诊 is on
+	On       bool          `json:"on"` // Settings › session triage is on
 	Sessions []SessionWork `json:"sessions"`
 }
 

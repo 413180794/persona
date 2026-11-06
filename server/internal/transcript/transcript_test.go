@@ -491,7 +491,7 @@ func TestClipJSONKeepsRunesIntact(t *testing.T) {
 	if strings.ContainsRune(out["content"], '�') {
 		t.Fatal("clipJSON cut a rune in half")
 	}
-	// clipTo appends a "\n…（已截断，共 N 字节）" suffix, so allow a little slack over the limit.
+	// clipTo appends a "\n…(truncated, N bytes in all)" suffix (in Chinese), so allow a little slack over the limit.
 	if len(out["content"]) > maxInputLen/2+64 {
 		t.Fatalf("content was not shortened: %d bytes", len(out["content"]))
 	}

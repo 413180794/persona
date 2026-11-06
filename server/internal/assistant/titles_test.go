@@ -64,7 +64,7 @@ func TestParseTitle(t *testing.T) {
 }
 
 // MMDD is the day in the user's time zone though the hub runs in UTC; a broken answer is asked for once more, then
-// cut or replaced by 「探索 | the first 14 characters」.
+// cut or replaced by "explore | the first 14 characters".
 func TestMakeTitle(t *testing.T) {
 	started := time.Date(2026, 11, 1, 16, 30, 0, 0, time.UTC) // 00:30 on 11-02 in Shanghai
 	ctx := context.Background()

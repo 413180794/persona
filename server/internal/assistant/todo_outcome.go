@@ -14,10 +14,10 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// What a finished task came to (#2820, docs/todos.md「做完记结论」). When a task the main conversation opened (its todo
+// What a finished task came to (#2820, docs/todos.md "Record the outcome when done"). When a task the main conversation opened (its todo
 // has an origin) is done, closed by the judge (done.go) or by the user, its agents' last replies are read and a model
 // pulls out a one-line outcome, its links, the decisions made and the pitfalls hit. They go in the todo's decisions
-// (source "outcome", once per completion) and in the timelines of the projects the agents worked in («待办 · <title>»),
+// (source "outcome", once per completion) and in the timelines of the projects the agents worked in («to-do · <title>», in Chinese),
 // where the next agent started for the project finds them (projectContext). Without a model the outcome is the
 // receipt's text, without decisions or pitfalls.
 
@@ -262,8 +262,8 @@ func (s *Service) outcomeDecisions(ctx context.Context, t Todo, key string, by o
 	return true
 }
 
-// outcomeLog appends 「结论：…」 to the timeline of each project an agent of t worked in (kb.ProjectsForWork), once a
-// project: «待办 · <title>», not bounded like an agent's turns (kb_bus.go).
+// outcomeLog appends "Outcome: …" (in Chinese) to the timeline of each project an agent of t worked in (kb.ProjectsForWork), once a
+// project: «to-do · <title>», not bounded like an agent's turns (kb_bus.go).
 func (s *Service) outcomeLog(ctx context.Context, t Todo, agents []outcomeAgent, o taskOutcome) {
 	e, err := s.kbGet(ctx)
 	if errors.Is(err, errKBNotOpen) {
@@ -292,7 +292,7 @@ func (s *Service) outcomeLog(ctx context.Context, t Todo, agents []outcomeAgent,
 	}
 }
 
-// outcomeLogLine is 「结论：<outcome> <links>」 within a timeline line: the links whole (those that fit), the outcome
+// outcomeLogLine is "Outcome: <outcome> <links>" (in Chinese) within a timeline line: the links whole (those that fit), the outcome
 // clipped to the room they leave, so kb's cut at outcomeLogMax never breaks a link.
 func outcomeLogLine(o taskOutcome) string {
 	const prefix = kb.TodoOutcomePrefix

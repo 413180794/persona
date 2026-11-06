@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 )
 
-// `personad extension …` on the hub's machine (docs/extensions.md「命令行」): what installs, upgrades and removes
+// `personad extension …` on the hub's machine (docs/extensions.md "Command line"): what installs, upgrades and removes
 // extensions. It talks to the running hub over loopback with the master token in hub.json, like `hub admin`.
 // `personad ext …` is the same, and so is `personad plugin …` (its name before #1844).
 
@@ -376,12 +376,12 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		}
 		fmt.Fprintf(stdout, "%s：%s\n", d.ID, d.Status)
 		return nil
-	case "auth": // docs/extensions.md「登录（auth）」
+	case "auth": // docs/extensions.md "Sign-in (auth)"
 		if err := need(1); err != nil {
 			return err
 		}
 		return extensionAuthCommand(ctx, c, positional, stdin, stdout)
-	case "sandbox": // docs/extensions.md「沙箱」
+	case "sandbox": // docs/extensions.md "Sandbox"
 		if err := need(2); err != nil {
 			return err
 		}

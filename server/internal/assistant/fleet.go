@@ -18,12 +18,12 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// What comes from the nodes is the manager's (docs/machines.md「谁处理电脑的事件」). The hub did all of this until the
+// What comes from the nodes is the manager's (docs/machines.md "Who handles the computers' events"). The hub did all of this until the
 // manager connected the computers itself; it moved here as it was (fleet_*.go):
 //
 //   - the interactions (approval / question / plan / screen / Codex cards): made from the nodes' interaction.create
 //     and what their sessions show, kept, waited for, answered, expired (fleet_ix.go);
-//   - each Agent's state as the apps get it — the unified state, 需要你, 完成未看 / 已看, the work and todos it shows —
+//   - each Agent's state as the apps get it — the unified state, "Needs you", "Unread" / "Seen", the work and todos it shows —
 //     and the session lists (this file);
 //   - the pushes and the Live Activity's content: when a finished turn is worth a push, a card's push, what the
 //     activity shows (fleet_push.go, fleet_live.go);
@@ -86,7 +86,7 @@ type fleetBook struct {
 	askMu sync.Mutex
 	asked map[string]*askedOne // the assistant's own questions and cards on the phone (by interaction id)
 
-	// reanswered: the 改答 messages sent to agents, by interaction and answers (fleet_delegate.go): each goes once.
+	// reanswered: the "Change answer" messages sent to agents, by interaction and answers (fleet_delegate.go): each goes once.
 	reanswered map[string]bool
 
 	undelivered heldActs // answers the manager's own Action did not take yet
@@ -885,10 +885,10 @@ func (s *Service) decorated(machine string) []proto.Session {
 			list[i].Space = identity.SpaceOf(list[i].Cwd)
 		}
 		if t := shown[list[i].SessionID].Title; t != "" && list[i].Assistant {
-			list[i].Title = t // 「MMDD | 类型 | 主题」, the user's own, 「Persona」 for the main one (titles.go)
+			list[i].Title = t // "MMDD | type | topic", the user's own, "Persona" for the main one (titles.go)
 		}
 		if ch := via[[2]string{machine, list[i].SessionID}]; len(ch) > 0 {
-			list[i].Channels = ch // where its messages came from (docs/channels.md「来源标记」)
+			list[i].Channels = ch // where its messages came from (docs/channels.md "Source marks")
 		}
 		if list[i].Assistant {
 			list[i].Archived = shown[list[i].SessionID].Archived
@@ -905,7 +905,7 @@ func (s *Service) decorated(machine string) []proto.Session {
 		list[i].TurnErrorCode = ""
 		if list[i].TurnError != "" {
 			list[i].TurnErrorCode = turnErrorCode(list[i].TurnError)
-			// Not worth a 继续: the user signs in, fixes the key or the model. Only where agents_work would not retry it
+			// Not worth a "Continue": the user signs in, fixes the key or the model. Only where agents_work would not retry it
 			// anyway: a gateway's 5xx that mentions the model stays transient.
 			if list[i].TurnErrorKind == "" && userTurnError(list[i].TurnErrorCode) && !transientError(list[i].TurnError) {
 				list[i].TurnErrorKind = proto.TurnErrorUser
@@ -1050,9 +1050,9 @@ func agentState(sess proto.Session, seenAt time.Time) string {
 }
 
 // backgroundState is an agent's state once its background work counts (#2228): a Claude whose turn ended while its
-// background commands, subagents, Monitors or workflows still run is working, not 完成未看 or 已看 — they wake it with their results, and it
+// background commands, subagents, Monitors or workflows still run is working, not "Unread" or "Seen" — they wake it with their results, and it
 // goes on. Needs-you stays first; a stopped one (offline) has nothing running. Not the assistant's conversations:
-// their Monitors and background tasks stay on, and a conversation always 工作中 would skip every scheduled run.
+// their Monitors and background tasks stay on, and a conversation always "Working" would skip every scheduled run.
 // What waits for a turn to end (the finished push, scheduled runs, the hub's own update) reads the host's status.
 func backgroundState(state string, sess proto.Session) string {
 	if sess.Assistant || !backgroundRunning(sess) {
@@ -1066,7 +1066,7 @@ func backgroundState(state string, sess proto.Session) string {
 }
 
 // stateWithBackground is backgroundState, and whether the background work is all that makes it working
-// (Session.BackgroundWorking: 工作中（后台）).
+// (Session.BackgroundWorking: "Working (background)").
 func stateWithBackground(host string, sess proto.Session) (string, bool) {
 	state := backgroundState(host, sess)
 	return state, state == proto.StateWorking && host != proto.StateWorking
@@ -1075,7 +1075,7 @@ func stateWithBackground(host string, sess proto.Session) (string, bool) {
 // turnError is the model API error that cut s's latest turn off, while it has stopped (unread or idle): not finished
 // (#1516), and its kind when the agent's record gives one. The node's word comes first: the agent's own record said
 // the turn failed (Codex, #2185). Otherwise its last words when they are the error, as Claude Code writes it; only an
-// answer that starts with the error counts: a reply that talks about one ("修好了 API Error: … 时的崩溃") is a reply.
+// answer that starts with the error counts: a reply that talks about one ("fixed the crash on API Error: …") is a reply.
 func turnError(sess proto.Session) (text, kind string) {
 	if sess.State != proto.StateUnread && sess.State != proto.StateIdle {
 		return "", ""

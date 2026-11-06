@@ -313,7 +313,7 @@ func askedQuestions(ix proto.Interaction) string {
 
 // ---- inbox_draft (prompts/mcp/inbox) ----
 
-// placeholderRE: a blank a draft leaves for the user to fill in — 【…】, {{…}}.
+// placeholderRE: a blank a draft leaves for the user to fill in — text in full-width lenticular brackets, {{…}}.
 var placeholderRE = regexp.MustCompile(`【[^】\n]*】|\{\{[^}\n]*\}\}`)
 
 // draftPlaceholder is the first blank in a draft left to fill in; empty when it has none.
@@ -321,7 +321,7 @@ func draftPlaceholder(text string) string {
 	return placeholderRE.FindString(text)
 }
 
-// toolInboxDraft gives the inbox the draft of the AI 分身 working in conversation self (docs/inbox.md, inboxDraft):
+// toolInboxDraft gives the inbox the draft of the AI twin working in conversation self (docs/inbox.md, inboxDraft):
 // it waits on the item for the user to send.
 func (s *Service) toolInboxDraft(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
@@ -331,7 +331,7 @@ func (s *Service) toolInboxDraft(ctx context.Context, self string, args json.Raw
 	if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Text) == "" {
 		return "", errors.New("text is required")
 	}
-	// The user sends it with one tap: a blank left to fill in (【预计几点前】) would go out as it is.
+	// The user sends it with one tap: a blank left to fill in (a bracketed "by what time") would go out as it is.
 	if p := draftPlaceholder(a.Text); p != "" {
 		return "", fmt.Errorf("the draft leaves %s to fill in, and it goes out as it is: leave out what you could not find (say so in note) and submit again", p)
 	}

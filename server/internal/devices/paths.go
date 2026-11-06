@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The computers the center drives and the ways to each (docs/plan-hub-center.md 5, docs/mesh.md「多条路」). A way —
+// The computers the center drives and the ways to each (docs/plan-hub-center.md 5, docs/mesh.md "Several ways"). A way —
 // a path — is a hub.json entry of this hub (local, service, link, ssh, tailcat) or one of a member hub's (the center
 // opens the node's stream through that hub, peer_node.go). Paths that turn out to reach the same computer (the same
 // machine_uid in node.info) are one machine: listed once, connected through one path at a time (a resident node takes
@@ -63,7 +63,7 @@ type pathHealth struct {
 	rtt       int       // ms: the node's round trip the last time it was in use
 }
 
-// pathInfo is a path as the admin page and the machine list show it (plan 5「paths」).
+// pathInfo is a path as the admin page and the machine list show it (plan 5 "paths").
 type pathInfo = devicewire.PathInfo
 
 type fleet struct {
@@ -861,7 +861,7 @@ func abs(n int) int {
 }
 
 // hubSlug is a hub's name made fit for a machine id suffix: lowercase letters, digits and dashes; a name with none
-// of those (家里) gives the start of the hub_id.
+// of those (say, a Chinese one) gives the start of the hub_id.
 func hubSlug(name, hubID string) string {
 	var b strings.Builder
 	dash := false

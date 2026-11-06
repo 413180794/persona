@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/streams"
 )
 
-// Forwarding a machine's port to the apps (docs/ports.md「转发」): the app listens on the phone's loopback and opens
+// Forwarding a machine's port to the apps (docs/ports.md "Forwarding"): the app listens on the phone's loopback and opens
 // one WebSocket here for each TCP connection the in-app browser makes; the hub carries its bytes as a stream on the
 // connection it already has to the node (streams.Mux), and the node connects to the port on its own addresses. Bytes
 // pass untouched, so the page, its WebSocket (HMR), redirects and cookies work as they do on the machine itself.
@@ -126,7 +126,7 @@ func (h *Hub) openPort(w http.ResponseWriter, r *http.Request, m *Machine) {
 }
 
 // screenPort is macOS's Screen Sharing (VNC): the live screen of a Mac the plugin cua is on for
-// (docs/computer-use.md「实时画面」).
+// (docs/computer-use.md "Live view").
 const screenPort = 5900
 
 // portAllowed: an agent on the machine listens on port, or the user opened it, or it is the screen of a Mac the

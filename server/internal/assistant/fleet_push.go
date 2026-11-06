@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// When a "finished" push is worth sending (docs/server.md 推送), and the pushes of the cards. Borrowed from Ovis
+// When a "finished" push is worth sending (docs/server.md "Push"), and the pushes of the cards. Borrowed from Ovis
 // (github.com/devswha/ovis, server/push.ts, MIT): a push is for someone away from the computer, so
 //   - wait a while after the turn ends; if the agent resumes, or the user looks at it (herdr idle, or opened in the
 //     app), nothing is sent;
@@ -242,7 +242,7 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 		s.kbAgentDone(machine, sess)
 	}
 	if ok && sess.Work != nil && sess.Work.Phase == proto.WorkBlocked && (sess.Work.WakeAt != nil || sess.Work.InteractionID != "") {
-		return // the Agents business goes on with it (继续, a wake), or its card already rang
+		return // the Agents business goes on with it ("Continue", a wake), or its card already rang
 	}
 	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there; a quiet
 	// task's is told in the main conversation (taskTurnEnded, #1731).
@@ -265,7 +265,7 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	if verdict == finishStale || verdict == finishHold {
 		return // the turn goes on: its mark waits for how it ends
 	}
-	// 「只推耗时长的」 is for turns the user started: a quick answer is read where it was asked. A 早报 or a task notice
+	// "Only long-running turns" is for turns the user started: a quick answer is read where it was asked. A morning briefing or a task notice
 	// has nobody waiting for it; a quick one was never pushed and the user had to go and look (#3438). The mark is
 	// used up by this turn whether it is pushed or dropped (notify_user, seen, muted): left over, the user's own next
 	// turn took it.
@@ -283,7 +283,7 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	if s.quietTaskFinish(sess) {
 		return
 	}
-	// A turn a 督办 message started, finished normally (#3124): what the user needs to know went out with notify_user.
+	// A turn a follow-up (supervision) message started, finished normally (#3124): what the user needs to know went out with notify_user.
 	if s.supervising(id) && assistantwire.SupervisedFinish(sess, true) {
 		return
 	}
@@ -310,7 +310,7 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 const reportSlack = 2 * time.Minute
 
 // noteReportTurn: a scheduled run or a task notice was just sent into conversation session; the turn it starts is
-// pushed whatever its length (the device's 完成推送 off still means no push).
+// pushed whatever its length (the device's "Finished" push off still means no push).
 func (s *Service) noteReportTurn(session string) {
 	if session == "" {
 		return

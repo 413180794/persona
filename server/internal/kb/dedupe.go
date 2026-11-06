@@ -16,11 +16,11 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Project dedupe (docs/knowledge.md「项目去重」). The same work is often discussed in several groups under different
-// names, and a chat's compression only sees project names: each group grew its own project (2026-11-01: SS codex 方案
-// and SS 支持单 agent 多 Session 窗口, 10 people in common, no word in common). Pairs of live projects that share
-// people, chats or name words go to the model with both profiles; the ones it calls the same are merged. Each pair's
-// verdict is kept (projects/.dedupe.json) so it is asked once, and again only after either side changed a lot.
+// Project dedupe (docs/knowledge.md "Project dedupe"). The same work is often discussed in several groups under different
+// names, and a chat's compression only sees project names: each group grew its own project (2026-11-01: two names
+// for the same work with no word in common, 10 people in common). Pairs of live projects that share people, chats
+// or name words go to the model with both profiles; the ones it calls the same are merged. Each pair's verdict is
+// kept (projects/.dedupe.json) so it is asked once, and again only after either side changed a lot.
 
 const (
 	// dedupeRecheck: a pair judged different is asked again after this long (both have grown since).
@@ -114,8 +114,8 @@ func overlap(a, b []string) int {
 	return n
 }
 
-// nameWords are the words of a project's name and aliases, lowercased, two characters or more: "SS codex 方案" →
-// ss, codex, 方案. Common words every project has say nothing and are left out.
+// nameWords are the words of a project's name and aliases, lowercased, two characters or more: "Acme codex plan" →
+// acme, codex, plan. Common words every project has say nothing and are left out.
 func nameWords(p *Project) []string {
 	var out []string
 	for _, n := range append([]string{p.Name}, p.Aliases...) {
@@ -217,7 +217,7 @@ func (e *Engine) judgeDuplicate(ctx context.Context, c dedupeCandidate) (same, k
 	return d.Same, !strings.EqualFold(strings.TrimSpace(d.Keep), "B"), reason, nil
 }
 
-// hedgeWords in a "same" verdict's reason mean the model doubts it (merges whose reasons read 「方向是否一致存疑」,
+// hedgeWords in a "same" verdict's reason mean the model doubts it (merges whose reasons read "whether the direction is the same is doubtful",
 // #2546).
 var hedgeWords = []string{"存疑", "不确定", "拿不准", "不一定", "待确认", "或许", "也许", "似乎", "不太像", "可能不是"}
 
@@ -231,7 +231,7 @@ func hedged(reason string) bool {
 }
 
 // MergeProjects folds drop into keep: drop's name and aliases become keep's aliases; people, chats, documents,
-// code directories, keywords and 公司圈 posts are joined; the timelines are interleaved; the chats, people and items
+// code directories, keywords and Moments posts are joined; the timelines are interleaved; the chats, people and items
 // that named drop name keep. drop stays on disk as merged (merged_into), hidden from lists, so it can be undone by
 // hand. keep is marked dirty: its profile is rewritten from both.
 func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {

@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// ContributionView is one contribution of an extension and its switch (docs/extensions.md「贡献的开关」).
+// ContributionView is one contribution of an extension and its switch (docs/extensions.md "Contribution switches").
 type ContributionView struct {
 	Point   string `json:"point"`
 	ID      string `json:"id"`
@@ -66,7 +66,7 @@ func (ps *extensions) connectorOn(m *extension.Manifest, point, id string) bool 
 }
 
 // contributionRoutes: PUT /api/v1/extensions/{id}/-/contributions/{point}/{cid} {enabled} switches one contribution and
-// answers the extension's detail. A connector's goes to the connector's own switch (the same as 设置 › 连接器).
+// answers the extension's detail. A connector's goes to the connector's own switch (the same as Settings › Connectors).
 func (h *Manager) contributionRoutes(api *http.ServeMux) {
 	api.HandleFunc("PUT /api/v1/extensions/{id}/-/contributions/{point}/{cid}", func(w http.ResponseWriter, r *http.Request) {
 		if principalOf(r.Context()).Role != roleFull {

@@ -348,7 +348,7 @@ func TestRewoundByTheNode(t *testing.T) {
 	f := NewFile(p)
 	_, before, _ := f.RefreshSpan()
 
-	// Go back to the second 「继续」 (the last one), then to the first (the new last one is the remaining one).
+	// Go back to the second "continue" (the last one), then to the first (the new last one is the remaining one).
 	if _, ok := f.Rewound("没有这条", 1); ok {
 		t.Fatal("found a message that was never sent")
 	}

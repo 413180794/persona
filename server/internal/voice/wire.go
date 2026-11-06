@@ -116,7 +116,7 @@ func (liveWire) text(s string) any {
 }
 func (w liveWire) say(s, id string) []any { return []any{withEventID(w.text(s), id)} }
 
-// A thinking is held to the append's token limit; a commentary only to its characters (docs/lessons/voice.md「错误」:
+// A thinking is held to the append's token limit; a commentary only to its characters (docs/lessons/voice.md "Errors":
 // a delegation's commentary of 1300 Chinese characters went through on the measured service, its limit is 4000
 // characters), so a whole answer fits in one. Another service may hold a commentary to the append's tokens: it refuses
 // it (evError, param content) and the conversation sends a shorter one (session.go, deliver).
@@ -133,7 +133,7 @@ func (w liveWire) toolResult(delegation, _, output, id string) []any {
 }
 
 // The service echoes a client frame's event_id as client_event_id on its session.commentary.appended and on an error
-// about it (docs/lessons/voice.md「错误」).
+// about it (docs/lessons/voice.md "Errors").
 func (liveWire) acks() bool { return true }
 
 func withEventID(frame any, id string) any {
@@ -219,7 +219,7 @@ func (liveWire) decode(raw []byte) []event {
 
 // liveResponseEvent reads the Responses event a response.event carries: a function call (bare, or as the finished
 // item of response.output_item.done), the model's text, the start and end of its reply. A reply's events come on its
-// own (responses) delegation: delegation names the reply (docs/lessons/voice.md「其他行为」).
+// own (responses) delegation: delegation names the reply (docs/lessons/voice.md "Other behavior").
 func liveResponseEvent(delegation string, raw json.RawMessage) []event {
 	var e struct {
 		Type   string `json:"type"`
@@ -405,7 +405,7 @@ func inputContent(s string) []contentPart { return []contentPart{{Type: "input_t
 
 const (
 	appendTokens     = 450  // GPT-Live: a thinking's content is limited to 500 tokens
-	commentaryRunes  = 3900 // GPT-Live: a commentary's to 4000 characters (docs/lessons/voice.md「错误」)
+	commentaryRunes  = 3900 // GPT-Live: a commentary's to 4000 characters (docs/lessons/voice.md "Errors")
 	codexAppendBytes = 500  // Codex splits its context appends at 500 bytes
 )
 

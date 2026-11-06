@@ -21,12 +21,12 @@ import (
 	"time"
 )
 
-// Plugin markets (docs/extensions.md「扩展市场」): a repository or a website publishes an index of its plugins,
+// Plugin markets (docs/extensions.md "Extension market"): a repository or a website publishes an index of its plugins,
 // persona-extensions.json (formerly persona-plugins.json); a hub that registered the market lists them, and installs one by downloading its package and
 // checking it against the sha256 the index pins.
 
 // IndexFile is a market's index, at the root of a repository or of a website's path; LegacyIndexFile is its name
-// before #1844, read when a market has no IndexFile (docs/extensions.md「命名和兼容」).
+// before #1844, read when a market has no IndexFile (docs/extensions.md "Naming and compatibility").
 const (
 	IndexFile       = "persona-extensions.json"
 	LegacyIndexFile = "persona-plugins.json"
@@ -274,7 +274,7 @@ func (e *MarketEntry) PackageFor(platform string) *MarketPackage {
 // Market is a registered market with what reading it needs.
 type Market struct {
 	Spec MarketSpec
-	// TrustedKey 由 hub 提供，用于绑定预览时的市场信任，不是下载凭据。
+	// TrustedKey is supplied by the hub to pin the market's trust at preview time; it is not a download credential.
 	TrustedKey string
 	// Token, when set, is sent to the market's own origin only (a private repository or site).
 	Token string
@@ -286,7 +286,7 @@ type Market struct {
 	GitHubWeb string
 	// Dir is where git markets' clones are kept (the hub's data directory).
 	Dir string
-	// Cache is where downloaded packages are kept by their sha256 ("": none), docs/protocol.md「扩展的安装、升级、卸载进度」.
+	// Cache is where downloaded packages are kept by their sha256 ("": none), docs/protocol.md "Extension install, upgrade and uninstall progress".
 	Cache string
 	// allowLocal lets tests clone a local repository.
 	allowLocal bool
@@ -371,7 +371,7 @@ func rateLimited(res *http.Response) bool {
 }
 
 // retryIn says when a rate-limited request may be tried again, from Retry-After (seconds) or X-RateLimit-Reset
-// (Unix seconds); "过一会儿" when neither says.
+// (Unix seconds); "in a while" (in Chinese) when neither says.
 func retryIn(h http.Header, now time.Time) string {
 	var wait time.Duration
 	if s, err := strconv.ParseInt(strings.TrimSpace(h.Get("Retry-After")), 10, 64); err == nil && s >= 0 {

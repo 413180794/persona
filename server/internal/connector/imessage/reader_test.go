@@ -53,7 +53,7 @@ func TestChatsAreConversationsNewestFirst(t *testing.T) {
 	want := []row{
 		{"张三", "👍 好的 🎉"},                    // iMessage and SMS chats of one person: one conversation
 		{"12345", "【示例】验证码 123456，5 分钟内有效"}, // not in the contacts: the number
-		{"李四、+15550102", "收到"},              // a group without a name: its members (李四 saved without +1)
+		{"李四、+15550102", "收到"},              // a group without a name: its members (the second contact saved without +1)
 		{"周末徒步", "你把+15550102加进了群聊"},        // the newest line is the group's: not the tapback-free message before it
 		{"Alice Example", "[语音]"},
 	}
@@ -246,7 +246,7 @@ func TestContactNames(t *testing.T) {
 	c.addNumber("(415) 555-0100", "Example B")
 	c.addNumber("555 0101", "示例乙")
 	c.addNumber("+1 555 0199", "示例丙")
-	c.addNumber("+44 555 0199", "示例丁") // the same last seven digits as 示例丙: neither by seven
+	c.addNumber("+44 555 0199", "示例丁") // the same last seven digits as the contact above: neither by seven
 	for handle, want := range map[string]string{
 		"+8613800000000":    "示例甲",
 		"+14155550100":      "Example B",

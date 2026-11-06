@@ -1,7 +1,7 @@
 // Package mail implements the Persona mail module: encrypted account storage,
 // IMAP reading, SMTP sending and the /api/v1/mail HTTP API.
 //
-// The JSON shapes mirror docs/protocol.md ("邮件 API"); keep them in sync.
+// The JSON shapes mirror docs/protocol.md ("Mail API"); keep them in sync.
 package mail
 
 import (

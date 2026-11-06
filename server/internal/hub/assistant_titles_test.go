@@ -124,7 +124,7 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	}
 }
 
-// A scheduled task's conversation is 「MMDD | 定时 | 任务名」 from its first run, with no model call, and keeps it.
+// A scheduled task's conversation is "MMDD | scheduled | task name" (in Chinese) from its first run, with no model call, and keeps it.
 func TestATaskConversationIsTitledAfterTheTask(t *testing.T) {
 	h := newTestHub(t)
 	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
@@ -150,7 +150,7 @@ func TestATaskConversationIsTitledAfterTheTask(t *testing.T) {
 	}
 }
 
-// The main conversation is 「Persona」 on the lists the apps get, whatever the node, a model or a rename would call it;
+// The main conversation is "Persona" on the lists the apps get, whatever the node, a model or a rename would call it;
 // it is not named after its first turn and the app cannot rename it (#1313).
 func TestTheMainConversationIsAlwaysPersona(t *testing.T) {
 	h, n := conversationsHub(t)

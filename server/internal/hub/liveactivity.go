@@ -24,7 +24,7 @@ import (
 // on the phone. So what needs the user (a request arriving, or answered) goes out at once; anything else is merged
 // for fleetCoalesce and reaches a device at most every fleetMinGap; the timer (working since…) runs on the phone; a
 // phone whose app is open draws the activity itself from the fleet events and gets no push; and nothing is sent
-// while nothing changes except a refresh before the content goes stale (docs/live-activity.md「推送节奏」).
+// while nothing changes except a refresh before the content goes stale (docs/live-activity.md "Push cadence").
 
 const (
 	fleetCoalesce = 2500 * time.Millisecond
@@ -98,7 +98,7 @@ func fleetEmpty(s FleetState) bool { return s.Phase == "" }
 
 // showsNothing: a device's version of the fleet (forDevice) has nothing to draw: no agent, and the assistant not
 // answering or not on its island. Only the assistant answering is something to show where the island shows it
-// (思考中, #4398).
+// ("Thinking", #4398).
 func showsNothing(dst FleetState) bool { return fleetEmpty(dst) && !dst.Assistant }
 
 // showsAssistant: the device has the activity on, with a side of its island for the assistant answering.
@@ -550,7 +550,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 			la.mu.Unlock()
 			if !already {
 				la.markSent(r.DeviceID, dst, now, true)
-				// 手机静音 while a desktop is online: the activity still starts, without its alert (desktops.go).
+				// "Phone Muted" while a desktop is online: the activity still starts, without its alert (desktops.go).
 				quiet := prefs.MuteWhileDesktop && la.h.push.desktopOnline != nil && la.h.push.desktopOnline()
 				la.sendStart(d, r, startPayloadIn(la.h.userLang(), dst, now, quiet))
 			}
@@ -631,7 +631,7 @@ func startPayloadIn(l i18n.Lang, st FleetState, now time.Time, quiet bool) map[s
 	return p
 }
 
-// fleetSentence: "2 个需要你 · 3 个在工作", the alert of a push-started activity.
+// fleetSentence: "2 need you · 3 working" (in Chinese), the alert of a push-started activity.
 func fleetSentence(l i18n.Lang, st FleetState) string {
 	var parts []string
 	if st.NeedsYou > 0 {

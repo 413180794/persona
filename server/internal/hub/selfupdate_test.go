@@ -158,7 +158,7 @@ func TestUpdateWaitsForIdle(t *testing.T) {
 	}
 }
 
-// 现在就更新 (the second confirmation) does not wait.
+// "Update now" (the second confirmation) does not wait.
 func TestUpdateNowSkipsTheWait(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
 	h, m, _, execs := updatingHub(t, p, "release")
@@ -443,7 +443,7 @@ func TestUpdateAutoWhenTheReleaseContainsIt(t *testing.T) {
 	}
 }
 
-// With 自动更新 off nothing would install by itself anyway: no held record either.
+// With auto-update off nothing would install by itself anyway: no held record either.
 func TestUpdateHeldNotNotedWithAutoOff(t *testing.T) {
 	p := publishedAtB(t)
 	h, _, _, _ := updatingHub(t, p, "release")
@@ -487,7 +487,7 @@ func TestUpdateSettings(t *testing.T) {
 	}
 }
 
-// Once confirmed, the release's node binaries go where 重新部署 takes them (deploy.go), and only machines whose
+// Once confirmed, the release's node binaries go where "Redeploy" takes them (deploy.go), and only machines whose
 // node is another build, reached through the hub, are redeployed: never the hub's own machine.
 func TestUpdateNodesBinariesInPlace(t *testing.T) {
 	nodes := t.TempDir()
@@ -580,7 +580,7 @@ func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
 	} else if !bytes.Equal(b, p.script) {
 		t.Fatalf("the node binary for %s is not the hub's binary: %d bytes, gzip %v", own, len(b), len(b) > 1 && b[0] == 0x1f && b[1] == 0x8b)
 	}
-	// What the new hub does with them: 重新部署 takes them from NodeBinaryDir (internal/devices nodeBinary).
+	// What the new hub does with them: "Redeploy" takes them from NodeBinaryDir (internal/devices nodeBinary).
 	h.upd.updateNodes(context.Background(), staged)
 	for _, plat := range want {
 		if _, err := os.Stat(filepath.Join(nodes, "jarvisd-"+plat)); err != nil {

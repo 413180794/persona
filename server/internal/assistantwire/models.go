@@ -6,9 +6,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The model configuration is the assistant's (docs/model-config.md「谁管模型」): the four categories' records, the
-// providers added in Persona with their sealed keys, the hidden ~/.zshrc launchers, the routes of 设置 › 模型供应商 /
-// 模型配置 and 新建 Agent's pickers. Every model call is made there. The hub keeps what its plugins have (their
+// The model configuration is the assistant's (docs/model-config.md "Who owns the models"): the four categories' records, the
+// providers added in Persona with their sealed keys, the hidden ~/.zshrc launchers, the routes of Settings › Model providers /
+// Models and "New agent"'s pickers. Every model call is made there. The hub keeps what its plugins have (their
 // providers, their voice models, their quota readers) and hands those over as data; the hub.json sections about
 // models come in the hello (HubModels).
 
@@ -32,7 +32,7 @@ type ConfiguredLauncher struct {
 	AgentType string `json:"agent_type,omitempty"`
 }
 
-// The node's launcher methods the assistant calls (docs/protocol.md「hub ↔ node」).
+// The node's launcher methods the assistant calls (docs/protocol.md "hub ↔ node").
 const (
 	DeviceLaunchersZshrc      = "launchers.zshrc"       // {} → {aliases: [{alias, env, args, command}]}: the claude aliases with their env (keys too)
 	DeviceLaunchersManaged    = "launchers.managed"     // {launchers: [proto.ManagedLauncher]} → {ok}: with their keys
@@ -50,7 +50,7 @@ const (
 	PluginsPresets = "plugins.presets"
 	// PluginsVoice: {} → {plugins: [VoicePlugin]}, the voice plugins and the models each offers.
 	PluginsVoice = "plugins.voice"
-	// PluginsNeedTriage: {} → {names}, the plugins switched on whose inbox needs 信息筛选 (inbox.triage) to be callable.
+	// PluginsNeedTriage: {} → {names}, the plugins switched on whose inbox needs message screening (inbox.triage) to be callable.
 	PluginsNeedTriage = "plugins.need_triage"
 	// PluginsQuota: {name, machine, base_url, tz} → {report}: the quota plugins read launcher name's quota at its gateway
 	// base_url; what they send goes back with the key through models.launcher_http (on machine). Errors: the plugins'
@@ -58,7 +58,7 @@ const (
 	PluginsQuota = "plugins.quota"
 )
 
-// LauncherPreset is one model provider 设置 › 模型供应商 offers: a plugin's (docs/extensions.md「模型供应商」) or a built-in
+// LauncherPreset is one model provider Settings › Model providers offers: a plugin's (docs/extensions.md "Model providers") or a built-in
 // one (plugin "builtin", docs/onboarding.md 4.3).
 type LauncherPreset struct {
 	ID          string                    `json:"id"` // <plugin>/<provider>
@@ -76,7 +76,7 @@ type LauncherPreset struct {
 	Auth string `json:"auth,omitempty"`
 	// SignupURL is the page to open an account or buy a key at (built-in presets only; the apps open it in-app).
 	SignupURL string `json:"signup_url,omitempty"`
-	// DisplayName is the provider's name in the request's language (「智谱 GLM」); Name stays the plain one.
+	// DisplayName is the provider's name in the request's language ("Zhipu GLM" in Chinese); Name stays the plain one.
 	DisplayName string `json:"display_name,omitempty"`
 	// ModelsError says why the plugin's own list could not be had (the declared models are still there).
 	ModelsError string `json:"models_error,omitempty"`
@@ -101,7 +101,7 @@ type ModelChoice struct {
 // What the hub's plugins ask of the model configuration (Handler).
 const (
 	// MethodModelsUsable: {purpose} → {usable}: an API purpose resolves to an address, a model and a key (a plugin
-	// whose inbox needs 信息筛选 is switched on only then).
+	// whose inbox needs message screening is switched on only then).
 	MethodModelsUsable = "models.usable"
 	// MethodModelsLauncherHTTP: {name, machine?, http?} → {base_url, machine} without http, else the quota.Response: a
 	// request to a launcher's gateway, sent by whoever holds its key (the assistant for a provider added in Persona,

@@ -2,7 +2,7 @@ package proto
 
 import "encoding/json"
 
-// Plugins' programs on computers (docs/plan-extensions.md「七」, #1830): what the hub and a node say to each other
+// Plugins' programs on computers (docs/plan-extensions.md"7", #1830): what the hub and a node say to each other
 // about them (extmgr/extension_nodes.go, node/plugins.go). The hub keeps what should run where; the node does it.
 
 // PluginNodeProgram is one plugin version that should be on a machine: Digest is the sha256 of the package the hub

@@ -147,7 +147,7 @@ func TestInboxRuleTier(t *testing.T) {
 	}{
 		{InboxItem{Kind: KindDM}, TierAction},
 		{InboxItem{Kind: KindMention}, TierAction},
-		{InboxItem{Kind: KindMention, Lark: &InboxLark{AtAll: true}}, TierFYI},                // only @所有人: an announcement
+		{InboxItem{Kind: KindMention, Lark: &InboxLark{AtAll: true}}, TierFYI},                // only @all: an announcement
 		{InboxItem{Kind: KindMention, Lark: &InboxLark{AtAll: true, AtMe: true}}, TierAction}, // @me as well
 		{InboxItem{Kind: KindGroup}, TierFYI},
 		{InboxItem{Kind: KindBot}, TierNoise},

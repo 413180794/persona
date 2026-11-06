@@ -84,7 +84,7 @@ func installNode(t *testing.T, body []byte, sum string, gate chan struct{}) (*No
 	return n, sock, fl, fr
 }
 
-// 启动 on a machine without herdr: the pinned binary is downloaded, checked, put in ~/.local/bin as an executable
+// "Start" on a machine without herdr: the pinned binary is downloaded, checked, put in ~/.local/bin as an executable
 // herdr, and the server started from it — the call answers running.
 func TestStartHerdrInstallsItFirst(t *testing.T) {
 	body := []byte("#!/bin/sh\necho herdr\n")
@@ -110,7 +110,7 @@ func TestStartHerdrInstallsItFirst(t *testing.T) {
 	if left, _ := filepath.Glob(filepath.Join(fr.dir, ".herdr-install-*")); len(left) != 0 {
 		t.Fatalf("left behind %v", left)
 	}
-	// Installed now: another 启动 downloads nothing.
+	// Installed now: another "Start" downloads nothing.
 	if _, err := request(t, n, "herdr.server.start", map[string]any{}); err != nil || fr.hits.Load() != 1 {
 		t.Fatalf("again: %v, %d downloads", err, fr.hits.Load())
 	}
@@ -153,7 +153,7 @@ func TestStartHerdrInstallUnreachable(t *testing.T) {
 	}
 }
 
-// A slow download: 启动 says it is installing instead of hanging, the status says so too, and once it is done the
+// A slow download: "Start" says it is installing instead of hanging, the status says so too, and once it is done the
 // node starts herdr by itself.
 func TestStartHerdrInstallGoesOn(t *testing.T) {
 	gate := make(chan struct{})

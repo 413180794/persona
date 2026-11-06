@@ -2,7 +2,7 @@ package prompts
 
 import "regexp"
 
-// The voice extension's prompts (voice/, docs/voice.md「提示词」). Every one comes in the user's language: its Lang is
+// The voice extension's prompts (voice/, docs/voice.md "Prompts"). Every one comes in the user's language: its Lang is
 // an i18n code, en or ja, anything else is Chinese.
 
 // VoiceLine is one final line of a voice conversation, or of the conversation a call is bound to (role tool: the
@@ -15,10 +15,10 @@ type VoiceLine struct {
 // VoiceInstructions is what the built-in voice plugin's realtime model is told about itself (voice/instructions).
 type VoiceInstructions struct {
 	Lang  string
-	Owner string // "" is 用户 (the user, ユーザー)
+	Owner string // "" is the word for "user" in Lang
 	Notes string
 	// Tools is which of the plugin's function tools (mcp/voice) the session declares: "all"; "ask_jarvis" (only that
-	// one: another extension calling, docs/voice.md「权限」); "bound" (a call bound to a conversation, protocol 2:
+	// one: another extension calling, docs/voice.md "Permissions"); "bound" (a call bound to a conversation, protocol 2:
 	// search_knowledge, list_agents and delegate_task, which hands work to it); "" none, the model delegates.
 	Tools string
 	// History: what was said before the connection dropped (a reconnected session, a call picked up again), oldest
@@ -32,8 +32,8 @@ type VoiceInstructions struct {
 	Waiting []string
 }
 
-// VoiceTarget is the conversation a call is bound to, as its session starts (voice/target, docs/voice.md「给快层的
-// 上下文」). Title, Goal, Work, the recent turns, the cards' questions and the agents' titles are other people's words:
+// VoiceTarget is the conversation a call is bound to, as its session starts (voice/target, docs/voice.md "Context for the
+// fast layer"). Title, Goal, Work, the recent turns, the cards' questions and the agents' titles are other people's words:
 // they go inside an <agent_output> block.
 type VoiceTarget struct {
 	Kind  string // main | assistant | agent
@@ -59,7 +59,7 @@ func RenderVoiceInstructions(d VoiceInstructions) string { return render("voice/
 
 // VoiceReport is what the voice model is told when a turn handed to the main conversation is over, or stops to wait for
 // the user (voice/report). Its first sentence and the <agent_output> block around the answer are the wording measured
-// to keep the model from doing what an agent wrote (docs/lessons/voice.md「注入实测用的原文」).
+// to keep the model from doing what an agent wrote (docs/lessons/voice.md "Original text used in the injection tests").
 type VoiceReport struct {
 	Lang   string
 	To     string   // who did it: an agent's name (Claude Code…); "" the Persona main conversation
@@ -76,24 +76,24 @@ type VoiceReport struct {
 	Reason     string // failed: why there is no answer
 	// Failure is what sort of model error the turn ended on, said instead of its text (voice/failure): not_logged_in,
 	// auth_failed, model_route, rate_limited (proto.Session.TurnErrorCode), transient (the model service failed for a
-	// moment, and nobody went on), retried (it failed again after a 继续), error (another). failed: the turn has no
+	// moment, and nobody went on), retried (it failed again after a "Continue"), error (another). failed: the turn has no
 	// answer; done: Answer is what it wrote before that.
 	Failure string
 	// Observed: the turn was not handed over by voice: the bound conversation began it otherwise (typed on the phone or
-	// at the computer, a wake-up, docs/voice.md「一轮跟踪」); Tasks is then empty.
+	// at the computer, a wake-up, docs/voice.md "Turn tracking"); Tasks is then empty.
 	Observed bool
 }
 
 func RenderVoiceReport(d VoiceReport) string { return render("voice/report", d) }
 
 // VoiceProgress is what the voice model is told while the bound conversation still works on what was handed over
-// (voice/progress, docs/voice.md「播报」): a heartbeat after a long quiet (working: the sort of step it is on and how
+// (voice/progress, docs/voice.md "Announcements"): a heartbeat after a long quiet (working: the sort of step it is on and how
 // long it has worked, nothing it wrote), or once that it stopped to wait on something outside (waiting).
 type VoiceProgress struct {
 	Lang string
 	To   string // an agent's name; "" the Persona main conversation
 	Do   string // working | waiting
-	// Activity is the sort of step it is on (在跑测试, 在读, 在改…), Elapsed how long it has worked on it, in Lang.
+	// Activity is the sort of step it is on (running tests, reading, editing…), Elapsed how long it has worked on it, in Lang.
 	Activity, Elapsed string
 	// On is what it waits on (waiting): external (a deploy, CI, a review, a time) or agent (another agent finishing);
 	// Wait what it says it waits for and Agent the agent it waits on: the hub's triage of its words, inside
@@ -108,7 +108,7 @@ func RenderVoiceProgress(d VoiceProgress) string { return render("voice/progress
 type VoiceObserved struct {
 	Lang    string
 	To      string // "" the Persona main conversation; Persona for another of its conversations
-	Channel string // the channel's name (微信, 飞书机器人…); "" not a channel (a scheduled task, a wake-up)
+	Channel string // the channel's name (WeChat, Lark bot…); "" not a channel (a scheduled task, a wake-up)
 }
 
 func RenderVoiceObserved(d VoiceObserved) string { return render("voice/observed", d) }
@@ -116,8 +116,8 @@ func RenderVoiceObserved(d VoiceObserved) string { return render("voice/observed
 // VoiceRefused is what the voice model is told when what it handed over was not sent (voice/refused).
 type VoiceRefused struct {
 	Lang string
-	// Code: unprompted (the user had not spoken since the last agent's words, or not lately: docs/voice.md「用户发言
-	// 门槛」), empty (no task was heard), unknown (the send broke off and may have been typed), unreachable (the hub
+	// Code: unprompted (the user had not spoken since the last agent's words, or not lately: docs/voice.md "User speech
+	// gate"), empty (no task was heard), unknown (the send broke off and may have been typed), unreachable (the hub
 	// did not answer before anything was sent), on_screen (only a word that approves or refuses, while a card waits:
 	// cards are answered on the screen), dialog_open (a dialog holds the agent's terminal; Plan: it is the plan that
 	// waits), input_draft (its input box holds words typed at the computer), failed (Reason says why, when the hub
@@ -156,7 +156,7 @@ type VoiceAgentMessage struct {
 func RenderVoiceAgentMessage(d VoiceAgentMessage) string { return render("voice/agent_message", d) }
 
 // VoiceStatus is what the voice model is told about the bound conversation without sending it anything
-// (voice/status, docs/voice.md「状态查询」): a status asked for, or a stop.
+// (voice/status, docs/voice.md "Status queries"): a status asked for, or a stop.
 type VoiceStatus struct {
 	Lang string
 	To   string // an agent's name; "" the Persona main conversation
@@ -164,7 +164,7 @@ type VoiceStatus struct {
 	// idle (asked to stop while it does nothing); gone (it is no longer listed).
 	Do       string
 	State    string // proto.Session.State
-	Activity string // what sort of step it is on: 在跑测试, 在读, 在改…
+	Activity string // what sort of step it is on: running tests, reading, editing…
 	Work     string // proto.WorkState.Line
 	Elapsed  string // how long it has worked on this turn, in Lang ("" not known)
 	Latest   string // its latest words, made speakable
@@ -174,7 +174,7 @@ type VoiceStatus struct {
 
 func RenderVoiceStatus(d VoiceStatus) string { return render("voice/status", d) }
 
-// VoiceAsk is a question a conversation asked, as the voice model is to ask it (voice/ask, docs/voice.md「提问和卡片」):
+// VoiceAsk is a question a conversation asked, as the voice model is to ask it (voice/ask, docs/voice.md "Questions and cards"):
 // from the card's own data, one question at a time, the options by their names. Not channel.QuestionText: that has the
 // options' meanings and the typing hints in it, and a cut drops the last options. The question and the options are
 // the agent's words: they go inside an <agent_output> block.
@@ -183,7 +183,7 @@ type VoiceAsk struct {
 	To   string // an agent's name; "" the Persona main conversation
 	// Tool is what the model hands the answer over with: delegate_task, ask_jarvis, or "" (a delegation of its own).
 	Tool string
-	// Bound: the call is bound to the conversation (protocol 2): 「状态：」 and 「停止：」 are not answers.
+	// Bound: the call is bound to the conversation (protocol 2): the "status:" and "stop:" prefixes (in Chinese) are not answers.
 	Bound            bool
 	Header, Question string
 	Options          []VoiceOption
@@ -199,7 +199,7 @@ func RenderVoiceAsk(d VoiceAsk) string { return render("voice/ask", d) }
 
 // VoiceNeedsYou is what the voice model is told of cards that are answered on the screen only (voice/needs_you): a
 // plan, a permission, a terminal dialog, a form, a question voice cannot answer. Only their kinds: never a command, a
-// path or what a plan says (docs/voice.md「提问和卡片」).
+// path or what a plan says (docs/voice.md "Questions and cards").
 type VoiceNeedsYou struct {
 	Lang  string
 	To    string
@@ -264,7 +264,7 @@ func RenderVoiceToolResult(d VoiceToolResult) string { return render("voice/tool
 var agentOutputTag = regexp.MustCompile(`(?i)<\s*/?\s*agent_output\b[^>]*>`)
 
 // AgentOutput is an agent's words to go inside an <agent_output> block, with nothing left in them that opens or closes
-// one, so none of them can stand outside it (docs/voice.md「给快层的上下文」rule 5). Like ContextBody, a tag the removal
+// one, so none of them can stand outside it (docs/voice.md "Context for the fast layer" rule 5). Like ContextBody, a tag the removal
 // puts together has its `<` written as `&lt;`. Templates call it as `output`.
 func AgentOutput(s string) string {
 	s = agentOutputTag.ReplaceAllString(s, "")

@@ -194,7 +194,7 @@ func TestInboxHoldsNewItemsWithoutFallback(t *testing.T) {
 	}
 }
 
-// An item with a fallback tier comes in with it when the model fails (「按规则」) and that version is final: the model
+// An item with a fallback tier comes in with it when the model fails ("By rule") and that version is final: the model
 // coming back does not sort it again. Meanwhile one without a fallback waits.
 func TestInboxFallbackIsFinal(t *testing.T) {
 	model, client := newTriageModel(t, "fail", `{"tier":"noise","summary":"示例","reason":"示例"}`)
@@ -236,7 +236,7 @@ func TestInboxFallbackIsFinal(t *testing.T) {
 }
 
 // A plugin connector's item in the list without a fallback whose new version the model can't sort keeps what it
-// shows (no silent 噪音) and is asked again by the next pass.
+// shows (no silent "Noise") and is asked again by the next pass.
 func TestInboxConnectorItemIsNotSilentlyNoise(t *testing.T) {
 	model, client := newTriageModel(t, "fail", `{"tier":"fyi","summary":"示例","reason":"示例"}`)
 	h, _ := admitHub(t, client)
@@ -322,7 +322,7 @@ func TestInboxAdmitWindow(t *testing.T) {
 }
 
 // The hub's own sources (here a connector no plugin provides) go as they always did: a new item is listed at once,
-// untriaged, and the triage pass afterwards gives one without a rule tier its fallback, 噪音, when the model fails;
+// untriaged, and the triage pass afterwards gives one without a rule tier its fallback, "Noise", when the model fails;
 // nothing is held back.
 func TestInboxBuiltinSourcesAsBefore(t *testing.T) {
 	model, client := newTriageModel(t, "fail", `{"tier":"action","summary":"示例","reason":"示例"}`)

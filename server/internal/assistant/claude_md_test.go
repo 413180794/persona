@@ -107,7 +107,7 @@ func TestAssistantPromptUsesReportedStorageRoots(t *testing.T) {
 	}
 }
 
-// The assistant's instructions said 「就是你所在的这台」 only of the hub's own machine and gave everything else an
+// The assistant's instructions said "the one you are on" only of the hub's own machine and gave everything else an
 // `ssh <alias>` command, but the aliases are the hub machine's and a link machine has no ssh: an assistant on a laptop
 // was told to ssh into itself through a name only the hub knows (2026-10-31).
 func TestAssistantMachinesFromWhereItRuns(t *testing.T) {

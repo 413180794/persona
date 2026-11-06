@@ -260,7 +260,7 @@ func (h *Hub) pairContext(parent context.Context, p principal) (context.Context,
 	return ctx, cancel
 }
 
-// notifyPairing tells the devices a new credential was made; credential is its id (what 撤销 revokes).
+// notifyPairing tells the devices a new credential was made; credential is its id (what "Revoke" revokes).
 func (h *Hub) notifyPairing(name, credential string) {
 	if !h.push.ready() {
 		h.logf("new device paired: %q (push unavailable)", name)

@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// shortSupervise makes 督办 messages come at once and often, for a test.
+// shortSupervise makes supervision messages come at once and often, for a test.
 func shortSupervise(t *testing.T) {
 	t.Helper()
 	g, e, u := superviseGather, superviseEvery, superviseUrgentEvery

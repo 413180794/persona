@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Forking a conversation (分支到新聊天, #2137): a new Claude Code session that knows the conversation up to one of its
+// Forking a conversation ("Branch to New Chat", #2137): a new Claude Code session that knows the conversation up to one of its
 // replies, the original untouched. The transcript is copied under a new id up to the end of the turn that reply is in
 // (so no tool call is cut from its result) and the copy is an offline session like any other: the next message to it
 // resumes it (claude --resume <new id>) in a new tab, or in the assistant's process for an assistant conversation.
@@ -24,7 +24,7 @@ import (
 // is not honoured by an interactive claude (tried 2026-11-05), so the node makes the copy itself.
 
 // forkable: the session is a Claude Code conversation whose transcript the node can copy. Codex, TRAEX, runtimes and
-// other tools' sources have their own ids and files; the client hides 分支到新聊天 for them.
+// other tools' sources have their own ids and files; the client hides "Branch to New Chat" for them.
 func (n *Node) forkable(s proto.Session) bool {
 	if _, codex := n.codexSource(s.SessionID); codex || s.SourceKind != "" || (s.Agent != "" && s.Agent != "claude") || !validID(s.SessionID) || n.runtimeAssistant(s.SessionID) || s.Starting {
 		return false
@@ -94,7 +94,7 @@ func (n *Node) fork(ctx context.Context, id, at string) (string, error) {
 	return newID, nil
 }
 
-// forkTitle is the copy's name: the original's (else its first prompt, cut to 40 characters) with 「分支 · 」 in front,
+// forkTitle is the copy's name: the original's (else its first prompt, cut to 40 characters) with the Chinese "Branch · " prefix in front,
 // once.
 func forkTitle(title, first string) string {
 	title = strings.TrimSpace(title)

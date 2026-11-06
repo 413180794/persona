@@ -16,22 +16,22 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// 请验收 (#2768, docs/bots.md「请验收」): once a task's work is deployed, the bot asks the user in Feishu to try it —
-// three lines: what changed, where to look (a link straight to the page), how to check — with 通过 on the card. 通过
+// "Please verify" (#2768, docs/bots.md "Please verify"): once a task's work is deployed, the bot asks the user in Feishu to try it —
+// three lines: what changed, where to look (a link straight to the page), how to check — with "Pass" on the card. "Pass"
 // (the button, or a reply saying so) marks the task verified; any other reply to the card is written into the todo's
 // decisions and sent to the agent that did the work. One still not accepted is asked again the next morning.
 
 const acceptanceKey = "assistant.acceptance"
 
 // acceptMorningHour is when, in the user's zone, the cards not accepted the day before are posted again, when the
-// morning briefing (the 早报 routine) is off or gone; while it is on, its own time.
+// morning briefing (the "Morning briefing" routine) is off or gone; while it is on, its own time.
 const acceptMorningHour = 9
 
 type acceptAsk struct {
 	MessageID string   `json:"message_id"`
 	Messages  []string `json:"messages,omitempty"` // every card asking it (the first and the reminders)
 	// Earlier are the cards of the task's rounds before this one (#4853): dead, so a press or a reply on one is answered
-	// 已经处理过了 and never accepts this round or reaches the chat.
+	// "already handled" and never accepts this round or reaches the chat.
 	Earlier    []string  `json:"earlier,omitempty"`
 	MachineID  string    `json:"machine_id"`
 	SessionID  string    `json:"session_id"`
@@ -85,7 +85,7 @@ func (s *Service) saveAcceptLocked(ctx context.Context) {
 
 var urlRe = regexp.MustCompile(`https?://[^\s<>()\[\]"'，。；、）]+`)
 
-// askAcceptance posts task t's 请验收 card once (reply: what its agent said last, on machine/session).
+// askAcceptance posts task t's "Please verify" card once (reply: what its agent said last, on machine/session).
 func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -173,7 +173,7 @@ func (s *Service) acceptLines(ctx context.Context, t Todo, machine, session, rep
 	return a
 }
 
-// acceptCard is the 请验收 card (again: the morning's reminder), or how it ended (accepted).
+// acceptCard is the "Please verify" card (again: the morning's reminder), or how it ended (accepted).
 func (s *Service) acceptCard(ctx context.Context, t Todo, a acceptAsk, again bool) *feishubot.Card {
 	l := s.botLang(ctx)
 	head := "assistant-reports.accept_title"
@@ -210,7 +210,7 @@ func lastOf(list []string, n int) []string {
 	return list
 }
 
-// acceptFor is the todo whose 请验收 card message id is (or the thread it is in), "" when none; earlier when the card
+// acceptFor is the todo whose "Please verify" card message id is (or the thread it is in), "" when none; earlier when the card
 // is one of an earlier round of that task (Earlier).
 func (s *Service) acceptFor(ids ...string) (todo string, earlier bool) {
 	b := &s.accept
@@ -244,13 +244,13 @@ func (s *Service) acceptAskLocked(id string) *acceptAsk {
 	return b.asks[id]
 }
 
-// passWords accepts bare approval, optionally prefixed with 验收 and followed by one or two completion
-// particles (通过了, 可以啊, 没问题了呀, ok啦) or a stop. Question markers stay out: 吗/么/吧/呢 and
-// both ？/? are neither particles nor stops here, so 可以了吗 and 通过了？ still go to the agent, and
-// negations (不通过, 没通过, 通过不了, 不行) never match because the regex anchors on the approval word.
+// passWords accepts bare approval, optionally prefixed with the Chinese word for "verify" and followed by one or two
+// Chinese completion particles (as in "ok" plus a particle) or a stop. Question particles stay out, and
+// both full-width and ASCII question marks are neither particles nor stops, so questions still go to the agent, and
+// negations ("not passed", "can't pass", "no good") never match because the regex anchors on the approval word.
 var passWords = regexp.MustCompile(`(?i)^\s*(验收)?(通过|没问题|可以|好的?|ok|okay|lgtm|pass(ed)?|approved?|👍)(?:[了啦呀咯喽呗哒啊]{1,2})?\s*[。.!！]?\s*$`)
 
-// acceptReply answers a reply to a 请验收 card (true: it was one): 通过 marks it verified, anything else is the
+// acceptReply answers a reply to a "Please verify" card (true: it was one): "Pass" marks it verified, anything else is the
 // user's change, written into the todo's decisions and sent to its agent.
 func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids ...string) bool {
 	id, earlier := s.acceptFor(ids...)
@@ -299,7 +299,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 		}
 	}
 	// Not accepted: the work goes on. A task the hub (or the user) closed meanwhile is open again before its agent is
-	// told, so the turn the change starts is followed (receipt, judgment, the next 请验收) and the task shows as in
+	// told, so the turn the change starts is followed (receipt, judgment, the next "Please verify") and the task shows as in
 	// progress, not done (#3457). It stays open when the send fails: the change is still to be made.
 	if t.StartError == "" {
 		if err := s.reopenTodo(ctx, id); err != nil {
@@ -446,7 +446,7 @@ func (s *Service) remindAcceptance(now time.Time) {
 	}
 }
 
-// briefingClock is when the morning briefing goes out (the enabled 早报 routine's time), else acceptMorningHour: the
+// briefingClock is when the morning briefing goes out (the enabled "Morning briefing" routine's time), else acceptMorningHour: the
 // reminders come with it, and the briefing lists what waits (snapshotUnaccepted).
 func (s *Service) briefingClock(ctx context.Context) (int, int) {
 	sc, err := s.lockedSchedule(ctx)
@@ -468,7 +468,7 @@ func (s *Service) briefingClock(ctx context.Context) (int, int) {
 }
 
 // snapshotUnaccepted are the deployed tasks still waiting for the user to check them, the oldest eight, and how many
-// there are (the snapshot's 等用户验收的, which the morning briefing brings up).
+// there are (the snapshot's "waiting for the user to verify", which the morning briefing brings up).
 func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([]prompts.SnapshotAccept, int) {
 	b := &s.accept
 	b.mu.Lock()
@@ -527,7 +527,7 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 	return out, total
 }
 
-// acceptAskEnded says the todo a 请验收 card waits on has ended without the hub's auto-judge: the owner closed it in
+// acceptAskEnded says the todo a "Please verify" card waits on has ended without the hub's auto-judge: the owner closed it in
 // the todos themselves (DoneBy "") or a review did (DoneByReview). Such a card can never be passed, so it is neither
 // reminded nor counted. An auto-closed task (DoneByAuto) is the normal state: the judge finished it, but the owner
 // still has to pass the card.

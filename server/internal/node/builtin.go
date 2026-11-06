@@ -1,6 +1,6 @@
 package node
 
-// Built-in programs (#1830 steps 5 and 6, docs/plan-extensions.md「cua / ego 怎么迁」「iMessage 怎么用它」): the
+// Built-in programs (#1830 steps 5 and 6, docs/plan-extensions.md "Moving cua / ego" and "How iMessage uses it"): the
 // extensions cua (Cua Driver on this Mac), ego (ego lite) and imessage (this Mac's Messages, read-only) are programs on
 // computers like any extension's, but they run in this process, not as a package the hub sends. A hub that sees them
 // in node.info's builtin_programs asks them over plugin.node.call {id, method, params}; one from before asks by their
@@ -38,7 +38,7 @@ type lcuCaller func(ctx context.Context, params json.RawMessage) (*proto.Compute
 func builtinCall(ctx context.Context, id, method string, params json.RawMessage, lcu lcuCaller) (any, error) {
 	switch id {
 	case "cua":
-		backend := computerBackend(params) // the plugin's 操控后端: cua, lcu, or auto (lcu_status.go)
+		backend := computerBackend(params) // the plugin's "Control backend": cua, lcu, or auto (lcu_status.go)
 		switch method {
 		case "status": // Cua Driver or LCU on this Mac, asked only while the user has it on (computer.go)
 			return computerStatusFor(ctx, backend), nil
@@ -67,18 +67,18 @@ func builtinCall(ctx context.Context, id, method string, params json.RawMessage,
 		case "cancel":
 			cancelJob()
 			return computerStatusFor(ctx, backend), nil
-		case "clipboard": // the live screen's 剪贴板: text RFB cannot carry (Chinese), and reading it (clipboard.go)
+		case "clipboard": // the live screen's clipboard: text RFB cannot carry (Chinese), and reading it (clipboard.go)
 			return macClipboard(ctx, params)
-		case "cursor": // 「显示 Agent 的光标」: Cua Driver's daemon with or without its cursor overlay (cua_extras.go)
+		case "cursor": // "Show the agent's cursor": Cua Driver's daemon with or without its cursor overlay (cua_extras.go)
 			return setCursor(ctx, params)
-		case "nolock": // 「扩展开着时不自动锁屏」, said again by the hub every few minutes (awake.go)
+		case "nolock": // "Don't auto-lock while the extension is on", said again by the hub every few minutes (awake.go)
 			var p struct {
 				On bool `json:"on"`
 			}
 			_ = json.Unmarshal(params, &p)
 			noLock.set(p.On)
 			return map[string]any{"held": noLock.held()}, nil
-		case "lock": // 锁上 from the app, after a one-tap unlock (awake.go)
+		case "lock": // "Lock" from the app, after a one-tap unlock (awake.go)
 			if err := lockScreen(ctx); err != nil {
 				return nil, err
 			}

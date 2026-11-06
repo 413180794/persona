@@ -77,7 +77,7 @@ type Config struct {
 	// plugin host's business, and the hub passes the program's calls and events on (Handle, Event).
 	Link *Link
 	// GhToken, when set, answers the program's credentials.gh_token: a computer's gh login. The hub sets it only for
-	// an extension it granted gh_login (docs/extensions.md「权限」); nil refuses.
+	// an extension it granted gh_login (docs/extensions.md "Permissions"); nil refuses.
 	GhToken func(ctx context.Context, machine, host string) (string, error)
 }
 
@@ -895,7 +895,7 @@ func (s connItems) DocTitle(ctx context.Context, url string) string {
 }
 
 // ArchiveMedia is an archived message's attachment (archive.media); a program without it answers unknown_method and
-// the line keeps [附件].
+// the line keeps the [attachment] marker (in Chinese).
 func (c *Conn) ArchiveMedia(ctx context.Context, ref string) (connector.Media, error) {
 	var out connector.Media
 	err := c.call(ctx, serve.MArchiveMedia, serve.MediaParams{Ref: ref}, &out)

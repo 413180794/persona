@@ -38,7 +38,7 @@ func New(cfg Config, hubURL, hubToken string, logger *log.Logger) *Plugin {
 
 func (pl *Plugin) logf(format string, args ...any) { pl.logger.Printf(format, args...) }
 
-// Handler is the plugin's API (docs/extensions.md「语音」): /health, /models, /voices, /ws.
+// Handler is the plugin's API (docs/extensions.md "Voice"): /health, /models, /voices, /ws.
 func (pl *Plugin) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func (pl *Plugin) Handler() http.Handler {
 			return
 		}
 		c.SetReadLimit(1 << 20)
-		// Who is calling, as the hub found it (docs/extensions.md「转发时的调用方」): the role decides the tools, the
+		// Who is calling, as the hub found it (docs/extensions.md "The caller on forwarded requests"): the role decides the tools, the
 		// language the words the model is told.
 		role, lang := r.Header.Get(extwire.HeaderRole), i18n.Resolve(r.Header.Get(extwire.HeaderLang))
 		pl.logf("conversation opened (role %q)", role)

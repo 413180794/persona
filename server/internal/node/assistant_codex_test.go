@@ -22,7 +22,7 @@ import (
 
 // fakeAppServer plays `codex app-server` on the other end of a codexConn: it records what the node sends, answers
 // requests with canned results, and pushes notifications / requests of its own. The frames follow what codex-cli
-// 0.159.3 sent in a real run (docs/assistant.md「Codex」).
+// 0.159.3 sent in a real run (docs/assistant.md "Codex").
 type fakeAppServer struct {
 	t   *testing.T
 	out io.Writer
@@ -385,7 +385,7 @@ func TestCodexApprovals(t *testing.T) {
 	if ix := fh.interactions(); len(ix) != 1 || ix[0].ToolName != "示例" || ix[0].SessionID != testThread {
 		t.Fatalf("a gated write not confirmed on the phone: %+v", ix)
 	}
-	// Confirmed whole (a command the gate cannot follow): 本会话总是允许 remembers nothing for it, nor does the hub.
+	// Confirmed whole (a command the gate cannot follow): "Always allow in this session" remembers nothing for it, nor does the hub.
 	if ix := fh.interactions(); len(ix[0].AlwaysKeys) != 0 {
 		t.Fatalf("whole command's always keys: %q", ix[0].AlwaysKeys)
 	}
@@ -554,7 +554,7 @@ func TestQuickMetaFindsAFirstPromptPastLongInstructions(t *testing.T) {
 	}
 }
 
-// Codex reads and writes the assistant's memory, the one the app's 记忆 page shows (Claude's auto-memory directory):
+// Codex reads and writes the assistant's memory, the one the app's "Memory" page shows (Claude's auto-memory directory):
 // its index goes into the instructions, the directory is writable, and writing there is not asked about.
 func TestCodexSharesTheAssistantMemory(t *testing.T) {
 	n := codexTestNode(t)
@@ -689,7 +689,7 @@ func TestCodexGetsRealWritableRoots(t *testing.T) {
 			if want := real(cwd); root != want {
 				t.Fatalf("workspace %s, want %s", root, want)
 			}
-			shown := n.memoryDir(cwd) // the one the app's 记忆 page shows, maybe through a link
+			shown := n.memoryDir(cwd) // the one the app's "Memory" page shows, maybe through a link
 			if want := real(shown); mem != want {
 				t.Fatalf("memory %s, want %s", mem, want)
 			}

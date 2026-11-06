@@ -8,8 +8,8 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The assistant's skills live on the machine that runs it, in the user's ~/.jarvis/skills (docs/hub-update.md「skill
-// 从二进制里拿出来」): the hub asks that machine's node (skills.list) to show them and to tell the assistant what it has.
+// The assistant's skills live on the machine that runs it, in the user's ~/.jarvis/skills (docs/hub-update.md "Moving
+// skills out of the binary"): the hub asks that machine's node (skills.list) to show them and to tell the assistant what it has.
 
 var errNoAssistantMachine = i18n.Err("hub-skills.no_assistant_machine")
 

@@ -4,7 +4,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What comes from the nodes is the manager's (docs/machines.md「谁处理电脑的事件」): it creates and answers the
+// What comes from the nodes is the manager's (docs/machines.md "Who handles the computers' events"): it creates and answers the
 // interactions, works out each Agent's state, decides the pushes and the Live Activity's content, runs the nodes' MCP
 // tools and keeps the machines' monitoring. The hub shows and delivers what it reports: the session lists, the
 // pending interactions and the fleet (kept while the manager is away), and the pushes (APNs, the relay, the apps'
@@ -70,7 +70,7 @@ type FleetInteraction struct {
 }
 
 // FleetResolved is EventFleetResolved's params; AnsweredBy says the assistant answered it, Reason why and Answers
-// with what (docs/assistant.md「提问先由助手代答」).
+// with what (docs/assistant.md "The assistant answers questions first").
 type FleetResolved struct {
 	ID         string            `json:"id"`
 	AnsweredBy string            `json:"answered_by,omitempty"`
@@ -124,7 +124,7 @@ type FleetState struct {
 	WorkingSince float64 `json:"workingSince,omitempty"`
 	// Details: the lock screen may show titles (the device's lock_details setting); otherwise only counts.
 	Details bool `json:"details"`
-	// Assistant: the assistant (对话 tab) is answering. Pushed only to devices that show it.
+	// Assistant: the assistant ("Chat" tab) is answering. Pushed only to devices that show it.
 	Assistant bool `json:"assistant,omitempty"`
 	// Left / Right: the compact Dynamic Island's sides (the device's island setting); empty means status counts.
 	Left  string `json:"left,omitempty"`
@@ -169,7 +169,7 @@ type FleetItem struct {
 	// Background: a working item whose turn ended while its background work runs (#2935, Session.BackgroundWorking);
 	// Detail then says what runs ("parity-audit · Verify · 169/185"). Older apps ignore it and show it working.
 	Background  bool    `json:"background,omitempty"`
-	Interaction string  `json:"interaction,omitempty"` // what 允许 / 拒绝 / 批准 resolve
+	Interaction string  `json:"interaction,omitempty"` // what "Allow" / "Deny" / "Approve" resolve
 	Since       float64 `json:"since,omitempty"`
 }
 

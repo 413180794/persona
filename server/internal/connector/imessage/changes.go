@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// What goes to Persona' knowledge base, inbox and assistant (the user's 「交给 Persona」 switch, on the hub): new
+// What goes to Persona' knowledge base, inbox and assistant (the user's "Hand to Persona" switch, on the hub): new
 // messages by ROWID, and a search. Only real conversations go (Keep), and codes are masked (MaskCodes); the app's
 // own view of a conversation (Messages) shows everything as it is.
 
@@ -191,7 +191,7 @@ var (
 	codeDigit = regexp.MustCompile(`\b\d{4,8}\b`)
 )
 
-// MaskCodes hides the digits of a message that is about a code (验证码 123456 → 验证码 ••••): what Persona keeps
+// MaskCodes hides the digits of a message that is about a code (verification code 123456 → verification code ••••): what Persona keeps
 // and gives to models does not carry one-time codes.
 func MaskCodes(s string) string {
 	if !codeWords.MatchString(s) {

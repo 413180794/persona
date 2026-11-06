@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The manager carries the extensions, the connectors and the bots too (internal/extmgr, docs/extensions.md「谁管什么」):
+// The manager carries the extensions, the connectors and the bots too (internal/extmgr, docs/extensions.md "Who manages what"):
 // this file is how the bus connection hands that layer the hub's extensions.* calls and events and the relayed
 // requests, and how what the assistant asked the hub for of them (the inbox's sources, the channels' transport, the
 // connectors for the knowledge base and its directory) goes to it directly instead, as do the assistant's events that

@@ -136,7 +136,7 @@ func TestHerdrAutostartPerMachine(t *testing.T) {
 	}
 }
 
-// The 启动 button works with autostart off — the switch says whether the node starts herdr on its own.
+// The "Start" button works with autostart off — the switch says whether the node starts herdr on its own.
 func TestHerdrStartButton(t *testing.T) {
 	h := newTestDevices(t)
 	off := false
@@ -199,7 +199,7 @@ func TestHerdrRowAsksTheNode(t *testing.T) {
 	}
 }
 
-// A 启动 on a machine without herdr goes on installing it in the background (node/herdrinstall.go): the row reads
+// A "Start" on a machine without herdr goes on installing it in the background (node/herdrinstall.go): the row reads
 // installing from the node, then why it failed; hub.json's herdr_autoinstall reaches the node in node.configure.
 func TestHerdrRowInstalling(t *testing.T) {
 	h := newTestDevices(t)
@@ -257,7 +257,7 @@ func TestHerdrRowOlderNode(t *testing.T) {
 	}
 }
 
-// After 启动 the row says it runs, even from an older node that cannot be asked again: it said so starting it.
+// After "Start" the row says it runs, even from an older node that cannot be asked again: it said so starting it.
 func TestHerdrRowAfterStart(t *testing.T) {
 	h := newTestDevices(t)
 	herdrMac(t, h, "mac", true)

@@ -1,7 +1,7 @@
 package prompts
 
 // TodoDecisions is the context a handoff to an agent carries for a todo's decisions in effect (todo/decisions,
-// #1618, docs/todos.md「决策记录」). The caller leaves out the closing tags
+// #1618, docs/todos.md "Decision log"). The caller leaves out the closing tags
 // ("</persona-context>", "</jarvis-context>") from the texts.
 type TodoDecisions struct {
 	Title     string
@@ -9,7 +9,7 @@ type TodoDecisions struct {
 }
 
 // TodoDecision is one decision: N counts from 1; When is its time as the user reads it, From where it came from
-// ("在 <Agent> 的提问里答的"), empty for one written in the todo.
+// ("answered in <Agent>'s question", in Chinese), empty for one written in the todo.
 type TodoDecision struct {
 	N                        int
 	Question, Choice, Reason string
@@ -25,9 +25,9 @@ func RenderTodoDecisions(d TodoDecisions) string {
 }
 
 // TodoTitle is the system prompt naming a todo a task opened after what the agent is asked to do (todo/title, #2775,
-// docs/todos.md「待办标题」).
+// docs/todos.md "To-do titles").
 type TodoTitle struct {
-	// Language is the title's language by its own name ("English", "日本語"); "" is Chinese.
+	// Language is the title's language by its own name ("English", "Japanese" written in Japanese); "" is Chinese.
 	Language string
 	Max      int // characters
 }
@@ -40,7 +40,7 @@ func RenderTodoTitleInput(prompt string) string {
 }
 
 // TodoOutcome is the system prompt pulling what a finished task came to out of its agents' last replies: a one-line
-// outcome, links, decisions, pitfalls (todo/outcome, docs/todos.md「做完记结论」, #2820).
+// outcome, links, decisions, pitfalls (todo/outcome, docs/todos.md "Recording the outcome", #2820).
 type TodoOutcome struct {
 	Owner string
 }

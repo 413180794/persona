@@ -442,7 +442,7 @@ func TestSendRetryKeepsTheClientID(t *testing.T) {
 	}
 }
 
-// 「正在输入」 while the hub says so, off when it says it is done.
+// "typing…" while the hub says so, off when it says it is done.
 func TestTypingWhileTheHubSays(t *testing.T) {
 	r := newRig(t, true)
 	ctx := context.Background()

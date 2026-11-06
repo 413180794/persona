@@ -34,7 +34,7 @@ func (n *Node) sampleMetrics(ctx context.Context) {
 		start := time.Now()
 		s := c.Sample(start.Round(time.Second))
 		took += time.Since(start)
-		if i == 30 { // the cost, once per node start (docs/machines.md「开销」)
+		if i == 30 { // the cost, once per node start (docs/machines.md "Overhead")
 			n.logger.Printf("metrics: a sample takes %v on average", (took / 30).Round(10*time.Microsecond))
 		}
 		if n.peer != nil {

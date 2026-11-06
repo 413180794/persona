@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The triage's model (purpose agent.triage, 「模型配置 › 信息筛选」's): the hub's models.json, the one place the Agents
+// The triage's model (purpose agent.triage, "Model Settings › Triage"'s): the hub's models.json, the one place the Agents
 // business uses a model besides the tab names (agents_start.go).
 
 // triageOut is what the triage model answers (prompts/agents/triage.md).
@@ -115,7 +115,7 @@ func triageWork(out triageOut, others map[string]proto.WorkAgent, now time.Time,
 			w.Agent = &a
 		}
 		if wt.Risky {
-			w.On = proto.WaitUser // never a wait the manager ends itself (docs/agent-work.md「安全边界」)
+			w.On = proto.WaitUser // never a wait the manager ends itself (docs/agent-work.md "Safety boundary")
 		}
 	}
 	switch w.On {

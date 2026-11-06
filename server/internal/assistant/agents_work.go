@@ -20,7 +20,7 @@ import (
 
 // Where an agent stands in its work (docs/agent-work.md, #1686), the manager's: when a turn ends it triages it — rules
 // first, then a cheap model reading the last reply — into done or blocked on a named precondition, and acts on what it
-// can: 继续 after a transient model error (with backoff and a cap), a wake when what it waits for should be over, a
+// can: "Continue" after a transient model error (with backoff and a cap), a wake when what it waits for should be over, a
 // card for what the user is to decide (the answer goes back to the agent). Everything else (pushing code, deploying,
 // messaging people, touching someone else's MR) is only ever a card. Each action checks, the moment before, that the
 // session is still stopped on the same turn with nothing pending or queued: whatever the user did meanwhile wins.
@@ -30,12 +30,12 @@ import (
 // on the session lists), the cards among the snapshot's interactions (answered with manager.action); what the manager
 // sends an agent goes through device.call session.send.
 
-// TriageSwitches turn the triage and each of its actions on, all off until the user turns them on (设置 › 会话分诊,
-// settings agents.triage): the triage calls a model on every stopped turn, and a 继续 or a wake runs a turn of the
-// agent on its own model (docs/agent-work.md「开关」).
+// TriageSwitches turn the triage and each of its actions on, all off until the user turns them on (Settings › Session Triage,
+// settings agents.triage): the triage calls a model on every stopped turn, and a "Continue" or a wake runs a turn of the
+// agent on its own model (docs/agent-work.md "Switches").
 type TriageSwitches struct {
 	Enabled      bool `json:"enabled"`       // triage stopped turns: the lists' line, done no longer unread
-	AutoContinue bool `json:"auto_continue"` // 继续 after a transient model error
+	AutoContinue bool `json:"auto_continue"` // "Continue" after a transient model error
 	Wake         bool `json:"wake"`          // wake agents whose wait should be over
 	Decide       bool `json:"decide"`        // cards for what the user is to decide
 }
@@ -61,7 +61,7 @@ func cmp0(n, def int) int {
 	return def
 }
 
-// retryBackoff is how long after a transient error each 继续 goes (the last repeats).
+// retryBackoff is how long after a transient error each "Continue" goes (the last repeats).
 var retryBackoff = []time.Duration{30 * time.Second, 2 * time.Minute, 8 * time.Minute}
 
 // workEvery is how often the manager looks for due wakes and expired cards; workBackfillEvery how often it looks for
@@ -80,7 +80,7 @@ const (
 	workSampleGap = 5 * time.Minute
 )
 
-// continueText (tasks.go) is what goes on a turn the model service cut off, as the chat's 重试 on an API error card.
+// continueText (tasks.go) is what goes on a turn the model service cut off, as the chat's "Retry" on an API error card.
 
 // Card answers the manager acts on itself instead of handing them to the agent: each one's default-language label,
 // which names it here. A card shows answerLabel's (the user's language); canonicalAnswer reads any language's back.
@@ -179,7 +179,7 @@ func (b *workBook) init() {
 	}
 }
 
-// approval is the user's 等好了就去做 on a risky wait's card: once the wait is over, the agent may take that step. It
+// approval is the user's "Do it once it's ready" on a risky wait's card: once the wait is over, the agent may take that step. It
 // holds while the agent keeps waiting (a wake, the agent's own check), so the same question is not asked again each
 // turn; anything the user does themselves, a turn that is no wait, or a riskier step ends it.
 type approval struct{ wait, then string }
@@ -785,7 +785,7 @@ func runningInBackground(c proto.Session) int {
 	return n
 }
 
-// turnErrorTransient: c's turn error is worth a 继续. The agent's record says so when it gives a kind (Codex's error
+// turnErrorTransient: c's turn error is worth a "Continue". The agent's record says so when it gives a kind (Codex's error
 // kinds, #2185); otherwise the text does.
 func turnErrorTransient(c proto.Session) bool {
 	switch c.TurnErrorKind {
@@ -797,7 +797,7 @@ func turnErrorTransient(c proto.Session) bool {
 	return transientError(c.TurnError)
 }
 
-// transientError: a model API error worth a 继续 (the service failed for a moment), not one the user must fix
+// transientError: a model API error worth a "Continue" (the service failed for a moment), not one the user must fix
 // (sign-in, key, the model picked).
 func transientError(text string) bool {
 	t := strings.ToLower(text)
@@ -820,7 +820,7 @@ func transientError(text string) bool {
 	return false
 }
 
-// riskyWords mark a next step the manager must not set off itself (docs/agent-work.md「安全边界」): it is only ever a
+// riskyWords mark a next step the manager must not set off itself (docs/agent-work.md "Safety boundary"): it is only ever a
 // card.
 var riskyWords = []string{"push", "deploy", "部署", "发布", "上线", "merge", "合并", "合入", "发消息", "回复", "评论", "testflight",
 	"release", "推送", "推到", "comment", "发版", "提审", "send"}
@@ -977,7 +977,7 @@ func errGone(id string) error {
 }
 
 // workAnswer is manager.action for one of the cards (false: id is none of them). What the agent is to hear goes to it;
-// the answers the manager acts on itself (先不管, 再等等…) do not. The work is read back first: an answer the hub kept
+// the answers the manager acts on itself ("Not now", "Wait a bit"…) do not. The work is read back first: an answer the hub kept
 // while the manager was away comes right after it is back. When the agent cannot be sent the answer (its machine just
 // went away) the card goes up again, under a new id. A repeated callback while an answer is being sent is answered OK
 // and delivered once: the send can take until its timeout, and the entry still names the card until it comes back.
@@ -1064,7 +1064,7 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 	}
 	if !only[answerGo] {
 		s.work.mu.Lock()
-		delete(s.work.approved, key) // any other answer (先别做, 先不管…) takes an earlier yes back
+		delete(s.work.approved, key) // any other answer ("Don't do it yet", "Not now"…) takes an earlier yes back
 		s.work.mu.Unlock()
 	}
 	var text string
@@ -1261,7 +1261,7 @@ func (s *Service) workGuard(v *workView, e db.SessionWork, ownCard bool) (proto.
 	return c, ""
 }
 
-// workWake sends what is due for k: 继续 after a transient error, or a wake for a wait.
+// workWake sends what is due for k: "Continue" after a transient error, or a wake for a wait.
 func (s *Service) workWake(ctx context.Context, v *workView, k [2]string, now time.Time) {
 	e, ok := s.workEntry(k)
 	if !ok || e.WakeAt == nil {
@@ -1443,7 +1443,7 @@ func (s *Service) backfillWork(ctx context.Context, v *workView, now time.Time) 
 	}
 }
 
-// sampleWork records how many sessions are in each state now (for the stats: 完成未看 over time).
+// sampleWork records how many sessions are in each state now (for the stats: "Unread" over time).
 func (s *Service) sampleWork(v *workView) {
 	counts := map[string]any{}
 	for _, d := range v.machines() {

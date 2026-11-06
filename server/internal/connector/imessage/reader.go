@@ -1,4 +1,4 @@
-// Package imessage reads the Messages app's data on a Mac (docs/plan-connectors.md「五、iMessage 连接器」):
+// Package imessage reads the Messages app's data on a Mac (docs/plan-connectors.md "5. iMessage connector"):
 // ~/Library/Messages/chat.db and the address book for names, read-only, through macOS's own /usr/bin/sqlite3
 // (jarvisd is built without cgo). It runs in the node of the Mac the hub was told to read (imessage.machine): the
 // files are protected by macOS (Full Disk Access), and nothing here writes to them, marks anything read or sends.
@@ -37,7 +37,7 @@ type Reader struct {
 	// SQLite is the sqlite3 to run; macOS's own when empty.
 	SQLite string
 	// Via is how this node runs, for the permission guide: "launchd" (a resident node: Full Disk Access goes to
-	// jarvisd) or "ssh" (it goes to sshd-keygen-wrapper, through 远程登录's switch).
+	// jarvisd) or "ssh" (it goes to sshd-keygen-wrapper, through the "Remote Login" switch).
 	Via string
 	// Executable is this jarvisd's path, for the launchd guide.
 	Executable string

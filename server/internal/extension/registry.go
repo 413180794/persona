@@ -47,7 +47,7 @@ type Record struct {
 	Enabled         bool            `json:"enabled"`
 	Config          json.RawMessage `json:"config,omitempty"`
 	Remote          *Remote         `json:"remote,omitempty"`
-	// DisabledContributions are the contributions the user switched off ("<point>/<id>", docs/extensions.md「贡献的开关」):
+	// DisabledContributions are the contributions the user switched off ("<point>/<id>", docs/extensions.md "Contribution switches"):
 	// they do not take effect while the rest of the extension runs. A connector's switch is the connector's own.
 	DisabledContributions []string  `json:"disabled_contributions,omitempty"`
 	InstalledAt           time.Time `json:"installed_at"`
@@ -124,11 +124,11 @@ type Registry struct {
 	// switched on, installed (on at once) or upgraded while on. A rollback is not asked (it goes back to a version
 	// that ran; the hub rolls back a broken upgrade itself).
 	CanEnable func(ctx context.Context, source string, m *Manifest) error
-	// PlanCandidates 为主预览提供联合升级图，PlanGuard 保持提交期间的市场信任不变。
+	// PlanCandidates gives the main preview the joint upgrade graph; PlanGuard keeps market trust unchanged while committing.
 	PlanCandidates func(context.Context, *Manifest, string) []*Manifest
 	PlanGuard      func(context.Context, []*Preview) (func(), error)
 	// BoundSecrets names the secrets of p that hold only for its configuration old, so changing it to next deletes
-	// them (the built-in voice extension's key goes with its service's address, docs/extensions.md「内置语音扩展」).
+	// them (the built-in voice extension's key goes with its service's address, docs/extensions.md "Built-in voice extension").
 	// Both are the configurations with the schema's defaults. SetConfig deletes them before it saves next, in the same
 	// operation SetSecret runs in, so a secret never pairs with a configuration it was not set for. Nil: none.
 	BoundSecrets func(p *Extension, old, next json.RawMessage) []string
@@ -137,7 +137,7 @@ type Registry struct {
 	SecretNeeds func(p *Extension, name string, config json.RawMessage) error
 
 	operationMu sync.Mutex // serializes package/record changes, including plan recovery and cleanup
-	planProblem error      // 提交确认或包恢复未确定时，禁止新的写操作，等待重新加载。
+	planProblem error      // while a commit confirmation or package recovery is unresolved, no new writes; wait for a reload
 	mu          sync.Mutex
 	extensions  map[string]*Extension
 	reserved    map[string]map[string]string // point → contribution id → who has it (the hub's own)
@@ -235,7 +235,7 @@ func (r *Registry) AddBuiltin(m *Manifest, dir string, enabled bool) error {
 }
 
 // KeepOff holds the built-in extension id (registered, before Load) switched off whatever its row says; switching it
-// on answers why. For a built-in that took over a hub.json entry written disabled (docs/extensions.md「内置语音扩展」):
+// on answers why. For a built-in that took over a hub.json entry written disabled (docs/extensions.md "Built-in voice extension"):
 // hub.json has the last word on it, its settings and secrets stay editable, and its row keeps its own switch for when
 // hub.json lets it run.
 func (r *Registry) KeepOff(id string, why error) {
@@ -411,9 +411,9 @@ type Preview struct {
 	// AddedPermissions are the lines of what the new version may do that the installed one may not (only what is
 	// new: the added hosts, the added secrets), for the upgrade screen.
 	AddedPermissions []PermissionLine `json:"added_permissions,omitempty"`
-	// Market is the market it comes from (a full-rights device may install it, docs/extensions.md「扩展市场」).
+	// Market is the market it comes from (a full-rights device may install it, docs/extensions.md "Extension market").
 	Market string `json:"market,omitempty"`
-	// Depends are its dependencies on this hub (docs/extensions.md「依赖」); Bundle the previews of what installs with it,
+	// Depends are its dependencies on this hub (docs/extensions.md "Dependencies"); Bundle the previews of what installs with it,
 	// before it: its missing dependencies from the markets, or a pack's members. Each has its own id and digest, and
 	// installing sends them all (the user agreed to every one on one screen).
 	Depends []DependencyState `json:"depends,omitempty"`
@@ -428,7 +428,7 @@ type Preview struct {
 	staging               string
 }
 
-// MarketTrust 是预览时绑定的市场地址和信任公钥，不增加协议字段。
+// MarketTrust is the market address and trusted public key pinned at preview time; it adds no protocol field.
 func (pv *Preview) MarketTrust() (string, string) { return pv.marketSpec, pv.marketKey }
 
 // previewIDPattern is what newID makes: a preview's staging directory is named so (staging/<id>).
@@ -727,7 +727,7 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 	return checkProgram(root, "runtime.command", cmd)
 }
 
-// NodePrograms says whether this hub runs plugins' programs on computers (docs/plan-extensions.md「七」): off, a package
+// NodePrograms says whether this hub runs plugins' programs on computers (docs/plan-extensions.md "7"): off, a package
 // with a node program does not install, rather than install and never run there (a test turns it off).
 var NodePrograms = true
 
@@ -778,7 +778,8 @@ func (r *Registry) conflictsCandidates(m *Manifest, candidates []*Manifest) erro
 	return errors.Join(errs...)
 }
 
-// 包中实际读出的清单覆盖同 ID 的规划清单，不能用市场描述掩盖下载内容。
+// The manifest actually read from the package overrides the planned one with the same ID; the market's description
+// must not mask what was downloaded.
 func previewCandidates(m *Manifest, candidates []*Manifest) []*Manifest {
 	out := make([]*Manifest, 0, len(candidates)+1)
 	for _, candidate := range candidates {

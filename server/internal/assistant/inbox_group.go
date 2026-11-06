@@ -17,14 +17,14 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Inbox events (#1680, docs/inbox.md「事件合成」). A connector that declares group hands a conversation's new messages
+// Inbox events (#1680, docs/inbox.md "Event grouping"). A connector that declares group hands a conversation's new messages
 // over as a batch (InboxThing.Group) instead of an item. The hub asks the model which events — inbox items of that
 // conversation — the messages belong to: it reads the events (the events tool, its own) and the conversation (the
 // connector's tools, group.tool through the hub), at most groupCalls calls, and answers with a title, a summary and a tier for every
 // event it touches. The connector writes each event (group.append: one event a call, its meta in and out; the hub never
 // reads meta) and the hub stores what comes back with the model's words, triaged_by "model". When the model can't (not
 // set up, held, failing, too slow, or an answer that does not hold up) the connector groups the batch by structure
-// itself (group.fallback) and the events keep its rule tiers, 按规则, triaged_by "rules": that version is final.
+// itself (group.fallback) and the events keep its rule tiers, "By rule", triaged_by "rules": that version is final.
 
 const (
 	groupCalls       = 4                  // tool calls one batch may make
@@ -534,7 +534,7 @@ func (s *Service) writeGroup(ctx context.Context, c assistantwire.InboxSource, t
 	}
 	s.saveInbox(ctx, saved)
 	if len(saved) > 0 {
-		s.handInbox(ctx) // a new 需要你 may be the AI 分身's
+		s.handInbox(ctx) // a new "Needs you" may be the AI twin's
 	}
 }
 
@@ -580,7 +580,7 @@ func (s *Service) appendEvent(ctx context.Context, source string, a connector.Gr
 }
 
 // putEvent keeps an event the connector wrote (or the hub composed), under the item's id: the model's title, summary
-// and tier, or under the fallback its rule tier with 按规则; triaged at this version either way. Its count is the
+// and tier, or under the fallback its rule tier with "By rule"; triaged at this version either way. Its count is the
 // hub's (the messages it put in it; extra.count is not read for an event) and its start is set when it is made. An answer at the version the item has
 // already is a repeat: nothing is stored or announced again (nil).
 func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e plannedEvent, thing connector.InboxThing, byModel bool) *InboxItem {
@@ -637,7 +637,7 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 		if tier == "" {
 			tier = b.ruleTier(it)
 		}
-		if tier == "" { // nothing says: the user looks (拿不准时选 action)
+		if tier == "" { // nothing says: the user looks (when unsure, pick action)
 			tier = TierAction
 		}
 		if t := strings.TrimSpace(e.title); t != "" {
@@ -661,7 +661,7 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 	return it
 }
 
-// foldNoise keeps noise one event per atom (docs/inbox.md「事件与处理链条」): the noise a plan opens goes into the
+// foldNoise keeps noise one event per atom (docs/inbox.md "Events and the handling chain"): the noise a plan opens goes into the
 // conversation's open noise event, or into one new event for all of it; an existing noise event never takes what
 // the model sorts higher (that opens its own event instead). Under b.mu.
 func (b *inboxBook) foldNoise(connectorID, thread string, plan *groupPlan) {

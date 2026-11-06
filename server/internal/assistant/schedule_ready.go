@@ -8,16 +8,16 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// A scheduled run waits for the main conversation to be ready (docs/onboarding.md 4.4「定时任务」). A new hub has the
-// weekday 早报 on, and with no computer yet (or one asleep, Claude Code missing or signed out, a key that is wrong)
-// every run failed and pushed 定时任务失败. Now a due run first looks at the readiness (no probe: nothing is spent,
+// A scheduled run waits for the main conversation to be ready (docs/onboarding.md 4.4 "Scheduled tasks"). A new hub has the
+// weekday morning briefing on, and with no computer yet (or one asleep, Claude Code missing or signed out, a key that is wrong)
+// every run failed and pushed "Scheduled task failed". Now a due run first looks at the readiness (no probe: nothing is spent,
 // the node's two questions are cached): when what the run needs is not there, it is skipped and recorded as such,
 // and nothing is pushed. The first run once it is ready again goes as usual, and the main conversation gets one line
 // saying the tasks run again (a feed item of kind notice, written before that run is sent).
 //
 // Only what the run needs counts: a follow-up going into a conversation on another computer does not wait on the
 // assistant's computer, and a task on a launcher of its own does not wait on the main conversation's Claude Code or
-// model. 立即运行 in the app is not held back: the user asked for it and sees what goes wrong. Nor is a one-off (a
+// model. "Run now" in the app is not held back: the user asked for it and sees what goes wrong. Nor is a one-off (a
 // reminder, a follow-up the assistant set for itself): it is turned off once due, so a skip would lose it; it goes as
 // before, and a failure is pushed and retried once.
 //

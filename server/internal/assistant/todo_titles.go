@@ -20,8 +20,8 @@ import (
 )
 
 // A todo a task opens (task_plan, agent_start) used to be titled with its prompt's first line, which opens with what
-// the agent is told rather than what the work is: 「ultrathink ultracode 主人 11-05 19:47 的反馈，已授权直接开工：…」
-// (#2775, docs/todos.md「待办标题」). The todo now gets that line cleaned up at once (cleanTodoTitle), so nothing
+// the agent is told rather than what the work is: "ultrathink ultracode, the owner's feedback of 11-05 19:47, cleared to start: …" (in Chinese)
+// (#2775, docs/todos.md "To-do titles"). The todo now gets that line cleaned up at once (cleanTodoTitle), so nothing
 // waits; the small-task model then names it from the prompt in the background, and its title replaces the cleaned
 // one only while the todo still has it: a title the user gave meanwhile stays.
 
@@ -38,14 +38,14 @@ func todoTitleMax(locale string) int {
 var (
 	// Words that tune the agent's thinking, at the start of a prompt (Claude Code's ultrathink and the like).
 	todoTitleKeyword = regexp.MustCompile(`(?i)^/?(?:ultrathink|ultracode|ultraplan|megathink|think\s+(?:very\s+)?hard(?:er)?|think\s+deeply|think\s+harder)\b[\s,，、:：;；.。!！-]*`)
-	// Where the request comes from and when: 「主人 11-05 19:47 的反馈，」「11/05 19:47 的消息：」. A date needs a time
-	// or what came then after it, so a version number (「修复 3.2 的崩溃」) is not taken for one.
+	// Where the request comes from and when: "the owner's feedback of 11-05 19:47," / "the message of 11/05 19:47:" (in Chinese). A date needs a time
+	// or what came then after it, so a version number ("fix the crash in 3.2") is not taken for one.
 	todoTitleStamp = regexp.MustCompile(`^[^\s，,:：]{0,8}\s*\d{1,4}[-/.月]\d{1,2}日?(?:\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:的)?(?:反馈|消息|要求|需求|留言)?|\s*(?:的)?(?:反馈|消息|要求|需求|留言))[\s,，、:：;；]*`)
-	// A note on who hands the work over, in brackets: 「秘书派活（主人授权过……）：」「【派活】」.
+	// A note on who hands the work over, in brackets: "secretary hands out work (the owner allowed it…):" or "[hand out work]" (in Chinese, full-width brackets).
 	todoTitleBracket = regexp.MustCompile(`^[^\s（(【\[]{0,8}\s*(?:（[^）]*）|\([^)]*\)|【[^】]*】|\[[^\]]*\])[\s,，、:：;；]*`)
 	// Permission the agent is given, which says nothing about the work.
 	todoTitleGrant = regexp.MustCompile(`^(?:已(?:经)?(?:获)?授权|授权)(?:过)?(?:，|,)?(?:直接|可以|你)?(?:开工|动手|开始|执行|做)?[\s,，、:：;；!！。]*`)
-	// The bare go-ahead before a colon: 「直接做：」「就开工：」.
+	// The bare go-ahead before a colon: "just do it:", "start now:" (in Chinese).
 	todoTitleGo = regexp.MustCompile(`^(?:直接|就|马上|立刻)(?:做|开工|动手|开始|执行|改)\s*[:：]\s*`)
 )
 
@@ -209,7 +209,7 @@ type TodoRetitle struct {
 
 // retitleable: a todo's title is still the one a task gave it before #2775, its prompt's first line cut: longer
 // than max characters and how its notes (the prompt) start. A todo keeps no record of who titled it, so a title that only
-// looks like a prompt (【紧急】修登录, 11/05 反馈：修登录) is taken as the user's and left.
+// looks like a prompt ("[urgent] fix login", "11/05 feedback: fix login", in Chinese) is taken as the user's and left.
 func retitleable(title, notes string, max int) bool {
 	return utf8.RuneCountInString(strings.TrimSuffix(strings.TrimSpace(title), "…")) > max && openedFromPrompt(title, notes)
 }

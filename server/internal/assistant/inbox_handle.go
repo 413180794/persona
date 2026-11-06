@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// The processing conversation (docs/inbox.md「AI 分身」, phase 1): with the AI 分身 on, every 需要你 event goes to the
+// The processing conversation (docs/inbox.md"AI twin", phase 1): with the AI twin on, every Needs you event goes to the
 // manager, one conversation per event, bound to it by the event's id. What comes later — new messages, the user's
 // confirmation, rejection or words, the event being closed — is sent into that same conversation (sendToSession)
 // instead of starting over; a conversation found gone is replaced by a new one that carries the recap and the chain.
@@ -109,7 +109,7 @@ func (b *inboxBook) setHandling(it *InboxItem, state, errText string, now time.T
 	}
 }
 
-// failHandling: the conversation failed or timed out: back to 需要你 without a suggestion, the chain says why.
+// failHandling: the conversation failed or timed out: back to Needs you without a suggestion, the chain says why.
 // Under b.mu.
 func (b *inboxBook) failHandling(it *InboxItem, reason string, now time.Time) {
 	it.Suggestion = nil
@@ -146,8 +146,8 @@ func ownSend(it *InboxItem, last string) bool {
 	return a != nil && h != nil && h.State == HandlingWaiting && a.SentOf != "" && a.SentOf == it.Last && (last == "" || last == it.Last)
 }
 
-// escalate hands the manager its work, under b.mu: a newly triaged 需要你 event (recent) gets a processing
-// conversation (queued); new content of an event that has one — being handled, or triaged 需要你 again — is sent into
+// escalate hands the manager its work, under b.mu: a newly triaged Needs you event (recent) gets a processing
+// conversation (queued); new content of an event that has one — being handled, or triaged Needs you again — is sent into
 // that conversation. It returns the items it moved.
 func (b *inboxBook) escalate(since, now time.Time) []*InboxItem {
 	b.mu.Lock()
@@ -328,7 +328,7 @@ func (in *suggestIn) check() error {
 		return errSuggestion{"text is required"}
 	}
 	if in.Kind == SuggestReply && !in.Handback {
-		// The user sends it with one tap: a blank left to fill in (【预计几点前】) would go out as it is.
+		// The user sends it with one tap: a blank left to fill in (<expected completion time>) would go out as it is.
 		if p := draftPlaceholder(in.Text); p != "" {
 			return errSuggestion{fmt.Sprintf("the reply leaves %s to fill in, and it goes out as it is: leave out what you could not find (say so in note) and submit again", p)}
 		}
@@ -471,7 +471,7 @@ func (s *Service) toolInboxSuggest(ctx context.Context, self string, args json.R
 }
 
 // inboxAgentStarted records the Agent an event's conversation started (agent_start from it): the chain links that
-// sub-session, the event is 进行中 (Agent 在做) until the conversation hands in what it found.
+// sub-session, the event is In progress (Agent is working) until the conversation hands in what it found.
 func (s *Service) inboxAgentStarted(ctx context.Context, self, machine, session, prompt string) {
 	if self == "" || session == "" || s.inboxReady(ctx) != nil {
 		return
@@ -495,7 +495,7 @@ func (s *Service) inboxAgentStarted(ctx context.Context, self, machine, session,
 	s.saveInbox(ctx, []*InboxItem{it})
 }
 
-// legacySuggestion is an AI 分身 draft stored before suggestions, as a reply suggestion (version 1); nil for none.
+// legacySuggestion is an AI twin draft stored before suggestions, as a reply suggestion (version 1); nil for none.
 func legacySuggestion(it *InboxItem) *InboxSuggestion {
 	a := it.Agent
 	if it.Suggestion != nil || it.Handling != nil || a == nil || a.State != AgentDrafted || strings.TrimSpace(a.Draft) == "" {
@@ -674,7 +674,7 @@ func confirmedEntry(l i18n.Lang, text string, edited bool, now time.Time) InboxC
 
 // confirmReply sends the confirmed reply as shown (or as the user edited it) through the same once-only path as
 // /reply, but keeps the event open: it waits for the other side (handling waiting), and the conversation is told.
-// A send that fails leaves the event 需要你 without a suggestion.
+// A send that fails leaves the event Needs you without a suggestion.
 func (s *Service) confirmReply(ctx context.Context, it *InboxItem, g *InboxSuggestion, text string, edited bool, last, clientID string) (InboxItem, error) {
 	if !validClientID(clientID) { // the same suggestion confirmed again is the same send
 		clientID = namedClientID(fmt.Sprintf("suggestion\n%s\n%d", it.ID, g.Version))
@@ -746,7 +746,7 @@ func (s *Service) confirmAgent(ctx context.Context, it *InboxItem, g *InboxSugge
 
 // linkTask asks the judge (model 2) which of the user's tasks going on the event is about (docs/unified-entry.md):
 // the conversation is told that task's progress, and its reply suggestion puts a card in the task's conversation.
-// Since phase 1 every 需要你 event goes to the manager whatever the judge says of handling it; a model that fails
+// Since phase 1 every Needs you event goes to the manager whatever the judge says of handling it; a model that fails
 // leaves the event unlinked.
 func (s *Service) linkTask(ctx context.Context, it *InboxItem, tasks []prompts.InboxTask) bool {
 	b := &s.inbox

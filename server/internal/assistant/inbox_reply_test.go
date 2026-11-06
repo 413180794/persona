@@ -199,7 +199,7 @@ func TestMigratedReplyKeepsMessagesThatCameInMeanwhile(t *testing.T) {
 
 // A reply goes out but the row filing the item cannot be written (#4627): the item stays filed in memory (the reply
 // went out, a repeat must not send it again), and the same reply sent again writes the row then, so a restart does
-// not bring the item back as 需要你.
+// not bring the item back as "Needs you".
 func TestReplyRepeatWritesTheRowThatFailed(t *testing.T) {
 	ctx := context.Background()
 	h, st := newBulkFailHub(t)

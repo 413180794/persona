@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A task's own conversation (started, then continued) runs on the 主对话 category (#1544: not Agents, whatever that
+// A task's own conversation (started, then continued) runs on the main chat category (#1544: not Agents, whatever that
 // is set to), never on the task's old fields; delivery into the conversation it came from is a turn of that
 // conversation (#1518): its launcher, still none of the task's old fields, the task's permission mode.
 func TestScheduledExecutionUsesMainConversationCategoryAndNoOldOverrides(t *testing.T) {

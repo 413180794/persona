@@ -1,4 +1,4 @@
-// Package extmgr is the manager's extensions, connectors and bots (docs/extensions.md「谁管什么」), moved here from
+// Package extmgr is the manager's extensions, connectors and bots (docs/extensions.md "Who owns what"), moved here from
 // the hub as they were: the extension registry and its tables (plugins, plugin_secrets, plugin_audit, the markets),
 // installing, upgrading, rolling back and removing, the markets and auto-upgrade, the programs (extension/host, their
 // sandbox and egress proxy, metrics, logs, dev taps), their settings and secrets (only this package opens them), the
@@ -306,7 +306,7 @@ func (h *Manager) AssistantSaid(event string, params json.RawMessage) bool {
 	return ok
 }
 
-// errAssistantOffline is the hub's 「助手暂时连不上」.
+// errAssistantOffline is the hub's "the assistant can't be reached right now".
 var errAssistantOffline = i18n.Err("hub-assistant_link.offline")
 
 func (h *Manager) String() string { return fmt.Sprintf("extmgr(%s)", h.cfg.dir) }

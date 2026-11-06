@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// The names before #1844 still work (docs/extensions.md「命名和兼容」): the manifest's old file name and
+// The names before #1844 still work (docs/extensions.md "Naming and compatibility"): the manifest's old file name and
 // engines.plugin_protocol, initialize's "plugin", the index's old file name and "plugins".
 
 func TestEnginesBothNames(t *testing.T) {

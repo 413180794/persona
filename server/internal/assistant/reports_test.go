@@ -106,7 +106,7 @@ func TestStageOf(t *testing.T) {
 		"https://github.com/o/r/pull/1 已合入":          "merge",
 		"合入 https://github.com/o/r/pull/1 并已部署到 n37": "deploy",
 		"已部署，实测通过，截图为证":                              "verify",
-		// Not deployed yet, waiting for it, or asking: no 请验收.
+		// Not deployed yet, waiting for it, or asking: no "Please verify".
 		"https://github.com/o/r/pull/1 已合并，还没部署到 hub，等你部署":       "merge",
 		"Merged https://github.com/o/r/pull/2, not deployed yet": "merge",
 		"已合入。未部署（这台连不上 hub）":                                     "develop",
@@ -147,7 +147,7 @@ func TestTaskReportSkipsAskAlreadyInChat(t *testing.T) {
 	}
 }
 
-// Realistic replies: told as deployed or not (negated, deferred, asked). A false 已部署 sends a bogus 请验收 card.
+// Realistic replies: told as deployed or not (negated, deferred, asked). A false "deployed" sends a bogus "Please verify" card.
 func TestSaidDeployed(t *testing.T) {
 	for text, want := range map[string]bool{
 		"已完成部署，请验收": true, "部署好了": true, "已经部署，不需要你再看": true, "已部署到 hub，不需要你再操作": true,

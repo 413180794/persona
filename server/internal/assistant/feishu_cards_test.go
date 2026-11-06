@@ -165,7 +165,7 @@ func waitForStart(t *testing.T, f *fakeHub, posts chan struct{}, says chan strin
 }
 
 // A double press of the same /start card (a double tap, Feishu's redelivery, or the hub's resend) starts one agent:
-// both presses get the same 「启动中」 toast and a different card can still start another agent (#4340).
+// both presses get the same "Starting" toast and a different card can still start another agent (#4340).
 func TestStartCardDoublePressStartsOneAgent(t *testing.T) {
 	s, f, posts, says := startCardHub(t)
 	ctx := context.Background()
@@ -211,7 +211,7 @@ func TestStartCardInvalidFormDoesNotTakeSlot(t *testing.T) {
 }
 
 // When the start itself fails (the node refused it), the dedup slot is released: the owner sees the failure and can
-// press the same card again to retry, instead of getting a bare 「启动中」 with nothing starting.
+// press the same card again to retry, instead of getting a bare "Starting" with nothing starting.
 func TestStartCardFailedStartLetsNextPressThrough(t *testing.T) {
 	s, f, posts, says := startCardHub(t)
 	ctx := context.Background()

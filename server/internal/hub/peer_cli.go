@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// The mesh from the command line on the hub's machine (docs/mesh.md「命令行」): the same peers API as the admin page,
+// The mesh from the command line on the hub's machine (docs/mesh.md "Command line"): the same peers API as the admin page,
 // under /api/v1/admin/cli/, over loopback with the master token (peerCLIRoutes).
 
 // PairPeer prints a code another hub pairs with this one by (`jarvisd hub pair --peer`): the code alone on stdout, what

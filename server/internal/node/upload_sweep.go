@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Files pasted or dropped into a web terminal (dest=terminal, docs/terminal.md「粘贴图片 / 文件」) live in
+// Files pasted or dropped into a web terminal (dest=terminal, docs/terminal.md "Pasting images / files") live in
 // <node dir>/uploads/terminal/<YYYY-MM-DD>/, apart from the chat's images (uploads/<date>, saveImages) so a sweep
 // of one never touches the other.
 

@@ -14,7 +14,7 @@ import (
 // assistant/start.go): the phone's messages (assistant.send_params), the node's own, and the follow-ups the assistant
 // runs.
 
-// A follow-up the assistant scheduled for itself goes into its conversation on that conversation's launcher (#1518): the main conversation on 模型配置 › 主对话 (even when it last ran on another launcher), another
+// A follow-up the assistant scheduled for itself goes into its conversation on that conversation's launcher (#1518): the main conversation on Models › Main chat (even when it last ran on another launcher), another
 // of its conversations on what it runs. On the Agents launcher (plain claude by default) a follow-up moved the main
 // conversation off its launcher, and every message after stayed there.
 func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
@@ -30,7 +30,7 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 	n.m.sessions = []proto.Session{
 		{SessionID: "main", Launcher: "claude", Model: "stale", Assistant: true, Status: proto.StatusOffline},
 		{SessionID: "side", Launcher: "side-l", Model: "side-m", Assistant: true, Status: proto.StatusOffline},
-		// 早报's own conversation, moved onto plain claude by a follow-up before #1518 (#1544)
+		// the morning brief's own conversation, moved onto plain claude by a follow-up before #1518 (#1544)
 		{SessionID: "daily", Launcher: "claude", Assistant: true, Status: proto.StatusOffline},
 	}
 	n.m.mu.Unlock()
@@ -44,7 +44,7 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 	for _, c := range []struct{ task, session, launcher, model, effort string }{
 		{"fu_main", "main", "conv", "", "high"},
 		{"fu_side", "side", "side-l", "side-m", ""},
-		// a scheduled task's own conversation follows 主对话 like the main one, whatever it ran last (#1544)
+		// a scheduled task's own conversation follows the main chat like the main one, whatever it ran last (#1544)
 		{"fu_daily", "daily", "conv", "", "high"},
 	} {
 		got, err := runNow(t, h, c.task)
@@ -61,7 +61,7 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 			t.Errorf("%s: no model fingerprint: %v", c.task, p)
 		}
 	}
-	// A task with no conversation to go back to runs in its own, on 主对话's launcher (#1544), not the Agents one.
+	// A task with no conversation to go back to runs in its own, on the main chat's launcher (#1544), not the Agents one.
 	if _, err := runNow(t, h, "own"); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 }
 
 // What the node asks before it tells a conversation by itself that a restart lost its background tasks (#1554): the
-// launcher and model a message from the phone runs on. The main conversation follows 模型配置 › 主对话, not the model it
+// launcher and model a message from the phone runs on. The main conversation follows Models › Main chat, not the model it
 // last ran (which left the phone's next message on another model than the running process, refused while it was busy).
 func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
 	h, _ := modelTestHub(t)

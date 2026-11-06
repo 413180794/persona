@@ -66,7 +66,7 @@ func TestOfficialExtensionMarketIsAddedOnceAndFirst(t *testing.T) {
 	defer srv.Close()
 	h.extensions.markets.client, h.extensions.markets.githubAPI = srv.Client(), srv.URL
 	key := newMarketKey(t)
-	// Its index calls itself after its publisher; the apps are shown 官方扩展 all the same (#5017).
+	// Its index calls itself after its publisher; the apps are shown "Official extensions" all the same (#5017).
 	ix, _ := json.Marshal(map[string]any{"market_version": 1, "name": "Example 扩展", "signing_key": key.text,
 		"extensions": []any{marketEntry(t, dir, "release:v1/example-ui-1.0.0.tar.gz", pkg)}})
 	gh.files[extension.IndexFile], gh.files[extension.IndexFile+extension.SigSuffix] = ix, key.sign(ix)

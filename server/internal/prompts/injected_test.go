@@ -98,7 +98,7 @@ func TestParseInjected(t *testing.T) {
 			t.Errorf("%s: got %s, want %s", c.Name, g, w)
 		}
 	}
-	// The shape every spec/fixtures domain has (spec/README.md「夹具约定」).
+	// The shape every spec/fixtures domain has (spec/README.md "Fixture conventions").
 	b, err := json.MarshalIndent(struct {
 		Version int            `json:"version"`
 		Cases   []injectedCase `json:"cases"`
@@ -134,7 +134,7 @@ func TestInjectedTemplatesKeepTheirHead(t *testing.T) {
 	}
 }
 
-// A 督办 message (#3124) is a system line, read off its head and marker; a user's line that looks like its head is not.
+// A follow-up (supervision) message (#3124) is a system line, read off its head and marker; a user's line that looks like its head is not.
 func TestParseInjectedSupervise(t *testing.T) {
 	text := RenderSupervise(Supervise{Entries: []SuperviseEntry{{ID: "todo_1", Title: "部署", Kind: "review"}, {ID: "todo_2", Title: "修崩溃", Kind: "idle"}}})
 	got := ParseInjected("<jarvis-context>快照</jarvis-context>\n" + text)

@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// An assistant conversation's permission card names what 本会话总是允许 grants, for the hub to keep past the process
+// An assistant conversation's permission card names what "Always allow in this session" grants, for the hub to keep past the process
 // (#2202); an Agents session's card names nothing (its rule stays Claude's own, as before).
 func TestPermissionHookAlwaysKeys(t *testing.T) {
 	n := codexTestNode(t)
@@ -84,8 +84,8 @@ func TestLarkGateAlwaysKeys(t *testing.T) {
 	}
 }
 
-// A health conversation's Feishu writes are confirmed each time (docs/health.md「外发」): a rule that allows the
-// route still asks, the card offers no 本会话总是允许, and a yes with always is not remembered. Reads still go.
+// A health conversation's Feishu writes are confirmed each time (docs/health.md "Outgoing"): a rule that allows the
+// route still asks, the card offers no "Always allow in this session", and a yes with always is not remembered. Reads still go.
 func TestLarkGateHealthAsksEachTime(t *testing.T) {
 	n := codexTestNode(t)
 	fh := withFakeHub(t, n)
@@ -122,7 +122,7 @@ func TestLarkGateHealthAsksEachTime(t *testing.T) {
 	}
 }
 
-// 本会话总是允许 on an assistant conversation's file read allows that file's directory only, in the session rule
+// "Always allow in this session" on an assistant conversation's file read allows that file's directory only, in the session rule
 // and in the key the hub keeps (#3282); an Agents session's still allows the whole tool.
 func TestPermissionHookAlwaysFileScope(t *testing.T) {
 	n := codexTestNode(t)

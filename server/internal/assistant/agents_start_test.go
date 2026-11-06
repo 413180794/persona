@@ -61,7 +61,7 @@ func TestGoldenTabName(t *testing.T) {
 	}
 }
 
-// agents.start_params: what a new Agent runs on is 模型配置 › Agents (with what the app picked over it), its tab is
+// agents.start_params: what a new Agent runs on is Model Settings › Agents (with what the app picked over it), its tab is
 // named when asked; a resume keeps what it runs on; a refusal is the app's to see.
 func TestAgentStartParams(t *testing.T) {
 	f := newFakeHub()
@@ -98,7 +98,7 @@ func TestAgentStartParams(t *testing.T) {
 		t.Fatalf("not the app's to see: %v", err)
 	}
 
-	// agents.resume_params: 模型配置 › Agents' launcher and model only; none when it cannot say.
+	// agents.resume_params: Model Settings › Agents' launcher and model only; none when it cannot say.
 	p, _ = s.AgentResumeParams(ctx, AgentResumeParams{MachineID: "box", SessionID: "gone-1", Params: map[string]any{}})
 	if p["launcher"] != "other-l" || p["text"] != nil {
 		t.Fatalf("resume params: %v", p)

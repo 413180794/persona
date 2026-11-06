@@ -58,10 +58,10 @@ type KBProjectInput struct {
 	Summary    string
 	Log        []string
 	Chats      []KBProjectChat
-	Moments    []KBMoment // 公司圈 posts judged to be about it
+	Moments    []KBMoment // Moments posts judged to be about it
 }
 
-// KBMoment is a 公司圈 post put before a model: who, when, how many comments, its text clipped, and (when judged
+// KBMoment is a Moments post put before a model: who, when, how many comments, its text clipped, and (when judged
 // before) how it bears on the project.
 type KBMoment struct {
 	ID, Author, At, Text, Note string
@@ -86,7 +86,7 @@ type KBDedupeInput struct {
 func RenderKBDedupe(o KBOwner) string             { return render("kb/dedupe", o) }
 func RenderKBDedupeInput(in KBDedupeInput) string { return render("kb/dedupe_input", in) }
 
-// KBMomentsLinkInput is a project and 公司圈 posts its keywords found (kb/moments_link_input).
+// KBMomentsLinkInput is a project and Moments posts its keywords found (kb/moments_link_input).
 type KBMomentsLinkInput struct {
 	Name, OneLine, Goal, Summary string
 	Aliases, Keywords            []string

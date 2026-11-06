@@ -371,7 +371,7 @@ func (s *Service) botMessages(ctx context.Context, messageID string) ([]feishubo
 	return res.Items, err
 }
 
-// botName is a user's name (the hub's contact lookup; 「某人」 when it can't be read).
+// botName is a user's name (the hub's contact lookup; "someone" when it can't be read).
 func (s *Service) botName(ctx context.Context, openID string) string {
 	var res struct {
 		Name string `json:"name"`
@@ -647,7 +647,7 @@ func (s *Service) feishuCardsWaiting() int {
 //
 // Handled each on its own, a message slower to get through (its reaction, a picture to download, a quote to read)
 // was overtaken by the next one. The later message went into the conversation first, and the one answer covering
-// both went under the earlier message. A message right after 「/new …」 could also read the target before the new
+// both went under the earlier message. A message right after "/new …" could also read the target before the new
 // conversation was set, and start one more.
 func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	var ev feishubot.MessageEvent
@@ -717,7 +717,7 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus, acti
 		content.Text = rest
 	}
 	if !content.Forward && s.acceptReply(ctx, msg.MessageID, content.Text, msg.ParentID, msg.RootID) {
-		return // about a 请验收 card (acceptance.go)
+		return // about a "Please verify" card (acceptance.go)
 	}
 	if !content.Forward && len(content.Media) == 0 && s.botAnswerQuestion(ctx, msg.MessageID, content.Text, action, msg.RootID, msg.ParentID) {
 		return // the answer to the card waiting in this topic (feishu_text_answer.go)
@@ -1153,7 +1153,7 @@ func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
 // answer writes the answer into the progress card (more cards when long), and marks the messages DONE. When nothing
 // of it got out because the hub could not be reached it says so (tried again later); once a piece is out, the rest
 // is best effort (a card sent twice would show twice). The card's last line says how the run ended; a quiet end
-// still turns the progress card into that line, so it never stays on 「处理中」.
+// still turns the progress card into that line, so it never stays on "Working".
 func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note string, took time.Duration, final, quiet bool, end channel.End) error {
 	s := f.s
 	l := s.botLang(ctx)

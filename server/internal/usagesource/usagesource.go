@@ -1,5 +1,5 @@
 // Package usagesource reads subscription usage windows from an account-pool gateway (#2595, docs/usage-windows.md
-// 「账号池网关」): a service that holds several agent accounts and already knows how much of each one's 5-hour and
+// "Account-pool gateways"): a service that holds several agent accounts and already knows how much of each one's 5-hour and
 // weekly allowance is used. The hub asks it, read-only, and turns the answer into the proto.UsageAccount list the
 // sidebar draws; the node-local collectors (#2432) and the gateway's numbers meet in devices/usagewindows.go.
 //
@@ -70,7 +70,7 @@ type Result struct {
 	// a length and a number, at most AccountsMost.
 	Accounts []proto.UsageAccount
 	// Inventory is every account the gateway listed (at most InventoryMost), disabled ones and those without such a
-	// window included, as usage.gateway_accounts gives them (Source not set; docs/usage-windows.md「网关的账号清单」).
+	// window included, as usage.gateway_accounts gives them (Source not set; docs/usage-windows.md"Gateway account inventory").
 	// Only the relay type has one; Complete false: the list stopped short.
 	Inventory []proto.GatewayAccount
 	Complete  bool

@@ -8,12 +8,12 @@ import (
 	"github.com/nwverse/persona/server/internal/quota"
 )
 
-// A launcher's quota at its gateway (docs/launchers.md「额度」) is read by the quota plugins (docs/extensions.md「额度」).
-// The route (GET /api/v1/launchers/{name}/quota) and its cache are the manager's, which has the launchers; it asks the
-// hub's plugins to read it (plugins.quota) while the plugins are the hub's. A plugin never sees the key, nor does the
-// hub: it says what to send, and whoever holds the key sends it — the manager for a launcher added in Persona (its
-// sealed key), the machine for a ~/.zshrc one (node/launcherquota.go), so that key stays on that machine; the manager
-// knows which (models.launcher_http).
+// A launcher's quota at its gateway (docs/launchers.md "Quota") is read by the quota plugins (docs/extensions.md
+// "Quota"). The route (GET /api/v1/launchers/{name}/quota) and its cache are the manager's, which has the launchers; it
+// asks the hub's plugins to read it (plugins.quota) while the plugins are the hub's. A plugin never sees the key, nor
+// does the hub: it says what to send, and whoever holds the key sends it — the manager for a launcher added in Persona
+// (its sealed key), the machine for a ~/.zshrc one (node/launcherquota.go), so that key stays on that machine; the
+// manager knows which (models.launcher_http).
 
 // errNoGateway: the launcher has no gateway address of its own (it uses the official API), so there is no quota to read.
 var errNoGateway = i18n.Err("hub-launcherquota.no_gateway")

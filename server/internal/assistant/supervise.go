@@ -18,12 +18,12 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Supervised tasks (#3124, docs/unified-entry.md「督办」). A task the main conversation hands out (task_plan, or an
+// Supervised tasks (#3124, docs/unified-entry.md"Supervision"). A task the main conversation hands out (task_plan, or an
 // agent_start that became a quiet task) has the main conversation as its supervisor: the task keeps a ledger (what
 // done means, how long it should take, where its review stands) and the hub watches it without a model call. What
 // needs the supervisor — the work looks finished and waits for review, an agent stopped short of it, waits for an
 // answer too long, makes no progress, was cut off or did not start — becomes a signal; the signals of all tasks go to
-// the main conversation as one 督办 message (the quiet tasks' notices are among them), at most every few minutes, and
+// the main conversation as one supervision message (the quiet tasks' notices are among them), at most every few minutes, and
 // the turn it starts is not pushed unless the assistant pushes (notify_user). The assistant answers with task_review:
 // accepted closes the todo (its agents are closed later, tasks_close.go), rework sends the gaps back to the agent (at
 // most maxReworkRounds times), needs_user waits for the user, cancelled ends it.
@@ -193,7 +193,7 @@ const (
 var (
 	// superviseGather is how long a first signal waits for others to go out with it.
 	superviseGather = 15 * time.Second
-	// superviseEvery is the least time between two 督办 messages; superviseUrgentEvery when one waits on a decision.
+	// superviseEvery is the least time between two supervision messages; superviseUrgentEvery when one waits on a decision.
 	superviseEvery       = 10 * time.Minute
 	superviseUrgentEvery = 2 * time.Minute
 	// superviseNeedsAfter is how long an agent waits for an answer before the supervisor hears of it (the user was
@@ -203,7 +203,7 @@ var (
 	superviseStallMin = 20 * time.Minute
 	// superviseTick is how often the tasks are looked at.
 	superviseTick = 30 * time.Second
-	// superviseHoldMax bounds how long the main conversation's turns stay unpushed after a 督办 message went in.
+	// superviseHoldMax bounds how long the main conversation's turns stay unpushed after a supervision message went in.
 	superviseHoldMax = 2 * time.Hour
 )
 
@@ -234,11 +234,11 @@ type superviseBook struct {
 	pending map[string]superviseSignal // by todo|kind
 	sent    map[string]string          // todo|kind → the key last told
 	asks    map[string]string          // todo → what its agent last asked (InteractionRaised)
-	last    time.Time                  // when the last 督办 message went out
+	last    time.Time                  // when the last supervision message went out
 	queued  []superviseSignal          // the signals of the message still waiting in the main conversation's queue
 	timer   *time.Timer
 	timerAt time.Time
-	hold    map[string]time.Time // conversation → when a 督办 message went in: its turn's finish is not pushed
+	hold    map[string]time.Time // conversation → when a supervision message went in: its turn's finish is not pushed
 }
 
 func (b *superviseBook) init() {
@@ -371,7 +371,7 @@ func stallAfter(expect int) time.Duration {
 	return max(superviseStallMin, time.Duration(expect)*time.Minute*3/2)
 }
 
-// superviseLoop looks at the supervised tasks every superviseTick, and lets the 督办 messages go out.
+// superviseLoop looks at the supervised tasks every superviseTick, and lets the supervision messages go out.
 func (s *Service) superviseLoop(ctx context.Context) {
 	t := time.NewTicker(superviseTick)
 	defer t.Stop()
@@ -509,12 +509,12 @@ func (s *Service) supervisedWorking(ctx context.Context, t Todo) {
 	b.mu.Unlock()
 }
 
-// ---- the 督办 message ----
+// ---- the supervision message ----
 
-// superviseTool marks a queued 督办 message (relayMsg.Tool).
+// superviseTool marks a queued supervision message (relayMsg.Tool).
 const superviseTool = "supervise"
 
-// sendDigest puts the due signals into the main conversation as one 督办 message: now, or queued behind its turn (a
+// sendDigest puts the due signals into the main conversation as one supervision message: now, or queued behind its turn (a
 // message still queued takes these in too). A signal that no longer holds (answered, done, reviewed meanwhile) is
 // dropped.
 func (s *Service) sendDigest(ctx context.Context) {
@@ -621,7 +621,7 @@ func mergeSignals(a, b []superviseSignal) []superviseSignal {
 	return out
 }
 
-// replaceQueuedSupervise: a 督办 message still waits in the queue: msg takes its place (true).
+// replaceQueuedSupervise: a supervision message still waits in the queue: msg takes its place (true).
 func (s *Service) replaceQueuedSupervise(to string, msg relayMsg) bool {
 	b := &s.relays
 	b.mu.Lock()
@@ -702,7 +702,7 @@ func sortEntries(list []prompts.SuperviseEntry) []prompts.SuperviseEntry {
 
 // ---- the main conversation's pushes ----
 
-// holdPushes: a 督办 message went into conversation id: its turn's normal finish is not pushed (the hub and the
+// holdPushes: a supervision message went into conversation id: its turn's normal finish is not pushed (the hub and the
 // channels read it off the snapshot, SessionView.Supervising) until the user or anything else speaks there.
 func (s *Service) holdPushes(ctx context.Context, id string) {
 	b := &s.supervise
@@ -725,7 +725,7 @@ func (s *Service) releasePushes(ctx context.Context, id string) {
 	}
 }
 
-// supervising: conversation id's current turn was started by a 督办 message.
+// supervising: conversation id's current turn was started by a supervision message.
 func (s *Service) supervising(id string) bool {
 	b := &s.supervise
 	b.mu.Lock()
@@ -788,7 +788,7 @@ func (s *Service) toolTaskReview(ctx context.Context, self string, args json.Raw
 	}
 	verdict, note := a.Verdict, clip(a.Note, 2000)
 	// Only the main conversation supervises (task_plan, quietAgentTask): another conversation's task without a ledger
-	// gets none here either, or its signals would go into the main conversation's 督办 messages (#4262). It can still
+	// gets none here either, or its signals would go into the main conversation's supervision messages (#4262). It can still
 	// be closed; rework and needs_user are what supervision is for.
 	ledger := t.Supervision != nil || s.isMain(ctx, self)
 	if !ledger && (verdict == reviewRework || verdict == reviewNeedsUser) {
@@ -1201,7 +1201,7 @@ func (s *Service) planDuplicates(ctx context.Context, tasks []PlanTask) string {
 		"same work, cancel the new task (task_review cancelled, or dismiss the plan) or send what is new to the agent already on it." + b.String()
 }
 
-// SetSuperviseTimings makes 督办 messages gather for gather and come at most every every (urgent: urgent), and
+// SetSuperviseTimings makes supervision messages gather for gather and come at most every every (urgent: urgent), and
 // answers what puts them back: for the hub's end-to-end tests, which cannot reach the package's own.
 func SetSuperviseTimings(gather, every, urgent time.Duration) (restore func()) {
 	g, e, u := superviseGather, superviseEvery, superviseUrgentEvery

@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The runtime CLI over the hub (docs/runtime-cli.md「经 hub 连真机」): a DEBUG build of the app, started with the CLI
+// The runtime CLI over the hub (docs/runtime-cli.md "Reaching a real device through the hub"): a DEBUG build of the app, started with the CLI
 // over the hub turned on, lists phone_runtime_cli with its tools in register_phone. It is not one of the phone's
 // tools: the app's screen holds mail, messages and health data, so it is never offered to an agent (the MCP tool
 // list, callTool), only to POST /api/v1/phone/runtime-cli from a full device credential (scripts/app/jarvisctl.py --hub),

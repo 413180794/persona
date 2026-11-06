@@ -1,6 +1,6 @@
 package extmgr
 
-// Plugins' programs on computers (docs/plan-extensions.md「七」, #1830): the hub keeps what should run where (the
+// Plugins' programs on computers (docs/plan-extensions.md "7", #1830): the hub keeps what should run where (the
 // plugin's switch, configuration and the machines picked in its node.machines field) and makes each machine so —
 // when it connects, when the plugin changes, and by renewing the leases every 10 minutes. Nothing is queued for a
 // machine that is away: it is brought in line when it is back. The node runs them (node/plugins.go).
@@ -29,7 +29,7 @@ import (
 
 const (
 	// extensionLease is how long a machine keeps a plugin's program running without hearing from the hub
-	// (plan「拍板结果」), renewed every extensionLeaseEvery.
+	// (plan "Decisions"), renewed every extensionLeaseEvery.
 	extensionLease      = 30 * time.Minute
 	extensionLeaseEvery = 10 * time.Minute
 	// extensionNodeOutdated is a machine whose node cannot run plugins' programs (older than #1830).
@@ -205,7 +205,7 @@ func putNodePackage(ctx context.Context, m *Machine, prog proto.PluginNodeProgra
 }
 
 // nodeInit is the initialize p's program on a computer gets: the configuration, and only the secrets its manifest
-// sends to computers (node.secrets); no hub token (no hub_api on computers, plan「拍板结果」).
+// sends to computers (node.secrets); no hub token (no hub_api on computers, plan "Decisions").
 func (ps *extensions) nodeInit(ctx context.Context, p *extension.Extension) (json.RawMessage, error) {
 	all, err := ps.reg.Secrets(ctx, p.Record.ID)
 	if err != nil {

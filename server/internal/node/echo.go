@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// Which transcript line is the message an app sent (docs/protocol.md「待发消息的对应」). The app sends with a
+// Which transcript line is the message an app sent (docs/protocol.md "Matching pending messages"). The app sends with a
 // client_msg_id and shows a pending bubble until the transcript has the message, but Claude Code, Codex and the
 // runtimes give that line ids of their own. After a send that reached the pane (or may have), the node expects its
 // copy: in the order sent, the first user line written after the transcript's end at the time it was typed whose words

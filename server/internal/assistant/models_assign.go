@@ -6,7 +6,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// assign (POST /api/v1/launchers, docs/onboarding.md 5.4): a provider added in the onboarding becomes what 主对话 and
+// assign (POST /api/v1/launchers, docs/onboarding.md 5.4): a provider added in the onboarding becomes what the main chat and
 // new Agents run on, but only where nobody has chosen anything yet; a choice the user made is never replaced.
 
 // assignablePurposes are the categories assign may set: the two that run Claude Code on a computer.
@@ -14,7 +14,7 @@ var assignablePurposes = []string{"assistant", "agent.new"}
 
 // Why assign left a category as it was.
 const (
-	keptCustomized   = "customized"   // someone chose its model (here, or 主对话's launcher in 设置 › 助手)
+	keptCustomized   = "customized"   // someone chose its model (here, or the main chat's launcher in Settings › Assistant)
 	keptIncompatible = "incompatible" // the category cannot run on the provider
 	keptFailed       = "failed"       // reading or writing the configuration failed
 )
@@ -46,7 +46,7 @@ func (s *Service) assignIfDefault(ctx context.Context, provider string, ids []st
 	return assigned, kept
 }
 
-// assignOne sets category id to provider if it is at its default: no model chosen for it and, for 主对话, the
+// assignOne sets category id to provider if it is at its default: no model chosen for it and, for the main chat, the
 // assistant's launcher still the built-in claude. The reason it was kept, else "".
 func (s *Service) assignOne(ctx context.Context, id, provider string, providers []ModelProvider) (string, error) {
 	p, err := s.modelPurpose(ctx, id, providers)

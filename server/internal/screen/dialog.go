@@ -18,8 +18,8 @@ type Dialog struct {
 	Header   string `json:"header,omitempty"`
 	Question string `json:"question"`
 	Detail   string `json:"detail,omitempty"` // lines above the question that belong to it (the command asked about)
-	// Warning is what the agent adds in a box above the question about why it asks (Claude Code's 「Dangerous rm
-	// operation on possibly-empty variable…」); Deadline its 「⚠ … will automatically block this request in 1:59」,
+	// Warning is what the agent adds in a box above the question about why it asks (Claude Code's "Dangerous rm
+	// operation on possibly-empty variable…"); Deadline its "⚠ … will automatically block this request in 1:59",
 	// whose countdown moves every second. Neither is in Rev: a card stays answerable while the clock runs.
 	Warning  string   `json:"warning,omitempty"`
 	Deadline string   `json:"deadline,omitempty"`
@@ -29,7 +29,7 @@ type Dialog struct {
 	// Submit, which opens the review tab, or Next when another question follows.
 	Multi  bool   `json:"multi,omitempty"`
 	Submit string `json:"submit,omitempty"` // that row's label: "Submit" or "Next"
-	// Steps are the questions of a multi-question AskUserQuestion, from its tab bar ("←  ☒ 环境  ☐ 平台  ✔ Submit  →",
+	// Steps are the questions of a multi-question AskUserQuestion, from its tab bar ("←  ☒ Env  ☐ Platform  ✔ Submit  →",
 	// the Submit tab left out). A single question's one tab is its Header.
 	Steps []Step `json:"steps,omitempty"`
 	// Review is the Submit tab ("Review your answers", "1. Submit answers / 2. Cancel"); Incomplete when it warns
@@ -82,11 +82,11 @@ var numberedRE = regexp.MustCompile(`^(\s*)(?:([❯›>])\s*)?(\d)\.\s+(\S.*)$`)
 // cursorRE is the selected row of an unnumbered list: `❯ No, exit`.
 var cursorRE = regexp.MustCompile(`^(\s*)❯\s+(\S.*)$`)
 
-// boxRE is a multi-select option's check box before its label: `[ ] 手机`, `[✔] 电脑`.
+// boxRE is a multi-select option's check box before its label: `[ ] Phone`, `[✔] Computer`.
 var boxRE = regexp.MustCompile(`^\[([ ✔✓xX])\]\s*(.*)$`)
 
 // previewRE is the box beside the options of a question with previews (AskUserQuestion's preview field), from the
-// gap before it to the end of the row: `1. 可以         ┌────┐`, `2. 要改         │ 第一行 │`.
+// gap before it to the end of the row: `1. Yes         ┌──────────┐`, `2. Change      │ Line one │`.
 var previewRE = regexp.MustCompile(`\s{2,}[┌│└].*$`)
 
 // previewNote is the hint under that box.
@@ -127,7 +127,7 @@ func rewindList(lines []string) *Dialog {
 	if cur < 0 || r.Rows[cur].Current {
 		return nil
 	}
-	// The prompts often repeat (「继续」 with no code changes): scrolled one row, the window looks the same.
+	// The prompts often repeat ("continue" with no code changes): scrolled one row, the window looks the same.
 	d := &Dialog{Question: rewindListQuestion, window: fmt.Sprintf("%d/%d", r.Above, r.Below)}
 	for i, row := range r.Rows {
 		if row.Current {
@@ -158,9 +158,9 @@ type row struct {
 }
 
 // numbered reads the dialog's numbered options. Only rows from dialogTop down count: a numbered list in the agent's
-// answer above the dialog (「I'll do three things: 1. … 2. …」) is the conversation, and its numbers pick nothing.
+// answer above the dialog ("I'll do three things: 1. … 2. …") is the conversation, and its numbers pick nothing.
 // Nothing below dialogTop is the conversation — dialogTop stops under the last conversation row it finds, so a
-// finished turn under the list (「✻ Cooked for 12s」) is already outside the window read here.
+// finished turn under the list ("✻ Cooked for 12s") is already outside the window read here.
 func numbered(lines []string) *Dialog {
 	var rows []row
 	for i := dialogTop(lines); i < len(lines); i++ {
@@ -334,7 +334,7 @@ func unnumbered(lines []string) *Dialog {
 	return d
 }
 
-// tabsRE is AskUserQuestion's tab bar: "←  ☒ 环境  ☐ 平台  ✔ Submit  →" (a multi-select or multi-question dialog).
+// tabsRE is AskUserQuestion's tab bar: "←  ☒ Env  ☐ Platform  ✔ Submit  →" (a multi-select or multi-question dialog).
 var tabsRE = regexp.MustCompile(`^←\s+(.*?)\s+→$`)
 
 // gapRE parts the tab bar's tabs (two spaces or more; a header may have one).
@@ -445,8 +445,8 @@ func (d *Dialog) hash() {
 	d.Rev = hex.EncodeToString(h.Sum(nil))[:12]
 }
 
-// The countdown Claude Code adds when it will answer for the user (auto mode: 「⚠ Claude Code will automatically
-// block this request in 1:59, to avoid holding up an unattended session」; earlier builds say deny), and the dashed
+// The countdown Claude Code adds when it will answer for the user (auto mode: "⚠ Claude Code will automatically
+// block this request in 1:59, to avoid holding up an unattended session"; earlier builds say deny), and the dashed
 // rules it draws around the command asked about.
 var (
 	deadlineRE = regexp.MustCompile(`(?i)^⚠?\s*.*\bwill automatically (block|deny|allow|approve|accept|reject)\b.*\bin \d+:\d{2}\b`)

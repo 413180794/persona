@@ -67,7 +67,7 @@ func (e *Engine) ForgetSource(source string) (Forgotten, error) {
 	return out, nil
 }
 
-// dropLogLines rewrites a project's timeline without the lines whose source (「- 时间 · 来源 · 内容」) gone says.
+// dropLogLines rewrites a project's timeline without the lines whose source ("- time · source · content") gone says.
 func (s *Store) dropLogLines(slug string, gone func(source string) bool) (err error) {
 	s.mu.Lock()
 	defer func() {

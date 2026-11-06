@@ -139,7 +139,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if os.Args[1] == sandbox.RunCommand { // an extension's sandbox (docs/extensions.md「沙箱」); it passes signals on itself
+	if os.Args[1] == sandbox.RunCommand { // an extension's sandbox (docs/extensions.md "Sandbox"); it passes signals on itself
 		stop()
 		os.Exit(sandbox.Run(os.Args[2:], os.Stderr))
 	}
@@ -288,7 +288,7 @@ func main() {
 		}
 	case "hook":
 		runHook(ctx)
-	case "launch": // a launcher kept in 设置 › 模型: its settings from the local node, then claude (docs/launchers.md)
+	case "launch": // a launcher kept in Settings › Models: its settings from the local node, then claude (docs/launchers.md)
 		if len(os.Args) < 3 {
 			err = usageError("usage: " + commandName() + " launch <launcher> [claude args…]")
 			break

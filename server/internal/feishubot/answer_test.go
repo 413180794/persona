@@ -599,7 +599,7 @@ func cardComponents(c decoded) int {
 	return n
 }
 
-// pipeTable builds a cols x nrows pipe table with header "列<j>" and cell "<i>-<j>".
+// pipeTable builds a cols x nrows pipe table with header "<column><j>" (the Chinese word for column) and cell "<i>-<j>".
 func pipeTable(cols, nrows int) string {
 	var head, rows strings.Builder
 	for j := 0; j < cols; j++ {
@@ -703,11 +703,11 @@ func TestAnswerTableMixedBudget(t *testing.T) {
 	}
 }
 
-// The fallback a refused card is sent as rich text: rows are "- 列名：值" bullet lines and never carry a pipe, even one escaped inside a cell.
+// The fallback a refused card is sent as rich text: rows are "- column: value" bullet lines and never carry a pipe, even one escaped inside a cell.
 func TestAnswerTableFallbackNoPipes(t *testing.T) {
 	for _, tc := range []struct {
 		name, in, want string
-		bullets        int // "- 列0：" bullets across all parts; -1 skips
+		bullets        int // "- column0:" bullets across all parts; -1 skips
 	}{
 		{"7x30", pipeTable(7, 30), "列1：0-1", 30},
 		{"2x100", pipeTable(2, 100), "列1：99-1", 100},
@@ -784,7 +784,7 @@ func TestRetitleKeepsTheBodysHeadingAndStatus(t *testing.T) {
 	if !strings.Contains(s, `"text_tag"`) || !strings.Contains(s, "请验收") || !strings.Contains(s, `"template":"orange"`) || strings.Contains(s, "**请验收**") {
 		t.Fatalf("status only: %s", s)
 	}
-	// A heading that is only the status (with or without the 「#」): the tag, not a bold line repeating it.
+	// A heading that is only the status (with or without the "#"): the tag, not a bold line repeating it.
 	for _, md := range []string{"# 请验收\n\n改好了", "# 待验收\n\n改好了", "# 有变动\n\n见下",
 		"# 状态：请验收\n\n改好了", "# 结论：无变动\n\n一切正常", "# 【请验收】\n\n改好了"} {
 		b, _ = json.Marshal(first(md))

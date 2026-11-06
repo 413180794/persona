@@ -186,7 +186,7 @@ func seedTasks(t *testing.T, h *Hub, tasks ...assistant.Task) {
 	}
 }
 
-// runNow is 立即运行 in the app (POST …/tasks/{id}/run): the conversation the run went into.
+// runNow is "Run now" in the app (POST …/tasks/{id}/run): the conversation the run went into.
 func runNow(t *testing.T, h *Hub, id string) (proto.Session, error) {
 	t.Helper()
 	mux := http.NewServeMux()

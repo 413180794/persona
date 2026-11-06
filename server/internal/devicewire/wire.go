@@ -1,5 +1,5 @@
 // Package devicewire is what the hub and the manager that carries the user's computers say to each other over the
-// bus about them (docs/protocol.md「电脑（devices.*）」, docs/machines.md「谁连电脑」): the manager (internal/devices, in
+// bus about them (docs/protocol.md "Computers (devices.*)", docs/machines.md "Who connects the computers"): the manager (internal/devices, in
 // `personad assistant`) connects every computer — the local node, ssh, tailcat, Persona Link in both modes, the ones
 // reached through another hub of the mesh — and holds what is known of each; the hub never dials or accepts a
 // computer. It hands the manager hub.json's machines as defaults, relays the apps' calls and streams to it, and keeps
@@ -74,7 +74,7 @@ const (
 	// MethodReconnect {machine_id} → {}: connect the machine's node again (the apps' reconnect, the admin page).
 	MethodReconnect = "devices.reconnect"
 	// MethodUsageGatewayAccounts {} → proto.GatewayAccounts: the account lists of the account-pool gateways among the
-	// usage sources, from their last read (never a key; docs/usage-windows.md「网关的账号清单」). The extensions'
+	// usage sources, from their last read (never a key; docs/usage-windows.md "The gateway's account list"). The extensions'
 	// usage.gateway_accounts (internal/extmgr, permission usage_gateways) asks it in the manager's process.
 	MethodUsageGatewayAccounts = "devices.usage_gateway_accounts"
 	// EventLinkRTT LinkRTT: a Persona Link's round trip, as the hub's heartbeat on it measured it (its paths are
@@ -142,7 +142,7 @@ type LinkEndpoint struct {
 	Kind string `json:"kind"`
 }
 
-// Mesh is what the manager needs of the mesh group (docs/mesh.md「多条路」): whether this hub leaves its computers to
+// Mesh is what the manager needs of the mesh group (docs/mesh.md "Several ways"): whether this hub leaves its computers to
 // the center, and the members' computers the center reaches through them.
 type Mesh struct {
 	// Member: this hub is a member; its computers are connected by the center (through it), not from here.

@@ -13,10 +13,10 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// An item's parent (#2128, docs/inbox.md「线索」): what the item grew out of, so a thing that started in a chat, became
+// An item's parent (#2128, docs/inbox.md "Threads"): what the item grew out of, so a thing that started in a chat, became
 // a todo and went to a few agents reads as one line. The parent is another item, a todo or an agent session; it comes
 // from the event it continues, from its connector (InboxThing.Parent) or from the user. Persona only keeps it, lists
-// it and links to it: nothing guesses one, and todos keep no tree of their own (docs/todos.md「设计取舍」).
+// it and links to it: nothing guesses one, and todos keep no tree of their own (docs/todos.md "Design trade-offs").
 
 // The kinds of parent.
 const (

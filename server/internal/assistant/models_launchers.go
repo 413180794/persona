@@ -24,10 +24,10 @@ import (
 	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
-// 设置 › 模型供应商 (docs/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its
+// Settings › Model providers (docs/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its
 // node and remembered by the hub (it hands them over: launchers.zshrc); those added in the app are the assistant's —
 // base URL, model, and the API key AES-GCM sealed with secret.key (the hub's data directory's, which the assistant
-// reads: docs/assistant.md「进程」) — and given to every node, which runs them as `personad launch <name>`. Deleting a
+// reads: docs/assistant.md "Processes") — and given to every node, which runs them as `personad launch <name>`. Deleting a
 // ~/.zshrc launcher only hides it in Persona.
 
 const (
@@ -43,7 +43,7 @@ type storedLauncher struct {
 	// HeadersSealed: Headers (ANTHROPIC_CUSTOM_HEADERS) sealed like the key; the embedded Headers is never stored.
 	HeadersSealed string `json:"headers_sealed,omitempty"`
 	Preset        string `json:"preset,omitempty"` // the preset (built-in or a plugin's) it was added from
-	// DisplayName is what the apps call it (any language, 「智谱 GLM」); Name stays the ASCII id the launch uses.
+	// DisplayName is what the apps call it (any language, "Zhipu GLM"); Name stays the ASCII id the launch uses.
 	DisplayName string    `json:"display_name,omitempty"`
 	Created     time.Time `json:"created"`
 	Updated     time.Time `json:"updated"`
@@ -793,7 +793,7 @@ func (s *Service) launcherRoutes() {
 		}
 		apierr.WriteJSON(w, map[string]any{"ok": true, "hidden": true})
 	})
-	// 测试可用性: one real request through the launcher on a machine (default: the assistant's).
+	// "Test": one real request through the launcher on a machine (default: the assistant's).
 	s.handle("POST /api/v1/launchers/{name}/check", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 		defer cancel()
@@ -883,7 +883,7 @@ func sessionLaunchers(discovered, configured []ConfiguredLauncher) []ConfiguredL
 
 var errUnknownMachine = errors.New("unknown machine")
 
-// machineLauncherRoutes are 新建 Agent's pickers on one machine: its launchers with the agent each starts
+// machineLauncherRoutes are "New Agent"'s pickers on one machine: its launchers with the agent each starts
 // (sessionLaunchers), and a launcher's /model list (node/launcher_models.go; the node keeps a list 10 minutes,
 // ?refresh=1 asks the CLI again).
 func (s *Service) machineLauncherRoutes() {
@@ -1010,8 +1010,8 @@ func (s *Service) pickMachine(ctx context.Context, has []string, want string) (s
 	return "", false
 }
 
-// providerModels is GET /api/v1/model-config/providers/{id}/models: a launcher provider's /model list for 模型配置
-// (docs/model-config.md「模型配置选模型」). 模型配置 is not one machine's, so the list comes from a machine that has the
+// providerModels is GET /api/v1/model-config/providers/{id}/models: a launcher provider's /model list for Model configuration
+// (docs/model-config.md "Picking a model in Model configuration"). Model configuration is not one machine's, so the list comes from a machine that has the
 // launcher (pickMachine), and the answer says which. Other providers have no list to ask for: a plugin's comes with
 // it, an API connection has none.
 func (s *Service) providerModels(w http.ResponseWriter, r *http.Request) {

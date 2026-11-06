@@ -59,7 +59,7 @@ func kindTestNode(t *testing.T) *Node {
 }
 
 // A conversation resumes on the kind of agent it was started on, whatever kind the launcher asked for runs: the
-// main conversation follows 模型配置 › 主对话 on every message, and a Codex main conversation with the setting moved
+// main conversation follows "Model Settings › Main Chat" on every message, and a Codex main conversation with the setting moved
 // to a Claude launcher failed every message on `claude --resume <thread>` (2026-11-05).
 func TestAssistantResumeLauncherKeepsTheConversationsAgent(t *testing.T) {
 	n := kindTestNode(t)

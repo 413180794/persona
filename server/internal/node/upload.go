@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Files sent from the phone to an agent (docs/protocol.md「发送文件」): the hub streams the upload in chunks
+// Files sent from the phone to an agent (docs/protocol.md "Sending files"): the hub streams the upload in chunks
 // (file.upload.begin / chunk / end; one JSON line per chunk, never the whole file), the node writes it to a hidden
 // part file in the temp directory and, once every byte is there, renames it to the original name plus a timestamp.
 // The app puts the returned absolute path in the input box.
@@ -41,7 +41,7 @@ type upload struct {
 	random  bool // the final name starts with a random prefix instead of ending in a timestamp (terminal pastes)
 }
 
-// begin opens an upload into the temp directory (the chat's 「发送文件」).
+// begin opens an upload into the temp directory (the chat's "Send file").
 func (u *uploads) begin(name string, size int64) (string, error) {
 	return u.beginIn(os.TempDir(), name, size, proto.MaxUploadBytes, false)
 }

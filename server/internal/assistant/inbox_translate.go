@@ -19,14 +19,14 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Translation (docs/ios.md「翻译」) is the manager's. The app decides what needs translating (its own setting, its
+// Translation (docs/ios.md "Translation") is the manager's. The app decides what needs translating (its own setting, its
 // own language detection) and asks (POST /api/v1/translate, /api/v1/translate/mail, relayed by the hub); the manager
 // asks the translation model (purpose "translate": a cheap one is enough) and keeps the answers in memory, so opening
 // the same mail again is instant. Mail is translated by reference (the hub reads the message: inbox.mail_body,
 // readable), short texts (Feishu messages of chosen chats) in batches.
 //
 // New mail is translated as it comes in, not when it is opened (2026-11-01): after each mail collection, open mail
-// items whose text is in another script than a target some device asked for (设置 › 翻译 sent to the hub with the
+// items whose text is in another script than a target some device asked for (Settings › Translation sent to the hub with the
 // device's prefs, InboxConfig.Translate) get the translation stored on the item. The list shows the translated subject
 // and preview; opening the mail finds the whole translation there (storedMailTranslation).
 

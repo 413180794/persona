@@ -78,7 +78,7 @@ func (h *Manager) pushBackground(payload map[string]any, devices []string) {
 }
 
 // asker is the conversation a card the manager has the hub make belongs to: the clients put a card into the chat of
-// its machine and session, so one with no session shows only in 需要你.
+// its machine and session, so one with no session shows only in "Needs you".
 type asker struct{ machine, session string }
 
 // assistantAsker is the assistant conversation sessionID (on the assistant's machine); with none, a card of machine.
@@ -101,7 +101,7 @@ func (h *Manager) assistantToolsNow() []proto.Tool {
 }
 
 // inHealth: an assistant conversation working in cwd is in the health space. What it says leaves the space only with
-// the user knowing (docs/health.md「外发」): its writes are confirmed on the phone each time, whatever the gate rules
+// the user knowing (docs/health.md "Outbound"): its writes are confirmed on the phone each time, whatever the gate rules
 // allow.
 func inHealth(cwd string) bool { return cwd != "" && identity.SpaceOf(cwd) == identity.SpaceHealth }
 

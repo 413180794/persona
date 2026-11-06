@@ -18,7 +18,7 @@ import (
 const ConfigMost = 64 << 10
 
 // Schema is a plugin's configuration: the subset of JSON Schema every client can draw as a form
-// (docs/plan-extensions.md「configuration」), its properties in the order the manifest has them.
+// (docs/plan-extensions.md "configuration"), its properties in the order the manifest has them.
 type Schema struct {
 	Fields []Field `json:"fields"`
 }
@@ -36,7 +36,7 @@ type Field struct {
 	// OS, for format machine: only machines of these systems (x-os: darwin, linux, windows); none, any.
 	OS []string `json:"os,omitempty"`
 	// Confirm (x-confirm): what a form asks before a switch is turned on (a boolean, or a machine of a machine list),
-	// for settings with a cost the user should agree to (the plugin cua's 「扩展开着时不自动锁屏」, #1507).
+	// for settings with a cost the user should agree to (the plugin cua's "Don't auto-lock while the extension is on", #1507).
 	Confirm     string   `json:"confirm,omitempty"`
 	Pattern     string   `json:"pattern,omitempty"`
 	MinLength   *int     `json:"min_length,omitempty"`
@@ -353,7 +353,8 @@ func (s *Schema) Check(raw json.RawMessage) error {
 	return checkObject(fields, raw, "")
 }
 
-// CheckSaved 校验已有值，但允许新版本新增的必填项暂缺，交给 needs_setup。
+// CheckSaved checks the saved values but lets required fields added by a new version be missing, leaving them to
+// needs_setup.
 func (s *Schema) CheckSaved(raw json.RawMessage) error {
 	if s == nil {
 		return s.Check(raw)

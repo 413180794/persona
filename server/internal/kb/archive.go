@@ -57,7 +57,7 @@ type Engine struct {
 	Sources      []Source
 	Model        Model
 	ModelFor     func(string) Model
-	Owner        string // how the owner is called (the AI writes "我" for them)
+	Owner        string // how the owner is called (the AI writes the Chinese "I" for them)
 	Logf         func(string, ...any)
 	// ExtraDirs are directories outside the data dir that Search also reads (Markdown files, read only): notes the
 	// user keeps elsewhere, e.g. a git repository of facts. Absolute paths.

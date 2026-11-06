@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The extensions, the connectors and the bots are the manager's (internal/extmgr, docs/extensions.md「谁管什么」): the
+// The extensions, the connectors and the bots are the manager's (internal/extmgr, docs/extensions.md "Who owns what"): the
 // registry, the programs, their secrets and tokens, every source, mail, the Feishu and WeChat bots. The hub relays:
 //
 //   - the apps' requests on their routes (extwire.Routes, the admin UI's /api/v1/admin/extensions…, and the parts of

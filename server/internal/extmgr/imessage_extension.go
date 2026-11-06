@@ -10,9 +10,10 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The built-in extension 信息 (#1830 step 6, docs/plan-extensions.md「iMessage 怎么用它」): which Mac's Messages the
-// connector imessage reads, picked in 设置 › 扩展 › 信息 instead of hub.json's imessage.machine. The connector is the
-// one it always was (its id, inbox, knowledge base, 交给 Persona, 删除数据); only where its Mac comes from changed:
+// The built-in extension Messages (#1830 step 6, docs/plan-extensions.md "How iMessage uses it"): which Mac's Messages
+// the connector imessage reads, picked in Settings › Extensions › Messages instead of hub.json's imessage.machine. The
+// connector is the one it always was (its id, inbox, knowledge base, "Hand to Persona", "Delete data"); only where its
+// Mac comes from changed:
 //
 //   - the extension on with a Mac picked: that Mac;
 //   - else hub.json's imessage.machine, as before (kept one version, read-only, never written);
@@ -124,7 +125,7 @@ func (h *Manager) applyIMessage() {
 	}
 }
 
-// imessageOneMac refuses a second Mac for 信息 with the one already on named: one Mac only (the same Apple ID's Macs
+// imessageOneMac refuses a second Mac for Messages with the one already on named: one Mac only (the same Apple ID's Macs
 // hold the same messages, read twice they would come twice).
 func (h *Manager) imessageOneMac(raw json.RawMessage) *extension.FieldError {
 	var next struct {

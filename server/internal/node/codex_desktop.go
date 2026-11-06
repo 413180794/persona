@@ -195,7 +195,7 @@ func (n *Node) sendCodexDesktop(ctx context.Context, src codexSource, text strin
 }
 
 // The Codex App's threads are listed like its sidebar: grouped by its projects, newest first, and those of the last
-// few days with a state like herdr's — working while a turn runs; after it, done (完成未看) while the App's sidebar
+// few days with a state like herdr's — working while a turn runs; after it, done ("Unread") while the App's sidebar
 // still marks the thread unread, idle once it was looked at in the App (or, as for any agent, in Persona).
 // A process holding the rollout open only ever said "unknown", which the phone folds away with the quiet ones.
 const codexDesktopRecent = 72 * time.Hour

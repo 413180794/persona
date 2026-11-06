@@ -428,7 +428,7 @@ func TestLinkTellsWhatTheHubIsCalled(t *testing.T) {
 }
 
 // A computer waiting to be confirmed is told so on its link, and told again once confirmed (#4655): Persona Link shows
-// 「等你在手机上确认」 until then. A confirmed one is never told it is pending, and the others' links are not.
+// "Waiting for you to confirm on your phone" until then. A confirmed one is never told it is pending, and the others' links are not.
 func TestLinkTellsItIsPending(t *testing.T) {
 	h, _, srv := newLinkHub(t)
 	h.setPendingLocal("laptop", time.Now(), true) // as markMachinePending does, without the database

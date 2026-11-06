@@ -16,7 +16,7 @@ import (
 
 const triageConcurrency = 4
 
-// triageInbox sorts open items whose content changed since they were last looked at into 需要你 / 知悉即可 / 噪音
+// triageInbox sorts open items whose content changed since they were last looked at into "Needs you" / "FYI" / "Noise"
 // with a one-line summary (the small-task model, inbox.triage). It runs in the background; one pass at a time.
 func (s *Service) triageInbox(ctx context.Context) {
 	b := &s.inbox
@@ -80,7 +80,7 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 	switch {
 	case v.state == triagePaused:
 		// The model's connection is held (quota used up, busy): not triaged, so a pass after it is back asks again.
-		// Meanwhile an untriaged item sits in its rule tier rather than in 需要你.
+		// Meanwhile an untriaged item sits in its rule tier rather than in "Needs you".
 		if it.Tier == "" && fallback != "" {
 			it.Tier, it.Reason = fallback, b.byRules()
 			return true
@@ -122,7 +122,7 @@ type triageVerdict struct {
 	tier, summary, reason string
 	urgent                bool   // someone waits, a deadline is near (action only)
 	state                 string // "" when answered
-	why                   string // the state for people: 模型没有额度
+	why                   string // the state for people: "model out of quota"
 	err                   error
 }
 
@@ -185,7 +185,7 @@ func (b *inboxBook) ruleTier(it *InboxItem) string {
 	}
 	switch it.Kind {
 	case KindMention:
-		// An @所有人 without an @me is an announcement: worth knowing, not waiting on me.
+		// An @all without an @me is an announcement: worth knowing, not waiting on me.
 		if it.Lark != nil && it.Lark.AtAll && !it.Lark.AtMe {
 			return TierFYI
 		}
@@ -303,7 +303,7 @@ func replyInDoubt(err error) bool {
 }
 
 // replyInbox sends text as the user's reply to the item's source — in the Feishu chat, a document's comments, a
-// 公司圈 post (the plugin that took Feishu over), a reply to the newest mail of the thread, a GitHub comment… (the
+// Moments (company feed) post (the plugin that took Feishu over), a reply to the newest mail of the thread, a GitHub comment… (the
 // hub sends it) — and files the item as done, unless something new came into it while the reply was out.
 func (s *Service) replyInbox(ctx context.Context, id, text string, changes ...DocChange) (InboxItem, error) {
 	return s.replyInboxAs(ctx, id, text, "", changes...)
@@ -315,7 +315,7 @@ func (s *Service) replyInboxAs(ctx context.Context, id, text, clientID string, c
 	return s.replyInboxDo(ctx, id, text, clientID, false, true, changes...)
 }
 
-// replyInboxFrom is replyInboxAs; fromCard: it is 发送 on a message card (sendFromCard), which does not reply to an
+// replyInboxFrom is replyInboxAs; fromCard: it is "Send" on a message card (sendFromCard), which does not reply to an
 // item filed since (errInboxItemDone). Checked with the copy for the reply, so an item filed after sendFromCard
 // looked is not answered and keeps its mark (#4871).
 func (s *Service) replyInboxFrom(ctx context.Context, id, text, clientID string, fromCard bool, changes ...DocChange) (InboxItem, error) {
@@ -436,7 +436,7 @@ func (s *Service) replyInboxDo(ctx context.Context, id, text, clientID string, f
 
 // saveReplied writes the item a reply filed. The reply went out, so a failed write keeps the item filed in memory
 // (rolling it back would let a repeat send the reply again) and is remembered on the item's replies: a repeat of
-// the reply writes it then, instead of the item coming back as 需要你 after a restart. With once.mu held.
+// the reply writes it then, instead of the item coming back as "Needs you" after a restart. With once.mu held.
 func (s *Service) saveReplied(ctx context.Context, it *InboxItem, once *inboxReply) {
 	failed := s.saveInbox(ctx, []*InboxItem{it})
 	once.unsaved = failed[it.ID]

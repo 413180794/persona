@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
-// Pins are the spaces and agents the user keeps at the top of the 开发 list (saved in Postgres, so a reinstall or
+// Pins are the spaces and agents the user keeps at the top of the "Develop" list (saved in Postgres, so a reinstall or
 // another phone sees the same). Spaces are "machine/space name" — herdr workspace ids change when herdr restarts,
 // names do not; agents are "machine/session id".
 type Pins struct {

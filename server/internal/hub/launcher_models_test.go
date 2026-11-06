@@ -105,7 +105,7 @@ func TestLauncherModelsEndpoint(t *testing.T) {
 	}
 }
 
-// The model picked in 新建 Agent reaches the node's start (it used to be dropped with the request's other unknown keys).
+// The model picked in "New agent" reaches the node's start (it used to be dropped with the request's other unknown keys).
 func TestSessionStartTakesPickedModel(t *testing.T) {
 	h, _ := modelTestHub(t)
 	var got map[string]any
@@ -126,7 +126,7 @@ func TestSessionStartTakesPickedModel(t *testing.T) {
 	}
 }
 
-// 模型配置's list for a launcher provider comes from a machine that has the launcher and is online, and says which;
+// Models' list for a launcher provider comes from a machine that has the launcher and is online, and says which;
 // providers without a list to ask for answer 404 (#943).
 func TestProviderModelsAsksAMachineWithTheLauncher(t *testing.T) {
 	h, mux := modelTestHub(t)
@@ -163,7 +163,7 @@ func TestProviderModelsAsksAMachineWithTheLauncher(t *testing.T) {
 	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &res) != nil || res.Machine != "b" || len(res.Models) != 1 {
 		t.Fatalf("work: %d %s", w.Code, w.Body)
 	}
-	// Claude Code 默认 runs on every machine.
+	// Claude Code "Default" runs on every machine.
 	if w := get("/api/v1/model-config/providers/launcher.claude/models"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"machine":"b"`) {
 		t.Fatalf("claude: %d %s", w.Code, w.Body)
 	}

@@ -338,7 +338,7 @@ func abbreviated(s string) (uint64, bool) {
 	return n * mult, err == nil
 }
 
-// darwinMemoryUsed is Activity Monitor's 「已使用内存」: app memory (anonymous pages that are not purgeable) + wired +
+// darwinMemoryUsed is Activity Monitor's  "Memory Used": app memory (anonymous pages that are not purgeable) + wired +
 // what the compressor occupies. File cache and purgeable memory count as free, as on Linux.
 func darwinMemoryUsed(v vmStat, page uint64) int64 {
 	app := v.anonymous - min(v.purgeable, v.anonymous)

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// The first-run setup code (docs/admin.md「首次设置」). A request from this machine's loopback may be a browser here, or
+// The first-run setup code (docs/admin.md "First-run setup"). A request from this machine's loopback may be a browser here, or
 // the internet through a reverse proxy on this machine that adds no forwarding header (nginx's proxy_pass by
 // default): both look the same. So setting the first password from loopback takes a one-time code that only someone
 // who can work on the hub's machine sees: the hub logs one when it starts without a password, and

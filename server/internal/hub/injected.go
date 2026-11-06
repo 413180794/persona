@@ -10,7 +10,7 @@ import (
 
 // withInjected marks, on items going to the apps, the user lines Persona wrote for the model (a task's notice, a
 // scheduled run, a wake-up…): the apps show one line instead of a bubble with the model's instructions in it
-// (docs/protocol.md「Persona 注入的消息」). Read off the text, so old lines and older nodes' get it too; a line an app
+// (docs/protocol.md "Messages Persona injects"). Read off the text, so old lines and older nodes' get it too; a line an app
 // sent (client_msg_id) is the user's whatever it says. A task notice is tied to its task when the assistant's report
 // names one open task by that title.
 func (h *Hub) withInjected(items []proto.Item) []proto.Item {
@@ -74,7 +74,7 @@ func injectedLine(l i18n.Lang, in *proto.Injected) string {
 		}
 	case proto.InjectedSystem:
 		if in.State == "lost_tasks" {
-			// the count is in the Chinese line: "node 重启过，3 个后台任务停了"
+			// the count is in the Chinese line: "node restarted, 3 background tasks stopped"
 			n := 0
 			for _, f := range strings.FieldsFunc(in.Line, func(r rune) bool { return r < '0' || r > '9' }) {
 				for _, c := range f {

@@ -198,7 +198,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 			n.mu.Unlock()
 		}
 		if m.size != st.Size() || !m.mtime.Equal(st.ModTime()) {
-			// Written since that read: a turn error it saw may be over (a 继续 ran and ended well within the interval),
+			// Written since that read: a turn error it saw may be over (a "Continue" ran and ended well within the interval),
 			// and a stale one would have it continued again. None for a few seconds is the safe side (#2185).
 			m.turnError, m.turnErrorKind = "", ""
 		}
@@ -284,7 +284,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	m.wake, m.turnClosed, m.lastTextAt, m.lastPromptAt = tm.LastTurnWake, tm.TurnClosed, tm.LastTextAt, tm.LastPromptAt
 	if m.lastText == "" && off > 0 {
 		// An agent that said a line and then ran tools for a while: their results and hook lines push its words out of
-		// the tail (a 1.5 MB transcript whose last text was 900 KB back, 2026-11-04) and its task card said 还没有动静.
+		// the tail (a 1.5 MB transcript whose last text was 900 KB back, 2026-11-04) and its task card said "No activity yet".
 		if prev.size > 0 && prev.size >= off && prev.size <= st.Size() {
 			m.lastText = prev.lastText // nothing written since the last read is out of the tail: no newer words
 		} else {
@@ -345,7 +345,7 @@ const codexStaleWorking = 30 * time.Second
 
 // codexTurnOver reports whether a Codex session herdr calls working has in fact finished: its rollout ends with the
 // turn complete and nothing has been written for a while. herdr has said so for hours-old turns (2026-10-30: a turn
-// finished two days earlier showed 「正在工作 45 小时」 for eight minutes, the rollout untouched).
+// finished two days earlier showed "working for 45 hours" for eight minutes, the rollout untouched).
 func (n *Node) codexTurnOver(id string, now time.Time) bool {
 	p := n.transcriptPath(id)
 	if p == "" {
@@ -775,7 +775,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			continue
 		}
 		s.WorkspaceCwd = n.sessionWorkspaceCwd(s.Cwd)
-		s.CanFork = n.forkable(s) // 分支到新聊天 (fork.go)
+		s.CanFork = n.forkable(s) // "Branch to New Chat" (fork.go)
 		keptSessions = append(keptSessions, s)
 	}
 	out = keptSessions
@@ -839,7 +839,7 @@ func (n *Node) scanOffline() []proto.Session {
 	var cands, assistant, kept []cand
 	keep := n.keptSessions()
 	n.mu.Lock()
-	forked := maps.Clone(n.forked) // 分支到新聊天's copies (fork.go)
+	forked := maps.Clone(n.forked) // "Branch to New Chat"'s copies (fork.go)
 	n.mu.Unlock()
 	own := n.assistantProject()
 	for _, p := range files {
@@ -877,7 +877,7 @@ func (n *Node) scanOffline() []proto.Session {
 		return list
 	}
 	// The assistant's conversations are counted on their own: a script running `claude -p` hundreds of times a day
-	// filled the 80 newest with its sessions, and the 对话 tab lost every conversation quieter than a couple of hours (#2105).
+	// filled the 80 newest with its sessions, and the "Chat" tab lost every conversation quieter than a couple of hours (#2105).
 	cands = append(newest(cands, 80), newest(assistant, maxAssistantOffline)...)
 	cands = append(cands, kept...)
 	sort.SliceStable(cands, func(i, j int) bool { return cands[i].st.ModTime().After(cands[j].st.ModTime()) })
@@ -894,7 +894,7 @@ func (n *Node) scanOffline() []proto.Session {
 		}
 		// Sessions that never produced output (hook probes): small files read whole with no title and no words. A bigger
 		// one only had its tail read, and a tail of tool calls under one huge line says nothing; the main conversation is
-		// listed whatever its tail holds. Dropping it left the app and the web with no session for 主对话, and its composer
+		// listed whatever its tail holds. Dropping it left the app and the web with no session for the main chat, and its composer
 		// disabled (#1163: its last turn stopped mid tool call, under a 377 KB line).
 		if m.lastText == "" && m.lastTextAt.IsZero() && m.title == "" && !keep[id] && !forked[id] && c.st.Size() <= quickTail {
 			continue
@@ -937,7 +937,7 @@ func lastUsed(m quickMeta, st os.FileInfo) time.Time {
 
 // untitled gives sessions without an AI title (headless ones) their first message as title: what the user wrote,
 // not the context blocks it starts with (the main conversation's, a Feishu /agent request's), or the title of the
-// block it is made of only (「接上旧主对话」). Stripped first, clipped after.
+// block it is made of only ("continue the old main chat"). Stripped first, clipped after.
 func untitled(s *proto.Session, m quickMeta) {
 	if first := transcript.Title(m.first); s.Title == "" && first != "" {
 		r := []rune(snippet(first))

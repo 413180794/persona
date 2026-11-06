@@ -2,7 +2,7 @@ package extension
 
 import "strings"
 
-// The scopes of the hub's API an extension may ask for (permissions.hub; docs/extensions.md「权限」). Each route of the
+// The scopes of the hub's API an extension may ask for (permissions.hub; docs/extensions.md"Permissions"). Each route of the
 // hub an extension's token may call names one (extmgr/extension_scopes.go); a route naming none is for full tokens
 // only.
 const (

@@ -383,7 +383,7 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 		Up         bool     `json:"up"`
 		Column     *int     `json:"column"`
 		Row        *int     `json:"row"`
-		// terminal.mouse (docs/terminal.md「鼠标」)
+		// terminal.mouse (docs/terminal.md "Mouse")
 		Action    string `json:"action"`
 		Button    string `json:"button"`
 		Modifiers int    `json:"modifiers"`

@@ -2,7 +2,7 @@ package voice
 
 import "net/http"
 
-// Codes of the error frames (docs/voice.md「扩展 → App」): a client shows its own words for them, the message is the
+// Codes of the error frames (docs/voice.md "Extension → app"): a client shows its own words for them, the message is the
 // detail.
 const (
 	codeNoUpstream          = "no_upstream"          // fatal: no realtime voice service is set up yet
@@ -16,8 +16,8 @@ const (
 	codeMachineOffline      = "machine_offline"      // not fatal: its computer is offline, what is said waits for it
 )
 
-// infoProtocol is the voice wire this plugin speaks (docs/voice.md「版本协商」): 1 is the frames of
-// docs/extensions.md「语音」; 2 adds the bound conversation (start.target), the run frames and resume, for a client
+// infoProtocol is the voice wire this plugin speaks (docs/voice.md "Version negotiation"): 1 is the frames of
+// docs/extensions.md "Voice"; 2 adds the bound conversation (start.target), the run frames and resume, for a client
 // whose start says protocol 2.
 const infoProtocol = 2
 

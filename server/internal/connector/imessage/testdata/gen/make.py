@@ -80,7 +80,7 @@ def chat_db():
                          (f"at_{message['ROWID']}_{name}", f"at_{message['ROWID']}_{name}", f"~/Library/Messages/Attachments/00/00/{name}", mime, name, size, uti))
         db.execute("INSERT INTO message_attachment_join (message_id, attachment_id) VALUES (?, ?)", (message["ROWID"], cur.lastrowid))
 
-    # 张三, over SMS first and then iMessage.
+    # Zhang San (a Chinese-named contact), over SMS first and then iMessage.
     msg(2, 2, apple_ns(2026, 10, 27, 1, 0), text="示例：今天的快递到了吗")
     msg(1, 1, apple_ns(2026, 10, 27, 1, 5), text="到了，谢谢", me=True)
     plain = msg(1, 1, apple_ns(2026, 10, 28, 2, 0), body="plain")  # only attributedBody, like half of real messages

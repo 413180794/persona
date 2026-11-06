@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// The 公司圈 archive (docs/knowledge.md「公司圈全量」): every post the crawler reaches, kept as text under
+// The Moments archive (docs/knowledge.md "All of Moments"): every post the crawler reaches, kept as text under
 // <data>/moments, one Markdown file per post (the post, then its comments) and its metadata beside it. Archive only:
 // nothing here goes to the model post by post; the posts that concern me are chats (moments-<id>) as well, summarized
 // like any chat. Search reads these files after everything else.
@@ -33,7 +33,7 @@ type MomentPost struct {
 	Mine         bool      `json:"mine,omitempty"`     // my post
 	Concerns     bool      `json:"concerns,omitempty"` // it is a chat as well (mine, or someone commented / @ed me)
 	// Source is the connector that keeps it ("" before connectors could: the hub's own crawler's); Feed is what
-	// the feed is called, for the heading ("" is 帖子).
+	// the feed is called, for the heading ("" is "posts").
 	Source string `json:"source,omitempty"`
 	Feed   string `json:"feed,omitempty"`
 }

@@ -930,7 +930,7 @@ func TestOrcaHookPaneBinding(t *testing.T) {
 	}
 }
 
-// A child worktree (Orca's「N 个子项」) carries its parent's id as its space's parent, on the space and on the sessions
+// A child worktree (Orca's "N children") carries its parent's id as its space's parent, on the space and on the sessions
 // in it; a top-level one, and one that names itself, has none (#2073).
 func TestOrcaChildWorktreeNamesItsParent(t *testing.T) {
 	n, _, o, procs, home := orcaNode(t)

@@ -11,7 +11,7 @@ import (
 )
 
 // A message from a channel starts a run: the hub follows the conversation until the turn is over, then sends its
-// answer (the assistant's last words, after its last tool call) back. The rules (docs/channels.md「跟踪这一轮」):
+// answer (the assistant's last words, after its last tool call) back. The rules (docs/channels.md "Following this turn"):
 // the message is found by its client_msg_id (or a piece of its text, from older nodes); a message queued behind a
 // running turn waits for its own turn; a turn that leaves background work answers now and again when that work
 // reports back; a message sent while one waits on the same conversation is answered with it.
@@ -325,7 +325,7 @@ func Answer(items []proto.Item) []proto.Item {
 // StoppedMost bounds the reason Stopped gives.
 const StoppedMost = 300
 
-// Stopped is why a turn ended when its items end on a model API error or 已中断 (the notices the transcript parser
+// Stopped is why a turn ended when its items end on a model API error or "Interrupted" (the notices the transcript parser
 // writes for them, transcript.APIErrorPrefix / InterruptedNotice) rather than on words: StopReason of its text.
 // Compactions after it (an idle conversation compacted, Persona's /compact) are passed over; any other ending gives
 // "", other notices too (goals, a task reporting back, Codex events, command output).
@@ -395,7 +395,7 @@ func Probe(text string, fallbacks ...string) string {
 	return ""
 }
 
-// Duration is d for people in l: 「12 秒」「3 分 4 秒」「2 小时 5 分」.
+// Duration is d for people in l: "12 s", "3 min 4 s", "2 h 5 min" (in l's words).
 func Duration(l i18n.Lang, d time.Duration) string {
 	s := int(d.Round(time.Second).Seconds())
 	switch {

@@ -23,8 +23,8 @@ func builtinNode(machines string) *extension.NodeRuntime {
 // off (tellNoLock says off again, the rest ask nothing).
 var builtinConnected = []func(h *Manager, ctx context.Context, m *Machine){
 	func(h *Manager, ctx context.Context, m *Machine) { h.refreshComputer(ctx, m) }, // cua: only when it is on for m (computer.go)
-	func(h *Manager, ctx context.Context, m *Machine) { h.tellNoLock(ctx, m) },      // cua's 「扩展开着时不自动锁屏」 (computer_nolock.go)
-	func(h *Manager, ctx context.Context, m *Machine) { h.tellCursor(ctx, m) },      // cua's 「显示 Agent 的光标」 (computer_cursor.go)
+	func(h *Manager, ctx context.Context, m *Machine) { h.tellNoLock(ctx, m) },      // cua's "Don't auto-lock while the extension is on" (computer_nolock.go)
+	func(h *Manager, ctx context.Context, m *Machine) { h.tellCursor(ctx, m) },      // cua's "Show the agent's cursor" (computer_cursor.go)
 	func(h *Manager, ctx context.Context, m *Machine) { h.refreshBrowser(ctx, m) },  // ego (browser.go)
 }
 

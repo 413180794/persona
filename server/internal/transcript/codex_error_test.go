@@ -8,7 +8,7 @@ import (
 )
 
 // What failed a Codex turn, in a rollout's words (snake_case) and an app-server's (camelCase), sorted into worth a
-// 继续 or the user's to fix (#2185).
+// "Continue" or the user's to fix (#2185).
 func TestCodexTurnError(t *testing.T) {
 	for _, tc := range []struct {
 		name, raw, text, kind string

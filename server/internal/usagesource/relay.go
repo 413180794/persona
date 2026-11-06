@@ -85,7 +85,7 @@ type relayEntry struct {
 
 // fetchRelay reads the gateway once: the account list (paged), then the stored usage of the accounts that are not
 // disabled. One pass gives both the samples the sidebar's strip draws (Accounts, mapRelay) and the account list
-// the extensions read (Inventory, docs/usage-windows.md「网关的账号清单」), disabled accounts included.
+// the extensions read (Inventory, docs/usage-windows.md"Gateway account inventory"), disabled accounts included.
 func fetchRelay(ctx context.Context, c *client, now time.Time) (Result, error) {
 	list, complete, err := relayList(ctx, c)
 	if err != nil {

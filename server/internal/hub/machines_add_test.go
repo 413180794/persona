@@ -246,7 +246,7 @@ func TestMasterAddsAConfirmedComputer(t *testing.T) {
 	requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", h.cfg.Token, `{"machine":"onb-nowhere"}`, "127.0.0.1:1", false), 400, "unknown_machine")
 }
 
-// `personad hub pair --machine <id> --add --name <名字>`: the add request, the link alone on stdout, 已添加 on stderr;
+// `personad hub pair --machine <id> --add --name <name>`: the add request, the link alone on stdout, "Added" on stderr;
 // without --add, a computer the hub does not have says to add --add.
 func TestPairMachineCLIAdd(t *testing.T) {
 	var got map[string]any

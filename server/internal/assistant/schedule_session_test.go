@@ -25,7 +25,7 @@ func runNow(t *testing.T, h *Service, id string) (proto.Session, error) {
 	return h.runTask(task, now, now, false, false)
 }
 
-// The user's ask (2026-11-01): 「同一个定时任务，用同一个 session 跑」. The first run starts the task's own
+// The user's ask (2026-11-01): "run the same scheduled task in the same session". The first run starts the task's own
 // conversation; later runs go into it, told the earlier runs are above instead of being given the background again.
 func TestATaskRunsInItsOwnConversation(t *testing.T) {
 	n := newFakeHub().withMachine()
@@ -73,7 +73,7 @@ func TestATaskRunsInItsOwnConversation(t *testing.T) {
 }
 
 // A conversation that is gone (Claude Code cleans transcripts up after 30 days), one on another launcher, or one the
-// user reset (下次开新对话) can't be continued: the run starts a new one and that becomes the task's.
+// user reset ("New chat next time") can't be continued: the run starts a new one and that becomes the task's.
 func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newTestService(t, n)
@@ -95,7 +95,7 @@ func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 		t.Fatalf("a new conversation gets the whole message again: %q", text)
 	}
 
-	// 模型配置 › 主对话 now runs on another launcher (a task's conversations follow it, #1570).
+	// Model configuration › Main chat now runs on another launcher (a task's conversations follow it, #1570).
 	setModel(t, h, "assistant", ModelBinding{Provider: "launcher.codex"})
 	switched, _ := runNow(t, h, "p")
 	if switched.SessionID == gone.SessionID {
@@ -108,7 +108,7 @@ func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 		t.Fatalf("%+v", task)
 	}
 
-	// 下次开新对话 in the app.
+	// "New chat next time" in the app.
 	srv := httptest.NewServer(scheduleMux(h))
 	defer srv.Close()
 	res, err := http.Post(srv.URL+"/api/v1/assistant/tasks/p/fresh", "application/json", nil)
@@ -131,7 +131,7 @@ func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 }
 
 // A repeating task due while its last run is still going (a patrol stuck on an approval) is skipped and recorded, not
-// stacked into the same conversation; a one-off still goes in, and 立即运行 says why it didn't.
+// stacked into the same conversation; a one-off still goes in, and "Run now" says why it didn't.
 func TestATaskDueWhileItsLastRunIsGoingIsSkipped(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
@@ -264,7 +264,7 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 }
 
 // A run whose turn ends with no output at all (the model service answered 200 with nothing: no reply, no tool call,
-// no error) is failed, pushed and retried once, not left "ok" behind a push that says 完成了 (#3752).
+// no error) is failed, pushed and retried once, not left "ok" behind a push that says "done" (#3752).
 func TestTaskSilentTurnFailsAndRetriesOnce(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
@@ -324,7 +324,7 @@ func TestTaskSilentTurnFailsAndRetriesOnce(t *testing.T) {
 
 // The session's state lags: it is never seen working, and the last item changed only because the prompt landed. The
 // turn read holds the prompt alone: that is no turn known to have ended, so the run is not failed, not pushed as a
-// failure and not run again (review of #3777: a wrong verdict ran the whole 早报 twice).
+// failure and not run again (review of #3777: a wrong verdict ran the whole morning briefing twice).
 func TestTaskPromptOnlyTurnIsNotJudgedSilent(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)

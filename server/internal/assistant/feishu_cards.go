@@ -34,7 +34,7 @@ func (s *Service) feishuInteraction(ix proto.Interaction) {
 	if !ready || !f.Cards {
 		return
 	}
-	// 全部卡片 does not take a health conversation's: only one the chat drives itself (health.go).
+	// "All cards" does not take a health conversation's: only one the chat drives itself (health.go).
 	if drives := s.botDrives(ctx, ix.MachineID, ix.SessionID); !drives && (!f.AllCards || s.ixInHealth(ctx, ix)) {
 		return
 	}
@@ -148,7 +148,7 @@ type detachedCard struct {
 	closed chan struct{}
 }
 
-// feishuDetach: the cards ids are about to end because their node went away. Their Feishu cards say 「已结束」 as any
+// feishuDetach: the cards ids are about to end because their node went away. Their Feishu cards say "Ended" as any
 // ended card's, and are kept for resumeGrace in case the same card comes back (#4583).
 func (s *Service) feishuDetach(ids []string) {
 	b := &s.fbot
@@ -658,7 +658,7 @@ func toast(kind, text string) *feishubot.CardResponse {
 	return &feishubot.CardResponse{Toast: &feishubot.Toast{Type: kind, Content: text}}
 }
 
-// cardAnswerWait is how long a press waits for its answer to go through before it says 「正在处理…」: the hub has
+// cardAnswerWait is how long a press waits for its answer to go through before it says "Processing…": the hub has
 // Feishu's 3 seconds, and the press came over the bus.
 var cardAnswerWait = 1500 * time.Millisecond
 
@@ -845,7 +845,7 @@ func (s *Service) startCardPressed(mid string) (bool, time.Time) {
 }
 
 // forgetStartCard releases mid's dedup slot after its start failed, so pressing the same card again retries it
-// instead of being answered with a bare 「启动中」. It only deletes the slot this press stamped (at): if the window
+// instead of being answered with a bare "Starting". It only deletes the slot this press stamped (at): if the window
 // passed and a later manual press re-stamped it while the first start was still hung, that newer slot must survive
 // the first start's late failure.
 func (s *Service) forgetStartCard(mid string, at time.Time) {
@@ -922,7 +922,7 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 	var missing []int // the pieces that did not get out (1-based): said at the end
 	for i, ac := range cards {
 		if i == 0 {
-			// The push's title heads the card; the body's own heading and status (请验收 / 无变动) are kept (Retitle).
+			// The push's title heads the card; the body's own heading and status ("Please verify" / "No changes") are kept (Retitle).
 			ac.card.Retitle("🔔 ", title, feishubot.Wathet)
 			ac.card.Config = head.Config
 		}
@@ -1076,7 +1076,7 @@ func (s *Service) feishuAgentDone(machine string, sess proto.Session, head, text
 		agentLabel(sess)+" · "+s.machineName(machine))
 }
 
-// --- commands (docs/bots.md「命令」): which conversation or agent messages go to, the lists to pick one from,
+// --- commands (docs/bots.md "Commands"): which conversation or agent messages go to, the lists to pick one from,
 // starting an agent, stopping a turn ---
 
 func botHelp(l i18n.Lang, f FeishuFeatures) string {
@@ -1147,7 +1147,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.next_is_new"))
 			return true, ""
 		}
-		return false, rest // "/new 帮我…": the rest starts it
+		return false, rest // "/new help me…": the rest starts it
 	case "/list", "/对话":
 		if !f.Main {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.main_off"))

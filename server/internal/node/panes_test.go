@@ -171,7 +171,7 @@ func TestTerminalWatchStreamsAShellByPaneAddress(t *testing.T) {
 	}
 }
 
-// 新建终端: a tab in the workspace, in the workspace's own directory, not focused, named shell; the phone names no
+// "New terminal": a tab in the workspace, in the workspace's own directory, not focused, named shell; the phone names no
 // directory. The new pane is then in the layout, so its terminal opens at once.
 func TestNewShellOpensATabInTheWorkspace(t *testing.T) {
 	streamingHerdr()

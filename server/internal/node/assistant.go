@@ -28,14 +28,14 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// The assistant (the app's 对话 tab) runs Claude Code headless — `<launcher> -p --input-format stream-json
+// The assistant (the app's "Chat" tab) runs Claude Code headless — `<launcher> -p --input-format stream-json
 // --output-format stream-json --include-partial-messages` — instead of in a herdr tab: nothing appears in herdr,
 // tokens stream as they are generated, and switching the launcher (model) just restarts the process with --resume.
 // A launcher that runs Codex gets `codex app-server` instead (assistant_codex.go).
 
 const assistantIdleTimeout = 20 * time.Minute
 
-// A long conversation is compacted (docs/assistant.md「压缩」): every restart after the prompt cache expired (an hour)
+// A long conversation is compacted (docs/assistant.md "Compaction"): every restart after the prompt cache expired (an hour)
 // writes the whole context again, half a million tokens for an assistant conversation that had never been compacted.
 // Claude Code compacts on its own once the context nears the auto-compact window, also under -p (tested on 2.1.314):
 // CLAUDE_CODE_AUTO_COMPACT_WINDOW lowers that from the model's 1M to 200K. Its own idle compaction only runs in
@@ -55,7 +55,7 @@ const assistantTaskMaxIdle = 12 * time.Hour
 // schedule_followup waited for a tap on the phone, so a follow-up firing at night just stalled.
 const assistantAllowedTools = "mcp__jarvis"
 
-// A spare process started when the app opens the 对话 tab, so the first message skips claude's startup.
+// A spare process started when the app opens the "Chat" tab, so the first message skips claude's startup.
 // It is only adopted while fresh (what it loaded at start — CLAUDE.md, memory, tools — may have changed since).
 const assistantSpareMaxAge = 10 * time.Minute
 
@@ -68,7 +68,7 @@ const (
 
 // assistantStartWait: how long a send that started a fresh process waits for its first output before answering. A
 // launcher that cannot start (its node socket gone, a shell error) exits within a second or two; the message written
-// to it is lost, so the send fails with what it printed instead of leaving the message at "正在送达" for good.
+// to it is lost, so the send fails with what it printed instead of leaving the message at "Delivering" for good.
 var assistantStartWait = 8 * time.Second
 
 // A launcher whose command is missing for a moment is started again a few times before the send fails (#2581):
@@ -311,7 +311,7 @@ func (n *Node) isAssistantSession(id string) bool {
 // assistantResumable: conversation id can be continued, its process is running or its transcript is still on disk.
 // A scheduled task's own conversation is sent with resume_only, so one that is gone (cleaned up after 30 days, or
 // never written) starts a new conversation at the hub instead of a blank one under the old id (docs/assistant.md
-// 「定时任务」).
+// "Scheduled tasks").
 func (n *Node) assistantResumable(id string) bool {
 	if n.runtimeAssistant(id) { // a runtime keeps it: still its while the runtime knows it
 		_, _, known := n.runtimes.belongs(id)
@@ -1326,7 +1326,7 @@ func (n *Node) assistantAgent(ctx context.Context, launcher string) (string, err
 
 // assistantResumeLauncher is what an existing conversation id resumes on when launcher was asked for. A conversation keeps the
 // kind of agent it was started on: Claude Code can't resume a Codex thread, nor Codex a Claude transcript, nor either
-// a runtime's conversation. The main conversation follows 模型配置 › 主对话 on every message (#1518), so a setting
+// a runtime's conversation. The main conversation follows "Model Settings › Main Chat" on every message (#1518), so a setting
 // moved to another kind made every message to it fail (`claude --resume <thread>`: "No conversation found", 2026-11-05).
 // A launcher of another kind gives way to the conversation's own launcher, or the plain agent when that one is of
 // another kind too (it was overwritten by such a failed start); "" for a runtime's conversation is its own (launcherOr).

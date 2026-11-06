@@ -18,13 +18,13 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// 交给 Persona (#528; the user, 2026-11-03: iMessage's texts may go to AI like Feishu's): while the switch is on, the
+// "Hand to Persona" (#528; the user, 2026-11-03: iMessage's texts may go to AI like Feishu's): while the switch is on, the
 // Mac's real conversations (KeepContacts) go into the knowledge base (connector.Archive, by ROWID), unread ones into
 // the inbox (connector.Inbox, triaged like Feishu's), and the assistant reads them (ReadTools). Codes are masked in
 // all of it. Off: none of it — nothing is read for Persona, the tools are gone; what the hub kept stays until the
 // user deletes it (extmgr/imessage.go).
 
-// SetAI turns 交给 Persona on or off (the hub keeps the choice).
+// SetAI turns "Hand to Persona" on or off (the hub keeps the choice).
 func (c *Remote) SetAI(on bool) {
 	c.ai.Store(on)
 	if !on {
@@ -151,11 +151,11 @@ func (c *Remote) Collect(context.Context) ([]connector.InboxThing, error) {
 
 var errNoReply = errors.New("在「信息」里回复：Persona 不替你发信息")
 
-// Reply: Persona does not send messages (the item's 在信息里回复 opens Messages with the number).
+// Reply: Persona does not send messages (the item's "Reply in Messages" opens Messages with the number).
 func (c *Remote) Reply(context.Context, connector.InboxReply) error { return errNoReply }
 
 // How often Watch looks at the Mac for new messages, how many conversations it looks at, and how many of a
-// conversation's last messages go to the inbox (triage, the AI 分身).
+// conversation's last messages go to the inbox (triage, the AI twin).
 var (
 	watchPoll    = 2 * time.Minute
 	watchChats   = 30
@@ -261,7 +261,7 @@ func (c *Remote) context(ctx context.Context, chat, last string) string {
 	return text
 }
 
-// transcript is messages as the models read them: 张三（10-30 08:00）：…, codes masked.
+// transcript is messages as the models read them: "Name (10-30 08:00): …" with full-width punctuation, codes masked.
 func (c *Remote) transcript(msgs []Message) string {
 	var b strings.Builder
 	for _, m := range msgs {

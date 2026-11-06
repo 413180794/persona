@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The user's language (docs/i18n.md「协议」): what the latest full-role client said in client_hello.locale, kept in
+// The user's language (docs/i18n.md "Protocol"): what the latest full-role client said in client_hello.locale, kept in
 // Postgres settings. Whatever the hub writes for people without a request in front of it reads in it: pushes to a
 // device that gave no locale of its own, the assistant's answers, injected messages, task notifications, the bots'
 // replies. Until a client says one it is zh-Hans, what the hub wrote before.

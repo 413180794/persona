@@ -23,7 +23,7 @@ import (
 // what is asked in a conversation a channel drives goes there too. All of that is the assistant's. The hub keeps the
 // transport — the open platform's long connection, pairing, the plugins' programs — hands the assistant what comes in
 // (channels.receive, feishu.message, feishu.card_action) and posts what it is given (app.call feishu.*, channels.*).
-// While the assistant is not connected the hub answers the owner's messages 「助手暂时连不上」 itself.
+// While the assistant is not connected the hub answers the owner's messages "the assistant can't be reached right now" itself.
 
 // The channels' state: each plugin channel's settings and the conversations its messages went to lately (channels),
 // the runs, the asks waiting in text and the messages taken (channels.state). The same keys the hub kept before; only
@@ -368,7 +368,7 @@ func (s *Service) pluginChannelNow(ctx context.Context, id string) (channel.View
 }
 
 // botLang is the language of what the bots and the channels write: the request's when the context carries one (the
-// app's request, withRequestLang), else the user's (docs/i18n.md「协议」), zh-Hans while no client has said one.
+// app's request, withRequestLang), else the user's (docs/i18n.md "Protocol"), zh-Hans while no client has said one.
 func (s *Service) botLang(ctx context.Context) i18n.Lang {
 	if l := i18n.From(ctx); l != "" {
 		return l
@@ -783,7 +783,7 @@ func (s *Service) channelsReconnected(ctx context.Context) {
 }
 
 // channelsCatchUp takes what came and went while the assistant was not connected: a card that came meanwhile goes to
-// the channels as a new one would, one that ended meanwhile is closed (its Feishu card says 「已结束」, its text ask
+// the channels as a new one would, one that ended meanwhile is closed (its Feishu card says "Ended", its text ask
 // stops waiting). The first connection of this process only notes what is pending: a card asked before it started may
 // have gone out already.
 func (s *Service) channelsCatchUp(ctx context.Context) {

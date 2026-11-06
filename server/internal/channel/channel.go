@@ -80,7 +80,7 @@ const (
 	AsksButtons Asks = "buttons" // the channel draws it (the Feishu bot's cards)
 )
 
-// Capabilities are what a channel can do (docs/channels.md「能力」). Taking text is a given.
+// Capabilities are what a channel can do (docs/channels.md "Capabilities"). Taking text is a given.
 type Capabilities struct {
 	ImagesIn bool   `json:"images_in,omitempty"`
 	FilesIn  bool   `json:"files_in,omitempty"`
@@ -144,7 +144,7 @@ type Feature struct {
 	On          bool   `json:"on"`
 }
 
-// The features every plugin channel has, as its capabilities allow (docs/channels.md「features」).
+// The features every plugin channel has, as its capabilities allow (docs/channels.md "features").
 const (
 	FeatureAsks    = "asks"
 	FeatureAllAsks = "all_asks"
@@ -241,7 +241,7 @@ func ValidID(id string) bool { return idPattern.MatchString(id) && !uuidHead.Mat
 var Reserved = []string{App, Feishu, LarkAgent, "voice", "siri", "watch", "web"}
 
 // ClientMsgID is the client_msg_id a channel's message goes into a conversation with: the source mark the apps read
-// (docs/channels.md「来源标记」), and the hub's once-only guard for a message the chat app delivers again.
+// (docs/channels.md "Source marks"), and the hub's once-only guard for a message the chat app delivers again.
 func ClientMsgID(channel, messageID string) string { return channel + "-" + messageID }
 
 // FromClientMsgID is the channel a client_msg_id says its message came from, when it is one of known ("" when not).
@@ -258,7 +258,7 @@ func FromClientMsgID(id string, known []string) string {
 	return ""
 }
 
-// Item is a contribution to the channel extension point (docs/channels.md「清单」).
+// Item is a contribution to the channel extension point (docs/channels.md "Manifest").
 type Item struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -332,7 +332,7 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// --- the plugin protocol's channel namespace (docs/channels.md「协议」) ---
+// --- the plugin protocol's channel namespace (docs/channels.md "Protocol") ---
 
 // Namespace is the channel extension point's: its methods are channel.<method>.
 const Namespace = "channel"
@@ -368,7 +368,7 @@ type Blob struct {
 	Data []byte `json:"data"`
 }
 
-// Limits on what a message brings (docs/channels.md「协议」).
+// Limits on what a message brings (docs/channels.md "Protocol").
 const (
 	ImagesMost = 4
 	ImageMost  = 3 << 20
@@ -435,7 +435,7 @@ type Transport interface {
 	Send(ctx context.Context, p SendParams) (SendResult, error)
 }
 
-// Typer shows 「正在输入」.
+// Typer shows "typing".
 type Typer interface {
 	Typing(ctx context.Context, on bool) error
 }

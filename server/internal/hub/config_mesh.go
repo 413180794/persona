@@ -12,7 +12,7 @@ type MeshConfig struct {
 	// (default 60; a broken path is left at once). Keeps a computer from flapping between two paths.
 	PathSwitchSeconds int `json:"path_switch_seconds,omitempty"`
 	// Plaintext: links to other hubs without TLS (ws://), only with the addresses listed (peer_plain.go,
-	// docs/mesh.md「明文链路」). Off while Allow is empty.
+	// docs/mesh.md "Plaintext links"). Off while Allow is empty.
 	Plaintext MeshPlaintextConfig `json:"plaintext,omitzero"`
 }
 

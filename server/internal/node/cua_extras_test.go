@@ -32,7 +32,7 @@ func TestClicksCountsTheSteps(t *testing.T) {
 	}
 }
 
-// 点击音效: none plays nothing; foreground only for a foreground click; all for any; once a call.
+// "Click sound": none plays nothing; foreground only for a foreground click; all for any; once a call.
 func TestTheClickSoundAsTheSettingSays(t *testing.T) {
 	dir := t.TempDir()
 	played := filepath.Join(dir, "played")
@@ -72,7 +72,7 @@ func TestTheClickSoundAsTheSettingSays(t *testing.T) {
 	}
 }
 
-// 显示 Agent 的光标: off restarts a daemon that draws it with --no-overlay, on again restarts it without; a daemon
+// "Show the agent's cursor": off restarts a daemon that draws it with --no-overlay, on again restarts it without; a daemon
 // already that way, or none running, is left alone; on never undoes a --no-overlay this node did not ask for.
 func TestTheAgentCursorRestartsTheDaemonOnlyToChangeIt(t *testing.T) {
 	dir := t.TempDir()

@@ -252,7 +252,7 @@ func TestPairURLRoundTrips(t *testing.T) {
 	}
 }
 
-// The Mac has no camera to scan with: `jarvisd hub pair` prints the link too, to paste into 连接 hub.
+// The Mac has no camera to scan with: `jarvisd hub pair` prints the link too, to paste into "Connect hub".
 func TestPairPrintsTheLinkForTheMac(t *testing.T) {
 	cfg := &Config{PublicURL: "http://hub.example.com:18660", Token: "tok"}
 	var b strings.Builder

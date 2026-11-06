@@ -43,8 +43,8 @@ func (exampleItems) Items(context.Context) ([]kb.Item, error) {
 func (exampleItems) DocTitle(context.Context, string) string { return "发布计划" }
 
 // The knowledge base's sources are the hub's connectors, read through it as data (connectors.*): which to read now
-// (signed in, 进知识库 on: its poll, its other names but another connector's id, whether it has attachments), what moved
-// since a cursor, an attachment (not a too big one), the items and a document's title.
+// (signed in, "Add to knowledge base" on: its poll, its other names but another connector's id, whether it has
+// attachments), what moved since a cursor, an attachment (not a too big one), the items and a document's title.
 func TestKBSourcesAreTheHubsConnectors(t *testing.T) {
 	ctx := context.Background()
 	h := newTestManager(t)
@@ -88,7 +88,7 @@ func TestKBSourcesAreTheHubsConnectors(t *testing.T) {
 		t.Fatal("changes of a connector the hub does not have")
 	}
 
-	// 进知识库 off: not listed, and its changes are not read.
+	// "Add to knowledge base" off: not listed, and its changes are not read.
 	if err := h.connectors.SetFeed("example", connector.FeedArchive, false); err != nil {
 		t.Fatal(err)
 	}

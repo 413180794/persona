@@ -138,8 +138,8 @@ func TestOriginOfARequest(t *testing.T) {
 	}
 }
 
-// The AI 分身's conversation is the inbox's, of its item, and named after the item from the start instead of its
-// prompt's first line (the sidebar's 「这是收件箱里的一件事，你作…」).
+// The AI twin's conversation is the inbox's, of its item, and named after the item from the start instead of its
+// prompt's first line (the sidebar's "This is an item from the inbox; as…").
 func TestInboxAgentOriginAndTitle(t *testing.T) {
 	h := agentHub(t)
 	it := actionItem("lark:f1:11", time.Now())

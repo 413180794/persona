@@ -74,7 +74,7 @@ func TestConfirmAlwaysStillAsks(t *testing.T) {
 	}
 }
 
-// A call marked ConfirmEach (a health conversation's, docs/health.md「外发」) asks even where a rule allows it; a
+// A call marked ConfirmEach (a health conversation's, docs/health.md "Outbound") asks even where a rule allows it; a
 // deny rule still refuses without asking.
 func TestConfirmEachClampsAllow(t *testing.T) {
 	asked := 0

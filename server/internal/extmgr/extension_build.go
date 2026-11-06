@@ -25,8 +25,8 @@ import (
 	"github.com/nwverse/persona/server/internal/extension/conformance"
 )
 
-// Writing an extension (docs/extensions.md「写扩展：SDK、模板和命令行」): `personad extension new | test | pack` need
-// no hub; `dev` hangs the extension on this machine's (extension_dev.go).
+// Writing an extension (docs/extensions.md "Writing extensions: SDK, templates and CLI"): `personad extension new |
+// test | pack` need no hub; `dev` hangs the extension on this machine's (extension_dev.go).
 
 const extensionBuildUsage = `
 writing one:

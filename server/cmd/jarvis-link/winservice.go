@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// On Windows jarvis-link runs from a scheduled task of the user's own (docs/windows.md「安装和开机自启」): `install`
+// On Windows jarvis-link runs from a scheduled task of the user's own (docs/windows.md "Install and start at login"): `install`
 // writes the task, registers it with schtasks and starts it; `uninstall` takes it away. The task starts at sign-in
 // in the user's session and needs no administrator: Task Scheduler refuses a standard user a task that runs without
 // a sign-in (S4U), and the node has to see the user's Orca and its agents anyway. What it runs is the supervisor

@@ -7,7 +7,7 @@
 //	personad tool --cli <connector> [--format json|text] <words…>
 //	    the connector's command line (Telegram's tg, on the assistant's PATH: node/clicall.go): the connector's
 //	    <connector>_cli tool reads the words and names the tool to call; that tool is called (through the gate, as by
-//	    name); with --format text the connector shows its answer for people (docs/connector-protocol.md「命令行」)
+//	    name); with --format text the connector shows its answer for people (docs/connector-protocol.md "Command line")
 //
 // Output is for a program: one line of JSON on stdout, or text for a person. A failure is one line of JSON on stderr
 // ({error, kind, retry_after}), or "<name>: …" with --format text, and an exit code by its kind.

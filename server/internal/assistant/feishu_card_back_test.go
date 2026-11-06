@@ -55,7 +55,7 @@ func waitFeishu(seen func() (int, []string), d time.Duration, ok func(int, []str
 }
 
 // The node's connection drops and comes back while the agent still waits on the same dialog: the Feishu card closed
-// as 「已结束」 asks it again, in the same message, not as a second card (#4583).
+// as "Ended" asks it again, in the same message, not as a second card (#4583).
 func TestFeishuCardBackAfterTheNodeReconnects(t *testing.T) {
 	ft, n := newCardFleet(t, false)
 	seen := feishuCardsOn(ft)
@@ -81,7 +81,7 @@ func TestFeishuCardBackAfterTheNodeReconnects(t *testing.T) {
 	}
 }
 
-// The agent moved on while its node was away: the card does not come back, and its Feishu card stays 「已结束」.
+// The agent moved on while its node was away: the card does not come back, and its Feishu card stays "Ended".
 func TestFeishuCardThatEndedWhileTheNodeWasAwayStaysClosed(t *testing.T) {
 	ft, n := newCardFleet(t, false)
 	seen := feishuCardsOn(ft)

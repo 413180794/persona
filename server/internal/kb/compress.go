@@ -80,7 +80,7 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 	from := c.CoveredUntil
 	if from.IsZero() {
 		from = c.Created.AddDate(0, 0, -30)
-		// A 公司圈 post is archived when it first concerns me, often long after it was written: the 30 days before
+		// A Moments post is archived when it first concerns me, often long after it was written: the 30 days before
 		// that held none of it, so 20 of 21 posts were settled without a model call (2026-11-01). The whole post,
 		// back to a year before it was archived.
 		if c.Kind == "moment" {
@@ -254,7 +254,7 @@ func applyTags(t *Tagging, importance string, relevance int, tags []string, now 
 
 var slugRe = regexp.MustCompile(`[^\p{L}\p{N}]+`)
 
-// Slug is the directory name of a project name ("Persona 2.0 发布" → "jarvis-2-0-发布").
+// Slug is the directory name of a project name ("Persona 2.0 Launch" → "persona-2-0-launch"; letters of any script are kept).
 func Slug(name string) string {
 	s := strings.Trim(slugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
 	if r := []rune(s); len(r) > 40 {
@@ -376,7 +376,7 @@ func (e *Engine) knownProjects() []prompts.KnownProject {
 			continue
 		}
 		// With its one line: names alone made the model start a second project for the same work under the name
-		// of the group it was reading (2026-11-01, SS codex 方案 / SS 支持单 agent 多 Session 窗口).
+		// of the group it was reading (2026-11-01, two work groups about the same project).
 		out = append(out, prompts.KnownProject{Name: p.Name, Aliases: p.Aliases, OneLine: p.OneLine, Pinned: p.Pinned})
 	}
 	return out

@@ -501,7 +501,7 @@ func TestRuntimeInteractionGoesToThePhone(t *testing.T) {
 	if ix.ID == "" || ix.SessionTitle != "deploy" || ix.Cwd != "/w/app" || !ix.Resumable || ix.ExpiresAt.IsZero() {
 		t.Fatalf("asked %+v", ix)
 	}
-	if ix.Agent != "dsh" || ix.AgentLabel != "DSH" { // drawn as DSH's card, not Claude's (whose 本会话总是允许 DSH cannot keep)
+	if ix.Agent != "dsh" || ix.AgentLabel != "DSH" { // drawn as DSH's card, not Claude's (whose "Always Allow in Session" DSH cannot keep)
 		t.Fatalf("agent %q label %q", ix.Agent, ix.AgentLabel)
 	}
 
@@ -687,7 +687,7 @@ func TestRuntimeSubagentsAndBackground(t *testing.T) {
 }
 
 // A runtime running another version of a package the node carries is offered the node's in the hello reply, and
-// fetches it with runtime.package; one running the same is not (docs/runtimes.md「自动更新」).
+// fetches it with runtime.package; one running the same is not (docs/runtimes.md "Automatic updates").
 func TestRuntimePackageUpdate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(runtimepkg.OverrideEnv, dir)
@@ -753,7 +753,7 @@ func TestRuntimePackageUpdate(t *testing.T) {
 	}
 }
 
-// 本会话总是允许 on a runtime's card (#3974): the node names the grant, never the runtime: one key for this runtime's
+// "Always Allow in Session" on a runtime's card (#3974): the node names the grant, never the runtime: one key for this runtime's
 // tool, only on a permission card that offers it, never in the health space or on a card with fields.
 func TestRuntimeAskAlwaysKeys(t *testing.T) {
 	n, hub := runtimeNode(t)

@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/channel"
 )
 
-// Permissions are what a plugin asks for (docs/plan-extensions.md「权限」). The vocabulary is closed: a manifest naming
+// Permissions are what a plugin asks for (docs/plan-extensions.md "Permissions"). The vocabulary is closed: a manifest naming
 // a permission this hub does not know does not install, so nobody is shown one the hub cannot explain.
 type Permissions struct {
 	// Network are the hosts it reaches ("api.example.com", "*.example.com"). Shown and recorded; the hub does not
@@ -25,14 +25,14 @@ type Permissions struct {
 	// Hub are the parts of the hub's API it calls (HubScopes): it gets a token that opens those routes and no other.
 	Hub []string `json:"hub,omitempty"`
 	// LauncherKeys: it reads launchers' quota with their keys — never seeing them: the hub (or the machine with the
-	// launcher) sends its requests, to the launcher's own gateway only (docs/extensions.md「额度」).
+	// launcher) sends its requests, to the launcher's own gateway only (docs/extensions.md "Quota").
 	LauncherKeys bool `json:"launcher_keys,omitempty"`
 	// GhLogin: it asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub
-	// connector), held in its memory only (docs/extensions.md「权限」). For the GitHub connector moved out of the hub.
+	// connector), held in its memory only (docs/extensions.md "Permissions"). For the GitHub connector moved out of the hub.
 	GhLogin bool `json:"gh_login,omitempty"`
 	// UsageGateways: it reads the account list of the account-pool gateways among the hub's usage sources
 	// (usage.gateway_accounts: accounts, their status and quota windows, from the hub's last read), never a key
-	// (docs/extensions.md「额度」, docs/usage-windows.md「网关的账号清单」).
+	// (docs/extensions.md "Quota", docs/usage-windows.md "The gateway's account list").
 	UsageGateways bool `json:"usage_gateways,omitempty"`
 }
 
@@ -406,7 +406,7 @@ func newChannels(old, m *Manifest) []channel.Item {
 	return out
 }
 
-// surfacesDetail says where in the apps m draws, of surfaces: 主导航上的入口：Token 用量；总览上的卡片：…
+// surfacesDetail says where in the apps m draws, of surfaces: "entry in the main navigation: Token usage; card on the overview: ..." (in Chinese)
 func surfacesDetail(m *Manifest, surfaces []string) string {
 	var parts []string
 	for _, name := range surfaces {

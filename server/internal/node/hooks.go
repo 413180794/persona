@@ -396,7 +396,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 
 	case in.HookEventName == "PermissionRequest":
 		ix.Kind, ix.Summary = proto.IxPermission, toolSummary(in.ToolName, in.ToolInput)
-		// The session rule 本会话总是允许 adds: the whole tool, but for an assistant conversation's file tools only the
+		// The session rule "Always allow in this session" adds: the whole tool, but for an assistant conversation's file tools only the
 		// file's directory, so allowing one read does not open every file on the machine (#3282).
 		rule := map[string]any{"toolName": in.ToolName}
 		if n.isAssistantSession(in.SessionID) {

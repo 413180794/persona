@@ -53,7 +53,7 @@ func (s *Service) fleetHandler(next http.Handler) http.Handler {
 		}
 		apierr.WriteJSON(w, map[string]any{"ok": true})
 	})
-	mux.HandleFunc("POST /api/v1/interactions/{id}/reanswer", s.serveReanswer) // 改答 (fleet_delegate.go)
+	mux.HandleFunc("POST /api/v1/interactions/{id}/reanswer", s.serveReanswer) // "Change answer" (fleet_delegate.go)
 	mux.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
 		st := s.fleetStore()
 		if st == nil {

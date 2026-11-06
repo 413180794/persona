@@ -39,7 +39,7 @@ const (
 	askQuestionMost = 1000
 	// AskTimeoutMost bounds how long one ask waits for the phone.
 	AskTimeoutMost = 24 * time.Hour
-	// scriptAgent / scriptAgentLabel: who asks, as a runtime's cards say it (docs/runtimes.md): the apps draw "脚本 在问你"
+	// scriptAgent / scriptAgentLabel: who asks, as a runtime's cards say it (docs/runtimes.md): the apps draw "Script is asking you" (in Chinese)
 	// and offer no "always allow" on it.
 	scriptAgent      = "script"
 	scriptAgentLabel = "脚本"

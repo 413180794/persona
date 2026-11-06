@@ -17,7 +17,7 @@ import (
 )
 
 // What the bound conversation does that the call did not hand over, and how a turn that is not over yet is told
-// (docs/voice.md「一轮跟踪」「播报」, #3503).
+// (docs/voice.md "Following a turn", "Announcements", #3503).
 //
 // Observed runs (protocol 2): the call watches the conversation it is bound to from ready on. When it works and no run
 // of the call's is on it (none being sent, none held), the turn it works on is followed as a run of its own: the user
@@ -26,13 +26,13 @@ import (
 // conversation (the main one, another), a turn that came by another channel (a chat app's bot, a scheduled task) is
 // only mentioned, once a channel a call (voice/observed): its answer went back there. Protocol 1 has no fixed target
 // (the main conversation of the moment): no observed runs. Not observed either: the turn the user just stopped
-// (「停止：」, its state behind the stop), and a turn of a message the call sent whose send ended unknown (it got there
+// ("Stop:", its state behind the stop), and a turn of a message the call sent whose send ended unknown (it got there
 // after all: followed as the call's run).
 //
 // A turn of an agent that stopped is not always over, and what says so is the hub's triage of it (docs/agent-work.md),
 // when the user turned it on: about triage_settle_seconds (15 s) plus a model call after the turn stopped. A model
-// error the manager goes on from (继续) is not the end: a turn that stopped on a model error waits for that triage when
-// the manager would go on (auto_continue), and while it says a 继续 is due. A turn it says waits on something outside
+// error the manager goes on from ("Continue") is not the end: a turn that stopped on a model error waits for that triage when
+// the manager would go on (auto_continue), and while it says a "Continue" is due. A turn it says waits on something outside
 // (a deploy, CI, another agent) is told once (voice/progress#waiting) and then waited on: the answer of a turn that
 // stopped is said at once (the user does not wait for the triage), and the run is kept until the triage of that turn
 // is in; when it says the turn waits, the run goes on, blocked, and its later turns (the manager wakes the agent) are
@@ -42,7 +42,7 @@ import (
 
 var (
 	// heartbeatAfter is how long a call is quiet while what was handed over is worked on before the user hears that it
-	// still is (docs/lessons/voice.md「常量的建议值」: a say, which the model always speaks; not more often, or it chats).
+	// still is (docs/lessons/voice.md "Suggested constant values": a say, which the model always speaks; not more often, or it chats).
 	heartbeatAfter = 2 * time.Minute
 	// triageWait is how long a stopped turn of an agent waits for the hub's triage of it: the manager triages a turn that
 	// stayed stopped triage_settle_seconds (15 s by default), with a model call.
@@ -71,7 +71,7 @@ type observer struct {
 	n       int               // observed runs made (their ids)
 	told    map[string]bool   // what other channels' turns were mentioned (by name): once a call each
 	names   map[string]string // the hub's channels, id -> name in the call's language (nil until read)
-	// afterStop: the user stopped its turn (「停止：」); until it is seen not working, or a message after stopSeq (its last
+	// afterStop: the user stopped its turn ("Stop:"); until it is seen not working, or a message after stopSeq (its last
 	// line then) begins another turn, what it works on is that turn, its state behind the stop.
 	afterStop bool
 	stopSeq   int
@@ -265,7 +265,7 @@ func opener(items []proto.Item) *proto.Item {
 }
 
 // sourceOf says whether a message of the bound conversation came from elsewhere than the app or voice
-// (docs/channels.md「来源标记」), and the channel's name when it came by one: one Persona wrote (a scheduled task, a
+// (docs/channels.md "Source marks"), and the channel's name when it came by one: one Persona wrote (a scheduled task, a
 // task reporting back, a wake-up) or another session sent is from elsewhere, not a channel. Bound to an agent nothing
 // is (what is typed at its terminal is the user's).
 func (t *tracker) sourceOf(ctx context.Context, it proto.Item) (foreign bool, from string) {
@@ -353,7 +353,7 @@ func (t *tracker) heartbeat(r *voiceRun, s *proto.Session, now time.Time) {
 func activityIn(l i18n.Lang, activity string) string {
 	kind := strings.TrimSpace(activity)
 	if key, _ := transcript.ActivityKey(kind); key == "" {
-		kind = activityKind(kind) // 「在跑 npm test」: 在跑 (a fixed line keeps its space: 「在等 CI」)
+		kind = activityKind(kind) // "running npm test" in Chinese: "running" (a fixed line keeps its space: "waiting on CI")
 	}
 	if kind == "" || l == i18n.ZhHans || !i18n.Valid(l) {
 		return kind
@@ -383,7 +383,7 @@ func (t *tracker) triage(ctx context.Context) triageSwitches {
 	return t.tri.sw
 }
 
-// triaged is the hub's triage of the turn s stopped on (docs/agent-work.md「分诊」): nil until it is in (about
+// triaged is the hub's triage of the turn s stopped on (docs/agent-work.md "Triage"): nil until it is in (about
 // triage_settle_seconds after the turn stopped, and only when the triage is on), and when it is of an earlier turn.
 func triaged(s *proto.Session) *proto.WorkState {
 	w := s.Work
@@ -409,11 +409,11 @@ func outside(w *proto.WorkState) bool {
 	return w != nil && w.Phase == proto.WorkBlocked && (w.On == proto.WaitExternal || w.On == proto.WaitAgent)
 }
 
-// untilTriaged: r's turn stopped, not on the user, and is not over yet (docs/voice.md「一轮跟踪」Look). The hub's triage
-// of it says a 继续 is due after a transient model error, or that it waits on something outside (told once, the run
+// untilTriaged: r's turn stopped, not on the user, and is not over yet (docs/voice.md "Following a turn" Look). The hub's triage
+// of it says a "Continue" is due after a transient model error, or that it waits on something outside (told once, the run
 // blocked); or that triage is not in yet and may say either: a model error the manager would go on from
 // (auto_continue: Claude Code's say nothing of their kind, the triage tells), or a turn woken from a wait, which often
-// stops on the same one. That wait is triageWait at most from when it was seen stopped; a 继续 channel.QueuedMost.
+// stops on the same one. That wait is triageWait at most from when it was seen stopped; a "Continue" channel.QueuedMost.
 func (t *tracker) untilTriaged(ctx context.Context, r *voiceRun, s *proto.Session, now time.Time) bool {
 	tri, w := t.triage(ctx), triaged(s) // the switches read here are keepTold's too
 	switch {
@@ -487,7 +487,7 @@ func (t *tracker) waitOutside(r *voiceRun, w *proto.WorkState) {
 
 // failureOf is the sort of model error s's last turn ended on (prompts.VoiceReport.Failure), "" none: what is wrong
 // when the hub can tell, never the error's text (it may say what the service runs on). A transient one is retried
-// when a 继续 was seen and it failed again.
+// when a "Continue" was seen and it failed again.
 func (r *voiceRun) failureOf(s *proto.Session) string {
 	if strings.TrimSpace(s.TurnError) == "" {
 		return ""

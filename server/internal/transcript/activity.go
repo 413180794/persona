@@ -42,8 +42,8 @@ func (m *Meta) trackActivity(it proto.Item) {
 // activityLen: an activity is one short line on a task card.
 const activityLen = 40
 
-// Activity says in a few words what a tool call is doing: 「在跑测试」「在读 tasks.go」「在等 CI」. Shown on the task cards
-// and agent rows while an agent only runs tools (docs/unified-entry.md「任务卡片的进度」).
+// Activity says in a few words what a tool call is doing: "running tests", "reading tasks.go", "waiting for CI". Shown on the task cards
+// and agent rows while an agent only runs tools (docs/unified-entry.md "Progress on task cards").
 func Activity(name string, input json.RawMessage) string {
 	var in map[string]any
 	_ = json.Unmarshal(input, &in)
@@ -177,7 +177,7 @@ func clipActivity(s string) string {
 	return s
 }
 
-// activityPhrases are Activity's fixed lines, activityVerbs its verbs (「在读 tasks.go」, or alone), by the key of their
+// activityPhrases are Activity's fixed lines, activityVerbs its verbs ("reading tasks.go", or alone), by the key of their
 // words in the hub's transcript texts (i18n hub-transcript_text.<key>; a verb with what it acts on: <key>_what).
 var (
 	activityPhrases = map[string]string{

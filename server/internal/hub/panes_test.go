@@ -239,7 +239,7 @@ func TestNodeActionRoutesAreFullCredentialsOnly(t *testing.T) {
 	}
 }
 
-// #2431: 新建 worktree… passes the workspace, the branch, the path and the host kind, and nothing else (no base ref, no
+// #2431: "New worktree…" passes the workspace, the branch, the path and the host kind, and nothing else (no base ref, no
 // force, no hook).
 func TestWorktreeCreatePassesOnlyItsFields(t *testing.T) {
 	tn := newTermNode(t)

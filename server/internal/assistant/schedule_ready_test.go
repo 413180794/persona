@@ -64,7 +64,7 @@ func lastRunOf(t *testing.T, s *Service, id string) ScheduleRun {
 	return ScheduleRun{}
 }
 
-// A new hub with no computer yet: the 早报 that comes due is skipped and recorded in plain words, nothing is pushed or
+// A new hub with no computer yet: the morning briefing that comes due is skipped and recorded in plain words, nothing is pushed or
 // sent. Once a computer is set up (here after a restart, the mark kept in Postgres) the next run goes as usual and the
 // main conversation gets one line saying so; the runs after that add nothing.
 func TestRoutineWaitsUntilTheMainConversationIsReady(t *testing.T) {
@@ -168,7 +168,7 @@ func TestRoutineSkippedWhileSignedOut(t *testing.T) {
 }
 
 // Only what the run needs counts: with the assistant's computer asleep, a follow-up into a conversation on another
-// computer still goes, while a task that starts its own conversation waits. 立即运行 is never held back.
+// computer still goes, while a task that starts its own conversation waits. "Run now" is never held back.
 func TestRoutineWaitsOnlyForWhatItNeeds(t *testing.T) {
 	f := newFakeHub().withMachine()
 	f.sessions["laptop"] = []proto.Session{{SessionID: "c1"}}
@@ -197,7 +197,7 @@ func TestRoutineWaitsOnlyForWhatItNeeds(t *testing.T) {
 	}
 }
 
-// The defaults a new hub starts with stay as they were: the weekday 早报 at 09:00 on, the evening one off.
+// The defaults a new hub starts with stay as they were: the weekday morning briefing at 09:00 on, the evening one off.
 func TestDefaultRoutinesUnchanged(t *testing.T) {
 	r := defaultRoutines("zh-Hans")
 	if len(r) != 2 || r[0].ID != "morning" || !r[0].Enabled || r[0].Time != "09:00" || !slices.Equal(r[0].Weekdays, []int{1, 2, 3, 4, 5}) ||

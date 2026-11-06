@@ -29,7 +29,7 @@ func fakeRisk(words []string) string {
 }
 
 // What the gate makes of lark-cli: reads run, writes and unknown commands are confirmed on the phone, logging in and
-// changing lark-cli's setup are refused (docs/plan-lark-cli.md「闸门」).
+// changing lark-cli's setup are refused (docs/plan-lark-cli.md "Gate").
 func TestLarkCLIGate(t *testing.T) {
 	for _, tc := range []struct{ cmd, want string }{
 		// Reads, by lark-cli's own risk level or because they only print.

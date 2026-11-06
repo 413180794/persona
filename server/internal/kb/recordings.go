@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Recordings (docs/knowledge.md「录音」, docs/protocol.md「录音同步」): the phone uploads each recording's transcript,
+// Recordings (docs/knowledge.md "Recordings", docs/protocol.md "Recording sync"): the phone uploads each recording's transcript,
 // keyed by its UUID, the whole state every time (revision orders them), so replays, reordering and a transcript
 // completed later all land on one entry. Only text: the audio stays on the phone. A directory per recording:
 // meta.json, segments.json, transcript.md (what the searches read), summary.md (the model's, once it is complete).

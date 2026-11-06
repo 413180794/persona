@@ -350,7 +350,7 @@ const (
 )
 
 // codexHeldIdle: a rollout held open by a process node cannot join, untouched this long, is history (#2425). A bridge
-// that keeps stdio app-servers for months holds the threads they once loaded: they showed 完成未看 all along.
+// that keeps stdio app-servers for months holds the threads they once loaded: they showed "Unread" all along.
 const codexHeldIdle = 24 * time.Hour
 
 // heldRecently: the rollout at path was written within codexHeldIdle (its last line's time or its mtime, the later).
@@ -501,7 +501,7 @@ func (n *Node) programRun(id string, src codexSource) bool {
 
 // subagentRun: a subagent's thread (session_meta: thread_source "subagent" or a source of {"subagent": …}) known only
 // from its rollout. Its parent drives it and its work shows in the parent's conversation; listed on its own it was an
-// agent of its own, titled after its directory, that pushed 完成了 and sat in Agents as 完成未看 each time a parent's
+// agent of its own, titled after its directory, that pushed "Done" and sat in Agents as "Unread" each time a parent's
 // reviewer finished (#4745). A subagent a shared app-server holds stays (read-only, its cards answerable), as does
 // one the Codex App lists under its parent.
 func (n *Node) subagentRun(id string, src codexSource) bool {

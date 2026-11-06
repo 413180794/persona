@@ -178,7 +178,7 @@ func TestConversationReadTool(t *testing.T) {
 	}
 }
 
-// 「MMDD | 类型 | 主题」 with the day it started; the user's title stays unless they asked; a Codex conversation's title
+// "MMDD | type | topic" with the day it started; the user's title stays unless they asked; a Codex conversation's title
 // is only the hub's; the automatic title doesn't replace the assistant's.
 func TestConversationRenameTool(t *testing.T) {
 	h, n := conversationsHub(t)

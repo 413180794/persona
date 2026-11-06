@@ -8,10 +8,10 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// The providers extension point (docs/extensions.md「模型供应商」): a plugin declares model providers — address, kind,
-// models — and 设置 › 模型供应商 offers them when a launcher is added: the user picks one and fills in only the name and
-// the key (POST /api/v1/launchers with preset). A provider whose plugin lists its models itself (dynamic_models) is
-// asked provider.models.
+// The providers extension point (docs/extensions.md "Model providers"): a plugin declares model providers — address,
+// kind, models — and Settings › Model providers offers them when a launcher is added: the user picks one and fills in
+// only the name and the key (POST /api/v1/launchers with preset). A provider whose plugin lists its models itself
+// (dynamic_models) is asked provider.models.
 
 // LauncherPreset is one extension's provider as the app offers it (extwire).
 type LauncherPreset = assistantwire.LauncherPreset

@@ -36,7 +36,7 @@ func ask(t *testing.T, s *Service, ix proto.Interaction, r *proto.Resolution) (g
 	return got
 }
 
-// 本会话总是允许 on an assistant conversation's card outlasts the agent's process: the manager answers the same card of
+// "Always Allow in Session" on an assistant conversation's card outlasts the agent's process: the manager answers the same card of
 // the resumed process itself (#2202), and only that conversation's, only for what it granted.
 func TestAssistantAlwaysAllowKept(t *testing.T) {
 	ft := newFleetTest(t)
@@ -72,7 +72,7 @@ func TestAssistantAlwaysAllowKept(t *testing.T) {
 	}
 }
 
-// A card of the same conversation waiting when another one is answered with 本会话总是允许 is answered with it.
+// A card of the same conversation waiting when another one is answered with "Always Allow in Session" is answered with it.
 func TestAssistantAlwaysAnswersWaitingCards(t *testing.T) {
 	ft := newFleetTest(t)
 	s := ft.s

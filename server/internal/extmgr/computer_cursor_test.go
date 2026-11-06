@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// 显示 Agent 的光标 and 点击音效 (#1507 d): the Macs the plugin is on for are told the cursor's setting, any other Mac
-// on; a call carries the click sound for the node to play.
+// "Show the agent's cursor" and "Click sound" (#1507 d): the Macs the plugin is on for are told the cursor's setting,
+// any other Mac on; a call carries the click sound for the node to play.
 func TestTheCursorAndTheClickSound(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	ctx := context.Background()

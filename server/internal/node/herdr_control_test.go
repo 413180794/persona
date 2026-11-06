@@ -523,7 +523,7 @@ func TestHerdrSendResumesAnOfflineSession(t *testing.T) {
 }
 
 // A session that is not running and that nothing says which launcher it ran with (started outside Jarvis) is
-// resumed with the launcher the hub sends (新建 Agent's), not plain claude; the launcher Jarvis started it with
+// resumed with the launcher the hub sends ("New Agent"'s), not plain claude; the launcher Jarvis started it with
 // still wins over the hub's.
 func TestHerdrSendResumesWithTheHubsLauncher(t *testing.T) {
 	for _, tc := range []struct {

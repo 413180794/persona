@@ -72,9 +72,9 @@ func TestMailSendAsksWithTheSameCard(t *testing.T) {
 	}
 }
 
-// A connector's write the assistant asks for is a card of its conversation, as a hook's is: the clients show a card
-// in the chat of its session, and one with none only in 需要你 (#2558). The user's own in a connector's thread has none.
-// (The hub hands the agent's mcp.call here as extensions.hub_call connector_tool.)
+// A connector's write the assistant asks for is a card of its conversation, as a hook's is: the clients show a card in
+// the chat of its session, and one with none only in "Needs you" (#2558). The user's own in a connector's thread has
+// none. (The hub hands the agent's mcp.call here as extensions.hub_call connector_tool.)
 func TestConnectorCardsBelongToTheCallingConversation(t *testing.T) {
 	h := newTestManager(t)
 	h.mail = &replyMail{}

@@ -57,14 +57,14 @@ type Todo struct {
 	// StartError: a task whose agent did not start ends done with why (#1077); reopening clears it.
 	StartError string `json:"start_error,omitempty"`
 	// DoneBy is "auto" when the assistant closed the task because its judge found the work finished (#1092,
-	// docs/todos.md「自动完成」), with DoneReason; ReopenedAt: when the user last reopened it after it was done.
+	// docs/todos.md "Automatic completion"), with DoneReason; ReopenedAt: when the user last reopened it after it was done.
 	DoneBy     string      `json:"done_by,omitempty"`
 	DoneReason string      `json:"done_reason,omitempty"`
 	ReopenedAt *time.Time  `json:"reopened_at,omitempty"`
 	Spaces     []TodoSpace `json:"spaces"`
 	Agents     []TodoAgent `json:"agents"`
 	// Quiet: a task from the main conversation while assistant.main_tasks_quiet was on (#1731,
-	// docs/unified-entry.md「安静的任务」): no pushes, Live Activity or task badges for its agents; the main
+	// docs/unified-entry.md "Quiet tasks"): no pushes, Live Activity or task badges for its agents; the main
 	// conversation is told instead (quiet.go). Set when it is made, never changed.
 	Quiet bool `json:"quiet"`
 	// Supervision: the task's ledger when the main conversation handed it out and follows it up (#3124,

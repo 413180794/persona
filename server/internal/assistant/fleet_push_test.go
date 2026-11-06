@@ -352,8 +352,8 @@ func TestHealthDonePushHidesContent(t *testing.T) {
 	}
 }
 
-// A scheduled run (早报) or a task notice that the assistant answers quickly is pushed all the same: its finished push
-// asks for no minimum length (LongMS 0), so 「只推耗时长的」 does not drop it (#3438). The user's next turn there goes by
+// A scheduled run (morning briefing) or a task notice that the assistant answers quickly is pushed all the same: its finished push
+// asks for no minimum length (LongMS 0), so "Only long-running turns" does not drop it (#3438). The user's next turn there goes by
 // the device's setting again, and so does a turn of the user's during which a run was sent (the run is the next turn).
 func TestReportTurnPushedHoweverShort(t *testing.T) {
 	ft := newFleetTestNoStore(t)

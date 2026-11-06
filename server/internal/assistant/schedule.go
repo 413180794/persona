@@ -21,9 +21,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What the assistant does on its own (docs/assistant.md「定时任务」) is one list of tasks, each with a schedule:
+// What the assistant does on its own (docs/assistant.md "Scheduled tasks") is one list of tasks, each with a schedule:
 //   - once: a follow-up the assistant scheduled from a conversation (schedule_followup), or the user in the app;
-//   - daily: at a time on some weekdays (早报 on weekdays at 09:00…), set up in the app or with schedule_routine;
+//   - daily: at a time on some weekdays (the morning briefing on weekdays at 09:00…), set up in the app or with schedule_routine;
 //   - interval: every N minutes (a 30-minute patrol), from schedule_followup's `every` or the app.
 // A run goes into the conversation the task came from (SessionID), else into the task's own conversation
 // (RunSessionID: the first run starts it, later ones continue it so each run sees the ones before), with the task's
@@ -55,9 +55,9 @@ type Task struct {
 	// The conversation it came from (on MachineID), runs go into it; empty = the task's own conversation.
 	MachineID string `json:"machine_id,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
-	// The task's own conversation, set by the hub (2026-11-01: each run used to start a new one, so 「和昨天比」 had
+	// The task's own conversation, set by the hub (2026-11-01: each run used to start a new one, so "compare with yesterday" had
 	// nothing to compare with): the first run starts it on the assistant's machine with RunLauncher, later runs are
-	// sent into it. Empty = the next run starts one (the app's 下次开新对话); so does a conversation that is gone or
+	// sent into it. Empty = the next run starts one (the app's "New chat next time"); so does a conversation that is gone or
 	// can't be continued (another launcher or machine), and the new one is kept.
 	RunMachineID string `json:"run_machine_id,omitempty"`
 	RunSessionID string `json:"run_session_id,omitempty"`
@@ -88,7 +88,7 @@ type Task struct {
 
 // rearm notes that t starts counting from now when it was just created, switched on, or its daily time or weekdays
 // changed (old: as it was; a new task's has no ID or is off). Without it the scheduler took the run due earlier today
-// for one the hub missed while it was down, and recorded 「Persona 停机，错过了时间」 (#3816).
+// for one the hub missed while it was down, and recorded "Persona was down and missed the time" (#3816).
 func rearm(old Task, t *Task, now time.Time) {
 	if t.Repeat != repeatDaily || !t.Enabled {
 		return
@@ -112,7 +112,7 @@ const minEvery = 5
 // settings (scheduleOwn).
 const doneKeep = 24 * time.Hour
 
-// kind is what the history calls it (the app's 运行记录, from before tasks were one list).
+// kind is what the history calls it (the app's "Run history", from before tasks were one list).
 func (t Task) kind() string {
 	if t.Repeat == repeatOnce {
 		return "followup"
@@ -179,11 +179,11 @@ type ScheduleRun struct {
 	Kind      string    `json:"kind"`   // routine / followup (Task.kind)
 	RefID     string    `json:"ref_id"` // the task's id
 	Title     string    `json:"title"`
-	Due       time.Time `json:"due"` // when it was meant to run (the tap for 立即运行)
+	Due       time.Time `json:"due"` // when it was meant to run (the tap for "Run now")
 	At        time.Time `json:"at"`  // when it ran
 	Status    string    `json:"status"`
 	Error     string    `json:"error,omitempty"`
-	Manual    bool      `json:"manual,omitempty"` // 立即运行
+	Manual    bool      `json:"manual,omitempty"` // "Run now"
 	MachineID string    `json:"machine_id,omitempty"`
 	SessionID string    `json:"session_id,omitempty"`
 	// Retried: this run is the automatic retry after a failure (so a retry that fails again does not retry forever).
@@ -191,7 +191,7 @@ type ScheduleRun struct {
 	// StreakTold: this run made its task's streak of runs that did not go through long enough to tell the user, who
 	// was told then (schedule_streak.go): the rest of that streak is not told again.
 	StreakTold bool `json:"streak_told,omitempty"`
-	// of is when the scheduler started this run (the task's LastRun then; 立即运行's tap): a run that finishes after a
+	// of is when the scheduler started this run (the task's LastRun then; "Run now"'s tap): a run that finishes after a
 	// newer one started is history only, it does not overwrite the newer one's status (recordRun).
 	of time.Time
 }
@@ -455,7 +455,7 @@ func stripScheduleHeader(p string) string {
 	}
 }
 
-// everyText: "30 分钟" / "2 小时".
+// everyText: "30 minutes" / "2 hours" (in Chinese).
 func everyText(minutes int) string {
 	if minutes%60 == 0 {
 		return fmt.Sprintf("%d 小时", minutes/60)
@@ -560,8 +560,8 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	return fmt.Sprintf("Scheduled %s for %s (%s); %s.", t.ID, at.In(loc).Format("01-02 15:04 Mon"), until(at), pushText(t)), nil
 }
 
-// scheduleOwn handles a run scheduling its own next run ("最后用 schedule_followup（at=30m，prompt 和本条相同）
-// 安排下一次"): the same task is kept, with the launcher and permission mode the user picked for it, instead of a new
+// scheduleOwn handles a run scheduling its own next run ("finally use schedule_followup (at=30m, same prompt as this one)
+// to schedule the next one"): the same task is kept, with the launcher and permission mode the user picked for it, instead of a new
 // follow-up per run. A one-off rescheduled by a relative time becomes a task every that long; one that already
 // repeats stays as it is (a changed prompt is taken). A task deleted while its run was going stays deleted: the run is
 // told so, nothing is scheduled (#4792). ok is false when this conversation's latest run isn't one of the task's
@@ -643,7 +643,7 @@ func ranRecently(r ScheduleRun) bool {
 }
 
 // copiesRun: what was asked is that run's task again, by its title, or (no title) by the run's own message copied
-// along (its first line 「⏰ <name>（…）」, taskPrompt). Only the run's name is left of a deleted task, so a bare prompt
+// along (its first line "⏰ <name> (…)", taskPrompt). Only the run's name is left of a deleted task, so a bare prompt
 // without that line is taken as something new (#4792).
 func copiesRun(r ScheduleRun, title, rawPrompt string) bool {
 	if r.Title == "" {
@@ -742,7 +742,7 @@ func (s *Service) describeSchedule(ctx context.Context, space string) string {
 	return b.String()
 }
 
-// toolScheduleRoutine adds a daily task from a conversation ("每天 9 点给我早报"), or changes one by id.
+// toolScheduleRoutine adds a daily task from a conversation ("give me a morning briefing at 9 every day"), or changes one by id.
 func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		ID       string  `json:"id"`
@@ -917,7 +917,7 @@ func (s *Service) Run(ctx context.Context) {
 	go s.channelLoop(ctx)    // the channels' runs that lost their watcher (channels.go)
 	go s.kbLoop(ctx)         // the knowledge base (kb.go)
 	go s.viewActionLoop(ctx) // durable card reply outbox
-	go s.acceptLoop(ctx)     // 请验收 reminders each morning (acceptance.go)
+	go s.acceptLoop(ctx)     // "Please verify" reminders each morning (acceptance.go)
 	go s.healthLoop(ctx)     // each machine's launchers (launcher_health.go)
 	s.scheduleLoop(ctx)
 }
@@ -1011,7 +1011,7 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 			case last.IsZero():
 				last = now.Add(-2 * time.Minute) // never ran: only the last couple of minutes (#664)
 			case now.Sub(last) > 36*time.Hour:
-				// The hub was down, or the task skips days: Friday's 早报 is 72 hours before Monday's, a weekly one 168.
+				// The hub was down, or the task skips days: Friday's morning briefing is 72 hours before Monday's, a weekly one 168.
 				// Looking back only two minutes lost Monday's run (nothing run, nothing recorded) whenever the hub came
 				// up a few minutes late. Looking back a day treats it as any other day: run within the catch-up
 				// window, else skipped and recorded (#3397).
@@ -1027,7 +1027,7 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 			t.LastRun, changed = now.UTC(), true // saved before it starts: a restart in between loses the run rather than repeating it
 			if now.Sub(next) < dailyCatchUp {
 				due = append(due, dueTask{*t, next})
-			} else { // missed by a long hub outage: skip rather than send a stale 早报 at noon
+			} else { // missed by a long hub outage: skip rather than send a stale morning briefing at noon
 				t.LastStatus, t.LastError = runSkipped, i18n.T(s.lang(ctx), "assistant-schedule.missed")
 				skipped = append(skipped, ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: next.UTC(), At: now.UTC(),
 					Status: runSkipped, Error: t.LastError, of: now.UTC()})
@@ -1153,9 +1153,9 @@ var errTaskBusy = i18n.Err("assistant-schedule.busy_skipped")
 
 // runTask sends the task's message into the conversation it came from (on that conversation's launcher, as the phone's
 // messages are), else into its own conversation, else (none yet, or that one is gone, busy elsewhere, or on another
-// launcher / machine) a new one that becomes its own; those two on 模型配置 › 主对话 (#1544), with the task's
+// launcher / machine) a new one that becomes its own; those two on Model configuration › Main chat (#1544), with the task's
 // permission mode. due: when it was meant to run; now: when the scheduler noticed (a run that
-// waited for the hub to come back is told how late it is); manual is 立即运行 in the app.
+// waited for the hub to come back is told how late it is); manual is "Run now" in the app.
 //
 // A repeating task whose own conversation is still on its last run (working, or waiting on the user) is skipped,
 // not queued: two runs stacked in one conversation answer twice in a row, and the second one only sees the first
@@ -1166,7 +1166,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	loc, kb := s.location(ctx), s.kbReady(ctx)
 	run := ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: due.UTC(), At: time.Now().UTC(), Manual: manual, Status: runOK,
 		Retried: retried, of: now.UTC()}
-	if !s.sched.begin(t.ID) { // the same task is being sent right now (立即运行 as it came due)
+	if !s.sched.begin(t.ID) { // the same task is being sent right now ("Run now" as it came due)
 		return proto.Session{}, s.skipRun(run, errTaskBusy)
 	}
 	defer s.sched.end(t.ID)
@@ -1250,7 +1250,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	run.MachineID, run.SessionID = sess.MachineID, sess.SessionID
 	s.logf("task %s ran %s after its time (new conversation %s, kept for the next runs)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
 	s.adoptConversation(t.ID, sess.MachineID, sess.SessionID, sess.Launcher)
-	s.titleFixed(sess.MachineID, sess.SessionID, time.Now(), titleTask, t.label()) // 「MMDD | 定时 | 任务名」, the same for every run in it
+	s.titleFixed(sess.MachineID, sess.SessionID, time.Now(), titleTask, t.label()) // "MMDD | scheduled | task name", the same for every run in it
 	var m *Device
 	if d, ok := s.device(ctx, sess.MachineID); ok {
 		m = &d
@@ -1264,7 +1264,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 // nothing else, the follow-up the user counted on was gone without a word (#5030). The user is told, as a run whose turn
 // failed is (watchScheduledRun), and it is tried once more after runRetryDelay, as the task is then (deleted: not). A
 // failed retry is told too, and not tried again. A repeating task runs again at its next time and has its streak notice
-// (#4658); 立即运行 is answered in the app.
+// (#4658); Run now is answered in the app.
 func (s *Service) oneOffNotStarted(ctx context.Context, t Task, run ScheduleRun) {
 	if t.Repeat != repeatOnce || run.Manual {
 		return
@@ -1349,11 +1349,11 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	}
 	if text == "" {
 		// The model service answered 200 with nothing in it: no reply, no tool call, no error. The run stayed "ok"
-		// and the push said 完成了 over an empty 早报; it fails and is retried like an error (#3752, as tasks: #2349).
+		// and the push said "done" over an empty morning briefing; it fails and is retried like an error (#3752, as tasks: #2349).
 		if items, read := s.lastTurnItems(ctx, m.ID, run.SessionID); read && silentRun(items, t, ran) && s.stillEnded(ctx, m.ID, run.SessionID, items) {
 			text = silentTurnErrorIn(s.lang(ctx))
 			// Its failure is pushed below. noteAsked holds back the conversation's finished pushes for the next three
-			// minutes (notifyFinished), so the turn's own 「早报 · 完成了」 does not go out next to it.
+			// minutes (notifyFinished), so the turn's own "Morning briefing · done" does not go out next to it.
 			s.noteAsked(run.SessionID)
 		}
 	}
@@ -1443,7 +1443,7 @@ func silentRun(items []proto.Item, t Task, ran bool) bool {
 }
 
 // runAsk: ask is the message a run of a task with prompt sent (taskPrompt: the header, a blank line, the prompt), not
-// a message of the user's that only mentions it (「早报呢？」 for the task 「早报」).
+// a message of the user's that only mentions it ("where's the briefing?" for the task "briefing").
 func runAsk(ask, prompt string) bool {
 	ask, prompt = strings.TrimSpace(ask), strings.TrimSpace(prompt)
 	if prompt == "" {
@@ -1605,7 +1605,7 @@ func (s *Service) adoptConversation(id, machine, session, launcher string) {
 // (the snapshot's profile: keptSessions); it configures the nodes.
 func (s *Service) keepListed(ctx context.Context) { s.publish(ctx) }
 
-// forgetConversation is 下次开新对话: the next run starts a new conversation (the old one stays in 对话).
+// forgetConversation is "New chat next time": the next run starts a new conversation (the old one stays in Chats).
 func (s *Service) forgetConversation(ctx context.Context, id string) (Task, bool, error) {
 	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
@@ -1648,7 +1648,7 @@ func lateness(due, at time.Time) string {
 	return at.Sub(due).Round(100 * time.Millisecond).String()
 }
 
-// humanDuration: "25 分钟" / "3 小时" / "2 天".
+// humanDuration: "25 minutes" / "3 hours" / "2 days" (in Chinese).
 func humanDuration(d time.Duration) string {
 	switch {
 	case d < time.Hour:
@@ -1956,7 +1956,7 @@ func (s *Service) deleteTaskRoute(w http.ResponseWriter, r *http.Request) {
 	apierr.WriteJSON(w, map[string]any{"ok": true})
 }
 
-// runTaskRoute is 立即运行: the task runs now; a one-off is then done, a repeating one keeps its schedule.
+// runTaskRoute is "Run now": the task runs now; a one-off is then done, a repeating one keeps its schedule.
 func (s *Service) runTaskRoute(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	sc, err := s.lockedSchedule(r.Context())

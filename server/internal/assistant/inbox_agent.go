@@ -16,10 +16,10 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The inbox's AI 分身 (docs/inbox.md): model 1 triages every new item (inbox_triage.go), model 2 decides which of
-// the 需要你 items an agent should take on, and the agent (model 3, a headless Claude Code in the assistant's
+// The inbox's AI twin (docs/inbox.md): model 1 triages every new item (inbox_triage.go), model 2 decides which of
+// the "Needs you" items an agent should take on, and the agent (model 3, a headless Claude Code in the assistant's
 // directory, with its tools: a conversation the assistant starts itself, untitled) looks into it and drafts the reply
-// (inbox_draft). The draft waits in the inbox; nothing is sent until the user taps 发送 (POST /api/v1/inbox/{id}/reply).
+// (inbox_draft). The draft waits in the inbox; nothing is sent until the user taps "Send" (POST /api/v1/inbox/{id}/reply).
 
 // InboxAgentConfig is hub.json's inbox.agent (the hub hands it over in InboxConfig).
 type InboxAgentConfig = assistantwire.InboxAgentConfig
@@ -62,16 +62,16 @@ var inboxAgentStartBackoff = []time.Duration{time.Minute, 5 * time.Minute}
 // errNoInboxMachine is the definite "no computer can run the inbox agent" refusal before any node call.
 var errNoInboxMachine = errors.New("no machine for the inbox agent")
 
-// InboxAgent is the AI 分身's work on one item.
+// InboxAgent is the AI twin's work on one item.
 type InboxAgent struct {
 	State     string `json:"state"`
 	Task      string `json:"task,omitempty"`   // model 2's instruction to the agent
 	Reason    string `json:"reason,omitempty"` // model 2's why, short
 	MachineID string `json:"machine_id,omitempty"`
-	SessionID string `json:"session_id,omitempty"` // the agent's conversation (对话 tab): how it got there
+	SessionID string `json:"session_id,omitempty"` // the agent's conversation ("Chats" tab): how it got there
 	Draft     string `json:"draft,omitempty"`
 	Note      string `json:"note,omitempty"` // what the agent found, for the user to check the draft against
-	// Changes are the status moves the agent proposes with its draft (document items); 发送 makes them.
+	// Changes are the status moves the agent proposes with its draft (document items); "Send" makes them.
 	Changes []DocChange `json:"changes,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Of      string      `json:"of,omitempty"` // the item's Last the work answers
@@ -106,8 +106,8 @@ func (a *InboxAgent) startDue(now time.Time) bool {
 	return a.RetryAfter == nil || !a.RetryAfter.After(now)
 }
 
-// handInbox is one pass of the AI 分身's work (docs/inbox.md「AI 分身」): settle conversations that finished, hung or
-// were lost, escalate every newly triaged 需要你 item to the manager (one processing conversation per event), deliver
+// handInbox is one pass of the AI twin's work (docs/inbox.md"AI twin"): settle conversations that finished, hung or
+// were lost, escalate every newly triaged Needs you item to the manager (one processing conversation per event), deliver
 // what waits for the events' conversations (new messages, the user's answers), start conversations for the queued
 // ones. One pass at a time, in the background.
 func (s *Service) handInbox(ctx context.Context) {
@@ -237,7 +237,7 @@ func kbChatOf(it *InboxItem) string {
 }
 
 // startInboxAgent starts a headless conversation like the assistant's (same directory, so the same tools) on the
-// inbox agent's model (模型配置 › inbox.agent), untitled: the draft in the inbox is its result.
+// inbox agent's model (model settings › inbox.agent), untitled: the draft in the inbox is its result.
 func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, it *InboxItem, prompt string) (machineID, sessionID string, err error) {
 	machine := s.settings(ctx).MachineID
 	if _, ok := s.device(ctx, cfg.Machine); ok && cfg.Machine != "" {
@@ -251,7 +251,7 @@ func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, it 
 	if err != nil {
 		return "", "", err
 	}
-	// 「MMDD | 收件箱 | the item's title」 from the start, not its prompt's first line (#3264).
+	// "MMDD | Inbox | the item's title" from the start, not its prompt's first line (#3264).
 	s.titleFixed(sess.MachineID, sess.SessionID, time.Now(), titleInbox, it.Title)
 	return sess.MachineID, sess.SessionID, nil
 }
@@ -357,7 +357,7 @@ func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, no
 	s.saveInbox(ctx, changed)
 }
 
-// inboxAgentPrompt is the AI 分身's first message for an item (prompts/inbox/agent.md).
+// inboxAgentPrompt is the AI twin's first message for an item (prompts/inbox/agent.md).
 func (b *inboxBook) inboxAgentPrompt(it *InboxItem, owner string, kbc *prompts.KBContext) string {
 	return b.inboxAgentPromptFor(it, owner, kbc, nil, 1)
 }
@@ -370,7 +370,7 @@ func (b *inboxBook) inboxAgentPromptFor(it *InboxItem, owner string, kbc *prompt
 	return prompts.RenderInboxAgent(a)
 }
 
-// inboxAgentFor is what the AI 分身's first message is made of, but the knowledge base's part.
+// inboxAgentFor is what the AI twin's first message is made of, but the knowledge base's part.
 func (b *inboxBook) inboxAgentFor(it *InboxItem, owner string, linked *prompts.InboxTask, larkDefault int) prompts.InboxAgent {
 	a := prompts.InboxAgent{Owner: owner, EventID: it.ID, Title: it.Title, Item: b.promptItem(it), Task: it.Agent.Task, Reason: it.Agent.Reason,
 		Linked: linked}
@@ -456,5 +456,5 @@ func (s *Service) inboxRepliedAt(ctx context.Context, ids []string) map[string]t
 	return out
 }
 
-// ActiveTasks are the tasks going on, as the inbox's judge and AI 分身 link messages to them.
+// ActiveTasks are the tasks going on, as the inbox's judge and AI twin link messages to them.
 func (s *Service) ActiveTasks(ctx context.Context) []prompts.InboxTask { return s.activeTasks(ctx) }

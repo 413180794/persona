@@ -15,8 +15,8 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// The message cards of the AI 分身's drafts about a task (docs/unified-entry.md「消息卡关联任务」): the card is in the
-// task's conversation, and its 发送 is the inbox's reply, once per card.
+// The message cards of the AI twin's drafts about a task (docs/unified-entry.md "Message cards linked to tasks"): the card is in the
+// task's conversation, and its "Send" is the inbox's reply, once per card.
 
 // cardHub has a task in conv1 and an inbox item about it (a GitHub-like review thread) whose agent is drafting.
 func cardHub(t *testing.T) (*inboxHub, *replierConnector, *InboxItem) {
@@ -70,8 +70,8 @@ func cardBody(t *testing.T, it FeedItem) MessageCard {
 	return b
 }
 
-// 发送 on a card: the reply goes out once, the card says so for good — on a reload, after the item opens again and
-// the AI 分身 drafts a new card, and to the clients at once.
+// "Send" on a card: the reply goes out once, the card says so for good — on a reload, after the item opens again and
+// the AI twin drafts a new card, and to the clients at once.
 func TestMessageCardStaysSent(t *testing.T) {
 	h, rc, it := cardHub(t)
 	mux := h.routes()
@@ -118,7 +118,7 @@ func TestMessageCardStaysSent(t *testing.T) {
 		t.Fatalf("a card for a reply already out: %+v", got)
 	}
 
-	// A new message opens the item again and the AI 分身 drafts again: a new card to send; the old one stays sent.
+	// A new message opens the item again and the AI twin drafts again: a new card to send; the old one stays sent.
 	h.inbox.mu.Lock()
 	it.DoneAt, it.DoneBy, it.Last = nil, "", "m2"
 	h.inbox.mu.Unlock()
@@ -178,7 +178,7 @@ func TestMessageCardSentBeforeTheRecord(t *testing.T) {
 	}
 
 	// Filed without a reply, or replied to before the card came: the card does not say sent (nothing went out from
-	// it), but its 发送 sends nothing while the item stays filed (TestMessageCardOfAFiledItemSendsNothing).
+	// it), but its "Send" sends nothing while the item stays filed (TestMessageCardOfAFiledItemSendsNothing).
 	h2, rc2, it2 := cardHub(t)
 	h2.inbox.mu.Lock()
 	it2.done(time.Now().Add(-time.Minute), "replied")
@@ -199,7 +199,7 @@ func TestMessageCardSentBeforeTheRecord(t *testing.T) {
 	}
 }
 
-// The AI 分身's draft goes out with one tap: one that leaves a blank to fill in is sent back to it (the assistant's
+// The AI twin's draft goes out with one tap: one that leaves a blank to fill in is sent back to it (the assistant's
 // rule, assistant.TestInboxDraftRules), and nothing changes on the item.
 func TestInboxDraftRefusesPlaceholders(t *testing.T) {
 	h, _, it := cardHub(t)
@@ -212,7 +212,7 @@ func TestInboxDraftRefusesPlaceholders(t *testing.T) {
 	draft(t, h, "修好了，合进去了")
 }
 
-// draft is the AI 分身 in conversation s1 handing in its draft (inbox_draft).
+// draft is the AI twin in conversation s1 handing in its draft (inbox_draft).
 func draft(t *testing.T, h *inboxHub, text string) {
 	t.Helper()
 	if _, err := runTool(h.Service, "s1", "inbox_draft", map[string]any{"text": text}); err != nil {
@@ -239,8 +239,8 @@ func (c *replierConnector) Reply(_ context.Context, r connector.InboxReply) erro
 	return nil
 }
 
-// An item the user filed while its AI 分身 worked (已处理, 忽略, read and filed elsewhere) needs nothing more: the
-// draft that comes in after puts no card with 发送 in the task's conversation.
+// An item the user filed while its AI twin worked ("Done", "Ignore", read and filed elsewhere) needs nothing more: the
+// draft that comes in after puts no card with "Send" in the task's conversation.
 func TestMessageCardNotForAFiledItem(t *testing.T) {
 	for _, by := range []string{"user", "dismissed", "read"} {
 		h, rc, it := cardHub(t)
@@ -257,7 +257,7 @@ func TestMessageCardNotForAFiledItem(t *testing.T) {
 	}
 }
 
-// A card put in before its item was filed (已处理, 忽略, read and filed elsewhere): its 发送 sends nothing, and the
+// A card put in before its item was filed ("Done", "Ignore", read and filed elsewhere): its "Send" sends nothing, and the
 // item stays filed as it was. Moved back to the inbox, the item is open again and the card sends.
 func TestMessageCardOfAFiledItemSendsNothing(t *testing.T) {
 	for _, by := range []string{"user", "dismissed", "read"} {
@@ -295,7 +295,7 @@ func TestMessageCardOfAFiledItemSendsNothing(t *testing.T) {
 	}
 }
 
-// An item filed after 发送 on its card looked (between sendFromCard's check and the reply taking its copy) is not
+// An item filed after "Send" on its card looked (between sendFromCard's check and the reply taking its copy) is not
 // answered either: nothing goes out and the item keeps the mark the user gave it (#4871).
 func TestMessageCardOfAnItemFiledWhileSendingSendsNothing(t *testing.T) {
 	for _, by := range []string{"user", "dismissed", "read"} {
@@ -337,9 +337,9 @@ func TestReplyNotFromACardAnswersAFiledItem(t *testing.T) {
 	}
 }
 
-// Another reply of the item may be out when 发送 on its card comes (the phone's reply, a repeat): the card's send waits
+// Another reply of the item may be out when Send on its card comes (the phone's reply, a repeat): the card's send waits
 // for it on the item's reply lock, past the check #4899 made. An item filed meanwhile (that reply went out, or
-// 已处理 on another device) is not answered again, and keeps its mark.
+// Done on another device) is not answered again, and keeps its mark.
 func TestMessageCardOfAnItemFiledWhileAnotherReplyIsOutSendsNothing(t *testing.T) {
 	for _, by := range []string{"replied", "user", "dismissed"} {
 		h, rc, it := cardHub(t)

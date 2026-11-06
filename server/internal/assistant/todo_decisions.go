@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A todo's decision record (#1618, docs/todos.md「决策记录」): the calls the user made on it, written by hand in the
+// A todo's decision record (#1618, docs/todos.md "Decision record"): the calls the user made on it, written by hand in the
 // todo or from their answers to the question cards of the agents working on it (interaction.resolved), and handed to
 // every agent the todo is given to (assistant.todo_handoff).
 
@@ -151,7 +151,7 @@ func (s *Service) cardDecisions(ctx context.Context, ix proto.Interaction, r pro
 		return
 	}
 	if r.AnsweredBy == proto.AnsweredByAssistant {
-		return // the assistant's call for the user (delegate.go), not one the user made; 改答 is
+		return // the assistant's call for the user (delegate.go), not one the user made; "Change answer" is
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -243,7 +243,7 @@ func (s *Service) todoDecisionsContext(ctx context.Context, todoID string) strin
 }
 
 // contextText keeps a text from closing the context block it is put in (prompts.ContextBody), and indents its later lines under the item, so a text cannot pass for a
-// decision of its own ("\n2. 选了：…").
+// decision of its own (a "\n2. Chose: …" line).
 func contextText(s string) string {
 	return strings.ReplaceAll(strings.TrimSpace(prompts.ContextBody(s)), "\n", "\n      ")
 }

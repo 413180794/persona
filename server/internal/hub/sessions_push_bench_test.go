@@ -10,7 +10,7 @@ import (
 )
 
 // BenchmarkBroadcastSessions is one session of a 150-session machine changing, pushed to two older apps and three
-// delta apps (docs/server.md「推送给 App 的量」): each change encodes the whole list again.
+// delta apps (docs/server.md "What gets pushed to apps"): each change encodes the whole list again.
 func BenchmarkBroadcastSessions(b *testing.B) { benchmarkBroadcastSessions(b, 2) }
 
 // BenchmarkBroadcastSessionsDeltaOnly is the same with five delta apps and no older one: no whole-list message.

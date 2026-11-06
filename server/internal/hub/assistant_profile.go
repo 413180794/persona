@@ -16,7 +16,7 @@ import (
 )
 
 // The assistant's settings are its own (internal/assistant, profile.go): the hub keeps the profile it last reported
-// (Snapshot.Profile) for its own features — the model configuration runs 主对话 on the assistant's machine, a phone's
+// (Snapshot.Profile) for its own features — the model configuration runs the main chat on the assistant's machine, a phone's
 // message to the main conversation, the user's time zone, the conversations the nodes keep listing — and asks the
 // assistant about its conversations (assistant.start, assistant.send_params, assistant.rename). The Feishu bot and the
 // channels are the assistant's own (assistant_channels.go): they do not go by it. Before

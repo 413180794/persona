@@ -17,9 +17,9 @@ import (
 // The model configuration's purposes the inbox uses.
 const (
 	purposeTriage = "inbox.triage" // model 1: triage and summary, relating batches to events
-	purposeJudge  = "inbox.judge"  // model 2: which 需要你 items the AI 分身 takes
-	purposeDraft  = "inbox.draft"  // AI 草拟回复
-	purposeAgent  = "inbox.agent"  // model 3: the AI 分身's own conversation (a launcher)
+	purposeJudge  = "inbox.judge"  // model 2: which "Needs you" items the AI twin takes
+	purposeDraft  = "inbox.draft"  // "AI draft reply"
+	purposeAgent  = "inbox.agent"  // model 3: the AI twin's own conversation (a launcher)
 	// purposeTranslate translates mail and short texts (translation, inbox_translate.go).
 	purposeTranslate = "translate"
 )

@@ -38,7 +38,7 @@ func bulkIDs(list []any) []string {
 	return out
 }
 
-// Filing what the list shows: only the items named, each as it was listed; a repeat changes nothing; 撤销 brings
+// Filing what the list shows: only the items named, each as it was listed; a repeat changes nothing; "Undo" brings
 // back what was filed.
 func TestInboxBulkDone(t *testing.T) {
 	h := muteHub(t)
@@ -87,7 +87,7 @@ func TestInboxBulkDone(t *testing.T) {
 		t.Fatalf("a repeat changed something: %v", out)
 	}
 
-	// 撤销: what was filed comes back.
+	// "Undo": what was filed comes back.
 	_, out = inboxCall(t, mux, "POST", "/api/v1/inbox/done", bulkBody(false, inboxBulkTarget{"a", ""}))
 	if len(out["changed"].([]any)) != 1 || !h.inbox.items["a"].open() || h.inbox.items["a"].DoneBy != "" {
 		t.Fatalf("undo: %v", out)
@@ -148,7 +148,7 @@ func TestInboxBulkDoneConcurrent(t *testing.T) {
 }
 
 // POST /api/v1/inbox/bulk with a filter files what the list as of as_of showed under it: an item that arrived after
-// (a new one, or new mail into a listed one) stays open; 忽略 is done_by=dismissed; the undo it answers brings back
+// (a new one, or new mail into a listed one) stays open; "Ignore" is done_by=dismissed; the undo it answers brings back
 // exactly what it filed.
 func TestInboxBulkFilterAsOf(t *testing.T) {
 	h := muteHub(t)
@@ -205,7 +205,7 @@ func TestInboxBulkFilterAsOf(t *testing.T) {
 		t.Fatalf("a after the undo: %v %s", a.DoneAt, a.DoneBy)
 	}
 
-	// The same list again, everything 已处理: b and n still did not arrive by then.
+	// The same list again, everything "Done": b and n still did not arrive by then.
 	body = fmt.Sprintf(`{"action":"done","filter":{},"as_of":%q}`, asOf)
 	_, out = inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", body)
 	if got := fmt.Sprint(out["ids"]); got != "[a c l]" || h.inbox.items["a"].DoneBy != "user" {
@@ -213,7 +213,7 @@ func TestInboxBulkFilterAsOf(t *testing.T) {
 	}
 }
 
-// ids file what they name (no version check), dismissed items list as such, and the single item's 忽略 matches.
+// ids file what they name (no version check), dismissed items list as such, and the single item's "Ignore" matches.
 func TestInboxBulkIDsAndSingleDismiss(t *testing.T) {
 	h := muteHub(t)
 	mux := h.routes()
@@ -233,8 +233,8 @@ func TestInboxBulkIDsAndSingleDismiss(t *testing.T) {
 	}
 }
 
-// Clients released before #5114 still send 全部标为已处理 (action=done) and 全部忽略 (action=dismiss) with the listed
-// items and versions; newer ones send only 全部清理 (dismiss). Both keep working, each filed as it says, and each
+// Clients released before #5114 still send Mark all as done (action=done) and Dismiss all (action=dismiss) with the listed
+// items and versions; newer ones send only Clean up all (dismiss). Both keep working, each filed as it says, and each
 // undo brings back what it filed.
 func TestInboxBulkOldClientsDoneAndDismiss(t *testing.T) {
 	h := muteHub(t)
@@ -500,7 +500,7 @@ func TestInboxBulkReopenWriteFailure(t *testing.T) {
 	}
 }
 
-// One item's 已处理 that cannot be stored answers 500 and leaves the item open; after recovery it answers 200 and
+// One item's "Done" that cannot be stored answers 500 and leaves the item open; after recovery it answers 200 and
 // the done state is stored. Bringing it back is symmetric: a failed reopen answers 500 and leaves it filed.
 func TestSetInboxDoneWriteFailure(t *testing.T) {
 	h, st := newBulkFailHub(t)

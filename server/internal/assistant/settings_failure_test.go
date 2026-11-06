@@ -62,7 +62,7 @@ func newSettingsHiccup(t *testing.T) (ft *fleetTest, st *settingFailing, fail fu
 }
 
 // One settings read failing (the database busy for a moment, after the 5s the settings are kept) is no reason to
-// show the main conversation under its first message: the snapshot keeps titling it 「Persona」 (#1338).
+// show the main conversation under its first message: the snapshot keeps titling it "Persona" (#1338).
 func TestMainTitleSurvivesSettingsReadFailure(t *testing.T) {
 	ft, _, fail := newSettingsHiccup(t)
 	ft.s.publish(context.Background())

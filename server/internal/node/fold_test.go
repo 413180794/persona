@@ -85,7 +85,7 @@ func TestSessionItemsFoldWork(t *testing.T) {
 }
 
 // herdr read a Codex agent as working for minutes although its turn had finished two days earlier (the app showed
-// 「正在工作 45 小时」): a rollout that ends with the turn complete and has not been written for a while wins. A turn
+// "working for 45 hours"): a rollout that ends with the turn complete and has not been written for a while wins. A turn
 // that has just started, or one whose start is still being written, stays working.
 func TestCodexTurnOverOverridesWorking(t *testing.T) {
 	dir := t.TempDir()

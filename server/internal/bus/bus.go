@@ -1,4 +1,4 @@
-// Package bus is how a service reaches the hub (docs/protocol.md「总线」): it dials GET /api/v1/bus with a token of
+// Package bus is how a service reaches the hub (docs/protocol.md "Bus"): it dials GET /api/v1/bus with a token of
 // its own and keeps the connection up. Over it runs the internal/rpc protocol unchanged, one
 // JSON line per WebSocket text message, calls going both ways. Client is the service's side; the hub's is
 // hub/bus.go.

@@ -5,7 +5,7 @@ package prompts
 // the files it carried, saved on the machine the conversation runs on.
 type BotMessage struct {
 	Jarvis  bool   // a Persona conversation (not a coding agent): add the note about answering in Feishu
-	Owner   string // "" is 用户
+	Owner   string // "" is the Chinese word for "user"
 	Text    string
 	Quote   *BotQuote
 	Forward string // the forwarded messages, one line each

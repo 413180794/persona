@@ -97,7 +97,7 @@ func TestTurnErrorCodes(t *testing.T) {
 }
 
 // Claude Code without credentials answers "Not logged in · Please run /login" as if it were a reply: the apps get a
-// turn error the user must fix, with its code, and the Agents business asks the user rather than sending 继续.
+// turn error the user must fix, with its code, and the Agents business asks the user rather than sending "continue".
 func TestNotLoggedInIsTheUsersTurnError(t *testing.T) {
 	const text = "Not logged in · Please run /login"
 	if !assistantwire.CutOff(text) || assistantwire.CutOff("修好了 Not logged in · Please run /login 时的崩溃") {

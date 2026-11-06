@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// A git repository as a market (docs/extensions.md「扩展市场」): the hub keeps a shallow clone in its data directory and
+// A git repository as a market (docs/extensions.md "Extension market"): the hub keeps a shallow clone in its data directory and
 // reads the index and the packages from it, with its machine's own credentials (its SSH key) — for private hosts
 // with no way to read one file with a token.
 

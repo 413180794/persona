@@ -17,13 +17,15 @@ import (
 // preview_id/permissions_digest/bundle fields stay unchanged.
 type PreviewRef struct{ PreviewID, Digest string }
 
-// PlanStore 将记录整批提交；普通错误表示未提交，确认丢失必须返回 CommitUnknownError。
-// 包由 registry 准备；失败恢复从不删除用户数据或重写 sealed secrets。
+// PlanStore commits the records as one batch; a plain error means nothing was committed, and a lost
+// confirmation must return CommitUnknownError.
+// The registry prepares the packages; recovering from a failure never deletes user data or rewrites sealed
+// secrets.
 type PlanStore interface {
 	PutExtensionPlan(context.Context, []Record) error
 }
 
-// CommitUnknownError 表示 COMMIT 的答复丢失，不能据此宣称数据库回滚了。
+// CommitUnknownError means the answer to COMMIT was lost; it does not mean the database rolled back.
 type CommitUnknownError struct{ Err error }
 
 func (e *CommitUnknownError) Error() string { return "提交结果未知：" + e.Err.Error() }
@@ -52,7 +54,7 @@ func (e *PlanError) Error() string {
 }
 func (e *PlanError) Unwrap() error { return e.Err }
 
-// ManifestsEqual 比较完整清单；RawMessage 内对象键的顺序不影响等价性。
+// ManifestsEqual compares whole manifests; the order of object keys inside a RawMessage does not matter.
 func ManifestsEqual(a, b *Manifest) bool {
 	canonical := func(m *Manifest) ([]byte, error) {
 		raw, err := json.Marshal(m)

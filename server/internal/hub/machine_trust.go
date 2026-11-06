@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A computer the user has not said is theirs yet (docs/onboarding.md 4.2「你的电脑 ↔ hub」, 5.3). Persona-managed keys go
+// A computer the user has not said is theirs yet (docs/onboarding.md 4.2 "Your computer ↔ hub", 5.3). Persona-managed keys go
 // to every node and the assistant falls back to the first machine, so a forwarded pairing link must not be enough to
 // get them: a computer added from a signed-in device is pending until the user confirms it, and while it is
 //   - it gets no Persona-managed keys and nothing it asks of the assistant is answered (assistant/machine_trust.go);

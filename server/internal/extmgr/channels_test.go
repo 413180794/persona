@@ -165,7 +165,7 @@ func (w *channelWorld) channels(t *testing.T, method string, params any) (map[st
 }
 
 // A message from a plugin's channel goes to the assistant as the program gave it, with the owner's action; what the
-// assistant sends back goes through channel.send in the pieces it gives (the same ref once), 「正在输入」 on and off.
+// assistant sends back goes through channel.send in the pieces it gives (the same ref once), "typing" on and off.
 func TestChannelMessageGoesToTheAssistantAndTheAnswerComesBack(t *testing.T) {
 	w := newChannelWorld(t)
 	w.receive(t, "m1", "明天有什么会？")

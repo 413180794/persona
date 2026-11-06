@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The knowledge base is the assistant's (docs/knowledge.md「谁管什么」): the engine (internal/kb), its loop, its files
+// The knowledge base is the assistant's (docs/knowledge.md "Who owns what"): the engine (internal/kb), its loop, its files
 // under the data directory and its index rows in Postgres. Only the assistant writes them. The hub keeps the sources:
 // what its connectors deliver is read over the bus (kb_sources.go), the posts their programs hand it come over the bus
 // (kb_posts.go), and the hub's features that read the knowledge base ask here (kb_bus.go). The kb_* tools, the live
@@ -199,7 +199,7 @@ func (s *Service) kbOpenLocked(ctx context.Context, set assistantwire.KBSettings
 	if !k.passed {
 		k.passed = true
 		// Projects from before keywords existed get them at their next rewrite: the active ones are rewritten now (a
-		// few a run), so their 公司圈 posts can be found.
+		// few a run), so their Moments (company feed) posts can be found.
 		if n := e.SeedKeywords(60 * 24 * time.Hour); n > 0 {
 			s.logf("kb: %d project(s) to be rewritten for their keywords", n)
 		}
@@ -402,7 +402,7 @@ func (s *Service) kbRound(ctx context.Context, e *kb.Engine, r *kbRounds) {
 		}
 		e.SummarizeRecordings(ctx, 3)
 	})
-	// Same work under two names, and the 公司圈 posts about each project: a few model calls every half hour.
+	// Same work under two names, and the Moments (company feed) posts about each project: a few model calls every half hour.
 	if time.Since(r.links) >= kbItemsPoll {
 		r.links = time.Now()
 		s.kbRun(ctx, func() {

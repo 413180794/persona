@@ -36,7 +36,7 @@ func FirstLine(s string) string {
 	return ""
 }
 
-// Ago is how long ago t was, in words (刚刚, 5 分钟前…); "" for the zero time.
+// Ago is how long ago t was, in words ("just now", "5 minutes ago"… in Chinese); "" for the zero time.
 func Ago(t time.Time) string {
 	if t.IsZero() {
 		return ""

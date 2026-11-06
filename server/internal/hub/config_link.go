@@ -6,7 +6,7 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// LinkConfig tunes the heartbeat with the computers' Persona Links (docs/config.md, docs/link.md「心跳」): the hub's
+// LinkConfig tunes the heartbeat with the computers' Persona Links (docs/config.md, docs/link.md "Heartbeat"): the hub's
 // side of each link and its streams, the manager's side of the streams it opens to connectors (kind service), and
 // Persona Link's own side, which the manager tells it. Links to other hubs (mesh) keep link.PingEvery / PingTimeout.
 type LinkConfig struct {

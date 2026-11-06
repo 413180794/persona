@@ -167,7 +167,7 @@ func (d *DB) AddExtensionAudit(ctx context.Context, id, action, actor string, de
 var _ extension.Store = (*DB)(nil)
 var _ extension.PlanStore = (*DB)(nil)
 
-// ---- plugin markets (docs/extensions.md「扩展市场」) ----
+// ---- plugin markets (docs/extensions.md "Extension market") ----
 
 // PluginMarkets are the registered markets, oldest first.
 func (d *DB) ExtensionMarkets(ctx context.Context) ([]extension.MarketRecord, error) {

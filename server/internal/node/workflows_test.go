@@ -148,7 +148,7 @@ func TestWorkflowStalled(t *testing.T) {
 }
 
 // The transcript's launch line reaches the session's background through the background scan (the main turn has ended:
-// the session would be 完成未看 without it).
+// the session would be "Unread" without it).
 func TestWorkflowFromTranscript(t *testing.T) {
 	n, parent, sess := workflowSession(t)
 	n.bgScans, n.metas = map[string]*bgScan{}, map[string]quickMeta{}

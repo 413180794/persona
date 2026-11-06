@@ -142,7 +142,7 @@ func (h *Hub) relayBroadcast(message json.RawMessage) error {
 	return nil
 }
 
-// An install's steps (docs/protocol.md「扩展的安装、升级、卸载进度」) go only to the apps that declared they know them,
+// An install's steps (docs/protocol.md "Extension install, upgrade and uninstall progress") go only to the apps that declared they know them,
 // and not into the event log: a download pushes once a second, and an app that comes back lists them again.
 const (
 	extensionOperationEvent    = "extension_operation"

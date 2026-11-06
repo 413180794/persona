@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// Manifest is latest.json: the release the publisher put up (docs/hub-update.md「版本清单和签名」).
+// Manifest is latest.json: the release the publisher put up (docs/hub-update.md "Release manifest and signature").
 type Manifest struct {
 	Version      string          `json:"version"`
 	Build        int64           `json:"build"`

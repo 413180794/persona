@@ -168,7 +168,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			rep.Lang = lang
 			got := prompts.RenderVoiceReport(rep)
 			golden(t, "report."+name+"."+lang, got)
-			// Every spoken report says whether the work is done or still going (docs/voice.md「提示词」).
+			// Every spoken report says whether the work is done or still going (docs/voice.md "Prompts").
 			if !slices.ContainsFunc(reportMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
 				t.Errorf("report.%s.%s says neither done nor still working: %s", name, lang, got)
 			}
@@ -287,7 +287,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			pr.Lang = lang
 			got := prompts.RenderVoiceProgress(pr)
 			golden(t, "progress."+name+"."+lang, got)
-			// It still works, and says so: never a result (docs/voice.md「提示词」).
+			// It still works, and says so: never a result (docs/voice.md "Prompts").
 			if !slices.ContainsFunc(progressMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
 				t.Errorf("progress.%s.%s does not say it is still working: %s", name, lang, got)
 			}

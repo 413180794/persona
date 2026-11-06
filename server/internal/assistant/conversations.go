@@ -20,8 +20,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The assistant manages its own conversations (docs/assistant.md「管理自己的对话」, the user's ask on 2026-11-01):
-// list, read, rename, archive, start one and message another. Archiving only hides a conversation (the app's 已归档
+// The assistant manages its own conversations (docs/assistant.md "Managing its own conversations", the user's ask on 2026-11-01):
+// list, read, rename, archive, start one and message another. Archiving only hides a conversation (the app's "Archived"
 // lists it, nothing is deleted); the set is the assistant's (settings assistant.archived), so Claude and Codex
 // conversations are archived alike. Messages between conversations are queued by the assistant while the receiver
 // runs and carry where they come from; a chain of them is cut after a few hops and a few per pair in ten minutes, so
@@ -479,7 +479,7 @@ func (s *Service) assistantConversation(ctx context.Context, id string) (proto.S
 }
 
 // spaceConversation is assistantConversation among the conversations of one space only (in == nil: any): a
-// conversation's tools reach only the conversations of its own space (docs/health.md「隔离」).
+// conversation's tools reach only the conversations of its own space (docs/health.md "Isolation").
 func (s *Service) spaceConversation(ctx context.Context, id string, in *string) (proto.Session, error) {
 	list, err := s.sessions(ctx, s.settings(ctx).MachineID)
 	if errors.Is(err, ErrNoDevice) {

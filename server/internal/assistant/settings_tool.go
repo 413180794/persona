@@ -13,8 +13,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// jarvis_settings: Persona changes its own settings for the user (docs/assistant.md「操作 Persona 自己」). The
-// assistant's own (关于我, its launcher, 主对话派的任务只在主对话里通知) are its to read and change; the hub's (the
+// jarvis_settings: Persona changes its own settings for the user (docs/assistant.md "Operating Persona itself"). The
+// assistant's own ("About me", its launcher, "notify tasks the main chat starts only in the main chat") are its to read and change; the hub's (the
 // inbox's rules, the blocked Claude config directories, mail accounts…) are the hub's settings app's, which asks the
 // user itself (app.tool jarvis_settings). Reads are free; every change is a card on the phone that says what changes
 // (before → after) and is applied only when approved.
@@ -345,7 +345,7 @@ func (s *Service) getLauncher(ctx context.Context) (string, error) {
 	return b.String(), nil
 }
 
-// setLauncher writes the launcher into 模型配置 › 主对话, keeping its model and effort.
+// setLauncher writes the launcher into Model configuration › Main chat, keeping its model and effort.
 func (s *Service) setLauncher(ctx context.Context, v json.RawMessage) (*ownChange, error) {
 	var name string
 	if err := json.Unmarshal(v, &name); err != nil || strings.TrimSpace(name) == "" {

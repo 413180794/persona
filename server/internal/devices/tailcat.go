@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/tunnel"
 )
 
-// Reaching a machine (docs/server.md「tailcat 打洞」): ssh when the hub can, tailcat when it cannot. A machine with
+// Reaching a machine (docs/server.md "tailcat hole punching"): ssh when the hub can, tailcat when it cannot. A machine with
 // both (ssh_host and tailcat_addr) tries ssh first; when ssh fails, tailcat right after. While it runs over tailcat
 // the hub checks ssh every few minutes and goes back to it once it works: ssh is the plain, well-known way, and
 // tailcat may go through Tailscale's shared relays.

@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// healthReportCall asks the machine about the health space's reports (docs/health.md「体检报告」); a node that predates
+// healthReportCall asks the machine about the health space's reports (docs/health.md"Health reports"); a node that predates
 // them says so in words the app can show.
 func healthReportCall(w http.ResponseWriter, r *http.Request, m *Machine, method string, params any) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)

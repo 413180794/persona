@@ -150,7 +150,7 @@ func TestDelegatedAnswerToTheAgent(t *testing.T) {
 	golden(t, "agent_answer.delegated", renderDelegatedAnswer([]agentAnswerItem{{"用哪个方案？", "用 D4"}}, "D4 是 Agent 推荐的，和任务不冲突"))
 }
 
-// 提问代答 is a category of its own: by default on the triage's connection with Opus when that connection serves Claude
+// "Answering questions" is a category of its own: by default on the triage's connection with Opus when that connection serves Claude
 // models, the triage's model on another vendor's; a model the user picks for it wins, and the triage does not move.
 func TestDelegateModel(t *testing.T) {
 	for _, tc := range []struct{ triage, want string }{
@@ -177,7 +177,7 @@ func TestDelegateModel(t *testing.T) {
 		if err != nil || p.CategoryID != "agent.delegate" || len(p.Fields) == 0 || p.Effective.Model != tc.want {
 			t.Fatalf("%s: settings show %+v %v", tc.triage, p, err)
 		}
-		// 继承来源 says what it runs on: the triage's connection, and the model actually on it.
+		// "Inherited From" says what it runs on: the triage's connection, and the model actually on it.
 		if want := "跟「信息筛选」同一个接入（hub 分拣 API），模型 " + tc.want; p.InheritedFrom != want {
 			t.Fatalf("%s: inherited from %q, want %q", tc.triage, p.InheritedFrom, want)
 		}

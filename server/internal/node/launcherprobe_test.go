@@ -321,7 +321,7 @@ func TestProbeInBashAndZsh(t *testing.T) {
 	}
 }
 
-// 测试可用性 runs claude without hooks (Persona's could hold it past the timeout, #3412), and reads the answer behind a
+// "Test" runs claude without hooks (Persona's could hold it past the timeout, #3412), and reads the answer behind a
 // shell integration's escape codes on the same line.
 func TestLauncherCheckRunsWithoutHooks(t *testing.T) {
 	seen := filepath.Join(t.TempDir(), "settings.json")

@@ -130,7 +130,7 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 	if len(h.tasksView(context.Background(), nil)) != 3 {
 		t.Fatal("the app doesn't list a one-off that already ran")
 	}
-	// A hub that was down all morning does not send the 早报 at noon.
+	// A hub that was down all morning does not send the morning briefing at noon.
 	sc.mu.Lock()
 	sc.tasks[0].LastRun = at(9, 0).Add(-24 * time.Hour)
 	sc.mu.Unlock()
@@ -147,7 +147,7 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 	}
 }
 
-// Friday's 早报 ran 72 hours before Monday's, a weekly task's last run 168 hours before: a hub that comes up five
+// Friday's morning briefing ran 72 hours before Monday's, a weekly task's last run 168 hours before: a hub that comes up five
 // minutes late on Monday still sends them, and one too late records the miss, as on any other weekday (#3397: it looked
 // back two minutes only, and the run was dropped without a trace).
 func TestWeekdayTaskCatchesUpOnMonday(t *testing.T) {
@@ -211,7 +211,7 @@ func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("the late run is not in the history: %d runs", n)
 	}
-	// The run of the current LastRun, and 立即运行 (started after it), do set it.
+	// The run of the current LastRun, and "Run now" (started after it), do set it.
 	h.recordRun(ScheduleRun{Kind: "routine", RefID: "r", Status: runOK, SessionID: "s2", of: at(11, 0).UTC()})
 	if r, _ := taskByID(h, "r"); r.LastStatus != runOK || r.LastSessionID != "s2" {
 		t.Fatalf("the latest run's status: %+v", r)
@@ -565,7 +565,7 @@ func TestTasksMovedFromTheOldLists(t *testing.T) {
 	ctx := context.Background()
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	due := time.Now().Add(-time.Minute).Truncate(time.Second)
-	// The 早报 twelve hours from now, never a fixed 09:00: with no last run a daily routine catches up the last couple of
+	// The morning briefing twelve hours from now, never a fixed 09:00: with no last run a daily routine catches up the last couple of
 	// minutes, so a run just after 09:00 Shanghai time ran it too and saw two runs (#664).
 	morning := time.Now().In(loc).Add(12 * time.Hour).Format("15:04")
 	if err := store.PutSetting(ctx, routinesKey, []Routine{{ID: "morning", Title: "早报", Prompt: "x", Time: morning, Enabled: true,
@@ -842,7 +842,7 @@ func TestTaskEditsCannotCreateModelOverrides(t *testing.T) {
 }
 
 // A task switched on again, or retimed to earlier today, after its time has gone by: the run due before that is no
-// run the hub missed, so nothing is recorded as 「Persona 停机，错过了时间」 and the next run comes as usual (#3816).
+// run the hub missed, so nothing is recorded as "Persona was down and missed the time" and the next run comes as usual (#3816).
 // Retimed to later today it still runs today; a hub that really was down still records the miss.
 func TestNoMissRecordedForARunBeforeTheTaskWasArmed(t *testing.T) {
 	f := readyHub() // a set-up computer: a skip here is a missed time, not one for want of a computer
@@ -975,7 +975,7 @@ func TestTaskArmedDuringItsMinuteRunsToday(t *testing.T) {
 	}
 }
 
-// The snapshot tells the 早报 / 晚报 what went wrong overnight without a tool call (#4124): each daily task with how
+// The snapshot tells the morning / evening briefing what went wrong overnight without a tool call (#4124): each daily task with how
 // its last run went, and the scheduled runs that failed or were skipped since yesterday 18:00, newest first, bounded.
 func TestSnapshotScheduleTellsMisses(t *testing.T) {
 	f := newFakeHub()
@@ -1062,8 +1062,8 @@ func TestSnapshotScheduleLateRecordedRunAndTotals(t *testing.T) {
 	}
 }
 
-// A hub set up before kept its 早报 / 晚报 prompts as they were saved: one byte for byte an earlier default gets the
-// current default when the schedule is read, so the 早报 puts what waits on the owner first. One the owner changed,
+// A hub set up before kept its morning / evening briefing prompts as they were saved: one byte for byte an earlier default gets the
+// current default when the schedule is read, so the morning briefing puts what waits on the owner first. One the owner changed,
 // even by a character, and another task holding the old text, are left alone.
 func TestUpgradeDefaultRoutines(t *testing.T) {
 	formerM, formerE := prompts.FormerMorningRoutines(), prompts.FormerEveningRoutines()

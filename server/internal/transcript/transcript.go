@@ -19,7 +19,7 @@ import (
 )
 
 // Limits keep huge tool outputs and images from flooding the phone. Parsing keeps up to maxTextLen of any text, what
-// "看全文" shows; pages and pushes carry a light copy (light): a tool's output cut to pageOutputLen, other text to
+// "View full text" shows; pages and pushes carry a light copy (light): a tool's output cut to pageOutputLen, other text to
 // pageTextLen, images without their data.
 const (
 	maxTextLen    = 1 << 20
@@ -1178,7 +1178,7 @@ func clipTo(s string, n int) string {
 
 // light is the copy of an item that pages and pushes carry; cut says something was left out (fetch it with Full).
 // Long text ends in a line that says it was cut, so apps that do not know FullSize still show it truncated, not whole.
-// Only a tool's output has a "看全文" button in the app, so only its note says to tap for the whole.
+// Only a tool's output has a "View full text" button in the app, so only its note says to tap for the whole.
 func light(it proto.Item, keepImage bool) (_ proto.Item, cut bool) {
 	limit, note := pageTextLen, "\n…（已截断，共 %d 字节）"
 	if it.Kind == proto.KindToolResult {

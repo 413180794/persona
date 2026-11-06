@@ -249,8 +249,8 @@ func TestInteractionLineSaysWhatIsAsked(t *testing.T) {
 	}
 }
 
-// The snapshot's 需要你 is the agents in that state, as the Live Activity, the lists and the badges count them: a
-// decision the triage put no card up for (cards off, muted, 先不管) stays 完成未看 with what it waits for, and is not
+// The snapshot's "Needs you" is the agents in that state, as the Live Activity, the lists and the badges count them: a
+// decision the triage put no card up for (cards off, muted, "Not now") stays "Unread" with what it waits for, and is not
 // listed once seen (#4449).
 func TestSnapshotNeedsYouIsTheState(t *testing.T) {
 	ft := newFleetTestNoStore(t)
@@ -281,7 +281,7 @@ func TestSnapshotNeedsYouIsTheState(t *testing.T) {
 	}
 }
 
-// A muted agent (or one in a muted space) is not 需要你, 工作中 or 完成未看 in the snapshot, as the Live Activity, the
+// A muted agent (or one in a muted space) is not "Needs you", "Working" or "Unread" in the snapshot, as the Live Activity, the
 // Agents badge and the inbox leave it out: the assistant would tell the user an agent waits for them that they muted.
 // It is listed apart, for when they ask about it (#4562).
 func TestSnapshotLeavesMutedAgentsOut(t *testing.T) {

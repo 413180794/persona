@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-// Desktop apps (the Mac app) on the hub, like WeChat's 「Mac 微信已登录」: a desktop registers as one (register_desktop)
+// Desktop apps (the Mac app) on the hub, like WeChat's "WeChat for Mac is logged in": a desktop registers as one (register_desktop)
 // instead of as the phone, so the phone keeps the phone_* tools and its wake pushes; every client hears which
-// desktops are connected (the desktops event, docs/protocol.md), and a phone that turned on 手机静音
+// desktops are connected (the desktops event, docs/protocol.md), and a phone that turned on "Phone Muted"
 // (NotifyPrefs.MuteWhileDesktop) gets no alert pushes while one is.
 
 // desktopView is one connected desktop as the apps see it.
 type desktopView struct {
-	// Device is its device token's id (what 退出 revokes); empty when it connected with the pairing token.
+	// Device is its device token's id (what "Sign out" revokes); empty when it connected with the pairing token.
 	Device string    `json:"device"`
 	Name   string    `json:"name"`
 	Since  time.Time `json:"since"`
@@ -88,7 +88,7 @@ func queue(c *client, b []byte) {
 	}
 }
 
-// desktopOnline: some desktop app is connected (手机静音 holds the phone's pushes back).
+// desktopOnline: some desktop app is connected ("Phone Muted" holds the phone's pushes back).
 func (h *Hub) desktopOnline() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -101,7 +101,7 @@ func (h *Hub) desktopOnline() bool {
 }
 
 // desktopOpen: the desktop app with this push id is connected. It posts its own notifications for agents that turn
-// needs-you or finish (the Mac's MacAttentionWatcher, on the same 设置 › 通知), so those pushes would show twice.
+// needs-you or finish (the Mac's MacAttentionWatcher, on the same Settings › Notifications), so those pushes would show twice.
 func (h *Hub) desktopOpen(device string) bool {
 	if device == "" {
 		return false

@@ -8,7 +8,7 @@ import (
 )
 
 // The inbox (docs/inbox.md) is the manager's: the items and their state (admission, triage, events, mutes, done,
-// the AI 分身, translations) and the /api/v1/inbox… routes, which the hub relays like Routes. The hub keeps the
+// the AI twin, translations) and the /api/v1/inbox… routes, which the hub relays like Routes. The hub keeps the
 // sources: it reads them when a round is due (its poll, a connector's changed) and hands what it read over
 // (MethodInboxCollected); what the inbox does with a source (a mail body, a reply, a connector's group tools…) it asks
 // the hub for on AppInbox. These are the shapes, in their own file so the other moves merge apart.
@@ -219,21 +219,21 @@ type InboxMailMessage struct {
 // asked for when it is needed, kept a few seconds.
 type InboxConfig struct {
 	// Rules are the user's own triage rules (setting inbox.rules, else hub.json's inbox.rules); AgentRules the AI
-	// 分身's judge's (inbox.agent_rules).
+	// twin's judge's (inbox.agent_rules).
 	Rules      string           `json:"rules,omitempty"`
 	AgentRules string           `json:"agent_rules,omitempty"`
 	Agent      InboxAgentConfig `json:"agent"`
 	// LarkAccount is the default Feishu account, the gateway account Feishu items came to unless they say another: the
 	// Feishu extension's default (GET accounts of its messaging source), else hub.json's lark.account (#5098).
 	LarkAccount int `json:"lark_account,omitempty"`
-	// Translate are the languages some device wants mail translated into (设置 › 翻译).
+	// Translate are the languages some device wants mail translated into (Settings › Translation).
 	Translate []string `json:"translate,omitempty"`
 	// Extensions are the connectors a plugin provides (installed, or hub.json's), whether or not a round read them:
 	// their items have no fallback tier (a model sorts them, or they wait), from the manager's start on.
 	Extensions []string `json:"extensions,omitempty"`
 }
 
-// InboxAgentConfig is hub.json's inbox.agent: the AI 分身 (docs/inbox.md).
+// InboxAgentConfig is hub.json's inbox.agent: the AI twin (docs/inbox.md).
 type InboxAgentConfig struct {
 	Enabled bool `json:"enabled"`
 	// Machine and Launcher run the agent; default: the assistant's.
@@ -273,7 +273,7 @@ type InboxChangedItem struct {
 	Title  string `json:"title"`
 }
 
-// InboxReport is what the hub shows of the inbox from the snapshot: the conversations the AI 分身 runs in (their
+// InboxReport is what the hub shows of the inbox from the snapshot: the conversations the AI twin runs in (their
 // finished turn is no push: the draft in the inbox is the result).
 type InboxReport struct {
 	Agents []SessionRef `json:"agents"`

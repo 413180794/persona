@@ -32,7 +32,7 @@ func fakeClaudeHome(t *testing.T, script string) {
 }
 
 // A launcher that exits before reading the message (its node socket gone: "no jarvis node") lost it: the send says
-// so with what it printed, instead of answering ok and leaving the message at 正在送达 for good.
+// so with what it printed, instead of answering ok and leaving the message at "Delivering" for good.
 func TestAssistantSendFailsWhenTheLauncherDoesNotStart(t *testing.T) {
 	fakeClaudeHome(t, "printf '\\033[31mERROR\\033[0m: gitstatus failed\\n\\n' >&2\necho 'jarvisd launch opus: no jarvis node: dial unix node.sock: connect: connection refused' >&2\nexit 1\n")
 	n := codexTestNode(t)

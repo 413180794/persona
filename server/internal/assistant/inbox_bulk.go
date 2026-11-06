@@ -14,8 +14,8 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 )
 
-// Filing many items (or bringing them back) in one request: 全部清理 over what the list shows, 全部看过 / 全部清除 on
-// a section, and their 撤销 (docs/inbox.md「全部清理」). Done stays in Persona, as for one item: Feishu, the mail
+// Filing many items (or bringing them back) in one request: Clean up all over what the list shows, Mark all as seen / Clear all on
+// a section, and their Undo (docs/inbox.md"Clean up all"). Done stays in Persona, as for one item: Feishu, the mail
 // servers and the connectors are not told.
 
 // inboxBulkMax caps one request (the list holds a few hundred items at most).
@@ -39,7 +39,7 @@ type inboxBulkSkip struct {
 }
 
 type inboxBulkResult struct {
-	// Changed are the items this request moved (done or back), as listed now: 撤销 sends these back.
+	// Changed are the items this request moved (done or back), as listed now: "Undo" sends these back.
 	Changed []InboxItem `json:"changed"`
 	// Unchanged were already in the state asked for (a retried request, another device): nothing written.
 	Unchanged []string        `json:"unchanged"`
@@ -67,15 +67,15 @@ func inboxVersion(it *InboxItem) string {
 
 // Bulk actions (POST /api/v1/inbox/bulk).
 const (
-	// bulkDone files as handled (done_by=user): the sections' 全部看过 / 全部清除, and 全部标为已处理 from clients
+	// bulkDone files as handled (done_by=user): the sections' Mark all as seen / Clear all, and Mark all as done from clients
 	// released before #5114, which still send it.
 	bulkDone = "done"
-	// bulkDismiss files as set aside (done_by=dismissed): 全部清理, and 全部忽略 from clients before #5114.
+	// bulkDismiss files as set aside (done_by=dismissed): Clean up all, and Dismiss all from clients before #5114.
 	bulkDismiss = "dismiss"
-	bulkReopen  = "reopen" // 移回 / 撤销
+	bulkReopen  = "reopen" // Move back / Undo
 )
 
-// doneByOf is done_by for the user filing an item: 已处理 or 忽略.
+// doneByOf is done_by for the user filing an item: "Done" or "Ignore".
 func doneByOf(dismiss bool) string {
 	if dismiss {
 		return "dismissed"
@@ -121,11 +121,11 @@ func (s *Service) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarge
 }
 
 // setInboxBulk files (done / dismiss) or brings back (reopen) the targets, or with a filter the open items it picks
-// that arrived by asOf, in one go, written and announced once: what one item's 已处理 does (setInboxDone), many times.
+// that arrived by asOf, in one go, written and announced once: what one item's "Done" does (setInboxDone), many times.
 // Filing is idempotent (an item already done keeps when and why it was done) and leaves what changed since the list
 // the user acted on (a target's version, or under a filter what arrived after asOf), so what came in meanwhile is
 // not filed unseen. Bringing back does not check it (an item done meanwhile by a reply elsewhere comes back too, as
-// with 移回 on one item).
+// with "Move back" on one item).
 func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inboxBulkTarget, filter *inboxBulkFilter,
 	asOf, now time.Time) inboxBulkResult {
 	done := action != bulkReopen

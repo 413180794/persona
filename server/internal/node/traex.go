@@ -26,7 +26,7 @@ import (
 //     exact, no guessing by directory;
 //   - its conversation is a rollout in ~/.trae/cli/sessions/YYYY/MM/DD, the newer Codex format (transcript/codex.go);
 //   - herdr has no state for the pane: a spinner in the terminal title or "esc to interrupt" on screen is working,
-//     a numbered choice on screen is blocked, anything else is a finished turn (the hub turns that into 完成未看 / 已看).
+//     a numbered choice on screen is blocked, anything else is a finished turn (the hub turns that into "Unread" / "Seen").
 
 const traexAgent = "traex"
 

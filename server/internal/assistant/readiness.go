@@ -24,7 +24,7 @@ import (
 // machines, the launcher in effect, the main conversation's last turn, the launcher checks) plus two free questions to
 // the node, both cached: its self-check for Claude Code's version, and claude.auth_status for whether Claude Code is
 // signed in as the launcher runs it. No tokens are spent unless the client asks for a probe. The last result and the
-// user's 以后再说 are kept in the settings (readinessKey).
+// user's "Later" are kept in the settings (readinessKey).
 
 // readinessKey is the setting the readiness record is kept in.
 const readinessKey = "assistant.readiness"
@@ -329,7 +329,7 @@ func (s *Service) readiness(ctx context.Context, probe bool, wait time.Duration)
 		computer = s.readinessStep(lang, StepComputer, StepTodo, proto.CodeNoMachine, "", launcher, "add_computer")
 	case !d.Online && !d.Reachable:
 		computer = s.readinessStep(lang, StepComputer, StepProblem, codeNodeUnreachable, d.Name, launcher, "wake_computer")
-	case d.Version != "" && !d.ModelConfiguration: // a node from before 模型配置 cannot run the main conversation's model
+	case d.Version != "" && !d.ModelConfiguration: // a node from before Model configuration cannot run the main conversation's model
 		computer = s.readinessStep(lang, StepComputer, StepProblem, codeNodeOutdated, d.Name, launcher, "")
 	}
 	if has {
@@ -662,7 +662,7 @@ func readinessSuggestions(lang i18n.Lang, mode string) []ReadinessSuggestion {
 
 // ---- what it asks ----
 
-// readinessProbe runs the one-word check of launcher on machine (launchers.check, what 测试可用性 runs), or answers
+// readinessProbe runs the one-word check of launcher on machine (launchers.check, what "Test" runs), or answers
 // the last one's result when it ran this launcher there within readinessProbeReuse; one at a time.
 func (s *Service) readinessProbe(ctx context.Context, machine, launcher string) *proto.LauncherCheck {
 	b := &s.ready
@@ -892,7 +892,7 @@ func (s *Service) askClaudeAuth(machine, launcher, key string, done chan struct{
 // deviceNodeDoctor is the node's self-check (node/doctor_rpc.go), read-only.
 const deviceNodeDoctor = "node.doctor"
 
-// doctorVersion is the version at the start of the claude-version check's detail (「2.1.308，支持 --plugin-dir」);
+// doctorVersion is the version at the start of the claude-version check's detail ("2.1.308, supports --plugin-dir");
 // none when it could not read one.
 var doctorVersion = regexp.MustCompile(`^\s*v?(\d+\.\d+\.\d+[0-9A-Za-z.+-]*)`)
 

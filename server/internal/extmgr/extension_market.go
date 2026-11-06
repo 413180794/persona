@@ -18,9 +18,9 @@ import (
 	"github.com/nwverse/persona/server/internal/netproxy"
 )
 
-// Plugin markets (docs/extensions.md「扩展市场」): the hub keeps the markets the user registered and their indexes, lists
-// their plugins as one catalog, and installs one from a market. A device with full rights may do all of this; other
-// sources (a directory, a file, a URL, an upload) stay with the hub's machine and the admin UI.
+// Plugin markets (docs/extensions.md "Extension markets"): the hub keeps the markets the user registered and their
+// indexes, lists their plugins as one catalog, and installs one from a market. A device with full rights may do all of
+// this; other sources (a directory, a file, a URL, an upload) stay with the hub's machine and the admin UI.
 
 // marketStale is how old an index may be before the catalog reads it again (in the background).
 const marketStale = 6 * time.Hour
@@ -55,8 +55,8 @@ type MarketView struct {
 	AddedAt     time.Time  `json:"added_at"`
 	// Official: the market every hub has without adding it (extension.Official), listed first.
 	Official bool `json:"official,omitempty"`
-	// Signature is the index's signature (docs/extensions.md「签名」): signed / unsigned / invalid / key_changed, and the
-	// key it is signed by.
+	// Signature is the index's signature (docs/extensions.md "Signatures"): signed / unsigned / invalid / key_changed,
+	// and the key it is signed by.
 	Signature MarketSignatureView `json:"signature"`
 }
 
@@ -223,7 +223,7 @@ func (h *Manager) market(rec extension.MarketRecord) (*extension.Market, error) 
 }
 
 // marketRead reads a market's index now and keeps it (or why it could not). An index its signature refuses is not
-// taken: the last good one stays, and the market says why (docs/extensions.md「签名」).
+// taken: the last good one stays, and the market says why (docs/extensions.md "Signatures").
 func (h *Manager) marketRead(ctx context.Context, id string) (MarketView, error) {
 	return h.marketReadAs(ctx, id, false)
 }
@@ -351,7 +351,7 @@ func githubHost(host string) bool {
 	return host == "github.com" || strings.HasSuffix(host, ".github.com") || host == "githubusercontent.com" || strings.HasSuffix(host, ".githubusercontent.com")
 }
 
-// marketName is what the apps show for a market: the official one is 官方扩展 in l whatever its index calls itself
+// marketName is what the apps show for a market: the official one is "Official extensions" in l whatever its index calls itself
 // (#5017), the others the name their index gives.
 func marketName(l i18n.Lang, rec extension.MarketRecord) string {
 	if extension.Official.Is(rec.Spec) {

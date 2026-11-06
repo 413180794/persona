@@ -3,15 +3,15 @@ package assistant
 import "time"
 
 // The processing conversation bound to an event (InboxItem.Handling) and the manager's suggestion on it
-// (InboxItem.Suggestion), docs/inbox.md「事件与处理链条（第一期）」.
+// (InboxItem.Suggestion), docs/inbox.md "Events and the handling chain (phase 1)".
 
 // Handling states.
 const (
-	HandlingLooking = "looking" // the manager is on it (进行中, AI 正在看)
+	HandlingLooking = "looking" // the manager is on it ("In progress", "AI is looking")
 	HandlingAgent   = "agent"   // a sub-session it started is working
 	HandlingWaiting = "waiting" // a confirmed action went out: waiting for the other side
 	HandlingDone    = "done"    // it finished this round (a suggestion out, or a conclusion)
-	HandlingFailed  = "failed"  // failed or timed out: back to 需要你 without a suggestion
+	HandlingFailed  = "failed"  // failed or timed out: back to "Needs you" without a suggestion
 )
 
 // HandlingOwner is the only manager of phase 1.

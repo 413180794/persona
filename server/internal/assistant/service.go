@@ -148,7 +148,7 @@ func fullRole(r *http.Request) bool {
 	return role == "" || role == roleFull
 }
 
-// owner is how the assistant calls the user: hub.json's assistant.owner, else 「用户」.
+// owner is how the assistant calls the user: hub.json's assistant.owner, else the Chinese word for "user".
 func (s *Service) owner(ctx context.Context) string {
 	if o := strings.TrimSpace(s.hello(ctx).Owner); o != "" {
 		return o
@@ -165,7 +165,7 @@ func (s *Service) hello(ctx context.Context) Hello {
 	return h
 }
 
-// lang is the user's language (the hub's hello, docs/i18n.md「协议」): what the assistant's own texts for people are
+// lang is the user's language (the hub's hello, docs/i18n.md "Protocol"): what the assistant's own texts for people are
 // written in when no request is in front of them (task notices, cards, records in a conversation).
 func (s *Service) lang(ctx context.Context) i18n.Lang {
 	return i18n.Lang(s.hello(ctx).Locale).Or(i18n.Default)
@@ -175,7 +175,7 @@ func (s *Service) lang(ctx context.Context) i18n.Lang {
 func (s *Service) call(ctx context.Context, device, method string, params, out any) error {
 	if p, ok := params.(map[string]any); ok && method == DeviceAssistantSend {
 		if id, _ := p["session_id"].(string); id != "" && s.supervising(id) {
-			s.releasePushes(ctx, id) // something else speaks there: its turns are pushed again (a 督办 message holds them anew)
+			s.releasePushes(ctx, id) // something else speaks there: its turns are pushed again (a supervision message holds them anew)
 		}
 	}
 	raw, err := json.Marshal(params)
@@ -368,7 +368,7 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 		view(id, here).Queued = q // a conversation sent to is on the assistant's machine
 	}
 	for _, id := range s.heldConversations() {
-		view(id, here).Supervising = true // a 督办 message started its turn: not pushed (supervise.go)
+		view(id, here).Supervising = true // a supervision message started its turn: not pushed (supervise.go)
 	}
 	if cfg.Main != "" { // not snap.Profile: that is left out while a settings read fails
 		view(cfg.Main, cfg.MachineID).Title = mainTitle // never its first message, a model's name or a rename (#1313)

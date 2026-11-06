@@ -575,7 +575,7 @@ func DoctorCommand(ctx context.Context, args []string, out io.Writer) (failed bo
 // doctorLabels are the line prefixes of the text report, the same words `hub doctor` uses (hub/doctor.go).
 var doctorLabels = map[string]string{DoctorOK: "正常", DoctorWarn: "注意", DoctorFail: "有问题"}
 
-// PrintDoctor writes rep, one line per check: label｜name：what was found；what to do about it.
+// PrintDoctor writes rep, one line per check: label | name: what was found; what to do about it (full-width separators).
 func PrintDoctor(out io.Writer, rep DoctorReport) {
 	fmt.Fprintf(out, "node 自检（%s）\n", rep.Dir)
 	counts := map[string]int{}

@@ -27,7 +27,7 @@ import (
 // asks only what its plugins need (models_hub.go). Every model call is made from here, with the keys only the
 // assistant opens.
 
-// assistantRuntimes is what GET /model-config offers for 主对话's runtime.
+// assistantRuntimes is what GET /model-config offers for the main chat's runtime.
 var assistantRuntimes = []string{proto.AssistantRuntimeCLI, proto.AssistantRuntimeAgentSDK}
 
 type modelRecord struct {
@@ -35,7 +35,7 @@ type modelRecord struct {
 	Binding  ModelBinding `json:"binding"`
 }
 
-// ModelProvider is one provider as 设置 › 模型配置 offers it: never its key.
+// ModelProvider is one provider as Settings › Model configuration offers it: never its key.
 type ModelProvider struct {
 	ID       string        `json:"id"`
 	Name     string        `json:"name"`
@@ -85,7 +85,7 @@ var modelPurposes = []ModelPurpose{
 	{ID: "agent.new", Group: "group_default", Kind: "launcher", Uses: []ModelUse{{Name: "use_new_agent"}, {Name: "use_inbox_agent"}, {Name: "use_lark_agent"}}},
 	{ID: "kb", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_translate"}, {Name: "use_draft"}, {Name: "use_knowledge"}, {Name: "use_projects"}, {Name: "use_titles"}}},
 	{ID: "inbox.triage", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_triage"}, {Name: "use_importance"}, {Name: "use_reply_or_agent"}}},
-	// 提问代答 (delegate.go) is a category of its own, so it can run on a stronger model than the triage's (#3029).
+	// "Answering agents' questions" (delegate.go) is a category of its own, so it can run on a stronger model than the triage's (#3029).
 	{ID: "agent.delegate", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_delegate"}}},
 	{ID: "inbox.agent", Group: "group_agents", Kind: "launcher", Parent: "agent.new"},
 	{ID: "lark.agent", Group: "group_agents", Kind: "launcher", Parent: "agent.new"},
@@ -101,8 +101,8 @@ var modelPurposes = []ModelPurpose{
 	{ID: "assistant.title", Group: "group_processing", Kind: "api", Parent: "kb"},
 	{ID: "agent.title", Group: "group_processing", Kind: "api", Parent: "kb"},
 	{ID: "todo.title", Group: "group_processing", Kind: "api", Parent: "kb"}, // a task's todo (assistant/todo_titles.go)
-	// Scheduled tasks (早报…) run in the assistant's directory with its instructions, memory and tools: they are the
-	// assistant's conversations, on 主对话's model, not new Agents (#1544; #697 had them under Agents, plain Claude Code
+	// Scheduled tasks (the morning briefing…) run in the assistant's directory with its instructions, memory and tools: they are the
+	// assistant's conversations, on the main chat's model, not new Agents (#1544; #697 had them under Agents, plain Claude Code
 	// by default, which is not logged in on every hub machine).
 	{ID: "schedule", Group: "group_assistant", Kind: "launcher", Parent: "assistant"},
 }
@@ -329,7 +329,7 @@ func (s *Service) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBindi
 		b, err := s.resolveModel(ctx, p.Parent)
 		return b, p.Parent, err
 	}
-	if p.ID == "agent.delegate" { // 信息筛选's connection, with a stronger model on it (delegateModel)
+	if p.ID == "agent.delegate" { // "Sorting"'s connection, with a stronger model on it (delegateModel)
 		b, err := s.resolveModel(ctx, "inbox.triage")
 		if err == nil {
 			b = s.delegateBaseline(ctx, b)
@@ -364,11 +364,11 @@ func (s *Service) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBindi
 	return ModelBinding{Provider: p.ID}, mc(l, "source_extension_default"), nil
 }
 
-// delegateModel is what 提问代答 runs on unless the user picks another (2026-11-05, the user's call): it decides for the
+// delegateModel is what "Answering agents' questions" runs on unless the user picks another (2026-11-05, the user's call): it decides for the
 // user whether an agent's question is theirs, a cheap triage model is not up to that.
 const delegateModel = "claude-opus-5-5"
 
-// delegateBaseline is 信息筛选's binding b with delegateModel on it when its connection serves Claude models (its
+// delegateBaseline is "Sorting"'s binding b with delegateModel on it when its connection serves Claude models (its
 // model is one); b as it is otherwise: a connection to another vendor's models, or one that cannot be called, keeps
 // its own model.
 func (s *Service) delegateBaseline(ctx context.Context, b ModelBinding) ModelBinding {
@@ -384,12 +384,12 @@ func (s *Service) delegateBaseline(ctx context.Context, b ModelBinding) ModelBin
 }
 
 // modelAutoSource is (the catalog name of) what modelBaseline calls the default of an API use that runs on
-// fallbackAPIProvider's pick; 继承来源 names the pick (inheritedLabel).
+// fallbackAPIProvider's pick; "Inherited from" names the pick (inheritedLabel).
 const modelAutoSource = "source_auto"
 
-// inheritedLabel is what 继承来源 says for p, whose default is base (from: what modelBaseline calls it). Nothing when
+// inheritedLabel is what "Inherited from" says for p, whose default is base (from: what modelBaseline calls it). Nothing when
 // p picks its own connection: none of it is inherited. Where the default is not a fixed place it names what it
-// actually runs on: 提问代答's connection and the model on it (Opus only when that connection serves Claude models,
+// actually runs on: "Answering agents' questions"'s connection and the model on it (Opus only when that connection serves Claude models,
 // delegateBaseline), the connection an unconfigured API use falls back to.
 func inheritedLabel(l i18n.Lang, p ModelPurpose, base ModelBinding, from string, providers []ModelProvider) string {
 	if p.Override.Provider != "" {
@@ -413,7 +413,7 @@ func inheritedLabel(l i18n.Lang, p ModelPurpose, base ModelBinding, from string,
 	return from
 }
 
-// modelNoAPIStatus explains an API use with nothing to call: launchers like 「Claude Code 默认」 only start a CLI on a
+// modelNoAPIStatus explains an API use with nothing to call: launchers like "Claude Code default" only start a CLI on a
 // computer, so they never show up for these uses. A catalog name.
 const modelNoAPIStatus = "status_no_api"
 
@@ -577,7 +577,7 @@ func (s *Service) modelBindingFingerprint(ctx context.Context, b ModelBinding) s
 	return hex.EncodeToString(sum[:])
 }
 
-// modelPurpose is purpose id as 设置 › 模型配置 shows it: what it is set to, what it runs on, and how that stands.
+// modelPurpose is purpose id as Settings › Model configuration shows it: what it is set to, what it runs on, and how that stands.
 func (s *Service) modelPurpose(ctx context.Context, id string, providers []ModelProvider) (ModelPurpose, error) {
 	p, err := s.modelPurposeDef(ctx, id)
 	if err != nil {
@@ -827,7 +827,7 @@ func (s *Service) providerModelUses(ctx context.Context, provider string) ([]str
 
 // triageInUse refuses a change that leaves inbox.triage uncallable while plugins that need it are on: 422
 // triage_model_in_use, naming them (not 409: the apps read a 409 from model-config as an edit conflict and would hide
-// the message; a 422 they show as it is). nil when the change may go (docs/extensions.md「收件箱的通用规则」).
+// the message; a 422 they show as it is). nil when the change may go (docs/extensions.md "General inbox rules").
 func (s *Service) triageInUse(ctx context.Context, id string, effective ModelBinding) (map[string]any, error) {
 	if id != "inbox.triage" || s.modelUsable(ctx, effective) {
 		return nil, nil
@@ -995,7 +995,7 @@ func (s *Service) applyPickedModel(ctx context.Context, params map[string]any) e
 	if e, _ := params["effort"].(string); e != "" {
 		b.Effort = e
 	}
-	// A pick is a launcher and model for one message; the runtime stays 主对话's.
+	// A pick is a launcher and model for one message; the runtime stays the main chat's.
 	configured, err := s.resolveModel(ctx, "assistant")
 	if err != nil {
 		return err

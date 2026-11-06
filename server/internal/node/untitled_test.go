@@ -20,7 +20,7 @@ func TestUntitledSkipsContextBlocks(t *testing.T) {
 		t.Fatalf("title of a message with only a block = %q, want the block's title", s.Title)
 	}
 	// A main conversation handed over starts with the old one's summary: titled by the block, never by a clip of
-	// its opening tag (「<jarvis-context kind="context" title="接上…」).
+	// its opening tag (`<jarvis-context kind="context" title="…`, its title saying it continues the old one).
 	s = proto.Session{}
 	untitled(&s, quickMeta{first: `<jarvis-context kind="context" title="接上旧主对话" url="">` + "\n" + strings.Repeat("旧对话的摘要。", 40)})
 	if s.Title != "接上旧主对话" {

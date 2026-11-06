@@ -289,7 +289,8 @@ func TestComputerResultCutsLongOutput(t *testing.T) {
 	}
 }
 
-// The machine page's 安装 Cua Driver, 去授权 and 取消 start and stop the node's job; its state comes back on the machine.
+// The machine page's "Install Cua Driver", "Grant access" and "Cancel" start and stop the node's job; its state comes
+// back on the machine.
 func TestComputerJobs(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	ctx := context.Background()
@@ -322,7 +323,7 @@ func TestComputerJobs(t *testing.T) {
 		t.Fatalf("%v", out)
 	}
 	call(t, mux, "POST", "/api/v1/machines/mac/computer/grant", h.cfg.Token, "")
-	// 锁上 and the app's word that it unlocks it over the live screen (#1507 a-2): the second only goes to the log.
+	// "Lock" and the app's word that it unlocks it over the live screen (#1507 a-2): the second only goes to the log.
 	if code, out := call(t, mux, "POST", "/api/v1/machines/mac/computer/unlocking", h.cfg.Token, ""); code != 200 || out["enabled"] != true {
 		t.Fatalf("unlocking: %d %v", code, out)
 	}

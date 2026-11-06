@@ -21,7 +21,7 @@ func TestCodexPaneTurnError(t *testing.T) {
 	if s.TurnError != "unexpected status 503 Service Unavailable: upstream overloaded" || s.TurnErrorKind != proto.TurnErrorTransient {
 		t.Fatalf("failed turn: %q, %q", s.TurnError, s.TurnErrorKind)
 	}
-	// 继续 went in: a turn runs again, the error is gone. (A growing rollout is re-read at most every
+	// "continue" went in: a turn runs again, the error is gone. (A growing rollout is re-read at most every
 	// metaMinInterval: forget the last read.)
 	writeRollout(t, n.home, remoteRaw, n.home, at, at.Add(time.Second), append(failed, event("task_started"))...)
 	forgetMetas(n)
@@ -36,7 +36,7 @@ func TestCodexPaneTurnError(t *testing.T) {
 	}
 }
 
-// Failed, then 继续 ran and ended well within metaMinInterval, before the rollout is re-read: the throttled read must
+// Failed, then "continue" ran and ended well within metaMinInterval, before the rollout is re-read: the throttled read must
 // not bring the old error back, which would have the hub continue a turn that went fine (#2185).
 func TestCodexPaneStaleTurnError(t *testing.T) {
 	n, _, _, _ := daemonPane(t)

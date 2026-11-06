@@ -85,7 +85,7 @@ func TestCodexStdioOpenRolloutIsVisibleButNeverWritable(t *testing.T) {
 	t.Fatal("open stdio rollout omitted")
 }
 
-// 2026-11-02: a task at work in the Codex desktop App showed on the phone under 空闲的空间. The App's own app-server
+// 2026-11-02: a task at work in the Codex desktop App showed on the phone under "Idle Spaces". The App's own app-server
 // talks stdio, so node only sees which rollouts it holds open and called each unknown; the rollout says whether a
 // turn runs, even when one turn has written more than the tail node reads.
 func TestCodexStdioOpenRolloutStatusFollowsItsTurn(t *testing.T) {
@@ -140,7 +140,7 @@ func TestCodexStdioOpenRolloutStatusFollowsItsTurn(t *testing.T) {
 }
 
 // #2425: a bridge kept stdio app-servers for months, holding open the rollouts of threads they once loaded; each
-// showed 完成未看 (「app-server 正在运行」) all along and stayed after the user looked. Untouched for a day, a held
+// showed "Unread" ("app-server is running") all along and stayed after the user looked. Untouched for a day, a held
 // rollout is history again; a fresh one still follows its turn, and a codex TUI holding one is not called app-server.
 func TestCodexHeldOpenRolloutGoesOfflineWhenUntouched(t *testing.T) {
 	cases := []struct {
@@ -241,7 +241,7 @@ func TestCodexRolloutNoLongerHeldGoesOffline(t *testing.T) {
 	}
 }
 
-// #2425 on a real machine: two months-old sessions said 「app-server 正在运行」 while the only app-server there was
+// #2425 on a real machine: two months-old sessions said "app-server is running" while the only app-server there was
 // another tool's, under its own CODEX_HOME, holding nothing. Their rollouts were held by two codex TUIs left open in
 // tmux, whose home is the user's, written as a symlink (/home → /data00/home). The rollout is the TUI's, not the
 // app-server's: named as Codex, and history once it has sat untouched for a day.

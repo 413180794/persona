@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Starting the assistant's conversations (docs/assistant.md「进程」「新建主对话」): its directory on the machine is
+// Starting the assistant's conversations (docs/assistant.md "Processes", "New main chat"): its directory on the machine is
 // prepared first (the CLAUDE.md written from what the hub tells it, the connectors' and plugins' skills), the model
 // configuration applied, then the node's assistant.send. The main conversation is one of them; putting it away for a
 // new one keeps what it left for the next one's first message.
@@ -113,7 +113,7 @@ func (s *Service) prepareSpace(ctx context.Context, machine, space string) (stri
 }
 
 // startOn starts a new conversation on machine: the directory prepared, the model configuration of p.Purpose ("" is
-// 主对话's) applied, then the node's assistant.send (headless: no herdr tab, streamed tokens, any launcher per message).
+// the main chat's) applied, then the node's assistant.send (headless: no herdr tab, streamed tokens, any launcher per message).
 func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (proto.Session, error) {
 	if p.Space != "" && p.Space != SpaceHealth {
 		return proto.Session{}, badRequest(fmt.Errorf("space %q: health or none", p.Space))
@@ -139,7 +139,7 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 	s.startRefused(ctx, machine, used, err) // Claude Code or the launcher missing: the readiness's claude step
 	if err != nil {
 		if d, ok := s.device(ctx, machine); ok {
-			err = apierr.OnMachine(err, d.Name) // claude_missing on 小林的 MacBook (docs/onboarding.md 4.6)
+			err = apierr.OnMachine(err, d.Name) // claude_missing on a sample user's MacBook (docs/onboarding.md 4.6)
 		}
 		return proto.Session{}, err
 	}
@@ -179,7 +179,7 @@ func (s *Service) startConversation(ctx context.Context, p startParams) (proto.S
 		Origin: p.Origin, OriginRef: p.OriginRef})
 }
 
-// Start is assistant.start: a conversation one of the hub's features starts (the inbox's AI 分身), or the channels'
+// Start is assistant.start: a conversation one of the hub's features starts (the inbox's AI twin), or the channels'
 // (feishu.go, channels_plugin.go). It is named after its first turn like the app's, unless it is untitled.
 func (s *Service) Start(ctx context.Context, p StartParams) (proto.Session, error) {
 	sess, err := s.start(ctx, p)
@@ -405,7 +405,7 @@ func (s *Service) startRoutes() {
 			Effort         string        `json:"effort"`
 			Main           bool          `json:"main"` // becomes the main conversation
 			// Purpose is the model purpose it runs under ("assistant" when empty; a plugin's /agent asks for its own);
-			// MachineID one of the hub's machines instead of the assistant's (docs/protocol.md「助手」).
+			// MachineID one of the hub's machines instead of the assistant's (docs/protocol.md "Assistant").
 			Purpose   string `json:"purpose"`
 			MachineID string `json:"machine_id"`
 			Space     string `json:"space"` // "health": a conversation of the health space (docs/health.md)
@@ -535,7 +535,7 @@ func (s *Service) SendParams(ctx context.Context, p SendParams) (map[string]any,
 
 // sendModel puts into p (a message for one of the assistant's conversations, sid on machine) which launcher and model
 // run it: one picked in the chat's menu (sent with the message) wins; else the main conversation and a scheduled
-// task's own conversation (早报's, #1544) follow 模型配置 › 主对话, and the others keep what they run. Those two follow
+// task's own conversation (the morning briefing's, #1544) follow Model configuration › Main chat, and the others keep what they run. Those two follow
 // the setting on every message, not what they ran last: once a run had moved one to another launcher, every later
 // message stayed there (#1518). A launcher or model that is gone falls back to the assistant's. A picked one is checked
 // and fingerprinted like a configured one. The phone's messages, the node's own and the follow-ups the assistant
@@ -613,7 +613,7 @@ func (s *Service) Rename(ctx context.Context, p RenameParams) (json.RawMessage, 
 
 // answerLanguage is what the CLAUDE.md asks the assistant to answer in, and the language the inbox's summaries and
 // the conversations' titles are written in: the user's language by its own name, "" for zh-Hans (the prompts then
-// say 用中文, as they did before i18n).
+// say "use Chinese", as they did before i18n).
 func answerLanguage(locale string) string {
 	l := i18n.Lang(locale)
 	if !i18n.Valid(l) || l == i18n.ZhHans {

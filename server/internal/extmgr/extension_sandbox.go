@@ -20,9 +20,9 @@ import (
 )
 
 // An installed extension's program runs in a sandbox, reaching out only through the hub's egress proxy and only to the
-// hosts of its permissions.network (docs/extensions.md「沙箱」「出网」). Whether it does: the owner's choice for it,
-// else on unless it came from a trusted market (the official ones, and those hub.json trusts by their signing keys).
-// The extensions already installed when this came keep running as they did (seeded off).
+// hosts of its permissions.network (docs/extensions.md "Sandbox" "Network egress"). Whether it does: the owner's choice
+// for it, else on unless it came from a trusted market (the official ones, and those hub.json trusts by their signing
+// keys). The extensions already installed when this came keep running as they did (seeded off).
 
 // sandboxProbe is what this machine can do (tests replace it).
 var sandboxProbe = sandbox.Probe

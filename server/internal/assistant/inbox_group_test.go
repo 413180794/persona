@@ -263,7 +263,7 @@ func TestInboxGroupByTheModel(t *testing.T) {
 }
 
 // An answer that does not hold up is the model being unavailable: the connector's fallback groups the batch, with the
-// events the model would have seen, and the events keep its rule tiers (按规则, triaged_by rules) for good: the model
+// events the model would have seen, and the events keep its rule tiers ("By rule", triaged_by rules) for good: the model
 // coming back sorts nothing again.
 func TestInboxGroupFallsBackOnABadAnswer(t *testing.T) {
 	g := &groupLark{batch: groupBatch(), placed: map[string]bool{}, fallback: connector.GroupFallbackResult{

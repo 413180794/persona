@@ -16,7 +16,7 @@ import (
 
 const deployedReply = "已合入 https://github.com/o/r/pull/9 并已部署到 n37。打开 https://hub.example.com/settings?tab=feishu 能看到新开关"
 
-// acceptService is reportService with the small model answering the 请验收 lines, the cards' updates and notes kept.
+// acceptService is reportService with the small model answering the "Please verify" lines, the cards' updates and notes kept.
 func acceptService(t *testing.T) (*Service, *fakeHub, func() []string) {
 	t.Helper()
 	s, f, posts := reportService(t, true)
@@ -26,7 +26,7 @@ func acceptService(t *testing.T) (*Service, *fakeHub, func() []string) {
 	return s, f, posts
 }
 
-// askOf is task id's 请验收 ask as it is now (nil: none), read under the lock the hub's goroutines write it under.
+// askOf is task id's "Please verify" ask as it is now (nil: none), read under the lock the hub's goroutines write it under.
 func askOf(s *Service, id string) *acceptAsk {
 	s.accept.mu.Lock()
 	defer s.accept.mu.Unlock()
@@ -62,8 +62,8 @@ func waitAcceptCard(t *testing.T, s *Service, id string, posts func() []string) 
 	waitFor(t, "the 请验收 card", func() bool { a := askOf(s, id); return a != nil && a.MessageID != "" && acceptCardOf(posts()) != "" })
 }
 
-// A turn that says the work is deployed gets a 请验收 card: what changed, a link straight to the page (one from the
-// reply, never made up), how to check, and 通过. 通过 marks the task verified.
+// A turn that says the work is deployed gets a "Please verify" card: what changed, a link straight to the page (one from the
+// reply, never made up), how to check, and "Pass". "Pass" marks the task verified.
 func TestDeployedTaskAsksForAcceptance(t *testing.T) {
 	s, f, posts := acceptService(t)
 	todo := startedTask(t, s, f)
@@ -197,7 +197,7 @@ func TestUnacceptedInTheMorningBriefing(t *testing.T) {
 }
 
 // A change asked for on the card of a task the hub closed meanwhile reopens it: while its agent works on the change
-// the task is open, and the agent's next turn is followed again — the next deploy gets a new 请验收 card (#3457).
+// the task is open, and the agent's next turn is followed again — the next deploy gets a new "Please verify" card (#3457).
 func TestAcceptanceFeedbackReopensTheClosedTask(t *testing.T) {
 	s, f, posts := acceptService(t)
 	todo := startedTask(t, s, f)
@@ -249,15 +249,15 @@ func TestAcceptanceFeedbackReopensTheClosedTask(t *testing.T) {
 	})
 }
 
-// Approval with a completion particle (通过了, 可以啊, 没问题了呀, ok了, 验收通过了) still marks the task
-// verified. Questions (可以了吗, 通过了？/?) and negations (不通过, 通过不了, 不行) stay feedback for the agent.
+// Approval with a completion particle (the words below, "verify: passed" too) still marks the task
+// verified. Questions (a question particle or mark) and negations ("not passed", "no good") stay feedback for the agent.
 func TestPassWordsParticles(t *testing.T) {
 	pass := []string{
 		"通过", "通过。", "通过了。", "通过啦！", "验收通过了",
 		"可以了", "没问题了", "ok了", "OK啦",
 		"通过呀", "通过咯", "通过喽", "可以呗", "好哒", "可以啊", "没问题啊",
 		"通过了呀",    // two completion particles, still an approval
-		"好", "好的", // bare 好 already matched before this change; the behavior is kept
+		"好", "好的", // bare "ok" already matched before this change; the behavior is kept
 	}
 	for _, in := range pass {
 		if !passWords.MatchString(in) {
@@ -276,7 +276,7 @@ func TestPassWordsParticles(t *testing.T) {
 	}
 }
 
-// A 请验收 card whose task ends without the hub's auto-judge — the owner closes it in the todos, or a supervision
+// A "Please verify" card whose task ends without the hub's auto-judge — the owner closes it in the todos, or a supervision
 // review does — can never be passed: it is neither reminded nor counted in the morning briefing, and is dropped.
 func TestAcceptanceAskEndedElsewhere(t *testing.T) {
 	cases := []struct {
@@ -302,7 +302,7 @@ func TestAcceptanceAskEndedElsewhere(t *testing.T) {
 		}, true},
 		{"still open", func(context.Context, *Service, string) {}, true},
 	}
-	// setup deploys a task until its 请验收 card is out; the case then ends it.
+	// setup deploys a task until its "Please verify" card is out; the case then ends it.
 	setup := func(t *testing.T) (*Service, *fakeHub, func() []string, string) {
 		s, f, posts := acceptService(t)
 		todo := startedTask(t, s, f)
@@ -522,7 +522,7 @@ func TestAcceptanceReopenRound(t *testing.T) {
 // deployed again) is not the card the sweep judged, so it stays (#4649).
 func TestAcceptanceSweepKeepsANewRound(t *testing.T) {
 	ctx := context.Background()
-	// setup deploys a task until its 请验收 card is out and returns a hook that, the first time it runs, asks the next
+	// setup deploys a task until its "Please verify" card is out and returns a hook that, the first time it runs, asks the next
 	// round's card the way the next deploy does (after reopen, when given).
 	setup := func(t *testing.T, reopen bool) (*Service, func() []string, string, func(string)) {
 		s, f, posts := acceptService(t)

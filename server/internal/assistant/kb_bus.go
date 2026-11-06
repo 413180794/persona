@@ -17,7 +17,7 @@ import (
 )
 
 // What the hub asks of the knowledge base and tells it (assistantwire.MethodKB*, EventKB*; BusHub passes them here):
-// the hub's own features that read it (the inbox's AI 分身, the agents' triage), deleting a source's data, the posts
+// the hub's own features that read it (the inbox's AI twin, the agents' triage), deleting a source's data, the posts
 // of the connectors' programs; a source with something new, an agent's finished turn.
 
 // kbRequest answers one of the hub's kb.* calls; false for any other method.
@@ -110,7 +110,7 @@ func (s *Service) kbEvent(ctx context.Context, name string, params json.RawMessa
 }
 
 // kbChatContext is what the knowledge base knows about a chat and its first three projects (shared/kb_blocks.md):
-// the inbox's AI 分身 starts with it, a plugin's /agent reads it (GET /api/v1/kb/chats/{id}/context). nil without
+// the inbox's AI twin starts with it, a plugin's /agent reads it (GET /api/v1/kb/chats/{id}/context). nil without
 // such a chat.
 func (s *Service) kbChatContext(ctx context.Context, id string) *prompts.KBContext {
 	e, _ := s.kbGet(ctx)

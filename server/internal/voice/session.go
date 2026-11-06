@@ -18,8 +18,8 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// One voice conversation: the app's WebSocket on one side (docs/extensions.md「语音」), a GPT-Live session on the other.
-// The upstream session can drop mid-conversation: the app's socket stays open, shows 「重新连接中」 and the
+// One voice conversation: the app's WebSocket on one side (docs/extensions.md "Voice"), a GPT-Live session on the other.
+// The upstream session can drop mid-conversation: the app's socket stays open, shows "Reconnecting" and the
 // conversation goes on in a new session told what was said so far.
 
 // stableAfter is how long an upstream session holds before a drop of it no longer counts toward maxReconnects.
@@ -53,7 +53,7 @@ type conversation struct {
 	role string
 	lang i18n.Lang
 	runs *tracker
-	// version is the voice wire the app speaks: 1, or 2 when its start says so (docs/voice.md「协议变更」). target is
+	// version is the voice wire the app speaks: 1, or 2 when its start says so (docs/voice.md "Protocol changes"). target is
 	// the conversation a protocol 2 call is bound to, fixed before ready; prep its binding, taken while the upstream
 	// connects; resume the runs the app handed back (a call picked up again).
 	version int
@@ -100,7 +100,7 @@ type conversation struct {
 	// it hands over is the card's answer.
 	askCur  string
 	askTold bool
-	// stopAt is when 「停止：」 began to interrupt the bound conversation (zero: it did not, or that failed): a card
+	// stopAt is when "Stop:" began to interrupt the bound conversation (zero: it did not, or that failed): a card
 	// that goes from then on was closed by it (asks.go).
 	stopAt time.Time
 
@@ -206,7 +206,7 @@ func (c *conversation) sendApp(v any) {
 
 func (c *conversation) fail(msg string, fatal bool) { c.failCode("", msg, fatal) }
 
-// failCode is fail with the error's code (docs/voice.md「扩展 → App」), none when code is "".
+// failCode is fail with the error's code (docs/voice.md "Extension → app"), none when code is "".
 func (c *conversation) failCode(code, msg string, fatal bool) {
 	f := map[string]any{"type": "error", "message": msg, "fatal": fatal}
 	if code != "" {
@@ -266,7 +266,7 @@ func (c *conversation) begin() error {
 
 // negotiate reads what the app's start asks for: the protocol, the conversation to bind (protocol 2: its binding starts
 // now, while the upstream connects), what it hands back of a call it picks up again. Another extension calling has
-// protocol 1 only (docs/voice.md「权限」): the main conversation, never a target of its choosing.
+// protocol 1 only (docs/voice.md "Permissions"): the main conversation, never a target of its choosing.
 func (c *conversation) negotiate(s *startFrame) error {
 	full := c.role == "" || c.role == roleFull
 	if s.Target != nil && !full {
@@ -528,17 +528,17 @@ func (c *conversation) dial(ctx context.Context, p *Provider, w wire, model stri
 	return up, nil
 }
 
-// toolSet is which of the plugin's function tools the session declares (docs/voice.md「权限」): all of them for a full
+// toolSet is which of the plugin's function tools the session declares (docs/voice.md "Permissions"): all of them for a full
 // device; for another extension calling (role extension) only ask_jarvis, to the main conversation, which is what it may
 // reach: the others reach past that (the knowledge base, any agent), and without a tool the measured service hands
-// nothing over at all (docs/lessons/voice.md「其他行为」); none for an upstream that takes no tools.
+// nothing over at all (docs/lessons/voice.md "Other behavior"); none for an upstream that takes no tools.
 func (c *conversation) toolSet() []string {
 	switch {
 	case !c.p.tools():
 		return nil
 	case c.version >= 2:
 		// Bound to a conversation: what hands work over goes to it (delegate_task); send_to_agent and ask_jarvis would
-		// go past it. The measured service hands nothing over without a tool (docs/lessons/voice.md「其他行为」).
+		// go past it. The measured service hands nothing over without a tool (docs/lessons/voice.md "Other behavior").
 		return boundTools
 	case c.role == "" || c.role == roleFull:
 		return toolNames
@@ -660,7 +660,7 @@ func (c *conversation) handle(gen int, e event) {
 		}
 		if e.id != "" && slices.Contains(c.replied, e.id) {
 			// A reply that was over already, superseded by the next one (a tool's result, a say): nothing of it is left
-			// to drop, and a clear would cut the end of it the app still plays (docs/lessons/voice.md「其他行为」). On
+			// to drop, and a clear would cut the end of it the app still plays (docs/lessons/voice.md"Other behavior"). On
 			// either protocol (#4719): protocol 1's apps play behind the upstream the same way.
 			return
 		}
@@ -862,7 +862,7 @@ func (c *conversation) toolOutput(e event) string {
 
 // startTask hands a delegation the model made to the main conversation (mu held). Nothing is sent back on the
 // delegation until the task's answer: the model has already told the user it handed it over, and anything on the
-// delegation has it speak again (docs/lessons/voice.md「结论」4).
+// delegation has it speak again (docs/lessons/voice.md "Conclusions" 4).
 func (c *conversation) startTask(delegationID, text string, at time.Time) {
 	c.handOver(strings.TrimSpace(text), delegationID, c.delegations[delegationID], at)
 }
@@ -1150,7 +1150,7 @@ func (c *conversation) recent(n int) []prompts.VoiceLine {
 }
 
 // heard is when the call was last not quiet: the model's speech played out, the user's voice, a caption or a line of
-// theirs (a heartbeat goes after a long quiet, docs/voice.md「播报」).
+// theirs (a heartbeat goes after a long quiet, docs/voice.md "Announcements").
 func (c *conversation) heard() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1185,7 +1185,7 @@ func (c *conversation) lost(gen int, why error) {
 	}
 	c.pl.logf("session lost: %v", why)
 	if !c.connectedAt.IsZero() && time.Since(c.connectedAt) >= stableAfter {
-		c.reconnects = 0 // it held: a drop now is not one of a run of them (docs/voice.md「重连和续接」)
+		c.reconnects = 0 // it held: a drop now is not one of a run of them (docs/voice.md "Reconnect and resume")
 	}
 	if c.reconnects >= maxReconnects {
 		c.mu.Unlock()
@@ -1284,7 +1284,7 @@ func (c *conversation) readApp() {
 				c.fail("语音会话还没连上，这句没发出去", false)
 			}
 		case "resend":
-			// The user tapped 重发 / 清空并发送 under a run a 409 refused (protocol 2): their own act, not the model's,
+			// The user tapped "Resend" / "Clear and send" under a run a 409 refused (protocol 2): their own act, not the model's,
 			// so not held to the user-speech gate.
 			if c.version >= 2 && msg.ID != "" {
 				c.runs.resend(msg.ID, msg.ClearDraft)
@@ -1294,7 +1294,7 @@ func (c *conversation) readApp() {
 }
 
 // cutIn takes a frame of the app's audio, n bytes long, voiced or not (mu held): the user talking over the model's
-// speech for bargeMin drops what the app has not played of it (gate.go「Barging in」). Protocol 2 only, and only on
+// speech for bargeMin drops what the app has not played of it (gate.go "Barging in"). Protocol 2 only, and only on
 // an upstream that does not say when the model is cut in on (signals): there clear follows its word. Protocol 1 does
 // as it always did (a clear when the upstream says so, or the app asks).
 func (c *conversation) cutIn(now time.Time, voiced bool, n int) {
@@ -1319,7 +1319,7 @@ func (c *conversation) cutIn(now time.Time, voiced bool, n int) {
 
 // replyAfterCut: after the energy rule cut the model off (cutAt), audio coming now is its next reply, not the rest of the
 // one it dropped (mu held): the user has been quiet replyAfterVoice, and what came before has paused for cutGap (gate.go
-// 「Barging in」). The reply to a short cut-in comes before the 1.5 s pause that ends a drop otherwise.
+// "Barging in"). The reply to a short cut-in comes before the 1.5 s pause that ends a drop otherwise.
 func (c *conversation) replyAfterCut(now time.Time) bool {
 	return !c.cutAt.IsZero() && now.Sub(c.pace.voice) >= replyAfterVoice && now.Sub(c.lastAudio) >= cutGap
 }

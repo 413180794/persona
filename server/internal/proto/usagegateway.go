@@ -3,7 +3,7 @@ package proto
 import "time"
 
 // The account list of the account-pool gateways among the hub's usage sources (#4576, docs/usage-windows.md
-// 「网关的账号清单」): every account a gateway lists, disabled ones included, with its status and every quota window it
+// "The gateway's account list"): every account a gateway lists, disabled ones included, with its status and every quota window it
 // stores, as the hub's last read of the source had them. The extensions read it with usage.gateway_accounts (the
 // permission usage_gateways); the sidebar's usage strip keeps its own samples (UsageAccount). Nothing here carries a
 // key, and a gateway's free text (an account's last error) is never passed on: only a short token of it.

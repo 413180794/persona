@@ -52,9 +52,9 @@ const (
 
 // Triage tiers (inbox_triage.go).
 const (
-	TierAction = "action" // 需要你
-	TierFYI    = "fyi"    // 知悉即可
-	TierNoise  = "noise"  // 噪音
+	TierAction = "action" // "Needs you"
+	TierFYI    = "fyi"    // "FYI"
+	TierNoise  = "noise"  // "Noise"
 )
 
 type InboxItem struct {
@@ -62,7 +62,7 @@ type InboxItem struct {
 	Source      string     `json:"source"` // lark | mail
 	Kind        string     `json:"kind"`
 	Account     string     `json:"account"`      // "feishu" or a mail account id
-	AccountName string     `json:"account_name"` // 飞书 / the mail address
+	AccountName string     `json:"account_name"` // Lark (Feishu) / the mail address
 	Title       string     `json:"title"`        // chat name / mail subject
 	Sender      string     `json:"sender,omitempty"`
 	Avatar      string     `json:"avatar,omitempty"`
@@ -77,31 +77,31 @@ type InboxItem struct {
 	DoneAt      *time.Time `json:"done_at,omitempty"`
 	DoneBy      string     `json:"done_by,omitempty"` // user | dismissed | read | replied
 	Lark        *InboxLark `json:"lark,omitempty"`
-	// Conversation is where the item opens in a messaging source (docs/extension-messaging.md「九」, #2138): listed
+	// Conversation is where the item opens in a messaging source (docs/extension-messaging.md "9", #2138): listed
 	// only, from Lark; an app with the source opens it there, an older one uses Lark.
 	Conversation *wire.MessagingConversationRef `json:"conversation,omitempty"`
 	Mail         *InboxMail                     `json:"mail,omitempty"`
 	Doc          *InboxDoc                      `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_blocks.go)
 	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
 	Translations map[string]*InboxTranslation `json:"translations,omitempty"`
-	Moment       *InboxMoment                 `json:"moment,omitempty"` // a 公司圈 post's comments / @me (inbox_blocks.go)
+	Moment       *InboxMoment                 `json:"moment,omitempty"` // a Moments (company feed) post's comments / @me (inbox_blocks.go)
 	// Connector: a thread of a connector's (GitHub…), Source being its id (inbox_connectors.go).
 	Connector *InboxConnector `json:"connector,omitempty"`
-	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
+	// Agent is the AI twin's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
 	Agent *InboxAgent `json:"agent,omitempty"`
 	// Mutes are what it can be muted by (listed only; inbox_mutes.go).
 	Mutes []MuteOption `json:"mutes,omitempty"`
-	// Version names what the item holds now (listed only): a bulk 已处理 sends it back, so an item that took new
+	// Version names what the item holds now (listed only): a bulk "Done" sends it back, so an item that took new
 	// messages since the list was drawn is not filed with them (inbox_bulk.go).
 	Version string `json:"version,omitempty"`
 	// TriagedBy says who sorted an event (inbox_group.go): "model" (its title, summary and tier are the model's) or
-	// "rules" (the connector grouped it and its rule tier stands, 按规则).
+	// "rules" (the connector grouped it and its rule tier stands, "By rule").
 	TriagedBy string `json:"triaged_by,omitempty"`
 	// Parent is what the item grew out of: another item, a todo or an agent session (inbox_parent.go, #2128).
 	Parent *InboxParent `json:"parent,omitempty"`
 
 	// The event's part (inbox_events.go, inbox_handling.go): its section (listed only), urgent (someone waits, a
-	// deadline is near), the manager's recap, the processing conversation, the one current suggestion, the 处理链条
+	// deadline is near), the manager's recap, the processing conversation, the one current suggestion, the handling chain
 	// and the items related to it across atoms.
 	Status     string            `json:"status,omitempty"`
 	Urgent     bool              `json:"urgent,omitempty"`
@@ -113,13 +113,13 @@ type InboxItem struct {
 
 	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
 	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
-	Context   string `json:"context,omitempty"`    // the conversation as text, for triage and 交给 AI
+	Context   string `json:"context,omitempty"`    // the conversation as text, for triage and "Hand to AI"
 	TriagedAt string `json:"triaged_at,omitempty"` // Last when it was triaged
 	BodyOf    string `json:"body_of,omitempty"`    // mail: Last when the full text was read into Preview / Context
 	JudgedAt  string `json:"judged_at,omitempty"`  // Last when model 2 looked at it
 	// Rules are the item's own triage rules, from its connector (InboxThing.Rules): they replace inbox.rules for it.
 	Rules string `json:"rules,omitempty"`
-	// ArrivedAt is the clock here when the item first held Last (ArrivedOf), as listed or saved: a bulk 已处理 over a
+	// ArrivedAt is the clock here when the item first held Last (ArrivedOf), as listed or saved: a bulk "Done" over a
 	// filter leaves what arrived after the list it acted on (inbox_bulk.go). Rows stored before have UpdatedAt.
 	ArrivedOf string    `json:"arrived_of,omitempty"`
 	ArrivedAt time.Time `json:"arrived_at,omitzero"`
@@ -280,7 +280,7 @@ type inboxBook struct {
 	replies     sync.Map   // item id -> *inboxReply: replies to one item, one at a time (inbox_triage.go)
 	mutes       []InboxMute
 	mutesMu     sync.Mutex // one read-change-save of the kept mutes at a time
-	cardSends   sync.Map   // a message card's id → the lock its 发送 holds (sendFromCard)
+	cardSends   sync.Map   // a message card's id → the lock its "Send" holds (sendFromCard)
 	// translations are the translations made, by model, text or mail and language (inbox_translate.go).
 	translations translateCache
 
@@ -363,7 +363,7 @@ func (b *inboxBook) mutedReason(name string) string {
 	return i18n.T(b.userLang(), "assistant-inbox.muted", i18n.Args{"name": name})
 }
 
-// sourceName is an inbox source for people: 飞书, 邮件, a connector's name as the hub last said it.
+// sourceName is an inbox source for people: Lark (Feishu), mail, a connector's name as the hub last said it.
 func (b *inboxBook) sourceName(source string) string {
 	switch source {
 	case "lark":
@@ -1052,7 +1052,7 @@ func (s *Service) collectSource(ctx context.Context, src assistantwire.InboxSour
 
 var errNoInboxItem = errors.New("no such inbox item")
 
-// errInboxItemDone is 发送 on a message card whose inbox item was filed since (sendFromCard): nothing is sent.
+// errInboxItemDone is "Send" on a message card whose inbox item was filed since (sendFromCard): nothing is sent.
 var errInboxItemDone = errors.New("the inbox item was filed: nothing was sent")
 
 // errInboxNotPersisted says the item moved in memory but its row could not be written; the in-memory move was
@@ -1104,7 +1104,7 @@ func (s *Service) inboxRoutes() {
 		}
 		var in struct {
 			Done    bool `json:"done"`
-			Dismiss bool `json:"dismiss"` // 忽略: filed as not for the user, done_by=dismissed
+			Dismiss bool `json:"dismiss"` // "Ignore": filed as not for the user, done_by=dismissed
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
@@ -1390,7 +1390,7 @@ func (s *Service) InboxForget(ctx context.Context, source string) (int, error) {
 	return len(ids), nil
 }
 
-// inboxReport is what the hub shows of the inbox (the snapshot's inbox): the AI 分身's conversations; nil while the
+// inboxReport is what the hub shows of the inbox (the snapshot's inbox): the AI twin's conversations; nil while the
 // inbox could not be read.
 func (s *Service) inboxReport(ctx context.Context) *assistantwire.InboxReport {
 	if s.inboxReady(ctx) != nil {

@@ -12,7 +12,7 @@ import (
 )
 
 // Opt-in report-only hooks for the claude sessions Persona did not start (hub.json machines[].claude_global_hooks,
-// docs/claude-integration.md「全局只报告的 hooks」). Sessions Persona starts load the persona-hooks plugin for that
+// docs/claude-integration.md "Global report-only hooks"). Sessions Persona starts load the persona-hooks plugin for that
 // session alone (hooksplugin.go); the ones the user starts in a herdr pane themselves have no hooks, so the node reads
 // the screen and the transcript for them. These entries go into the user's own settings.json, where hooks of every
 // tool add up, so they differ from the plugin's in two ways that matter:

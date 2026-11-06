@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// The interactions (docs/protocol.md「交互」): the cards the user answers on the phone — a hook's permission, question
+// The interactions (docs/protocol.md "Interactions"): the cards the user answers on the phone — a hook's permission, question
 // or plan (a node's interaction.create, waited for until it is answered, expires or its node goes; a resumable one
 // outlives its node for its hook to claim again), a TUI dialog read off the screen (a "screen" card the manager
 // answers itself with keys), a Codex question or approval the node lists, the assistant's own questions and cards,
@@ -362,7 +362,7 @@ type answeredScreen struct {
 // lifetime); a session that stays blocked longer, or a machine that never lists again, does not keep it forever.
 const screenHandedBackFor = 24 * time.Hour
 
-// screenHandedBackLocked: card id is the dialog its user handed back to the computer ({"dismiss":true}: 交回电脑),
+// screenHandedBackLocked: card id is the dialog its user handed back to the computer ({"dismiss":true}: "Hand back to computer"),
 // still on screen: no new card, no push, until the agent is no longer blocked (syncScreenInteractions) or something
 // else shows. A card handed back before its dialog could be read (no dialog in its id) is the first dialog drawn
 // after it, as upgradeScreenCard takes it for the same card. Callers hold s.fleet.mu.
@@ -576,7 +576,7 @@ func (s *Service) show(ix proto.Interaction) {
 
 // ---- waiting ----
 
-// nodeInteraction is a node's interaction.create: allowed right away when 本会话总是允许 already covers it, else
+// nodeInteraction is a node's interaction.create: allowed right away when "Always allow in this session" already covers it, else
 // shown and waited for.
 func (s *Service) nodeInteraction(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
 	// Defense behind the node hook: question-text-keyed answers could not be kept apart on a duplicate card.
@@ -982,7 +982,7 @@ func (s *Service) askHub(ctx context.Context, ix proto.Interaction) (proto.Resol
 	return s.waitInteraction(ctx, ix)
 }
 
-// ---- 本会话总是允许 (#2202, docs/assistant.md「本会话总是允许」) ----
+// ---- "Always allow in this session" (#2202, docs/assistant.md "Always allow in this session") ----
 
 // Claude's session rule and Codex's acceptForSession live in the agent's process, and the assistant's process is
 // replaced all the time (idle, redeploys, a launcher switch): the resumed one asked about the same tool again. The
@@ -998,7 +998,7 @@ func alwaysCard(ix proto.Interaction) bool {
 		len(ix.AlwaysKeys) <= maxAlwaysKeys && len(ix.Fields) == 0
 }
 
-// alwaysAllowed: every key ix names was granted with 本会话总是允许 in its conversation.
+// alwaysAllowed: every key ix names was granted with "Always allow in this session" in its conversation.
 func (s *Service) alwaysAllowed(ctx context.Context, ix proto.Interaction) (proto.Resolution, bool) {
 	st := s.fleetStore()
 	if st == nil || !alwaysCard(ix) {
@@ -1017,7 +1017,7 @@ func (s *Service) alwaysAllowed(ctx context.Context, ix proto.Interaction) (prot
 	return proto.Resolution{Allow: &yes, Always: true}, true
 }
 
-// keepAlways keeps what a card answered with 本会话总是允许 grants, then answers the conversation's other cards
+// keepAlways keeps what a card answered with "Always allow in this session" grants, then answers the conversation's other cards
 // waiting meanwhile that it covers now (parallel tool calls ask at once). It runs before the hook hears the answer,
 // so each database call is bounded by historyTimeout: a grant that cannot be kept is only logged.
 func (s *Service) keepAlways(ix proto.Interaction, r proto.Resolution) {
@@ -1051,7 +1051,7 @@ func (s *Service) keepAlways(ix proto.Interaction, r proto.Resolution) {
 	}
 }
 
-// ---- Codex cards (docs/codex.md「提问和审批」) ----
+// ---- Codex cards (docs/codex.md "Questions and approvals") ----
 
 // A node lists the Codex questions and approvals open on its machine whenever the list changes (codex.interactions,
 // node/codexask.go); the manager keeps a card for each — a new one is announced, one no longer listed (answered at

@@ -16,18 +16,18 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Assistant conversations are titled 「MMDD | 类型 | 主题」 (docs/assistant.md「对话标题」, the user's ask on 2026-11-01):
-// MMDD is the day the conversation started in the user's time zone, 类型 one of titleKinds, 主题 at most 14
+// Assistant conversations are titled "MMDD | kind | topic" (docs/assistant.md "Chat titles", the user's ask on 2026-11-01):
+// MMDD is the day the conversation started in the user's time zone, kind one of titleKinds, topic at most 14
 // characters. A conversation the hub starts is noted (titleNew); when its first turn ends (titleAfterTurn) the
 // small-task model reads that exchange and names it, off the conversation's path: nothing waits for it and the
-// assistant isn't asked to do anything. A scheduled task's conversation is 「MMDD | 定时 | 任务名」 from the start,
+// assistant isn't asked to do anything. A scheduled task's conversation is "MMDD | scheduled | task name" from the start,
 // with no model call; it stays the same however many runs go into it.
 //
 // The titles live in the assistant's store (settings assistant.titles) and go to the hub in the snapshot, which puts
 // them on the session lists the apps get, so Claude and Codex conversations are named the same way and nothing is
 // written into transcripts. A conversation is named once: a rename in the app (POST …/rename with a title) is
 // recorded as the user's and is never replaced; conversations from before this are left as they were. The main
-// conversation has no title of its own (the hub shows it as 「Persona」, #1313).
+// conversation has no title of its own (the hub shows it as "Persona", #1313).
 
 var titleKinds = []string{"功能", "设计", "修复", "优化", "发布", "探索", "文档", "研究", "评审", "定时"}
 
@@ -35,7 +35,7 @@ const (
 	maxTitleTopic = 14 // characters, in Chinese; titleTopicMax for the user's language
 	titlesKey     = "assistant.titles"
 	titleTask     = "定时"
-	// titleInbox is the inbox's AI 分身's kind (#3264): the hub's own, not one the model picks (titleKinds).
+	// titleInbox is the inbox's AI twin's kind (#3264): the hub's own, not one the model picks (titleKinds).
 	titleInbox    = "收件箱"
 	titleFallback = "探索"
 )
@@ -45,7 +45,7 @@ const (
 	titlePending = "pending" // started by the hub, named when its first turn ends
 	titleAuto    = "auto"
 	titleByTask  = "task"
-	titleByInbox = "inbox" // the inbox's AI 分身: 「收件箱 | the item's title」
+	titleByInbox = "inbox" // the inbox's AI twin: "inbox | the item's title"
 	titleByUser  = "user"
 	// The assistant renamed it (conversation_rename): not replaced by the automatic title, the user's rename wins.
 	titleByAssistant = "assistant"
@@ -113,8 +113,8 @@ func (s *Service) titleNew(machine, id string, started time.Time) {
 	s.noteTitle(machine, id, started, "", "")
 }
 
-// titleFixed names a conversation the hub just started for something that has a name already: 「MMDD | kind |
-// topic」 now, with no model call (a scheduled task's 「定时 | 任务名」, the inbox's 「收件箱 | the item's title」).
+// titleFixed names a conversation the hub just started for something that has a name already: "MMDD | kind |
+// topic" now, with no model call (a scheduled task's "scheduled | task name", the inbox's "inbox | the item's title").
 func (s *Service) titleFixed(machine, id string, started time.Time, kind, topic string) {
 	s.noteTitle(machine, id, started, kind, topic)
 }
@@ -187,7 +187,7 @@ func (s *Service) titleSet(machine, id, title, by string) {
 	s.publish(context.Background())
 }
 
-// renameConversation names an assistant conversation for the assistant's conversation_rename: like the app's 重命名,
+// renameConversation names an assistant conversation for the assistant's conversation_rename: like the app's "Rename",
 // Claude's transcript gets the title too (its own lists show it); a Codex conversation's title is only the
 // assistant's (the node would write Claude's custom-title line into the Codex rollout).
 func (s *Service) renameConversation(ctx context.Context, c proto.Session, title, by string) error {
@@ -293,8 +293,8 @@ func (s *Service) firstExchange(ctx context.Context, machine, id string) (first,
 	return cutRunes(first, 1500), cutRunes(wire.AssistantCardText(reply), 1500)
 }
 
-// makeTitle asks the model for 「类型 | 主题」, once more when that breaks the format, and falls back to
-// 「探索 | the first message's first 14 characters」.
+// makeTitle asks the model for "kind | topic", once more when that breaks the format, and falls back to
+// "explore | the first message's first 14 characters".
 func (s *Service) makeTitle(ctx context.Context, started time.Time, first, reply string) string {
 	reply = wire.AssistantCardText(reply)
 	day := titleDay(started, s.location(ctx))
@@ -351,7 +351,7 @@ func titleTopicMax(locale string) int {
 // parseTitle is parseTitleMax for a Chinese topic.
 func parseTitle(out string) (kind, topic string, ok bool) { return parseTitleMax(out, maxTitleTopic) }
 
-// parseTitleMax reads 「类型 | 主题」 from what the model said (one line; a date it added anyway, quotes, a full-width
+// parseTitleMax reads "kind | topic" from what the model said (one line; a date it added anyway, quotes, a full-width
 // bar are tolerated). kind is "" when it isn't one of titleKinds; ok when the topic fits in max characters too.
 func parseTitleMax(out string, max int) (kind, topic string, ok bool) {
 	line := ""

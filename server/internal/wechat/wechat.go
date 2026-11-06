@@ -2,7 +2,7 @@
 // through iLink (wechat/ilink), contributed as a channel (docs/channels.md). The user binds it by scanning a QR code
 // (the connector's sign-in); the owner's messages to the bot go to the hub (channel.receive), which sends them into a
 // conversation, follows the turn and asks what agents ask — all of that is the hub's. This program only talks to
-// WeChat: it receives, sends what the hub gives it (channel.send) and shows 「正在输入」.
+// WeChat: it receives, sends what the hub gives it (channel.send) and shows "typing…".
 //
 // It keeps its own in one sealed blob in the hub (the connector's secrets): the bot token, the polling cursor and the
 // owner's latest context token, so a restart picks up where it was.

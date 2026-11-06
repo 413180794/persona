@@ -134,7 +134,7 @@ func notifyOK() (any, error) { return map[string]any{"sent": true}, nil }
 
 func boolp(b bool) *bool { return &b }
 
-// A question with options is the question card AskUserQuestion already is, from "脚本", under the session of the
+// A question with options is the question card AskUserQuestion already is, from "Script" (in Chinese), under the session of the
 // caller's pane; the option chosen comes back.
 func TestScriptAskOptionsIsAQuestionCard(t *testing.T) {
 	h := newScriptHub(t, answerWith(proto.Resolution{Answers: map[string]string{"Deploy where?": "staging"}}), notifyOK)

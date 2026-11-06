@@ -19,7 +19,7 @@ import (
 
 // A machine that rebooted has the node back (launchd / systemd start it) but not herdr: nobody opened a terminal and
 // ran it. Instead of refusing every start and resume until someone does, the node starts herdr's headless server
-// itself when it needs one (#1879, docs/engines.md「herdr 没在运行时」): when it starts, and before a start or resume.
+// itself when it needs one (#1879, docs/engines.md "When herdr is not running"): when it starts, and before a start or resume.
 // Only classic herdr (engines herdr and herdr-both), never Herdr App's herdr-core: that has its own lifecycle.
 //
 // The server runs in a clean login shell (env -i + $SHELL -l): herdr hands its environment to every pane and the
@@ -91,7 +91,7 @@ func (n *Node) ensureHerdr(ctx context.Context, why string) error {
 	return n.startOrInstallHerdr(ctx, h, why, n.hinstall.auto.Load()) // hub.json machines[].herdr_autoinstall
 }
 
-// startHerdrServer is herdr.server.start: the user pressed 启动 in the Agents list (herdr_autostart off does not stop
+// startHerdrServer is herdr.server.start: the user pressed "Start" in the Agents list (herdr_autostart off does not stop
 // that — the switch only says whether the node may do it on its own), installing herdr first when there is none.
 // It reports why when it could not.
 func (n *Node) startHerdrServer(ctx context.Context) (map[string]any, error) {
@@ -102,7 +102,7 @@ func (n *Node) startHerdrServer(ctx context.Context) (map[string]any, error) {
 	if !ok || h.c == nil {
 		return nil, fmt.Errorf("这台电脑没有 herdr")
 	}
-	if err := n.startOrInstallHerdr(ctx, h, "the user asked for it", true); err != nil { // the user's 启动 installs it
+	if err := n.startOrInstallHerdr(ctx, h, "the user asked for it", true); err != nil { // the user's "Start" installs it
 		return nil, err
 	}
 	return map[string]any{"running": herdrAlive(ctx, h.c.Socket)}, nil

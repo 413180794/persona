@@ -411,7 +411,7 @@ func TestRenameTodoSpaceConflictVoidsOldLink(t *testing.T) {
 }
 
 // An agent linked to a todo the user already finished stays linked (#2954): that is what a task's start does when the
-// user taps 完成 while the agent is still starting, so the task keeps the agent and the close loop retires it.
+// user taps "Done" while the agent is still starting, so the task keeps the agent and the close loop retires it.
 // Linking one to a done todo by hand stays refused.
 func TestLinkTodoAgentOfDoneTask(t *testing.T) {
 	d, ctx := open(t), context.Background()

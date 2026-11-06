@@ -16,7 +16,7 @@ import (
 // Each machine's node drives a terminal engine (herdr, herdr-core, herdr-both for the two side by side, or orca),
 // picked by the user in the app and kept here: one settings key holding machine id → engine, herdr for a machine never
 // set. The hub tells the node with engine.use when it connects (before the first session list) and when the user
-// changes it (docs/protocol.md「引擎」).
+// changes it (docs/protocol.md "Engine").
 
 // enginesKey is the settings key holding map[machineID]engine.
 const enginesKey = "machine_engines"

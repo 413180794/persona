@@ -140,7 +140,7 @@ func TestNoPersistDoesNotInventAGrant(t *testing.T) {
 	if ix.AlwaysLabel != "" {
 		t.Fatalf("no longer scope was offered: %q", ix.AlwaysLabel)
 	}
-	// The web card still shows 总是允许. That press must not store a grant the runtime did not offer.
+	// The web card still shows "Always allow". That press must not store a grant the runtime did not offer.
 	if got := Answer(raw, allow(true)); action(t, got) != "accept" || persist(t, got) != "" {
 		t.Fatalf("%+v", got)
 	}

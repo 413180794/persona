@@ -233,7 +233,7 @@ func (s *Control) Click(column, row int) error {
 }
 
 // Mouse modifier bits of herdr's terminal.mouse / terminal.scroll "modifiers" (a u8): shift 1, ctrl 2, alt 4. Anything
-// above is ignored by herdr, so it is masked off here (docs/terminal.md「鼠标」).
+// above is ignored by herdr, so it is masked off here (docs/terminal.md "Mouse").
 const (
 	ModShift    = 1
 	ModCtrl     = 2

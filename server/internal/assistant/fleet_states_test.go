@@ -272,7 +272,7 @@ func TestRedacted(t *testing.T) {
 	}
 }
 
-// The snapshot says which conversations are the AI 分身's (no finished push for them), which agents work for a quiet
+// The snapshot says which conversations are the AI twin's (no finished push for them), which agents work for a quiet
 // task or a task (its cards name it), and which turns a channel answers; a snapshot that could not read a part keeps
 // the last of it.
 func TestSnapshotPartsTheFleetReads(t *testing.T) {
@@ -319,7 +319,7 @@ func TestTurnErrorFromNode(t *testing.T) {
 	if got, _ := turnError(codex); got != codex.TurnError {
 		t.Errorf("seen: %q", got)
 	}
-	codex.State = proto.StateWorking // it took the 继续 up: the old error is gone
+	codex.State = proto.StateWorking // it took the "Continue" up: the old error is gone
 	if got, kind := turnError(codex); got != "" || kind != "" {
 		t.Errorf("working: %q, %q", got, kind)
 	}

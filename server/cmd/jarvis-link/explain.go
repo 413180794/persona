@@ -24,7 +24,7 @@ func explain(err error) string {
 	return raw
 }
 
-// rejected: some candidate's hub answered the pairing with "no" to its token. link.Pair says so as text, "hub 拒绝了："
+// rejected: some candidate's hub answered the pairing with "no" to its token. link.Pair says so as text, "The hub rejected:"
 // and the hub's answer: its 401 body ("invalid token") or, from a proxy with no JSON, the status ("401 Unauthorized").
 // A 403 (a link for another machine) or a 429 is a different matter and stays as it is.
 func rejected(err error) bool {
@@ -94,7 +94,7 @@ func hostsOf(err error) []string {
 	return out
 }
 
-// nodeHint follows "hub 连不上本机的 node（…）": how to check the resident node, unless the error already says
+// nodeHint follows "The hub cannot connect to this computer's node (...)": how to check the resident node, unless the error already says
 // (link.nodeMissing names the command that runs it).
 func nodeHint(nodeErr string) string {
 	if strings.Contains(nodeErr, link.NodeDownMarker) {

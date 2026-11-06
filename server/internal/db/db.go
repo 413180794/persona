@@ -675,7 +675,7 @@ func (d *DB) InteractionOutcome(ctx context.Context, id string) (string, *proto.
 	return status, &res, json.Unmarshal(raw, &res)
 }
 
-// ---- 本会话总是允许 on assistant conversations (assistant_always) ----
+// ---- "Always allow in this conversation" on assistant conversations (assistant_always) ----
 
 func alwaysKeyHash(key string) string {
 	sum := sha256.Sum256([]byte(key))

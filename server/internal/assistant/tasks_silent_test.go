@@ -13,7 +13,7 @@ import (
 
 // A task turn's end is told by what that turn did (#2349): a reply is done (judged, maybe closed); a model API error
 // is interrupted (#1516); no reply and no tool call, with no error either (the model service answered 200 with
-// nothing), is interrupted too: no "完成了", no done notice, nothing judged or closed.
+// nothing), is interrupted too: no "done", no done notice, nothing judged or closed.
 func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 	prompt := proto.Item{Kind: proto.KindText, Role: "user", Text: "修登录崩溃"}
 	for _, c := range []struct {
@@ -26,7 +26,7 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 		state     string // the receipt's
 		summary   string
 		errText   string
-		notice    []string // in the main conversation's 督办 message
+		notice    []string // in the main conversation's supervision message
 		judged    bool
 	}{
 		{name: "no output", items: []proto.Item{prompt, {Kind: proto.KindThinking, Role: "assistant", Text: "…"}},

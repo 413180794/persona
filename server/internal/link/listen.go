@@ -23,7 +23,7 @@ import (
 	"github.com/coder/websocket"
 )
 
-// The passive listener (docs/link.md「被动模式」): TLS with the connector's own identity, three endpoints and nothing
+// The passive listener (docs/link.md "Passive mode"): TLS with the connector's own identity, three endpoints and nothing
 // else. Pairing trades a one-time code for the hub's credential (its hash is kept); info and stream need that
 // credential; a stream is joined to the resident node's socket byte for byte, as active mode's streams are.
 

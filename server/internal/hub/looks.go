@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extwire"
 )
 
-// Looks (形象, docs/extensions.md「形象」, docs/persona.md): one list of every look a user can choose — the ones the apps
+// Looks (docs/extensions.md "Looks", docs/persona.md): one list of every look a user can choose — the ones the apps
 // draw themselves (builtin), the persona packages on the hub (hub) and the ones extensions declare (extension) — and
 // which one is chosen, kept on the hub so every device of the user shows the same one.
 //

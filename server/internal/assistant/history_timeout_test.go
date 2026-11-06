@@ -120,7 +120,7 @@ func TestInteractionHistoryStuckDatabase(t *testing.T) {
 	t.Logf("answer delivered after %v", time.Since(start))
 }
 
-// 本会话总是允许 on a conversation is kept before the hook hears the answer: a database that does not answer holds it
+// "Always allow in this session" on a conversation is kept before the hook hears the answer: a database that does not answer holds it
 // back by historyTimeout at most, and the hook still gets the answer.
 func TestKeepAlwaysStuckDatabase(t *testing.T) {
 	shortHistoryTimeout(t, 100*time.Millisecond)

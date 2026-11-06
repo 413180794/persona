@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The administrator's password and browser sessions (docs/admin.md「管理员密码和会话」).
+// The administrator's password and browser sessions (docs/admin.md "Admin password and sessions").
 
 // adminStore is what the admin UI keeps in Postgres (internal/db/admin.go); the hub's Store stays as it is.
 type adminStore interface {

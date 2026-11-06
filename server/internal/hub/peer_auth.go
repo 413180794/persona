@@ -10,9 +10,9 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 )
 
-// Calls between hubs of a group (docs/mesh.md「调用」): a call for a hub the caller has no link to goes hop by hop along
+// Calls between hubs of a group (docs/mesh.md "Calls"): a call for a hub the caller has no link to goes hop by hop along
 // the route (relay). What one hub may ask another: the center takes over a member's device credentials (creds.import,
-// plan-hub-center.md 3「设备凭据」); a revocation reaches every copy of a credential (creds.revoked, docs/mesh.md).
+// plan-hub-center.md 3 "Device credentials"); a revocation reaches every copy of a credential (creds.revoked, docs/mesh.md).
 
 // meshRelayReq is a call to another hub of the group, passed along the way to it.
 type meshRelayReq struct {

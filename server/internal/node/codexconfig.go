@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Codex's options the app may change (设置 › Codex 设置), in ~/.codex/config.toml. Only these top-level keys are read
+// Codex's options the app may change ("Settings › Codex Settings"), in ~/.codex/config.toml. Only these top-level keys are read
 // or written, line by line: the rest of the file (comments, [model_providers.*], [projects.*]…) stays byte for byte.
 // The same shape as Claude's (claudeconfig.go), so the app draws both with one page.
 var codexSettings = []ClaudeSetting{

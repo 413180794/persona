@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Command-line programs an extension needs (docs/extensions.md「命令行程序（tools）」, #4507): the hub installs them
+// Command-line programs an extension needs (docs/extensions.md "Command-line programs (tools)", #4507): the hub installs them
 // into the extension's own directory at install time and puts them first on its PATH, so an extension built on a
 // CLI works on a machine that does not have that CLI.
 
@@ -64,7 +64,7 @@ type ToolNPM struct {
 	Bin       string `json:"bin,omitempty"`
 }
 
-// AuthSpec is manifest.auth: the extension signs in through its auth.* methods (docs/extensions.md「登录（auth）」).
+// AuthSpec is manifest.auth: the extension signs in through its auth.* methods (docs/extensions.md "Sign-in (auth)").
 type AuthSpec struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
@@ -153,7 +153,7 @@ func (t *ToolSpec) consent() string {
 	return t.Name + " " + kind + " " + strings.Join(t.Hosts(), ",")
 }
 
-// Describe is the tool for people: 「example-cli 2.3.4（npm：registry.example.com）」.
+// Describe is the tool for people: "example-cli 2.3.4 (npm: registry.example.com)", with full-width punctuation.
 func (t *ToolSpec) Describe() string {
 	name := t.Name
 	if t.Title != "" && t.Title != t.Name {

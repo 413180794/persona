@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// 主对话's runtime (#2455): only the assistant takes one, it reaches the node's params, and it is in the fingerprint.
+// The main chat's runtime (#2455): only the assistant takes one, it reaches the node's params, and it is in the fingerprint.
 
 func TestModelRuntimeIsOfferedAndPatchedOnlyForTheAssistant(t *testing.T) {
 	s, _, _ := modelService(t)
@@ -89,7 +89,7 @@ func TestModelRuntimeReachesParamsAndFingerprint(t *testing.T) {
 	if sdk["runtime"] != proto.AssistantRuntimeAgentSDK || sdk["model_fingerprint"] == cli["model_fingerprint"] {
 		t.Fatalf("runtime not applied or not fingerprinted: %+v", sdk)
 	}
-	// Another launcher (warm, a start for one launcher) and a pick from the chat's menu keep 主对话's runtime.
+	// Another launcher (warm, a start for one launcher) and a pick from the chat's menu keep the main chat's runtime.
 	for name, p := range map[string]map[string]any{
 		"launcher": run(assistant, map[string]any{"launcher": "other"}),
 		"picked":   run(func(p map[string]any) error { return s.applyPickedModel(ctx, p) }, map[string]any{"launcher": "other", "model": "m"}),

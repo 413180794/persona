@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What the terminal browser's and the sidebar's context menus change on a computer (docs/terminal.md「节点菜单」):
+// What the terminal browser's and the sidebar's context menus change on a computer (docs/terminal.md "Node menu"):
 // close a tab or a pane, split a pane, rename a tab, run an agent in a plain shell pane, and fetch / pull / push in a
 // pane's directory. The hub lets only a full device call them. Every call names a pane, tab or workspace the host
 // lists; none of them names a directory or a command, so a menu cannot be turned into a way to run anything.
@@ -212,7 +212,7 @@ func paneShells(ctx context.Context) []string {
 	return []string{herdrPaneShell()}
 }
 
-// runAgentInPane starts an agent of a launcher in a plain shell pane, the way 新建 Agent does in a new tab: same
+// runAgentInPane starts an agent of a launcher in a plain shell pane, the way "New Agent" does in a new tab: same
 // launcher command, same wait for the session, same binding. The pane has to be at its shell prompt: nothing but a
 // shell in front, no agent bound to it. A start that fails leaves the pane as it is (it is not closed: it was not made
 // for this).

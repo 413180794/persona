@@ -398,7 +398,7 @@ func TestAssistantSDKRuntimeChangeRestartsWithResume(t *testing.T) {
 	if r := f.n.sessionRuntime(id, proto.AssistantRuntimeCLI, false); r != "" {
 		t.Fatalf("cli asked: %q", r)
 	}
-	// The hub resolved 主对话's configuration (a fingerprint came) and sent no runtime: the CLI, not the one before.
+	// The hub resolved the main chat's configuration (a fingerprint came) and sent no runtime: the CLI, not the one before.
 	if r := f.n.sessionRuntime(id, "", true); r != "" {
 		t.Fatalf("hub-resolved CLI ran on %q", r)
 	}

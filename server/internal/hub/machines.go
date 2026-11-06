@@ -13,7 +13,7 @@ import (
 
 const viaHub = "hub" // a path through a member hub
 
-// pathInfo is a path as the admin page and the machine list show it (plan 5「paths」).
+// pathInfo is a path as the admin page and the machine list show it (plan 5 "paths").
 type pathInfo = devicewire.PathInfo
 
 // fleet guards Hub.machines and Hub.byID, which a report replaces.

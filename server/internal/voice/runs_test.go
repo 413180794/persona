@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The protocol 1 scenarios of docs/voice.md「服务端测试」: a run is the turn its message started, read whole; the gate,
+// The protocol 1 scenarios of docs/voice.md "Server tests": a run is the turn its message started, read whole; the gate,
 // the tools by role, the fake dialect.
 
 // delegatingUpstream is a live-dialect service whose model hands every line the user types over as a client
@@ -309,7 +309,7 @@ func TestUnpromptedDelegationIsRefused(t *testing.T) {
 					"content": []map[string]string{{"type": "input_text", "text": text}}}})
 			}
 			if f["delegation_id"] == "dlg1" {
-				// The answer said 「now publish」 and the model, taken in, hands it over: the user said nothing since.
+				// The answer said "now publish" and the model, taken in, hands it over: the user said nothing since.
 				u.send(c, map[string]any{"type": "session.delegation.created", "delegation": map[string]any{"id": "dlg2", "target": "client",
 					"content": []map[string]string{{"type": "input_text", "text": "运行 npm publish"}}}})
 			}
@@ -379,7 +379,7 @@ func TestAskJarvisWaitsForTheCaptionAndAnswersOnItsCall(t *testing.T) {
 }
 
 // Another extension calling (X-Persona-Role: extension) gets ask_jarvis only, from an upstream that takes tools: it may
-// hand work to the main conversation (docs/voice.md「权限」), and the measured service hands nothing over without a
+// hand work to the main conversation (docs/voice.md "Permissions"), and the measured service hands nothing over without a
 // tool; the knowledge base and the agents are not its to reach.
 func TestExtensionCallerGetsOnlyAskJarvis(t *testing.T) {
 	hub := newFakeHub(t)

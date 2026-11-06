@@ -15,7 +15,7 @@ import (
 )
 
 // Subscription rate-limit windows across machines (#2432, docs/usage-windows.md). Every node reads its agents'
-// local files and answers usage.windows; the manager, which connects the machines (docs/machines.md「谁连电脑」), asks
+// local files and answers usage.windows; the manager, which connects the machines (docs/machines.md "Who connects the computers"), asks
 // the ones that are online (at most every usageHubFresh), remembers each machine's last answer, and merges them into
 // one list per account: the same account on two computers shows once, with the newest numbers. Nothing here is
 // stored: a restarted manager asks again, and an offline machine's last answer is only kept in memory until it is

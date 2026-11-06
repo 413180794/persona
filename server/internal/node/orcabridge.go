@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Orca's structured sessions (docs/plan-orca-support.md「结构化会话」): Orca's own chats around Claude Code, with no
+// Orca's structured sessions (docs/plan-orca-support.md "Structured sessions"): Orca's own chats around Claude Code, with no
 // terminal, so not the Orca host's (hostorca.go lists terminals). While the machine's engine is Orca the node runs a
 // bridge for them in its own process: a runtime (runtimes.go) on one end of a pipe into the runtime host, Orca's
 // agentSession.* on the other. A session's content is its Claude transcript here (runtimetranscript.go); the bridge

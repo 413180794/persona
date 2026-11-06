@@ -27,8 +27,8 @@ func actionItem(id string, at time.Time) *InboxItem {
 		UpdatedAt: at, Lark: &InboxLark{FeedID: "f1"}}
 }
 
-// Every newly triaged 需要你 item is escalated to the manager (no judge filters it): queued, 进行中; new content goes
-// to the same conversation; old, untriaged, not 需要你, done ones are not.
+// Every newly triaged Needs you item is escalated to the manager (no judge filters it): queued, In progress; new content goes
+// to the same conversation; old, untriaged, not Needs you, done ones are not.
 func TestInboxEscalates(t *testing.T) {
 	now := time.Now()
 	h := agentHub(t)
@@ -111,7 +111,7 @@ func TestInboxDraftBeforeTheStartReturned(t *testing.T) {
 }
 
 // The draft (inbox_draft) goes on the item whose agent runs in the conversation, with the moves of a document's rows
-// the item offers; the hub is told which conversations are the AI 分身's (no finished push for them).
+// the item offers; the hub is told which conversations are the AI twin's (no finished push for them).
 func TestInboxDraft(t *testing.T) {
 	h := agentHub(t)
 	ctx := context.Background()
@@ -356,7 +356,7 @@ func TestInboxAgentRetryFieldsPersist(t *testing.T) {
 }
 
 // A queued item's agent is the assistant's own conversation, named after the item, on the inbox agent's model and the
-// assistant's machine; the hub learns it is the AI 分身's from the next snapshot.
+// assistant's machine; the hub learns it is the AI twin's from the next snapshot.
 func TestInboxAgentStarts(t *testing.T) {
 	h := agentHub(t)
 	it := actionItem("x", time.Now())
@@ -423,7 +423,7 @@ func TestInboxModelsLive(t *testing.T) {
 }
 
 // An item about one of the user's tasks (docs/unified-entry.md): the judge sees the tasks and links the item; the AI
-// 分身 is told the task's progress; its draft puts a card into the task's conversation.
+// twin is told the task's progress; its draft puts a card into the task's conversation.
 func TestInboxItemAboutATask(t *testing.T) {
 	ctx := context.Background()
 	s, f := newTaskService(t)

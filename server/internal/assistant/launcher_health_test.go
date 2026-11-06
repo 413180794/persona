@@ -36,13 +36,13 @@ func TestClassifyLauncherError(t *testing.T) {
 }
 
 // launcherHealthHub is a hub with three machines (the assistant's "server", a broken "l4", a healthy "box") that all run the
-// launcher "work", which 模型配置 › Agents starts with.
+// launcher "work", which model settings › Agents starts with.
 func launcherHealthHub(t *testing.T) (*Service, *fakeHub) {
 	return launcherHealthHubOn(t, newTestService)
 }
 
 // launcherHealthHubOn is launcherHealthHub with the service made by mk (newStorelessService keeps plans in memory;
-// with no database 模型配置 stays as it is, so tasks name the launcher).
+// with no database the model settings stay as it is, so tasks name the launcher).
 func launcherHealthHubOn(t *testing.T, mk func(*testing.T, *fakeHub) *Service) (*Service, *fakeHub) {
 	t.Helper()
 	f := newFakeHub().withMachine()

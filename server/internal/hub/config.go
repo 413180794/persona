@@ -41,7 +41,7 @@ type MachineConfig struct {
 	Address string `json:"address,omitempty"`
 	Proxy   string `json:"proxy,omitempty"`
 	// TailcatAddr is the machine's tailcat address (`jarvisd node tailcat init` there): the way in when ssh does not
-	// work, e.g. a computer behind NAT (tailcat.go, docs/server.md「tailcat 打洞」). A secret, like the token.
+	// work, e.g. a computer behind NAT (tailcat.go, docs/server.md "tailcat hole punching"). A secret, like the token.
 	TailcatAddr string `json:"tailcat_addr,omitempty"`
 	Icon        string `json:"icon,omitempty"`
 	// RemoteBin is the jarvisd path on the remote machine (default ~/.jarvis/bin/jarvisd).
@@ -54,18 +54,18 @@ type MachineConfig struct {
 	CodexServers     []proto.CodexServer `json:"codex_servers,omitempty"`
 	// Launchers adds configured wrappers or overrides the type reported by the node.
 	Launchers []assistantwire.ConfiguredLauncher `json:"launchers,omitempty"`
-	// Botmux false: the machine's node does not list botmux's sessions and never runs botmux (docs/engines.md「botmux」);
+	// Botmux false: the machine's node does not list botmux's sessions and never runs botmux (docs/engines.md "botmux");
 	// unset lists them, as before.
 	Botmux *bool `json:"botmux,omitempty"`
 	// HerdrAutostart false: the machine's node never starts herdr's server itself when it is not running
-	// (docs/engines.md「herdr 没在运行时」); unset starts it when needed.
+	// (docs/engines.md "When herdr is not running"); unset starts it when needed.
 	HerdrAutostart *bool `json:"herdr_autostart,omitempty"`
 	// HerdrAutoinstall true: when the machine has no herdr, the node's own starts (at node start, before a start or
-	// resume) install the pinned herdr first (docs/engines.md「没装 herdr 时」); unset only the Agents list's 启动 does.
+	// resume) install the pinned herdr first (docs/engines.md "When herdr is not installed"); unset only the Agents list's "Start" does.
 	HerdrAutoinstall bool `json:"herdr_autoinstall,omitempty"`
 	// ClaudeGlobalHooks true: the machine's node puts report-only hooks into its default claude config directory's
 	// settings.json, so the sessions Persona did not start report their turns and cards too (docs/claude-integration.md
-	// 「全局只报告的 hooks」). Off unless set; false (or removing the key) takes them out again.
+	// "Global report-only hooks"). Off unless set; false (or removing the key) takes them out again.
 	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
 	// UsageWindows false: the machine's node does not read the agents' subscription rate-limit windows (Codex's
 	// rollouts, a Claude Code status line drop) and the manager does not ask it (docs/usage-windows.md, #2432); unset
@@ -125,10 +125,10 @@ type Config struct {
 	// {"method":"POST","path":"/conversations/*/messages","action":"allow"}).
 	LarkGate []proto.LarkRule `json:"lark_gate,omitempty"`
 	Machines []MachineConfig  `json:"machines"`
-	// Assistant personalizes the 对话 tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
+	// Assistant personalizes the chat tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
 	// know about them and their setup (where code lives, which skills reach work data, machines to stay out of).
 	Assistant AssistantProfile `json:"assistant"`
-	// Inbox tunes the 收件箱's AI triage (docs/inbox.md).
+	// Inbox tunes the inbox's AI triage (docs/inbox.md).
 	Inbox InboxConfig `json:"inbox"`
 	// Notify tunes when "finished" pushes go out (notify.go); which ones a device gets is its own setting.
 	Notify NotifyConfig `json:"notify,omitempty"`
@@ -146,7 +146,7 @@ type Config struct {
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 	// Mesh tunes the links to other hubs (docs/mesh.md, config_mesh.go).
 	Mesh MeshConfig `json:"mesh,omitempty"`
-	// Link tunes the heartbeat with the computers' Persona Links (config_link.go, docs/link.md「心跳」).
+	// Link tunes the heartbeat with the computers' Persona Links (config_link.go, docs/link.md "Heartbeat").
 	Link LinkConfig `json:"link,omitzero"`
 	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/persona.md).
 	Personas PersonasConfig `json:"personas,omitempty"`
@@ -413,7 +413,7 @@ func (c *Config) requestPairCodeWith(ctx context.Context, reqBody map[string]any
 }
 
 // writePair prints the server, token, the pairing QR code for the iPhone and the same link for the Mac (no camera:
-// it pastes the link into 连接 hub).
+// it pastes the link into "Connect hub").
 func writePair(w io.Writer, cfg *Config) {
 	fmt.Fprintf(w, "Server: %s\nToken:  %s\n\n用 Persona App 扫码配对：\n\n", cfg.PublicURL, cfg.Token)
 	qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, w)

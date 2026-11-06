@@ -27,7 +27,7 @@ type answeredBody struct {
 }
 
 // answeredItem is one question of a card and what the user answered, newlines kept. Answer is empty when there is
-// nothing to say beyond the summary (a dismissed card's questions say 忽略了 themselves).
+// nothing to say beyond the summary (a dismissed card's questions say "ignored" themselves).
 type answeredItem struct {
 	Question string `json:"question"`
 	Answer   string `json:"answer,omitempty"`
@@ -225,7 +225,7 @@ var planModes = map[string]string{
 	"plan":              "mode_plan",
 }
 
-// fieldValues are a card's filled-in fields, label：value, a password field only said to be filled in.
+// fieldValues are a card's filled-in fields, label: value, a password field only said to be filled in.
 func fieldValues(l i18n.Lang, ix proto.Interaction, r proto.Resolution) []string {
 	var lines []string
 	known := map[string]bool{}

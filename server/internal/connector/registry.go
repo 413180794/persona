@@ -98,7 +98,7 @@ func (r *Registry) Enabled(id string) bool {
 }
 
 // Feed is where a connector's things go besides the assistant's tools: each is on until the user turns it off
-// (设置 › 连接器's 进知识库 and 进收件箱), while the connector itself keeps running.
+// (Settings › Connectors' "Add to knowledge base" and "Add to inbox"), while the connector itself keeps running.
 type Feed string
 
 const (

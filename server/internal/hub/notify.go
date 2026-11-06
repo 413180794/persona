@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// When a "finished" push is worth sending (docs/server.md 推送). Borrowed from Ovis (github.com/devswha/ovis,
+// When a "finished" push is worth sending (docs/server.md "Pushes"). Borrowed from Ovis (github.com/devswha/ovis,
 // server/push.ts, MIT): a push is for someone away from the computer, so
 //   - wait a while after the turn ends; if the agent resumes, or the user looks at it (herdr idle, or opened in the
 //     app), nothing is sent;
@@ -46,7 +46,7 @@ func secondsOr(n, def int) time.Duration {
 	return time.Duration(def) * time.Second
 }
 
-// NotifyPrefs is what one device wants pushed, set in the app (设置 › 通知) and stored per device.
+// NotifyPrefs is what one device wants pushed, set in the app (Settings › Notifications) and stored per device.
 type NotifyPrefs struct {
 	// Input: questions, plans, permissions and terminal prompts (anything that needs you).
 	Input bool `json:"input"`
@@ -58,17 +58,17 @@ type NotifyPrefs struct {
 	LockDetails bool `json:"lock_details"`
 	// Island: what the compact Dynamic Island shows on each side.
 	Island IslandPrefs `json:"island"`
-	// Translate: the app's 设置 › 翻译, so the hub can translate new mail before it is opened (assistant/inbox_translate.go).
+	// Translate: the app's Settings › Translation, so the hub can translate new mail before it is opened (assistant/inbox_translate.go).
 	Translate TranslatePrefs `json:"translate"`
-	// MuteWhileDesktop: 手机静音 (WeChat's) — no alert pushes to this device while a desktop app (the Mac app) is
+	// MuteWhileDesktop: "Phone Muted" (WeChat's) — no alert pushes to this device while a desktop app (the Mac app) is
 	// connected; it shows them there (desktops.go).
 	MuteWhileDesktop bool `json:"mute_while_desktop"`
-	// Look: the persona this device's Live Activity draws (设置 › 形象), echoed in its pushes (FleetState.Look): the
+	// Look: the persona this device's Live Activity draws (Settings › Look), echoed in its pushes (FleetState.Look): the
 	// widget extension cannot read the app's settings.
 	Look *FleetLook `json:"look,omitempty"`
 }
 
-// TranslatePrefs mirrors 设置 › 翻译 on a device.
+// TranslatePrefs mirrors Settings › Translation on a device.
 type TranslatePrefs struct {
 	Enabled bool   `json:"enabled"`
 	Target  string `json:"target,omitempty"` // BCP 47, one of assistantwire.TranslateLanguages
@@ -90,7 +90,7 @@ const (
 	SlotTPM       = "tpm"       // output tokens per minute, every machine
 	SlotTokens    = "tokens"    // today's tokens
 	SlotRequests  = "requests"  // today's model requests
-	SlotAssistant = "assistant" // whether the assistant (对话 tab) is answering
+	SlotAssistant = "assistant" // whether the assistant (chat tab) is answering
 	SlotLoad      = "load"      // a machine's load
 	SlotTimer     = "timer"     // how long the longest running turn has been going
 	SlotNone      = "none"

@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// On Linux jarvis-link runs as a systemd user service (docs/link.md「Linux（headless）」): `install` writes the unit,
+// On Linux jarvis-link runs as a systemd user service (docs/link.md "Linux (headless)"): `install` writes the unit,
 // enables and (re)starts it and waits for the link; `uninstall` takes it away. The service runs in the user's own
 // systemd instance, so it needs no root, and runs with nobody logged in once linger is on.
 
@@ -435,7 +435,7 @@ func uninstall(e *env, args []string) error {
 	return nil
 }
 
-// hubName is " 「name」 " for a sentence, or nothing.
+// hubName is " name " in full-width corner brackets for a sentence, or nothing.
 func hubName(name string) string {
 	if name == "" {
 		return ""

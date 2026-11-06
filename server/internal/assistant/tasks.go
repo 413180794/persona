@@ -26,7 +26,7 @@ import (
 
 // Tasks dispatched from an assistant conversation (docs/unified-entry.md, #930). The assistant hands the user a plan
 // (task_plan); read-only plans, tasks the user asked for in so many words (#2559) and kinds the user trusts start at
-// once, the rest wait for the user's 开始 on the plan card. A task is a todo (todos.go) whose origin is the conversation; its agents are ordinary agents
+// once, the rest wait for the user's "Start" on the plan card. A task is a todo (todos.go) whose origin is the conversation; its agents are ordinary agents
 // (the Agents page shows them as always). What the assistant adds to the conversation — the plan card, a started
 // task, an answered question, a receipt, a message sent straight to a task — is the conversation's feed, kept apart
 // from Claude's transcript.
@@ -42,7 +42,7 @@ type PlanTask struct {
 	Permission string `json:"permission,omitempty"`
 	Readonly   bool   `json:"readonly,omitempty"`
 	// UserRequested: the user asked for this very task in the turn that planned it (#2559); with
-	// assistant.start_requested_tasks on it starts without the card's 开始.
+	// assistant.start_requested_tasks on it starts without the card's "Start".
 	UserRequested bool   `json:"user_requested,omitempty"`
 	Why           string `json:"why,omitempty"`
 	// DoneWhen: what done means, criteria the supervisor checks before it accepts the work; ExpectMinutes: how long it
@@ -191,7 +191,7 @@ func (s *Service) appendFeed(ctx context.Context, conversation, kind, ref string
 	return s.appendFeedAt(ctx, conversation, kind, ref, body, time.Now())
 }
 
-// appendFeedAt is appendFeed for an item that belongs at another time (the 今天 card: the start of the day).
+// appendFeedAt is appendFeed for an item that belongs at another time (the "Today" card: the start of the day).
 func (s *Service) appendFeedAt(ctx context.Context, conversation, kind, ref string, body any, at time.Time) (FeedItem, error) {
 	it := FeedItem{ID: "feed_" + randomHex(8), Conversation: conversation, At: at.UTC(), Kind: kind, Ref: ref}
 	if body != nil {
@@ -289,7 +289,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 	if _, err := s.appendFeed(ctx, sessionID, feedPlan, p.ID, map[string]any{"plan": p}); err != nil {
 		s.logf("task plan %s: feed: %v", p.ID, err)
 	}
-	// A plan from the health space hands its prompts to agents outside it: it waits for the user's 开始 on its card,
+	// A plan from the health space hands its prompts to agents outside it: it waits for the user's "Start" on its card,
 	// whatever would start it at once, and its push names no task (health.go).
 	health := s.inHealth(ctx, sessionID)
 	if health || !s.planStartsAtOnce(ctx, p.Tasks) {
@@ -532,7 +532,7 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 	if err == nil {
 		err = s.linkTodoAgent(ctx, t.TodoID, mid, sid, t.Title, t.Cwd, "")
 		if errors.Is(err, db.ErrTodoCompleted) {
-			// The user tapped 完成 while the agent was starting (a busy machine takes minutes, #1396). The task stays
+			// The user tapped "Done" while the agent was starting (a busy machine takes minutes, #1396). The task stays
 			// done and its agent stays in it: nothing reads failed, and the close loop still finds the agent to retire.
 			err = s.linkTodoAgentOfDoneTask(ctx, t.TodoID, mid, sid, t.Title, t.Cwd, "")
 			if err != nil {
@@ -545,7 +545,7 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 	}
 	s.logf("task %s: start: %v", t.TodoID, err)
 	// The start may have used up ctx (a busy machine's shell taking all of taskStartTimeout): recording the failure
-	// on it failed too, and the task stayed 「正在开」 with no agent for ever (#4510). The bookkeeping gets its own time.
+	// on it failed too, and the task stayed "starting" with no agent for ever (#4510). The bookkeeping gets its own time.
 	ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), taskFailTimeout)
 	defer cancel()
 	reason := clip(oneLine(err.Error()), 200)
@@ -677,14 +677,14 @@ func (s *Service) retryTask(ctx context.Context, todoID string) (json.RawMessage
 	return view, nil
 }
 
-// continueText is what goes on a cut-off turn: what the chat's 重试 on an API error card sends.
+// continueText is what goes on a cut-off turn: what the chat's "Retry" on an API error card sends.
 const continueText = "继续"
 
-// continueHold bounds how long a sent 继续 keeps further taps from sending another while the agent takes it up.
+// continueHold bounds how long a sent "Continue" keeps further taps from sending another while the agent takes it up.
 var continueHold = 30 * time.Second
 
 // continueTask tells the agent of a task whose latest turn the model service cut off (#1516) to go on, as the chat's
-// 重试 on the error card does; the task shows as in progress again once the agent works. One 继续 per cut: taps while
+// "Retry" on the error card does; the task shows as in progress again once the agent works. One "Continue" per cut: taps while
 // one is on its way, or before the agent took it up, answer the todo as it is, as does a task with no agent cut off.
 // The agent's machine offline is refused.
 func (s *Service) continueTask(ctx context.Context, cur Todo) (json.RawMessage, error) {
@@ -1011,7 +1011,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 			return
 		}
 		if w := c.Work; w != nil && w.Phase == proto.WorkBlocked && w.On == proto.WaitTransient && w.WakeAt != nil {
-			return // 继续 goes by itself (agents_work.go): the receipt waits for how that ends
+			return // "Continue" goes by itself (agents_work.go): the receipt waits for how that ends
 		}
 		if c.UpdatedAt.After(last.UpdatedAt) {
 			last = c
@@ -1046,7 +1046,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		name = m.Name
 	}
 	if cut.SessionID != "" {
-		// A turn cut off by the model service is no end of the work: an interrupted receipt (with 继续 on the card),
+		// A turn cut off by the model service is no end of the work: an interrupted receipt (with "Continue" on the card),
 		// and nothing to judge or close (#1516).
 		s.logf("task %s: interrupted: %s", t.ID, clip(oneLine(cut.TurnError), 200))
 		where := [2]string{cut.MachineID, cut.SessionID}
@@ -1207,7 +1207,7 @@ func cardSentAt(it FeedItem) *time.Time {
 }
 
 // settleCards fills in the cards among items whose item was replied to after they were put in but which do not say
-// so: cards from before it was recorded on them (the reply went out, the card still offered 发送). When the items
+// so: cards from before it was recorded on them (the reply went out, the card still offered "Send"). When the items
 // were replied to is the inbox's (inboxRepliedAt).
 func (s *Service) settleCards(ctx context.Context, items []FeedItem) {
 	var ids []string
@@ -1238,7 +1238,7 @@ func (s *Service) settleCards(ctx context.Context, items []FeedItem) {
 	}
 }
 
-// cardSent is whether card cardID, about inbox item itemID, says its reply went out (发送 on the card sends once per
+// cardSent is whether card cardID, about inbox item itemID, says its reply went out ("Send" on the card sends once per
 // card: sendFromCard).
 func (s *Service) cardSent(ctx context.Context, cardID, itemID string) (bool, error) {
 	card, err := s.feedItem(ctx, cardID)
@@ -1270,7 +1270,7 @@ func (s *Service) feedItem(ctx context.Context, id string) (*FeedItem, error) {
 	return &FeedItem{ID: r.ID, Conversation: r.Conversation, At: r.At, Kind: r.Kind, Ref: r.Ref, Body: r.Body}, nil
 }
 
-// activeTasks are the tasks going on, as the inbox's judge and AI 分身 see them.
+// activeTasks are the tasks going on, as the inbox's judge and AI twin see them.
 func (s *Service) activeTasks(ctx context.Context) []prompts.InboxTask {
 	var out []prompts.InboxTask
 	for _, t := range s.snapshotTasks(ctx, "") {
@@ -1310,7 +1310,7 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 		}
 		task := snapshotTask(t, st, agents, now)
 		if st == "failed" && task.Last == "" {
-			task.Last = clip(oneLine(t.StartError), 80) // why it did not start, for the 早报 (#4124)
+			task.Last = clip(oneLine(t.StartError), 80) // why it did not start, for the morning brief (#4124)
 		}
 		task.Link = todoLink(web, t.ID)
 		task.Delivery = deliverySummary(t)
@@ -1337,7 +1337,7 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 
 // snapshotTask is one task in the snapshot, in state st: its lead agent's (taskLead) last words, the step it is on
 // while it works (or has said nothing yet: an agent that only runs tools, #1583) and its running subagents, as the
-// task cards show them (docs/unified-entry.md「任务卡片的进度」).
+// task cards show them (docs/unified-entry.md "Progress on task cards").
 func snapshotTask(t Todo, st string, agents []proto.Session, now time.Time) prompts.SnapshotTask {
 	task := prompts.SnapshotTask{ID: t.ID, Title: t.Title, State: taskStateLabel(st)}
 	last := taskLead(st, agents)
@@ -1392,7 +1392,7 @@ func taskLead(st string, agents []proto.Session) proto.Session {
 	return latest
 }
 
-// taskState follows docs/todos.md「状态计算规则」(clients compute the same).
+// taskState follows docs/todos.md "How the state is computed"(clients compute the same).
 func taskState(t Todo, agents []proto.Session) string {
 	if t.DoneAt != nil && t.StartError != "" {
 		return "failed"
@@ -1409,7 +1409,7 @@ func taskState(t Todo, agents []proto.Session) string {
 	switch {
 	case has[proto.StateNeedsYou]:
 		return "needs_you"
-	case interrupted: // stopped on a model API error: not done, waiting for 继续 (#1516)
+	case interrupted: // stopped on a model API error: not done, waiting for "Continue" (#1516)
 		return "interrupted"
 	case has[proto.StateUnread]:
 		return "unread"

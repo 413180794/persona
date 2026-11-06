@@ -89,7 +89,7 @@ func (s *Service) admitInbox(ctx context.Context, batch *inboxBatch, todo []*Inb
 }
 
 // admit lets in the items that got a tier: the model's, or — when the model can't (not set up, held, failing, too
-// slow) — their fallback tier with 「按规则」, for good (this version is not asked again when the model is back). The
+// slow) — their fallback tier with "By rule", for good (this version is not asked again when the model is back). The
 // rest are dropped this round and counted as held back.
 func (s *Service) admit(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
 	b := &s.inbox
@@ -154,7 +154,7 @@ func (s *Service) admit(ctx context.Context, batch *inboxBatch, todo []*InboxIte
 		s.inboxChanged(ctx, nil) // nothing came in, but the triage status moved (saveInbox tells otherwise)
 	}
 	if len(in) > 0 {
-		s.handInbox(ctx) // a new 需要你 may be the AI 分身's
+		s.handInbox(ctx) // a new "Needs you" may be the AI twin's
 	}
 	if behind && len(in) > 0 {
 		// More to sort, and the model is getting through them: the next round comes now.
@@ -212,7 +212,7 @@ func (s *Service) recordHeld(batch *inboxBatch, held map[string]inboxHeld) bool 
 // round had more than it sorts. "ok" when none wait.
 type InboxTriage struct {
 	State   string              `json:"state"`            // ok | unconfigured | paused | error | timeout | behind
-	Reason  string              `json:"reason,omitempty"` // the state for people: 模型没有额度
+	Reason  string              `json:"reason,omitempty"` // the state for people: "model out of quota"
 	Waiting int                 `json:"waiting"`
 	Sources []InboxTriageSource `json:"sources,omitempty"`
 }

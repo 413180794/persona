@@ -9,7 +9,7 @@ import (
 // the dialog: an answer's numbered list became options (the hub's card offered the prose as buttons) and the
 // recordings' DialogHead was the welcome box or an answer. Codex starts each row of the conversation at the left
 // edge — the agent's and status rows with •, the user's with ›, events with ✔ ✗ ■ — and ends a turn with
-// 「Worked for 2s • 9:41 PM」; its dialogs are indented under them, with the cursor's › at the edge only on an option.
+// "Worked for 2s • 9:41 PM"; its dialogs are indented under them, with the cursor's › at the edge only on an option.
 const codexAnswer = "• I'll do three things:\n  1. Fix the race in the watcher\n  2. Add a regression test\n  3. Push the branch"
 
 func TestCodexAnswersNumberedListIsNotADialog(t *testing.T) {
