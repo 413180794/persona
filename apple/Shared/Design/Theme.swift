@@ -547,6 +547,12 @@ nonisolated enum Theme {
         static let drawer = Color(light: 0xF9F9F9, dark: 0x171717)
         /// The composer: its field's corner when it is one line (a capsule) and when it has grown into a card.
         static let composerRadius: CGFloat = 32
+        /// Reserve most of the keyboard-visible viewport for the conversation, not the draft.
+        static let composerHeightFraction: CGFloat = 0.22
+        static let composerMinimumLines = 3
+        static let composerMaximumLines = 8
+        /// Text and TextField round line heights differently; half a line distinguishes adjacent counts.
+        static let composerLineTolerance: CGFloat = 0.5
         /// The switch's segments: width of each, and its height.
         static let segmentWidth: CGFloat = 72
         static let switchHeight: CGFloat = 44

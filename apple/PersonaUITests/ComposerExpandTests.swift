@@ -1,10 +1,9 @@
 import XCTest
 
-/// Expand in the shell's composer (#3167): a draft three lines long offers it; the full-page editor holds the same text and
-/// quotes, edits there are the box's when it goes down, and its Send sends as the box's does. The assistant's and an
-/// agent's conversation, keyboard up and down; iPhone and iPad alike (the iPad draws the same composer, #2779).
-/// Against scripts/mock/mock_hub.py or composer_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=…); TEST_RUNNER_JARVIS_SHOTS=<dir>
-/// keeps screenshots, TEST_RUNNER_JARVIS_SHOTS_APPEARANCE names them (light / dark).
+/// Expand in the shell's composer (#5685): a draft grows to its viewport-dependent line limit, then offers an icon in
+/// the text area's upper-right corner. The full-page editor holds the same text and quotes; edits and cursor position
+/// survive collapse, and Send sends once. The assistant's and an agent's conversation, keyboard up and down.
+/// Against scripts/mock/composer_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=…). Screenshots are kept as xcresult attachments.
 final class ComposerExpandTests: XCTestCase {
     private var app: XCUIApplication!
     private var hub = ""
@@ -36,7 +35,96 @@ final class ComposerExpandTests: XCTestCase {
 
     @MainActor func testTheAssistantsDraftOpensFullPage() { expands(isAssistant: true) }
 
-    /// One paragraph, no new line, wrapped past three lines by the field's width: Expand all the same.
+    /// Discover the real threshold rather than assuming a device-specific line count. Capture the four acceptance states.
+    @MainActor func testAdaptiveThresholdAndFourStates() {
+        open(isAssistant: true)
+        if ProcessInfo.processInfo.environment["JARVIS_ORIENTATION"] == "landscape" {
+            XCTAssertGreaterThan(app.frame.width, app.frame.height, "the app did not actually rotate to landscape")
+        }
+        startTyping()
+        field.typeText("Draft line 1")
+        sleep(1)
+        XCTAssertFalse(expand.exists)
+        let oneLineHeight = field.frame.height
+        let unreservedWidth = field.frame.width
+        field.typeText("\nDraft line 2")
+        sleep(1)
+        let landscape = ProcessInfo.processInfo.environment["JARVIS_ORIENTATION"] == "landscape"
+        XCTAssertFalse(expand.exists, "two lines must fit without an expand button, including landscape")
+        XCTAssertGreaterThan(field.frame.height, oneLineHeight, "typing another line did not grow the field")
+        if !expand.exists { shot("01-below-threshold") }
+
+        var draft = "Draft line 1\nDraft line 2"
+        var threshold = 2
+        for count in 3...8 where !expand.exists {
+            let next = "\nDraft line \(count)"
+            field.typeText(next)
+            draft += next
+            sleep(1)
+            if expand.exists { threshold = count; break }
+        }
+        XCTAssertTrue(expand.exists, "no expand icon at the maximum line count")
+        print("RESULT: composer threshold=\(threshold), orientation=\(landscape ? "landscape" : "portrait"), language=\(language)")
+        if let expected = ProcessInfo.processInfo.environment["JARVIS_EXPECTED_LINES"].flatMap(Int.init) {
+            XCTAssertEqual(threshold, expected, "the viewport did not select the expected line limit")
+        }
+        assertCorner()
+        XCTAssertLessThan(field.frame.width, unreservedWidth, "the text area did not reserve space for the corner button")
+        XCTAssertEqual(field.value as? String, draft)
+        shot("02-at-threshold")
+        let cappedHeight = field.frame.height
+        field.typeText("\nExtra scrolling line\nOne more scrolling line")
+        sleep(1)
+        XCTAssertEqual(field.frame.height, cappedHeight, accuracy: 2, "the field grew beyond its line limit")
+        let scrollingDraft = draft + "\nExtra scrolling line\nOne more scrolling line"
+        XCTAssertEqual(field.value as? String, scrollingDraft)
+
+        expand.tap()
+        XCTAssertTrue(page.waitForExistence(timeout: 5))
+        XCTAssertEqual(page.value as? String, scrollingDraft)
+        let collapse = element("composer-page-collapse")
+        let send = element("composer-page-send")
+        XCTAssertEqual(collapse.label, collapseLabel)
+        XCTAssertGreaterThan(collapse.frame.midX, app.frame.midX, "collapse is not in the upper-right corner")
+        XCTAssertGreaterThan(send.frame.minY, page.frame.midY, "send is not below the page editor")
+        shot("03-expanded")
+        collapse.tap()
+        XCTAssertTrue(page.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, scrollingDraft, "collapse changed the draft")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        assertCorner()
+        shot("04-collapsed")
+        field.typeText("!")
+        XCTAssertEqual(field.value as? String, scrollingDraft + "!", "the cursor did not return to the end")
+
+        // Delete back below the threshold: the icon and its reserved width must go away.
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: scrollingDraft.count + 1 - "Draft line 1".count))
+        XCTAssertTrue(expand.waitForNonExistence(timeout: 5), "the expand icon survived deletion below the threshold")
+        XCTAssertEqual(field.value as? String, "Draft line 1")
+        XCTAssertEqual(field.frame.height, oneLineHeight, accuracy: 2)
+        XCTAssertEqual(field.frame.width, unreservedWidth, accuracy: 2, "deletion did not restore the full text width")
+        shot("05-deleted-below-threshold")
+        leaveEmpty()
+    }
+
+    @MainActor private func assertCorner() {
+        XCTAssertTrue(expand.isHittable)
+        XCTAssertEqual(expand.label, expandLabel)
+        XCTAssertGreaterThan(expand.frame.minX, field.frame.midX)
+        XCTAssertLessThan(expand.frame.midY, field.frame.midY, "the icon is not at the top of the text area")
+        XCTAssertLessThan(expand.frame.maxY, element("shell-composer-add").frame.minY + 1, "expand moved into the bottom toolbar")
+        XCTAssertLessThanOrEqual(expand.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
+    }
+
+    private var language: String { ProcessInfo.processInfo.environment["JARVIS_UI_LANGUAGE"] ?? "zh-Hans" }
+    private var expandLabel: String {
+        ["zh-Hans": "展开输入框", "en": "Expand the message box", "ja": "入力欄を広げる"][language]!
+    }
+    private var collapseLabel: String {
+        ["zh-Hans": "收起输入框", "en": "Collapse the message box", "ja": "入力欄を縮める"][language]!
+    }
+
+    /// One paragraph, no newline, wrapped past the viewport's threshold: Expand all the same.
     @MainActor func testALongParagraphOffersIt() {
         open(isAssistant: true)
         startTyping()
@@ -60,7 +148,7 @@ final class ComposerExpandTests: XCTestCase {
         // text view starts under the bar).
         open(isAssistant: false, quotes: true)
         startTyping()
-        field.typeText("line one\nline two\nline three\nline four")
+        field.typeText((1...8).map { "line \($0)" }.joined(separator: "\n"))
         XCTAssertTrue(expand.waitForExistence(timeout: 5))
         expand.tap()
         XCTAssertTrue(page.waitForExistence(timeout: 5))
@@ -102,8 +190,12 @@ final class ComposerExpandTests: XCTestCase {
     /// `leaveEmpty`, and the quotes taken off: unsent, they would stay with the conversation for the next test.
     @MainActor private func leaveEmptyWithoutQuotes() {
         leaveEmpty()
+        removeQuotes()
+    }
+
+    @MainActor private func removeQuotes() {
         for _ in 1...4 {
-            guard let x = app.buttons.matching(NSPredicate(format: "label == '取消引用'")).allElementsBoundByIndex.first(where: \.isHittable) else { break }
+            guard let x = app.buttons.matching(identifier: "取消引用").allElementsBoundByIndex.first(where: \.isHittable) else { break }
             x.tap()
             sleep(1)
         }
@@ -120,7 +212,7 @@ final class ComposerExpandTests: XCTestCase {
         open(isAssistant: false)
         startTyping()
         let marker = "expand-cmd-return-\(Int(Date.now.timeIntervalSince1970))"
-        field.typeText("line one\nline two\nline three\n\(marker)")
+        field.typeText((1...7).map { "line \($0)" }.joined(separator: "\n") + "\n" + marker)
         XCTAssertTrue(expand.waitForExistence(timeout: 5))
         expand.tap()
         XCTAssertTrue(page.waitForExistence(timeout: 5))
@@ -150,17 +242,23 @@ final class ComposerExpandTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app = XCUIApplication()
         // Pair first on its own: a first pairing resets the route arguments (as ComposerKeyboardTests).
-        app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "NO"]
+        app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "NO", "-AppleLanguages", "(\(language))"]
         app.launchPinned()
         XCTAssertTrue(app.buttons["Persona"].waitForExistence(timeout: 15) || field.waitForExistence(timeout: 15))
         app.terminate()
-        app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "NO", "-holdChromeOpen", "YES", "-showSampleQuotes", quotes ? "YES" : "NO",
+        app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "NO", "-AppleLanguages", "(\(language))", "-holdChromeOpen", "YES", "-showSampleQuotes", quotes ? "YES" : "NO",
                                "-dev.openChat", "", "-app.tab", isAssistant ? "assistant" : "chats",
                                "-tab", isAssistant ? "assistant" : "dev"]
         app.launchArguments += isAssistant ? ["-openAssistant", assistant] : ["-openSession", agent]
         app.launchPinned()
         XCTAssertTrue(field.waitForExistence(timeout: 20), "the conversation did not open:\n\(app.debugDescription)")
-        if quotes { sleep(4) } else { sleep(2) } // `-showSampleQuotes` puts its quotes over the field after 3 s
+        if quotes {
+            sleep(4) // `-showSampleQuotes` puts its quotes over the field after 3 s.
+        } else {
+            sleep(2)
+            // Failed earlier runs can leave quotes in the persisted draft; the no-quotes cases start clean.
+            removeQuotes()
+        }
     }
 
     /// The keyboard on the box, the box empty (drafts are kept across runs).
@@ -190,16 +288,14 @@ final class ComposerExpandTests: XCTestCase {
         field.typeText("line one\nline two")
         sleep(1)
         XCTAssertFalse(expand.exists, "展开 offered for two lines")
-        // Four: Expand in the card's row, with a title and an icon, over the keyboard.
+        // Eight lines exceed either keyboard-visible threshold and still offer expansion with the keyboard down.
         let marker = "expand-\(name)-\(Int(Date.now.timeIntervalSince1970))"
-        field.typeText("\nline three\n\(marker)")
-        XCTAssertTrue(expand.waitForExistence(timeout: 5), "no 展开 for four lines")
-        XCTAssertEqual(expand.label, "展开输入框")
-        XCTAssertTrue(expand.isHittable)
-        XCTAssertLessThanOrEqual(expand.frame.maxY, app.keyboards.firstMatch.frame.minY + 1, "展开 under the keyboard")
-        XCTAssertGreaterThan(expand.frame.minY, field.frame.maxY - 4, "展开 in the row under the field")
+        let rest = (3...7).map { "line \($0)" }.joined(separator: "\n") + "\n" + marker
+        field.typeText("\n" + rest)
+        XCTAssertTrue(expand.waitForExistence(timeout: 5), "no expand icon for eight lines")
+        assertCorner()
         shot("\(name)-bar-long")
-        let draft = "line one\nline two\nline three\n\(marker)"
+        let draft = "line one\nline two\n" + rest
         XCTAssertEqual(field.value as? String, draft)
 
         // Expand: the page, filling the window, with the same text and the quotes.
@@ -208,15 +304,24 @@ final class ComposerExpandTests: XCTestCase {
         sleep(1)
         XCTAssertEqual(page.value as? String, draft, "the page shows another text than the box")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the page's editor has no keyboard")
-        // Page-sized: down to the keyboard (or the window's end), whatever the screen.
+        // The editor reaches its footer, and the footer reaches the keyboard; neither overlaps the other.
         let bottom = min(app.keyboards.firstMatch.frame.minY, app.frame.maxY)
-        XCTAssertGreaterThan(page.frame.maxY, bottom - 80, "the page's editor stops short of the keyboard (\(page.frame), keyboard at \(bottom))")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == '取消引用'")).allElementsBoundByIndex.contains { $0.isHittable },
+        let pageSend = element("composer-page-send")
+        XCTAssertGreaterThan(pageSend.frame.maxY, bottom - 80, "the send control stops short of the keyboard")
+        XCTAssertGreaterThan(page.frame.maxY, pageSend.frame.minY - 32, "the editor stops short of its footer")
+        XCTAssertLessThanOrEqual(page.frame.maxY, pageSend.frame.minY + 1, "the editor overlaps its footer")
+        shot("\(name)-page")
+        let quoteButtons = element("composer-page-quotes").buttons.matching(identifier: "取消引用")
+        // Existence precedes hit testing during the sheet animation, especially on a busy simulator.
+        for _ in 1...5 {
+            if quoteButtons.allElementsBoundByIndex.contains(where: { $0.isHittable && $0.frame.minY < page.frame.minY }) { break }
+            sleep(1)
+        }
+        XCTAssertTrue(quoteButtons.allElementsBoundByIndex.contains { $0.isHittable && $0.frame.minY < page.frame.minY },
                       "the quotes are not on the page")
         XCTAssertTrue(element("composer-page-collapse").isHittable && element("composer-page-send").isHittable)
-        XCTAssertEqual(element("composer-page-collapse").label, "收起输入框")
-        XCTAssertEqual(element("composer-page-send").label, "发送")
-        shot("\(name)-page")
+        XCTAssertEqual(element("composer-page-collapse").label, collapseLabel)
+        XCTAssertEqual(element("composer-page-send").label, ["zh-Hans": "发送", "en": "Send", "ja": "送信"][language]!)
 
         // An edit at the cursor (the end, where the box left it), then Collapse: the box has it, the keyboard on the box.
         page.typeText(" edited")

@@ -186,6 +186,16 @@ Use an invalidation revision as the task key and handle the flag after completio
 - Do not wrap `List` rows in custom views merely for `Equatable` then put `.swipeActions` / `.contextMenu` inside body: tested 2026-11-01, both pushes and scrolling slowed
   (UIKit reconfigures cell swipe actions every time). Reduce Agents push cost by batching (`AppModel.applyPendingSessions`).
 
+## 长消息输入框的动态阈值（#5685）
+
+- 可用高度取输入框底边在窗口中的位置，扣除顶部安全区，不取输入框自身高度。自身高度随着输入变化，用它计算行数上限会形成反馈循环；窗口坐标还能避免独立 hosting controller 的局部「global」坐标影响结果。
+- 展开按钮出现后，文字右边距增加。用于判断是否显示按钮的测量始终保留未缩进的宽度，否则新增边距会让文字再次换行，删字到边界时容易闪烁。实际高度仍由原生 `TextField.lineLimit` 控制，不使用隐藏 `Text` 强行设置高度；隐藏测量只判断阈值，标点的原生压缩行为可能与它相差少量字符。
+- 不用 `TextField(axis: .vertical).fixedSize(horizontal: false, vertical: true)` 强撑高度：实测多行原生文本视图的实际 / 无障碍范围会伸进工具栏，测试点在文字末尾却被工具栏接走，键盘不弹。保留原生约束和 `lineLimit`，通过文字区的 `layoutPriority` 和包含按钮偏移的最小高度分配空间。
+- 按钮的可见图标很小，但点击区域会随动态字体放大。引用栏压缩文字区时，只有原有最小高度还不够，按钮顶部偏移会让点击区域伸进底部工具栏；最小高度要包含这个偏移，右侧预留宽度也要使用实际测得的点击区域宽度。`assertCorner` 同时检查图标属于文字区且点击区域没有进入工具栏。
+- 全屏页的底部发送区用编辑器的兄弟布局。改为 `safeAreaInset` 时，实测 `TextEditor` 的无障碍范围仍延伸到键盘，与发送按钮重叠；引用按钮也不能可靠地点击。改成明确的竖向布局，并给页内引用区独立的标识后，两项主对话 / Agent 引用回归通过。测试同时核对编辑区与发送区不重叠，不把「元素存在」当成「可以点击」。
+- 到达阈值时，按钮缩进改变换行，原生文本视图有时仍保留旧的可见范围，刚输入的末行会被裁掉几像素。iOS 输入框在高度变化后的布局完成时先修正越界偏移，再 `scrollRangeToVisible(selectedRange)` 保持光标可见；不修改文本和选区，也不在用户仅手动滚动时触发。截图复查确认三行都能完整显示，光标回传测试继续通过。
+- UI 测试不再假设「超过两行就展开」：小屏、大屏和键盘收起后的上限不同。先逐行输入找到当前阈值，再测试停止长高、右上角位置、展开 / 收起和删除。键盘收起后，上限增加，未达到新上限的草稿可以不再显示按钮。
+
 ## Navigation
 
 - Markdown in a file-preview `.sheet` inherits the chat page's `openURL` (2026-11-03, #796): tapping only changes the underlying chat's link state; the file drawer hides the link drawer until closed. The current presentation layer must own link state and presenter and override `openURL` / `openLink`; do not close the file first or retry the underlying presenter after a delay. Pass the original chat key; closing the link retains the file and reading `position`. Tap-test both file entry points, normal web pages and port forwarding.

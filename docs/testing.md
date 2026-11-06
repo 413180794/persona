@@ -364,6 +364,8 @@ Style `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`; actual `simctl ui <udid> appearan
 Fresh dedicated simulator paired only to this mock; never target real main chat. Fixture regression:
 `python3 -B -m unittest discover -s scripts/mock -p 'test_composer_hub.py'`.
 
+输入框展开（#5685）：同一隔离 mock，运行 `ComposerExpandTests` 和 `ComposerGrowthTests`。所有 `xcodebuild` 前加 `~/.local/bin/xcode-slot`，用 `-parallel-testing-enabled NO`，小屏和大屏依次验证，不同时启动两台模拟器。`testAdaptiveThresholdAndFourStates` 在实际输入中寻找阈值，验证未达阈值无按钮、到阈值右上角按钮、停止长高、展开 / 收起不改文字、光标恢复、删除后按钮消失。`TEST_RUNNER_JARVIS_UI_LANGUAGE=zh-Hans|en|ja` 验证两种按钮的无障碍标签；`TEST_RUNNER_JARVIS_EXPECTED_LINES=<行数>` 可断言指定设备的实际阈值。用 `xcrun xcresulttool export attachments --path <结果.xcresult> --output-path <截图目录>` 导出 `01-below-threshold`、`02-at-threshold`、`03-expanded`、`04-collapsed` 四张附件，再人工检查。深浅色由 `simctl ui <udid> appearance light|dark` 切换。键盘截图使用 `sim-boot.sh --profile stock`；每台跑完就 shutdown，任务结束删除自建模拟器。真实横屏用支持横屏的 iPad；当前 iPhone 的 `Info.plist` 只允许竖屏，不能把设置了 `JARVIS_ORIENTATION=landscape` 当作已经旋转。测试会断言 App 窗口宽度大于高度。部分运行时的 `app.screenshot()` 在旋转后会出现错向 / 黑边，功能测试通过不等于截图可用，不用这种截图做视觉验收。
+
 Notification buttons (`NotificationActionTests`) use mock, not real hub:
 `PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/NotificationActionTests`.
 Long-press SpringBoard banner, tap Deny, inspect mock `GET /mock/resolved` for resolve.

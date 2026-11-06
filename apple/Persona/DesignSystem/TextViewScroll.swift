@@ -27,9 +27,17 @@ enum TextViewScroll {
     }
 
     /// Settles the text view that has focus, once the layout in progress is done.
-    @MainActor static func settleFocused() {
+    @MainActor static func settleFocused(revealCaret: Bool = false) {
         DispatchQueue.main.async {
-            if let view = FirstResponder.current as? UITextView { settle(view) }
+            if let view = FirstResponder.current as? UITextView {
+                if revealCaret { view.layoutIfNeeded() }
+                settle(view)
+                // Reserving the corner control changes wrapping while the field grows. Keep the newly typed line
+                // visible after that layout, without changing its text or selection.
+                if revealCaret, view.selectedRange.location != NSNotFound {
+                    view.scrollRangeToVisible(view.selectedRange)
+                }
+            }
         }
     }
 }

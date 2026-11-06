@@ -37,9 +37,11 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     @State private var dictation = Dictation()
     @Environment(\.buiTheme) private var theme
     #if os(iOS)
-    /// The draft's height in the field's width and one line's, to tell when it is long enough to offer Expand (#3167).
+    /// The draft's height at its full width, and a line's height at the current Dynamic Type size.
     @State private var textHeight: CGFloat = 0
     @State private var lineHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+    @State private var enlargeWidth: CGFloat = Theme.Size.tapTarget
     /// The full-page editor is up (`ComposerPageEditor`), on the same draft.
     @State private var enlarged = false
     /// It went down because its Send sent: the keyboard does not come back to the emptied field.
@@ -51,16 +53,39 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     /// while the page is up. A focus binding does not reach into a sheet, so the page keeps its own.
     @State private var pageFocusRequest = 0
 
-    /// Three lines or more: the box is getting small for the text, ChatGPT's point to offer its full-page editor.
-    private var offersEnlarge: Bool { !text.isEmpty && lineHeight > 0 && textHeight > lineHeight * 2.5 }
-
-    /// What is measured: enough of the draft for four lines at most (only "more than two and a half" matters), with a
-    /// trailing new line counted as the line it starts.
-    private var measuredText: String {
-        let head = String(text.prefix(600))
-        return head.isEmpty ? " " : head.hasSuffix("\n") ? head + " " : head
+    private var offersEnlarge: Bool {
+        !text.isEmpty && ComposerGrowth.offersExpansion(textHeight: textHeight, lineHeight: lineHeight, maximumLines: maximumLines)
     }
+
+    /// Count a trailing newline as the empty line it starts.
+    private var measuredText: String { text.isEmpty ? " " : text.hasSuffix("\n") ? text + " " : text }
     #endif
+
+    private var maximumLines: Int {
+        #if os(iOS)
+        ComposerGrowth.maximumLines(viewportHeight: viewportHeight, lineHeight: lineHeight)
+        #else
+        Theme.Shell.composerMaximumLines // Other platforms retain their existing composer height.
+        #endif
+    }
+
+    private var fieldRightInset: CGFloat {
+        let inset = expanded ? Theme.Space.l : Theme.Space.xs
+        #if os(iOS)
+        return inset + (offersEnlarge ? enlargeWidth : 0)
+        #else
+        return inset
+        #endif
+    }
+
+    private var fieldMinimumHeight: CGFloat {
+        #if os(iOS)
+        // Even when quotes compress the text, the corner button's target must stay above the toolbar.
+        Theme.Size.tapTarget + (offersEnlarge ? Theme.Space.xs : 0)
+        #else
+        Theme.Size.tapTarget
+        #endif
+    }
 
     private var fieldSelection: Binding<TextSelection?> {
         #if os(iOS)
@@ -104,11 +129,15 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                 if !expanded { plus }
                 TextField(placeholder, text: $text, selection: fieldSelection, axis: .vertical)
                     .font(Theme.Font.body)
-                    .lineLimit(expanded ? 1...8 : 1...1)
+                    .lineLimit(expanded ? 1...maximumLines : 1...1)
                     #if os(iOS) || os(visionOS)
                     // Grown taller, the field must not stay scrolled down a line (#909, TextViewScroll).
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in
+                        #if os(iOS)
+                        if focused.wrappedValue, !enlarged { TextViewScroll.settleFocused(revealCaret: true) }
+                        #else
                         if focused.wrappedValue { TextViewScroll.settleFocused() }
+                        #endif
                     }
                     #endif
                     .focused(focused)
@@ -117,17 +146,23 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     .macComposerKeys(focused: focused.wrappedValue, canSend: canSend, // ⏎ sends, ⇧⏎ a new line
                                      history: history.map { MacComposerHistory(key: $0, text: $text, focus: { focused.wrappedValue = true }) }, send: send)
                     #endif
-                    .padding(.horizontal, expanded ? Theme.Space.l : Theme.Space.xs)
+                    .padding(.leading, expanded ? Theme.Space.l : Theme.Space.xs)
+                    .padding(.trailing, fieldRightInset)
                     .padding(.top, expanded ? Theme.Space.l : 0)
-                    .scaledFrame(minHeight: Theme.Size.tapTarget)
+                    .scaledFrame(minHeight: fieldMinimumHeight)
                     .accessibilityIdentifier("shell-composer-field")
                     #if os(iOS)
-                    // The draft's lines as the field's width wraps them, and one line's height (after the identifier,
-                    // which would name these too). Not the field's own height: on a short page (quotes over it, the
-                    // keyboard up) the field is squeezed below its lines.
+                    // Measure at full width, before the button's reserved inset, not the field's capped height.
                     // Not while the page is up: it has its own lines, and the box measures again as it comes back.
                     .background(alignment: .topLeading) {
                         if !enlarged { measuring }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if offersEnlarge {
+                            enlargeButton
+                                .padding(.trailing, Theme.Space.s)
+                                .padding(.top, Theme.Space.xs)
+                        }
                     }
                     #endif
                 if !expanded {
@@ -137,12 +172,13 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     if let stop { stopButton(stop) }
                 }
             }
+            #if os(iOS)
+            // Prefer the native, line-limited text region over surrounding content without forcing UIKit's size.
+            .layoutPriority(1)
+            #endif
             if expanded {
                 HStack(spacing: Theme.Space.xs) {
                     plus
-                    #if os(iOS)
-                    if offersEnlarge { enlargeButton }
-                    #endif
                     Spacer(minLength: Theme.Space.s)
                     if let modesTitle {
                         Menu { modes() } label: { modesLabel(modesTitle) }
@@ -179,6 +215,11 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         .animation(Theme.Motion.state, value: canSend)
         .animation(Theme.Motion.standard, value: focused.wrappedValue)
         #if os(iOS)
+        .background {
+            ComposerViewportReader { viewportHeight = $0 }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .animation(Theme.Motion.state, value: offersEnlarge)
         .onChange(of: focused.wrappedValue) { _, wants in
             // The box asked for while the page is up: the page takes it, the hidden box under the sheet does not.
@@ -201,19 +242,15 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     }
 
     #if os(iOS)
-    /// Expand: the draft in a full-page editor (ChatGPT's), offered once it is three lines long. In the card's row beside +,
-    /// where the composer's buttons are: over the field's corner it would cover the text or make it wrap anew.
+    /// An icon in the text area's corner, never competing with the model and send controls below it.
     private var enlargeButton: some View {
         Button(action: enlarge) {
-            Label("Expand", systemImage: Theme.Icon.enlarge)
-                .labelStyle(.titleAndIcon)
+            Image(systemName: Theme.Icon.expandMessage)
                 .font(Theme.Font.secondary)
                 .foregroundStyle(ink)
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, Theme.Space.s)
-                .scaledFrame(minHeight: Theme.Size.tapTarget)
-                .contentShape(.capsule)
+                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { enlargeWidth = $0 }
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Expand the message box")
@@ -225,7 +262,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     private var measuring: some View {
         ZStack(alignment: .topLeading) {
             Text(verbatim: measuredText)
-                .lineLimit(4)
+                .lineLimit(maximumLines + 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight = $0 }
@@ -385,6 +422,7 @@ private struct ComposerPageEditor: View {
                 if let quotes, !quotes.wrappedValue.isEmpty {
                     QuoteBar(refs: quotes)
                         .padding(.horizontal, Theme.Space.l)
+                        .accessibilityIdentifier("composer-page-quotes")
                 }
                 TextEditor(text: $text, selection: $cursor)
                     .font(Theme.Font.body)
@@ -406,30 +444,34 @@ private struct ComposerPageEditor: View {
                     .shellScaled() // the box's type size, a size up
                     .accessibilityLabel(placeholder)
                     .accessibilityIdentifier("composer-page-field")
+                HStack {
+                    Spacer()
+                    if !canSend, let stop {
+                        ComposerRoundButton.stop(id: "composer-page-stop", stop)
+                    } else {
+                        ComposerRoundButton(symbol: Theme.Icon.send, label: String(localized: "Send"), id: "composer-page-send", action: sendOnce)
+                            .keyboardShortcut(.return, modifiers: .command)
+                            .disabled(!canSend)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.s)
             }
             .frame(maxWidth: ChatView.readableWidth) // an iPad's page: the conversation's measure, not the window's
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .themedPage()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         commitTyped()
                         collapse()
-                    } label: { Label("Collapse", systemImage: Theme.Icon.shrink) }
-                        .accessibilityLabel("Collapse the message box")
-                        .accessibilityIdentifier("composer-page-collapse")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    if !canSend, let stop {
-                        Button(action: stop) { Label("Interrupt [Composer Buttons f9d193]", systemImage: Theme.Icon.interrupt) }
-                            .accessibilityIdentifier("composer-page-stop")
-                    } else {
-                        Button(action: sendOnce) { Label("Send", systemImage: Theme.Icon.send) }
-                            .keyboardShortcut(.return, modifiers: .command) // the box's, which is off meanwhile
-                            .disabled(!canSend)
-                            .accessibilityIdentifier("composer-page-send")
+                    } label: {
+                        Image(systemName: Theme.Icon.collapseMessage)
                     }
+                    .accessibilityLabel("Collapse the message box")
+                    .accessibilityIdentifier("composer-page-collapse")
                 }
             }
         }

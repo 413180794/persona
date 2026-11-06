@@ -173,6 +173,9 @@ extension Theme {
         static let enlarge = "arrow.up.left.and.arrow.down.right"
         /// Back from the enlarged view (the composer's full-page editor, #3167); a file outline's Collapse all.
         static let shrink = "arrow.down.right.and.arrow.up.left"
+        /// Expand a draft from the text area's upper-right corner; collapse it back from the page.
+        static let expandMessage = "arrow.down.left.and.arrow.up.right"
+        static let collapseMessage = "arrow.up.right.and.arrow.down.left"
         /// The text size setting.
         static let textSize = "textformat.size"
         static let upDown = "arrow.up.arrow.down"
@@ -460,7 +463,17 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video''s, the sidebar's).
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
+        /// Send someone a message.
+        static let message = "bubble.left.fill"
+        static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
+        static let locked = "lock"
+        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
+        static let memory = "brain"
+        /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"
