@@ -1,6 +1,8 @@
 import SwiftUI
+#if !os(macOS)
 import UIKit
 import WebKit
+#endif
 
 /// Settings › hub › the in-app tunnel (docs/network.md「经 App 内隧道连 hub」): one paired hub's tunnel, the account it signs
 /// in with, and what it is doing now. Only a hub whose extension contributes a tunnel has the page, titled with the
@@ -21,9 +23,11 @@ struct HubInAppTunnelPage: View {
             form(hub, route)
                 .detailTitle(route.title)
                 .task { await watchCore() }
+                #if !os(macOS)
                 .sheet(isPresented: Binding(get: { panel != nil }, set: { if !$0 { panel = nil } })) {
                     if let panel { InAppTunnelPanelSheet(url: panel, title: route.title) }
                 }
+                #endif
         } else {
             EmptyStateView(symbol: Theme.Icon.inAppTunnel, title: String(localized: "这台 hub 没有内网隧道"),
                            message: String(localized: "在 hub 上装好并打开提供内网隧道的扩展，再回到这里。"))
@@ -184,6 +188,9 @@ struct HubInAppTunnelPage: View {
     }
 }
 
+// The panel is UIKit (a WKWebView in a UIView, UIAlertController for its alerts). The Mac app builds this folder too,
+// and the tunnel core is only linked into iOS device builds, so the Mac never opens it.
+#if !os(macOS)
 /// The tunnel core's own control panel (on loopback, in this process): where its account signs in and a node is
 /// picked. A sign-in that opens outside the app may end with a link the user copies there; it is offered to the core
 /// from the clipboard when the user comes back (InAppTunnel.offerLink).
@@ -324,3 +331,4 @@ struct InAppTunnelPanelView: UIViewRepresentable {
         container.addSubview(webView)
     }
 }
+#endif
