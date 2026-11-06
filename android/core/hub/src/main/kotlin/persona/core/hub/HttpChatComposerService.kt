@@ -168,7 +168,7 @@ class HttpChatComposerService internal constructor(
         if (!readyToSend.value) throw ComposerOperationException(CoreText.of(Key.ComposerInterruptOffline))
         request(api("sessions", session.machineId, session.sessionId, "interrupt"), "{}".toRequestBody(jsonType), emptyMap()).use {
             if (!it.isSuccessful) {
-                if (it.code in setOf(401, 403)) onPairingExpired()
+                if (HubFailure.from(it).kind == HubError.PairingExpired) onPairingExpired()
                 throw ComposerOperationException(CoreText.of(Key.ComposerInterruptUnconfirmed))
             }
         }

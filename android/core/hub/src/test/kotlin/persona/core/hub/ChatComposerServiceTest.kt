@@ -101,4 +101,36 @@ class ChatComposerServiceTest {
         assertNotEquals(ops[0], ops[1])
         assertEquals(DeliveryState.Sent, service.deliveries.value["operation"]!!.state)
     }
+
+    // An interrupt refused for this request (#4803) keeps the pairing, as every other request does since #4776; only a
+    // refused credential ends it.
+    @Test fun aRefusedInterruptEndsThePairingOnlyForARefusedCredential() = runBlocking {
+        val scope = HubScope("test-hub", "generation")
+        val session = SessionKey("machine", "session")
+        val transport = object : MessageTransport {
+            override val readyToSend = MutableStateFlow(true)
+            override val supportsClientOps = false
+            override suspend fun send(request: MessageRequest): MessageTransportResult = error("Unexpected delegate send")
+        }
+        val cases = listOf(
+            Triple(403, """{"error":"TLS is required for public requests","code":"tls_required"}""", false),
+            Triple(403, """{"error":"only on the hub's machine","code":"this_machine_only"}""", false),
+            Triple(401, """{"error":"invalid token","code":"invalid_token"}""", true),
+        )
+        for ((code, body, endsPairing) in cases) {
+            var expired = 0
+            val paths = mutableListOf<String>()
+            val service = HttpChatComposerService(scope, transport, request = { path, _, _ ->
+                paths += path
+                Response.Builder().request(Request.Builder().url("https://example.com/").build())
+                    .protocol(Protocol.HTTP_1_1).code(code).message("test").body(body.toResponseBody()).build()
+            }, onPairingExpired = { expired++ })
+            try {
+                service.interrupt(session)
+                fail("A refused interrupt must not look confirmed")
+            } catch (_: ComposerOperationException) { }
+            assertEquals(listOf("/api/v1/sessions/machine/session/interrupt"), paths)
+            assertEquals("$code $body", if (endsPairing) 1 else 0, expired)
+        }
+    }
 }
