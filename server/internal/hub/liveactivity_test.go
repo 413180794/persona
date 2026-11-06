@@ -430,6 +430,34 @@ func TestCoalescerNeedsYouBothWays(t *testing.T) {
 	}
 }
 
+// Past fleetMaxItems the items are the same three agents whether three or four need the user: a fourth arriving, or
+// one past the three answered, changes only NeedsYou. The island's 「N 个需要你」 must follow at once all the same
+// (#4604), not after fleetMinGap at priority 5.
+func TestCoalescerNeedsYouCountPastTheItems(t *testing.T) {
+	var c coalescer
+	three := FleetState{Phase: "needsYou", NeedsYou: 3, Items: []FleetItem{
+		{ID: "m/a", Kind: proto.IxQuestion, Interaction: "ix1"},
+		{ID: "m/b", Kind: proto.IxPermission, Interaction: "ix2"},
+		{ID: "m/c", Kind: proto.IxPlan, Interaction: "ix3"},
+	}}
+	c.sentState(three)
+	four := three
+	four.NeedsYou = 4
+	if now, sched := c.offer(four); !now {
+		t.Fatalf("a fourth request goes out at once: now=%v schedule=%v", now, sched)
+	}
+	c.sentState(four)
+	if now, sched := c.offer(three); !now {
+		t.Fatalf("the fourth answered goes out at once: now=%v schedule=%v", now, sched)
+	}
+	c.sentState(three)
+	busier := three
+	busier.Working = 2
+	if now, sched := c.offer(busier); now || !sched {
+		t.Fatalf("an ordinary change waits: %v %v", now, sched)
+	}
+}
+
 // fleetClock gives h.live a clock the test moves, and the device "phone" a running activity.
 func fleetClock(t *testing.T) (*Hub, *fakeAPNs, *time.Time) {
 	h, f := testLive(t)

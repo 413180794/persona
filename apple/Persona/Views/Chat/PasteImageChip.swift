@@ -70,7 +70,7 @@ struct PasteImageChip: View {
                     board.dismiss()
                 } label: {
                     Image(systemName: Theme.Icon.close).font(Theme.Font.label).foregroundStyle(.secondary)
-                        .frame(minWidth: 28, minHeight: 28).contentShape(.rect)
+                        .scaledFrame(minWidth: Theme.Size.wellXS, minHeight: Theme.Size.wellXS).contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("不粘贴")

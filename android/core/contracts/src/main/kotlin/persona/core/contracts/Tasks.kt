@@ -250,10 +250,13 @@ fun List<Todo>.forSpace(machineId: String, space: String): Todo? {
 }
 
 /**
- * Formats the todo context tag as in protocol.md and docs/todos.md.
+ * Formats the todo context tag as in protocol.md and docs/todos.md, as iOS `TodosLogic.formatTodoContext` does: the
+ * title escaped as an attribute, the notes through [contextBody] so they cannot close the tag.
  */
-fun todoContextXml(title: String, notes: String): String =
-    """<jarvis-context kind="context" title="待办 · $title" url="">$notes</jarvis-context>""" // i18n-ignore: the tag docs/todos.md specifies for the agent
+fun todoContextXml(title: String, notes: String): String {
+    val t = title.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    return """<jarvis-context kind="context" title="待办 · $t" url="">${contextBody(notes)}</jarvis-context>""" // i18n-ignore: the tag docs/todos.md specifies for the agent
+}
 
 /**
  * The prompt to send when handing off a todo to an agent.

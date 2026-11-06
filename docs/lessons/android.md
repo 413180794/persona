@@ -243,3 +243,9 @@ WindowInsets 回给浮层 View 的 IME bottom 可能只是该窗口与键盘的�
 - `POST /api/v1/interactions/{id}/resolve` 对已结束的卡不是统一的错误：已回答的回 200 `{already: true, resolution}`（当时生效的答案，可能和这次发的不同），过期、撤回、交回电脑的回 410 带 `status`。只看 HTTP 状态码会把前者当成刚刚答好、把后者一律说成「已在电脑上处理」。
 - 410 的 `status` 在错误体里，`HubFailure.body` 留着原文，按需再解析；`ErrorBody` 不加这个字段。
 - 刷新时只合并「拉取开始之后」的变化，挡不住一份比本机作答还晚、但 hub 还没来得及去掉这张卡的快照：本机结束的 id 要单独记下，快照里的跳过，实时的 `interaction` 事件才放回。
+
+## 拼 context 块的正文一律经 `contextBody`（2026-11-06，#3831）
+
+- 收件箱交给 AI（`InboxHandOff.contextTag`）、链接选段（`ChatLinkContext.xml`）、分享（`formatSharedContent`）原来只 `replace` 一遍字面的结束标签，嵌套写法 `</jarvis-</jarvis-context>context>` 删完正好剩一个，块提前闭合，外部正文落到块外成了用户的话；知识库（`knowledgeContext`）挡不住大小写变体；待办（`todoContextXml`）完全不处理，标题也没转义。
+- 现在都经 `core/contracts` 的 `contextBody`：先删一遍，删出来的再把 `<` 写成 `&lt;`，两遍、线性，大小写不敏感、允许空白，和 hub、网页、iOS 一致。回归测试用 `contextClosingTag` 数整条消息里的结束标签，只能剩块自己的那一个。
+- 做负面对照时用 `git checkout` / `git apply` 把源码换回去又换回来，Gradle 守护进程的文件监视（`watch-fs`）可能没察觉：第二次 `compileKotlin` 报 UP-TO-DATE，测试跑的还是旧 class，结果和改前一模一样。对照前后各跑一次时加 `--no-watch-fs`，并确认改到的模块的编译任务真的执行了。

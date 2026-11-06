@@ -12,7 +12,8 @@ import WebKit
 // agent as an edit request (AI 修改) or ride along with the next message (作为上下文), both as <jarvis-context>.
 
 /// A piece of a page the user picked, carried in a message as
-/// `<jarvis-context kind="context|edit" title="…" url="…">text</jarvis-context>`.
+/// `<jarvis-context kind="context|edit" title="…" url="…">text</jarvis-context>`, the text through `ContextText.inBlock`
+/// so it cannot close the tag (#3831).
 nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
     var id = UUID()
     var kind: String // "context" | "edit"
@@ -30,7 +31,7 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
                 .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
         }
         let msgAttr = msg.isEmpty ? "" : " msg=\"\(esc(msg))\""
-        return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(text.replacingOccurrences(of: "</jarvis-context>", with: "").replacingOccurrences(of: "</persona-context>", with: ""))\n</jarvis-context>"
+        return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(ContextText.inBlock(text))\n</jarvis-context>"
     }
 
     /// One block, its attributes in any order and any of them missing (a Feishu /agent request's context has no url);

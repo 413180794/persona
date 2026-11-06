@@ -3,6 +3,7 @@ package persona.feature.inbox
 import android.content.res.Resources
 
 import persona.core.contracts.Session
+import persona.core.contracts.contextBody
 import persona.core.domain.sort.canSend
 import java.time.Instant
 
@@ -47,7 +48,7 @@ fun handoffPrompt(res: Resources, item: HandOffItem, ask: String = ""): String {
 internal fun contextTag(title: String, text: String, url: String = ""): String {
     fun escape(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
     return "<jarvis-context kind=\"context\" title=\"${escape(title)}\" url=\"${escape(url)}\">\n" +
-        text.replace("</jarvis-context>", "").replace("</persona-context>", "") + "\n</jarvis-context>"
+        contextBody(text) + "\n</jarvis-context>"
 }
 
 /** An agent 交给 AI can send to: the most recently active live ones, never Persona itself (iOS: eight). */

@@ -31,6 +31,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import persona.core.designsystem.PersonaTheme
 import persona.core.designsystem.dismissKeyboardOnBlankTap
 import persona.core.contracts.SessionKey
+import persona.core.contracts.contextBody
 import persona.core.contracts.api.AssistantRepository
 import persona.core.contracts.api.MessageSender
 import persona.core.contracts.api.SessionsRepository
@@ -309,7 +310,7 @@ internal fun formatSharedContent(
             .replace("<", "&lt;").replace(">", "&gt;")
         val url = Regex("https?://[^\\s<>]+", RegexOption.IGNORE_CASE).find(text)?.value.orEmpty()
         "<jarvis-context kind=\"context\" title=\"${escape(title.ifBlank { untitled })}\" url=\"${escape(url)}\">\n" +
-            content.replace("</jarvis-context>", "").replace("</persona-context>", "") + "\n</jarvis-context>"
+            contextBody(content) + "\n</jarvis-context>"
     } else content
     return listOf(shared, note.trim()).filter { it.isNotBlank() }.joinToString("\n\n")
 }

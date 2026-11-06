@@ -120,9 +120,10 @@ func fleetRelevance(s FleetState) float64 {
 // coalescer decides when a new fleet state goes out: a change in what needs the user (a request arriving, or answered
 // or gone) at once, anything else after fleetCoalesce (more changes in the meantime ride along).
 type coalescer struct {
-	sent    []byte          // last state pushed
-	needs   map[string]bool // its needs-you items
-	pending bool
+	sent     []byte          // last state pushed
+	needs    map[string]bool // its needs-you items
+	needsYou int             // its NeedsYou: past fleetMaxItems the items stay the same three while the count moves
+	pending  bool
 }
 
 // offer returns whether to push now, or else whether a delayed flush should be scheduled.
@@ -135,6 +136,9 @@ func (c *coalescer) offer(st FleetState) (now, schedule bool) {
 	if needs := needsYouIDs(st); !maps.Equal(needs, c.needs) && (len(needs) > 0 || len(c.needs) > 0) {
 		return true, false
 	}
+	if st.NeedsYou != c.needsYou { // a request beyond the items arrived or was answered (#4604)
+		return true, false
+	}
 	if c.pending {
 		return false, false
 	}
@@ -145,6 +149,7 @@ func (c *coalescer) offer(st FleetState) (now, schedule bool) {
 func (c *coalescer) sentState(st FleetState) {
 	c.sent, _ = json.Marshal(st)
 	c.needs = needsYouIDs(st)
+	c.needsYou = st.NeedsYou
 	c.pending = false
 }
 

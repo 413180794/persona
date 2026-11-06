@@ -4,6 +4,7 @@ import android.content.res.Resources
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.staticCompositionLocalOf
 import persona.core.contracts.Item
+import persona.core.contracts.contextBody
 import persona.core.contracts.parseTime
 import java.net.URI
 import java.net.URLDecoder
@@ -144,7 +145,7 @@ internal object ChatLinks {
 /**
  * A piece of a page picked in the link sheet, carried in a message as
  * `<jarvis-context kind="context|edit|quote" title="…" url="…" msg="…">text</jarvis-context>`, written exactly as iOS's `ContextRef`
- * does: the attributes escaped, the text as it is with only `</jarvis-context>` and `</persona-context>` taken out (it cannot close the tag).
+ * does: the attributes escaped, the text through [contextBody] (it cannot close the tag).
  */
 data class ChatLinkContext(
     val kind: String = "context", val title: String, val url: String, val text: String,
@@ -153,7 +154,7 @@ data class ChatLinkContext(
     val msg: String = "",
 ) {
     fun xml(): String = "<jarvis-context kind=\"${if (kind == "edit" || kind == QUOTE) kind else "context"}\" title=\"${escape(title)}\" url=\"${escape(url)}\"" +
-        (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + text.replace("</jarvis-context>", "").replace("</persona-context>", "") + "\n</jarvis-context>"
+        (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + contextBody(text) + "\n</jarvis-context>"
 
     companion object {
         /**

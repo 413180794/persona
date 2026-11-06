@@ -425,7 +425,7 @@ nonisolated enum TodosLogic {
             .replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
-        let body = (notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = ContextText.inBlock((notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
         return "<jarvis-context kind=\"context\" title=\"待办 · \(t)\" url=\"\">\(body)</jarvis-context>" // i18n-ignore: context sent to the agent
     }
 }

@@ -1092,3 +1092,8 @@ UIKit 的栈却还推着一页，上面只有系统的返回按钮「Agents」�
 - **现象**：`Binding(get:set:)` 里写 `set: pick`（`pick` 是 MainActor 隔离的实例方法），PersonaMac 构建必崩在 `LanguageSettingsView.swift` 的 IRGen：`report_at_maximum_capacity`，SIL 函数 demangle 出来是 `reabstraction thunk helper from ... (AppLanguage, Actor?) -> () to ... (AppLanguage) -> ()`。清 DerivedData 全量重建照样崩；同一版代码 iOS 不崩。
 - **原因**：Swift 6.3（Xcode 26.6）给「带隐式 actor 参数的隔离方法值」生成 reabstraction thunk 时编译器自身溢出，是编译器 bug，不是源码错误；日志里没有普通 `error:` 行，要看 `While emitting IR SIL function` 和 stack dump 才能认出。
 - **做法**：把方法值包成普通闭包：`set: { pick($0) }`，崩点消失。仓内其他 `flatMap(Type.init(rawValue:))` 不受影响（崩点在 Binding 的 setter，不在 flatMap，改 flatMap 没用，已实测）。规避处留英文注释写明编译器版本和 issue 号，防止被人当多余闭包改回去。
+
+## 拼 context 块的正文一律经 `ContextText.inBlock`（2026-11-06，#3831）
+
+- `ContextRef.xml` 原来只把正文里的 `</jarvis-context>`、`</persona-context>` 删一遍：嵌套写法 `</jarvis-</jarvis-context>context>` 删完正好剩一个结束标签，块提前闭合，收件箱交给 AI 时别人写的正文落到块外，成了用户自己说的话。大小写变体、`</jarvis-context >` 这类带空白的写法，hub 和网页的读取端也认，一遍字面删除也挡不住。
+- 现在 `ContextRef.xml` 和 `TodosLogic.formatTodoContext` 都经 `Shared/ContextText.swift`：先删一遍，删出来的再把 `<` 写成 `&lt;`，两遍、线性，输出和 hub `prompts.ContextBody`、网页 `contextBody`、安卓 `contextBody` 一致。新写块的地方也照这个来；回归测试用 `ContextText.closingTag` 数整条消息里的结束标签，只能剩块自己的那一个。

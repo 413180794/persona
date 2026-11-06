@@ -1,6 +1,7 @@
 package persona.feature.knowledge
 
 import persona.core.contracts.Session
+import persona.core.contracts.contextBody
 import persona.core.contracts.api.*
 import kotlinx.serialization.json.*
 import androidx.annotation.StringRes
@@ -369,9 +370,8 @@ internal fun knowledgeContext(detail: KnowledgeDetail, kindName: String): String
             append("\n\n代码目录：\n").append(it.joinToString("\n")) // i18n-ignore: context for the model
         }
         append("\n\n知识库目录：").append(detail.path) // i18n-ignore: context for the model
-    }.replace("</jarvis-context>", "&lt;/jarvis-context&gt;")
+    }.let(::contextBody)
         .replace("<jarvis-context", "&lt;jarvis-context")
-        .replace("</persona-context>", "&lt;/persona-context&gt;")
         .replace("<persona-context", "&lt;persona-context")
     return "<jarvis-context kind=\"context\" title=\"${attribute(title)}\" url=\"\">\n$text\n</jarvis-context>"
 }
