@@ -168,7 +168,8 @@
           "conversation_origin",
           "builtin_presets",
           "upload_dir",
-          "task_push"
+          "task_push",
+          "sessions_list"
         ],
         "/type": "hello"
       }
@@ -330,7 +331,8 @@
           "conversation_origin",
           "builtin_presets",
           "upload_dir",
-          "task_push"
+          "task_push",
+          "sessions_list"
         ],
         "/ok": true,
         "/version": "fixture-version"
