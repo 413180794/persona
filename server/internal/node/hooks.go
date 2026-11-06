@@ -691,8 +691,9 @@ func toolSummary(name string, input json.RawMessage) string {
 }
 
 // callerTools are the agents' own tools that act for the agent calling them (assistant/agent_control.go
-// agentToolNames): reporting to its supervisor, reading and noting the decisions of the todo it works on.
-var callerTools = []string{"report_to_supervisor", "todo_decisions", "todo_decision_add"}
+// agentToolNames): reporting to its supervisor, reading and noting the decisions of the todo it works on, binding
+// that todo to a chat thread.
+var callerTools = []string{"report_to_supervisor", "todo_decisions", "todo_decision_add", "todo_bind_thread"}
 
 // mcpCaller is the session an MCP call of tool name goes to the hub with: the one it names, else, for an agent's
 // tools that need to know whose call it is (callerTools), the session its pane runs. The rest go on as before, with

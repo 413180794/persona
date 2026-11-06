@@ -63,6 +63,7 @@ inbox.write          DELETE /api/v1/inbox/policies/{id}
 -                    DELETE /api/v1/todos/{id}
 todos.write          DELETE /api/v1/todos/{id}/agents/{mid}/{sid}
 todos.write          DELETE /api/v1/todos/{id}/spaces/{mid}/{space...}
+-                    DELETE /api/v1/todos/{id}/thread
 -                    DELETE {base}/markets/{mid}
 -                    GET /api/v1/admin/assistant
 -                    GET /api/v1/admin/devices
@@ -432,6 +433,7 @@ kb.write             PUT /api/v1/kb/{kind}/{id}
 -                    PUT /api/v1/recordings/{id}
 todos.write          PUT /api/v1/todos/{id}/agents/{mid}/{sid}
 todos.write          PUT /api/v1/todos/{id}/spaces/{mid}/{space...}
+-                    PUT /api/v1/todos/{id}/thread
 -                    PUT /api/v1/workspace-board/settings
 -                    PUT {base}/markets/{mid}
 -                    PUT {base}/markets/{mid}/token

@@ -30,8 +30,10 @@ func TestMCPCaller(t *testing.T) {
 		{"report_to_supervisor", "", false, "sess-pane"},
 		{"todo_decisions", "", false, "sess-pane"},
 		{"todo_decision_add", "", false, "sess-pane"},
+		{"todo_bind_thread", "", false, "sess-pane"},
 		{"kb_search", "", false, ""},
 		{"todo_decisions", "", true, ""},
+		{"todo_bind_thread", "", true, ""},
 		{"todo_decisions", "sess-named", false, "sess-named"},
 	} {
 		if got := n.mcpCaller(c.name, c.session, "w1:p1", c.assistant); got != c.want {

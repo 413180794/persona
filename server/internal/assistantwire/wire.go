@@ -638,6 +638,8 @@ var Routes = []string{
 	"GET /api/v1/todos/{id}/decisions",
 	"POST /api/v1/todos/{id}/decisions",
 	"PATCH /api/v1/todos/{id}/decisions/{did}",
+	"PUT /api/v1/todos/{id}/thread",
+	"DELETE /api/v1/todos/{id}/thread",
 	"POST /api/v1/todos/{id}/done-check",
 	"POST /api/v1/todos/{id}/retry",
 	"POST /api/v1/todos/retitle",

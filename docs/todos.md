@@ -32,6 +32,7 @@ Server state is stored in the hub's Postgres database (read/written by the assis
 - `done_by` (text, NOT NULL, DEFAULT ''): who marked it done: empty = user tapped (or launch failed, see `start_error`), `auto` = assistant automatically completed it after judging it finished ("Automatic completion"), `review` = supervisor completed it after acceptance (#3124).
 - `done_reason` (text, NOT NULL, DEFAULT ''): judgment model's reason for automatic completion (e.g. "PR merged and TestFlight released"), cleared when user marks done or reopens.
 - `reopened_at` (timestamptz): last time user reopened a completed to-do; assistant only judges automatic completion again after a new turn of work follows it.
+- `thread` (jsonb, NULL): the chat thread the to-do is bound to, `{"channel", "chat_id", "thread_id", "title"}` (#5279, "Chat thread" below); `NULL` while it has none. A `CHECK` requires all three keys, and a unique index `todos_thread` over `(thread->>'channel', thread->>'chat_id', thread->>'thread_id') WHERE thread IS NOT NULL` lets a thread belong to one to-do only. One value, read and written as a unit, hence a jsonb column like the ledger's `reviews` rather than four more columns on every to-do read; the binding goes with the row when the to-do is deleted.
 - (Not in the table) `stage`, `pr_url`, `delivery`: stage strip, PR and delivery-card location, stored in settings `assistant.todo_stages`, merged when reading to-dos ("Delivery").
 
 ### 2. todo_spaces table
@@ -107,6 +108,8 @@ Link/release semantics:
 | DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | Unlink the project (physically delete this project's space-linked Agents under the to-do) → `{"ok": true}`; missing 404; read-only role 403 |
 | PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Link an existing Agent (no message) → `{"ok": true}`; clears `dismissed_at`; completed to-do cannot be linked (409); missing 404; read-only role 403 |
 | DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Remove Agent (soft removal: sets `released_at` and `dismissed_at`, excluded from API and never automatically relinked) → `{"ok": true}`; missing 404; read-only role 403 |
+| PUT | `/api/v1/todos/{id}/thread` | Bind the to-do to a chat thread `{"channel", "chat_id", "thread_id", "title"?}` (replaces the one it had) → `{"todo": Todo}` with `thread`; the three ids are trimmed, required and at most 256 characters (400), the title is trimmed and clipped to 200; another to-do holds the thread 409; missing 404; read-only role 403 ("Chat thread") |
+| DELETE | `/api/v1/todos/{id}/thread` | Unbind it → `{"todo": Todo}`; a to-do with no thread stays as it is; missing 404; read-only role 403 |
 | GET | `/api/v1/todos/{id}/decisions` | Decision list → `{"decisions": [...]}`, chronological; effective only by default, `?all=1` includes superseded decisions (with `superseded_by`); `[]` when none; missing 404 |
 | POST | `/api/v1/todos/{id}/decisions` | Record manually `{"question", "choice", "reason"?, "supersedes_id"?}` → `{"decision": Decision}`; empty question/choice 400, `supersedes_id` not an earlier decision in this to-do 400; read-only role 403 |
 | PATCH | `/api/v1/todos/{id}/decisions/{did}` | Mark supersession after the fact `{"supersedes_id"}` (empty string undoes) → `{"decision": Decision}`; same rules; missing 404; read-only role 403 |
@@ -125,13 +128,13 @@ Only present when the session is currently associated (`released_at` and `dismis
 The internal `spawn_from` field carried in session reports is stripped before hub pushes to clients.
 
 ### Live WebSocket pushes
-- `{"type":"todos"}`: broadcast on to-do creation, edit, deletion, whole-project link/unlink or Agent association changes; clients refetch `GET /api/v1/todos`.
+- `{"type":"todos"}`: broadcast on to-do creation, edit, deletion, whole-project link/unlink, Agent association changes or a change of its chat thread; clients refetch `GET /api/v1/todos`.
 - Session-change push: when to-do/association changes affect sessions, assistant reports a new snapshot; hub compares which computer's sessions changed and re-pushes that computer's `sessions` event.
 
 ### Status codes and roles
 - Missing title or malformed parameters: 400 Bad Request.
 - Missing to-do: 404 Not Found. Old hubs without to-do APIs return 404; clients hide the entry point without an error popup.
-- Linking to a completed to-do: 409 Conflict.
+- Linking to a completed to-do: 409 Conflict. Binding a chat thread another to-do holds: 409 Conflict.
 - Assistant disconnected: 503 `assistant_offline` (to-do APIs and create/send with `todo_id`).
 - Read-only role (e.g. paired Apple Watch, `role: "answer"`): every to-do write API (POST / PATCH / DELETE / PUT), plus create/send with `todo_id`, returns 403 Forbidden.
 
@@ -321,6 +324,16 @@ The costliest long-task mistake is an Agent forgetting a decision already made: 
 - Recording/superseding updates to-do `updated_at` and broadcasts `{"type":"todos"}` so clients refetch decisions.
 
 Not yet: Android / iOS decision lists.
+
+## Chat thread
+
+(#5279, step 2: the binding itself) A to-do can be bound to a chat thread, a topic in a group chat or a conversation, so that the thread and the to-do are known to belong together. Posting to the thread, taking its replies back as decisions and `todo.*` events come in later steps; this step writes nothing to any channel and changes no bot routing.
+
+- **The binding**: `thread` on the to-do, `{channel, chat_id, thread_id, title}` (the first three name the thread, the title is a label). `channel` is a channel id as `internal/channel` names them (`channel.Feishu` = `"feishu"`); it is trimmed and lower-cased before it is kept, so `Feishu` and `feishu` are one channel. For `feishu`, `chat_id` is the chat's id (`oc_…`) and `thread_id` is the `thread_id` the message events carry (`omt_…`), not the thread's root message id (`om_…`). The server does not check them against the channel (it cannot know a thread exists), so the caller must pass the real ones. At most one thread per to-do and one to-do per thread: binding a thread another to-do holds is refused (409, from memory first, finally by the unique index, so a second assistant on the same database cannot slip past it). Binding again replaces the thread; the old one is free for another to-do. A done to-do can be bound or unbound too (it may be reopened, and the user's tidying should not depend on its state).
+- **API**: `PUT` / `DELETE /api/v1/todos/{id}/thread` (full role only), "API overview" above. Both move the to-do's `updated_at` and broadcast `{"type":"todos"}`, unless nothing changed (unbinding a to-do that has no thread, or binding exactly what it already has: nothing is written); `GET /api/v1/todos` returns `thread` with each to-do that has one. Editing a to-do leaves its thread alone.
+- **Reverse lookup** for the next step (a reply in a thread finds its to-do): in memory, every `Todo` carries `Thread` and `sameThread(a, b)` (`assistant/todo_thread.go`) compares two bindings; from the store, `DB.TodoOfThread(channel, chat_id, thread_id)` (`internal/db/todo_thread.go`).
+- **From the Agent**: an Agent on an open to-do has `todo_bind_thread {channel, chat_id, thread_id, title?, todo_id?}` (`mcp/todo/`, with the decision tools; the node resolves its caller the same way, `callerTools`). It binds the to-do the Agent works on and no other: `todo_id`, if given, must be that to-do's own id. A to-do that already has another thread keeps it (changing it is the user's call, the tool says to ask them); the same thread again only updates its title. Outside an open to-do it says there is none.
+- Web: `Todo.thread` is typed (`web/src/lib/todos.ts`); no screen shows it yet.
 
 ## Record conclusions on completion
 

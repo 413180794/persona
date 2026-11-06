@@ -77,6 +77,8 @@ type Todo struct {
 	// Delivery: how far its finished work went out, and while short of live where it is held and who can unhold it
 	// (delivery.go, #3306); nil until judged.
 	Delivery *TodoDelivery `json:"delivery,omitempty"`
+	// Thread: the chat thread the todo is bound to (#5279, todo_thread.go); nil while it has none.
+	Thread *TodoThread `json:"thread,omitempty"`
 }
 
 // todoStore is what the todos keep in the database (internal/db). A Store without it (the unit tests' memStore) keeps
@@ -103,6 +105,9 @@ type todoStore interface {
 	ListTodoDecisions(ctx context.Context, todoID string, all bool) ([]db.TodoDecisionRow, error)
 	InsertTodoDecision(ctx context.Context, r db.TodoDecisionRow) (bool, error)
 	SetTodoDecisionSupersedes(ctx context.Context, todoID, id, supersedesID string, at time.Time) (*db.TodoDecisionRow, error)
+	ListTodoThreads(ctx context.Context) (map[string]db.TodoThread, error)
+	SetTodoThread(ctx context.Context, todoID string, th db.TodoThread, at time.Time) error
+	ClearTodoThread(ctx context.Context, todoID string, at time.Time) (bool, error)
 }
 
 // The database keeps them: a Store that is it but lacked one of these would keep them in memory only.
@@ -280,6 +285,15 @@ func (s *Service) loadTodosLocked(ctx context.Context) error {
 			}
 		}
 	}
+	threads, err := st.ListTodoThreads(ctx)
+	if err != nil {
+		return err
+	}
+	for id, th := range threads {
+		if t, ok := tmap[id]; ok {
+			t.Thread = &th
+		}
+	}
 	for id, st := range s.todoStages(ctx) {
 		if t, ok := tmap[id]; ok {
 			t.Stage, t.PRURL, t.Delivery = st.Stage, st.PR, st.Delivery
@@ -380,6 +394,10 @@ func copyTodoLocked(t *Todo) Todo {
 		}
 	}
 	out.Supervision = t.Supervision.clone()
+	if t.Thread != nil {
+		th := *t.Thread
+		out.Thread = &th
+	}
 	return out
 }
 
@@ -491,6 +509,7 @@ var errTodosUnavailable = errors.New("todos service unavailable")
 
 func (s *Service) todoRoutes() {
 	s.todoDecisionRoutes()
+	s.todoThreadRoutes()
 	s.todoRetitleRoute()
 	// GET /api/v1/todos: list all todos (newest created_at first), agents sorted (active first, then released)
 	s.handle("GET /api/v1/todos", func(w http.ResponseWriter, r *http.Request) {

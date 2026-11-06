@@ -34,7 +34,7 @@ func (s *Service) mcpTools(ctx context.Context, assistant bool) []proto.Tool {
 	}
 	tools := append(phone.Tools, agents...)
 	if !assistant {
-		tools = append(tools, s.AgentTools()...) // report_to_supervisor, todo_decisions, todo_decision_add (agentToolNames)
+		tools = append(tools, s.AgentTools()...) // report_to_supervisor, todo_decisions, todo_decision_add, todo_bind_thread (agentToolNames)
 	}
 	if assistant {
 		tools = append(tools, s.Tools(ctx)...)
