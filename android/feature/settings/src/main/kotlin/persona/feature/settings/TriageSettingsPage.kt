@@ -89,5 +89,17 @@ internal fun TriageSettingsPage(triage: AgentTriage?, models: ModelConfiguration
             SettingsCaption(stringResource(R.string.settings_triage_actions_about),
                 Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
         }
+        // Rules on the hub, no model: apart from the triage switch above (#5096).
+        item("reply-reminder") {
+            JGroupItem(GroupPosition.of(0, 1), Modifier.padding(top = Tokens.Space.m)) {
+                JSwitchRow(stringResource(R.string.settings_triage_reply_reminder), sw?.remindsReply == true,
+                    { v -> sw?.let { change(it.copy(replyReminder = v)) } }, Modifier.testTag("triage-reply-reminder"),
+                    leadingIcon = PhIcons.ChatCircleDots, enabled = sw != null && !busy)
+            }
+        }
+        item("reply-reminder-about") {
+            SettingsCaption(stringResource(R.string.settings_triage_reply_reminder_about),
+                Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
+        }
     }
 }

@@ -84,6 +84,7 @@ data class CoreText(val key: Key, val args: List<Any> = emptyList()) {
         AgentsPinned("Pinned"),
         StateNeedsYou("Needs you"),
         StateUnread("Unread"),
+        StateAwaitingReply("Awaiting reply"),
         StateWorking("Working"),
         StateWaiting("Waiting"),
         StateMuted("Muted"),

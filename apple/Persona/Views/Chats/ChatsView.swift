@@ -1176,7 +1176,7 @@ private struct AgentsList: View {
         // herdr is where most agents run: only the others name their host
         let host = showHost ? s.hostKind.flatMap { $0 == "herdr" ? nil : $0 } : nil
         if compact {
-            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil, host: host, time: time, pane: pane)
+            CompactSlotRow(session: s, muted: model.isMuted(s), hideState: inStateSection, space: context ? (s.spaceName ?? s.folderName) : nil, host: host, time: time, pane: pane)
                 .equatable()
         } else {
             SlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil,
@@ -1561,6 +1561,7 @@ private struct AgentsList: View {
 
     private static let stateTitles: [(key: String, title: String, tint: StatusTone)] = [
         ("needs", String(localized: "Needs You [Chats View e60ec4]"), StatusPalette.needsYou), ("unread", String(localized: "Unread [Chats View f9bf93]"), StatusPalette.unread),
+        ("awaiting", String(localized: "Awaiting Reply"), StatusPalette.awaitingReply),
         ("working", String(localized: "Working [Assistant Profile View f42082]"), StatusPalette.working),
         ("waiting", String(localized: "Waiting [Chats View 66441e]"), StatusTone(dot: Theme.loop, text: Theme.loop)),
         ("muted", String(localized: "Muted [Chats View b66705]"), StatusPalette.idle), ("idle", String(localized: "Seen"), StatusPalette.idle),
@@ -2244,7 +2245,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
             x.effort = nil
             x.model = nil
             x.seenAt = nil
-            if !searching { x.lastText = nil }
+            if !searching { x.lastText = nil; x.asks = nil } // an Awaiting Reply row's question: only rows show it
             x.updatedAt = nil
             x.subagents = (s.subagents ?? []).contains(where: \.running) ? [] : nil
             x.background = (s.background ?? []).isEmpty ? nil : []
@@ -2657,7 +2658,7 @@ nonisolated struct SlotRow: View, Equatable {
         Group {
             if AppStyle.current.usesBeautifulUI {
                 TaskRow(TaskItem(id: session.key.sessionID, title: session.displayTitle,
-                                 subtitle: session.listPreview, footnote: meta,
+                                 subtitle: session.listPreview(muted: muted), footnote: meta,
                                  status: .pending(step: 0)),
                         shape: taskShape(), isOpen: session.leadWorkflow != nil,
                         accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
@@ -2672,6 +2673,10 @@ nonisolated struct SlotRow: View, Equatable {
                         if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
                         #endif
                         if session.state == .needsYou && !muted && !hideState && !pendingCount { BUIPill(session.state.label, tone: .red) }
+                        if awaitingWord {
+                            let tone = StatusPalette.awaitingReply
+                            BUIPill(session.stateLabel(muted: muted), tone: .custom(ink: tone.text, fill: tone.tint))
+                        }
                         if muted {
                             Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("Notifications muted")
                         }
@@ -2691,7 +2696,7 @@ nonisolated struct SlotRow: View, Equatable {
                                 .lineLimit(2)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            if let last = session.listPreview {
+                            if let last = session.listPreview(muted: muted) {
                                 Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
                             }
                             // A workflow running in the background (#2935): its name, phase and progress.
@@ -2748,6 +2753,10 @@ nonisolated struct SlotRow: View, Equatable {
         #endif
     }
 
+    /// Awaiting Reply spelled out (#5096), as Needs You is: a seen agent's gray dot does not say it waits on the user.
+    /// Not for a muted one (it folds with the idle ones), nor where the section already says it.
+    private var awaitingWord: Bool { session.awaitsYourReply(muted: muted) && !hideState }
+
     /// Persona' own row's line: "Needs You · Claude · app › tests · MacBook": the end gives way when the line is short.
     /// Something typed or quoted in its composer and not sent (#4578), as Telegram's and Signal's lists say.
     @MainActor private var hasDraft: Bool { AppModel.shared.draftMarks.contains(session.key) }
@@ -2756,6 +2765,9 @@ nonisolated struct SlotRow: View, Equatable {
         var parts: [Text] = []
         if session.state == .needsYou && !muted && !hideState && !pendingCount {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
+        }
+        if awaitingWord {
+            parts.append(Text(session.stateLabel(muted: muted)).fontWeight(.semibold).foregroundStyle(StatusPalette.awaitingReply.text))
         }
         if hasDraft { parts.append(Text("Draft").fontWeight(.semibold).foregroundStyle(Theme.needsYou)) }
         parts.append(Text(pane?.name ?? session.sourceSubtitle ?? session.agentLabel))
@@ -2823,6 +2835,8 @@ struct AgentTimeText: View {
 nonisolated struct CompactSlotRow: View, Equatable {
     var session: Session
     var muted = false
+    /// As SlotRow's: the section already says the state (By Status).
+    var hideState = false
     var space: String? = nil
     /// As SlotRow's `host`.
     var host: String? = nil
@@ -2859,6 +2873,10 @@ nonisolated struct CompactSlotRow: View, Equatable {
                 }
             }
             Spacer(minLength: Theme.Space.xs)
+            // Awaiting Reply in words (#5096): the dot is a seen agent's gray.
+            if session.awaitsYourReply(muted: muted) && !hideState {
+                Text(session.stateLabel(muted: muted)).font(CompactList.metaStrong).foregroundStyle(StatusPalette.awaitingReply.text).lineLimit(1).fixedSize()
+            }
             if muted { Image(systemName: Theme.Icon.muted).font(CompactList.meta).foregroundStyle(.secondary).accessibilityLabel("Notifications muted") }
             AgentTimeText(time: time, fallback: session.updatedAt, font: CompactList.meta.monospacedDigit())
             #if os(macOS)

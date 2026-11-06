@@ -39,10 +39,11 @@ import Observation
         }
     }
 
-    /// The triage itself can always be flipped; what it may do only while it is on.
+    /// The triage itself and Remind When Seen, Unanswered (rules only, no model) can always be flipped; what the triage may do only
+    /// while it is on.
     func canChange(_ key: WritableKeyPath<TriageSwitches, Bool>) -> Bool {
         guard let switches, !saving else { return false }
-        return key == \TriageSwitches.enabled || switches.enabled
+        return key == \TriageSwitches.enabled || key == \TriageSwitches.replyReminder || switches.enabled
     }
 
     /// Shows the new value at once; a failed save puts the old one back and says why.

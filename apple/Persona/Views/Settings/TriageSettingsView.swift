@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Settings › Session Triage (`TriageSettingsModel`): the triage and its model, then the three things it may do.
+/// Settings › Session Triage (`TriageSettingsModel`): the triage and its model, then the three things it may do, then the
+/// reminder for a question seen and not answered (apart from the triage).
 struct TriageSettingsView: View {
     @Environment(AppModel.self) private var app
     @State private var model: TriageSettingsModel?
@@ -33,6 +34,9 @@ struct TriageSettingsView: View {
                 } footer: {
                     Text("Works only when session triage is on. Continuing and waking make the agent run another turn on its own model. For things like pushing code, deploying or messaging other people, the hub only asks you and never does them itself.")
                 }
+                Section {
+                    toggle(\.replyReminder, String(localized: "Remind If Seen but Unanswered"), String(localized: "When an agent asks you something and you've seen it but haven't replied for \(replyMinutes) minutes, you get one reminder. It follows simple rules and uses no tokens."), Theme.Icon.replyReminder, id: "triage-reply-reminder")
+                }
             }
         }
         .overlay { if model?.switches == nil && model?.error == nil && model?.unsupported != true { ProgressView() } }
@@ -56,6 +60,9 @@ struct TriageSettingsView: View {
         }
         .refreshable { await model?.load() }
     }
+
+    /// The hub's wait before Remind When Seen, Unanswered fires (`reply_reminder_minutes`, 30 when it names none).
+    private var replyMinutes: Int { model?.switches?.replyReminderAfter ?? TriageSwitches.defaultReplyReminderMinutes }
 
     private func toggle(_ key: WritableKeyPath<TriageSwitches, Bool>, _ title: String, _ hint: String, _ symbol: String,
                         id: String) -> some View {

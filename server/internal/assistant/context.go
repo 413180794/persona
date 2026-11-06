@@ -103,7 +103,7 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 		snap.Machines = append(snap.Machines, prompts.SnapshotMachine{Name: m.Name, ID: m.ID, Online: m.Online})
 	}
 	web := s.webBase(ctx) // the agents' and tasks' links (#2194)
-	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Muted, snap.Working, snap.Workflows = s.snapshotAgents(ctx, devices, web)
+	snap.Needs, snap.Unread, snap.Awaiting, snap.Waiting, snap.Done, snap.Muted, snap.Working, snap.Workflows = s.snapshotAgents(ctx, devices, web)
 	snap.Tasks = s.snapshotTasks(ctx, web)
 	snap.Approvals = s.snapshotApprovals(ctx, web)
 	snap.Unaccepted, snap.UnacceptedTotal = s.snapshotUnaccepted(ctx, loc)
@@ -137,7 +137,7 @@ func (s *Service) ProfileChanged(context.Context) {
 // waits for or concluded. Each has its page in the web app at web ("" for none). The muted ones (the agent or its
 // space) are in none of the others: the Live Activity, the Agents badge and the inbox leave them out
 // (docs/live-activity.md), so "Needs you" here does too; they are told apart, for when the user asks about them (#4562).
-func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done, muted []prompts.SnapshotAgent,
+func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, awaiting, waiting, done, muted []prompts.SnapshotAgent,
 	working []prompts.SnapshotAgent, workflows []prompts.SnapshotWorkflow) {
 	for _, m := range devices {
 		list, off, _ := s.sessionsMuted(ctx, m.ID)
@@ -155,6 +155,9 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 			if w != nil && w.Phase != proto.WorkWorking {
 				a.Line = w.Line
 			}
+			if a.Line == "" && c.AwaitsReply {
+				a.Line = c.Asks // what it asks (#5096)
+			}
 			recent := time.Since(c.UpdatedAt) < 24*time.Hour
 			var into *[]prompts.SnapshotAgent
 			switch {
@@ -166,6 +169,8 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 					continue
 				}
 				into = &muted
+			case c.AwaitsReply && c.State == proto.StateIdle && recent:
+				into = &awaiting // seen, its question unanswered (#5096)
 			// A decision with no card up (cards off, muted, "Not now") is not "Needs you": the lists, the badges and the Live
 			// Activity go by the state (docs/agent-states.md), so it stays "Unread" with what it waits for, or is seen.
 			case w != nil && w.Phase == proto.WorkBlocked && w.On != proto.WaitUser && c.State != proto.StateUnread && recent:
@@ -183,7 +188,7 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 			*into = append(*into, a)
 		}
 	}
-	return needs, unread, waiting, done, muted, working, workflows
+	return needs, unread, awaiting, waiting, done, muted, working, workflows
 }
 
 // runningWorkflows are c's background workflow runs still running, as the snapshot tells them (#2935).

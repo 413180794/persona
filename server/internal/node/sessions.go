@@ -146,6 +146,8 @@ type quickMeta struct {
 	cwd      string
 	model    string
 	lastText string
+	// asks is what lastText asks the user (transcript.AskOf), when no message came in after it (#5096).
+	asks string
 	// lastTextAt is when the agent last wrote text (botmux's sentinel included: it said something, it is no probe).
 	lastTextAt time.Time
 	// lastPromptAt is when the latest message to the agent came in.
@@ -321,6 +323,9 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 		} else {
 			m.lastText = lastWordsBefore(f, off)
 		}
+	}
+	if !m.lastPromptAt.After(m.lastTextAt) { // a message after the question answered it (#5096)
+		m.asks = transcript.AskOf(m.lastText)
 	}
 	if t := tm.LastTool; t != nil {
 		m.doing, m.doingAt = transcript.Activity(t.Name, t.Input), t.At
@@ -699,7 +704,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
 		}
 		// textAt: when the transcript last had the agent's words; rollout: a Codex pane's rollout meta, for its effort.
-		var textAt time.Time
+		var textAt, promptAt time.Time
 		var rollout quickMeta
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
@@ -714,6 +719,8 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
+				s.Asks, s.AsksRead = m.asks, true // the list's last_text is only the reply's start (#5096)
+				promptAt = m.lastPromptAt
 				if a.Agent != "codex" && a.Agent != traexAgent {
 					s.Model = n.shownModel(id, m.model) // the pick made in the app until a reply shows the real one (model_switch.go)
 				}
@@ -738,6 +745,14 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		// right after the reply (the sentinel, a closing line) comes within minutes.
 		if a.LastText != "" && (a.LastTextAt.IsZero() || !textAt.After(a.LastTextAt.Add(hostTextSlack))) {
 			s.LastText = snippet(a.LastText)
+			// A message to the agent after the host's answer answered its question (#5096); a host that gives no time
+			// for its answer is taken as the latest word.
+			if !a.LastTextAt.IsZero() && promptAt.After(a.LastTextAt) {
+				s.Asks = ""
+			} else {
+				s.Asks = transcript.AskOf(a.LastText)
+			}
+			s.AsksRead = true
 		}
 		if a.Agent == "codex" {
 			n.codexEffortRow(id, &s.Efforts, &s.Effort, rollout) // joined on its app-server: its effort (codex_effort.go)

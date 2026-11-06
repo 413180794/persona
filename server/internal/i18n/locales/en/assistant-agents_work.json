@@ -30,5 +30,7 @@
   "auth_link": "Open the authorization link: {url}",
   "auth_link_until": "Open the authorization link: {url} (valid until {time})",
   "you_skipped": "You said to leave it",
-  "waiting_on": "Waiting for “{wait}”"
+  "waiting_on": "Waiting for “{wait}”",
+  "reply_title": "{agent} is still waiting for your answer",
+  "reply_body": "It stopped to ask you something and has no answer yet"
 }

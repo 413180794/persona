@@ -878,6 +878,16 @@ type Session struct {
 	Ports     []Port    `json:"ports,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 	LastText  string    `json:"last_text,omitempty"`
+	// Asks is what the agent's last reply asks the user, when its closing words put a question or a decision to
+	// them (transcript.AskOf, #5096): read by the node off the whole reply, since LastText is only its beginning.
+	Asks string `json:"asks,omitempty"`
+	// AsksRead: the node read Asks off the reply (an empty Asks then means it asks nothing, or the user answered it);
+	// without it (an older node, a host that does not say) the hub reads the list's last words when they are whole.
+	AsksRead bool `json:"asks_read,omitempty"`
+	// AwaitsReply: the agent stopped on a question to the user nobody has answered yet (docs/agent-states.md "Awaiting your reply",
+	// #5096) — it asks (Asks, or the triage says it waits on the user) and has no card, error or background work. Set by
+	// the hub on a stopped session (Unread or Seen); an Seen one is listed as Awaiting Reply, not folded with the idle ones.
+	AwaitsReply bool `json:"awaits_reply,omitempty"`
 	// TurnError: the agent's latest turn ended in a model API error (the connection lost mid-response, overloaded,
 	// rate limited, the model service down…). The node sets it when the agent's own record says the turn failed
 	// (Codex: a rollout's task_complete.error, an app-server's failed turn, #2185); otherwise the hub reads it off the
@@ -1000,6 +1010,9 @@ type WorkState struct {
 	Questions []Question `json:"questions,omitempty"`
 	// InteractionID is the card the hub made for a decision (on user), while it is pending.
 	InteractionID string `json:"interaction_id,omitempty"`
+	// Deferred: the user put the decision off on its card (Skip for now, Not now, Stop waiting, Hold off, or closed it): the agent is no
+	// Awaiting Reply for it and is not reminded of (#5096).
+	Deferred bool `json:"deferred,omitempty"`
 	// TurnAt is the end of the turn this state is about (the session's updated_at then); At when it was found, By how:
 	// "rule" or "model".
 	TurnAt time.Time `json:"turn_at,omitzero"`

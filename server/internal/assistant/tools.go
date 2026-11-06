@@ -634,8 +634,8 @@ func (s *Service) describeAgents(ctx context.Context, state, machine, query stri
 			switch state {
 			case "all":
 			case "active":
-				if c.State != proto.StateNeedsYou && c.State != proto.StateWorking && c.State != proto.StateUnread {
-					continue
+				if c.State != proto.StateNeedsYou && c.State != proto.StateWorking && c.State != proto.StateUnread && !c.AwaitsReply {
+					continue // a seen one still asking the user is active too (#5096)
 				}
 			default:
 				if c.State != state {
@@ -693,6 +693,9 @@ func (s *Service) describeAgents(ctx context.Context, state, machine, query stri
 		}
 		for _, p := range pending[[2]string{r.m.ID, c.SessionID}] {
 			fmt.Fprintf(&b, "    等你：%s\n", p)
+		}
+		if c.AwaitsReply && c.Asks != "" {
+			fmt.Fprintf(&b, "    在问你、还没回：%s\n", c.Asks) // i18n-ignore: agents_list output for the model, as the lines around it
 		}
 		// Why it waits, while it does (a dialog's first line, a host's reason), as the apps' rows show it; else its last words.
 		if last := c.LastText; c.State == proto.StateNeedsYou && strings.TrimSpace(c.AttentionReason) != "" {

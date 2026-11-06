@@ -28,7 +28,7 @@ internal class NotificationDelivery(
                 if (session != null && (suppressed(session) || quiet(session))) return
                 if (event.kind != "interaction" && NotificationPolicy.channel(event) == null) return
                 val settings = preferences() ?: return
-                if ((event.kind == "interaction" || event.kind == "alert") && !settings.input) return
+                if ((event.kind == "interaction" || event.kind == "alert" || event.kind == "reply") && !settings.input) return
                 if (event.kind == "done" && settings.done == DoneNotification.Off) return
                 // Long/Always and session mute/seen suppression remain the hub's decision.
                 if (session != null && event.kind != "assistant" && sessions.sessions.value.none { it.key == session }) sessions.refresh()

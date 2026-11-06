@@ -16395,6 +16395,28 @@
       },
       "extractionState": "manual"
     },
+    "Awaiting Reply": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Awaiting Reply"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返信待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待你回复"
+          }
+        }
+      }
+    },
     "Back 15 Seconds": {
       "localizations": {
         "en": {
@@ -76388,6 +76410,28 @@
       },
       "extractionState": "manual"
     },
+    "Remind If Seen but Unanswered": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remind If Seen but Unanswered"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既読で未返信なら通知"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看过没回时提醒"
+          }
+        }
+      }
+    },
     "Reminder [Add Todo Intent 357f8a]": {
       "localizations": {
         "en": {
@@ -111552,6 +111596,40 @@
         }
       },
       "extractionState": "manual"
+    },
+    "When an agent asks you something and you've seen it but haven't replied for %lld minutes, you get one reminder. It follows simple rules and uses no tokens.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "When an agent asks you something and you've seen it but haven't replied for %lld minute, you get one reminder. It follows simple rules and uses no tokens."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "When an agent asks you something and you've seen it but haven't replied for %lld minutes, you get one reminder. It follows simple rules and uses no tokens."
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent に質問され、既読のまま %lld 分返信しないと一度だけ通知します。ルールだけで判断し、トークンは使いません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent 问了你、你看过 %lld 分钟还没回，就提醒一次；只按规则判断，不花 token"
+          }
+        }
+      }
     },
     "When an agent is waiting for you to do something on the computer, tap “I'm Done” in the bottom bar when you're finished and it carries on. Closing the screen also hands it back.": {
       "localizations": {

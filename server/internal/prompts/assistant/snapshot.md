@@ -4,6 +4,7 @@
 - Agents：需要你 {{len .Needs}} 个，完成未看 {{len .Unread}} 个，工作中 {{len .Working}} 个（详情用 agents_list）
 {{with .Needs}}  - 需要你：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Unread}}  - 完成未看：{{template "assistant/snapshot_agents" .}}
+{{end}}{{with .Awaiting}}  - 在问用户、用户看过还没回的（用户问有什么要处理时带上；别替用户回答）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Waiting}}  - 在等的（hub 到时会叫醒它们，不用管）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Done}}  - 做完的（24 小时内）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Muted}}  - 已屏蔽（用户关了它们的通知，上面的数不算它们；别主动提，问到再说）：{{template "assistant/snapshot_agents" .}}

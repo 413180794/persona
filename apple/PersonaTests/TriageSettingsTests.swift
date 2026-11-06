@@ -10,7 +10,33 @@ import Testing
         let s = try JSON.decoder.decode(TriageSwitches.self, from: Data(#"{"enabled":true,"auto_continue":true}"#.utf8))
         #expect(s == TriageSwitches(enabled: true, autoContinue: true))
         let back = try JSONSerialization.jsonObject(with: JSONEncoder().encode(s)) as? [String: Bool]
-        #expect(back == ["enabled": true, "auto_continue": true, "wake": false, "decide": false])
+        #expect(back == ["enabled": true, "auto_continue": true, "wake": false, "decide": false, "reply_reminder": true])
+    }
+
+    /// Remind If Seen but Unanswered (#5096): on when the hub leaves it out, kept with its minutes on the way back.
+    @Test func theReplyReminderIsOnUnlessTheHubSaysOff() throws {
+        #expect(try JSON.decoder.decode(TriageSwitches.self, from: Data("{}".utf8)).replyReminder)
+        let off = try JSON.decoder.decode(TriageSwitches.self, from: Data(#"{"reply_reminder":false,"reply_reminder_minutes":60}"#.utf8))
+        #expect(!off.replyReminder && off.replyReminderMinutes == 60)
+        let back = try JSONSerialization.jsonObject(with: JSONEncoder().encode(off)) as? [String: Any]
+        #expect(back?["reply_reminder"] as? Bool == false && back?["reply_reminder_minutes"] as? Int == 60)
+    }
+
+    /// The hint says the hub's wait: its minutes, 30 when it names none or 0 (as the hub and the web do).
+    @Test func theReplyReminderWaitsTheHubsMinutes() throws {
+        #expect(TriageSwitches().replyReminderAfter == 30)
+        #expect(TriageSwitches(replyReminderMinutes: 0).replyReminderAfter == 30)
+        #expect(TriageSwitches(replyReminderMinutes: 90).replyReminderAfter == 90)
+        #expect(try JSON.decoder.decode(TriageSwitches.self, from: Data(#"{"reply_reminder_minutes":45}"#.utf8)).replyReminderAfter == 45)
+    }
+
+    @Test func theReplyReminderDoesNotWaitForTheTriage() async {
+        var saved: [TriageSwitches] = []
+        let m = TriageSettingsModel(deps: .init(load: { TriageSwitches() }, save: { saved.append($0); return $0 }))
+        await m.load()
+        #expect(m.canChange(\.replyReminder) && !m.canChange(\.decide))
+        await m.set(\.replyReminder, false)
+        #expect(saved == [TriageSwitches(replyReminder: false)] && m.switches?.replyReminder == false)
     }
 
     @Test func loadsAndSavesTheWholeSet() async {

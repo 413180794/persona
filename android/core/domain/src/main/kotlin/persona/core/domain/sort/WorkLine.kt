@@ -17,6 +17,14 @@ val WorkState.hubWaits: Boolean
     get() = phase == "blocked" && on != "user" && (wakeAt != null || on == "external" && wait.isNullOrBlank() && agent == null)
 
 /**
+ * What an Awaiting Reply row says (#5096): what the hub's triage says it waits on the user for (blocked on user), else what its
+ * last reply asks; null when neither has words.
+ */
+val Session.replyLine: String? get() =
+    work?.takeIf { it.phase == "blocked" && it.on == "user" }?.line?.trim()?.takeIf(String::isNotEmpty)
+        ?: asks?.trim()?.takeIf(String::isNotEmpty)
+
+/**
  * The row's line for a stopped session the hub triaged: "✓ Conclusion" when done, what it waits for when blocked (with when the
  * hub acts next); null while it works or before the hub triaged its turn.
  */

@@ -6,6 +6,7 @@
   "offline": "Not running",
   "unknown": "Unknown",
   "waiting": "Waiting",
+  "awaits_reply": "Awaiting your reply",
   "done": "Done",
   "interrupted": "Interrupted",
   "follow_up": "Follow-up",

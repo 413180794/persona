@@ -73,6 +73,10 @@ type fleetBook struct {
 	// decorated and told (publishList), so the lists reach the hub in the order they were made.
 	sentMu sync.Mutex
 	sent   map[string]string
+	// shown: the list last told the hub for each machine, decorated (the reminders of agents awaiting a reply read it
+	// instead of decorating every list each minute, agents_reply.go).
+	shownMu sync.Mutex
+	shown   map[string][]proto.Session
 
 	// rep is the last snapshot's parts the session lists show (fleetTakeSnapshot).
 	rep fleetReport
@@ -760,6 +764,7 @@ func (s *Service) setSessions(machine string, list []proto.Session) {
 		switch {
 		case sess.Status == proto.StatusWorking && prev != proto.StatusWorking:
 			s.turnsBook().working(key, now)
+			s.replyWorked(machine, sess.SessionID) // answered: a question it asks next is a new one (agents_reply.go)
 			ref := SessionRef{MachineID: machine, SessionID: sess.SessionID}
 			s.inOrder(func() { s.TurnStarted(context.Background(), ref) }) // after the items that came before it
 		case prev == proto.StatusWorking && (sess.Status == proto.StatusDone || sess.Status == proto.StatusIdle):
@@ -847,6 +852,12 @@ func (s *Service) publishList(machine string) []proto.Session {
 		return list
 	}
 	f.sent[machine] = string(b)
+	f.shownMu.Lock()
+	if f.shown == nil {
+		f.shown = map[string][]proto.Session{}
+	}
+	f.shown[machine] = list
+	f.shownMu.Unlock()
 	s.hub.Tell(assistantwire.EventFleetSessions, json.RawMessage(b))
 	s.liveChanged(false)
 	return list
@@ -916,6 +927,7 @@ func (s *Service) decorated(machine string) []proto.Session {
 			}
 		}
 		s.decorateWork(machine, &list[i], asking)
+		decorateAwaits(&list[i])
 	}
 	s.decorateTodos(machine, list)
 	for i := range list {

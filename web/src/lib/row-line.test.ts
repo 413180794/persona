@@ -40,6 +40,16 @@ describe("interactionKicker", () => {
   it("is the 待办 page's word for each kind", () => {
     expect(["question", "plan", "permission", "screen", "elicitation"].map((kind) => interactionKicker({ kind } as Interaction))).toEqual(["在问你", "计划待批准", "需要授权", "终端对话框", "MCP 请求"]);
   });
+
+  it("says 待你回复 and what it asks for a seen agent awaiting your reply (#5096)", () => {
+    const asking = s({ state: "idle", awaits_reply: true, asks: "要不要推到 **beta**？", last_text: "改好了，测试都过了。要不要推到 beta？" });
+    expect(rowLine(asking, undefined, true)).toEqual({ lead: "待你回复：", text: "要不要推到 beta？", tone: "reply" });
+    const blocked = { ...asking, work: { phase: "blocked", on: "user", line: "等你定用 A 还是 B" } as Session["work"] };
+    expect(rowLine(blocked, undefined, true)).toEqual({ lead: "待你回复：", text: "等你定用 A 还是 B", tone: "reply" });
+    expect(rowLine(s({ state: "idle", awaits_reply: true }), undefined, true)).toEqual({ lead: "待你回复", text: "", tone: "reply" });
+    // not awaiting (muted, or the caller says no): a seen row has no second line
+    expect(rowLine(asking)).toBeUndefined();
+  });
 });
 
 describe("draftLine (#5568)", () => {

@@ -11,6 +11,7 @@ import {
   dismissPlan,
   draftPlaceholder,
   field,
+  feedNotice,
   getFeedState,
   receiptState,
   isToday,
@@ -585,6 +586,15 @@ export const FeedLineView = memo(function FeedLineView({ item }: { item: FeedIte
       return <TodayCard body={item.body as unknown as TodayBody} conversation={item.conversation} />;
     case "message":
       return item.ref && !isLater ? <MessageCard item={item} /> : null;
+    case "notice": {
+      // a line the hub wrote (#4305): small and centered, as the chat's own notices
+      const text = feedNotice(item);
+      return text ? (
+        <p data-testid="feed-notice" className="px-6 text-center text-[12px] text-ink-2 [overflow-wrap:anywhere]">
+          {text}
+        </p>
+      ) : null;
+    }
     case "view":
       // a live card: drawn where it was first shown, again at each version (ui/AssistantCard.tsx)
       return item.ref ? <LiveCard conversation={item.conversation} id={item.ref} first={(item.body as { view?: AssistantView } | undefined)?.view} /> : null;

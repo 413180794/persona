@@ -28,6 +28,7 @@ import { chatLines, freshWords, openRecap, parseUserText, segments, type ChatLin
 import type { Item, Session, Subagent } from "../../lib/types";
 import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel, followsAfterUnfold, UNFOLD_PAUSE, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { awaitsReply } from "../../lib/agent-groups";
 import { StatusMark } from "../../ui/StatusMark";
 import { Icon } from "../../ui/icons";
 import { scrollBehavior } from "../../ui/stream/motion";
@@ -1288,6 +1289,8 @@ export function Header({
   };
   const [linkTodoOpen, setLinkTodoOpen] = useState(false);
   const state = session ? stateOf(session) : "unknown";
+  // Awaiting Reply (#5096): seen, but it asked you something you have not answered
+  const awaiting = session ? awaitsReply(session, mutes) : false;
   const sub = chrome?.sub
     ? chrome.sub
     : main
@@ -1396,7 +1399,7 @@ export function Header({
       </div>
       <div className={cx("min-w-0 flex-1", Boolean(topCenter) && "max-lg:hidden")}>
         <div className="flex min-w-0 items-center gap-2">
-          {session && !assistant && <StatusMark state={state} />}
+          {session && !assistant && <StatusMark state={state} awaiting={awaiting} />}
           {session && !assistant && <SessionMark s={session} size={16} />}
           {assistant && <AssistantFace session={session} last={last} />}
           {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}
@@ -1405,7 +1408,7 @@ export function Header({
             <IconButton icon="chevron" label={t("chat-chatview.switch_agent")} onClick={pick.open} active={Boolean(pick.anchor)} className="-ml-1.5 shrink-0" />
           )}
           {/* a panel is a phone's width: the dot says the state there too */}
-          {session && !assistant && !chrome && state !== "idle" && <span className="hidden @min-[800px]:contents"><StatePill state={state} /></span>}
+          {session && !assistant && !chrome && (state !== "idle" || awaiting) && <span className="hidden @min-[800px]:contents"><StatePill state={state} awaiting={awaiting} /></span>}
           {/* narrow: the context bar gives way to the title too (#3532); "Session info" still has the token count. The header's own
               width decides (a container), so a side panel beside the chat narrows it as a phone does; the pill and the
               bar go below 800px, the chips' words below 640px, so the title keeps room in between (#3670) */}

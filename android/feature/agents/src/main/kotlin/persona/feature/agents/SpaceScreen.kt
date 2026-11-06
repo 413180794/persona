@@ -47,7 +47,7 @@ internal fun SpaceScreen(
                     if (busy) JLinearProgress(null)
                 }
                 // the agents of one tab follow each other in pane order: the launcher marked, the panes it split off under it (#2320)
-                val tabs = agentTabs(space.members)
+                val tabs = agentTabs(space.members, preferences.mutes)
                 itemsIndexed(space.members, key = { _, row -> row.id }) { index, row ->
                     val requests = pending.count { it.sessionKey == row.session.key }
                     val card = cards[row.session.key]

@@ -59,6 +59,8 @@ extension Theme {
         static let instructed = "quote.bubble"
         /// The manager's conclusion: done, just read it.
         static let concluded = "flag.checkered"
+        /// Remind When Seen, Unanswered (#5096): a question the user saw and did not answer, reminded once after a while.
+        static let replyReminder = "clock.badge.exclamationmark"
         /// Persona woke a waiting agent up (a message it typed in for the model, `Injected`).
         static let wakeUp = "bell.and.waves.left.and.right"
         /// A task that waits for the user's answer (its notice in the main conversation, `Injected`).

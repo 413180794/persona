@@ -341,6 +341,13 @@ data class Session(
     val goal: GoalInfo? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
+    /** What its last reply asks the user, when its closing words put a question or a decision to them (#5096). */
+    @SerialName("asks") val asks: String? = null,
+    /**
+     * It stopped on a question to the user nobody answered yet (docs/agent-states.md "Awaiting your reply", #5096): set by the hub
+     * on a stopped session (Unread or Seen). Older hubs never send it.
+     */
+    @SerialName("awaits_reply") val awaitsReply: Boolean = false,
     /** Its latest step when that is a tool call no text came after ("running tests", "reading tasks.go"), and when it started. */
     @SerialName("activity") val activity: String? = null,
     @WireTime @SerialName("activity_at") val activityAt: String? = null,

@@ -6,6 +6,7 @@
 // flipped would write off over every other switch the hub has on. Until the hub answers there are no switches, only
 // "Loading" or why it could not read them and "Retry". A hub with no such route (404) is older than the triage: it says so,
 // without a "Retry" that could not help (iOS / Android do the same).
+// "Remind when seen, unanswered" (#5096) is rule-based and spends no tokens: on unless the hub says false, and not tied to the main switch.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
@@ -15,6 +16,14 @@ import { Button, Loading, toast } from "../../ui/atoms";
 import { Group, Row, Switch } from "./SettingsParts";
 
 const OFF: TriageSwitches = { enabled: false, auto_continue: false, wake: false, decide: false };
+
+// the hub's default wait before Remind When Seen, Unanswered (assistant/agents_reply.go), when it does not send its own
+const REPLY_REMINDER_MINUTES = 30;
+
+/** Remind When Seen, Unanswered is on unless the hub stored it off (absent: on). */
+export function replyReminderOn(sw: Pick<TriageSwitches, "reply_reminder">): boolean {
+  return sw.reply_reminder !== false;
+}
 
 export function TriageSettings({ onModel }: { onModel?: () => void }) {
   const [sw, setSw] = useState<TriageSwitches | null>(null);
@@ -51,7 +60,7 @@ export function TriageSettings({ onModel }: { onModel?: () => void }) {
       setBusy(false);
     }
   };
-  const flip = (k: keyof TriageSwitches) => (on: boolean) => sw && change({ ...sw, [k]: on });
+  const flip = (k: "enabled" | "auto_continue" | "wake" | "decide" | "reply_reminder") => (on: boolean) => sw && change({ ...sw, [k]: on });
   const off = !sw?.enabled;
 
   return (
@@ -99,6 +108,10 @@ export function TriageSettings({ onModel }: { onModel?: () => void }) {
           </Row>
           <Row label={t("settings-triagesettings.wake")} hint={t("settings-triagesettings.wake_hint")}>
             <Switch on={sw.wake} onChange={flip("wake")} disabled={busy || off} label={t("settings-triagesettings.wake")} />
+          </Row>
+          {/* no model call, so it works with the triage off */}
+          <Row label={t("settings-triagesettings.reply_reminder")} hint={t("settings-triagesettings.reply_reminder_hint", { minutes: sw.reply_reminder_minutes || REPLY_REMINDER_MINUTES })}>
+            <Switch on={replyReminderOn(sw)} onChange={flip("reply_reminder")} disabled={busy} label={t("settings-triagesettings.reply_reminder")} />
           </Row>
         </>
       )}

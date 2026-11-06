@@ -30,5 +30,7 @@
   "auth_link": "認可リンクを開いてください：{url}",
   "auth_link_until": "認可リンクを開いてください：{url}（{time}まで有効）",
   "you_skipped": "放置するよう指示されました",
-  "waiting_on": "「{wait}」を待機中"
+  "waiting_on": "「{wait}」を待機中",
+  "reply_title": "{agent} があなたの返事を待っています",
+  "reply_body": "質問したまま、まだ返事がありません"
 }

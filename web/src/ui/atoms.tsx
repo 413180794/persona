@@ -12,7 +12,7 @@ import { keyboardFrame } from "../lib/viewport";
 import { prefersReducedMotion } from "./stream/motion";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
 import { NARROW_QUERY, placeMenu, placeSubmenu, SHEET_QUERY, useEscapeClose, useMedia, useModalFocus, type MenuPlace } from "./overlay";
-import { STATE_LABEL } from "../lib/state-labels";
+import { STATE_LABEL, stateName } from "../lib/state-labels";
 
 export const EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 
@@ -73,7 +73,8 @@ export function Loading({ label = t("common.loading") }: { label?: string }) {
   );
 }
 
-export function StatePill({ state }: { state: AgentState }) {
+/** A state as a word in a pill; `awaiting`: seen and awaiting the user's reply, "Awaiting your reply" in the unread tint (#5096). */
+export function StatePill({ state, awaiting = false }: { state: AgentState; awaiting?: boolean }) {
   const tone: Record<AgentState, string> = {
     needs_you: "bg-red-tint text-red",
     working: "bg-orange-tint text-orange",
@@ -82,10 +83,11 @@ export function StatePill({ state }: { state: AgentState }) {
     offline: "bg-field text-ink-3",
     unknown: "bg-field text-ink-3",
   };
+  const reply = awaiting && state === "idle";
   return (
-    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium ${tone[state]}`}>
+    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium ${reply ? tone.unread : tone[state]}`}>
       {(state === "working" || state === "needs_you") && <StatusMark state={state} size="sm" label={false} />}
-      {STATE_LABEL[state]}
+      {reply ? stateName("awaits_reply") : STATE_LABEL[state]}
     </span>
   );
 }

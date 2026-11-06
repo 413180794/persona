@@ -37,6 +37,18 @@ func (s *Service) agentRoutes() {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
+		// An app that does not know the reminder's switch (#5096) leaves it as it was. While the saved switches cannot be
+		// read, a PUT still goes through (it saves the whole set): then the reminder's switch it leaves out is the default.
+		prev, _ := s.readTriageSwitches(r.Context())
+		if in.ReplyReminder == nil {
+			in.ReplyReminder = prev.ReplyReminder
+		}
+		switch {
+		case in.ReplyReminderMinutes == 0:
+			in.ReplyReminderMinutes = prev.ReplyReminderMinutes
+		case in.ReplyReminderMinutes < 0:
+			in.ReplyReminderMinutes = 0 // back to the default
+		}
 		if err := s.putTriageSwitches(r.Context(), in); err != nil {
 			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return

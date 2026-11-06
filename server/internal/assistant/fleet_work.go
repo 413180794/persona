@@ -2,12 +2,14 @@ package assistant
 
 import (
 	"context"
+	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Where each agent stands in its work as the session lists show it (docs/agent-work.md "Model"): what the Agents
@@ -122,4 +124,36 @@ func interactionLine(l i18n.Lang, ix proto.Interaction) string {
 		return i18n.T(l, "hub-agents_link.elicitation")
 	}
 	return i18n.T(l, "hub-agents_link.screen")
+}
+
+// decorateAwaits says whether sess (decorated, its work on it) stopped on a question to the user nobody answered yet
+// (Session.AwaitsReply, docs/agent-states.md "Awaiting your reply", #5096), and puts on it what it asks when the node could not
+// say (an older node, a host whose words come another way: no AsksRead): the list's last words, when they are the whole
+// reply. A node that read the reply and found no question (or found it answered) is taken at its word.
+func decorateAwaits(sess *proto.Session) {
+	if !sess.AsksRead && sess.Asks == "" && sess.LastText != "" && !strings.HasSuffix(sess.LastText, "…") {
+		sess.Asks = transcript.AskOf(sess.LastText)
+	}
+	sess.AwaitsReply = awaitsReply(*sess)
+}
+
+// awaitsReply: sess is stopped (Unread or Seen) on a question to the user — the triage says it waits on the user, or,
+// when the triage has no word on the turn (off, not yet, unsure), its closing words ask — with nothing else to answer
+// it: no card (that is Needs You), no model error (the triage or Retry handles it), no background work or /loop (it wakes
+// itself). A turn the triage found done asks nothing: its"shall I also…"is an offer, not a wait; nor one whose card the
+// user answered "Skip for now".
+func awaitsReply(sess proto.Session) bool {
+	if sess.Assistant || sess.State != proto.StateUnread && sess.State != proto.StateIdle || sess.PendingInteractions > 0 ||
+		sess.TurnError != "" || sess.Loop != nil || backgroundRunning(sess) {
+		return false
+	}
+	if w := sess.Work; w != nil {
+		switch w.Phase {
+		case proto.WorkDone:
+			return false
+		case proto.WorkBlocked:
+			return w.On == proto.WaitUser && !w.Deferred // put off on its card: the user chose to leave it
+		}
+	}
+	return sess.Asks != ""
 }

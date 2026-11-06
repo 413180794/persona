@@ -17,6 +17,46 @@ whether there's a pending interaction, and whether the user has looked at it in 
 
 Sort priority: Needs you → Working → Unread → Seen → Unknown → Not running.
 
+### Awaiting your reply (#5096)
+
+"Seen" only says the user looked; it does not say whether the agent still waits on them. A turn that stops on a question
+("Push it to beta?", "A or B?") that the user glanced at and left was Seen like a finished one, folded into Idle Spaces, and
+forgotten. So a stopped session carries `awaits_reply` (`state` is unchanged; older apps still show Seen):
+
+- **What it asks** (`asks`): the node takes the question to the user from the turn's whole last reply (`last_text` is only its
+  first 200 runes, and the question is usually at the end) with `transcript.AskOf`, rules only, no model: one of the last three
+  sentences ending in a question mark, or carrying a phrase that hands a decision over (要不要 / 要我 / 是否需要 / 请确认 / 选哪个 /
+  告诉我 / 跟我说一声 / 选定后…, "Should I / Do you want / Let me know…", ますか / でしょうか…). Code blocks don't count, nor a
+  phrase when the close says there is nothing to decide (没有需要你拍板的问题; a real question mark before it still counts), nor a reply a newer message came after (the user already
+  answered; a host's answer such as botmux's counts the same way when the host gives its time). Marks inside inline code and links end no sentence (`user?.name`,
+  `…?w=1` ask nothing; the question keeps their words), an ASCII `?` only ends a sentence before a space or the line's end, and a Chinese sentence ending in
+  吗 asks even without its question mark (not 么 / 呢: "…为什么。" is a statement). The node marks the session `asks_read`; only without it (an older node, a
+  host that does not say) the manager reads `last_text` itself, and only when it was not cut.
+- **Still waiting** (`awaits_reply`, the manager's): Unread or Seen, no pending interaction (that is Needs You), no model
+  error, no background work or `/loop`, and either the triage says it waits on the user (not put off on its card:
+  `work.deferred`), or the triage has no word on the turn (off, not yet, unsure) and the turn has `asks`. A turn the triage
+  found done does not count (a closing "shall I also…" is an offer).
+- **Lists**: a Seen, not muted agent with `awaits_reply` gets its own rank, Awaiting Reply, after Unread and before Working;
+  it and its space stay out of Idle Spaces and the "N more idle" folds, and its row shows what it asks (the triage's line when
+  it has one).
+- **Reminder** (the manager, `assistant/agents_reply.go`): once a minute it looks; when one has waited 30 minutes since the user
+  looked (seen on the computer only: since it asked), one push "<agent> is still waiting for your answer" with the question,
+  through the Needs You push switch, answerable from the notification. Once per turn; not for muted agents, inbox agents,
+  questions asked in Feishu, quiet scheduled tasks, or questions older than a day. The record is in memory: the manager's first
+  look at each machine's list after a restart (whenever its node is back) takes what is already due as reminded (no burst
+  after a deploy); at worst one that was about to be reminded is not. A question is its turn end and its words: the same words
+  with a moved `updated_at` (a line written after the turn) are not reminded of again, unless the agent worked in between (any turn start drops the mark).
+  Turned off and on again, the reminders prime each machine again; until the seen times are read back after a restart
+  nothing is reminded of. Agents in the health space are never reminded of (their questions are not for the lock screen). The reminder is laid out as a finished
+  turn's push but is no `agent.finished` to extensions; on the WebSocket it is a `reply` notify (Android files it with the
+  finished ones and puts it away when the session is seen). A reminder the hub refuses (one that is behind) is tried again
+  the next minute. It reads the lists as last told to the hub, not decorating them again. The switch is in Settings › Session Triage (`reply_reminder`, `reply_reminder_minutes` in `agents.triage`):
+  it spends no tokens, so it is on by default and does not depend on the triage switch; an older app changing another switch
+  leaves it as it was.
+- The finished push of a turn that asks says the question, not the reply's first lines.
+- **The assistant knows**: its live snapshot has a section for agents asking the user that the user saw and has not answered,
+  and `agents_list`'s `active` lists them with an "asking you, unanswered" line.
+
 ### Non-Claude herdr agents (opencode, pi, unrecognized agents)
 
 When the agent herdr reports isn't Claude / Codex / compatible Codex forks, the state is **always what herdr reports** (`blocked` / `working` / `done` / `idle` / `unknown`); there are no hooks, transcripts or on-screen boxes to add to it.
@@ -102,7 +142,7 @@ They count as background work just like background commands: the Agent is Workin
 - **End notifications and timing** (#3433): `Dynamic workflow "…" completed / failed / was stopped` is parsed as `Item.task.kind: workflow`, preserving the notification's `tool_use_id` and `task_id` so clients can find the initiating call or run. A Live Activity item with `background_working` uses the earliest known `started_at` among running workflows for `since`; without one, it falls back to the turn's start time, then the session's update time. `detail` remains a one-line progress summary.
 - **Fallback**: with no notification and no status file, 30 minutes without any write counts as `stalled` (its claude is gone) and no longer as running; a Monitor past `expires_at` doesn't count; finished ones stop being listed after a day.
 - The assistant's live snapshot and `agents_list` spell out running workflows ("this turn stopped to wait for results, it isn't done"), so it won't nudge or close these Agents.
-List order (the same for all three groupings): Needs you → Unread → Working → Waiting → Muted → Seen; within a state, by last update time (`docs/ios.md`).
+List order (the same for all three groupings): Needs you → Unread → Awaiting reply → Working → Waiting → Muted → Seen; within a state, by last update time (`docs/ios.md`).
 
 ### "Seen"
 

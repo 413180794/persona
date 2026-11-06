@@ -45,7 +45,7 @@ import Testing
     @Test func mutedLiveAgentsGoBelowTheRestButNeedsYouStaysFirst() {
         let list = [session("a", "unread"), session("b", "working"), session("c", "needs_you"), session("d", "idle")]
         let o = order(muted: ["a", "c"])
-        #expect(o.rank(list[0]) == 4, "muted and unread ranks as 已屏蔽")
+        #expect(o.rank(list[0]) == 5, "muted and unread ranks as 已屏蔽")
         #expect(o.rank(list[2]) == 0, "muted but needs you stays first")
         #expect(o.ordered(list).map(\.sessionID) == ["c", "b", "a", "d"])
     }
@@ -130,6 +130,71 @@ import Testing
         #expect(AgentListOrder.recent([a, unknown, b]).map(\.id) == ["a/same", "b/same", "m/unknown"])
     }
 
+    // MARK: Awaiting Reply (#5096)
+
+    private func awaiting(_ id: String, _ extra: String = "", state: String = "idle", updated: TimeInterval = 0) -> Session {
+        let json = """
+        {"machine_id":"m","session_id":"\(id)","title":"\(id)","cwd":"/tmp/p","status":"idle","state":"\(state)",
+         "space_id":"w1","space_name":"app","awaits_reply":true,"asks":"要不要推到 beta？","last_text":"PR 看完了"\(extra),
+         "updated_at":"\(ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: updated)))"}
+        """
+        do { return try JSON.decoder.decode(Session.self, from: Data(json.utf8)) }
+        catch { fatalError("bad fixture: \(error)") }
+    }
+
+    @Test func awaitingAReplyDecodesAndOlderHubsSayNothing() {
+        let a = awaiting("a")
+        #expect(a.awaitsReply && a.asks == "要不要推到 beta？" && a.awaitsYourReply(muted: false))
+        let plain = session("p", "idle")
+        #expect(!plain.awaitsReply && plain.asks == nil && !plain.awaitsYourReply(muted: false))
+        let odd = try? JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"x","awaits_reply":"yes","asks":3}"#.utf8))
+        #expect(odd?.awaitsReply == false && odd?.asks == nil, "an odd value never drops the session")
+        #expect(!awaiting("u", state: "unread").awaitsYourReply(muted: false), "完成未看 is its own state")
+    }
+
+    @Test func awaitingAReplyRanksBetweenUnreadAndWorking() {
+        let list = [session("idle", "idle", updated: 50), session("work", "working", updated: 40), awaiting("ask", updated: 1),
+                    session("unread", "unread", updated: 20), session("needs", "needs_you", updated: 1)]
+        #expect(order().rank(list[2]) == AgentListOrder.stateKeys.firstIndex(of: "awaiting"))
+        #expect(order().ordered(list).map(\.sessionID) == ["needs", "unread", "ask", "work", "idle"])
+        #expect(order(byRank: false).ordered(list).map(\.sessionID) == ["idle", "work", "unread", "ask", "needs"],
+                "最近更新 keeps time-only ordering")
+        #expect(order().sectionIDs(list, byMachine: false) == ["state/needs", "state/unread", "state/awaiting", "state/working", "state/idle"])
+    }
+
+    @Test func awaitingAReplyStaysOutOfTheIdleFoldUnlessMuted() {
+        let ask = awaiting("ask")
+        #expect(order().stays(ask))
+        #expect(!order(muted: ["ask"]).stays(ask) && order(muted: ["ask"]).rank(ask) == 6, "a muted one folds as 已看")
+        let g = SpaceGroup(id: "s", machineID: "m", spaceID: "w1", group: "", name: "app", index: 0, sessions: [ask, session("q", "idle")])
+        #expect(!order().isQuiet(g), "a space with one is not in 空闲的空间")
+        #expect(order(muted: ["ask"]).isQuiet(g))
+        #expect(rows(.space).spaces(active: [g], quiet: [], hosts: nil).map(\.sessionID) == ["ask"])
+        #expect(rows(.state, folded: ["state/idle"]).states([ask, session("q", "idle")]).map(\.sessionID) == ["ask"])
+    }
+
+    @Test func awaitingAReplyShowsTheQuestion() {
+        let ask = awaiting("ask")
+        #expect(ask.stateLabel(muted: false) == "待你回复" && ask.listPreview(muted: false) == "要不要推到 beta？")
+        let blocked = awaiting("b", #","work":{"phase":"blocked","on":"user","line":"等你决定发不发 beta"}"#)
+        #expect(blocked.listPreview(muted: false) == "等你决定发不发 beta", "the triage's line is the better one")
+        var seen = session("s", "idle")
+        seen.asks = "要不要推到 beta？"
+        #expect(seen.stateLabel(muted: false) == "已看" && seen.replyLine(muted: false) == nil, "asks alone is not 待你回复")
+    }
+
+    /// One rule: a muted agent that asks is plain Seen in every word, color and line, as it ranks (`AgentListOrder.rank`).
+    @Test func aMutedAgentThatAsksIsPlainSeenEverywhere() {
+        let ask = awaiting("ask")
+        #expect(!ask.awaitsYourReply(muted: true))
+        #expect(ask.stateLabel(muted: true) == "已看" && ask.stateLabel == "已看", "the plain label never says it")
+        #expect(ask.stateTone(muted: true).text == AgentState.idle.tone.text)
+        #expect(ask.stateTone(muted: false).text == StatusPalette.awaitingReply.text)
+        #expect(ask.replyLine(muted: true) == nil)
+        #expect(ask.listPreview(muted: true) == "PR 看完了", "its last words, not the question")
+        #expect(order(muted: ["ask"]).awaitsReply(ask) == ask.awaitsYourReply(muted: true))
+    }
+
     // MARK: The open agent held in place (#2213)
 
     @Test func theOpenAgentSeenByOpeningKeepsItsPlaceUntilLeft() {
@@ -140,7 +205,7 @@ import Testing
         #expect(held.rank(read) == 1, "still 完成未看's place")
         #expect(held.ordered(list).map(\.sessionID) == ["read", "work", "old"])
         let left = order()
-        #expect(!left.stays(read) && left.rank(read) == 5, "folds as soon as it is left")
+        #expect(!left.stays(read) && left.rank(read) == 6, "folds as soon as it is left")
     }
 
     @Test func aQuietSpaceWithTheHeldAgentIsNotQuiet() {
@@ -152,7 +217,7 @@ import Testing
 
     @Test func aHeldAgentThatIsWorkingAgainRanksAsWorking() {
         let s = session("again", "working")
-        #expect(AgentListOrder(isPinned: { _ in false }, isMuted: { _ in false }, held: s.key).rank(s) == 2)
+        #expect(AgentListOrder(isPinned: { _ in false }, isMuted: { _ in false }, held: s.key).rank(s) == 3)
     }
 
     // MARK: The rows in order (↑ / ↓, #2213)

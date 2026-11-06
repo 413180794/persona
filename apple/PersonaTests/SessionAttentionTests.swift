@@ -11,15 +11,15 @@ struct SessionAttentionTests {
 
     @Test func theReasonTakesTheListLineAndTheTopicOpensOnTheWeb() throws {
         let s = try session(#"{"session_id":"s","status":"blocked","last_text":"正在跑全量","attention_reason":"本轮执行失败，再发一条消息继续","external_url":"https://applink.example.com/thread?x=1"}"#)
-        #expect(s.listPreview == "本轮执行失败，再发一条消息继续")
+        #expect(s.listPreview(muted: false) == "本轮执行失败，再发一条消息继续")
         #expect(s.externalLink?.absoluteString == "https://applink.example.com/thread?x=1")
     }
 
     @Test func withoutAReasonTheLastWordsStay() throws {
         let s = try session(#"{"session_id":"s","status":"working","last_text":"在补测试","attention_reason":""}"#)
-        #expect(s.listPreview == "在补测试")
+        #expect(s.listPreview(muted: false) == "在补测试")
         #expect(s.externalLink == nil)
-        #expect(try session(#"{"session_id":"s","status":"idle"}"#).listPreview == nil)
+        #expect(try session(#"{"session_id":"s","status":"idle"}"#).listPreview(muted: false) == nil)
     }
 
     /// A host's failure notice (failure_reason) is no wait: the session stays in its turn's state, the notice takes the
@@ -28,9 +28,9 @@ struct SessionAttentionTests {
         let s = try session(#"{"session_id":"s","status":"done","last_text":"已改好标题","failure_reason":"⚠️ 本轮执行失败，再发一条消息继续"}"#)
         #expect(s.failureReason == "⚠️ 本轮执行失败，再发一条消息继续")
         #expect(s.state != .needsYou)
-        #expect(s.listPreview == "本轮执行失败，再发一条消息继续")
+        #expect(s.listPreview(muted: false) == "本轮执行失败，再发一条消息继续")
         let working = try session(#"{"session_id":"s","status":"working","last_text":"在补测试","failure_reason":"⚠️ 失败"}"#)
-        #expect(working.listPreview == "在补测试")
+        #expect(working.listPreview(muted: false) == "在补测试")
     }
 
     /// The app draws its own warning sign: botmux's at the start of the notice goes (the note and the list line).

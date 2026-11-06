@@ -109,8 +109,25 @@ export function isWaiting(s: Session): boolean {
   return ["idle", "unknown"].includes(stateOf(s)) && Boolean(s.loop || s.background?.length || s.subagents?.some((a) => a.running) || hubWaits(s.work));
 }
 
-export function isQuiet(s: Session): boolean {
-  return ["idle", "unknown"].includes(stateOf(s)) && !isWaiting(s);
+const NO_MUTES: AgentMutes = { spaces: [], sessions: [] };
+
+/** Awaiting Reply (#5096, docs/agent-states.md): seen, but it stopped on a question to the user nobody has answered yet
+ *  (`awaits_reply`), and not muted. Such an agent is not quiet: it never folds into Idle Spaces. */
+export function awaitsReply(s: Session, mutes: AgentMutes = NO_MUTES): boolean {
+  return stateOf(s) === "idle" && Boolean(s.awaits_reply) && !isMuted(s, mutes);
+}
+
+/** What an Awaiting Reply agent asks: what the triage says it waits for (blocked on the user), else the question its last reply
+ *  put to the user; "" when neither says. */
+export function replyAsk(s: Session): string {
+  const w = s.work;
+  if (w?.phase === "blocked" && w.on === "user" && w.line?.trim()) return w.line.trim();
+  return s.asks?.trim() ?? "";
+}
+
+/** Nothing to look at: seen (or unknown), not waiting on the hub or itself, and not waiting for the user's reply. */
+export function isQuiet(s: Session, mutes: AgentMutes = NO_MUTES): boolean {
+  return ["idle", "unknown"].includes(stateOf(s)) && !isWaiting(s) && !awaitsReply(s, mutes);
 }
 
 function isMuted(s: Session, mutes: AgentMutes): boolean {
@@ -125,13 +142,15 @@ function byDate(a: Session, b: Session): number {
   return byTime(date(b), date(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
 }
 
-// iOS AgentListOrder: needs you always wins, even when a session or its project is muted. "By status" is the only grouping
-// built here ("By machine" is lib/herdr-tree.ts); the argument stays for the callers that name it.
+// iOS AgentListOrder (#5096): needs you → unread → awaiting reply → working → waiting → muted → seen; needs you always wins,
+// even when a session or its project is muted. "By status" is the only grouping built here ("By machine" is
+// lib/herdr-tree.ts); the argument stays for the callers that name it.
 export function buildAgentGroups(all: Session[], machines: Machine[], _grouping: "state", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
   const { live } = splitAgentSessions(all, machines);
   const groups: AgentGroup[] = [
     { key: "state:needs", name: stateName("needs_you"), state: "needs_you", sessions: [] },
     { key: "state:unread", name: stateName("unread"), state: "unread", sessions: [] },
+    { key: "state:reply", name: stateName("awaits_reply"), sessions: [] },
     { key: "state:working", name: stateName("working"), state: "working", sessions: [] },
     { key: "state:waiting", name: stateName("waiting"), sessions: [] },
     { key: "state:muted", name: t("lib-agent-groups.state_muted"), sessions: [] },
@@ -140,8 +159,8 @@ export function buildAgentGroups(all: Session[], machines: Machine[], _grouping:
   for (const s of live) {
     const state = stateOf(s);
     const waiting = isWaiting(s);
-    const index = state === "needs_you" ? 0 : isMuted(s, mutes) && (state === "working" || state === "unread" || waiting) ? 4
-      : state === "unread" ? 1 : state === "working" ? 2 : waiting ? 3 : 5;
+    const index = state === "needs_you" ? 0 : isMuted(s, mutes) && (state === "working" || state === "unread" || waiting) ? 5
+      : state === "unread" ? 1 : awaitsReply(s, mutes) ? 2 : state === "working" ? 3 : waiting ? 4 : 6;
     groups[index].sessions.push(s);
   }
   return groups.filter((g) => g.sessions.length).map((g) => ({ ...g, sessions: g.sessions.sort(byDate) }));

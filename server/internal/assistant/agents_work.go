@@ -38,6 +38,11 @@ type TriageSwitches struct {
 	AutoContinue bool `json:"auto_continue"` // "Continue" after a transient model error
 	Wake         bool `json:"wake"`          // wake agents whose wait should be over
 	Decide       bool `json:"decide"`        // cards for what the user is to decide
+	// ReplyReminder: push once when an agent the user looked at still waits on their answer (agents_reply.go,
+	// #5096). Rules only, no tokens: unset is on.
+	ReplyReminder *bool `json:"reply_reminder,omitempty"`
+	// ReplyReminderMinutes: after how long since the user looked. 0: 30 (a PUT with 0 keeps it, a negative one clears it).
+	ReplyReminderMinutes int `json:"reply_reminder_minutes,omitempty"`
 }
 
 const triageSettingKey = "agents.triage"
@@ -1043,7 +1048,7 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 		s.publishSoon() // the card goes from the snapshot all the same
 	}
 	if r.Dismiss {
-		done(nil)
+		done(func(e *db.SessionWork) { e.Work.Deferred = true })
 		s.workEvent(ix.MachineID, ix.SessionID, "answered", map[string]any{"after": after, "dismissed": true})
 		return true, nil
 	}
@@ -1082,7 +1087,7 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 		return true, nil
 	case len(only) == 1 && (only[answerSkip] || only[answerNotNow] || only[answerStop] || only[answerHold]):
 		line := workT(s.lang(ctx), "you_skipped")
-		done(func(e *db.SessionWork) { e.Work.Line = line })
+		done(func(e *db.SessionWork) { e.Work.Line, e.Work.Deferred = line, true })
 		return true, nil
 	case len(only) == 1 && only[answerWait]:
 		l := s.lang(ctx)

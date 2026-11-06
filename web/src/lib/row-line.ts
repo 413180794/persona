@@ -1,7 +1,9 @@
 // The sidebar's agent rows say under their title what they need from you or what they did (#3195), so the owner
 // does not have to hover or open each one: the same words as the to-dos page's agent rows (todos.json kicker_*).
+import { stateName } from "./state-labels";
 import { t } from "../i18n";
 import { sessionPreview, stateOf } from "./format";
+import { replyAsk } from "./agent-groups";
 import { interactionAsk } from "./inbox";
 import { plainMarkdown } from "./plain-markdown";
 import type { Interaction, Session } from "./types";
@@ -28,11 +30,18 @@ const MAX = 160;
 /**
  * The second line of an agent's sidebar row: for one that needs you, its card's kind and what it asks
  * ("Asking you: which test framework?"), else why it waits (sessionPreview: the host's reason, the error, the hub's triage, its
- * last words); for one that finished unseen, what it did ("✓ conclusion" or its last words, as plain text). Undefined for
- * every other state, and when there is nothing to say. `lead` is the red part, colon included when text follows.
+ * last words); for one that finished unseen, what it did ("✓ conclusion" or its last words, as plain text); for one seen and
+ * awaiting the user's reply (`awaiting`, lib/agent-groups.ts awaitsReply, #5096), "Awaiting your reply:" and what it asks.
+ * Undefined for every other state, and when there is nothing to say. `lead` is the colored part (`tone`: red for
+ * needs you, the unread tint for Awaiting Reply), colon included when text follows.
  */
-export function rowLine(s: Session, ix?: Interaction): { lead?: string; text: string } | undefined {
+export function rowLine(s: Session, ix?: Interaction, awaiting = false): { lead?: string; text: string; tone?: "needs" | "reply" } | undefined {
   const st = stateOf(s);
+  if (awaiting && st === "idle") {
+    const text = plainMarkdown(replyAsk(s)).slice(0, MAX);
+    const lead = stateName("awaits_reply");
+    return text ? { lead: t("todos.kicker_line", { kicker: lead }), text, tone: "reply" } : { lead, text: "", tone: "reply" };
+  }
   if (st !== "needs_you" && st !== "unread") return undefined;
   if (st === "needs_you" && ix) {
     const kicker = interactionKicker(ix);

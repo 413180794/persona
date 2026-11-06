@@ -7,7 +7,9 @@ data class AgentSpace(val id: String, val name: String, val members: List<AgentS
     val cwd: String get() = members.first().session.cwd
     val priority: Int get() = members.minOf { it.state.priority }
     val updatedAt get() = members.mapNotNull { it.updatedAt }.maxOrNull()
-    val quiet: Boolean get() = members.all { it.isQuiet && !it.isWaiting }
+    val quiet: Boolean get() = quiet(AgentPreferences())
+    /** Nothing in it goes on: every agent is seen and none waits to be woken or for the user's reply ([AgentSession.stays]). */
+    fun quiet(mutes: AgentPreferences): Boolean = members.none { it.stays(mutes) }
 }
 
 fun agentSpaces(sessions: List<AgentSession>): List<AgentSpace> = sessions

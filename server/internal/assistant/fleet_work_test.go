@@ -185,6 +185,7 @@ func TestGoldenAssistantSnapshotWork(t *testing.T) {
 		{SessionID: "dddddddd-4", Cwd: "/code/demo", Title: "没分诊", Status: proto.StatusDone, UpdatedAt: at},
 		{SessionID: "eeeeeeee-5", Cwd: "/code/demo", Title: "在问", Status: proto.StatusDone, UpdatedAt: at},
 		{SessionID: "ffffffff-6", Cwd: "/code/demo", Title: "屏蔽了", Status: proto.StatusDone, UpdatedAt: at},
+		{SessionID: "99999999-7", Cwd: "/code/demo", Title: "看过没回", Status: proto.StatusIdle, UpdatedAt: at, Asks: "要推到 beta 吗？"},
 	})
 	setMutes(s, Pins{Sessions: []string{"server/ffffffff-6"}})
 	for _, sid := range []string{"eeeeeeee-5", "ffffffff-6"} {
@@ -269,7 +270,7 @@ func TestSnapshotNeedsYouIsTheState(t *testing.T) {
 	putPending(s, &pending{ix: proto.Interaction{ID: "own", MachineID: "mac", SessionID: "cccccccc-3", Kind: proto.IxQuestion,
 		Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
 
-	needs, unread, waiting, _, _, _, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
+	needs, unread, awaiting, waiting, _, _, _, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
 	if live := s.fleetSnapshot().NeedsYou; len(needs) != live || live != 1 || needs[0].Session != "cccccccc" {
 		t.Fatalf("需要你: snapshot %+v, Live Activity %d; want the one asking", needs, live)
 	}
@@ -278,6 +279,10 @@ func TestSnapshotNeedsYouIsTheState(t *testing.T) {
 	}
 	if len(waiting) != 0 {
 		t.Fatalf("在等的 %+v: the hub waits out none of them", waiting)
+	}
+	// Seen with its decision still open (no card: cards off): asked and unanswered (#5096).
+	if len(awaiting) != 1 || awaiting[0].Session != "bbbbbbbb" || awaiting[0].Line != "你说先不管" {
+		t.Fatalf("看过还没回 %+v: want the seen one waiting on a decision", awaiting)
 	}
 }
 
@@ -303,7 +308,7 @@ func TestSnapshotLeavesMutedAgentsOut(t *testing.T) {
 			Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
 	}
 
-	needs, unread, _, _, muted, working, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
+	needs, unread, _, _, _, muted, working, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
 	live := s.fleetSnapshot()
 	if len(needs) != live.NeedsYou || live.NeedsYou != 1 || needs[0].Session != "aaaaaaaa" {
 		t.Fatalf("需要你: snapshot %+v, Live Activity %d; want only the agent not muted", needs, live.NeedsYou)

@@ -9,6 +9,7 @@ import persona.core.contracts.SessionKey
 import persona.core.contracts.Todo
 import persona.core.contracts.parseTime
 import persona.core.domain.plainMarkdown
+import persona.core.domain.sort.replyLine
 import persona.core.domain.sort.workLine
 import persona.core.contracts.toolDisplayName
 import java.time.Instant
@@ -74,8 +75,11 @@ fun Session.askingLine(card: Interaction?): CoreText? =
 
 /**
  * The line under an agent row's title: what its card asks while it waits for you ([askingLine]), else why its host says
- * it waits or stopped (iOS listPreview), where its work stands once the hub triaged its turn (docs/agent-work.md), else
- * its last words.
+ * it waits or stopped (iOS listPreview), what it asks the user once seen and still unanswered ([replyLine], #5096; an
+ * unread or muted one keeps its last words, as on iOS and the web), where
+ * its work stands once the hub triaged its turn (docs/agent-work.md), else its last words.
  */
-fun Session.rowLine(card: Interaction?, now: Instant): CoreText? = askingLine(card)
-    ?: reasonPreview?.let(CoreText::plain) ?: workLine(now) ?: lastText?.takeIf(String::isNotBlank)?.let(CoreText::plain)
+fun Session.rowLine(card: Interaction?, now: Instant, muted: Boolean = false): CoreText? = askingLine(card)
+    ?: reasonPreview?.let(CoreText::plain)
+    ?: replyLine?.takeIf { awaitsReply && agentState == AgentState.Idle && !muted }?.let(CoreText::plain)
+    ?: workLine(now) ?: lastText?.takeIf(String::isNotBlank)?.let(CoreText::plain)

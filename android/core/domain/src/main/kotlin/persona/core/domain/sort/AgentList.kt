@@ -113,13 +113,19 @@ data class AgentMachineGroup(
     val id: String get() = "machine/${machine.id}"
 }
 
+/**
+ * State First's order, the index into By Status's sections (iOS `AgentListOrder.rank`): Needs You → Unread → Awaiting Reply → Working →
+ * Waiting → Muted → Seen. Muted agents that are working, finished-unread or waiting rank as Muted; a muted one that only
+ * waits for the user's reply is just Seen ([AgentSession.awaitsReply]); one that needs you stays first.
+ */
 fun agentRank(session: AgentSession, mutes: AgentPreferences = AgentPreferences()): Int = when {
     session.state == AgentState.NeedsYou -> 0
-    (session.state == AgentState.Working || session.state == AgentState.Unread || session.isWaiting) && mutes.mutes(session) -> 4
+    (session.state == AgentState.Working || session.state == AgentState.Unread || session.isWaiting) && mutes.mutes(session) -> 5
     session.state == AgentState.Unread -> 1
-    session.state == AgentState.Working -> 2
-    session.isWaiting -> 3
-    else -> 5
+    session.awaitsReply(mutes) -> 2
+    session.state == AgentState.Working -> 3
+    session.isWaiting -> 4
+    else -> 6
 }
 
 /** The list's own filter before the quick filter and the botmux switch: not the assistant, the machine, the search. */
@@ -158,7 +164,7 @@ private fun buildFlatAgentList(
     val comparator = compareBy<AgentSession> { if (byRank) agentRank(it, mutes) else 0 }
         .thenByDescending { it.sortDate }.thenBy { it.session.sessionId }.thenBy { it.id }
     fun ordered(rows: List<AgentSession>) = rows.sortedWith(comparator)
-    fun stays(row: AgentSession) = !row.isQuiet || row.isWaiting
+    fun stays(row: AgentSession) = row.stays(mutes)
     fun showIdle(key: String) = key in settings.expandedIdle || settings.query.isNotEmpty()
     fun group(id: String, title: CoreText, rows: List<AgentSession>, visible: List<AgentSession>): AgentListGroup {
         val folded = id in settings.folded
@@ -241,8 +247,8 @@ private fun buildFlatAgentList(
                 machines = machineGroups)
         }
         AgentGrouping.State -> {
-            val titles = listOf("needs" to Key.StateNeedsYou, "unread" to Key.StateUnread, "working" to Key.StateWorking,
-                "waiting" to Key.StateWaiting, "muted" to Key.StateMuted, "idle" to Key.StateIdle).map { (key, title) -> key to CoreText.of(title) }
+            val titles = listOf("needs" to Key.StateNeedsYou, "unread" to Key.StateUnread, "awaiting" to Key.StateAwaitingReply,
+                "working" to Key.StateWorking, "waiting" to Key.StateWaiting, "muted" to Key.StateMuted, "idle" to Key.StateIdle).map { (key, title) -> key to CoreText.of(title) }
             val byRank = live.groupBy { agentRank(it, mutes) }
             titles.forEachIndexed { rank, (key, title) ->
                 val rows = ordered(byRank[rank].orEmpty())
@@ -328,10 +334,10 @@ private fun buildFlatAgentList(
                 // "Recently updated": the busy spaces by their latest agent, not by state (muted ones still after the rest).
                 val busy = if (latest) spaces.sortedWith(compareByDescending<AgentSpace> { space -> space.members.mapNotNull { it.sortDate }.maxOrNull() }
                     .thenBy { it.id }) else spaces
-                busy.filter { !it.quiet && !pinnedSpace(it) && !mutedSpace(it) } +
-                    busy.filter { !it.quiet && mutedSpace(it) }
+                busy.filter { !it.quiet(mutes) && !pinnedSpace(it) && !mutedSpace(it) } +
+                    busy.filter { !it.quiet(mutes) && mutedSpace(it) }
             }
-            val quiet = if (quick) emptyList() else spaces.filter { it.quiet && !leading(it) }
+            val quiet = if (quick) emptyList() else spaces.filter { it.quiet(mutes) && !leading(it) }
             if (quiet.isNotEmpty()) quietTitle = CoreText.of(Key.AgentsQuietSpaces)
             fun spaceGroup(space: AgentSpace, isQuiet: Boolean): AgentListGroup {
                 val rows = if (isQuiet) space.members else ordered(space.members)

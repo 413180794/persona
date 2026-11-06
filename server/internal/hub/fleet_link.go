@@ -451,6 +451,8 @@ func (h *Hub) deliverPush(n assistantwire.Notification) error {
 	case assistantwire.NotifyDone:
 		h.notifyDone("done", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body,
 			pushWants{Kind: "done", Took: time.Duration(n.TookMS) * time.Millisecond, Long: time.Duration(n.LongMS) * time.Millisecond})
+	case assistantwire.NotifyReply:
+		h.notifyReply(n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body)
 	case assistantwire.NotifyInput:
 		if n.Interaction == nil {
 			return errors.New("an input push needs its interaction")

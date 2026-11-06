@@ -64,6 +64,19 @@ class AgentTabTest {
         assertEquals("a", even.lead.session.sessionId) // equals: the first in pane order
     }
 
+    @Test fun aTabWaitingOnTheUsersReplySpeaksForItOverTheSeenOnes() {
+        // 待你回复 (#5096) comes after 完成未看 and before 已看: over a seen agent earlier in pane order
+        val asks = row(s("b", place = 1).copy(awaitsReply = true, asks = "要不要推到 beta？"))
+        val seen = listOf(row(s("a", place = 0, state = "idle")), asks)
+        assertEquals("b", agentTabs(seen).values.single().lead.session.sessionId)
+        // a muted one is just 已看: the first in pane order leads again
+        assertEquals("a", agentTabs(seen, AgentPreferences(sessions = listOf("mac/b"))).values.single().lead.session.sessionId)
+        // unread, working and needs-you agents still come first
+        listOf("unread", "working", "needs_you").forEach { state ->
+            assertEquals(state, "c", agentTabs(seen + row(s("c", place = 2, state = state))).values.single().lead.session.sessionId)
+        }
+    }
+
     @Test fun slotLabels() {
         assertEquals("#2", s("a").slotLabel)
         assertEquals("#2", s("a").copy(slotName = "2").slotLabel)

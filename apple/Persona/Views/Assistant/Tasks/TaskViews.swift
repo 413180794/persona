@@ -512,6 +512,17 @@ struct FeedLine: View {
                     registered: AppModel.shared.features(group).contains("assistant_views"),
                     location: location, deps: .live(location))
             }
+        case .notice:
+            // A line the hub wrote (a routine running again once the computer and model are ready, #4305).
+            if let text = item.noticeText {
+                Text(text)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, Theme.Space.xl)
+                    .accessibilityIdentifier("feed.notice")
+            }
         case .unknown: EmptyView()
         }
     }

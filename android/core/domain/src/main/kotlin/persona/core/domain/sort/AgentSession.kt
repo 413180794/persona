@@ -21,6 +21,14 @@ data class AgentSession(
     val isQuiet: Boolean get() = state == AgentState.Idle || state == AgentState.Unknown
     val isWaiting: Boolean get() = isQuiet &&
         (session.loop != null || !session.background.isNullOrEmpty() || hasRunningSubagent || session.work?.hubWaits == true)
+    /**
+     * Awaiting Reply (#5096, docs/agent-states.md): seen, but it stopped on a question nobody answered yet. Not quiet unless
+     * muted ([awaitsReply] with the mutes): its space stays open and it stays out of the idle folds.
+     */
+    val asksYou: Boolean get() = state == AgentState.Idle && session.awaitsReply
+    fun awaitsReply(mutes: AgentPreferences): Boolean = asksYou && !mutes.mutes(this)
+    /** Kept out of the idle folds and quiet spaces: not quiet, waiting to be woken, or Awaiting Reply ([awaitsReply]). */
+    fun stays(mutes: AgentPreferences): Boolean = !isQuiet || isWaiting || awaitsReply(mutes)
     val updatedAt: Instant? get() = parseTime(session.updatedAt)
     val sortDate: Instant? get() = if (state == AgentState.Working) parseTime(stateSince) ?: updatedAt else updatedAt
     val spacePreferenceKey: String? get() = session.spaceName?.let { "${session.machineId}/$it" }

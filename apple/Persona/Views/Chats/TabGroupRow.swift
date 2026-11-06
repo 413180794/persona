@@ -35,7 +35,7 @@ struct TabGroupRow: View {
         .padding(.vertical, compact ? 0 : Theme.Space.xxs)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([String(localized: "Tab \(name)"), count, lead.stateLabel, folded ? String(localized: "Collapsed [Readiness Card ee6046]") : String(localized: "Expanded")].joined(separator: String(localized: ", ")))
+        .accessibilityLabel([String(localized: "Tab \(name)"), count, lead.stateLabel(muted: AppModel.shared.isMuted(lead)), folded ? String(localized: "Collapsed [Readiness Card ee6046]") : String(localized: "Expanded")].joined(separator: String(localized: ", ")))
         .accessibilityHint(folded ? String(localized: "Show This Tab's Agents") : String(localized: "Collapse"))
         .accessibilityAddTraits(.isButton)
     }

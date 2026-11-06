@@ -72,17 +72,18 @@ private const val QUIET = "quiet"
  * Flattens the list into tree lines: "Pinned" first, then every computer with its spaces, then any other groups. With
  * [tabs] ("By machine", as the web's sidebar) a space's agents that share a herdr tab are one [TreeTabEntry] with its agents
  * under it, listed where its most urgent agent would be; a tab is shown whole once one of its agents is, and the
- * tabs in [foldedTabs] ([AgentTab.foldKey]) are folded to their row.
+ * tabs in [foldedTabs] ([AgentTab.foldKey]) are folded to their row. [mutes] pick a tab's lead as the list ranks them.
  */
 internal fun agentTreeEntries(
     list: AgentListResult, machineFilter: String, tabs: Boolean = false, foldedTabs: Set<String> = emptySet(),
+    mutes: AgentPreferences = AgentPreferences(),
     expandedTasks: Set<String> = emptySet(),
 ): List<AgentTreeEntry> {
     val entries = mutableListOf<AgentTreeEntry>()
     fun group(group: AgentListGroup, space: Boolean, depth: Int, first: Boolean) {
         entries += TreeGroupEntry(group, space, depth, first)
         if (group.folded) return
-        val byTab = if (tabs && space) agentTabs(group.rows) else emptyMap()
+        val byTab = if (tabs && space) agentTabs(group.rows, mutes) else emptyMap()
         // each line is a row of its own or a tab of several, in the group's order
         val lines = mutableListOf<Any>()
         val placed = mutableSetOf<String>()

@@ -33,6 +33,17 @@ func (h *Hub) notifyDone(kind, machineID, machine, sessionID, title, text string
 	h.notifyWSIn(kind, build, wants.fn())
 }
 
+// notifyReply reminds the devices that take "needs you" pushes of an agent still waiting on the user's answer (#5096).
+// It is laid out as a finished turn's (answerable from the notification, opens the session), but nothing finished:
+// the extensions hear no agent.finished. On the WebSocket it is a "reply" notify (not "done": Android puts away the
+// finished notifications of seen sessions when it starts, and a reminder is about a seen one).
+func (h *Hub) notifyReply(machineID, machine, sessionID, title, text string) {
+	build := func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }
+	wants := pushWants{Kind: "input"}
+	h.push.sendLocalized(build, "", wants.fn())
+	h.notifyWSIn("reply", build, wants.fn())
+}
+
 func (h *Hub) notifyInteraction(ix proto.Interaction, machine string) {
 	build := func(l i18n.Lang) map[string]any { return interactionPayloadIn(l, ix, machine) }
 	h.emitToExtensions("agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,

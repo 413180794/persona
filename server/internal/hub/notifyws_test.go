@@ -14,6 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -274,5 +275,38 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 	h.notifyInteraction(ix, "box")
 	if k := got(); k != "interaction" {
 		t.Fatalf("not muted, interaction: %q", k)
+	}
+}
+
+// The reminder of an agent still waiting on the user's answer (#5096) goes to the devices that take "needs you" pushes,
+// laid out as a finished turn's; it is no finished turn to the extensions.
+func TestWSNotifyReplyTakesTheInputSwitch(t *testing.T) {
+	for _, input := range []bool{true, false} {
+		c := &client{device: "test-device", out: make(chan []byte, 4)}
+		h := &Hub{clients: map[*client]struct{}{c: {}}, push: newPusher(t.TempDir(), nil, t.Logf)}
+		if err := h.push.setPrefs(c.device, NotifyPrefs{Done: DoneOff, Input: input}); err != nil {
+			t.Fatal(err)
+		}
+		h.onClientMessage(context.Background(), c, []byte(`{"type":"client_hello","features":["ws_notify"]}`))
+		<-c.out
+		if err := h.deliverPush(assistantwire.Notification{Kind: assistantwire.NotifyReply, DeviceID: "m", SessionID: "s",
+			Title: "修登录 还在等你回复", Body: "要推到 beta 吗？"}); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case raw := <-c.out:
+			if !input {
+				t.Fatalf("needs-you pushes off, got %s", raw)
+			}
+			var got map[string]string
+			_ = json.Unmarshal(raw, &got)
+			if got["kind"] != "reply" || got["session_id"] != "s" || got["body"] != "要推到 beta 吗？" {
+				t.Fatalf("reminder = %v", got)
+			}
+		default:
+			if input {
+				t.Fatal("no reminder with needs-you pushes on")
+			}
+		}
 	}
 }

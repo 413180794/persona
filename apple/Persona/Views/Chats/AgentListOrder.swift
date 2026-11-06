@@ -13,27 +13,32 @@ struct AgentListOrder {
     var held: SessionKey? = nil
 
     /// The sections of By Status, in rank order.
-    static let stateKeys = ["needs", "unread", "working", "waiting", "muted", "idle"]
+    static let stateKeys = ["needs", "unread", "awaiting", "working", "waiting", "muted", "idle"]
 
-    /// Rows that stay out of the idle fold: busy, pinned, or waiting to be woken (`Session.isWaiting`: looping, with
-    /// background work, or the hub waiting it out).
+    /// Awaiting Reply (#5096): seen, stopped on a question nobody answered yet, and not muted (a muted one folds with
+    /// the idle ones, as it did before). The one rule is `Session.awaitsYourReply(muted:)`, which the rows use too.
+    func awaitsReply(_ s: Session) -> Bool { s.awaitsYourReply(muted: isMuted(s)) }
+
+    /// Rows that stay out of the idle fold: busy, pinned, waiting to be woken (`Session.isWaiting`: looping, with
+    /// background work, or the hub waiting it out), or waiting on the user's reply (`awaitsReply`).
     func stays(_ s: Session) -> Bool {
-        !s.isQuiet || s.key == held || isPinned(s.key) || s.isWaiting
+        !s.isQuiet || s.key == held || isPinned(s.key) || s.isWaiting || awaitsReply(s)
     }
 
     /// One order for every grouping (inside a space, a machine, and the sections of By Status):
-    /// Needs You → Unread → Working → Waiting → Muted → Seen. Muted agents that are working, finished-unread or waiting
-    /// rank as Muted; one that needs you stays first. The index into `stateKeys`.
+    /// Needs You → Unread → Awaiting Reply → Working → Waiting → Muted → Seen. Muted agents that are working,
+    /// finished-unread or waiting rank as Muted; one that needs you stays first. The index into `stateKeys`.
     func rank(_ s: Session) -> Int {
         if s.state == .needsYou { return 0 }
         let unread = s.state == .unread || (s.key == held && s.isQuiet)
         let live = s.state == .working || unread || s.isWaiting
-        if live && isMuted(s) { return 4 }
+        if live && isMuted(s) { return 5 }
         if unread { return 1 }
+        if awaitsReply(s) { return 2 }
         switch s.state {
         case .unread: return 1
-        case .working: return 2
-        default: return s.isWaiting ? 3 : 5
+        case .working: return 3
+        default: return s.isWaiting ? 4 : 6
         }
     }
 
@@ -67,8 +72,9 @@ struct AgentListOrder {
         return (entries.filter(stays), entries.filter { !stays($0) })
     }
 
-    /// A space that folds into Idle Spaces: every agent in it quiet, and not the held one's.
-    func isQuiet(_ g: SpaceGroup) -> Bool { g.isQuiet && !g.sessions.contains { $0.key == held } }
+    /// A space that folds into Idle Spaces: every agent in it quiet, none awaiting the user's reply, and not the held
+    /// one's.
+    func isQuiet(_ g: SpaceGroup) -> Bool { g.isQuiet && !g.sessions.contains { $0.key == held || awaitsReply($0) } }
     /// Newest first by `date`, then by `id` so equal times never swap between renders: spaces under a quick filter,
     /// spaces and machines under Recently Updated. `date` is a `sortDate`, so a working agent's every step does not move them.
     static func latestFirst<T>(_ items: [T], date: (T) -> Date, id: (T) -> String) -> [T] {

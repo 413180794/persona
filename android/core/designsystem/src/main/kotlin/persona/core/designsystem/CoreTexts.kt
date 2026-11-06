@@ -116,6 +116,7 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.AgentsPinned -> R.string.designsystem_core_agents_pinned
     CoreText.Key.StateNeedsYou -> R.string.designsystem_core_state_needs_you
     CoreText.Key.StateUnread -> R.string.designsystem_core_state_unread
+    CoreText.Key.StateAwaitingReply -> R.string.designsystem_core_state_awaiting_reply
     CoreText.Key.StateWorking -> R.string.designsystem_core_state_working
     CoreText.Key.StateWaiting -> R.string.designsystem_core_state_waiting
     CoreText.Key.StateMuted -> R.string.designsystem_core_state_muted

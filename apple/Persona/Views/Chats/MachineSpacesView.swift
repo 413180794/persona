@@ -18,8 +18,10 @@ struct MachineSpacesView: View {
         let sessions = model.allSessions.filter { $0.machineRef == ref && $0.state.isLive && !$0.assistant }
         let groups = SpaceGroup.build(sessions)
         let pinned = groups.filter { model.isPinned($0) }
-        let active = pinned + groups.filter { !$0.isQuiet && !model.isPinned($0) }
-        let quiet = groups.filter { $0.isQuiet && !model.isPinned($0) }
+        // A space with an agent waiting on the user's reply (Awaiting Reply) is not idle (`AgentListOrder.isQuiet`).
+        let order = AgentListOrder(isPinned: model.isPinned, isMuted: model.isMuted)
+        let active = pinned + groups.filter { !order.isQuiet($0) && !model.isPinned($0) }
+        let quiet = groups.filter { order.isQuiet($0) && !model.isPinned($0) }
 
         List {
             if let machine {

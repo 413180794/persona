@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyFilter, arrangeSpaces, botmuxAndFilter, isBotmux, withoutBotmux, filterCounts, matchesFilter, matchingKeys, shownFilters, agentFilter, unreadOf, type SpaceLike } from "./agent-filter";
-import type { AgentMutes } from "./agent-groups";
+import { isQuiet, type AgentMutes } from "./agent-groups";
 import { NO_PINS } from "./pins";
 import type { AgentState, Session } from "./types";
 
@@ -46,6 +46,20 @@ describe("快速筛选（iOS AgentFilter）", () => {
 
   it("全部标为已读只标完成未看的", () => {
     expect(ids(unreadOf([session("a", "unread"), session("b", "idle"), session("c", "needs_you"), session("d", "unread")]))).toEqual(["a", "d"]);
+  });
+});
+
+describe("待你回复的空间不收进「空闲的空间」（#5096）", () => {
+  const sp = (name: string, sessions: Session[]): SpaceLike => ({ key: `m/${name}`, machineId: "m", name, sessions });
+  it("只有一个已看但在等你回复的 Agent 的空间留在上面，屏蔽的照旧折起来", () => {
+    const asking = sp("问你", [session("q1", "idle", { awaits_reply: true, asks: "要不要推到 beta？" })]);
+    const quiet = sp("安静", [session("i1", "idle")]);
+    const mutedAsk = sp("屏蔽", [session("m1", "idle", { awaits_reply: true, space_name: "屏蔽" })]);
+    const mutes: AgentMutes = { spaces: ["m/屏蔽"], sessions: [] };
+    const busy = (x: SpaceLike) => x.sessions.some((s) => !isQuiet(s, mutes));
+    const r = arrangeSpaces([quiet, asking, mutedAsk], { pins: NO_PINS, mutes, filtered: false, busy });
+    expect(r.active.map((x) => x.name)).toEqual(["问你"]);
+    expect(r.idle.map((x) => x.name)).toEqual(["安静", "屏蔽"]);
   });
 });
 

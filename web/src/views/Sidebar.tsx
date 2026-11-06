@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, BOTMUX_HIDDEN_KEY, botmuxAndFilter, filterCounts, isBotmux, isSpaceMuted, matchingKeys, shownFilters, unreadOf, withoutBotmux, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { AGENT_SORT_KEY, AGENT_SORTS, agentSort, machineTreeByUpdate, projectsByUpdate, repoMachinesByUpdate, todoTreeByUpdate, type AgentSort } from "../lib/agent-sort";
-import { agentGrouping, AGENT_GROUPINGS, type AgentGrouping, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
+import { agentGrouping, AGENT_GROUPINGS, type AgentGrouping, awaitsReply, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { keyedRefs } from "../lib/keyed-refs";
 import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
@@ -645,9 +645,9 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
   const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
 
-  // a space with nothing to look at (every agent seen and waiting) goes to "Idle spaces", like the app; the open
-  // conversation's space stays where it is so the row under the pointer doesn't move away
-  const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
+  // a space with nothing to look at (every agent seen and waiting, none awaiting your reply) goes to "Idle spaces", like
+  // the app; the open conversation's space stays where it is so the row under the pointer doesn't move away
+  const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s, mutes) || activeKey === `s:${s.machine_id}/${s.session_id}`);
   // pinned spaces lead; under a quick filter nothing folds into "Idle spaces"
   const { active, idle } = arrangeSpaces(spaces, { pins, mutes, filtered, busy });
   const tree = { machines, reg, hover, activeKey, go, mutes, onSpaceMenu, onRowMenu, onNodeMenu, onNavigate };
@@ -1215,7 +1215,8 @@ function RepoSection({ tree, reg, hover, activeKey, go, onRowMenu }: { tree: Rep
  * running says so. */
 function RepoWorktreeRows({ w, repo, row, activeKey }: { w: RepoWorktree; repo: string; row: (s: Session, hint: string) => React.ReactNode; activeKey: string }) {
   const [folded, toggle] = useFolded(w.key, w.sessions.length === 0, { holds: holdsRow(w.sessions, activeKey) });
-  const running = w.sessions.filter((s) => !isQuiet(s)).length;
+  const mutes = useStore((st) => st.mutes);
+  const running = w.sessions.filter((s) => !isQuiet(s, mutes)).length;
   return (
     <div className="mt-px">
       <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex w-full min-w-0 items-center gap-1.5 whitespace-nowrap rounded-control py-1 pl-3 pr-2 text-left text-[11.5px] text-ink-2 hover:bg-hover">
@@ -1232,7 +1233,8 @@ function RepoWorktreeRows({ w, repo, row, activeKey }: { w: RepoWorktree; repo: 
 }
 
 function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: SpaceMenuFn; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
-  const allIdle = sp.sessions.every(isQuiet);
+  const mutes = useStore((st) => st.mutes);
+  const allIdle = sp.sessions.every((s) => isQuiet(s, mutes));
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3, { holds: holdsRow(sp.sessions, activeKey) });
 
   return (
@@ -1373,7 +1375,8 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
 
 // A workspace or "Other" in the tree: its title row folds what is under it, the fold kept by machine/space name.
 function TreeBlock({ foldKey, sessions, activeKey, state, title, right, children, onMenu }: { foldKey: string; sessions: Session[]; activeKey: string; state?: AgentState; title: React.ReactNode; right: (folded: boolean) => React.ReactNode; children: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement, fold: { folded: boolean; toggle: () => void }) => void }) {
-  const [folded, toggle] = useFolded(foldKey, sessions.every(isQuiet) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
+  const mutes = useStore((st) => st.mutes);
+  const [folded, toggle] = useFolded(foldKey, sessions.every((s) => isQuiet(s, mutes)) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
   return (
     <div>
       <div className="group/sec relative flex items-center gap-1 pr-2 pl-2 [@media(hover:none)]:pr-11" {...(onMenu ? contextMenuProps((at, el) => onMenu(at, el, { folded, toggle })) : {})}>
@@ -1622,7 +1625,8 @@ function ShellTree({ mid, online, spaces, reg, hover, go, activeKey, onNodeMenu 
 // Agents outside any space (Codex sessions and the like): folds like a space, folded at first when it is long and
 // nothing in it wants a look. The app lists them as a space of their machine.
 function LooseSection({ sessions, reg, hover, activeKey, go, onRowMenu }: { sessions: Session[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
-  const [folded, toggle] = useFolded("loose", sessions.every(isQuiet) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
+  const mutes = useStore((st) => st.mutes);
+  const [folded, toggle] = useFolded("loose", sessions.every((s) => isQuiet(s, mutes)) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
   return (
     <Section title={t("sidebar.other_agents")} folded={folded} onToggle={toggle} right={<SessionTally sessions={sessions} folded={folded} />}>
       {sessions.map((s) => (
@@ -1837,10 +1841,10 @@ export function SourceTag({ s, className }: { s: Session; className?: string }) 
 }
 
 /** A row's line under its title (rowLine, or draftLine): the red lead, then the words. */
-function SecondLine({ line, draft }: { line: { lead?: string; text: string }; draft: boolean }) {
+function SecondLine({ line, draft }: { line: { lead?: string; text: string; tone?: "needs" | "reply" }; draft: boolean }) {
   return (
     <span data-row-line data-draft={draft ? "" : undefined} className="truncate text-[11.5px] leading-4 text-ink-3">
-      {line.lead && <span className="font-medium text-red">{line.lead}</span>}
+      {line.lead && <span className={cx("font-medium", line.tone === "reply" ? "text-green" : "text-red")}>{line.lead}</span>}
       {line.text}
     </span>
   );
@@ -1866,6 +1870,8 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   const pending = useStore((st) => answerPending(st.answered, given.machine_id, given.session_id));
   const s = answeredSession(given, Boolean(ix), justAnswered, pending);
   const st = stateOf(s);
+  // Awaiting Reply (#5096): seen, but it asked you something you have not answered
+  const awaiting = useStore((x) => awaitsReply(s, x.mutes));
   const tail = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
   const row = useRef<HTMLAnchorElement | null>(null);
@@ -1892,7 +1898,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   const regRow = useMemo(() => reg(k), [reg, k]);
   // words left unsent in its box, once you are not in it (#5568): in place of what it asks or did
   const draft = draftLine(useLeftDraft(`${given.machine_id}/${given.session_id}`));
-  const line = draft ?? (showState && !s.assistant ? rowLine(s, ix) : undefined);
+  const line = draft ?? (showState && !s.assistant ? rowLine(s, ix, awaiting) : undefined);
   const link = (
     <a
       ref={(el) => {
@@ -1913,7 +1919,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for "N agents" and the ⋯ beside it (instead of the ⋯'s own)
         endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
-      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusMark state={st} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
+      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusMark state={st} awaiting={awaiting} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SessionMark s={s} size={14} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
       {detail.length > 0 || workflow || line || plan ? (

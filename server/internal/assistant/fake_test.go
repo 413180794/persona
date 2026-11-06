@@ -390,7 +390,7 @@ func (f *fakeHub) NotifyRequest(_ context.Context, p NotifyRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch p.Notification.Kind {
-	case NotifyPush, assistantwire.NotifyDone, assistantwire.NotifyInput:
+	case NotifyPush, assistantwire.NotifyDone, assistantwire.NotifyInput, assistantwire.NotifyReply:
 	default:
 		return fmt.Errorf("kind %q", p.Notification.Kind)
 	}

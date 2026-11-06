@@ -290,13 +290,7 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	if s.stopDuplicate(machine, id) {
 		return
 	}
-	place := s.machineName(machine)
-	if sess.SpaceName != "" {
-		place += " · " + sess.SpaceName
-		if sess.SlotName != "" && sess.SlotName != fmt.Sprint(sess.SlotIndex) {
-			place += " › " + sess.SlotName
-		}
-	}
+	place := s.pushPlace(machine, sess)
 	head, text := doneAlert(s.lang(context.Background()), sess)
 	s.deliver(Notification{Kind: assistantwire.NotifyDone, DeviceID: machine, Subtitle: place, SessionID: id, Title: head,
 		Body: text, TookMS: took.Milliseconds(), LongMS: long.Milliseconds()})
@@ -353,16 +347,38 @@ func (s *Service) reportTurn(session string, start time.Time) bool {
 	return true
 }
 
+// pushPlace is a push's subtitle for sess on machine: "机器 · 空间 › 标签" without the parts it lacks (a tab named by
+// its number is left out).
+func (s *Service) pushPlace(machine string, sess proto.Session) string {
+	place := s.machineName(machine)
+	if sess.SpaceName != "" {
+		place += " · " + sess.SpaceName
+		if sess.SlotName != "" && sess.SlotName != fmt.Sprint(sess.SlotIndex) {
+			place += " › " + sess.SlotName
+		}
+	}
+	return place
+}
+
+// pushTitle is how a push names sess: its title, else its directory's name.
+func pushTitle(sess proto.Session) string {
+	title := transcript.Title(sess.Title)
+	if title == "" || title == "Claude Code" {
+		title = path.Base(sess.Cwd)
+	}
+	return title
+}
+
 // doneAlert is the title and body of the push for sess's finished turn, in l.
 func doneAlert(l i18n.Lang, sess proto.Session) (head, text string) {
 	if spaceOf(sess) == SpaceHealth { // the lock screen hears there is news, not what it is, nor the conversation's title
 		return i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
 	}
-	title := transcript.Title(sess.Title)
-	if title == "" || title == "Claude Code" {
-		title = path.Base(sess.Cwd)
-	}
+	title := pushTitle(sess)
 	head, text = title, sess.LastText // no mark: a finished turn is the usual news
+	if ask := replyAsk(sess); sess.AwaitsReply && ask != "" {
+		text = ask // what it asks, not the reply's first lines: the question is what the user acts on (#5096)
+	}
 	if text == "" {
 		text = i18n.T(l, "hub-machine.done")
 	}

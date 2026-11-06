@@ -49,8 +49,12 @@ export function sessionDeletable(s: Session): boolean {
   return !s.assistant && s.status === "offline" && !s.starting;
 }
 
-// docs/agent-states.md: needs you → unread → working → idle → unknown → offline
-const RANK: Record<AgentState, number> = { needs_you: 0, unread: 1, working: 2, idle: 3, unknown: 4, offline: 5 };
+// docs/agent-states.md: needs you → unread → awaiting reply (seen, awaiting the user's reply, #5096) → working → idle → unknown → offline
+const RANK: Record<AgentState, number> = { needs_you: 0, unread: 1, working: 3, idle: 4, unknown: 5, offline: 6 };
+
+// A seen agent awaiting the user's reply ranks between unread and working. The comparator has no mutes: a muted one
+// awaiting a reply ranks so here too (the sidebar's By Status sections and folds go by lib/agent-groups.ts awaitsReply).
+const rankOf = (s: Session) => (stateOf(s) === "idle" && s.awaits_reply ? 2 : RANK[stateOf(s)]);
 
 export function stateOf(s: Session): AgentState {
   if (s.state) return s.state;
@@ -76,7 +80,7 @@ export function stateColor(st: AgentState): string {
 }
 
 export function byAttention(a: Session, b: Session): number {
-  const d = RANK[stateOf(a)] - RANK[stateOf(b)];
+  const d = rankOf(a) - rankOf(b);
   if (d) return d;
   const ta = stateOf(a) === "working" ? a.state_since || a.updated_at : a.updated_at;
   const tb = stateOf(b) === "working" ? b.state_since || b.updated_at : b.updated_at;

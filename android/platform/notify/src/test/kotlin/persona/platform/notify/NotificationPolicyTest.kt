@@ -83,6 +83,7 @@ class NotificationPolicyTest {
     @Test fun onlyHubNotifyPostsCompletionAndOnlyVisibleConversationIsSuppressed() {
         assertEquals("alert", NotificationPolicy.channel(NotifyEvent("alert", "machine", "session")))
         assertEquals(Notifier.CH_DONE, NotificationPolicy.channel(NotifyEvent("done", "machine", "session")))
+        assertEquals(Notifier.CH_DONE, NotificationPolicy.channel(NotifyEvent("reply", "machine", "session")))
         assertEquals(Notifier.CH_ASSISTANT, NotificationPolicy.channel(NotifyEvent("assistant", "machine", "session")))
         assertNull(NotificationPolicy.channel(NotifyEvent("interaction", "machine", "session")))
         assertNull(NotificationPolicy.channel(NotifyEvent("unknown", "machine", "session")))

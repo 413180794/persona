@@ -605,6 +605,13 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var ports: [ListeningPort]? = nil
     var updatedAt: Date?
     var lastText: String?
+    /// What the agent's last reply asks the user (`asks`, #5096): the question or decision its closing words put to
+    /// them, read off the whole reply (`lastText` is only its beginning). Nil when it asks nothing, and from older hubs.
+    var asks: String? = nil
+    /// It stopped on a question to the user nobody answered yet (`awaits_reply`, docs/agent-states.md "Awaiting your reply"): set by
+    /// the hub on a Unread or Seen one; an Seen one is listed as Awaiting Reply, not folded with the idle ones. False from
+    /// older hubs.
+    var awaitsReply: Bool = false
     /// What it is doing when its latest step is a tool call no words came after (「在跑测试」「在读 tasks.go」), and since
     /// when; nil once it writes again. The hub's `activity` / `activity_at` (docs/protocol.md); older hubs send neither.
     var activity: String? = nil
@@ -656,6 +663,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String? = nil
 
+    /// Awaiting Reply (#5096): seen, stopped on a question to the user nobody answered yet, and not muted. The one rule
+    /// for the lists' order and folds (`AgentListOrder.awaitsReply`) and for every word, color and question a row shows:
+    /// a muted one is plain Seen everywhere, so callers say whether it is muted.
+    func awaitsYourReply(muted: Bool) -> Bool { state == .idle && awaitsReply && !muted }
     /// Unique across groups; for the default group exactly what it always was.
     var id: String { (hubGroup.map { $0 + "|" } ?? "") + machineID + "/" + sessionID }
     /// What lists sort by, newest first: a working agent's updated_at moves on every step, so working ones keep
@@ -763,7 +774,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              assistantSpace = "space",
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index", parentSpaceID = "parent_space_id",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, workflows, ports,
-             updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
+             updatedAt = "updated_at", lastText = "last_text", asks, awaitsReply = "awaits_reply", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
              attentionReason = "attention_reason", failureReason = "failure_reason",
              turnError = "turn_error", turnErrorKind = "turn_error_kind", turnErrorCode = "turn_error_code", externalURL = "external_url", channels, origin, compaction, work,
@@ -829,6 +840,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
+        asks = (try? c.decodeIfPresent(String.self, forKey: .asks)).flatMap { $0 } // an odd one never drops the session
+        awaitsReply = (try? c.decodeIfPresent(Bool.self, forKey: .awaitsReply)).flatMap { $0 } ?? false
         activity = try c.decodeIfPresent(String.self, forKey: .activity)
         activityAt = try c.decodeIfPresent(Date.self, forKey: .activityAt)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
@@ -884,7 +897,7 @@ nonisolated struct WorkState: Codable, Hashable, Sendable {
 }
 
 /// The session triage's switches (`GET / PUT /api/v1/agents/triage`, docs/agent-work.md「开关」): the triage itself, then
-/// what it may do, each only while it is on. A switch the hub leaves out is off.
+/// what it may do, each only while it is on. A switch the hub leaves out is off, apart from `replyReminder`.
 nonisolated struct TriageSwitches: Codable, Hashable, Sendable {
     var enabled = false
     /// Waits for the user's decision become Needs You cards.
@@ -893,17 +906,31 @@ nonisolated struct TriageSwitches: Codable, Hashable, Sendable {
     var autoContinue = false
     /// Wakes the agent to check on a deploy, CI or another agent.
     var wake = false
+    /// Remind When Seen, Unanswered (#5096): one push when an agent asked the user something, they looked and did not answer for a while.
+    /// Rules only (no model), so it is apart from the triage and on when the hub leaves it out.
+    var replyReminder = true
+    /// After how many minutes since the user looked (the hub's default, 30, when nil). Not changed here: sent back
+    /// as it came so a PUT keeps it.
+    var replyReminderMinutes: Int? = nil
+    /// The hub's wait when it names none (or 0): 30 minutes.
+    static let defaultReplyReminderMinutes = 30
+    /// After how many minutes since the user looked the hub reminds (what Settings › Session Triage says).
+    var replyReminderAfter: Int { replyReminderMinutes.flatMap { $0 > 0 ? $0 : nil } ?? Self.defaultReplyReminderMinutes }
 
     enum CodingKeys: String, CodingKey {
         case enabled, decide, wake
         case autoContinue = "auto_continue"
+        case replyReminder = "reply_reminder", replyReminderMinutes = "reply_reminder_minutes"
     }
 
-    init(enabled: Bool = false, decide: Bool = false, autoContinue: Bool = false, wake: Bool = false) {
+    init(enabled: Bool = false, decide: Bool = false, autoContinue: Bool = false, wake: Bool = false,
+         replyReminder: Bool = true, replyReminderMinutes: Int? = nil) {
         self.enabled = enabled
         self.decide = decide
         self.autoContinue = autoContinue
         self.wake = wake
+        self.replyReminder = replyReminder
+        self.replyReminderMinutes = replyReminderMinutes
     }
 
     init(from decoder: Decoder) throws {
@@ -912,6 +939,8 @@ nonisolated struct TriageSwitches: Codable, Hashable, Sendable {
         decide = try c.decodeIfPresent(Bool.self, forKey: .decide) ?? false
         autoContinue = try c.decodeIfPresent(Bool.self, forKey: .autoContinue) ?? false
         wake = try c.decodeIfPresent(Bool.self, forKey: .wake) ?? false
+        replyReminder = (try? c.decodeIfPresent(Bool.self, forKey: .replyReminder)).flatMap { $0 } ?? true
+        replyReminderMinutes = (try? c.decodeIfPresent(Int.self, forKey: .replyReminderMinutes)).flatMap { $0 }
     }
 }
 
@@ -1172,12 +1201,21 @@ extension Session {
 
     var displayTitle: String { title.isEmpty || title == "Claude Code" ? folderName : title }
     /// The line a list row shows under the title: why it waits for you when its host says so, what it concluded or
-    /// waits for once the hub triaged its turn (`workLine`), else the last words.
-    var listPreview: String? {
+    /// waits for once the hub triaged its turn (`workLine`), else the last words; Awaiting Reply's question first unless
+    /// it is muted (`replyLine`).
+    func listPreview(muted: Bool) -> String? {
         if state == .needsYou, let r = attentionReason, !r.isEmpty { return r } // a stale reason (offline, seen) stays out
         if state != .working, let r = failureReason, !r.isEmpty { return Session.failureText(r) }
+        if let r = replyLine(muted: muted) { return r }
         if let w = workLine() { return w }
         return lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
+    }
+    /// The question an Awaiting Reply row shows: what the triage says it waits on the user for (blocked · user), else what
+    /// its last reply asks; nil when it is not Awaiting Reply or names nothing.
+    func replyLine(muted: Bool) -> String? {
+        guard awaitsYourReply(muted: muted) else { return nil }
+        if let w = work, w.phase == "blocked", w.on == "user", let line = w.line, !line.isEmpty { return line }
+        return asks.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
     }
     /// The row's line for a stopped session the hub triaged (docs/agent-work.md, the web's `workLine`): 「✓ 结论」 when
     /// done, what it waits for when blocked, with when the hub acts next; nil while it works or before the triage.
@@ -1215,7 +1253,7 @@ extension Session {
         return u
     }
 
-    /// Idle or unclassified: folded away in busy spaces.
+    /// Idle or unclassified: folded away in busy spaces (an Awaiting Reply one stays out: `AgentListOrder.stays`).
     var isQuiet: Bool { state == .idle || state == .unknown }
 }
 

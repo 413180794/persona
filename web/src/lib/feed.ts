@@ -37,7 +37,7 @@ export interface TaskPlan {
   created_at?: string;
 }
 
-export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report";
+export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report" | "notice";
 
 export interface FeedItem {
   id: string;
@@ -62,6 +62,13 @@ export interface TodayBody {
 export function field(it: FeedItem, key: string): string | undefined {
   const v = it.body?.[key];
   return typeof v === "string" ? v : undefined;
+}
+
+/** `notice`: a line the hub wrote in the user's language (#4305), e.g. a routine running again once the computer and
+ *  model are ready; undefined when it has no words. */
+export function feedNotice(it: FeedItem): string | undefined {
+  if (it.kind !== "notice") return undefined;
+  return field(it, "text")?.trim() || undefined;
 }
 
 /** A receipt's outcome: an `interrupted` one (#1516), or a `done` one from a hub before it whose summary is the API

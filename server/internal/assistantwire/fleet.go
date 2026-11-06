@@ -109,6 +109,9 @@ const (
 	NotifyDone = "done"
 	// NotifyInput is a pending interaction (Notification.Interaction): the devices that take "needs you" pushes.
 	NotifyInput = "input"
+	// NotifyReply reminds the user of an agent still waiting on their answer (Session.AwaitsReply, #5096): the devices
+	// that take "needs you" pushes; answerable from the notification as a finished turn is.
+	NotifyReply = "reply"
 )
 
 // FleetState is the Live Activity's ContentState, field for field (apple/LiveActivity/FleetActivity.swift). Times

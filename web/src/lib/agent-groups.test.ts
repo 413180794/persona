@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentGrouping, type AgentMutes, buildAgentGroups, hostsOf, isQuiet, sessionHost, splitAgentSessions } from "./agent-groups";
+import { agentGrouping, type AgentMutes, awaitsReply, buildAgentGroups, hostsOf, isQuiet, replyAsk, sessionHost, splitAgentSessions } from "./agent-groups";
 import { byAttention } from "./format";
 import type { AgentState, Machine, Session } from "./types";
 
@@ -55,7 +55,7 @@ describe("iOS 标准的状态分组", () => {
     const all = [session("loop", "idle", { loop: { kind: "loop" } }), session("background", "unknown", { background: [{ id: "task", kind: "shell" }] }),
       session("subagent", "idle", { subagents: [{ id: "child", session_id: "child", running: true }] }),
       session("done", "idle", { background: [], subagents: [{ id: "child", session_id: "child", running: false }] })];
-    expect(all.map(isQuiet)).toEqual([false, false, false, true]);
+    expect(all.map((s) => isQuiet(s))).toEqual([false, false, false, true]);
     const groups = buildAgentGroups(all, machines, "state");
     expect(ids(groups[0].sessions)).toEqual(["background", "loop", "subagent"]);
     expect(ids(groups[1].sessions)).toEqual(["done"]);
@@ -104,5 +104,46 @@ describe("sessionHost", () => {
     expect(sessionHost(s("botmux:abc"))).toBe("botmux");
     expect(sessionHost(s())).toBe("");
     expect([...hostsOf([s("p1"), s("botmux:a"), s("botmux:b"), s()])].sort()).toEqual(["botmux", "herdr"]);
+  });
+});
+
+describe("待你回复（#5096）", () => {
+  const asking = (id: string, patch: Partial<Session> = {}) => session(id, "idle", { awaits_reply: true, asks: "要不要推到 beta？", ...patch });
+
+  it("已看 + awaits_reply、没屏蔽才算；完成未看、屏蔽的、没标的都不算", () => {
+    expect(awaitsReply(asking("a"))).toBe(true);
+    expect(awaitsReply(asking("a"), mutes)).toBe(true);
+    expect(awaitsReply(session("u", "unread", { awaits_reply: true }))).toBe(false);
+    expect(awaitsReply(asking("muted-idle"), mutes)).toBe(false);
+    expect(awaitsReply(asking("in-space", { space_name: "项目" }), mutes)).toBe(false);
+    expect(awaitsReply(session("plain", "idle"))).toBe(false);
+  });
+
+  it("不算安静（不收进空闲的空间），屏蔽的照旧算安静", () => {
+    expect(isQuiet(asking("a"))).toBe(false);
+    expect(isQuiet(session("plain", "idle"))).toBe(true);
+    expect(isQuiet(asking("muted-idle"), mutes)).toBe(true);
+  });
+
+  it("按状态：需要你 → 完成未看 → 待你回复 → 工作中 → 待唤醒 → 已屏蔽 → 已看；屏蔽的待你回复归已看", () => {
+    const all = [session("idle", "idle"), asking("reply"), session("working", "working"), session("unread", "unread"), session("needs", "needs_you"),
+      session("waiting", "unknown", { loop: { kind: "cron" } }), session("muted-working", "working"), asking("muted-idle")];
+    const groups = buildAgentGroups(all, machines, "state", mutes);
+    expect(groups.map((g) => g.name)).toEqual(["需要你", "完成未看", "待你回复", "工作中", "待唤醒", "已屏蔽", "已看"]);
+    expect(ids(groups[2].sessions)).toEqual(["reply"]);
+    expect(groups[2].folded).toBeFalsy();
+    expect(ids(groups[6].sessions)).toEqual(["idle", "muted-idle"]);
+  });
+
+  it("组内排序（byAttention）：待你回复在完成未看之后、工作中之前", () => {
+    const all = [session("idle", "idle"), session("working", "working"), asking("reply"), session("unread", "unread"), session("needs", "needs_you")];
+    expect(ids(all.sort(byAttention))).toEqual(["needs", "unread", "reply", "working", "idle"]);
+  });
+
+  it("问的那句：分诊说在等你（blocked·user）时用它的 line，否则用 asks", () => {
+    expect(replyAsk(asking("a"))).toBe("要不要推到 beta？");
+    expect(replyAsk(asking("a", { work: { phase: "blocked", on: "user", line: "等你定 A 还是 B" } }))).toBe("等你定 A 还是 B");
+    expect(replyAsk(asking("a", { work: { phase: "blocked", on: "external", line: "在等 CI" } }))).toBe("要不要推到 beta？");
+    expect(replyAsk(session("plain", "idle"))).toBe("");
   });
 });

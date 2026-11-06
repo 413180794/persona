@@ -6,6 +6,7 @@
   "offline": "停止中",
   "unknown": "不明",
   "waiting": "待機中",
+  "awaits_reply": "返信待ち",
   "done": "完了",
   "interrupted": "中断",
   "follow_up": "フォローアップ",

@@ -85,6 +85,7 @@ type Service struct {
 	live       contextState      // context.go
 	todos      todoBook          // todos.go
 	work       workBook          // agents_work.go: the Agents business
+	reply      replyBook         // agents_reply.go: the reminders of questions left unanswered
 	chans      channelsBook      // channels.go
 	fbot       feishuBook        // feishu.go
 	kb         kbState           // kb.go

@@ -238,6 +238,11 @@ nonisolated extension Session {
 }
 
 extension Session {
-    /// The state's word with the background marked: 「工作中（后台）」 (`AgentState.label` is the main actor's).
+    /// The state's word with the background marked: 「工作中（后台）」 (`AgentState.label` is the main actor's). Never
+    /// Awaiting Reply: that needs to know whether it is muted (`stateLabel(muted:)`).
     var stateLabel: String { isBackgroundWorking ? String(localized: "Working (Background)") : state.label }
+    /// `stateLabel`, and "Awaiting Reply" for a seen one waiting on the user's reply that is not muted (#5096).
+    func stateLabel(muted: Bool) -> String { awaitsYourReply(muted: muted) ? String(localized: "Awaiting Reply") : stateLabel }
+    /// The colors of `stateLabel(muted:)`: Awaiting Reply in its own tone (`StatusPalette.awaitingReply`), else the state's.
+    func stateTone(muted: Bool) -> StatusTone { awaitsYourReply(muted: muted) ? StatusPalette.awaitingReply : state.tone }
 }

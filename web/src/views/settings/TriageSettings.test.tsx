@@ -49,7 +49,7 @@ describe("设置 › 会话分诊", () => {
     expect(switches()).toHaveLength(0);
     expect(host.textContent).toContain("加载中");
     await answer(0, ON);
-    expect(switches()).toHaveLength(4);
+    expect(switches()).toHaveLength(5);
     expect(named("会话分诊")!.getAttribute("aria-checked")).toBe("true");
   });
 
@@ -98,7 +98,7 @@ describe("设置 › 会话分诊", () => {
     await act(async () => retry()!.click());
     expect(pending).toHaveLength(3);
     await answer(2, ON);
-    expect(switches()).toHaveLength(4);
+    expect(switches()).toHaveLength(5);
   });
 
   it("hub 没有这个接口（太旧）：说不支持，不给重试", async () => {
@@ -121,5 +121,29 @@ describe("设置 › 会话分诊", () => {
     await answer(1, { enabled: true, auto_continue: false, wake: false, decide: false });
     expect(named("会话分诊")!.disabled).toBe(false);
     expect(named("到点叫醒")!.disabled).toBe(false);
+  });
+
+  it("看过没回时提醒：hub 没给就是开着，不跟会话分诊总开关走，改它时整套一起发出去", async () => {
+    await render();
+    const off = { enabled: false, auto_continue: false, wake: false, decide: false };
+    await answer(0, off);
+    const reminder = () => named("看过没回时提醒")!;
+    expect(reminder().getAttribute("aria-checked")).toBe("true");
+    expect(reminder().disabled).toBe(false);
+    expect(host.textContent).toContain("你看过 30 分钟还没回");
+    await act(async () => reminder().click());
+    expect(pending[1].method).toBe("PUT");
+    expect(pending[1].json).toEqual({ ...off, reply_reminder: false });
+    await answer(1, { ...off, reply_reminder: false });
+    expect(reminder().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("看过没回时提醒：hub 存了关就画成关；hub 给的分钟数写进说明并原样发回", async () => {
+    await render();
+    await answer(0, { ...ON, reply_reminder: false, reply_reminder_minutes: 60 });
+    expect(named("看过没回时提醒")!.getAttribute("aria-checked")).toBe("false");
+    expect(host.textContent).toContain("你看过 60 分钟还没回");
+    await act(async () => named("到点叫醒")!.click());
+    expect(pending[1].json).toEqual({ ...ON, wake: false, reply_reminder: false, reply_reminder_minutes: 60 });
   });
 });

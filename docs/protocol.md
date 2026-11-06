@@ -479,6 +479,9 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
                           "started_at":"...","ended_at":"...","updated_at":"...","last_text":"…", // ended_at is absent while running; completed agents use the last exchange time (file mtime as fallback), stopped agents prefer the run's end time; omitted if unknown
                           "model":"claude-example","latest_tool":{"name":"Read","summary":"Reading example.go"},
                           "tokens":1234,"calls":8}]}],                   // each agent is read as a subagent: GET the content of session session_id
+ "asks":"Push it to beta?",   // what the last reply asks the user, read by the node off the whole reply (last_text is only its start); absent when it asks nothing (#5096, docs/agent-states.md "Awaiting your reply")
+ "asks_read":true,            // the node read asks off the reply (empty asks then means it asks nothing or was answered); without it the hub reads last_text when it is whole
+ "awaits_reply":true,         // stopped (unread / idle) on a question nobody answered, with no card, error or background work. Computed by the hub; clients list an idle one as "Awaiting your reply", not folded with the idle ones
  "background_working":true,   // state is working only because of background work (this turn is over, workflows / background commands / Monitors / subagents are running, #2935): clients write "Working (Background)". Computed by the hub; when an old hub lacks it, look for state=working with a running workflow
  // The user's latest manual compaction (assistant chats only, present only after POST …/compact): running → done | failed (error is a human-readable reason); the node keeps it until the next one
  "compaction":{"state":"running|done|failed","error":"…","started_at":"...","finished_at":"..."}}

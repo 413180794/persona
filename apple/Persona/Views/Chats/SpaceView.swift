@@ -106,7 +106,7 @@ struct SiblingTabs: View {
                 plainTab(s, label: label, launcher: launcher, on: on, tone: tone, quiet: quiet)
             }
         }
-        .accessibilityLabel(String(localized: "\(label)\(launcher ? String(localized: " (starter)") : ""), \(s.stateLabel)"))
+        .accessibilityLabel(String(localized: "\(label)\(launcher ? String(localized: " (starter)") : ""), \(s.stateLabel(muted: model.isMuted(s)))"))
         .accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityIdentifier("chat.sibling")
         .contextMenu {
@@ -291,7 +291,7 @@ private struct SiblingList: View {
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(label).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
                                 // The state in its color, then the model the tab runs on (2026-10-31: which tab is which model).
-                                (Text(s.stateLabel).foregroundStyle(s.state.tone.text)
+                                (Text(s.stateLabel(muted: model.isMuted(s))).foregroundStyle(s.stateTone(muted: model.isMuted(s)).text)
                                     + Text(role?.launcher == true ? String(localized: " · Started It") : "").foregroundStyle(.secondary)
                                     + Text(Fmt.model(s.model).map { " · " + $0 } ?? "").foregroundStyle(.secondary))
                                     .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
@@ -307,7 +307,7 @@ private struct SiblingList: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "\(label)\(role?.launcher == true ? String(localized: " (starter)") : ""), \(s.stateLabel)") + (Fmt.model(s.model).map { String(localized: ", \($0)") } ?? ""))
+                    .accessibilityLabel(String(localized: "\(label)\(role?.launcher == true ? String(localized: " (starter)") : ""), \(s.stateLabel(muted: model.isMuted(s)))") + (Fmt.model(s.model).map { String(localized: ", \($0)") } ?? ""))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -398,7 +398,7 @@ struct SpaceView: View {
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(sessions) { s in
-                        NavigationLink(value: s.key) { SlotCard(session: s, pending: model.interactions(for: s.key).count, pane: roles[s.key]) }
+                        NavigationLink(value: s.key) { SlotCard(session: s, pending: model.interactions(for: s.key).count, muted: model.isMuted(s), pane: roles[s.key]) }
                             .buttonStyle(.plain)
                     }
                     Button { showNew = true } label: {
@@ -450,11 +450,13 @@ struct SpaceView: View {
 struct SlotCard: View {
     var session: Session
     var pending: Int
+    /// Muted (itself or its space): plain Seen, never Awaiting Reply (`Session.awaitsYourReply(muted:)`).
+    var muted = false
     /// Its place in a tab of several agents (#2320): the tab's chip names the agent too, the starter marked.
     var pane: TabPanes.Role? = nil
 
     var body: some View {
-        let tone = session.state.tone
+        let tone = session.stateTone(muted: muted)
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             // Chips don't shrink: in a narrow column (two cards a row on a phone) a long tab name pushed the card wider
             // than its column and the whole grid off the screen. Drop the agent chip first, then let the name truncate.
@@ -475,10 +477,10 @@ struct SlotCard: View {
             }
             Text(session.displayTitle).font(Theme.Font.secondaryStrong).lineLimit(2)
             // The starter says so beside its state: the header's chips are cut first in a narrow card.
-            Text(session.stateLabel + (pane?.launcher == true ? String(localized: " · Started It") : "") + (pending > 0 ? String(localized: " · \(pending) pending") : ""))
+            Text(session.stateLabel(muted: muted) + (pane?.launcher == true ? String(localized: " · Started It") : "") + (pending > 0 ? String(localized: " · \(pending) pending") : ""))
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)
-            if let t = session.listPreview {
+            if let t = session.listPreview(muted: muted) {
                 Text(t).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
             }
             Spacer(minLength: 0)

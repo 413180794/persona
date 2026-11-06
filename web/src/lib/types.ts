@@ -117,6 +117,11 @@ export interface TriageSwitches {
   auto_continue: boolean;
   wake: boolean;
   decide: boolean;
+  /** Remind When Seen, Unanswered (#5096): remind once when an agent asked the user something and it stays unanswered after they saw
+   *  it. Rule-based, no tokens, so it is on when absent and does not depend on `enabled`. */
+  reply_reminder?: boolean;
+  /** How long after the user saw it the reminder goes out, in minutes (the hub's default when absent). */
+  reply_reminder_minutes?: number;
 }
 
 export interface Session {
@@ -180,6 +185,10 @@ export interface Session {
   updated_at?: string;
   seen_at?: string;
   last_text?: string;
+  /** The question its last reply put to the user (#5096), when its closing words ask something. */
+  asks?: string;
+  /** It stopped (unread or seen) on a question to the user nobody has answered yet (#5096): Awaiting Reply once seen. */
+  awaits_reply?: boolean;
   /** Its latest step when that is a tool call no text came after ("running tests", "reading tasks.go"), and when it started. */
   activity?: string;
   activity_at?: string;

@@ -40,8 +40,8 @@ class SeenSessionsTest {
     @Test fun seenRetractsResultsButNotCards() {
         val key = SessionKey("m", "a")
         val tags = NotificationPolicy.resultTags(key)
-        assertEquals(listOf("done:${key.path}", "assistant:${key.path}"), tags)
-        listOf("done", "assistant").forEach { kind ->
+        assertEquals(listOf("done:${key.path}", "assistant:${key.path}", "reply:${key.path}"), tags)
+        listOf("done", "assistant", "reply").forEach { kind ->
             val event = persona.core.contracts.NotifyEvent(kind = kind, machineId = "m", sessionId = "a")
             assertTrue(NotificationPolicy.tag(event) in tags)
         }

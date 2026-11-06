@@ -391,7 +391,7 @@ struct ChatView: View {
         let title = s.title.isEmpty ? s.agentLabel : s.title
         let name = role.map { $0.launcher ? String(localized: "\($0.name) (started it) · \(title)") : "\($0.name) · \(title)" } ?? title
         Button { if s.key != key { switchTo(s.key) } } label: {
-            if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.stateLabel)") }
+            if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.stateLabel(muted: model.isMuted(s)))") }
         }
     }
 
@@ -3337,7 +3337,7 @@ struct ChatView: View {
         }
         let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
-        return [s.sourceSubtitle, machine, place.isEmpty ? nil : place, s.hasSource ? nil : s.agentLabel, s.stateLabel].compactMap { $0 }.joined(separator: " · ")
+        return [s.sourceSubtitle, machine, place.isEmpty ? nil : place, s.hasSource ? nil : s.agentLabel, s.stateLabel(muted: model.isMuted(s))].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {

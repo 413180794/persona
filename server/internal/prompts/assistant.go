@@ -187,6 +187,9 @@ type Snapshot struct {
 	// Waiting: stopped on something the hub waits out for them (a retry, a deploy, another agent); Done: finished
 	// within a day, with the conclusion (docs/agent-work.md "Persona knows").
 	Waiting, Done []SnapshotAgent
+	// Awaiting: stopped on a question to the user, who looked at it and has not answered (docs/agent-states.md
+	// "Awaiting your reply", #5096).
+	Awaiting []SnapshotAgent
 	// Muted: agents (or their spaces) the user turned notifications off for that would be in one of the above; in
 	// none of them, as the Live Activity and the Agents badge count none of them (#4562).
 	Muted         []SnapshotAgent

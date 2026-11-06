@@ -31,7 +31,14 @@ val PaneOrder: Comparator<Session> = compareBy<Session> { it.paneIndex ?: Int.MA
 fun <T> launcherOf(panes: List<T>, session: (T) -> Session): T? =
     if (panes.size > 1) panes.firstOrNull { session(it).paneIndex == 0 } else null
 
-/** What a tab's row speaks for (docs/agent-states.md "Sort priority", as the web): needs you > working > unread > seen. */
+/**
+ * What a tab's row speaks for (docs/agent-states.md "Sort priority", as the web): needs you > working > unread > awaiting
+ * reply (#5096, not muted) > seen.
+ */
+private fun tabUrgency(row: AgentSession, mutes: AgentPreferences): Int = when {
+    row.awaitsReply(mutes) -> TabUrgency.indexOf(AgentState.Unread) + 1
+    else -> TabUrgency.indexOf(row.state).let { if (it > TabUrgency.indexOf(AgentState.Unread)) it + 1 else it }
+}
 private val TabUrgency = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread, AgentState.Idle, AgentState.Unknown, AgentState.Offline)
 
 /**
@@ -59,9 +66,10 @@ val Session.tabKey: String? get() = if (slotId.isNullOrEmpty() || spaceId.isNull
  * task), two tabs may share a name, and herdr keeps the numbers across a restart (its ids it does not). A host without
  * numbers uses the tab's id.
  */
-data class AgentTab(val key: String, val members: List<AgentSession>) {
+data class AgentTab(val key: String, val members: List<AgentSession>, val mutes: AgentPreferences = AgentPreferences()) {
     val launcher: AgentSession? get() = launcherOf(members) { it.session }
-    val lead: AgentSession get() = members.minWith(compareBy<AgentSession> { TabUrgency.indexOf(it.state) }.thenBy { members.indexOf(it) })
+    /** What the tab's row speaks for: its most urgent agent ([tabUrgency] with [mutes]), the first in pane order on a tie. */
+    val lead: AgentSession get() = members.minWith(compareBy<AgentSession> { tabUrgency(it, mutes) }.thenBy { members.indexOf(it) })
     val foldKey: String get() = members.first().session.let { s ->
         "tab:${s.machineId}/${s.spaceName ?: s.spaceId.orEmpty()}/${s.slotIndex?.toString() ?: s.slotId.orEmpty()}"
     }
@@ -70,8 +78,8 @@ data class AgentTab(val key: String, val members: List<AgentSession>) {
 }
 
 /** The tabs among [rows] that hold more than one agent, by [AgentTab.key]; each tab's agents in pane order. */
-fun agentTabs(rows: List<AgentSession>): Map<String, AgentTab> = rows
+fun agentTabs(rows: List<AgentSession>, mutes: AgentPreferences = AgentPreferences()): Map<String, AgentTab> = rows
     .mapNotNull { row -> row.session.tabKey?.let { it to row } }
     .groupBy({ it.first }, { it.second })
     .filterValues { it.size > 1 }
-    .mapValues { (key, members) -> AgentTab(key, members.sortedWith(compareBy(PaneOrder) { it.session })) }
+    .mapValues { (key, members) -> AgentTab(key, members.sortedWith(compareBy(PaneOrder) { it.session }), mutes) }

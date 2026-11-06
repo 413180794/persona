@@ -16,7 +16,15 @@ data class TriageSwitches(
     @SerialName("auto_continue") val autoContinue: Boolean = false,
     val wake: Boolean = false,
     val decide: Boolean = false,
-)
+    /**
+     * Remind When Seen, Unanswered (#5096): push once when an agent the user looked at still waits on their answer. Rules only, no
+     * tokens, and apart from [enabled]. Absent (an older hub, or never set) is on: read it through [remindsReply]; a
+     * change always sends it, since a value equal to the default would not be encoded.
+     */
+    @SerialName("reply_reminder") val replyReminder: Boolean? = null,
+) {
+    val remindsReply: Boolean get() = replyReminder != false
+}
 
 /** GET / PUT /api/v1/agents/triage on the active pairing; [TriageUnsupported] from hubs without it. */
 interface AgentTriage {

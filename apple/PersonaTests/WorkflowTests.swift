@@ -136,6 +136,6 @@ import Testing
         let s = try session(#""workflows":[{"task_id":"wf","running":true}]"#, state: "idle")
         let order = AgentListOrder(isPinned: { _ in false }, isMuted: { _ in false })
         #expect(order.stays(s))
-        #expect(order.rank(s) == 3)
+        #expect(order.rank(s) == 4)
     }
 }

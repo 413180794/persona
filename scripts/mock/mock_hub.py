@@ -2362,6 +2362,10 @@ if MOCK_TASKS:
                                                              "evidence": ["https://github.com/example/weather/pull/42"]}),
             _feed("feed_r2", 3, "routed", "todo_task_tests", {"text": "用协议注入，先改网络层那 6 个文件", "interrupted": True}),
         ]
+    # MOCK_TASKS_NOTICE=1: the line the hub writes when a routine runs again once the computer and model are ready
+    # (#4253, kind notice, drawn by the clients since #4305), last in the conversation.
+    if os.environ.get("MOCK_TASKS_NOTICE") == "1":
+        TASK_FEED[ASK1].append(_feed("feed_notice", 0.5, "notice", None, {"text": "电脑和模型接好了，定时任务恢复运行，这次是「早报」"}))
     ITEMS[ASK1] = (
         [it("user", "text", 60 * 26, text="博客迁移到 Astro，在 Mac Studio 上做")]
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_0 is on the user's screen as a card.", 60 * 26 - 0.3)

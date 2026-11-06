@@ -193,8 +193,8 @@ internal fun AgentsScreen(
     // "By machine" shows a herdr tab's agents as a group (#2320), as the web's sidebar; the other groupings list one agent a row
     val tabs = page.preferences.grouping == AgentGrouping.MachineSpace
     var expandedTasks by remember { mutableStateOf(emptySet<String>()) }
-    val tree = remember(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs, expandedTasks) {
-        agentTreeEntries(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs, expandedTasks)
+    val tree = remember(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs, page.preferences.mutes, expandedTasks) {
+        agentTreeEntries(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs, page.preferences.mutes, expandedTasks)
     }
     val spacesById = remember(spaces, page.preferences.grouping, page.list) {
         when (page.preferences.grouping) {
@@ -412,7 +412,7 @@ internal fun AgentsScreen(
                     }
                     is TreeTabEntry -> item(entry.key, contentType = "tab") {
                         AgentTabEntryRow(entry, now, page.preferences.compact, onOpen = { openRow(entry.tab.lead) }, onToggle = { model.foldTab(entry.tab) },
-                            card = cards[entry.tab.lead.session.key])
+                            card = cards[entry.tab.lead.session.key], muted = page.preferences.mutes.mutes(entry.tab.lead))
                     }
                     is TreeIdleEntry -> item(entry.key, contentType = "idle") {
                         AgentIdleRow(entry.hidden, onClick = { model.showIdle(entry.group) }, depth = entry.depth)
@@ -586,14 +586,14 @@ internal fun SlotRow(
     }
     JSwipeActions(end = onClose?.let { SwipeAction(stringResource(R.string.agents_close), PhIcons.X, Status.NeedsYou, it, destructive = true) }) {
     AgentRow(
-        title = session.displayTitle, status = row.state.designStatus, depth = depth, position = position,
+        title = session.displayTitle, status = row.rowStatus(muted), depth = depth, position = position,
         onClick = onOpen, onLongClick = { menu = true }, compact = compact, muted = muted,
         selected = isSessionSelected(LocalDetailKey.current, session.key),
         // What its card asks while it needs you, else why its host says it waits or stopped, where its work stands, its last words.
-        preview = session.rowLine(card, now)?.text(), time = relativeTime(agentResources(), row.updatedAt, now),
+        preview = session.rowLine(card, now, muted)?.text(), time = relativeTime(agentResources(), row.updatedAt, now),
         // Codex, a compatible CLI or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
         agent = session.agentLabel.takeIf { !session.isClaude && source == null },
-        statusText = row.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label,
+        statusText = row.rowStatusText(muted),
         facts = buildList {
             // Where a Codex thread or a runtime's session comes from, and when the phone can only read it.
             source?.let { add(RowFact(listOfNotNull(it.label, it.agentName).joinToString(" / "))) }
@@ -638,19 +638,23 @@ internal fun SlotRow(
  * Time and agent kind stay on the agents' own rows: the tab's row has "N agents" at its end instead.
  */
 @Composable
-internal fun AgentTabEntryRow(entry: TreeTabEntry, now: Instant, compact: Boolean, onOpen: () -> Unit, onToggle: () -> Unit, card: Interaction? = null) {
+internal fun AgentTabEntryRow(
+    entry: TreeTabEntry, now: Instant, compact: Boolean, onOpen: () -> Unit, onToggle: () -> Unit, card: Interaction? = null,
+    /** The lead agent is muted: a muted Awaiting Reply reads as Seen. */
+    muted: Boolean = false,
+) {
     val lead = entry.tab.lead
     val session = lead.session
     val titled = entry.tab.launcher ?: entry.tab.members.first()
     val asks = session.askingLine(card)?.text()
-    val words = asks ?: session.rowLine(card, now)?.text()
+    val words = asks ?: session.rowLine(card, now, muted)?.text()
     AgentTabRow(
-        label = titled.session.slotLabel.orEmpty(), title = titled.session.displayTitle, status = lead.state.designStatus,
+        label = titled.session.slotLabel.orEmpty(), title = titled.session.displayTitle, status = lead.rowStatus(muted),
         agents = entry.tab.members.size, folded = entry.folded, onToggle = onToggle, onClick = onOpen,
         depth = entry.depth, position = GroupPosition(entry.first, entry.last),
         // "Codex · Needs approval: …": the card's own words already have a colon
         preview = words?.let { if (lead.id == titled.id) it else stringResource(if (asks != null) R.string.agents_tab_lead_asks else R.string.agents_tab_lead_words, session.agentLabel, it) },
-        statusText = lead.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label, compact = compact,
+        statusText = lead.rowStatusText(muted), compact = compact,
         // folded, the tab's row stands for its agents: it is the one lit while one of them is open
         selected = entry.folded && entry.tab.members.any { isSessionSelected(LocalDetailKey.current, it.session.key) },
     )
@@ -755,6 +759,17 @@ internal val AgentState.designStatus: Status get() = when (this) {
     AgentState.Offline -> Status.Offline
 }
 internal val AgentState.label: String @Composable get() = designStatus.localizedLabel
+
+/** A row's state colour: Awaiting Reply (#5096) takes Unread's, since it waits on the user as much; a muted one is just Seen. */
+internal fun AgentSession.rowStatus(muted: Boolean): Status = if (asksYou && !muted) Status.Unread else state.designStatus
+
+/** A row's state words: "Awaiting your reply" for a seen agent waiting on the user's answer; none for a plain seen one. */
+@Composable
+internal fun AgentSession.rowStatusText(muted: Boolean): String? = when {
+    asksYou && !muted -> CoreText.of(CoreText.Key.StateAwaitingReply).text()
+    state == AgentState.Idle || state == AgentState.Unknown -> null
+    else -> state.label
+}
 @Composable
 internal fun StateDot(state: AgentState, breathe: Boolean = false) {
     JStatusMark(state.designStatus, animated = breathe)

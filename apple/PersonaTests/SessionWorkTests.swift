@@ -31,13 +31,13 @@ struct SessionWorkTests {
     @Test func anOddWorkStateNeverDropsTheSession() throws {
         let s = try session(work: #"{"line":"没有 phase"}"#)
         #expect(s.work == nil)
-        #expect(s.listPreview == "最后一句")
+        #expect(s.listPreview(muted: false) == "最后一句")
     }
 
     @Test func doneShowsItsConclusion() throws {
         let s = try session(work: #"{"phase":"done","line":"已合并 PR #12，测试全过"}"#)
         #expect(s.workLine(now: now) == "✓ 已合并 PR #12，测试全过")
-        #expect(s.listPreview == "✓ 已合并 PR #12，测试全过")
+        #expect(s.listPreview(muted: false) == "✓ 已合并 PR #12，测试全过")
     }
 
     @Test func blockedSaysWhatItWaitsForAndWhenTheHubActs() throws {
@@ -55,15 +55,15 @@ struct SessionWorkTests {
         #expect(try session(work: #"{"phase":"working"}"#).workLine(now: now) == nil)
         #expect(try session(state: "working", work: #"{"phase":"done","line":"旧的结论"}"#).workLine(now: now) == nil)
         #expect(try session(work: #"{"phase":"done","line":""}"#).workLine(now: now) == nil)
-        #expect(try session(work: nil).listPreview == "最后一句")
-        #expect(try session(state: "working", work: #"{"phase":"done","line":"旧的结论"}"#).listPreview == "最后一句")
+        #expect(try session(work: nil).listPreview(muted: false) == "最后一句")
+        #expect(try session(state: "working", work: #"{"phase":"done","line":"旧的结论"}"#).listPreview(muted: false) == "最后一句")
     }
 
     /// The host's own reason for waiting still comes first (botmux's attention).
     @Test func theHostsReasonStaysFirst() throws {
         let json = #"{"session_id":"s","status":"blocked","state":"needs_you","attention_reason":"要你确认","work":{"phase":"blocked","on":"user","line":"等你确认"}}"#
         let s = try JSON.decoder.decode(Session.self, from: Data(json.utf8))
-        #expect(s.listPreview == "要你确认")
+        #expect(s.listPreview(muted: false) == "要你确认")
     }
 
     @Test func theHubWaitsOutRetriesAndWakesButNotTheUser() throws {
@@ -82,9 +82,9 @@ struct SessionWorkTests {
         let order = AgentListOrder(isPinned: { _ in false }, isMuted: { _ in false })
         let wake = try session(work: #"{"phase":"blocked","on":"transient","line":"模型出错","wake_at":"\#(at(1))"}"#)
         let done = try session(work: #"{"phase":"done","line":"做完了"}"#)
-        #expect(order.rank(wake) == 3)
+        #expect(order.rank(wake) == 4)
         #expect(order.stays(wake))
-        #expect(order.rank(done) == 5)
+        #expect(order.rank(done) == 6)
         #expect(!order.stays(done))
     }
 }

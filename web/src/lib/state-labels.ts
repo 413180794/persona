@@ -4,8 +4,8 @@
 import { t } from "../i18n";
 import type { AgentState } from "./types";
 
-/** An agent's state (AgentState), Waiting, and the states only a task or a summary has: Done, Interrupted, Follow-up, Not started, Didn't start. */
-export type StateName = AgentState | "waiting" | "done" | "interrupted" | "follow_up" | "not_started" | "failed";
+/** An agent's state (AgentState), Waiting, Awaiting reply (#5096), and the states only a task or a summary has: Done, Interrupted, Follow-up, Not started, Didn't start. */
+export type StateName = AgentState | "waiting" | "awaits_reply" | "done" | "interrupted" | "follow_up" | "not_started" | "failed";
 
 export function stateName(s: StateName): string {
   return t(`lib-state-labels.${s}`);

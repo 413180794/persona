@@ -30,5 +30,7 @@
   "auth_link": "请打开授权链接：{url}",
   "auth_link_until": "请打开授权链接：{url}（{time} 前有效）",
   "you_skipped": "你说先不管",
-  "waiting_on": "等「{wait}」"
+  "waiting_on": "等「{wait}」",
+  "reply_title": "{agent} 还在等你回复",
+  "reply_body": "它停下来问了你一个问题，还没有回答"
 }
