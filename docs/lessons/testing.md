@@ -512,6 +512,7 @@ Use separate simulators for unit tests and screenshots; delete/recreate contamin
 from the local development node finding Agent listeners (`docs/ports.md`) and probing the `httptest` port. Count only your own API
 (`POST /v1/messages`); return 404 without counting other paths (`assistant/inbox_limit_test.go`). Use this pattern for similar fakes or they become flaky on node-running machines.
 `TestOpenMacLeavesAgentAlertsToTheApp` also occasionally got an extra "push" with token `/` for the same reason; fake APNs counts only `POST /3/device/…` (`hub/liveactivity_test.go`).
+`TestGateProxyReportCutsTheText` counted the same probe as a third request (2026-11-06, #6057). Its fake API (`fakeAPI`, `node/gateproxy_test.go`) has to accept any path the gate forwards, so it can't answer 404 to other paths. Instead it leaves out exactly the probe's shape: `GET /` with `User-Agent` `portProbeAgent`. Use such a filter only for a fake that must accept any path. Counting your own paths and answering 404 to the rest stays the default. Neither replaces real isolation in network-isolation or zero-connection tests: see the #2025 bullet on network-isolation listeners near the top of this file.
 
 ## Fake model servers also receive the hub's own model calls (2026-11-04)
 

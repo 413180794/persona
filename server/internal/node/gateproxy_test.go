@@ -46,6 +46,12 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	t.Helper()
 	a := &fakeAPI{}
 	a.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" && r.Header.Get("User-Agent") == portProbeAgent {
+			// A Persona node on the machine running these tests (the tests run under its agents) finds this server
+			// among an agent's ports and probes it (ports.go): that GET / is not a request the gate passed on. Only
+			// the probe's whole shape is left out, never a request the gate forwards.
+			return
+		}
 		b, _ := io.ReadAll(r.Body)
 		a.mu.Lock()
 		a.seen = append(a.seen, apiSeen{Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Auth: r.Header.Get("Authorization"),
@@ -67,6 +73,22 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	}))
 	t.Cleanup(a.Close)
 	return a
+}
+
+// A node's port probe of the example API is not counted as a request the gate passed on: on a machine where Persona
+// runs the agents, the node probes the tests' servers too, and a count of the API's requests saw one more.
+func TestFakeAPIIgnoresPortProbes(t *testing.T) {
+	api := newFakeAPI(t)
+	if got := probePort(context.Background(), portOf(t, api.URL), "127.0.0.1"); !got.http {
+		t.Fatalf("the probe did not reach the API: %+v", got)
+	}
+	if seen := api.requests(); len(seen) != 0 {
+		t.Fatalf("a port probe counted as the gate's request: %+v", seen)
+	}
+	// Any other GET / still counts.
+	if code, _ := send(t, "GET", api.URL+"/", ""); code != http.StatusOK || len(api.requests()) != 1 {
+		t.Fatalf("a GET / that is not the probe: %d, %d requests", code, len(api.requests()))
+	}
 }
 
 func (a *fakeAPI) requests() []apiSeen {

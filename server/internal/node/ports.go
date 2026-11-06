@@ -42,6 +42,10 @@ const (
 	// connection and said nothing by then is listed without a title and asked again next time.
 	portProbeWait = 3 * time.Second
 	maxPortTitle  = 60 // characters
+	// portProbeAgent is the User-Agent of the probe's GET /: a server can tell it from its real clients (the tests'
+	// servers do, as a node on the machine probes them too). Never rename it: installed nodes keep sending
+	// "jarvis-ports", and what recognizes the probe has to match them.
+	portProbeAgent = "jarvis-ports"
 )
 
 type portState struct {
@@ -284,7 +288,7 @@ func probePort(ctx context.Context, port int, addr string) portProbe {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(portProbeWait))
 	host := "localhost:" + strconv.Itoa(port)
-	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: jarvis-ports\r\nAccept: text/html\r\nConnection: close\r\n\r\n", host)
+	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: text/html\r\nConnection: close\r\n\r\n", host, portProbeAgent)
 	br := bufio.NewReader(conn)
 	head, err := br.Peek(5)
 	if err != nil {
