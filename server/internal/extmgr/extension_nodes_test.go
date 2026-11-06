@@ -436,6 +436,7 @@ func TestNodeProgramsForgotten(t *testing.T) {
 	}
 
 	// Upgraded: only 2.0.0's package is left.
+	old := reg.Snapshot("example-helper")
 	manifest := filepath.Join(dir, extension.ManifestFile)
 	raw, _ := os.ReadFile(manifest)
 	_ = os.WriteFile(manifest, []byte(strings.Replace(string(raw), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)), 0o644)
@@ -453,11 +454,26 @@ func TestNodeProgramsForgotten(t *testing.T) {
 	if got := nodePackageKeys(h, "example-helper"); !slices.Equal(got, []string{"example-helper/2.0.0/linux-amd64"}) {
 		t.Fatalf("after the upgrade: %v", got)
 	}
+	// Nor does a sync that read the registry before the upgrade and goes on after it (each change starts one): no 1.0.0
+	// package, and the machine's 2.0.0 state stays.
+	h.syncExtensionNode(ctx, old, box, true)
+	if got := nodePackageFiles(t, h, "example-helper"); !slices.Equal(got, []string{"example-helper-2.0.0-linux-amd64.tgz", "example-helper-two-1.0.0-linux-amd64.tgz"}) {
+		t.Fatalf("after a sync of the old version: %v", got)
+	}
+	if got := nodePackageKeys(h, "example-helper"); !slices.Equal(got, []string{"example-helper/2.0.0/linux-amd64"}) {
+		t.Fatalf("after a sync of the old version: %v", got)
+	}
+	if v := h.extensions.nodes.views("example-helper"); len(v) != 1 || v[0].Version != "2.0.0" {
+		t.Fatalf("machine state after a sync of the old version: %+v", v)
+	}
 
-	// Uninstalled: nothing of it is left on the hub.
+	// Uninstalled: nothing of it is left on the hub. The sync waits for the ones in flight (they share a lock per
+	// machine), so a package one of them made and removed again is not caught in between.
+	cur := reg.Snapshot("example-helper")
 	if err := reg.Uninstall(ctx, "example-helper", false, "test"); err != nil {
 		t.Fatal(err)
 	}
+	h.syncExtensionNodes(ctx, box)
 	if v := h.extensions.nodes.views("example-helper"); len(v) != 0 {
 		t.Fatalf("machine states kept: %+v", v)
 	}
@@ -466,6 +482,14 @@ func TestNodeProgramsForgotten(t *testing.T) {
 	}
 	if got := nodePackageFiles(t, h, "example-helper"); !slices.Equal(got, []string{"example-helper-two-1.0.0-linux-amd64.tgz"}) {
 		t.Fatalf("package files kept: %v", got)
+	}
+	// Nor does a sync that read the registry before the uninstall leave a state or a package of it.
+	h.syncExtensionNode(ctx, cur, box, true)
+	if v := h.extensions.nodes.views("example-helper"); len(v) != 0 {
+		t.Fatalf("machine state after a sync of the uninstalled version: %+v", v)
+	}
+	if got := nodePackageFiles(t, h, "example-helper"); !slices.Equal(got, []string{"example-helper-two-1.0.0-linux-amd64.tgz"}) {
+		t.Fatalf("package files after a sync of the uninstalled version: %v", got)
 	}
 
 	// A machine's late word of it is not taken.

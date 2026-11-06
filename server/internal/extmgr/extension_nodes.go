@@ -67,9 +67,29 @@ func (pn *extensionNodes) lock(machine string) *sync.Mutex {
 	return l
 }
 
-func (pn *extensionNodes) set(pluginID, machine string, st proto.PluginNodeState) {
+// keepNodeState records st of plugin id's program on machine while id is installed in version (in any version when
+// version is ""). That is decided under the lock drop takes once the registry has changed, so a sync that read the
+// registry before an upgrade or an uninstall, or a machine's late word, either wrote before drop (which removes it) or
+// is not kept: no state of a version that is gone stays behind.
+func (ps *extensions) keepNodeState(id, version, machine string, st proto.PluginNodeState) {
+	pn := &ps.nodes
 	pn.mu.Lock()
 	defer pn.mu.Unlock()
+	if !ps.installedAt(id, version) {
+		return
+	}
+	pn.set(id, machine, st)
+}
+
+// installedAt says whether extension id is installed, in version unless that is "". Asked with nodes.mu held: the
+// registry never takes that lock.
+func (ps *extensions) installedAt(id, version string) bool {
+	p := ps.reg.Get(id)
+	return p != nil && (version == "" || p.Record.Version == version)
+}
+
+// set records st; pn.mu is held.
+func (pn *extensionNodes) set(pluginID, machine string, st proto.PluginNodeState) {
 	if pn.states == nil {
 		pn.states = map[string]map[string]proto.PluginNodeState{}
 	}
@@ -141,6 +161,10 @@ func nodePackageVersion(name, id string) (string, bool) {
 	return version, true
 }
 
+// errNodeVersionGone: the version a sync read is not installed any more (it was upgraded or uninstalled meanwhile).
+// The sync after the change brings the machine in line, so it is not a plugin's error to log.
+var errNodeVersionGone = errors.New("this version of the extension is not installed any more")
+
 // ExtensionNodeView is a plugin's program on one machine, as the apps show it.
 type ExtensionNodeView struct {
 	MachineID string `json:"machine_id"`
@@ -211,11 +235,17 @@ func (ps *extensions) nodePackage(p *extension.Extension, platform string) (node
 	}
 	pkg = nodePackage{file: file, digest: digest, size: size}
 	pn.mu.Lock()
+	defer pn.mu.Unlock()
+	// Kept only while this version is installed, decided under the lock drop takes (keepNodeState): a sync that read
+	// the registry before an upgrade or an uninstall leaves no package of the version that is gone.
+	if !ps.installedAt(p.Record.ID, p.Record.Version) {
+		_ = os.Remove(file)
+		return nodePackage{}, errNodeVersionGone
+	}
 	if pn.packages == nil {
 		pn.packages = map[string]nodePackage{}
 	}
 	pn.packages[key] = pkg
-	pn.mu.Unlock()
 	return pkg, nil
 }
 
@@ -298,21 +328,10 @@ func (h *Manager) syncExtensionNodes(ctx context.Context, m *Machine) {
 	}
 	online := m.isOnline()
 	for _, p := range all {
-		id := p.Record.ID
 		if p.Manifest.NodeProgram() == nil { // none, or built in (no package to keep there)
 			continue
 		}
-		if !ps.nodeRunsOn(ctx, p, m) {
-			ps.nodes.forget(id, slices.DeleteFunc(ps.nodeMachines(p), func(mid string) bool { return mid == m.cfg.ID }))
-			continue
-		}
-		if !online {
-			ps.nodes.set(id, m.cfg.ID, proto.PluginNodeState{ID: id, Version: p.Record.Version, State: extensionNodeOffline})
-			continue
-		}
-		st, prog := h.startExtensionNode(ctx, p, m)
-		ps.nodes.set(id, m.cfg.ID, st)
-		if prog != nil {
+		if prog := h.syncExtensionNode(ctx, p, m, online); prog != nil {
 			programs = append(programs, *prog)
 		}
 	}
@@ -327,6 +346,25 @@ func (h *Manager) syncExtensionNodes(ctx context.Context, m *Machine) {
 		!nodeOutdated(err) {
 		h.logf("[%s] plugins' programs: %v", m.cfg.ID, err)
 	}
+}
+
+// syncExtensionNode brings plugin p's program on m in line with p as the sync read it from the registry, and records
+// its state there; the program to keep on m, nil for none. p may be out of date by then (an upgrade or an uninstall
+// came in the meantime): keepNodeState and nodePackage then keep nothing of it.
+func (h *Manager) syncExtensionNode(ctx context.Context, p *extension.Extension, m *Machine, online bool) *proto.PluginNodeProgram {
+	ps := h.extensions
+	id := p.Record.ID
+	if !ps.nodeRunsOn(ctx, p, m) {
+		ps.nodes.forget(id, slices.DeleteFunc(ps.nodeMachines(p), func(mid string) bool { return mid == m.cfg.ID }))
+		return nil
+	}
+	if !online {
+		ps.keepNodeState(id, p.Record.Version, m.cfg.ID, proto.PluginNodeState{ID: id, Version: p.Record.Version, State: extensionNodeOffline})
+		return nil
+	}
+	st, prog := h.startExtensionNode(ctx, p, m)
+	ps.keepNodeState(id, p.Record.Version, m.cfg.ID, st)
+	return prog
 }
 
 // startExtensionNode sends m p's package (unless it has it) and starts it; the program to keep there, nil when the node
@@ -344,7 +382,9 @@ func (h *Manager) startExtensionNode(ctx context.Context, p *extension.Extension
 			return st, nil
 		}
 		st.State, st.Error = "error", err.Error()
-		h.logf("[%s] plugin %s: %v", m.cfg.ID, id, err)
+		if !errors.Is(err, errNodeVersionGone) {
+			h.logf("[%s] plugin %s: %v", m.cfg.ID, id, err)
+		}
 		return st, nil
 	}
 	pkg, err := ps.nodePackage(p, platform)
@@ -438,8 +478,8 @@ func (h *Manager) extensionNodeEvent(m *Machine, event string, params json.RawMe
 	case "plugin.node.state":
 		var st proto.PluginNodeState
 		// A late word from a machine of a plugin that is gone (its "stopped" after the uninstall) is not kept.
-		if json.Unmarshal(params, &st) == nil && st.ID != "" && h.extensions.reg != nil && h.extensions.reg.Get(st.ID) != nil {
-			h.extensions.nodes.set(st.ID, m.cfg.ID, st)
+		if json.Unmarshal(params, &st) == nil && st.ID != "" && h.extensions.reg != nil {
+			h.extensions.keepNodeState(st.ID, "", m.cfg.ID, st)
 		}
 	case "plugin.node.event":
 		var e proto.PluginNodeEvent

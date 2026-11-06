@@ -2,6 +2,13 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Cleanup after a change races work that read the state before it (2026-11-06, #5932)
+
+- Every registry change starts a sync of every machine in the background. A sync reads the registry once, then builds packages and records machine states for what it read. `drop`, which runs after an upgrade or an uninstall, removed the old version's packages and states, but a sync that had read the registry before the change rebuilt or recorded them afterwards. Nothing removed them again. This was the flaky `TestNodeProgramsForgotten`: 30 of 300 runs failed, and none did with the background syncs turned off.
+- Such a write has to check that its version is still the installed one, under the same lock as the cleanup (`keepNodeState`, `nodePackage`). A check made before taking the lock, like the old `reg.Get(id) != nil` in front of `set`, still leaves a gap. With the check under the lock, a write either lands before the cleanup, which then removes it, or is refused.
+- A test that asserts the cleanup on disk first has to wait for the work in flight. A refused sync can still create a file and remove it a moment later, and a glob can catch it in between. Running a sync first does the waiting, because syncs share a lock per machine.
+- Keep a test that reaches the check that decides. An early check of the same condition outside the lock (here, before building the package) refused every stale snapshot first. With the locked check deleted, the test still passed 1,000 of 1,000. Without the early check, deleting the locked one fails the test 1,000 of 1,000. An optimisation for a rare race is not worth hiding the check that matters.
+
 ## Shared bot identities across managers (2026-11-06, #5826)
 
 - Compare each manager's extension report before merging away ownership. Ignore repeated identities within one manager, empty identities, and managers removed from the roster. Offline reports describe the last known configuration, not confirmed live connections.
