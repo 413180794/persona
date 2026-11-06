@@ -750,3 +750,7 @@ A timeout or disconnected stream may happen after input reached the node. Transl
 ## An empty Git file list is still authoritative (#6056)
 
 A successful `git ls-files` can return no files when the requested directory contains only ignored output. Falling back to a filesystem walk on an empty result discards Git's ignore rules and lists that output. Use the result's availability, not its length, to choose the fallback; test an ignored directory that actually contains a file.
+
+## Staging cleanup covers final promotion too (#6106)
+
+A verified download or unpacked binary is still temporary until its final rename succeeds. Register removal of the staging path immediately after creating it, so copy, verification and promotion failures share cleanup. Remove only that temporary file; keep the existing destination and valid input archive intact.

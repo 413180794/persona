@@ -114,17 +114,16 @@ func fetchFile(ctx context.Context, client *http.Client, url, path string, f Fil
 	if err != nil {
 		return err
 	}
+	defer os.Remove(tmp)
 	h := sha256.New()
 	n, err := io.Copy(io.MultiWriter(out, h), io.LimitReader(resp.Body, f.Size+1))
 	if cerr := out.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
-		os.Remove(tmp)
 		return err // cut off: the next attempt starts again
 	}
 	if n != f.Size || hex.EncodeToString(h.Sum(nil)) != f.SHA256 {
-		os.Remove(tmp)
 		if n < f.Size {
 			return fmt.Errorf("%s: got %d of %d bytes", url, n, f.Size)
 		}
@@ -148,6 +147,7 @@ func unpack(gz, bin, want string) error {
 	if err != nil {
 		return err
 	}
+	defer os.Remove(tmp)
 	h := sha256.New()
 	_, err = io.Copy(io.MultiWriter(out, h), zr)
 	if cerr := out.Close(); err == nil {
@@ -157,7 +157,6 @@ func unpack(gz, bin, want string) error {
 		err = fmt.Errorf("%w: %s unpacked", errMismatch, filepath.Base(gz))
 	}
 	if err != nil {
-		os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, bin)

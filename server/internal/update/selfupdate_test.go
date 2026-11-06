@@ -82,6 +82,52 @@ func TestDownloadRefusesAnotherFile(t *testing.T) {
 	}
 }
 
+func TestFailedPromotionRemovesStagingFile(t *testing.T) {
+	f, gz := fileFor("program.gz", []byte("verified binary"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(gz)
+	}))
+	defer srv.Close()
+
+	for _, stage := range []string{"download", "unpack"} {
+		t.Run(stage, func(t *testing.T) {
+			dir := t.TempDir()
+			input := filepath.Join(dir, "input.gz")
+			if err := os.WriteFile(input, gz, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			dest := filepath.Join(dir, "artifact")
+			if err := os.Mkdir(dest, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			marker := filepath.Join(dest, "keep.txt")
+			if err := os.WriteFile(marker, []byte("keep"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			var err error
+			if stage == "download" {
+				err = fetchFile(context.Background(), srv.Client(), srv.URL, dest, f)
+			} else {
+				err = unpack(input, dest, f.BinarySHA256)
+			}
+			var renameErr *os.LinkError
+			if !errors.As(err, &renameErr) || renameErr.Op != "rename" {
+				t.Fatalf("promotion error = %v, want a rename failure", err)
+			}
+			if _, err := os.Stat(dest + ".part"); !os.IsNotExist(err) {
+				t.Errorf("staging file remains: %v", err)
+			}
+			if got, err := os.ReadFile(marker); err != nil || string(got) != "keep" {
+				t.Errorf("destination changed: %q, %v", got, err)
+			}
+			if got, err := os.ReadFile(input); err != nil || !bytes.Equal(got, gz) {
+				t.Errorf("input archive changed: %d bytes, %v", len(got), err)
+			}
+		})
+	}
+}
+
 func TestCheck(t *testing.T) {
 	f, _ := fileFor("personad-linux-amd64.gz", []byte("x"))
 	m := Manifest{Version: "v2", Build: 202611021700, Protocol: 1, Files: map[string]File{"linux-amd64": f}}
