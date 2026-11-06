@@ -130,6 +130,8 @@ type conversation struct {
 	stopAt time.Time
 
 	barge barge // the user's voice over the model's speech (gate.go, protocol 2)
+	// own is the user's own voice, clear of the model's speech, for the user-speech gate (gate.go).
+	own ownVoice
 	// cutAt: the energy rule cut the model off then (dropAudio); its reply to the user comes once they are quiet.
 	cutAt time.Time
 	// signals: the service says when the model's replies start, end and are cut off (the measured one's
@@ -1011,7 +1013,8 @@ func (c *conversation) handOver(task, delegation string, gen int, at time.Time) 
 
 // whenSpoken calls f, in a goroutine, with whether the user-speech gate is open for what the model did when the gate's
 // agent time was at: at once when it is, else once it opens within gateWait (the caption of what the user just said
-// can come after the model acted on it).
+// can come after the model acted on it). The user's own voice since at, by the time the model acted, opens it too: a
+// reply that only calls a tool has the user's caption come after the call's result on the measured service (gate.go).
 func (c *conversation) whenSpoken(at time.Time, f func(spoken bool)) { c.waitGate(at, false, f) }
 
 // whenSaid is whenSpoken for a handover that is sent with what was said: while the user's caption of what they said
@@ -1021,14 +1024,19 @@ func (c *conversation) whenSpoken(at time.Time, f func(spoken bool)) { c.waitGat
 func (c *conversation) whenSaid(at time.Time, f func(spoken bool)) { c.waitGate(at, true, f) }
 
 func (c *conversation) waitGate(at time.Time, caption bool, f func(spoken bool)) {
+	heard := c.gate.heardSince(at, time.Now()) // mu held: the user's voice by the time the model acted
 	go func() {
 		deadline := time.Now().Add(gateWait)
 		for {
 			c.mu.Lock()
-			open := c.gate.openSince(at, time.Now())
+			worded := c.gate.openSince(at, time.Now())
 			due := caption && c.captionDue()
 			c.mu.Unlock()
+			open := heard || worded
 			if open && !due || !time.Now().Before(deadline) {
+				if open && !worded {
+					c.pl.logf("the user's caption had not come: their voice in the app's audio counts")
+				}
 				f(open)
 				return
 			}
@@ -1375,6 +1383,7 @@ func (c *conversation) readApp() {
 			up, ready, w := c.up, c.ready, c.w
 			voiced := c.pace.heard(now, ms)
 			held := c.held(b, voiced) // paused or waking: kept for the next session (suspend.go)
+			c.heardOwn(now, voiced, len(b), held, ready)
 			if !held {
 				c.cutIn(now, voiced, len(b))
 			}
@@ -1424,6 +1433,34 @@ func (c *conversation) readApp() {
 			}
 		}
 	}
+}
+
+// heardOwn takes a frame of the app's audio, n bytes long, voiced or not, arrived at now (mu held): the user's own
+// voice for spokeVoice (ownVoice) is the user speaking for the user-speech gate, once it reaches the model. Sent as it
+// comes when the upstream is up (ready); kept while it is paused or waking (held), it counts once it reaches the woken
+// session (flushRing), as a line typed meanwhile does; dropped (no session: reconnecting), it does not count.
+func (c *conversation) heardOwn(now time.Time, voiced bool, n int, held, ready bool) {
+	if !c.own.add(now, voiced, c.frameLen(n), c.pace.playEnd) {
+		return
+	}
+	switch {
+	case held:
+		c.sus.spoke = true
+	case ready:
+		c.gate.voice = now
+	}
+}
+
+// frameLen is how long n bytes of the app's audio play (0 before its rate is known).
+func (c *conversation) frameLen(n int) time.Duration {
+	if c.p == nil {
+		return 0
+	}
+	rate := c.p.inputRate()
+	if rate <= 0 {
+		return 0
+	}
+	return time.Duration(n/2) * time.Second / time.Duration(rate)
 }
 
 // cutIn takes a frame of the app's audio, n bytes long, voiced or not (mu held): the user talking over the model's

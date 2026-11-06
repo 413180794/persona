@@ -66,6 +66,7 @@ type suspension struct {
 	voice  barge     // the user's voice in the app's audio while paused, toward wakeVoice
 	ring   ring      // the app's audio while paused and waking, the last ringSpan
 	texts  []string  // lines the user typed while paused and waking: sent once the ring is out
+	spoke  bool      // the ring has the user's own voice in it (heardOwn): it counts once it reaches the session
 	failed int       // tries of a wake that failed in a row
 	flush  bool      // a flushRing sends what is kept: one at a time, so it goes out in order
 	pauses int       // how often the call paused (the log)
@@ -134,7 +135,7 @@ func (c *conversation) maybePause(now time.Time) {
 	if time.Since(c.connectedAt) >= stableAfter {
 		c.reconnects = 0 // as a drop of it would (lost): it held
 	}
-	s.state, s.at, s.voice, s.ring, s.texts = linkPaused, now, barge{}, ring{}, nil
+	s.state, s.at, s.voice, s.ring, s.texts, s.spoke = linkPaused, now, barge{}, ring{}, nil, false
 	s.pauses++
 	c.gen++ // its delegations go with it: what comes back for them is said
 	c.ready = false
@@ -278,6 +279,9 @@ func (c *conversation) flushRing() {
 		frames, text := c.sus.ring.take(), ""
 		switch {
 		case len(frames) > 0:
+			if c.sus.spoke { // the user's voice in it reaches the session now, after what its instructions told it
+				c.gate.voice = time.Now()
+			}
 			for _, b := range frames {
 				out = append(out, w.audio(b))
 			}
@@ -287,7 +291,7 @@ func (c *conversation) flushRing() {
 			c.gate.user = time.Now()
 			out = append(out, w.text(text))
 		default:
-			c.sus.state, c.sus.flush, c.sus.failed = "", false, 0
+			c.sus.state, c.sus.flush, c.sus.failed, c.sus.spoke = "", false, 0, false
 			c.pl.logf("woke the upstream in %v", time.Since(c.sus.at).Round(10*time.Millisecond))
 			c.mu.Unlock()
 			select { // what waits to be said goes now

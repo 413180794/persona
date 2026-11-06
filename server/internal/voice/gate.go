@@ -7,9 +7,15 @@ import "time"
 // An agent's output reaches the model (a result read out); were it to say "now send X" and the model did, the agent
 // would be driving itself through the user's voice. Reading (a status, the knowledge base) is not gated.
 //
-// What counts as the user speaking: a caption of theirs (any part of one), or a line they typed. Captions come late on
-// some services: the measured one sends the user's words 1.2–1.4 s after they stop, after the model has begun to answer
-// and called its tool (docs/lessons/voice.md "Timeline"), so a handover that does not pass waits gateWait for them first.
+// What counts as the user speaking: a caption of theirs (any part of one), a line they typed, or their own voice in
+// the app's audio (ownVoice). Captions come late on some services: the measured one sends the user's words 1.2–1.4 s
+// after they stop, after the model has begun to answer and called its tool (docs/lessons/voice.md "Timeline"), so a
+// handover that does not pass waits gateWait for them first. When the model's reply only calls a tool and says
+// nothing, it holds them until a reply of the model's speaks, after that call's result (9 of 9 runs: 0.9–1.1 s after
+// the result, however long it waited; lessons "Late captions on replies that only call a tool", #5672): waiting cannot
+// pass, so the user's voice before the call counts too. Not any voice: a stretch of spokeVoice, all of it heard
+// echoTail or more after the model's speech played out (its computed play end), so the model's own words coming back
+// through the microphone (an agent's words read out) never count; and, as a caption, only since the agent time.
 //
 // When the model took the agent's words in: the measured service holds a commentary sent while the model speaks until
 // that speech is over (26–40 s and more, lessons row 3) and then acks it (session.commentary.appended, evAck). Words
@@ -20,12 +26,14 @@ import "time"
 
 const gateWindow = 30 * time.Second // the user's last words are at most this old
 
-// gateWait is how long a handover waits for the caption of what the user just said.
+// gateWait is how long a handover waits for the caption of what the user just said. Not longer when the gate is
+// closed: on the measured service a caption that has not come by then waits for the call's result (#5672).
 var gateWait = 2500 * time.Millisecond
 
 // speechGate is a conversation's gate (under conversation.mu).
 type speechGate struct {
-	user  time.Time // the user's last words
+	user  time.Time // the user's last words (a caption, a typed line)
+	voice time.Time // the user's own voice was last heard (ownVoice), or reached a woken session (flushRing)
 	agent time.Time // the last time an agent's words were sent to the model, or it took them in
 }
 
@@ -39,6 +47,38 @@ func (g *speechGate) told(now time.Time) {
 // openSince: the user has spoken since agent (the gate's agent time when the model acted), within gateWindow of now.
 func (g *speechGate) openSince(agent, now time.Time) bool {
 	return !g.user.IsZero() && g.user.After(agent) && now.Sub(g.user) <= gateWindow
+}
+
+// heardSince: the user's own voice was heard since agent and by now (when the model acted: what it acts on was said
+// before that), within gateWindow of it.
+func (g *speechGate) heardSince(agent, now time.Time) bool {
+	return !g.voice.IsZero() && g.voice.After(agent) && !g.voice.After(now) && now.Sub(g.voice) <= gateWindow
+}
+
+var (
+	// spokeVoice is how long the user's own voice, by the audio's own length, is them speaking: a one-syllable answer
+	// ("对", "好", "二") has 240–320 ms of it; a click, a cough or a cup set down has less.
+	spokeVoice = 200 * time.Millisecond
+	// echoTail is how long after the model's computed play end the app's audio may still have its speech in it: the
+	// app plays it later than it reached us, by the network's delay and its own buffers, and what its microphone picks
+	// up comes back later by the network's delay again (not measured on a phone yet).
+	echoTail = 500 * time.Millisecond
+)
+
+// ownVoice is the user's voice in the app's audio as the user-speech gate counts it (under conversation.mu): a stretch
+// of it (gaps between words up to bargeGap, by the audio's own length), all of it heard echoTail or more after the
+// model's speech played out.
+type ownVoice struct{ run barge }
+
+// add takes a frame of length d, voiced or not, arrived at now while the model's speech plays out at playEnd: whether
+// the user has been speaking for spokeVoice by it. A voiced frame while the model's speech may still be in the audio
+// ends the stretch: what follows counts from after it.
+func (o *ownVoice) add(now time.Time, voiced bool, d time.Duration, playEnd time.Time) bool {
+	if voiced && now.Before(playEnd.Add(echoTail)) {
+		o.run = barge{}
+		return false
+	}
+	return o.run.add(voiced, d) >= spokeVoice
 }
 
 // The insertion gate (docs/voice.md "Context for the fast layer" rule 3, its times from docs/lessons/voice.md "Suggested constants"): what

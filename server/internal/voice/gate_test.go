@@ -2,9 +2,11 @@ package voice
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // delegate makes the model hand text over as client delegation id.
@@ -302,3 +305,206 @@ func TestSendFailureWords(t *testing.T) {
 type errFake string
 
 func (e errFake) Error() string { return string(e) }
+
+// The user's own voice as the user-speech gate counts it (#5672): a stretch of spokeVoice by the audio's own length,
+// gaps between words up to bargeGap bridged; nothing of it while the model's speech plays or within echoTail after;
+// a stretch begun then counts from after it. Heard only since the agent time and by when the model acted.
+func TestOwnVoice(t *testing.T) {
+	const frame = 20 * time.Millisecond
+	at := time.Now()
+	// talk feeds d of frames from from on, voiced or not: whether one of them made it the user speaking.
+	talk := func(o *ownVoice, from time.Time, d time.Duration, voiced bool, playEnd time.Time) bool {
+		spoke := false
+		for i := range int(d / frame) {
+			if o.add(from.Add(time.Duration(i)*frame), voiced, frame, playEnd) {
+				spoke = true
+			}
+		}
+		return spoke
+	}
+	var o ownVoice
+	if talk(&o, at, 100*time.Millisecond, true, time.Time{}) {
+		t.Error("a click is the user speaking")
+	}
+	talk(&o, at.Add(100*time.Millisecond), 200*time.Millisecond, false, time.Time{}) // longer than bargeGap: it is forgotten
+	if talk(&o, at.Add(300*time.Millisecond), 180*time.Millisecond, true, time.Time{}) {
+		t.Error("the click and a short sound after a pause are taken together")
+	}
+	o = ownVoice{}
+	if !talk(&o, at, 240*time.Millisecond, true, time.Time{}) {
+		t.Error("one syllable is not the user speaking")
+	}
+	o = ownVoice{}
+	talk(&o, at, 100*time.Millisecond, true, time.Time{})
+	talk(&o, at.Add(100*time.Millisecond), 100*time.Millisecond, false, time.Time{}) // between two words
+	if !talk(&o, at.Add(200*time.Millisecond), 100*time.Millisecond, true, time.Time{}) {
+		t.Error("two words with a short gap are not the user speaking")
+	}
+
+	// The model's speech plays out at playEnd: its echo, however long, is not the user's voice.
+	playEnd := at.Add(2 * time.Second)
+	o = ownVoice{}
+	if talk(&o, at, 2*time.Second+echoTail, true, playEnd) {
+		t.Error("the model's speech coming back is the user speaking")
+	}
+	// A voice that goes on past echoTail counts from then on: 160 ms of it is not yet the user speaking, 200 ms is.
+	o = ownVoice{}
+	if talk(&o, playEnd.Add(echoTail-300*time.Millisecond), 460*time.Millisecond, true, playEnd) {
+		t.Error("the voice within echoTail counted")
+	}
+	o = ownVoice{}
+	if !talk(&o, playEnd.Add(echoTail-300*time.Millisecond), 500*time.Millisecond, true, playEnd) {
+		t.Error("the voice after echoTail did not count")
+	}
+
+	g := speechGate{voice: at}
+	for _, c := range []struct {
+		agent, now time.Time
+		want       bool
+	}{
+		{at.Add(-time.Second), at.Add(time.Second), true},
+		{at, at.Add(time.Second), false},                         // not since the agent's words
+		{at.Add(-time.Second), at.Add(-time.Millisecond), false}, // after the model acted
+		{at.Add(-time.Minute), at.Add(gateWindow + time.Second), false},
+	} {
+		if got := g.heardSince(c.agent, c.now); got != c.want {
+			t.Errorf("heardSince(%v, %v) = %v", c.agent.Sub(at), c.now.Sub(at), got)
+		}
+	}
+	if (&speechGate{}).heardSince(time.Time{}, at) {
+		t.Error("heard with no voice")
+	}
+}
+
+// lateCaptionUpstream is a live service with tools whose model asks a card's question it is told with speech of
+// speech's length (acked first, its reply's start said, as the measured service does), and whose user caption comes
+// only after the result of a call that said nothing (docs/lessons/voice.md "Late captions on replies that only call a
+// tool"). The test has the model call (call) when it likes.
+type lateCaptionUpstream struct {
+	*fakeUpstream
+	mu   sync.Mutex
+	conn *websocket.Conn
+}
+
+func newLateCaptionUpstream(t *testing.T, speech time.Duration, caption string) *lateCaptionUpstream {
+	l := &lateCaptionUpstream{}
+	l.fakeUpstream = newFakeUpstream(t, func(u *fakeUpstream, c *websocket.Conn, f map[string]any) {
+		switch {
+		case f["type"] == "session.start":
+			l.mu.Lock()
+			l.conn = c
+			l.mu.Unlock()
+			u.send(c, map[string]any{"type": "session.started", "session": map[string]any{}})
+		case said(f):
+			u.send(c, map[string]any{"type": "session.commentary.appended", "client_event_id": f["event_id"]})
+			u.send(c, map[string]any{"type": "response.event", "delegation_id": "r1", "event": map[string]any{"type": "response.created"}})
+			for range int(speech / (100 * time.Millisecond)) { // 100 ms at 16 kHz a piece
+				u.send(c, map[string]any{"type": "session.output_audio.delta", "delta": b64(make([]byte, 3200))})
+			}
+		case f["type"] == "session.commentary.append" && f["delegation_id"] != nil:
+			u.send(c, map[string]any{"type": "session.input_transcript.delta", "delta": caption})
+		}
+	})
+	return l
+}
+
+// call has the model hand task over with delegate_task on delegation id, in a reply that says nothing.
+func (l *lateCaptionUpstream) call(id, task string) {
+	l.mu.Lock()
+	c := l.conn
+	l.mu.Unlock()
+	l.send(c, map[string]any{"type": "session.delegation.created", "delegation": map[string]any{"id": id, "target": "client"}})
+	l.send(c, map[string]any{"type": "response.event", "delegation_id": id, "event": map[string]any{
+		"type": "function_call", "call_id": "c-" + id, "name": "delegate_task", "arguments": fmt.Sprintf(`{"task":%q}`, task)}})
+}
+
+// framesOf is how many frames of the app's audio of amplitude amp (tone) the service got.
+func framesOf(u *fakeUpstream, amp int16) int {
+	return u.count(func(f map[string]any) bool {
+		b, _ := base64.StdEncoding.DecodeString(fmt.Sprint(f["audio"]))
+		return f["type"] == "session.input_audio.append" && len(b) >= 2 && int16(uint16(b[0])|uint16(b[1])<<8) == amp
+	})
+}
+
+// sound sends the app's audio at amplitude amp (tone) for d, in 20 ms frames: at once, or in real time (paced).
+func (a *app) sound(d time.Duration, amp int16, paced bool) {
+	for range int(d / (20 * time.Millisecond)) {
+		_ = a.c.Write(context.Background(), websocket.MessageBinary, tone(320, amp))
+		if paced {
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+}
+
+// askedByVoice is a bound call whose conversation asks dbQuestion at the start, the model reading it out for speech:
+// the app has heard it begin.
+func askedByVoice(t *testing.T, speech time.Duration) (*fakeHub, *lateCaptionUpstream, *app) {
+	hub := agentHub(t)
+	hub.cards = []proto.Interaction{dbQuestion("q1", "a1")}
+	up := newLateCaptionUpstream(t, speech, "第二个。")
+	pl := testPlugin(t, Config{Providers: []Provider{{ID: "rt", URL: up.url(), Models: []string{"m1"}, Tools: true}}}, hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	a.until(askFrom("q1", askAsking, ""))
+	a.heardAudio()
+	return hub, up, a
+}
+
+// #5672: the card's question is an agent's words (they close the gate); the user answers it after it played out, and
+// the model hands the answer over in a reply that says nothing, so the user's caption only comes after the call's
+// result. Their voice in the app's audio is them speaking: the card is answered, not refused as unprompted.
+func TestUserVoiceOpensTheGateBeforeTheCaption(t *testing.T) {
+	setVar(t, &gateWait, 300*time.Millisecond)
+	setVar(t, &echoTail, 100*time.Millisecond)
+	hub, up, a := askedByVoice(t, 300*time.Millisecond)
+	time.Sleep(300*time.Millisecond + echoTail + 200*time.Millisecond) // the question has played out
+	a.sound(200*time.Millisecond, 100, false)                          // the room
+	a.sound(300*time.Millisecond, 3000, false)                         // "the second one"
+	a.sound(100*time.Millisecond, 100, false)
+	waitFor(t, "the service has the user's voice", func() bool { return framesOf(up.fakeUpstream, 3000) == 15 })
+	up.call("dlg1", "回答：第二个")
+	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "用户的回答已经交给 Claude Code 了") {
+		t.Fatalf("told: %s", got)
+	}
+	a.until(askFrom("q1", askAnswered, byVoice))
+	if res := hub.resolutions(); len(res) != 1 || res[0].Res.Answers["数据库用哪个？"] != "SQLite" {
+		t.Fatalf("resolved %+v", res)
+	}
+}
+
+// The security property holds without a caption (#5672): with no voice of the user's in the app's audio since the
+// card's question (a quiet room), or only the model's own speech coming back while it plays and just after (echo,
+// whatever its level), a handover that says nothing is still refused as unprompted and the card is not answered.
+func TestNoUserVoiceStillRefused(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		sound func(a *app, speech time.Duration)
+	}{
+		{"quiet room", func(a *app, speech time.Duration) {
+			time.Sleep(speech + echoTail + 200*time.Millisecond)
+			a.sound(time.Second, 100, false)
+		}},
+		{"echo", func(a *app, speech time.Duration) {
+			// Its speech, as loud as a voice, from when it reached the app until echoTail is nearly out.
+			a.sound(speech+echoTail-300*time.Millisecond, 3000, true)
+			a.sound(300*time.Millisecond, 100, false)
+			time.Sleep(echoTail)
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			setVar(t, &gateWait, 300*time.Millisecond)
+			setVar(t, &echoTail, 800*time.Millisecond)
+			speech := time.Second
+			hub, up, a := askedByVoice(t, speech)
+			c.sound(a, speech)
+			waitFor(t, "the service has the app's audio", func() bool { return framesOf(up.fakeUpstream, 100) >= 15 })
+			up.call("dlg1", "回答：第二个")
+			if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "这条不是你说的，我没发") {
+				t.Fatalf("told: %s", got)
+			}
+			if res := hub.resolutions(); len(res) != 0 {
+				t.Fatalf("resolved %+v", res)
+			}
+		})
+	}
+}

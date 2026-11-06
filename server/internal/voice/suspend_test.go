@@ -337,6 +337,58 @@ func TestTypedLineAfterTheAgentWrote(t *testing.T) {
 	}
 }
 
+// The user's voice kept while paused counts once it reaches the new session (#5672), as a typed line does: the agent
+// wrote while paused (the gate closes as the session comes up), the user's voice wakes it, and the woken session's
+// model hands what they said over without a caption of it (a reply that only calls a tool has it come after the
+// result): sent, not refused as unprompted.
+func TestVoiceAfterTheAgentWrote(t *testing.T) {
+	quick(t)
+	setVar(t, &gateWait, 300*time.Millisecond)
+	setVar(t, &spokeVoice, 100*time.Millisecond) // spoken before it wakes: all of the voice is kept
+	hub := workingAgent(t)
+	var mu sync.Mutex
+	sessions, voiced := map[*websocket.Conn]int{}, map[*websocket.Conn]int{}
+	up := newFakeUpstream(t, func(u *fakeUpstream, c *websocket.Conn, f map[string]any) {
+		switch f["type"] {
+		case "session.start":
+			mu.Lock()
+			sessions[c] = len(sessions)
+			mu.Unlock()
+			u.send(c, map[string]any{"type": "session.started", "session": map[string]any{}})
+		case "session.input_audio.append":
+			b, _ := base64.StdEncoding.DecodeString(f["audio"].(string))
+			loud := len(b) >= 2 && int16(uint16(b[0])|uint16(b[1])<<8) == 3000
+			mu.Lock()
+			n := voiced[c]
+			if loud {
+				voiced[c]++
+			} else if n >= 10 && sessions[c] > 0 { // the woken session heard the user out: its model hands it over
+				voiced[c] = -1 << 20
+				delegate(u, c, "dlg1", "顺便把 README 也改一下")
+			}
+			mu.Unlock()
+		}
+	})
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	a.until(linkIn(linkPaused))
+	hub.add("a1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "集成测试跑完一半了。"})
+	a.speak(wakeVoice, true) // kept until the session is up: nothing of it goes live
+	a.until(linkIn(linkWaking))
+	a.until(linkIn(linkLive))
+	a.speak(200*time.Millisecond, false)
+	a.until(func(f map[string]any) bool {
+		if f["type"] == "run" && f["state"] == runRefused {
+			t.Fatalf("refused: %v", f)
+		}
+		return f["type"] == "run" && f["state"] == runSent
+	})
+	if m := hub.waitSent(1); !strings.Contains(m.Text, "README") {
+		t.Fatalf("sent %+v", m)
+	}
+}
+
 // recLink is an upstream session that keeps the frames written to it; once broken it refuses the next write, after
 // broke (as the session's reader noticing the drop).
 type recLink struct {
