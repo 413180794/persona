@@ -1,7 +1,7 @@
 // An HTML file shown as a page (docs/web.md「HTML 预览」, #1413): in a sandboxed frame with scripts and the network
 // off; each can be turned on for this file while it is open. lib/html-preview.ts has the policy.
 import { useEffect, useMemo, useState } from "react";
-import { fileDownloadURL } from "../../../lib/api";
+import { fileDownloadURL, READ_TIMEOUT_MS } from "../../../lib/api";
 import { inlineSiblings } from "../../../lib/html-inline";
 import { previewDocument, relativeRefs, sandboxFor } from "../../../lib/html-preview";
 import { cx, IconButton, Loading } from "../../../ui/atoms";
@@ -22,14 +22,29 @@ export function HtmlPreview({ html, title, mid, path }: { html: string; title: s
       setInlined({ html, loaded: 0, missing: 0 });
       return;
     }
+    // Closing the file or reloading aborts the reads still pending; each read also gives up after READ_TIMEOUT_MS like
+    // every other hub read, and a read that fails counts as a missing file, so a stalled machine cannot hold the page.
+    const closed = new AbortController();
     void inlineSiblings(html, path, async (p) => {
-      const res = await fetch(fileDownloadURL(mid, p, ""));
-      return res.ok ? res.blob() : null;
+      // a read the inliner starts after the abort (the next @import of a sheet) never begins: the listener would not fire
+      if (closed.signal.aborted) return null;
+      const one = new AbortController();
+      const abort = () => one.abort();
+      closed.signal.addEventListener("abort", abort, { once: true });
+      const timer = setTimeout(abort, READ_TIMEOUT_MS);
+      try {
+        const res = await fetch(fileDownloadURL(mid, p, ""), { signal: one.signal });
+        return res.ok ? await res.blob() : null;
+      } finally {
+        clearTimeout(timer);
+        closed.signal.removeEventListener("abort", abort);
+      }
     })
       .catch(() => ({ html, loaded: 0, missing: local }))
       .then((r) => live && setInlined(r));
     return () => {
       live = false;
+      closed.abort();
     };
   }, [html, path, mid, local, reloads]);
   const srcDoc = useMemo(() => (inlined ? previewDocument(inlined.html, { scripts, network }) : ""), [inlined, scripts, network]);

@@ -2,7 +2,11 @@ package persona.feature.machines
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 import persona.core.contracts.Machine
@@ -73,6 +77,23 @@ class AddComputerModelTest {
         list.value = listOf(Machine("macbook", online = false, trust = "pending"))
         model.tick()
         list.value = emptyList()
+        assertEquals(AddStage.Gone, model.state.value.stage(list.value))
+    }
+
+    @Test fun rejectedWhileAskedIsGone() = runTest {
+        // #5080: found by the poll, then rejected on the web (or removed): the poll keeps reading and it is gone.
+        val hub = Hub()
+        val list = MutableStateFlow(emptyList<Machine>())
+        val model = AddComputerModel(hub, list) { 0L }
+        model.setName("小林的 MacBook"); model.add()
+        backgroundScope.launch { model.run() }
+        hub.listed = listOf(Machine("macbook", online = true, trust = "pending"))
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals(AddStage.Joined, model.state.value.stage(list.value))
+        val polls = hub.calls.count { it.startsWith("machines") }
+        hub.listed = emptyList()
+        advanceTimeBy(3_000); runCurrent()
+        assertTrue("still polling while asked", hub.calls.count { it.startsWith("machines") } > polls)
         assertEquals(AddStage.Gone, model.state.value.stage(list.value))
     }
 

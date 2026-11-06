@@ -215,14 +215,17 @@ internal class AddComputerModel(
         mutable.update { s -> if (s.machineId != id) s else s.copy(polled = list, seen = s.seen || list.any { it.id == id }) }
     }
 
-    /** The countdown each second and the machine list every three, while a code waits for its computer. */
+    /**
+     * The countdown each second and the machine list every three, while a code waits for its computer and while it
+     * asks whether it is yours (rejected or removed elsewhere, the next poll no longer has it: it is gone).
+     */
     suspend fun run() {
         var n = 0
         while (true) {
             delay(1_000)
             tick()
             val s = state.value
-            val waiting = s.code != null && s.outcome == null && s.stage(listed.value).let { it == AddStage.Waiting || it == AddStage.Expired }
+            val waiting = s.code != null && s.outcome == null && s.stage(listed.value).let { it == AddStage.Waiting || it == AddStage.Expired || it == AddStage.Joined }
             if (waiting && ++n % 3 == 0) poll()
         }
     }

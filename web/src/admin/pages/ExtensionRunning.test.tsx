@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // 运行情况 in an extension's details: the figures on screen always belong to the chosen window and extension, a failed
 // refresh is shown rather than passing the old figures off as current, and one hub 404 does not hide the next extension.
+// Its log: the lines on screen always answer the current search, and a failed search is shown.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,16 +10,16 @@ vi.hoisted(() => {
   window.matchMedia ??= ((query: string) => ({ matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as typeof window.matchMedia;
 });
 
-const api = vi.hoisted(() => ({ metrics: vi.fn() }));
+const api = vi.hoisted(() => ({ metrics: vi.fn(), logs: vi.fn(), follow: vi.fn() }));
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   getExtensionMetrics: api.metrics,
-  getExtensionLogs: vi.fn(() => new Promise(() => {})),
-  followExtensionLogs: vi.fn(() => () => {}),
+  getExtensionLogs: api.logs,
+  followExtensionLogs: api.follow,
 }));
 
 import { AdminError } from "../api";
-import type { ExtensionMetrics, MetricsWindow } from "../types";
+import type { ExtensionMetrics, LogsPage, MetricsWindow } from "../types";
 import { ExtensionRunning } from "./ExtensionRunning";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -59,6 +60,8 @@ const deferred = <T,>() => {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   api.metrics.mockReset();
+  api.logs.mockReset().mockImplementation(() => new Promise(() => {}));
+  api.follow.mockReset().mockImplementation(() => () => {});
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -118,5 +121,85 @@ describe("ExtensionRunning", () => {
     await render("ext.b");
     expect(host.querySelector("section")).not.toBeNull();
     expect(text()).toContain("555");
+  });
+});
+
+describe("ExtensionLogs", () => {
+  const page = (next: number, ...texts: string[]): LogsPage => ({
+    lines: texts.map((text, i) => ({ seq: next - texts.length + i, at: "2026-01-01T00:00:00Z", source: "program", text })),
+    next,
+    kept: texts.length,
+  });
+  const logs = () => host.querySelectorAll("section")[1]?.textContent ?? "";
+  // The search waits 0.3 s after the last key.
+  const search = async (q: string) => {
+    const input = host.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, q);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await flush();
+  };
+  const start = async (id = "ext.a") => {
+    await act(async () => root.render(<ExtensionRunning id={id} />));
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await flush();
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
+    api.metrics.mockResolvedValue(metrics(1));
+  });
+
+  it("drops the last search's lines while the new search is pending", async () => {
+    api.logs.mockImplementation((_id: string, q: string) => (q ? new Promise(() => {}) : Promise.resolve(page(3, "alpha old"))));
+    await start();
+    expect(logs()).toContain("alpha old");
+    await search("beta");
+    expect(api.logs).toHaveBeenLastCalledWith("ext.a", "beta");
+    expect(logs()).not.toContain("alpha old");
+    expect(logs()).toContain("加载中");
+  });
+
+  it("shows a failed search instead of the last search's lines", async () => {
+    api.logs.mockImplementation((_id: string, q: string) => (q ? Promise.reject(new Error("search broke")) : Promise.resolve(page(3, "alpha old"))));
+    await start();
+    expect(logs()).toContain("alpha old");
+    await search("beta");
+    expect(logs()).toContain("search broke");
+    expect(logs()).not.toContain("alpha old");
+  });
+
+  it("ignores a late answer for an older search", async () => {
+    const older = deferred<LogsPage>();
+    const newer = deferred<LogsPage>();
+    api.logs.mockImplementation((_id: string, q: string) => (q === "be" ? older.promise : q === "beta" ? newer.promise : Promise.resolve(page(1, "first"))));
+    await start();
+    await search("be");
+    await search("beta");
+    await act(async () => newer.resolve(page(9, "beta new")));
+    await flush();
+    await act(async () => older.resolve(page(5, "be stale")));
+    await flush();
+    expect(logs()).toContain("beta new");
+    expect(logs()).not.toContain("be stale");
+  });
+
+  it("follows from where the current search's answer ends", async () => {
+    const newer = deferred<LogsPage>();
+    api.logs.mockImplementation((_id: string, q: string) => (q ? newer.promise : Promise.resolve(page(10, "alpha old"))));
+    await start();
+    const follow = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("实时跟随"))!;
+    await act(async () => follow.click());
+    expect(api.follow).toHaveBeenLastCalledWith("ext.a", 9, expect.any(Function), expect.any(Function));
+    api.follow.mockClear();
+    await search("beta");
+    // nothing follows the new search before its answer says where its lines end
+    expect(api.follow).not.toHaveBeenCalled();
+    await act(async () => newer.resolve(page(20, "beta new")));
+    await flush();
+    expect(api.follow).toHaveBeenCalledTimes(1);
+    expect(api.follow).toHaveBeenLastCalledWith("ext.a", 19, expect.any(Function), expect.any(Function));
   });
 });

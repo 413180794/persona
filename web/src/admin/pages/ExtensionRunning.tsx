@@ -191,9 +191,10 @@ function Figure({ label, className, children }: { label: string; className?: str
 /** The extension's log: the kept lines, searched on the hub; following adds each new line as it comes. */
 function ExtensionLogs({ id }: { id: string }) {
   const [q, setQ] = useState("");
-  const [lines, setLines] = useState<LogLine[] | null>(null);
-  const [next, setNext] = useState(0);
-  const [failed, setFailed] = useState<unknown>(null);
+  const query = q.trim();
+  // Each answer is kept with the extension and search it is for, so a new search never shows the last one's lines as its own.
+  const [got, setGot] = useState<{ id: string; q: string; lines: LogLine[]; next: number } | null>(null);
+  const [failed, setFailed] = useState<{ id: string; q: string; e: unknown } | null>(null);
   const [following, setFollowing] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
@@ -202,36 +203,41 @@ function ExtensionLogs({ id }: { id: string }) {
   useEffect(() => {
     let live = true;
     const timer = setTimeout(() => {
-      getExtensionLogs(id, q.trim()).then(
-        (r) => live && (setLines(r.lines), setNext(r.next), setFailed(null)),
-        (e) => live && setFailed(e),
+      getExtensionLogs(id, query).then(
+        (r) => live && (setGot({ id, q: query, lines: r.lines, next: r.next }), setFailed(null)),
+        (e) => live && setFailed({ id, q: query, e }),
       );
     }, 300);
     return () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [id, q]);
+  }, [id, query]);
+  const answer = got?.id === id && got.q === query ? got : null;
+  const lines = answer?.lines ?? null;
+  const error = failed?.id === id && failed.q === query ? failed.e : null;
 
-  // Following: the new lines from the stream, filtered here as the hub filters the kept ones.
+  // Following: the new lines from the stream, filtered here as the hub filters the kept ones. It starts from the end of the
+  // current search's answer, so a new search stops it until its own answer is in.
+  const answered = answer !== null;
   useEffect(() => {
-    if (!following || lines === null) return;
-    const needle = q.trim().toLowerCase();
+    if (!following || !answer) return;
+    const needle = query.toLowerCase();
     return followExtensionLogs(
       id,
-      next - 1,
+      answer.next - 1,
       (l) => {
         if (needle && !l.text.toLowerCase().includes(needle) && !l.source.includes(needle)) return;
-        setLines((have) => mergeLines(have ?? [], [l]));
+        setGot((have) => (have && have.id === id && have.q === query ? { ...have, lines: mergeLines(have.lines, [l]) } : have));
       },
       () => {
         setFollowing(false);
         toast(t("admin-pages-extensionrunning.follow_broke"), "error");
       },
     );
-    // next and lines only matter when following starts
+    // the answer's next only matters when following starts
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [following, id, q]);
+  }, [following, id, query, answered]);
 
   // Stay at the end while the reader is there.
   useEffect(() => {
@@ -271,10 +277,10 @@ function ExtensionLogs({ id }: { id: string }) {
           {t("admin-parts.copy")}
         </Button>
       </div>
-      {failed && !lines ? (
-        <p className="text-[12px] text-red">{errorText(failed)}</p>
-      ) : !lines ? (
-        <Loader />
+      {/* a failed search is said even while lines stay on screen */}
+      {error != null && <p className="text-[12px] text-red">{errorText(error)}</p>}
+      {!lines ? (
+        error == null && <Loader />
       ) : (
         <div
           ref={box}

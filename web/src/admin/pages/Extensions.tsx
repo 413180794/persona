@@ -91,6 +91,8 @@ export function Extensions() {
         loading ? <Loader /> : <ErrorBox error={error} onRetry={reload} />
       ) : (
         <>
+          {/* A failed poll keeps the last list on screen; say so, or its states look live. */}
+          {error != null && <ErrorBox error={error} onRetry={reload} />}
           {!data.can_install && (
             <Notice tone="gray" icon="info" title={t("admin-pages-extensions.no_db_title")}>
               {t("admin-pages-extensions.no_db_detail")}

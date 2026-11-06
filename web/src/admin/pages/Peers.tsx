@@ -81,6 +81,8 @@ export function Peers() {
         loading ? <Loader /> : <ErrorBox error={error} onRetry={reload} />
       ) : (
         <>
+          {/* A failed poll keeps the last list on screen; say so, or its dots and round trips look live. */}
+          {error != null && <ErrorBox error={error} onRetry={reload} />}
           {mesh && mesh.hubs.length > 1 && <Group mesh={mesh} onChanged={reload} />}
           <Card title={t("admin-pages-peers.linked")} footer={t("admin-pages-peers.linked_footer")}>
             {data.peers.length === 0 ? (

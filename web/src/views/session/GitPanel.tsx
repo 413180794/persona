@@ -52,6 +52,11 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
   const head = useRef<string | undefined>(undefined);
   // The status changed on the computer (lib/fs-live.ts): read it again without the panel showing a spinner.
   const [live, setLive] = useState(0);
+  // Whether a status is on screen: the status read's failure then cannot replace it, so it is said in a toast.
+  const shown = useRef(false);
+  useEffect(() => {
+    shown.current = status !== null;
+  }, [status]);
 
   useFsLive(mid, cwd, [], true, (c) => c.git && setLive((n) => n + 1));
 
@@ -73,7 +78,11 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
         setError("");
       })
       .catch((e) => {
-        if (!isAbort(e)) setError(errorText(e));
+        if (isAbort(e)) return;
+        setError(errorText(e));
+        // A reader's reload over a status already shown says it failed; a silent fs-live read stays quiet (the next
+        // change reads again, and a toast per background hiccup would be noise).
+        if (shown.current && !silent) toast(errorText(e), "error");
       })
       .finally(() => !ac.signal.aborted && setLoading(false));
     return () => ac.abort();
@@ -89,7 +98,8 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
       setOlder((o) => [...o, ...r.commits]);
       setNoMore(r.has_more === false || r.commits.length < PAGE);
     } catch (e) {
-      setError(errorText(e));
+      // The status is on screen, so the error state would never show: say it, unless HEAD moved under the page.
+      if (!isAbort(e) && head.current === requestedHead) toast(errorText(e), "error");
     } finally {
       setLoadingMore(false);
     }

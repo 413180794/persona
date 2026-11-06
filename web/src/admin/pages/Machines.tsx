@@ -60,20 +60,24 @@ export function Machines() {
       {!data ? (
         loading ? <Loader /> : <ErrorBox error={error} onRetry={reload} />
       ) : (
-        <Card
-          title={t("admin-pages-machines.count", { count: data.machines.length })}
-          footer={t("admin-pages-machines.list_footer")}
-        >
-          {data.machines.length === 0 ? (
-            <EmptyState icon="machine" title={t("admin-pages-machines.empty_title")}>
-              {t("admin-pages-machines.empty_body")}
-            </EmptyState>
-          ) : (
-            data.machines.map((m) => (
-              <MachineRow key={m.id} m={m} mesh={mesh} selfId={hubId} tls={data.tls} onChanged={changed} onPair={() => setPairing(m)} onRepair={() => setRepairing(m)} />
-            ))
-          )}
-        </Card>
+        <>
+          {/* A failed poll keeps the last list on screen; say so, or its online dots and round trips look live. */}
+          {error != null && <ErrorBox error={error} onRetry={reload} />}
+          <Card
+            title={t("admin-pages-machines.count", { count: data.machines.length })}
+            footer={t("admin-pages-machines.list_footer")}
+          >
+            {data.machines.length === 0 ? (
+              <EmptyState icon="machine" title={t("admin-pages-machines.empty_title")}>
+                {t("admin-pages-machines.empty_body")}
+              </EmptyState>
+            ) : (
+              data.machines.map((m) => (
+                <MachineRow key={m.id} m={m} mesh={mesh} selfId={hubId} tls={data.tls} onChanged={changed} onPair={() => setPairing(m)} onRepair={() => setRepairing(m)} />
+              ))
+            )}
+          </Card>
+        </>
       )}
       <AddLink open={adding === "link"} onClose={() => setAdding(null)} existing={data?.machines.map((m) => m.id) ?? []} onAdded={() => changed()} />
       <AddService open={adding === "service"} onClose={() => setAdding(null)} existing={data?.machines.map((m) => m.id) ?? []} onAdded={() => changed()} />
