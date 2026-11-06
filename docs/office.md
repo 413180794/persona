@@ -1,103 +1,103 @@
-# 生成 Office 文件（`personad office`，#1300）
+# Generating Office files (`personad office`, #1300)
 
-助手和 Agent 生成 Word、PowerPoint、Excel 文件用的命令，是 #1289 的 M9。文件生成在那台机器上；回复里写出它的绝对路径，App 就在回复下面把它显示成一张卡片
-（第一页的缩略图、文件名、「Word 文档」这样的类型，#1543，见 `docs/ios.md`「这一轮看过的图片和文档卡片」），点开是 M1–M3 的预览。
-助手和 Persona 启动的 Agent 经 skill `persona-office` 用它（见下面「skill」）。
+The command the assistant and Agents use to generate Word, PowerPoint and Excel files; it is M9 of #1289. The file is generated on that machine. When the reply contains its absolute path, the App shows it as a card under the reply
+(a thumbnail of the first page, the file name, a type such as "Word document", #1543, see `docs/ios.md` ("Image and document cards seen in this turn")); tapping it opens the M1–M3 preview.
+The assistant and Agents started by Persona use it through the skill `persona-office` (see "skill" below).
 
-## 为什么做进 personad
+## Why it lives in personad
 
-跑助手的 hub 机器上不一定有 Node、pip / venv、LibreOffice（实测：Ubuntu 上缺 `ensurepip`，Claude Code 是原生二进制）。
-依赖 python-docx / python-pptx（要编译的 lxml）或 Node 的 docx / pptxgenjs 的做法在那里跑不起来，各台电脑的环境也不一定齐。
-每台机器都有 `personad`，所以生成器做在它里面（`server/internal/office`）。Go 没有许可证合适又成熟的 docx / pptx 库，所以自己写最小的合法 Office Open XML；
-Markdown 用 goldmark（MIT）解析。参考了 Anthropic 官方 docx / xlsx / pptx skill 的思路（写完自查、表格用公式、版式统一），只借思路，没有搬内容。
+The hub machine that runs the assistant does not necessarily have Node, pip / venv or LibreOffice (observed: Ubuntu lacks `ensurepip`, and Claude Code is a native binary).
+Approaches that depend on python-docx / python-pptx (lxml, which needs compiling) or Node's docx / pptxgenjs do not run there, and the environments on the various computers are not complete either.
+Every machine has `personad`, so the generator lives in it (`server/internal/office`). Go has no mature docx / pptx library with a suitable license, so we write minimal valid Office Open XML ourselves;
+Markdown is parsed with goldmark (MIT). We borrowed ideas from Anthropic's official docx / xlsx / pptx skills (self-check after writing, formulas in tables, consistent layout): only the ideas, no content was copied.
 
-## skill（persona-office）
+## skill (persona-office)
 
-内置 skill `server/internal/assistantskills/builtin/persona-office`：SKILL.md 讲什么时候用、怎么写源文件、生成后看 `check`、回复里写出文件的绝对路径；
-skill 自带的 `office.sh` 找本机的 personad（先看 `PERSONA_BIN`，再看 `~/.persona/bin`、`~/.jarvis/bin`、`/opt/jarvis/bin`，最后是 PATH，都没有就退出码 3）。
+Built-in skill `server/internal/assistantskills/builtin/persona-office`: SKILL.md says when to use it, how to write the source file, to look at `check` after generating, and to write the file's absolute path in the reply.
+The skill's own `office.sh` finds the local personad (first `PERSONA_BIN`, then `~/.persona/bin`, `~/.jarvis/bin`, `/opt/jarvis/bin`, finally PATH; if none, exit code 3).
 
-谁拿得到（2026-11-04 用户定的）：**只有助手和 Persona 启动的 Agent**，不写进机器上用户级的 Claude / Codex skills 目录，用户自己开的会话不受影响。
+Who gets it (decided by the user 2026-11-04): **only the assistant and Agents started by Persona**. It is not written into the machine's user-level Claude / Codex skills directories, so sessions the user opens themselves are unaffected.
 
-- 助手：和别的内置 skill 一样装进它的目录（`assistantskills.Sync`：`.claude/skills`、`.agents/skills`，Codex 助手经 extraRoots）。
-- Persona 启动的 Claude Agent：node 启动时把 skill 写成一个插件（`<node 目录>/agent-plugin`，`assistantskills.WritePlugin`，`ForAgents` 列出给 Agent 的），
-  启动命令加 `--plugin-dir`，和 `--mcp-config`、Persona 的 hooks 插件一样只作用于这一个会话。在会话里它叫 `persona:persona-office`。
-  - 只在 Claude Code 2.1 及以上加（`pluginMinVersion`）：更老的会拒绝不认识的参数、整个启动失败；版本问不出来时也不加，照旧启动。
-  - 版本每次 hello 时问一次，启动时超过 10 分钟没问才再问（每次要起一个登录 shell）。
-- Persona 启动的 Codex Agent：还没带上。没找到按会话给 Codex 加 skill 目录、又不写 `CODEX_HOME/skills` 的办法。
+- Assistant: installed into its directory like the other built-in skills (`assistantskills.Sync`: `.claude/skills`, `.agents/skills`; the Codex assistant via extraRoots).
+- Claude Agents started by Persona: when node starts, it writes the skills as a plugin (`<node dir>/agent-plugin`, `assistantskills.WritePlugin`; `ForAgents` lists the ones for Agents),
+  and the launch command adds `--plugin-dir`. Like `--mcp-config` and Persona's hooks plugin, it applies only to that one session. Inside the session it is called `persona:persona-office`.
+  - Added only for Claude Code 2.1 and later (`pluginMinVersion`): older versions reject unknown flags and the whole launch fails. If the version cannot be queried, it is not added either and the launch proceeds as before.
+  - The version is queried once on every hello; at launch it is queried again only if more than 10 minutes have passed (each query starts a login shell).
+- Codex Agents started by Persona: not included yet. We have not found a way to add a skills directory per session for Codex without writing `CODEX_HOME/skills`.
 
-### 不用每次批准
+### No approval every time
 
-生成命令不在用户手机上弹审批卡：Persona 启动 claude 时用 `--allowedTools` 放行这一条，只认绝对路径，只对那一个会话有效。
-- Persona 启动的 Agent：`Bash(sh <node 目录>/agent-plugin/skills/persona-office/scripts/office.sh *)`，跟加载插件的 `--plugin-dir` 一起加（Claude Code 2.1 及以上）。
-- 助手：它目录里 `.claude/skills/persona-office/scripts/office.sh` 的同样一条，加在它原有的 `--allowedTools mcp__jarvis` 后面。
-- 不写进任何 settings 文件。用户自己开的会话不受影响，启动器自带的 `--settings` 也照样生效（#1462 之后 Persona 只给托管启动器传 `--settings`）。
+The generate command does not pop an approval card on the user's phone: when Persona starts claude, it allows this one command with `--allowedTools`, matching only the absolute path and valid only for that session.
+- Agents started by Persona: `Bash(sh <node dir>/agent-plugin/skills/persona-office/scripts/office.sh *)`, added together with the `--plugin-dir` that loads the plugin (Claude Code 2.1 and later).
+- Assistant: the same rule for `.claude/skills/persona-office/scripts/office.sh` in its directory, appended after its existing `--allowedTools mcp__jarvis`.
+- Not written into any settings file. Sessions the user opens themselves are unaffected, and the launcher's own `--settings` still applies (since #1462 Persona only passes `--settings` to managed launchers).
 
-为什么这样做（2026-11-04 在真 claude 上试过）：
-- 不用 skill 的 `allowed-tools`：有了它，启动这个 skill 本身就要批准（`-p` 下直接被拒），而且写死在 SKILL.md 里的规则带不了各台机器的路径。
-- 不用 `*/persona-office/scripts/office.sh` 这种通配：Agent 在自己的目录里写一个同名脚本（acceptEdits 下不用问）也能被放行，试过，真的跑了。只认绝对路径就挡住了。
-- 不写进 Persona 的 settings 文件：#1462 之后，大多数启动已经不传它了。
-- `;`、`&&` 连起来的命令，Claude Code 会拆开逐条判断；`.claude/` 下的文件也不会不问就改。所以助手那份脚本没法被悄悄换掉。
-- `-o` 只能写同类的文件（`.docx` / `.pptx` / `.xlsx`），免得一条放行的命令把 `~/.zshrc` 之类的文件覆盖掉。
-- SKILL.md 因此要求一条命令只生成一个文件、写出脚本的绝对路径，不用 shell 变量拼。
+Why it works this way (tried on real claude on 2026-11-04):
+- Not the skill's `allowed-tools`: with it, invoking the skill itself needs approval (rejected outright under `-p`), and rules hard-coded in SKILL.md cannot carry each machine's paths.
+- Not a wildcard like `*/persona-office/scripts/office.sh`: an Agent could write a same-named script in its own directory (no prompt under acceptEdits) and it would be allowed. We tried it and it really ran. Matching only the absolute path blocks this.
+- Not written into Persona's settings file: since #1462 most launches no longer pass it.
+- Claude Code splits commands chained with `;` or `&&` and checks each one; files under `.claude/` are not modified without asking either. So the assistant's copy of the script cannot be swapped silently.
+- `-o` can only write files of the same kind (`.docx` / `.pptx` / `.xlsx`), so one allowed command cannot overwrite files like `~/.zshrc`.
+- That is why SKILL.md requires one file per command and the script's absolute path written out, not assembled from shell variables.
 
-## 命令
+## Commands
 
-| 命令 | 做什么 |
+| Command | What it does |
 | --- | --- |
-| `personad office docx <file.md> [-o out.docx] [--title T]` | Word 文档，A4 |
-| `personad office pptx <file.md> [-o out.pptx] [--title T]` | 16:9 的演示文稿 |
-| `personad office xlsx <file.json\|file.csv> [-o out.xlsx]` | Excel 工作簿 |
-| `personad office check <file.docx\|.xlsx\|.pptx>` | 读回结构，自己的和别人的都行 |
+| `personad office docx <file.md> [-o out.docx] [--title T]` | Word document, A4 |
+| `personad office pptx <file.md> [-o out.pptx] [--title T]` | 16:9 presentation |
+| `personad office xlsx <file.json\|file.csv> [-o out.xlsx]` | Excel workbook |
+| `personad office check <file.docx\|.xlsx\|.pptx>` | Reads the structure back, ours or anyone else's |
 
-- 不写 `-o` 就放在输入旁边、换成对应的扩展名。写完打印一段 JSON：`file`（绝对路径）、`bytes`、`check`（同 check 的结果）。
-- 退出码：0 成功，1 失败（stderr 一行原因，比如图片找不到），2 用法不对。
+- Without `-o`, the output goes next to the input with the matching extension. After writing, it prints JSON: `file` (absolute path), `bytes`, `check` (same as the check result).
+- Exit codes: 0 success, 1 failure (one line of reason on stderr, e.g. image not found), 2 bad usage.
 
-## 写什么
+## What to write
 
-**docx（Markdown）**：
-- 支持：`#` 到 `###` 标题（更深的按三级算）、段落、**粗体** / *斜体* / `代码` / ~~删除线~~ / 链接、有序和无序列表（可嵌套，有序列表从自己的第一个数开始）、GitHub 表格（第一行是表头，列对齐照 `:---:`）、代码块、引用、任务列表的勾选框、`---`（分页）。
-- 图片 `![说明](相对 Markdown 文件的路径)`：只认 PNG / JPEG / GIF，最宽到页面宽度。网上的图不去下载，只留说明文字。
+**docx (Markdown)**:
+- Supported: `#` to `###` headings (deeper ones count as level three), paragraphs, **bold** / *italic* / `code` / ~~strikethrough~~ / links, ordered and unordered lists (nestable; an ordered list starts from its own first number), GitHub tables (first row is the header, column alignment follows `:---:`), code blocks, quotes, task-list checkboxes, `---` (page break).
+- Images `![caption](path relative to the Markdown file)`: PNG / JPEG / GIF only, scaled at most to the page width. Remote images are not downloaded; only the caption text is kept.
 
-**pptx（Markdown）**：
-- 分页：有 `---` 就按它分页，没有就每个 `#` / `##` 标题开一页。每页第一个标题是这页的标题。
-- 封面：第一页只有 `#` 标题和段落时做成封面，段落是副标题。
-- 正文：列表是要点（编号列表带编号），其他段落是不带圆点的行。
-- 图和表：每页一张图或一个表；有文字时图放右边、表放下面。
-- 字号：按这页的文字量自动变小（24 → 20 → 18 → 14 磅）。很多查看器不会像 PowerPoint 编辑时那样自动缩小字。
+**pptx (Markdown)**:
+- Slides: if there is `---`, split on it; otherwise each `#` / `##` heading starts a slide. The first heading on a slide is its title.
+- Cover: if the first slide has only a `#` heading and paragraphs, it becomes a cover, with the paragraphs as subtitle.
+- Body: lists are bullet points (numbered lists keep their numbers); other paragraphs are lines without bullets.
+- Images and tables: one image or one table per slide. With text, the image goes on the right and the table below.
+- Font size: shrinks automatically with the amount of text on the slide (24 → 20 → 18 → 14 pt). Many viewers do not auto-shrink text the way PowerPoint does while editing.
 
-**xlsx（JSON 或 CSV）**：
+**xlsx (JSON or CSV)**:
 
 ```json
-{"sheets":[{"name":"销售","header":["月份","收入","日期"],
-  "rows":[["1月",1200.5,"2026-01-31"],["合计","=SUM(B2:B2)",null]],
+{"sheets":[{"name":"Sales","header":["Month","Revenue","Date"],
+  "rows":[["Jan",1200.5,"2026-01-31"],["Total","=SUM(B2:B2)",null]],
   "widths":[10,14,12],"formats":["","#,##0.00","yyyy-mm-dd"],"freeze":true}]}
 ```
 
-- 单元格：文字、数字、`true` / `false`、`null`（空），或者以 `=` 开头的公式。
-- 表头加粗、浅色底、冻结（`freeze: false` 关掉）。列宽默认按内容算，中文算两个字宽。
-- `formats` 是按列的 Excel 数字格式；格式像日期时（有 `yy`、`dd` 或 `mmm`），`"2026-01-31"` 这样的文字会变成真的日期。
-- 工作表名会去掉 Excel 不认的字符、截到 31 个字、重名的加序号。
-- CSV：第一行是表头，像数字的就是数字，但 `007` 这样带前导零的编号保持文字。
+- Cells: text, numbers, `true` / `false`, `null` (empty), or a formula starting with `=`.
+- The header is bold, with a light background, and frozen (`freeze: false` turns that off). Column widths default to the content; a CJK character counts as two characters wide.
+- `formats` are per-column Excel number formats. When a format looks like a date (contains `yy`, `dd` or `mmm`), text like `"2026-01-31"` becomes a real date.
+- Sheet names have characters Excel rejects removed, are truncated to 31 characters, and duplicates get a sequence number.
+- CSV: the first row is the header. Anything that looks like a number is a number, but IDs with leading zeros such as `007` stay text.
 
-## 公式的值
+## Formula values
 
-工作簿里的公式在写的时候就算好，像 Excel 保存时那样把值写进文件（`formula.go`）。很多查看器（QuickLook、App 的预览、很多网页查看器）不会算公式，只显示文件里存的值，没有值就是空格子。
-Excel 和 Numbers 打开时照样全部重算（`fullCalcOnLoad`）。
+Formulas in the workbook are computed at write time and their values written into the file, like Excel does on save (`formula.go`). Many viewers (QuickLook, the App's preview, many web viewers) do not compute formulas; they only show the stored value, and with no value the cell is blank.
+Excel and Numbers still recompute everything on open (`fullCalcOnLoad`).
 
-- 能算的：`+ - * / ^ & %`、比较、单元格和区域（别的工作表也行：`Sheet!A1`、`'带 空格'!A1:B2`），以及 SUM AVERAGE MIN MAX COUNT COUNTA ROUND ABS IF IFERROR AND OR NOT。
-  `ROUND` 照 Excel 的 15 位有效数字，`2.345` 舍到 `2.35`。
-- 遇到别的函数（VLOOKUP 等），这个公式就不写值，留给 Excel 算，在不算公式的查看器里会是空的。
-- 循环引用写成 `#REF!`。
+- Supported: `+ - * / ^ & %`, comparisons, cells and ranges (other sheets too: `Sheet!A1`, `'with space'!A1:B2`), and SUM AVERAGE MIN MAX COUNT COUNTA ROUND ABS IF IFERROR AND OR NOT.
+  `ROUND` follows Excel's 15 significant digits: `2.345` rounds to `2.35`.
+- When another function appears (VLOOKUP etc.), that formula gets no value and is left for Excel to compute; it will be blank in viewers that do not compute formulas.
+- Circular references are written as `#REF!`.
 
-## 怎么验证的
+## How it was verified
 
-- `server/internal/office` 的单元测试：每个部件 XML 合法，内容、编号、图、表、公式值都在，check 能读回。
-- 合成的样例在 macOS 上交叉检查（2026-11-04）：
-  - QuickLook 缩略图：文档、每种幻灯片、工作簿的公式值都显示对了。
-  - `textutil` 读 docx。
-  - python-docx / openpyxl / python-pptx 打开不报错，读到标题、表格、图、冻结、数字格式、日期和公式的缓存值。
-- QuickLook 的几处限制已经绕开：
-  - 表格的边框和宽度写在表格自己上，不只写在样式里。
-  - 每个有序列表一个编号定义，不用 `startOverride`。
-  - 分页用下一段的「段前分页」，不用分页符：分页符在 QuickLook 里显示成一个方块。
-- QuickLook 仍会把表格列宽缩到内容那么宽；Word 里是整页宽。
+- Unit tests in `server/internal/office`: every part's XML is valid; content, numbering, images, tables and formula values are all present; check can read them back.
+- Synthetic samples cross-checked on macOS (2026-11-04):
+  - QuickLook thumbnails: documents, every kind of slide, and workbook formula values all display correctly.
+  - `textutil` reads the docx.
+  - python-docx / openpyxl / python-pptx open them without errors and read the headings, tables, images, freeze, number formats, dates and cached formula values.
+- Worked around several QuickLook limitations:
+  - Table borders and widths are written on the table itself, not only in the style.
+  - One numbering definition per ordered list, no `startOverride`.
+  - Page breaks use "page break before" on the next paragraph, not a break character: QuickLook shows a break character as a box.
+- QuickLook still shrinks table column widths to fit the content; in Word they span the full page width.

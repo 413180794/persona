@@ -1,27 +1,27 @@
-# 飞书草稿与发件箱恢复回归（#688）
+# Lark draft and outbox recovery regression (#688)
 
-2026-11-03，iPhone 18 Pro / iOS 27。浅色、深色各完成以下九条 mock 流程，并检查关键状态截图。真实账号只读核对接口结构，没有发送消息或已读回执。连续用例共用 mock 历史，所以部分截图包含先前用例发出的文件和图片；气泡旁圆环为主线已读标记。
+2026-11-03, iPhone 18 Pro / iOS 27. Ran the nine mock flows below in both light and dark mode and checked screenshots of the key states. A real account was used read-only to check the API shapes; no messages or read receipts were sent. Consecutive cases share mock history, so some screenshots include files and images sent by earlier cases; the ring next to a bubble is the main-thread read marker.
 
-| 状态 | 浅色 | 深色 |
+| State | Light | Dark |
 | --- | --- | --- |
-| 后台保存、终止 App 后恢复文字和照片 | [草稿](light/lark-draft-restored.png) | [草稿](dark/lark-draft-restored.png) |
-| 失败文件重启后仍可显式重试 | [失败](light/lark-failure-restored.png) | [失败](dark/lark-failure-restored.png) |
-| 回执丢失只检查结果，不重复上传 | [菜单](light/lark-file-check-only.png) | [菜单](dark/lark-file-check-only.png) |
-| 成功文件没有消息 ID，只允许移除本机记录 | [菜单](light/lark-idless-file-receipt.png) | [菜单](dark/lark-idless-file-receipt.png) |
-| 本机草稿无法读取 | [入口](light/lark-draft-unreadable.png) | [入口](dark/lark-draft-unreadable.png) |
-| 清除本机草稿前说明删除范围 | [确认](light/lark-draft-recovery-confirm.png) | [确认](dark/lark-draft-recovery-confirm.png) |
-| 确认清除后可重新编辑 | [编辑](light/lark-draft-recovered.png) | [编辑](dark/lark-draft-recovered.png) |
-| 旧版草稿先确认飞书账号归属 | [确认](light/lark-legacy-draft-confirm.png) | [确认](dark/lark-legacy-draft-confirm.png) |
-| 旧版草稿恢复后重启，文字和文件仍保留 | [恢复](light/lark-legacy-draft-restored.png) | [恢复](dark/lark-legacy-draft-restored.png) |
+| Saved in the background, text and photo restored after the App is killed | [Draft](light/lark-draft-restored.png) | [Draft](dark/lark-draft-restored.png) |
+| A failed file can still be retried explicitly after relaunch | [Failed](light/lark-failure-restored.png) | [Failed](dark/lark-failure-restored.png) |
+| Lost receipt: only check the result, no re-upload | [Menu](light/lark-file-check-only.png) | [Menu](dark/lark-file-check-only.png) |
+| Successful file without a message ID: only removing the local record is allowed | [Menu](light/lark-idless-file-receipt.png) | [Menu](dark/lark-idless-file-receipt.png) |
+| Local draft cannot be read | [Entry](light/lark-draft-unreadable.png) | [Entry](dark/lark-draft-unreadable.png) |
+| Explain what gets deleted before clearing the local draft | [Confirm](light/lark-draft-recovery-confirm.png) | [Confirm](dark/lark-draft-recovery-confirm.png) |
+| Editable again after confirming the clear | [Edit](light/lark-draft-recovered.png) | [Edit](dark/lark-draft-recovered.png) |
+| Legacy draft: confirm which Lark account it belongs to first | [Confirm](light/lark-legacy-draft-confirm.png) | [Confirm](dark/lark-legacy-draft-confirm.png) |
+| Legacy draft restored, then relaunched: text and file still kept | [Restored](light/lark-legacy-draft-restored.png) | [Restored](dark/lark-legacy-draft-restored.png) |
 
-`LarkAttachmentFlowTests` 九条流程：图片预览/下拉关闭/移除，图片回显一次，文件明确拒绝后编辑与重试，照片草稿后台保存及重启恢复，失败文件重启恢复与重试，丢失回执后的检查及重启核验，无 ID 成功文件移除本机记录，损坏草稿确认清除后重新编辑，旧版草稿确认归属后迁移并重启恢复。恢复用例重新启动时移除 DEBUG 注入参数；照片用例在离开前断言完整输入，避免把键盘未完成输入当成存储结果。
+The nine `LarkAttachmentFlowTests` flows: image preview / pull-down dismiss / remove; image echoed once; file explicitly rejected, then edited and retried; photo draft saved in the background and restored after relaunch; failed file restored after relaunch and retried; check after a lost receipt and verification after relaunch; successful file without an ID has its local record removed; corrupted draft cleared after confirmation and edited again; legacy draft migrated after confirming ownership and restored after relaunch. Recovery cases drop the DEBUG injection arguments on relaunch. The photo case asserts the complete input before leaving, so unfinished keyboard input is not mistaken for the stored result.
 
-48 项存储、附件及队列测试（3 个 suite）和 5 项 mock 测试通过。覆盖：Hub 组及实际飞书账号隔离、路由/令牌更新沿用草稿、发送前核对账号、切换账号阻止 POST、草稿一秒写入合并、离开及发送时立即保存、迟到的延迟写入不恢复旧草稿、解除配对取消进行中的请求并清理本机记录、迟到的身份响应不恢复绑定、其他 Hub 数据保留、旧版媒体确认迁移、无 ID 成功文件可移除，以及原子事务、丢失媒体、损坏记录和不确定发送结果。
+48 storage, attachment and queue tests (3 suites) and 5 mock tests pass. Coverage: isolation by hub group and by actual Lark account; route / token updates keep the draft; account check before sending; switching accounts blocks the POST; draft writes coalesced within one second; immediate save on leave and on send; a late delayed write does not restore an old draft; unpairing cancels in-flight requests and clears local records; a late identity response does not restore the binding; other hubs' data is kept; legacy media migrated after confirmation; successful files without an ID can be removed; plus atomic transactions, missing media, corrupted records and uncertain send results.
 
-Xcode 26.0 的 iOS（含 Watch 和扩展）及 macOS 构建通过；隐私扫描、diff 检查通过。GitHub Actions 的隐私与工作流检查也已恢复执行，运行时代码提交 628e6d87 通过，不再以此前 runner 未分配作为本轮验证依据。
+Xcode 26.0 builds for iOS (including Watch and extensions) and macOS pass; privacy scan and diff check pass. The GitHub Actions privacy and workflow checks run again too, and the runtime code commit 628e6d87 passes, so the earlier unassigned runner is no longer used as the basis for this round's verification.
 
-草稿按 Hub 组、实际飞书 userId 和会话保存，不依赖地址或令牌。旧版记录没有账号身份，只有当前/备用地址可定位的旧记录和旧文字草稿提供确认恢复入口；不自动推测所有历史凭据对应的账号。发送、重试和刷新期间可继续编辑，输入框只在本机提交事务期间短暂锁定。
+Drafts are stored per hub group, actual Lark userId and conversation, independent of address or token. Legacy records have no account identity; only legacy records and legacy text drafts that can be located by the current / fallback address get a confirm-to-restore entry. The account behind every historical credential is not guessed automatically. Editing continues during send, retry and refresh; the input box only locks briefly while the local transaction commits.
 
-文件上传没有上游幂等协议。不确定结果不允许重新上传；成功但缺少消息 ID 的记录不按同名文件猜测回显，可能与服务端消息暂时并存，可手动移除本机记录。损坏草稿的恢复是明确确认后的本机清除，不是备份或远端撤回。移除 Hub 会失效队列后清理本机数据；普通文件系统删除仍可能因系统 I/O 错误失败，不承诺故障环境中的绝对清理。
+File upload has no upstream idempotency protocol. Uncertain results may not be re-uploaded. A successful record without a message ID is not echoed by guessing from a same-named file; it may coexist with the server message for a while and the local record can be removed manually. Recovering a corrupted draft means clearing it locally after explicit confirmation; it is not a backup or a remote recall. Removing a hub invalidates the queue and then clears local data; a plain file-system delete can still fail on a system I/O error, so absolute cleanup in a faulty environment is not promised.
 
-本阶段复用已有只读 accounts 接口，不需要新增服务端部署。加密发送、话题附件和置顶列表不在本 PR 范围。
+This stage reuses the existing read-only accounts API and needs no new server deployment. Encrypted sending, thread attachments and the pinned list are out of this PR's scope.

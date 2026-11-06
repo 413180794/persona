@@ -1,35 +1,35 @@
-# Android 胶囊完成提示（#2124）
+# Android capsule completion hint (#2124)
 
-## 结果与验收证据
+## Outcome and acceptance evidence
 
-新完成会话在小胶囊上短暂显示“会话名 · 已完成”，约4秒后收回64×40dp；点击提示直接打开该会话，不改变手动卡片的会话选择和草稿。以模拟器真实状态事件、4秒前后窗口截图 / 录屏、点击路由及单元 / UI测试、APK / lint 为完成证据。
+When a session finishes, the small capsule briefly shows "session name · Done" and shrinks back to 64×40dp after about 4 seconds. Tapping the hint opens that session directly, without changing the manual card's session selection or draft. Completion evidence: real state events on the emulator, window screenshots / recordings before and after the 4-second mark, tap routing, unit / UI tests, APK / lint.
 
-## 范围与策略
+## Scope and approach
 
-- 短暂单行提示是独立于完整展开卡片的展示态，不调用聊天观察，不自动弹出输入法。
-- 使用统一会话的在线本轮 Working → Unread 完成（中途 NeedsYou 保留运行标记），初始 / 重连旧未读作为基线；更新rev本身不触发新完成。按多hub限定键和完成版本去重，静音 / quiet 在完成时过滤，解除静音不补播旧事件。
-- 手动卡片展开 / 输入时不抢占，只保留原未读提示；多个符合条件的完成提示逐条展示；点击使用独立完成目标，直接进入原会话。
-- 回到App、锁屏、撤权、关闭功能、配对切换时清理当前提示和队列；旧定时器不收起新打开的手动卡片。保留停靠 / 转屏和三个固定入口。
-- 延用当前同签名安装包发布与浏览器二维码下载；不扩展语音、屏幕上下文或 #2198 更新传输。
+- The brief single-line hint is a display state separate from the fully expanded card. It does not start chat observation and does not open the keyboard.
+- It uses the unified session's online in-turn Working → Unread completion (a NeedsYou in between keeps the running flag). Old unread sessions at startup / reconnect are the baseline; a rev update by itself does not count as a new completion. Dedup is by multi-hub scoped key and completion version. Mute / quiet is filtered at completion time; unmuting does not replay old events.
+- While the manual card is expanded or being typed in, the hint does not take over; only the existing unread hint stays. Several qualifying completion hints are shown one at a time. Tapping uses a separate completion target and goes straight to the original session.
+- Returning to the App, locking the screen, revoking permission, turning the feature off, or switching pairing clears the current hint and the queue. An old timer does not collapse a newly opened manual card. Docking / rotation and the three fixed entry points are kept.
+- Keeps the current same-signature APK release and browser QR-code download. Does not extend voice, screen context, or the #2198 update transport.
 
-## 分工
+## Division of work
 
-研究核实事件 / 版本 / 多hub边界；原生实现负责通知合约、排队 / 计时、窗口与展示；App实现负责实际完成边沿、过滤 / 去重和明确目标；独立验收模拟器截图 / 录屏 / 点击目标。主代理集成、文档、测试 / PR与发布。
+Research verified the event / version / multi-hub boundaries. The native implementation owns the notification contract, queueing / timing, window and display. The App implementation owns the actual completion edge, filtering / dedup and explicit targets. Independent acceptance covered emulator screenshots / recordings / tap targets. The main agent did integration, docs, tests / PR and release.
 
-## 阶段
+## Stages
 
-- [x] 记录、查重、认领和方案。
-- [x] 完成事件适配与直接导航。
-- [x] 原生短提示、队列、自动收回与手动卡片隔离。
-- [x] 测试 / 模拟器 / APK / lint。
-- [ ] PR与安装包发布（进展以Issue评论为准）。
+- [x] Record, dedup check, claim and plan.
+- [x] Completion event adaptation and direct navigation.
+- [x] Native brief hint, queue, auto-collapse and isolation from the manual card.
+- [x] Tests / emulator / APK / lint.
+- [ ] PR and APK release (see the issue comments for progress).
 
-## 合并前验证（2026-11-05）
+## Pre-merge verification (2026-11-05)
 
-App 91、原生 23、数据层 73，共187项相关测试通过；真实HTTP / WebSocket mock控制测试2项通过。APK / lint、文档路径与隐私检查通过。独立审查指出经过NeedsYou会漏提示，已保留该轮运行标记并补3个回归和实际转场验证。
+App 91, native 23, data layer 73: 187 related tests pass in total; 2 control tests against a real HTTP / WebSocket mock pass. APK / lint, doc paths and privacy check pass. Independent review found that passing through NeedsYou would miss the hint; the turn's running flag is now kept, with 3 regression tests and a real transition check added.
 
-Android 14 专用模拟器：初始旧未读不弹；浅色约0.358秒显示、4.196秒回收，深色约0.245秒显示、4.195秒回收；最终Working → NeedsYou → Unread实测约0.362秒显示、4.108秒回收。提示实际216×40dp，小胶囊64×40dp。Main / Inbox选择下点击均进入精确完成会话；FIFO顺序与去重、输入草稿保护、撤权清理不重播通过。保留23秒主录屏、16秒FIFO / 点击辅助录屏和关键截图。仅使用mock数据。
+Dedicated Android 14 emulator: old unread at startup does not pop. Light mode shows in about 0.358 s and collapses at 4.196 s; dark mode shows in about 0.245 s and collapses at 4.195 s. The final Working → NeedsYou → Unread run measured about 0.362 s to show and 4.108 s to collapse. The hint is actually 216×40dp; the small capsule is 64×40dp. With Main / Inbox selected, tapping opens the exact completed session in both cases. FIFO order and dedup, input draft protection, and no replay after revocation cleanup all pass. Kept a 23-second main recording, a 16-second FIFO / tap auxiliary recording and key screenshots. Mock data only.
 
-基线没有公开新鲜列表接口，因此以独立只读VerifiedSessionsRepository同步投影已有authority，避免使用磁盘旧Working猜测；未新增HTTP或WebSocket。重连不可观测窗口内的完成不猜测补播。
+The baseline had no public fresh-list API, so a separate read-only VerifiedSessionsRepository synchronously projects the existing authority, instead of guessing from stale on-disk Working. No new HTTP or WebSocket was added. Completions inside an unobservable reconnect window are not guessed and replayed.
 
-本记录截至PR合并前；PR及0.2.2安装包发布状态见#2124进展评论。语音、屏幕上下文及#2198更新链路不在本轮。
+This record covers up to before the PR merge; for the PR and 0.2.2 APK release status, see the #2124 progress comments. Voice, screen context and the #2198 update path are out of this round.

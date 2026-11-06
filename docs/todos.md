@@ -1,379 +1,379 @@
-# 待办（Todos）
+# To-dos (Todos)
 
-记下一件要做的事，把它交给一个或几个 Agent 去做，在待办里看哪些 Agent 在为它干活、各自在做什么、这件事整体到哪一步了；Agents 页也能按待办分组看。
+Record something to do, hand it to one or several Agents, and see in To-dos which Agents are working on it, what each is doing and how far the overall task has progressed; Agents can also be grouped by to-do on the Agents page.
 
-## 为什么需要
+## Why this is needed
 
-一件事常常要开好几个 Agent（不同电脑、不同工作区、不同标签页）。Agents 列表按项目、状态或电脑排列，看不出哪几个是在为同一件事干活，也看不出这件事整体到哪一步了、卡在哪、在等谁。通过待办将分散的 Agent 聚合到一项目标下，便于跟踪进度与协同。
+One task often needs several Agents (different computers, workspaces and tabs). An Agents list arranged by project, state or computer does not show which ones are working on the same task, its overall progress, where it is blocked or who it is waiting for. To-dos collect scattered Agents under one goal for progress tracking and coordination.
 
-## 谁管什么（2026-11-04 起）
+## Who owns what (since 2026-11-04)
 
-待办是助手的（`server/internal/assistant` 的 `todos.go`、`todo_decisions.go`、`todo_sessions.go`、`tasks_close.go`；以前在 hub，见 `docs/assistant.md`「和 hub 的边界」）：
+To-dos belong to the assistant (`todos.go`, `todo_decisions.go`, `todo_sessions.go`, `tasks_close.go` in `server/internal/assistant`; formerly in hub, see `docs/assistant.md`, "Boundary with the hub"):
 
-- **助手**：存储（下面的四张表，还在 hub 的 Postgres 里、没有迁移，只有助手的进程读写）、下面「接口概要」里待办的全部接口、随项目自动挂和派生跟随、herdr 标记的对账、Agent 标题和启动错误的快照、决策记录、自动完成、做完的任务关掉 Agent。
-  hub 收到某台电脑的会话列表时发 `sessions.changed`，用户处理了卡片发 `interaction.resolved`，这几件事都从这两个事件来。
-- **hub**：只转发待办的接口（`assistantwire.Routes`，调用方的角色一起带过去，只读角色照旧 403），给 App 的会话列表、提问卡片、推送用助手在快照里报的那份（`todos`：每个 Agent 在为哪个未完成的待办干活、哪些 Agent 是安静的，`hub/assistant_todos.go`；安静的只报未完成或完成不到 7 天的安静任务的 Agent（`quietKeep`），让这份报告保持小，更早的任务的 Agent 再干活时照常推送）；
-  `POST /api/v1/sessions`、`POST /api/v1/sessions/{mid}/{sid}/messages` 带 `todo_id` 时先问助手（`assistant.todo_handoff`）：待办在不在、完成没有（不能交时它给 404 / 409 和原话，hub 照回）、要交给 Agent 的话前面拼上决策、新开的 Agent 再拼上项目背景，一次问完；交出去以后让助手挂上（`assistant.todo_link`，挂上的标题、待办的标题都是它定）；经 hub 改工作区名字时告诉助手（`todos.space_renamed`）。协议见 `docs/protocol.md`「总线」。
-- **助手没连着时**（hub 刚起来、助手的进程在重启）：待办的接口回 `503 assistant_offline`「助手暂时连不上，稍后再试」，带 `todo_id` 的新建会话和发消息同样 503（不知道待办在不在）；会话列表上的待办、安静的标记照 hub 留着的最后一份显示（hub 刚起来、助手还没报的那一两秒里没有）；这期间 hub 不发事件，所以自动挂、标记对账、决策记录要等它连上以后的下一份会话列表或下一次回答，经 hub 改名的工作区不迁移。
+- **Assistant**: storage (the four tables below, still in the hub's Postgres, no migration, read/written only by the assistant process), every to-do API in "API overview" below, automatic project linking and following spawned sessions, reconciliation of herdr markers, snapshots of Agent titles/start errors, decision records, automatic completion and closing Agents for completed tasks.
+  When hub receives a computer's session list it emits `sessions.changed`; when the user handles a card it emits `interaction.resolved`. These behaviors come from those two events.
+- **Hub**: only forwards to-do APIs (`assistantwire.Routes`, carrying caller role; read-only roles still get 403), and uses the assistant's snapshot report for App session lists, question cards and pushes (`todos`: which unfinished to-do each Agent works on and which Agents are quiet, `hub/assistant_todos.go`; quiet reports only cover Agents of unfinished quiet tasks or those completed less than 7 days ago (`quietKeep`), keeping the report small; Agents from older tasks still push normally if they work again);
+  `POST /api/v1/sessions` and `POST /api/v1/sessions/{mid}/{sid}/messages` with `todo_id` first ask the assistant (`assistant.todo_handoff`): does the to-do exist, is it done (if handoff is disallowed, it supplies 404/409 and the message, echoed by hub), prepend decisions to the Agent's message and project context for new Agents, all in one call. After handoff, ask assistant to link it (`assistant.todo_link`; assistant determines both linked title and to-do title); workspace renames through hub notify assistant (`todos.space_renamed`). Protocol in `docs/protocol.md`, "Bus".
+- **When assistant is disconnected** (hub just started, assistant process restarting): to-do APIs return `503 assistant_offline`, "The assistant is temporarily unavailable. Try again later"; create/send with `todo_id` also return 503 (to-do existence unknown). Session-list to-do/quiet markers keep hub's last report (absent in the first second or two after hub starts before assistant reports). Hub emits no events during this period, so automatic linking, marker reconciliation and decision records wait for the next session list or answer after reconnection; workspaces renamed through hub are not migrated.
 
-## 数据模型
+## Data model
 
-服务端状态存储在 hub 的 Postgres 数据库中（读写的是助手，见上一节）：
+Server state is stored in the hub's Postgres database (read/written by the assistant, above):
 
-### 1. todos 表
-- `id` (text, PK)：不透明字符串标识符（如 `todo_3f2a1b9c`）。
-- `title` (text, NOT NULL)：待办标题。
-- `notes` (text, NOT NULL, DEFAULT '')：待办详细说明与要求，交给 Agent 时作为上下文一同发出。
-- `done_at` (timestamptz)：完成时间；未完成时为 `NULL`。
-- `created_at` (timestamptz, NOT NULL)：创建时间。
-- `updated_at` (timestamptz, NOT NULL)：最后修改时间。
-- `origin` (text, NOT NULL, DEFAULT '')：从哪段助手对话开的任务（会话 id），手动建的为空（[unified-entry.md](unified-entry.md)）。
-- `plan_id` (text, NOT NULL, DEFAULT '')：由哪个计划开的（`task_plans.id`）。
-- `done_by` (text, NOT NULL, DEFAULT '')：谁把它标成完成的：空 = 用户点的（或没开起来，见 `start_error`），`auto` = 助手判断任务做完后自动完成（见「自动完成」），`review` = 督办人验收后完成（#3124）。
-- `done_reason` (text, NOT NULL, DEFAULT '')：自动完成时判断模型给的理由（如「已合并 PR 并发了 TestFlight」），用户点完成或重新打开时清空。
-- `reopened_at` (timestamptz)：用户最近一次把已完成的待办重新打开的时间；在它之后有新的一轮工作，助手才会再判断要不要自动完成。
-- （不在表里）`stage`、`pr_url`、`delivery`：阶段条、PR 和交付卡在哪，存在 settings `assistant.todo_stages`，读待办时并进去（见「交付」）。
+### 1. todos table
+- `id` (text, PK): opaque string identifier (e.g. `todo_3f2a1b9c`).
+- `title` (text, NOT NULL): to-do title.
+- `notes` (text, NOT NULL, DEFAULT ''): detailed description and requirements, sent as context when handed to an Agent.
+- `done_at` (timestamptz): completion time; `NULL` while unfinished.
+- `created_at` (timestamptz, NOT NULL): creation time.
+- `updated_at` (timestamptz, NOT NULL): last modification time.
+- `origin` (text, NOT NULL, DEFAULT ''): assistant chat that created the task (session id); empty for manual creation ([unified-entry.md](unified-entry.md)).
+- `plan_id` (text, NOT NULL, DEFAULT ''): plan that created it (`task_plans.id`).
+- `done_by` (text, NOT NULL, DEFAULT ''): who marked it done: empty = user tapped (or launch failed, see `start_error`), `auto` = assistant automatically completed it after judging it finished ("Automatic completion"), `review` = supervisor completed it after acceptance (#3124).
+- `done_reason` (text, NOT NULL, DEFAULT ''): judgment model's reason for automatic completion (e.g. "PR merged and TestFlight released"), cleared when user marks done or reopens.
+- `reopened_at` (timestamptz): last time user reopened a completed to-do; assistant only judges automatic completion again after a new turn of work follows it.
+- (Not in the table) `stage`, `pr_url`, `delivery`: stage strip, PR and delivery-card location, stored in settings `assistant.todo_stages`, merged when reading to-dos ("Delivery").
 
-### 2. todo_spaces 表
-记录整组挂到待办的项目工作区（herdr workspace）：
-- `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE)：关联的待办 ID。
-- `machine_id` (text, NOT NULL)：机器 ID。
-- `space` (text, NOT NULL)：项目名（会话的 `space_name`，没有时用 `space_id`）。
-- `linked_at` (timestamptz, NOT NULL)：关联时间。
-- 约束：
-  - 主键：`(todo_id, machine_id, space)`。
-  - 唯一索引：`UNIQUE (machine_id, space)`，保证一个项目同一时间只跟一个待办。
+### 2. todo_spaces table
+Records project workspaces (herdr workspaces) linked as a whole to a to-do:
+- `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE): linked to-do ID.
+- `machine_id` (text, NOT NULL): machine ID.
+- `space` (text, NOT NULL): project name (session `space_name`, or `space_id` if absent).
+- `linked_at` (timestamptz, NOT NULL): link time.
+- Constraints:
+  - Primary key: `(todo_id, machine_id, space)`.
+  - Unique index: `UNIQUE (machine_id, space)`, ensuring a project follows only one to-do at a time.
 
-### 3. todo_agents 表
-记录待办与 Agent 会话的关联：
-- `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE)：关联的待办 ID。
-- `machine_id` (text, NOT NULL)：机器 ID。
-- `session_id` (text, NOT NULL)：会话 ID。
-- `linked_at` (timestamptz, NOT NULL)：挂上时间。
-- `released_at` (timestamptz)：解除活跃关联时间；活跃时为 `NULL`。
-- `title` (text, NOT NULL, DEFAULT '')：会话标题快照（超出会话列表时间窗后仍可用于展示）。
-- `cwd` (text, NOT NULL, DEFAULT '')：会话工作目录快照。
-- `agent` (text, NOT NULL, DEFAULT '')：启动器/Agent 类别快照（`claude` / `codex` 等）。
-- `start_error` (text, NOT NULL, DEFAULT '')：异步新建失败的原因（便于在待办中查看与移除）。
-- `source` (text, NOT NULL, DEFAULT 'manual')：关联来源：
-  - `manual`：手动关联或交给已有 Agent；
-  - `space`：随整组工作区项目挂上；
-  - `spawned`：由挂在待办上的父 Agent 派生。
-- `via` (text, NOT NULL, DEFAULT '')：关联途径：
-  - source 为 `space` 时是项目键 `<machine_id>/<space>`；
-  - source 为 `spawned` 时是父 Agent 标识 `<machine_id>/<session_id>`。
-- `dismissed_at` (timestamptz)：手动移出时间戳。移出时同时置 `released_at` 与 `dismissed_at`。接口不返回已移出的记录，后续会话更新也不会自动挂回。
-- 约束：
-  - 主键：`(todo_id, machine_id, session_id)`。
-  - 部分唯一索引：`UNIQUE (machine_id, session_id) WHERE released_at IS NULL`，保证一个 Agent 同一时间只能为一个待办活跃工作。
+### 3. todo_agents table
+Records associations between to-dos and Agent sessions:
+- `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE): linked to-do ID.
+- `machine_id` (text, NOT NULL): machine ID.
+- `session_id` (text, NOT NULL): session ID.
+- `linked_at` (timestamptz, NOT NULL): link time.
+- `released_at` (timestamptz): time active association was released; `NULL` while active.
+- `title` (text, NOT NULL, DEFAULT ''): session-title snapshot (still displayable beyond the session-list time window).
+- `cwd` (text, NOT NULL, DEFAULT ''): session working-directory snapshot.
+- `agent` (text, NOT NULL, DEFAULT ''): launcher/Agent-type snapshot (`claude` / `codex`, etc.).
+- `start_error` (text, NOT NULL, DEFAULT ''): asynchronous creation failure reason (viewable/removable in To-dos).
+- `source` (text, NOT NULL, DEFAULT 'manual'): association source:
+  - `manual`: manually linked or handed to an existing Agent;
+  - `space`: linked with the entire workspace project;
+  - `spawned`: spawned by a parent Agent linked to the to-do.
+- `via` (text, NOT NULL, DEFAULT ''): association path:
+  - For source `space`, project key `<machine_id>/<space>`;
+  - For source `spawned`, parent Agent identifier `<machine_id>/<session_id>`.
+- `dismissed_at` (timestamptz): manual removal timestamp. Removal sets both `released_at` and `dismissed_at`. APIs exclude removed records, and subsequent session updates do not automatically relink them.
+- Constraints:
+  - Primary key: `(todo_id, machine_id, session_id)`.
+  - Partial unique index: `UNIQUE (machine_id, session_id) WHERE released_at IS NULL`, ensuring an Agent actively works for only one to-do at a time.
 
-### 4. todo_decisions 表
-这件事上用户拍过的板（见「决策记录」）：
-- `id` (text, PK)：`dec_` 开头的不透明标识。
-- `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE)。
-- `question` / `choice` / `reason` (text)：问题、选了什么、原因（原因可空）。
-- `source` (text, NOT NULL, DEFAULT 'manual')：`manual` 在待办里手动记的；`card` 用户答 Agent 的提问卡片时自动记的；`outcome` 任务做完时从 Agent 最后的回复里抽的结论、决定和踩坑（见下面「做完记结论」）。
-- `source_machine` / `source_session` / `source_message` (text)：出处，`card` 时是提问的 Agent 和那张卡片（interaction id），手动记的为空。
-- `supersedes_id` (text, FK → `todo_decisions(id)` ON DELETE SET NULL)：这条改判了哪一条更早的决策。
-- `created_at` (timestamptz, NOT NULL)。
-- 约束：部分唯一索引 `(todo_id, source_message, question) WHERE source_message <> ''`，同一张卡片的同一个问题只记一次。
+### 4. todo_decisions table
+Decisions the user has made for this task ("Decision records"):
+- `id` (text, PK): opaque identifier starting with `dec_`.
+- `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE).
+- `question` / `choice` / `reason` (text): question, selected choice, reason (reason may be empty).
+- `source` (text, NOT NULL, DEFAULT 'manual'): `manual`, recorded manually in the to-do; `card`, recorded automatically when user answers an Agent question card; `outcome`, conclusions, decisions and lessons extracted from the Agent's last reply when the task finishes ("Record conclusions on completion" below).
+- `source_machine` / `source_session` / `source_message` (text): provenance; for `card`, the asking Agent and card (interaction id), empty for manual records.
+- `supersedes_id` (text, FK → `todo_decisions(id)` ON DELETE SET NULL): earlier decision this one supersedes.
+- `created_at` (timestamptz, NOT NULL).
+- Constraint: partial unique index `(todo_id, source_message, question) WHERE source_message <> ''`, recording each question on the same card only once.
 
-### 5. todo_supervision 表
-主对话督办的任务的台账（#3124，`docs/unified-entry.md`「督办」），一行一个，没有督办的待办没有行：
-- `todo_id` (text, PK, FK → `todos(id)` ON DELETE CASCADE)。
-- `supervisor` (text, NOT NULL)：督办人，开它的对话。
-- `done_when` (jsonb, NOT NULL, DEFAULT '[]')：验收标准（字符串数组）；`expect_minutes` (integer, NOT NULL, DEFAULT 0)：预计分钟数。
-- `state` (text, NOT NULL, DEFAULT '')：`''` 进行中、`pending_review`、`rework`、`needs_user`、`accepted`、`cancelled`；`round` (integer)：返工轮次。
-- `reviews` (jsonb, NOT NULL, DEFAULT '[]')：每次验收（`verdict`、逐条 `checks`、`note`），最多留 20 条；`updated_at` (timestamptz)。
+### 5. todo_supervision table
+Ledger for tasks supervised by the main chat (#3124, `docs/unified-entry.md`, "Supervision"), one row each; unsupervised to-dos have no row:
+- `todo_id` (text, PK, FK → `todos(id)` ON DELETE CASCADE).
+- `supervisor` (text, NOT NULL): supervisor, the chat that created it.
+- `done_when` (jsonb, NOT NULL, DEFAULT '[]'): acceptance criteria (string array); `expect_minutes` (integer, NOT NULL, DEFAULT 0): expected minutes.
+- `state` (text, NOT NULL, DEFAULT ''): `''` in progress, `pending_review`, `rework`, `needs_user`, `accepted`, `cancelled`; `round` (integer): rework round.
+- `reviews` (jsonb, NOT NULL, DEFAULT '[]'): each review (`verdict`, per-item `checks`, `note`), at most 20 kept; `updated_at` (timestamptz).
 
-关联与释放语义：
-- 当一个 Agent 被关联到新待办时，如果它当前在其它待办上处于活跃状态，在同一个事务中将原关联记录标为 `released`（记录 `released_at` 时间），旧待办中将其展示为「参与过」。
-- 若之前参与过该待办的 Agent 再次手动挂回该待办，清除 `released_at` 和 `dismissed_at`，并刷新 `linked_at` 与快照信息。
-- 用户从待办中主动移出 Agent 时，将该行置 `released_at` 与 `dismissed_at`（软移出，接口不返回）。
+Link/release semantics:
+- When an Agent is linked to a new to-do and is active on another, the same transaction marks the original association `released` (records `released_at`); the old to-do shows it as "Previously involved".
+- If an Agent previously involved in this to-do is manually linked back, clear `released_at`/`dismissed_at`, and refresh `linked_at` and snapshot information.
+- When the user removes an Agent from a to-do, set that row's `released_at`/`dismissed_at` (soft removal, excluded from API results).
 
-## 接口概要
+## API overview
 
-`/api/v1/todos…` 都是助手的接口，hub 原样转发（助手没连着时 `503 assistant_offline`）；最后两行是 hub 自己的接口，`todo_id` 那部分问助手。
+`/api/v1/todos…` are assistant APIs, forwarded unchanged by hub (`503 assistant_offline` when assistant is disconnected); the last two rows are hub's own APIs, asking assistant for the `todo_id` part.
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/todos` | 全部待办列表（`created_at` 降序），每个待办包含 `spaces` 列表和 `agents` 列表（过滤掉已移出行；活跃在前按 `linked_at` 降序，参与过在后按 `released_at` 降序） |
-| POST | `/api/v1/todos` | 新建待办 `{"title", "notes"?}` → `{"todo": Todo}`；`title` 不能为空（400）；只读角色（手表）403 |
-| PATCH | `/api/v1/todos/{id}` | 修改待办 `{"title"?, "notes"?, "done"?}` → `{"todo": Todo}`；只修改传入的字段；用户改完成状态时清掉 `done_by` / `done_reason`，从已完成改回未完成时记 `reopened_at`；不存在 404；只读角色 403 |
-| POST | `/api/v1/todos/retitle` | 把以前按 prompt 第一行起标题的任务待办改成短标题（见「待办标题」）→ `{"dry_run", "todos": [{"id", "old_title", "new_title"}]}`；`?dry_run=1` 只列不改；只读角色 403 |
-| POST | `/api/v1/todos/{id}/done-check` | 只读地跑一次「自动完成」的判断 → `{"verdict", "reason", "would_close", "skip", "replies", "signals"}`，不写库（见「自动完成」）；不存在 404；只读角色 403 |
-| DELETE | `/api/v1/todos/{id}` | 删除待办及其关联 → `{"ok": true}`；Agent 会话本身不动；不存在 404；只读角色 403 |
-| PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → `{"ok": true, "linked": N}`；`space` 为 URL 编码的项目名（通配路径）；已完成待办不可挂（409）；不存在 404；只读角色 403 |
-| DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → `{"ok": true}`；不存在 404；只读角色 403 |
-| PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 将已有 Agent 挂到待办上（不发消息） → `{"ok": true}`；清空 `dismissed_at`；已完成待办不可挂（409）；不存在 404；只读角色 403 |
-| DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 移出 Agent（软移出：置 `released_at` 和 `dismissed_at`，接口不返回且不再自动挂回） → `{"ok": true}`；不存在 404；只读角色 403 |
-| GET | `/api/v1/todos/{id}/decisions` | 决策列表 → `{"decisions": [...]}`，按时间先后；默认只给生效的，`?all=1` 连被改判的一起给（被改判的带 `superseded_by`）；没有时是 `[]`；不存在 404 |
-| POST | `/api/v1/todos/{id}/decisions` | 手动记一条 `{"question", "choice", "reason"?, "supersedes_id"?}` → `{"decision": Decision}`；问题或选择为空 400，`supersedes_id` 不是这个待办里更早的一条 400；只读角色 403 |
-| PATCH | `/api/v1/todos/{id}/decisions/{did}` | 补标改判 `{"supersedes_id"}`（空字符串撤销） → `{"decision": Decision}`；规则同上；不存在 404；只读角色 403 |
-| POST | `/api/v1/sessions` | 新建会话，支持可选 `todo_id` 参数：创建成功后在同一请求内自动挂上待办；待办不存在 404，已完成 409，只读角色 403 |
-| POST | `/api/v1/sessions/{mid}/{sid}/messages` | 发送消息，支持可选 `todo_id` 参数：发送成功后自动挂上待办；待办不存在 404，已完成 409，只读角色 403 |
+| GET | `/api/v1/todos` | All to-dos (`created_at` descending), each with `spaces` and `agents` lists (removed rows filtered out; active first by `linked_at` descending, previously involved after by `released_at` descending) |
+| POST | `/api/v1/todos` | Create `{"title", "notes"?}` → `{"todo": Todo}`; nonempty `title` required (400); read-only role (watch) 403 |
+| PATCH | `/api/v1/todos/{id}` | Edit `{"title"?, "notes"?, "done"?}` → `{"todo": Todo}`; only supplied fields change; user completion-state changes clear `done_by` / `done_reason`, and reopening records `reopened_at`; missing 404; read-only role 403 |
+| POST | `/api/v1/todos/retitle` | Give short titles to task to-dos previously named from the prompt's first line ("To-do titles") → `{"dry_run", "todos": [{"id", "old_title", "new_title"}]}`; `?dry_run=1` lists without changes; read-only role 403 |
+| POST | `/api/v1/todos/{id}/done-check` | Run an "Automatic completion" judgment read-only → `{"verdict", "reason", "would_close", "skip", "replies", "signals"}`, no database write ("Automatic completion"); missing 404; read-only role 403 |
+| DELETE | `/api/v1/todos/{id}` | Delete to-do and associations → `{"ok": true}`; Agent sessions untouched; missing 404; read-only role 403 |
+| PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | Link an entire workspace project → `{"ok": true, "linked": N}`; `space` is URL-encoded project name (wildcard path); completed to-do cannot be linked (409); missing 404; read-only role 403 |
+| DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | Unlink the project (physically delete this project's space-linked Agents under the to-do) → `{"ok": true}`; missing 404; read-only role 403 |
+| PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Link an existing Agent (no message) → `{"ok": true}`; clears `dismissed_at`; completed to-do cannot be linked (409); missing 404; read-only role 403 |
+| DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Remove Agent (soft removal: sets `released_at` and `dismissed_at`, excluded from API and never automatically relinked) → `{"ok": true}`; missing 404; read-only role 403 |
+| GET | `/api/v1/todos/{id}/decisions` | Decision list → `{"decisions": [...]}`, chronological; effective only by default, `?all=1` includes superseded decisions (with `superseded_by`); `[]` when none; missing 404 |
+| POST | `/api/v1/todos/{id}/decisions` | Record manually `{"question", "choice", "reason"?, "supersedes_id"?}` → `{"decision": Decision}`; empty question/choice 400, `supersedes_id` not an earlier decision in this to-do 400; read-only role 403 |
+| PATCH | `/api/v1/todos/{id}/decisions/{did}` | Mark supersession after the fact `{"supersedes_id"}` (empty string undoes) → `{"decision": Decision}`; same rules; missing 404; read-only role 403 |
+| POST | `/api/v1/sessions` | Create session, optional `todo_id`: after successful creation, automatically link within the same request; missing to-do 404, completed 409, read-only role 403 |
+| POST | `/api/v1/sessions/{mid}/{sid}/messages` | Send message, optional `todo_id`: automatically link after success; missing to-do 404, completed 409, read-only role 403 |
 
-### 会话装饰字段
-在会话列表（`GET /api/v1/sessions` 及 WebSocket 的 `sessions` 推送）中，hub 按助手在快照里报的那份（`todos.links`）注入待办字段：
+### Session decoration fields
+In session lists (`GET /api/v1/sessions` and WebSocket `sessions` pushes), hub injects to-do fields using the assistant snapshot's report (`todos.links`):
 ```jsonc
 "todo": {
   "id": "todo_weather",
-  "title": "天气 App 发 1.3 版"
+  "title": "Release weather App 1.3"
 }
 ```
-仅在会话当前有关联（`released_at` 为 `NULL` 且 `dismissed_at` 为 `NULL`）且该待办未完成时出现。当关联解除、被转移或待办完成时，该字段自动清除，客户端无需在前端自行 join。
-会话上报中携带的内部 `spawn_from` 字段在 hub 推送给客户端前统一剔除。
+Only present when the session is currently associated (`released_at` and `dismissed_at` both `NULL`) and the to-do is unfinished. On release, transfer or completion, the field automatically clears; clients need no frontend join.
+The internal `spawn_from` field carried in session reports is stripped before hub pushes to clients.
 
-### WebSocket 实时推送
-- `{"type":"todos"}`：当待办创建、修改、删除、整组挂/解除或 Agent 关联变化时广播，客户端收到后重新拉取 `GET /api/v1/todos`。
-- 会话变更推送：当待办或关联发生变化影响会话时，助手报一份新的快照，hub 比对出哪台电脑的会话变了，重新推送那台的 `sessions` 事件。
+### Live WebSocket pushes
+- `{"type":"todos"}`: broadcast on to-do creation, edit, deletion, whole-project link/unlink or Agent association changes; clients refetch `GET /api/v1/todos`.
+- Session-change push: when to-do/association changes affect sessions, assistant reports a new snapshot; hub compares which computer's sessions changed and re-pushes that computer's `sessions` event.
 
-### 状态码与角色控制
-- 缺少标题或参数格式错误：400 Bad Request。
-- 待办不存在：404 Not Found。旧 hub 未实现待办接口时返回 404，各端客户端据此隐藏待办入口，不弹错。
-- 关联到已完成的待办：409 Conflict。
-- 助手没连着：503 `assistant_offline`（待办的接口，以及带 `todo_id` 的新建和发消息）。
-- 只读角色（如配对的 Apple Watch，`role: "answer"`）：对待办所有写接口（POST / PATCH / DELETE / PUT）以及带 `todo_id` 的新建和发消息均返回 403 Forbidden。
+### Status codes and roles
+- Missing title or malformed parameters: 400 Bad Request.
+- Missing to-do: 404 Not Found. Old hubs without to-do APIs return 404; clients hide the entry point without an error popup.
+- Linking to a completed to-do: 409 Conflict.
+- Assistant disconnected: 503 `assistant_offline` (to-do APIs and create/send with `todo_id`).
+- Read-only role (e.g. paired Apple Watch, `role: "answer"`): every to-do write API (POST / PATCH / DELETE / PUT), plus create/send with `todo_id`, returns 403 Forbidden.
 
-## 整组挂与自动挂
+## Whole-project linking and automatic linking
 
-### 整组挂
-一个 herdr 工作区可以整组挂载到未完成待办上：
-- 挂上时，项目内所有当前在线（状态不是 offline）的 Agent 批量挂载到目标待办，`source = "space"`，`via = "<machine_id>/<space>"`。
-- 若该项目原已挂在其它待办上，先从旧待办解除（旧待办中属于该项目的 space 关联 Agent 被移除），再转移至新待办。
-- 当待办下某 Agent 曾被标记移出（dismissed），整组挂时一并清除 dismissed 状态。
-- 解除整组挂时，删去工作区关联，并物理删除该待办下 `source = "space"` 且 `via` 为该项目的 Agent 行（手动挂和派生的 Agent 保持不变）。
+### Whole-project linking
+A herdr workspace can be linked as a whole to an unfinished to-do:
+- On linking, batch-link every currently online Agent in the project (state not offline), `source = "space"`, `via = "<machine_id>/<space>"`.
+- If the project is already linked elsewhere, unlink it first (remove the old to-do's space-linked Agents belonging to this project), then transfer to the new to-do.
+- If an Agent in the to-do was dismissed, whole-project linking clears that dismissed state too.
+- Unlinking deletes the workspace association and physically deletes Agent rows under this to-do with `source = "space"` and this project's `via` (manual/spawned Agents remain).
 
-### 随项目自动挂
-助手收到某台电脑的会话列表（`sessions.changed`）时，检查处于已整组挂项目中的在线 Agent：
-1. 该 Agent 当前没有其它活跃待办关联（自动规则不抢占其它待办中的 Agent）；
-2. 目标待办中此前未出现过该 Agent 的任何记录（活跃、参与过或曾被手动移出均算出现过，不再自动挂入）；
-满足条件时自动挂入该待办（`source = "space"`）。
-自动挂先改助手的内存、马上报给 hub（hub 再推一次那台电脑的会话列表），数据库写入在后台完成，写不进去就撤回。
-以前 hub 自己挂，同一次推送的会话列表里就带着关联；现在要等助手报回来的下一次推送（隔一次总线来回）。
-待办标记完成后，自动挂机制停止生效；待办重新打开后恢复。
+### Automatic linking with a project
+When assistant receives a computer's session list (`sessions.changed`), it checks online Agents in whole-linked projects:
+1. Agent currently has no other active to-do association (automatic rules do not take Agents away from other to-dos);
+2. Target to-do has never had any record of this Agent (active, previously involved or manually removed all count as previously present, so no automatic relinking);
+When both hold, automatically link to the to-do (`source = "space"`).
+Automatic linking first updates assistant memory and reports to hub immediately (hub pushes that computer's session list again); database writes happen in background and roll back if they fail.
+Previously hub linked it itself and included the association in that same session-list push; now it waits for the next push after assistant reports back (one bus round trip).
+Automatic linking stops when a to-do is completed and resumes when reopened.
 
-经 hub 改名（与置顶、屏蔽共用改名接口）时，hub 告诉助手（`todos.space_renamed`），`todo_spaces` 中的空间名及 `todo_agents` 中对应的 `via` 字段一并迁移。助手先写库再改内存并广播 `{"type":"todos"}`。若改名后的目标名称已被其他待办关联（唯一索引冲突），该项目原有的待办挂靠作废并清理，并记录日志。助手没连着时这次改名不迁移（同「已知限制」第 1 条）。
+For renames through hub (shared with pin/mute's rename API), hub tells assistant (`todos.space_renamed`), migrating the space name in `todo_spaces` and corresponding `via` in `todo_agents` together. Assistant writes database first, then memory and broadcasts `{"type":"todos"}`. If the new name is already linked to another to-do (unique-index conflict), this project's old to-do link is invalidated and cleaned up, with a log entry. No migration if assistant is disconnected (same as "Known limitations", item 1).
 
-## 派生跟随
+## Following spawned Agents
 
-挂在待办上的 Agent 派出的子 Agent 自动挂入同一个待办，并追踪其来源层级：
-1. **父 Agent 标记**：处于未完成待办上的活跃 Agent，其 herdr pane 上带有 `persona_todo_ref` 标记，值为 `<todo_id>@<machine_id>/<session_id>`。
-2. **派活方传递标记**：派活方拉起子 Agent 后，读取自身 pane 上的标记，并将值通过 `persona_from` 标记写入子 Agent 的 pane。
-3. **node 上报与助手关联**：node 在发现会话时将 `persona_from` 填入会话的 `spawn_from` 字段上报给 hub，hub 把会话列表原样交给助手（`sessions.changed`）；助手解析待办 ID 与父 Agent，若待办未完成、子 Agent 无活跃关联且在该待办中无历史记录，则自动挂入该待办（`source = "spawned"`，`via = "<parent_machine>/<parent_session>"`）。父 Agent 是否在线或是否在同一台电脑均不影响跟随。
-4. **孙子辈跟随**：子 Agent 挂入待办后，其 pane 同样由 node 打上 `persona_todo_ref`，后续进一步派生的孙子 Agent 依相同机制持续跟随。
-5. **消费标记**：子 Agent 成功获得活跃关联后，node 在周期对账中自动清除其 pane 上的 `persona_from` 标记，防止后续被误挂回。
+Child Agents spawned by a linked Agent automatically join the same to-do, tracking their parent hierarchy:
+1. **Parent marker**: an active Agent on an unfinished to-do has a `persona_todo_ref` marker on its herdr pane, value `<todo_id>@<machine_id>/<session_id>`.
+2. **Dispatcher passes the marker**: after launching a child, the dispatcher reads its own pane marker and writes the value to the child's pane as `persona_from`.
+3. **node reports, assistant associates**: when discovering sessions, node copies `persona_from` into `spawn_from` and reports to hub; hub passes the session list unchanged to assistant (`sessions.changed`). Assistant parses to-do ID/parent Agent; if unfinished, child has no active association and no history in that to-do, automatically link it (`source = "spawned"`, `via = "<parent_machine>/<parent_session>"`). Following does not depend on parent being online or on the same computer.
+4. **Grandchildren follow**: after the child joins, node also sets `persona_todo_ref` on its pane; further generations follow the same mechanism.
+5. **Consume the marker**: after child gets an active association, node's periodic reconciliation automatically clears its pane's `persona_from`, preventing mistaken relinking later.
 
-### 派活方约定与示例命令
-派活脚本在启动子 Agent（无论在同机还是跨机）后，应执行如下转写命令：
+### Dispatcher contract and example command
+After launching a child Agent (on the same or another machine), the dispatch script should copy the marker as follows:
 ```sh
 REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_ref // .result.pane.tokens.persona_from // empty')
 [ -n "$REF" ] && herdr pane report-metadata "$CHILD_PANE" --source persona --token "persona_from=$REF"
 ```
-注：若子 Agent 启动在另一台机器上，读取父 pane 标记的命令在本地执行，向 `$CHILD_PANE` 写入标记的命令发送给目标机器的 herdr 执行。
+Note: for a child on another machine, read the parent pane marker locally, then send the command that writes `$CHILD_PANE` to the target machine's herdr.
 
-### botmux 跟随
-botmux 会话没有 herdr pane，不带 `persona_from`。node 从 `botmux observe --include-raw` 读每个会话的飞书群（`raw.chatId`）和话题根消息（`raw.rootMessageId`），再读 botmux 数据目录（`SESSION_DATA_DIR`，否则 `~/.botmux/.data-dir` 指的目录，否则 `~/.botmux/data`）里的 `orchestrate-dispatch.json`：它以派出去的话题根消息为键，`orchSessionId` 是派活的会话（`botmux dispatch --session-id`）。这三样随会话报给 hub（`chat`、`topic`、`dispatched`），hub 推给客户端前去掉。助手在前两条规则之后再试两条，都只挂当前没有活跃待办、也没在目标待办里出现过的 Agent：
-1. **派活跟随**：会话的话题是某个会话（任一台电脑；离线的也算，只要它还在那台电脑的列表里，即离线不超过 `offlineWindow`）用 `botmux dispatch` 派出来的，派活的会话挂在未完成待办上，就挂进同一个待办（`source = "spawned"`，`via = "<machine>/<session>"`）。
-2. **同群跟随**：同一个飞书群里其它在线 botmux Agent 挂的未完成待办，挂得最多的一个至少是第二名的两倍（只有一个待办时直接算），就挂进去（`source = "chat"`，`via` 为群 id，客户端显示「同群」）。打平或差得不够就不挂；挂错了可以手动改挂。靠这条挂进来的 Agent 不参与投票（否则一个待办会从一个 Agent 扩散到整群），10 分钟没报过列表的电脑上的 Agent 也不算。
+### botmux following
+botmux sessions have no herdr pane or `persona_from`. node reads each session's Lark group (`raw.chatId`) and thread-root message (`raw.rootMessageId`) from `botmux observe --include-raw`, then reads `orchestrate-dispatch.json` in the botmux data directory (`SESSION_DATA_DIR`, otherwise the directory referenced by `~/.botmux/.data-dir`, otherwise `~/.botmux/data`): keyed by dispatched thread-root messages, with `orchSessionId` identifying the dispatching session (`botmux dispatch --session-id`). These three values report to hub with the session (`chat`, `topic`, `dispatched`) and are stripped before pushing to clients. After the first two rules, assistant tries two more, only for Agents with no active to-do and no previous record in the target to-do:
+1. **Follow dispatch**: if the session's thread was dispatched with `botmux dispatch` by a session (on any computer; offline counts if still in its computer's list, i.e. offline no longer than `offlineWindow`) linked to an unfinished to-do, join that same to-do (`source = "spawned"`, `via = "<machine>/<session>"`).
+2. **Follow the group**: among unfinished to-dos linked by other online botmux Agents in the same Lark group, if the largest count is at least twice the runner-up (automatic when only one to-do exists), join it (`source = "chat"`, `via` is group id; client shows **Same Group**). Ties or insufficient margin do not link; wrong links can be changed manually. Agents linked by this rule do not vote (otherwise one Agent could spread a to-do across the entire group), nor do Agents on computers with no list report for 10 minutes.
 
-## herdr 标记与对账
+## herdr markers and reconciliation
 
-在 herdr 宿主环境下，待办关联状态会同步映射到 herdr pane 标记中（侧边栏展示）：
-- **写入的标记**：挂在未完成待办上的 Agent，其 pane 上由 node 维护两个 metadata token：
-  - `persona_todo`：待办标题；
-  - `persona_todo_ref`：`<todo_id>@<machine_id>/<session_id>`。
-- **清除标记**：当待办完成、待办被删除或 Agent 关联被解除时，node 清空对应的 `persona_todo` 和 `persona_todo_ref` 标记。
-- **来源与命名空间保护**：node 写入与清理标记一律使用 `--source persona`。对账操作仅针对 `persona_todo`、`persona_todo_ref` 和 `persona_from` 三个名字，绝不触碰用户或其它插件的 metadata。
-- **定期对账机制**：助手将期望标记集合按会话 ID 下发（node 的 RPC 方法 `todo.sync_session_tokens`，经 `device.call`）：关联变了的电脑马上下发，没变的不重发；node 和 hub 的连接是新的一条时（`sessions.changed` 的 `connected` 变了：node 可能重启过，收到之前不动标记）新连接上的第一份会话列表再全发一次，和以前 hub 在 node 重连时立刻重发一样；node 仅基于当前活着的会话与宿主实时报上来的 Agent 会话信息动态解析对应的 live pane，对比 herdr 当前标记与期望集合，补齐缺失标记、清理多余标记。两个会话映射到同一 pane 时只认当前存活者。node 每隔 30 秒执行一次对账检查，在 herdr 服务重启、pane ID 变更或热交接后，自动将标记恢复到正确的新 pane 上，已退出的旧会话不会污染当前 pane。
+Under herdr, to-do associations map to pane markers (shown in the sidebar):
+- **Written markers**: for Agents linked to unfinished to-dos, node maintains two metadata tokens on their pane:
+  - `persona_todo`: to-do title;
+  - `persona_todo_ref`: `<todo_id>@<machine_id>/<session_id>`.
+- **Clearing markers**: when a to-do completes, is deleted or an Agent is unlinked, node clears its `persona_todo` and `persona_todo_ref`.
+- **Source/namespace protection**: all writes/cleanup use `--source persona`. Reconciliation only touches `persona_todo`, `persona_todo_ref` and `persona_from`, never user or other plugin metadata.
+- **Periodic reconciliation**: assistant sends expected markers by session ID (node RPC `todo.sync_session_tokens`, via `device.call`): immediately for computers whose associations changed, no resend otherwise; on a new node/hub connection (`connected` in `sessions.changed` changes: node may have restarted, do not touch markers until received), resend all with the first session list on that connection, like hub's former immediate resend after node reconnect. node resolves live panes dynamically only from currently living sessions and host-reported current Agent sessions, compares herdr's markers with expectations, fills missing and removes surplus markers. If two sessions map to one pane, only the live one counts. node reconciles every 30 seconds; after herdr restart, pane-ID change or hot handoff, markers restore on the correct new pane without old exited sessions contaminating it.
 
-## 状态计算规则
+## State calculation rules
 
-待办的运行状态由各端客户端根据挂着的活跃 Agents 实时计算，不持久化在数据库中。优先级按以下顺序，取第一个命中的状态：
+Clients calculate to-do runtime state live from linked active Agents; it is not persisted. Use the first matching state in this priority order:
 
-| 优先级 | 状态 | 条件 |
+| Priority | State | Condition |
 | :--- | :--- | :--- |
-| 0 | 没开起来 | 从对话开的任务 Agent 没启动起来，助手把待办结束掉（`done_at` + `start_error`，#1077）；客户端显示失败、能移除，不算进行中 |
-| 1 | 已完成 | 用户点击了完成，或助手判断从对话派出去的任务已经做完（`done_at != null`；`done_by = "auto"` 时客户端标「自动完成」） |
-| 2 | 等你 | 有挂着的活跃 Agent 处于 `needs_you` 状态（等待用户回答提问、审批计划或授权） |
-| 2.5 | 中断了 | 有挂着的活跃 Agent 停着（`unread` / `idle`）且带 `turn_error`：这一轮被模型服务出错打断（连接中断、过载、限流、登录过期……），没做完（#1516）；红色，卡片上「继续」= 给它发「继续」 |
-| 3 | 待查看 | 有挂着的活跃 Agent 处于 `unread` 状态（任务完成，用户尚未查看） |
-| 4 | 进行中 | 有挂着的活跃 Agent 处于 `working` 状态（工作中或正在启动） |
-| 5 | 待跟进 | 挂着的活跃 Agent 均停滞（`idle` 已查看、`offline` 未运行或启动失败） |
-| 6 | 未开始 | 没有挂着的活跃 Agent |
+| 0 | Didn't Start | Agent for a task created from chat failed to launch; assistant ends the to-do (`done_at` + `start_error`, #1077); client shows failure/removal, not active |
+| 1 | Done | User marked done, or assistant judged a dispatched task complete (`done_at != null`; client shows **Auto-completed** for `done_by = "auto"`) |
+| 2 | Needs You | A linked active Agent is `needs_you` (waiting for question, plan approval or authorization) |
+| 2.5 | Interrupted | A linked active Agent is stopped (`unread` / `idle`) with `turn_error`: model-service failure interrupted the turn (disconnect, overload, rate limit, expired login…), unfinished (#1516); red, **Continue** on the card sends "继续" ("continue") |
+| 3 | Unread | A linked active Agent is `unread` (task finished, not viewed yet) |
+| 4 | Active | A linked active Agent is `working` (working or starting) |
+| 5 | Follow up | All linked active Agents are stalled (`idle` seen, `offline` not running, or launch failed) |
+| 6 | Not started | No linked active Agents |
 
-- 待办列表排序：未完成的在前（同状态按 `created_at` 降序），已完成的收起在列表底部。
-- 完成即代表该事项结束：事项下所有 Agent 的会话中不再标注当前在为该待办干活；如需继续可「重新打开」。
-- 任务还在开 Agent 时用户点了完成（机器忙时能开几分钟，`done_at` 先落下）：不算「没开起来」，待办保持已完成、没有 `start_error`；已经开起来的 Agent 挂在这个已完成的待办上，交给「做完的任务关掉 Agent」按原有规则（空闲够久才关）回收（#2954）。
+- To-do list ordering: unfinished first (same state by `created_at` descending), completed collapsed at bottom.
+- Completion means the task is over: its Agents' sessions no longer say they currently work for it; **Reopen** to continue.
+- User marks done while Agent is still launching (can take minutes on a busy machine; `done_at` written first): not **Didn't Start**, to-do stays done with no `start_error`; Agents that do launch join this completed to-do and are reclaimed by "Close Agents for completed tasks" under existing rules (only after idle long enough) (#2954).
 
-## 待办标题
+## To-do titles
 
-`task_plan` 和 `agent_start` 开的待办（#2775）以前直接用 prompt 第一行当标题，开头常是给 Agent 的话（「ultrathink ultracode 主人 11-05 19:47 的反馈，已授权直接开工：…」「秘书派活（主人授权过…）」），看不出是什么事。现在分两步（`assistant/todo_titles.go`）：
+To-dos created by `task_plan` and `agent_start` (#2775) formerly used the prompt's first line as title, often starting with instructions to the Agent ("ultrathink ultracode 主人 11-05 19:47 的反馈，已授权直接开工：…", meaning feedback from the owner, authorized to start; "秘书派活（主人授权过…）", meaning assistant dispatch, owner already authorized), obscuring the task itself. Now two steps (`assistant/todo_titles.go`):
 
-1. **建待办时**同步给一个清理过的标题：去掉开头的 ultrathink / ultracode / think hard 之类的关键词、「主人 11-05 19:47 的反馈」这种来历和时间戳、「秘书派活（…）」「【…】」这种括号说明、「已授权直接开工」，截到 20 个字（日语 20、其他语言 40 个字符）。不调模型，不挡任务开工。
-2. **后台**用小任务模型（模型配置里的「待办标题」`todo.title`，继承「知识整理」那一类，和对话标题 `assistant.title` 一样经 `models.complete`）读 prompt 起一个说清是什么事的短标题，替换第 1 步的。模型不可用、出错、回空就保留第 1 步的。替换时核对标题还是第 1 步给的那个（库里是带条件的 `UPDATE … WHERE title = 旧标题`），用户在这之间改过的不覆盖。提示词是 `prompts/todo/title.md`、`title_input.md`。
+1. **On creation**, synchronously supply a cleaned title: remove leading keywords such as ultrathink / ultracode / think hard, provenance/timestamps such as "主人 11-05 19:47 的反馈" (owner's feedback), parenthetical notes such as "秘书派活（…）" (assistant dispatch) / "【…】", and "已授权直接开工" (authorized to start); truncate to 20 Chinese characters (20 Japanese, 40 characters for other languages). No model call, no delay to task launch.
+2. **In background**, the small-task model (**To-do Title** `todo.title` in model configuration, inheriting the knowledge-organization category, through `models.complete` like chat titles `assistant.title`) reads the prompt and produces a short title explaining the task, replacing step 1. Keep step 1 if model unavailable, errors or empty result. Before replacement, verify title is still step 1's (conditional `UPDATE … WHERE title = old title` in database); never overwrite an intervening user edit. Prompts: `prompts/todo/title.md`, `title_input.md`.
 
-`task_plan` 里助手自己给的标题：不超过上限、开头没有上面那些前缀的照用，不调模型；是 prompt 第一行、太长或带前缀的才走上面两步。
+Assistant-supplied titles in `task_plan`: if within the limit and without those prefixes, use as-is without a model; only first-line, overlong or prefixed titles use the two steps.
 
-**已有待办批量改**：`POST /api/v1/todos/retitle` 只挑任务开的待办（`origin` 不为空），而且标题还是以前派活时截下来的 prompt 第一行：超过上限，并且是 `notes` 的开头（截断、带不带「…」都算）。只是看起来像 prompt 的短标题（「【紧急】修登录」「11/05 反馈：修登录」）当成用户起的，不动（待办没有记谁起的标题，这是能做到的最保守判断）。每个用模型起标题（4 个并发），模型没有就用第 1 步的清理结果；改之前同样核对标题没变。
+**Batch retitle existing to-dos**: `POST /api/v1/todos/retitle` selects only task-created to-dos (nonempty `origin`) whose title is still the prompt's first line truncated at dispatch: over the limit and a prefix of `notes` (truncated, with or without "…"). Short titles merely resembling prompts ("【紧急】修登录", "[Urgent] fix login"; "11/05 反馈：修登录", "11/05 feedback: fix login") count as user-created and stay untouched (to-dos do not record who named them; this is the most conservative possible judgment). Use model for each (4 concurrent), or step 1 cleanup without a model; again verify title unchanged before writing.
 
 ```sh
-curl -X POST '<hub 地址>/api/v1/todos/retitle?dry_run=1' -H 'Authorization: Bearer <token>'   # 先看会改哪些
-curl -X POST '<hub 地址>/api/v1/todos/retitle' -H 'Authorization: Bearer <token>'             # 再改
+curl -X POST '<hub address>/api/v1/todos/retitle?dry_run=1' -H 'Authorization: Bearer <token>'   # Preview changes first
+curl -X POST '<hub address>/api/v1/todos/retitle' -H 'Authorization: Bearer <token>'             # Then apply
 ```
 
-## 自动完成
+## Automatic completion
 
-从助手对话派出去的任务（`task_plan` 开的待办，`origin` 不为空）做完以后由助手自动标成完成，不用用户逐个点（主对话督办的任务除外：判断做完时改成「待验收」，由督办人用 `task_review` 验收后才完成，`done_by = review`，见 `docs/unified-entry.md`「督办」）；用户手建的待办（`origin` 为空）一律不自动完成，仍然是「用户点了完成」才算完成。
+Tasks dispatched from assistant chats (to-dos created by `task_plan`, nonempty `origin`) are automatically marked done by assistant, without individual user taps (except tasks supervised by main chat: completion judgment moves to "Pending review", and supervisor must accept with `task_review`, `done_by = review`, see `docs/unified-entry.md`, "Supervision"). Manually created to-dos (empty `origin`) never auto-complete; only user marking done counts.
 
-**什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、助手往对话里发 done 回执的同一处（`assistant/tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
+**When judged**: all task Agents stop (none working, waiting for user or carrying pending cards), at the same point assistant sends the done receipt to chat (`taskTurnEnded` in `assistant/tasks.go`; one receipt and one judgment per stretch of work).
 
-**怎么判断**：Agent 停下不等于做完了：停在「没有全改完……」「等待审核」的都不该关。助手用判断模型（经 hub 的模型配置，`app.call models.json`；模型配置里的「AI 分身判断器」`inbox.judge`，即 hub.json 的 `inbox.judge_ai`，没配时继承 `ai`）看三样东西：任务标题、派活时的要求（待办的 `notes`）、每个活跃 Agent 最近一轮的内容（经 `session.items` 读：这一轮里用户给它的话和它最后一条完整回复；读不到时用会话列表里截短的 `last_text`）。用户后来又给 Agent 发了新的要求时，要求以后来的为准（原来的已在之前几轮处理过）；后来的话只是确认、回答它的问题（「好」「👌」「按 A」）时仍以派活时的要求为准（#1116）。模型答五选一：
+**How judged**: stopped is not finished; "not all changes done…" or "waiting for review" must not close. Assistant's judgment model (through hub model configuration, `app.call models.json`; **AI Twin Judge** `inbox.judge`, i.e. hub.json `inbox.judge_ai`, inheriting `ai` if unset) sees three things: task title, dispatch requirements (to-do `notes`), each active Agent's latest turn (read via `session.items`: user's message and last complete reply; fallback truncated `last_text` in session list if unreadable). Later new requirements from user override original ones (already handled in earlier turns); if later messages merely confirm/answer a question ("OK", "👌", "Use A"), original dispatch requirements still apply (#1116). Model chooses one of five:
 
-| 结论 | 含义 | 自动完成 |
+| Verdict | Meaning | Auto-complete |
 | --- | --- | --- |
-| `done` | 要求的事做完了，回复交代了结果，不需要用户再做什么，也不等别人 | 是 |
-| `not_done` | 只做了一部分、出错、卡住、只是汇报进度或计划 | 否 |
-| `waiting` | 自己能做的做完了，在等外部结果（审核、CI、别人回复、发布排队） | 否 |
-| `needs_user` | 要用户拍板、提供信息、批准、手动操作或验收 | 否 |
-| `unsure` | 看不出来 | 否 |
+| `done` | Requested work finished, reply gives results, user need do nothing more, no waiting for others | Yes |
+| `not_done` | Partial, failed, blocked, or only reporting progress/plan | No |
+| `waiting` | Own work finished, awaiting external result (review, CI, someone else's reply, release queue) | No |
+| `needs_user` | User must decide, supply information, approve, act manually or accept | No |
+| `unsure` | Cannot tell | No |
 
-- 附带说明不影响完成：没截图的平台、没实测的环境、提醒用户的事都不算没做完；交付以后例行的等待（TestFlight 外部组的 Beta 审核、CI 重跑）也不算在等；处理 App Store / Mac App Store 审核意见、提交后在等审核结论的算 `waiting`。
-- 宁可不关：模型不可用、超时、回复不是合法 JSON、结论不是 `done`，都不动待办，只记日志；回执照发。
-- 被模型服务打断的一轮不判断（#1516）：任务的某个 Agent 停在 API 错误上（会话的 `turn_error`：Claude Code 是它最后一句的「API Error: …」等，Codex 是 node 从这一轮的错误报的，#2185），回执写 `state: "interrupted"`（摘要「模型服务出错，中断了」，错误原文放 `error`），不调判断模型、不关待办；`done-check` 读到的最后一句是这种错误时直接答 `not_done`。
-- 没有任何输出的一轮同样不判断（#2349）：最后停下的 Agent 这一轮（node 的 `session.items` `turns: 1`）里没有 assistant 的文字、工具调用或图片，又没有 `turn_error`（模型服务回 200 但内容是空的，Claude Code 补一条看不见的「no visible output」提示重试后静默结束），回执写 `interrupted`（error 是「这一轮没有任何输出：…」），通知用 interrupted，不调判断模型、不关待办。读不到条目（node 调不通、没有条目）和用户自己按 Esc 停的（「已中断」notice）不算。
-- 便宜的线索：最后的回复里有 GitHub PR 链接且提到合并（merged / 已合并 / 合入），或提到 TestFlight 加构建号，助手把这两个线索写进输入，只作提示，不能单凭它判完成。
-- 提示词在 `server/internal/prompts/assistant/task_done.md`、`task_done_input.md`（`docs/prompts.md`）。
+- Caveats do not prevent completion: platforms without screenshots, unmeasured environments and reminders to user are not unfinished work. Routine waits after delivery (TestFlight external-group Beta review, CI rerun) do not count as waiting either; addressing App Store / Mac App Store review feedback then awaiting review outcome does count as `waiting`.
+- Prefer leaving open: unavailable model, timeout, invalid JSON or verdict other than `done` leave to-do untouched and only log; receipt still sends.
+- No judgment for a turn interrupted by model service (#1516): if an Agent stops on an API error (`turn_error`: Claude Code's last message such as "API Error: …", Codex reported by node from this turn's error, #2185), receipt has `state: "interrupted"` (summary "Model-service error interrupted the task", original error in `error`); no judgment-model call or closing to-do. `done-check` directly returns `not_done` when the last reply is such an error.
+- No judgment for a turn with no output either (#2349): latest stopped Agent's turn (node `session.items`, `turns: 1`) contains no assistant text, tool calls or images and no `turn_error` (model service returns 200 with empty content; Claude Code adds an invisible "no visible output" notice, retries, then ends silently). Receipt is `interrupted` (error "这一轮没有任何输出：…", "This turn had no output: …"), notification uses interrupted, no judgment or to-do close. Unreadable items (node unreachable/no items) or user pressing Esc ("已中断" notice, "Interrupted") do not count.
+- Cheap signals: final reply has a GitHub PR link and mentions merging (merged / 已合并 / 合入, the latter two meaning merged), or mentions TestFlight plus a build number. Assistant includes these as hints only, never enough alone for completion.
+- Prompts: `server/internal/prompts/assistant/task_done.md`, `task_done_input.md` (`docs/prompts.md`).
 
-**能看出来、能撤销**：自动完成写 `done_at`、`done_by = "auto"`、`done_reason`。iOS / Mac / 网页的待办列表行和详情页在已完成的状态旁标「自动完成」，详情页显示理由；「重新打开」和手动完成的一样回到未完成，同时清掉 `done_by`、`done_reason`，记下 `reopened_at`。
+**Visible and reversible**: auto-completion writes `done_at`, `done_by = "auto"`, `done_reason`. iOS / Mac / web list/detail show **Auto-completed** beside Done; detail shows reason. **Reopen**, like manual completion, returns to unfinished, clears `done_by`/`done_reason`, records `reopened_at`.
 
-**重新打开以后**：用户重新打开过的待办，同一段工作不再被自动关：只有 `reopened_at` 之后任务的某个 Agent 又开始了一轮（用户再给它发消息、它又接着干），这一轮做完时才重新判断。助手重启后不知道这一轮是什么时候开始的，这时对重新打开过的待办不判断（宁可不关）。写库时再核对一次（`done_at IS NULL` 且 `reopened_at` 早于这段工作的开始），用户在判断途中刚点了完成或重新打开的，以用户的为准。
+**After reopening**: same stretch of work cannot auto-close again; only when an Agent begins a new turn after `reopened_at` (user sends again, Agent resumes) is completion judged again. After assistant restart the turn's start time is unknown; reopened to-dos are not judged then (prefer leaving open). Database write rechecks (`done_at IS NULL`, `reopened_at` before work start); user completion/reopen during judgment wins.
 
-**完成之后**：和用户点完成走同一条路：会话不再带待办字段，node 对账时清掉 `persona_todo` / `persona_todo_ref` 标记，整组挂和派生跟随停止，收件箱的 AI 分身不再把消息关联到它；助手的实时快照里这个任务标成「已完成（hub 判断做完了自动关的）」，24 小时后不再列出。
+**After completion**: same path as user marking done: sessions lose to-do field, node reconciliation clears `persona_todo` / `persona_todo_ref`, whole-project linking/spawn following stop, Inbox AI twin no longer associates messages with it; assistant live snapshot marks task "Done (automatically closed after hub judged complete)", omitted after 24 hours.
 
-**排查**：`POST /api/v1/todos/{id}/done-check` 按同样的输入跑一次判断，只返回结论，不写库（只读角色 403）：
+**Diagnosis**: `POST /api/v1/todos/{id}/done-check` judges the same inputs, returns verdict only without database writes (read-only role 403):
 
 ```jsonc
-{"verdict": "waiting", "reason": "等 App 审核", "would_close": false, "skip": "", "replies": 1, "signals": {"merged_pr": false, "build": false}}
+{"verdict": "waiting", "reason": "Waiting for App review", "would_close": false, "skip": "", "replies": 1, "signals": {"merged_pr": false, "build": false}}
 ```
 
-`skip` 不为空时表示这次自动流程不会判断它（`not_a_task` 手建的待办、`done` 已经完成、`reopened` 重新打开后还没有新一轮工作），但接口照样给出模型的结论，方便看。
-开着「交付」（下一节）时多一个 `delivery`，`verdict` 可能是 hub 自己给的 `undelivered`。
+Nonempty `skip` means automatic flow would not judge this to-do (`not_a_task` manual, `done` completed, `reopened` no new work after reopen), but API still returns model verdict for inspection.
+With **Delivery** enabled (next section), response also has `delivery`; `verdict` may be hub's own `undelivered`.
 
-## 交付
+## Delivery
 
-（#3306，经验见 `docs/lessons/delivery.md`）改代码的任务「做完」= 改动上线并实测过，不是开了 PR 或合了。只看 Agent 说没说做完，大量任务会停在「开了 PR」「合了但默认关」「没部署」却显示「已完成」。
-助手设置 `done_needs_delivery`，**默认关**（关着就是只看 `verdict` 的老行为）。打开的办法任选一个：
-对助手说「打开『上线并实测才算做完』」（`jarvis_settings` 的 `assistant.done_needs_delivery`，手机上弹确认卡片），或 `PUT /api/v1/assistant` 带 `{"done_needs_delivery": true}`；
-从下一次判断、下一个派出去的任务起生效。打开以后：
+(#3306, lessons in `docs/lessons/delivery.md`) A code-change task is "done" only when live and tested, not when a PR is opened or merged. Judging only whether an Agent says finished leaves many tasks at "PR opened", "merged but off by default" or "not deployed" while showing Done.
+Assistant setting `done_needs_delivery` is **off by default** (off retains the old verdict-only behavior). Enable either way:
+tell assistant "Turn on 'only done when live and tested'" (`assistant.done_needs_delivery` in `jarvis_settings`, confirmation card on phone), or `PUT /api/v1/assistant` with `{"done_needs_delivery": true}`;
+effective from the next judgment and next dispatched task. When on:
 
-- **派活时说清标准**：`task_plan` 开的非只读任务，hub 在 Agent 的第一条消息（派活 prompt）后面接上交付标准（`prompts/assistant/task_delivery.md`）：做完 = 上线并实测、附读数；
-  规矩允许自己合并 / 部署 / 启用的就做到底；要用户当次点头的（合并不归用户的仓库、部署到线上、打开默认关的功能、对外发消息）做到点头前一步，写清要批什么；
-  卡在 CI、别人、环境上先自己解，解不了写清卡在哪、谁能解。最后一行固定写 `交付：<已上线并实测 | 停在 PR | 已合未上线 | 默认关待启用 | 不涉及上线>；卡点：…；谁来解：…`。只读任务不带。
-- **判断时多判一样**：「自动完成」的判断模型同时回 `delivery`（`live` / `pr` / `merged` / `off` / `none`）、`gate`（卡在哪道闸）、`unblock`（`user` / `agent` / `other`），以 Agent 的那一行为准，除非正文和它矛盾。
-  模型没给就用 Agent 的那一行；都没有算 `none`。说 `live`（或没判）而回复里点了 PR、却没有部署或 TestFlight 构建号的字样，按 `pr` / `merged` 算，除非 Agent 那一行写着已上线。
-- **只有 `live` 和 `none` 才自动完成**：`verdict` 是 `done` 而交付没到位的，结论改成 `undelivered`，待办留着。
-  主对话督办的任务（#3124，本来就不由 hub 关）这时不进「等验收」，督办消息写「做完了但还没上线：…（停在 PR，卡在「…」）」，交给主对话去追或拿给用户批。
-- **待办上写着卡在哪**：判断结果（除了 `not_done`）记在待办的 `delivery`（`{"state", "gate", "unblock", "at"}`，和阶段条一起存在 settings `assistant.todo_stages`，没有新表），阶段条至少走到对应的一步（PR → 审查、合入 → 合入、默认关 / 上线 → 部署）。
-  网页的待办行在开着、`state` 是 `pr` / `merged` / `off` 时多一行「停在 PR · 卡在「…」· 要你点头」；Android 的待办行（Agent 没在工作、没在等你时）和待办详情页同样画这一行（`core:domain` 的 `Todo.hold`）；iOS / Mac 还没画（字段可选，老客户端不受影响）。
-- **等用户点头的一次批**：助手的实时快照里，每个任务后面写着交付卡在哪；`unblock = user` 的开着的任务另列一组「等用户点头才能上线的」（最早的十件）。
-  助手的 CLAUDE.md 让它把这些合成一条一次列给用户，用户一句话批完后用 `agent_send` 分头告诉对应的 Agent，不再每冒出一件就单独问一次。
+- **State criteria at dispatch**: for non-read-only tasks created by `task_plan`, hub appends delivery criteria to the Agent's first message (dispatch prompt, `prompts/assistant/task_delivery.md`): done = live and tested, with measurements;
+  if rules permit self-merge/deploy/enable, finish the whole path; if current user approval is required (merging a repo not owned by user, production deploy, enabling an off-by-default feature, outbound messaging), stop one step before approval and state what needs approval;
+  first try to resolve CI/other-person/environment blocks yourself; if impossible, state where and who can unblock. Fixed last line: `交付：<已上线并实测 | 停在 PR | 已合未上线 | 默认关待启用 | 不涉及上线>；卡点：…；谁来解：…` ("Delivery: <live and tested | at PR | merged, not live | off by default, awaiting enablement | no deployment involved>; blocker: …; who can resolve: …"). Read-only tasks omit it.
+- **Judge one more thing**: the "Automatic completion" model also returns `delivery` (`live` / `pr` / `merged` / `off` / `none`), `gate` (blocking gate), `unblock` (`user` / `agent` / `other`), taking the Agent's line as authoritative unless contradicted by the body.
+  If model omits it, use Agent's line; if neither exists, `none`. If `live` (or not judged) but reply mentions a PR without deployment or TestFlight build-number wording, treat as `pr` / `merged`, unless the Agent's line says live.
+- **Only `live` and `none` auto-complete**: if `verdict` is `done` but delivery incomplete, change to `undelivered` and keep to-do open.
+  Main-chat-supervised tasks (#3124, already not closed by hub) do not enter pending review; supervision message says "Finished but not live yet: …(at PR, blocked on '…')", for main chat to follow up or ask user approval.
+- **To-do shows the blocker**: judgment results except `not_done` are recorded in to-do `delivery` (`{"state", "gate", "unblock", "at"}`, settings `assistant.todo_stages` alongside stage strip, no new table); stage advances at least to its corresponding step (PR → review, merged → merge, off by default/live → deploy).
+  Web to-do rows add "At PR · Blocked on '…' · Needs your approval" while open and `state` is `pr` / `merged` / `off`; Android to-do rows (when the Agent is neither working nor waiting for you) and details show the same line (`Todo.hold` in `core:domain`); iOS / Mac do not render it yet (optional field, old clients unaffected).
+- **Batch user approvals**: assistant live snapshot lists delivery blockers after each task; open tasks with `unblock = user` get a separate "Waiting for user approval to go live" group (oldest ten).
+  Assistant CLAUDE.md tells it to present these together in one message; after user approves in one reply, use `agent_send` to notify the corresponding Agents separately, rather than asking anew for every item.
 
-## 做完的任务关掉 Agent
+## Close Agents for completed tasks
 
-从助手对话派出去的任务（`origin` 不为空）完成以后——用户点的完成或助手的自动完成都算——它的 Agent 不再留在 herdr 里占一个标签页：
-助手每分钟看一遍（`assistant/tasks_close.go`，会话状态读 hub 给 App 的那份会话列表 `sessions.list`），任务完成且 Agent 静止都满 3 分钟（`taskCloseIdle`，从完成时间和 Agent 最后一次活动里取较晚的算）就让 node 关掉它（`session.retire`，`node/retire.go`）：
-关的是它的窗格（标签页里只有它时关整个标签页，和手机上「关闭」一样），Agent 进程随之退出。
+After a task dispatched from assistant chat (nonempty `origin`) completes—manually or automatically—its Agent no longer occupies a herdr tab:
+assistant checks every minute (`assistant/tasks_close.go`, reading hub's App-facing session list through `sessions.list`); once task completion and Agent inactivity both reach 3 minutes (`taskCloseIdle`, measured from the later of completion time and last activity), ask node to close it (`session.retire`, `node/retire.go`):
+close its pane (whole tab if it is the only pane, same as **Close** on phone), exiting the Agent process with it.
 
-**保留什么**：待办里的 Agent 记录（机器、会话 id、目录）不动，不算 released；node 记的启动信息（启动器、目录、模型，hub 的 `node_sessions`）和会话记录都在。
-读结果照常从会话记录读（回执、`agent_read`、聊天页），「完成未看」的也可以关。
+**What stays**: to-do Agent record (machine, session id, directory) remains, not released; node's launch information (launcher, directory, model, hub `node_sessions`) and transcripts remain.
+Results still read from transcripts (receipts, `agent_read`, chat page); Unread Agents may also close.
 
-**怎么接着用**：给已关闭的 Agent 发消息——`agent_send`、任务卡片上直接发给任务（`route`）、聊天页——node 先用原来的启动器在原目录、原工作区开一个新标签页恢复会话（标签名取会话标题），再把消息发进去：
+**How to reuse**: send to a closed Agent—`agent_send`, directly to task from its card (`route`), or chat page—and node first resumes in a new tab using original launcher, directory and workspace (tab named from session title), then sends the message:
 
-| Agent | 恢复方式 |
+| Agent | Resume method |
 | --- | --- |
-| Claude Code | `<启动器> --resume <id>`，带上原来的权限模式、思考强度和模型 |
-| Codex | 启动器的参数（换上原来的模型）`resume <id> -- <消息>`，经 `personad codex-start` 执行，消息作为参数传进去，不经过 shell、不上屏 |
-| TRAEX | `<启动器> resume <id> <消息>` |
+| Claude Code | `<launcher> --resume <id>`, with original permission mode, thinking effort and model |
+| Codex | Launcher arguments (with original model substituted) `resume <id> -- <message>`, through `personad codex-start`; message passed as an argument, not through shell or on screen |
+| TRAEX | `<launcher> resume <id> <message>` |
 
-恢复要等启动器起来，`route` 和聊天页的发送一样不跟着手机断开而取消，最多等 5 分钟。完成的待办不因为这条消息重新打开；恢复后再次静止满 3 分钟会再被关掉。
+Resume waits for launcher readiness; like chat sends, `route` is not cancelled by phone disconnection, waiting at most 5 minutes. Completed to-do does not reopen for this message; after another 3 minutes idle, Agent closes again.
 
-**不关**：在工作、等用户（提问、计划、权限、任何对话框、待处理的卡片）、引擎看不出状态的；有排队的消息、后台 shell、在跑的子 Agent、`/loop`、在监听端口（开着开发服务器）的；还挂在别的未完成待办上的；助手对话；别的工具管的会话（外部 Codex app-server、runtime、daemon、pi）；不是 Persona 开的（不知道怎么恢复）；引擎不能新开标签页的（Orca、herdr-core）；Claude 没有会话记录、Codex / TRAEX 不知道启动器的。
-这些由 node 拒绝（`not_retirable`），助手记下来，Agent 没变化时 10 分钟内不再问（`taskCloseRetry`，之后重试：node 可能已经升级了）；不认识 `session.retire` 的旧 node 同样当作拒绝，所以 hub 先升级、node 后升级也不会误关，node 升级后最多 10 分钟就接着关。
-没挂在任何任务上的 Agent（用户自己开的、`agent_start` 开的、herdr-leader 之类的巡检会话）不归这里管。
+**Do not close**: working, waiting for user (questions, plans, permissions, any dialog, pending cards), unknown engine state; queued messages, background shells, running sub-Agents, `/loop`, listening ports (development servers); linked to another unfinished to-do; assistant chats; sessions managed by other tools (external Codex app-server, runtime, daemon, pi); not started by Persona (unknown resume method); engines unable to create tabs (Orca, herdr-core); Claude without transcript, Codex / TRAEX without known launcher.
+node rejects these (`not_retirable`), assistant records them and does not ask again for 10 minutes if Agent unchanged (`taskCloseRetry`, then retries because node may have upgraded). Old nodes not recognizing `session.retire` are likewise treated as refusals, so hub-first/node-later upgrades do not close wrongly; after node upgrade, closure resumes within at most 10 minutes.
+Agents linked to no task (user-created, `agent_start`, inspection sessions such as herdr-leader) are not managed here.
 
-## 决策记录
+## Decision records
 
-长程任务里最贵的错误是 Agent 忘了用户已经拍过的板：重复问同一件事，或悄悄推翻之前的决定（#1618）。决策散在各个 Agent 的对话里，换一个 Agent 或压缩一次就丢了，所以按待办收在一处：
+The costliest long-task mistake is an Agent forgetting a decision already made: asking again or silently overturning it (#1618). Decisions scattered across Agent chats disappear when switching Agents or compacting, so collect them by to-do:
 
-- **一条决策** = 问题 + 选了什么 + 原因 + 时间 + 出处（哪个 Agent 问的、哪张卡片里答的）。
-- **自动记**：用户在 App 里答了 Claude Code 的选项提问（`question` 卡片，即 `AskUserQuestion`），而提问的 Agent 正挂在一个未完成的待办上时，每个答了的问题记一条（`source = "card"`；hub 发 `interaction.resolved`，助手记，助手没连着时这次不记）。授权、计划审批、终端对话框、忽略掉的卡片不记；同一张卡片重复上报只记一次。
-- **手动记**：待办详情页「决策」里「记一条」。
-- **改判**：新决策可以标「取代」一条更早的（`supersedes_id`），旧的保留、划掉；只有没被任何一条取代的才算生效。写错了能用 PATCH 补标或撤销。只能取代同一个待办里更早的，所以不会绕成圈。
-- **交给 Agent**：`POST /api/v1/sessions` 的 `prompt`、`POST …/messages` 的 `text` 带 `todo_id` 时（各端「交给 Agent」都这么发），hub 问助手（`assistant.todo_handoff`），助手把生效的决策拼成一段 `<jarvis-context kind="context" title="待办 · <标题> · 已定的决策">` 放在最前面（提示词 `server/internal/prompts/todo/decisions.md`），各端不用改；没有决策时原样发。读不出来（数据库出错）时照常发，只记日志。
-- 记一条、改判都会更新待办的 `updated_at` 并广播 `{"type":"todos"}`，客户端据此重新拉决策。
+- **One decision** = question + choice + reason + time + provenance (asking Agent, answering card).
+- **Automatic**: when user answers Claude Code's choice question in App (`question` card, `AskUserQuestion`) and the Agent is linked to an unfinished to-do, record each answered question (`source = "card"`; hub emits `interaction.resolved`, assistant records; nothing recorded if assistant disconnected). Do not record authorization, plan approvals, terminal dialogs or ignored cards; duplicate reports of a card record once.
+- **Manual**: **Decisions › Record one** in to-do details.
+- **Supersession**: a new decision can **Replace** an earlier one (`supersedes_id`), keeping the old one struck through; only unsuperseded decisions are effective. PATCH can mark/undo later corrections. Only earlier decisions in the same to-do can be replaced, preventing cycles.
+- **Hand to Agent**: when `POST /api/v1/sessions` `prompt` or `POST …/messages` `text` carries `todo_id` (all clients' handoff does), hub asks assistant (`assistant.todo_handoff`); assistant prepends effective decisions as `<jarvis-context kind="context" title="待办 · <title> · 已定的决策">` ("To-do · <title> · Established decisions", prompt `server/internal/prompts/todo/decisions.md`), no client change needed; send unchanged without decisions. On read failure (database error), still send and only log.
+- Recording/superseding updates to-do `updated_at` and broadcasts `{"type":"todos"}` so clients refetch decisions.
 
-还没做：Agent 侧按待办随时取决策的 MCP 工具（压缩后重拿）、安卓 / iOS 的决策列表。
+Not yet: MCP tool to fetch decisions by to-do on demand from Agent (after compaction), Android / iOS decision lists.
 
-## 做完记结论
+## Record conclusions on completion
 
-三循环第 3 步（#2820）：Agent 做完的结论自动沉淀到待办和知识库，用户不用点进 Agent 看；下次派同项目的活自动带上（`server/internal/assistant/todo_outcome.go`）。
+Step 3 of the three-loop process (#2820): Agent conclusions automatically settle into the to-do/knowledge base, without user opening Agent; next dispatch for the same project includes them (`server/internal/assistant/todo_outcome.go`).
 
-- **什么时候记**：主对话派出的任务（待办的 `origin` 不为空）变成完成时：主对话验收通过（`task_review` 的 `accepted`，`reviewDoneTodo`：主对话派出的任务都有督办，不自己关，等验收），自动完成判定做完了（`autoDoneTodo`，没有督办的任务），或用户点了完成（`PATCH /api/v1/todos/{id}` 的 `done: true`）。手动记的待办、启动失败结束的任务、验收时取消（`cancelled`）的任务不记。在后台做，不拖慢完成本身。
-- **抽什么**：读这个任务上每个还挂着的 Agent 最后一轮的回复（读不到就用会话列表的 `last_text`；被模型服务打断的不算），用模型（用途 `kb.project`，提示词 `server/internal/prompts/todo/outcome.md`、`outcome_input.md`）抽出：一句话结论（最多 120 字）、PR / 部署链接（最多 3 个）、做过的决定、踩坑（各最多 5 条），回复里没交代的不编。读回复最多 1 分钟、等模型最多 90 秒，写决策和时间线另给 45 秒，模型慢了也不耽误写。
-  模型不可用（没配、额度、回复解析不了）时，结论退回回执里的那段文字（最新那个 Agent 的回复压成一行，最多 120 字），链接只取回复里的 GitHub PR，不抽决定和踩坑。
-- **写进决策区**：结论（「做完的结论」+ 结论和链接）、每条决定（问题 / 选了 / 原因）、每条踩坑（「踩过的坑」）各记一条决策，`source = "outcome"`，出处是最新那个 Agent（`source_machine` / `source_session`）。
-  同一次完成只记一次：`source_message` 是 `outcome:<待办 id>:<完成时间>#<序号>`，同一次完成重复触发（两条路同时走到、hub 重启后再来）先查库里有没有这次的；结论那一条最先写，写进去的才接着写决定、踩坑和时间线（两个助手共用一个库时只有一个写成），待办已经删了也就不写；重新打开再完成是新的一次，另记。网页决策区的出处显示「Agent 做完时记的」；交给 Agent 时这几条也在「已定的决策」里，标着「Agent 做完时记的，不是用户定的」。
-- **写进知识库**：每个 Agent 的工作目录对应的项目（`kb.Engine.ProjectsForWork`：先按项目登记的代码目录 `dirs`；一个都对不上时，按目录名找没登记任何代码目录的项目，名字、slug 或别名一样就算，登记了目录的项目不按名字找），
-  在 `log.md` 追加一行「结论：<结论> <最多两个链接>」（一行最多 200 字：链接整个保留，结论按剩下的地方截短），来源「待办 · <标题>」（标题去掉 ` · `，最长 60 字），一个项目只记一行。不受 `kb.agent_turn` 每个 Agent 30 分钟一条的限制。知识库还没打开时等 30 秒再试一次，仍不行就只记决策。
-- **派活带背景**：开一个新的 Agent 时，按它的目标目录（同上的找法）找到项目，把项目一句话和项目时间线里最近 5 条「待办 ·」结论（新的在前；只认来源以「待办 · 」开头、正文以「结论：」开头的行，同名的群聊记录不算）拼成一段 `<jarvis-context kind="context" title="项目 · <名字> · 背景">`（提示词 `server/internal/prompts/todo/project.md`）放在 prompt 最前面；一个目录属于多个项目时最多带两个。没有项目、项目既没一句话也没结论、知识库没开时原样发。
-  - 助手的 `task_plan`（`startTaskAgent`，重试时连待办的决策一起带）、`agent_start`：直接拼；tab 名字仍按原来的标题 / prompt 起。
-  - App「交给 Agent → 新开」走 hub：`POST /api/v1/sessions` 带 `todo_id` 和 `prompt` 时，hub 问助手（`assistant.todo_handoff` 带 `new: true`、`machine_id`、`cwd`，`cwd` 按那台电脑的家目录展开 `~/` 和空值），项目背景放在决策前面。
-    各端的 Claude 是先后台开、再发第一条消息（`async`，prompt 为空）：hub 记下「这个会话是为这个待办新开的」（内存，15 分钟），它的第一条消息当作新 Agent 的第一句，带上项目背景和决策；iOS / 安卓的第一条消息不带 `todo_id` 也认。发送成功才忘掉这条记录，没发出去（被拒、什么都没打进去）再发时照样带；只答复的设备发的消息不算。hub 在这之间重启过就原样发。
-  - 交给已有的 Agent（发消息）只带决策，不带项目背景。
+- **When**: main-chat-dispatched task (nonempty `origin`) becomes done: main-chat acceptance (`accepted` in `task_review`, `reviewDoneTodo`; all main-chat tasks are supervised, awaiting acceptance rather than self-closing), automatic completion (`autoDoneTodo`, unsupervised tasks), or user marks done (`done: true` in `PATCH /api/v1/todos/{id}`). Excludes manual to-dos, tasks ended by launch failure and review-cancelled tasks (`cancelled`). Runs in background, not slowing completion.
+- **Extract**: read last-turn replies from all still-linked Agents (fallback session-list `last_text`; ignore model-service-interrupted turns), use model (`kb.project`, prompts `server/internal/prompts/todo/outcome.md`, `outcome_input.md`) to extract one-sentence conclusion (at most 120 characters), PR/deploy links (at most 3), decisions and lessons (at most 5 each); invent nothing not in replies. Reply reads get at most 1 minute, model 90 seconds, decision/timeline writes another 45 seconds, so a slow model does not delay writes.
+  Without model (unconfigured, quota, unparsable reply), conclusion falls back to receipt text (latest Agent reply compressed to one line, at most 120 characters), links only GitHub PRs from replies, no extracted decisions/lessons.
+- **Decision section**: record conclusion ("Completion conclusion" + conclusion/links), each decision (question/choice/reason), each lesson ("Lessons learned") separately, `source = "outcome"`, provenance latest Agent (`source_machine` / `source_session`).
+  Once per completion: `source_message` is `outcome:<to-do id>:<completion time>#<index>`; duplicate triggers (two paths together, again after hub restart) check database first. Write conclusion first; only successful writer proceeds with decisions, lessons and timeline (one wins with two assistants sharing database); deleted to-do gets no writes. Reopen then complete is a new occurrence. Web provenance says "Recorded when Agent finished"; handoff includes these in established decisions, marked "Recorded when Agent finished, not decided by user".
+- **Knowledge base**: project for each Agent working directory (`kb.Engine.ProjectsForWork`: first registered code `dirs`; if none match, match directory name to projects with no registered code dirs by name/slug/alias, never name-match projects with registered dirs),
+  append `结论：<conclusion> <at most two links>` ("Conclusion: …") to `log.md` (at most 200 characters per line: keep links whole, truncate conclusion to remaining space), source `待办 · <title>` ("To-do · <title>", remove ` · ` from title, at most 60 characters), one line per project. Not limited by `kb.agent_turn`'s one-per-Agent-per-30-minutes rule. If knowledge base not open, retry once after 30 seconds; otherwise only record decisions.
+- **Project context at dispatch**: for a new Agent, resolve project by target directory as above, prepend project summary and latest 5 `待办 ·` conclusions (newest first; only source beginning `待办 · ` and body beginning `结论：`, not same-named group-chat records) as `<jarvis-context kind="context" title="项目 · <name> · 背景">` ("Project · <name> · Background", prompt `server/internal/prompts/todo/project.md`); at most two projects per directory. Send unchanged without project, both summary/conclusions absent, or knowledge base closed.
+  - Assistant `task_plan` (`startTaskAgent`, retry includes decisions too), `agent_start`: prepend directly; tab names still use original title/prompt.
+  - App **Hand to Agent → New** through hub: `POST /api/v1/sessions` with `todo_id`/`prompt` asks assistant (`assistant.todo_handoff` with `new: true`, `machine_id`, `cwd`; expand `~/` and empty cwd using that computer's home), project context before decisions.
+    Clients' Claude starts in background then sends first message (`async`, empty prompt): hub remembers "session newly created for this to-do" (memory, 15 minutes), treats its first message as new Agent's first input with context/decisions; recognizes iOS / Android first messages even without `todo_id`. Forget only after successful send; failed sends (rejected/nothing entered) retain context on retry; answer-only devices do not count. If hub restarted between, send unchanged.
+  - Handoff to an existing Agent (message) includes decisions only, not project context.
 
-还没做：结论的人工编辑和撤销（现在能在决策区标「取代」）、飞书汇报（#2768）、iOS / 安卓的决策列表。
+Not yet: manual editing/undo of conclusions (currently **Replace** in decisions), Lark reporting (#2768), iOS / Android decision lists.
 
-## 各端交互设计
+## Interaction design across clients
 
-### 1. 侧边栏与主导航
-- 侧边栏提供「待办」入口，展示未完成待办数量角标。
+### 1. Sidebar and main navigation
+- Sidebar has a **To-dos** entry with unfinished-count badge.
 
-### 2. 待办列表与详情
-- 列表页：搜索栏、未完成列表、底部收起的已完成分组。每行展示待办标题、状态点、挂着几个 Agent 以及当前最要紧的 Agent 的最新一句话。点击圆圈或向左滑动可标记完成。
-- 详情页：直接编辑标题与说明；展示当前状态；展示当前关联的项目列表（整组挂）与活跃的 Agents 列表（状态点、标题、机器与工作区标签、最新消息摘要、更新时间，点击进入会话；超出会话时间窗的借助快照展示并标注「已结束」；启动失败展示原因并允许移除）；收起的「参与过」列表；底部常驻「交给 Agent」和「完成 / 重新打开」按钮；右上角更多菜单支持删除。
-- 「决策」小节位于说明下方（网页）：生效的决策按时间先后列出（问题、选了、原因、时间、出处），每条可「改判」（写一条新的取代它）或在 ⋯ 里补标「改判了哪一条」/「撤销改判」；有被改判的时可「看全历史」，被改判的划掉。hub 不支持（路由 404）时整节不显示。
-- 「项目」小节位于 Agents 上方，每行显示「项目名 · 机器名」，支持「移出」；没有在线 Agent 的项目标「当前没有 Agent」：只算当前 hub 组里、所在电脑连着的、状态不是 offline 的会话（别的组里 id 相同的电脑不算；电脑断连时 hub 把它的会话标成 unknown 而不是 offline，也不算，和网页一致）。Agent 的来源显示「随项目 <项目名>」或「由 <父 Agent 标题> 派出」；缺少项目来源时只写「随项目」，找不到父 Agent 时只写「派生」，手动挂的不标注。
+### 2. To-do list and details
+- List: search bar, unfinished list, collapsed completed group at bottom. Each row shows title, state dot, linked-Agent count and latest message from the highest-priority Agent. Tap circle or swipe left to mark done.
+- Details: edit title/notes directly; current state; linked projects (whole-project links) and active Agents (state dot, title, machine/workspace labels, latest-message summary, update time, tap to chat; beyond session time window use snapshot and mark "Ended"; launch failures show reason/removal); collapsed "Previously involved" list; persistent bottom **Hand to Agent** and **Done / Reopen** buttons; delete in top-right more menu.
+- **Decisions** section under notes (web): effective decisions chronologically (question, choice, reason, time, provenance), each can **Change decision** (write a replacement) or ⋯ **Which decision did this replace?** / **Undo replacement**; when superseded records exist, **View full history**, with old records struck through. Hide whole section if hub unsupported (route 404).
+- **Projects** section above Agents: each row "project · machine", with **Remove**; projects without online Agents show "No Agents currently": only sessions in current hub group, on connected computers, not offline count (same-ID computers in other groups do not; disconnected computer sessions marked unknown by hub rather than offline do not count either, matching web). Agent source says "With project <name>" or "Dispatched by <parent title>"; missing project source shows only "With project", missing parent only "Spawned", manual links unlabelled.
 
-### 3. 交给 Agent
-- 支持「新开一个」或「交给已有的」。
-- 上下文拼装格式参考收件箱交给 AI：`<jarvis-context kind="context" title="待办 · <标题>" url="">说明</jarvis-context>`，紧接用户输入的任务指令。
-- 新开会话带 `todo_id` 参数；交给已有会话发消息带 `todo_id` 与 `client_msg_id`。
+### 3. Hand to Agent
+- **Start a new one** or **Hand to an existing one**.
+- Context follows Inbox's hand-to-AI format: `<jarvis-context kind="context" title="待办 · <title>" url="">notes</jarvis-context>` (title means "To-do · <title>"), immediately followed by user's task instructions.
+- New session carries `todo_id`; message to existing session carries `todo_id` and `client_msg_id`.
 
-### 4. Agents 视图整合
-- Agents 页分组模式支持「按待办」（#1836；iOS / Mac 没选过分组时默认按仓库，#2108）：每个有活跃 Agent 的未完成待办作为独立分组段，段头展示待办标题与状态，点击段头直达待办详情；未挂待办、在 herdr 里手动开的 Agent（`started_by_jarvis` 为假）单独一段「手动开的」（网页叫「在终端里开的」，#3057），排在「未归属」（网页叫「没挂待办的」）前面、展开（网页 #2608，iOS / Mac #2917：没有派生关系、空间也没挂待办时，没有哪条自动挂的规则认得它们；用行菜单的「关联到待办…」挂；派它的 Agent 不在待办上的派生 herdr Agent 各端都分不出来，也算在这里）；其余未挂待办的 Agent 汇总于末尾「未归属」段（上面有待办时默认折叠，里面有需要你的就展开）。网页记住每个浏览器上次选的分组，选过按待办就一直按待办（没选过默认按机器，#1990）。列表里多于一种宿主时，不在 herdr 的行标宿主名。
-- 网页的「按待办」是三层树（#2526）：项目 › 待办 › Agent。项目取待办里 Agent 所在的仓库（规则同「按仓库」的 `repoOf`，跨电脑合并，几个仓库时取 Agent 最多的那个）；派生的 Agent（`source = "spawned"`，`via` 指向同一待办里的另一个 Agent）缩进挂在派它的 Agent 下面，父 Agent 不在列表里或成环时留在顶层。每个节点一行状态「等你 / 在做 / 做完」，取下面最要紧的（等你 > 在做 > 做完，中断的算等你）。已完成的待办、做完且最后活动超过 1 天的分支默认折叠；「手动开的」「未归属」在最后，里面再按项目分。待办页左侧的未完成待办同样按项目分段，没有 Agent 的放最后。Android 的「按待办」也是 项目 › 待办 › Agent（#3156），派生缩进和一天折叠还没做。
-- 每个 Agent 行的标题前有来源标签（#2526）：botmux 的是「飞书群」，有话题链接时点一下在飞书里打开；herdr 的是「终端」；其他宿主不标。快速筛选多了「飞书群」「终端」两项，只看这一类。iOS / Mac 同样有标签和这两个筛选；Android 也有（筛选 #3154，标签 #3132，标签在时间下面，#3043）。
-- 其他分组模式下，挂有待办的 Agent 增加待办标题标签。
-- 按项目分组的组头展示关联待办标签，点击进入详情；菜单支持「挂到待办…」「改挂到其他待办…」「移出待办」，选择器可选未完成待办或新建后挂上。不在 herdr 工作区里的 Agent 分组（没有工作区 id）不显示待办标签，也没有这些菜单项。
-- 列表还没加载出来，或非空列表中的待办都不带 `spaces` 数组时，不显示整组入口；成功加载的空列表显示入口。刷新请求进行中或遇到普通错误时保留上次的支持状态，刷新或重连成功后重新判断。整组接口返回「路由不存在」的 404 时隐藏入口，并提示 hub 需要升级；其他 404 按普通错误提示。旧 hub 的返回与旧本地缓存可继续解码。选择器每次打开或目标项目变化时重置输入；会话的当前待办以自己的 `todo` 标记为准。
-- Agent 的快捷菜单（网页、iOS / Mac、安卓）：没挂待办时是「关联到待办…」；挂着待办时是「改挂到其他待办…」与「解除关联」，改挂直接挂到新待办，hub 同时放掉旧的关联（#2348）。
-- 对话页右上角更多菜单与会话信息弹窗展示「待办：X」，点击可跳转；网页的对话页顶部标题下也显示所属待办，带「换个待办…」（#1836）。
+### 4. Agents view integration
+- Agents grouping supports **By To-do** (#1836; iOS / Mac defaults by repository when no grouping chosen, #2108): each unfinished to-do with active Agents is a separate section; header shows title/state and opens details. Unlinked manually started herdr Agents (`started_by_jarvis` false) have a separate expanded **Manually started** section (web: **Started in terminal**, #3057), before **Unassigned** (web: **Not linked to a to-do**; web #2608, iOS / Mac #2917: without spawn relationships or linked space no automatic rule recognizes them; link through **Link to To-do…** in row menu; spawned herdr Agents whose parent is not linked cannot be distinguished on any client and count here). Remaining unlinked Agents go in final **Unassigned** section (collapsed by default when to-dos exist, expanded if any Needs you). Web remembers each browser's grouping, retaining By To-do once chosen (default By Machine if never chosen, #1990). When list contains multiple host types, non-herdr rows label their host.
+- Web **By To-do** is a three-level tree (#2526): project › to-do › Agent. Project comes from linked Agents' repository (same `repoOf` as By Repository, merged across computers; choose repository with most Agents if several); spawned Agents (`source = "spawned"`, `via` points to another Agent in same to-do) nest beneath parent, staying top-level if parent absent or cycle. Each node has state "Needs you / Working / Done", highest priority below it (Needs you > Working > Done, interrupted counts Needs you). Completed to-dos and done branches with last activity over 1 day ago default collapsed; Manually started/Unassigned last, grouped by project inside. Unfinished to-dos on left of To-dos page also group by project, no-Agent items last. Android By To-do also uses project › to-do › Agent (#3156), without spawned indentation/one-day folding yet.
+- Source label before every Agent title (#2526): botmux **Lark Group**, tapping opens a thread link in Lark when present; herdr **Terminal**; other hosts unlabelled. Quick filters add Lark Group/Terminal for just that type. iOS / Mac have labels/filters too; Android too (filters #3154, labels #3132, labels under time, #3043).
+- Other grouping modes add to-do-title labels to linked Agents.
+- By-project headers show linked to-do labels opening details; menu **Link to To-do…**, **Move to Another To-do…**, **Remove from To-do**; picker selects unfinished to-do or creates then links. Agent groups outside herdr workspaces (no workspace id) have no labels or these menu items.
+- Hide whole-project entry before list loads or when nonempty list has no `spaces` arrays; successful empty list shows it. Preserve prior support state during refresh/ordinary error; reassess after successful refresh/reconnect. Hide entry and ask for hub upgrade on whole-project API route-not-found 404; other 404s are ordinary errors. Old hub responses/local caches still decode. Picker resets input whenever opened or target project changes; session's own `todo` marker is authoritative.
+- Agent quick menu (web, iOS / Mac, Android): unlinked **Link to To-do…**; linked **Move to Another To-do…** and **Unlink**. Relink directly to new to-do; hub releases old association simultaneously (#2348).
+- Chat top-right more menu and session-info popup show "To-do: X", tap to open; web also shows it below top title with **Change To-do…** (#1836).
 
-### 5. Siri 与快捷指令（iOS / macOS）
-- 「新建待办」（`AddTodoIntent`）：说「用 Persona 新建待办」或在快捷指令 / 操作按钮里用，标题必填、说明可选，后台直接写到 App 当前选中的 hub 组，不用打开 App。见 `docs/siri.md`。
+### 5. Siri and Shortcuts (iOS / macOS)
+- **New To-do** (`AddTodoIntent`): say "Create a to-do with Persona" or use in Shortcuts / Action button; title required, notes optional, writes directly in background to the App's currently selected hub group, without opening App. See `docs/siri.md`.
 
-## 设计取舍与理由
+## Design trade-offs and reasons
 
-1. **不做第二个飞书任务或提醒事项**：Persona 的待办专为驱动和跟踪 Agent 工作流设计，聚焦于「一件事分工给哪些 Agent、各自进展如何」，不做复杂的子任务、截止日、优先级树、日历提醒或多方协同步同。
-2. **状态不入库**：待办整体状态完全派生自关联 Agent 的实时运行状态（提问中、工作中、已完成未看等）。Agent 状态变化极为频繁，派生计算避免了双写状态一致性与庞大的状态同步开销。
-3. **单待办活跃限制**：通过 `UNIQUE (machine_id, session_id) WHERE released_at IS NULL` 强制一个 Agent 同时只能全心全意服务于一个当前待办。当需要它做别的事时，前一任务自动划为「参与过」，保证会话上下文与执行目标清晰。
-4. **自动完成只给从对话派出去的任务，并且由模型判断**：这类任务有明确的要求（派活 prompt）和交付（Agent 的最后回复），做完了还要用户逐个点完成是负担；手建的待办往往是用户自己的打算，hub 看不出做没做完。Agent 停下不等于做完，所以不按状态直接关，而是交给判断模型，拿不准时不关；自动关错的代价（用户以为做完了）远大于漏关（多点一下），所以可撤销、有理由、重新打开后不会被同一段工作再关一次。
+1. **Not another Lark Tasks or Reminders**: Persona to-dos drive and track Agent workflows, focusing on which Agents share one task and their progress, not complex subtasks, deadlines, priority trees, calendar reminders or multi-party collaboration.
+2. **No stored state**: overall state derives entirely from linked Agents' live runtime states (questioning, working, finished unread, etc.). Agent state changes frequently; derivation avoids dual-write consistency problems and large synchronization overhead.
+3. **One active to-do**: `UNIQUE (machine_id, session_id) WHERE released_at IS NULL` ensures each Agent serves only one current to-do at a time. Assigning other work automatically marks the previous task "Previously involved", keeping context and execution goal clear.
+4. **Automatic completion only for chat-dispatched tasks, judged by model**: these have explicit requirements (dispatch prompt) and deliverables (Agent's final reply), so requiring individual user completion taps is a burden; manual to-dos often represent the user's own plans, whose completion hub cannot know. Stopped is not finished, so do not close by state alone; judgment model decides, leaving open when uncertain. Wrong auto-close (user thinks finished) costs much more than missed close (one extra tap), hence reversible, reasoned, and not reclosed by the same work after reopening.
 
-## 已知限制
+## Known limitations
 
-1. **herdr 内部直接改名**：若直接在 herdr 终端内重命名工作区而非通过 hub 接口改名，相当于生成了全新项目；原待办已关联的 Agent 保持不变，但该工作区后续新起的 Agent 将不会自动挂入。
-2. **跨组多 hub 连接下的标记覆盖**：一台电脑的常驻 node 一次仅服务一个长连接通道。若同一台 node 被多个不同互联组的独立 hub 轮流或交替连接，后连接的 hub 下发的期望标记会覆盖前一个 hub 的标记。
-3. **空工作区改名不迁移**：经 hub 重命名工作区时，若该工作区内没有活跃会话，hub 无法解析出旧工作区名，`todo_spaces` 与置顶、屏蔽一样不会自动迁移。
-4. **`/clear` 会话重建**：当 Agent 在对话中执行 `/clear` 后，底层会新建一个 session uuid，新会话不会自动挂载到原待办上，原会话行依然留在列表中。
-5. **助手没连着时**：待办的接口、带 `todo_id` 的新建和发消息回 503；这期间经 hub 改名的工作区不迁移、答的卡片不记成决策（见「谁管什么」）。
+1. **Direct renames inside herdr**: renaming workspace in herdr terminal rather than hub API acts as a new project; previously linked Agents remain, but later Agents in that workspace will not auto-link.
+2. **Marker overwrite across multi-hub groups**: a computer's persistent node serves only one long-lived connection at a time. If independent hubs in different linked-hub groups connect alternately to one node, later hub's expected markers overwrite earlier hub's.
+3. **Empty-workspace rename does not migrate**: when renaming through hub with no active sessions, hub cannot resolve old workspace name; `todo_spaces` does not automatically migrate, like pin/mute.
+4. **`/clear` recreates session**: Agent `/clear` creates a new session uuid underneath; new session does not auto-link to old to-do, and original session row stays listed.
+5. **Assistant disconnected**: to-do APIs and create/send with `todo_id` return 503; workspace renames through hub do not migrate and answered cards are not recorded as decisions ("Who owns what").
