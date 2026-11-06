@@ -42,25 +42,75 @@ nonisolated struct MarkdownChunk: Identifiable, @unchecked Sendable {
     var content: MarkdownContent
 }
 
+/// Highlighted blocks shared by Markdown views. Evict only the least recently used block, not every visible block
+/// when a long file fills the cache. Both the entry count and retained source bytes are bounded; oversized blocks
+/// are returned without retaining them. Relative fonts and dynamic syntax colors still resolve in the view's environment.
+@MainActor
+final class MarkdownCodeMemo {
+    private nonisolated struct Key: Hashable {
+        var code: String
+        var language: String?
+        var scale: CGFloat
+    }
+
+    private struct Entry {
+        var text: Text
+        var bytes: Int
+        var used: UInt64
+    }
+
+    static let highlightedByteLimit = 60_000
+    private var entries: [Key: Entry] = [:]
+    private var retainedBytes = 0
+    private var clock: UInt64 = 0
+    private let limit: Int
+    private let byteLimit: Int
+
+    init(limit: Int = 300, byteLimit: Int = 2 << 20) {
+        self.limit = max(0, limit)
+        self.byteLimit = max(0, byteLimit)
+    }
+
+    func value(_ code: String, language: String?, scale: CGFloat, make: () -> Text) -> Text {
+        // Large blocks already skip lexing; never let their cheap plain text evict highlighted hot blocks.
+        guard code.utf8.count < Self.highlightedByteLimit else { return make() }
+        let key = Key(code: code, language: language, scale: scale)
+        clock += 1
+        if var entry = entries[key] {
+            entry.used = clock
+            entries[key] = entry
+            return entry.text
+        }
+        let text = make()
+        let bytes = code.utf8.count + (language?.utf8.count ?? 0)
+        guard limit > 0, bytes <= byteLimit else { return text }
+        while entries.count >= limit || retainedBytes + bytes > byteLimit {
+            guard let oldest = entries.min(by: { $0.value.used < $1.value.used }) else { break }
+            retainedBytes -= oldest.value.bytes
+            entries.removeValue(forKey: oldest.key)
+        }
+        entries[key] = Entry(text: text, bytes: bytes, used: clock)
+        retainedBytes += bytes
+        return text
+    }
+}
+
 /// Code fences in rendered Markdown colored by the file viewer's lexer, by the fence's language (```swift).
 /// Unknown languages and long blocks stay plain.
 struct PersonaCodeHighlighter: CodeSyntaxHighlighter {
     /// MarkdownUI asks again on every layout of the block: the colored text is kept by text size, language and code
     /// (its font is the code level at the text size it was made at, so Increase / Decrease Text Size make it again, #2736).
-    @MainActor private static var memo: [String: Text] = [:]
+    @MainActor private static let memo = MarkdownCodeMemo()
 
     @MainActor func highlightCode(_ code: String, language: String?) -> Text {
-        let key = "\(Theme.Font.scale)\u{0}" + (language ?? "") + "\u{0}" + code
-        if let t = Self.memo[key] { return t }
-        let t = Self.color(code, language: language)
-        if Self.memo.count > 300 { Self.memo = [:] }
-        Self.memo[key] = t
-        return t
+        Self.memo.value(code, language: language, scale: Theme.Font.scale) {
+            Self.color(code, language: language)
+        }
     }
 
     @MainActor private static func color(_ code: String, language: String?) -> Text {
         // The code level's monospaced font: a Text from here does not take the theme's code block font.
-        guard let language, code.utf8.count < 60_000,
+        guard let language, code.utf8.count < MarkdownCodeMemo.highlightedByteLimit,
               let lang = SyntaxLanguage.detect(name: "x." + Self.extensionFor(language.lowercased())) else { return Text(code).font(Theme.Font.code) }
         let doc = CodeDocument(text: code, language: lang)
         doc.highlight { _ in }

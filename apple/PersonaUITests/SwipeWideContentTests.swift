@@ -19,8 +19,10 @@ final class SwipeWideContentTests: XCTestCase {
         let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-0000000005e1", "-openChatsFresh", "YES"]
+        let scheme = ProcessInfo.processInfo.environment["JARVIS_SHOTS_SCHEME"] ?? "light"
+        app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-0000000005e1", "-openChatsFresh", "YES", "-ui.scheme", scheme]
         app.launchPinned()
+        acceptIconAlert()
         dropKeptQuotes()
     }
 

@@ -15,14 +15,23 @@ final class RichReplyTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-rich-\(name).png"))
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "rich-" + name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor func testLinksEndAtCJKAndTablesFit() throws {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-00000000000a"]
+        let scheme = ProcessInfo.processInfo.environment["JARVIS_SHOTS_SCHEME"] ?? "light"
+        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-ui.scheme", scheme]
         app.launchPinned()
+        acceptIconAlert()
+        app.terminate()
+        app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-00000000000a", "-ui.scheme", scheme]
+        app.launchPinned()
+        acceptIconAlert()
 
         let cell = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "按小时刷新")).firstMatch
         XCTAssertTrue(cell.waitForExistence(timeout: 20), "the reply did not open:\n\(app.debugDescription)")

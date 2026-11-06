@@ -131,6 +131,38 @@ nonisolated enum MarkdownTableText {
     }
 }
 
+/// One table's preparation, retained across geometry and scroll updates. Check the parsed content before rendering
+/// it back to Markdown; the shared width memo otherwise saves measurement but still serializes the table every time.
+/// Keep only the current content and font's measurement. Font changes reuse the source, content changes replace it.
+@MainActor
+final class MarkdownTablePreparation {
+    private var content: MarkdownContent?
+    private var markdown = ""
+    private var fontSize: CGFloat?
+    private var measured: MarkdownTableText.Measure?
+    private let render: (MarkdownContent) -> String
+    private let measureText: (String, CGFloat) -> MarkdownTableText.Measure
+
+    init(render: @escaping (MarkdownContent) -> String = { $0.renderMarkdown() },
+         measure: @escaping (String, CGFloat) -> MarkdownTableText.Measure = { MarkdownTableText.measure($0, fontSize: $1) }) {
+        self.render = render
+        self.measureText = measure
+    }
+
+    func measure(_ content: MarkdownContent, fontSize: CGFloat) -> MarkdownTableText.Measure {
+        if self.content != content {
+            markdown = render(content)
+            self.content = content
+            measured = nil
+        }
+        if self.fontSize == fontSize, let measured { return measured }
+        let result = measureText(markdown, fontSize)
+        self.fontSize = fontSize
+        measured = result
+        return result
+    }
+}
+
 extension EnvironmentValues {
     /// The text width of each column of the table being drawn (`TablePlan`); empty until measured.
     @Entry var tableColumnWidths: [CGFloat] = []
@@ -143,6 +175,7 @@ struct FittedTable: View {
     @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = Theme.Level.body.size * 0.88 * Theme.Font.scale
     @State private var available: CGFloat = 0
     @State private var atEnd = false
+    @State private var preparation = MarkdownTablePreparation()
 
     static let cellPadding: CGFloat = 16
     static let border: CGFloat = 1
@@ -151,7 +184,7 @@ struct FittedTable: View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("FittedTable")
         #endif
-        let measure = MarkdownTableText.measure(config.content.renderMarkdown(), fontSize: fontSize)
+        let measure = preparation.measure(config.content, fontSize: fontSize)
         let n = CGFloat(measure.natural.count)
         let plan = available > 0
             ? TablePlan.fit(natural: measure.natural, minimum: measure.minimum,
