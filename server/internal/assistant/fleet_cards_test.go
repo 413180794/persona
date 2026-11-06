@@ -212,11 +212,9 @@ func TestScreenCardAfterAnAnswerWhileStillBlocked(t *testing.T) {
 // Blocked a moment before the dialog is drawn: the card made then has no dialog. Once the dialog shows, its card
 // replaces that one.
 func TestScreenCardUpgradesWhenTheDialogShows(t *testing.T) {
-	old, oldFor := screenUpgrade, screenUpgradeFor
-	screenUpgrade, screenUpgradeFor = 50*time.Millisecond, time.Second
-	t.Cleanup(func() { screenUpgrade, screenUpgradeFor = old, oldFor })
 	ft, n := newCardFleet(t, false)
 	s := ft.s
+	shortScreenUpgrade(s)
 	n.setScreen("  ✢ Percolating… (running PreToolUse hooks… 1/2 · 3s)\n")
 	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
 	got, _ := waitCards(s, 1, 2*time.Second)
@@ -233,6 +231,40 @@ func TestScreenCardUpgradesWhenTheDialogShows(t *testing.T) {
 	}
 	list := s.pendingInteractions()
 	if len(list) != 1 || list[0].ID == "scr_mac_s1" || list[0].Dialog == nil || len(list[0].Dialog.Options) != 2 {
+		t.Fatalf("after the dialog showed: %+v", list)
+	}
+}
+
+// Another manager's upgrade loop is still running at the default timing, as one an earlier test leaves behind:
+// shortening this manager's timing touches nothing that loop reads, so -race has nothing to report (#4554), and this
+// manager's card still upgrades.
+func TestScreenCardUpgradeTimingIsPerService(t *testing.T) {
+	other, on := newCardFleet(t, false)
+	on.setScreen("  ✢ Percolating…\n")
+	blockSession(other, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, _ := waitCards(other.s, 1, 2*time.Second); len(got) != 1 {
+		t.Fatalf("the other card: %v", got)
+	}
+	t.Cleanup(func() { // its loop ends at its next look
+		other.d.setSessions("mac", []proto.Session{{SessionID: "s1", Agent: "claude", Status: proto.StatusWorking}})
+	})
+
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	shortScreenUpgrade(s)
+	n.setScreen("  ✢ Percolating…\n")
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, _ := waitCards(s, 1, 2*time.Second); len(got) != 1 || got["scr_mac_s1"] == "" {
+		t.Fatalf("the card before the dialog: %v", got)
+	}
+	n.setScreen(pickModel)
+	// upgradeScreenCard ends the card without a dialog, then makes the dialog's: wait for that one, not for a gap.
+	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
+		if ids := pendingIDs(s); len(ids) == 1 && ids["scr_mac_s1"] == "" {
+			break
+		}
+	}
+	if list := s.pendingInteractions(); len(list) != 1 || list[0].ID == "scr_mac_s1" || list[0].Dialog == nil {
 		t.Fatalf("after the dialog showed: %+v", list)
 	}
 }
@@ -316,11 +348,9 @@ func TestScreenCardAskedAgainAfterTheNodeWasAwayIsPushed(t *testing.T) {
 // Right after the reconnect the screen is read before the dialog is drawn again: that card, and the one made once the
 // dialog shows, are the card that was pushed already (#4252).
 func TestScreenCardBackHalfDrawnAfterTheNodeReconnectsIsQuiet(t *testing.T) {
-	old, oldFor := screenUpgrade, screenUpgradeFor
-	screenUpgrade, screenUpgradeFor = 50*time.Millisecond, time.Second
-	t.Cleanup(func() { screenUpgrade, screenUpgradeFor = old, oldFor })
 	ft, n := newCardFleet(t, false)
 	s := ft.s
+	shortScreenUpgrade(s)
 	n.setScreen(pickModel)
 	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
 	got, _ := waitCards(s, 1, 2*time.Second)
@@ -1030,6 +1060,12 @@ func TestCodexEndedPrunedOnItsOwn(t *testing.T) {
 	if old || !fresh {
 		t.Fatalf("pruned wrong: old kept %v, new kept %v", old, fresh)
 	}
+}
+
+// shortScreenUpgrade has s's screen cards made without a dialog look again every 50 ms for a second
+// (upgradeScreenCard). Call it before s gets a session list: each loop reads it as it starts.
+func shortScreenUpgrade(s *Service) {
+	s.fleet.upgradeEvery, s.fleet.upgradeFor = 50*time.Millisecond, time.Second
 }
 
 // shortScreenQuiet makes screenAnsweredQuiet short for a test, and waits its look after the quiet time out before the

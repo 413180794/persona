@@ -66,12 +66,16 @@ struct WatchGroupRefreshTests {
         let stored = ["g2": WatchGroupData(sessions: [], interactions: [card], machines: [])]
         let failed = WatchGroupRefresh.mergeGroups(old: stored, new: [:], failures: ["g2"])
         #expect(failed.staleFailed == ["g2"])
-        #expect(WatchGroupRefresh.newHapticUids(seen: Set(remembered), current: failed.data["g2"]?.interactions ?? []).isEmpty)
+        // The coalescing stays outside #expect: its property-access macro treats the whole expression as the
+        // optional root and generates a chain on the already non-optional [String].
+        let failedCards = failed.data["g2"]?.interactions ?? []
+        #expect(WatchGroupRefresh.newHapticUids(seen: Set(remembered), current: failedCards).isEmpty)
 
         // g2 recovers with the same card: replaced with fresh data, still no buzz.
         let recovered = WatchGroupRefresh.mergeGroups(old: failed.data, new: stored, failures: [])
         #expect(recovered.staleFailed.isEmpty)
-        #expect(WatchGroupRefresh.newHapticUids(seen: Set(remembered), current: recovered.data["g2"]?.interactions ?? []).isEmpty)
+        let recoveredCards = recovered.data["g2"]?.interactions ?? []
+        #expect(WatchGroupRefresh.newHapticUids(seen: Set(remembered), current: recoveredCards).isEmpty)
 
         // A genuinely new card buzzes; the one already seen does not.
         let next = interaction("card2", group: "g2")

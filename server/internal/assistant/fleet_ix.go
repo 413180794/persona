@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -261,17 +262,18 @@ func (s *Service) screenBackLocked(machine, session, id string, dialog bool, now
 	return false
 }
 
-// screenUpgrade: how often, and screenUpgradeFor how long, a screen card made without a dialog it could read looks
-// at the screen again (upgradeScreenCard).
-var screenUpgrade, screenUpgradeFor = 500 * time.Millisecond, 30 * time.Second
+// screenUpgradeEvery: how often, and screenUpgradeFor how long, a screen card made without a dialog it could read
+// looks at the screen again (upgradeScreenCard; fleetBook.upgradeEvery / upgradeFor override them).
+const screenUpgradeEvery, screenUpgradeFor = 500 * time.Millisecond, 30 * time.Second
 
 // upgradeScreenCard: the agent may be called blocked before it draws its dialog (Orca does so from its PreToolUse
 // hook; on Windows the hooks take seconds before AskUserQuestion's dialog shows), so the card made then has no dialog
 // to answer. Look at the screen again; once a dialog shows, its card replaces this one. Stop when this card is
 // answered or gone, the agent no longer blocked, or the time up (a dialog the manager cannot read: the card stays).
 func (s *Service) upgradeScreenCard(machine, session, id string) {
-	for end := time.Now().Add(screenUpgradeFor); time.Now().Before(end); {
-		time.Sleep(screenUpgrade)
+	every, span := cmp.Or(s.fleet.upgradeEvery, screenUpgradeEvery), cmp.Or(s.fleet.upgradeFor, screenUpgradeFor)
+	for end := time.Now().Add(span); time.Now().Before(end); {
+		time.Sleep(every)
 		cur, ok := s.nodeSession(machine, session)
 		if !ok || cur.Status != proto.StatusBlocked {
 			return

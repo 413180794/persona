@@ -121,6 +121,8 @@ final class AppModel {
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
     /// Interactions ended locally (answered, cancelled or gone): snapshots will not restore them (#1688).
     @ObservationIgnored var endedInteractionIDs: Set<String> = []
+    /// Cards being answered, and whether the hub ended them meanwhile: a failed answer puts back only the ones it did not.
+    @ObservationIgnored private var answering = AnsweringInteractions()
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
     var pairingEngineMachine: MachineRef?
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
@@ -1446,7 +1448,9 @@ final class AppModel {
             WatchSync.shared.push(summary: watchSummary())
         case .interactionResolved(let id):
             endedInteractionIDs.insert(id)
-            interactions[group.isEmpty ? id : group + "|" + id] = nil
+            let uid = group.isEmpty ? id : group + "|" + id
+            answering.hubEnded(uid)
+            interactions[uid] = nil
             WatchSync.shared.push(summary: watchSummary())
         case .toolCall(let callID, let name, let args):
             Task { await runPhoneTool(callID: callID, name: name, args: args, group: group) }
@@ -1546,6 +1550,8 @@ final class AppModel {
         guard connection.networkUp else { notDone(); return }
         interactions[ix.uid] = nil
         endedInteractionIDs.insert(ix.id)
+        answering.begin(ix.uid)
+        defer { answering.finish(ix.uid) }
         // One op id for this answer: a retry through a hub restart (the request died with the old process, a proxy
         // answered 502) goes with it again, and the hub presses the keys once. The card stays away meanwhile, for up
         // to a minute (OpRetry.limit), then comes back with the error.
@@ -1560,19 +1566,25 @@ final class AppModel {
             }
             Haptics.success()
         } catch let e as APIError where e.code == "prompt_changed" {
-            // Nothing pressed: the terminal's dialog changed. The hub sends the card for what is there now.
-            endedInteractionIDs.remove(ix.id)
-            interactions[ix.uid] = ix
+            // Nothing pressed: the terminal's dialog changed. The hub has ended a screen card and sends one for what is
+            // there now; a Codex card it keeps open goes back.
+            putBack(ix)
             Haptics.attention()
             toast = Toast(String(localized: "终端上的对话框已经变了，这次没有按任何键：看看新的再答"), style: .error)
         } catch let e as APIError where e.status == 410 {
             let reason = Answered.endedText(e.fields["status"])
             toast = Toast(reason, style: .error)
         } catch {
-            endedInteractionIDs.remove(ix.id)
-            interactions[ix.uid] = ix
+            putBack(ix)
             show(error)
         }
+    }
+
+    /// A card whose answer failed, back among the pending ones, unless the hub has ended it meanwhile (#3922).
+    private func putBack(_ ix: Interaction) {
+        guard answering.putsBack(ix.uid) else { return }
+        endedInteractionIDs.remove(ix.id)
+        interactions[ix.uid] = ix
     }
 
     /// Unsent composer text per chat (also where an edited queued message lands); kept across launches.

@@ -53,6 +53,10 @@ type fleetBook struct {
 	// screenDetached: screen card id -> the card its node's connection ended while it was open (fleet_ix.go
 	// screenBackLocked): read again off the same dialog once the node is back, it is that card, not a new question.
 	screenDetached map[string]screenGone
+	// upgradeEvery / upgradeFor override screenUpgradeEvery / screenUpgradeFor (0: those; upgradeScreenCard). Tests
+	// shorten them on their own Service before any session list comes, so an upgrade loop another test left running
+	// never reads what this one writes (#4554).
+	upgradeEvery, upgradeFor time.Duration
 	// hooked: Persona's hooks run in the session (a hook event came since the manager started).
 	hooked map[[2]string]bool
 	// stopSig: the signature of the reply each session's latest Stop ended its turn with; pushedSig: the one a
