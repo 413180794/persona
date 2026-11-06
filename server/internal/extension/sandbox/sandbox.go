@@ -97,7 +97,24 @@ func probe() Support {
 			s.Why = "机器上没有 bwrap（bubblewrap）"
 			return s
 		}
-		out, err := exec.CommandContext(ctx, path, append(bwrapNamespaces(), "--ro-bind", "/", "/", "--", "true")...).CombinedOutput()
+		dir, err := os.MkdirTemp("", "persona-sandbox-probe-*")
+		if err != nil {
+			s.Why = "探测沙箱无法创建临时目录：" + err.Error()
+			return s
+		}
+		defer os.RemoveAll(dir)
+		pkg, data, run := filepath.Join(dir, "pkg"), filepath.Join(dir, "data"), filepath.Join(dir, "run")
+		for _, d := range []string{pkg, data, run} {
+			if err := os.MkdirAll(d, 0o700); err != nil {
+				s.Why = "探测沙箱无法创建临时目录：" + err.Error()
+				return s
+			}
+		}
+		trueBin := "true"
+		if p, err := exec.LookPath("true"); err == nil {
+			trueBin = p
+		}
+		out, err := exec.CommandContext(ctx, path, bwrapProbeArgs(pkg, data, run, trueBin)...).CombinedOutput()
 		if err != nil {
 			s.Why = "bwrap 起不来沙箱：" + firstLine(out, err)
 			return s
@@ -163,6 +180,28 @@ func firstLine(out []byte, err error) string {
 
 func bwrapNamespaces() []string {
 	return []string{"--unshare-user-try", "--unshare-ipc", "--unshare-pid", "--unshare-net", "--unshare-uts", "--unshare-cgroup-try"}
+}
+
+// bwrapProbeArgs tests whether bwrap can create the same mount points as Linux(…).
+func bwrapProbeArgs(pkg, data, run, trueBin string) []string {
+	args := []string{"--die-with-parent"}
+	args = append(args, bwrapNamespaces()...)
+	for _, d := range systemDirs {
+		args = append(args, "--ro-bind-try", d, d)
+	}
+	args = append(args,
+		"--proc", "/proc",
+		"--dev", "/dev",
+		"--tmpfs", "/tmp",
+		"--tmpfs", "/run",
+		"--ro-bind", pkg, pkg,
+		"--bind", data, data,
+		"--bind", run, run,
+		"--remount-ro", "/",
+		"--chdir", pkg,
+		"--", trueBin,
+	)
+	return args
 }
 
 // systemDirs are bound read-only into a Linux sandbox when they exist: the programs, libraries and settings (CA

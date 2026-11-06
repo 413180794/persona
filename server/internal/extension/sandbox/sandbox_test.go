@@ -373,3 +373,31 @@ func TestToolsMounted(t *testing.T) {
 		t.Fatal(args[1])
 	}
 }
+
+func TestBwrapProbeArgs(t *testing.T) {
+	pkg, data, run := "/tmp/test-pkg", "/tmp/test-data", "/tmp/test-run"
+	args := bwrapProbeArgs(pkg, data, run, "/usr/bin/true")
+	line := strings.Join(args, " ")
+	for _, want := range []string{
+		"--die-with-parent",
+		"--proc /proc",
+		"--dev /dev",
+		"--tmpfs /tmp",
+		"--tmpfs /run",
+		"--ro-bind " + pkg + " " + pkg,
+		"--bind " + data + " " + data,
+		"--bind " + run + " " + run,
+		"--remount-ro /",
+		"--chdir " + pkg,
+		"-- /usr/bin/true",
+	} {
+		if !strings.Contains(line, want) {
+			t.Errorf("want %q in probe args %s", want, line)
+		}
+	}
+	for _, ns := range bwrapNamespaces() {
+		if !slices.Contains(args, ns) {
+			t.Errorf("missing namespace %q in %v", ns, args)
+		}
+	}
+}
