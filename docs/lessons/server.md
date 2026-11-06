@@ -214,9 +214,12 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   so `kb.project`'s old 4000 cap often truncated into thinking plus half a JSON object, reported as "unterminated JSON object", retrying every 2 minutes.
   Inspect Messages `stop_reason`: if `ai.JSONMax` lacks a complete object and stopped on `max_tokens`, double the cap and retry once; if still truncated, return `ai.ErrTruncated`.
   Budget JSON tasks for both body and thinking.
-- Model JSON may contain escapes invalid in JSON (2026-11-05, #2151): JavaScript / Python `\'` for single quotes, or a single backslash in Windows paths,
-  makes `json.Unmarshal` report ``invalid escape sequence `\'` in string``, discarding the entire result. On initial syntax failure, `ai.JSONMax` repairs illegal escapes inside strings
-  (`\'` becomes a quote, other illegal `\x` becomes a literal backslash) and parses once more; valid JSON never enters this path. New model-JSON consumers use `ai.JSONMax`, not their own `json.Unmarshal`.
+- Model JSON strings may contain things JSON does not allow; once `json.Unmarshal` reports a syntax error, the entire result of that call is discarded:
+  - escapes JSON lacks (2026-11-05, #2151): JavaScript / Python `\'` for single quotes, or a single backslash in Windows paths, reports ``invalid escape sequence `\'` in string``;
+  - control characters typed in as they are (2026-11-06, #4872): a summary written in paragraphs carries raw line breaks and tabs instead of `\n` / `\t`, reporting `invalid character '\n' in string`.
+
+  On initial syntax failure, `ai.JSONMax` repairs these inside strings (`\'` becomes a quote, other illegal `\x` becomes a literal backslash, control characters become `\n` `\r` `\t` `\b` `\f`,
+  the rest `\u00XX`) and parses once more; line breaks outside strings are valid whitespace and stay as they are, and valid JSON never enters this path. New model-JSON consumers use `ai.JSONMax`, not their own `json.Unmarshal`.
 
 ## Time zones
 

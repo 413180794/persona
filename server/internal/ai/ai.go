@@ -324,10 +324,11 @@ func FirstObject(s string) (string, error) {
 	return "", errors.New("ai: unterminated JSON object in reply")
 }
 
-// unmarshalReply is json.Unmarshal for a model's object, which may escape what JSON does not (#2151): \' as
-// JavaScript and Python write a quote, or a lone backslash as in a Windows path. Those are repaired only when the
-// object does not parse as it is, so valid JSON is never touched; when the repair does not help, the first error
-// stands, as it is the one that says what the model wrote.
+// unmarshalReply is json.Unmarshal for a model's object, whose strings may hold what JSON does not allow there: an
+// escape JSON lacks (#2151: \' as JavaScript and Python write a quote, a lone backslash as in a Windows path), or a
+// control character written as it is (#4872: the line breaks of a summary in paragraphs, a tab). Those are repaired
+// only when the object does not parse as it is, so valid JSON is never touched; when the repair does not help, the
+// first error stands, as it is the one that says what the model wrote.
 func unmarshalReply(data []byte, out any) error {
 	err := json.Unmarshal(data, out)
 	var syntax *json.SyntaxError
@@ -340,8 +341,9 @@ func unmarshalReply(data []byte, out any) error {
 	return err
 }
 
-// fixEscapes rewrites, inside strings, the escapes JSON does not have: \' becomes a quote, any other unknown \x a
-// literal backslash followed by x. The escapes JSON has are kept as they are.
+// fixEscapes rewrites, inside strings, what JSON does not allow there: \' becomes a quote, any other unknown \x a
+// literal backslash followed by x, and a control character (U+0000–U+001F) written as it is its escape. The escapes
+// JSON has are kept as they are, and so is everything outside strings (line breaks and tabs are whitespace there).
 func fixEscapes(data []byte) ([]byte, bool) {
 	var b bytes.Buffer
 	b.Grow(len(data) + 8)
@@ -368,8 +370,29 @@ func fixEscapes(data []byte) ([]byte, bool) {
 				changed = true
 			}
 			continue
+		case ch < 0x20:
+			b.WriteString(controlEscape(ch))
+			changed = true
+			continue
 		}
 		b.WriteByte(ch)
 	}
 	return b.Bytes(), changed
+}
+
+// controlEscape is JSON's escape for a control character: the short one where JSON has it, \u00XX for the rest.
+func controlEscape(ch byte) string {
+	switch ch {
+	case '\n':
+		return `\n`
+	case '\r':
+		return `\r`
+	case '\t':
+		return `\t`
+	case '\b':
+		return `\b`
+	case '\f':
+		return `\f`
+	}
+	return fmt.Sprintf(`\u%04x`, ch)
 }

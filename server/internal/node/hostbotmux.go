@@ -49,6 +49,10 @@ type botmuxHost struct {
 	dryRun bool // botmux renders the turn and dispatches nothing (the live test)
 	// dataDir is botmux's data directory (botmuxDataDir), "" for none (tests without one).
 	dataDir string
+	// bin is the botmux CLI run ("" in tests on a fake), and tooOld its botmuxStamp when it last printed its usage
+	// instead of observing ("" otherwise): until bin changes, that answer holds for botmuxTooOldReuse.
+	bin    string
+	tooOld string
 }
 
 var (
@@ -64,6 +68,11 @@ const botmuxPaneEnv = "BOTMUX_SESSION_ID"
 // one observe (all daemons at once, a Node.js CLI) took 0.3–0.9 s with ~500 sessions. A delivered message looks again
 // at once.
 const botmuxReuse = 5 * time.Second
+
+// botmuxTooOldReuse: a botmux without `observe` prints its usage until it is upgraded, so that answer is reused while
+// the CLI file is unchanged (botmuxStamp, a stat per refresh) and for at most this long: one run cost 0.6 s of CPU
+// every 5 s for nothing (#5337). The upper bound covers an upgrade behind a launcher script that stays as it was.
+const botmuxTooOldReuse = 10 * time.Minute
 
 // botmuxBin is the botmux CLI, "" when not installed (tests: "", so the hosts of an engine stay as they were).
 var botmuxBin = findBotmux
@@ -161,7 +170,25 @@ func newBotmuxHost(bin string, logf func(format string, args ...any)) *botmuxHos
 		}},
 		logf:    logf,
 		dataDir: botmuxDataDir(),
+		bin:     bin,
 	}
+}
+
+// botmuxStamp names the botmux CLI file's version: its resolved path, size and mtime ("" when it cannot be read). An
+// upgrade replaces the file or points the link elsewhere.
+func botmuxStamp(bin string) string {
+	if bin == "" {
+		return ""
+	}
+	p, err := filepath.EvalSymlinks(bin)
+	if err != nil {
+		return ""
+	}
+	st, err := os.Stat(p)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s\x00%d\x00%d", p, st.Size(), st.ModTime().UnixNano())
 }
 
 func (h *botmuxHost) Kind() string      { return host.Botmux }
@@ -221,6 +248,11 @@ func (h *botmuxHost) observe(parent context.Context) ([]botmuxRow, error) {
 	if !h.at.IsZero() && time.Since(h.at) < botmuxReuse {
 		return h.rows, h.err
 	}
+	stamp := botmuxStamp(h.bin)
+	if !h.at.IsZero() && h.tooOld != "" && h.tooOld == stamp && time.Since(h.at) < botmuxTooOldReuse {
+		return h.rows, h.err
+	}
+	h.tooOld = ""
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second) // 0.3 s as a rule; seconds on a machine under load
 	defer cancel()
 	h.rows, h.err = nil, nil
@@ -244,6 +276,7 @@ func (h *botmuxHost) observe(parent context.Context) ([]botmuxRow, error) {
 		// botmux not running for the node, with what to do about it.
 		h.err = host.Mark(errors.New("botmux is too old to list its sessions (no `botmux observe`): run `botmux upgrade`"),
 			host.ErrNotRunning)
+		h.tooOld = stamp
 	case json.Unmarshal(out, &doc) != nil || doc.SchemaVersion != 1:
 		h.err = fmt.Errorf("botmux observe: unexpected output (schema %d)", doc.SchemaVersion)
 	default:

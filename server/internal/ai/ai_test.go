@@ -192,17 +192,36 @@ func TestJSONMaxTakesAQuoteEscapedAsInJavaScript(t *testing.T) {
 	}
 }
 
+// A model writing a summary in paragraphs puts the line breaks into the string as they are, not as \n (#4872).
+func TestJSONMaxTakesALineBreakTypedIntoAString(t *testing.T) {
+	c, seen := truncatingServer(t, map[string]any{"text": "{\"summary\":\"第一段\n\n第二段\"}", "stop": "end_turn"})
+	var out struct{ Summary string }
+	if err := c.JSONMax(context.Background(), "sys", "user", 100, &out); err != nil || out.Summary != "第一段\n\n第二段" {
+		t.Fatalf("out = %+v, %v", out, err)
+	}
+	if len(*seen) != 1 {
+		t.Errorf("requests = %v, want one", *seen)
+	}
+}
+
 func TestUnmarshalReplyRepairsOnlyWhatJSONLacks(t *testing.T) {
 	cases := map[string]string{
 		`{"s":"it\'s"}`:                        "it's",
 		`{"s":"C:\Users\me"}`:                  `C:\Users\me`,
 		`{"s":"tab\tquote\"slash\/\u00e9\\n"}`: "tab\tquote\"slash/é\\n",
 		`{"s":"mixed \' and \"real\" and \d"}`: `mixed ' and "real" and \d`,
+		// Control characters written into a string as they are: JSON allows none of them there.
+		"{\"s\":\"line one\nline two\"}":        "line one\nline two",
+		"{\"s\":\"a\tb\r\nc\"}":                 "a\tb\r\nc",
+		"{\"s\":\"bell\x07 and \x1f\"}":         "bell\x07 and \x1f",
+		"{\n  \"s\": \"two\nlines\"\n}":         "two\nlines", // the line breaks between the fields stay as they are
+		"{\"s\":\"it\\'s\nmine\"}":              "it's\nmine",
+		"{\"s\":\"a real \\n and a typed \n\"}": "a real \n and a typed \n",
 	}
 	for in, want := range cases {
 		var out struct{ S string }
 		if err := unmarshalReply([]byte(in), &out); err != nil || out.S != want {
-			t.Errorf("unmarshalReply(%s) = %q, %v; want %q", in, out.S, err, want)
+			t.Errorf("unmarshalReply(%q) = %q, %v; want %q", in, out.S, err, want)
 		}
 	}
 }
@@ -213,6 +232,10 @@ func TestUnmarshalReplyKeepsTheFirstErrorWhenTheRepairDoesNotHelp(t *testing.T) 
 	var syntax *json.SyntaxError
 	if !errors.As(err, &syntax) || !strings.Contains(err.Error(), `\'`) {
 		t.Fatalf("err = %v, want the syntax error about \\'", err)
+	}
+	err = unmarshalReply([]byte("{\"s\":\"a\nb\",}"), &out) // the line break is repaired, the trailing comma is not
+	if !errors.As(err, &syntax) || !strings.Contains(err.Error(), `'\n'`) {
+		t.Fatalf("err = %v, want the syntax error about the line break", err)
 	}
 	if err := unmarshalReply([]byte(`{"s":1}`), &out); err == nil {
 		t.Fatal("a type error is not repaired: want it back")

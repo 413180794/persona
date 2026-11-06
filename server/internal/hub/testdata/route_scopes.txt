@@ -111,6 +111,7 @@ assistant.ask        GET /api/v1/assistant/reporters
 -                    GET /api/v1/devices/{id}/sessions
 -                    GET /api/v1/endpoints
 -                    GET /api/v1/extensions
+-                    GET /api/v1/extensions/-/audit
 -                    GET /api/v1/extensions/-/operations
 -                    GET /api/v1/extensions/-/operations/{op}
 -                    GET /api/v1/extensions/-/prompts

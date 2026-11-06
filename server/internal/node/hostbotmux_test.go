@@ -315,6 +315,59 @@ func TestBotmuxTooOldIsNotRunning(t *testing.T) {
 	}
 }
 
+// A botmux without `observe` is not run again every 5 seconds: its answer holds until the CLI file changes (an
+// upgrade) or botmuxTooOldReuse passes (#5337). Without a file to check, it is asked again as before.
+func TestBotmuxTooOldIsReused(t *testing.T) {
+	usage := []byte("\nbotmux v3.13.0 — IM ↔ AI 编程 CLI 桥接\n\n命令:\n  setup  交互式配置\n")
+	bin := filepath.Join(t.TempDir(), "botmux")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runs := 0
+	out := usage
+	h := &botmuxHost{bin: bin, run: func(context.Context, ...string) ([]byte, error) { runs++; return out, nil }}
+	look := func(want int, why string) {
+		t.Helper()
+		_, err := h.Agents(context.Background())
+		if runs != want {
+			t.Fatalf("%s: %d runs, want %d", why, runs, want)
+		}
+		if !errors.Is(err, host.ErrNotRunning) {
+			t.Fatalf("%s: %v", why, err)
+		}
+	}
+	look(1, "first look")
+	h.at = time.Now().Add(-botmuxReuse)
+	look(1, "after 5 seconds, same CLI")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n# upgraded\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	look(2, "the CLI file changed")
+	h.at = time.Now().Add(-botmuxTooOldReuse)
+	look(3, "after the upper bound")
+	h.at = time.Time{} // a delivered message: look again at once
+	look(4, "asked to look again")
+
+	out = []byte(`{"schemaVersion":1,"daemons":[{"probe":{"status":"ok"},"sessions":[]}]}`)
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n# observes now\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	h.at = time.Now().Add(-botmuxReuse)
+	if _, err := h.Agents(context.Background()); err != nil || runs != 5 {
+		t.Fatalf("upgraded: %v, %d runs", err, runs)
+	}
+	h.at = time.Now().Add(-botmuxReuse)
+	if _, err := h.Agents(context.Background()); err != nil || runs != 6 {
+		t.Fatalf("a botmux that observes is asked every 5 seconds: %v, %d runs", err, runs)
+	}
+
+	runs, out = 0, usage
+	h = &botmuxHost{run: func(context.Context, ...string) ([]byte, error) { runs++; return out, nil }}
+	look(1, "no CLI file")
+	h.at = time.Now().Add(-botmuxReuse)
+	look(2, "no CLI file to check: asked again after 5 seconds")
+}
+
 // A message goes to botmux as a turn of the session — a running one and a parked one alike (botmux resumes it; no
 // claude --resume in herdr) — with the dashboard's token, asked of botmux again once it was rotated.
 func TestBotmuxReplyIsDeliveredByBotmux(t *testing.T) {
