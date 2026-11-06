@@ -729,6 +729,13 @@ export function putTodo(todo: Todo) {
   set({ todos: state.todos.map((t) => (t.id === todo.id ? { ...t, ...todo } : t)) });
 }
 
+/** Takes a todo the hub just deleted out of the list at once; a /todos answer asked for before the delete is older
+ *  and must not put it back. */
+export function dropTodo(id: string) {
+  todosAsked.forget();
+  set({ todos: state.todos.filter((t) => t.id !== id) });
+}
+
 export async function refreshTodos() {
   const asked = todosAsked.ask();
   try {

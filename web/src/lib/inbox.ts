@@ -815,6 +815,84 @@ export function replaceItem(item: InboxItem) {
   if (item?.id) patchItem(item.id, () => item);
 }
 
+/** A done / open mark still being sent: what the item shows until the hub answers. */
+type DoneMark = Pick<InboxItem, "done_at" | "done_by">;
+/** A mark and, once the hub took it, the last list request that may have left before that (see listSeq). */
+type MarkEntry = { mark: DoneMark; tookAt?: number };
+/** Marks by item: a list that left before the hub took one must not put it back here (every inbox push and hello
+ * reloads). A mark is laid over every list while its request is out, and once the hub took it, over the lists that left
+ * before that. The newest mark of an item wins. */
+const pendingDone = new Map<string, MarkEntry>();
+/** Numbers the list requests (reloadInbox, refreshInbox) in the order they leave; listsOut holds those not back yet. */
+let listSeq = 0;
+const listsOut = new Set<number>();
+
+/** Starts a list request: its number. */
+function beginList(): number {
+  listsOut.add(++listSeq);
+  return listSeq;
+}
+
+/** Ends a list request and drops the taken marks no list still out can undo. */
+function endList(seq: number) {
+  listsOut.delete(seq);
+  pruneMarks();
+}
+
+function pruneMarks() {
+  for (const [id, e] of pendingDone) {
+    if (e.tookAt === undefined) continue;
+    if (![...listsOut].some((s) => s <= e.tookAt!)) pendingDone.delete(id);
+  }
+}
+
+/** Whether an item has a mark whose request is still out. */
+function markOut(id: string): boolean {
+  const e = pendingDone.get(id);
+  return !!e && e.tookAt === undefined;
+}
+
+/** Lays the marks over a list from the hub. Without a request number (an answer that came after the hub took the
+ * marks) only the marks still out are laid. */
+function withPending(items: InboxItem[], seq?: number): InboxItem[] {
+  if (!pendingDone.size) return items;
+  return items.map((it) => {
+    const e = pendingDone.get(it.id);
+    if (!e) return it;
+    const lay = e.tookAt === undefined || (seq !== undefined && seq <= e.tookAt);
+    return lay ? { ...it, ...e.mark } : it;
+  });
+}
+
+/** Sets a new mark for an item, replacing any older one. */
+function putMark(id: string, mark: DoneMark) {
+  pendingDone.set(id, { mark });
+}
+
+/** Ends a mark's request unless a newer mark of the same item replaced it meanwhile. Taken: it stays over the lists
+ * that left before now, with the hub's done fields when it answered the item. Not taken: it is dropped (those lists
+ * have the item as the hub still has it). */
+function settleMark(id: string, mark: DoneMark, taken: boolean, hub?: InboxItem) {
+  const e = pendingDone.get(id);
+  if (e?.mark !== mark) return;
+  if (taken) {
+    e.tookAt = listSeq;
+    if (hub?.id === id) e.mark = { done_at: hub.done_at, done_by: hub.done_by };
+  } else pendingDone.delete(id);
+  pruneMarks();
+}
+
+/** Marks that did not go through, by item: the current copies (maybe fresher than when they were marked) take back the
+ * done state they had, except those with a newer mark still out. */
+function undoMarks(was: Map<string, DoneMark>) {
+  set({
+    items: state.items.map((it) => {
+      const w = was.get(it.id);
+      return w && !markOut(it.id) ? { ...it, done_at: w.done_at, done_by: w.done_by } : it;
+    }),
+  });
+}
+
 let started = false;
 let inFlight: Promise<void> | null = null;
 let again = false;
@@ -852,8 +930,13 @@ export function reloadInbox(): Promise<void> {
     try {
       do {
         again = false;
-        const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox?sources=all");
-        set({ items: keepSameItems(state.items, r.items ?? []), triage: r.triage ?? null, loaded: true, error: "" });
+        const seq = beginList();
+        try {
+          const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox?sources=all");
+          set({ items: keepSameItems(state.items, withPending(r.items ?? [], seq)), triage: r.triage ?? null, loaded: true, error: "" });
+        } finally {
+          endList(seq);
+        }
       } while (again);
     } catch (e) {
       set({ error: errorText(e), loaded: true });
@@ -868,12 +951,14 @@ export function reloadInbox(): Promise<void> {
 /** "Refresh": the hub collects Feishu and mail now, then lists. */
 export async function refreshInbox(): Promise<void> {
   set({ loading: true });
+  const seq = beginList();
   try {
     const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox/refresh?sources=all", { method: "POST" });
-    set({ items: keepSameItems(state.items, r.items ?? []), triage: r.triage ?? null, loaded: true, error: "" });
+    set({ items: keepSameItems(state.items, withPending(r.items ?? [], seq)), triage: r.triage ?? null, loaded: true, error: "" });
   } catch (e) {
     toast(t("lib-inbox.refresh_failed", { error: errorText(e) }), "error");
   } finally {
+    endList(seq);
     set({ loading: false });
   }
 }
@@ -883,12 +968,18 @@ export async function refreshInbox(): Promise<void> {
 export async function setDone(item: InboxItem, done: boolean): Promise<boolean> {
   const before = state.items.find((x) => x.id === item.id);
   if (!before) return false;
-  patchItem(item.id, (it) => ({ ...it, done_at: done ? new Date().toISOString() : null, done_by: done ? "user" : null }));
+  const mark: DoneMark = { done_at: done ? new Date().toISOString() : null, done_by: done ? "user" : null };
+  putMark(item.id, mark);
+  patchItem(item.id, (it) => ({ ...it, ...mark }));
   try {
-    await api(`${itemPath(item.id)}/done`, { method: "POST", json: { done } });
+    const r = await api<InboxItem>(`${itemPath(item.id)}/done`, { method: "POST", json: { done } });
+    settleMark(item.id, mark, true, r);
+    // The hub answers the item as it has it now; a newer mark still out stays on top.
+    if (r?.id === item.id) replaceItem(withPending([r])[0]);
     return true;
   } catch (e) {
-    patchItem(item.id, () => before);
+    settleMark(item.id, mark, false);
+    undoMarks(new Map([[item.id, before]]));
     toast(t(done ? "lib-inbox.done_failed" : "lib-inbox.undone_failed", { error: errorText(e) }), "error");
     return false;
   }
@@ -989,17 +1080,24 @@ export async function setAllDone(items: InboxItem[], action: BulkAction | boolea
   const before = new Map(targets.map((it) => [it.id, it]));
   const now = new Date().toISOString();
   const by = a === "dismiss" ? "dismissed" : "user";
-  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, done_at: done ? now : null, done_by: done ? by : null } : it)) });
+  const mark: DoneMark = { done_at: done ? now : null, done_by: done ? by : null };
+  for (const id of before.keys()) putMark(id, mark);
+  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, ...mark } : it)) });
   try {
     const r = await bulkRequest(a, targets);
-    const fresh = new Map((r.changed ?? []).map((it) => [it.id, it]));
+    // The ones the hub left (new messages, gone) are not laid over earlier lists; they take back their done state on
+    // the current copy below.
     const left = new Set((r.skipped ?? []).map((s) => s.id));
-    set({ items: state.items.map((it) => fresh.get(it.id) ?? (left.has(it.id) ? before.get(it.id) ?? it : it)) });
+    const fresh = new Map((r.changed ?? []).map((it) => [it.id, it]));
+    before.forEach((_, id) => settleMark(id, mark, !left.has(id), fresh.get(id)));
+    set({ items: withPending(state.items.map((it) => fresh.get(it.id) ?? it)) });
+    if (left.size) undoMarks(new Map([...before].filter(([id]) => left.has(id))));
     if ((r.skipped ?? []).some((s) => s.reason === "changed")) void reloadInbox();
     const moved = r.changed ?? [];
     toast(bulkMessage(a, r), "ok", undoable && done && moved.length ? { label: t("lib-inbox.undo"), run: () => void setAllDone(moved, "reopen", false) } : undefined);
   } catch (e) {
-    set({ items: state.items.map((it) => before.get(it.id) ?? it) });
+    before.forEach((_, id) => settleMark(id, mark, false));
+    undoMarks(before);
     toast(t(!done ? "lib-inbox.undone_failed" : a === "dismiss" ? "lib-inbox.clean_failed" : "lib-inbox.done_failed", { error: errorText(e) }), "error");
   }
 }
@@ -1122,6 +1220,9 @@ export function resetInboxForTests() {
   started = false;
   inFlight = null;
   again = false;
+  pendingDone.clear();
+  listsOut.clear();
+  listSeq = 0;
   unsentReplies.clear();
 }
 

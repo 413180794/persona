@@ -8,7 +8,7 @@ import { interactionAsk } from "../lib/inbox";
 import { plainMarkdown } from "../lib/plain-markdown";
 import { composing } from "../lib/send-history";
 import { useAgentSessions } from "../lib/sessions";
-import { refresh, refreshTodos, useStore } from "../lib/store";
+import { dropTodo, refresh, refreshTodos, useStore } from "../lib/store";
 import {
   addTodoDecision,
   createTodo,
@@ -72,6 +72,7 @@ export function TodosView({
   const [newOpen, setNewOpen] = useState(false);
   const [handoverOpen, setHandoverOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [showReleased, setShowReleased] = useState(false);
 
@@ -101,8 +102,8 @@ export function TodosView({
 
   // Filter by search query
   const filterTodo = (t: Todo) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
     return t.title.toLowerCase().includes(q) || (t.notes ?? "").toLowerCase().includes(q);
   };
 
@@ -169,20 +170,28 @@ export function TodosView({
   }, []);
 
   const handleDelete = async () => {
-    if (!activeTodo) return;
+    if (!activeTodo || deleting) return;
+    const id = activeTodo.id;
+    setDeleting(true);
     try {
-      await deleteTodo(activeTodo.id);
-      await refreshTodos();
-      await refresh();
-      setDeleteConfirm(false);
-      setActiveId(undefined);
-      pushedId.current = undefined;
-      // replace: Back must not land on ?id=<the deleted todo>
-      navigate("/todos", true);
-      toast(t("todos.deleted"), "ok");
+      await deleteTodo(id);
     } catch (e) {
       toast(t("todos.delete_failed", { error: errorText(e) }), "error");
+      return;
+    } finally {
+      setDeleting(false);
     }
+    // The todo is gone on the hub: close and drop it now, not after refresh() (seconds on a busy hub), so it cannot
+    // be deleted a second time (the hub answers 404 for it).
+    dropTodo(id);
+    setDeleteConfirm(false);
+    setActiveId(undefined);
+    pushedId.current = undefined;
+    // replace: Back must not land on ?id=<the deleted todo>
+    navigate("/todos", true);
+    toast(t("todos.deleted"), "ok");
+    // the rest of the page catches up in the background; a failed refresh leaves the list as dropped, the next push fixes it
+    void refreshTodos().then(() => refresh()).catch(() => {});
   };
 
   return (
@@ -348,7 +357,7 @@ export function TodosView({
             <Button tone="secondary" onClick={() => setDeleteConfirm(false)}>
               {t("common.cancel")}
             </Button>
-            <Button tone="danger" onClick={handleDelete}>
+            <Button tone="danger" busy={deleting} onClick={handleDelete}>
               {t("todos.delete")}
             </Button>
           </div>

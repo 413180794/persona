@@ -71,6 +71,7 @@ export function ListPane({
   const [found, setFound] = useState<{ q: string; results: KBResult[] } | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [searchRetry, setSearchRetry] = useState(0);
   const q = query.trim();
 
   useEffect(() => {
@@ -80,13 +81,11 @@ export function ListPane({
       setSearching(false);
       return;
     }
+    // A cached search paints at once and is still asked again (the hub may have learned new entries since), like the
+    // lists above; a failed refresh keeps the cached results without an error.
     const cached = searches.get(q);
-    if (cached) {
-      setFound({ q, results: cached });
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
+    if (cached) setFound({ q, results: cached });
+    setSearching(!cached);
     const ac = new AbortController();
     const timer = setTimeout(() => {
       api<{ results: KBResult[] | null }>(`/kb-search?q=${enc(q)}&results=1`, { signal: ac.signal })
@@ -96,14 +95,14 @@ export function ListPane({
           remember(results.map((x) => x.entry));
           setFound({ q, results });
         })
-        .catch((e) => !isAbort(e) && setSearchError(errorText(e)))
+        .catch((e) => !isAbort(e) && !cached && setSearchError(errorText(e)))
         .finally(() => !ac.signal.aborted && setSearching(false));
     }, 300); // typing
     return () => {
       clearTimeout(timer);
       ac.abort();
     };
-  }, [q, reloadKey]);
+  }, [q, reloadKey, searchRetry]);
 
   const sections = useMemo(() => (list?.items ? groupEntries(kind, list.items, tag) : []), [list, kind, tag]);
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -140,7 +139,15 @@ export function ListPane({
           </label>
 
           {q ? (
-            <SearchResults found={found} error={searchError} searching={searching} isSel={isSel} onOpen={onOpen} />
+            <SearchResults
+              q={q}
+              found={found}
+              error={searchError}
+              searching={searching}
+              isSel={isSel}
+              onOpen={onOpen}
+              onRetry={() => setSearchRetry((x) => x + 1)}
+            />
           ) : !list && !error ? (
             // Paint the chips with their count and rows, so the count cannot wrap an already visible chip row.
             <div className="py-10">
@@ -279,19 +286,24 @@ function EntryRow({ e, tag, selected, onOpen }: { e: KBEntry; tag?: string; sele
 }
 
 function SearchResults({
+  q,
   found,
   error,
   searching,
   isSel,
   onOpen,
+  onRetry,
 }: {
+  q: string;
   found: { q: string; results: KBResult[] } | null;
   error: string;
   searching: boolean;
   isSel: (e: KBEntry) => boolean;
   onOpen: (e: KBEntry, query?: string) => void;
+  onRetry: () => void;
 }) {
-  if (error && !found) return <div className="mt-4"><ErrorBox text={error} /></div>;
+  // Results of an older query only stand in (dimmed) while the current one runs; once it fails, its error wins.
+  if (error && found?.q !== q) return <div className="mt-4"><ErrorBox text={error} onRetry={onRetry} /></div>;
   if (!found)
     return (
       <div className="py-10">

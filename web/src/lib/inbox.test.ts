@@ -420,6 +420,140 @@ describe("列表状态", () => {
     expect(list[2].done_at).toBeUndefined();
   });
 
+  // A list pulled before a mark lands must not put the item back open (every inbox push and hello reloads).
+  const held = () => {
+    let finish: (v: unknown) => void = () => {};
+    fetcher.mockReturnValueOnce(new Promise((r) => (finish = r)));
+    return (v: unknown) => finish(v);
+  };
+  const byId = (id: string) => getInbox().items.find((x) => x.id === id)!;
+
+  it("done survives a reload that left before the mark, then takes the hub's copy", async () => {
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const finishPost = held();
+    const p = setDone(dm, true);
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    finishGet(ok({ items: [dm, doc, mail] })); // still open on the hub when it was listed
+    await reload;
+    expect(byId(dm.id).done_at).toBeTruthy();
+    expect(byId(dm.id).done_by).toBe("user");
+    const hubCopy = { ...dm, done_at: at(0), done_by: "user", version: "v9" };
+    finishPost(ok(hubCopy));
+    expect(await p).toBe(true);
+    expect(byId(dm.id)).toEqual(hubCopy);
+    // Settled: the next list is the hub's again.
+    fetcher.mockResolvedValueOnce(ok({ items: [dm, doc, mail] }));
+    await reloadInbox();
+    expect(byId(dm.id).done_at).toBeUndefined();
+  });
+
+  it("done survives a reload that left before the mark and lands after the hub answered", async () => {
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const hubCopy = { ...dm, done_at: at(0), done_by: "user", version: "v9" };
+    fetcher.mockResolvedValueOnce(ok(hubCopy));
+    expect(await setDone(dm, true)).toBe(true);
+    finishGet(ok({ items: [dm, doc, mail] })); // listed before the hub took the mark
+    await reload;
+    expect(byId(dm.id).done_at).toBe(hubCopy.done_at);
+    expect(byId(dm.id).done_by).toBe("user");
+    // A list asked for after the answer is the hub's again.
+    fetcher.mockResolvedValueOnce(ok({ items: [dm, doc, mail] }));
+    await reloadInbox();
+    expect(byId(dm.id).done_at).toBeUndefined();
+  });
+
+  it("a failed done is not laid over a reload that left before it", async () => {
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    fetcher.mockResolvedValueOnce(fail(500, "boom"));
+    expect(await setDone(dm, true)).toBe(false);
+    finishGet(ok({ items: [dm, doc, mail] }));
+    await reload;
+    expect(byId(dm.id).done_at).toBeUndefined();
+  });
+
+  it("Clean up all: a reload that left before it keeps the filed items, not the ones the hub left", async () => {
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const filed = { ...dm, done_at: at(0), done_by: "dismissed", version: "v9" };
+    fetcher.mockResolvedValueOnce(ok({ changed: [filed], unchanged: [], skipped: [{ id: doc.id, reason: "gone" }] }));
+    await setAllDone([dm, doc], "dismiss");
+    finishGet(ok({ items: [dm, doc, mail] }));
+    await reload;
+    expect([byId(dm.id).done_by, byId(doc.id).done_by]).toEqual(["dismissed", undefined]);
+  });
+
+  it("a failed done after a reload keeps the newer copy and only reopens it", async () => {
+    const finishPost = held();
+    const p = setDone(dm, true);
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const newer = { ...dm, preview: "a newer message", count: 2 };
+    fetcher.mockResolvedValueOnce(ok({ items: [newer, doc, mail] }));
+    await reloadInbox();
+    expect(byId(dm.id).done_at).toBeTruthy();
+    expect(byId(dm.id).preview).toBe("a newer message");
+    finishPost(fail(500, "boom"));
+    expect(await p).toBe(false);
+    expect(byId(dm.id)).toEqual({ ...newer, done_at: undefined, done_by: undefined });
+  });
+
+  it("a newer mark of the same item wins over an older answer", async () => {
+    const finishDone = held();
+    const first = setDone(dm, true);
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const finishOpen = held();
+    const second = setDone(dm, false); // Move back before the first answer
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    finishDone(ok({ ...dm, done_at: at(0), done_by: "user" }));
+    await first;
+    expect(byId(dm.id).done_at).toBeNull();
+    fetcher.mockResolvedValueOnce(ok({ items: [{ ...dm, done_at: at(0), done_by: "user" }, doc, mail] }));
+    await reloadInbox();
+    expect(byId(dm.id).done_at).toBeNull();
+    finishOpen(ok({ ...dm, done_at: null, done_by: null }));
+    await second;
+    expect(byId(dm.id).done_at).toBeNull();
+  });
+
+  it("Clean up all survives a reload that left before it; a failure after one keeps the newer copies", async () => {
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const finishPost = held();
+    const p = setAllDone([dm, doc], "dismiss");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    finishGet(ok({ items: [dm, doc, mail] }));
+    await reload;
+    expect([byId(dm.id).done_by, byId(doc.id).done_by, byId(mail.id).done_by]).toEqual(["dismissed", "dismissed", undefined]);
+    // The hub filed dm and left doc (a new message since the list).
+    const filed = { ...dm, done_at: at(0), done_by: "dismissed", version: "v9" };
+    finishPost(ok({ changed: [filed], unchanged: [], skipped: [{ id: doc.id, reason: "changed" }] }));
+    const newerDoc = { ...doc, preview: "a newer comment" };
+    fetcher.mockResolvedValueOnce(ok({ items: [filed, newerDoc, mail] })); // the reload for doc's new message
+    await p;
+    await vi.waitFor(() => expect(byId(doc.id).preview).toBe("a newer comment"));
+    expect(byId(dm.id)).toEqual(filed);
+    expect(byId(doc.id).done_at).toBeUndefined();
+
+    // A failure after a reload brought a newer mail: it keeps the new fields and only reopens.
+    const finishFail = held();
+    const q = setAllDone([mail], "dismiss");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(5));
+    const newerMail = { ...mail, preview: "a newer mail" };
+    fetcher.mockResolvedValueOnce(ok({ items: [filed, newerDoc, newerMail] }));
+    await reloadInbox();
+    expect(byId(mail.id).done_by).toBe("dismissed");
+    finishFail(fail(502, "boom"));
+    await q;
+    expect(byId(mail.id)).toEqual({ ...newerMail, done_at: undefined, done_by: undefined });
+  });
+
   it("已静音：同一秒里带小数的按时间排，不按字符串", async () => {
     fetcher.mockResolvedValueOnce(ok({ mutes: [
       { id: "s0", source: "mail", tag: "sender", value: "a", name: "a", created_at: "2026-11-05T01:02:05Z" },
