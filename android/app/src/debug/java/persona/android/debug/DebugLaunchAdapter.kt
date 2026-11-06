@@ -30,6 +30,7 @@ private val pages = mapOf(
     "channels" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Channels)),
     "feishu-bot" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.FeishuBot)),
     "managers" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Managers)),
+    "sent" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Sent)),
     "hub-update" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.HubUpdate)),
     "translate" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Translation)),
     "triage" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Triage)),

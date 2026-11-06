@@ -242,6 +242,9 @@ private fun SettingsContent(
         "managers" -> manager?.let { id -> ManagerPage(services.managers.takeUnless { services.demo }, id, onBack = { manager = null }) }
             ?: ManagersPage(services.managers.takeUnless { services.demo }, back,
                 onManager = { id -> onNavigate?.invoke(persona.core.navigation.ManagerRoute(id)) ?: run { manager = id } })
+        "sent" -> SentAsYouPage(services.sent.takeUnless { services.demo }, back,
+            // A chat opens by its ids in the hub's group, as every other page's link to one does.
+            onChat = onNavigate?.let { navigate -> { machine, session -> navigate(persona.core.navigation.ChatRoute(machine, session)) } })
         "hub-update" -> HubUpdatePage(hubUpdates, machines, back, online = connection == ConnectionState.Online, onMachine = onNavigate)
         "hubs" -> HubsScreen(services.hubs ?: HubGroups.None, services.addHub?.let { { page = "hubs-add" } }, back, deviceFeedback)
         // Adding a hub is the pairing page with an adding service; it returns to the hub list.
@@ -413,6 +416,13 @@ private fun SettingsContent(
                     stringResource(R.string.settings_connectors_caption),
                     Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s),
                 )
+            }
+            // What Persona sent in the user's name through the connectors (#5278, docs/connectors.md "Sent as the user"), right after them.
+            if (services.sent != null && !services.demo) item {
+                JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
+                    JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Sent), title = stringResource(R.string.settings_sent_title),
+                        leadingIcon = PhIcons.PaperPlaneTilt, subtitle = stringResource(R.string.settings_sent_subtitle), onClick = { open(SettingsPage.Sent) })
+                }
             }
             item { JSectionHeader(stringResource(R.string.settings_section_appearance)) }
             item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Persona), title = stringResource(R.string.settings_avatar_title), leadingIcon = PhIcons.Robot, value = if (LocalPersonaPack.current != null) LocalPersonaName.current else LocalPersonaDesign.current.title, onClick = { open(SettingsPage.Persona) }) } }

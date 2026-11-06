@@ -27,6 +27,8 @@ object LocalizedFormats {
     const val DATE = "yMMMd"
     /** A full date and time. */
     const val DATE_TIME = "yMMMdjmm"
+    /** A full date and time with seconds: Nov 5, 2026, 2:30:05 PM. */
+    const val DATE_TIME_SECONDS = "yMMMdjmmss"
     /** A time in the phone's 12 / 24 hour habit for the language: 14:30 · 2:30 PM. */
     const val TIME = "jmm"
     /** A time with seconds. */

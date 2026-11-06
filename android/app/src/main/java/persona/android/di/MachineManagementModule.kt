@@ -18,6 +18,7 @@ import persona.core.hub.HttpConnectorsManagement
 import persona.core.hub.HttpComputerPairing
 import persona.core.hub.HttpHubUpdates
 import persona.core.hub.HttpHubManagers
+import persona.core.hub.HttpHubSent
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpAgentTriage
 import persona.core.hub.HttpModelConfiguration
@@ -235,6 +236,12 @@ object MachineManagementModule {
         override suspend fun rename(id: String, name: String) = api().rename(id, name)
         override suspend fun makeDefault(id: String) = api().makeDefault(id)
         override suspend fun delete(id: String) = api().delete(id)
+    }
+
+    // Settings › Sent as you (docs/connectors.md "Sent as the user"): the selected group's hub, its rows' machine ids in the group's form.
+    @Provides @Singleton fun sent(runtime: ConnectionRuntime): HubSent = SelectedGroupSent {
+        val data = runtime.scopedData.value ?: throw HubFailure(HubError.NoNetwork, AppText.get(R.string.app_error_pair_first), retryable = false)
+        SelectedGroupSent.Group(HttpHubSent(runtime.connectionFor(data)), runtime.groups.value.firstOrNull { it.data === data }?.namespace)
     }
 
     // A hub-level page: the selected group's connectors (docs/connectors.md).

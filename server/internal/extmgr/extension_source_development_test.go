@@ -130,9 +130,12 @@ return {};
 		t.Fatal("manager warning not emitted on activation", count)
 	}
 	proc.Stop()
+	// Restart gets the same activation budget, not what remains after calls and stop.
+	restartCtx, restartCancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer restartCancel()
 	restarted := host.Start(context.Background(), spec)
 	defer restarted.Stop()
-	if err := restarted.Wait(ctx); err != nil {
+	if err := restarted.Wait(restartCtx); err != nil {
 		t.Fatal("manager restart failed", err)
 	}
 	mu.Lock()

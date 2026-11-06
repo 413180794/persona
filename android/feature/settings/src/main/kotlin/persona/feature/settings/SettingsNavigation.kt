@@ -31,6 +31,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Desktops -> "desktops"
     SettingsPage.Managers -> "managers"
     SettingsPage.FeishuBot -> "feishu-bot"
+    SettingsPage.Sent -> "sent"
 }
 
 /** The root and unknown page names have no detail destination. */
