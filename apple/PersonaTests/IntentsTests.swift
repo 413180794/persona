@@ -131,7 +131,7 @@ struct IntentsTests {
 
     @Test func failureSentences() {
         #expect(IntentFailure.notPaired.sentence.contains("还没配对"))
-        #expect(IntentFailure.noMachine.sentence.contains("没有在线的机器"))
+        #expect(IntentFailure.noMachine.sentence.contains("没有在线的电脑"))
         #expect(IntentFailure.offline("desktop").sentence.contains("desktop"))
         #expect(IntentFailure.noSession("server").sentence.contains("没有运行中的会话"))
         #expect(IntentFailure.noLauncher("server").sentence.contains("新对话"))
