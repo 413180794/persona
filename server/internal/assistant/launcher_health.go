@@ -158,7 +158,11 @@ func (s *Service) healthLoadLocked(ctx context.Context) {
 	}
 	var stored healthStore
 	if st := s.store(); st != nil {
-		if _, err := st.Setting(ctx, launchersHealthKey, &stored); err != nil {
+		// Bounded: b.mu is held, and every start waits for it (#5467).
+		rctx, cancel := context.WithTimeout(ctx, historyTimeout)
+		_, err := st.Setting(rctx, launchersHealthKey, &stored)
+		cancel()
+		if err != nil {
 			s.logf("launcher health: read: %v", err)
 			return // read again next time
 		}
@@ -192,7 +196,10 @@ func (s *Service) healthSaveLocked(ctx context.Context) {
 		out.Repairs = append(out.Repairs, *r)
 	}
 	sort.Slice(out.Repairs, func(i, j int) bool { return out.Repairs[i].Machine < out.Repairs[j].Machine })
-	if err := st.PutSetting(context.WithoutCancel(ctx), launchersHealthKey, out); err != nil {
+	// Bounded: b.mu is held, and every start waits for it; the records stay in memory either way (#5467).
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), historyTimeout)
+	defer cancel()
+	if err := st.PutSetting(wctx, launchersHealthKey, out); err != nil {
 		s.logf("launcher health: save: %v", err)
 	}
 }

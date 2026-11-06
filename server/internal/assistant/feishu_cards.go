@@ -28,6 +28,22 @@ import (
 // what the chat drives (its target, and the conversations of its runs), or for everything with all_cards. And the
 // chat's commands, /start, the pushes and the sync mirror.
 
+const (
+	maxFormQuestions     = 6     // more questions than this are answered in the app (keeps the form under ~200 components)
+	maxFormOptions       = 20    // options shown per question
+	maxQuestionRunes     = 600   // runes of one question's text
+	maxOptionDescRunes   = 150   // runes of one option's description
+	maxOptionDescBudget  = 800   // runes of all option descriptions of one question
+	maxDialogRunes       = 2000  // runes of a screen dialog's detail and question
+	maxDialogOptions     = 8     // option buttons of a screen dialog
+	maxScreenRunes       = 2500  // runes of the terminal screen kept
+	maxScreenLineRunes   = 300   // runes per terminal line
+	maxPermissionReason  = 1000  // runes of a permission's reason
+	maxAnsweredQuestions = 3     // questions shown on an answered card
+	maxAnsweredQRunes    = 150   // runes per question on an answered card
+	maxCardJSONBytes     = 24000 // serialized size above which safeCard falls back (Feishu rejects ~30 KB)
+)
+
 // feishuInteraction: a new card (interaction.announced).
 func (s *Service) feishuInteraction(ix proto.Interaction) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -73,7 +89,18 @@ func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction)
 			reply = r.ReplyTo
 		}
 	}
-	mid, err := s.botPost(ctx, reply, s.interactionCard(ctx, ix), "")
+	fallback := ""
+	switch ix.Kind {
+	case proto.IxQuestion:
+		fallback = "❓ " + clip(firstQuestion(ix), 100)
+	case proto.IxPermission:
+		fallback = "🔐 " + toolDisplayName(ix.ToolName)
+	case proto.IxPlan:
+		fallback = "📋 " + clip(firstLine(ix.Plan), 100)
+	case proto.IxScreen:
+		fallback = "🖥 " + i18n.T(s.botLang(ctx), "assistant-feishu_cards.screen_summary")
+	}
+	mid, err := s.botPost(ctx, reply, s.interactionCard(ctx, ix), fallback)
 	ended := s.interactionEnded(ix.ID)
 	b.mu.Lock()
 	if err != nil {
@@ -234,6 +261,7 @@ func (s *Service) feishuCardBack(ix proto.Interaction) {
 func (s *Service) botCardDone(ctx context.Context, messageID string, ix proto.Interaction, how string) {
 	if err := s.botUpdateCard(ctx, messageID, s.answeredCard(ctx, ix, how)); err != nil {
 		s.logf("bots: close card %s: %v", ix.ID, err)
+		s.botNote(ctx, messageID, "✓ "+how)
 	}
 }
 
@@ -317,7 +345,7 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 		c := feishubot.NewCard("❓ "+i18n.T(l, "assistant-feishu_cards.question_title", i18n.Args{"where": s.ixWhere(ctx, ix)}), feishubot.Orange, i18n.T(l, "assistant-feishu_cards.question_summary", i18n.Args{"question": firstQuestion(ix)}))
 		if len(ix.Questions) == 1 && !ix.Questions[0].MultiSelect && len(ix.Questions[0].Options) <= 4 {
 			q := ix.Questions[0]
-			c.Markdown(questionText(q))
+			c.Markdown(questionText(l, q))
 			var bs []feishubot.Button
 			for _, o := range q.Options {
 				bs = append(bs, feishubot.Btn(clip(o.Label, 30), feishubot.Default, val(map[string]any{"q": "0", "v": o.Label})))
@@ -328,12 +356,19 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			if len(q.Options) > 0 {
 				c.Note(i18n.T(l, "assistant-feishu_cards.answer_by_text"))
 			}
+		} else if len(ix.Questions) > maxFormQuestions {
+			// The submit handler needs an answer to every question, so a form clipped to the first few could never be
+			// sent: that many questions are answered in the app.
+			c.Note(i18n.T(l, "assistant-feishu_cards.questions_in_app", i18n.Args{"count": len(ix.Questions)}))
 		} else {
 			var fields []any
 			for i, q := range ix.Questions {
-				fields = append(fields, feishubot.MarkdownBlock(questionText(q)))
+				fields = append(fields, feishubot.MarkdownBlock(questionText(l, q)))
 				var opts []feishubot.Option
-				for _, o := range q.Options {
+				for j, o := range q.Options {
+					if j >= maxFormOptions {
+						break
+					}
 					opts = append(opts, feishubot.Option{Label: clip(o.Label, 60), Value: o.Label})
 				}
 				if len(opts) > 0 {
@@ -348,7 +383,7 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 				c.Note(i18n.T(l, "assistant-feishu_cards.answer_by_text"))
 			}
 		}
-		return c.Buttons(open, feishubot.Btn(i18n.T(l, "assistant-feishu_cards.dismiss"), feishubot.Default, val(map[string]any{"dismiss": "1"})))
+		return safeCard(l, c.Buttons(open, feishubot.Btn(i18n.T(l, "assistant-feishu_cards.dismiss"), feishubot.Default, val(map[string]any{"dismiss": "1"}))), open)
 	case proto.IxPlan:
 		c := feishubot.NewCard("📋 "+i18n.T(l, "assistant-feishu_cards.plan_title", i18n.Args{"where": s.ixWhere(ctx, ix)}), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.plan_summary"))
 		plan := ix.Plan
@@ -362,13 +397,13 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 		)
 		c.Form("reject", []any{feishubot.Input("feedback", "", i18n.T(l, "assistant-feishu_cards.feedback_placeholder"), true)},
 			feishubot.Submit(i18n.T(l, "assistant-feishu_cards.send_back"), feishubot.Danger, "plan_reject", val(map[string]any{"approve": "0"})))
-		return c.Buttons(open)
+		return safeCard(l, c.Buttons(open), open)
 	case proto.IxPermission:
 		c := feishubot.NewCard("🔐 "+i18n.T(l, "assistant-feishu_cards.permission_title", i18n.Args{"where": s.ixWhere(ctx, ix)}), feishubot.Orange, i18n.T(l, "assistant-feishu_cards.permission_summary", i18n.Args{"tool": toolDisplayName(ix.ToolName)}))
 		var b strings.Builder
 		fmt.Fprintf(&b, "**%s**", feishubot.EscapeMarkdown(toolDisplayName(ix.ToolName)))
 		if ix.Reason != "" {
-			fmt.Fprintf(&b, "\n%s", feishubot.EscapeMarkdown(ix.Reason))
+			fmt.Fprintf(&b, "\n%s", feishubot.EscapeMarkdown(clipRunes(ix.Reason, maxPermissionReason)))
 		}
 		c.Markdown(b.String())
 		if sum := strings.TrimSpace(ix.Summary); sum != "" {
@@ -379,7 +414,7 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 		if len(ix.Fields) > 0 {
 			// A password or a code is typed in the app, never in a chat.
 			c.Note(i18n.T(l, "assistant-feishu_cards.fields_in_app"))
-			return c.Buttons(open)
+			return safeCard(l, c.Buttons(open), open)
 		}
 		bs := []feishubot.Button{
 			feishubot.Btn(i18n.T(l, "assistant-feishu_cards.allow"), feishubot.Primary, val(map[string]any{"allow": "1"})),
@@ -392,7 +427,7 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			}
 			bs = append(bs, feishubot.Btn(clip(label, 20), feishubot.Default, val(map[string]any{"allow": "1", "always": "1"})))
 		}
-		return c.Buttons(bs...).Buttons(open)
+		return safeCard(l, c.Buttons(bs...).Buttons(open), open)
 	case proto.IxScreen:
 		c := feishubot.NewCard("🖥 "+i18n.T(l, "assistant-feishu_cards.screen_title", i18n.Args{"where": s.ixWhere(ctx, ix)}), feishubot.Orange, i18n.T(l, "assistant-feishu_cards.screen_summary"))
 		if d := ix.Dialog; d != nil {
@@ -400,19 +435,35 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			if d.Detail != "" {
 				q = d.Detail + "\n" + q
 			}
+			if r := []rune(q); len(r) > maxDialogRunes {
+				q = string(r[:maxDialogRunes]) + i18n.T(l, "assistant-feishu_cards.clipped")
+			}
 			c.Markdown(feishubot.EscapeMarkdown(q))
 			var bs []feishubot.Button
 			for _, o := range d.Options {
 				if o.Kind == "type_something" || o.Kind == "chat" {
 					continue
 				}
+				if len(bs) >= maxDialogOptions {
+					break
+				}
 				bs = append(bs, feishubot.Btn(clip(o.Label, 30), feishubot.Default, val(map[string]any{"opt": o.Key})))
 			}
 			c.Buttons(bs...)
 		} else {
 			screen := ix.Screen
-			if lines := strings.Split(screen, "\n"); len(lines) > 20 {
-				screen = strings.Join(lines[len(lines)-20:], "\n")
+			lines := strings.Split(screen, "\n")
+			if len(lines) > 20 {
+				lines = lines[len(lines)-20:]
+			}
+			for i, line := range lines {
+				if r := []rune(line); len(r) > maxScreenLineRunes {
+					lines[i] = string(r[:maxScreenLineRunes]) + "…"
+				}
+			}
+			screen = strings.Join(lines, "\n")
+			if r := []rune(screen); len(r) > maxScreenRunes {
+				screen = "…\n" + string(r[len(r)-maxScreenRunes:])
 			}
 			c.Markdown("```\n" + strings.ReplaceAll(screen, "```", "'''") + "\n```")
 			c.Buttons(
@@ -428,11 +479,29 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 		} else {
 			c.Note(i18n.T(l, "assistant-feishu_cards.secret_in_app"))
 		}
-		return c.Buttons(open)
+		return safeCard(l, c.Buttons(open), open)
 	case proto.IxElicitation:
-		return s.elicitationCard(ctx, ix, open)
+		return safeCard(l, s.elicitationCard(ctx, ix, open), open)
 	}
-	return feishubot.NewCard(where, feishubot.Grey, "").Buttons(open)
+	return safeCard(l, feishubot.NewCard(where, feishubot.Grey, "").Buttons(open), open)
+}
+
+// safeCard returns c, or, when it would still be too big for Feishu after the clipping above, a short card that sends
+// the owner to the app (with the open button, if any).
+func safeCard(l i18n.Lang, c *feishubot.Card, open feishubot.Button) *feishubot.Card {
+	if len(c.JSON()) <= maxCardJSONBytes {
+		return c
+	}
+	title := ""
+	if c.Header != nil {
+		title = c.Header.Title.Content
+	}
+	fallback := feishubot.NewCard(title, feishubot.Orange, "")
+	fallback.Note(i18n.T(l, "assistant-feishu_cards.too_long_in_app"))
+	if len(open) > 0 {
+		fallback.Buttons(open)
+	}
+	return fallback
 }
 
 // elicitationTarget is the link an elicitation may open and its host: an absolute http(s) URL with a host and no
@@ -502,16 +571,30 @@ func firstQuestion(ix proto.Interaction) string {
 	return ""
 }
 
-func questionText(q proto.Question) string {
+func questionText(l i18n.Lang, q proto.Question) string {
 	s := ""
 	if q.Header != "" {
-		s = "**" + feishubot.EscapeMarkdown(q.Header) + "**\n"
+		s = "**" + feishubot.EscapeMarkdown(clipRunes(q.Header, 60)) + "**\n"
 	}
-	s += feishubot.EscapeMarkdown(q.Question)
-	for _, o := range q.Options {
-		if o.Description != "" {
-			s += "\n- " + feishubot.EscapeMarkdown(o.Label) + "：" + feishubot.EscapeMarkdown(o.Description)
+	s += feishubot.EscapeMarkdown(clipRunes(q.Question, maxQuestionRunes))
+	descBudget := maxOptionDescBudget
+	clippedOptions := 0
+	for i, o := range q.Options {
+		if i >= maxFormOptions {
+			clippedOptions = len(q.Options) - i
+			break
 		}
+		if o.Description != "" && descBudget > 0 {
+			desc := clipRunes(o.Description, maxOptionDescRunes)
+			if len([]rune(desc)) > descBudget {
+				desc = clipRunes(desc, descBudget)
+			}
+			descBudget -= len([]rune(desc))
+			s += "\n- " + feishubot.EscapeMarkdown(clip(o.Label, 40)) + "：" + feishubot.EscapeMarkdown(desc)
+		}
+	}
+	if clippedOptions > 0 {
+		s += i18n.T(l, "assistant-feishu_cards.clipped")
 	}
 	return s
 }
@@ -522,15 +605,24 @@ func (s *Service) answeredCard(ctx context.Context, ix proto.Interaction, how st
 	c := feishubot.NewCard(title, feishubot.Grey, how)
 	switch ix.Kind {
 	case proto.IxQuestion:
-		for _, q := range ix.Questions {
-			c.Markdown(feishubot.EscapeMarkdown(q.Question))
+		qs := ix.Questions
+		more := 0
+		if len(qs) > maxAnsweredQuestions {
+			more = len(qs) - maxAnsweredQuestions
+			qs = qs[:maxAnsweredQuestions]
+		}
+		for _, q := range qs {
+			c.Markdown(feishubot.EscapeMarkdown(clipRunes(q.Question, maxAnsweredQRunes)))
+		}
+		if more > 0 {
+			c.Note(strings.TrimSpace(i18n.T(s.botLang(ctx), "assistant-feishu_cards.clipped")))
 		}
 	case proto.IxPermission:
 		c.Markdown(feishubot.EscapeMarkdown(ix.ToolName + " " + clip(oneLine(ix.Summary), 200)))
 	case proto.IxPlan:
 		c.Markdown(feishubot.EscapeMarkdown(clip(planTitle(ix.Plan), 200)))
 	}
-	return c.Note("✓ " + how)
+	return safeCard(s.botLang(ctx), c.Note("✓ "+how), nil)
 }
 
 func (s *Service) ixWhere(ctx context.Context, ix proto.Interaction) string {
