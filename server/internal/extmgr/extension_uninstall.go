@@ -1,6 +1,7 @@
 package extmgr
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -31,11 +32,12 @@ func (h *Manager) uninstallPack(w http.ResponseWriter, r *http.Request, id strin
 		if !h.takeDependents(w, r, id, o.cascade) {
 			return
 		}
-		if err := ps.reg.Uninstall(r.Context(), id, o.keepData, o.actor); err != nil {
+		warnings, err := leftover(ps.reg.Uninstall(r.Context(), id, o.keepData, o.actor), nil)
+		if err != nil {
 			writeErrCode(w, o.failureStatus, "uninstall_failed", err)
 			return
 		}
-		writeJSON(w, map[string]any{"ok": true, "removed_members": []string{}})
+		writeJSON(w, uninstalled(map[string]any{"ok": true, "removed_members": []string{}}, warnings))
 		return
 	}
 	ids := ps.packMembers(p)
@@ -52,15 +54,18 @@ func (h *Manager) uninstallPack(w http.ResponseWriter, r *http.Request, id strin
 	}
 	removed := []string{}
 	failed := []removedMember{}
+	var warnings []string
 	for _, mid := range ids {
-		if err := ps.reg.Uninstall(r.Context(), mid, o.keepData, o.actor); err != nil {
+		var err error
+		if warnings, err = leftover(ps.reg.Uninstall(r.Context(), mid, o.keepData, o.actor), warnings); err != nil {
 			failed = append(failed, removedMember{ID: mid, Error: err.Error()})
 		} else {
 			removed = append(removed, mid)
 		}
 	}
 	if len(failed) == 0 {
-		if err := ps.reg.Uninstall(r.Context(), id, o.keepData, o.actor); err != nil {
+		var err error
+		if warnings, err = leftover(ps.reg.Uninstall(r.Context(), id, o.keepData, o.actor), warnings); err != nil {
 			failed = append(failed, removedMember{ID: id, Error: err.Error()})
 		}
 	}
@@ -84,5 +89,24 @@ func (h *Manager) uninstallPack(w http.ResponseWriter, r *http.Request, id strin
 		writeJSON(w, map[string]any{"ok": false, "code": "partial_uninstall", "error": i18n.T(l, "hub-extension_uninstall.partial", i18n.Args{"removed": removedText, "failed": strings.Join(names, sep)}), "removed_members": removed, "failed_members": failed, "remaining_members": remaining})
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "removed_members": removed})
+	writeJSON(w, uninstalled(map[string]any{"ok": true, "removed_members": removed}, warnings))
+}
+
+// leftover splits an uninstall's error: one that happened but left files (extension.LeftoverError) is a warning
+// added to warnings, so the answer says it is uninstalled (a retry would only find no such extension) and names
+// what to delete by hand; any other error is returned.
+func leftover(err error, warnings []string) ([]string, error) {
+	var left *extension.LeftoverError
+	if errors.As(err, &left) {
+		return append(warnings, left.Error()), nil
+	}
+	return warnings, err
+}
+
+// uninstalled is a successful uninstall's answer, with the warnings when there are any.
+func uninstalled(out map[string]any, warnings []string) map[string]any {
+	if len(warnings) > 0 {
+		out["warnings"] = warnings
+	}
+	return out
 }

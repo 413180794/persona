@@ -78,6 +78,77 @@ func TestBotCommandListCardsClipAndFallback(t *testing.T) {
 	if n := strings.Count(fallback, "\n- "); n != 10 || !strings.Contains(fallback, "🔴") || strings.ContainsAny(fallback, "*_[`") {
 		t.Fatalf("/agents fallback rows=%d, icon or escaping wrong: %q", n, fallback)
 	}
+	// The card's tail offers starting a new agent without typing /start.
+	if !strings.Contains(card, `"a":"start_form"`) {
+		t.Fatalf("/agents card has no start-new button: %s", card)
+	}
+}
+
+// Pressing "Chat here" on a list-card row points the chat at that target and binds the pressed card itself: a quote
+// reply to the card has it as the parent and a topic started on it has it as the root, so botTargetFor routes both
+// to the target (#5438).
+func TestSwitchBindsPressedCard(t *testing.T) {
+	s, _, _, _ := startCardHub(t)
+	ctx := context.Background()
+	var a feishubot.CardAction
+	a.Action.Value = map[string]any{"a": "switch", "k": targetAgent, "m": "box", "s": "agent01", "t": "修登录 · box"}
+	a.Context.MessageID = "om_agents"
+	r := s.botCardAction(ctx, &a, "")
+	wantToast := i18n.T("", "assistant-feishu_cards.now_to_reply", i18n.Args{"title": "修登录 · box"})
+	if r.Toast == nil || r.Toast.Content != wantToast {
+		t.Fatalf("toast %+v, want %q", r.Toast, wantToast)
+	}
+	want := botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agent01"}
+	if got := s.botTargetFor("", "om_agents"); got != want { // a quote reply to the list card
+		t.Fatalf("reply to the card routes to %+v, want %+v", got, want)
+	}
+	if got := s.botTargetFor("om_agents", "om_agents"); got != want { // a topic started on the card
+		t.Fatalf("topic on the card routes to %+v, want %+v", got, want)
+	}
+	if got := s.botTargetFor("", ""); got != want {
+		t.Fatalf("current target %+v, want %+v", got, want)
+	}
+}
+
+// The agents card's "Start new agent" button posts the same form /start builds (startAgentCard), quoting the
+// pressed list card, and starts nothing itself (#5438).
+func TestStartFormCallbackPostsStartCard(t *testing.T) {
+	s, f, _, _ := startCardHub(t)
+	ctx := context.Background()
+	var a feishubot.CardAction
+	a.Action.Value = map[string]any{"a": "start_form"}
+	a.Context.MessageID = "om_agents"
+	r := s.botCardAction(ctx, &a, "")
+	if r.Toast == nil || r.Toast.Content != i18n.T("", "assistant-feishu_cards.start_form_opening") {
+		t.Fatalf("toast %+v", r.Toast)
+	}
+	var post map[string]any
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if ps := f.appParams(AppFeishu, FeishuPost); len(ps) > 0 {
+			post = ps[0]
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if post == nil {
+		t.Fatal("the start form was not posted")
+	}
+	if replyTo, _ := post["reply_to"].(string); replyTo != "om_agents" {
+		t.Fatalf("the form replies to %q, want the pressed list card", replyTo)
+	}
+	card, _ := post["card"].(string)
+	for _, want := range []string{
+		i18n.T("", "assistant-feishu_cards.start_title"),
+		`"name":"machine"`, `"name":"cwd"`, `"name":"prompt"`, `"a":"start"`,
+	} {
+		if !strings.Contains(card, want) {
+			t.Fatalf("start form card missing %q:\n%s", want, card)
+		}
+	}
+	if got := f.startCount(); got != 0 {
+		t.Fatalf("the form callback started %d agents", got)
+	}
 }
 
 // startCardHub is a service whose feishu app has the Agents feature on and one machine "box"; posts counts the

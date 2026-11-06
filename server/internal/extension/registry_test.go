@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -787,5 +788,341 @@ func TestLoadRemovesPreviewsOfAnEarlierRun(t *testing.T) {
 	}
 	if _, err := os.Stat(other); err != nil {
 		t.Fatal("a directory that is not a preview's is removed:", err)
+	}
+}
+
+// An uninstall that cannot remove the extension's data fails with nothing changed: the row, the package and the data
+// stay, instead of an uninstall that says it worked over data left behind.
+func TestUninstallThatCannotRemoveDataChangesNothing(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root moves out of a read-only directory")
+	}
+	ctx := context.Background()
+	r, store, _ := newTestRegistry(t)
+	pkg := t.TempDir()
+	writePackage(t, pkg, nil)
+	pv, err := r.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := r.Install(ctx, pv.ID, pv.Digest, "cli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := r.DataDir("example-notes")
+	if err := os.MkdirAll(data, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "token"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Dir(data)
+	if err := os.Chmod(parent, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+
+	if err := r.Uninstall(ctx, "example-notes", false, "cli"); err == nil {
+		t.Fatal("an uninstall that cannot remove the data says so")
+	}
+	if r.Get("example-notes") == nil || len(store.rows) != 1 {
+		t.Fatal("the extension is still installed")
+	}
+	if _, err := os.Stat(filepath.Join(p.Dir, "bin", "notes")); err != nil {
+		t.Fatal("its package is back where it was:", err)
+	}
+	if _, err := os.Stat(filepath.Join(data, "token")); err != nil {
+		t.Fatal("its data is still there:", err)
+	}
+
+	_ = os.Chmod(parent, 0o700)
+	if err := r.Uninstall(ctx, "example-notes", false, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{filepath.Join(r.dir, "installed", "example-notes"), data} {
+		if _, err := os.Stat(d); err == nil {
+			t.Fatal(d, "left")
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(r.dir, "staging")); len(entries) != 0 {
+		t.Fatal("staging left behind", entries)
+	}
+}
+
+// installNotes installs the example package with a data file and returns its package and data directories.
+func installNotes(t *testing.T, r *Registry) (pkgDir, data string) {
+	t.Helper()
+	ctx := context.Background()
+	pkg := t.TempDir()
+	writePackage(t, pkg, nil)
+	pv, err := r.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := r.Install(ctx, pv.ID, pv.Digest, "cli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = r.DataDir("example-notes")
+	if err := os.MkdirAll(data, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "token"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p.Dir, data
+}
+
+// A crash after the directories moved aside but before the row went: the next Load puts them back, the extension
+// is whole again, and a later uninstall removes everything.
+func TestLoadPutsBackAnUninstallInterruptedBeforeTheRow(t *testing.T) {
+	ctx := context.Background()
+	r, store, _ := newTestRegistry(t)
+	pkgDir, data := installNotes(t, r)
+	aside, err := r.moveAside(r.Get("example-notes").Record, []string{filepath.Join("installed", "example-notes"), filepath.Join("data", "example-notes")})
+	if err != nil || aside == "" {
+		t.Fatal(aside, err)
+	}
+	if !strings.Contains(filepath.Base(aside), "example-notes") {
+		t.Fatal("the staging name says whose it is:", aside)
+	}
+	// The crash: the row is still there.
+	var logs []string
+	r2 := NewRegistry(r.dir, store, rot13{}, 202611100000)
+	r2.Logf = func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
+	if err := r2.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	p := r2.Get("example-notes")
+	if p == nil || p.Problem != "" {
+		t.Fatalf("whole again: %+v", p)
+	}
+	for _, f := range []string{filepath.Join(pkgDir, "bin", "notes"), filepath.Join(data, "token")} {
+		if _, err := os.Stat(f); err != nil {
+			t.Fatal("put back:", err)
+		}
+	}
+	if _, err := os.Stat(aside); err == nil {
+		t.Fatal("the staging directory is gone")
+	}
+	if len(logs) != 1 || !strings.Contains(logs[0], "back") {
+		t.Fatal(logs)
+	}
+	if err := r2.Uninstall(ctx, "example-notes", false, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(r.dir, "staging")); len(entries) != 0 {
+		t.Fatal("staging left behind", entries)
+	}
+}
+
+// A crash after the row went but before the moved-aside directory was removed: the next Load removes it.
+func TestLoadRemovesWhatAnUninstallLeftAfterTheRow(t *testing.T) {
+	ctx := context.Background()
+	r, store, _ := newTestRegistry(t)
+	installNotes(t, r)
+	aside, err := r.moveAside(r.Get("example-notes").Record, []string{filepath.Join("installed", "example-notes"), filepath.Join("data", "example-notes")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteExtension(ctx, "example-notes"); err != nil {
+		t.Fatal(err)
+	}
+	var logs []string
+	r2 := NewRegistry(r.dir, store, rot13{}, 202611100000)
+	r2.Logf = func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
+	if err := r2.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r2.Get("example-notes") != nil {
+		t.Fatal("not installed")
+	}
+	if _, err := os.Stat(aside); err == nil {
+		t.Fatal("its files are removed")
+	}
+	for _, d := range []string{filepath.Join(r.dir, "installed", "example-notes"), r.DataDir("example-notes")} {
+		if _, err := os.Stat(d); err == nil {
+			t.Fatal(d, "is not back")
+		}
+	}
+	if len(logs) != 1 || !strings.Contains(logs[0], "removed") {
+		t.Fatal(logs)
+	}
+}
+
+// A move that cannot be undone keeps the staging directory and says where; nothing is deleted.
+func TestMoveBackThatFailsKeepsTheFiles(t *testing.T) {
+	r, _, _ := newTestRegistry(t)
+	_, data := installNotes(t, r)
+	aside, err := r.moveAside(r.Get("example-notes").Record, []string{filepath.Join("data", "example-notes")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Something took the place back meanwhile: the data cannot go back over it.
+	if err := os.MkdirAll(data, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.moveBack(aside); err == nil {
+		t.Fatal("says it could not put it back")
+	}
+	if _, err := os.Stat(filepath.Join(aside, "0", "token")); err != nil {
+		t.Fatal("the data is kept in staging:", err)
+	}
+}
+
+// An uninstall whose cleanup fails still uninstalls, and says what to delete by hand.
+func TestUninstallThatCannotCleanUpIsALeftover(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes from a read-only directory")
+	}
+	ctx := context.Background()
+	r, store, _ := newTestRegistry(t)
+	_, data := installNotes(t, r)
+	// The data has a read-only directory in it: it moves aside, but cannot be removed there.
+	locked := filepath.Join(data, "locked")
+	if err := os.MkdirAll(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "f"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	var aside string
+	t.Cleanup(func() {
+		if aside != "" {
+			_ = filepath.Walk(aside, func(p string, _ os.FileInfo, _ error) error { return os.Chmod(p, 0o700) })
+		}
+	})
+	err := r.Uninstall(ctx, "example-notes", false, "cli")
+	var left *LeftoverError
+	if !errors.As(err, &left) || !strings.Contains(left.Error(), "已卸载") || !strings.Contains(left.Error(), left.Path) {
+		t.Fatalf("a leftover, not a failure: %v", err)
+	}
+	aside = left.Path
+	if r.Get("example-notes") != nil || len(store.rows) != 0 {
+		t.Fatal("uninstalled")
+	}
+}
+
+// The reviewer's case (#4466): a no-keep uninstall whose cleanup failed leaves its files in staging; the owner
+// installs the same id again. The next Load must not move the old data into the new install: it removes it.
+func TestReinstallNeverGetsTheDataOfAnUninstall(t *testing.T) {
+	ctx := context.Background()
+	r, store, _ := newTestRegistry(t)
+	_, data := installNotes(t, r)
+	row := r.Get("example-notes").Record
+	aside, err := r.moveAside(row, []string{filepath.Join("installed", "example-notes"), filepath.Join("data", "example-notes")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The row went (the uninstall happened) and its cleanup did not.
+	if err := store.DeleteExtension(ctx, "example-notes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(aside, uninstallCommitted), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	delete(r.extensions, "example-notes")
+	r.mu.Unlock()
+	// Reinstalled: a new row of the same id, no data yet.
+	r.now = func() time.Time { return time.Now().Add(time.Hour) }
+	pkg := t.TempDir()
+	writePackage(t, pkg, nil)
+	pv, err := r.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Install(ctx, pv.ID, pv.Digest, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	r2 := NewRegistry(r.dir, store, rot13{}, 202611100000)
+	if err := r2.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(data, "token")); !os.IsNotExist(err) {
+		t.Fatal("the deleted data came back:", err)
+	}
+	if _, err := os.Stat(aside); !os.IsNotExist(err) {
+		t.Fatal("the old files are removed:", err)
+	}
+	if p := r2.Get("example-notes"); p == nil || p.Problem != "" {
+		t.Fatalf("the new install is whole: %+v", p)
+	}
+
+	// Without the committed marker (a crash just before it), the install identity still tells them apart.
+	row2 := r2.Get("example-notes").Record
+	stale := filepath.Join(r.dir, "staging", "uninstall-example-notes-"+newID())
+	if err := os.MkdirAll(filepath.Join(stale, "0"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(stale, "0", "token"), []byte("old"), 0o600)
+	b, _ := json.Marshal(map[string]any{"id": "example-notes", "version": row2.Version, "installed_at": row.InstalledAt.Unix(),
+		"moves": []map[string]string{{"from": filepath.Join("data", "example-notes"), "to": "0"}}})
+	_ = os.WriteFile(filepath.Join(stale, uninstallManifest), b, 0o600)
+	r3 := NewRegistry(r.dir, store, rot13{}, 202611100000)
+	if err := r3.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(data, "token")); !os.IsNotExist(err) {
+		t.Fatal("another install's data was put back:", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatal("removed:", err)
+	}
+}
+
+// moveBack only puts back an extension's own directories: a manifest naming anything else is refused.
+func TestMoveBackRefusesOtherPaths(t *testing.T) {
+	r, _, _ := newTestRegistry(t)
+	aside := filepath.Join(r.dir, "staging", "uninstall-x-"+newID())
+	if err := os.MkdirAll(filepath.Join(aside, "0"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, from := range []string{"installed/y", "../escape", "data", "staging/x", "installed/x/../y"} {
+		b, _ := json.Marshal(map[string]any{"id": "x", "moves": []map[string]string{{"from": from, "to": "0"}}})
+		_ = os.WriteFile(filepath.Join(aside, uninstallManifest), b, 0o600)
+		if err := r.moveBack(aside); err == nil {
+			t.Fatal(from, "is not x's own directory")
+		}
+	}
+	if !ownDir("x", "tools/x") || !ownDir("x", "data/x") || !ownDir("x", "installed/x") || ownDir("..", "data/..") {
+		t.Fatal("ownDir")
+	}
+}
+
+// An uninstall moves the extension's tools directory too, and the sweep of old previews leaves uninstall-* alone.
+func TestUninstallMovesToolsAndPreviewSweepSparesIt(t *testing.T) {
+	ctx := context.Background()
+	r, _, _ := newTestRegistry(t)
+	installNotes(t, r)
+	tools := r.ToolsDir("example-notes")
+	if err := os.MkdirAll(tools, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	aside, err := r.moveAside(r.Get("example-notes").Record, []string{filepath.Join("tools", "example-notes")})
+	if err != nil || aside == "" {
+		t.Fatal(aside, err)
+	}
+	if _, err := os.Stat(tools); !os.IsNotExist(err) {
+		t.Fatal("tools moved:", err)
+	}
+	old := time.Now().Add(-48 * time.Hour)
+	_ = os.Chtimes(aside, old, old)
+	r.now = func() time.Time { return time.Now().Add(previewFor + time.Hour) }
+	r.dropStalePreviews()
+	if _, err := os.Stat(aside); err != nil {
+		t.Fatal("the preview sweep removed an uninstall's directory:", err)
+	}
+	if err := r.moveBack(aside); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Uninstall(ctx, "example-notes", false, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(tools); !os.IsNotExist(err) {
+		t.Fatal("tools left after uninstall:", err)
 	}
 }

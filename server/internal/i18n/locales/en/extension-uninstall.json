@@ -1,0 +1,7 @@
+{
+  "move_failed": "Couldn't remove {path}",
+  "put_back_failed": "putting the files back failed too; they are in {path}: {err}",
+  "bad_path": "The record has a wrong path: {path}",
+  "taken": "{path} exists again, so it was not put back",
+  "leftover": "Extension {id} is uninstalled, but its files were not all removed. Delete {path} by hand ({err})."
+}

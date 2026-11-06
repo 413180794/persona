@@ -723,7 +723,26 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 			return toast("error", err.Error())
 		}
 		s.setBotCurrent(t)
-		return toast("success", i18n.T(l, "assistant-feishu_cards.now_to", i18n.Args{"title": clip(title, 30)}))
+		// The callback only carries the pressed card's own message id (no thread root, no chat beyond its id): bind
+		// the card itself. A quote reply to it has it as the parent, and a topic started on it has it as the root,
+		// so botTargetFor routes both to this target.
+		s.rememberBotThread(a.Context.MessageID, t, title)
+		return toast("success", i18n.T(l, "assistant-feishu_cards.now_to_reply", i18n.Args{"title": clip(title, 30)}))
+	case "start_form":
+		if f, _ := s.feishuFeatures(ctx); !f.Agents {
+			return toast("error", i18n.T(l, "assistant-feishu_cards.agents_off_short"))
+		}
+		// Feishu gives the callback 3 s and the post goes over the bus to the feishu app, so the /start form is
+		// posted from a goroutine (as botStartAgent posts its card), quoting the pressed list card.
+		mid := a.Context.MessageID
+		go func() {
+			cctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if _, err := s.botPost(cctx, mid, s.startAgentCard(cctx, ""), ""); err != nil {
+				s.logf("bots: start form: %v", err)
+			}
+		}()
+		return toast("info", i18n.T(l, "assistant-feishu_cards.start_form_opening"))
 	case "start":
 		if f, _ := s.feishuFeatures(ctx); !f.Agents {
 			return toast("error", i18n.T(l, "assistant-feishu_cards.agents_off_short"))
@@ -1208,6 +1227,7 @@ func (s *Service) feishuAgentDone(machine string, sess proto.Session, head, text
 		return n
 	}
 	limit := agentDoneClip
+	hint := i18n.T(l, "assistant-feishu_cards.agent_done_reply_hint")
 	var (
 		card    *feishubot.Card
 		body    string
@@ -1217,13 +1237,14 @@ func (s *Service) feishuAgentDone(machine string, sess proto.Session, head, text
 		body = clip(text, limit)
 		clipped = len([]rune(text)) > limit
 		card = feishubot.NewCard(head, color, head).Markdown(feishubot.CardMarkdown(body)).
-			Note(note(clipped)).Buttons(s.openButton(ctx, machine, session))
+			Note(note(clipped)).Buttons(s.openButton(ctx, machine, session)).Note(hint)
 		if len(card.JSON()) <= answerCardMaxBytes || limit <= agentDoneClip/8 {
 			break
 		}
 		limit /= 2
 	}
-	fallback := fallbackText.Replace(head) + "\n\n" + fallbackText.Replace(body) + "\n" + fallbackText.Replace(note(clipped))
+	fallback := fallbackText.Replace(head) + "\n\n" + fallbackText.Replace(body) + "\n" + fallbackText.Replace(note(clipped)) +
+		"\n" + fallbackText.Replace(hint)
 	mid, err := s.botPost(ctx, "", card, strings.TrimSpace(fallback))
 	if err != nil {
 		s.logf("bots: agent done: %v", err)
@@ -1451,9 +1472,10 @@ func (s *Service) agentsCard(ctx context.Context, query string) (*feishubot.Card
 	l := s.botLang(ctx)
 	title := i18n.T(l, "assistant-feishu_cards.agents_title")
 	c := feishubot.NewCard(title, feishubot.Purple, i18n.T(l, "assistant-feishu_cards.agents_summary"))
+	startNew := feishubot.Btn(i18n.T(l, "assistant-feishu_cards.start_new"), feishubot.Primary, map[string]any{"a": "start_form"})
 	if len(rows) == 0 {
 		empty := i18n.T(l, "assistant-feishu_cards.no_agents")
-		return c.Markdown(empty), title + "\n\n" + empty
+		return c.Markdown(empty).Buttons(startNew), title + "\n\n" + empty
 	}
 	var b strings.Builder
 	b.WriteString(title + "\n")
@@ -1475,7 +1497,7 @@ func (s *Service) agentsCard(ctx context.Context, query string) (*feishubot.Card
 			map[string]any{"a": "switch", "k": targetAgent, "m": r.d.ID, "s": r.sess.SessionID, "t": label + " · " + name}))
 		fmt.Fprintf(&b, "- %s %s · %s\n", icons[r.sess.State], fallbackText.Replace(label), fallbackText.Replace(name))
 	}
-	return c, strings.TrimSpace(b.String())
+	return c.Buttons(startNew), strings.TrimSpace(b.String())
 }
 
 // startAgentCard is a form to start a coding agent on a machine.

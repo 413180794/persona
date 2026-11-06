@@ -44,7 +44,9 @@ final class AssistantArchiveTests: XCTestCase {
         sleep(1)
         shot("\(layout) after 归档")
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "\(layout): still in the list")
-        XCTAssertTrue(conversation("整理这个季度").exists, "\(layout): the drawer closed or the list went")
+        // Still open: its first row is still there. (The demo's other conversations belong to scheduled tasks, so since
+        // #3264 / #3566 they are in Auto Chats or under Scheduled Tasks, not Recent, which may be empty now; #5197.)
+        XCTAssertTrue(app.buttons["sidebar-main"].firstMatch.exists, "\(layout): the drawer closed or the list went")
 
         let entry = app.buttons["sidebar-archived"].firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 3), "\(layout): no 已归档 entry")

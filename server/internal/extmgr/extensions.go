@@ -349,6 +349,7 @@ func (h *Manager) attachExtensions(ctx context.Context) {
 		_ = reg.AddHubJSON(p.Manifest, p.Legacy, p.Record.Enabled)
 	}
 	reg.RemoteManifest = ps.remoteManifest
+	reg.Logf = h.logf                    // what Load did about an interrupted uninstall
 	reg.CanEnable = h.canEnableExtension // the inbox's rules (extension_inbox.go)
 	reg.PlanCandidates = h.extensionPlanCandidates
 	reg.PlanGuard = h.guardExtensionPlan

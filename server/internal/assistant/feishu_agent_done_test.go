@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -96,6 +97,14 @@ func TestFeishuAgentDoneCard(t *testing.T) {
 				if !strings.Contains(fallback, want) {
 					t.Fatalf("fallback missing %q: %q", want, fallback)
 				}
+			}
+			// A grey hint says a reply continues the work with this agent (#5438).
+			hint := i18n.T("", "assistant-feishu_cards.agent_done_reply_hint")
+			if !strings.Contains(card, hint) {
+				t.Fatalf("done card missing reply hint %q:\n%s", hint, card)
+			}
+			if !strings.Contains(fallback, hint) {
+				t.Fatalf("done fallback missing reply hint %q: %q", hint, fallback)
 			}
 			if got := ft.pushesOf(assistantwire.NotifyDone, 1, time.Second); len(got) != 1 {
 				t.Fatalf("the phone push changed: %+v", got)
@@ -206,4 +215,3 @@ func TestFeishuAgentDoneHalvedCardMarksClipped(t *testing.T) {
 		t.Fatalf("halved fallback is missing cut short notice:\n%s", fallback)
 	}
 }
-

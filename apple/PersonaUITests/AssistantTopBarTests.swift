@@ -118,12 +118,13 @@ final class AssistantTopBarTests: XCTestCase {
                       "no Persona at the foot")
         XCTAssertTrue(app.buttons["搜索对话"].exists, "no search button")
         shot(app, "sidebar")
-        let pick = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "早报 · 周三")).firstMatch
-        XCTAssertTrue(pick.isHittable, "no 早报 among the conversations")
+        // A conversation the user opened, in Recent: the morning brief's is that scheduled task's own, under Scheduled Tasks (#3566, #5197).
+        let pick = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "帮我约周五")).firstMatch
+        XCTAssertTrue(pick.isHittable, "no 帮我约周五 among the conversations")
         pick.tap()
         waitGone(sidebar(app), "the sidebar stays open after picking a conversation")
-        XCTAssertTrue(app.staticTexts["早上好！今天 2 个会议，3 封邮件需要回复。"].waitForExistence(timeout: 10),
-                      "did not switch to 早报:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["已经在日历里加好了。"].waitForExistence(timeout: 10),
+                      "did not switch to 帮我约周五:\n\(app.debugDescription)")
 
         // Off the main conversation, the avatar's menu leads back to it.
         avatar(app).tap()

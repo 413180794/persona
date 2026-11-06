@@ -1,0 +1,7 @@
+{
+  "move_failed": "删不掉 {path}",
+  "put_back_failed": "放回原处也失败了，文件在 {path}：{err}",
+  "bad_path": "记录里的路径不对：{path}",
+  "taken": "{path} 已经又有了，没放回",
+  "leftover": "扩展 {id} 已卸载，但它的文件没删干净：请手动删掉 {path}（{err}）"
+}
