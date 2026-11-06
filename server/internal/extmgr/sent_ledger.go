@@ -252,7 +252,11 @@ func scalarOrStrings(v any) (any, bool) {
 	return nil, false
 }
 
-// pruneSentLedger deletes the rows older than the days the ledger is kept (sent_ledger_days).
+// sentLedgerNow is the clock the prune reads (tests pin it).
+var sentLedgerNow = time.Now
+
+// pruneSentLedger deletes the rows older than the days the ledger is kept (sent_ledger_days). The cut is counted in
+// UTC: in local time, N calendar days back across a DST change is N×24 h ± 1 h.
 func (h *Manager) pruneSentLedger(ctx context.Context) {
 	st, _ := h.store.(sentStore)
 	days := h.cfg.SentLedgerDays
@@ -262,7 +266,7 @@ func (h *Manager) pruneSentLedger(ctx context.Context) {
 	if days == 0 {
 		days = sentLedgerDays
 	}
-	n, err := st.PruneSentAsUser(ctx, time.Now().AddDate(0, 0, -days))
+	n, err := st.PruneSentAsUser(ctx, sentLedgerNow().UTC().AddDate(0, 0, -days))
 	switch {
 	case err != nil && ctx.Err() == nil:
 		h.logf("sent ledger: pruning: %v", err)

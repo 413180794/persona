@@ -327,8 +327,17 @@ func TestSentLedgerRoute(t *testing.T) {
 	}
 }
 
-// The ledger is pruned to hub.json's sent_ledger_days: 90 when it says nothing, never when it is below 0.
+// The ledger is pruned to hub.json's sent_ledger_days: 90 when it says nothing, never when it is below 0. The cut
+// is exactly that many days of 24 h back, also right after a DST change (US DST ended 2026-11-01): counted in the
+// clock's zone it was an hour off.
 func TestSentLedgerPrune(t *testing.T) {
+	zone, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Skip("no time zone data:", err)
+	}
+	now := time.Date(2026, 11, 6, 10, 0, 0, 0, zone) // after the DST change; 7 and 90 days back are before it
+	sentLedgerNow = func() time.Time { return now }
+	t.Cleanup(func() { sentLedgerNow = time.Now })
 	for _, c := range []struct {
 		days int
 		want int // days the cut is back from now; 0: no cut
@@ -348,8 +357,8 @@ func TestSentLedgerPrune(t *testing.T) {
 			t.Errorf("sent_ledger_days %d: %d cuts", c.days, len(st.pruned))
 			continue
 		}
-		if back := time.Since(st.pruned[0]); back < time.Duration(c.want)*24*time.Hour-time.Hour || back > time.Duration(c.want)*24*time.Hour+time.Hour {
-			t.Errorf("sent_ledger_days %d cut %v ago", c.days, back)
+		if back := now.Sub(st.pruned[0]); back != time.Duration(c.want)*24*time.Hour {
+			t.Errorf("sent_ledger_days %d cut %v ago, want %v", c.days, back, time.Duration(c.want)*24*time.Hour)
 		}
 	}
 }
