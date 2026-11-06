@@ -306,6 +306,15 @@ describe("a message card's 发送 (#1519)", () => {
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   });
 
+  it("sends nothing for a card whose thing was handled elsewhere (#5095)", async () => {
+    const fetcher = vi.fn().mockResolvedValue(ok({}));
+    vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+    vi.stubGlobal("fetch", fetcher);
+    await sendMessage(card("m3", { filed_at: "2026-11-05T09:00:00Z" }), "修好了");
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(getFeedState().busy.m3).toBeFalsy();
+  });
+
   it("does not send a draft with a blank, and can be tapped again after a failure", async () => {
     const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 502, text: async () => JSON.stringify({ error: "github: rate limited" }) });
     vi.stubGlobal("localStorage", { getItem: () => "jd_test" });

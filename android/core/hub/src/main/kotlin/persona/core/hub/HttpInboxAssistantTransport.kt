@@ -99,6 +99,18 @@ class HttpInboxAssistantTransport private constructor(
             else url("api", "v1", "lark", "conversations", requireNotNull(feedId), "messages")
         return json(target, buildJsonObject { put("text", text); put("client_id", clientId) })
     }
+    override suspend fun suggestion(itemId: String, version: Long, action: String, text: String?, clientId: String): JsonObject {
+        require(itemId.isNotBlank() && clientId.isNotBlank() && action in setOf("confirm", "reject", "instruct"))
+        return try {
+            json(url("api", "v1", "inbox", itemId, "suggestion"), buildJsonObject {
+                put("version", version); put("action", action); text?.let { put("text", it) }; put("client_id", clientId)
+            })
+        } catch (e: HubFailure) {
+            if (e.status != 409 || e.code != "suggestion_stale") throw e
+            val item = e.body?.let { runCatching { JsonCodec.parseToJsonElement(it).jsonObject["item"] as? JsonObject }.getOrNull() }
+            throw persona.core.contracts.api.InboxSuggestionStale(item)
+        }
+    }
     override suspend fun replyMail(itemId: String, text: String, clientId: String, target: MailReplyTarget): JsonObject {
         require(text.isNotBlank() && clientId.isNotBlank() && target.uid > 0 && target.version.isNotBlank())
         try {

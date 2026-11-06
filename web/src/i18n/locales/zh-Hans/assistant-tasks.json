@@ -80,6 +80,7 @@
   "send": "发送",
   "later": "稍后",
   "filed_not_sent": "这件事已经处理过了，没有发出去",
+  "filed_title": "已处理",
   "more_asks_other": "还有 {count} 件",
   "dock_all": "全部 {count}",
   "waiting": "等你",

@@ -114,6 +114,7 @@
     <string name="designsystem_core_inbox_action">要対応</string>
     <string name="designsystem_core_inbox_fyi">参考</string>
     <string name="designsystem_core_inbox_noise">折りたたみ済み</string>
+    <string name="designsystem_core_inbox_working">進行中</string>
     <string name="designsystem_core_inbox_done">対応済み</string>
     <string name="designsystem_core_compacted_above">ここまでのコンテキストを圧縮しました</string>
     <string name="designsystem_core_compact_manual">手動</string>

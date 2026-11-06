@@ -642,6 +642,76 @@ class InboxRepositoryTest {
         }
     }
 
+    // Inbox phase 1: an item's event fields are read with it, and answering its suggestion puts the item the hub answers
+    // with in the list, also when the suggestion was stale (409 suggestion_stale carries the current item).
+    @Test fun aSuggestionAnswerRedrawsTheItemTheHubAnswersWith() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-suggestion-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(version: Int, status: String, state: String) = buildJsonObject {
+                put("id", "lark:c:1"); put("source", "lark"); put("kind", "dm"); put("title", "示例"); put("tier", "action")
+                put("status", status); put("urgent", true); put("recap", "示例总结")
+                putJsonObject("lark") { put("feed_id", "c"); put("start_position", "1") }
+                putJsonObject("handling") { put("owner", "manager"); put("state", state) }
+                if (status == "action") putJsonObject("suggestion") { put("version", version); put("kind", "reply"); put("text", "好的 $version") }
+                putJsonArray("chain") {
+                    add(buildJsonObject { put("id", "c1"); put("kind", "received"); put("text", "收到 1 条新消息")
+                        putJsonObject("link") { put("type", "source"); put("position", "1") } })
+                    add(buildJsonObject { put("id", "c2"); put("kind", "something_new"); put("text", "以后的动作") })
+                }
+            }
+            val transport = object : InboxAssistantTransport by FakeTransport() {
+                val seen = mutableListOf<List<Any?>>()
+                var answer: suspend () -> JsonObject = { buildJsonObject { put("item", item(2, "working", "waiting")) } }
+                override suspend fun inbox() = buildJsonObject { put("items", JsonArray(listOf(item(2, "action", "done")))) }
+                override suspend fun suggestion(itemId: String, version: Long, action: String, text: String?, clientId: String): JsonObject {
+                    seen += listOf(itemId, version, action, text, clientId)
+                    return answer()
+                }
+            }
+            val repository = RealInboxRepository(
+                object : InboxAssistantConnection { override val current = MutableStateFlow<InboxAssistantTransport?>(transport) },
+                InboxReplyJournal(directory, "hub/generation"),
+                object : SessionsRepository {
+                    override val machines = MutableStateFlow<List<Machine>>(emptyList())
+                    override val sessions = MutableStateFlow<List<Session>>(emptyList())
+                    override suspend fun refresh() = Unit
+                },
+                object : InteractionCenter {
+                    override val pending = MutableStateFlow<List<Interaction>>(emptyList())
+                    override suspend fun refresh() = Unit
+                    override suspend fun resolve(id: String, resolution: Resolution) = Unit
+                }, owner, hubConnection = FakeHub(),
+            ) { _, _ -> error("unused") }
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            val listed = repository.snapshot.value.records.single()
+            assertEquals("action", listed.item.status)
+            assertEquals(true, listed.item.urgent)
+            assertEquals("示例总结", listed.event.recap)
+            assertEquals(2L, listed.event.suggestion?.version)
+            assertEquals(listOf("received", "something_new"), listed.event.chain.map { it.kind })
+            assertEquals(1L, listed.event.chain.first().link?.positionValue)
+
+            val request = persona.feature.inbox.SuggestionRequest("lark:c:1", 2, persona.feature.inbox.SuggestionAction.Confirm, "好的，改过")
+            assertEquals(persona.feature.inbox.SuggestionOutcome.Done, repository.actOnSuggestion(request))
+            assertEquals(listOf("lark:c:1", 2L, "confirm", "好的，改过", request.clientId), transport.seen.single())
+            repository.snapshot.value.records.single().let {
+                assertEquals("working", it.item.status)
+                assertEquals("waiting", it.event.handling?.state)
+                assertEquals(null, it.event.suggestion)
+            }
+
+            transport.answer = { throw InboxSuggestionStale(item(3, "action", "done")) }
+            val stale = persona.feature.inbox.SuggestionRequest("lark:c:1", 2, persona.feature.inbox.SuggestionAction.Reject)
+            assertEquals(persona.feature.inbox.SuggestionOutcome.Stale, repository.actOnSuggestion(stale))
+            assertEquals(3L, repository.snapshot.value.records.single().event.suggestion?.version)
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun aMuteFilesWhatItCoversAtOnceAndAFailurePutsThemBack() = runBlocking {
         val directory = Files.createTempDirectory("inbox-mute-test").toFile()
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)

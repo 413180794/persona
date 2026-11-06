@@ -38,6 +38,28 @@ class ParityInboxTransportTest {
         }
     }
 
+    // Inbox phase 1: POST /api/v1/inbox/{id}/suggestion with the version shown; 409 suggestion_stale carries the item.
+    @Test fun aSuggestionAnswerPostsItsVersionAndAStaleOneCarriesTheItem() = runBlocking {
+        MockWebServer().use { server ->
+            val t = HttpInboxAssistantTransport("scope", server.url("/").toString(), "token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"id":"lark:c:1","status":"working"}"""))
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"code":"suggestion_stale","error":"建议已更新","item":{"id":"lark:c:1","suggestion":{"version":4}}}"""))
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"code":"inbox_item_done","error":"done"}"""))
+            assertEquals("working", t.suggestion("lark:c:1", 3, "confirm", "改过的", "c-1")["status"]?.toString()?.trim('"'))
+            val stale = runCatching { t.suggestion("lark:c:1", 3, "reject", null, "c-2") }.exceptionOrNull()
+            assertTrue(stale is persona.core.contracts.api.InboxSuggestionStale)
+            assertEquals("lark:c:1", (stale as persona.core.contracts.api.InboxSuggestionStale).item?.get("id")?.toString()?.trim('"'))
+            val done = runCatching { t.suggestion("lark:c:1", 4, "instruct", "先问时间", "c-3") }.exceptionOrNull()
+            assertTrue(done is HubFailure && done.code == "inbox_item_done")
+            server.takeRequest().let {
+                assertEquals("POST /api/v1/inbox/lark:c:1/suggestion", "${it.method} ${it.path}")
+                assertEquals("""{"version":3,"action":"confirm","text":"改过的","client_id":"c-1"}""", it.body.readUtf8())
+            }
+            server.takeRequest().let { assertEquals("""{"version":3,"action":"reject","client_id":"c-2"}""", it.body.readUtf8()) }
+            server.takeRequest().let { assertEquals("""{"version":4,"action":"instruct","text":"先问时间","client_id":"c-3"}""", it.body.readUtf8()) }
+        }
+    }
+
     @Test fun connectorCallsUseTheHubsRoutes() = runBlocking {
         MockWebServer().use { server ->
             val http = OkHttpClient()

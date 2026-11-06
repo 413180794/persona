@@ -182,4 +182,36 @@
     <string name="inbox_unmute">取消静音</string>
     <string name="inbox_unmute_failed">没能取消静音，已恢复</string>
     <string name="inbox_muted_notice">已静音「%1$s」，以后不再进收件箱</string>
+
+    <!-- Inbox phase 1: events, suggestions, the 处理链条 (InboxEvents.kt). -->
+    <string name="inbox_section_working">进行中</string>
+    <string name="inbox_handling_looking">AI 正在看</string>
+    <string name="inbox_handling_agent">Agent 在做</string>
+    <string name="inbox_handling_waiting">等对方回复</string>
+    <string name="inbox_handling_preparing">AI 正在准备建议</string>
+    <string name="inbox_handling_failed">AI 没处理完，要你看一下</string>
+    <string name="inbox_handling_failed_reason">AI 没处理完：%1$s</string>
+    <string name="inbox_suggestion_reply">建议回复</string>
+    <string name="inbox_suggestion_agent">建议派 Agent</string>
+    <string name="inbox_suggestion_conclusion">结论</string>
+    <string name="inbox_suggestion_handback">建议</string>
+    <string name="inbox_suggestion_row">%1$s：%2$s</string>
+    <string name="inbox_suggestion_note">依据：%1$s</string>
+    <string name="inbox_suggestion_send">发送</string>
+    <string name="inbox_suggestion_start">开始</string>
+    <string name="inbox_suggestion_ack">知道了</string>
+    <string name="inbox_suggestion_confirm">确认</string>
+    <string name="inbox_suggestion_edit">修改</string>
+    <string name="inbox_suggestion_reject">驳回</string>
+    <string name="inbox_suggestion_editor_title">修改建议</string>
+    <string name="inbox_suggestion_say">说一句话</string>
+    <string name="inbox_suggestion_say_hint">比如：别这么回，先问时间</string>
+    <string name="inbox_suggestion_say_send">告诉 AI</string>
+    <string name="inbox_suggestion_stale">建议已更新</string>
+    <string name="inbox_event_recap">总结</string>
+    <string name="inbox_event_chain">处理链条</string>
+    <string name="inbox_event_chain_all">展开全部（%1$d）</string>
+    <string name="inbox_event_view_source">看原文</string>
+    <string name="inbox_done_by_manager">管理者处理了</string>
+    <string name="inbox_event_related">有关</string>
 </resources>

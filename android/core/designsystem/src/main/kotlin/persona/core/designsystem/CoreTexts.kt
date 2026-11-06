@@ -132,6 +132,7 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.InboxAction -> R.string.designsystem_core_inbox_action
     CoreText.Key.InboxFyi -> R.string.designsystem_core_inbox_fyi
     CoreText.Key.InboxNoise -> R.string.designsystem_core_inbox_noise
+    CoreText.Key.InboxWorking -> R.string.designsystem_core_inbox_working
     CoreText.Key.InboxDone -> R.string.designsystem_core_inbox_done
     CoreText.Key.CompactedAbove -> R.string.designsystem_core_compacted_above
     CoreText.Key.CompactManual -> R.string.designsystem_core_compact_manual

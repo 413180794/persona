@@ -550,6 +550,20 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - **截图（不用模拟器）**：`./gradlew :feature:inbox:testDebugUnitTest --tests '*InboxTriageShotsTest*'`，Robolectric 原生绘制整个收件箱页，三种风格 × 深浅色 × 三种情况（没配模型带「去配置」、积压、几个来源带 hub 的原因），PNG 在 `build/inbox-triage-shots/`。
 - **单测**：`InboxTriageTest`（解析、老 hub、一个 / 几个来源、hub 的原因和兜底的话、不认识的状态、只有没配模型才有去配置）、`InboxTriageShotsTest`（文案在、去配置只在没配模型时出现且点了打开设置、不能改设置的设备只有文字、回到 ok 和老 hub 不显示）、`core/data` 的 `InboxHandOffRepositoryTest.refreshCarriesTheHubsTriage`。
 
+## 收件箱：事件、建议、处理链条（第一期）
+
+行为和接口以收件箱第一期的规格为准（四端一致：`status` / `urgent` / `recap` / `handling` / `suggestion` / `chain` / `related` 和 `POST /api/v1/inbox/{id}/suggestion`），这里只写 Android 的做法。旧 hub 不发这些字段，列表、行、点开去哪和以前一模一样。
+
+- **数据**：`core:contracts` 的 `InboxEvents.kt` 定义这几个字段（`InboxHandling`、`InboxSuggestion`、`InboxChainEntry`、`InboxChainLink`、`InboxRelated`，也加进了 `WireModels.InboxItem`），`inboxEventFields(item)` 逐个字段读，坏掉的一个字段、链条里坏掉的一条只丢它自己；不认识的 `status` 当没有（按 tier），不认识的链条 kind 照样留着（画 hub 给的 `text` 和一个通用图标）；`position` 是字符串或数字都认。`RealInboxRepository` 把它们放进 `InboxRecord.event`，`status`、`urgent` 同时放进 `core:domain` 的 `InboxItem`。缓存是 hub 原样的 JSON，冷启动时这些字段也在。
+- **分段**（`core:domain` 的 `buildInboxList`）：有 `status` 时按它分（`InboxItem.section`），「进行中」排在需要你和知悉即可之间、永远展开；tier 还是 action 的进行中事项不算需要你，角标（`actionCount`）不数它。共享夹具 `spec/fixtures/inbox/status.json`。页面上旧 hub 的「AI 分身在拟稿」行照旧并进这一段，标题在旧 hub 上仍是「Persona 在办」，hub 发 `status` 时叫「进行中」。
+- **行**：进行中的行是工作中状态，下面一行写谁在做（AI 正在看 / Agent 在做 / 等对方回复）；急事还在 AI 看（`urgent` 且 `handling.state == looking`、没有建议）写「AI 正在准备建议」；有建议的写「建议回复：第一行」这样的种类 + 第一行；失败退回的写「AI 没处理完，要你看一下」（`InboxEvents.kt` 的 `eventMark`）。有 `suggestion` 或 `handling` 时，行、飞书会话页、邮件页、扩展的条目页都不再画旧的 AI 分身草稿卡和它的状态（hub 为旧 App 把回复建议镜像进 `agent`，不重复画），AI 草拟、自己的草稿照旧。
+- **点开**：带事件字段的条目点开是事件页 `InboxEventRoute`（`InboxEventScreen.kt`，宽屏在右栏），其余照旧进来源页。事件页从上到下：档位和来源的标签、右边「看原文」（列表以前打开的那一页：飞书会话、邮件、连接器会话或扩展的条目页），✦ AI 摘要，总结（`recap`），处理到哪了（进行中 / 准备建议 / 失败的一行），建议卡，处理链条，有关。
+- **建议卡**：标题是种类（建议回复 / 建议派 Agent / 结论；`handback` 的一律叫「建议」），正文、依据，按钮一行三个、单行：回复「发送 · 修改 · 驳回」，Agent「开始 · 修改 · 驳回」，结论「知道了 · 驳回」，要判断的「确认 · 修改 · 驳回」。「发送」就是确认，不再弹「以你的身份发送？」（规格：点一下就发）。「修改」打开浮层：上面是可改的文字和确认键（文字没改就按原样确认，不带 `text`），下面「说一句话」和「告诉 AI」（instruct）。每次请求带 `client_id`，同一个回答重试沿用同一个。结论卡在知悉即可里不画需要你的描边，点「知道了」之前一直留在列表里。管理者看完归档的（`done_by: manager`），事件页的档位标签写「管理者处理了」；链条里的 `done`（已处理）是对勾图标，没有链接。
+- **建议过时**：hub 回 `409 suggestion_stale` 时（`HttpInboxAssistantTransport.suggestion` 抛 `InboxSuggestionStale`，带当前的条目），仓库用回来的条目换掉列表里的那条，页面在新建议上面留一条「建议已更新」，直到再回答一次；其他失败（`inbox_item_done`、`assistant_in_doubt`、只能回答的设备）走统一的操作反馈。
+- **处理链条**：默认只显示最新一条，下面「展开全部（N）」/「收起」；每行是时间（今天只写时刻）、按 kind 的图标、hub 给的一句话。点了去哪（`chainTarget`）：`source` 带 `position` → 飞书会话定位到那条（没有会话的条目进来源页），带 `url` → 应用内浏览器，带 `uid` → 邮件页，什么都不带 → 来源页；`session` → 那段对话（`ChatRoute`）；`item` → 那一件（有事件字段的进它的事件页）；没有链接的就地展开 `detail` 和 `messages`。
+- **单测**：`core:contracts` 的 `InboxEventFieldsTest`（夹具的每种状态、旧条目、坏值和不认识的 kind），`core:domain` 的 `InboxListFixtureTest`（`status.json` 三个用例），`core:hub` 的 `ParityInboxTransportTest.aSuggestionAnswerPostsItsVersionAndAStaleOneCarriesTheItem`（路径、请求体、409 两种），`core:data` 的 `InboxRepositoryTest.aSuggestionAnswerRedrawsTheItemTheHubAnswersWith`，`feature:inbox` 的 `InboxEventsTest`（分段、行的标记、各种按钮、修改的文字、点开去哪、链条的每种链接、折叠、时间）。夹具是第一期共用的那份（编造的数据），复制在两个模块的 `src/test/resources/inbox/phase1.json`。
+- **截图（不用模拟器）**：`./gradlew :feature:inbox:testDebugUnitTest --tests '*InboxEventShotsTest*'`，Robolectric 原生绘制，三种风格 × 深浅色：整个列表（五个分段和每种行的标记）、六种事件页（回复建议、等对方回复且链条展开、急事、派 Agent、结论、失败），玻璃风格的「建议已更新」和修改浮层；同一个测试还点了发送、驳回（过时）、修改后发送、说一句话、链条里的「管理者处理」和「看原文」，核对发出去的请求和打开的页面。PNG 在 `build/inbox-event-shots/`。
+
 ## 收件箱：后台刷新时列表不动（#1947）
 
 - **刷新**：`RealInboxRepository` 只在收到 `{"type":"inbox"}` 时刷新列表；连续来的几个合成一次（`refreshWindowMillis`，默认 1 秒，用 `sample`），刷新进行中又来的事件，刷新完再补一次。`{"type":"lark"}` 只重读打开着的飞书会话，不刷新列表：hub 改了列表会自己发 `inbox`，iOS 也这样做。连上 hub 时仍立即刷新一次，15 秒轮询仍是兜底。

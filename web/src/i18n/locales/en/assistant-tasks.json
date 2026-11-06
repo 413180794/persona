@@ -89,6 +89,7 @@
   "send": "Send",
   "later": "Later",
   "filed_not_sent": "Already handled, nothing was sent",
+  "filed_title": "Handled",
   "more_asks_one": "{count} more",
   "more_asks_other": "{count} more",
   "dock_all": "All {count}",

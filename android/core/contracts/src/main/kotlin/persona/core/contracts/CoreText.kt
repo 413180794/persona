@@ -100,6 +100,7 @@ data class CoreText(val key: Key, val args: List<Any> = emptyList()) {
         InboxAction("Needs you"),
         InboxFyi("FYI"),
         InboxNoise("Folded"),
+        InboxWorking("In progress"),
         InboxDone("Done"),
         CompactedAbove("Context above compacted"),
         CompactManual("Manual"),

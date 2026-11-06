@@ -894,10 +894,11 @@ function MessageCard({ item }: { item: FeedItem }) {
           <Icon name="chevronRight" size={13} className="text-ink-3" />
         </button>
       )}
-      <div className={cx("flex flex-col gap-1 rounded-control p-3", sent ? "bg-green-tint" : "bg-accent-tint")}>
-        <span id={headingId} className={cx("flex items-center gap-1 text-[12px] font-semibold", sent ? "text-green" : "text-accent")}>
-          <Icon name={sent ? "check" : "pencil"} size={12} />
-          {sent ? t("assistant-tasks.replied_as_you") : t("assistant-tasks.draft_from_progress")}
+      {/* handled elsewhere: no longer a draft waiting on you, so not drawn like one (#5095) */}
+      <div className={cx("flex flex-col gap-1 rounded-control p-3", sent ? "bg-green-tint" : filed ? "bg-field" : "bg-accent-tint")}>
+        <span id={headingId} className={cx("flex items-center gap-1 text-[12px] font-semibold", sent ? "text-green" : filed ? "text-ink-2" : "text-accent")}>
+          <Icon name={sent ? "check" : filed ? "archive" : "pencil"} size={12} />
+          {sent ? t("assistant-tasks.replied_as_you") : filed ? t("assistant-tasks.filed_title") : t("assistant-tasks.draft_from_progress")}
           {sent && <span className="ml-auto font-normal text-ink-3">{clock(sent.at)}</span>}
         </span>
         {!sent && !filed ? (

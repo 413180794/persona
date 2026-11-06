@@ -359,7 +359,8 @@ export async function sendRouted(conversation: string, text: string): Promise<bo
 export async function sendMessage(card: FeedItem, text: string) {
   const itemId = card.ref;
   const latest = () => st.feeds[card.conversation]?.find((i) => i.id === card.id) ?? card;
-  if (!itemId || st.busy[card.id] || cardSent(latest())) return;
+  // Handled elsewhere (#5095): the hub would refuse it, so nothing goes out.
+  if (!itemId || st.busy[card.id] || cardSent(latest()) || cardFiled(latest())) return;
   const blank = draftPlaceholder(text);
   if (blank) throw new Error(t("lib-feed.draft_blank", { blank }));
   set({ busy: { ...st.busy, [card.id]: true } });

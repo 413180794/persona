@@ -57,6 +57,14 @@ describe("a message card", () => {
     expect(html).not.toContain("草稿里还有没填的");
   });
 
+  it("draws a handled card plainly, not as a draft waiting on you (#5095)", () => {
+    const html = renderToStaticMarkup(<FeedLineView item={card({ filed_at: "2026-11-05T09:00:00Z" })} />);
+    expect(html).not.toContain("按任务进度起草的回复");
+    expect(html).not.toContain("bg-accent-tint");
+    expect(html).toContain("已处理");
+    expect(html).toContain("确实是 bug，谢谢指出");
+  });
+
   it("holds a draft with a blank to fill in", () => {
     const html = renderToStaticMarkup(<FeedLineView item={card({ draft: "确实是 bug，【预计今晚 / 几点前】修好" })} />);
     expect(html).toContain("草稿里还有没填的「【预计今晚 / 几点前】」");

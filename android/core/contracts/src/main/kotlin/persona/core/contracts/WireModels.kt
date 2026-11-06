@@ -147,6 +147,14 @@ data class InboxItem(
     val lark: InboxLark? = null, val mail: InboxMail? = null, val moment: InboxMoment? = null,
     val agent: InboxAgent? = null,
     val context: String? = null,
+    // Inbox phase 1 (InboxEvents.kt); the app reads them with inboxEventFields, which keeps the good entries of a chain.
+    @WireEnum("action", "working", "fyi", "noise", "unknown") val status: String? = null,
+    val urgent: Boolean? = null,
+    val recap: String? = null,
+    val handling: InboxHandling? = null,
+    val suggestion: InboxSuggestion? = null,
+    val chain: List<InboxChainEntry> = emptyList(),
+    val related: List<InboxRelated> = emptyList(),
 )
 
 @KeepGeneratedSerializer

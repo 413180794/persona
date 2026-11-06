@@ -1,0 +1,133 @@
+{
+  "as_of": "2026-11-05T10:10:00Z",
+  "items": [
+    {
+      "id": "lark:oc_demo1:100", "source": "lark", "kind": "dm", "account": "feishu", "account_name": "飞书",
+      "title": "张三", "sender": "张三", "preview": "周五前能把报价给客户吗？", "count": 3,
+      "started_at": "2026-11-05T09:58:00Z", "updated_at": "2026-11-05T10:00:00Z",
+      "tier": "action", "status": "action", "summary": "张三问周五前能否给客户报价", "reason": "私聊直接提问",
+      "recap": "客户要周五前拿到报价。张三在等你确认价格区间，之前的版本是上个月的。",
+      "lark": {"feed_id": "oc_demo1", "is_group": false, "start_position": "100"},
+      "handling": {"owner": "manager", "state": "done", "machine_id": "m1", "session_id": "s-demo1", "since": "2026-11-05T10:01:00Z"},
+      "suggestion": {"version": 2, "kind": "reply", "text": "可以，我周四下班前把报价发你。", "note": "知识库里上次报价是 10 月 12 日", "handback": false, "at": "2026-11-05T10:03:00Z"},
+      "agent": {"state": "drafted", "draft": "可以，我周四下班前把报价发你。", "note": "知识库里上次报价是 10 月 12 日", "session_id": "s-demo1", "machine_id": "m1"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T10:00:00Z", "kind": "received", "text": "收到 3 条新消息 · 张三", "count": 3, "sender": "张三",
+         "messages": [{"sender": "张三", "text": "在吗", "at": "2026-11-05T09:58:00Z"}, {"sender": "张三", "text": "客户催报价了", "at": "2026-11-05T09:59:00Z"}, {"sender": "张三", "text": "周五前能把报价给客户吗？", "at": "2026-11-05T10:00:00Z"}],
+         "link": {"type": "source", "position": "100"}},
+        {"id": "c2", "at": "2026-11-05T10:00:05Z", "kind": "triaged", "text": "分拣：需要你", "detail": "需要你 · 私聊直接提问"},
+        {"id": "c3", "at": "2026-11-05T10:01:00Z", "kind": "handling", "text": "管理者处理", "link": {"type": "session", "machine_id": "m1", "session_id": "s-demo1"}}
+      ]
+    },
+    {
+      "id": "lark:oc_demo2:200", "source": "lark", "kind": "mention", "account": "feishu", "account_name": "飞书",
+      "title": "发布群", "sender": "李四", "preview": "@你 今天的发布还上吗", "count": 1,
+      "started_at": "2026-11-05T10:05:00Z", "updated_at": "2026-11-05T10:05:00Z",
+      "tier": "action", "status": "action", "urgent": true, "summary": "李四问今天的发布还上不上", "reason": "有人在等",
+      "lark": {"feed_id": "oc_demo2", "is_group": true, "start_position": "200", "at_me": true},
+      "handling": {"owner": "manager", "state": "looking", "machine_id": "m1", "session_id": "s-demo2", "since": "2026-11-05T10:05:10Z"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T10:05:00Z", "kind": "received", "text": "收到 1 条新消息 · 李四", "count": 1, "sender": "李四", "link": {"type": "source", "position": "200"}},
+        {"id": "c2", "at": "2026-11-05T10:05:04Z", "kind": "triaged", "text": "分拣：需要你（急）", "detail": "需要你 · 有人在等"},
+        {"id": "c3", "at": "2026-11-05T10:05:10Z", "kind": "handling", "text": "管理者处理", "link": {"type": "session", "machine_id": "m1", "session_id": "s-demo2"}}
+      ]
+    },
+    {
+      "id": "lark:oc_demo3:300", "source": "lark", "kind": "dm", "account": "feishu", "account_name": "飞书",
+      "title": "王五", "sender": "王五", "preview": "好的，我问一下客户", "count": 2,
+      "started_at": "2026-11-05T08:00:00Z", "updated_at": "2026-11-05T09:30:00Z",
+      "tier": "action", "status": "working", "summary": "和王五约下周的评审时间", "recap": "已回复王五周二下午可以，等他确认客户那边的时间。",
+      "lark": {"feed_id": "oc_demo3", "is_group": false, "start_position": "300"},
+      "handling": {"owner": "manager", "state": "waiting", "machine_id": "m1", "session_id": "s-demo3", "since": "2026-11-05T09:20:00Z"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T08:00:00Z", "kind": "received", "text": "收到 1 条新消息 · 王五", "count": 1, "sender": "王五", "link": {"type": "source", "position": "300"}},
+        {"id": "c2", "at": "2026-11-05T08:00:04Z", "kind": "triaged", "text": "分拣：需要你", "detail": "需要你 · 私聊约时间"},
+        {"id": "c3", "at": "2026-11-05T08:01:00Z", "kind": "handling", "text": "管理者处理", "link": {"type": "session", "machine_id": "m1", "session_id": "s-demo3"}},
+        {"id": "c4", "at": "2026-11-05T09:19:00Z", "kind": "confirmed", "text": "你确认了（改过文字）", "detail": "周二下午可以，三点以后都行", "edited": true},
+        {"id": "c5", "at": "2026-11-05T09:19:02Z", "kind": "sent", "text": "发了飞书消息", "link": {"type": "source", "position": "305"}},
+        {"id": "c6", "at": "2026-11-05T09:30:00Z", "kind": "received", "text": "收到 1 条新消息 · 王五", "count": 1, "sender": "王五", "link": {"type": "source", "position": "306"}}
+      ],
+      "related": [{"id": "mail:a1:review:55", "title": "评审材料", "source": "mail"}]
+    },
+    {
+      "id": "mail:a1:ci:77", "source": "mail", "kind": "direct", "account": "a1", "account_name": "me@example.com",
+      "title": "构建失败：主分支", "sender": "CI", "preview": "第 812 次构建失败", "count": 1,
+      "started_at": "2026-11-05T07:00:00Z", "updated_at": "2026-11-05T07:00:00Z",
+      "tier": "action", "status": "working", "summary": "主分支构建失败",
+      "mail": {"account_id": "a1", "mailbox": "INBOX", "uids": [77], "message_id": "<x@example.com>", "from": {"name": "CI", "email": "ci@example.com"}, "thread": "构建失败：主分支"},
+      "handling": {"owner": "manager", "state": "agent", "machine_id": "m1", "session_id": "s-demo4", "since": "2026-11-05T07:05:00Z"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T07:00:00Z", "kind": "received", "text": "收到 1 封邮件 · CI", "count": 1, "sender": "CI", "link": {"type": "source", "uid": 77}},
+        {"id": "c2", "at": "2026-11-05T07:00:03Z", "kind": "triaged", "text": "分拣：需要你", "detail": "需要你 · 相关告警"},
+        {"id": "c3", "at": "2026-11-05T07:01:00Z", "kind": "handling", "text": "管理者处理", "link": {"type": "session", "machine_id": "m1", "session_id": "s-demo4b"}},
+        {"id": "c4", "at": "2026-11-05T07:05:00Z", "kind": "agent", "text": "开了子会话：查构建失败原因", "link": {"type": "session", "machine_id": "m1", "session_id": "s-demo4"}}
+      ]
+    },
+    {
+      "id": "mail:a1:contract:88", "source": "mail", "kind": "direct", "account": "a1", "account_name": "me@example.com",
+      "title": "合同续签", "sender": "法务", "preview": "请确认续签条款", "count": 1,
+      "started_at": "2026-11-05T06:00:00Z", "updated_at": "2026-11-05T06:00:00Z",
+      "tier": "action", "status": "action", "summary": "法务请你确认续签条款",
+      "mail": {"account_id": "a1", "mailbox": "INBOX", "uids": [88], "message_id": "<y@example.com>", "from": {"name": "法务", "email": "legal@example.com"}, "thread": "合同续签"},
+      "handling": {"owner": "manager", "state": "done", "machine_id": "m1", "session_id": "s-demo5", "since": "2026-11-05T06:02:00Z"},
+      "suggestion": {"version": 1, "kind": "agent", "text": "对比新旧两版合同，列出改动的条款和风险", "handback": false, "at": "2026-11-05T06:04:00Z"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T06:00:00Z", "kind": "received", "text": "收到 1 封邮件 · 法务", "count": 1, "sender": "法务", "link": {"type": "source", "uid": 88}},
+        {"id": "c2", "at": "2026-11-05T06:00:03Z", "kind": "triaged", "text": "分拣：需要你", "detail": "需要你 · 要你确认"},
+        {"id": "c3", "at": "2026-11-05T06:02:00Z", "kind": "handling", "text": "管理者处理", "link": {"type": "session", "machine_id": "m1", "session_id": "s-demo5"}}
+      ]
+    },
+    {
+      "id": "lark:oc_demo6:600", "source": "lark", "kind": "dm", "account": "feishu", "account_name": "飞书",
+      "title": "赵六", "sender": "赵六", "preview": "客户那边要改需求", "count": 1,
+      "started_at": "2026-11-05T05:00:00Z", "updated_at": "2026-11-05T05:00:00Z",
+      "tier": "action", "status": "action", "summary": "赵六说客户要改需求",
+      "lark": {"feed_id": "oc_demo6", "is_group": false, "start_position": "600"},
+      "handling": {"owner": "manager", "state": "failed", "since": "2026-11-05T05:20:00Z", "error": "处理超时了"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T05:00:00Z", "kind": "received", "text": "收到 1 条新消息 · 赵六", "count": 1, "sender": "赵六", "link": {"type": "source", "position": "600"}},
+        {"id": "c2", "at": "2026-11-05T05:00:03Z", "kind": "triaged", "text": "分拣：需要你", "detail": "需要你 · 私聊"},
+        {"id": "c3", "at": "2026-11-05T05:01:00Z", "kind": "handling", "text": "管理者处理", "link": {"type": "session", "machine_id": "m1", "session_id": "s-demo6"}},
+        {"id": "c4", "at": "2026-11-05T05:20:00Z", "kind": "failed", "text": "处理失败", "detail": "处理超时了"}
+      ]
+    },
+    {
+      "id": "lark:oc_demo7:700", "source": "lark", "kind": "group", "account": "feishu", "account_name": "飞书",
+      "title": "项目群", "sender": "钱七", "preview": "今天的周报已发", "count": 2,
+      "started_at": "2026-11-05T04:00:00Z", "updated_at": "2026-11-05T04:10:00Z",
+      "tier": "fyi", "status": "fyi", "summary": "周报已发，进度正常",
+      "recap": "管理者看过了：周报里你负责的两项都按计划，没有要你做的。",
+      "lark": {"feed_id": "oc_demo7", "is_group": true, "start_position": "700"},
+      "handling": {"owner": "manager", "state": "done", "machine_id": "m1", "session_id": "s-demo7", "since": "2026-11-05T04:12:00Z"},
+      "suggestion": {"version": 1, "kind": "conclusion", "text": "周报里你负责的两项都按计划，不用回复。", "handback": false, "at": "2026-11-05T04:12:00Z"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T04:10:00Z", "kind": "received", "text": "收到 2 条新消息 · 钱七", "count": 2, "sender": "钱七", "link": {"type": "source", "position": "700"}},
+        {"id": "c2", "at": "2026-11-05T04:10:03Z", "kind": "triaged", "text": "分拣：知悉即可", "detail": "知悉即可 · 群里的进展"}
+      ]
+    },
+    {
+      "id": "mail:a1:news:99", "source": "mail", "kind": "list", "account": "a1", "account_name": "me@example.com",
+      "title": "每周精选", "sender": "Newsletter", "preview": "本周十篇好文", "count": 1,
+      "started_at": "2026-11-05T03:00:00Z", "updated_at": "2026-11-05T03:00:00Z",
+      "tier": "noise", "status": "noise", "summary": "订阅邮件",
+      "mail": {"account_id": "a1", "mailbox": "INBOX", "uids": [99], "message_id": "<z@example.com>", "from": {"name": "Newsletter", "email": "news@example.com"}, "thread": "每周精选"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T03:00:00Z", "kind": "received", "text": "收到 1 封邮件 · Newsletter", "count": 1, "sender": "Newsletter", "link": {"type": "source", "uid": 99}},
+        {"id": "c2", "at": "2026-11-05T03:00:02Z", "kind": "triaged", "text": "分拣：已折叠", "detail": "已折叠 · 订阅邮件"}
+      ]
+    },
+    {
+      "id": "lark:oc_demo9:900", "source": "lark", "kind": "dm", "account": "feishu", "account_name": "飞书",
+      "title": "孙八", "sender": "孙八", "preview": "收到", "count": 1,
+      "started_at": "2026-11-05T02:00:00Z", "updated_at": "2026-11-05T02:00:00Z", "done_at": "2026-11-05T02:30:00Z", "done_by": "replied",
+      "tier": "action", "summary": "孙八确认收到材料",
+      "lark": {"feed_id": "oc_demo9", "is_group": false, "start_position": "900"},
+      "chain": [
+        {"id": "c1", "at": "2026-11-05T02:00:00Z", "kind": "received", "text": "收到 1 条新消息 · 孙八", "count": 1, "sender": "孙八", "link": {"type": "source", "position": "900"}},
+        {"id": "c2", "at": "2026-11-05T02:00:03Z", "kind": "triaged", "text": "分拣：需要你", "detail": "需要你 · 私聊"},
+        {"id": "c3", "at": "2026-11-05T02:30:00Z", "kind": "self_replied", "text": "你在飞书里回复了", "link": {"type": "source", "position": "902"}}
+      ]
+    }
+  ],
+  "triage": {"state": "ok", "waiting": 0}
+}

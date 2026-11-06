@@ -48,6 +48,7 @@
   只在 draw 里读），不要跟着屏幕刷新率跑；省电模式下停掉。
 - `JSegmented` 不能放进 `horizontalScroll`：看板风格的每一格是 `weight(1f, fill = false)`，横向滚动给的宽度是无穷大，格子全缩没了，只剩一条竖线（插件页的 `segmented`，#1451，用 Robolectric 截图才看出来，玻璃和晨报正常）。要横排就让它拿父级的有限宽度。
 - 插件画的界面可以在 JVM 上截图：`feature:settings` 的 `PluginSlotsShotsTest` 用 Robolectric 的原生绘制（`@GraphicsMode(NATIVE)`）`captureToImage()` 存 PNG，中文字体正常，不用模拟器；新做的纯 Compose 组件照这个办法先看一遍。
+- 截图测试注释里写的 `-Dpersona.shots=<dir>` 经 `./gradlew … -D` 传不进测试 JVM（约定插件没有转发这个系统属性，2026-11-05 收件箱第一期）：PNG 照旧写在模块的 `build/<名字>-shots/`，要放别处就跑完再拷。用 `LocalizedFormats` 的纯函数（时间格式）在普通 JUnit 里会抛 `RuntimeException`（它用了 Android 的 `DateFormat`），测试类要加 `@RunWith(AndroidJUnit4::class)` 用 Robolectric 跑。
 - Robolectric 截图测试里 `rule.mainClock.autoAdvance = false`（转圈、计时不会停）时，改了 `mutableStateOf`（比如 `dark = true`）再 `advanceTimeByFrame()` 不一定重组：快照的改动还没 apply，深色截图其实还是浅色（#3350 第一次拍出两张一样的图）。改状态后先 `Snapshot.sendApplyNotifications()` 再推帧，并断言两张图的像素不同（`LiveTurnShotsTest`）。
 - Compose 测试里 `Modifier.clickable(enabled = false)` 仍带 OnClick 语义动作，`assertHasNoClickAction()` 断言不了「不可点」，要用 `assertIsNotEnabled()`（`ComposerPartsTest`）。
 

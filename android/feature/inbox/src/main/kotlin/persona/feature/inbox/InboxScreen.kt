@@ -72,8 +72,11 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         items = items, interactions = snapshot.interactions, sessions = snapshot.sessions, mutes = snapshot.mutes, settings = settings,
     )
     val result = list(InboxListSettings(source, kind, query, expanded.toSet() + section))
+    // 进行中: the hub says so (`status`, inbox phase 1), or, from an older hub, the AI 分身 is drafting a reply.
     fun working(row: InboxRow) = row.type == InboxRowType.Item &&
-        records[row.id]?.agent?.state in setOf("running", "queued")
+        records[row.id]?.let { it.item.isWorking || it.agent?.state in setOf("running", "queued") } == true
+    // A hub that sends `status` calls the section 进行中; an older hub's is the AI 分身's 「Persona 在办」 as before.
+    val eventHub = snapshot.records.any { it.item.status != null }
     // The summary speaks for the whole inbox, so it reads the unfiltered list.
     val overall = if (query.isEmpty() && source.isEmpty() && kind.isEmpty()) result else list(InboxListSettings())
     val workingRows = result.groups.filter { it.id != "done" }.flatMap { it.rows }.filter(::working)
@@ -85,7 +88,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }
     val displayGroups = buildList {
         triageGroups.firstOrNull { it.id == "action" }?.let { add(it) }
-        if (workingRows.isNotEmpty()) add(InboxGroup("working", persona.core.contracts.CoreText.plain(res.getString(R.string.inbox_group_working)), workingRows, workingRows, false))
+        if (workingRows.isNotEmpty()) add(InboxGroup("working", persona.core.contracts.CoreText.plain(res.getString(
+            if (eventHub) R.string.inbox_section_working else R.string.inbox_group_working)), workingRows, workingRows, false))
         addAll(triageGroups.filter { it.id != "action" })
     }
     val groups = displayGroups.filter { section.isEmpty() || it.id == section }
@@ -273,7 +277,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             groups.forEach { group ->
                 item("section:${group.id}", contentType = "section") {
                     JSectionHeader(
-                        title = inboxGroupTitle(group),
+                        title = if (group.id == "working") group.title.text() else inboxGroupTitle(group),
                         count = group.count,
                         status = when (group.id) { "action" -> Status.NeedsYou; "working" -> Status.Working; else -> null },
                         trailing = if (group.id == "working") null else if (group.folded) stringResource(R.string.inbox_expand) else stringResource(R.string.inbox_collapse),
@@ -358,15 +362,18 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             time = item.updatedAt?.let { displayTime(it, currentLocale) },
             preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null }
                 ?: record.doc?.let { listOf(docTypeName(res, it.type), item.preview).filter { s -> s.isNotBlank() }.joinToString(" · ") } ?: item.preview,
-            status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
+            status = when { done -> null; item.isWorking || record.agent?.state in setOf("running", "queued") -> Status.Working
+                item.section == InboxTier.Action.wire -> Status.NeedsYou; else -> null },
             // The hub names its own sources 飞书 and 邮件; the row already shows those as its source.
             tags = listOfNotNull(kindLabel(res, record).takeIf { it.isNotBlank() },
                 record.sourceLabel.takeIf { !record.isConnector && it.isNotBlank() && it !in setOf("飞书", "邮件") }, // i18n-ignore: hub source labels it matches
                 pluralStringResource(R.plurals.inbox_messages_count, record.count, record.count).takeIf { record.count > 0 }),
             // An extension may draw the page of its connector's items (inbox_item); the rest open their own page.
-            onClick = { navigator.navigate(pages.open(record)) }, onLongClick = { menu = true }, extra = {
+            // An event (inbox phase 1) opens its own page; an item from an older hub its source, as always.
+            onClick = { navigator.navigate(inboxRowPage(record, pages)) }, onLongClick = { menu = true }, extra = {
                 record.localDelivery?.pendingStatus()?.let { PendingBadge(it) }
                     ?: record.localStatus?.let { InboxLocalStatus(it) }
+                if (!done) eventMark(record)?.let { EventRowMark(it) }
                 if (!done) AgentDraftCard(record, composers, navigator, repository = repository)
             })
     }

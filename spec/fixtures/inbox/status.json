@@ -1,0 +1,408 @@
+{
+  "schema_version": 1,
+  "operation": "inbox_list",
+  "cases": [
+    {
+      "name": "status_sections_with_working",
+      "description": "有 status 时按 status 分段：进行中在需要你和知悉即可之间；tier 仍是 action 的进行中事项不算需要你；未知 status 和缺 status 按 tier。",
+      "source": [
+        "docs/inbox.md: 事件、处理链条、建议（第一期）",
+        "/api/v1/inbox: status, urgent（第一期契约）"
+      ],
+      "input": {
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "items": [
+          {
+            "id": "ev-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:59Z",
+            "status": "action",
+            "urgent": true
+          },
+          {
+            "id": "ev-b",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:58Z",
+            "status": "working"
+          },
+          {
+            "id": "ev-c",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "updated_at": "2026-01-01T00:00:57Z",
+            "status": "fyi"
+          },
+          {
+            "id": "ev-d",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "updated_at": "2026-01-01T00:00:56Z",
+            "status": "noise"
+          },
+          {
+            "id": "ev-e",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:55Z"
+          },
+          {
+            "id": "ev-f",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "updated_at": "2026-01-01T00:00:54Z",
+            "status": "later"
+          },
+          {
+            "id": "ev-g",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:53Z",
+            "status": "working",
+            "done_at": "2026-01-01T00:01:00Z"
+          }
+        ],
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-a"
+              },
+              {
+                "type": "item",
+                "id": "ev-e"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "ev-a"
+              },
+              {
+                "type": "item",
+                "id": "ev-e"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "working",
+            "title": "进行中",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-b"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "ev-b"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "fyi",
+            "title": "知悉即可",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-c"
+              },
+              {
+                "type": "item",
+                "id": "ev-f"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "ev-c"
+              },
+              {
+                "type": "item",
+                "id": "ev-f"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "noise",
+            "title": "已折叠",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-d"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-g"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          }
+        ],
+        "action_count": 2,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "working_never_folds",
+      "description": "进行中不受折叠设置影响，展开设置里没有它也照常显示成员。",
+      "source": [
+        "docs/inbox.md: 事件、处理链条、建议（第一期）",
+        "/api/v1/inbox: status, urgent（第一期契约）"
+      ],
+      "input": {
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "items": [
+          {
+            "id": "ev-w1",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:59Z",
+            "status": "working"
+          },
+          {
+            "id": "ev-w2",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "updated_at": "2026-01-01T00:00:58Z",
+            "status": "working"
+          }
+        ],
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": []
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "working",
+            "title": "进行中",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-w1"
+              },
+              {
+                "type": "item",
+                "id": "ev-w2"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "ev-w1"
+              },
+              {
+                "type": "item",
+                "id": "ev-w2"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 0,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "old_hub_without_status",
+      "description": "旧 hub 不发 status：和以前一样按 tier 分段，没有进行中。",
+      "source": [
+        "docs/inbox.md: 事件、处理链条、建议（第一期）",
+        "/api/v1/inbox: status, urgent（第一期契约）"
+      ],
+      "input": {
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "items": [
+          {
+            "id": "ev-o1",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:59Z"
+          },
+          {
+            "id": "ev-o2",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "updated_at": "2026-01-01T00:00:58Z"
+          }
+        ],
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-o1"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "ev-o1"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "fyi",
+            "title": "知悉即可",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "ev-o2"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "ev-o2"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    }
+  ]
+}

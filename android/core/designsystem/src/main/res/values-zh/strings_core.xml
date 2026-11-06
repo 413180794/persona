@@ -114,6 +114,7 @@
     <string name="designsystem_core_inbox_action">需要你</string>
     <string name="designsystem_core_inbox_fyi">知悉即可</string>
     <string name="designsystem_core_inbox_noise">已折叠</string>
+    <string name="designsystem_core_inbox_working">进行中</string>
     <string name="designsystem_core_inbox_done">已处理</string>
     <string name="designsystem_core_compacted_above">以上内容已压缩</string>
     <string name="designsystem_core_compact_manual">手动</string>

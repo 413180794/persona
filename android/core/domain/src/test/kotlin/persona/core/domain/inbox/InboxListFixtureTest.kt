@@ -19,6 +19,7 @@ class InboxListFixtureTest internal constructor(private val fixture: ListFixture
         title = value.string("title"), sender = value.optional("sender"), preview = value.string("preview"),
         summary = value.optional("summary"), tier = value.optional("tier"),
         updatedAt = value.optional("updated_at"), doneAt = value.optional("done_at"),
+        status = value.optional("status"), urgent = value.optional("urgent") == "true",
     )
 
     @Test fun matchesExpected() {

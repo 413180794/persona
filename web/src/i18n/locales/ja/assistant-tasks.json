@@ -80,6 +80,7 @@
   "send": "送信",
   "later": "あとで",
   "filed_not_sent": "この件は対応済みです。送信していません",
+  "filed_title": "対応済み",
   "more_asks_other": "ほか{count}件",
   "dock_all": "すべて{count}",
   "waiting": "要対応",

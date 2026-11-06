@@ -351,6 +351,24 @@ class RealInboxRepository(
         return text
     }
 
+    override suspend fun actOnSuggestion(request: SuggestionRequest): SuggestionOutcome {
+        val transport = requireTransport()
+        val (item, outcome) = try {
+            transport.suggestion(request.itemId, request.version, request.action.wire, request.text, request.clientId) to SuggestionOutcome.Done
+        } catch (e: InboxSuggestionStale) {
+            e.item to SuggestionOutcome.Stale
+        }
+        if (!owns(transport)) throw CancellationException("Pairing changed")
+        // The hub answers with the item as it now is (a new suggestion, 等对方回, or filed): the page redraws from it.
+        (item?.obj("item") ?: item)?.takeIf { it.optional("id") == request.itemId }?.let { data ->
+            refreshLock.withLock {
+                versions[request.itemId] = data.obj("agent")?.toString().orEmpty()
+                replaceRecord(record(data, transport))
+            }
+        }
+        return outcome
+    }
+
     override suspend fun handOff(request: InboxHandOffRequest) {
         require(request.itemId.isNotBlank() && request.text.isNotBlank() && request.operationId.isNotBlank())
         scope.coroutineContext.ensureActive()
@@ -898,11 +916,12 @@ class RealInboxRepository(
         val agent = data.obj("agent")
         val mail = data.obj("mail")
         val moment = data.obj("moment")
+        val event = persona.core.contracts.inboxEventFields(data)
         return InboxRecord(
             InboxItem(data.string("id"), data.string("account"), data.string("kind"), data.string("title"),
                 data.optional("sender"), data.string("preview"), data.optional("summary"), data.optional("tier"),
                 data.optional("updated_at"), data.optional("done_at"), data.optional("version"),
-                notice = moment?.optional("notice")),
+                notice = moment?.optional("notice"), status = event.status, urgent = event.urgent),
             sourceLabel = data.optional("account_name") ?: DataText.of(if (data.string("source") == "lark") Key.SourceLark else Key.SourceMail),
             feedId = lark?.optional("feed_id"), startPosition = lark?.number("start_position"), count = data.number("count")?.toInt() ?: 0,
             agent = agent?.let { InboxAgent(it.string("state"), it.string("draft"), it.optional("note") ?: it.string("reason"),
@@ -941,6 +960,7 @@ class RealInboxRepository(
                 }
             },
             mutes = persona.feature.inbox.inboxMuteOptions(data),
+            event = event,
         )
     }
 

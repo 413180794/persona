@@ -23,7 +23,9 @@ internal fun AgentDraftCard(record: InboxRecord, composers: ReplyComposers, navi
     /** An item's own page keeps its reply around, so a draft from AI 草拟 shows as soon as it comes. */
     keepComposer: Boolean = false,
 ) {
-    val agent = record.agent
+    // From a hub with events (inbox phase 1) the suggestion and the processing state take the AI 分身's place (the hub
+    // mirrors a reply suggestion into `agent` for older apps): the event page draws them, not this card.
+    val agent = record.agent?.takeIf { record.event.suggestion == null && record.event.handling == null }
     val drafted = agent != null && agent.state == "drafted" && agent.draft.isNotBlank()
     if (agent?.state == "running" || agent?.state == "queued") {
         StatusLine(StatusLineState(waiting = agent.state == "queued", working = agent.state == "running",

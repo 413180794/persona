@@ -2,6 +2,7 @@ package persona.android.navigation
 
 import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.*
+import persona.feature.inbox.InboxEventRoute
 import persona.feature.inbox.InboxItemDetailRoute
 import persona.feature.inbox.LarkMomentRoute
 import persona.feature.inbox.LarkRoute
@@ -14,7 +15,7 @@ import persona.platform.phonetools.PhoneToolsRoute
  */
 internal fun isDetailDestination(key: NavKey): Boolean = when (key) {
     is ChatRoute, is InteractionRoute, is TerminalRoute, is LarkRoute, is LarkMomentRoute, is MailRoute, is InboxItemRoute, is LarkChatRoute,
-    is InboxItemUiRoute, is InboxItemDetailRoute,
+    is InboxItemUiRoute, is InboxItemDetailRoute, is InboxEventRoute,
     is SettingsPageRoute, PairingRoute, PhoneToolsRoute, MachinesRoute, is MachineDetailRoute, is AddComputerRoute, TerminalPanesRoute,
     is EngineRoute, is ModelPurposeRoute, is ExtensionRoute, is ExtensionUiRoute, ExtensionMarketRoute, is ExtensionCatalogRoute,
     ExtensionMarketsRoute, is LauncherRoute, is ChannelRoute, is ConnectorRoute -> true

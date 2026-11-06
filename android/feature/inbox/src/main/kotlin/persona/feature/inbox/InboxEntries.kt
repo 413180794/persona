@@ -51,6 +51,12 @@ fun EntryProviderScope<NavKey>.inboxEntries(
             LarkLinkHost(source) { InboxItemDetailScreen(source, route, navigator) }
         }
     }
+    entry<InboxEventRoute> { route ->
+        val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        CompositionLocalProvider(LocalInboxNavigator provides navigator) {
+            LarkLinkHost(source) { InboxEventScreen(source, route, navigator) }
+        }
+    }
     entry<ConnectorThreadRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {

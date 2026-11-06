@@ -182,4 +182,36 @@
     <string name="inbox_unmute">ミュート解除</string>
     <string name="inbox_unmute_failed">ミュートを解除できませんでした。元に戻しました</string>
     <string name="inbox_muted_notice">「%1$s」をミュートしました。今後は受信トレイに入りません</string>
+
+    <!-- Inbox phase 1: events, suggestions, the 处理链条 (InboxEvents.kt). -->
+    <string name="inbox_section_working">進行中</string>
+    <string name="inbox_handling_looking">AIが確認中</string>
+    <string name="inbox_handling_agent">Agentが作業中</string>
+    <string name="inbox_handling_waiting">返信待ち</string>
+    <string name="inbox_handling_preparing">AIが提案を準備中</string>
+    <string name="inbox_handling_failed">AIが処理しきれませんでした。確認してください</string>
+    <string name="inbox_handling_failed_reason">AIが処理しきれませんでした：%1$s</string>
+    <string name="inbox_suggestion_reply">返信の提案</string>
+    <string name="inbox_suggestion_agent">Agentへの依頼案</string>
+    <string name="inbox_suggestion_conclusion">結論</string>
+    <string name="inbox_suggestion_handback">提案</string>
+    <string name="inbox_suggestion_row">%1$s：%2$s</string>
+    <string name="inbox_suggestion_note">根拠：%1$s</string>
+    <string name="inbox_suggestion_send">送信</string>
+    <string name="inbox_suggestion_start">開始</string>
+    <string name="inbox_suggestion_ack">了解</string>
+    <string name="inbox_suggestion_confirm">確認</string>
+    <string name="inbox_suggestion_edit">修正</string>
+    <string name="inbox_suggestion_reject">却下</string>
+    <string name="inbox_suggestion_editor_title">提案を修正</string>
+    <string name="inbox_suggestion_say">ひとこと伝える</string>
+    <string name="inbox_suggestion_say_hint">例：この返信はやめて、先に時間を確認して</string>
+    <string name="inbox_suggestion_say_send">AIに伝える</string>
+    <string name="inbox_suggestion_stale">提案が更新されました</string>
+    <string name="inbox_event_recap">まとめ</string>
+    <string name="inbox_event_chain">処理の流れ</string>
+    <string name="inbox_event_chain_all">すべて表示（%1$d）</string>
+    <string name="inbox_event_view_source">原文を見る</string>
+    <string name="inbox_done_by_manager">マネージャーが処理済み</string>
+    <string name="inbox_event_related">関連</string>
 </resources>

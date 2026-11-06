@@ -10,6 +10,9 @@ data class InboxDoneTarget(val id: String, val version: String? = null)
 /** What a bulk request does (`POST /api/v1/inbox/bulk`): 全部标为已处理, 全部忽略 (done_by=dismissed), 移回 (撤销). */
 enum class InboxBulkAction(val wire: String) { Done("done"), Dismiss("dismiss"), Reopen("reopen") }
 
+/** The suggestion acted on is no longer the current one (`409 suggestion_stale`); [item] is the item as it is now. */
+class InboxSuggestionStale(val item: JsonObject?) : IllegalStateException("suggestion_stale")
+
 /** One immutable pairing owns a transport and all its requests, including media. */
 interface InboxAssistantTransport {
     val scope: String
@@ -30,6 +33,13 @@ interface InboxAssistantTransport {
         if (action == InboxBulkAction.Dismiss) throw UnsupportedOperationException("Bulk dismiss unavailable")
         else setDone(items, action == InboxBulkAction.Done)
     suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String): JsonObject
+    /**
+     * Acts on an item's suggestion (`POST /api/v1/inbox/{id}/suggestion`, inbox phase 1): [action] is confirm, reject or
+     * instruct, [version] the suggestion's as shown, [text] the edited text (confirm) or the words (instruct). Answers
+     * the item; throws [InboxSuggestionStale] with the current item when the hub has a newer suggestion (409).
+     */
+    suspend fun suggestion(itemId: String, version: Long, action: String, text: String?, clientId: String): JsonObject =
+        throw UnsupportedOperationException("Inbox suggestions unavailable")
     suspend fun replyMail(itemId: String, text: String, clientId: String, target: MailReplyTarget): JsonObject =
         throw UnsupportedOperationException("Checked mail replies unavailable")
     suspend fun messages(feedId: String, around: Long? = null, before: String? = null, after: String? = null): JsonObject

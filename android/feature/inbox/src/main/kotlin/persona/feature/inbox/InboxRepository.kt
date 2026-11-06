@@ -45,6 +45,13 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
      */
     suspend fun draftReply(itemId: String, instruction: String): String = error("AI 草拟尚未接入") // i18n-ignore: developer error for a repository without the hub
 
+    /**
+     * The user's answer to an item's suggestion (inbox phase 1, `POST /api/v1/inbox/{id}/suggestion`). The snapshot
+     * takes the item the hub answers with, also when the suggestion was stale ([SuggestionOutcome.Stale]).
+     */
+    suspend fun actOnSuggestion(request: SuggestionRequest): SuggestionOutcome =
+        error("建议尚未接入") // i18n-ignore: developer error for a repository without the hub
+
     /** 交给 AI: the item as context with what to do, queued for Persona's main conversation or a running Agent. */
     suspend fun handOff(request: InboxHandOffRequest): Unit = error("交给 AI 尚未接入") // i18n-ignore: developer error for a repository without the hub
     fun replyUpdates(target: ReplyTarget): Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
@@ -153,6 +160,8 @@ data class InboxRecord(
     /** A Feishu chat's kind (`lark.is_group` / `is_topic`); null for one listed or cached before the hub said. */
     val isGroup: Boolean? = null,
     val isTopic: Boolean? = null,
+    /** Inbox phase 1: 总结, the processing conversation, the suggestion, the 处理链条; none from an older hub. */
+    val event: persona.core.contracts.InboxEventFields = persona.core.contracts.InboxEventFields.None,
 ) {
     /** A hub connector's item (not Feishu's, not mail): it opens as its connector's thread. */
     val isConnector: Boolean get() = connector != null && !isLark && !isMail && moment == null
@@ -258,3 +267,21 @@ data class InboxHandOffRequest(
     val sessionId: String? = null,
     val operationId: String = UUID.randomUUID().toString(),
 )
+
+/**
+ * One answer to a suggestion: [action] confirm (with [text] when the user changed it), reject, or instruct ([text] the
+ * words). [clientId] stays the same while the same answer is retried, so the hub runs it once.
+ */
+@Serializable
+data class SuggestionRequest(
+    val itemId: String,
+    val version: Long,
+    val action: SuggestionAction,
+    val text: String? = null,
+    val clientId: String = UUID.randomUUID().toString(),
+)
+
+@Serializable
+enum class SuggestionAction(val wire: String) { Confirm("confirm"), Reject("reject"), Instruct("instruct") }
+
+enum class SuggestionOutcome { Done, Stale }

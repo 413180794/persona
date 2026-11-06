@@ -1,0 +1,158 @@
+package persona.feature.inbox
+
+import androidx.annotation.StringRes
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import persona.core.contracts.InboxChainEntry
+import persona.core.contracts.InboxHandling
+import persona.core.contracts.InboxSuggestion
+import persona.core.designsystem.LocalizedFormats
+import persona.core.designsystem.icons.PhIcon
+import persona.core.designsystem.icons.PhIcons
+import persona.core.navigation.ChatRoute
+import java.time.Instant
+import java.time.ZoneId
+import java.util.Locale
+
+// Inbox phase 1 (docs/inbox.md「事件、处理链条、建议」, docs/android.md「收件箱：事件、建议、处理链条」): the pure parts of
+// how an event reads in the list and on its page. An item from an older hub has no event fields and none of this applies:
+// its row and its page are what they were.
+
+/** An event's own page: 摘要, 总结, the suggestion with its buttons, the 处理链条; 「看原文」 opens the item's source page. */
+@Serializable @SerialName("persona.feature.inbox.InboxEventRoute")
+data class InboxEventRoute(val itemId: String) : NavKey
+
+/** Opening [record] from the list: its event page when the hub sent event fields, else its own page as before. */
+fun inboxRowPage(record: InboxRecord, pages: InboxItemPages): NavKey =
+    if (record.event.present) InboxEventRoute(record.item.id) else pages.open(record)
+
+/** The words for a processing conversation that is on it (进行中): AI 正在看, Agent 在做, 等对方回复. */
+@StringRes
+internal fun handlingWord(handling: InboxHandling?): Int? = when (handling?.state) {
+    "looking" -> R.string.inbox_handling_looking
+    "agent" -> R.string.inbox_handling_agent
+    "waiting" -> R.string.inbox_handling_waiting
+    else -> null
+}
+
+/** What an open event's row says under its preview, besides its status mark. */
+internal sealed interface EventMark {
+    /** In 进行中: who is on it ([word]). */
+    data class Working(@StringRes val word: Int) : EventMark
+    /** 急事 in 需要你 while the manager prepares its suggestion. */
+    data object Preparing : EventMark
+    /** The suggestion's kind and the first line of its text. */
+    data class Suggests(@StringRes val kind: Int, val line: String) : EventMark
+    /** The manager failed or timed out: back in 需要你 without a suggestion. */
+    data class Failed(val reason: String?) : EventMark
+}
+
+internal fun eventMark(record: InboxRecord): EventMark? {
+    val item = record.item
+    if (item.isDone) return null
+    val event = record.event
+    event.suggestion?.let { return EventMark.Suggests(suggestionKindLabel(it), firstLine(it.text)) }
+    if (item.isWorking) return EventMark.Working(handlingWord(event.handling) ?: R.string.inbox_handling_looking)
+    val handling = event.handling
+    if (handling?.state == "failed") return EventMark.Failed(handling.error?.takeIf { it.isNotBlank() })
+    if (item.urgent && handling?.state == "looking") return EventMark.Preparing
+    return null
+}
+
+internal fun firstLine(text: String): String = text.trim().lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+
+/** The suggestion card's title: what it suggests (a handback one needs the user's judgment, whatever its kind). */
+@StringRes
+internal fun suggestionKindLabel(suggestion: InboxSuggestion): Int = when {
+    suggestion.handback -> R.string.inbox_suggestion_handback
+    suggestion.kind == "reply" -> R.string.inbox_suggestion_reply
+    suggestion.kind == "agent" -> R.string.inbox_suggestion_agent
+    suggestion.kind == "conclusion" -> R.string.inbox_suggestion_conclusion
+    else -> R.string.inbox_suggestion_handback
+}
+
+/**
+ * The card's buttons: [confirm]'s label, and whether it can be changed (修改 opens the editor with the text and
+ * 「说一句话」). reply 发送 · 修改 · 驳回, agent 开始 · 修改 · 驳回, conclusion 知道了 · 驳回, handback 确认 · 修改 · 驳回.
+ */
+internal data class SuggestionButtons(@StringRes val confirm: Int, val editable: Boolean)
+
+internal fun suggestionButtons(suggestion: InboxSuggestion): SuggestionButtons = when {
+    suggestion.handback -> SuggestionButtons(R.string.inbox_suggestion_confirm, true)
+    suggestion.kind == "reply" -> SuggestionButtons(R.string.inbox_suggestion_send, true)
+    suggestion.kind == "agent" -> SuggestionButtons(R.string.inbox_suggestion_start, true)
+    suggestion.kind == "conclusion" -> SuggestionButtons(R.string.inbox_suggestion_ack, false)
+    else -> SuggestionButtons(R.string.inbox_suggestion_confirm, true)
+}
+
+/**
+ * The confirm request for [suggestion] with the text the user leaves in the editor: the edited text only when it
+ * differs from the suggestion's (the hub records 改过 then), else none (run exactly as shown).
+ */
+internal fun confirmText(suggestion: InboxSuggestion, edited: String?): String? =
+    edited?.trim()?.takeIf { it.isNotEmpty() && it != suggestion.text.trim() }
+
+/** The chain as shown: only the newest entry while collapsed, else all of it, oldest first. */
+internal fun shownChain(chain: List<InboxChainEntry>, expanded: Boolean): List<InboxChainEntry> =
+    if (expanded || chain.size <= 1) chain else chain.takeLast(1)
+
+/** What tapping a chain entry does. */
+internal sealed interface ChainTarget {
+    data class Page(val key: NavKey) : ChainTarget
+    /** The item's own source page (Feishu chat, mail, connector thread, the extension's page): what 「看原文」 opens. */
+    data object Source : ChainTarget
+    /** A connector's link, opened in the in-app browser. */
+    data class Url(val url: String) : ChainTarget
+    /** Another inbox item. */
+    data class Item(val id: String) : ChainTarget
+    /** It opens its [InboxChainEntry.detail] / [InboxChainEntry.messages] in place. */
+    data object Inline : ChainTarget
+    /** Nothing more to show. */
+    data object None : ChainTarget
+}
+
+internal fun chainTarget(entry: InboxChainEntry, record: InboxRecord): ChainTarget {
+    val inline = if (!entry.detail.isNullOrBlank() || entry.messages.isNotEmpty()) ChainTarget.Inline else ChainTarget.None
+    val link = entry.link ?: return inline
+    return when (link.type) {
+        "source" -> {
+            val position = link.positionValue
+            when {
+                position != null && record.feedId != null -> ChainTarget.Page(LarkRoute(record.feedId, record.item.id, position))
+                !link.url.isNullOrBlank() -> ChainTarget.Url(link.url!!)
+                link.uid != null && record.isMail && record.doc == null -> ChainTarget.Page(MailRoute(record.item.id))
+                else -> ChainTarget.Source
+            }
+        }
+        "session" -> if (!link.machineId.isNullOrBlank() && !link.sessionId.isNullOrBlank())
+            ChainTarget.Page(ChatRoute(link.machineId!!, link.sessionId!!)) else inline
+        "item" -> link.id?.takeIf { it.isNotBlank() }?.let { ChainTarget.Item(it) } ?: inline
+        else -> inline
+    }
+}
+
+/** A chain entry's icon by its kind; a kind this app does not know gets a plain one. */
+internal fun chainIcon(kind: String, record: InboxRecord): PhIcon = when (kind) {
+    "received" -> if (record.isMail) PhIcons.EnvelopeSimple else PhIcons.ChatCircleDots
+    "triaged" -> PhIcons.FunnelSimple
+    "handling" -> PhIcons.Sparkle
+    "sent" -> PhIcons.PaperPlaneTilt
+    "agent" -> PhIcons.Robot
+    "confirmed" -> PhIcons.CheckCircle
+    "rejected" -> PhIcons.XCircle
+    "instructed" -> PhIcons.Quotes
+    "self_replied" -> PhIcons.ArrowBendUpLeft
+    "failed" -> PhIcons.WarningCircle
+    "concluded" -> PhIcons.Lightbulb
+    // Filed (已处理) by the manager or the user; not in the contract table, drawn like iOS does.
+    "done" -> PhIcons.Checks
+    else -> PhIcons.Info
+}
+
+/** A chain entry's time: the clock today, the date and the clock before. */
+internal fun chainTime(value: String?, locale: Locale, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
+    val at = value?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return ""
+    val today = at.atZone(zone).toLocalDate() == now.atZone(zone).toLocalDate()
+    return LocalizedFormats.format(at, if (today) LocalizedFormats.TIME else LocalizedFormats.MONTH_DAY_TIME, locale, zone)
+}

@@ -129,6 +129,7 @@
     <string name="designsystem_core_inbox_action">Needs you</string>
     <string name="designsystem_core_inbox_fyi">FYI</string>
     <string name="designsystem_core_inbox_noise">Folded</string>
+    <string name="designsystem_core_inbox_working">In progress</string>
     <string name="designsystem_core_inbox_done">Done</string>
     <string name="designsystem_core_compacted_above">Context above compacted</string>
     <string name="designsystem_core_compact_manual">Manual</string>

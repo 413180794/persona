@@ -23,6 +23,7 @@
 | 空间屏蔽可由单会话 allowed 覆盖。 | AppModel 的 `isMuted`；`apple/Shared/APIClient.swift` 的 `Pins.mutes` | `agent_mute_allow_override` |
 | 段标题件数包括交互和事项，actionCount 只数所有未处理 action 事项，不受页面筛选影响。 | InboxView 的 `sectionHeader`；InboxStore 的 `actionCount` | `waiting_agents_before_items`、`source_hides_agents`、`inbox_filter_mail_account` |
 | 筛选标签当前没有数字，因此 filter_counts 为空对象。 | InboxView 的 `chip` | `inbox_filter_feishu`、`inbox_filter_mail_kind` |
+| 有 status（第一期）时按它分段：进行中排在需要你和知悉即可之间、永远展开；进行中的事项不算需要你（actionCount 不数它）；缺 status 或值不认识时按 tier。 | `docs/inbox.md`「事件、处理链条、建议」；Android `InboxList.kt` 的 `section` | `status_sections_with_working`、`working_never_folds`、`old_hub_without_status` |
 | 本任务补充同时间按 id 升序的规则，并保留当前 iOS 的对照结果。 | `CLAUDE.md`「同一时间再按 id」；InboxView 的 `shownDone`；AppModel 的 `pendingInteractions` | `equal_times_use_id_extension`、`equal_times_reversed_input` |
 
 ## JSON 结构
@@ -33,7 +34,7 @@
 | --- | --- | --- |
 | `inbox_item_state` | `item_state.json` | 输入 items，输出 id、triage、is_triaged、is_done；sessions 为空，用于共享探针输入结构。 |
 | `hub_inbox_order` | `hub_order.json` | 输入无序 items，输出 hub 列表中的 ids，直接以 Go 实现对照。 |
-| `inbox_list` | `sections.json`、`filters.json`、`agents.json`、`ties.json` | 输入已加载列表、待处理交互和设置，输出分段、可见行和计数。 |
+| `inbox_list` | `sections.json`、`filters.json`、`agents.json`、`ties.json`、`status.json` | 输入已加载列表、待处理交互和设置，输出分段、可见行和计数。 |
 
 `inbox_list.input`：
 
@@ -68,7 +69,7 @@ Android 的目标断言应读取 expected，以后 iOS 跟进时补上比较键�
 
 ## 对照与复跑
 
-本目录共 28 个用例：Swift 客户端 25 个，Go hub 3 个；其中两个同时间用例按上面的双结果方式验证。`inbox_decode_triage_assertions` 直接迁移 InboxTests 的分拣及完成状态断言，替换所有内容为编造的数据；其余用例依据实现补齐。
+本目录共 31 个用例：Swift 客户端 25 个，Go hub 3 个，第一期的 status 分段 3 个（`status.json`，按契约写的 expected，只由 Android 验证）；其中两个同时间用例按上面的双结果方式验证。`inbox_decode_triage_assertions` 直接迁移 InboxTests 的分拣及完成状态断言，替换所有内容为编造的数据；其余用例依据实现补齐。
 
 临时程序和命令与 [Agents README](../sort/README.md#对照验证) 共用，按任务约定不提交探针。重建收件箱部分时：
 

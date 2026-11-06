@@ -198,4 +198,36 @@
     <string name="inbox_unmute">Unmute</string>
     <string name="inbox_unmute_failed">Couldn\'t unmute; restored</string>
     <string name="inbox_muted_notice">Muted “%1$s”; it won\'t come into the Inbox again</string>
+
+    <!-- Inbox phase 1: events, suggestions, the 处理链条 (InboxEvents.kt). -->
+    <string name="inbox_section_working">In progress</string>
+    <string name="inbox_handling_looking">AI is on it</string>
+    <string name="inbox_handling_agent">An agent is working</string>
+    <string name="inbox_handling_waiting">Waiting for a reply</string>
+    <string name="inbox_handling_preparing">AI is preparing a suggestion</string>
+    <string name="inbox_handling_failed">AI couldn’t finish. Take a look</string>
+    <string name="inbox_handling_failed_reason">AI couldn’t finish: %1$s</string>
+    <string name="inbox_suggestion_reply">Suggested reply</string>
+    <string name="inbox_suggestion_agent">Suggested agent task</string>
+    <string name="inbox_suggestion_conclusion">Conclusion</string>
+    <string name="inbox_suggestion_handback">Suggestion</string>
+    <string name="inbox_suggestion_row">%1$s: %2$s</string>
+    <string name="inbox_suggestion_note">Why: %1$s</string>
+    <string name="inbox_suggestion_send">Send</string>
+    <string name="inbox_suggestion_start">Start</string>
+    <string name="inbox_suggestion_ack">Got it</string>
+    <string name="inbox_suggestion_confirm">Confirm</string>
+    <string name="inbox_suggestion_edit">Edit</string>
+    <string name="inbox_suggestion_reject">Reject</string>
+    <string name="inbox_suggestion_editor_title">Edit the suggestion</string>
+    <string name="inbox_suggestion_say">Tell the AI</string>
+    <string name="inbox_suggestion_say_hint">For example: don’t reply like this, ask about the time first</string>
+    <string name="inbox_suggestion_say_send">Tell AI</string>
+    <string name="inbox_suggestion_stale">The suggestion was updated</string>
+    <string name="inbox_event_recap">Recap</string>
+    <string name="inbox_event_chain">What happened</string>
+    <string name="inbox_event_chain_all">Show all (%1$d)</string>
+    <string name="inbox_event_view_source">View original</string>
+    <string name="inbox_done_by_manager">Handled by the manager</string>
+    <string name="inbox_event_related">Related</string>
 </resources>
