@@ -13,7 +13,7 @@ import WebKit
 
 /// A piece of a page the user picked, carried in a message as
 /// `<jarvis-context kind="context|edit" title="…" url="…">text</jarvis-context>`.
-nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
+nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
     var id = UUID()
     var kind: String // "context" | "edit"
     var title: String

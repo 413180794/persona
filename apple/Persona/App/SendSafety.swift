@@ -74,6 +74,38 @@ extension AppModel {
     }
 }
 
+extension AppModel {
+    private static let contextsName = "composer-contexts"
+
+    static func savedContexts() -> [SessionKey: [ContextRef]] {
+        let list = StateCache.load(contextsName, as: [SavedContexts].self) ?? []
+        return Dictionary(list.map { ($0.key, $0.refs) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    func saveContexts() {
+        contextWriter.run { [weak self] in
+            guard let self else { return }
+            StateCache.save(Self.contextsName, self.composerContexts.filter { !$0.value.isEmpty }.map { SavedContexts(key: $0.key, refs: $0.value) })
+        }
+    }
+
+    nonisolated static func marks(_ drafts: [SessionKey: String], _ contexts: [SessionKey: [ContextRef]]) -> Set<SessionKey> {
+        Set(drafts.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.keys)
+            .union(contexts.filter { !$0.value.isEmpty }.keys)
+    }
+
+    /// `draftMarks` from the drafts and quotes, set only when it differs.
+    func markDrafts() {
+        let now = Self.marks(drafts, composerContexts)
+        if now != draftMarks { draftMarks = now }
+    }
+}
+
+private nonisolated struct SavedContexts: Codable, Sendable {
+    var key: SessionKey
+    var refs: [ContextRef]
+}
+
 private nonisolated struct SavedDraft: Codable, Sendable {
     var key: SessionKey
     var text: String

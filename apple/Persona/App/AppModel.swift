@@ -1576,7 +1576,7 @@ final class AppModel {
     }
 
     /// Unsent composer text per chat (also where an edited queued message lands); kept across launches.
-    var drafts: [SessionKey: String] = AppModel.savedDrafts() { didSet { saveDrafts() } }
+    var drafts: [SessionKey: String] = AppModel.savedDrafts() { didSet { saveDrafts(); markDrafts() } }
     @ObservationIgnored let draftWriter = Debouncer()
     /// A send the computer refused because its input box holds a draft (SendSafety.swift).
     var sendRefusal: SendRefusal?
@@ -2296,7 +2296,13 @@ final class AppModel {
     var composerDrops: [SessionKey: [URL]] = [:]
     #endif
     /// Page excerpts picked as context for a chat's next message (`<jarvis-context>`).
-    var composerContexts: [SessionKey: [ContextRef]] = [:]
+    /// Kept across launches with the text (#4578): a quote is the larger part of a reply.
+    var composerContexts: [SessionKey: [ContextRef]] = AppModel.savedContexts() { didSet { saveContexts(); markDrafts() } }
+    @ObservationIgnored let contextWriter = Debouncer()
+    /// The chats with something unsent (text or quotes): the Agents rows' 草稿 (#4578). Apart from `drafts`, which
+    /// changes on every key: this changes only when a chat gains or loses a draft, so the rows do not draw again as
+    /// one is typed.
+    var draftMarks: Set<SessionKey> = AppModel.marks(AppModel.savedDrafts(), AppModel.savedContexts())
     /// A chat asked for its composer's keyboard (a message just quoted, #1058); the composer takes it and clears it.
     var composerFocus: SessionKey?
 

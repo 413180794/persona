@@ -3522,6 +3522,8 @@ struct Composer: View, Equatable {
     }
 
     private var allowsSend: Bool { model.session(key)?.canSend == true }
+    /// A health conversation's files go to the health space's reports/ (docs/health.md「体检报告」), not the temp directory.
+    private var uploadDest: String? { model.session(key)?.isHealth == true ? Session.healthSpace : nil }
 
     /// /loop for Claude agents (`LoopCommand.offered`, as on the web): in the quick commands, with a line saying what
     /// a /loop draft will do.
@@ -3879,7 +3881,7 @@ struct Composer: View, Equatable {
         }
         .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
-            uploads.start(urls, machine: key.machineRef, model: model) { insertPath($0) }
+            uploads.start(urls, machine: key.machineRef, model: model, dest: uploadDest) { insertPath($0) }
         }
         #if os(macOS)
         // Finder drags: pictures are attached like 照片, other files uploaded to the machine like 文件 (docs/mac.md).
@@ -3982,7 +3984,7 @@ struct Composer: View, Equatable {
     }
 
     private func upload(_ urls: [URL]) {
-        uploads.start(urls, machine: key.machineRef, model: model) { insertPath($0) }
+        uploads.start(urls, machine: key.machineRef, model: model, dest: uploadDest) { insertPath($0) }
         focused = true
     }
     #endif

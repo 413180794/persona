@@ -71,7 +71,8 @@ final class FileUploads {
     @ObservationIgnored private var last: Task<Void, Never>?
 
     /// Queues picked files for machine; done gets each one's path on the machine, in the order picked.
-    func start(_ urls: [URL], machine: MachineRef, model: AppModel, done: @escaping (String) -> Void) {
+    /// dest "health": a report for the health space, kept in its reports/ (docs/health.md「体检报告」); nil the temp directory.
+    func start(_ urls: [URL], machine: MachineRef, model: AppModel, dest: String? = nil, done: @escaping (String) -> Void) {
         let features = model.features(machine.group)
         if !features.isEmpty, !features.contains("file_upload") {
             model.toast = Toast(String(localized: "hub 版本太旧，还不能发送文件：更新 hub 后再试"), style: .error)
@@ -92,7 +93,7 @@ final class FileUploads {
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 await prev?.value
                 guard let self, !Task.isCancelled else { return }
-                await self.run(item.id, url: url, machine: machine, model: model, done: done)
+                await self.run(item.id, url: url, machine: machine, model: model, dest: dest, done: done)
             }
             tasks[item.id] = task
             last = task
@@ -104,7 +105,7 @@ final class FileUploads {
         items.removeAll { $0.id == id }
     }
 
-    private func run(_ id: UUID, url: URL, machine: MachineRef, model: AppModel, done: (String) -> Void) async {
+    private func run(_ id: UUID, url: URL, machine: MachineRef, model: AppModel, dest: String?, done: (String) -> Void) async {
         defer {
             tasks[id] = nil
             items.removeAll { $0.id == id }
@@ -116,7 +117,7 @@ final class FileUploads {
             let staged = try await Self.stage(url)
             defer { try? FileManager.default.removeItem(at: staged.deletingLastPathComponent()) }
             update(id) { $0.size = (try? staged.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? $0.size }
-            let out = try await api.upload(file: staged, name: name, machine: machine.id) { sent in
+            let out = try await api.upload(file: staged, name: name, machine: machine.id, dest: dest) { sent in
                 Task { @MainActor [weak self] in self?.update(id) { $0.sent = max($0.sent, sent) } }
             }
             guard !Task.isCancelled else { return }

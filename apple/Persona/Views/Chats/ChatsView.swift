@@ -2581,11 +2581,15 @@ nonisolated struct SlotRow: View, Equatable {
     }
 
     /// Persona' own row's line: "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
+    /// Something typed or quoted in its composer and not sent (#4578), as Telegram's and Signal's lists say.
+    @MainActor private var hasDraft: Bool { AppModel.shared.draftMarks.contains(session.key) }
+
     @MainActor private var metaText: Text {
         var parts: [Text] = []
         if session.state == .needsYou && !muted && !hideState && !pendingCount {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
         }
+        if hasDraft { parts.append(Text("草稿").fontWeight(.semibold).foregroundStyle(Theme.needsYou)) }
         parts.append(Text(pane?.name ?? session.sourceSubtitle ?? session.agentLabel))
         if pane?.launcher == true { parts.append(Text("发起者").fontWeight(.semibold)) }
         if let host { parts.append(Text(host)) }
@@ -2601,7 +2605,8 @@ nonisolated struct SlotRow: View, Equatable {
 
     /// "Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var meta: String {
-        var parts = [pane?.name ?? session.sourceSubtitle ?? session.agentLabel]
+        var parts = hasDraft ? [String(localized: "草稿")] : []
+        parts.append(pane?.name ?? session.sourceSubtitle ?? session.agentLabel)
         if pane?.launcher == true { parts.append(String(localized: "发起者")) }
         if let host { parts.append(host) }
         let slot = pane == nil ? session.slotLabel : nil

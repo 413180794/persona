@@ -201,6 +201,8 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   所以从输入框上方弹出的菜单不会被裁（库代码不改，见 `apple/Packages/BeautifulUI/VENDORED.md`）。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里。
   - 草稿：输入框直接编辑 `model.drafts`（`Options.text`），不要让 bar 和宿主互相回写，否则拼音输入法正在拼的字会被提前上屏。
     发送前先确认输入法正在拼的字、拿文本视图里的字更新草稿（`TypedText.commitFocused`，三个输入框都这样，#2203：微信输入法下发出去只有一半）。
+    引用（`composerContexts`）和文字一样存进 StateCache（"composer-contexts"），App 被杀后还在；有字或有引用的会话在 Agents 列表行的元信息前标「草稿」（#4578，
+    `AppModel.draftMarks`，只在某个会话有了或没了草稿时才变，打字时行不重绘）。
   - 粘贴图片（#4573）：剪贴板里有图片、输入框聚焦时，输入框上方出现系统的「粘贴」按钮（`PasteImageChip`，SwiftUI `PasteButton`），点一下就把图加进待发图片；
     点按钮本身就是授权，不弹「允许粘贴」。是否有图只用 `hasImages` 判断，不读内容；同一次拷贝点过或点 × 后不再出现。对话、助手的两种起始输入框都有。
   - 「@」：本会话的工具读写过的文件（最近 12 个，打 `@相对路径`，Claude Code 和 Codex 都认），再是其他会话（最近活跃的 8 个，选中后作为一段

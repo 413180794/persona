@@ -188,6 +188,12 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 	for page := 0; page < or(e.PagesPerChat, 10); page++ {
 		msgs, newer, more, err := src.Messages(ctx, sc, cursor, limit)
 		if err != nil {
+			// Earlier pages are in the day files already: keep their cursor, or the next run writes them again.
+			if total > 0 {
+				if serr := e.saveArchived(c, cursor, total, sc.UpdatedAt); serr != nil {
+					e.logf("archive %s: save progress: %v", c.ID, serr)
+				}
+			}
 			return total, err
 		}
 		var lines []Line
@@ -220,17 +226,22 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 			break
 		}
 	}
+	return total, e.saveArchived(c, cursor, total, sc.UpdatedAt)
+}
+
+// saveArchived records how far a chat's archive got: the cursor to go on from and the n lines written.
+func (e *Engine) saveArchived(c *Chat, cursor string, n int, listed time.Time) error {
 	c.Cursor = cursor
-	c.Messages += total
-	c.Pending += total
+	c.Messages += n
+	c.Pending += n
 	if c.LastAt.IsZero() {
-		c.LastAt = sc.UpdatedAt
+		c.LastAt = listed
 	}
 	if err := e.Store.PutChat(c); err != nil {
-		return total, err
+		return err
 	}
 	e.index(KindChat, c.ID, c.Name, c.Tagging, c.OneLine, c.LastAt)
-	return total, nil
+	return nil
 }
 
 var docLink = regexp.MustCompile(`https?://[\w.-]+\.(?:feishu\.cn|larksuite\.com|larkoffice\.com)/(?:docx|docs|wiki|sheets|base|mindnotes|slides)/[A-Za-z0-9]+`)

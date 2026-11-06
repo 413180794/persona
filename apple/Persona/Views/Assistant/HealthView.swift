@@ -60,9 +60,9 @@ struct HealthView: View {
                 .themedPage()
             Group {
                 if AppStyle.current.usesBeautifulUI {
-                    BeautifulStarterComposer(disabled: disabled, launcher: $launcher, placeholder: String(localized: "问健康相关的问题…"), send: send)
+                    BeautifulStarterComposer(disabled: disabled, launcher: $launcher, placeholder: String(localized: "问健康相关的问题…"), uploadDest: Session.healthSpace, send: send)
                 } else {
-                    StarterComposer(disabled: disabled, placeholder: String(localized: "问健康相关的问题…"), send: send)
+                    StarterComposer(disabled: disabled, placeholder: String(localized: "问健康相关的问题…"), uploadDest: Session.healthSpace, send: send)
                 }
             }
             .padding(.horizontal, Theme.Space.m)
@@ -130,7 +130,7 @@ struct HealthView: View {
                 Section {
                     source(Theme.Icon.health, "Apple Health", String(localized: "经你的 iPhone 读取步数、睡眠、心率、体重等汇总，需要 Persona 在手机上打开并授权。"))
                     source(Theme.Icon.edit, String(localized: "记一条数据"), String(localized: "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。"))
-                    source(Theme.Icon.photo, String(localized: "化验单和报告"), String(localized: "发图片，逐项读出来并标出超出参考范围的。"))
+                    source(Theme.Icon.photo, String(localized: "化验单和报告"), String(localized: "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。"))
                 } header: {
                     Text("数据来源")
                 }

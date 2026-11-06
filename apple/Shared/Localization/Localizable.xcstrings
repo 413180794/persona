@@ -29599,24 +29599,24 @@
         }
       }
     },
-    "发图片，逐项读出来并标出超出参考范围的。": {
+    "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Send a photo; each item is read out, and anything outside the reference range is flagged."
+            "value": "Send a PDF or a photo: each item is read out and the ones outside the reference range are marked. The original and its record stay in Health, so years can be compared."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "画像を送ると項目ごとに読み取り、基準範囲外のものを示します。"
+            "value": "PDF か画像を送ると、項目ごとに読み取り、基準範囲外のものに印を付けます。原本と整理した記録はヘルスに残り、年ごとに比べられます。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "发图片，逐项读出来并标出超出参考范围的。"
+            "value": "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。"
           }
         }
       }

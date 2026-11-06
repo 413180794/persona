@@ -635,6 +635,8 @@ struct StarterComposer: View {
     var shell: ShellModes? = nil
     /// The field's hint; nil: 问 <Persona's name>… (健康 has its own).
     var placeholder: String? = nil
+    /// Where picked files land on the assistant's machine: "health" for 健康's reports/ (docs/health.md「体检报告」).
+    var uploadDest: String? = nil
     var send: (String, [ImagePayload]) -> Void
 
     struct ShellModes {
@@ -717,14 +719,14 @@ struct StarterComposer: View {
         .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
-            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model, dest: uploadDest) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         }
         #if os(macOS)
         // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
         .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
-            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model, dest: uploadDest) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         })
@@ -758,6 +760,8 @@ struct BeautifulStarterComposer: View {
     @Binding var launcher: String?
     /// The field's hint; nil: 问 <Persona's name>… (健康 has its own).
     var placeholder: String? = nil
+    /// Where picked files land on the assistant's machine: "health" for 健康's reports/ (docs/health.md「体检报告」).
+    var uploadDest: String? = nil
     var send: (String, [ImagePayload]) -> Void
     @State private var text = ""
     @State private var picks: [PhotosPickerItem] = []
@@ -843,14 +847,14 @@ struct BeautifulStarterComposer: View {
         .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
-            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model, dest: uploadDest) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         }
         #if os(macOS)
         // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
         .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
-            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model, dest: uploadDest) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         })
