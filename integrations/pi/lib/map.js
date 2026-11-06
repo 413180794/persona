@@ -99,7 +99,7 @@ export function entryItems(entry, seq) {
       const content = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content ?? []
       for (const b of content) {
         if (b?.type === 'text' && b.text) add({ role: 'user', kind: 'text', text: b.text })
-        else if (b?.type === 'image') add({ role: 'user', kind: 'image', mime: b.mimeType, lazy: true })
+        else if (b?.type === 'image') add({ role: 'user', kind: 'image', image: placeholder(b.mimeType) })
       }
       break
     }
@@ -119,7 +119,8 @@ export function entryItems(entry, seq) {
     }
     case 'toolResult': {
       add({ role: 'user', kind: 'tool_result', tool_use_id: m.toolCallId, is_error: m.isError === true, text: textOf(m.content) })
-      for (const b of m.content ?? []) if (b?.type === 'image') add({ role: 'user', kind: 'image', mime: b.mimeType, lazy: true })
+      // The result's images are its call's too (the apps show them on its card).
+      for (const b of Array.isArray(m.content) ? m.content : []) if (b?.type === 'image') add({ role: 'user', kind: 'image', tool_use_id: m.toolCallId, image: placeholder(b.mimeType) })
       break
     }
     case 'bashExecution': {
@@ -140,6 +141,9 @@ export function entryItems(entry, seq) {
   return out
 }
 
+/** An image item's payload in a page: its bytes come from session.image (docs/protocol.md「数据类型」Item.image). */
+const placeholder = (mime) => ({ mime: typeof mime === 'string' && mime ? mime : 'image/png', data: '', lazy: true })
+
 /** The image block the item at index of an entry stands for (as entryItems numbers them), undefined for others. */
 export function imageOf(entry, index) {
   const m = entry?.message
@@ -150,7 +154,7 @@ export function imageOf(entry, index) {
       if (i++ === index) return b.type === 'image' ? b : undefined
     }
   }
-  if (m?.role === 'toolResult') return (m.content ?? []).filter((b) => b?.type === 'image')[index - 1] // after the result
+  if (m?.role === 'toolResult') return (Array.isArray(m.content) ? m.content : []).filter((b) => b?.type === 'image')[index - 1] // after the result
   return undefined
 }
 

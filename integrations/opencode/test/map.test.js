@@ -18,9 +18,9 @@ test('tools get the names and arguments the apps draw', () => {
 
 test('a user message gives its text and its attachments', () => {
   const items = messageItems({ type: 'user', time: { created: T }, text: 'look', files: [{ mime: 'image/png', name: 'a.png', data: 'AAAA' }, { mime: 'text/plain', name: 'n.txt', data: 'x' }] }, 7)
-  assert.deepEqual(items.map((i) => [i.id, i.role, i.kind, i.text ?? i.mime]), [
+  assert.deepEqual(items.map((i) => [i.id, i.role, i.kind, i.text ?? i.image?.mime]), [
     ['7#0', 'user', 'text', 'look'], ['7#1', 'user', 'image', 'image/png'], ['7#2', 'user', 'text', '［附件 n.txt］']])
-  assert.equal(items[1].lazy, true)
+  assert.deepEqual(items[1].image, { mime: 'image/png', data: '', lazy: true }, 'a placeholder in Item.image: the bytes come from session.image')
   assert.equal(items[0].seq, 7)
   assert.deepEqual(imageOf({ type: 'user', files: [{ mime: 'image/png', data: 'AAAA' }] }, 1), { mime: 'image/png', data: 'AAAA' })
   assert.equal(imageOf({ type: 'user', files: [{ mime: 'image/png', data: 'AAAA' }] }, 2), undefined)

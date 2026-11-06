@@ -105,7 +105,7 @@ node 带的就是要跑的（通用做法见 `docs/runtimes.md`「自动更新�
 | assistant 消息：`thinking` / `text` / `toolCall` | `thinking` / `text` / `tool_use`；工具名和参数按 Claude 的画法：`bash`→`Bash`、`read`→`Read`（`path`→`file_path`）、`edit`→`Edit`（一处改动）/ `MultiEdit`（多处）、`write`→`Write`…… |
 | `stopReason: aborted / error` | notice「已中断」/「出错了：…」 |
 | `stopReason: length`（输出达到上限） | notice「输出达到上限，这一轮停了」 |
-| `toolResult` | `tool_result`（带 `tool_use_id`、`is_error`），里面的图片另成 `image` |
+| `toolResult` | `tool_result`（带 `tool_use_id`、`is_error`），里面的图片另成 `image`（带同一个 `tool_use_id`，App 画在这次调用的卡片上） |
 | 用户在 pi 里 `!` 跑的命令（`bashExecution`） | 一对 `Bash` 的 `tool_use` + `tool_result` |
 | compaction、分支摘要、显示的自定义消息 | notice |
 | 系统提示、模型 / 思考档位变化、标签、会话名、用量 | 不出 item（seq 照样往前走） |

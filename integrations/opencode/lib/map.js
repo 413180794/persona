@@ -85,7 +85,7 @@ export function messageItems(msg, seq) {
     case 'user': {
       if (msg.text) add(0, { role: 'user', kind: 'text', text: msg.text })
       ;(msg.files ?? []).forEach((f, i) => {
-        if (typeof f?.mime === 'string' && f.mime.startsWith('image/')) add(1 + i, { role: 'user', kind: 'image', mime: f.mime, lazy: true })
+        if (typeof f?.mime === 'string' && f.mime.startsWith('image/')) add(1 + i, { role: 'user', kind: 'image', image: { mime: f.mime, data: '', lazy: true } }) // bytes: session.image
         else add(1 + i, { role: 'user', kind: 'text', text: `［附件 ${f?.name ?? f?.mime ?? ''}］` })
       })
       break

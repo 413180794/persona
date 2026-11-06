@@ -7,8 +7,7 @@ const msg = (id, parentId, message) => ({ type: 'message', id, parentId, timesta
 test('user, assistant (thinking, text, tool calls) and tool results become the apps\' items', () => {
   const user = entryItems(msg('u', null, { role: 'user', content: [{ type: 'text', text: 'fix it' }, { type: 'image', data: 'AAAA', mimeType: 'image/png' }] }), 3)
   assert.deepEqual(user.map((i) => [i.id, i.role, i.kind]), [['3#0', 'user', 'text'], ['3#1', 'user', 'image']])
-  assert.equal(user[1].lazy, true)
-  assert.equal(user[1].data, undefined, 'image data comes from session.image')
+  assert.deepEqual(user[1].image, { mime: 'image/png', data: '', lazy: true }, 'a placeholder in Item.image: the bytes come from session.image')
 
   const asst = entryItems(msg('a', 'u', { role: 'assistant', stopReason: 'toolUse', content: [
     { type: 'thinking', thinking: 'look first' },
@@ -23,7 +22,9 @@ test('user, assistant (thinking, text, tool calls) and tool results become the a
   assert.equal(asst[4].tool_name, 'MultiEdit')
 
   const res = entryItems(msg('r', 'a', { role: 'toolResult', toolCallId: 'call_1', toolName: 'read', isError: false, content: [{ type: 'text', text: 'package a' }, { type: 'image', data: 'BB', mimeType: 'image/jpeg' }] }), 5)
-  assert.deepEqual(res.map((i) => [i.kind, i.tool_use_id ?? '']), [['tool_result', 'call_1'], ['image', '']])
+  assert.deepEqual(res.map((i) => [i.kind, i.tool_use_id ?? '']), [['tool_result', 'call_1'], ['image', 'call_1']], 'a result\'s image belongs to its call')
+  assert.deepEqual(res[1].image, { mime: 'image/jpeg', data: '', lazy: true })
+  assert.equal(imageOf(msg('r', 'a', { role: 'toolResult', content: 'plain text output' }), 1), undefined, 'a text-only result has no image')
   assert.equal(imageOf(msg('r', 'a', { role: 'toolResult', content: [{ type: 'text', text: 'x' }, { type: 'image', data: 'BB', mimeType: 'image/jpeg' }] }), 1).data, 'BB')
   assert.equal(imageOf(msg('u', null, { role: 'user', content: [{ type: 'text', text: 'fix it' }, { type: 'image', data: 'AAAA', mimeType: 'image/png' }] }), 1).data, 'AAAA')
 })
