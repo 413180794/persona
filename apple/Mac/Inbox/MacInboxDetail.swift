@@ -96,6 +96,8 @@ struct MacInboxItemDetail: View {
                 .navigationDestination(for: InboxItem.self) {
                     MacInboxItemDetail(item: $0, accounts: accounts, standalone: standalone)
                 }
+                // An event's chain: the source at an entry's message (inbox phase 1).
+                .navigationDestination(for: InboxSourceRoute.self) { InboxSourcePage(route: $0, accounts: accounts) }
         }
         .environment(\.feishuOpen) { route in
             // Documents read beside the item; people and chats replace it (back returns).
@@ -110,7 +112,7 @@ struct MacInboxItemDetail: View {
         // Another item of its Thread pushes in the column's stack, as a Feishu page does (back returns).
         .macInboxActions(current, reading: link != nil, showsListToggle: !standalone,
                          draft: { drafting = true }, handOff: { handingOff = true },
-                         openItem: { path.append($0) })
+                         openItem: { path.append($0) }, openSource: { path.append($0) })
         .onChange(of: link != nil, initial: true) { _, open in
             if Self.writesSharedReading(standalone: standalone) { MacInboxState.shared.reading = open }
         }

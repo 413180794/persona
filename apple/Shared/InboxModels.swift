@@ -41,8 +41,18 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     /// What it holds now, as the hub listed it: a bulk Done sends it back so an item that took new messages since
     /// is left open (older hubs leave it out).
     var version: String?
-    /// What it grew out of (docs/inbox.md「线索」, #2128): another item, a todo or an agent session; older hubs leave it out.
+    /// What it grew out of (docs/inbox.md「thread line」, #2128): another item, a todo or an agent session; older hubs leave it out.
     var parent: InboxParent?
+    /// Inbox phase 1 (docs/inbox.md): the section the hub put an open item in (action | working | fyi | noise;
+    /// nil from an older hub: the list goes by `tier`), urgent (someone waits), the manager's recap, the processing
+    /// conversation, the current suggestion, the chain and related items. Older hubs leave them all out.
+    var status: String?
+    var urgent: Bool?
+    var recap: String?
+    var handling: Handling?
+    var suggestion: Suggestion?
+    var chain: [ChainEntry]?
+    var related: [Related]?
 
     /// One thing an item can be muted by: a repository, a chat or a sender of its source.
     nonisolated struct MuteOption: Codable, Hashable, Sendable {
@@ -238,25 +248,36 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector, mutes, version, parent
+        case status, urgent, recap, handling, suggestion, chain, related
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 
     var isDone: Bool { doneAt != nil }
     var isLark: Bool { source == "lark" }
 
-    /// Triage tiers, most urgent first. Items not triaged yet count as Needs You until the AI says otherwise.
+    /// The list's sections of open items, in order: Needs You, In Progress (the AI or an Agent on it, or waiting for the
+    /// other side; inbox phase 1), FYI, Collapsed. Items not triaged yet count as Needs You until the AI says otherwise.
     enum Tier: String, CaseIterable, Sendable {
-        case action, fyi, noise
+        case action, working, fyi, noise
         var title: String {
             switch self {
             case .action: String(localized: "需要你")
+            case .working: String(localized: "进行中")
             case .fyi: String(localized: "知悉即可")
             case .noise: String(localized: "已折叠")
             }
         }
+
+        /// The section opens and closes from its title; In Progress is always open (the AI is on those, nothing to put away).
+        var folds: Bool { self != .working }
     }
 
-    var triage: Tier { tier.flatMap(Tier.init(rawValue:)) ?? .action }
+    /// The section: the hub's `status` when it sends one, else the triage tier as before (an older hub never says
+    /// In Progress, so the list is today's).
+    var triage: Tier {
+        if let s = status.flatMap(Tier.init(rawValue:)) { return s }
+        return tier.flatMap(Tier.init(rawValue:)).flatMap { $0 == .working ? nil : $0 } ?? .action
+    }
     var isTriaged: Bool { tier?.isEmpty == false }
 
     /// The short tag next to the title.

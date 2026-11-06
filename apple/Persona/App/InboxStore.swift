@@ -244,6 +244,18 @@ final class InboxStore {
         }
     }
 
+    /// The hub's copy of one item, as an answer returned it (acting on its suggestion): replaces the list's, kept on disk.
+    func put(_ item: InboxItem) {
+        guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
+        // An answer carries no `version` of the listing; keep the one listed so a bulk Done still sees it.
+        var fresh = item
+        if fresh.version == nil { fresh.version = items[i].version }
+        guard items[i] != fresh else { return }
+        items[i] = fresh
+        let snapshot = items
+        saver.run { StateCache.save(Self.stateName, snapshot) }
+    }
+
     /// Status moves being written, by "<item>|<row>|<field>" (the menu shows a spinner).
     private(set) var moving: Set<String> = []
 

@@ -61,13 +61,13 @@ struct MacInboxList: View {
             }
             ForEach(sections.tiers, id: \.tier) { t in
                 Section {
-                    if state.expanded.contains(t.tier.rawValue) {
+                    if state.expanded.contains(t.tier.rawValue) || !t.tier.folds {
                         ForEach(t.agents) { agentRow($0) }
                         ForEach(t.items) { row($0) }
                     }
                 } header: {
                     header(t.tier.title, count: t.items.count + t.agents.count, key: t.tier.rawValue,
-                           clear: t.tier == .action ? nil : (t.tier == .fyi ? String(localized: "全部看过") : String(localized: "全部清除"), { store.setDone(t.items, true) }))
+                           clear: InboxPage.clearTitle(t.tier).map { ($0, { store.setDone(t.items, true) }) })
                 }
             }
             if !sections.done.isEmpty {
@@ -171,6 +171,16 @@ struct MacInboxList: View {
     /// A section title that opens / closes the section, with its count, and an optional action on the right.
     private func header(_ title: String, count: Int, key: String, clear: (String, () -> Void)?) -> some View {
         HStack(spacing: Theme.Space.sm) {
+            if InboxItem.Tier(rawValue: key)?.folds == false {
+                // In Progress: always open, a plain title (inbox phase 1).
+                HStack(spacing: Theme.Space.xs) {
+                    Text(title).foregroundStyle(.secondary)
+                    Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
+                    Spacer(minLength: 0)
+                }
+                .font(Theme.Font.sectionHeader)
+                .lineLimit(1)
+            } else {
             Button {
                 withAnimation(Theme.Motion.standard) { state.toggle(key) }
             } label: {
@@ -187,6 +197,7 @@ struct MacInboxList: View {
             }
             .buttonStyle(.plain)
             .help(state.expanded.contains(key) ? "收起" : "展开")
+            }
             if let clear {
                 Button(clear.0) { withAnimation(Theme.Motion.standard) { clear.1() } }
                     .font(Theme.Font.secondary)

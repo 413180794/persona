@@ -134,8 +134,8 @@ final class MacInboxState {
     }
     var query = ""
     var selection: Set<MacInboxSelection> = []
-    /// Sections shown open: tiers (action, fyi, noise) and "done". Collapsed and Done start closed, as on the iPhone.
-    var expanded: Set<String> = ["action", "fyi"]
+    /// Sections shown open: tiers (action, working, fyi, noise) and "done". Collapsed and Done start closed, as on the iPhone.
+    var expanded: Set<String> = ["action", "working", "fyi"]
     var accounts: [MailAccount] = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
     /// The sheets the list opens: New Email, Manage Accounts, Edit on the AI Twin's draft, Hand to AI.
     var composing: ComposeDraft?
@@ -249,7 +249,7 @@ final class MacInboxState {
     func visibleOrder(_ model: AppModel) -> [MacInboxSelection] {
         let s = sections(model)
         var out: [MacInboxSelection] = []
-        for t in s.tiers where expanded.contains(t.tier.rawValue) {
+        for t in s.tiers where expanded.contains(t.tier.rawValue) || !t.tier.folds {
             out += t.agents.map { .agent($0.id) } + t.items.map { .item($0.id) }
         }
         if expanded.contains("done") { out += s.done.map { .item($0.id) } }
@@ -257,6 +257,7 @@ final class MacInboxState {
     }
 
     func toggle(_ section: String) {
+        guard InboxItem.Tier(rawValue: section)?.folds != false else { return } // In Progress stays open
         if expanded.contains(section) { expanded.remove(section) } else { expanded.insert(section) }
     }
 

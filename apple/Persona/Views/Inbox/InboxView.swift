@@ -48,8 +48,8 @@ struct InboxPage: View {
         get { accountState.accounts }
         nonmutating set { accountState.accounts = newValue }
     }
-    /// Sections shown open: tiers (action, fyi, noise) and "done". Collapsed and Done start closed.
-    @State private var expanded: Set<String> = ["action", "fyi"]
+    /// Sections shown open: tiers (action, working, fyi, noise) and "done". Collapsed and Done start closed.
+    @State private var expanded: Set<String> = ["action", "working", "fyi"]
     @State private var composing: ComposeDraft?
     @State private var editingDraft: InboxItem? // Edit on the AI Twin's draft
     @State private var showingMutes = false     // Muted
@@ -230,13 +230,13 @@ struct InboxPage: View {
                 let agents = tier == .action ? waitingAgents : []
                 if !items.isEmpty || !agents.isEmpty {
                     Section {
-                        if expanded.contains(tier.rawValue) {
+                        if expanded.contains(tier.rawValue) || !tier.folds {
                             ForEach(agents) { agentRow($0) }
                             ForEach(items) { row($0) }
                         }
                     } header: {
                         sectionHeader(tier.title, count: items.count + agents.count, key: tier.rawValue,
-                                      clear: tier == .action ? nil : (tier == .fyi ? String(localized: "全部看过") : String(localized: "全部清除"), { store.setDone(items, true) }))
+                                      clear: InboxPage.clearTitle(tier).map { ($0, { store.setDone(items, true) }) })
                     }
                 }
             }
@@ -258,6 +258,11 @@ struct InboxPage: View {
     /// context menu, so it is a visible button).
     private func sectionHeader(_ title: String, count: Int, key: String, clear: (String, () -> Void)?) -> some View {
         HStack(spacing: Theme.Space.sm) {
+            if InboxItem.Tier(rawValue: key)?.folds == false {
+                // In Progress: always open, a plain title (inbox phase 1).
+                Text("\(title) · \(count)").font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 0)
+            } else {
             Button {
                 withAnimation(Theme.Motion.standard) { if expanded.contains(key) { expanded.remove(key) } else { expanded.insert(key) } }
             } label: {
@@ -271,6 +276,7 @@ struct InboxPage: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            }
             if let clear {
                 Button(clear.0) { withAnimation(Theme.Motion.standard) { clear.1() } }
                     .font(Theme.Font.secondary)
@@ -403,6 +409,16 @@ struct InboxPage: View {
         .buttonStyle(.plain)
     }
 
+    /// A section's clear-all on the right: mark all seen (FYI), clear all (Collapsed); none for Needs You and In Progress (the AI is
+    /// on those).
+    nonisolated static func clearTitle(_ tier: InboxItem.Tier) -> String? {
+        switch tier {
+        case .action, .working: nil
+        case .fyi: String(localized: "全部看过")
+        case .noise: String(localized: "全部清除")
+        }
+    }
+
     /// The part of an address before the @ (chips stay short), unless that alone says nothing ("c@…").
     static func short(_ email: String) -> String {
         let name = String(email.split(separator: "@").first ?? Substring(email))
@@ -476,14 +492,18 @@ struct InboxRow: View {
                 if showAccount && !item.isLark {
                     Text(item.accountName).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                if !item.isDone {
+                if let mark = InboxEventText.mark(item) {
+                    // Inbox phase 1: the suggestion (it replaces the AI agent's draft card, which a hub mirrors it
+                    // into), In Progress's state, the 'preparing a suggestion' line; its buttons are in the detail.
+                    InboxEventMarkLine(mark: mark).padding(.top, Theme.Space.xxs)
+                } else if !item.isDone && item.suggestion == nil && item.handling == nil {
                     if let draft = item.agentDraft, let send {
                         InboxDraftCard(draft: draft, changes: (item.agent?.changes ?? []).map { DocChangeText.line($0, in: item.doc) },
                                        sending: sending, send: { send(draft) }, edit: edit)
                             .padding(.top, Theme.Space.sm)
                     } else if item.agentWorking {
                         HStack(spacing: Theme.Space.sm) {
-                            if AppStyle.current.usesBeautifulUI { BUISpinner(size: Theme.Size.dotXL) } else { ProgressView().controlSize(.mini) }
+                            InboxSpinner()
                             Text(item.agent?.state == "queued" ? String(localized: "AI 分身排队中") : item.agent?.task.map { String(localized: "AI 分身正在处理：\($0)") } ?? String(localized: "AI 分身正在处理"))
                                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -626,7 +646,7 @@ struct InboxDraftCard: View {
 }
 
 /// The draft's card: the accent's tint with a hairline; in the BeautifulUI style the field gray (RecommendationCard).
-private struct DraftSurface: ViewModifier {
+struct DraftSurface: ViewModifier {
     func body(content: Content) -> some View {
         if AppStyle.current.usesBeautifulUI {
             content.background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
@@ -698,10 +718,7 @@ struct InboxDetailView: View {
     private var current: InboxItem { InboxStore.shared.items.first { $0.id == item.id } ?? item }
 
     var body: some View {
-        InboxItemSlotContent(item: current, slot: slot) { content }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                InboxActionBar(item: current, draft: { drafting = true }, handOff: { handingOff = true })
-            }
+        page
             .sheet(isPresented: $drafting) {
                 InboxDraftSheet(item: current, accounts: accounts, onSent: { dismiss() })
             }
@@ -728,6 +745,21 @@ struct InboxDetailView: View {
                     }
                 }
             }
+    }
+
+    /// An event (inbox phase 1: recap, a suggestion, the chain) opens as its own page, the source behind 'view original';
+    /// anything else as before: the source with the actions over it.
+    @ViewBuilder private var page: some View {
+        if current.isEvent {
+            InboxEventPage(item: current, accounts: accounts, draft: { drafting = true }, handOff: { handingOff = true })
+                .navigationTitle(current.title)
+                .navigationBarTitleDisplayMode(.inline)
+        } else {
+            InboxItemSlotContent(item: current, slot: slot) { content }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    InboxActionBar(item: current, draft: { drafting = true }, handOff: { handingOff = true })
+                }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -763,6 +795,10 @@ struct InboxDestinations: ViewModifier {
                 InboxDetailView(item: $0, accounts: accounts).id($0.id).splitDetailPage().feishuHandlesLinks(feishuOpen)
             }
             .navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0).splitDetailPage().feishuHandlesLinks(feishuOpen) }
+            // view original and the chain's links of an event (inbox phase 1).
+            .navigationDestination(for: InboxSourceRoute.self) {
+                InboxSourcePage(route: $0, accounts: accounts).splitDetailPage().feishuHandlesLinks(feishuOpen)
+            }
             .extensionPushDestination()
     }
 }

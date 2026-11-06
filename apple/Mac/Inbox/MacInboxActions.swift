@@ -19,10 +19,38 @@ struct MacInboxActions: View {
     var draft: () -> Void
     var handOff: () -> Void
     var openItem: ((InboxItem) -> Void)?
+    /// The source at a chain entry's message, pushed in the detail's stack (inbox phase 1).
+    var openSource: ((InboxSourceRoute) -> Void)?
     @State private var line: InboxTree?
+    /// Inbox phase 1: the suggestion's buttons, and its editor (edit).
+    @State private var suggestion: InboxSuggestionModel
+    @State private var editing = false
+
+    init(item: InboxItem, column: Bool, reading: Bool = false, showsListToggle: Bool = true,
+         draft: @escaping () -> Void, handOff: @escaping () -> Void, openItem: ((InboxItem) -> Void)? = nil,
+         openSource: ((InboxSourceRoute) -> Void)? = nil) {
+        self.item = item
+        self.column = column
+        self.reading = reading
+        self.showsListToggle = showsListToggle
+        self.draft = draft
+        self.handOff = handOff
+        self.openItem = openItem
+        self.openSource = openSource
+        _suggestion = State(initialValue: InboxSuggestionModel.live(item.id))
+    }
 
     var body: some View {
         bar.inboxLine(item, tree: $line)
+            .sheet(isPresented: $editing) {
+                if let s = item.currentSuggestion {
+                    InboxSuggestionEditor(item: item, suggestion: s, model: suggestion).macSheet()
+                }
+            }
+            #if DEBUG
+            // `-showInboxSuggestionEdit YES`: the suggestion's editor (screenshots).
+            .task { if column, UserDefaults.standard.bool(forKey: "showInboxSuggestionEdit"), item.currentSuggestion != nil { editing = true } }
+            #endif
     }
 
     @ViewBuilder private var bar: some View {
@@ -75,7 +103,11 @@ struct MacInboxActions: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        if item.agentWorking {
+        if item.isEvent {
+            // recap, the suggestion with its buttons, the chain and related items (inbox phase 1); the source is the item beside.
+            InboxEventBlocks(item: item, model: suggestion, sourceShown: true, compact: !column, edit: { editing = true },
+                             openItem: openItem, openSource: openSource)
+        } else if item.agentWorking {
             HStack(spacing: Theme.Space.sm) {
                 ProgressView().controlSize(.mini)
                 Text(item.agent?.state == "queued" ? String(localized: "AI 分身排队中")
@@ -88,8 +120,12 @@ struct MacInboxActions: View {
 
     @ViewBuilder private func buttons(iconsOnly: Bool) -> some View {
         // A connector's thread that cannot be answered here (a CI run, a text message) is answered in its own app.
-        if item.connector.map({ $0.canReply == true }) ?? true {
-            action(item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"), Theme.Icon.draftReply, prominent: true, iconsOnly: iconsOnly,
+        if item.currentSuggestion?.kind == "reply" {
+            // A suggested reply has its own send / edit in the card (inbox phase 1): no second way to the same draft.
+        } else if item.connector.map({ $0.canReply == true }) ?? true {
+            // Another suggestion has its own buttons in the card: draft reply steps back to a plain button.
+            action(item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"), Theme.Icon.draftReply,
+                   prominent: item.currentSuggestion == nil, iconsOnly: iconsOnly,
                    help: item.agentDraft == nil ? String(localized: "让 AI 用你的口吻草拟一条回复") : String(localized: "AI 分身草拟好了回复，看看再发"), perform: draft)
         } else if let open = item.connector?.openURL, let url = InboxActionBar.systemURL(open, draft: item.agentDraft) {
             let sms = url.scheme == "sms"
@@ -124,9 +160,9 @@ extension View {
     /// The item's actions (`MacInboxActions`) beside it when the detail has room for a column, over it otherwise.
     func macInboxActions(_ item: InboxItem, reading: Bool = false, showsListToggle: Bool = true,
                          draft: @escaping () -> Void, handOff: @escaping () -> Void,
-                         openItem: ((InboxItem) -> Void)? = nil) -> some View {
+                         openItem: ((InboxItem) -> Void)? = nil, openSource: ((InboxSourceRoute) -> Void)? = nil) -> some View {
         modifier(MacInboxActionsHost(item: item, reading: reading, showsListToggle: showsListToggle,
-                                     draft: draft, handOff: handOff, openItem: openItem))
+                                     draft: draft, handOff: handOff, openItem: openItem, openSource: openSource))
     }
 }
 
@@ -139,6 +175,7 @@ private struct MacInboxActionsHost: ViewModifier {
     var draft: () -> Void
     var handOff: () -> Void
     var openItem: ((InboxItem) -> Void)?
+    var openSource: ((InboxSourceRoute) -> Void)?
     @State private var wide = true
     private var room: Bool { wide && !reading }
 
@@ -149,13 +186,13 @@ private struct MacInboxActionsHost: ViewModifier {
             VStack(spacing: 0) {
                 if !room {
                     MacInboxActions(item: item, column: false, reading: reading, showsListToggle: showsListToggle,
-                                    draft: draft, handOff: handOff, openItem: openItem)
+                                    draft: draft, handOff: handOff, openItem: openItem, openSource: openSource)
                 }
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if room {
                 Divider()
-                MacInboxActions(item: item, column: true, draft: draft, handOff: handOff, openItem: openItem)
+                MacInboxActions(item: item, column: true, draft: draft, handOff: handOff, openItem: openItem, openSource: openSource)
                     .frame(width: Theme.Size.macInboxActionsWidth)
             }
         }

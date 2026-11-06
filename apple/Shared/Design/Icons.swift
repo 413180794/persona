@@ -48,6 +48,17 @@ extension Theme {
         static let schedule = "alarm"
         /// The session triage: a stopped agent read to say whether it is done or what it waits for (Settings › Session Triage).
         static let triage = "text.badge.checkmark"
+        // The inbox chain (docs/inbox.md): what happened to an event, one icon per kind.
+        /// New messages came into an event (3 new messages).
+        static let received = "arrow.down.message"
+        /// The triage model sorted it (triaged: needs you).
+        static let triaged = "tray.2"
+        /// The user turned a suggestion down (reject).
+        static let rejected = "hand.thumbsdown"
+        /// The user told the manager what to do instead (say a word).
+        static let instructed = "quote.bubble"
+        /// The manager's conclusion: done, just read it.
+        static let concluded = "flag.checkered"
         /// Persona woke a waiting agent up (a message it typed in for the model, `Injected`).
         static let wakeUp = "bell.and.waves.left.and.right"
         /// A task that waits for the user's answer (its notice in the main conversation, `Injected`).
@@ -420,17 +431,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

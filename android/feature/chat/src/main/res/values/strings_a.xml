@@ -76,6 +76,10 @@
     <string name="chat_receipt_plan_rejected">Plan sent back</string>
     <string name="chat_receipt_plan_rejected_feedback">Plan sent back: %1$s</string>
     <string name="chat_receipt_answered">Answered: %1$s</string>
+    <string name="chat_receipt_plan_approved_about">Plan approved: %1$s</string>
+    <string name="chat_receipt_plan_approved_mode">Plan approved, %1$s</string>
+    <string name="chat_receipt_plan_approved_mode_about">Plan approved, %1$s: %2$s</string>
+    <string name="chat_receipt_answered_about">Answered “%1$s”: %2$s</string>
     <string name="chat_interaction_resolved_elsewhere">Handled on the computer</string>
     <string name="chat_interaction_prompt_changed">The screen changed, so nothing was submitted. Check the new question and choose again.</string>
     <string name="chat_interaction_unknown">Not sure your answer got through. Check the request first.</string>

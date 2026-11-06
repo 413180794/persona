@@ -57,7 +57,8 @@ internal object AnsweredText {
         }
     }
 
-    private fun modeLabel(mode: String?) = when (mode) {
+    /** The approval mode a plan was approved with, in words; null for none or one this app has no words for. */
+    fun modeLabel(mode: String?) = when (mode) {
         "acceptEdits" -> R.string.chat_answered_mode_accept_edits
         "bypassPermissions" -> R.string.chat_answered_mode_bypass
         "default" -> R.string.chat_answered_mode_default
