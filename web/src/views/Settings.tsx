@@ -2,6 +2,7 @@
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
 import { BASE, stripBase } from "../lib/base";
 import { href } from "../lib/router";
+import { useScrollMemory } from "../lib/scroll-memory";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, handleUnauthorized, setToken } from "../lib/api";
 import { TOKEN_ID_KEY } from "../lib/auth";
@@ -132,6 +133,9 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     return () => removeEventListener("popstate", back);
   }, []);
   const listed = phone && !at.tab;
+  // one scroller shows the list and every page: each keeps its own spot, and Back to the list lands where it was (#5133)
+  const scroller = useRef<HTMLDivElement>(null);
+  useScrollMemory(scroller, listed ? "settings" : `settings/${at.tab ?? "general"}/${at.sub ?? ""}`);
   const tab: Tab = at.tab ?? "general";
   const { sub } = at;
   // 扩展 only on a hub with the extension base (docs/extensions.md「hub 的接口」); a link to it still opens it.
@@ -187,7 +191,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </nav>
         )}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
         {listed ? (
           <div className="px-4 py-5" style={{ animation: `fade-up 320ms ${EASE} both` }}>
             <SettingsList shown={shown} onPick={pick} />

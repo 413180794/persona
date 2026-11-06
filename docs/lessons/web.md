@@ -318,3 +318,9 @@
 
 - A hover-only title does not explain a failed request on touch devices. Render the shared error explanation in the sidebar and keep an explicit retry action there.
 - Reuse the list store's refresh path and disable the local retry action until its promise settles. A failed retry stays retryable; a successful one clears the error. Preserve the last successful session list while requests fail. Test these transitions through the actual sidebar and mocked HTTP responses.
+
+## Back lands where the page was scrolled (2026-11-06, #5133)
+
+- Pages scroll in their own `overflow-y-auto` box under `<main>`, not the window, so the browser's scroll restoration does nothing for them. 总览 unmounts when a card opens a conversation, and 设置's phone list shares one scroller with every category (the category's shorter content clamps `scrollTop`), so Back landed at the top. The inbox never had the problem: its list stays mounted, hidden, under the opened item.
+- `useScrollMemory(ref, key)` (`lib/scroll-memory.ts`) remembers `scrollTop` per key and restores it only when the router saw Back / Forward land on the current address (`takeReturn`); a link or a tap starts at the top. Decide the target once per key: React's StrictMode runs the layout effect twice in development, and the second run would find the return already taken.
+- Checking it in a browser: an edit made while Vite is running can keep serving the old module (the "negative control" passed with the hook disabled). Restart Vite with `--force` and fetch the module to confirm before trusting a before/after comparison.

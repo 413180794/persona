@@ -1,5 +1,9 @@
 package persona.core.domain.tasks
 
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -70,7 +74,11 @@ class TaskDockTest {
         override suspend fun removeTask(todoId: String) = Unit
         override suspend fun route(conversation: String, todoId: String, text: String): FeedItem = error("unused")
         var main: String? = null
-        override suspend fun today(conversation: String): FeedItem { calls += "today $conversation"; return FeedItem("today-$conversation", conversation, kind = "today") }
+        /** The hub's day (its ref): the assistant's time zone, not the phone's. */
+        var hubDay: String? = null
+        override suspend fun today(conversation: String): FeedItem {
+            calls += "today $conversation"; return FeedItem("today-$conversation", conversation, kind = "today", ref = hubDay)
+        }
         override suspend fun mainConversation(): String? = main
         override suspend fun inboxReply(itemId: String, text: String, card: String?) = Unit
     }
@@ -94,6 +102,37 @@ class TaskDockTest {
         store.loadTodayIfMain("B")
         assertEquals(listOf("today A", "today B"), api.calls)
         assertEquals("B", store.mainConversation.value)
+    }
+
+    private class TestClock(var instant: Instant) : Clock() {
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+        override fun withZone(zone: ZoneId?): Clock = this
+        override fun instant(): Instant = instant
+    }
+
+    @Test fun theTodayCardIsAskedAgainWhenTheHubsDayMayHaveMovedOn() {
+        // The phone is on 11-06; the hub counts days in another zone and still gives 11-05's card (#5194).
+        val api = Api().apply { hubDay = "2026-11-05" }
+        val clock = TestClock(Instant.parse("2026-11-06T07:00:00Z"))
+        val store = TasksStore(api, Connection(), CoroutineScope(Dispatchers.Unconfined), clock = clock)
+        store.loadToday("main")
+        store.loadToday("main")
+        assertEquals(1, api.calls.size)
+        // Later the same phone day the hub is on 11-06 too: opening the conversation asks again.
+        clock.instant = Instant.parse("2026-11-06T15:00:00Z")
+        api.hubDay = "2026-11-06"
+        store.loadToday("main")
+        assertEquals(2, api.calls.size)
+        store.loadToday("main")
+        assertEquals(2, api.calls.size)
+        // A hub a day ahead of the phone cannot move on before the phone's own day does.
+        api.hubDay = "2026-11-07"
+        clock.instant = Instant.parse("2026-11-06T16:00:00Z")
+        store.loadToday("main")
+        assertEquals(3, api.calls.size)
+        clock.instant = Instant.parse("2026-11-06T20:00:00Z")
+        store.loadToday("main")
+        assertEquals(3, api.calls.size)
     }
 
     @Test fun aProjectMovesToTheTodoItIsLinkedToAndBackOnFailure() = runBlocking {

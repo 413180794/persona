@@ -138,8 +138,21 @@ export function routePath(r: Route): string {
 const viewQuery = (view?: SessionView) => (view ? `?view=${view}` : "");
 
 const listeners = new Set<() => void>();
+// The address Back / Forward last landed on, until a page takes it (takeReturn) or the app navigates on: a page that
+// remembers where it was scrolled puts it back only on a return, and a fresh visit starts at the top (#5133).
+let returnedTo = "";
 if (typeof addEventListener !== "undefined") {
-  addEventListener("popstate", () => listeners.forEach((l) => l()));
+  addEventListener("popstate", () => {
+    returnedTo = location.pathname + location.search;
+    listeners.forEach((l) => l());
+  });
+}
+
+/** Whether the page now at the address was reached by Back / Forward (once: the next call says no). */
+export function takeReturn(): boolean {
+  const back = returnedTo !== "" && returnedTo === location.pathname + location.search;
+  returnedTo = "";
+  return back;
 }
 
 /** `r` as a string is a path in the app ("/settings?tab=…"), without the sub-path. `state` goes with the new entry
@@ -148,6 +161,7 @@ export function navigate(r: Route | string, replace = false, state: Record<strin
   const to = typeof r === "string" ? BASE + r : href(r);
   // the query is part of the address (/s/…?view=term): the same page with another view is somewhere else
   if (to === location.pathname + location.search) return;
+  returnedTo = "";
   // From inside an open overlay (a drawer's link, a sheet's action): the new page takes the overlay's entry, so Back
   // from it goes to the page under the overlay, not to a dead copy of it (#1996). A replace keeps the entry's state:
   // an overlay open over the page keeps its marker.

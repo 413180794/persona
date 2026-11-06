@@ -3,6 +3,8 @@ package persona.core.domain.tasks
 import persona.core.contracts.CoreTextFailure
 import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -271,11 +273,15 @@ interface TodoCache {
     suspend fun write(todos: List<Todo>)
 }
 
+/** How long a 今天 card is held before an open asks the hub again whether its day has moved on (#5194). */
+private val todayRecheck = Duration.ofMinutes(10)
+
 class TasksStore(
     private val api: TasksApi,
     connection: HubConnection,
     private val scope: CoroutineScope,
     private val cache: TodoCache? = null,
+    private val clock: Clock = Clock.systemDefaultZone(),
 ) {
     private val _todos = MutableStateFlow<List<Todo>>(emptyList())
     val todos: StateFlow<List<Todo>> = _todos.asStateFlow()
@@ -298,7 +304,8 @@ class TasksStore(
     val busy = MutableStateFlow<Set<String>>(emptySet())
     /** Message cards (inbox item ids) put off with 稍后. */
     val later = MutableStateFlow<Set<String>>(emptySet())
-    private val todayAsked = HashMap<String, LocalDate>()
+    /** Conversation → when the 今天 card was last asked for, and the day of the card the hub gave (null while asking). */
+    private val todayAsked = HashMap<String, Pair<Instant, LocalDate?>>()
     /** This hub's assistant cards (docs/assistant-views.md): live cards, answers and registered reply blocks. */
     val cards = AssistantViewStore()
     val cardActions = AssistantCardActions(api, cards, reload = { load(it, whole = true) })
@@ -490,11 +497,25 @@ class TasksStore(
     fun agentsOf(conversation: String, sessions: List<Session>): List<Session> =
         dockAgents(conversation, mainConversation.value, sessions, _todos.value)
 
+    /**
+     * The hub counts the day in the assistant's time zone, which need not be the phone's (#5194): the card is asked
+     * again on the phone's new day, and on an open [todayRecheck] after the last ask unless the card's day is already
+     * past the phone's (that hub cannot move on before the phone does).
+     */
     fun loadToday(conversation: String) {
-        val today = LocalDate.now()
-        if (todayAsked[conversation] == today) return
-        todayAsked[conversation] = today
-        scope.launch { runCatching { api.today(conversation) }.onSuccess { received(listOf(it)) }.onFailure { todayAsked.remove(conversation) } }
+        val now = clock.instant()
+        val today = LocalDate.now(clock)
+        todayAsked[conversation]?.let { (at, day) ->
+            if (LocalDate.ofInstant(at, clock.zone) == today &&
+                (day == null || day > today || now < at + todayRecheck)) return
+        }
+        todayAsked[conversation] = now to null
+        scope.launch {
+            runCatching { api.today(conversation) }.onSuccess { card ->
+                todayAsked[conversation] = now to (card.ref?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today)
+                received(listOf(card))
+            }.onFailure { todayAsked.remove(conversation) }
+        }
     }
 
     private fun received(items: List<FeedItem>, conversation: String? = null) {

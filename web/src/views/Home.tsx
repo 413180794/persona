@@ -1,5 +1,5 @@
 // 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ago, sessionCan, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
 import { cardState } from "../lib/card-focus";
 import { interactionAsk } from "../lib/inbox";
@@ -15,6 +15,7 @@ import { isPending, machineErrorText } from "../lib/add-computer";
 import { machineDeployment } from "../lib/machine-deploy";
 import { classifyConnection } from "../lib/node-health";
 import { href, onLinkClick, type Route } from "../lib/router";
+import { useScrollMemory } from "../lib/scroll-memory";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { getSession, useStore } from "../lib/store";
 import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
@@ -66,6 +67,10 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
     setTimeout(() => setHeld((h) => h.filter((x) => x.ix.id !== ix.id)), ANSWERED_HOLD_MS + 400);
   };
 
+  // Back from a card opened here lands where the reader was, not at the top (#5133)
+  const scroller = useRef<HTMLDivElement>(null);
+  useScrollMemory(scroller, "/overview");
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4 lg:border-transparent">
@@ -75,7 +80,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           {t("home.new_agent")}
         </Button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[760px] flex-col gap-9 px-5 pt-6 pb-16 sm:px-8 sm:pt-10">
           <div style={{ animation: `fade-up 420ms ${EASE} both` }}>
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{greeting()}</h1>
