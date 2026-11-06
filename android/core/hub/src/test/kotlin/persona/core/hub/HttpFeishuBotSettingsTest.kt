@@ -25,13 +25,13 @@ class HttpFeishuBotSettingsTest {
     }
 
     @Test fun readsTheBotAndToleratesWhatItDoesNotKnow() = withHub { server, api ->
-        server.enqueue(MockResponse().setBody("""{"enabled":true,"app_id":"cli_a1","domain":"https://lark-connectorsuite.com","has_secret":true,"from_config":false,
+        server.enqueue(MockResponse().setBody("""{"enabled":true,"app_id":"cli_a1","domain":"https://larksuite.com","has_secret":true,"from_config":false,
             "features":{"main":true,"cards":true,"all_cards":false,"pushes":false,"sync":false,"agents":true},"connected":true,
             "last_event_at":1762300000,"bot_name":"Persona","owner":{"name":"示例用户","paired_at":1762200000},
             "target":"主对话","agents":[{"title":"修登录页","machine_id":"laptop","session_id":"s1"}],"unknown":[1]}"""))
         val status = api.status()
         assertEquals("cli_a1", status.appId)
-        assertEquals("https://lark-connectorsuite.com", status.domain)
+        assertEquals("https://larksuite.com", status.domain)
         assertTrue(status.hasSecret && status.connected)
         assertEquals("示例用户", status.owner?.name)
         assertEquals("laptop", status.agents?.single()?.machineId)

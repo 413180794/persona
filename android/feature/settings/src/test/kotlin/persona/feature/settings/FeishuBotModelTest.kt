@@ -33,7 +33,7 @@ private class FakeBot(var status: FeishuBotStatus) : FeishuBotSettings {
 class FeishuBotModelTest {
     @Test fun loadingFillsTheFormFromTheHub() = runBlocking {
         // The hub sends the domain it resolved (feishubot.ResolveDomain), the picker shows 飞书 / Lark.
-        val model = FeishuBotModel(FakeBot(FeishuBotStatus(enabled = true, appId = "cli_a1", domain = "https://lark-connectorsuite.com", hasSecret = true)))
+        val model = FeishuBotModel(FakeBot(FeishuBotStatus(enabled = true, appId = "cli_a1", domain = "https://larksuite.com", hasSecret = true)))
         model.load()
         val state = model.state.value
         assertEquals("cli_a1", state.appId)
@@ -85,7 +85,7 @@ class FeishuBotModelTest {
     @Test fun theResolvedDomainMapsBackToThePicker() {
         assertEquals("feishu", FeishuBotState.domainChoice("https://open.feishu.cn"))
         assertEquals("feishu", FeishuBotState.domainChoice(""))
-        assertEquals("lark", FeishuBotState.domainChoice("https://lark-connectorsuite.com"))
+        assertEquals("lark", FeishuBotState.domainChoice("https://larksuite.com"))
         assertEquals("https://open.example.com", FeishuBotState.domainChoice("https://open.example.com"))
         val same = FeishuBotState(status = FeishuBotStatus(appId = "cli_a1", domain = "https://open.feishu.cn", hasSecret = true),
             appId = "cli_a1", domain = "feishu")
