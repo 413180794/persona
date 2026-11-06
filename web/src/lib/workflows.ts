@@ -4,7 +4,7 @@
 // Newer hubs send Session.workflows; an older one only lists the run in background (kind "workflow"). Fields a hub may
 // not have yet (phase_stats, tool_use_id, agents_failed…) are read when they are there; without them it says less.
 import { t } from "../i18n";
-import { stateOf } from "./format";
+import { backgroundWaiting, stateOf } from "./format";
 import { took } from "./tasks";
 import type { Session, Workflow, WorkflowAgent, WorkflowPhaseStats } from "./types";
 
@@ -352,6 +352,22 @@ export function backgroundLine(s: Session | undefined): BackgroundLine | null {
   if (s.background_working !== true && !guessed) return null;
   const run = runs[0];
   return { run, more: runs.length - 1, ...(run.started_at ? { since: run.started_at } : {}), guessed };
+}
+
+/** What an agent waiting in the background waits on (#6045, Session.background_waiting): its first background
+ *  command's description (or command, on one line), how many more, and since when it waits. Null otherwise. */
+export interface WaitLine {
+  what: string;
+  more: number;
+  since?: string;
+}
+
+export function backgroundWaitLine(s: Session | undefined): WaitLine | null {
+  if (!s || !backgroundWaiting(s)) return null;
+  const tasks = (s.background ?? []).filter((b) => b.kind === "shell" || b.kind === "monitor");
+  const first = tasks[0];
+  const what = (first?.description || first?.command || "").split("\n")[0]!.trim();
+  return { what, more: Math.max(0, tasks.length - 1), ...(s.state_since ? { since: s.state_since } : {}) };
 }
 
 /** The hub says the agent's turn is over and a workflow it launched keeps it working: the chat draws that turn finished. */

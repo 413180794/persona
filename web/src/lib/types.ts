@@ -245,6 +245,9 @@ export interface Session {
   /** Working only because of background work: its turn is over, workflows / background commands / subagents run on
    *  (#2935). Older hubs leave it out. */
   background_working?: boolean;
+  /** Working only because of background commands that only wait (sleep, a check loop, gh … --watch; #6045): shown
+   *  as "Waiting in the background", lighter, and not counted as Working. An older hub never sends it. */
+  background_waiting?: boolean;
   rev?: number;
   suggestion?: string;
   /** An assistant conversation moved out of the list (docs/assistant.md "Managing its own conversations"). */

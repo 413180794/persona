@@ -3,20 +3,22 @@
 // keeps its place, so the next one is still right below it.
 import { t } from "../i18n";
 import { sessionHost, sessionSource, type AgentMutes } from "./agent-groups";
-import { stateOf } from "./format";
+import { backgroundWaiting, stateOf } from "./format";
 import { agentKey, isSpacePinned, type AgentPins } from "./pins";
 import { isMuted } from "./session-actions";
 import type { AgentState, Session } from "./types";
 import { byTime, timeMs } from "./times";
 import { stateName } from "./state-labels";
 
-export type AgentFilter = "all" | "needs" | "unread" | "working" | "feishu" | "terminal";
+export type AgentFilter = "all" | "needs" | "unread" | "working" | "bg_waiting" | "feishu" | "terminal";
 
 export const AGENT_FILTERS: { key: AgentFilter; label: string; state?: AgentState }[] = [
   { key: "all", label: t("lib-agent-filter.all") },
   { key: "needs", label: stateName("needs_you"), state: "needs_you" },
   { key: "unread", label: stateName("unread"), state: "unread" },
   { key: "working", label: stateName("working"), state: "working" },
+  // working only on background commands that wait (#6045): its own chip, out of "Working"
+  { key: "bg_waiting", label: stateName("bg_waiting"), state: "working" },
   // where the agent was opened (#2526): a botmux session (its Feishu group) or a herdr pane
   { key: "feishu", label: t("lib-agent-filter.feishu") },
   { key: "terminal", label: t("lib-agent-filter.terminal") },
@@ -56,14 +58,15 @@ export function matchesFilter(s: Session, f: AgentFilter, mutes: AgentMutes): bo
   if (f === "feishu" || f === "terminal") return sessionSource(s) === SOURCE_FILTERS[f];
   const state = filterState(f);
   if (!state) return true;
+  if (state === "working" && backgroundWaiting(s) !== (f === "bg_waiting")) return false;
   return stateOf(s) === state && (state === "needs_you" || !isMuted(s, mutes));
 }
 
 export type FilterCounts = Record<Exclude<AgentFilter, "all">, number>;
 
 export function filterCounts(sessions: Session[], mutes: AgentMutes): FilterCounts {
-  const out: FilterCounts = { needs: 0, unread: 0, working: 0, feishu: 0, terminal: 0 };
-  for (const s of sessions) for (const f of ["needs", "unread", "working", "feishu", "terminal"] as const) if (matchesFilter(s, f, mutes)) out[f]++;
+  const out: FilterCounts = { needs: 0, unread: 0, working: 0, bg_waiting: 0, feishu: 0, terminal: 0 };
+  for (const s of sessions) for (const f of ["needs", "unread", "working", "bg_waiting", "feishu", "terminal"] as const) if (matchesFilter(s, f, mutes)) out[f]++;
   return out;
 }
 

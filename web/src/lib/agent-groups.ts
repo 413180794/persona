@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { byAttention, stateOf } from "./format";
+import { backgroundWaiting, byAttention, stateOf } from "./format";
 import { hubWaits } from "./work";
 import type { AgentState, Machine, Session } from "./types";
 import { byTime } from "./times";
@@ -59,6 +59,8 @@ export interface AgentGroup {
   name: string;
   sessions: Session[];
   state?: AgentState;
+  /** Its agents only wait on background commands (#6045): drawn with the waiting mark. */
+  waiting?: boolean;
   folded?: boolean;
   todoId?: string;
   todoStatus?: string;
@@ -142,7 +144,8 @@ function byDate(a: Session, b: Session): number {
   return byTime(date(b), date(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
 }
 
-// iOS AgentListOrder (#5096): needs you → unread → awaiting reply → working → waiting → muted → seen; needs you always wins,
+// iOS AgentListOrder (#5096): needs you → unread → awaiting reply → working → waiting in the background (#6045) → waiting →
+// muted → seen; needs you always wins,
 // even when a session or its project is muted. "By status" is the only grouping built here ("By machine" is
 // lib/herdr-tree.ts); the argument stays for the callers that name it.
 export function buildAgentGroups(all: Session[], machines: Machine[], _grouping: "state", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
@@ -152,6 +155,7 @@ export function buildAgentGroups(all: Session[], machines: Machine[], _grouping:
     { key: "state:unread", name: stateName("unread"), state: "unread", sessions: [] },
     { key: "state:reply", name: stateName("awaits_reply"), sessions: [] },
     { key: "state:working", name: stateName("working"), state: "working", sessions: [] },
+    { key: "state:bg_waiting", name: stateName("bg_waiting"), state: "working", waiting: true, sessions: [] },
     { key: "state:waiting", name: stateName("waiting"), sessions: [] },
     { key: "state:muted", name: t("lib-agent-groups.state_muted"), sessions: [] },
     { key: "state:idle", name: stateName("idle"), state: "idle", sessions: [], folded: true },
@@ -159,8 +163,8 @@ export function buildAgentGroups(all: Session[], machines: Machine[], _grouping:
   for (const s of live) {
     const state = stateOf(s);
     const waiting = isWaiting(s);
-    const index = state === "needs_you" ? 0 : isMuted(s, mutes) && (state === "working" || state === "unread" || waiting) ? 5
-      : state === "unread" ? 1 : awaitsReply(s, mutes) ? 2 : state === "working" ? 3 : waiting ? 4 : 6;
+    const index = state === "needs_you" ? 0 : isMuted(s, mutes) && (state === "working" || state === "unread" || waiting) ? 6
+      : state === "unread" ? 1 : awaitsReply(s, mutes) ? 2 : backgroundWaiting(s) ? 4 : state === "working" ? 3 : waiting ? 5 : 7;
     groups[index].sessions.push(s);
   }
   return groups.filter((g) => g.sessions.length).map((g) => ({ ...g, sessions: g.sessions.sort(byDate) }));

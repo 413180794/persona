@@ -5,12 +5,15 @@
 // work line ("Working…") ticks, the bar leaves the time to it (#3534: the same clock twice; iOS shows it there only).
 // Once the turn is over and a workflow keeps the agent working (#3434, `background_working`), it says what runs:
 // "Background workflow · Verify · 169/185+", timed from the workflow's start (the turn's own time read as if the agent
-// were still at it). The count stays whole on a narrow screen: the words before it give way first.
+// were still at it). The count stays whole on a narrow screen: the words before it give way first. An agent whose
+// background commands only wait (#6045, `background_waiting`) gets a still line instead: "Waiting in the background ·
+// what it waits on", timed from when it started waiting, with no breath and no tokens.
 import { useEffect, useRef, useState } from "react";
 import { duration } from "../../lib/format";
 import { useSessionLive } from "../../lib/live";
 import type { SessionLive } from "../../lib/types";
-import { workflowCounts, type BackgroundLine } from "../../lib/workflows";
+import { workflowCounts, type BackgroundLine, type WaitLine } from "../../lib/workflows";
+import { stateName } from "../../lib/state-labels";
 import { useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { FADE_OUT_MS, LINGER_MS, useBreath, useCountUp } from "../../ui/motion";
@@ -42,9 +45,26 @@ export function statusText(live: SessionLive | null, agents?: AgentsWorking | nu
   return live.verb ? `${live.verb}…` : t("chat-runningstatusbar.running");
 }
 
-export function RunningStatusBar({ mid, sid, working, startedAt, clock, agents, background }: { mid: string; sid: string; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null; background?: BackgroundLine | null }) {
+export function RunningStatusBar({ mid, sid, working, startedAt, clock, agents, background, wait }: { mid: string; sid: string; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null; background?: BackgroundLine | null; wait?: WaitLine | null }) {
   const live = useSessionLive(mid, sid);
+  if (wait && working) return <WaitingView wait={wait} />;
   return <RunningStatusView live={live} working={working} startedAt={startedAt} clock={clock} agents={agents} background={background} />;
+}
+
+/** The bar of an agent that only waits in the background (#6045): still, in the waiting color, timed from when it began. */
+export function WaitingView({ wait }: { wait: WaitLine }) {
+  const now = useNow(1000);
+  const since = wait.since ? Date.parse(wait.since) : NaN;
+  const words = [stateName("bg_waiting"), wait.what, wait.more > 0 ? t("chat-runningstatusbar.more_waits", { count: wait.more }) : ""].filter(Boolean).join(" · ");
+  return (
+    <div data-running-status="on" data-running-background="waiting" className="flex select-none items-center justify-between gap-3 px-2 py-1.5 text-[13px] font-medium">
+      <div className="flex min-w-0 items-center gap-1.5 text-status-waiting">
+        <Icon name="clock" size={14} className="shrink-0 -translate-y-px" />
+        <span className="truncate" data-running-verb>{words}</span>
+      </div>
+      {Number.isFinite(since) && <span className="shrink-0 whitespace-nowrap text-ink-3 tabular-nums" data-running-elapsed>{duration(Math.max(0, now - since))}</span>}
+    </div>
+  );
 }
 
 /** Whether the bar speaks of the background workflow: the hub says the turn is over, or (a hub from before

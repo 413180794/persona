@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTodoTree, groupTodosByProject, nestAgents, projectOf, STALE_MS } from "./todo-tree";
+import { agentTreeState, buildTodoTree, groupTodosByProject, nestAgents, projectOf, STALE_MS, todoTreeState } from "./todo-tree";
 import { makeSessionLookup, type Todo } from "./todos";
 import { matchesFilter } from "./agent-filter";
 import { sessionSource } from "./agent-groups";
@@ -91,5 +91,19 @@ describe("来源：飞书群 / 终端 (#2526)", () => {
     expect(sessionSource(s("n", "idle", "/"))).toBeUndefined();
     expect(matchesFilter(s("b", "idle", "/", { pane_id: "botmux:abc" }), "feishu", noMutes)).toBe(true);
     expect(matchesFilter(s("h", "idle", "/", { pane_id: "w1:p1" }), "feishu", noMutes)).toBe(false);
+  });
+});
+
+describe("waiting in the background in the tree (#6045)", () => {
+  const sess = (id: string, patch: Partial<Session>): Session => ({ machine_id: "m", session_id: id, state: "working", status: "done", ...patch }) as Session;
+  it("ranks between Working and Done, for an agent and for a todo whose agents only wait", () => {
+    const waiting = sess("w", { background_waiting: true });
+    const busy = sess("b", {});
+    expect(agentTreeState(waiting)).toBe("bg_waiting");
+    expect(agentTreeState(sess("s", { background_waiting: true, starting: true }))).toBe("working");
+    expect(todoTreeState("working", [waiting])).toBe("bg_waiting");
+    expect(todoTreeState("working", [waiting, busy])).toBe("working");
+    expect(todoTreeState("working")).toBe("working");
+    expect(todoTreeState("needs_you", [waiting])).toBe("needs_you");
   });
 });

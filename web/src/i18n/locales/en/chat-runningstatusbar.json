@@ -6,5 +6,7 @@
   "agents_more_other": "+{count} more",
   "background_workflow": "Background workflow",
   "more_workflows_one": "{count} more",
-  "more_workflows_other": "{count} more"
+  "more_workflows_other": "{count} more",
+  "more_waits_one": "{count} more",
+  "more_waits_other": "{count} more"
 }

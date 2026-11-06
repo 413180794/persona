@@ -1,15 +1,16 @@
 import { t } from "../i18n";
 import type { AgentGroup, AgentMutes } from "./agent-groups";
 import { repoOf } from "./agent-repos";
-import { stateOf } from "./format";
+import { backgroundWaiting, stateOf } from "./format";
 import { buildTodoAgentGroups, interruptedAgent, todoStatus, type SessionLookup, type Todo, type TodoStatus } from "./todos";
 import type { Machine, Session } from "./types";
 import { stateName } from "./state-labels";
 
-/** The one-word state every node of the tree shows (#2526): "Needs you" before "Working" before "Done". */
-export type TreeState = "needs_you" | "working" | "done";
+/** The one-word state every node of the tree shows (#2526): "Needs you" before "Working" before "Waiting in the
+ *  background" (#6045) before "Done". */
+export type TreeState = "needs_you" | "working" | "bg_waiting" | "done";
 
-const TREE_RANK: Record<TreeState, number> = { needs_you: 0, working: 1, done: 2 };
+const TREE_RANK: Record<TreeState, number> = { needs_you: 0, working: 1, bg_waiting: 2, done: 3 };
 
 export function treeStateLabel(s: TreeState): string {
   return stateName(s);
@@ -67,13 +68,20 @@ export interface TodoTree {
 export function agentTreeState(s: Session): TreeState {
   const st = stateOf(s);
   if (st === "needs_you" || interruptedAgent(s)) return "needs_you";
-  if (st === "working" || s.starting) return "working";
+  if (s.starting) return "working";
+  if (backgroundWaiting(s)) return "bg_waiting";
+  if (st === "working") return "working";
   return "done";
 }
 
-export function todoTreeState(status: TodoStatus): TreeState {
+/** A todo's state in the tree from its status; a working one whose agents only wait in the background (none works, one
+ *  waits) is "Waiting in the background" (#6045). */
+export function todoTreeState(status: TodoStatus, agents: readonly Session[] = []): TreeState {
   if (status === "needs_you" || status === "interrupted") return "needs_you";
-  if (status === "working") return "working";
+  if (status === "working") {
+    const states = agents.map(agentTreeState);
+    return states.includes("bg_waiting") && !states.includes("working") ? "bg_waiting" : "working";
+  }
   return "done";
 }
 
@@ -183,7 +191,7 @@ export function buildTodoTree(all: Session[], machines: Machine[], todos: Todo[]
       projects.set(key, p);
     }
     const status = g.todoStatus as TodoStatus | undefined;
-    const state = status ? todoTreeState(status) : worst(g.sessions.map(agentTreeState));
+    const state = status ? todoTreeState(status, g.sessions) : worst(g.sessions.map(agentTreeState));
     p.todos.push({
       key: `todo-tree:todo:${g.todoId}`,
       todoId: g.todoId,
@@ -239,6 +247,11 @@ export interface TodoProjectGroup {
   folded: boolean;
 }
 
+/** A todo's agents that are still on it, as the lookup has them. */
+function liveAgents(td: Todo, lookup: SessionLookup): Session[] {
+  return (td.agents ?? []).filter((a) => !a.released_at).map((a) => lookup(a.machine_id, a.session_id)).filter((s): s is Session => Boolean(s));
+}
+
 export function groupTodosByProject(todos: Todo[], lookup: SessionLookup, now = Date.now()): TodoProjectGroup[] {
   const map = new Map<string, Todo[]>();
   for (const td of todos) {
@@ -246,7 +259,7 @@ export function groupTodosByProject(todos: Todo[], lookup: SessionLookup, now = 
     map.set(name, [...(map.get(name) ?? []), td]);
   }
   const groups = [...map.entries()].map(([name, list]) => {
-    const states = list.map((td) => todoTreeState(todoStatus(td, lookup)));
+    const states = list.map((td) => todoTreeState(todoStatus(td, lookup), liveAgents(td, lookup)));
     const state = worst(states);
     const sessions = list.flatMap((td) => (td.agents ?? []).filter((a) => !a.released_at).map((a) => lookup(a.machine_id, a.session_id)).filter((s): s is Session => Boolean(s)));
     const touched = Math.max(latest(sessions), ...list.map((td) => Date.parse(td.updated_at) || 0));

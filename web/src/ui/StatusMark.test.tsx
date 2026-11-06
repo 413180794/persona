@@ -52,8 +52,22 @@ const sess = (state: AgentState, i: number): Session => ({ machine_id: "m", sess
 describe("folded counts", () => {
   it("counts what wants a look and leaves idle and offline out", () => {
     const list = [sess("needs_you", 1), sess("working", 2), sess("working", 3), sess("unread", 4), sess("idle", 5), sess("offline", 6), sess("unknown", 7)];
-    expect(foldedCounts(list)).toEqual({ needs_you: 1, working: 2, unread: 1 });
-    expect(foldedCounts([])).toEqual({ needs_you: 0, working: 0, unread: 0 });
+    expect(foldedCounts(list)).toEqual({ needs_you: 1, working: 2, bg_waiting: 0, unread: 1 });
+    expect(foldedCounts([])).toEqual({ needs_you: 0, working: 0, bg_waiting: 0, unread: 0 });
+  });
+
+  it("counts waiting in the background apart from working, with the still mark (#6045)", () => {
+    const list = [sess("working", 1), { ...sess("working", 2), background_waiting: true }, { ...sess("idle", 3), background_waiting: true }];
+    const counts = foldedCounts(list);
+    expect(counts).toEqual({ needs_you: 0, working: 1, bg_waiting: 1, unread: 0 });
+    const html = renderToStaticMarkup(<StateTally counts={counts} />);
+    expect([...html.matchAll(/<span aria-hidden="true" data-state="(\w+)">/g)].map((m) => m[1])).toEqual(["working", "bg_waiting"]);
+    expect(html).toContain('data-shape="wait"');
+    expect(html).toContain('d="M12 7v5l3 2"'); // the clock, as the chat's running bar has it
+    const mark = renderToStaticMarkup(<StatusMark state="working" waiting />);
+    expect(mark).toContain('aria-label="后台等待中"');
+    expect(mark).not.toContain("busy");
+    expect(renderToStaticMarkup(<StatusMark state="idle" waiting />)).toContain('data-shape="dot"'); // only a working state waits
   });
 
   it("shows needs you first, then working, then done, a monospace count beside each mark", () => {

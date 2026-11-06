@@ -711,6 +711,21 @@ if os.environ.get("MOCK_WORKFLOW") == "1":
                            "phases": ["Scan", "Fix"], "phase": "Scan", "phase_index": 1, "agents_started": 4, "agents_done": 2, "agents_running": 0,
                            "started_at": ago(minutes=50), "ended_at": ago(minutes=40), "error": "Error: Workflow aborted"}])
 
+# MOCK_BG_WAITING=1 (#6045): two agents whose turns ended with background commands. One only waits (a loop on the PR's
+# checks): Waiting in the background, apart from Working. The other's background build works: Working, as before.
+if os.environ.get("MOCK_BG_WAITING") == "1":
+    for _s in SESSIONS:
+        if _s["session_id"] == BLOG:
+            _s.update(status="done", state="working", state_since=ago(minutes=9), seen_at=None, background_working=True,
+                      background_waiting=True, last_text="PR 开好了，后台等 CI 跑完再合。",
+                      background=[{"id": "bq7ci42wa", "kind": "shell", "description": "等 PR #7 的检查跑完",
+                                   "command": "until gh pr checks 7 --watch; do sleep 60; done", "started_at": ago(minutes=9)}])
+        if _s["session_id"] == RELEASE:
+            _s.update(status="done", state="working", state_since=ago(minutes=4), seen_at=None, background_working=True,
+                      last_text="在后台打包发布产物，完了我核对一下。",
+                      background=[{"id": "bb1d5te2k", "kind": "shell", "description": "打包发布产物", "command": "make release",
+                                   "started_at": ago(minutes=4)}])
+
 # MOCK_WORKFLOW=crowded (#4532): three workflows on the review agent, as a user's chat had them: one running with ten
 # agents, one stopped with its error, one completed. The chat's header must not push the conversation off the screen.
 if os.environ.get("MOCK_WORKFLOW") == "crowded":

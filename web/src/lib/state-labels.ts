@@ -4,15 +4,15 @@
 import { t } from "../i18n";
 import type { AgentState } from "./types";
 
-/** An agent's state (AgentState), Waiting, Awaiting reply (#5096), and the states only a task or a summary has: Done, Interrupted, Follow-up, Not started, Didn't start. */
-export type StateName = AgentState | "waiting" | "awaits_reply" | "done" | "interrupted" | "follow_up" | "not_started" | "failed";
+/** An agent's state (AgentState), Waiting, Waiting in the background (#6045), Awaiting reply (#5096), and the states only a task or a summary has: Done, Interrupted, Follow-up, Not started, Didn't start. */
+export type StateName = AgentState | "waiting" | "bg_waiting" | "awaits_reply" | "done" | "interrupted" | "follow_up" | "not_started" | "failed";
 
 export function stateName(s: StateName): string {
   return t(`lib-state-labels.${s}`);
 }
 
 /** The states a list counts in its headers and summaries: "3 need you". */
-export type CountedState = "needs_you" | "working" | "unread" | "done";
+export type CountedState = "needs_you" | "working" | "bg_waiting" | "unread" | "done";
 
 export function stateCount(s: CountedState, count: number): string {
   return t(`lib-state-labels.count_${s}`, { count });

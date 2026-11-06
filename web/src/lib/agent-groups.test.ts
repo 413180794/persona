@@ -147,3 +147,12 @@ describe("待你回复（#5096）", () => {
     expect(replyAsk(session("plain", "idle"))).toBe("");
   });
 });
+
+describe("waiting in the background (#6045)", () => {
+  it("has its own group by status, after Working, and leaves Working", () => {
+    const all = [session("busy", "working"), session("sleeping", "working", { background_waiting: true }), session("woken", "idle", { loop: { prompt: "check" } as Session["loop"] })];
+    const groups = buildAgentGroups(all, machines, "state", { spaces: [], sessions: [] });
+    expect(groups.map((g) => [g.key, ids(g.sessions)])).toEqual([["state:working", ["busy"]], ["state:bg_waiting", ["sleeping"]], ["state:waiting", ["woken"]]]);
+    expect(groups[1]!.waiting).toBe(true);
+  });
+});

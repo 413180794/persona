@@ -64,6 +64,12 @@ export function stateOf(s: Session): AgentState {
   return "idle";
 }
 
+/** Working only because its background commands wait (#6045, Session.background_waiting): its own state is still
+ *  "working" (older apps show that); the web shows it as "Waiting in the background", apart from Working. */
+export function backgroundWaiting(s: Session): boolean {
+  return stateOf(s) === "working" && Boolean(s.background_waiting);
+}
+
 export function stateColor(st: AgentState): string {
   switch (st) {
     case "needs_you":

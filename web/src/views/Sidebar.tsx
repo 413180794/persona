@@ -17,7 +17,7 @@ import { useInboxBadge } from "../lib/inbox";
 import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
 import { agentLabel } from "../lib/mentions";
-import { ago, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { ago, backgroundWaiting, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { NAV_PAGES, firstAndCurrent, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
 import { arrangePages, useSidebarPrefs } from "../lib/sidebar-pages";
@@ -881,7 +881,7 @@ function FilterBar({ selection, counts, onChoose, botmux }: { selection: AgentFi
               on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-2 hover:bg-hover hover:text-ink",
             )}
           >
-            {f.state && <StatusMark state={f.state} size="sm" />}
+            {f.state && <StatusMark state={f.state} size="sm" waiting={k === "bg_waiting"} />}
             {f.label}
             {n !== undefined && <span className={cx("tabular-nums", on ? "text-ink-2" : "text-ink-3")}>{n}</span>}
           </button>
@@ -1076,7 +1076,7 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
     </span>
   ) : (
     <span className="flex min-w-0 items-center gap-1.5">
-      {group.state && <span aria-hidden><StatusMark state={group.state} size="sm" /></span>}
+      {group.state && <span aria-hidden><StatusMark state={group.state} size="sm" waiting={group.waiting} /></span>}
       <span className="truncate">{group.name}</span>
     </span>
   );
@@ -1098,7 +1098,7 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
 
 type TreeRowProps = { machines: Machine[]; showHost?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void };
 
-const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", done: "text-ink-3" };
+const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", bg_waiting: "text-status-waiting", done: "text-ink-3" };
 
 /** "Needs you" / "Working" / "Done" at the end of a tree node's line. */
 function TreeStateText({ state }: { state: TreeState }) {
@@ -1981,7 +1981,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for "N agents" and the ⋯ beside it (instead of the ⋯'s own)
         endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
-      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState || st === "working" ? <StatusMark state={st} awaiting={awaiting} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
+      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState || st === "working" ? <StatusMark state={st} awaiting={awaiting} waiting={backgroundWaiting(s)} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SessionMark s={s} size={14} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
       {/* with the mark, the title sits in the column whether a second line shows or not: the same element through a

@@ -4,5 +4,6 @@
   "agents_working_other": "サブエージェント {count} 件が作業中",
   "agents_more_other": "ほか {count} 件",
   "background_workflow": "バックグラウンド workflow",
-  "more_workflows_other": "ほか {count} 件"
+  "more_workflows_other": "ほか {count} 件",
+  "more_waits_other": "他 {count} 件"
 }

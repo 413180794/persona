@@ -179,7 +179,7 @@ body {
 
 
 /* ── Persona additions ──────────────────────────────────── */
-:root { --status-needs: var(--red); --status-working: var(--orange); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #dceaff; --neutral-bubble: #f0f1f3; --term-magenta: #a347ba; --term-cyan: #0f8a9c; }
+:root { --status-needs: var(--red); --status-working: var(--orange); --status-waiting: color-mix(in srgb, var(--status-working) 55%, var(--ink-3)); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #dceaff; --neutral-bubble: #f0f1f3; --term-magenta: #a347ba; --term-cyan: #0f8a9c; }
 .dark { --user-bubble: #1d3557; --neutral-bubble: #2c2d31; --term-magenta: #c678dd; --term-cyan: #4fb6c4; }
 /* The chat's trace (aligned with cindy's defaults, #1963): tool rows and their chevrons, the work group's rail, thought
    text, diff counts and the running status bar's accent. */
@@ -199,7 +199,7 @@ body {
 .dark { --usage-input: #3987e5; --usage-output: #d95926; --usage-cache-write: #9085e9; --usage-cache-read: #199e70; }
 /* The user's own messages: iOS Agents' pale blue (apple/Shared/Design/Styles/Glass.swift, ColorSpec.blue); a message
    relayed from another conversation and a tool's inline detail keep the neutral gray. */
-@theme inline { --color-user-bubble: var(--user-bubble); --color-neutral-bubble: var(--neutral-bubble); }
+@theme inline { --color-user-bubble: var(--user-bubble); --color-neutral-bubble: var(--neutral-bubble); --color-status-waiting: var(--status-waiting); }
 @keyframes breathe{0%,to{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
 @keyframes slide-up{0%{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes slide-in-right{0%{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
@@ -327,7 +327,7 @@ button:disabled { cursor: default; }
    that turns, needs-you a glowing dot with a ring, done a glowing dot, idle a plain dot, offline a hollow ring. All
    marks take the same layout box (the dot's); the arc is bigger and overhangs it. */
 :root {
-  --mark-dot: 7px; --mark-dot-sm: 6px; --mark-spin: 9px; --mark-spin-sm: 8px;
+  --mark-dot: 7px; --mark-dot-sm: 6px; --mark-spin: 9px; --mark-spin-sm: 8px; --mark-clock: 12px; --mark-clock-sm: 11px;
   --mark-glow: 6px; --mark-glow-mix: 50%; --mark-ring-gap: 1.5px; --mark-ring-mix: 40%; --mark-hollow: 1.5px;
   --mark-spin-dur: .9s;
   --status-offline: var(--ink-3);
@@ -340,6 +340,9 @@ button:disabled { cursor: default; }
 .status-mark[data-shape="glow"], .status-mark[data-shape="alert"] { background: var(--mark-color); box-shadow: 0 0 var(--mark-glow) color-mix(in srgb, var(--mark-color) var(--mark-glow-mix), transparent); }
 .status-mark[data-shape="alert"] { outline: 1px solid color-mix(in srgb, var(--mark-color) var(--mark-ring-mix), transparent); outline-offset: var(--mark-ring-gap); }
 .status-mark[data-shape="ring"] { box-shadow: inset 0 0 0 var(--mark-hollow) var(--mark-color); }
+.status-mark[data-shape="wait"] { --mark-clock-size: var(--mark-clock); display: inline-flex; width: var(--mark-clock-size); height: var(--mark-clock-size); margin: calc((var(--mark-size) - var(--mark-clock-size)) / 2); color: var(--mark-color); border-radius: 0; }
+.status-mark[data-shape="wait"][data-size="sm"] { --mark-clock-size: var(--mark-clock-sm); }
+.status-mark[data-shape="wait"] > svg { width: 100%; height: 100%; }
 .status-mark[data-shape="arc"] { width: var(--mark-spin-size); height: var(--mark-spin-size); margin: calc((var(--mark-size) - var(--mark-spin-size)) / 2); color: var(--mark-color); border-radius: 0; will-change: transform; --busy-cycles: 100; animation: spin-long calc(var(--mark-spin-dur) * 100) linear infinite; }
 /* Under reduced motion the arc carries .busy-motion (lib/busy-motion.ts): it turns at 2.4s instead of freezing. */
 /* A folded group's tally: the mark, then a monospace count (ui/StatusMark.tsx StateTally). */

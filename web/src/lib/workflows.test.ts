@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Session, Workflow, WorkflowAgent } from "./types";
 import {
+  backgroundWaitLine,
   agentDetail,
   agentElapsed,
   agentRunState,
@@ -277,5 +278,15 @@ describe("the run's card (#3434)", () => {
     // a current hub leaves background_working out when it is false (a turn of its own): no guess
     expect(backgroundLine(session({ workflows: [{ ...run, tool_use_id: "tu1" }] }))).toBeNull();
     expect(backgroundLine(session({ workflows: [{ ...run, agents: [{ ...run.agents![1], status: "running" }] }] }))).toBeNull();
+  });
+});
+
+describe("backgroundWaitLine (#6045)", () => {
+  it("names what an agent waiting in the background waits on, and since when", () => {
+    const s = { machine_id: "m", session_id: "s", state: "working", background_waiting: true, state_since: "2026-01-01T00:00:00Z",
+      background: [{ id: "b1", kind: "shell", command: "until gh pr checks 7 --watch\ndo sleep 60; done", started_at: "" }, { id: "b2", kind: "monitor", description: "tail the log", started_at: "" }, { id: "b3", kind: "agent", started_at: "" }] } as Session;
+    expect(backgroundWaitLine(s)).toEqual({ what: "until gh pr checks 7 --watch", more: 1, since: "2026-01-01T00:00:00Z" });
+    expect(backgroundWaitLine({ ...s, background_waiting: false })).toBeNull();
+    expect(backgroundWaitLine({ ...s, state: "idle" })).toBeNull();
   });
 });

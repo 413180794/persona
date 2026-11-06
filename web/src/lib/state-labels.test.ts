@@ -35,11 +35,12 @@ describe("state names", () => {
     expect(STATE_LABEL).toEqual({ needs_you: "需要你", working: "工作中", unread: "完成未看", idle: "已看", offline: "未运行", unknown: "未知" });
     const names: Record<StateName, string> = {
       needs_you: "需要你", working: "工作中", unread: "完成未看", idle: "已看", offline: "未运行", unknown: "未知",
-      waiting: "待唤醒", awaits_reply: "待你回复", done: "已完成", interrupted: "中断了", follow_up: "待跟进", not_started: "未开始", failed: "没开起来",
+      waiting: "待唤醒", bg_waiting: "后台等待中", awaits_reply: "待你回复", done: "已完成", interrupted: "中断了", follow_up: "待跟进", not_started: "未开始", failed: "没开起来",
     };
     for (const [s, name] of Object.entries(names)) expect(stateName(s as StateName)).toBe(name);
     expect(stateCount("needs_you", 2)).toBe("2 个需要你");
     expect(stateCount("unread", 1)).toBe("1 个完成未看");
+    expect(stateCount("bg_waiting", 2)).toBe("2 个后台等待中");
     expect(markAllSeenLabel()).toBe("全部标为已看");
     expect(markAllSeenLabel(3)).toBe("全部标为已看（3）");
   });

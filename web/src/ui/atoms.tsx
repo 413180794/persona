@@ -74,7 +74,7 @@ export function Loading({ label = t("common.loading") }: { label?: string }) {
 }
 
 /** A state as a word in a pill; `awaiting`: seen and awaiting the user's reply, "Awaiting your reply" in the unread tint (#5096). */
-export function StatePill({ state, awaiting = false }: { state: AgentState; awaiting?: boolean }) {
+export function StatePill({ state, awaiting = false, waiting = false }: { state: AgentState; awaiting?: boolean; /** working only on background commands that wait (#6045) */ waiting?: boolean }) {
   const tone: Record<AgentState, string> = {
     needs_you: "bg-red-tint text-red",
     working: "bg-orange-tint text-orange",
@@ -84,10 +84,11 @@ export function StatePill({ state, awaiting = false }: { state: AgentState; awai
     unknown: "bg-field text-ink-3",
   };
   const reply = awaiting && state === "idle";
+  const bg = waiting && state === "working";
   return (
-    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium ${reply ? tone.unread : tone[state]}`}>
-      {(state === "working" || state === "needs_you") && <StatusMark state={state} size="sm" label={false} />}
-      {reply ? stateName("awaits_reply") : STATE_LABEL[state]}
+    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium ${reply ? tone.unread : bg ? "bg-field text-ink-2" : tone[state]}`} data-bg-waiting={bg || undefined}>
+      {(state === "working" || state === "needs_you") && <StatusMark state={state} size="sm" label={false} waiting={bg} />}
+      {reply ? stateName("awaits_reply") : bg ? stateName("bg_waiting") : STATE_LABEL[state]}
     </span>
   );
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { tokenCount, RunningStatusView, statusText } from "./RunningStatusBar";
+import { tokenCount, RunningStatusView, statusText, WaitingView } from "./RunningStatusBar";
 
 afterEach(() => vi.useRealTimers());
 
@@ -65,5 +65,16 @@ describe("RunningStatusView", () => {
 
   it("is not there while nothing works", () => {
     expect(render({ live: null, working: false })).toBe("");
+  });
+});
+
+describe("the bar of an agent waiting in the background (#6045)", () => {
+  it("is still: what it waits on, the time since it began, no breath and no tokens", () => {
+    const html = renderToStaticMarkup(<WaitingView wait={{ what: "等 PR #7 的检查跑完", more: 2, since: new Date(Date.now() - 90_000).toISOString() }} />);
+    expect(html).toContain('data-running-background="waiting"');
+    expect(html).toContain("后台等待中 · 等 PR #7 的检查跑完 · 还有 2 个");
+    expect(html).toMatch(/data-running-elapsed[^>]*>1 分/);
+    expect(html).not.toContain("tokens");
+    expect(html).not.toContain("status-breath");
   });
 });

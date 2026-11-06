@@ -2,7 +2,7 @@
 import { alsoOpenText } from "../../lib/engines";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, errorText, sessionPath } from "../../lib/api";
-import { ago, attentionReason, externalLink, failureReason, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
+import { ago, attentionReason, backgroundWaiting, externalLink, failureReason, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate, type SessionView } from "../../lib/router";
 import { canShowTerminal, otherView, useSessionView } from "../../lib/session-view";
 import { openLink } from "../../lib/links";
@@ -53,7 +53,7 @@ import { RunningStatusBar } from "./RunningStatusBar";
 import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
 import { publishPlan } from "../../lib/plan-store";
 import { ChatContext, FreshWords, LiveClockContext, type ChatContextValue } from "./chat-context";
-import { backgroundLine, waitingOnWorkflow, workflowCalls, workflowCallsKey } from "../../lib/workflows";
+import { backgroundLine, backgroundWaitLine, waitingOnWorkflow, workflowCalls, workflowCallsKey } from "../../lib/workflows";
 import { seekCall } from "./jump";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
@@ -631,7 +631,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // (its work folded, the run's card in the open), and the running bar says the workflow, timed from its start, instead
   // of the turn's "Working…" clock going on. Other background work (a command, a Monitor, a subagent) leaves the turn as
   // it was. A message of yours on its way, or one it is answering, is a turn again.
-  const backgroundOnly = waitingOnWorkflow(session) && !tr.streaming && !outgoing && !awaiting;
+  // The same for an agent that only waits on background commands (#6045): its turn is drawn finished.
+  const backgroundOnly = (waitingOnWorkflow(session) || Boolean(session && backgroundWaiting(session))) && !tr.streaming && !outgoing && !awaiting;
   const lastLive = (readOnly ? Boolean(viewed?.running) : working && !backgroundOnly) && !tr.loading;
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
   const isMain = Boolean(assistant && sid === mainConversation);
@@ -902,7 +903,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   ) : null;
   // Persona's own chats too (#3654), and from the moment the message is in, not from the hub's next push
   const background = useMemo(() => (readOnly ? null : backgroundLine(session)), [readOnly, session]);
-  const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} clock={barClock.current} agents={waitingOn} background={background} /> : null;
+  const wait = useMemo(() => (readOnly || outgoing || awaiting ? null : backgroundWaitLine(session)), [readOnly, outgoing, awaiting, session]);
+  const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} clock={barClock.current} agents={waitingOn} background={background} wait={wait} /> : null;
   const queue = session && queued.length > 0 ? <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} compact={short} /> : null;
   // with the plan's pill showing, "Jump to bottom" goes beside it (over the chat, they hid each other)
   const jumpInDock = Boolean(planPill) && !readOnly;
@@ -1468,7 +1470,7 @@ export function Header({
       </div>
       <div className={cx("min-w-0 flex-1", Boolean(topCenter) && "max-lg:hidden")}>
         <div className="flex min-w-0 items-center gap-2">
-          {session && !assistant && <StatusMark state={state} awaiting={awaiting} />}
+          {session && !assistant && <StatusMark state={state} awaiting={awaiting} waiting={Boolean(session && backgroundWaiting(session))} />}
           {session && !assistant && <SessionMark s={session} size={16} />}
           {assistant && <AssistantFace session={session} last={last} />}
           {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}
@@ -1477,7 +1479,7 @@ export function Header({
             <IconButton icon="chevron" label={t("chat-chatview.switch_agent")} onClick={pick.open} active={Boolean(pick.anchor)} className="-ml-1.5 shrink-0" />
           )}
           {/* a panel is a phone's width: the dot says the state there too */}
-          {session && !assistant && !chrome && (state !== "idle" || awaiting) && <span className="hidden @min-[800px]:contents"><StatePill state={state} awaiting={awaiting} /></span>}
+          {session && !assistant && !chrome && (state !== "idle" || awaiting) && <span className="hidden @min-[800px]:contents"><StatePill state={state} awaiting={awaiting} waiting={Boolean(session && backgroundWaiting(session))} /></span>}
           {/* narrow: the context bar gives way to the title too (#3532); "Session info" still has the token count. The header's own
               width decides (a container), so a side panel beside the chat narrows it as a phone does; the pill and the
               bar go below 800px, the chips' words below 640px, so the title keeps room in between (#3670) */}
