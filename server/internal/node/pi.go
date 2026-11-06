@@ -68,7 +68,7 @@ const piNoExtension = "这个 pi 没有装 Persona 的扩展：手机上只能�
 // of the engine, waits for the pi it starts to list the session, and sends the phone's message there. Without an engine
 // that can start it: refused, nothing sent (it is not handed to pi-web).
 func (n *Node) resumeInEngine(ctx context.Context, h *runtimeConn, id string, argv []string, params json.RawMessage) (any, error) {
-	if n.engine() == proto.EngineOrca {
+	if n.defaultKind() == proto.EngineOrca { // it would start in the default host: Orca cannot reopen one
 		return nil, refusal("orca_resume", "Orca 会话请在电脑上恢复：这次没有启动，也没有发送。", nil)
 	}
 	row, _ := h.row(id)

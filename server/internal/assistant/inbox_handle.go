@@ -156,7 +156,8 @@ func (b *inboxBook) escalate(since, now time.Time) []*InboxItem {
 			continue
 		}
 		handled := it.handled()
-		if !handled && (it.Tier != TierAction || it.TriagedAt != it.Last) {
+		twin := b.policyTwin(it) // the user's policy (inbox_policies.go): first takes what is not Needs you too
+		if !handled && (twin == TwinNever || it.Tier != TierAction && twin != TwinFirst || it.TriagedAt != it.Last) {
 			continue
 		}
 		if a == nil {

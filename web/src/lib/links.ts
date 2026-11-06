@@ -255,10 +255,13 @@ export function prefetchLink(url: string | undefined) {
 /** A piece of a page the user picked (LinkSheet.swift ContextRef). `text` is "(whole document)" in Chinese for a whole document. */
 export interface ContextRef {
   id: string;
-  kind: "context" | "edit";
+  /** "workspace": a folder on a computer picked in the @ menu, carrying `machine` and `cwd` (docs/protocol.md "Tags in messages"). */
+  kind: "context" | "edit" | "workspace";
   title: string;
   url: string;
   text: string;
+  /** Extra attributes written on the tag after kind / title / url (a workspace's `machine` and `cwd`). */
+  attrs?: Record<string, string>;
 }
 
 // i18n-ignore: a marker inside <jarvis-context>, the app (QuoteViews.swift) matches it
@@ -269,13 +272,17 @@ function escAttr(s: string) {
 }
 
 /** `<jarvis-context kind="…" title="…" url="…">\ntext\n</jarvis-context>`, as the phone writes it. */
-export function contextXML(r: Pick<ContextRef, "kind" | "title" | "url" | "text">): string {
+export function contextXML(r: Pick<ContextRef, "kind" | "title" | "url" | "text" | "attrs">): string {
   const body = contextBody(r.text);
-  return `<jarvis-context kind="${escAttr(r.kind)}" title="${escAttr(r.title)}" url="${escAttr(r.url)}">\n${body}\n</jarvis-context>`;
+  const extra = Object.entries(r.attrs ?? {})
+    .filter(([k]) => /^[a-z_]+$/.test(k) && k !== "kind" && k !== "title" && k !== "url")
+    .map(([k, v]) => ` ${k}="${escAttr(v)}"`)
+    .join("");
+  return `<jarvis-context kind="${escAttr(r.kind)}" title="${escAttr(r.title)}" url="${escAttr(r.url)}"${extra}>\n${body}\n</jarvis-context>`;
 }
 
 /** A message with its picked contexts in front (ChatView.swift sendText). */
-export function withContexts(refs: Pick<ContextRef, "kind" | "title" | "url" | "text">[], text: string, hasImages = false): string {
+export function withContexts(refs: Pick<ContextRef, "kind" | "title" | "url" | "text" | "attrs">[], text: string, hasImages = false): string {
   const typed = text.trim();
   if (!refs.length) return typed;
   const body = typed || (hasImages ? t("lib-links.see_images") : t("lib-links.see_context"));

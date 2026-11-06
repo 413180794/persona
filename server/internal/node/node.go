@@ -64,6 +64,7 @@ type Node struct {
 	managed  managedLaunchers
 	hosts    *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
 	eng      engineState    // which engine, and its change stream (engine.go)
+	owners   ownership      // which host owns a session seen live in two (ownership.go)
 	hstart   herdrStarter   // starting herdr's server when it is not running (herdrstart.go)
 	hinstall herdrInstaller // installing herdr when there is none (herdrinstall.go)
 	// engEpoch counts engine switches (n.mu): a refresh applies its result only when no switch happened meanwhile.
@@ -523,22 +524,32 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		_ = json.Unmarshal(params, &c)
 		return ghToken(ctx, c.Host)
 	case "engine.use": // the engine the user chose for this machine (engine.go)
+		// A hub with sets (#2576) sends hosts and default beside the single engine; an older one, the engine alone.
 		var e struct {
-			Engine string `json:"engine"`
+			Engine  string    `json:"engine"`
+			Hosts   *[]string `json:"hosts"`
+			Default string    `json:"default"`
 		}
 		if err := json.Unmarshal(params, &e); err != nil {
 			return nil, err
 		}
-		if err := n.useEngine(ctx, e.Engine); err != nil {
+		var err error
+		if e.Hosts != nil {
+			err = n.useEngineChoice(ctx, proto.EngineChoice{Hosts: *e.Hosts, Default: e.Default})
+		} else {
+			err = n.useEngine(ctx, e.Engine)
+		}
+		if err != nil {
 			return nil, err
 		}
 		if n.runtimeHost != nil { // Paseo's agents come through its bridge, which the node runs (paseobridge.go)
-			n.runtimeHost.setPaseoBridge(n.engine() == proto.EnginePaseo)
+			n.runtimeHost.setPaseoBridge(n.hostEnabled(proto.EnginePaseo))
 			// Orca's chats come through a bridge the node runs too (orcabridge.go); its terminals, the Orca host.
-			n.runtimeHost.setOrcaBridge(n.engine() == proto.EngineOrca)
+			n.runtimeHost.setOrcaBridge(n.hostEnabled(proto.EngineOrca))
 		}
 		n.configured()
-		return map[string]any{"engine": n.engine()}, nil
+		c := n.engineChoice()
+		return map[string]any{"engine": n.engine(), "hosts": c.Hosts, "default": c.Default}, nil
 	case "node.configure":
 		var c struct {
 			ClaudeDirs []string `json:"claude_dirs"`
@@ -686,7 +697,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			if kind == "" {
 				kind = launcherAgentType(p.Launcher)
 			}
-			if _, runtime := engineRuntimes[n.engine()]; runtime {
+			if _, runtime := engineRuntimes[n.defaultKind()]; runtime { // the default host is a runtime (Paseo)
 				kind = "runtime"
 			}
 			if n.runtimes.launcherRuntime(p.Launcher) != nil && !shellLauncherNames()[p.Launcher] {
@@ -707,7 +718,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 				return map[string]any{"session": s}, err
 			}
 		}
-		if _, ok := engineRuntimes[n.engine()]; ok { // the engine is a runtime (Paseo): every start is its (runtimecontrol.go)
+		if _, ok := engineRuntimes[n.defaultKind()]; ok { // the default host is a runtime (Paseo): every start is its (runtimecontrol.go)
 			s, err := n.startOnEngineRuntime(ctx, rp)
 			return map[string]any{"session": s}, err
 		}
@@ -1249,6 +1260,7 @@ func nonNil(items []proto.Item) []proto.Item {
 }
 
 func (n *Node) info(ctx context.Context) proto.NodeInfo {
+	choice := n.engineChoice()
 	host, _ := os.Hostname()
 	hv := n.herdrVersion(ctx)
 	canUpdate, updateReason := n.updater.Capability()
@@ -1273,6 +1285,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		System:             n.system(ctx),
 		Engine:             n.engine(),
 		Engines:            n.engines(ctx, hv),
+		EngineHosts:        &choice, // this node takes sets in engine.use (the hub then sends it hosts and default)
 		MachineUID:         n.uid,
 		BuiltinPrograms:    builtinProgramIDs,
 	}

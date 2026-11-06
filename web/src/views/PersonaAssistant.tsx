@@ -26,7 +26,7 @@ const SUGGESTIONS = [t("personaassistant.suggestion_meetings"), t("personaassist
 const starting = new Set<string>();
 
 // @ in a new conversation: other sessions as context; no chat yet, so no files it touched (typed / and ~ paths still browse)
-const NEW_MENTION: MentionSource = { self: "jarvis-new", files: () => [] };
+const NEW_MENTION: MentionSource = { self: "jarvis-new", files: () => [], workspaces: true };
 
 export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string; fresh?: boolean; onToggleSidebar: () => void }) {
   const assistant = useStore((s) => s.assistant);

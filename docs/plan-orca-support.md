@@ -355,5 +355,5 @@ Issues discovered while adding tests, with tests pinning current behavior. Fixin
 ## Open decisions
 
 - Report capabilities per session or per host on each machine (leaning toward the latter, with sessions carrying only host kind).
-- Displaying one session in two hosts simultaneously (for example, resuming in herdr a session already open in Orca): the current design lists it twice; at least show "Running elsewhere".
+- ~~Displaying one session in two hosts simultaneously~~: settled in #2576. It is listed once, owned by one host, and its row carries `also_open_in` (`docs/engines.md` "Host sets").
 - Sessions outside any host but with a live process (ordinary terminal): mark "Running elsewhere" and disable sending? `sessions/<pid>.json` alone can detect this, independent of host abstraction, so it can be done first.

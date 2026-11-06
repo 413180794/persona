@@ -1,5 +1,5 @@
 // Contexts waiting in a composer (picked in the link panel): one chip each above the input — what it is, the passage
-// (or the page's title for a whole document), × to drop it. They go with the next message as <jarvis-context>.
+// (or the page's title for a whole document; a workspace's name), × to drop it. They go with the next message as <jarvis-context>.
 import { removeContext, useContexts, WHOLE } from "../../lib/links";
 import { EASE } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -13,17 +13,19 @@ export function ContextChips({ draftKey }: { draftKey: string }) {
     <div className="flex flex-wrap gap-1.5 px-0.5 pt-0.5" aria-label={t("link-contextchips.label")}>
       {refs.map((r) => {
         const whole = r.text === WHOLE;
-        const label = whole ? r.title || r.url : r.text.replace(/\s+/g, " ");
+        const workspace = r.kind === "workspace";
+        const label = workspace ? r.title : whole ? r.title || r.url : r.text.replace(/\s+/g, " ");
+        const kindLabel = r.kind === "edit" ? t("link-contextchips.edit") : workspace ? t("link-contextchips.workspace") : t("link-contextchips.context");
         return (
           <span
             key={r.id}
-            title={`${r.kind === "edit" ? t("link-contextchips.edit_title") : t("link-contextchips.context")} · ${r.title}\n${whole ? r.url : r.text}`}
+            title={`${r.kind === "edit" ? t("link-contextchips.edit_title") : kindLabel} · ${r.title}\n${whole ? r.url : r.text}`}
             className="flex h-7 max-w-[280px] min-w-0 items-center gap-1.5 rounded-full bg-accent-tint pr-1 pl-2.5 text-accent-ink"
             style={{ animation: `pop-in 180ms ${EASE} both` }}
           >
-            {r.kind === "edit" ? <Icon name="spark" size={11} /> : <QuoteIcon size={12} />}
-            <span className="shrink-0 text-[11px] font-semibold">{r.kind === "edit" ? t("link-contextchips.edit") : t("link-contextchips.context")}</span>
-            <span className="min-w-0 truncate text-[12px]">{whole ? label : t("link-contextchips.quoted", { text: label })}</span>
+            {r.kind === "edit" ? <Icon name="spark" size={11} /> : workspace ? <Icon name="folder" size={12} /> : <QuoteIcon size={12} />}
+            <span className="shrink-0 text-[11px] font-semibold">{kindLabel}</span>
+            <span className="min-w-0 truncate text-[12px]">{whole || workspace ? label : t("link-contextchips.quoted", { text: label })}</span>
             <button
               type="button"
               aria-label={t("link-contextchips.remove_label")}

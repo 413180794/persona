@@ -81,7 +81,7 @@ func herdrAlive(ctx context.Context, sock string) bool {
 // answer; it returns once the socket does. nil also when there is nothing to do (another engine, turned off, already
 // running): callers go on and report what herdr then says. why goes into the log.
 func (n *Node) ensureHerdr(ctx context.Context, why string) error {
-	if e := n.engine(); e != proto.EngineHerdr && e != proto.EngineHerdrBoth {
+	if !n.hostEnabled(proto.EngineHerdr) {
 		return nil
 	}
 	h, ok := n.hosts.Get(host.Herdr).(*herdrHost)
@@ -95,8 +95,8 @@ func (n *Node) ensureHerdr(ctx context.Context, why string) error {
 // that — the switch only says whether the node may do it on its own), installing herdr first when there is none.
 // It reports why when it could not.
 func (n *Node) startHerdrServer(ctx context.Context) (map[string]any, error) {
-	if e := n.engine(); e != proto.EngineHerdr && e != proto.EngineHerdrBoth {
-		return nil, fmt.Errorf("这台电脑的引擎不是 herdr")
+	if !n.hostEnabled(proto.EngineHerdr) {
+		return nil, fmt.Errorf("这台电脑没有启用 herdr 引擎")
 	}
 	h, ok := n.hosts.Get(host.Herdr).(*herdrHost)
 	if !ok || h.c == nil {

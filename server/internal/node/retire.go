@@ -43,7 +43,7 @@ func (n *Node) retire(ctx context.Context, id string) (closed bool, err error) {
 	if !ok {
 		return false, nil
 	}
-	if _, runtime := engineRuntimes[n.engine()]; runtime {
+	if _, runtime := engineRuntimes[n.defaultKind()]; runtime {
 		return no("this engine continues sessions itself")
 	}
 	if _, err := hostCap[host.Launcher](n); err != nil {
@@ -95,7 +95,7 @@ func (n *Node) resumeTabName(id string) string {
 // resume's prompt (nothing is typed). One Persona did not start (its launcher unknown) is refused as before.
 func (n *Node) resumeOther(ctx context.Context, id, text string, images []proto.Image) error {
 	st, mine := n.state.get(id)
-	if _, runtime := engineRuntimes[n.engine()]; runtime || !mine || st.Launcher == "" || st.Cwd == "" {
+	if _, runtime := engineRuntimes[n.defaultKind()]; runtime || !mine || st.Launcher == "" || st.Cwd == "" {
 		return fmt.Errorf("这个 Agent 已经退出：Codex / TRAEX 的会话要在电脑上重新打开")
 	}
 	return n.resumeOtherWith(ctx, id, st, text, images)

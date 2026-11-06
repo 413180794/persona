@@ -159,7 +159,7 @@ var engineRuntimes = map[string]string{proto.EnginePaseo: proto.EnginePaseo}
 // engineRuntime is the runtime that is this machine's engine (Paseo), when it is connected and starts sessions; nil on
 // a machine whose engine is a terminal (herdr, Orca…).
 func (n *Node) engineRuntime() *runtimeConn {
-	id, ok := engineRuntimes[n.engine()]
+	id, ok := engineRuntimes[n.defaultKind()]
 	if !ok {
 		return nil
 	}
@@ -181,7 +181,7 @@ func (n *Node) engineRuntime() *runtimeConn {
 // engineRuntimeAway is why a session cannot start or continue on a machine whose engine is a runtime that is not
 // connected (Paseo not running, or its bridge not up yet). Nothing was started or sent.
 func (n *Node) engineRuntimeAway() error {
-	name := proto.EngineNames[n.engine()]
+	name := proto.EngineNames[n.defaultKind()]
 	return refusal(engineMissing, fmt.Sprintf("这台电脑的引擎是 %s，但 %s 现在没有连上 Persona（没在运行，或刚启动还没连上），不能在这里新开或接着会话，这次没有发送。"+
 		"在电脑上打开 %s 后再试。", name, name, name), nil)
 }

@@ -998,6 +998,7 @@ func untitled(s *proto.Session, m quickMeta) {
 }
 
 func (n *Node) decorate(s *proto.Session) {
+	s.AlsoOpenIn = n.alsoOpenIn(s.SessionID) // live in another host too (ownership.go)
 	if st, ok := n.state.get(s.SessionID); ok {
 		s.StartedByJarvis = st.Ultracode == nil || !st.StartedAt.IsZero()
 		s.Launcher = st.Launcher
@@ -1318,6 +1319,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	m, onList := map[string]host.Agent{}, map[string]bool{}
 	var unknown, codex, pi, opencode, botmux []host.Agent
 	other := map[string]host.Agent{} // terminal-only agents by their row id (opencode.go)
+	contested := contest{}           // sessions live in two hosts at once: an owner is picked below (ownership.go)
 	procs := n.liveClaudes()
 	parked := parkedClaudeSessions(procs)    // claudebg.go
 	botmuxThreads := n.botmuxThreads(agents) // hostbotmux.go
@@ -1387,6 +1389,10 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			if liveTaken(m, id) && a.AgentStatus == proto.StatusOffline {
 				continue // the same session runs in another host's pane (botmux's parked row, herdr's resume)
 			}
+			if crossHost(m, id, a) {
+				contested.add(id, m[id], a) // live in another host too: its owner is picked below
+				continue
+			}
 			m[id] = a
 			continue
 		}
@@ -1434,6 +1440,10 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			}
 			continue
 		}
+		if id != "" && crossHost(m, id, a) { // its own claude runs a session another host's pane lists
+			contested.add(id, m[id], a)
+			continue
+		}
 		if id == "" {
 			n.mu.Lock()
 			id = n.panes[a.PaneID]
@@ -1449,6 +1459,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			m[id] = a
 		}
 	}
+	n.resolve(m, contested) // the owner of every session live in two hosts (ownership.go)
 	// Codex panes: the thread named in the title (what the pane shows now: a /resume in Codex changes it), else what
 	// herdr's codex integration or our own start said; only then, after every pane that could be told has its
 	// thread, the newest rollout in the directory nobody else has.

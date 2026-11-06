@@ -645,6 +645,9 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 		}
 		it.Summary, it.Tier, it.Reason, it.TriagedBy = "", tier, b.byRules(), "rules"
 	}
+	if !it.handled() { // what an event's conversation handles keeps its tier
+		b.applyPolicyTier(it)
+	}
 	it.TriagedAt = it.Last
 	if tierBefore != it.Tier || prev.last == "" {
 		b.noteTriaged(it)

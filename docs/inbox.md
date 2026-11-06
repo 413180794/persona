@@ -256,6 +256,25 @@ Muted under More at the Inbox's top right lists all mutes (name, source · repos
   hub migrates old entries through `inbox.repo_mutes` and clears them from GitHub settings. Settings › Connectors › GitHub (and old Apps) still read / write `muted_repos`;
   hub translates through the manager, so both entry points share the same data.
 
+## Policies (2026-11-06, #5747)
+
+A policy says, for a chat, a sender or a repository, how its items are handled, decided in code rather than by a model. It targets exactly what a mute targets (the item's `mutes` options, read off the item, the same for every source) and has two parts, each optional:
+
+- **Tier**: `action` (always Needs you), `fyi`, `noise`, or unset (triage decides).
+- **AI twin**: `first` (escalated even when not Needs you, and started before other queued events) or `never` (never escalated: the item stays visible and stays the user's), or unset.
+
+Rules:
+
+- **A mute wins**: a muted item is filed whatever its policy says. Among policies the most specific tag wins: `sender`, then `chat`, then `repo` (so a Lark group can be FYI while one person in it is always Needs you; in groups `sender` is the newest message's sender).
+- **The tier is applied after triage**, so the model's title, summary and urgency stay: after model triage (`triageOne`), at admission (`admitInbox`), when an event is grouped (`putEvent`), and for a connector's rule tier when the round files it. When the policy changes the tier, the reason reads "Your rule: <name>"; a tier other than Needs you clears `urgent`. If the model fails, the fallback tier is overridden the same way. Items an event's processing conversation is handling keep their tier (the conversation decides).
+- **Setting or changing a policy** re-applies it to open, triaged, unhandled items at once (`applied` count). **Deleting one** leaves the tiers it gave; the next triage of new content decides again.
+- **The twin's part** is read by `escalate` and the queue (`sortQueued`). `inbox.agent.enabled` still gates the twin as a whole; nothing here sends anything without confirmation.
+- Stored in the settings key `inbox_policies` (`assistant/inbox_policies.go`); one policy per source + tag + value.
+
+**APIs**: `GET /api/v1/inbox/policies`; `POST /api/v1/inbox/policies {item_id, tag, tier?, twin?}` → `{policy, applied}` (the value is read from the item; a policy for the same target is updated; one left with neither part is removed); `PATCH /api/v1/inbox/policies/{id} {tier?, twin?}` (both as they should be; neither removes it); `DELETE /api/v1/inbox/policies/{id}`. Clients find an item's policy by matching its `source` and `mutes` options against the list.
+
+Free-text triage rules (`inbox.rules`, a source's `triage_rules`) still exist for what is not a chat or a person ("release notifications are FYI"); policies are for the cases where the user knows exactly who or where.
+
 ## Events and handling chain (phase 1, 2026-11-05)
 
 Requirements are in the team's design description "Inbox evolution, phase 1." Existing items are **events**: arrival, triage, manager handling, result, user confirmation, and execution all happen on one item,

@@ -94,7 +94,12 @@ func findBotmux() string {
 
 // nodeHosts are the hosts a node drives: its engine's, and botmux's when botmux is installed and wanted (useBotmux).
 func nodeHosts(engine string, botmux bool, logf func(format string, args ...any)) []host.Host {
-	hs := engineHosts(engine, logf)
+	return nodeHostsFor(proto.EngineHostsOf(engine), botmux, logf)
+}
+
+// nodeHostsFor are a set's hosts, and botmux's as for nodeHosts.
+func nodeHostsFor(c proto.EngineChoice, botmux bool, logf func(format string, args ...any)) []host.Host {
+	hs := engineHostsFor(c, logf)
 	if !botmux {
 		return hs
 	}

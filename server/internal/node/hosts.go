@@ -91,24 +91,33 @@ func (n *Node) hostPrompt(ctx context.Context, pane, text string) error {
 	return h.Prompt(ctx, ref, text)
 }
 
-// defaultHost is where new sessions start and where spaces without a host kind live: the machine's engine (engine
-// names are host kinds), herdr unless herdr-core was chosen; the combined engine (herdr-both) starts on classic herdr,
-// its full-capability host.
-func (n *Node) defaultHost() host.Host { return n.hosts.Get(defaultHostKind(n.engine())) }
+// defaultHost is where new sessions start and where spaces without a host kind live: the set's default host (#2576;
+// host kinds are engine names), classic herdr for herdr + Herdr App, its full-capability host. nil for the empty set,
+// and for a default that is no terminal (Paseo).
+func (n *Node) defaultHost() host.Host {
+	kind := n.defaultKind()
+	if kind == "" {
+		return nil
+	}
+	return n.hosts.Get(kind)
+}
 
-// defaultEngineName names the runtime pane-less operations run on, for user-facing messages: the combined engine
-// starts and resumes on classic herdr, so it says herdr, not "herdr + Herdr App".
+// defaultEngineName names the host pane-less operations run on, for user-facing messages: herdr + Herdr App starts and
+// resumes on classic herdr, so it says herdr, not "herdr + Herdr App".
 func (n *Node) defaultEngineName() string {
-	if name := proto.EngineNames[defaultHostKind(n.engine())]; name != "" {
+	if name := proto.EngineNames[n.defaultKind()]; name != "" {
 		return name
 	}
 	return n.engine()
 }
 
-// hostCap is the default host as capability C.
+// hostCap is the default host as capability C; with no host enabled, noEngineRefusal.
 func hostCap[C any](n *Node) (C, error) {
 	var none C
-	kind := defaultHostKind(n.engine())
+	kind := n.defaultKind()
+	if kind == "" {
+		return none, noEngineRefusal()
+	}
 	h := n.hosts.Get(kind)
 	if h == nil {
 		return none, fmt.Errorf("no %s host on this machine", kind)

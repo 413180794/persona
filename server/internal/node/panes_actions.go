@@ -43,7 +43,7 @@ func (n *Node) listedPane(ctx context.Context, pane string) (host.Agent, error) 
 // hostOfKind is the host a tab or workspace id belongs to: the one of that kind, else the engine's.
 func (n *Node) hostOfKind(kind string) (host.Host, error) {
 	if kind == "" {
-		kind = defaultHostKind(n.engine())
+		kind = n.defaultKind()
 	}
 	h := n.hosts.Get(kind)
 	if h == nil {

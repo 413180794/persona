@@ -75,7 +75,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		if a, ok := n.agent(resume); ok {
 			return n.sessionFor(resume, a), nil // already running
 		}
-		if n.engine() == proto.EngineOrca {
+		if n.defaultKind() == proto.EngineOrca { // a resume goes to the default host: Orca cannot reopen one
 			return nil, refusal("orca_resume", "Orca 会话请在电脑上恢复：从手机只能新建，这次没有启动。", nil)
 		}
 		if r := n.openElsewhereRefusal(resume); r != nil { // open in Claude's desktop app or a terminal (openelsewhere.go)
@@ -605,8 +605,8 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			return err
 		}
 	} else {
-		// On a machine whose engine is a runtime (Paseo) the session is continued there (runtimecontrol.go).
-		if _, ok := engineRuntimes[n.engine()]; ok {
+		// On a machine whose default host is a runtime (Paseo) the session is continued there (runtimecontrol.go).
+		if _, ok := engineRuntimes[n.defaultKind()]; ok {
 			return n.continueInRuntime(ctx, id, text, images, opts.ClientMsgID)
 		}
 		if r := n.notRunningRefusal(ctx, id); r != nil {

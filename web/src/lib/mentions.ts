@@ -1,10 +1,14 @@
 // The composer's @ menu (iOS PromptComposer.swift PromptItems, BeautifulUI PromptToken): files this chat's tools
 // read or wrote and the session's folder (picking one types `@path`, which Claude Code and Codex read as that file),
-// then other agents' sessions (picking one quotes it as a <jarvis-context> before the message). No DOM here.
+// then, in the Persona assistant, workspaces (picking one sends it as a <jarvis-context kind="workspace">, which the
+// hub fills in so the assistant works there), then other agents' sessions (picking one quotes it as a
+// <jarvis-context> before the message). No DOM here.
 
 import { t } from "../i18n";
+import { shortPath } from "./format";
 import type { Item, Session } from "./types";
 import { byTime } from "./times";
+import type { Workspace } from "./workspace-board";
 
 export interface MentionToken {
   /** Offset of the `@`. */
@@ -123,4 +127,41 @@ export function sessionQuote(s: Session): { title: string; url: string; text: st
   const last = s.last_text?.trim();
   if (last) lines.push(t("lib-mentions.quote_last", { text: [...last].slice(0, 600).join("") }));
   return { title: displayTitle(s), url: `jarvis://session/${s.machine_id}/${s.session_id}`, text: lines.join("\n") };
+}
+
+/** Workspaces (GET /workspaces, docs/workspace-board.md) matching the query by title, folder or computer: ones whose
+ * title starts with it first, then available before unavailable, each keeping the hub's order. One per computer and
+ * folder (a host space and a session folder can name the same place); folderless host spaces can't be worked in. */
+export function workspaceMatches(all: Workspace[], query: string, machineName: (id: string) => string, limit = 8): Workspace[] {
+  const q = query.toLowerCase();
+  const seen = new Set<string>();
+  const hits = all.filter((w) => {
+    if (!w.cwd) return false;
+    const key = `${w.machine_id}\n${w.cwd.replace(/\/+$/, "")}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return !q || [workspaceTitle(w), w.cwd, machineName(w.machine_id), w.branch ?? ""].some((x) => x.toLowerCase().includes(q));
+  });
+  const ranked = byPrefix(hits, workspaceTitle, q);
+  return [...ranked.filter((w) => w.available !== false), ...ranked.filter((w) => w.available === false)].slice(0, limit);
+}
+
+/** A workspace's name: the host's title, else its folder's. */
+export function workspaceTitle(w: Pick<Workspace, "title" | "cwd">): string {
+  return w.title?.trim() || folderName(w.cwd) || w.cwd;
+}
+
+/** The @ menu's second line for a workspace: computer · folder (· branch). */
+export function workspaceDetail(w: Workspace, machineName: (id: string) => string): string {
+  return [machineName(w.machine_id), shortPath(w.cwd), w.branch].filter(Boolean).join(" · ");
+}
+
+/** The context for a picked workspace: `<jarvis-context kind="workspace" machine="…" cwd="…">`. The hub reads the two
+ * attributes and adds what it knows about the place (docs/assistant.md "Workspace mentions"); the body is for people
+ * and clients that show it as is. */
+export function workspaceContext(w: Workspace, machineName: (id: string) => string): { title: string; url: string; text: string; attrs: Record<string, string> } {
+  const title = workspaceTitle(w);
+  const lines = [t("lib-mentions.workspace_title", { title }), t("lib-mentions.workspace_machine", { machine: machineName(w.machine_id) }), t("lib-mentions.quote_cwd", { cwd: w.cwd })];
+  if (w.branch) lines.push(t("lib-mentions.workspace_branch", { branch: w.branch }));
+  return { title, url: "", text: lines.join("\n"), attrs: { machine: w.machine_id, cwd: w.cwd, ...(w.branch ? { branch: w.branch } : {}) } };
 }

@@ -10,6 +10,43 @@ On computers with **botmux**, its sessions appear alongside the selected engine 
 
 **Paseo** is terminal-free: it runs Agents through provider SDKs, with node connected through a bridge; see `docs/paseo.md`.
 
+## Host sets (#2576)
+
+A computer can **enable several engines at once**, any combination of herdr, Herdr App, Orca and Paseo, or none at all, plus a **default engine**:
+where sessions started from the phone, and sessions continued from there, go. Each single choice above is a special case of a set: herdr is `{herdr}`, and
+"herdr + Herdr App" is `{herdr, herdr-core}` with herdr the default. API and storage: `docs/protocol.md` "Engines" ("Host sets").
+The client pickers are not wired yet (all three still pick one engine, and the single engine picked keeps working).
+
+- **Only enabled hosts are registered.** An engine that is not checked gets no client, no polling and no event subscription; it is only probed once in
+  `node.info` (for "Detected"). An engine that is not installed or not running does not slow the others down.
+- **Hosts do not hold each other up.** Each host refreshes in parallel with its own timeout, and its events refresh only itself. A host that is down
+  (unreachable, `not_running`) clears only its own sessions; the others are listed and driven as usual. This is the same mechanism as herdr-both
+  (`docs/plan-orca-support.md` "Side-by-side engines").
+- **Default engine**: new sessions, continuing a session that is not running, renaming a space and the mode menus go to the default engine. Per-pane
+  operations (reading the screen, sending, keys, closing) still go to the host the pane belongs to. Changing only the default resets nothing; changing
+  the set itself works like switching engines did (live terminal views end, the session list is rebuilt). With Orca the default, continuing a session
+  that is not running is refused as before (`orca_resume`); with Paseo the default, new and continued sessions go to Paseo.
+- **The empty set**: no terminal host. Agents shows transcripts, runtimes (DSH, pi, opencode) and botmux sessions only; starting or continuing a
+  session from the phone is refused with "这台电脑没启用终端引擎" (`engine_missing`) and nothing is sent.
+- **One session live in two hosts** (say herdr `--resume`d a session that is still open in Orca): it is listed once and owned by one host
+  (`node/ownership.go`). The owner is, in order: (1) the pane whose claude process runs it (`~/.claude/sessions/<pid>.json`); (2) the pane whose last
+  SessionStart hook named it; (3) the default engine's pane; (4) otherwise herdr, Herdr App, Orca in that order. Messages, keys and interrupts go to
+  the owner only, and its state is the only one used; the row's `also_open_in` lists the other hosts that have it open, so clients can warn of the
+  conflict (UI not wired yet). Two panes of the same host, or a live pane and an offline row, behave as before.
+- **Performance** (2026-11-06, one Mac with herdr 0.9.5 and Orca 1.4.250, `go test -tags enginehostslive -run EngineHostsLive ./internal/node/ -v`,
+  40 rounds each, Orca refreshed once a second meanwhile as its watcher does; three runs, a typical one below, the other two of the same order):
+
+  | | herdr only | herdr + Orca |
+  | --- | --- | --- |
+  | herdr send | p50 0.5 ms · p95 1.7 ms · max 2.5 ms | p50 0.5 ms · p95 1.1 ms · max 3.3 ms |
+  | refresh after a herdr event (herdr only) | p50 82 ms · p95 205 ms · max 267 ms | p50 92 ms · p95 320 ms · max 430 ms |
+  | refresh of every host | p50 62 ms · p95 125 ms · max 179 ms | p50 106 ms · p95 519 ms · max 1104 ms |
+
+  In two of the three runs the herdr + Orca send had one max of about 170 ms (herdr alone had one of 149 ms in one run); p50 did not move.
+  The refresh of every host is slower because it now includes Orca, the heaviest host. herdr's own refresh gains about 10 ms at p50 and about
+  0.1 s at p95: Orca's refresh every second and herdr's share the session merge step (`setAgentsAt`: process lookups, session files) and wait for
+  each other when they collide.
+
 "Engine" below means this choice. APIs, storage, and node switching: `docs/protocol.md` ("Engines"); design / trade-offs: `docs/plan-orca-support.md`.
 
 ## Engines
@@ -77,7 +114,7 @@ Selecting `herdr-both` attaches both herdr and herdr-core hosts:
   herdr events only herdr; a failed side clears only its own online state.
 - Available only when both herdr and herdr-core are detected (can preselect offline, effective on reconnect; if only one exists,
   it works normally while the other list is empty).
-- Orca excluded from combined mode (per-second polling, highest overhead); concurrent Orca support is future work.
+- Orca next to herdr goes through "Host sets" above; there are no more combination options.
 
 ## botmux
 

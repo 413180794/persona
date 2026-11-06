@@ -1,5 +1,8 @@
 {
   "quote_session": "Another session: {title} ({agent})",
   "quote_cwd": "Folder: {cwd}",
-  "quote_last": "Last said: {text}"
+  "quote_last": "Last said: {text}",
+  "workspace_title": "Workspace: {title}",
+  "workspace_machine": "Computer: {machine}",
+  "workspace_branch": "Branch: {branch}"
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,17 +19,21 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// A machine's node drives exactly one terminal host, its engine: herdr (the default, as every node did before),
-// herdr-core (the Herdr desktop app) or orca (the Orca desktop app). The user picks it per machine in the app; the hub stores it and tells the node
-// with engine.use when it connects and when it changes (docs/protocol.md "Engines"). Running both side by side made each
-// slow the other down, so they never are.
+// A machine's node drives a set of terminal hosts side by side (#2576, proto/enginehosts.go): any of herdr (the
+// default, as every node did before), herdr-core (the Herdr desktop app), orca (the Orca desktop app) and paseo (a
+// runtime, not a terminal), or none — with one of them the default, where pane-less operations (new sessions,
+// continuing one, renaming a space) go. The user picks them per machine in the app; the hub stores them and tells
+// the node with engine.use when it connects and when they change (docs/protocol.md "Engines"). Only the hosts in the
+// set are registered, and each runs isolated from the others: refreshes in parallel, each watcher refreshing only its
+// own host (sessions.go, herdrevents.go), so one host that is slow or down does not hold up another.
 
 // engineState is the engine in use and the change stream watching it.
 type engineState struct {
 	mu   sync.Mutex
-	name string             // "" until engine.use: herdr
-	base context.Context    // Serve's context, nil before it
-	stop context.CancelFunc // ends the current engine's watcher
+	name string              // the single engine closest to set ("" until engine.use: herdr)
+	set  *proto.EngineChoice // the hosts and the default host; nil: the set name stands for (tests set only name)
+	base context.Context     // Serve's context, nil before it
+	stop context.CancelFunc  // ends the current engine's watcher
 
 	use   sync.Mutex    // one engine.use at a time, applied whole (the last one to arrive wins)
 	ready chan struct{} // closed once the hub said which engine (configured)
@@ -74,51 +79,82 @@ func (n *Node) startWhenConfigured(ctx context.Context) {
 	n.watchEngine(ctx)
 }
 
-// engineHosts are the hosts of an engine: herdr at its default socket (what every node had before engines),
-// herdr-core at the socket hc would use, Orca's runtime, or herdr and herdr-core together (EngineHerdrBoth): the
-// hosts stay isolated from each other — their refreshes run in parallel and each watcher only refreshes its own host
-// (sessions.go, herdrevents.go).
+// engineHosts are the hosts of a single engine (the set it stands for, engineHostsFor).
 func engineHosts(engine string, logf func(format string, args ...any)) []host.Host {
-	switch engine {
-	case proto.EngineHerdrCore:
-		c := herdrcore.New()
-		c.Log = logf
-		return []host.Host{&herdrCoreHost{c: c}}
-	case proto.EngineOrca:
-		c := orcart.New()
-		c.Log = logf
-		return []host.Host{newOrcaHost(c)}
-	case proto.EnginePaseo:
-		return nil // not a terminal: its sessions are its runtime's (runtimecontrol.go)
-	case proto.EngineHerdrBoth:
-		hc := herdr.New()
-		hc.Log = logf
-		cc := herdrcore.New()
-		cc.Log = logf
-		return []host.Host{&herdrHost{c: hc}, &herdrCoreHost{c: cc}}
-	}
-	c := herdr.New()
-	c.Log = logf
-	return []host.Host{&herdrHost{c: c}}
+	return engineHostsFor(proto.EngineHostsOf(engine), logf)
 }
 
-// defaultHostKind is the host that pane-less operations (starting and resuming sessions, renaming, mode menus) go to:
-// the engine itself, except for the combined engine, whose full-capability host is classic herdr.
-func defaultHostKind(engine string) string {
-	if engine == proto.EngineHerdrBoth {
-		return host.Herdr
+// engineHostsFor are the terminal hosts of a set, in its canonical order: herdr at its default socket (what every
+// node had before engines), herdr-core at the socket hc would use, Orca's runtime. Paseo is no terminal host: its
+// sessions are its runtime's (runtimecontrol.go), run while the set holds it (engine.use in node.go). The empty set has
+// none. The hosts stay isolated from each other — their refreshes run in parallel and each watcher only refreshes its
+// own host (sessions.go, herdrevents.go).
+func engineHostsFor(c proto.EngineChoice, logf func(format string, args ...any)) []host.Host {
+	var hs []host.Host
+	for _, kind := range c.Hosts {
+		switch kind {
+		case proto.EngineHerdr:
+			hc := herdr.New()
+			hc.Log = logf
+			hs = append(hs, &herdrHost{c: hc})
+		case proto.EngineHerdrCore:
+			cc := herdrcore.New()
+			cc.Log = logf
+			hs = append(hs, &herdrCoreHost{c: cc})
+		case proto.EngineOrca:
+			oc := orcart.New()
+			oc.Log = logf
+			hs = append(hs, newOrcaHost(oc))
+		}
 	}
-	return engine
+	return hs
 }
 
-// engine is the engine in use.
+// defaultHostKind is the default host of a single engine: the engine itself, except for the combined engine, whose
+// full-capability host is classic herdr.
+func defaultHostKind(engine string) string { return proto.EngineHostsOf(engine).Default }
+
+// engine is the single engine closest to the set in use (node.info's engine, user-facing names).
 func (n *Node) engine() string {
 	n.eng.mu.Lock()
 	defer n.eng.mu.Unlock()
+	return n.engineLocked()
+}
+
+func (n *Node) engineLocked() string {
+	if n.eng.set != nil {
+		return proto.LegacyEngine(*n.eng.set)
+	}
 	if n.eng.name == "" {
 		return proto.EngineHerdr
 	}
 	return n.eng.name
+}
+
+// engineChoice is the set in use: what engine.use said, herdr alone before it.
+func (n *Node) engineChoice() proto.EngineChoice {
+	n.eng.mu.Lock()
+	defer n.eng.mu.Unlock()
+	return n.engineChoiceLocked()
+}
+
+func (n *Node) engineChoiceLocked() proto.EngineChoice {
+	if n.eng.set != nil {
+		return *n.eng.set
+	}
+	return proto.EngineHostsOf(n.engineLocked())
+}
+
+// hostEnabled: the set in use holds the host (or runtime engine) kind.
+func (n *Node) hostEnabled(kind string) bool { return slices.Contains(n.engineChoice().Hosts, kind) }
+
+// defaultKind is the default host of the set in use: where pane-less operations go; "" when the set is empty.
+func (n *Node) defaultKind() string { return n.engineChoice().Default }
+
+// noEngineRefusal is why nothing can start on a machine that enables no terminal engine (the empty set).
+func noEngineRefusal() error {
+	return refusal(engineMissing, "这台电脑没启用终端引擎，不能从手机新开或接着会话，这次没有发送。"+
+		"在 设置 › 机器 › 这台电脑 › 引擎 里启用一个（herdr、Herdr App、Orca 或 Paseo）再试。", nil)
 }
 
 // watchEngine starts watching the engine in use for as long as ctx lasts (Serve); engine.use moves it to the new one.
@@ -167,15 +203,34 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	if _, ok := proto.EngineNames[engine]; !ok {
 		return fmt.Errorf("unknown engine %q", engine)
 	}
+	return n.useEngineChoice(ctx, proto.EngineHostsOf(engine))
+}
+
+// useEngineChoice switches the node to a set of hosts (useEngine). Only the default changed: nothing is reset, the
+// pane-less operations just go elsewhere from now on. The hosts changed: as a switch of engine.
+func (n *Node) useEngineChoice(ctx context.Context, c proto.EngineChoice) error {
+	c, err := proto.NormalizeEngineChoice(c.Hosts, c.Default)
+	if err != nil {
+		return err
+	}
 	n.eng.use.Lock()
 	defer n.eng.use.Unlock()
-	if n.engine() == engine {
+	cur := n.engineChoice()
+	if proto.SameEngineChoice(cur, c) {
 		return nil
 	}
+	if slices.Equal(cur.Hosts, c.Hosts) {
+		n.eng.mu.Lock()
+		n.eng.set, n.eng.name = &c, proto.LegacyEngine(c)
+		n.eng.mu.Unlock()
+		n.logf("engine: default host now %q", c.Default)
+		return nil
+	}
+	engine := proto.LegacyEngine(c)
 	n.eng.mu.Lock()
-	n.hosts.Set(nodeHosts(engine, n.eng.botmux != nil && *n.eng.botmux, n.logf)...)
+	n.hosts.Set(nodeHostsFor(c, n.eng.botmux != nil && *n.eng.botmux, n.logf)...)
 	n.resetSignals()
-	n.eng.name = engine
+	n.eng.name, n.eng.set = engine, &c
 	n.mu.Lock()
 	n.engEpoch++
 	epoch := n.engEpoch
@@ -188,7 +243,7 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	traexCache.Unlock()
 	n.startWatchLocked()
 	n.eng.mu.Unlock()
-	n.logf("engine: now %s", engine)
+	n.logf("engine: now %v (default %q)", c.Hosts, c.Default)
 
 	// The new engine's list goes to the hub when it is ready, not before the reply: building it asks the engine, scans
 	// processes and reads every agent's transcript, which on a machine with dozens of agents and cold caches took

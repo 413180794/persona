@@ -280,6 +280,8 @@ type inboxBook struct {
 	replies     sync.Map   // item id -> *inboxReply: replies to one item, one at a time (inbox_triage.go)
 	mutes       []InboxMute
 	mutesMu     sync.Mutex // one read-change-save of the kept mutes at a time
+	policies    []InboxPolicy
+	policiesMu  sync.Mutex // one read-change-save of the kept policies at a time (inbox_policies.go)
 	cardSends   cardLocks  // a message card's id → the lock its "Send" holds (sendFromCard)
 	// translations are the translations made, by model, text or mail and language (inbox_translate.go).
 	translations translateCache
@@ -432,7 +434,7 @@ func (s *Service) inboxUp(w http.ResponseWriter, r *http.Request) bool {
 // loadInbox reads the items still remembered and the mutes; false when the database could not be read.
 func (s *Service) loadInbox(ctx context.Context) bool {
 	b := &s.inbox
-	if !s.loadInboxMutes(ctx) {
+	if !s.loadInboxMutes(ctx) || !s.loadInboxPolicies(ctx) {
 		return false
 	}
 	st := s.inboxDB()
@@ -555,6 +557,7 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 	now := time.Now()
 	changed = append(changed, b.applyMutes(now)...)
 	changed, todo := b.sortBatch(batch, changed, now)
+	b.applyRuledPolicies(changed)
 	b.mu.Unlock()
 	s.saveInbox(ctx, changed)
 	if readsChanged && len(changed) == 0 {
@@ -1144,6 +1147,7 @@ var errCannotReply = i18n.ErrEnglish("inbox-errors.cannot_reply")
 
 func (s *Service) inboxRoutes() {
 	s.inboxMuteRoutes()
+	s.inboxPolicyRoutes()
 	s.inboxParentRoutes()
 	s.inboxBulkRoutes()
 	s.inboxSuggestionRoutes()

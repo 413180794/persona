@@ -278,6 +278,16 @@ MACHINES = [
 if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose jarvisd is another build than the hub's
     MACHINES[2]["node_mismatch"] = True
 
+# ---------- workspaces (GET /api/v1/workspaces, docs/workspace-board.md) ----------
+# A few host spaces and session folders on the mock machines: what the assistant's @ menu lists (#5594). Placeholders.
+def mock_workspaces():
+    rows = [("server", "herdr", "persona", "/home/me/code/persona", "master"), ("macbook", "herdr", "weather-app", "/Users/me/code/weather-app", "main"),
+            ("macbook", "session", "notes", "/Users/me/notes", ""), ("studio", "herdr", "site", "/Users/me/code/site", "redesign")]
+    return [{"id": f"{m}:{src}:{i}", "machine_id": m, "source": src, "source_id": str(i), "title": t, "cwd": cwd,
+             **({"branch": br} if br else {}), "online": True, "available": True, "last_seen": ago()}
+            for i, (m, src, t, cwd, br) in enumerate(rows)]
+
+
 # ---------- node self-check (#2429, docs/machines.md "Self-check") ----------
 # GET /api/v1/machines/{mid}/doctor and POST …/doctor/fix: the report `personad node doctor` prints, as the hub relays it.
 #   MOCK_TOKENS=none (a hub without per-machine token usage: no card tokens, the usage route 404s) | empty (nothing ran)
@@ -10991,6 +11001,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/hub/update/history": return self.send_json({"history": hub_update_history()})
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": out_machines()})
+        if p == "/api/v1/workspaces": return self.send_json({"workspaces": mock_workspaces()})
         if p.startswith("/api/v1/machines/") and p.endswith("/browser/cookies") and MOCK_BROWSER:  # sign-ins in ego (#1304)
             # MOCK_COOKIES_FAIL=1: the first read fails as a node says ego's script failed (#1926); "Try again" then works.
             if os.environ.get("MOCK_COOKIES_FAIL") and not COOKIES_FAILED[0]:

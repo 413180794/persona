@@ -140,6 +140,9 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	if err := execution.check(); err != nil {
 		return nil, err
 	}
+	if n.defaultKind() == "" { // no host enabled: refused before a starting row shows up on the phone
+		return nil, noEngineRefusal()
+	}
 	if id == "" {
 		id = newUUID()
 	} else if !validID(id) {

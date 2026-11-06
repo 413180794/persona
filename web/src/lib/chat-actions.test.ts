@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyDraft, onDraftEvent, parseQuote, replaceNeedsConfirm, sendDraft, splitQuote, storedQuotes, withAppended, withQuote, withQuoteBlock, withUnsent } from "./drafts";
-import { browseTarget, byPrefix, chatFiles, displayTitle, mentionAt, nameMatches, otherSessions, relPath, replaceToken, sessionQuote } from "./mentions";
+import { browseTarget, byPrefix, chatFiles, displayTitle, mentionAt, nameMatches, otherSessions, relPath, replaceToken, sessionQuote, workspaceContext, workspaceMatches, workspaceTitle } from "./mentions";
+import { contextXML } from "./links";
+import type { Workspace } from "./workspace-board";
 import { keepAllBut, sameMessage } from "./queue";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen } from "./image-edit";
 import type { Item, Session } from "./types";
@@ -218,5 +220,24 @@ describe("发送失败放回输入框", () => {
     expect(withUnsent("", "删除所有测试设备")).toBe("删除所有测试设备");
     expect(withUnsent("还有一件事", "删除所有测试设备")).toBe("删除所有测试设备\n还有一件事");
     expect(withUnsent("还有一件事", "")).toBe("还有一件事");
+  });
+});
+
+describe("@ workspaces (#5594)", () => {
+  const ws = (id: string, title: string, cwd: string, extra: Partial<Workspace> = {}): Workspace => ({ id, machine_id: "box", source: "herdr", source_id: id, title, cwd, online: true, available: true, ...extra });
+  const name = (id: string) => (id === "box" ? "Work laptop" : id);
+
+  it("ranks title prefixes first and unavailable ones last, matching computer and folder too", () => {
+    const all = [ws("a", "app-weather", "/c/aw"), ws("b", "weather", "/c/w", { available: false }), ws("c", "web", "/c/weather-web"), ws("d", "notes", "/n")];
+    expect(workspaceMatches(all, "wea", name).map((w) => w.id)).toEqual(["a", "c", "b"]);
+    expect(workspaceMatches(all, "laptop", name)).toHaveLength(4);
+    expect(workspaceMatches([ws("e", "", "/c/untitled")], "", name).map(workspaceTitle)).toEqual(["untitled"]);
+  });
+
+  it("writes the computer, folder and branch as attributes, escaped", () => {
+    const c = workspaceContext(ws("a", 'say "hi"', "/c/<x>", { branch: "main" }), name);
+    const xml = contextXML({ kind: "workspace", ...c });
+    expect(xml.split("\n")[0]).toBe('<jarvis-context kind="workspace" title="say &quot;hi&quot;" url="" machine="box" cwd="/c/&lt;x&gt;" branch="main">');
+    expect(c.text).toContain("Work laptop");
   });
 });

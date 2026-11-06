@@ -32,6 +32,10 @@ var InboxRoutes = []string{
 	"GET /api/v1/inbox/mutes",
 	"POST /api/v1/inbox/mutes",
 	"DELETE /api/v1/inbox/mutes/{id}",
+	"GET /api/v1/inbox/policies",
+	"POST /api/v1/inbox/policies",
+	"PATCH /api/v1/inbox/policies/{id}",
+	"DELETE /api/v1/inbox/policies/{id}",
 	"POST /api/v1/translate",
 	"POST /api/v1/translate/mail",
 }

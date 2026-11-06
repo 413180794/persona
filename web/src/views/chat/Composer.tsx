@@ -16,7 +16,9 @@ import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
 import { addQuote, applyDraft, getQuotes, onDraftEvent, parseQuotes, removeQuote, replaceNeedsConfirm, sendDraft, setQuotes, splitQuotes, storeDraft, useQuotes, withQuoteBlock, withUnsent, type DraftImage } from "../../lib/drafts";
-import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
+import { browseTarget, mentionAt, replaceToken, sessionQuote, workspaceContext } from "../../lib/mentions";
+import { machineWithHub } from "../../lib/mesh";
+import { getState } from "../../lib/store";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -350,10 +352,15 @@ export function Composer({
 
   const pickMention = (r: MentionRow) => {
     if (!token) return;
-    if (r.kind === "session") {
-      // a session goes with the message as a quote, not as text (PromptItems.quote)
-      const q = sessionQuote(r.session);
-      addContext(draftKey, newContext("context", q.title, q.url, q.text));
+    if (r.kind === "session" || r.kind === "workspace") {
+      // a session goes with the message as a quote, not as text (PromptItems.quote); a workspace as a context the hub fills in
+      if (r.kind === "session") {
+        const q = sessionQuote(r.session);
+        addContext(draftKey, newContext("context", q.title, q.url, q.text));
+      } else {
+        const w = workspaceContext(r.workspace, (id) => machineWithHub(id, getState().machines));
+        addContext(draftKey, { ...newContext("workspace", w.title, w.url, w.text), attrs: w.attrs });
+      }
       const out = replaceToken(draft, token, "");
       setDraft(out.text);
       setCaret(out.caret);

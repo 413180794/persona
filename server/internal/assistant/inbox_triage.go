@@ -83,6 +83,7 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		// Meanwhile an untriaged item sits in its rule tier rather than in "Needs you".
 		if it.Tier == "" && fallback != "" {
 			it.Tier, it.Reason = fallback, b.byRules()
+			b.applyPolicyTier(it)
 			return true
 		}
 		return false
@@ -97,6 +98,7 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		}
 		it.Tier, it.Reason = fallback, b.byRules()
 	}
+	b.applyPolicyTier(it) // the user's policy has the last word on the tier (inbox_policies.go)
 	it.TriagedAt = last
 	b.noteTriaged(it)
 	// Triage can settle an item read elsewhere while it was still untriaged (not one filed while the model thought).

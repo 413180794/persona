@@ -263,7 +263,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     }),
     [draftKey, canCompose, canFork, canRewind, rewindOff, mid, sid, assistant, persona.name],
   );
-  const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current) }), [session?.cwd, draftKey]);
+  // the assistant works on any computer, so its @ menu offers workspaces too
+  const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current), workspaces: Boolean(assistant) }), [session?.cwd, draftKey, assistant]);
 
   // a sent message stays as a "sending" bubble until the transcript has it (lib/echo.ts): an item the hub tied to it
   // (any kind, a notice too), or else a latest user message with its words; one that answered one answers no other

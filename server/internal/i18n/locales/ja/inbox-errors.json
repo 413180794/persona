@@ -29,5 +29,9 @@
   "translation_target": "対象言語{target}はサポートされていません。",
   "translation_count": "{expected}件の要求に対してモデルが{actual}件の翻訳を返しました。もう一度お試しください。",
   "translation_batch": "一度の翻訳には1〜{max}件のテキストが必要です。",
-  "muted_repository": "ミュートするリポジトリ{repo}はowner/name形式で指定してください。"
+  "muted_repository": "ミュートするリポジトリ{repo}はowner/name形式で指定してください。",
+  "cannot_policy": "この項目にはその条件でルールを設定できません。",
+  "policy_tier": "tier は action・fyi・noise または空にしてください。",
+  "policy_twin": "twin は first・never または空にしてください。",
+  "no_policy": "その受信箱ルールはありません。"
 }

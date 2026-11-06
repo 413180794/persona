@@ -265,10 +265,13 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 		n.notifyHookEvent(in, stopSig, true)
 		return nil, nil
 	}
-	// An Orca pane is bound only on a machine whose engine is Orca: elsewhere nothing could drive it, and the hook
+	// An Orca pane is bound only on a machine that enables Orca: elsewhere nothing could drive it, and the hook
 	// reported no pane for it before Orca was a host (a herdr machine behaves as it did).
 	if paneKindOK(n, req.Pane) {
 		n.bindPane(req.Pane, in.SessionID)
+		if in.HookEventName == "SessionStart" {
+			n.noteSessionStart(req.Pane, in.SessionID) // rule 2 of a session's owner (ownership.go)
+		}
 	}
 	if in.HookEventName == "SessionStart" {
 		n.resumeOnSessionStart(req.Pane, in.SessionID) // herdr's restore follows it to the new session (herdrresume.go)
@@ -472,9 +475,9 @@ func (n *Node) notifyHookEvent(in hookInput, stopSig string, reportOnly bool) {
 	_ = n.peer.Notify("hook.event", hookEventParams(in, stopSig, reportOnly))
 }
 
-// paneKindOK: a hook's pane is one this machine's engine can drive (an Orca pane only where the engine is Orca).
+// paneKindOK: a hook's pane is one this machine's hosts can drive (an Orca pane only where the set enables Orca).
 func paneKindOK(n *Node, pane string) bool {
-	return host.ParsePane(pane).Kind != host.Orca || n.engine() == proto.EngineOrca
+	return host.ParsePane(pane).Kind != host.Orca || n.hostEnabled(proto.EngineOrca)
 }
 
 // hookEventParams is hook.event's params for what a hook saw.

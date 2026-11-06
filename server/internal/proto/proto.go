@@ -949,6 +949,9 @@ type Session struct {
 	Chat       string   `json:"chat,omitempty"`
 	Topic      string   `json:"topic,omitempty"`
 	Dispatched []string `json:"dispatched,omitempty"`
+	// AlsoOpenIn are the other hosts (host kinds: herdr, herdr-core, orca…) the session is live in at the same time
+	// (#2576): it is listed and driven in the host that owns it (node/ownership.go); the apps warn of the conflict.
+	AlsoOpenIn []string `json:"also_open_in,omitempty"`
 }
 
 // Work phases (WorkState.Phase) and what a blocked session waits on (WorkState.On), docs/agent-work.md.

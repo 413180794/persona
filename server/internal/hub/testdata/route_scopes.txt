@@ -50,6 +50,7 @@ extensions.call:{id} /api/v1/extensions/{id}/
 -                    DELETE /api/v1/extensions/{id}/-/{$}
 -                    DELETE /api/v1/imessage/data
 inbox.write          DELETE /api/v1/inbox/mutes/{id}
+inbox.write          DELETE /api/v1/inbox/policies/{id}
 -                    DELETE /api/v1/launchers/{name}
 -                    DELETE /api/v1/machines/{mid}/browser/cookies
 -                    DELETE /api/v1/machines/{mid}/computer/apps/{bundle}
@@ -135,6 +136,7 @@ assistant.ask        GET /api/v1/assistant/reporters
 -                    GET /api/v1/imessage/chats/{id}/messages
 inbox.read           GET /api/v1/inbox
 inbox.read           GET /api/v1/inbox/mutes
+inbox.read           GET /api/v1/inbox/policies
 inbox.read           GET /api/v1/inbox/tree/{kind}/{id...}
 inbox.read           GET /api/v1/inbox/{id}
 agents.read          GET /api/v1/interactions
@@ -224,6 +226,7 @@ agents.read          GET /api/v1/workspaces
 -                    GET {link.Path}
 -                    GET {link.StreamPath}
 -                    GET {peerPath}
+inbox.write          PATCH /api/v1/inbox/policies/{id}
 -                    PATCH /api/v1/managers/{id}
 -                    PATCH /api/v1/model-config/purposes/{id}
 todos.write          PATCH /api/v1/todos/{id}
@@ -302,6 +305,7 @@ assistant.ask        POST /api/v1/assistant/conversations/{id}/stop
 inbox.write          POST /api/v1/inbox/bulk
 inbox.write          POST /api/v1/inbox/done
 inbox.write          POST /api/v1/inbox/mutes
+inbox.write          POST /api/v1/inbox/policies
 inbox.write          POST /api/v1/inbox/refresh
 inbox.write          POST /api/v1/inbox/{id}/doc/status
 inbox.write          POST /api/v1/inbox/{id}/done

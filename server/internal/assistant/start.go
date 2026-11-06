@@ -473,6 +473,9 @@ func (s *Service) startRoutes() {
 			guestTools, in.ReportTasks = in.Guest.Tools, false // it hands nothing out
 		}
 		origin, ref := requestOrigin(r, in.Purpose)
+		if in.Guest == nil {
+			in.Prompt = s.withWorkspaces(ctx, in.Prompt) // as SendParams does for the next messages
+		}
 		// The main conversation is the assistant's, on its machine.
 		sess, err := s.Start(ctx, StartParams{Text: in.Prompt, Images: in.Images, Launcher: in.Launcher, PermissionMode: in.PermissionMode,
 			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main, Space: in.Space, Origin: origin, OriginRef: ref,
@@ -574,8 +577,12 @@ func (s *Service) SendParams(ctx context.Context, p SendParams) (map[string]any,
 	if err := s.sendModel(ctx, p.MachineID, p.SessionID, params); err != nil {
 		return nil, badRequest(err)
 	}
-	if text, ok := params["text"].(string); ok && main {
-		params["text"] = s.handoffFor(ctx, p.SessionID, text)
+	if text, ok := params["text"].(string); ok {
+		text = s.withWorkspaces(ctx, text) // an @-mentioned workspace: where it is and what worked there (workspace_mention.go)
+		if main {
+			text = s.handoffFor(ctx, p.SessionID, text)
+		}
+		params["text"] = text
 	}
 	return params, nil
 }

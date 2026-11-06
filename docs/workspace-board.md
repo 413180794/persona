@@ -38,6 +38,8 @@ When a machine is offline, the list uses the last discovery snapshot saved in Po
 
 Card IDs, columns, and order are independent of host space IDs. A workspace's identity is scoped by machine, source, and source ID, so workspaces on different machines with the same name or the same source ID are never merged. Once several connections of a machine are recognized as the same computer, responses use the machine identity that is currently routable and keep the original cards and their workflow; cards that were saved separately before are not silently merged. Web data comes from the current hub (which forwards to its manager); a board from another hub you switch to is not stored in shared local state.
 
+The same workspace list feeds the Persona assistant's `@` menu (docs/assistant.md "Workspace mentions"), whether or not the board is on.
+
 ## Persistence, permissions, and refresh
 
 The board is stored in Postgres in `workspace_board`, workspace snapshots in `workspace_snapshots`. There is no fallback to JSON files or in-memory writes. The migration is `server/internal/db/migrations/manager/0302_workspace_board.sql`. Every change carries a `revision`; the database does an atomic CAS compare-and-increment. A concurrent conflict returns HTTP 409, and the web app re-reads and asks you to retry instead of overwriting the other side's change. On failure it restores the last board the server confirmed.
