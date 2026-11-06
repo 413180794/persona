@@ -14,7 +14,7 @@ import { hubLabel, machineWithHub } from "../lib/mesh";
 import { isPending, machineErrorText } from "../lib/add-computer";
 import { machineDeployment } from "../lib/machine-deploy";
 import { classifyConnection } from "../lib/node-health";
-import { href, onLinkClick, type Route } from "../lib/router";
+import { href, navigate, onLinkClick, type Route } from "../lib/router";
 import { useScrollMemory } from "../lib/scroll-memory";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { getSession, useStore } from "../lib/store";
@@ -45,6 +45,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   const agentSessions = useAgentSessions();
   const sessions = useMemo(() => answeredSessions(agentSessions, interactions, answered), [agentSessions, interactions, answered]);
   const loaded = useStore((s) => s.loaded);
+  const noMachines = loaded && machines.length === 0;
   const counts = useCounts();
   const now = useNow(5000, counts.working > 0);
 
@@ -76,9 +77,11 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4 lg:border-transparent">
         <IconButton icon="sidebar" label={t("home.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <span className="flex-1" />
-        <Button tone="secondary" icon="plus" onClick={onNewAgent}>
-          {t("home.new_agent")}
-        </Button>
+        {!noMachines && (
+          <Button tone="secondary" icon="plus" onClick={onNewAgent}>
+            {t("home.new_agent")}
+          </Button>
+        )}
       </header>
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[760px] flex-col gap-9 px-5 pt-6 pb-16 sm:px-8 sm:pt-10">
@@ -86,7 +89,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{greeting()}</h1>
             <div className="mt-1 flex items-center gap-2">
               <p className="min-w-0 flex-1 text-[13.5px] text-ink-2">
-                {!loaded ? t("home.connecting") : quiet ? t("home.all_quiet") : t("home.summary", { list: [counts.needs && t("home.summary_needs", { count: counts.needs }), counts.working && t("home.summary_working", { count: counts.working }), counts.unread && t("home.summary_unread", { count: counts.unread })].filter(Boolean).join(t("home.summary_separator")) })}
+                {!loaded ? t("home.connecting") : quiet ? noMachines ? t("home.no_machines_summary") : t("home.all_quiet") : t("home.summary", { list: [counts.needs && t("home.summary_needs", { count: counts.needs }), counts.working && t("home.summary_working", { count: counts.working }), counts.unread && t("home.summary_unread", { count: counts.unread })].filter(Boolean).join(t("home.summary_separator")) })}
               </p>
               {loaded && markAllAt === "summary" && markAll}
             </div>
@@ -171,15 +174,15 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 
           {loaded && quiet && interactions.length === 0 && held.length === 0 && (
             <div className="flex flex-col items-start gap-3 rounded-card bg-surface p-4 shadow-card">
-              <span className="flex size-8 items-center justify-center rounded-full bg-green-tint text-green">
-                <Icon name="check" size={15} stroke={2.6} />
+              <span className={cx("flex size-8 items-center justify-center rounded-full", noMachines ? "bg-field text-ink-2" : "bg-green-tint text-green")}>
+                <Icon name={noMachines ? "machine" : "check"} size={15} stroke={noMachines ? undefined : 2.6} />
               </span>
               <div>
-                <p className="text-[13.5px] font-medium text-ink">{t("home.all_set")}</p>
-                <p className="mt-0.5 text-[12.5px] text-ink-2">{t("home.all_set_hint")}</p>
+                <p className="text-[13.5px] font-medium text-ink">{noMachines ? t("home.no_machines") : t("home.all_set")}</p>
+                <p className="mt-0.5 text-[12.5px] text-ink-2">{noMachines ? t("home.no_machines_hint") : t("home.all_set_hint")}</p>
               </div>
-              <Button tone="primary" icon="plus" onClick={onNewAgent}>
-                {t("home.new_agent")}
+              <Button tone="primary" icon={noMachines ? "machine" : "plus"} onClick={noMachines ? () => navigate({ name: "machines" }) : onNewAgent}>
+                {noMachines ? t("home.open_machines") : t("home.new_agent")}
               </Button>
             </div>
           )}

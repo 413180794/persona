@@ -50,11 +50,13 @@ const agent = (slot: number, pane: number, state: Session["state"], o: Partial<S
   pane_index: pane,
   ...o,
 });
-const render = (sessions: Session[], interactions: Interaction[] = []) => {
-  Object.assign(fake, { sessions, interactions, machines: [mac] });
+// Preserve fake.loaded unless explicitly provided so tests can set the loading state themselves.
+const render = (sessions: Session[], interactions: Interaction[] = [], { machines = [mac], loaded }: { machines?: Machine[]; loaded?: boolean } = {}) => {
+  Object.assign(fake, { sessions, interactions, machines }, loaded === undefined ? {} : { loaded });
   return renderToStaticMarkup(<Home onNewAgent={() => {}} onToggleSidebar={() => {}} />);
 };
 const markAll = (html: string) => html.match(/<button [^>]*title="把 (\d+) 个完成未看的会话标为已读"[^>]*>/)?.[1];
+const buttonLabels = (html: string) => (html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g) ?? []).map((button) => button.replace(/<[^>]*>/g, ""));
 
 describe("the overview", () => {
   it("says what each waiting card asks, from whatever field has it (#3780)", () => {
@@ -82,6 +84,41 @@ describe("the overview", () => {
     const plan = render([a], [{ id: "l", kind: "plan", machine_id: "mac", session_id: a.session_id, plan: "# 计划" } as Interaction]);
     expect(buttons(plan)).not.toContain("允许");
     expect(plan).toContain("计划写好了，等你批准");
+  });
+
+  it("asks for a computer before offering to create an agent (#3729)", () => {
+    const html = render([], [], { machines: [] });
+    expect(html).toContain("还没有电脑");
+    expect(html).toContain("先接入一台电脑，再开始使用 Agent。");
+    expect(html).toContain("把一台电脑接入 hub 后，就能在这里新建 Agent、查看进展。");
+    expect(buttonLabels(html)).toContain("打开机器页");
+    expect(buttonLabels(html)).not.toContain("新建 Agent");
+    expect(html).not.toContain("一切就绪");
+    expect(html).not.toContain("所有 Agent 都在等你");
+  });
+
+  it("waits for the initial load before showing the no-computers guidance", () => {
+    let html: string;
+    try {
+      html = render([], [], { machines: [], loaded: false });
+    } finally {
+      fake.loaded = true;
+    }
+    expect(html).toContain("正在连上 hub");
+    expect(html).not.toContain("还没有电脑");
+    expect(html).not.toContain("先接入一台电脑");
+    expect(buttonLabels(html)).not.toContain("打开机器页");
+    expect(html).not.toContain("一切就绪");
+    expect(html).not.toContain("所有 Agent 都在等你");
+  });
+
+  it.each([{ state: "online", online: true }, { state: "offline", online: false }])("keeps the ready state with an existing $state computer and no agents", ({ online }) => {
+    const html = render([], [], { machines: [{ ...mac, online }] });
+    expect(html).toContain("一切就绪");
+    expect(html).toContain("所有 Agent 都在等你");
+    expect(buttonLabels(html)).toContain("新建 Agent");
+    expect(html).not.toContain("还没有电脑");
+    expect(buttonLabels(html)).not.toContain("打开机器页");
   });
 
   it("does not say nothing needs you above a waiting card", () => {
