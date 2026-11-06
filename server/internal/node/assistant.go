@@ -1013,6 +1013,19 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			go n.checkTurnUsage(p, ev.IsError && promptTooLong(ev.Result))
 		}
 	}
+	stopUnreadAssistant(p.ownerOr(started).logger, p, short(p.id), sc.Err())
+}
+
+// stopUnreadAssistant stops a process whose stdout the node can no longer read (a line longer than the scanner's
+// buffer: a big image or tool result). Nobody drains its stdout any more, so it would block on its next write and
+// never exit, leaving its conversation busy for good; stopped, its exit watcher cleans up. os.ErrClosed is the pipe
+// closed by cmd.Wait: the process has already exited.
+func stopUnreadAssistant(logger *log.Logger, p *assistantProc, name string, err error) {
+	if err == nil || errors.Is(err, os.ErrClosed) {
+		return
+	}
+	logger.Printf("assistant %s: stdout read: %v", name, err)
+	p.stop()
 }
 
 func (n *Node) emitDelta(id, text string) {

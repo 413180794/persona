@@ -15,11 +15,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -275,19 +277,62 @@ func (n *Node) assistantGateTool(ctx context.Context, g *proto.CommandGate, sess
 	}
 	rctx, cancel := context.WithTimeout(ctx, gateToolTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(rctx, "bash", append([]string{script}, a.Args...)...)
+	return runGateScript(rctx, g.Command, script, a.Args, cwd, env)
+}
+
+// gateOutputCap is how much of a gated command's output goes back to the assistant; gateOutputNotice follows it when
+// there was more.
+const gateOutputCap = 64 * 1024
+
+const gateOutputNotice = "\n…（输出太长，后面的没有放进来；用 -o 写到文件里再读）"
+
+// runGateScript runs a gated command's skill script with bash in cwd and returns its combined output as the tool's
+// result: an error result when it exits non-zero (with its output) or cannot run. The script runs in a process group of
+// its own (killGroupOnCancel): at ctx's end the whole group is killed, and a child that still holds the output pipe
+// (sleep 300 &) no longer keeps the call waiting past WaitDelay. On Unix the group is also stopped once the script has
+// exited, so what it left running does not outlive the call. Only the first gateOutputCap bytes are kept in memory.
+func runGateScript(ctx context.Context, name, script string, args []string, cwd string, env []string) proto.ToolResult {
+	cmd := exec.CommandContext(ctx, "bash", append([]string{script}, args...)...)
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), env...)
-	out, err := cmd.CombinedOutput()
-	text := string(out)
-	if len(text) > 64*1024 {
-		text = text[:64*1024] + "\n…（输出太长，后面的没有放进来；用 -o 写到文件里再读）"
+	killGroupOnCancel(cmd)
+	out := &cappedBuffer{max: gateOutputCap}
+	cmd.Stdout, cmd.Stderr = out, out // the same comparable writer: exec calls it from one goroutine at a time
+	if err := cmd.Start(); err != nil {
+		return proto.TextResult(name+": "+err.Error(), true)
+	}
+	err := cmd.Wait()
+	if runtime.GOOS != "windows" {
+		// The group outlives its leader while a member is left; already empty is ESRCH. Not on Windows: there the
+		// stop is taskkill /T by the leader's pid, which is gone (and may be reused) once it has exited.
+		_ = osproc.StopGroup(cmd.Process.Pid, true)
+	}
+	if errors.Is(err, exec.ErrWaitDelay) { // the script exited 0; a child it left held the pipe until WaitDelay
+		err = nil
+	}
+	text := string(out.buf)
+	if out.dropped > 0 {
+		text += gateOutputNotice
 	}
 	var exit *exec.ExitError
 	if err != nil && !errors.As(err, &exit) {
-		return proto.TextResult(g.Command+": "+err.Error(), true)
+		return proto.TextResult(name+": "+err.Error(), true)
 	}
 	return proto.TextResult(text, err != nil)
+}
+
+// cappedBuffer keeps the first max bytes written to it and counts the rest without holding them.
+type cappedBuffer struct {
+	buf     []byte
+	max     int
+	dropped int64
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	keep := min(len(p), b.max-len(b.buf))
+	b.buf = append(b.buf, p[:keep]...)
+	b.dropped += int64(len(p) - keep)
+	return len(p), nil
 }
 
 func fileExists(p string) bool {

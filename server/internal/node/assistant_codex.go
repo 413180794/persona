@@ -529,10 +529,13 @@ func short(id string) string {
 	return id
 }
 
+// codexLineMax is the longest app-server line read; a var so tests can lower it.
+var codexLineMax = 64 * 1024 * 1024
+
 // read handles everything the app-server writes: responses, notifications, and requests to us (approvals…).
 func (c *codexConn) read(r io.Reader) {
 	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
+	sc.Buffer(make([]byte, 64*1024), codexLineMax)
 	for sc.Scan() {
 		line := sc.Bytes()
 		if len(line) == 0 || line[0] != '{' { // an interactive shell may print banners
@@ -543,7 +546,8 @@ func (c *codexConn) read(r io.Reader) {
 			continue
 		}
 		c.receive(m)
-	} // the exit goroutine in spawnCodex cleans up
+	}
+	stopUnreadAssistant(c.n.logger, c.p, "codex "+c.key, sc.Err()) // the exit goroutine in spawnCodex cleans up
 }
 
 func (c *codexConn) receive(m codexMessage) {

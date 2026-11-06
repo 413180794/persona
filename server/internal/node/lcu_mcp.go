@@ -103,6 +103,9 @@ func (s *lcuSession) call(ctx context.Context, name string, args map[string]any,
 	if err := s.ensure(ctx); err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
+	wait := s.wait
+	s.mu.Unlock()
 	if session == "" {
 		session = "persona"
 	}
@@ -127,7 +130,7 @@ func (s *lcuSession) call(ctx context.Context, name string, args map[string]any,
 		return lcuToolResult(msg.Result)
 	case <-ctx.Done():
 		return nil, errors.New("操控电脑的确认超时或已取消")
-	case <-s.wait:
+	case <-wait:
 		return nil, errors.New("LCU 的进程结束了")
 	}
 }
@@ -201,31 +204,49 @@ func (s *lcuSession) ensure(ctx context.Context) error {
 		s.readLoop(stdout)
 		_ = cmd.Wait()
 		s.mu.Lock()
-		if s.failed == nil {
+		// Only the session's current process may mark it failed: a replaced one that exits late must not.
+		if s.cmd == cmd && s.failed == nil {
 			s.failed = errors.New("LCU 的进程结束了")
 		}
 		s.mu.Unlock()
 		close(wait)
 	}()
-	if err := s.initialize(ctx); err != nil {
+	if err := s.initialize(ctx, wait); err != nil {
 		s.mu.Lock()
-		s.failed = err
+		if s.cmd == cmd {
+			s.failed = err
+		}
 		s.mu.Unlock()
+		// A process that never finished the handshake is of no use, and one that ignores stdin EOF would stay.
 		_ = stdin.Close()
+		_ = cmd.Process.Kill()
+		select {
+		case <-wait:
+		case <-time.After(lcuExitWait):
+		}
 		return err
 	}
 	return nil
 }
 
+// lcuExitWait bounds how long a failed start waits for its killed process to be seen gone (a child of lcu can keep
+// its stdout open after the kill).
+const lcuExitWait = 2 * time.Second
+
 func (s *lcuSession) resetLocked() {
 	if s.stdin != nil {
 		_ = s.stdin.Close()
+	}
+	if s.cmd != nil && s.cmd.Process != nil {
+		// os.Process.Kill is a no-op on a process already waited for, so this never reaches a reused pid.
+		_ = s.cmd.Process.Kill()
 	}
 	s.stdin, s.cmd, s.failed = nil, nil, nil
 	s.pending = map[int64]chan mcpMessage{}
 }
 
-func (s *lcuSession) initialize(ctx context.Context) error {
+// initialize is the MCP handshake with the process whose exit closes exited.
+func (s *lcuSession) initialize(ctx context.Context, exited <-chan struct{}) error {
 	s.mu.Lock()
 	s.next++
 	id := s.next
@@ -252,6 +273,8 @@ func (s *lcuSession) initialize(ctx context.Context) error {
 		}
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-exited:
+		return errors.New("LCU 的进程结束了")
 	case <-time.After(30 * time.Second):
 		return errors.New("LCU 没有完成 MCP 握手")
 	}
