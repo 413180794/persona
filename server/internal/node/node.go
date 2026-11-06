@@ -481,7 +481,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	}
 	if n.externalCodex(p.SessionID) {
 		switch method {
-		case "session.keys", "session.screen", "session.screen.before", "terminal.watch", "session.close", "session.queue.edit", "session.rename", "assistant.send":
+		case "session.keys", "session.screen", "session.screen.before", "terminal.watch", "session.close", "session.queue.edit", "session.queue.send_now", "session.rename", "assistant.send":
 			return nil, refusal("codex_read_only", "这个会话没有终端或启动器控制能力，请在原 app-server 中操作", nil)
 		case "session.modes":
 			// Its effort, on the app-server running it (codex_effort.go); nothing else.
@@ -1229,6 +1229,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		_ = json.Unmarshal(params, &a)
 		queue, err := n.editQueue(ctx, p.SessionID, a.Keep)
 		return map[string]any{"queue": queue}, err
+	case "session.queue.send_now": // #6088
+		if err := n.sendQueuedNow(ctx, p.SessionID); err != nil {
+			return nil, err
+		}
+		return map[string]any{"sent": true}, nil
 	case "session.close":
 		if n.runtimeAssistant(p.SessionID) { // the runtime keeps the conversation; a running turn stops, as a process would
 			if s, _, listed := n.runtimes.rowOf(p.SessionID); listed && s.Status == proto.StatusWorking {

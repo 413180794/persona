@@ -142,7 +142,7 @@ func (n *Node) terminalOnlyCalls(ctx context.Context, method, id string, r termi
 	case "session.interrupt":
 		a, _ := n.agent(id)
 		return okResult(n.sendKeys(ctx, a.PaneID, "escape")), nil, true
-	case "session.modes", "session.queue.edit":
+	case "session.modes", "session.queue.edit", "session.queue.send_now":
 		return nil, refusal("unsupported", r.kind+" 没有这个操作", nil), true
 	}
 	return nil, nil, false

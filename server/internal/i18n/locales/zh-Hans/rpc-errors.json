@@ -8,5 +8,7 @@
   "attach_busy": "另一客户端正在使用这段会话，请等待它可用。",
   "node_outdated": "这台电脑上的 Persona 服务版本太旧，请先更新。",
   "in_doubt": "无法确认是否送达，请检查结果后再发送。",
-  "offline": "这台电脑未连接，请连接后重试。"
+  "offline": "这台电脑未连接，请连接后重试。",
+  "nothing_queued": "已经没有排队的消息了。",
+  "send_now_unsupported": "这个 Agent 不能立即发送排队的消息。请升级 Claude Code，或等它按顺序发出。"
 }

@@ -1281,7 +1281,7 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 		}
 		_, err := call("session.modes", map[string]any{"session_id": p.SessionID, "permission_mode": p.PermissionMode, "effort": p.Effort})
 		return okResult(err), err, true
-	case "session.queue.edit":
+	case "session.queue.edit", "session.queue.send_now":
 		return nil, errRuntimeUnsupported(label, "这个操作"), true
 	}
 	return nil, nil, false

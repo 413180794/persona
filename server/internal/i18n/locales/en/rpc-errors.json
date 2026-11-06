@@ -8,5 +8,7 @@
   "attach_busy": "This session is busy in another client. Wait until it is available.",
   "node_outdated": "The computer’s Persona service is too old for this operation. Update it first.",
   "in_doubt": "Delivery cannot be confirmed. Check the result before sending again.",
-  "offline": "This computer is offline. Reconnect it before retrying."
+  "offline": "This computer is offline. Reconnect it before retrying.",
+  "nothing_queued": "Nothing is queued for the agent any more.",
+  "send_now_unsupported": "This agent can’t send queued messages now. Update Claude Code, or wait for the queue."
 }

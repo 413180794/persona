@@ -208,6 +208,10 @@ var rpcFailureKeys = map[string]string{
 	"attach_busy":        "rpc-errors.attach_busy",
 	"node_outdated":      "rpc-errors.node_outdated",
 	"assistant_in_doubt": "rpc-errors.in_doubt",
+	// queued messages sent now (#6088)
+	"nothing_queued":       "rpc-errors.nothing_queued",
+	"send_now_unsupported": "rpc-errors.send_now_unsupported",
+	"send_now_in_doubt":    "rpc-errors.in_doubt",
 }
 
 func localizeFailure(body map[string]any, status int, err error, l i18n.Lang) {
