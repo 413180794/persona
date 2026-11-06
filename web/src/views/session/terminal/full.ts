@@ -78,6 +78,8 @@ export interface FullView {
 }
 
 const RESIZE_MS = 120;
+/** How often (ms) an open view checks that the hub link is still up: the hub stops the client when the socket drops, and nothing else says so. */
+const LINK_MS = 1000;
 /** A surface that gave the feed up is waited for this long (ms) before the client is let go: the page that takes over (another session of the machine) claims it within the same moment. */
 const YIELD_MS = 1200;
 /** One herdr_input carries at most this many UTF-16 units: a big paste goes in several (the hub caps one at 1 MiB). */
@@ -116,6 +118,8 @@ export class FullFeed {
   private schemeNotify = false;
   private found = { query: "", cs: false, busy: false };
   private everLive = false;
+  /** The link dropped under an open view: the screen stays, and the next view starts on a clean one. */
+  private linkLost = false;
   /** Files pasted or dropped (transfer.ts): sent to the computer, their paths typed in. */
   private transfer: FileTransfer;
   /** The pointer of the last press (a link opens on a tap but, with herdr holding the mouse, on ⌘ / Ctrl + click). */
@@ -193,6 +197,9 @@ export class FullFeed {
   snapshot = () => this.view;
 
   private patch(p: Partial<FullView>) {
+    // The key bar's ctrl / alt / shift go with the keys: its caps are disabled once control leaves, and a disabled cap
+    // gets no pointerup, so a modifier held, tapped or locked then would chord the first key typed when it comes back.
+    if (p.control === "off") p = { ...p, mods: NO_MODIFIERS };
     const v = this.view as unknown as Record<string, unknown>;
     if (!Object.entries(p).some(([k, x]) => v[k] !== x)) return;
     this.view = { ...this.view, ...p };
@@ -280,7 +287,9 @@ export class FullFeed {
       onHubEvent("herdr_focus", this.onFocus),
       onHubEvent("hello", this.onHello),
     ];
+    const link = window.setInterval(this.checkLink, LINK_MS);
     this.cleanup.push(
+      () => clearInterval(link),
       ...handlers.map((h) => () => h.dispose()),
       () => data.dispose(),
       () => selected.dispose(),
@@ -499,6 +508,10 @@ export class FullFeed {
     // herdr opens on the pane of the address (a page that got here by following herdr's focus is on it already)
     this.focused = this.target;
     focusGuard.consumeFollow(this.target);
+    if (this.linkLost) {
+      this.linkLost = false;
+      this.term.reset(); // the client draws it all again
+    }
     send({ type: "herdr_open", id, machine_id: this.mid, session_id: this.target, cols: this.grid.cols, rows: this.grid.rows, focus: true });
   }
 
@@ -513,6 +526,19 @@ export class FullFeed {
       this.patch({ status: "connecting", note: "", control: "off" });
     }
     this.begin();
+  };
+
+  /**
+   * The hub link went away under an open view: the hub has already stopped the client with it (docs/terminal.md), and
+   * keys sent now would be dropped. The view stops being live; the hub's hello opens another (onHello → begin).
+   */
+  private checkLink = () => {
+    if (this.disposed || !this.id || this.linkUp()) return;
+    this.id = "";
+    this.ack?.dispose();
+    this.ack = null;
+    this.linkLost = true;
+    this.patch({ status: "connecting", note: tr("session-terminal-feed.hub_unreachable"), control: "off" });
   };
 
   private onState = (msg: Record<string, unknown>) => {

@@ -256,7 +256,11 @@ export function FileView({
 
   const download = async () => {
     if (!f) return;
-    if (f.stream) {
+    // A paged text file goes through file/download too: the pages read here may stop at a cap or a failed page, which
+    // would save a truncated copy. Only a node that sends `revision` with stream=1 is known to serve file.chunk (both
+    // are newer than paging); an older one would answer 409 node_outdated, so it keeps the Blob of the pages read.
+    const pagedWhole = typeof f.data !== "string" && doc.next > 0 && !!f.revision;
+    if (f.stream || pagedWhole) {
       // the hub sends it as an attachment, by Range: the browser saves it without holding it here
       const a = document.createElement("a");
       a.href = fileDownloadURL(mid, f.path, cwd);

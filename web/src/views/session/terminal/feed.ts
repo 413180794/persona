@@ -310,6 +310,9 @@ export class TerminalFeed {
   }
 
   private patch(p: Partial<FeedView>) {
+    // The key bar's ctrl / alt / shift go with the keys: its caps are disabled once control leaves, and a disabled cap
+    // gets no pointerup, so a modifier held, tapped or locked then would chord the first key typed when it comes back.
+    if (p.control !== undefined && p.control !== "active") p = { ...p, mods: NO_MODIFIERS };
     const v = this.view as unknown as Record<string, unknown>;
     if (!Object.entries(p).some(([k, x]) => v[k] !== x)) return;
     this.view = { ...this.view, ...p };
@@ -473,6 +476,7 @@ export class TerminalFeed {
     } else if (v.mode === "stream") {
       if (!this.live()) {
         this.subscribed = false; // the hub's hello subscribes again
+        this.linkLost();
         if (!v.failure) this.patch({ failure: LINK_DOWN });
       } else {
         if (v.failure === LINK_DOWN) this.patch({ failure: null }); // back: an idle pane sends nothing, that is not a failure
@@ -512,8 +516,17 @@ export class TerminalFeed {
   private onHello = () => {
     if (this.view.mode !== "stream" || this.disposed) return;
     this.subscribed = false;
+    this.linkLost();
     if (this.live()) this.subscribeNow(true);
   };
+
+  /** The link went (or the hub started over): it no longer knows who drives. Keep the wish, so subscribing asks for
+   * control again, but let no key in until the hub's terminal_control says active. */
+  private linkLost() {
+    if (this.view.control !== "active") return;
+    this.patch({ control: "starting" });
+    this.inputMode();
+  }
 
   // ── frames ────────────────────────────────────────────
 
