@@ -641,3 +641,21 @@ func TestBotMessagesGoToTheAssistantInOrder(t *testing.T) {
 		t.Fatalf("handed as %s", got)
 	}
 }
+
+// The owner's recall in the bot's private chat is passed to the assistant; one in another chat, or by an admin, is not.
+func TestBotRecallTellsTheAssistant(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	recall := func(chat, kind string) {
+		b, _ := json.Marshal(map[string]any{"schema": "2.0", "header": map[string]any{"event_id": "ev_r" + chat + kind, "event_type": "im.message.recalled_v1"},
+			"event": map[string]any{"message_id": "om_x", "chat_id": chat, "recall_type": kind}})
+		_, _ = w.h.botEvent(w.ctx, b)
+	}
+	recall("oc_other", "message_owner")
+	recall("oc_p2p", "group_manager")
+	if w.a.wasTold(assistantwire.EventFeishuRecalled) {
+		t.Fatal("a recall not the owner's own was passed on")
+	}
+	recall("oc_p2p", "message_owner")
+	eventually(t, 5*time.Second, "the assistant told of the recall", func() bool { return w.a.wasTold(assistantwire.EventFeishuRecalled) })
+}

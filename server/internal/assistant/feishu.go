@@ -95,6 +95,41 @@ type feishuBook struct {
 	line chan struct{}
 	// turnWait is how long a message waits for the one before it (0: feishuTurnWait; tests change it).
 	turnWait time.Duration
+	// recalled are the messages the owner recalled lately (FeishuRecalled): one not in its conversation yet is not sent.
+	recalled map[string]time.Time
+}
+
+// feishuRecalledKeep is how long a recall is remembered: a message waits at most feishuTurnWait for the one before
+// it and a few minutes for its downloads.
+const feishuRecalledKeep = 10 * time.Minute
+
+// FeishuRecalled is feishu.recalled: the owner recalled a message in the bot's chat.
+func (s *Service) FeishuRecalled(p FeishuRecalled) {
+	if p.MessageID == "" {
+		return
+	}
+	b := &s.fbot
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := b.clock()
+	for id, at := range b.recalled {
+		if now.Sub(at) > feishuRecalledKeep {
+			delete(b.recalled, id)
+		}
+	}
+	if b.recalled == nil {
+		b.recalled = map[string]time.Time{}
+	}
+	b.recalled[p.MessageID] = now
+}
+
+// botRecalled says whether the owner recalled message id.
+func (s *Service) botRecalled(id string) bool {
+	b := &s.fbot
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, ok := b.recalled[id]
+	return ok
 }
 
 // feishuTurnWait is how long a message waits for the one before it to go into its conversation. Most get there in a
@@ -662,6 +697,10 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	msg := ev.Message
+	if s.botRecalled(msg.MessageID) {
+		s.logf("bots: a message recalled before its turn: not sent")
+		return
+	}
 	content := feishubot.ParseContent(msg.MessageType, msg.Content, msg.Mentions)
 	if _, _, isCommand := parseBotCommand(content.Text); isCommand && !content.Forward && len(content.Media) == 0 {
 		handled, rest := s.botCommand(ctx, st.Features, msg.MessageID, content.Text, msg.RootID, msg.ParentID)
@@ -846,6 +885,10 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 			return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-feishu.save_file", i18n.Args{"machine": rt.machineName}), err)
 		}
 		in.Files = append(in.Files, saved.Path)
+	}
+	if s.botRecalled(msg.MessageID) { // recalled while its pictures and files came down
+		s.logf("bots: a message recalled before it went in: not sent")
+		return nil
 	}
 	text := prompts.RenderBotMessage(in)
 	if strings.TrimSpace(content.Text) == "" && in.Quote == nil && in.Forward == "" && len(images) == 0 && len(in.Files) == 0 {

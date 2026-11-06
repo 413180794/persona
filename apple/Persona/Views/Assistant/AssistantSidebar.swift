@@ -718,9 +718,9 @@ private struct SidebarClosed: View {
 }
 
 /// What the sidebar lists (2026-10-31, laid out like 豆包's): Persona's name with a search button; the things to start
-/// (新对话, 定时任务, 知识库); 置顶 (the main conversation first, as 「Persona」 with the app's logo) and 最近, one line
-/// each with a round mark; Persona's face, where it runs and 设置 at the foot. The shell's drawer starts with the main
-/// conversation instead, then a line and the places to go (#2004).
+/// (新对话, 定时任务, 知识库; the shell's drawer: 收件箱 … 机器); a line; 置顶; the main conversation on a row of its own
+/// right above 最近, as 「主对话」 with the app's logo (#4606, before it the shell's first row #2004); 最近, one line each
+/// with a round mark; Persona's face, where it runs and 设置 at the foot.
 struct AssistantSidebar: View {
     /// The open conversation's row. On the Mac, the shade the shell's other lists select with (`macSelected`): the
     /// phone's `well` on the Mac's lighter fills (#1169) was hard to find there.
@@ -960,10 +960,8 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private func actions(_ all: [Session]) -> some View {
         if let openInbox, let onMachines {
-            // The shell's: Persona (the main conversation) first, a line, then the places to go.
+            // The shell's: the places to go (the main conversation is its own row right above 最近, `conversations`).
             VStack(alignment: .leading, spacing: 0) {
-                mainItem(all)
-                Divider().padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 action(String(localized: "收件箱"), Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
                 if TodoStore.shared.isSupported {
                     action(String(localized: "待办"), Theme.Icon.todo, id: "sidebar-todos", count: TodoStore.shared.badgeCount, run: { (openTodos ?? openInbox)() })
@@ -1067,51 +1065,51 @@ struct AssistantSidebar: View {
     }
     #endif
 
-    /// The shell's first row: the main conversation as 「Persona」 with the 形象's logo (#2004, #3203). Only the name shown is
-    /// Persona's: it is the same conversation, its key and its data unchanged. Its state (working, waiting, unread) on
-    /// the right, as on a conversation's row.
-    private func mainItem(_ all: [Session]) -> some View {
+    /// The main conversation's row while its session is not in the list (not loaded yet, or listed by no machine now):
+    /// it still opens it, or with no main conversation yet the new-conversation page, whose first one becomes it. Off
+    /// until the hub's assistant config came: a conversation started before would not become the main one.
+    private func mainPlaceholder() -> some View {
         let key = model.assistantMain
-        let main = all.first { $0.key == key }
         let selected = key != nil && key == current
-        return Button { if let key { open(key) } } label: {
-            HStack(spacing: Theme.Space.l) {
-                AppGlyph(size: Theme.Size.icon, scaled: true)
+        return Button { if let key { open(key) } else { newConversation() } } label: {
+            HStack(spacing: Theme.Space.m) {
+                AppGlyph(size: isShell ? Theme.Size.icon : Theme.Size.wellM, scaled: true)
                 Text(Self.mainTitle).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 0)
-                if let main { mark(main) }
             }
             .padding(.horizontal, Theme.Space.m)
-            .scaledFrame(minHeight: Theme.Size.box50)
+            .scaledFrame(minHeight: isShell ? Theme.Size.avatarXL : Theme.Size.box50)
             .background {
-                if selected { RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).fill(Self.selectedFill) }
+                if selected {
+                    RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous).fill(Self.selectedFill)
+                }
             }
-            .macHoverShade(in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+            .macHoverShade(in: RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([Self.mainTitle, main.flatMap(stateWord)].compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
+        .macListRow(selected: selected, in: Rectangle(), drawsShade: false) // the row draws its own (`selectedFill`)
+        .accessibilityLabel(Self.mainTitle)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("sidebar-main")
+        .disabled(key == nil && model.assistantConfig == nil)
         .contextMenu {
-            if let main {
+            if let key {
+                MainConversationMenu(key: key) // 压缩上下文, 新建主对话… (#1762), as on its row
                 Button {
-                    UIPasteboard.general.string = main.sessionID
+                    UIPasteboard.general.string = key.sessionID
                     model.toast = Toast(String(localized: "已拷贝会话 ID"), style: .success)
                 } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
                 Button {
-                    UIPasteboard.general.string = ChatTrace.shared.text(main.key) // structure only, to paste into a report
+                    UIPasteboard.general.string = ChatTrace.shared.text(key) // structure only, to paste into a report
                     model.toast = Toast(String(localized: "已拷贝诊断"), style: .success)
                 } label: { Label("拷贝诊断", systemImage: Theme.Icon.diagnostics) }
-                if main.status.isLive {
-                    Button(role: .destructive) { ending = main } label: { Label("结束…", systemImage: Theme.Icon.end) }
-                }
             }
         }
     }
 
-    /// The main conversation's name in the sidebar (it was 主对话).
-    static let mainTitle = "Persona"
+    /// The main conversation's name in the sidebar (#4606, as the web's; it was 「Persona」 from #2004).
+    static var mainTitle: String { String(localized: "主对话") }
 
     @ViewBuilder private func action(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
         if AppStyle.current.usesBeautifulUI {
@@ -1148,25 +1146,25 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private func conversations(_ all: [Session], archived: Int) -> some View {
         let main = model.assistantMain
-        // The shell has the main conversation at the top already (`mainItem`): not again under 置顶.
-        let pinned = all.filter { isPinned($0) && !(isShell && $0.key == main) }
-            .sorted { $0.key == main && $1.key != main } // the main one first
-        let mainAbove = isShell && all.contains { $0.key == main }
+        let pinned = all.filter { isPinned($0) && $0.key != main }
         if !pinned.isEmpty {
             heading(String(localized: "section.pinned", defaultValue: "置顶")) {
-                if pinned.contains(where: { $0.key != main }) {
-                    Button { unpinAll() } label: { Label("全部取消置顶", systemImage: Theme.Icon.unpin) }
-                }
+                Button { unpinAll() } label: { Label("全部取消置顶", systemImage: Theme.Icon.unpin) }
             }
             ForEach(pinned) { row($0) }
+            // A line under the pinned ones: the main conversation's row below is not one of them.
+            VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
         }
+        // The main conversation on a row of its own right above 最近 (#4606), as the Codex app's pinned thread: once
+        // (never under 置顶 or in 自动对话, `isPinned`), whether or not its session is listed yet, with no other one too.
+        if let s = all.first(where: { $0.key == main }) { row(s) } else { mainPlaceholder() }
         // Those Persona opened by itself are in 自动对话 (#3264); with a hub that does not say, the scheduled tasks' ones
         // are on 定时任务, under each task (#2838). The open one keeps its row.
         let split = AutoConversations(all.filter { !isPinned($0) }, tasks: taskChats.known, current: current,
                                       hubSays: model.hubFeatures.contains(AutoConversationSource.feature))
         let rest = AssistantSidebarGroups.newestFirst(split.mine)
         if rest.isEmpty && split.auto.isEmpty {
-            Text(pinned.isEmpty && !mainAbove ? "还没有对话：点上面的新对话开始" : "还没有别的对话")
+            Text("还没有别的对话")
                 .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.xl)
         } else {
@@ -1386,11 +1384,12 @@ struct AssistantSidebar: View {
         let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
-                // The shell's list is ChatGPT's: titles only, all in one column (the marks made it busy).
-                if isShell {
+                // The shell's list is ChatGPT's: titles only, all in one column (the marks made it busy); the main
+                // conversation keeps the app's logo, as its row above 收件箱 had it (#2004).
+                if isMain {
+                    AppGlyph(size: isShell ? Theme.Size.icon : Theme.Size.wellM, scaled: true)
+                } else if isShell {
                     EmptyView()
-                } else if isMain {
-                    AppGlyph(size: Theme.Size.wellM, scaled: true)
                 } else {
                     ConversationMark(id: s.sessionID)
                 }
@@ -1416,7 +1415,7 @@ struct AssistantSidebar: View {
         .accessibilityLabel([title, isMain && s.title != title ? s.title : nil, stateWord(s), preview.isEmpty ? nil : preview]
             .compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("sidebar-conversation")
+        .accessibilityIdentifier(isMain ? "sidebar-main" : "sidebar-conversation")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if !isMain {
                 Button { Task { await model.archiveConversation(s.key, true) } } label: {

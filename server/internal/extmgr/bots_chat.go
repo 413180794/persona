@@ -57,6 +57,11 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 			return nil, err
 		}
 		return h.botCardAction(ctx, &a, env.Event), nil
+	case feishubot.EventRecalled:
+		var ev feishubot.Recalled
+		if json.Unmarshal(env.Event, &ev) == nil {
+			h.botRecalled(ev)
+		}
 	case feishubot.EventP2PEntered:
 		var ev feishubot.P2PEntered
 		if json.Unmarshal(env.Event, &ev) == nil {
@@ -64,6 +69,21 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 		}
 	}
 	return nil, nil
+}
+
+// botRecalled tells the assistant the owner recalled a message in the bot's private chat: one not in its
+// conversation yet is not sent. Recalls elsewhere (a group, someone else's chat) and by an admin are not the owner's.
+func (h *Manager) botRecalled(ev feishubot.Recalled) {
+	_, set := h.botAPI()
+	if set.Owner == nil || ev.MessageID == "" || ev.ChatID == "" || ev.ChatID != set.Owner.ChatID {
+		return
+	}
+	if ev.RecallType != "" && ev.RecallType != "message_owner" {
+		return
+	}
+	if err := h.notifyAssistant(assistantwire.EventFeishuRecalled, assistantwire.FeishuRecalled{MessageID: ev.MessageID}); err != nil {
+		h.logf("bots: tell the assistant of a recall: %v", err)
+	}
 }
 
 // botSeenKeep is how many message ids the hub remembers: Feishu delivers again what it thinks was missed. The

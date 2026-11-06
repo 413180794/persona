@@ -821,6 +821,8 @@ const (
 	EventSessionDelta = "session.delta"
 	// EventFeishuOwner: FeishuOwner, one way: the Feishu bot was paired with its owner, or unpaired.
 	EventFeishuOwner = "feishu.owner"
+	// EventFeishuRecalled: FeishuRecalled, one way: the owner recalled a message in the bot's private chat.
+	EventFeishuRecalled = "feishu.recalled"
 	// EventChannelNoted: ChannelNoted, one way: a channel's message went into a conversation through the apps' routes
 	// (a voice conversation's errand: client_msg_id voice-…).
 	EventChannelNoted = "channels.noted"
@@ -945,6 +947,11 @@ type ChannelNoted struct {
 // FeishuOwner is feishu.owner's params.
 type FeishuOwner struct {
 	Paired bool `json:"paired"`
+}
+
+// FeishuRecalled is feishu.recalled's params: the message the owner recalled.
+type FeishuRecalled struct {
+	MessageID string `json:"message_id"`
 }
 
 // FeishuFeatures are the Feishu bot's switches (settings bots.feishu, the hub's with its credentials).

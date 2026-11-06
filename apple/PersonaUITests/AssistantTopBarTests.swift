@@ -105,13 +105,15 @@ final class AssistantTopBarTests: XCTestCase {
         XCTAssertTrue(history.isHittable, "no 历史对话 on the left")
         history.tapCenter()
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
-        // 豆包's layout (2026-10-31): what to start, 置顶 with the main conversation, 最近, Persona and 设置 at the foot.
-        for row in ["新对话", "定时任务", "知识库", "置顶", "最近"] {
+        // 豆包's layout (2026-10-31): what to start, the main conversation on its own row, 最近, Persona and 设置 at the foot.
+        for row in ["新对话", "定时任务", "知识库", "最近"] {
             XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")
         }
-        // The main conversation is named Persona (#2004).
-        XCTAssertTrue(app.buttons.matching(identifier: "sidebar-conversation").matching(NSPredicate(format: "label BEGINSWITH %@", "Persona")).firstMatch.exists,
-                      "no Persona (the main conversation) under 置顶:\n\(app.debugDescription)")
+        // The main conversation is 「主对话」, above 最近 and not under 置顶 (#4606).
+        let mainRow = app.buttons["sidebar-main"].firstMatch
+        XCTAssertTrue(mainRow.exists && mainRow.label.hasPrefix("主对话"), "no 主对话 row:\n\(app.debugDescription)")
+        XCTAssertLessThan(mainRow.frame.minY, app.staticTexts["最近"].firstMatch.frame.minY, "主对话 is not above 最近")
+        XCTAssertEqual(app.buttons.matching(identifier: "sidebar-main").count, 1, "the main conversation shows more than once")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Persona，", "查看资料")).firstMatch.exists,
                       "no Persona at the foot")
         XCTAssertTrue(app.buttons["搜索对话"].exists, "no search button")
@@ -145,7 +147,7 @@ final class AssistantTopBarTests: XCTestCase {
         }
         swipe(from: 0.35, to: 0.95) // from the middle of the chat
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "a swipe to the right did not open the sidebar:\n\(app.debugDescription)")
-        XCTAssertTrue(app.staticTexts["置顶"].exists && app.staticTexts["最近"].exists, "not the same sidebar as the button's")
+        XCTAssertTrue(app.buttons["sidebar-main"].exists && app.staticTexts["最近"].exists, "not the same sidebar as the button's")
 
         let close = app.descendants(matching: .any)["assistant-drawer-close"]
         XCTAssertTrue(close.exists, "no page edge to tap")

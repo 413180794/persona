@@ -642,7 +642,7 @@ private struct SourceIcon: View {
     }
 }
 
-/// Persona's logo beside its name (设置's header, the welcome page, the sidebar's Persona row): the 形象's home screen
+/// Persona's logo beside its name (设置's header, the welcome page, the sidebar's 主对话 row): the 形象's home screen
 /// icon, in the look the home screen shows it in (#1312). A package's own face stands in for it here, in the icon's
 /// shape: in the app it is the logo, on the home screen iOS allows only the icons the app ships (#3203).
 struct AppGlyph: View {

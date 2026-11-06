@@ -25,7 +25,15 @@ const (
 	EventMessage    = "im.message.receive_v1"
 	EventCardAction = "card.action.trigger"
 	EventP2PEntered = "im.chat.access_event.bot_p2p_chat_entered_v1"
+	EventRecalled   = "im.message.recalled_v1"
 )
+
+// Recalled is im.message.recalled_v1: a message in a chat the bot is in was recalled (message_owner: by its sender).
+type Recalled struct {
+	MessageID  string `json:"message_id"`
+	ChatID     string `json:"chat_id"`
+	RecallType string `json:"recall_type"`
+}
 
 func ParseEnvelope(payload []byte) (*Envelope, error) {
 	var e Envelope

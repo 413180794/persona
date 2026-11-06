@@ -16,7 +16,7 @@ final class ChatTraceMenuTests: XCTestCase {
         sleep(1)
         drawer.tapCenter()
         let main = app.buttons["sidebar-main"].firstMatch
-        XCTAssertTrue(main.waitForExistence(timeout: 5), "no Persona row at the top of the drawer")
+        XCTAssertTrue(main.waitForExistence(timeout: 5), "no 主对话 row in the drawer")
         sleep(1)
         main.press(forDuration: 1.2)
         let copy = app.buttons["拷贝诊断"].firstMatch

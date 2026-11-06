@@ -631,6 +631,12 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		s.FeishuOwner(ctx, p)
+	case assistantwire.EventFeishuRecalled:
+		var p FeishuRecalled
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.FeishuRecalled(p)
 	case assistantwire.EventChannelNoted:
 		var p ChannelNoted
 		if err := decode(&p); err != nil {

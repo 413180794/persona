@@ -89,6 +89,7 @@ type (
 	FeishuView           = assistantwire.FeishuView
 	FeishuAgent          = assistantwire.FeishuAgent
 	FeishuOwner          = assistantwire.FeishuOwner
+	FeishuRecalled       = assistantwire.FeishuRecalled
 	FeishuFeatures       = assistantwire.FeishuFeatures
 	FeishuStatus         = assistantwire.FeishuStatus
 	InteractionAnnounced = assistantwire.InteractionAnnounced

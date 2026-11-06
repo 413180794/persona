@@ -38,22 +38,22 @@ final class IPadSidebarTests: XCTestCase {
             XCUIDevice.shared.orientation = orientation
             app.launchPinned()
             let main = element("sidebar-main"), inbox = element("sidebar-inbox"), machines = element("sidebar-machines")
-            XCTAssertTrue(main.waitForExistence(timeout: 20), "\(name): no Persona row:\n\(app.debugDescription)")
+            XCTAssertTrue(main.waitForExistence(timeout: 20), "\(name): no 主对话 row:\n\(app.debugDescription)")
             XCTAssertTrue(inbox.exists && machines.exists, "\(name): the places are missing")
-            // Persona first, then 收件箱 … 机器 (the sidebar is the left column).
-            XCTAssertLessThan(main.frame.minY, inbox.frame.minY, "\(name): Persona is not on top")
+            // 收件箱 … 机器 first, then 主对话 on its own row (#4606; the sidebar is the left column).
             XCTAssertLessThan(inbox.frame.minY, machines.frame.minY)
+            XCTAssertLessThan(machines.frame.minY, main.frame.minY, "\(name): 主对话 is not under the places")
             XCTAssertLessThan(main.frame.maxX, app.windows.firstMatch.frame.width / 2 + 100, "\(name): not in the left column")
-            // 新对话 and 设置 at the foot, below the places, 新对话 on the left.
+            // 新对话 and 设置 at the foot, below the places and 主对话, 新对话 on the left.
             let new = element("sidebar-new"), settings = element("sidebar-settings")
             XCTAssertTrue(new.exists && settings.exists, "\(name): no 新对话 / 设置 at the foot")
-            XCTAssertGreaterThan(new.frame.minY, machines.frame.maxY)
+            XCTAssertGreaterThan(new.frame.minY, main.frame.maxY)
             XCTAssertEqual(new.frame.midY, settings.frame.midY, accuracy: 4, "\(name): 新对话 and 设置 in one row")
             XCTAssertLessThan(new.frame.minX, settings.frame.minX)
             // The tabs (iPad's bar at the top, above the sidebar's rows): Persona and Agents, no 收件箱 or 设置.
             func tabs(_ label: String) -> [XCUIElement] {
                 app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).allElementsBoundByIndex
-                    .filter { $0.exists && $0.frame.maxY < main.frame.minY - 60 }
+                    .filter { $0.exists && $0.frame.maxY < inbox.frame.minY - 60 }
             }
             XCTAssertFalse(tabs("Agents").isEmpty, "\(name): no Agents tab:\n\(app.debugDescription)")
             XCTAssertTrue(tabs("收件箱").isEmpty, "\(name): 收件箱 is still a tab")
@@ -67,7 +67,7 @@ final class IPadSidebarTests: XCTestCase {
             XCTAssertGreaterThan(more.frame.minX, inbox.frame.maxX, "\(name): the inbox is not beside the sidebar")
             XCTAssertTrue(main.exists && inbox.isHittable, "\(name): the sidebar went away with the inbox")
             shot("inbox-\(name)")
-            // Persona goes back to the conversation.
+            // 主对话 goes back to the conversation.
             main.tap()
             XCTAssertTrue(element("assistant-sidebar-search").waitForExistence(timeout: 5))
 

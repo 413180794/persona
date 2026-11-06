@@ -91473,28 +91473,6 @@
         }
       }
     },
-    "还没有对话：点上面的新对话开始": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No chats yet. Tap New Chat above to start."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "チャットはまだありません。上の「新しいチャット」から始めましょう。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "还没有对话：点上面的新对话开始"
-          }
-        }
-      }
-    },
     "还没有开过小窗。": {
       "localizations": {
         "en": {
