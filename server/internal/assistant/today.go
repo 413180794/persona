@@ -27,6 +27,26 @@ type todayBody struct {
 	Meetings []todayMeeting `json:"meetings,omitempty"`
 	AtMe     []todayChat    `json:"at_me,omitempty"`
 	Unread   int            `json:"unread,omitempty"`
+	// Failed: what did not go through since yesterday 18:00 (#4124) — the conversation's tasks whose agent did not
+	// start and the scheduled runs that failed or were skipped, newest first. Clients that do not know it ignore it.
+	Failed      []todayFailed `json:"failed,omitempty"`
+	FailedTotal int           `json:"failed_total,omitempty"` // all of them (Failed is the newest todayFailedMax)
+}
+
+// todayFailedMax: how many of them the card lists.
+const todayFailedMax = 8
+
+// todayFailed is one thing that did not go through overnight (#4124): the 今天 card says it, so the user does not have
+// to piece it together from the pushes they got at the time.
+type todayFailed struct {
+	Kind  string    `json:"kind"`          // "task": a dispatched task whose agent did not start; "routine": a scheduled run
+	ID    string    `json:"id"`            // the todo / the scheduled task
+	Ref   string    `json:"ref,omitempty"` // "routine": the run's id
+	Title string    `json:"title"`
+	At    time.Time `json:"at"`            // when it failed
+	Why   string    `json:"why,omitempty"` // the reason, one line, short
+	// Skipped: the run was skipped rather than failed (Persona was down at its time…).
+	Skipped bool `json:"skipped,omitempty"`
 }
 
 type todayTask struct {
@@ -116,8 +136,41 @@ func (s *Service) ensureToday(ctx context.Context, conversation string) (FeedIte
 		}
 		body.Unread = len(chats.Other)
 	}
+	body.Failed, body.FailedTotal = s.todayFailures(ctx, conversation, since, loc)
 	it, err := s.appendFeedAt(ctx, conversation, feedToday, date, body, day)
 	return it, true, err
+}
+
+// todayFailures is what did not go through since since (#4124), newest first: the conversation's tasks whose agent did
+// not start, and the scheduled runs that failed or were skipped. It also returns how many there were in all.
+func (s *Service) todayFailures(ctx context.Context, conversation string, since time.Time, loc *time.Location) ([]todayFailed, int) {
+	var out []todayFailed
+	for _, t := range s.todosOf(ctx, conversation) {
+		if t.Origin != conversation || t.DoneAt == nil || t.StartError == "" || t.DoneAt.Before(since) {
+			continue
+		}
+		out = append(out, todayFailed{Kind: "task", ID: t.ID, Title: t.Title, At: t.DoneAt.In(loc),
+			Why: clip(oneLine(t.StartError), 60)})
+	}
+	if sc, err := s.lockedSchedule(ctx); err == nil {
+		for _, r := range sc.runs { // appended as runs end, not by At: read them all (sorted below)
+			if r.At.Before(since) {
+				continue
+			}
+			if r.Status != runFailed && r.Status != runSkipped {
+				continue
+			}
+			out = append(out, todayFailed{Kind: "routine", ID: r.RefID, Ref: r.ID, Title: clip(r.Title, 60),
+				At: r.At.In(loc), Why: clip(oneLine(r.Error), 60), Skipped: r.Status == runSkipped})
+		}
+		sc.mu.Unlock()
+	}
+	slices.SortStableFunc(out, func(a, b todayFailed) int { return b.At.Compare(a.At) })
+	total := len(out)
+	if len(out) > todayFailedMax {
+		out = out[:todayFailedMax]
+	}
+	return out, total
 }
 
 // ---- kinds that start without asking ----

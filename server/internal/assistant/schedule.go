@@ -1029,6 +1029,7 @@ func (s *Service) recordRun(r ScheduleRun) string {
 			t.LastSessionID = r.SessionID
 		}
 	}
+	streakTask, streak := streakToldLocked(sc, r) // the run that makes it streakLimit in a row is told once (schedule_streak.go)
 	s.saveLocked(sc)
 	if st := s.store(); st != nil { // under the lock: two runs finishing together must not save their lists out of order
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1039,25 +1040,31 @@ func (s *Service) recordRun(r ScheduleRun) string {
 	}
 	sc.mu.Unlock()
 	s.broadcastSchedule()
+	if streak {
+		s.pushStreak(streakTask, r)
+	}
 	return r.ID
 }
 
 // updateRun rewrites a recorded run's outcome (a run that was sent but whose turn ended in an API error) and the
 // task's last status when this run is still the newest.
-func (s *Service) updateRun(r ScheduleRun, status, errText string) {
+// updateRun returns whether it pushed the streak notice (#4658), which then stands for the run's own failure push.
+func (s *Service) updateRun(r ScheduleRun, status, errText string) bool {
 	sc, err := s.lockedSchedule(context.Background())
 	if err != nil {
-		return
+		return false
 	}
 	i := slices.IndexFunc(sc.runs, func(x ScheduleRun) bool { return x.ID == r.ID })
 	if i < 0 {
 		sc.mu.Unlock()
-		return
+		return false
 	}
 	sc.runs[i].Status, sc.runs[i].Error = status, errText
 	if j := sc.indexLocked(r.RefID); j >= 0 && (r.of.IsZero() || !sc.tasks[j].LastRun.After(r.of)) {
 		sc.tasks[j].LastStatus, sc.tasks[j].LastError = status, errText
 	}
+	streakTask, streak := streakToldLocked(sc, sc.runs[i]) // a turn that ends in an error is a failed run too (schedule_streak.go)
+	streakRun := sc.runs[i]
 	s.saveLocked(sc)
 	if st := s.store(); st != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1068,6 +1075,10 @@ func (s *Service) updateRun(r ScheduleRun, status, errText string) {
 	}
 	sc.mu.Unlock()
 	s.broadcastSchedule()
+	if streak {
+		s.pushStreak(streakTask, streakRun)
+	}
+	return streak
 }
 
 // errTaskBusy: the task's last run is still going; this one is skipped (and recorded) rather than queued behind it.
@@ -1240,12 +1251,14 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	}
 	text = clip(oneLine(text), 300)
 	s.logf("task %s run %s failed: %s", t.ID, run.ID, text)
-	s.updateRun(run, runFailed, text)
+	streak := s.updateRun(run, runFailed, text)
 	name := t.labelIn(s.lang(ctx))
 	if t.Space == SpaceHealth { // the lock screen does not name a health task (health.go)
 		name, _ = healthNotice(s.lang(ctx))
 	}
-	s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: run.SessionID, Title: i18n.T(s.lang(ctx), "assistant-schedule.run_failed", i18n.Args{"name": name}), Body: text})
+	if !streak { // the streak notice already said it failed, with this reason
+		s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: run.SessionID, Title: i18n.T(s.lang(ctx), "assistant-schedule.run_failed", i18n.Args{"name": name}), Body: text})
+	}
 	if run.Retried {
 		return
 	}

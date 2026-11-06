@@ -19,5 +19,8 @@
   "gone": "This scheduled task no longer exists",
   "not_ready_skipped": "Your computer or model isn’t set up yet, so this one was skipped",
   "ready_again": "Your computer and model are set up, so scheduled tasks run again, starting with “{name}”",
-  "ready_again_unnamed": "Your computer and model are set up, so scheduled tasks run again"
+  "ready_again_unnamed": "Your computer and model are set up, so scheduled tasks run again",
+  "streak": "“{name}” hasn’t gone through {count} runs in a row",
+  "streak_body": "Last one: {reason}. I won’t bring this up again until it goes through once.",
+  "streak_unknown": "no reason given"
 }

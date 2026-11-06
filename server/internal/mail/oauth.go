@@ -238,7 +238,7 @@ func (s *Service) googleToken(ctx context.Context, form url.Values) (*tokenRespo
 	}
 	if resp.StatusCode != http.StatusOK || tr.AccessToken == "" {
 		if tr.Error == "invalid_grant" && form.Get("grant_type") == "refresh_token" {
-			return nil, errors.New("Google authorization expired or was revoked: sign in with Google again")
+			return nil, errGoogleRevoked
 		}
 		msg := tr.Error
 		if tr.ErrorDesc != "" {

@@ -19,5 +19,8 @@
   "gone": "这个定时任务已经不在了",
   "not_ready_skipped": "还没接好电脑或模型，这次跳过",
   "ready_again": "电脑和模型接好了，定时任务恢复运行，这次是「{name}」",
-  "ready_again_unnamed": "电脑和模型接好了，定时任务恢复运行"
+  "ready_again_unnamed": "电脑和模型接好了，定时任务恢复运行",
+  "streak": "「{name}」已经连续 {count} 次没跑成",
+  "streak_body": "最近一次：{reason}。在它成功跑成一次之前，这件事我不会再提醒。",
+  "streak_unknown": "没有说明原因"
 }

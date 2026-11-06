@@ -249,6 +249,89 @@ func TestTodayCard(t *testing.T) {
 	}
 }
 
+// The 今天 card says what did not go through overnight (#4124): the conversation's tasks whose agent did not start and
+// the scheduled runs that failed or were skipped since yesterday 18:00, newest first, each with a short reason.
+func TestTodayCardListsWhatFailed(t *testing.T) {
+	old := taskStartRetryDelay
+	taskStartRetryDelay = 300 * time.Millisecond
+	t.Cleanup(func() { taskStartRetryDelay = old })
+	s, f := newTaskService(t)
+	ctx := context.Background()
+	f.offline["box"] = true // the task's agent does not start
+	if _, err := s.toolTaskPlan(ctx, "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the task to fail", func() bool { return onlyTodo(s).StartError != "" })
+	failed := onlyTodo(s)
+	now := time.Now()
+	sc := s.loadSchedule(ctx)
+	sc.mu.Lock()
+	sc.runs = []ScheduleRun{
+		{ID: "run_old", RefID: "p", Title: "巡检", At: now.Add(-40 * time.Hour), Status: runFailed, Error: "前天的，不算"},
+		{ID: "run_ok", RefID: "m", Title: "早报", At: now.Add(-2 * time.Hour), Status: runOK},
+		{ID: "run_skip", RefID: "w", Title: "值守", At: now.Add(-90 * time.Minute), Status: runSkipped, Error: "Persona 停机，错过了时间"},
+		{ID: "run_fail", RefID: "p", Title: "巡检", At: now.Add(-time.Hour), Status: runFailed,
+			Error: "API Error: 503 upstream attempt budget is exhausted, " + strings.Repeat("重试也一样", 20)},
+	}
+	sc.mu.Unlock()
+
+	it, _, err := s.ensureToday(ctx, "conv1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body todayBody
+	_ = json.Unmarshal(it.Body, &body)
+	if body.FailedTotal != 3 || len(body.Failed) != 3 {
+		t.Fatalf("failed: %d of %d, want 3 of 3 (the run before yesterday 18:00 and the one that worked left out)", len(body.Failed), body.FailedTotal)
+	}
+	for i := 1; i < len(body.Failed); i++ { // newest first
+		if body.Failed[i].At.After(body.Failed[i-1].At) {
+			t.Fatalf("not newest first: %+v", body.Failed)
+		}
+	}
+	byID := map[string]todayFailed{}
+	for _, x := range body.Failed {
+		byID[x.Kind+"/"+x.ID] = x
+	}
+	if x, ok := byID["task/"+failed.ID]; !ok || !strings.Contains(x.Why, "offline") || x.At.IsZero() {
+		t.Fatalf("the task that did not start: %+v", body.Failed)
+	}
+	if x := byID["routine/p"]; x.Ref != "run_fail" || x.Skipped || !strings.HasPrefix(x.Why, "API Error: 503") {
+		t.Fatalf("the failed run: %+v", x)
+	}
+	if x := byID["routine/w"]; !x.Skipped || !strings.Contains(x.Why, "停") {
+		t.Fatalf("the skipped run: %+v (%+v)", x, body.Failed)
+	}
+	for _, x := range body.Failed {
+		if n := len([]rune(x.Why)); n > 61 {
+			t.Fatalf("a reason is kept short: %d runes: %q", n, x.Why)
+		}
+	}
+
+	// A run that started before 18:00 but ended (was recorded) after one that started later is still left out, and the
+	// later one still counted: the history is in the order runs ended, not by At.
+	// Then ten more overnight: the scheduled runs are the hub's, so another conversation's card shows them too (not
+	// conv1's task), the newest eight and how many there are.
+	sc.mu.Lock()
+	sc.runs = append(sc.runs, ScheduleRun{ID: "run_late", RefID: "q", Title: "慢的", At: now.Add(-30 * time.Hour), Status: runFailed})
+	for i := 0; i < 10; i++ {
+		sc.runs = append(sc.runs, ScheduleRun{ID: "run_x", RefID: "x", Title: "值守", At: now.Add(-time.Duration(10-i) * time.Minute), Status: runFailed})
+	}
+	sc.mu.Unlock()
+	it2, _, err := s.ensureToday(ctx, "conv2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body2 todayBody
+	_ = json.Unmarshal(it2.Body, &body2)
+	if len(body2.Failed) != 8 || body2.FailedTotal != 12 {
+		t.Fatalf("capped: %d of %d, want 8 of 12", len(body2.Failed), body2.FailedTotal)
+	}
+	if body2.Failed[0].At.Before(body2.Failed[7].At) {
+		t.Fatalf("the newest eight, not the oldest: %+v", body2.Failed)
+	}
+}
+
 // Kinds remembered with 这类以后直接开 are listed and can be forgotten (Postgres: on the hub machine).
 func TestTaskTrust(t *testing.T) {
 	url := os.Getenv("JARVIS_TEST_DATABASE_URL")

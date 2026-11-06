@@ -37,7 +37,9 @@ type Service struct {
 	mu    sync.Mutex
 	accts map[string]*MailAccount // by ID, as loaded from disk
 	conns map[string]*conn        // by account ID
-	opMu  map[string]accountLock  // per-account IMAP serialization (imap.go)
+	// loginErr is why an account's last login was refused, by ID (account_health.go); in memory only.
+	loginErr map[string]string
+	opMu     map[string]accountLock // per-account IMAP serialization (imap.go)
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -88,6 +90,7 @@ func New(dataDir string, recs Records) (*Service, error) {
 		store:      st,
 		accts:      make(map[string]*MailAccount),
 		conns:      make(map[string]*conn),
+		loginErr:   make(map[string]string),
 		usedStates: make(map[string]time.Time),
 		googleHTTP: httpClient,
 		access:     make(map[string]*accessCache),
@@ -164,7 +167,7 @@ func (s *Service) ListAccounts() ([]MailAccount, error) {
 	defer s.mu.Unlock()
 	out := make([]MailAccount, 0, len(s.accts))
 	for _, a := range s.accts {
-		out = append(out, *a.public())
+		out = append(out, *s.withHealthLocked(a))
 	}
 	sortAccounts(out)
 	return out, nil
@@ -276,6 +279,7 @@ func (s *Service) upsertAccount(a *MailAccount) (*MailAccount, error) {
 		a.ID, a.Name = prev.ID, prev.Name
 	}
 	s.accts[a.ID] = a
+	delete(s.loginErr, a.ID) // new credentials, verified just now
 	c := s.conns[a.ID]
 	delete(s.conns, a.ID)
 	accounts := s.snapshotLocked()
@@ -305,6 +309,7 @@ func (s *Service) DeleteAccount(id string) error {
 		return fmt.Errorf("unknown account %q", id)
 	}
 	delete(s.accts, id)
+	delete(s.loginErr, id)
 	c := s.conns[id]
 	delete(s.conns, id)
 	accounts := s.snapshotLocked()
@@ -741,6 +746,7 @@ func (s *Service) withConnAt(ctx context.Context, a *MailAccount, fn func(c *ima
 	}
 	run := func() error {
 		c, err := s.getConn(ctx, a)
+		s.noteLogin(a.ID, err)
 		if err != nil {
 			return err
 		}

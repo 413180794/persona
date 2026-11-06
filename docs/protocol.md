@@ -1980,6 +1980,9 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 //         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"原话（截断）","draft":"草稿"}；发送走收件箱的发送接口
 // today：ref 是用户那天的日期；{"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"working":2,
 //         "meetings":[{"start","end","title"}],"at_me":[{"name","unread","preview"}],"unread":5}（飞书没回应的那几项不带）
+//         "failed":[{"kind":"task|routine","id","ref"?,"title","at","why"?,"skipped"?}],"failed_total":3：昨天 18:00 以来没成功的（#4124），
+//         这段对话里没开起来的派出任务（kind task，id 是待办）和失败 / 跳过的定时任务运行（kind routine，id 是定时任务，ref 是那次运行），
+//         新的在前，最多 8 条，failed_total 是一共几条；why 是一行短原因。没有就不带，旧客户端不认识照样忽略
 ```
 
 任务卡、计划卡的实时状态不在动态里：客户端按 `ref` 读计划（`task_plan` 推送）和待办 + 挂着的 Agent 的会话状态（状态规则同 [todos.md](todos.md)）。
