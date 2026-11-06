@@ -25,6 +25,8 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var alwaysOpen = false
     /// The conversation whose sent messages ↑ / ↓ and ⌃R bring back (the Mac, `MacSendHistory`); nil: none.
     var history: String? = nil
+    /// The main conversation cannot answer yet: send says what to do first and goes there, the draft stays.
+    var gate: SendGate? = nil
     var send: () -> Void
     @ViewBuilder var attach: () -> Attach
     @ViewBuilder var modes: () -> Modes
@@ -92,7 +94,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                             .accessibilityIdentifier("shell-composer-modes")
                     }
                     mic
-                    if canSend {
+                    if let gate {
+                        SendGateButton(gate: gate)
+                    } else if canSend {
                         round(Theme.Icon.send, label: String(localized: "发送"), id: "shell-composer-send", action: sendTyped)
                             .keyboardShortcut(.return, modifiers: .command)
                     } else if let stop {

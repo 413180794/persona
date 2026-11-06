@@ -901,10 +901,26 @@ nonisolated struct APIClient: Sendable {
     }
     /// The 对话 tab is open: the hub gets a claude process ready so the first message starts at once. With no launcher
     /// chosen the field is omitted and the hub warms its own default (#4200: the client never sends a made-up name).
-    func warmAssistant(launcher: String?) async throws {
+    /// A hub with `assistant_readiness` answers with the readiness it has (not probed), or none while it works it out.
+    @discardableResult
+    func warmAssistant(launcher: String?) async throws -> AssistantReadiness? {
+        struct Warm: Decodable { var readiness: AssistantReadiness? }
         var body: [String: String] = [:]
         if let launcher, !launcher.isEmpty { body["launcher"] = launcher }
-        _ = try await request("POST", "/api/v1/assistant/warm", body: body)
+        let data = try await request("POST", "/api/v1/assistant/warm", body: body)
+        return (try? JSON.decoder.decode(Warm.self, from: data))?.readiness
+    }
+
+    /// What the main conversation still needs (docs/protocol.md「主对话就绪度」). `probe`: also try one word on it
+    /// (costs a little; only for 试一句 and 「我已经在用 Claude Code」).
+    func assistantReadiness(probe: Bool = false) async throws -> AssistantReadiness {
+        try JSON.decoder.decode(AssistantReadiness.self, from: try await request("GET", "/api/v1/assistant/readiness",
+                                                                                 query: probe ? ["probe": "1"] : [:]))
+    }
+
+    /// 以后再说: the checklist stops coming up by itself (the card still shows when the readiness gets worse).
+    func dismissAssistantReadiness(_ dismissed: Bool = true) async throws {
+        _ = try await request("POST", "/api/v1/assistant/readiness/dismiss", body: ["dismissed": dismissed])
     }
 
     // MARK: Assistant schedule, memory (docs/assistant.md)

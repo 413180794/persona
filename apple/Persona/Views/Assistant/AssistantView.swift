@@ -314,6 +314,7 @@ struct AssistantView: View {
     private func start(_ text: String, _ images: [ImagePayload], space: String? = nil) async {
         guard let api = model.api else { return }
         startError = nil
+        model.readiness.failure = nil
         // From 健康: back to the root, which shows the message coming as for any new conversation.
         if space != nil {
             backToRoot()
@@ -322,10 +323,21 @@ struct AssistantView: View {
         withAnimation(Theme.Motion.standard) { pending = PendingStart(text: text, imageCount: images.count) }
         do {
             let makesMain = space == nil && model.assistantMain == nil // the first one becomes the main conversation
-            let s = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher,
-                                                    permissionMode: starterMode.isEmpty ? nil : starterMode,
-                                                    effort: starterEffort.isEmpty ? nil : starterEffort,
-                                                    main: makesMain, space: space)
+            var attempt = 0
+            var started: Session?
+            while started == nil {
+                do {
+                    started = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher,
+                                                              permissionMode: starterMode.isEmpty ? nil : starterMode,
+                                                              effort: starterEffort.isEmpty ? nil : starterEffort,
+                                                              main: makesMain, space: space)
+                } catch where CodedFailure.passesBySelf(error) && attempt < 3 {
+                    // The assistant restarting: a few seconds, tried again without a word (docs/onboarding.md 4.6).
+                    attempt += 1
+                    try await Task.sleep(for: .seconds(2 * attempt))
+                }
+            }
+            guard let s = started else { return }
             if makesMain { await model.refreshAssistant() }
             Haptics.success()
             model.began(s, text: text, images: images) // the message stays on screen until claude has written it
@@ -334,10 +346,14 @@ struct AssistantView: View {
                 pending = nil
             }
         } catch {
+            // A coded refusal (no computer, Claude Code missing…) is a card with what to do, not a red line (5.2).
+            let coded = CodedFailure(error)
             withAnimation(Theme.Motion.standard) {
                 pending = nil
-                startError = error.shown
+                model.readiness.failure = coded
+                startError = coded == nil ? error.shown : nil
             }
+            if coded != nil { model.readinessChanged() }
             Haptics.error()
         }
     }
@@ -388,6 +404,7 @@ struct AssistantHome: View {
     @Binding var mode: String
     @Binding var effort: String
     var send: (String, [ImagePayload]) -> Void
+    @State private var route: ReadinessRoute?
 
     /// How far the page fades out above the chips and the field.
     private static let fade = Theme.Space.xl
@@ -401,7 +418,7 @@ struct AssistantHome: View {
                     .containerRelativeFrame(.vertical, alignment: .bottom)
             } else {
                 VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                    AssistantWelcome(error: error, send: send)
+                    AssistantWelcome(error: error, send: send, openHelp: { route = .help($0, machine: nil) })
                 }
                 .padding(.horizontal, Theme.Space.xl)
                 .padding(.bottom, Theme.Space.xl)
@@ -423,10 +440,11 @@ struct AssistantHome: View {
             // The chips' row a step off the field (2026-11-04: with Theme.Space.s it sat right on it, and the
             // suggestion cards were cut off hard just above it).
             VStack(alignment: .leading, spacing: Theme.Space.m) {
+                if pending == nil { ReadinessHomeCard(route: $route) }
                 if ChatComposerKind.padCard {
                     // The iPad: the iPhone's composer, the launcher, mode and effort in its model menu (#2779).
                     StarterComposer(disabled: pending != nil, shell: StarterComposer.ShellModes(launcher: $launcher, mode: $mode, effort: $effort),
-                                    send: send)
+                                    gate: model.readinessGate(route: $route), send: send)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Theme.Space.s) {
@@ -437,9 +455,9 @@ struct AssistantHome: View {
                         .padding(.horizontal, Theme.Space.xs)
                     }
                     if AppStyle.current.usesBeautifulUI {
-                        BeautifulStarterComposer(disabled: pending != nil, launcher: $launcher, send: send)
+                        BeautifulStarterComposer(disabled: pending != nil, launcher: $launcher, gate: model.readinessGate(route: $route), send: send)
                     } else {
-                        StarterComposer(disabled: pending != nil, send: send)
+                        StarterComposer(disabled: pending != nil, gate: model.readinessGate(route: $route), send: send)
                     }
                 }
             }
@@ -461,6 +479,8 @@ struct AssistantHome: View {
         }
         .navigationTitle("Persona")
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
+        .modifier(ReadinessRefresh())
+        .readinessSheets($route)
     }
 }
 
@@ -470,8 +490,57 @@ struct AssistantWelcome: View {
     @Environment(AppModel.self) private var model
     var error: String? = nil
     var send: (String, [ImagePayload]) -> Void
+    /// Opens local help for a readiness example question that is `local` (never sent to the model).
+    var openHelp: ((String) -> Void)? = nil
 
-    private let suggestions: [(symbol: String, title: String, prompt: String)] = [
+    /// A thing to ask: sent as `prompt`, or (`local`) opening help on this device; `needs`: the phone data it reads.
+    struct Suggestion {
+        var symbol: String
+        var title: String
+        var prompt: String
+        var local: String? = nil
+        var needs: [String] = []
+    }
+
+    /// The hub's example questions when it has readiness (in `setup` only the two that open help here), else this
+    /// app's own (an older hub).
+    private var suggestions: [Suggestion] {
+        guard let list = model.readiness.current?.suggestions, !list.isEmpty else {
+            return Self.builtIn.map { Suggestion(symbol: $0.symbol, title: $0.title, prompt: $0.prompt) }
+        }
+        return list.map { s in
+            Suggestion(symbol: Self.symbol(s.id), title: s.title, prompt: s.prompt ?? s.title,
+                       local: s.local == true ? s.id : nil, needs: s.needs ?? [])
+        }
+    }
+
+    private static func symbol(_ id: String) -> String {
+        switch id {
+        case "what_can_you_do": Theme.Icon.help
+        case "how_to_connect_model": Theme.Icon.model
+        case "largest_folders": Theme.Icon.folder
+        case "today": Theme.Icon.pluginCalendar
+        case "connect_mail": Theme.Icon.mailAccounts
+        default: Theme.Icon.ai
+        }
+    }
+
+    /// Before a question that reads phone data goes out: which permission the system is about to ask for.
+    private func ask(_ s: Suggestion) {
+        Haptics.tap()
+        if let local = s.local {
+            openHelp?(ReadinessRoute.helpTopics.contains(local) ? local : "what_can_you_do")
+            return
+        }
+        if s.needs.contains(where: { $0.hasPrefix("phone_calendar") }) {
+            model.toast = Toast(String(localized: "接下来 iPhone 会问你：允许 Persona 读取日历"))
+        } else if !s.needs.isEmpty {
+            model.toast = Toast(String(localized: "接下来 iPhone 会问你要不要允许 Persona 读取这项数据"))
+        }
+        send(s.prompt, [])
+    }
+
+    private static let builtIn: [(symbol: String, title: String, prompt: String)] = [
         ("calendar", String(localized: "今天的安排"), String(localized: "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。")),
         (Theme.Icon.mailAccounts, String(localized: "要处理的邮件"), String(localized: "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。")),
         ("macbook.and.iphone", String(localized: "电脑在忙什么"), String(localized: "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？")),
@@ -493,10 +562,9 @@ struct AssistantWelcome: View {
                 BUIListSection(String(localized: "可以问我")) {
                     ForEach(suggestions, id: \.title) { s in
                         Button {
-                            Haptics.tap()
-                            send(s.prompt, [])
+                            ask(s)
                         } label: {
-                            BUIListRow(s.title, detail: s.prompt, accessory: .disclosure, detailLines: 1) {
+                            BUIListRow(s.title, detail: s.local == nil ? s.prompt : nil, accessory: .disclosure, detailLines: 1) {
                                 BUIIconTile(s.symbol, tint: Theme.accent)
                             }
                         }
@@ -508,8 +576,7 @@ struct AssistantWelcome: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(suggestions, id: \.title) { s in
                         Button {
-                            Haptics.tap()
-                            send(s.prompt, [])
+                            ask(s)
                         } label: {
                             VStack(alignment: .leading, spacing: Theme.Space.m) {
                                 Image(systemName: s.symbol)
@@ -637,6 +704,8 @@ struct StarterComposer: View {
     var placeholder: String? = nil
     /// Where picked files land on the assistant's machine: "health" for 健康's reports/ (docs/health.md「体检报告」).
     var uploadDest: String? = nil
+    /// The main conversation cannot answer yet (docs/onboarding.md 4.4): send goes to what is missing, the draft stays.
+    var gate: SendGate? = nil
     var send: (String, [ImagePayload]) -> Void
 
     struct ShellModes {
@@ -662,6 +731,7 @@ struct StarterComposer: View {
     }
 
     private func submit() {
+        if let gate { gate.action(); return } // nothing goes and nothing is queued: the draft stays
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let files = videos.ready
         // Nothing to send: a second ⏎ on the Mac before the field redraws (#785) would start an empty conversation.
@@ -703,7 +773,7 @@ struct StarterComposer: View {
                 ShellComposerBar(placeholder: String(localized: "问 \(model.persona.name)"), text: $text, selection: $selection, focused: $focused,
                                  canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty,
                                  modesTitle: StarterModesMenu.title(modes: shell, launchers: launchers, model: model),
-                                 history: "assistant.new", send: submit) {
+                                 history: "assistant.new", gate: gate, send: submit) {
                     attachments
                 } modes: {
                     StarterModesMenu(modes: shell, launchers: launchers)
@@ -711,7 +781,7 @@ struct StarterComposer: View {
                 .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
                 ComposerRow(placeholder: placeholder ?? String(localized: "问 \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused, canSend: canSend,
-                            send: submit, history: "assistant.new") {
+                            send: submit, history: "assistant.new", gate: gate) {
                     attachments
                 }
             }
@@ -762,6 +832,8 @@ struct BeautifulStarterComposer: View {
     var placeholder: String? = nil
     /// Where picked files land on the assistant's machine: "health" for 健康's reports/ (docs/health.md「体检报告」).
     var uploadDest: String? = nil
+    /// The main conversation cannot answer yet: send goes to what is missing, the draft stays (the card says what).
+    var gate: SendGate? = nil
     var send: (String, [ImagePayload]) -> Void
     @State private var text = ""
     @State private var picks: [PhotosPickerItem] = []
@@ -830,6 +902,11 @@ struct BeautifulStarterComposer: View {
                            send: {
                                let typed = text
                                let t = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+                               if let gate { // the bar clears the box right after this: put the draft back
+                                   gate.action()
+                                   Task { text = typed }
+                                   return
+                               }
                                if videos.busy { // nothing goes; the bar clears the box right after this, so it is put back
                                    model.toast = Toast(String(localized: "视频还在上传，传完再发送"))
                                    Task { text = typed }

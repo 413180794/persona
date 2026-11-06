@@ -112,6 +112,9 @@ SCOPES = [
     Scope("apple/inbox", "swift", "apple/Persona/Views/Inbox/InboxView.swift", langs=("zh-Hans",)),
     Scope("apple/assistant", "swift", "apple/Persona/Views/Assistant/AssistantView.swift", langs=("zh-Hans",)),
     Scope("apple/provider-wizard", "swift", "apple/Persona/Views/Settings/ProviderWizardView.swift", langs=("zh-Hans",)),
+    # The main conversation's readiness card, its help and the coded refusals (#4193).
+    Scope("apple/readiness", "swift", "apple/Persona/Views/Assistant/ReadinessViews.swift", langs=("zh-Hans",)),
+    Scope("apple/readiness-data", "swift", "apple/Shared/AssistantReadiness.swift", langs=("zh-Hans",)),
 ]
 
 # (scope, key) → why a 高级 / 详情 section may say it. For swift the key is the literal.

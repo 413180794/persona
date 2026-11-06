@@ -625,6 +625,12 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var attentionReason: String? = nil
     /// Its host stopped its turn on an error it will not retry by itself (a botmux notice), until a message goes in.
     var failureReason: String? = nil
+    /// How the assistant's last turn failed (docs/protocol.md「错误体」, #3531): the words, their kind, and a code when it
+    /// is the model's set-up to fix (not_logged_in / auth_failed / model_route / rate_limited). Nil when it answered and
+    /// from older hubs.
+    var turnError: String? = nil
+    var turnErrorKind: String? = nil
+    var turnErrorCode: String? = nil
     /// Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开.
     var externalURL: String? = nil
     /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/channels.md「来源标记」): the
@@ -749,7 +755,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, workflows, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
-             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, origin, compaction, work,
+             attentionReason = "attention_reason", failureReason = "failure_reason",
+             turnError = "turn_error", turnErrorKind = "turn_error_kind", turnErrorCode = "turn_error_code", externalURL = "external_url", channels, origin, compaction, work,
              runtime, runtimeFallback = "runtime_fallback"
     }
 
@@ -822,6 +829,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         quiet = try c.decodeIfPresent(Bool.self, forKey: .quiet) ?? false
         attentionReason = try c.decodeIfPresent(String.self, forKey: .attentionReason)
         failureReason = try c.decodeIfPresent(String.self, forKey: .failureReason)
+        turnError = try c.decodeIfPresent(String.self, forKey: .turnError)
+        turnErrorKind = try c.decodeIfPresent(String.self, forKey: .turnErrorKind)
+        turnErrorCode = try c.decodeIfPresent(String.self, forKey: .turnErrorCode)
         externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
         channels = try c.decodeIfPresent([String].self, forKey: .channels)
         origin = try c.decodeIfPresent(String.self, forKey: .origin)

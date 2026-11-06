@@ -153,6 +153,8 @@ struct ChatView: View {
     /// behind another). Not observed: it draws nothing.
     @State private var shownInFront = FrontFlag()
     @State private var link: LinkTarget?
+    /// Where a 模型没接好 card's 去修 goes (`ReadinessSheets`).
+    @State private var readinessRoute: ReadinessRoute?
     /// The image viewer, shown by the page rather than the row it was opened from (`viewImages`).
     @State private var viewingImages: ImageViewing?
     @Namespace private var imageZoom
@@ -669,6 +671,7 @@ struct ChatView: View {
         .macLinkPanel($link, key: key) // the Mac's panel at the trailing edge (Mac/Link/MacLinkPanel.swift)
         #else
         .sheet(item: $link) { t in LinkSheet(target: t, key: key) }
+        .readinessSheets($readinessRoute)
         #endif
         .environment(\.attachImage, actions.attachImage)
         .environment(\.loadImage, actions.loadImage)
@@ -1103,12 +1106,28 @@ struct ChatView: View {
         ChatPin.Spot(y: g.frame(in: .global).minY, content: g.frame(in: .named(ChatPin.space)).maxY)
     }
 
+    /// Persona's last turn ended on a model set-up error the hub named (`turn_error_code`, docs/onboarding.md 4.4):
+    /// the fix to show instead of Claude Code's 「Not logged in」 as an answer. Persona's conversations only, as the web.
+    private var turnFix: TurnErrorFix? { style == .assistant ? TurnErrorFix(code: session?.turnErrorCode) : nil }
+
+    /// The 模型没接好 card for the line, when it is the turn's error: the last line, an answer or an API error.
+    private func turnErrorCard(_ line: ChatLine, raw: String?) -> ReadinessCard? {
+        guard let fix = turnFix, currentLines().last?.id == line.id else { return nil }
+        return ReadinessCard(title: fix.title, detail: fix.detail, tone: .danger,
+                             actionTitle: String(localized: "去修"),
+                             action: { readinessRoute = fix.action == "edit_provider" ? .provider(session?.launcher) : .providerWizard },
+                             details: [raw].compactMap { $0 })
+    }
+
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line.content {
-        case .row(let r): rowView(r, isLatest: false, live: true)
+        case .row(let r):
+            if r.errorCandidate != nil, let card = turnErrorCard(line, raw: r.errorCandidate?.text) { card } else { rowView(r, isLatest: false, live: true) }
         case .feed(let item): FeedLine(item: item, group: shownKey.group)
         case .quick(let result): QuickResultCard(result: result)
         case .day(let date): DayLine(date: date)
+        case .apiError(_, let info, _) where turnErrorCard(line, raw: info.raw) != nil:
+            turnErrorCard(line, raw: info.raw)
         case .apiError(let item, let info, let count):
             // 重试 only when the error is the last thing, the agent is not working (someone may have retried already) and
             // trying again can help (not a login or a bad request).
@@ -3469,6 +3488,8 @@ enum ChatComposerKind {
 }
 
 struct Composer: View, Equatable {
+    /// Where a refused send's card button goes (`ReadinessSheets`).
+    @State private var failureRoute: ReadinessRoute?
     @Environment(\.scenePhase) private var phase
     /// What the page hands in; the rest it reads from the model itself. The page re-evaluates on every hub push for its
     /// conversation, and the composer (a text field, its buttons, the mode chips) used to go with it.
@@ -3651,6 +3672,18 @@ struct Composer: View, Equatable {
 
     /// The notes over the box, the attachments and the box itself (`body` adds what happens around them).
     private var composerStack: some View {
+        composerNotes
+            .readinessSheets($failureRoute)
+            .modifier(MainReadinessRefresh(enabled: isMain))
+    }
+
+    /// Persona's main conversation: it carries the readiness card and the send gate (as the web, `useReadinessGate`).
+    private var isMain: Bool { model.assistantMain == key && model.session(key)?.assistant == true }
+
+    /// The main conversation cannot answer yet: send goes to what is missing, the draft stays.
+    private var gate: SendGate? { isMain && !status.isActive ? model.readinessGate(route: $failureRoute) : nil }
+
+    private var composerNotes: some View {
         VStack(spacing: Theme.Space.s) {
             if let s = model.session(key), s.starting == true || s.startError != nil {
                 StartingNote(error: s.startError, agent: s.agentLabel)
@@ -3667,6 +3700,14 @@ struct Composer: View, Equatable {
                     model.sendNow(key, text: "继续") // i18n-ignore
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if isMain {
+                // The main conversation: what it still needs, or a refused send (docs/onboarding.md 4.4, 5.2).
+                ReadinessHomeCard(route: $failureRoute)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if model.session(key)?.assistant == true, let f = model.readiness.failure {
+                CodedFailureCard(failure: f, route: $failureRoute)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             CompactionSlot(key: key) // an assistant conversation's 压缩上下文 (#1762)
             if canLoop, let hint = LoopCommand.hint(text) {
@@ -3709,7 +3750,8 @@ struct Composer: View, Equatable {
                                  quotes: contexts,
                                  alwaysOpen: ChatComposerKind.macCard,
                                  history: key.path,
-                                 send: { Task { await sendText(text) } }) {
+                                 gate: gate,
+                                 send: { if let gate { gate.action() } else { Task { await sendText(text) } } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
@@ -3765,6 +3807,7 @@ struct Composer: View, Equatable {
                                quotes: contexts,
                                send: { // the bar clears the draft right after
                                    let t = text
+                                   if let gate { gate.action(); Task { @MainActor in text = t }; return } // the draft stays
                                    if videos.busy { return holdForVideos(restoring: t) }
                                    Task { await sendText(t) }
                                })
@@ -3772,7 +3815,8 @@ struct Composer: View, Equatable {
                 ComposerRow(placeholder: status.isActive ? String(localized: "补充说明（会排队发送）") : (suggestion ?? placeholder ?? String(localized: "给 Claude 发消息")),
                             text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                             stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
-                            send: { Task { await sendText(text) } }, quotes: contexts, history: key.path) {
+                            send: { if let gate { gate.action() } else { Task { await sendText(text) } } }, quotes: contexts, history: key.path,
+                            gate: gate) {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {

@@ -823,6 +823,19 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - 体验模式下不申请通知权限、不注册 APNs、不 `register_phone`、不推配对信息给手表、不换设备凭据。
 - 审核备注（`app_store.external.review.notes`）写了从配对页进体验模式。
 
+## 主对话还缺什么（#4193，onboarding M1）
+
+hub 有 `assistant_readiness` 时，App 读 `GET /api/v1/assistant/readiness`（`AssistantReadiness`，`apple/Shared/AssistantReadiness.swift`；
+状态在 `AppModel.readiness`，`AssistantReadinessModel`），和网页（`web.md`「主对话还缺什么」）画的是同一套：
+
+- 什么时候问：Persona 页在前台时（`.tabActiveTask`）、机器变了、`warm` 带回来的、开对话被拒之后、存了供应商之后（`readinessChanged()`）。老 hub（没有 feature 或回 404）什么都不画。
+- 新对话页（旧布局 `AssistantHome`、新外壳 `ShellHome`）的输入框上方一张 `ReadinessCard`（设计系统组件，BeautifulUI 风格下画它的列表行）：
+  `setup` 时是第一个缺的步骤；`rate_limited` 只出卡片不挡发送。`setup` 时打了字，发送按钮换成 `SendGate`（「先接上模型」「先添加电脑」…），点了去那一步，草稿留着，不排队。
+- 按钮去哪（`ReadinessRoute`）：添加 / 确认电脑先开机器页（M3 合入后换成添加电脑），接上模型开供应商向导，换 Key 开那个供应商，
+  装 / 登录 Claude Code、唤醒电脑和 `local` 的示例问题开本机的说明（`ReadinessHelpView`，不发给模型），试一句调 `?probe=1`。不认识的 `action` 只显示文字。
+- 开对话、发消息被 hub 带码拒绝（`no_machine`、`claude_missing`…，`CodedFailure`）画成卡片（`CodedFailureCard`），原文和请求 ID 在「详情」，不弹 toast；`assistant_offline` 安静地重试三次。
+- Persona 对话最后一轮带 `turn_error_code`（`not_logged_in` / `auth_failed` / `model_route`）时，最后那条「Not logged in」换成「模型没接好」卡片加「去修」。
+
 ## 连接新设备（#3077）
 
 设置 › 设备 最上面「连接新设备」，照网页的（#2731，`docs/web.md`「设置」）：向 hub 要一个一次性临时配对码（`POST /api/v1/auth/pair-codes`，带 `{"web": hub 的地址}`，

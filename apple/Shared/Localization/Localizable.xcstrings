@@ -1505,6 +1505,50 @@
         }
       }
     },
+    "%@ 现在不在线，可能睡着了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is offline right now, maybe asleep"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ は今オフラインです。スリープ中かもしれません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 现在不在线，可能睡着了"
+          }
+        }
+      }
+    },
+    "%@ 现在不在线，可能睡着了，或者上面的 Persona Link 没开。打开盖子或唤醒它，确认 Persona Link 在运行。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is offline right now: it may be asleep, or Persona Link isn't running on it. Open the lid or wake it, and make sure Persona Link is running."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ は今オフラインです。スリープ中か、Persona Link が起動していないのかもしれません。ふたを開けるか起こして、Persona Link が動いていることを確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 现在不在线，可能睡着了，或者上面的 Persona Link 没开。打开盖子或唤醒它，确认 Persona Link 在运行。"
+          }
+        }
+      }
+    },
     "%@ 现在离线，看看 personad 和 SSH 隧道。": {
       "localizations": {
         "en": {
@@ -8882,6 +8926,28 @@
         }
       }
     },
+    "Key 不对或过期了，换一个能用的。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The key is wrong or has expired; use one that works."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーが正しくないか期限切れです。使えるキーに変えてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key 不对或过期了，换一个能用的。"
+          }
+        }
+      }
+    },
     "Key 加密存在 hub，不会返回到客户端。": {
       "localizations": {
         "en": {
@@ -9795,6 +9861,28 @@
         }
       }
     },
+    "Persona 是你的私人助手。接好电脑和模型以后，它能：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona is your personal assistant. With a computer and a model connected, it can:"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona はあなた専用のアシスタントです。コンピュータとモデルを接続すると、次のことができます："
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 是你的私人助手。接好电脑和模型以后，它能："
+          }
+        }
+      }
+    },
     "Persona 状态": {
       "localizations": {
         "en": {
@@ -9971,6 +10059,28 @@
         }
       }
     },
+    "Persona 能做什么": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What Persona can do"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona にできること"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 能做什么"
+          }
+        }
+      }
+    },
     "Persona 能搜消息、读文档；发消息等写操作先在 App 里问你": {
       "localizations": {
         "en": {
@@ -10033,6 +10143,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。"
+          }
+        }
+      }
+    },
+    "Persona 要一个能用的模型才能回答。两种方式选一种：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona needs a working model to answer. Pick one of two ways:"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona が答えるには使えるモデルが必要です。次のどちらかを選んでください："
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 要一个能用的模型才能回答。两种方式选一种："
           }
         }
       }
@@ -17108,6 +17240,28 @@
         }
       }
     },
+    "不管哪一种，现在主对话都还要在你的一台电脑上运行：只粘贴 API Key、不接电脑，还开始不了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Either way, the main conversation still runs on one of your computers: an API key alone, with no computer, can't start it yet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "どちらの場合も、メインの会話はあなたのコンピュータのどれかで動きます。コンピュータをつながずに API キーだけでは、まだ始められません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不管哪一种，现在主对话都还要在你的一台电脑上运行：只粘贴 API Key、不接电脑，还开始不了。"
+          }
+        }
+      }
+    },
     "不粘贴": {
       "localizations": {
         "en": {
@@ -19773,6 +19927,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "以下扩展依赖它，将一起停用：%@。只停用，不卸载；设置和数据保留。"
+          }
+        }
+      }
+    },
+    "以后再说": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あとで"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以后再说"
           }
         }
       }
@@ -22784,6 +22960,28 @@
         }
       }
     },
+    "先唤醒电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wake the computer first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にコンピュータを起こす"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先唤醒电脑"
+          }
+        }
+      }
+    },
     "先在「管理邮箱」里添加一个邮箱": {
       "localizations": {
         "en": {
@@ -22872,6 +23070,50 @@
         }
       }
     },
+    "先接上模型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a model first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にモデルを接続"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先接上模型"
+          }
+        }
+      }
+    },
+    "先更新电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update the computer first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にコンピュータを更新"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先更新电脑"
+          }
+        }
+      }
+    },
     "先注册一个自己的应用": {
       "localizations": {
         "en": {
@@ -22916,6 +23158,28 @@
         }
       }
     },
+    "先添加电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a computer first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にコンピュータを追加"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先添加电脑"
+          }
+        }
+      }
+    },
     "先直连这个地址，连不上再经 SSH 隧道。": {
       "localizations": {
         "en": {
@@ -22934,6 +23198,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "先直连这个地址，连不上再经 SSH 隧道。"
+          }
+        }
+      }
+    },
+    "先确认电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm the computer first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にコンピュータを確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先确认电脑"
           }
         }
       }
@@ -29403,6 +29689,28 @@
         }
       }
     },
+    "去修": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fix it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去修"
+          }
+        }
+      }
+    },
     "去允许": {
       "localizations": {
         "en": {
@@ -30088,6 +30396,28 @@
         }
       }
     },
+    "叫醒%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wake %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ を起こす"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "叫醒%@"
+          }
+        }
+      }
+    },
     "名字不能为空，最多 40 个字。": {
       "localizations": {
         "en": {
@@ -30106,6 +30436,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "名字不能为空，最多 40 个字。"
+          }
+        }
+      }
+    },
+    "在 %@ 上打开终端，粘贴下面这行，回车：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On %@, open Terminal, paste this line and press Return:"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ でターミナルを開き、次の行を貼り付けて Return キーを押してください："
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 %@ 上打开终端，粘贴下面这行，回车："
+          }
+        }
+      }
+    },
+    "在 %@ 上打开终端，输入下面这个词，回车，按提示在浏览器里登录一次：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On %@, open Terminal, type this word, press Return, and sign in once in the browser as it asks:"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ でターミナルを開き、次の語を入力して Return キーを押し、案内に従ってブラウザで一度ログインしてください："
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 %@ 上打开终端，输入下面这个词，回车，按提示在浏览器里登录一次："
           }
         }
       }
@@ -30172,6 +30546,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "在你的任意一台电脑上开一个 Agent，手机上实时看、随时接手。"
+          }
+        }
+      }
+    },
+    "在你的电脑上看文件、跑命令、替你动手（动手前会先问你）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read files, run commands and act for you on your computer (it asks you first)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータ上でファイルを見たり、コマンドを実行したり、代わりに作業したりします（実行前に確認します）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在你的电脑上看文件、跑命令、替你动手（动手前会先问你）"
           }
         }
       }
@@ -30260,6 +30656,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "在那台电脑上把 Persona 的两个程序放在同一个文件夹里。目前还没有安装包，要自己编译，托盘程序也还在做。"
+          }
+        }
+      }
+    },
+    "在那台电脑上登录一次，或者改用 API Key。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in once on that computer, or use an API key instead."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのコンピュータで一度ログインするか、代わりに API キーを使ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在那台电脑上登录一次，或者改用 API Key。"
           }
         }
       }
@@ -30419,6 +30837,28 @@
         }
       }
     },
+    "安装 Claude Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install Claude Code"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code をインストール"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装 Claude Code"
+          }
+        }
+      }
+    },
     "安装说明": {
       "localizations": {
         "en": {
@@ -30507,6 +30947,116 @@
         }
       }
     },
+    "已经在用 Claude Code：在那台电脑上登录一次就行，不用再填什么。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already using Claude Code: sign in once on that computer, nothing else to fill in."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すでに Claude Code を使っている場合：そのコンピュータで一度ログインするだけで、ほかに入力するものはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经在用 Claude Code：在那台电脑上登录一次就行，不用再填什么。"
+          }
+        }
+      }
+    },
+    "怎么唤醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to wake it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起こし方"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "怎么唤醒"
+          }
+        }
+      }
+    },
+    "怎么安装": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to install"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストール方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "怎么安装"
+          }
+        }
+      }
+    },
+    "怎么接模型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to connect a model"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルの接続方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "怎么接模型"
+          }
+        }
+      }
+    },
+    "怎么登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to sign in"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "怎么登录"
+          }
+        }
+      }
+    },
     "怎么装": {
       "localizations": {
         "en": {
@@ -30525,6 +31075,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "怎么装"
+          }
+        }
+      }
+    },
+    "打开管理界面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open admin page"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理画面を開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开管理界面"
           }
         }
       }
@@ -30551,6 +31123,94 @@
         }
       }
     },
+    "换 Key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change key"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーを変更"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "换 Key"
+          }
+        }
+      }
+    },
+    "接上模型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a model"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルを接続"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接上模型"
+          }
+        }
+      }
+    },
+    "接下来 iPhone 会问你要不要允许 Persona 读取这项数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next, your iPhone will ask whether Persona may read this data"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このあと iPhone が、Persona にこのデータの読み取りを許可するか尋ねます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接下来 iPhone 会问你要不要允许 Persona 读取这项数据"
+          }
+        }
+      }
+    },
+    "接下来 iPhone 会问你：允许 Persona 读取日历": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next, your iPhone will ask you to let Persona read your calendar"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このあと iPhone が、Persona にカレンダーの読み取りを許可するか尋ねます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接下来 iPhone 会问你：允许 Persona 读取日历"
+          }
+        }
+      }
+    },
     "撤回编辑、拷贝或删除": {
       "localizations": {
         "en": {
@@ -30569,6 +31229,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "撤回编辑、拷贝或删除"
+          }
+        }
+      }
+    },
+    "改用 API Key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use an API key instead"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代わりに API キーを使う"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改用 API Key"
           }
         }
       }
@@ -30614,6 +31296,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "最新版"
+          }
+        }
+      }
+    },
+    "有 API Key：在「设置 › 模型供应商」里选一家，粘贴 Key，会自动测试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Have an API key: in Settings › Model providers pick one, paste the key, and it's tested automatically."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API キーがある場合：「設定 › モデルプロバイダ」で 1 つ選んでキーを貼り付けると、自動でテストされます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 API Key：在「设置 › 模型供应商」里选一家，粘贴 Key，会自动测试。"
           }
         }
       }
@@ -30680,6 +31384,94 @@
           "stringUnit": {
             "state": "translated",
             "value": "有一台电脑想加入：%@，是你的吗？"
+          }
+        }
+      }
+    },
+    "模型名不对，或者这个模型现在用不了，换一个试试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model name is wrong, or the model isn't available right now; try another one."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデル名が正しくないか、このモデルは今使えません。別のモデルを試してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型名不对，或者这个模型现在用不了，换一个试试。"
+          }
+        }
+      }
+    },
+    "模型没接好：Claude Code 没登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model not connected: Claude Code isn't signed in"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデル未接続：Claude Code にログインしていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型没接好：Claude Code 没登录"
+          }
+        }
+      }
+    },
+    "模型没接好：Key 不对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model not connected: the key is wrong"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデル未接続：キーが正しくありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型没接好：Key 不对"
+          }
+        }
+      }
+    },
+    "模型没接好：这个模型用不了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model not connected: this model can't be used"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデル未接続：このモデルは使えません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型没接好：这个模型用不了"
           }
         }
       }
@@ -76650,6 +77442,28 @@
         }
       }
     },
+    "现在还差一步：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One more step for now: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あと一歩：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在还差一步：%@"
+          }
+        }
+      }
+    },
     "现在重试": {
       "localizations": {
         "en": {
@@ -77729,6 +78543,28 @@
         }
       }
     },
+    "登录 Claude Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to Claude Code"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code にログイン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 Claude Code"
+          }
+        }
+      }
+    },
     "登录于 %@": {
       "localizations": {
         "en": {
@@ -77791,6 +78627,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。"
+          }
+        }
+      }
+    },
+    "登录好以后回到这里，发一句试试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once signed in, come back here and send a message to try it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログインしたらここに戻って、試しにメッセージを送ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录好以后回到这里，发一句试试。"
           }
         }
       }
@@ -78386,6 +79244,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "看任务的要求"
+          }
+        }
+      }
+    },
+    "看你的日程、邮件、飞书和收件箱，帮你整理、草拟回复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read your calendar, mail, Feishu and inbox, sort them and draft replies"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "予定、メール、Feishu、受信トレイを見て、整理したり返信の下書きを作ったりします"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看你的日程、邮件、飞书和收件箱，帮你整理、草拟回复"
           }
         }
       }
@@ -79332,6 +80212,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "确认并继续"
+          }
+        }
+      }
+    },
+    "确认是我的电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It's my computer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自分のコンピュータです"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认是我的电脑"
           }
         }
       }
@@ -85291,6 +86193,28 @@
         }
       }
     },
+    "装好以后回到这里，过一会儿就会变好。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come back here once it's installed; this updates shortly after."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストールしたらここに戻ってください。しばらくすると更新されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "装好以后回到这里，过一会儿就会变好。"
+          }
+        }
+      }
+    },
     "装进 hub": {
       "localizations": {
         "en": {
@@ -87052,6 +87976,28 @@
         }
       }
     },
+    "记住聊过的事，下次接着来": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remember what you talked about and pick up next time"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話したことを覚えて、次回はその続きから始めます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记住聊过的事，下次接着来"
+          }
+        }
+      }
+    },
     "记忆": {
       "localizations": {
         "en": {
@@ -87664,6 +88610,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "译文：%@"
+          }
+        }
+      }
+    },
+    "试一句": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try a message"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試しに送る"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "试一句"
+          }
+        }
+      }
+    },
+    "试了一句，没成功": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tried a message, it didn't work"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試しましたが、うまくいきませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "试了一句，没成功"
+          }
+        }
+      }
+    },
+    "试过了，能回答": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tried it: it answers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試しました：応答があります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "试过了，能回答"
           }
         }
       }
@@ -88526,6 +89538,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "请求 ID"
+          }
+        }
+      }
+    },
+    "请求 ID：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request ID: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リクエスト ID：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求 ID：%@"
           }
         }
       }
@@ -91299,6 +92333,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "还剩 %lld%%"
+          }
+        }
+      }
+    },
+    "还差一步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One more step"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あと一歩"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还差一步"
           }
         }
       }
@@ -94433,6 +95489,28 @@
         }
       }
     },
+    "连上以后这里会自己变好，不用刷新。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once it's connected this updates by itself, no need to refresh."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続されると自動で更新されます。再読み込みは不要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连上以后这里会自己变好，不用刷新。"
+          }
+        }
+      }
+    },
     "适中": {
       "comment": "Codex verbosity",
       "localizations": {
@@ -94474,6 +95552,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "选一个系统：Mac、Linux 或 Windows。"
+          }
+        }
+      }
+    },
+    "那台电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "that computer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのコンピュータ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "那台电脑"
           }
         }
       }

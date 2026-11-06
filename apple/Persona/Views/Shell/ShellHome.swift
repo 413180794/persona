@@ -16,6 +16,7 @@ struct ShellHome: View {
     var openInbox: (InboxItem) -> Void
     var send: (String, [ImagePayload]) -> Void
     @State private var room = NeedsRoom()
+    @State private var route: ReadinessRoute?
 
     /// How far the welcome fades out over 需要你 and the composer, rather than being cut off at their edge.
     fileprivate static let fade = Theme.Space.xl
@@ -38,7 +39,7 @@ struct ShellHome: View {
             } else {
                 VStack(alignment: .leading, spacing: Theme.Space.xl) {
                     // Its errors stay over the composer, where the send was.
-                    AssistantWelcome(send: send)
+                    AssistantWelcome(send: send, openHelp: { route = .help($0, machine: nil) })
                 }
                 .padding(.horizontal, Theme.Space.l)
                 .frame(maxWidth: ChatView.readableWidth)
@@ -68,10 +69,13 @@ struct ShellHome: View {
                         }
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room.error = $0 }
                     }
+                    ReadinessHomeCard(route: $route)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room.card = $0 }
+                        .onDisappear { room.card = 0 }
                     ShellNeedsYou(maxHeight: room.needs(withError: shownError != nil), openInbox: openInbox).shellScaled()
                 }
                 StarterComposer(disabled: pending != nil, shell: StarterComposer.ShellModes(launcher: $launcher, mode: $mode, effort: $effort),
-                                send: send)
+                                gate: model.readinessGate(route: $route), send: send)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room.composerAtRest($0, typeSize: typeSize) }
             }
             .padding(.horizontal, Theme.Space.m)
@@ -92,6 +96,8 @@ struct ShellHome: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { room.pageAtRest($0) }
         .navigationTitle(model.persona.name)
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
+        .modifier(ReadinessRefresh())
+        .readinessSheets($route)
     }
 }
 
@@ -113,6 +119,8 @@ private struct NeedsRoom {
     private var composerSize: DynamicTypeSize?
     /// The start error over 需要你, while it shows.
     var error: CGFloat = 0
+    /// The readiness card over 需要你 (`ReadinessHomeCard`), while it shows.
+    var card: CGFloat = 0
 
     mutating func pageAtRest(_ size: CGSize) {
         guard size.height > 0 else { return }
@@ -129,7 +137,7 @@ private struct NeedsRoom {
     func needs(withError: Bool) -> CGFloat {
         guard page > 0, fold > 0, composer > 0 else { return .infinity }
         // Under it: the composer, the stack's spacing and bottom padding (ShellHome), the error and its spacing.
-        let below = composer + Theme.Space.m + Theme.Space.s + (withError ? error + Theme.Space.m : 0)
+        let below = composer + Theme.Space.m + Theme.Space.s + (withError ? error + Theme.Space.m : 0) + (card > 0 ? card + Theme.Space.m : 0)
         return page - AssistantTopBar.height - fold - ShellHome.fade - below
     }
 }

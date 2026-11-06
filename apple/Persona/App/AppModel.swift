@@ -815,7 +815,19 @@ final class AppModel {
         guard let api else { return }
         if let w = warmed, w.launcher == launcher, Date().timeIntervalSince(w.at) < 180 { return }
         warmed = (launcher, Date())
-        try? await api.warmAssistant(launcher: launcher)
+        if let r = try? await api.warmAssistant(launcher: launcher), hubFeatures.contains(AssistantReadiness.feature) {
+            readiness.land(r)
+        }
+    }
+
+    /// What the main conversation still needs (`AssistantReadinessModel`): the cards over the composer, the send button.
+    let readiness = AssistantReadinessModel()
+
+    /// Something the readiness depends on changed (a computer added or confirmed, a provider saved, pairing done):
+    /// ask again now. Nothing on a hub without readiness.
+    func readinessChanged() {
+        guard hubFeatures.contains(AssistantReadiness.feature) else { return }
+        Task { await readiness.refresh(api: api, force: true) }
     }
 
     func setAssistantLauncher(_ launcher: String) async {
@@ -1737,6 +1749,7 @@ final class AppModel {
     }
     func send(_ key: SessionKey, text: String, images: [ImagePayload] = [], haptic: Bool = true) async -> Bool {
         guard allowSend(key), let api = api(key.group) else { return false }
+        readiness.failure = nil // the refusal card goes with the next try
         do {
             try await api.send(key, text: text, images: images, launcher: assistantLaunchers[key], model: assistantModels[key])
             if haptic { Haptics.tap() }
@@ -2493,6 +2506,14 @@ final class AppModel {
     func show(_ error: Error) {
         if error.isOffline { notDone(); return }
         if (error as? APIError)?.code == DemoText.code { toast = Toast(DemoText.notSent); return } // 体验模式: not an error
+        // A start or a send the hub refused with a code (no computer, Claude Code missing…): a card with what to do where
+        // the conversation is, not a toast; a 409 is never quiet (docs/onboarding.md 5.2).
+        if let coded = CodedFailure(error) {
+            readiness.failure = coded
+            readinessChanged()
+            Haptics.error()
+            return
+        }
         guard !error.isQuiet else { return } // leaving a screen cancels its loads, a timeout gets retried: not shown
         toast = Toast(error.localizedDescription, style: .error)
         Haptics.error()

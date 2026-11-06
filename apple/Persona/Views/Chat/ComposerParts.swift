@@ -17,6 +17,8 @@ struct ComposerRow<MenuItems: View>: View {
     var quotes: Binding<[ContextRef]>? = nil
     /// The conversation whose sent messages ↑ / ↓ and ⌃R bring back (the Mac, `MacSendHistory`); nil: none.
     var history: String? = nil
+    /// The main conversation cannot answer yet: send says what to do first and goes there, the draft stays.
+    var gate: SendGate? = nil
     @ViewBuilder var menu: () -> MenuItems
 
     /// The symbols' frame: the button styles pad it to about 44 pt, the field's height.
@@ -59,7 +61,9 @@ struct ComposerRow<MenuItems: View>: View {
             }
             .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
 
-            if let stop, !canSend {
+            if let gate {
+                SendGateButton(gate: gate)
+            } else if let stop, !canSend {
                 Button(action: stop) {
                     Image(systemName: Theme.Icon.interrupt).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
