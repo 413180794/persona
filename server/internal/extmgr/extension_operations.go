@@ -451,6 +451,24 @@ func (h *Manager) claimOpOfPreview(previewID string) (*extOp, error) {
 	return nil, nil
 }
 
+// claimedByMarket says whether an install of a market's extension took over the operation that was waiting for consent
+// with preview previewID (claimOpOfPreview): the preview was that market's, also once the install has used it up. It
+// is known only while that operation is kept.
+func (h *Manager) claimedByMarket(previewID string) bool {
+	if previewID == "" {
+		return false
+	}
+	ps := h.extensions
+	ps.ops.mu.Lock()
+	defer ps.ops.mu.Unlock()
+	for _, op := range ps.ops.byID {
+		if op.claimed == previewID && op.ofMarket {
+			return true
+		}
+	}
+	return false
+}
+
 // opForInstall is the operation an install of preview pv goes on with: the one that made the preview, or a new one
 // whose first steps are done already (a preview made before operations, or by the admin UI). It fails while another
 // install goes on with the preview's operation.
@@ -465,7 +483,8 @@ func (h *Manager) opForInstall(pv *extension.Preview, previewID, actor string, l
 			kind = opUpgrade
 		}
 	}
-	op := h.startOp(kind, id, actor, l, pv != nil && pv.Market != "")
+	// A preview that a market's install used up was that market's: a phone may follow and clear this operation too.
+	op := h.startOp(kind, id, actor, l, (pv != nil && pv.Market != "") || (pv == nil && h.claimedByMarket(previewID)))
 	h.update(op, func(v *ExtensionOperation) bool {
 		for _, s := range []string{extension.StepDownload, extension.StepVerify, extension.StepUnpack, extension.StepCheck} {
 			setStep(v, s, extension.StepSkipped)

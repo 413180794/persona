@@ -327,15 +327,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			Bundle []bundleRef `json:"bundle,omitempty"`
 			Async  bool        `json:"async,omitempty"`
 		}
-		ofMarket := func() bool {
-			for _, b := range in.Bundle {
-				if ps().reg.PreviewMarketOf(b.PreviewID) == "" {
-					return false
-				}
-			}
-			return ps().reg.PreviewMarketOf(in.PreviewID) != ""
-		}
-		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, ofMarket) {
+		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool { return h.ofMarketPreview(in.PreviewID, in.Bundle) }) {
 			return
 		}
 		h.installRequest(w, r, "", in.PreviewID, in.Digest, in.Bundle, in.Async, "install_failed")
@@ -347,14 +339,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			Bundle    []bundleRef `json:"bundle,omitempty"`
 			Async     bool        `json:"async,omitempty"`
 		}
-		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool {
-			for _, member := range in.Bundle {
-				if ps().reg.PreviewMarketOf(member.PreviewID) == "" {
-					return false
-				}
-			}
-			return ps().reg.PreviewMarketOf(in.PreviewID) != ""
-		}) {
+		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool { return h.ofMarketPreview(in.PreviewID, in.Bundle) }) {
 			return
 		}
 		h.installRequest(w, r, r.PathValue("id"), in.PreviewID, in.Digest, in.Bundle, in.Async, "upgrade_failed")
@@ -440,6 +425,26 @@ func nodeConfirmForm(l i18n.Lang, s *extension.Schema, m *extension.Manifest) *e
 		}
 	}
 	return &out
+}
+
+// ofMarketPreview says whether preview previewID and the previews of its bundle are a registered market's, which a
+// device with full rights may install. An install uses its previews up while its operation still runs. So when the
+// registry no longer has previewID, it still counts if a market's install took over the operation that was waiting
+// for consent with it (claimOpOfPreview): a second install of it (a double click, two clients) is then
+// installing_already while that install runs, and fails as an expired preview after it ended, instead of 403
+// this_machine_only. That holds as long as the claimed operation is kept (opKeep, opMost, or until it is deleted);
+// then it is 403 again. A bundle member the registry still has must be a market's either way; one that is gone cannot
+// be installed. The registry is asked first: an install claims its preview before using it up.
+func (h *Manager) ofMarketPreview(previewID string, bundle []bundleRef) bool {
+	reg := h.extensions.reg
+	ok, elsewhere := reg.PreviewMarketOf(previewID) != "", false
+	for _, b := range bundle {
+		if reg.PreviewMarketOf(b.PreviewID) == "" {
+			ok = false
+			elsewhere = elsewhere || reg.PreviewOf(b.PreviewID) != nil
+		}
+	}
+	return ok || (!elsewhere && reg.PreviewOf(previewID) == nil && h.claimedByMarket(previewID))
 }
 
 // installRequest is an install (upgrade "") or upgrade call as an operation: the one its preview made, or a new one.
