@@ -2,6 +2,12 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## SDK runtime boundaries (2026-11-07, #6082)
+
+- Bound array length before allocating or scanning it, including keyed grid/carousel tiles. `map` skips sparse holes, so per-item key and prop checks alone do not bound allocation or reject empty tile slots. Capture the checked length and visit numeric slots: an overridden array iterator can omit holes or reorder tiles. Ordinary JSX child arrays already have a separate traversal budget.
+- A fetch effect runs after snapshot publication. Tag saved results with the current request identity and derive loading/idle for changed URL/dependencies during render, without writing state there. Rotate identity even when a URL returns while effect capacity delays work; dependency equality alone can resurrect an earlier result. Use a primitive identity across the state adapter boundary, since valid adapters can clone stored values.
+- JSON parsing does not validate a protocol envelope: `null` parses successfully. Reject nonobjects and invalid dispatch/error field types before routing or consuming a pending reply, while retaining valid legacy process frames and routing precedence. A reply must contain a result (including explicit null) or a valid error; an id alone must not consume a pending call.
+
 ## A child that dies at once fails the write before its exit is seen (2026-11-06, #6009)
 
 - The node writes `initialize` to `lcu`'s stdin right after starting it. If the process has already ended, the write fails with "broken pipe", or with "file already closed" once `cmd.Wait` has closed the pipe. That can happen before the goroutine that waits for the process reports the exit. So the caller got a raw pipe error or "the process ended", depending on which came first. `TestLCUProcessThatDiesOnStartFailsAtOnce` failed this way in 16 of 500 runs with `-race`.

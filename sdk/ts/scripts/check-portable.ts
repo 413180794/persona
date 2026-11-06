@@ -12,5 +12,8 @@ function run(command: string[]) {
 try {
   run([process.execPath, resolve(root, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.ui.json", "--noEmit", "false",
     "--rewriteRelativeImportExtensions", "--rootDir", root, "--outDir", output]);
+  run([process.execPath, resolve(root, "node_modules/typescript/bin/tsc"), "src/index.ts", "--target", "ES2022", "--module", "ESNext",
+    "--moduleResolution", "bundler", "--strict", "--skipLibCheck", "--types", "bun", "--rewriteRelativeImportExtensions",
+    "--rootDir", root, "--outDir", output]);
   run(["node", "--experimental-default-type=module", resolve(root, "scripts/portable-ui.mjs"), join(output, "src/ui.js")]);
 } finally { rmSync(output, { recursive: true, force: true }); }
