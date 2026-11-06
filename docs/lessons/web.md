@@ -354,6 +354,11 @@ If the header grows, elements below it (App.tsx connection-status pill) cannot a
 - `useScrollMemory(ref, key)` (`lib/scroll-memory.ts`) remembers `scrollTop` per key and restores it only when the router saw Back / Forward land on the current address (`takeReturn`); a link or a tap starts at the top. Decide the target once per key: React's StrictMode runs the layout effect twice in development, and the second run would find the return already taken.
 - Checking it in a browser: an edit made while Vite is running can keep serving the old module (the "negative control" passed with the hook disabled). Restart Vite with `--force` and fetch the module to confirm before trusting a before/after comparison.
 
+## Keep background task drawers open across turn status changes (2026-11-06)
+
+- `SegmentView` draws its wake chip above live work and below finished work. Moving an unkeyed stateful child between these sibling slots remounts it and closes its drawer. A fragment with the same key in both mutually exclusive slots preserves identity because both slots have the same parent; it adds no DOM or layout changes. Keys do not preserve identity across different parents.
+- Test both live-to-finished and finished-to-live transitions with the real `ChatLineView` and `Dialog`, checking that the open dialog and chip retain their DOM nodes.
+
 ## Growing composer leaves chat above the latest row (2026-11-06, #5375)
 
 - Autosizing textareas set `height: 0` before reading `scrollHeight`. In that layout, the dock shrinks and chat grows; the browser clamps chat `scrollTop` to the larger viewport, so restoring composer height leaves chat above the latest row by exactly that height. Below the cap, chat keeps shrinking and ResizeObserver restores the bottom, hiding the issue. At the 240px cap, chat height no longer changes, ResizeObserver does not fire, and every keystroke leaves the gap. Hold the textarea parent's original height with `min-height` during measurement.

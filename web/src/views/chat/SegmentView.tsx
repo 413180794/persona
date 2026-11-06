@@ -1,4 +1,4 @@
-import { memo, type ReactNode, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clock } from "../../lib/format";
 import { getSession, getState } from "../../lib/store";
 import { agentStatus, subagentFor } from "../../lib/tasks";
@@ -217,12 +217,12 @@ export const SegmentView = memo(function SegmentView({
     <section className="flex flex-col gap-3" data-segment>
       {seg.user && (seg.user.injected ? <InjectedHint msg={seg.user} sid={sid} /> : seg.user.parts ? <MergedBubble msg={seg.user} mid={mid} sid={sid} /> : seg.user.from ? <PeerMessage msg={seg.user} /> : isLoopTick(seg.user) ? <LoopTick msg={seg.user} /> : <UserBubble msg={seg.user} mid={mid} sid={sid} />)}
       {/* while the agent works, its live work stays at the bottom */}
-      {live && beforeWords}
+      {live && <Fragment key="before-words">{beforeWords}</Fragment>}
       <WorkNodes nodes={nodes.slice(0, cut)} p={p} live={live} fade />
       {/* working with no run of steps going (its words just came, or nothing yet): the live group still shows */}
       {working && <WorkGroup g={{ kind: "group", id: `work-live-${seg.id}`, children: [], live: true, startedAt: Date.parse(turnStart ?? "") || undefined }} p={p} />}
       {imageStrip}
-      {!live && beforeWords}
+      {!live && <Fragment key="before-words">{beforeWords}</Fragment>}
       <WorkNodes nodes={nodes.slice(cut)} p={p} fade />
       {streaming !== undefined && <Answer streaming={streaming} mid={mid} sid={sid} />}
     </section>
