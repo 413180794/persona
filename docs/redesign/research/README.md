@@ -1,22 +1,22 @@
-# 调研原始笔记
+# Raw research notes
 
-产品名统一为 Persona（原 Jarvis），笔记文件名、源码证据、协议字符串、旧命令和 `~/.jarvis` 路径保留研究基线，属于历史 / 兼容引用，不代表迁移版本的新默认名称。当前名称与配置见 [命名与兼容](../../config.md#命名与兼容)。
+The product name is now Persona (formerly Jarvis). Note file names, source evidence, protocol strings, old commands and `~/.jarvis` paths keep the research baseline: they are historical / compatibility references, not the new default names of the migrated version. For current names and configuration see [Naming and compatibility](../../config.md#命名与兼容).
 
-> 2026-10-30 由并行的调研 agent 写成，属于 [重设计方案](../README.md) 的证据。只读调研，没有改代码。
-> 前 8 份是第一轮；后 3 份是你定下「没有 Google 服务、公网直连优先 IPv6」之后补的第二轮（行号对应 master 的 ec11652）。
-> 证据里的行号对应 master 的 77999ab，也就是 PR #84（Android 第一版）和另外约 20 个提交合入之前；之后的变化见 [../parity.md](../parity.md) 第 26 节。
-> 笔记里「事实」和「判断」分开标注；性能数字只引用了文档或代码里写明是实测的值，其余都是代码常量或配置。
+> Written 2026-10-30 by parallel research agents, as evidence for the [redesign proposal](../README.md). Read-only research; no code was changed.
+> The first 8 notes are round one; the last 3 are round two, added after you settled on "no Google services, public direct connection with IPv6 first" (line numbers refer to master at ec11652).
+> Line numbers in the evidence refer to master at 77999ab, i.e. before PR #84 (Android first version) and about 20 other commits were merged; later changes are in section 26 of [../parity.md](../parity.md).
+> The notes mark "facts" and "judgments" separately; performance numbers only cite values that the docs or code state were measured; everything else is a code constant or configuration.
 
-| 笔记 | 内容 |
+| Note | Contents |
 | --- | --- |
-| [bh-architecture.md](bh-architecture.md) | removed 的整体架构与工程方法：分层、并发模板、结果三态与幂等回执、作用域与代次、能力协商、存储、测试；借鉴 / 不借鉴清单 |
-| [bh-herdr.md](bh-herdr.md) | removed 的 Herdr / Claude Code 客户端：会话页、原生交互、写操作安全、阅读工具；和 Persona Agents 的逐项对照 |
-| [bh-lark.md](bh-lark.md) | removed 的飞书网关飞书客户端：阅读位置、已读门禁、发送幂等、断线补洞；Persona 飞书页的问题；搬 / 不搬清单 |
-| [bh-ui-qa.md](bh-ui-qa.md) | removed 的设计系统、首次接入、原型与评审、验收分级、测试金字塔；Persona 设计系统的现状与采用率 |
-| [jarvis-ios-arch.md](jarvis-ios-arch.md) | Persona iOS 的现状架构与技术债：`AppModel` 职责、同步、缓存、规则多处实现、平台无关逻辑清单（Android 必须一致的部分） |
-| [jarvis-features.md](jarvis-features.md) | Persona iOS 的完整功能清单（213 项）与 Android 对应做法（[../parity.md](../parity.md) 的底稿） |
-| [jarvis-protocol.md](jarvis-protocol.md) | hub 协议：鉴权与配对、111 条 HTTP 路由、WebSocket 事件、同步模型、手机工具、推送；Android 需要的服务端改动 |
-| [android-tech.md](android-tech.md) | Android 技术选型（版本号附来源）：路线、模块、架构、网络、存储、UI 组件、系统能力、手机工具、测试、分发 |
-| [hub-network-current.md](hub-network-current.md) | hub 网络现状核查（带行号）：怎么监听、配对和鉴权、health 和 WS 握手、心跳；实现公网直连要改的地方；兼容现有 iOS 要注意什么（`Envelope` 撞名、二维码格式、401 无限重连） |
-| [public-direct-ipv6.md](public-direct-ipv6.md) | 公网直连调研（带来源）：国内家宽和手机的 IPv6 现状、光猫防火墙、前缀变化、封端口；地址发现；DDNS；多地址选路；Android 17 本地网络权限；TLS 和钉扎；加固；后台保活和运营商空闲超时 |
-| [android-cn-roms.md](android-cn-roms.md) | 国产系统与版本适配（带来源）：Android 版本分布和 minSdk、各家份额和当前版本、各家的通知和后台限制与设置页跳转、常驻前台服务、Live Updates 支持、没有 Google 服务时的系统能力、分发和自更新、真机矩阵和云真机 |
+| [bh-architecture.md](bh-architecture.md) | The reference iOS app's overall architecture and engineering method: layering, concurrency templates, three-state results and idempotent receipts, scopes and generations, capability negotiation, storage, testing; what to borrow / not borrow |
+| [bh-herdr.md](bh-herdr.md) | The reference iOS app's Herdr / Claude Code client: session page, native interactions, write-operation safety, reading tools; item-by-item comparison with Persona Agents |
+| [bh-lark.md](bh-lark.md) | The reference iOS app's Lark client over the Lark gateway: reading position, read-receipt gating, idempotent sending, gap filling after disconnects; problems with Persona's Lark page; what to port / not port |
+| [bh-ui-qa.md](bh-ui-qa.md) | The reference iOS app's design system, first-time onboarding, prototypes and reviews, acceptance levels, test pyramid; the state and adoption rate of Persona's design system |
+| [jarvis-ios-arch.md](jarvis-ios-arch.md) | Persona iOS's current architecture and tech debt: `AppModel` responsibilities, sync, caching, rules implemented in several places, list of platform-independent logic (the parts Android must match) |
+| [jarvis-features.md](jarvis-features.md) | Persona iOS's complete feature list (213 items) and the Android equivalent for each (draft of [../parity.md](../parity.md)) |
+| [jarvis-protocol.md](jarvis-protocol.md) | hub protocol: auth and pairing, 111 HTTP routes, WebSocket events, sync model, phone tools, push; server changes Android needs |
+| [android-tech.md](android-tech.md) | Android technology choices (versions with sources): approach, modules, architecture, networking, storage, UI components, system capabilities, phone tools, testing, distribution |
+| [hub-network-current.md](hub-network-current.md) | Audit of the hub's current networking (with line numbers): how it listens, pairing and auth, health and the WS handshake, heartbeats; what has to change for public direct connections; what to watch for to stay compatible with the existing iOS app (`Envelope` name clash, QR code format, endless reconnects on 401) |
+| [public-direct-ipv6.md](public-direct-ipv6.md) | Research on public direct connections (with sources): IPv6 status of home broadband and mobile in China, ONT firewalls, prefix changes, blocked ports; address discovery; DDNS; multi-address route selection; Android 17 local network permission; TLS and pinning; hardening; background keep-alive and carrier idle timeouts |
+| [android-cn-roms.md](android-cn-roms.md) | Chinese Android ROMs and version support (with sources): Android version distribution and minSdk, each vendor's market share and current version, each vendor's notification and background restrictions and settings deep links, persistent foreground services, Live Updates support, system capabilities without Google services, distribution and self-update, real-device matrix and cloud devices |

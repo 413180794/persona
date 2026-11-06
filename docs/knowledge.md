@@ -1,361 +1,363 @@
-# 知识库（`~/.persona/data`）
+# Knowledge base (`~/.persona/data`)
 
-Persona 和 AI 分身要「代替我上班」，前提是它们知道的和我一样多：谁是谁、哪个群在干什么、每个项目进展到哪、哪些事和我有关。
-这篇讲知识库怎么把飞书和邮件里的东西沉淀成一份**文件为主、数据库做索引**的知识库，以及 Persona、AI 分身、Agents 怎么共用它。
-（2026-10-30 用户定的方向：所有数据最终沉淀在 `.jarvis` 目录；文件为主，库做索引；文字保留 365 天，附件 30 天。）
-2026-11-04 起知识库是管理者（助手进程 `personad assistant`）的；2026-11-05 起来源（连接器）也是管理者的，在同一个进程里交给知识库（`server/internal/extmgr`，`docs/extensions.md`「谁管什么」），见下面「谁管什么」。
+For Persona and the AI twin to "work in my place", they first need to know as much as I do: who is who, what each group does, where each project stands, and what concerns me.
+This doc explains how Lark and email data become a knowledge base with **files as the primary store and a database as the index**, shared by Persona, the AI twin and Agents.
+(Direction decided 2026-10-30: all data ultimately settles in `.jarvis`; files first, database for indexing; text retained 365 days, attachments 30 days.)
+Since 2026-11-04 the knowledge base belongs to the manager (the assistant process `personad assistant`); since 2026-11-05 sources (connectors) also belong to the manager and feed the knowledge base in the same process (`server/internal/extmgr`, `docs/extensions.md` ("Who owns what")); see below.
 
-## 谁管什么（2026-11-04）
+## Who owns what (2026-11-04)
 
-把 hub 的业务挪进管理者（`docs/assistant.md`「和 hub 的边界」）的这一步，知识库整个挪进了管理者（现在只有一个，就是助手）：
+As part of moving hub business logic into managers (`docs/assistant.md` ("Boundary with the hub")), the entire knowledge base moved into the manager (currently there is just one, the assistant):
 
-- **管理者跑知识库**（`server/internal/assistant/kb*.go`）：引擎（`server/internal/kb`：归档、用模型压缩和整理、索引、时区、人 / 群 / 项目、公司圈帖子挂项目）、
-  它的循环（每 2 分钟一轮，来源有新东西时 5 秒后一轮）、它的状态（数据目录下的文件、`kb_entities` 索引表、`handles.key`，布局和以前一样，只有管理者写）。
-  助手的 `kb_*` 工具、实时快照里的知识库、助手目录 CLAUDE.md 里的知识库目录都是管理者里的本地调用（不再 `app.call kb.*`）。
-- **来源**（2026-11-05 起在管理者的 `internal/extmgr`，下面的方法照旧，只是在进程里直接调，不过总线；附件也不再有 4 MB 的限制）：连接器、插件交来的东西（聊天消息、帖子……）。知识库向来源要（`app.call connectors.*`，数据进、数据出）：
-  `connectors.archives`（现在该读哪些连接器：登录着、开着「进知识库」的，它们的轮询间隔、别的归档名字、有没有附件；以及有文档 / 会议 / 日程的）、
-  `connectors.changes`（一个连接器从某个游标以来的变化）、`connectors.archive_media`（一条消息的附件；管理者在别处时最多 4 MB，一条总线消息不能占住慢链路超过心跳，更大的那一行留 `[附件]`）、`connectors.items` / `connectors.doc_title`（文档、会议、日程）。
-  **游标是管理者的**（`cursors/<连接器>.json`，和以前同一个文件），只在写进去之后才往前走。插件程序交来的公司圈帖子（`posts.*`、`archive.chats`）hub 先看
-  「进知识库」开没开，再原样转给管理者（`kb.posts_put`、`kb.posts_comments`、`kb.posts_pending`、`kb.archived_chats`）。
-- **hub 自己的功能要读知识库**时经总线问管理者，都走 hub 的一个函数 `kbAsk`（`hub/kb.go`；那几个功能也在挪进管理者，挪过去以后就是本地调用）：
-  收件箱 AI 分身的会话上下文（`kb.context`）、删除一个来源的数据（`kb.forget`）。Agent 一轮停下后的分诊也挪进了助手（`docs/agent-work.md`「谁管什么」），它目录所属的项目直接在助手里读，不再经 `kb.projects`。
-  hub 看到的事是单向事件：来源有新东西（连接器的实时事件、打开了「进知识库」、「信息」的「交给 Persona」打开，`kb.kick`），
-  一个 Agent 一轮做完（推送判定之前，`kb.agent_turn`，项目时间线那一行）。
-- **模型**：知识库照旧用 hub 的模型配置（`kb.compress`、`kb.project`、`kb.items`、`kb.dedupe`、`kb.moments` 几个用途，`kb.ai` 是它们的默认），
-  经 `app.call models.json`（带 `max_tokens`），都在 `assistant/kb_model.go` 一处；模型那一步挪过去以后换成管理者自己的。
-- **数据在哪**：管理者默认是 hub 的子进程、在同一台机器上，用的就是 hub 的数据目录（`~/.persona/data`）和 `~/.persona/handles.key`，什么都不用搬。
-  怎么存**以 hub 的 hub.json 为准**：hub 在握手的回答里把 `kb` 一节交给管理者（`enabled`、`text_days`、`attachment_days`、`extra_dirs`，`docs/protocol.md`「握手」；
-  `kb.ai` 是 hub 的模型配置读的），管理者跑在别处也一样，它不读自己那台的 hub.json。`enabled: false` 时管理者不开知识库，hub 自己也不交来源
-  （`connectors.archives` 是空的，别的来源方法和插件的帖子回「这台 hub 没开知识库」），删除来源数据时不问知识库。
-  hub.json 写了 `assistant.external`（管理者跑在别处，`docs/assistant.md`「进程」）时，知识库就在**那台机器**的数据目录里：hub 机器上原来的 `data/` 不再更新，
-  要接着用就把整个目录（连同 `handles.key`，不然以后的身份线索哈希对不上）拷过去；`extra_dirs` 是那台机器上的路径；索引表在共用的 Postgres 里，不用动。
-  App 的知识库接口照样打到 hub，hub 原样转给管理者，样子不变。CLAUDE.md 仍把它说成「hub 上的目录」（管理者在 hub 机器上时就是）。
-- **什么时候开**：管理者第一次要用时打开（循环的第一轮、第一个工具调用、第一个请求），要三样都齐：hub 的 `kb` 设置到了（握手）、
-  读得出用户的时区（先把归档放进这个时区，所以不会在别的时区写东西）、数据目录的锁（`data/.lock`，一次只有一个管理者进程写）。
-  没开之前：`kb_*` 工具说「还没准备好，稍后再试」，App 的接口回 `503 kb_unavailable`，插件的帖子回同一个错（下一轮重交），删除来源数据回 503，
-  Agent 一轮做完的那一行在管理者里等着（每个 Agent 最新的一条，最多 200 个），开了再写。管理者和 hub 断开时它关上知识库、放开锁，
-  所以 hub 不再认的进程（token 被换掉）不会和新起的那个同时写；连上后再开。hub 的 `kb` 设置变了（hub 重启后的握手）就按新的重开。
-- **管理者没连着的时候**（重启、崩了、hub 刚起来）：
-  - 归档等着，**什么都不丢**：连接器的东西靠游标重新交（管理者回来后从上次写到的地方接着读，第一轮就读所有到期的连接器）；插件交帖子的调用
-    先等管理者最多 30 秒（插件和 hub 一起起来，比管理者早；管理者重启），还不在就回 `assistant_offline`，插件这一轮就停在那，下一轮重读；
-    文档、会议、日程下一轮（30 分钟）照常重读。
-    Agent 一轮做完的那一行由 **hub 排队**（每个 Agent 留最新的一条，最多 200 个），管理者一连上就发过去。`kb.kick` 不排队（回来后第一轮本来就读）。
-  - `kb_*` 工具和助手的其他工具一样失败；App 的 `/api/v1/kb…` 回 `503 assistant_offline`「助手暂时连不上，稍后再试」；
-    「删除已存的数据」「删除已存的知识库内容」、`DELETE /api/v1/imessage/data` 回同样的 503，知识库里的没删（连接器 / 「进知识库」已经先关上了，再点一次就行）；
-    收件箱里的条目照删（不等知识库的回答）。删除一个很大的来源时 hub 最多等知识库 10 分钟。
-  - 收件箱的 AI 分身起不来（助手本来就连不上），分诊的提示词里不带项目名，插件的 `/agent` 拿不到会话上下文（503）。
-- **时区**：知识库打开时（上面），按管理者自己存的用户时区（设置 `assistant` 里的 `timezone`，读不出来就不开）把归档放好，所以重启不会整份重排；
-  每一轮归档前再确认一次。读不出设置（数据库没答）的那一轮不归档也不搬。
-- **能看出来的差别**：只有上面「没连着」的那些。以前 hub 读的「只按聊天一个个读」的连接器接口（`connector.Chats`，飞书网关那条路走了以后已经没有连接器实现它）
-  不再读；插件的帖子没有经过它。
+- **The manager runs the knowledge base** (`server/internal/assistant/kb*.go`): the engine (`server/internal/kb`: archiving, model-based compression and organization, indexing, timezone, people / groups / projects, attaching Moments posts to projects),
+  its loop (every 2 minutes, or 5 seconds after a source has new data), and its state (files in the data directory, the `kb_entities` index table, `handles.key`; same layout as before, only the manager writes).
+  The assistant's `kb_*` tools, knowledge base in live snapshots, and knowledge directory in the assistant directory's CLAUDE.md are local manager calls (no longer `app.call kb.*`).
+- **Sources** (in the manager's `internal/extmgr` since 2026-11-05; the methods below are unchanged but now called directly in-process, without the bus; attachments also no longer have a 4 MB limit): data delivered by connectors and plugins (chat messages, posts…). The knowledge base asks sources (`app.call connectors.*`, data in and out):
+  `connectors.archives` (which connectors to read now: signed in with "Include in knowledge base" on, their polling intervals, other archive names, attachment support; and those with documents / meetings / events),
+  `connectors.changes` (a connector's changes since a cursor), `connectors.archive_media` (attachments for a message; when the manager is elsewhere, up to 4 MB, since one bus message must not occupy a slow link longer than a heartbeat; larger ones leave `[附件]` ("[attachment]") on the line), `connectors.items` / `connectors.doc_title` (documents, meetings, events).
+  **The manager owns the cursor** (`cursors/<connector>.json`, same file as before), which advances only after writing the data. For Moments posts submitted by plugin programs (`posts.*`, `archive.chats`), the hub first checks
+  whether "Include in knowledge base" is on, then forwards them unchanged to the manager (`kb.posts_put`, `kb.posts_comments`, `kb.posts_pending`, `kb.archived_chats`).
+- **When the hub's own features need the knowledge base**, they ask the manager over the bus through one hub function, `kbAsk` (`hub/kb.go`; those features are also moving into the manager, becoming local calls afterwards):
+  chat context for the Inbox AI twin (`kb.context`), deleting a source's data (`kb.forget`). Triage after an Agent's turn stops also moved into the assistant (`docs/agent-work.md` ("Who owns what")); the project owning its directory is read directly in the assistant, no longer via `kb.projects`.
+  Events seen by the hub are one-way: new source data (connector live events, enabling "Include in knowledge base", enabling "Hand to Persona" for "Information", `kb.kick`),
+  and an Agent finishing a turn (before deciding notifications, `kb.agent_turn`, the project timeline entry).
+- **Models**: the knowledge base still uses the hub's model configuration (`kb.compress`, `kb.project`, `kb.items`, `kb.dedupe`, `kb.moments`, defaulted by `kb.ai`),
+  via `app.call models.json` (with `max_tokens`), all in one place, `assistant/kb_model.go`; once models move, it will use the manager's own.
+- **Where data lives**: by default the manager is a hub child process on the same machine, using the hub's data directory (`~/.persona/data`) and `~/.persona/handles.key`; nothing needs moving.
+  Storage **follows the hub's hub.json**: the hub sends the `kb` section to the manager in its handshake response (`enabled`, `text_days`, `attachment_days`, `extra_dirs`, `docs/protocol.md` ("Handshake");
+  `kb.ai` is read by the hub's model configuration). This is also true when the manager runs elsewhere; it does not read its own machine's hub.json. With `enabled: false`, the manager does not open the knowledge base and the hub does not provide sources
+  (`connectors.archives` is empty; other source methods and plugin posts reply "This hub has no knowledge base enabled"); source deletion does not ask the knowledge base.
+  When hub.json sets `assistant.external` (manager elsewhere, `docs/assistant.md` ("Processes")), the knowledge base is in **that machine's** data directory: the original `data/` on the hub machine stops updating.
+  To continue using it, copy the entire directory (including `handles.key`, otherwise future identity-hint hashes will not match); `extra_dirs` refers to paths on that machine; the index table stays in shared Postgres and need not move.
+  The app's knowledge API still goes to the hub, which forwards it unchanged; the interface stays the same. CLAUDE.md still calls it "the directory on the hub" (accurate when the manager is on the hub machine).
+- **When it opens**: on the manager's first need (first loop iteration, tool call or request), requiring all three: the hub's `kb` settings have arrived (handshake),
+  the user's timezone can be read (archives are placed in that timezone first, avoiding writes in another timezone), and the data directory lock (`data/.lock`, only one manager process writes at a time).
+  Before opening: `kb_*` tools say "Not ready yet; try again later"; app APIs return `503 kb_unavailable`; plugin posts get the same error (resubmit next round); source deletion gets 503;
+  Agent-finished entries wait in the manager (latest per Agent, at most 200) and are written once open. On disconnect from the hub, the manager closes the knowledge base and releases the lock,
+  preventing a process the hub no longer recognizes (token replaced) from writing alongside its replacement; it reopens on reconnect. Changed hub `kb` settings (handshake after hub restart) trigger reopening with the new settings.
+- **When the manager is disconnected** (restart, crash, newly started hub):
+  - Archiving waits; **nothing is lost**: connectors redeliver by cursor (on return the manager reads from the last written position, reading every due connector in its first round); plugin post calls
+    wait up to 30 seconds for the manager (plugins start with the hub, before the manager; manager restarts), then return `assistant_offline` if still absent; the plugin stops this round there and rereads next round;
+    documents, meetings and events are reread normally next round (30 minutes).
+    Agent-finished entries are **queued by the hub** (latest per Agent, at most 200) and sent when the manager connects. `kb.kick` is not queued (the first round after return reads anyway).
+  - `kb_*` tools fail like the assistant's other tools; app `/api/v1/kb…` returns `503 assistant_offline`, "The assistant is temporarily unreachable; try again later";
+    "Delete stored data", "Delete stored knowledge content", and `DELETE /api/v1/imessage/data` return the same 503, leaving the knowledge data undeleted (the connector / "Include in knowledge base" is already disabled; tap again);
+    Inbox items are deleted normally (without waiting on the knowledge base). For a very large source deletion the hub waits up to 10 minutes.
+  - The Inbox AI twin cannot start (the assistant is unreachable anyway); triage prompts carry no project name; the plugin's `/agent` cannot get chat context (503).
+- **Timezone**: when opening (above), the knowledge base places archives according to the manager's stored user timezone (`timezone` in `assistant` settings; it does not open if unreadable), so restarting does not reorganize everything;
+  every archive round rechecks it. If settings cannot be read (database did not respond), that round neither archives nor moves files.
+- **Visible differences**: only those under "disconnected" above. The old connector interface the hub read one chat at a time (`connector.Chats`; no connector implements it since the Lark gateway path was removed)
+  is no longer read; plugin posts never used it.
 
-## 录音（#3235）
+## Recordings (#3235)
 
-手机（和经手机回传的手表）录音的转写文字，由手机经 `PUT /api/v1/recordings/{id}` 同步进来（[protocol.md](protocol.md)「录音同步」、[recording.md](recording.md)），不上传音频。
+Transcribed text from phone recordings (and watch recordings relayed through the phone) is synced by the phone via `PUT /api/v1/recordings/{id}` ([protocol.md](protocol.md) ("Recording sync"), [recording.md](recording.md)); audio is not uploaded.
 
-- 一条录音一个条目，键是手机上的 UUID；每次上传整份覆盖，`revision` 小于已存的就不写（乱序、重放都只留最新）。`complete: false` 时只存、可搜，不调模型。
-- 转写完成（`complete: true`）且这一版还没摘要过的，管理者每轮挑最多 3 条交给模型（用途和会话压缩一样是 `kb.compress`，提示词 `prompts/kb/recording.md`；没有可用的模型时这一轮停下，下一轮再试）：
-  得到摘要、一句话、标题（用户没起名时用）、打标和提到的项目；项目照常挂上（项目时间线记一条「录音 · 标题」）。全文最多给模型 2.4 万字（留开头和结尾）。
-- 保留期是助手设置 `recording_days`（默认 14 天，不跟 `text_days`）：每轮把开始时间早于保留期的目录和索引行删掉，墓碑也只留这么久。
-- `kb_list` / `kb_get` / `kb_search` 和 App 的知识库页多一类 `recordings`；`kb_get` 带摘要、书签和全文转写（最多 1.2 万字）。录音不能经 `kb_update` 改内容（内容以手机为准），只能改打标。
+- One item per recording, keyed by the phone's UUID; each upload replaces the whole record, and a `revision` below the stored one is not written (out-of-order and replayed uploads retain only the latest). With `complete: false`, it is stored and searchable but no model is called.
+- For completed transcripts (`complete: true`) whose current revision has not been summarized, each manager round selects at most 3 for the model (same purpose as chat compression, `kb.compress`, prompt `prompts/kb/recording.md`; if no model is available, stop this round and retry next round):
+  produces a summary, one-line description, title (used if the user has not named it), tags and mentioned projects; projects are linked normally (a "Recording · Title" project timeline entry). At most 24k characters go to the model (keeping the beginning and end).
+- Retention follows assistant setting `recording_days` (default 14 days, independent of `text_days`): each round deletes directories and index rows whose start time predates retention; tombstones are retained equally long.
+- `kb_list` / `kb_get` / `kb_search` and the app's Knowledge page gain the `recordings` category; `kb_get` includes summary, bookmarks and full transcription (up to 12k characters). Recording content cannot be edited via `kb_update` (the phone is authoritative); only tags can change.
 
-## 额外的笔记目录（`kb.extra_dirs`）
+## Extra notes directories (`kb.extra_dirs`)
 
-hub.json 的 `kb.extra_dirs` 列出管理者所在机器（默认就是 hub 机器）上用户自己维护的笔记目录（例如一个记事实、经验、决定的 git 仓库，由它自己的工具同步）。
-`kb_search` 在知识库之后也搜这些目录里的 `.md`（跳过 `.git` 等点开头的目录），命中的路径是绝对路径；助手的 CLAUDE.md 列出这些目录，
-并让它读写前先看目录里的 AGENTS.md / CLAUDE.md。Persona 不往里写、不同步，也不建索引。
+hub.json's `kb.extra_dirs` lists user-maintained notes directories on the manager's machine (the hub machine by default), for example a git repo of facts, lessons and decisions synced by its own tools.
+After searching the knowledge base, `kb_search` also searches `.md` files in these directories (skipping dot-prefixed directories such as `.git`); matching paths are absolute. The assistant's CLAUDE.md lists these directories
+and tells it to read their AGENTS.md / CLAUDE.md before reading or writing. Persona does not write, sync or index them.
 
-## 为什么是文件
+## Why files
 
-- Claude Code 读文件、grep 最顺手：助手、AI 分身、herdr 里的 Agent 不用学新接口，`rg 关键词 ~/.persona/data` 就能查。
-- 人也能直接看、直接改（改了的 `summary.md` 下次压缩会被当成已有上下文）。
-- Postgres 只放「要排序、要筛选」的索引（`kb_entities`：类型、名称、重要级、相关性、标签、路径、更新时间），丢了可以从文件重建。
+- Files and grep are natural for Claude Code: the assistant, AI twin and Agents in herdr need no new API; `rg keyword ~/.persona/data` searches directly.
+- People can read and edit directly too (an edited `summary.md` is treated as existing context on the next compression).
+- Postgres holds only the index needed for sorting and filtering (`kb_entities`: type, name, importance, relevance, tags, path, updated time); it can be rebuilt from files if lost.
 
-## 目录
+## Directory layout
 
 ```
 ~/.persona/data/
-  README.md                 # 本目录的说明（知识库生成），给 AI 看
-  chats/<chat id>/          # 一个会话一个目录：飞书 lark-<feedId>，邮件 mail-<账号>-<对方地址>
-    meta.json               # 名称、类型（dm / group / bot / mail）、成员、关联的人和项目、打标、归档游标
-    messages/YYYY-MM-DD.md  # 全量文字，一天一个文件，追加写；365 天后删
-    attachments/YYYY-MM-DD/ # 图片、文件；30 天后删
-    summary.md              # 压缩后的上下文（AI 维护，滚动更新）
-  people/<person id>/       # 一个人一个目录：飞书 lark-<userId>，邮件 mail-<地址>
-    meta.json               # 名字、所在的会话、关联项目、打标
-    summary.md              # 这个人是谁、和我什么关系、最近在跟我聊什么
-  projects/<slug>/          # 一个项目一个目录
-    meta.json               # 名称、类型（short 短期需求 / long 长期使命）、状态、成员、相关会话 / 文档 / 会议 / Agent 目录
-    summary.md              # 目标、现状、下一步、风险、我的角色
-    log.md                  # 时间线：每次有新进展追加一条（日期 · 来源 · 一句话）
-  docs/<id>.json            # 文档 / 会议 / 日程：标题、链接、时间、打标、关联项目
+  README.md                 # Directory guide (generated by the knowledge base), for AI
+  chats/<chat id>/          # One directory per chat: Lark lark-<feedId>, mail mail-<account>-<other address>
+    meta.json               # Name, type (dm / group / bot / mail), members, linked people and projects, tags, archive cursor
+    messages/YYYY-MM-DD.md  # Full text, one file per day, append-only; deleted after 365 days
+    attachments/YYYY-MM-DD/ # Images, files; deleted after 30 days
+    summary.md              # Compressed context (AI-maintained, rolling updates)
+  people/<person id>/       # One directory per person: Lark lark-<userId>, mail mail-<address>
+    meta.json               # Name, chats, linked projects, tags
+    summary.md              # Who they are, relationship to me, recent conversations with me
+  projects/<slug>/          # One directory per project
+    meta.json               # Name, type (short requirement / long mission), status, members, related chats / docs / meetings / Agent directories
+    summary.md              # Goal, current state, next steps, risks, my role
+    log.md                  # Timeline: append an entry for each update (date · source · one line)
+  docs/<id>.json            # Documents / meetings / events: title, link, time, tags, linked projects
   meetings/<id>.json
   events/<id>.json
-  recordings/<uuid>/        # 一条录音一个目录（手机同步来的，#3235，下面「录音」）
-    meta.json               # 开始 / 结束、时长、语言、来源设备、书签、revision、是否转写完、打标、关联项目
-    segments.json           # 带时间戳的分段（start / end 是距开始的秒数）
-    transcript.md           # 分段按用户时区的钟点写成一行一段，kb_search 搜它
-    summary.md              # 转写完成后模型写的摘要
-  recordings/.deleted.json  # 删除过的录音 UUID（墓碑），保留期内迟到的上传回 410
+  recordings/<uuid>/        # One directory per recording (synced from phone, #3235, "Recordings" below)
+    meta.json               # Start / end, duration, language, source device, bookmarks, revision, transcription complete, tags, linked projects
+    segments.json           # Timestamped segments (start / end in seconds from the beginning)
+    transcript.md           # One line per segment, with clock times in the user's timezone; searched by kb_search
+    summary.md              # Model summary after transcription completes
+  recordings/.deleted.json  # Deleted recording UUIDs (tombstones); late uploads within retention return 410
 ```
 
-## 打标
+## Tags
 
-每个会话、人、项目、文档、会议、日程都有三样，由 AI 在压缩时给出，人可以改：
+Every chat, person, project, document, meeting and event has three fields, generated by AI during compression and editable by people:
 
-| 字段 | 取值 | 含义 |
+| Field | Values | Meaning |
 | --- | --- | --- |
-| `importance` | `P0` / `P1` / `P2` / `P3` | 重要级：P0 关键（老板、核心项目、线上事故）、P1 重要、P2 一般、P3 可忽略 |
-| `relevance` | 0–100 | 与我相关性：直接找我 / 我负责 → 高；只是在群里看到 → 低 |
-| `tags` | 字符串数组 | 不预设，AI 自动生成（2–6 个短词，复用已有标签优先，`kb_tags` 给出现有标签和次数） |
+| `importance` | `P0` / `P1` / `P2` / `P3` | Importance: P0 critical (manager, core project, production incident), P1 important, P2 normal, P3 ignorable |
+| `relevance` | 0–100 | Relevance to me: directly addressed / my responsibility → high; merely seen in a group → low |
+| `tags` | String array | No preset list; AI generates 2–6 short terms, preferring existing tags (`kb_tags` returns existing tags and counts) |
 
-## 流水线（管理者后台，`server/internal/kb`，`assistant/kb.go` 的循环）
+## Pipeline (manager background, `server/internal/kb`, loop in `assistant/kb.go`)
 
-1. **归档**：每 2 分钟（飞书实时事件来了 5 秒后）看飞书「消息」列表最近活跃的 100 个会话，列表时间比上次归档的新才去读，
-   按游标（`afterPosition`）增量拉，第一次见到的会话从最新 100 条开始；追加到当天的 `messages/*.md`（日期和时间按用户的时区，见下面「时区」）。
-   图片 / 文件 / 富文本里的图下载到 `attachments/<日期>/`（单个 20 MB 以内），行里留 `[附件](相对路径)`；消息里的飞书文档链接记进 `docs/`。
-   话题群只读最新一页的话题。邮件每 6 分钟按账号读收件箱里 UID 比上次大的（一页 40 封，一次最多 5 页；超过一页时先收最新一页，中间的按页往下补，没补完下一次接着读），
-   每次最多读 10 封全文（其余用摘要），记到 `mail-<账号>-<对方地址>` 会话里；游标在 `cursors/mail.json`（各账号的 UID，另有 `<账号>#v` 记 UIDVALIDITY、
-   `#t` 记已归档最新一封的时间、`#f` / `#h` 记还没补的空洞；UIDVALIDITY 变了就从最新一页重新开始，只收比 `#t` 晚的；2026-11-03 以前在 `mail-cursors.json`，没有新文件时从它接着读）。
-   连接器（`docs/plan-connectors.md`，实现 `connector.Archive` 的）每 10 分钟按一个游标读一次「自从上次以来」有新消息的会话，
-   游标在 `cursors/<连接器>.json`，会话 id 是 `<连接器>-<会话>`。往回补只对能往回读的来源（飞书、公司圈），连接器的会话不占往回补的名额。
-   - **GitHub**：只收和我有关的 PR / issue（`involves:@me`，第一次看最近 30 天），不爬整个仓库。
-   - 一个 PR / issue 一个会话 `github-<owner>-<repo>-<号>`（`kind` 是 `pr` / `issue`），内容依次是：描述（`【标题】` 开头）；评论；review（「（review）批准了」）；行内评论（「（文件:行）…」）。
-   - 机器人标「(bot)」。每条最多 4000 字。请求额度低时这一轮不读。
-2. **压缩**：会话攒够 50 条新消息，或安静了 10 分钟，就把旧的 `summary.md` + 新消息（最多 2.4 万字，留最新的）交给小模型，
-   得到新的摘要（固定小节：这是什么 / 进展 / 待办和未决 / 关于我）、一句话、打标、提到的项目和人；写回 `summary.md`、`meta.json`。
-   每轮最多压缩 8 个会话，相关性高的先。私聊 / 邮件的打标同步给对方这个人；人的 `summary.md` 不调模型，由 meta 和私聊上下文拼出来。
-3. **演化（evo）**：压缩结果里提到的项目合并进 `projects/`（名字或别名去掉标点、大小写后相同就并，没有就新建），有进展就追加 `log.md`
-   并标脏。别名只收这件事自己的：别的（未合并的）项目的名字 / 别名、单字或两个字母的缩写、通用词不收，每个项目自动收的别名最多 12 个
-   （#2546：以前一周后几个项目各攒了上百个别名，互相串）；`kb_update` 手动加的不限，`remove_aliases` 删。按名字找项目时多个未合并的项目都对得上，
-   名字精确命中优先于别名，同级取最近更新的，不看目录顺序。
-   每轮最多重写 3 个脏项目的摘要（旧摘要 + 最近 40 条时间线 + 最多 8 个相关会话的摘要）。人、会话、项目之间的关联写进各自的
-   `meta.json`（双向）。长期项目（long）不会被改回短期。
-4. **文档 / 会议 / 日程**：每 30 分钟读飞书日历（昨天到 8 天后，忙碌的日程）和最近 30 场会议，补 10 个文档的标题（Markdown 导出的第一行），
-   新的和变了的每 40 条一批交给模型打标、挂到项目上。
-5. **回填历史**：第一次只读最新 100 条（安静的会话这一页能早到几年前，超过文字保留期的不写）；之后每轮挑相关性最高的 5 个还没回填完的会话，各往前读最多 3 页（`beforePosition`），
-   比已有最早一行更早的插到对应日期文件的最前面，直到 365 天前或会话开头（`backfill_done`）。回填的只归档、可搜索，不再交给模型压缩。
-   同一分钟里比已有最早一行还早的消息会被当成已有而跳过。
-5b. **公司圈**（2026-11-01，接飞书的插件提供，原 hub 的 kb_moments.go）：我发的帖子和通知里和我有关的帖子，各是一个会话 `moments-<帖子 id>`，帖子正文是第一条，
-   评论是后面的消息（按时间增量），照常压缩、打标、挂项目；第一次就读全部评论，所以不再回填。
-5c. **公司圈全量**（2026-11-01，接飞书的插件提供，原 hub 的 kb_moments_crawl.go；`kb/moments.go`，默认关）：每 30 分钟把每个 tab（推荐 + 各分类）往后翻，
-   一帖一个文件存在 `moments/posts/<id>.md`（正文 + 全部评论）和 `<id>.json`（作者、分类、点赞、评论数、和我有没有关系），
-   `moments/index.jsonl` 一帖一行，`moments/stats.json` 是最近一轮的统计。**只存档、不调模型**；和我有关的帖子另外照常是 `chats/moments-<id>`。
-   - 接口按热度排序，不按时间。每轮每个 tab 先读顶上 `head_pages`（3 页 × 50）找新帖，遇到一页没有新帖也没有评论数变化就停；
-     再从上一轮停下的地方往下读 `pages_per_tab`（10 页），翻到底就记下这个 tab 读完了（`moments/tabs.json`；翻页 token 失效就从头再来）。
-     同一轮里一个帖子只算第一次见到。所以是越来越接近全量，不保证一条不漏。
-   - 第一轮实测（2026-11-01）：12 个 tab、114 页、190 个请求、3 分 24 秒，5073 个帖子、9.2 MB（评论只读了 76 个帖子）。
-   - 评论：评论数变了（或从没读过）才重读，新帖先，每轮最多读 `comments_per_round`（150）个帖子的评论（没有评论的不占名额），剩下的下一轮接着读；请求之间隔 `delay_ms`（300）。
-     遇到限流（429 / rate）这一轮就停。
-   - 搜索（`kb_search`）也读这些帖子，但排在所有别的内容之后，不会把会话、项目挤掉。按 `text_days` 删过期的帖子。
-   - 开关在 `hub.json`：`"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300, "max_days": 365}}`。
-     它用你的账号读全公司的公司圈，所以默认不开。
-   - **外部帖子**（#1444）：帖子存档是通用的，任何声明了 `archive` 的连接器都能经连接器协议的 `posts.put` 往里写（`docs/connector-protocol.md`「知识库」），
-     `posts.pending` 告诉它哪些帖子的评论要重读（读完用 `posts.comments` 交回）；帖子记着来源（`source`）和 feed 的名字（`feed`，存档标题用），别的连接器的帖子不能覆盖。
-     存档目录沿用 `moments/`（`GET /api/v1/kb/moments/{id}` 也不变）。索引、按文字保留期每天清理、挂项目（下面「项目的公司圈」）由知识库（管理者）统一做，hub 只把插件交来的转过去。
-     插件接管飞书连接器后，hub 自己的爬取停下，由插件爬（翻到哪的状态在插件自己的数据目录，第一次接手会从头往下翻一遍，已有的帖子只是「见过」）；
-     和我有关的帖子由插件照常归档成 `moments-<id>` 会话（清单 `archive_sources: ["moments"]`），第一次从 `archive.chats` 拿到知识库里每帖读到哪，接着读。
-   - 只要一年内的（2026-11-01 用户要求，避免打爆上游）：`max_days`（默认 365，`kb.text_days` 更短就按它）之前的帖子不存、
-     不读评论；往下翻到一整页都超过一年就当这个 tab 读完了（`done`），之后每轮只读头几页看新帖。feed 按热度排，不严格按时间，
-     所以只在**整页**都旧时才停；混着新旧的页照常往下翻。每天清理一次超过 `max_days` 的存档。
-6. **清理**：每天一次，删 365 天前的 `messages/*.md`、30 天前的 `attachments/*`（天数在 `hub.json` 的 `kb` 里改）。
-   超过文字保留期的消息从一开始就不写：会话第一次归档、邮箱第一次读入、回填都从清理保留的最早那天的零点截止（`kb.Engine.textCutoff`，
-   和清理 `Engine.Prune` 用同一份 `text_days`），
-   否则清理删掉之后，下一个第一次归档的会话又会写出超期的日文件（2026-11-02 线上见过清理后 6 秒写回 47 个）。
+1. **Archive**: every 2 minutes (5 seconds after a Lark live event), inspect the 100 recently active chats in Lark's Messages list, reading only when the list timestamp is newer than the last archive.
+   Fetch incrementally by cursor (`afterPosition`); a newly seen chat starts with its latest 100 messages. Append to that day's `messages/*.md` (dates and times in the user's timezone, see "Timezone" below).
+   Download images / files / rich-text images to `attachments/<date>/` (up to 20 MB each), leaving `[附件](相对路径)` ("attachment; relative path") in the line; record Lark document links in `docs/`.
+   Topic groups read only the newest topic page. Every 6 minutes, read each email account's Inbox messages with UID above the last one (40 per page, at most 5 pages per round; with multiple pages, take the newest first, then fill the middle page by page and continue next time if unfinished),
+   reading at most 10 full bodies per round (summaries for the rest), into `mail-<account>-<other address>` chats. Cursors are in `cursors/mail.json` (per-account UIDs, plus `<account>#v` for UIDVALIDITY,
+   `#t` for the latest archived message time, `#f` / `#h` for unfilled gaps; on UIDVALIDITY change, restart from the newest page and only take messages later than `#t`; before 2026-11-03 it was `mail-cursors.json`, used as fallback when the new file is absent).
+   Connectors (`docs/plan-connectors.md`, implementing `connector.Archive`) read chats with new messages "since last time" by cursor every 10 minutes,
+   with cursor `cursors/<connector>.json` and chat id `<connector>-<chat>`. Backfill is only for sources supporting backward reads (Lark, Moments); connector chats do not consume backfill slots.
+   - **GitHub**: only PRs / issues involving me (`involves:@me`, last 30 days initially), not entire repositories.
+   - One PR / issue per chat, `github-<owner>-<repo>-<number>` (`kind` is `pr` / `issue`), in this order: description (starts with `【标题】`, "[Title]"); comments; reviews (`（review）批准了`, "(review) approved"); inline comments ("(file:line)…").
+   - Bots are marked `(bot)`. Each entry is at most 4000 characters. Skip the round when the request quota is low.
+2. **Compress**: once a chat has 50 new messages or has been quiet for 10 minutes, send the old `summary.md` + new messages (up to 24k characters, keeping the latest) to a small model,
+   producing a new summary (fixed sections: what this is / progress / to-dos and unresolved issues / about me), one line, tags, mentioned projects and people; write `summary.md` and `meta.json`.
+   At most 8 chats per round, most relevant first. Direct-chat / email tags propagate to the other person; a person's `summary.md` is assembled from metadata and direct-chat context without a model call.
+3. **Evolution (evo)**: merge projects mentioned in compression into `projects/` (names or aliases equal after stripping punctuation and case are merged; otherwise create), append progress to `log.md`
+   and mark dirty. Only aliases belonging to this project are accepted: names / aliases of other unmerged projects, single characters or two-letter abbreviations, and generic terms are rejected; at most 12 automatic aliases per project
+   (#2546: previously, several projects accumulated hundreds of aliases after a week and crossed into each other). Manual aliases from `kb_update` have no limit; `remove_aliases` deletes them. If several unmerged projects match a name,
+   exact names outrank aliases; ties use most recently updated, not directory order.
+   Rewrite at most 3 dirty project summaries per round (old summary + latest 40 timeline entries + summaries of up to 8 related chats). Person / chat / project associations are written into each
+   `meta.json` bidirectionally. Long-term projects (`long`) never revert to short-term.
+4. **Documents / meetings / events**: every 30 minutes read Lark calendar (yesterday through 8 days ahead, busy events) and the latest 30 meetings, fill titles for 10 documents (first line of Markdown export),
+   and send new or changed items to the model in batches of 40 for tags and project links.
+5. **Backfill history**: initially only the latest 100 messages are read (a quiet chat's page may reach years back; messages outside text retention are not written). Afterwards, each round picks the 5 most relevant unfinished chats, reading at most 3 pages backwards each (`beforePosition`),
+   inserting messages older than the earliest stored line at the start of the corresponding daily file, until 365 days ago or the chat's beginning (`backfill_done`). Backfill is archived and searchable but not compressed by the model again.
+   Messages earlier than the earliest stored line within the same minute are treated as already stored and skipped.
+5b. **Moments** (2026-11-01, provided by the Lark plugin, formerly hub kb_moments.go): my posts and posts involving me in notifications each become `moments-<post id>` chats, with the body as the first message
+   and comments afterwards (incremental by time), compressed, tagged and linked normally. All comments are read initially, so no backfill.
+5c. **All Moments** (2026-11-01, provided by the Lark plugin, formerly hub kb_moments_crawl.go; `kb/moments.go`, off by default): every 30 minutes page through each tab (recommended + categories),
+   storing one post per `moments/posts/<id>.md` (body + all comments) and `<id>.json` (author, category, likes, comment count, whether it involves me),
+   one line per post in `moments/index.jsonl`, latest round stats in `moments/stats.json`. **Archive only, no model calls**; posts involving me also remain normal `chats/moments-<id>` chats.
+   - The API sorts by popularity, not time. Each round reads the top `head_pages` (3 × 50) of each tab for new posts, stopping on a page with neither new posts nor changed comment counts;
+     then reads `pages_per_tab` (10) from the previous stopping point. At the bottom, mark the tab finished (`moments/tabs.json`; invalid page tokens restart from the top).
+     A post counts only on its first sighting in a round. This approaches full coverage over time but does not guarantee no omissions.
+   - First round measured (2026-11-01): 12 tabs, 114 pages, 190 requests, 3 minutes 24 seconds, 5073 posts, 9.2 MB (comments read for only 76 posts).
+   - Comments: reread only if the count changed (or never read), new posts first, at most `comments_per_round` (150) posts per round (posts without comments consume no slots); remaining ones continue next round. Requests are spaced by `delay_ms` (300).
+     Stop the round on rate limiting (429 / rate).
+   - Search (`kb_search`) reads these posts too, but after all other content, never displacing chats or projects. Expire posts by `text_days`.
+   - Switch in `hub.json`: `"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300, "max_days": 365}}`.
+     It reads company-wide Moments with your account, so it is off by default.
+   - **External posts** (#1444): post archiving is generic; any connector declaring `archive` can write through connector protocol `posts.put` (`docs/connector-protocol.md` ("Knowledge base")),
+     with `posts.pending` listing posts whose comments need rereading (submit through `posts.comments`). Posts record source (`source`) and feed name (`feed`, used in archive titles); other connectors cannot overwrite them.
+     The archive remains under `moments/` (`GET /api/v1/kb/moments/{id}` unchanged). Indexing, daily text-retention cleanup and project linking ("Project Moments" below) belong to the knowledge base (manager); the hub only forwards plugin submissions.
+     Once the plugin takes over the Lark connector, hub crawling stops and the plugin crawls (paging state in its own data directory; on first takeover it pages from the top, with existing posts merely "seen");
+     posts involving me are archived normally by the plugin into `moments-<id>` chats (manifest `archive_sources: ["moments"]`), initially reading each post's knowledge-base position through `archive.chats` before continuing.
+   - Only the last year (requested 2026-11-01, to avoid overloading upstream): posts before `max_days` (default 365, or `kb.text_days` if shorter) are not stored
+     and their comments are not read. A full page older than a year marks the tab `done`; subsequent rounds only read its head pages for new posts. The feed is popularity-ranked, not strictly chronological,
+     so stop only when the **whole page** is old; mixed pages continue normally. Clean archives older than `max_days` once daily.
+6. **Cleanup**: once daily, delete `messages/*.md` older than 365 days and `attachments/*` older than 30 days (days configured in hub.json's `kb`).
+   Messages outside text retention are never written: initial chat archives, initial email ingestion and backfill all stop at midnight on the earliest retained day (`kb.Engine.textCutoff`,
+   using the same `text_days` as cleanup's `Engine.Prune`),
+   otherwise another initially archived chat writes expired daily files again after cleanup (observed in production 2026-11-02: 47 returned 6 seconds after deletion).
 
-### 时区（2026-11-01）
+### Timezone (2026-11-01)
 
-归档里的日期和时间（按天分的文件、每行的「- 15:04」、时间线的「- 2006-01-02 15:04」、公司圈的时间）都是用户那里的时间。用户的时区是手机报给助手设置的那个
-（2026-11-04 起管理者读它自己的设置，没报过时用它那台机器的；以前是 `Hub.userLocation`）。以前按 hub 机器的时区写，hub 跑在 UTC，用户在 UTC+8：
+Archive dates and times (daily files, each line's "- 15:04", timeline "- 2006-01-02 15:04", Moments timestamps) are in the user's local time. The user's timezone is the one reported by the phone to assistant settings
+(since 2026-11-04 the manager reads its own settings, falling back to its machine's timezone if never reported; previously `Hub.userLocation`). Before, writes used the hub machine's timezone; with the hub in UTC and the user in UTC+8:
 
-- 早上 8 点前的消息算进了前一天；
-- 每行的时间早了 8 小时，AI 读到的时间也是错的。
+- Messages before 8 AM went into the previous day;
+- Every line was 8 hours early, and AI read the wrong time too.
 
-文件里只记钟点，不记时区，所以每份文件都写明自己的时区，时区一变就整体搬一次（`kb/zone.go`）：
+Files record clock times, not timezones, so each file declares its timezone and all data moves once on a timezone change (`kb/zone.go`):
 
-- **会话：** `messages/.zone` 写着时区名。没有这个文件的，是记录时区之前按 hub 自己的时区写的。
-  - `Store.Rezone` 把每行按原来的时区换成时刻，再按新时区重新分天、改写钟点。
-  - 先写到 `messages.rezone/`，再和 `messages/` 对调，所以每个会话要么整体是新的，要么整体是旧的。
-  - 中途断了下次接着做：对调前断的，旧文件原样还在；对调后断的，只剩 `messages.old/` 要删。同一份数据不会被换算两次。
-- **时间线：** `log.md` 的标题写时区（`# 时间线 · Asia/Shanghai`；只有 `# 时间线` 的是 hub 自己的时区）。整份一次改写。
-- **什么时候搬：** 管理者启动时（连 hub 之前，`Service.StartKB`）和每一轮归档前调 `Rezone`；读不出用户时区时不搬。全部搬完以后，同一个时区不再遍历。
-  手机换了时区（出差），下一轮就整体搬到新时区。
-- **读写都用同一个时区：**
-  - 读写一个会话前，先确认它已经在当前时区；
-  - `Since`（压缩时取上次以来的消息）把每行按当前时区换回时刻，再和起点比较。所以跨日界不会漏读，也不会重复。
-- **对旧数据的影响：** 第一次部署后，所有会话的天文件会按用户时区重新分一次。
-  - UTC 0–16 点（北京 8–24 点）的行留在原来那天，16–24 点（北京次日 0–8 点）的行挪到后一天；
-  - 每行的钟点加 8 小时；
-  - 时间线同理。
-  - 附件目录 `attachments/<日期>/` 不动（消息里按路径链接），只是清理时按目录名算的日子会差最多一天。
-  - 已经写好的公司圈帖子 Markdown 不改写，下次重新抓评论时按新时区写。
-  - 压缩档案、项目摘要里 AI 写过的时间是文字，不改。
+- **Chats:** `messages/.zone` records the timezone name. Without this file, the data predates timezone tracking and was written in the hub's timezone.
+  - `Store.Rezone` converts each line to an instant using the old timezone, then regroups by day and rewrites clock times in the new one.
+  - Write first to `messages.rezone/`, then swap with `messages/`, so each chat is entirely new or entirely old.
+  - Interrupted work resumes next time: before the swap, original files remain untouched; after it, only `messages.old/` needs deletion. The same data is never converted twice.
+- **Timelines:** `log.md`'s heading includes the timezone (`# 时间线 · Asia/Shanghai`, "Timeline"; bare `# 时间线` means the hub's timezone). Rewrite the whole file once.
+- **When to move:** call `Rezone` when the manager starts (before connecting to the hub, `Service.StartKB`) and before each archive round; do not move if the user timezone cannot be read. Once all data is moved, the same timezone does not trigger another traversal.
+  If the phone changes timezone (travel), the next round moves everything to it.
+- **Reads and writes use the same timezone:**
+  - Before reading or writing a chat, ensure it is in the current timezone;
+  - `Since` (messages since the last compression) converts each line back to an instant in the current timezone before comparing with the starting point, so date boundaries neither omit nor duplicate messages.
+- **Effect on old data:** after the first deployment, every chat's daily files are regrouped in the user's timezone.
+  - Lines at UTC 0–16 (Beijing 8–24) remain on the same day; UTC 16–24 (Beijing 0–8 next day) move to the next;
+  - Clock times increase by 8 hours;
+  - Timelines likewise.
+  - Attachment directories `attachments/<date>/` stay put (messages link by path), but cleanup dates inferred from directory names may differ by up to a day.
+  - Existing Moments Markdown is not rewritten; the next comment refresh writes in the new timezone.
+  - Times AI wrote into compressed profiles and project summaries are prose and unchanged.
 
-## 身份线索（2026-11-03，连接器 v2 · V4，#687）
+## Identity hints (2026-11-03, connector v2 · V4, #687)
 
-同一个人在飞书、邮件、信息、Telegram、GitHub 里各是一份人（`people/<来源>-<id>`）。为了以后能认出是同一个人，连接器在消息上带发送者的线索
-（`kb.SourceMessage.SenderHandles`，只在内存里）：邮件的地址、信息的邮箱或号码、GitHub 的登录名、Telegram 的用户、飞书的用户 id。
+The same person in Lark, email, Messages, Telegram and GitHub has separate records (`people/<source>-<id>`). To recognize them as one person later, connectors attach sender hints to messages
+(`kb.SourceMessage.SenderHandles`, in memory only): email address, Messages email or phone number, GitHub login, Telegram user, Lark user id.
 
-- 知识库规范化（邮箱小写、号码只留 `+` 和数字）后用 hub 的密钥做 HMAC-SHA256，存成 `<种类>:<32 位十六进制>`，只增不删，
-  写在人的目录下单独的 `handles.json`（`kb/handles.go`）。原始的号码、地址不落盘。
-- **不给模型看**：`meta.json` 里没有，`kb_get`、搜索、提示词只读 `meta.json` / `summary.md` / `log.md`，看不到 `handles.json`（测试守着）。
-- 密钥是管理者那台机器（默认就是 hub 机器）上的 `~/.persona/handles.key`（32 字节随机，0600，第一次用时生成），不进数据库、不进日志；丢了只是以后的哈希对不上。
-- 同一个邮箱在邮件和信息里得到同一个哈希。**把几份合成一个人不在这一步**：以后单独设计（合错了怎么拆、谁来确认）。
+- After normalization (lowercase emails, phone numbers reduced to `+` and digits), the knowledge base uses the hub key for HMAC-SHA256, stores `<kind>:<32 hex digits>`, append-only,
+  in a separate `handles.json` under the person's directory (`kb/handles.go`). Raw numbers and addresses never touch disk.
+- **Hidden from the model**: absent from `meta.json`; `kb_get`, search and prompts only read `meta.json` / `summary.md` / `log.md`, never `handles.json` (guarded by tests).
+- Key: `~/.persona/handles.key` on the manager's machine (hub machine by default), 32 random bytes, 0600, generated on first use; never in the database or logs. Losing it only means future hashes no longer match.
+- The same email in email and Messages gets the same hash. **Merging records into one person is not part of this step**: a separate future design must address splitting wrong merges and who confirms them.
 
-## 项目去重
+## Project deduplication
 
-同一件事常在几个群里各叫各的名字，以前压缩时模型只看得到项目名，每个群各长出一个项目（2026-11-01：「SS codex 方案」和
-「SS 支持单 agent 多 Session 窗口」，10 个人重叠，名字没有一个字相同）。现在分两头防（`kb/dedupe.go`）：
+The same work often has different names in different groups. Previously the model only saw project names during compression, so each group grew its own project (2026-11-01: "Codex integration proposal" and
+"multi-window single agent support", 10 people overlapping, no shared words in the names). Now prevent this from both ends (`kb/dedupe.go`):
 
-- **源头**：压缩时的「已知项目」带上每个项目的一句话（`kb/known_projects`），提示词要求对照一句话认同一件事，用原名，
-  把这个群的叫法写进 aliases。
-- **定期合并**：每 30 分钟，在进行中的项目里两两找候选：共同的人占较少一方的 30% 以上且至少 3 个、或共享会话 / 文档、
-  或名字里有两个以上非通用词相同。按分数排，每轮最多问模型 4 对（`kb/dedupe`：两边的名字、别称、一句话、目标、档案、来源群），
-  「拿不准就算不同」。模型说同一件事还要同时给 `sure: true`、理由里不带「存疑」「不确定」这类字眼才合并，否则按不同记下。
-  判过的对记在 `projects/.dedupe.json`，判为不同的 14 天后才再问。
-- **合并**（`MergeProjects`）：留下的一方吸收另一方的名字和别称（成为别称；和第三个未合并的项目重名的不收；被合并方的名字总会收下，所以可能比 12 个多一个，它原有的别称只在 12 个以内补入）、人、会话、文档、代码目录、关键词、公司圈；
-  时间线按时间交织并记一条「合并了项目「…」」；会话、人、文档里指向旧项目的都改指新项目；新项目标脏，下一轮重写档案。
-  被合并的项目留在磁盘上（`status: merged`、`merged_into`），列表、提示词、Agent 目录归属都不再算它，用旧名字找会找到新项目；
-  App 里打开它显示「已合并」和去新项目的入口。手动打过标（locked）的一方总是被留下。
-- **手动**：`kb_update` / `PUT /api/v1/kb/projects/<id>` 带 `merge_into: <另一个项目>`（别的字段同时不生效）。
+- **At the source**: "known projects" during compression includes each project's one-line description (`kb/known_projects`); prompts require recognizing the same work by that description, using its original name,
+  and adding this group's name to aliases.
+- **Periodic merging**: every 30 minutes, find pairs among active projects: shared people are at least 30% of the smaller side and at least 3, shared chats / documents,
+  or at least two matching non-generic name terms. Rank by score, ask the model about at most 4 pairs per round (`kb/dedupe`: both names, aliases, one-line descriptions, goals, profiles and source groups),
+  "when unsure, treat as different". Even if the model says they are the same, merge only with `sure: true` and no uncertainty words such as `存疑` / `不确定` ("doubtful" / "uncertain") in the reason; otherwise record them as different.
+  Judged pairs go in `projects/.dedupe.json`; different pairs are not asked again for 14 days.
+- **Merge** (`MergeProjects`): the survivor absorbs the other's name and aliases (as aliases; reject collisions with a third unmerged project; the merged project's name is always accepted, possibly one beyond 12, while its existing aliases only fill up to 12), people, chats, documents, code directories, keywords and Moments;
+  timelines interleave by time and add "Merged project …"; references from chats, people and documents change to the survivor; mark it dirty for profile rewriting next round.
+  The merged project remains on disk (`status: merged`, `merged_into`) but is excluded from lists, prompts and Agent directory ownership; looking up the old name finds the survivor;
+  opening it in the app shows "Merged" and a link to the survivor. The manually tagged (`locked`) side always survives.
+- **Manual**: send `merge_into: <other project>` through `kb_update` / `PUT /api/v1/kb/projects/<id>` (other fields do not apply simultaneously).
 
-## 项目的公司圈
+## Project Moments
 
-全量公司圈存档（上面 5c）不逐帖交给模型，反过来由项目去找（`kb/moments_link.go`）：
+Rather than sending every full Moments archive post (5c above) to the model, projects find relevant posts (`kb/moments_link.go`):
 
-- 项目档案的长度按项目大小分档（2026-11-04 用户定「放宽」，#1001）：短期项目 1500 字以内、长期方向 2500 字以内（`prompts/kb/project.md`），
-  已有档案超出的，下次重写时压回去。`kb.project` 的输出上限 8000 token，被截断时加倍再问一次（#1000），按「正文 + 思考」留了余量。
-- 项目档案重写时模型顺带给出 `keywords`（3–8 个公开讨论会用的词：产品名、功能名、对外叫法；不要内部代号和太泛的词）。
-  有了关键词功能之后，最近 60 天动过、还没有关键词的进行中项目在管理者启动时标脏，几轮内补上。
-- 每 30 分钟，对相关性最高的 3 个有关键词的项目：一年内的帖子按关键词命中数、评论数、新旧排，取没判过的前 20 帖，
-  连同项目档案交给模型（`kb/moments_link`）逐帖判断是不是在说这件事、一句话说什么关系。关键词本身很脏（全量里 165 帖提到
-  codex，几乎都和「SS codex 方案」无关），所以一定要过模型。ASCII 关键词少于 3 个字符、汉字少于 2 个的不用（「MA」能搜到一半帖子）。
-- 判过的帖子记在 `projects/<slug>/moments-judged.json`，不再问；新抓到的帖子下一轮自然成为候选。相关的进 `meta.json` 的
-  `moments`（最多 50 帖，新的在前）；两周内的还记一条时间线（「公司圈 · 作者」）并标脏，档案重写时带上评论最多的 5 帖
-  （提示词要求把用户反馈、外部声音写进现状或风险）。
-- 用的地方：项目详情的「相关公司圈」（作者、时间、评论数、关系；点开看全文和评论，`GET /api/v1/kb/moments/{id}`），
-  `kb_get` 取项目时列出这些帖子。
+- Project profile length follows project size (limits relaxed as requested 2026-11-04, #1001): short-term projects up to 1500 characters, long-term directions up to 2500 (`prompts/kb/project.md`);
+  existing overlong profiles are shortened on their next rewrite. `kb.project` allows 8000 output tokens, doubling and retrying once on truncation (#1000), with room for "body + thinking".
+- While rewriting the profile, the model also produces `keywords` (3–8 terms used in public discussion: product names, features, public names; not internal codenames or overly generic terms).
+  After keywords were added, active projects touched within 60 days but lacking keywords are marked dirty at manager startup and filled over a few rounds.
+- Every 30 minutes, for the 3 most relevant projects with keywords: rank posts from the last year by keyword hits, comment count and recency; take the top 20 unjudged posts
+  with the project profile and ask the model (`kb/moments_link`) whether each discusses this work and for one line explaining the relationship. Keywords are noisy (165 archived posts mention
+  codex, almost none related to the "Codex integration proposal"), so model checking is essential. Ignore ASCII keywords shorter than 3 characters or Chinese keywords shorter than 2 ("AB" matches half the posts).
+- Judged posts go into `projects/<slug>/moments-judged.json` and are not asked again; newly crawled posts become candidates next round. Relevant posts go into `meta.json`'s
+  `moments` (up to 50, newest first); those within two weeks also add a timeline entry ("Moments · Author") and mark the project dirty. Rewrites include the 5 most-commented posts
+  (the prompt requires user feedback and outside voices in the current state or risks).
+- Used in project details' **Related Moments** (author, time, comment count, relationship; open full text and comments through `GET /api/v1/kb/moments/{id}`),
+  and listed when `kb_get` fetches a project.
 
-和我有关的帖子（上面 5b）照常是会话：第一次压缩读整帖（入库前一年内），以前只读入库前 30 天，大多数旧帖一次都没压缩；超过一年的不再建会话。
+Posts involving me (5b above) remain normal chats: first compression reads the entire post (within a year before ingestion); previously it only read the preceding 30 days, leaving most older posts never compressed. Posts older than a year no longer create chats.
 
-## 不是项目的项目
+## Projects that are not projects
 
-模型会把通知邮件里的产品名（App Store 的每个 App、各种订阅服务）当成项目。所以只有**有真人在说话**的会话才能产生项目
-（`kb.HasPeople`：不是机器人会话；邮件要么自己回过、要么发件人不像 noreply / newsletter / support 之类的自动地址），
-提示词（`server/internal/prompts/kb/`，`docs/prompts.md`）里也写明通知、营销、账单里的东西不是项目。管理者启动时把只来自这类会话、没手动打过标的项目标成 `ignored`：
-不再更新、不进快照和提示词，App 里收在「不是项目」；在打标里改回状态就恢复。
+The model may mistake product names in notification emails (each App Store app, subscription services) for projects. So only chats **with real people talking** can create projects
+(`kb.HasPeople`: not bot chats; email either has a reply from me or a sender unlike automated noreply / newsletter / support addresses),
+and prompts (`server/internal/prompts/kb/`, `docs/prompts.md`) explicitly exclude notifications, marketing and billing. At startup the manager marks projects sourced only from these chats and never manually tagged as `ignored`:
+no more updates, snapshots or prompts; the app groups them under **Not projects**. Changing their status in tags restores them.
 
-## 谁在用
+## Who uses it
 
-- **Persona（主对话和其他对话）**：CLAUDE.md 里写明目录结构和「让上下文流动」的要求；MCP 工具 `kb_search`（全文）/ `kb_list`（排好序的列表）/
-  `kb_get`（档案 + 最近 7 天消息）/ `kb_update`（建项目、改档案、打标、建关联、记时间线；手动打的标会锁住，压缩不再覆盖）；
-  实时快照里带最重要的 6 个项目、8 个会话。这四个工具是助手的（参数的默认值、上限和模型看到的文字在 `assistant/tools_apps.go`），
-  2026-11-04 起知识库也是助手的，这几个工具直接调引擎（以前经总线调 hub 的 `kb.search` / `kb.list` / `kb.get` / `kb.update`）。
-- **主对话**：hub settings `assistant.main` 记着它的会话 id（`POST /api/v1/assistant/conversations` 带 `main: true` 时设上，
-  `PUT /api/v1/assistant {"main":"-"}` 清掉）；node 每条消息问快照时把会话 id 带给 `assistant.context`，主对话的快照开头多一句「这是主对话」。
-- **AI 分身**：交给 Agent 的提示词末尾附上这个会话和它前 3 个项目的档案（`<jarvis-context>`），并要求它把新结论用 `kb_update` 写回项目时间线。
-- **定时任务**（早报、晚间回顾和自己建的）：每次运行的提示词末尾加一段，要求先看重点项目、按项目汇报，并把新进展记回去。
-- **Agent 做完**：herdr 里的 Agent 一轮结束（推送判定之前），它的目录属于哪个项目，就把它最后说的话记进那个项目的时间线
-  （「Agent · 标题 · 机器」，同一个 Agent 30 分钟内只记一次），项目随后会重写摘要。hub 判定这一轮停下了就发 `kb.agent_turn` 给管理者，
-  管理者没连着时 hub 先排着（见上面「谁管什么」）。
-- **任务做完**（#2820）：主对话派的任务完成时（自动判定或用户点完成），助手从 Agent 最后的回复里抽一句话结论和链接，记进工作目录对应项目的时间线（「待办 · 标题」，
-  对不上登记的代码目录时按目录名找没登记目录的项目），不受上面 30 分钟一条的限制；下次在这个项目的目录里新开 Agent，项目一句话和最近 5 条「待办 ·」结论作为
-  `<jarvis-context>` 放在它的第一句前面。见 `docs/todos.md`「做完记结论」。
-- **Agents**：项目 `dirs` 记着 `<机器>:<路径>`；`GET /api/v1/kb/projects/<slug>` 带回在这些目录里跑的 Agent。App 里从项目开 Agent、
-  问 Persona 时把项目档案作为上下文带上。
+- **Persona (main chat and other chats)**: CLAUDE.md describes the layout and requires "keep context flowing"; MCP tools `kb_search` (full text) / `kb_list` (sorted list) /
+  `kb_get` (profile + last 7 days' messages) / `kb_update` (create projects, edit profiles, tag, link, add timeline entries; manual tags lock and are not overwritten by compression);
+  live snapshots include the 6 most important projects and 8 chats. These four tools belong to the assistant (parameter defaults, limits and model-facing copy in `assistant/tools_apps.go`),
+  and since 2026-11-04 so does the knowledge base, so they call the engine directly (formerly bus calls to hub `kb.search` / `kb.list` / `kb.get` / `kb.update`).
+- **Main chat**: hub settings `assistant.main` stores its session id (set by `POST /api/v1/assistant/conversations` with `main: true`,
+  cleared by `PUT /api/v1/assistant {"main":"-"}`). When requesting a snapshot per message, node passes the session id to `assistant.context`; main-chat snapshots start with "This is the main chat".
+- **AI twin**: Agent prompts end with this chat's profile and its first 3 projects (`<jarvis-context>`), requiring new conclusions to be written back to the project timeline through `kb_update`.
+- **Scheduled tasks** (morning briefing, evening review and user-created): every run's prompt ends with instructions to review important projects first, report by project and record new progress.
+- **Agent finishes**: after an Agent in herdr ends a turn (before notification decisions), its final words go into the timeline of the project owning its directory
+  ("Agent · Title · Machine", once per Agent within 30 minutes), triggering a summary rewrite. Once the hub decides the turn stopped, it sends `kb.agent_turn` to the manager,
+  queuing it while disconnected (see "Who owns what" above).
+- **Task finishes** (#2820): when a task dispatched by the main chat completes (automatically or by user action), the assistant extracts a one-line conclusion and links from the Agent's final reply and adds them to the project timeline for the working directory ("To-do · Title";
+  if no registered code directory matches, use the directory name to find a project without registered directories). This bypasses the 30-minute limit above; the next Agent started in this project's directory receives the project description and latest 5 "To-do ·" conclusions as
+  `<jarvis-context>` before its first message. See `docs/todos.md` ("Record conclusions on completion").
+- **Agents**: project `dirs` stores `<machine>:<path>`; `GET /api/v1/kb/projects/<slug>` returns Agents running there. Starting an Agent from a project in the app,
+  or asking Persona, includes the project profile as context.
 
-## 配置
+## Configuration
 
-`hub.json`：
+`hub.json`:
 
 ```json
 "kb": {
   "enabled": true,
   "text_days": 365,
   "attachment_days": 30,
-  "ai": { "base_url": "<网关地址>", "api_key_file": "<key 文件>", "model": "<模型>" }
+  "ai": { "base_url": "<gateway address>", "api_key_file": "<key file>", "model": "<model>" }
 }
 ```
 
-`kb.ai` 不写就用 `inbox.triage_ai`，再没有就用 `ai`。`enabled: false` 整个关掉。hub 在握手时把这一节交给管理者（上面「谁管什么」），`kb.ai` 是 hub 的模型配置读的（`kb.*` 用途的默认）。
+If `kb.ai` is omitted, use `inbox.triage_ai`, then `ai`. `enabled: false` disables everything. The hub sends this section to the manager at handshake ("Who owns what" above); the hub's model configuration reads `kb.ai` as the default for `kb.*` purposes.
 
-## 扩展整理知识库（#1908）
+<a id="扩展整理知识库1908"></a>
 
-扩展可以直接经 RPC 调用 `kb.list`、`kb.get`、`kb.day`、`kb.search`、`kb.update`、`kb.owner`，不用拿完整 hub token。
-hub 检查扩展实际获准的 `kb.read` / `kb.write`，再把调用转给拥有知识库的管理者；管理者跑在别的机器上也一样。
-`kb.write` 不包含读取权限。旧 `hub_api` 的 HTTP 和 RPC 调用继续可用，但内部的 `kb.forget`、`kb.posts_*` 等不对扩展开放。
-参数、分页、错误和事件订阅见 [扩展文档](extensions.md#知识库-rpc1908)。
+## Extensions organizing the knowledge base (#1908)
 
-### 更正、锁与解除关联
+Extensions can call `kb.list`, `kb.get`, `kb.day`, `kb.search`, `kb.update`, `kb.owner` directly over RPC without a full hub token.
+The hub checks the extension's actually granted `kb.read` / `kb.write`, then forwards to the manager owning the knowledge base, including when it runs on another machine.
+`kb.write` does not include read permission. Legacy `hub_api` HTTP and RPC remain available, but internal calls such as `kb.forget` and `kb.posts_*` are not exposed to extensions.
+For parameters, pagination, errors and event subscriptions, see [Extensions](extensions.md#知识库-rpc1908).
 
-六类实体的 metadata 都可带 `pinned`（用户确认的事实）和 `locked_fields`（受保护的字段）。`kb.update`、原来的 HTTP PUT 和助手的 `kb_update` 共用写入逻辑：
+### Corrections, locks and unlinking
 
-- `tags` 省略或为 `null` 时保持原值，显式 `[]` 清空，非空数组替换。显式清空后 metadata 保留 `tags: []`，使客户端以最新空值替换缓存。
-- `pinned` 只由显式更新修改，传空字符串可以清除。压缩、项目重写会把它作为只读输入，模型不能改写存下的事实；人物更正也会带入相关会话的压缩。
-- 手工写入默认锁住本次触及的字段，包括人物 `note`、摘要、项目描述和关联。后台写入在落盘时重读当前保护字段，防止模型调用期间的新更正被旧对象覆盖。
-- `lock: false` 表示本次不增加锁，供扩展选择让后台继续维护；它不解除已有锁。旧 `locked` 的打标保护继续生效。
-- `remove_people`、`remove_chats`、`remove_projects`、`remove_aliases` 移除关联或项目别名，不删除实体。同批先添加再移除，移除优先；存在的反向关系一起解除。`remove_aliases` 用于项目。
-- 自动去重跳过带人工保护的项目与关联。显式合并沿用既有合并优先级，更新已锁定的反向关系、拼接双方 pinned；源项目以 merged 记录保留，原有受保护 metadata 仍可读取。
+Metadata of all six entity types can include `pinned` (user-confirmed facts) and `locked_fields` (protected fields). `kb.update`, the original HTTP PUT and assistant `kb_update` share write logic:
 
-例如，从项目移除一位成员并留下已确认事实：
+- Omitted or `null` `tags` keeps the current value; explicit `[]` clears; a nonempty array replaces. After explicit clearing, metadata retains `tags: []`, allowing clients to replace cached tags with the latest empty value.
+- Only explicit updates change `pinned`; an empty string clears it. Compression and project rewrites receive it as read-only input; the model cannot overwrite stored facts. Person corrections also feed related chat compression.
+- Manual writes lock fields touched by default, including person `note`, summaries, project descriptions and associations. Background writes reread current protected fields at write time so corrections made during a model call cannot be overwritten by stale objects.
+- `lock: false` adds no locks in this update, letting extensions choose continued background maintenance; it does not remove existing locks. Legacy `locked` tag protection remains effective.
+- `remove_people`, `remove_chats`, `remove_projects`, `remove_aliases` remove associations or project aliases, not entities. A batch adds first then removes, so removal wins; existing reverse associations are removed too. `remove_aliases` applies to projects.
+- Automatic deduplication skips manually protected projects and associations. Explicit merging retains existing merge precedence, updates locked reverse associations and concatenates both pinned values; the source remains a merged record with its original protected metadata readable.
+
+For example, remove a project member while recording a confirmed fact:
 
 ```json
-{"kind":"projects","id":"example","remove_people":["person-a"],"pinned":"此项目由团队共同维护。"}
+{"kind":"projects","id":"example","remove_people":["person-a"],"pinned":"This project is maintained jointly by the team."}
 ```
 
-这不是跨文件事务，也没有新增 `If-Match` 或修订日志。写入失败返回错误，不应把失败自动重试成一次新的用户确认。
+This is not a cross-file transaction and adds neither `If-Match` nor a revision log. Write failures return errors; do not automatically retry a failure as a new user confirmation.
 
-### 本人信息与变更通知
+### Owner information and change notifications
 
-`kb.owner` 返回 `{name, aliases, handles:[{kind,value}]}`。名字来自 `assistant.owner`，别名由完整权限的用户通过现有
-`PUT /api/v1/assistant` 的 `owner_aliases` 编辑（省略保持，`[]` 清空）；只有 `kb.write` 的扩展不能改全局本人身份。
-handles 汇总仍启用知识库归档的已配置邮箱地址与后续归档里明确标为 `Mine` 的发送者身份，不从他人的身份哈希反推，也不猜测历史消息里的「我」是谁。
+`kb.owner` returns `{name, aliases, handles:[{kind,value}]}`. Name comes from `assistant.owner`; aliases are edited by fully authorized users through existing
+`PUT /api/v1/assistant` field `owner_aliases` (omitted keeps, `[]` clears). An extension with only `kb.write` cannot change the global owner identity.
+Handles combine configured email addresses whose knowledge archiving remains enabled and sender identities explicitly marked `Mine` in later archives; they are neither reverse-engineered from other people's identity hashes nor guessed from historical "me" messages.
 
-普通人物的原始身份线索仍不落盘。本人身份使用独立的私有加密记录，与普通实体、全文搜索和 profile 快照隔离；密钥来自管理者的
-`handles.key`，使用不同的加密用途。没有密钥时只在内存保存观察到的身份，重启后需要重新同步。来源删除会清除该来源的观察结果；
-由其他来源共同证实的同一身份继续保留；关闭邮箱归档来源后，也不再返回该来源的实时账户身份。
-密文损坏、密钥不匹配或已有密文却缺少密钥时，owner 读取与身份清理返回错误，普通知识库功能仍可用；不会用新观察结果覆盖无法打开的记录。
+Ordinary people's raw identity hints still never touch disk. Owner identity uses a separate private encrypted record isolated from ordinary entities, full-text search and profile snapshots; its key comes from the manager's
+`handles.key`, using a distinct encryption purpose. Without the key, observed identities stay only in memory and must be synced again after restart. Deleting a source clears that source's observations;
+an identity jointly confirmed by other sources remains. Disabling an email archive source also stops returning its live account identity.
+Corrupt ciphertext, a mismatched key, or existing ciphertext with a missing key causes owner reads and identity cleanup to fail, while normal knowledge-base functions remain available; new observations never overwrite an unreadable record.
 
-扩展声明 `events` 订阅 `kb.changed`、`kb.forgotten`，并获准 `kb.read`，就能收到不含正文的通知：
-`{kind,id,what}`（what 为 `metadata`、`summary`、`messages`、`log`）或 `{source}`。人工更新和后台落盘走同一条通知链；
-来源文件与索引删除成功后才发 forgotten。通知是尽力投递，不是持久变更日志；断线或拥塞期间可能错过，扩展启动后应重新 list/get 校准状态。
+Extensions declaring `events` subscriptions to `kb.changed`, `kb.forgotten` and granted `kb.read` receive body-free notifications:
+`{kind,id,what}` (`what`: `metadata`, `summary`, `messages`, `log`) or `{source}`. Manual and background writes share the notification path;
+forgotten is sent only after source files and index deletion succeed. Notifications are best-effort, not a durable change log; disconnects or congestion can lose them, so extensions should list/get again at startup to reconcile state.
 
-## App 接口
+## App API
 
-2026-11-04 起这些接口由 hub 原样转给管理者（`assistantwire.Routes`，`assistant/kb_routes.go`），路径、字段都不变；管理者没连着时回 `503 assistant_offline`，
-知识库关着（`kb.enabled: false`）时和以前一样回 503。
+Since 2026-11-04 the hub forwards these APIs unchanged to the manager (`assistantwire.Routes`, `assistant/kb_routes.go`), preserving paths and fields; disconnected managers return `503 assistant_offline`,
+and a disabled knowledge base (`kb.enabled: false`) returns 503 as before.
 
-| 接口 | 用途 |
+| Endpoint | Purpose |
 | --- | --- |
-| `GET /api/v1/kb/{kind}?tag=` | 排好序的列表（`items`）和常用标签（`tags`）；kind 是 projects / chats / people / docs / meetings / events / recordings |
-| `GET /api/v1/kb/{kind}/{id}` | `detail`（meta、summary、项目时间线、会话最近 7 天消息）；项目还带 `agents` |
-| `PUT /api/v1/kb/{kind}/{id}` | 改（字段同 `kb_update`）；项目不存在就新建 |
-| `GET /api/v1/kb-search?q=&messages=0` | 全文搜索（按行，旧版 App 用；助手的 `kb_search` 经总线的 `kb.search` 做同样的搜索） |
-| `GET /api/v1/kb-search?q=&results=1` | App 的搜索：按条目合并、排好序（`results`：`entry`、`count`、前 3 行 `hits`，`in_name`），见下面「搜索」 |
-| `GET /api/v1/kb/{kind}/{id}?q=` | 从搜索打开：多带 `matches`（这个条目里每一处命中；消息带 `day` 和前后各两条 `before` / `after`），最多 40 处 |
-| `GET /api/v1/kb/moments/{id}` | 一帖存档的公司圈（`post`、`markdown`：正文 + 全部评论），项目的「相关公司圈」点开用 |
-| `GET /api/v1/kb/chats/{id}/context` | 一个会话知识库里知道什么（`chat_id`、`chat_name`、`kind`、`summary`、前三个项目的 `projects: [{name, summary}]`），和 hub 自己放进提示词的是同一份；只读，插件的 /agent 用（#1484） |
-| `GET /api/v1/kb/chats/{id}/days/{day}` | 会话某一天的全部消息（`messages[].n` 是在文件里的行号）和前后有消息的那天（`prev` / `next`） |
+| `GET /api/v1/kb/{kind}?tag=` | Sorted list (`items`) and common tags (`tags`); kind is projects / chats / people / docs / meetings / events / recordings |
+| `GET /api/v1/kb/{kind}/{id}` | `detail` (meta, summary, project timeline, last 7 days' chat messages); projects also include `agents` |
+| `PUT /api/v1/kb/{kind}/{id}` | Edit (fields as in `kb_update`); create a project if absent |
+| `GET /api/v1/kb-search?q=&messages=0` | Full-text search (by line, for older apps; assistant `kb_search` does the same search through bus `kb.search`) |
+| `GET /api/v1/kb-search?q=&results=1` | App search: grouped and sorted by entry (`results`: `entry`, `count`, first 3 `hits` lines, `in_name`), see "Search" below |
+| `GET /api/v1/kb/{kind}/{id}?q=` | Open from search: adds `matches` (every hit in this entry; messages include `day` and two neighboring messages each in `before` / `after`), up to 40 |
+| `GET /api/v1/kb/moments/{id}` | One archived Moments post (`post`, `markdown`: body + all comments), opened from a project's Related Moments |
+| `GET /api/v1/kb/chats/{id}/context` | What the knowledge base knows about a chat (`chat_id`, `chat_name`, `kind`, `summary`, first three projects as `projects: [{name, summary}]`), same context the hub puts in prompts; read-only, used by plugin /agent (#1484) |
+| `GET /api/v1/kb/chats/{id}/days/{day}` | All messages for a chat day (`messages[].n` is the file line number), and neighboring days with messages (`prev` / `next`) |
 
-## 搜索
+## Search
 
-2026-10-31 用户反馈「搜到了点进去找不到在哪、返回还报错」后重做（`kb/find.go`）：
+Reworked after feedback on 2026-10-31: "I find results but can't locate them after opening; going back errors too" (`kb/find.go`):
 
-- 结果是条目，不是行：所有含全部关键词的行都找出来（档案、时间线、资料和全部聊天记录，约 42 万行 / 25 MB；先整份文件判断有没有全部关键词，8 路并行读，真实数据约 150 ms），
-  按条目合并，名字命中的在前，再按重要级、相关性、命中数、更新时间排。以前是按目录遍历顺序取前 60 行，常常被几个群的档案占满。
-- 边输边搜（#2632）：Engine 记住上一次搜索读到的东西，下一次只 `stat`，变了才重读：每个目录的列表（按目录的修改时间）、
-  每个文件转小写前后的内容（按修改时间 + 大小，总共最多 64 MB，超出的照旧每次读）、各类列表的条目（按全部 JSON 文件的修改时间 + 大小）。
-  2 秒内刚改过的文件和目录不记，免得同一个时间刻度里又写了一次、大小没变而看不出来。合成的约 33 MB 归档（3.7 万个文件）上热的每次约 360 ms → 85 ms，冷的约 350 ms → 270 ms（`go test -bench BenchmarkFind ./internal/kb`，5 次取中位数），缓存约占 35 MB，结果和不缓存时一致（`find_test.go`）。35 MB 是下限：这份合成数据几乎没有大写字母，转小写后和原文是同一个字符串只记一份；有大写（英文名、Build 之类）的文件要记两份，约是文本的 2 倍。每行都带大写时同一份归档会顶到 64 MB 上限（3.7 万个文件里记下 3.6 万个，其余每次读），热的仍约 85 ms。
-- 点开条目，顶部是「搜索「词」」：这个条目里的每一处命中，消息带前后各一条；点消息打开那一天（`KBDayView`），滚到并标出那条，可以翻到前后一天。
-- 返回不再出错：知识库页本身是 `navigationDestination(isPresented:)` 推出来的，里面再用 `NavigationLink(value:)` 推条目，
-  新页面会被插到它下面（`docs/lessons/ios.md`「导航」），点了像没反应，返回才看到条目页的黄色 ⚠️。知识库里的链接一律视图式。
-  返回时 `.task(id: query)` 会重跑：同一个词已有结果就不再搜，取消不算错误。
+- Results are entries, not lines: find every line containing all keywords (profiles, timelines, records and all chats, ~420k lines / 25 MB; first check the whole file for all keywords, with 8 concurrent readers, ~150 ms on real data),
+  group by entry, name matches first, then importance, relevance, hit count and updated time. Previously the first 60 lines in directory traversal order were often filled by a few group profiles.
+- Search as you type (#2632): the Engine remembers data read by the previous search, then only `stat`s and rereads changes: directory listings (directory mtime),
+  original and lowercase file content (mtime + size, up to 64 MB total; excess is read every time), and entries of each kind (mtime + size of all JSON files).
+  Files and directories changed within 2 seconds are not cached, avoiding invisible same-timestamp rewrites with unchanged size. On synthetic ~33 MB archives (37k files), median warm search ~360 ms → 85 ms, cold ~350 ms → 270 ms (`go test -bench BenchmarkFind ./internal/kb`, median of 5); cache ~35 MB, results identical to uncached (`find_test.go`). 35 MB is a lower bound: the synthetic data has almost no uppercase, so original and lowercase are the same string stored once; files with uppercase (English names, Build, etc.) need both, roughly 2× text size. With uppercase on every line, the same archive reaches the 64 MB cap (36k of 37k files cached, others reread); warm search remains ~85 ms.
+- Opening an entry shows **Search "term"** at the top: every hit in this entry, with one message before and after each message hit. Tapping opens that day (`KBDayView`), scrolls to and highlights the message, and allows paging to adjacent days.
+- Going back no longer errors: the Knowledge page itself is pushed by `navigationDestination(isPresented:)`; using `NavigationLink(value:)` inside to push an entry
+  inserts the new page beneath it (`docs/lessons/ios.md` ("Navigation")), making the tap appear ineffective and exposing the entry page's yellow warning only on Back. Knowledge links now all use view-based navigation.
+  Returning reruns `.task(id: query)`; do not search again if the same term already has results, and cancellation is not an error.
 
-## 各页面（2026-10-31 用真实数据过了一遍）
+## Pages (checked with real data 2026-10-31)
 
-- 类型胶囊一排放下全部六个（放不下先去掉图标、再换行），不用横向滚动视图（会被导航栏当成页面的滚动视图，日程也被挤出屏幕）。
-- 列表的标签菜单只给这一类的常用标签（`kb.KindTags`）：以前是会话和项目的，选了在人 / 文档里筛不出东西。
-- 人有近两千个，绝大多数只是群成员、没打过标：排好的在上面，其余收在「还没整理的」里，点开再看。会话同理。
-- 名字最多两行（文档、会议靠标题后半段区分）。
-- 文档 / 会议 / 日程的详情有时间和「打开文档」（App 内打开），关联里多了来源会话；项目的关联里有它的文档、会议、日程（各最多 30 个，新的在前）。
-- 档案去掉页头已有的内容后是空的，就不显示空卡片。
+- All six type pills fit in one row (drop icons first, then wrap if needed), not a horizontal scroll view (the navigation bar mistakes it for the page's scroll view, also pushing events offscreen).
+- The list's tag menu only offers common tags for that kind (`kb.KindTags`); previously it used chat and project tags, which filtered out everything in people / documents.
+- Nearly two thousand people, mostly untagged group members: organized ones first, the rest under **Not organized yet**, expanded on demand. Chats likewise.
+- Names allow two lines (documents and meetings differ in the second half of their titles).
+- Document / meeting / event details show time and **Open document** (in-app), with source chat among associations; project associations include documents, meetings and events (up to 30 each, newest first).
+- If a profile is empty after removing content already in the page header, do not show an empty card.

@@ -1,154 +1,154 @@
 # opencode
 
-[opencode](https://opencode.ai) 的会话出现在「Agents」里：herdr 窗格里的 opencode 是 herdr 会话（状态、终端、按键、标签都是 herdr 的），
-装了 Persona 的 opencode 插件以后还有对话内容（文字、思考、工具调用和结果、图片）、逐字输出、从手机发消息、中断、改名，
-以及在手机上批准 opencode 的权限请求。没装插件时照样列出，只有终端。
+[opencode](https://opencode.ai) sessions show up in **Agents**: opencode in a herdr pane is a herdr session (state, terminal, keys and tabs all belong to herdr).
+With Persona's opencode plugin installed, it also has chat content (text, thinking, tool calls and results, images), streaming output, sending messages from the phone, interrupt, rename,
+and approving opencode's permission requests on the phone. Without the plugin it is still listed, terminal only.
 
-2026-11-05 起支持（issue #3070，关联 #1178）。opencode 是第三个按 runtime 规范接入的 herdr 里的 Agent（`docs/runtimes.md`，前面是 pi：`docs/pi.md`）：
-`integrations/opencode/` 是一个 opencode 插件，建在 `integrations/runtime-sdk/` 上；node 一侧是 `server/internal/node/opencode.go`。
+Supported since 2026-11-05 (issue #3070, related #1178). opencode is the third Agent inside herdr integrated per the runtime spec (`docs/runtimes.md`; before it came pi: `docs/pi.md`):
+`integrations/opencode/` is an opencode plugin built on `integrations/runtime-sdk/`; the node side is `server/internal/node/opencode.go`.
 
-| opencode 跑在哪 | 在 Persona 里是 | 谁负责什么 |
+| Where opencode runs | What it is in Persona | Who handles what |
 | --- | --- | --- |
-| **herdr 的窗格里**（opencode 的 TUI，连着共用的 `opencode serve`） | herdr 的会话，和 herdr 里的 Claude 一样 | 窗格、空间、标签、状态、终端画面、按键：herdr；对话内容、发消息、中断、改名、卡片、逐字：服务进程里的 Persona 插件 |
-| 不在 herdr 里（网页、`opencode run`、别的终端连着同一个服务） | runtime `opencode-<pid>` 的会话（`source_kind: "runtime"`） | 插件；没有终端画面 |
-| herdr 窗格里、没装插件 | herdr 的会话，只有终端 | 对话是一条说明，发消息被拒（`opencode_no_extension`），中断按 Esc |
+| **In a herdr pane** (opencode's TUI, connected to the shared `opencode serve`) | A herdr session, same as Claude in herdr | Pane, space, tab, state, terminal view, keys: herdr; chat content, sending, interrupt, rename, cards, streaming: the Persona plugin in the server process |
+| Not in herdr (web, `opencode run`, another terminal connected to the same server) | A session of runtime `opencode-<pid>` (`source_kind: "runtime"`) | The plugin; no terminal view |
+| In a herdr pane, plugin not installed | A herdr session, terminal only | The chat is a single explanatory note, sending is rejected (`opencode_no_extension`), interrupt presses Esc |
 
-## 结构
+## Structure
 
 ```
- App ── hub ── node ── ~/.persona/runtime.sock ◄── Persona 插件（每个 opencode 服务进程一条连接，runtime `opencode-<pid>`）
-                │                                      · 列表、对话：只读 opencode.db
-                │                                      · 实时：服务进程的事件流
-                │                                      · 控制：插件上下文里的 session.prompt / interrupt / update、permission.reply
-                └─ herdr ── 窗格里的 opencode TUI（herdr 自己的 opencode 插件报状态、会话 id、标题）
+ App ── hub ── node ── ~/.persona/runtime.sock ◄── Persona plugin (one connection per opencode server process, runtime `opencode-<pid>`)
+                │                                      · list, chat: read-only opencode.db
+                │                                      · live: the server process's event stream
+                │                                      · control: session.prompt / interrupt / update, permission.reply in the plugin context
+                └─ herdr ── opencode TUI in the pane (herdr's own opencode plugin reports state, session id, title)
 ```
 
-- **一个服务进程一条连接**：opencode 把所有 TUI 接到同一个 `opencode serve --service` 上，插件跑在这个进程里，**每个项目目录（location）加载一次**
-  （收到该目录的第一个请求时才加载）。所以同一个进程里有很多个插件实例，每个只带自己目录的上下文。插件在 `globalThis` 里留一个宿主，
-  每个目录的实例把上下文登记进去；事件流是服务器范围的（每个实例收到的是同样的事件），只由其中一个（primary）读，它走了换下一个，事件按 id 去重。
-- **herdr 的一行怎么对上插件的一行**：herdr 的 opencode 插件在窗格里报 `agent_session`（就是 opencode 的会话 id，`ses_…`），标题是 `OC | <标题>`。
-  node 用会话 id 把 herdr 的行和插件列的行并成一行（`mergeOpencodeRow`）：标题（插件的是完整标题，herdr 的会被截断）、最后一句、模型、上下文用量、修订号取插件的，
-  状态取 herdr 的（插件说 `blocked` 时也算「需要你」）。herdr 没报会话 id 的窗格（旧版集成；服务进程里的插件不知道窗格）不会消失：
-  列成 `opencode-<窗格>` 的只有终端的行（和下面「其他 agent 的终端行」一样）。
-  这一行是 herdr 的（`source_kind` 为空、有终端）；插件列的那一行不再单独出现。调用按类型分：`session.keys` / `screen` / 终端 / 标签给 herdr，
-  其余（内容、发送、中断、改名、卡片）给插件。
-- **标题**：herdr 的 `OC | ` 前缀去掉；还没生成标题时 opencode 的终端标题就是 `OpenCode`，不当作标题。
-- **通知**：状态来自 herdr，「需要你」「完成」的判断和推送是 hub 现有的逻辑（按会话状态的变化，和 Claude 的 herdr 会话一样），不为 opencode 另写。
+- **One connection per server process**: opencode attaches every TUI to the same `opencode serve --service`. The plugin runs in that process and **is loaded once per project directory (location)**
+  (only when the first request for that directory arrives). So one process holds many plugin instances, each carrying only its own directory's context. The plugin keeps a host in `globalThis`,
+  and each directory's instance registers its context there. The event stream is server-wide (every instance receives the same events), so only one of them (the primary) reads it; when it goes away the next one takes over, and events are deduplicated by id.
+- **How a herdr row matches a plugin row**: herdr's opencode plugin reports `agent_session` in the pane (that is opencode's session id, `ses_…`), with the title `OC | <title>`.
+  node merges the herdr row and the plugin's row into one by session id (`mergeOpencodeRow`): title (the plugin's is complete, herdr's gets truncated), last line, model, context usage and revision come from the plugin;
+  state comes from herdr (when the plugin says `blocked`, it also counts as "Needs you"). Panes for which herdr reports no session id (older integration; the plugin in the server process does not know about panes) do not disappear:
+  they are listed as terminal-only rows `opencode-<pane>` (same as "Terminal rows for other agents" below).
+  This row belongs to herdr (empty `source_kind`, has a terminal); the plugin's row no longer appears separately. Calls are routed by type: `session.keys` / `screen` / terminal / tabs go to herdr,
+  everything else (content, sending, interrupt, rename, cards) goes to the plugin.
+- **Title**: herdr's `OC | ` prefix is stripped; before a title is generated, opencode's terminal title is just `OpenCode`, which is not treated as a title.
+- **Notifications**: state comes from herdr; deciding "Needs you" / "done" and pushing use the hub's existing logic (driven by session state changes, same as Claude's herdr sessions), nothing separate for opencode.
 
-## 其他 agent 的终端行
+## Terminal rows for other agents
 
-以前 node 对 herdr 报的、自己不认识的 agent（`gemini`、`amp`……）一律丢掉（`if a.Agent != "claude" { continue }`），手机上看不见这个窗格。
-现在 herdr 报了 agent 但 Persona 没有读它对话的办法时，**列成只有终端的行**（`otherAgent`）：窗格、空间、标签、状态、标题都是 herdr 的，
-会话 id 是 `<agent>-<窗格>`（agent 自己的会话 id 用不上，这一行就是这个窗格），对话是一条说明「Persona 还不能读 <agent> 的对话」，发消息被拒（`terminal_only`，不往不认识的 TUI 里盲打字），
-终端画面和按键照常（herdr 的）。理由：用户在 herdr 里开了什么 agent，手机上就该看得到它在不在等你，不能悄悄消失；它的状态本来就是 herdr 报的，成本只是多一行。
-herdr 没报 agent 的窗格（`agent: ""`）、botmux 的窗格仍然不列。这一行不能关闭（没有可恢复的会话，`session.retire` 拒绝）。
+node used to drop every agent herdr reported that it did not recognize (`gemini`, `amp`…) (`if a.Agent != "claude" { continue }`), so the pane was invisible on the phone.
+Now, when herdr reports an agent but Persona has no way to read its chat, it is **listed as a terminal-only row** (`otherAgent`): pane, space, tab, state and title are herdr's,
+the session id is `<agent>-<pane>` (the agent's own session id is of no use; this row is the pane), the chat is a single note "Persona can't read <agent>'s chat yet", sending is rejected (`terminal_only`; no blind typing into an unknown TUI),
+and the terminal view and keys work as usual (herdr's). Reason: whatever agent the user opened in herdr, the phone should show whether it is waiting for you, not let it quietly disappear; its state is reported by herdr anyway, so the cost is just one more row.
+Panes for which herdr reports no agent (`agent: ""`) and botmux panes are still not listed. This row cannot be closed (there is no session to resume; `session.retire` refuses).
 
-## 对话从哪来
+## Where the chat comes from
 
-opencode 的插件接口给的是会话的 context（压缩之后留下的那部分）和事件流，**没有会话列表，也没有完整的消息读取**；opencode 自己的数据库 `opencode.db`
-（SQLite，WAL）有全部：`session_v2`（会话：目录、标题、模型、`parent_id`、`revert`……）和 `session_message`（消息：`type`、事件日志里的 `seq`、`data` JSON）。所以：
+opencode's plugin API provides the session's context (what remains after compaction) and the event stream, **but no session list and no full message read**. opencode's own database `opencode.db`
+(SQLite, WAL) has everything: `session_v2` (sessions: directory, title, model, `parent_id`, `revert`…) and `session_message` (messages: `type`, `seq` from the event log, `data` JSON). So:
 
-- 列表和对话**只读**这个数据库（`file:…?mode=ro`、`PRAGMA query_only`、300 ms 的 busy timeout，查询都走 `(session_id, seq)` 索引）；在 opencode 自己的进程里用 `bun:sqlite`，
-  测试里用 `node:sqlite`。永远不写、不长时间占着。位置按 `$XDG_DATA_HOME/opencode/opencode.db`（默认 `~/.local/share/opencode`），`PERSONA_OPENCODE_DB` 可以指到别处。
-  数据库打不开时列表为空、翻页为空，发送 / 中断 / 改名 / 卡片照常（它们走插件接口）。
-  数据库里没有的会话翻页回 `not_found`：node 会拿没人列过的会话挨个问各个 runtime（`session.items {limit: 1}`），答得上来的就归它，回空页就会把 DSH、pi 的会话认成 opencode 的。
-- 实时的事情（一轮开始 / 结束、文字、权限）来自插件的事件流（`ctx.event.subscribe`）：`session.execution.started/succeeded/failed/interrupted`、
-  `session.inbox.enqueued`、`session.text.delta`、`session.step.ended`、`session.tool.success`、`permission.asked/replied`、`form.created/replied`、`session.renamed/deleted`。
-- 控制走插件上下文：`ctx.session.prompt({sessionID, text, files})`、`interrupt({sessionID})`、`update({sessionID, title})`、`ctx.permission.reply({sessionID, requestID, decision})`。
-  这些函数的参数是一个对象，路径参数和请求体并在一起（和 HTTP 接口同名）。HTTP 接口要密码，插件不碰它。
+- The list and the chat **only read** this database (`file:…?mode=ro`, `PRAGMA query_only`, a 300 ms busy timeout, every query uses the `(session_id, seq)` index): `bun:sqlite` inside opencode's own process,
+  `node:sqlite` in tests. Never writes, never holds it for long. Location is `$XDG_DATA_HOME/opencode/opencode.db` (default `~/.local/share/opencode`); `PERSONA_OPENCODE_DB` can point elsewhere.
+  If the database cannot be opened, the list is empty and pages are empty; sending / interrupt / rename / cards still work (they go through the plugin API).
+  Pages for sessions not in the database return `not_found`: node asks each runtime in turn about sessions nobody has listed (`session.items {limit: 1}`) and assigns the session to whichever answers, so returning an empty page would make DSH and pi sessions look like opencode's.
+- Live events (a turn starting / ending, text, permissions) come from the plugin's event stream (`ctx.event.subscribe`): `session.execution.started/succeeded/failed/interrupted`,
+  `session.inbox.enqueued`, `session.text.delta`, `session.step.ended`, `session.tool.success`, `permission.asked/replied`, `form.created/replied`, `session.renamed/deleted`.
+- Control goes through the plugin context: `ctx.session.prompt({sessionID, text, files})`, `interrupt({sessionID})`, `update({sessionID, title})`, `ctx.permission.reply({sessionID, requestID, decision})`.
+  These functions take a single object that combines path parameters and the request body (same names as the HTTP API). The HTTP API needs a password; the plugin does not touch it.
 
-### seq 和「一条消息还在写」
+### seq and "a message still being written"
 
-`session_message.seq` 是 opencode 事件日志里的序号：同一个会话里唯一、只增、**有空洞**（日志里还有别的事件），所以直接当 item 的 seq。
+`session_message.seq` is the sequence number in opencode's event log: unique within a session, only increasing, **with gaps** (the log has other events too), so it is used directly as the item's seq.
 
-- 一条 assistant 消息在这一步里是**原地改写**的（工具调用一个个完成），seq 不变；而 SDK 的 `append` 对 `toSeq <= 已推的` 的批次不再推。
-  所以**只推已经定稿的消息**：`time.completed` 有了（或有 `finish`）才算；中间状态靠逐字文字和「工作中」。定稿的前缀才算会话的内容：`to_seq`、翻页都截到第一条没定稿的消息之前。
-  被打断的一步（没有 `completed`）在一轮结束后 1.5 秒算定稿（`SETTLE_MS`）；服务进程里一直显示在跑却 60 秒没更新的也算（漏了事件）。
-  代价：一步里的工具调用要等这一步结束才出现在对话里（长命令跑的时候手机上看到的是「正在工作…」和逐字文字）。
-- item 的 id 是 `<seq>#<部分序号×2>`，工具结果是 `<seq>#<部分序号×2+1>`：一个结果完成时同一条消息里后面部分的 id 不会移位。
-- 第一次见到一个会话时（它的第一个事件）先记下当时的末尾作为基线，之后只推基线之后定稿的；手机在看的会话才会生成 item，没人看时只更新列表里的修订号。
-- `history` = `opencode:<会话 id>`；用户在 opencode 里回退（`revert` 非空）时加上它的哈希，App 整页重取。
+- An assistant message is **rewritten in place** during its step (tool calls complete one by one) and its seq does not change, while the SDK's `append` no longer pushes batches with `toSeq <= already pushed`.
+  So **only finalized messages are pushed**: a message counts once `time.completed` is set (or it has `finish`); in-between state is covered by streaming text and "working". Only the finalized prefix counts as the session's content: `to_seq` and pagination both stop before the first unfinalized message.
+  An interrupted step (no `completed`) counts as finalized 1.5 seconds after the turn ends (`SETTLE_MS`); so does one the server process shows as running but has not updated for 60 seconds (a missed event).
+  Cost: tool calls in a step only appear in the chat once the step ends (while a long command runs, the phone shows "Working…" and the streaming text).
+- An item's id is `<seq>#<part index×2>` and a tool result's is `<seq>#<part index×2+1>`, so when a result completes, the ids of later parts in the same message do not shift.
+- The first time a session is seen (its first event), the current end is recorded as a baseline, and afterwards only messages finalized after the baseline are pushed. Items are only generated for sessions the phone is viewing; when nobody is viewing, only the revision in the list is updated.
+- `history` = `opencode:<session id>`; when the user reverts in opencode (`revert` non-empty), its hash is appended and the app refetches the whole page.
 
-### 映射
+### Mapping
 
-`integrations/opencode/lib/map.js`，`session_message` → Persona item：
+`integrations/opencode/lib/map.js`, `session_message` → Persona item:
 
 | opencode | Persona |
 | --- | --- |
-| `user`：`text`、`files` | user `text`；图片是占位（`lazy`，数据走 `session.image`），别的文件一行「［附件 名字］」 |
-| `assistant` 的 `reasoning` / `text` / `tool` | `thinking` / `text` / `tool_use`（+ 完成或出错后的 `tool_result`，带 `tool_use_id`、`is_error`） |
-| 工具名和参数（按 Claude 的画法） | `shell`→`Bash`（`command`、`description`）、`read`→`Read`（`path`→`file_path`）、`write`→`Write`、`edit`→`Edit`（`oldString`/`newString`→`old_string`/`new_string`）、`grep`→`Grep`、`glob`→`Glob`、`subagent`→`Agent`、`webfetch`→`WebFetch`、`websearch`→`WebSearch`、`skill`→`Skill`，别的（`patch`、`execute`……）用原名 |
-| `finish: error` / 被打断（`error.type: aborted`） | notice「出错了：…」/「已中断」 |
-| `finish: length` / `content-filter`（输出达到上限 / 被内容过滤拦下） | notice「输出达到上限，这一轮停了」/「这一轮被拦下了」 |
-| `idle`（`outcome: interrupted`） | notice「已中断」 |
-| `compaction` | notice「已压缩上下文」 |
-| 用户用 `!` 跑的命令（`shell`） | 一对 `Bash` 的 `tool_use` + `tool_result` |
-| `system`、`synthetic`、模型 / agent / 目录切换 | 不出 item（seq 照样往前走） |
+| `user`: `text`, `files` | user `text`; images are placeholders (`lazy`, data via `session.image`), other files become one line `［附件 名字］` ("[attachment name]") |
+| `assistant`'s `reasoning` / `text` / `tool` | `thinking` / `text` / `tool_use` (+ `tool_result` once completed or failed, with `tool_use_id`, `is_error`) |
+| Tool names and arguments (drawn the Claude way) | `shell`→`Bash` (`command`, `description`), `read`→`Read` (`path`→`file_path`), `write`→`Write`, `edit`→`Edit` (`oldString`/`newString`→`old_string`/`new_string`), `grep`→`Grep`, `glob`→`Glob`, `subagent`→`Agent`, `webfetch`→`WebFetch`, `websearch`→`WebSearch`, `skill`→`Skill`; others (`patch`, `execute`…) keep their names |
+| `finish: error` / interrupted (`error.type: aborted`) | notice `出错了：…` ("Error: …") / `已中断` ("Interrupted") |
+| `finish: length` / `content-filter` (output hit the limit / blocked by the content filter) | notice `输出达到上限，这一轮停了` ("Output hit the limit; this turn stopped") / `这一轮被拦下了` ("This turn was blocked") |
+| `idle` (`outcome: interrupted`) | notice `已中断` ("Interrupted") |
+| `compaction` | notice `已压缩上下文` ("Context compacted") |
+| Commands the user runs with `!` (`shell`) | A `Bash` `tool_use` + `tool_result` pair |
+| `system`, `synthetic`, model / agent / directory switches | No item (seq still advances) |
 
-子 agent（`subagent` 工具开的子会话，`parent_id` 非空）不单列成会话；它们的权限请求算根会话的（卡片和「需要你」都在根会话上），别的事件忽略。
+Sub-agents (child sessions opened by the `subagent` tool, non-empty `parent_id`) are not listed as separate sessions; their permission requests count toward the root session (the card and "Needs you" are on the root session), and their other events are ignored.
 
-## 权限和提问
+## Permissions and questions
 
-- **权限**（`permission.asked`：`action` 是 `shell` / `edit` / `read`…，`resources` 是命令或路径，`save` 是「总是允许」会记下的规则）：
-  手机先答的话（`answerFirst`：`auto` = 手机最近 6 小时驱动过这个会话就先给手机，否则先给 opencode 的 TUI；`phone` / `local` 固定一边）
-  卡片是 runtime 自己的（`agent: "opencode"`），工具名按 Claude 的画法（`Bash`、`Edit`…）；允许 = `once`；带 `save` 的卡有「总是允许 <规则>」= `always`；
-  拒绝带理由时理由一起交给 opencode（`message`）。TUI 里的对话框一直在，**谁先答谁算**：TUI 里先答了，`permission.replied` 到了就撤掉手机上的卡；
-  手机上点「交回电脑」不回答。会话「需要你」的状态在等的时候由插件报 `blocked`。
-- **提问**（`form.created`，opencode 的 question 工具）：插件接口回答不了表单，**交回终端**——会话报 `blocked`（「需要你」），在 herdr 的终端里答。
-  回答表单要走 HTTP 接口（要服务的密码），插件不去读密码文件，所以不做。以后 opencode 开放了插件接口再接。
+- **Permissions** (`permission.asked`: `action` is `shell` / `edit` / `read`…, `resources` is the command or path, `save` is the rule "always allow" would record):
+  if the phone answers first (`answerFirst`: `auto` = to the phone first if it drove this session within the last 6 hours, otherwise to opencode's TUI first; `phone` / `local` pin one side),
+  the card belongs to the runtime itself (`agent: "opencode"`), with tool names drawn the Claude way (`Bash`, `Edit`…). Allow = `once`; a card with `save` has "Always allow <rule>" = `always`;
+  a deny with a reason passes the reason to opencode as well (`message`). The dialog in the TUI stays up, and **whoever answers first wins**: if the TUI answers first, the card on the phone is withdrawn when `permission.replied` arrives;
+  tapping "Hand back to computer" on the phone does not answer. While waiting, the plugin reports `blocked` for the session's "Needs you" state.
+- **Questions** (`form.created`, opencode's question tool): the plugin API cannot answer forms, so it is **handed back to the terminal**: the session reports `blocked` ("Needs you") and you answer in herdr's terminal.
+  Answering a form needs the HTTP API (which needs the server's password), and the plugin does not read the password file, so this is not done. To be added once opencode exposes it in the plugin API.
 
-## 安装
+## Installation
 
-在跑 opencode 的那台电脑上（这台电脑要在 hub 的机器列表里，node 要能起来）。
+On the computer that runs opencode (it must be in the hub's machine list, and node must be able to start).
 
-1. `node <Persona 仓库>/integrations/opencode/install.mjs`：在 opencode 配置目录（`$XDG_CONFIG_HOME/opencode`，默认 `~/.config/opencode`，`--config-dir` 可改）的 `plugins/` 里
-   写一个 `persona.js`，只有一行 `export { default } from "<仓库>/integrations/opencode/index.js"`（所以更新检出目录就是更新插件）。
-   已有一个不是它写的同名文件时拒绝，`--force` 覆盖；`--uninstall` 删掉。opencode 自己会加载 `plugins/*.js`，不用改 `opencode.json`。
-2. 重启 opencode 服务（`opencode serve --service` 那个进程）一次：插件在服务进程里，已经开着的服务不会自己加载新插件。重启服务会让连着它的 TUI 断一下，按你平时的做法重启。
-3. herdr 的 opencode 集成（`herdr integration install opencode`）：报状态、会话 id、标题。已经装了的不用动。
+1. `node <Persona repo>/integrations/opencode/install.mjs`: in `plugins/` under the opencode config directory (`$XDG_CONFIG_HOME/opencode`, default `~/.config/opencode`, changeable with `--config-dir`),
+   it writes a `persona.js` with a single line `export { default } from "<repo>/integrations/opencode/index.js"` (so updating the checkout updates the plugin).
+   It refuses if a file with the same name exists that it did not write; `--force` overwrites, `--uninstall` removes it. opencode loads `plugins/*.js` by itself, so `opencode.json` needs no change.
+2. Restart the opencode server (the `opencode serve --service` process) once: the plugin runs in the server process, and a server that is already running will not load a new plugin by itself. Restarting the server briefly disconnects the TUIs attached to it; restart it the way you usually do.
+3. herdr's opencode integration (`herdr integration install opencode`): reports state, session id and title. Leave it alone if already installed.
 
-别的 opencode 插件（通知类的）同时订阅事件流互不影响。
+Other opencode plugins (notification ones) can subscribe to the event stream at the same time without interfering.
 
-### 配置（可选）
+### Configuration (optional)
 
-`<opencode 配置目录>/persona.json`：
+`<opencode config directory>/persona.json`:
 
-| 字段 | 默认 | 说明 |
+| Field | Default | Description |
 | --- | --- | --- |
-| `answerFirst` | `auto` | 权限卡先给谁（见上） |
-| `listDays` | `7` | 没在跑的会话列最近几天的（手机碰过的、在跑的、等着的一定列） |
-| `maxSessions` | `80` | 列表最多多少个 |
-| `socket` | `~/.persona/runtime.sock` | node 的 runtime socket；`PERSONA_RUNTIME_SOCKET`（兼容 `JARVIS_RUNTIME_SOCKET`）也行 |
+| `answerFirst` | `auto` | Who gets the permission card first (see above) |
+| `listDays` | `7` | How many recent days of non-running sessions to list (sessions the phone touched, running ones and waiting ones are always listed) |
+| `maxSessions` | `80` | Maximum list length |
+| `socket` | `~/.persona/runtime.sock` | node's runtime socket; `PERSONA_RUNTIME_SOCKET` (compatible with `JARVIS_RUNTIME_SOCKET`) also works |
 
-环境变量：`PERSONA_OPENCODE_DB`（opencode.db 的位置）、`PERSONA_OPENCODE_DEBUG=1`（插件的日志打到 stderr，在 opencode 服务的输出里看）。
+Environment variables: `PERSONA_OPENCODE_DB` (location of opencode.db), `PERSONA_OPENCODE_DEBUG=1` (plugin logs to stderr, visible in the opencode server's output).
 
-## 限制和以后
+## Limits and later
 
-- 只有装了插件的服务进程里的会话；一个服务进程的列表是数据库里最近的根会话（别的服务进程跑着的会话也在库里，会被列成空闲，
-  node 选正在跑它的那个 runtime；一般只有一个共用的服务）。
-- 一步里的工具调用要等这一步结束才出现在对话里（见上「seq」）。
-- 提问（`form.created`）和 opencode 的 plan 模式不能在手机上答，交回终端。
-- 不能从手机新建 opencode 会话 / 在 herdr 里开新窗格（没有 `start`）；停了的 herdr 会话也不能从手机接着（没有 `resume_argv`）。
-- 权限模式、思考强度、换模型：插件没有 `modes`，手机上的这几个选择器对 opencode 会话回「不支持」。
-- 自动更新（像 pi 那样把包打进 personad、node 带新版本）没做：插件是检出目录里的一个文件，`git pull` 之后重启服务就换上。以后要做时在 `runtimepkg.Packages` 和 SDK 的 `PACKAGES` 里登记。
+- Only sessions in server processes that have the plugin installed. A server process's list is the most recent root sessions in the database (sessions run by other server processes are in the database too and get listed as idle;
+  node picks the runtime that is actually running it; usually there is only one shared server).
+- Tool calls in a step only appear in the chat once the step ends (see "seq" above).
+- Questions (`form.created`) and opencode's plan mode cannot be answered on the phone; they are handed back to the terminal.
+- Cannot create an opencode session / open a new pane in herdr from the phone (no `start`); a stopped herdr session cannot be continued from the phone either (no `resume_argv`).
+- Permission mode, thinking effort, model switching: the plugin has no `modes`, so these pickers on the phone reply "not supported" for opencode sessions.
+- Auto-update (bundling the package into personad and shipping new versions with node, as pi does) is not done: the plugin is a file in the checkout; after `git pull`, restart the server to pick it up. When this gets done, register it in `runtimepkg.Packages` and the SDK's `PACKAGES`.
 
-## 踩过的坑
+## Pitfalls
 
-- **`setup` 要马上返回**。opencode 在请求里等「Location plugins did not finish activating」；在 `setup` 里 `await` 事件循环会让这个目录的所有请求 503。事件循环放后台（`void`）。
-- **`setup` 要返回清理函数**，并让事件订阅跟着中止（`ctx.event.subscribe({signal})`）：服务进程收到 SIGINT 时等插件清理，订阅不停它会一直挂在那，只能 `kill -9`。
-- **事件流是服务器范围的，每个目录的实例都会收到每个事件**（有几个实例就重复几遍）：按事件 `id` 去重，别在每个实例里各处理一遍。
-- 插件上下文的函数是从 HTTP 接口生成的，参数是**一个对象**（路径参数 + 查询 + 请求体合并），不是位置参数。
-- `ctx.session.get` 的 `time.idle` 比 `time.updated` 旧就是在跑（只在刚见到一个会话时用来猜）。
-- 默认的公共模型在有些地区 403（`This model is not available in your country`）：端到端用脚本化的假模型（`e2e/mock-llm.mjs`），配成一个自定义 provider。
-- v2 的配置键是 `providers` / `permissions` / `plugins`（不是 v1 的 `provider`），插件的类型包 `@opencode-ai/plugin` 1.x 里没有 v2 的 `session` / `event` / `permission`：以运行时探测为准。
+- **`setup` must return immediately.** opencode makes requests wait on "Location plugins did not finish activating"; `await`ing the event loop inside `setup` makes every request for that directory return 503. Run the event loop in the background (`void`).
+- **`setup` must return a cleanup function**, and the event subscription must abort with it (`ctx.event.subscribe({signal})`): on SIGINT the server process waits for plugins to clean up, and if the subscription does not stop it hangs there until `kill -9`.
+- **The event stream is server-wide; every directory's instance receives every event** (repeated once per instance): dedupe by event `id`; don't process it in every instance.
+- The plugin context's functions are generated from the HTTP API, and take **a single object** (path parameters + query + body merged), not positional arguments.
+- If `ctx.session.get`'s `time.idle` is older than `time.updated`, it is running (only used as a guess when a session is first seen).
+- The default public models return 403 in some regions (`This model is not available in your country`): end-to-end tests use a scripted fake model (`e2e/mock-llm.mjs`), configured as a custom provider.
+- v2's config keys are `providers` / `permissions` / `plugins` (not v1's `provider`), and the plugin type package `@opencode-ai/plugin` 1.x has no v2 `session` / `event` / `permission`: trust runtime probing.
 
-## 验证
+## Verification
 
-- `cd integrations/opencode && npm test`：映射（工具名和参数、id 不随结果移位、出错 / 打断 / 压缩 / 用户 shell）、列表（根会话、归档、过期、模型窗口、上下文用量）、翻页（按轮、往前往后、定稿截断）、
-  发送（按 `client_msg_id` 只发一次、图片、按目录选上下文）、中断、改名、推送连续性和逐字、事件去重和 primary 交接、权限卡（允许 / 总是 / 拒绝带理由 / 交回 / TUI 先答）、子 agent 的权限、没有数据库、安装脚本。
-- node：`server/internal/node/opencode_test.go`（假 herdr）：一行 herdr 会话、状态取 herdr 的 / 插件加 blocked、靠插件的窗格认会话、没装插件、其他 agent 的终端行、标题前缀。
-- 端到端：`JARVISD=<personad> node integrations/opencode/e2e/run.mjs`：真的 `opencode serve`（临时的配置 / 数据 / 状态目录，插件由 `install.mjs` 装上）、脚本化的假模型、
-  真的 `personad node` 当 hub：插件连上并列出会话、发消息得到回答、重发只进一次、权限卡到手机并允许 / 带理由拒绝、逐字、中断、改名、翻页、服务退出后会话消失。2026-11-05：16/16（opencode 2.0.32）。
-- 网页：`MOCK_OPENCODE=1` 的假 hub + `scripts/test/web_opencode_e2e.py`：侧边栏里的 opencode 会话和没装插件 / 不认识的 agent 的终端行、对话里的工具调用、权限卡（宽屏 / 窄屏 × 浅色 / 深色）。
-- 没验证的：真的 herdr 里的 TUI 和 herdr 的 opencode 插件一起跑（用的是 herdr 报的数据的样子，不是现场的）、用户自己的 `opencode serve --service`（没有往它的配置里装过）、
-  真模型的长对话（压缩、很长的工具输出）。
+- `cd integrations/opencode && npm test`: mapping (tool names and arguments, ids not shifting with results, error / interrupt / compaction / user shell), list (root sessions, archived, expired, model window, context usage), pagination (by turn, backward and forward, truncation at finalized messages),
+  sending (once per `client_msg_id`, images, picking the context by directory), interrupt, rename, push continuity and streaming, event dedup and primary handover, permission cards (allow / always / deny with reason / hand back / TUI answers first), sub-agent permissions, no database, install script.
+- node: `server/internal/node/opencode_test.go` (fake herdr): a single herdr session row, state from herdr / plugin adds blocked, identifying the session from the plugin's pane, plugin not installed, terminal rows for other agents, title prefix.
+- End to end: `JARVISD=<personad> node integrations/opencode/e2e/run.mjs`: a real `opencode serve` (temporary config / data / state directories, plugin installed by `install.mjs`), a scripted fake model,
+  a real `personad node` acting as hub: the plugin connects and lists sessions, sending a message gets an answer, a resend goes in only once, the permission card reaches the phone and is allowed / denied with a reason, streaming, interrupt, rename, pagination, sessions disappear after the server exits. 2026-11-05: 16/16 (opencode 2.0.32).
+- Web: fake hub with `MOCK_OPENCODE=1` + `scripts/test/web_opencode_e2e.py`: opencode sessions in the sidebar and terminal rows for plugin-less / unknown agents, tool calls in the chat, permission cards (wide / narrow × light / dark).
+- Not verified: a real TUI in herdr running together with herdr's opencode plugin (tests use the shape of the data herdr reports, not a live one), the user's own `opencode serve --service` (never installed into its config),
+  long chats with a real model (compaction, very long tool output).

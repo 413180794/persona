@@ -1,211 +1,211 @@
-# 计划：支持 Antigravity（issue #281）
+# Plan: Antigravity support (issue #281)
 
-状态：第 0 步调研，**等维护者定**（见文末「需要维护者定的点」）。第 1、2 步还没人认领，定下来以后再动代码。
-定了以后这份计划改成实施顺序，做完把设计部分并进新的 Antigravity 文档（docs/antigravity.md）和 `docs/assistant.md`，删掉这份。
+Status: step 0, research; **waiting on the maintainer** (see "Points for the maintainer to decide" at the end). Steps 1 and 2 are unclaimed; code changes wait until this is decided.
+Once decided, this plan becomes an implementation order; when done, the design parts move into a new Antigravity doc (docs/antigravity.md) and `docs/assistant.md`, and this file is deleted.
 
-## 结论先说
+## Conclusions first
 
-- **Antigravity 有两样东西**：桌面 App（Antigravity 2.0 / IDE，会话在 `~/.gemini/antigravity`）和 **Antigravity CLI（`agy`）**。
-  能让外部程序接入的口子都在 CLI 上，这份计划只谈 CLI；桌面 App 没有公开的本地接口，只有 Google 自己的 Remote Control 网页能远程用它 [D7]。
-- **`agy` 有 TUI，是 herdr 里的一种 Agent，不是 runtime**。herdr 0.9.5 已经内置了 `agy` 的识别规则（工作中 / 授权框 / 提问框 / 信任目录框）和一个只报会话 id 的集成 hook [L3]。
-  但「从手机新建、离线后接着、助手」这些没有终端的场景，`agy acp`（1.5.0 起的 ACP 服务）几乎是一个现成的 runtime 后端：流式、续聊、中断、插话、授权请求、提问表单、图片都有 [D4][C1]。
-  所以建议**两条路并用**，结构照 pi（`docs/pi.md`）：herdr 窗格里的 `agy` 归 herdr，没有终端的会话归一个伴随进程 runtime，它背后跑 `agy acp`。
-- **无头调用选 `agy acp`，不选 `agy -p`**。`-p --output-format stream-json` 能常驻、能流式、能续聊，但没有中断和插话的控制消息、输入只收文字、要人批准的调用一律「软拒绝」不会问出来 [D3]，
-  手机审批只能靠 hook 绕。ACP 这几样都有。
-- **最大的风险是账号条款**，不是技术：官方 FAQ 写明个人计划下「把 `agy` 包进第三方应用」不受支持，用第三方工具访问 Antigravity 违反条款、可能封号；
-  第三方接入建议用 Gemini Enterprise 或 AI Studio 的 API key [D1][F1]。Persona 就是第三方应用。要不要接个人账号，需要维护者定。
+- **Antigravity is two things**: the desktop app (Antigravity 2.0 / IDE, sessions in `~/.gemini/antigravity`) and the **Antigravity CLI (`agy`)**.
+  Every hook point an external program can use is on the CLI, so this plan only covers the CLI; the desktop app has no public local interface, and only Google's own Remote Control web page can drive it remotely [D7].
+- **`agy` has a TUI, so it is an Agent inside herdr, not a runtime**. herdr 0.9.5 already ships detection rules for `agy` (working / permission dialog / question dialog / trust-folder dialog) and an integration hook that only reports the session id [L3].
+  But for the terminal-less cases ("start from the phone", "continue after going offline", the assistant), `agy acp` (the ACP server since 1.5.0) is almost a ready-made runtime backend: streaming, resume, interrupt, mid-turn messages, permission requests, question forms and images are all there [D4][C1].
+  So the recommendation is **both paths together**, structured like pi (`docs/pi.md`): `agy` in a herdr pane belongs to herdr; terminal-less sessions belong to a companion-process runtime that runs `agy acp` behind it.
+- **For headless use, pick `agy acp`, not `agy -p`**. `-p --output-format stream-json` can stay resident, stream and resume, but has no control messages for interrupting or mid-turn messages, only takes text input, and "soft-denies" every call that needs human approval instead of asking [D3],
+  so phone approval could only be hacked in via hooks. ACP has all of these.
+- **The biggest risk is the account terms**, not the technology: the official FAQ says that on personal plans "wrapping `agy` in a third-party application" is unsupported, that accessing Antigravity through third-party tools violates the terms and may get the account banned,
+  and recommends Gemini Enterprise or AI Studio API keys for third-party integrations [D1][F1]. Persona is a third-party application. Whether to support personal accounts is for the maintainer to decide.
 
-## 调研怎么做的
+## How the research was done
 
-- 本机：`agy` 1.4.10（macOS arm64），**只读**看了 `--help` 和各子命令的 help、`~/.gemini/antigravity-cli/` 的目录结构、SQLite 表结构、`transcript.jsonl` 的字段名
-  （统计字段和工具名，没有读对话正文）、二进制里的字符串（RPC 方法名、环境变量名）。没有登录、没有起 agy 会话、没有跑 `agy models`（要联网带凭据）、没有读 token 文件。
-- 本机这版没有 `acp` 子命令（`agy acp --help` 打出的是主帮助），ACP 是 1.5.0 加的 [C1]。所以 ACP 那一列全部来自官方文档，**没有实测**。
-- 外部资料：antigravity.google 的官方文档、GitHub 上的 CHANGELOG 和 issue、Google AI 开发者论坛。出处编号在文末。
+- Locally: `agy` 1.4.10 (macOS arm64), **read-only**: looked at `--help` and each subcommand's help, the directory layout of `~/.gemini/antigravity-cli/`, the SQLite schema, the field names in `transcript.jsonl`
+  (stats fields and tool names; no chat bodies read), and strings in the binary (RPC method names, environment variable names). Did not log in, did not start an agy session, did not run `agy models` (needs network and credentials), did not read token files.
+- This local version has no `acp` subcommand (`agy acp --help` prints the main help); ACP was added in 1.5.0 [C1]. So the whole ACP column comes from the official docs and was **not tested**.
+- External sources: the official docs on antigravity.google, the CHANGELOG and issues on GitHub, the Google AI developer forum. Source numbers are at the end.
 
-## 1. 能接入的口子
+## 1. Integration points
 
-| 口子 | 是什么 | 能拿来做什么 | 出处 |
+| Point | What it is | What it can be used for | Source |
 | --- | --- | --- | --- |
-| 交互 TUI（`agy`） | 终端里的全屏界面 | 放进 herdr 窗格；herdr 认得它的状态和对话框 | [L1][L3] |
-| 无头（`agy -p`） | 一次一个提示词；`--input-format stream-json` 时一个进程里多轮 | 流式文字、工具调用事件；续聊用 `--conversation <id>` | [D3][L1] |
-| ACP（`agy acp`，≥ 1.5.0） | stdio 上的 JSON-RPC，Agent Client Protocol v1，给 Zed / JetBrains / Xcode 这类编辑器用 | 会话的新建 / 载入 / 续上 / 列出 / 关闭、流式、插话、取消、授权请求、提问表单、图片、模型和思考强度、`default` / `accept-edits` / `plan` 三种模式 | [D4][D5][C1] |
-| hooks | `SessionStart`、`PreToolUse`、`PostToolUse`、`PreInvocation`、`PostInvocation`、`Stop`；命令型，stdin 进 JSON、stdout 出决定 | `PreToolUse` 能 `allow` / `auto_approve` / `deny`（带 `reason`）/ `ask` / `force_ask`，还能 `overwrite` 改参数；`SessionStart` / `PreInvocation` 能注入消息 | [D6] |
-| MCP | `~/.gemini/config/mcp_config.json`（全局）、`<工作目录>/.agents/mcp_config.json`（工作目录）、插件里的 | 挂 Persona 的工具（`ask_user` 等）；`timeoutSeconds: -1` 关掉超时 | [D8] |
-| 插件 | `agy plugin install`，打包 hooks、MCP、skills、rules、子 Agent | 一次装好 Persona 要的 hook 和 MCP；`agy plugin import claude` 能导入 Claude Code 插件 | [L1][C1] |
-| 规则和 skill | `AGENTS.md` / `GEMINI.md` / `.agents/rules/`；`.agents/skills/` | 助手目录现成的 `AGENTS.md` 和 `.agents/skills/` 它都认 | [D10][D11] |
-| Remote Control | `agy --remote-control` / `agy remote-control start`：反向隧道到 Google 的网页控制台 | 只给 Google 自己的网页用，没有给第三方的接口；不用 | [D7] |
-| 内部 language server | 二进制里有 `LanguageServerService` 的几百个 gRPC 方法（`StartCascade`、`HandleCascadeUserInteraction`、`StreamCascadeReactiveUpdates`…），要 `ANTIGRAVITY_LS_ADDRESS` 和 CSRF token | 私有接口、没文档、跟版本变；论坛里也说直接调后端不受支持。**不用** | [L2][F2] |
-| Python SDK（`google-antigravity`） | 自己写 Agent 的库，只认 `GEMINI_API_KEY` 或 Vertex | 跟用户电脑上的 `agy` 会话无关，不适合「Agents」tab；助手可以算一个备选，但要重写一套工具和权限 | [D9] |
+| Interactive TUI (`agy`) | Full-screen terminal UI | Goes in a herdr pane; herdr recognizes its states and dialogs | [L1][L3] |
+| Headless (`agy -p`) | One prompt at a time; multiple turns in one process with `--input-format stream-json` | Streaming text, tool call events; resume with `--conversation <id>` | [D3][L1] |
+| ACP (`agy acp`, ≥ 1.5.0) | JSON-RPC over stdio, Agent Client Protocol v1, for editors like Zed / JetBrains / Xcode | Create / load / resume / list / close sessions, streaming, mid-turn messages, cancel, permission requests, question forms, images, model and thinking effort, three modes `default` / `accept-edits` / `plan` | [D4][D5][C1] |
+| hooks | `SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`; command-type, JSON on stdin, decision on stdout | `PreToolUse` can `allow` / `auto_approve` / `deny` (with `reason`) / `ask` / `force_ask`, and can `overwrite` arguments; `SessionStart` / `PreInvocation` can inject messages | [D6] |
+| MCP | `~/.gemini/config/mcp_config.json` (global), `<workdir>/.agents/mcp_config.json` (workdir), and those in plugins | Mount Persona's tools (`ask_user` etc.); `timeoutSeconds: -1` disables the timeout | [D8] |
+| Plugins | `agy plugin install`, bundling hooks, MCP, skills, rules, sub-Agents | Install Persona's hooks and MCP in one go; `agy plugin import claude` can import Claude Code plugins | [L1][C1] |
+| Rules and skills | `AGENTS.md` / `GEMINI.md` / `.agents/rules/`; `.agents/skills/` | It recognizes the assistant directory's existing `AGENTS.md` and `.agents/skills/` | [D10][D11] |
+| Remote Control | `agy --remote-control` / `agy remote-control start`: a reverse tunnel to Google's web console | Only for Google's own web page; no interface for third parties; not used | [D7] |
+| Internal language server | The binary contains hundreds of gRPC methods of `LanguageServerService` (`StartCascade`, `HandleCascadeUserInteraction`, `StreamCascadeReactiveUpdates`…), needing `ANTIGRAVITY_LS_ADDRESS` and a CSRF token | Private, undocumented, changes with versions; the forum also says calling the backend directly is unsupported. **Not used** | [L2][F2] |
+| Python SDK (`google-antigravity`) | A library for writing your own Agent; only accepts `GEMINI_API_KEY` or Vertex | Unrelated to the `agy` sessions on the user's computer, so not suited to the **Agents** tab; could be a fallback for the assistant, but would need its own tools and permissions rewritten | [D9] |
 
-## 2. 会话存在哪、长什么样（本机 1.4.10）
+## 2. Where sessions are stored and what they look like (local 1.4.10)
 
-都在 `~/.gemini/antigravity-cli/`（herdr 认 `ANTIGRAVITY_CLI_CONFIG_DIR` 改这个目录 [L3]）：
+All under `~/.gemini/antigravity-cli/` (herdr honors `ANTIGRAVITY_CLI_CONFIG_DIR` to change this directory [L3]):
 
-| 路径 | 内容 |
+| Path | Contents |
 | --- | --- |
-| `conversations/<会话 id>.db` | 每个会话一个 SQLite（WAL）。`steps` 表一步一行（`idx`、`step_type`、`status`、protobuf 的 `step_payload` / `metadata` / `permissions`…），另有 `trajectory_meta`、`gen_metadata` 等。payload 是没公开的 protobuf，**不读** [L2] |
-| `brain/<会话 id>/.system_generated/logs/transcript.jsonl` | **对话记录，一步一行 JSON**，是要读的那份（hook 的 stdin 里 `transcriptPath` 就指它 [D6]）。旁边的 `transcript_full.jsonl` 是不截断的全文 |
-| `brain/<会话 id>/.system_generated/{steps,tasks,messages,terminals}/` | 工具的完整输出（`steps/<序号>/output.txt`）、后台任务日志、子 Agent 消息 |
-| `brain/<会话 id>/` 下的 `.md`、`scratch/`、`.tempmediaStorage/` | Agent 产出的计划 / 总结等工件、截图、图片 |
-| `cache/conversation_metadata.json` | 每个会话的 `summary`（标题）、`last_modified_time`、`is_internal` |
-| `cache/last_conversations.json` | 目录 → 这个目录最近的会话 id（`--continue` 用它） |
-| `presence/<会话 id>.lock` | 每个会话一个锁文件，像是「谁开着它」，**含义没验证** |
-| `history.jsonl`、`settings.json`、`log/`、`antigravity-oauth-token` | 输入历史、设置、日志、登录凭据（0600，没读） |
+| `conversations/<session id>.db` | One SQLite (WAL) per session. The `steps` table has one row per step (`idx`, `step_type`, `status`, protobuf `step_payload` / `metadata` / `permissions`…); there are also `trajectory_meta`, `gen_metadata` and others. The payload is unpublished protobuf; **not read** [L2] |
+| `brain/<session id>/.system_generated/logs/transcript.jsonl` | **The chat record, one JSON line per step**; this is the one to read (the hook's stdin `transcriptPath` points to it [D6]). Next to it, `transcript_full.jsonl` is the untruncated full text |
+| `brain/<session id>/.system_generated/{steps,tasks,messages,terminals}/` | Full tool output (`steps/<index>/output.txt`), background task logs, sub-Agent messages |
+| `.md`, `scratch/`, `.tempmediaStorage/` under `brain/<session id>/` | Artifacts the Agent produces (plans, summaries…), screenshots, images |
+| `cache/conversation_metadata.json` | Each session's `summary` (title), `last_modified_time`, `is_internal` |
+| `cache/last_conversations.json` | Directory → that directory's most recent session id (used by `--continue`) |
+| `presence/<session id>.lock` | One lock file per session, apparently "who has it open"; **meaning not verified** |
+| `history.jsonl`, `settings.json`, `log/`, `antigravity-oauth-token` | Input history, settings, logs, login credentials (0600, not read) |
 
-`transcript.jsonl` 每行的字段（本机 16 个会话、约 2600 行统计出来的）：`step_index`、`type`、`status`（`DONE` / `RUNNING` / `ERROR`）、`source`（`USER_EXPLICIT` / `MODEL` / `SYSTEM`）、`created_at`、
-`content`、`truncated_fields`；`PLANNER_RESPONSE` 另有 `thinking`、`tool_calls[{name, args}]` 和 token 数；`GENERIC` 有 `media[{mime_type, uri}]`、`error`。映射成 Persona 的 item：
+Fields of each `transcript.jsonl` line (from 16 local sessions, about 2600 lines): `step_index`, `type`, `status` (`DONE` / `RUNNING` / `ERROR`), `source` (`USER_EXPLICIT` / `MODEL` / `SYSTEM`), `created_at`,
+`content`, `truncated_fields`; `PLANNER_RESPONSE` also has `thinking`, `tool_calls[{name, args}]` and token counts; `GENERIC` has `media[{mime_type, uri}]`, `error`. Mapped to Persona items:
 
-| transcript 的 `type` | Persona item |
+| transcript `type` | Persona item |
 | --- | --- |
-| `USER_INPUT` | `text`（user） |
-| `PLANNER_RESPONSE` | `thinking` + `text`（assistant）+ 每个 `tool_calls` 一条 `tool_use` |
-| `GENERIC` | 上一个工具调用的 `tool_result`（**没有调用 id**，只能按顺序配对，要实测确认）；有 `media` 的出 `image` |
-| `SYSTEM_MESSAGE` / `CHECKPOINT` / `ERROR_MESSAGE` | `notice` 或不显示（系统注入的不出 item，`docs/runtimes.md`「内容」） |
+| `USER_INPUT` | `text` (user) |
+| `PLANNER_RESPONSE` | `thinking` + `text` (assistant) + one `tool_use` per `tool_calls` entry |
+| `GENERIC` | The `tool_result` of the previous tool call (**no call id**, so it can only be paired by order; needs testing to confirm); one with `media` produces an `image` |
+| `SYSTEM_MESSAGE` / `CHECKPOINT` / `ERROR_MESSAGE` | `notice` or hidden (system injections produce no item, `docs/runtimes.md` ("Content")) |
 
-工具名要换成 App 画的那套：`run_command`（参数 `CommandLine`、`Cwd`）→ `Bash`，`view_file` / `read_file` → `Read`，`write_to_file` / `write_file` → `Write`，
-`replace_file_content` → `Edit`，`grep_search` → `Grep`，`find_by_name` → `Glob`，`search_web` → `WebSearch`，`read_url_content` → `WebFetch`，`ask_question`（参数 `questions`）→ 提问；
-参数名各自转（`appToolName` + 自己的表）。存储格式没有公开说明，CHANGELOG 里改过好几次（压缩、分支、WAL）[C1]，读法要有语料测试守着。
+Tool names must be mapped to the set the app draws: `run_command` (arguments `CommandLine`, `Cwd`) → `Bash`, `view_file` / `read_file` → `Read`, `write_to_file` / `write_file` → `Write`,
+`replace_file_content` → `Edit`, `grep_search` → `Grep`, `find_by_name` → `Glob`, `search_web` → `WebSearch`, `read_url_content` → `WebFetch`, `ask_question` (argument `questions`) → question;
+argument names are converted per tool (`appToolName` + its own table). The storage format is not publicly documented and the CHANGELOG shows it changed several times (compression, branching, WAL) [C1], so the reader needs corpus tests guarding it.
 
-## 3. 会话、消息、工具调用、审批、提问各在哪、怎么答
+## 3. Where sessions, messages, tool calls, approvals and questions live, and how to answer them
 
-| 要做的 | herdr 窗格里的 `agy`（TUI） | `agy acp` 跑的会话 | 出处 |
+| Task | `agy` in a herdr pane (TUI) | Session run by `agy acp` | Source |
 | --- | --- | --- | --- |
-| 会话列表、标题 | herdr 报 Agent `agy` 和会话 id（装了 `herdr integration install antigravity-cli` 时）；标题读 `conversation_metadata.json` | ACP 会话列表、自动标题 | [L3][D5] |
-| 状态 | herdr 读屏：spinner + `esc to cancel` = 工作中，授权框 / 提问框 / 信任框 = 需要你 | ACP 的 turn 开始结束 | [L3] |
-| 对话内容 | 读 `transcript.jsonl` | ACP 的 session update，或同样读 `transcript.jsonl` | [L2][D4] |
-| 逐字 | 没有（只有落盘的整步） | ACP 流式 | [D4] |
-| 发消息 | 经 herdr 输进窗格（和 Claude 一样） | `session/prompt`；跑着时再发 = 插进这一轮 | [D5] |
-| 中断 | herdr 按 Esc | `session/cancel`：结束正在跑的工具调用、放弃等着的授权 | [D5] |
-| 工具授权 | `PreToolUse` hook：hook 先问手机，答了回 `auto_approve` / `deny`+`reason`，交回电脑回 `ask`；或者读屏回答授权框 | 授权请求发给客户端（Allow / Deny），runtime 转 `rt.ask` | [D6][D5] |
-| 提问（`ask_question`） | 读屏回答（herdr 认得提问框）；hook 的 `overwrite` 能不能代答**没验证** | ACP elicitation 表单 | [L3][D5] |
-| 计划审批 | `plan` 模式先列步骤再写代码；TUI 里怎么批**没查清** | 没写明是否走授权请求 | [D2] |
-| 新建 / 续上 | herdr 新标签跑 `agy --conversation <id>`（pi 的 `resume_argv` 那条路） | `session/new` / `session/resume`（不重放历史） | [D3][C1] |
+| Session list, titles | herdr reports Agent `agy` and the session id (when `herdr integration install antigravity-cli` is installed); title read from `conversation_metadata.json` | ACP session list, automatic titles | [L3][D5] |
+| State | herdr reads the screen: spinner + `esc to cancel` = working; permission / question / trust dialog = needs you | ACP turn start and end | [L3] |
+| Chat content | Read `transcript.jsonl` | ACP session updates, or the same `transcript.jsonl` | [L2][D4] |
+| Streaming | None (only whole steps written to disk) | ACP streaming | [D4] |
+| Sending messages | Typed into the pane via herdr (same as Claude) | `session/prompt`; sending while running = inserted into the current turn | [D5] |
+| Interrupt | herdr presses Esc | `session/cancel`: ends running tool calls, drops pending permission requests | [D5] |
+| Tool permission | `PreToolUse` hook: the hook asks the phone first; once answered it returns `auto_approve` / `deny`+`reason`, and hand-back-to-computer returns `ask`; or answer the permission dialog by reading the screen | Permission requests go to the client (Allow / Deny); the runtime forwards them as `rt.ask` | [D6][D5] |
+| Questions (`ask_question`) | Answer by reading the screen (herdr recognizes the question dialog); whether the hook's `overwrite` can answer on its behalf is **not verified** | ACP elicitation forms | [L3][D5] |
+| Plan approval | `plan` mode lists steps before writing code; how to approve it in the TUI is **not yet clear** | Not documented whether it goes through permission requests | [D2] |
+| New / continue | A new herdr tab runs `agy --conversation <id>` (the `resume_argv` path pi uses) | `session/new` / `session/resume` (history not replayed) | [D3][C1] |
 
-同一个会话 id 两边通用：ACP 里建的会话，人回到电脑前 `agy --conversation <id>` 就是同一个会话（存储是同一份）。但**同一个会话被两个进程同时开着会怎样没查清**：
-`presence/*.lock` 看起来是锁，要实测它会不会拒绝第二个进程。
+The same session id works on both sides: a session created over ACP is the same session when the person comes back to the computer and runs `agy --conversation <id>` (same storage). But **what happens when the same session is open in two processes at once is not yet clear**:
+`presence/*.lock` looks like a lock; needs testing whether it refuses a second process.
 
-## 4. 它是 herdr 的 Agent 还是 runtime
+## 4. Is it a herdr Agent or a runtime
 
-按规范，有终端的是 herdr 的 Agent。`agy` 的主形态是 TUI，herdr 已经认它，所以**窗格里的 `agy` 归 herdr**：终端、按键、读屏、关闭、空间都是 herdr 的，和 Claude、Codex 一样。
+Per the spec, anything with a terminal is a herdr Agent. `agy`'s main form is a TUI and herdr already recognizes it, so **`agy` in a pane belongs to herdr**: terminal, keys, screen reading, closing and spaces are all herdr's, same as Claude and Codex.
 
-缺的是 Claude 那一套 hook 给的东西（会话 id、授权到手机），和 node 读 transcript 的代码。issue 希望「node 侧尽量不加代码」，所以建议照 pi 的结构拆：
+What is missing is what Claude's hooks provide (session id, permissions on the phone) and node code to read the transcript. The issue wants "as little node-side code as possible", so the suggestion is to split it like pi:
 
 ```
- App ── hub ── node ─┬─ herdr 宿主：窗格里的 agy（Agent "agy"，herdr 读屏给状态）
-                     └─ runtime.sock ◄── Antigravity 伴随进程：runtime `antigravity`
-                          · 从磁盘列最近的 agy 会话、从 transcript.jsonl 给内容
-                          · 在 herdr 窗格里跑着的，行上带 pane_id，node 合成一行（同 pi）
-                          · 不在跑的：从手机发消息时要么 resume_argv 在 herdr 里开 `agy --conversation`，要么在自己的 `agy acp` 里接着跑
-                          · 从手机新建、助手：在 `agy acp` 里跑（没有终端的会话，source_kind: runtime）
-                          · 授权：窗格里的走 Persona 的 PreToolUse hook → 伴随进程 → rt.ask；acp 里的走 ACP 授权请求 → rt.ask
+ App ── hub ── node ─┬─ herdr host: agy in a pane (Agent "agy", herdr reads the screen for state)
+                     └─ runtime.sock ◄── Antigravity companion process: runtime `antigravity`
+                          · lists recent agy sessions from disk, provides content from transcript.jsonl
+                          · for ones running in a herdr pane, the row carries pane_id and node merges them into one row (same as pi)
+                          · not running: when sending from the phone, either resume_argv opens `agy --conversation` in herdr, or it continues in its own `agy acp`
+                          · new from the phone, the assistant: run in `agy acp` (terminal-less sessions, source_kind: runtime)
+                          · permissions: pane ones go through Persona's PreToolUse hook → companion process → rt.ask; acp ones go through ACP permission requests → rt.ask
 ```
 
-和 pi 不一样的地方：pi 的扩展跑在 pi 进程里，能直接给它发消息；`agy` 没有进程内扩展（插件只有 hooks / MCP / skills / rules），
-所以窗格里的 `agy` 发消息只能经 herdr 往输入框里输（herdr 有 `agent.prompt`），这一段要 node 帮忙。伴随进程报的行上只要带 pane，node 现有的「runtime 行 + herdr 窗格合并」能不能直接用、要不要改，第 1 步开工前要读 `node/pi.go` 和 `runtimes.go` 确认。
+Differences from pi: pi's extension runs inside the pi process and can send it messages directly; `agy` has no in-process extensions (plugins are only hooks / MCP / skills / rules),
+so sending a message to `agy` in a pane can only be typed into the input field via herdr (herdr has `agent.prompt`), and that part needs node's help. As long as the companion process's rows carry the pane, whether node's existing "runtime row + herdr pane merge" can be used as is or needs changes must be confirmed by reading `node/pi.go` and `runtimes.go` before step 1 starts.
 
-## 5. 无头调用对照 Codex 的能力表
+## 5. Headless capabilities compared with Codex's table
 
-对照 `docs/assistant.md`「Codex」那张表。✅ = 文档写明有；❓ = 文档没写或没实测；❌ = 文档写明没有。
+Compared against the table in `docs/assistant.md` ("Codex"). ✅ = documented as present; ❓ = not documented or not tested; ❌ = documented as absent.
 
-| 能力 | `agy -p --input-format stream-json` | `agy acp` | 出处 |
+| Capability | `agy -p --input-format stream-json` | `agy acp` | Source |
 | --- | --- | --- | --- |
-| 常驻 | ✅ 一个进程多轮，关 stdin 结束 | ✅ 编辑器的长连接；`--process-per-session` 每个会话一个子进程 | [D3][D5] |
-| 流式输出 | ✅ `step_update` 的 `text_delta` | ✅ | [D3][D4] |
-| 续聊 / 重启后 | ✅ `--conversation <id>` | ✅ `session/resume`、`session/load` | [D3][C1] |
-| 停止 | ❌ 没有控制消息（`control_request` 直接报错退出），只能 SIGINT 杀进程 | ✅ `session/cancel` | [D3][D5] |
-| 回复中插话 | ❌ 每条输入是新的一轮 | ✅ 跑着时发的提示词插进这一轮 | [D3][D5] |
-| Persona MCP 工具 | ✅ 工作目录的 `.agents/mcp_config.json` 或全局配置；没配过的 MCP 工具默认要批准，加 `mcp(jarvis/*)` 规则放行 | ✅ 同左；`session/new` 带的 `mcpServers` 认不认没写明（只说编辑器配的 HTTP MCP 要 `--process-per-session`）❓ | [D8][D5] |
-| `ask_user` 等手机 | ✅ MCP 工具调用默认 180 秒超时，`timeoutSeconds: -1` 关掉 | 同左 | [D8] |
-| 它自己的提问 | ❌ 无头时自己定主意，不问 | ✅ elicitation 表单 | [C2][D5] |
-| 命令 / 改文件审批到手机 | ❌ 要批准的一律软拒绝（stderr 一行 + `denied_actions`），只能靠 `PreToolUse` hook 去问手机 | ✅ 授权请求给客户端 | [D3][C2][D5] |
-| 飞书写操作经闸门 | `PreToolUse` hook 匹配 `run_command`，跑 node 的 `larkCheck`，写操作问手机，拒绝回 `deny` + `reason`（理由交给模型） | 同左（hook 在 ACP 里也生效**没验证**）；或者照 DSH 走扩展命令闸门声明的工具 | [D6] |
-| 权限模式 | `--mode accept-edits / auto / plan`，或默认；`--dangerously-skip-permissions` 全放行 | 只有 `default` / `accept-edits` / `plan`；`auto` 只给个人账号、要沙箱 | [D2][C1] |
-| 思考强度 | `--effort low…max`（本机 help 写到 `xhigh` / `max`） | 每个会话可设 | [L1][D5] |
-| 图片 | ❌ 输入只收 `text` 块，别的直接报错退出 | ✅ | [D3][D5] |
-| 指令文件 | ✅ 工作目录的 `AGENTS.md` / `GEMINI.md`；还会读用户自己的 `~/.gemini/AGENTS.md` 等 | 同左 | [D10] |
-| 扩展的 skill（如飞书网关的） | ✅ 工作目录的 `.agents/skills/`；没有「额外 skill 目录」的选项 | 同左 | [D11] |
-| 记忆（和 Claude / Codex 共用一份） | 照 Codex 的做法写进指令；agy 自己有 memory / knowledge（二进制里有 `GetCascadeMemories`、目录里有 `knowledge/`），怎么关**没查清** | 同左 | [L2] |
-| 后台任务 | 1.5.0 起没设 `--print-timeout` 时等后台任务跑完；有 `schedule` 工具 | ❓ | [C1][L2] |
-| 预热 | 预先起进程 | 预先起 `agy acp`、`session/new` | — |
+| Resident | ✅ multiple turns in one process, ends when stdin closes | ✅ editor-style long-lived connection; `--process-per-session` gives each session its own child process | [D3][D5] |
+| Streaming output | ✅ `text_delta` in `step_update` | ✅ | [D3][D4] |
+| Resume / after restart | ✅ `--conversation <id>` | ✅ `session/resume`, `session/load` | [D3][C1] |
+| Stop | ❌ no control messages (`control_request` errors out and exits); only SIGINT to kill the process | ✅ `session/cancel` | [D3][D5] |
+| Messages mid-reply | ❌ every input is a new turn | ✅ a prompt sent while running is inserted into the current turn | [D3][D5] |
+| Persona MCP tools | ✅ the workdir's `.agents/mcp_config.json` or global config; unconfigured MCP tools need approval by default, add an `mcp(jarvis/*)` rule to allow them | ✅ same; whether the `mcpServers` passed with `session/new` is honored is not documented (it only says HTTP MCP configured by the editor needs `--process-per-session`) ❓ | [D8][D5] |
+| `ask_user` waiting on the phone | ✅ MCP tool calls time out after 180 seconds by default; `timeoutSeconds: -1` disables it | Same | [D8] |
+| Its own questions | ❌ decides on its own when headless, does not ask | ✅ elicitation forms | [C2][D5] |
+| Command / file-edit approval on the phone | ❌ everything needing approval is soft-denied (a line on stderr + `denied_actions`); only a `PreToolUse` hook can ask the phone | ✅ permission requests go to the client | [D3][C2][D5] |
+| Lark write operations through the gate | `PreToolUse` hook matches `run_command`, runs node's `larkCheck`, asks the phone about writes, and a deny returns `deny` + `reason` (the reason goes to the model) | Same (whether hooks also apply in ACP is **not verified**); or, like DSH, use the tools declared by the extension's command gate | [D6] |
+| Permission modes | `--mode accept-edits / auto / plan`, or default; `--dangerously-skip-permissions` allows everything | Only `default` / `accept-edits` / `plan`; `auto` is only for personal accounts and needs a sandbox | [D2][C1] |
+| Thinking effort | `--effort low…max` (local help goes up to `xhigh` / `max`) | Settable per session | [L1][D5] |
+| Images | ❌ input only accepts `text` blocks; anything else errors out and exits | ✅ | [D3][D5] |
+| Instruction files | ✅ the workdir's `AGENTS.md` / `GEMINI.md`; it also reads the user's own `~/.gemini/AGENTS.md` etc. | Same | [D10] |
+| Extension skills (e.g. the Lark gateway's) | ✅ the workdir's `.agents/skills/`; no "extra skill directory" option | Same | [D11] |
+| Memory (shared with Claude / Codex) | Write it into the instructions the way Codex does; agy has its own memory / knowledge (`GetCascadeMemories` in the binary, a `knowledge/` directory), and how to turn it off is **not yet clear** | Same | [L2] |
+| Background tasks | Since 1.5.0, without `--print-timeout` it waits for background tasks to finish; has a `schedule` tool | ❓ | [C1][L2] |
+| Warm-up | Start the process ahead of time | Start `agy acp` and `session/new` ahead of time | — |
 
-hook 默认 30 秒超时，可以按 handler 设 `timeout`，最长多少、超时后算允许还是拒绝，文档没写 [D6]：等手机回答要先实测这一条。
-hook 的位置只有工作目录（`.agents/hooks.json`）、全局（`~/.gemini/config/hooks.json`）和插件三处，`--settings` 不带 hooks [D6]：
-助手可以只写在助手目录里；窗格里的 `agy` 要授权到手机，就得装到全局或做成插件，会改用户自己的 Antigravity 配置。
+hooks time out after 30 seconds by default, and `timeout` can be set per handler; the docs do not say the maximum or whether a timeout counts as allow or deny [D6]: test this first before waiting on phone answers.
+hooks can only live in the workdir (`.agents/hooks.json`), globally (`~/.gemini/config/hooks.json`) or in plugins, and `--settings` does not carry hooks [D6]:
+the assistant can keep them in the assistant directory only; for `agy` in a pane to get permissions on the phone, they must be installed globally or packaged as a plugin, which changes the user's own Antigravity config.
 
-## 6. 账号和模型
+## 6. Accounts and models
 
-- **登录方式** [D1][D5]：个人 Google 账号（浏览器 OAuth，SSH 里给链接、把码贴回来，`agy acp --login` 同理）；Gemini Enterprise / Google Cloud（SSO，要开 `aiplatform.googleapis.com`）；
-  ADC（`gcloud auth application-default login` + `AGY_ADC_AUTH=true`）；`GEMINI_API_KEY`（只有 CLI 支持，还要在 `settings.json` 里设 `"modelProvider": "gemini"`，只设环境变量没用）。
-- **凭据存哪**：文档说存系统钥匙串（macOS Keychain、Linux Secret Service / dbus）[D1]；本机 1.4.10 另有一个 0600 的 `antigravity-oauth-token` 文件，版本不同可能不一样。
-  hub 机器如果是没有桌面会话的 Linux，钥匙串可能用不了，API key 或 ADC 更稳（没实测）。
-- **跑在 hub 机器上要什么**：装 `agy`（≥ 1.5.0 才有 ACP），登录一次（无头时没登录直接报 `authentication required`，ACP 回 `-32000`）[D3][D5]；
-  个人账号的 `auto` 模式要终端沙箱（macOS `sandbox-exec`、Linux 非特权 user namespace，容器里常被禁）[D2]。
-- **模型**（2026-11 的文档）[D12]：Gemini 4 Argon、Gemini 3.8 / 3.7 / 3.6 Flash、Gemini 3.1 Pro、Claude Sonnet / Opus 5.5、Claude Sonnet / Opus 4.6、GPT-OSS 120B；
-  免费档没有 Argon 和 Claude 5.5，Claude 4.6 和 GPT-OSS 11-18 下线；Gemini 和 Claude / GPT 的额度分开算（每周 + 每 5 小时）。API key 只给 Gemini 模型，Claude 模型在 ADC 下有 [C1]。
-  所以 Persona 的「模型配置」对这种启动器只能列 `agy models` 给的，不能填网关地址；`GOOGLE_GEMINI_BASE_URL` 能指到兼容 Gemini 的端点 [D1]。
-- **启动器探测**：`docs/launchers.md` 现在只认最后跑 `claude` / `codex` 的 alias；要多认 `agy`。用户的 alias 常带 `--dangerously-skip-permissions` 和代理环境变量，助手要像 Codex 那样把启动器自己的参数和 Persona 的参数拼起来。
-- **条款**（见「结论先说」）：FAQ 的原话是 `agy -p`「intended for direct scripting and CI workflows」，把 `agy` 包进第三方 coding agent 或应用在个人计划下不受支持，
-  用第三方软件访问 Antigravity 违反服务条款、可能被暂停或终止账号，第三方接入推荐 Gemini Enterprise 或 AI Studio API key [D1]。
-  论坛上 10-16 一位以公司口吻回复的人说 FAQ 优先于更早的论坛回复，个人计划下包进第三方应用「No」[F1]；这个账号没有官方标识。
-  ACP 本身就是给 Zed、JetBrains 这类第三方编辑器用的，但没有一条官方说法讲 ACP 客户端算不算「第三方应用」[F1][G2]。GitHub 上问同类问题的 issue 还没有官方答复 [G2]。
+- **Sign-in methods** [D1][D5]: personal Google account (browser OAuth; over SSH it prints a link and you paste the code back; `agy acp --login` works the same way); Gemini Enterprise / Google Cloud (SSO, needs `aiplatform.googleapis.com` enabled);
+  ADC (`gcloud auth application-default login` + `AGY_ADC_AUTH=true`); `GEMINI_API_KEY` (CLI only, and `"modelProvider": "gemini"` must also be set in `settings.json`; the environment variable alone does nothing).
+- **Where credentials are stored**: the docs say the system keychain (macOS Keychain, Linux Secret Service / dbus) [D1]; local 1.4.10 also has a 0600 `antigravity-oauth-token` file, which may differ between versions.
+  If the hub machine is Linux without a desktop session, the keychain may be unavailable, so an API key or ADC is more reliable (not tested).
+- **What running on the hub machine needs**: install `agy` (≥ 1.5.0 for ACP) and sign in once (headless without sign-in fails with `authentication required`; ACP returns `-32000`) [D3][D5];
+  `auto` mode on personal accounts needs the terminal sandbox (macOS `sandbox-exec`, Linux unprivileged user namespaces, often disabled in containers) [D2].
+- **Models** (docs as of 2026-11) [D12]: Gemini 4 Argon, Gemini 3.8 / 3.7 / 3.6 Flash, Gemini 3.1 Pro, Claude Sonnet / Opus 5.5, Claude Sonnet / Opus 4.6, GPT-OSS 120B;
+  the free tier has no Argon or Claude 5.5; Claude 4.6 and GPT-OSS retire on 11-18; Gemini and Claude / GPT quotas are counted separately (weekly + every 5 hours). API keys only get Gemini models; Claude models are available under ADC [C1].
+  So Persona's model configuration for this kind of launcher can only list what `agy models` returns, with no gateway address to fill in; `GOOGLE_GEMINI_BASE_URL` can point to a Gemini-compatible endpoint [D1].
+- **Launcher detection**: `docs/launchers.md` currently only recognizes aliases whose last command is `claude` / `codex`; it needs to recognize `agy` too. Users' aliases often carry `--dangerously-skip-permissions` and proxy environment variables, so the assistant has to combine the launcher's own arguments with Persona's, as it does for Codex.
+- **Terms** (see "Conclusions first"): the FAQ says `agy -p` is "intended for direct scripting and CI workflows", that wrapping `agy` in a third-party coding agent or application is unsupported on personal plans,
+  that accessing Antigravity with third-party software violates the terms of service and may get the account suspended or terminated, and recommends Gemini Enterprise or AI Studio API keys for third-party integrations [D1].
+  On the forum on 10-16, someone replying in a company voice said the FAQ takes precedence over earlier forum replies, and that wrapping it in a third-party application on personal plans is "No" [F1]; that account has no official badge.
+  ACP itself exists for third-party editors like Zed and JetBrains, but there is no official statement on whether an ACP client counts as a "third-party application" [F1][G2]. GitHub issues asking similar questions have no official answer yet [G2].
 
-## 7. 建议的做法（供讨论，定了再拆成第 1、2 步）
+## 7. Suggested approach (for discussion; split into steps 1 and 2 once decided)
 
-1. **runtime `antigravity`**（放在 integrations/antigravity，建在 runtime-sdk 上）：伴随进程，读 `transcript.jsonl` 给列表和内容；没有终端的会话（手机新建、手机接着、助手）在它管的 `agy acp` 里跑，
-   授权、提问、逐字、中断、插话都从 ACP 转到 SDK。最低版本 1.5.0，低了就只读不跑，并在列表上说明。
-2. **窗格里的 `agy`**：herdr 已经认；node 认 Agent `agy`，和伴随进程的行合成一行（照 pi）；发消息经 herdr；授权到手机靠一个 Persona 的 Antigravity 插件（`PreToolUse` hook 问伴随进程）。
-3. **助手**：伴随进程声明 `caps.assistant`，走现成的 `assistant_runtime.go`（DSH 那条路），飞书走扩展命令闸门声明的工具、`run_command` 里的闸门命令由 hook 拦下；
-   这样 node 里不加按 Antigravity 写的代码。issue 原文写的是「像 Codex 一样单独一个文件」，两种做法的取舍放在下一节。
-4. 先做不碰账号条款的部分：存储读法和语料测试、映射、herdr 合并；真的跑 `agy` 的端到端用 API key 或 Enterprise 账号。
+1. **runtime `antigravity`** (in integrations/antigravity, built on runtime-sdk): a companion process that reads `transcript.jsonl` for the list and content. Terminal-less sessions (new from the phone, continued from the phone, the assistant) run in an `agy acp` it manages;
+   permissions, questions, streaming, interrupt and mid-turn messages are forwarded from ACP to the SDK. Minimum version 1.5.0; below that it reads only, never runs, and says so in the list.
+2. **`agy` in a pane**: herdr already recognizes it; node recognizes Agent `agy` and merges it with the companion process's row (like pi); messages go via herdr; permissions reach the phone through a Persona Antigravity plugin (a `PreToolUse` hook that asks the companion process).
+3. **Assistant**: the companion process declares `caps.assistant` and uses the existing `assistant_runtime.go` (the DSH path); Lark goes through the tools declared by the extension's command gate, and gate commands inside `run_command` are intercepted by the hook.
+   That way node gets no Antigravity-specific code. The issue originally said "a separate file, like Codex"; the trade-off between the two is in the next section.
+4. Do the parts that do not touch the account terms first: storage reader and corpus tests, mapping, herdr merging; end-to-end tests that really run `agy` use an API key or an Enterprise account.
 
-## 需要维护者定的点
+## Points for the maintainer to decide
 
-1. **个人 Google 账号接不接**（最要紧）。选项：a) 只支持 `GEMINI_API_KEY` / Gemini Enterprise / ADC，个人 OAuth 账号的会话只读不驱动；b) 都支持，在文档和启动器上写明封号风险；c) 先问 Google 拿到明确答复再做。
-   建议 a：只读本机的对话记录不算「包进第三方应用」，驱动它才算；API key 下只有 Gemini 模型，这个差别写进文档。
-2. **形态**：a) herdr Agent + 伴随进程 runtime（上面第 7 节，建议）；b) 只做 runtime，窗格里的 `agy` 只显示成「未运行」的对话记录；c) 只做 herdr Agent，node 里写读 transcript 的 Go 代码。
-3. **助手后端**：a) 伴随进程声明 `caps.assistant`、走 `assistant_runtime.go`（不加 Go 代码，飞书走扩展命令闸门声明的工具，建议）；b) 照 issue 写 `assistant_antigravity.go`，node 直接起 `agy acp`（和 Codex 对称，多一套 Go 代码，飞书闸门要在 ACP 授权和 hook 两处接）。
-4. **最低版本**：要求 ≥ 1.5.0（ACP）。低于它时只列会话、只读，还是完全不接。
-5. **窗格里授权到手机要不要改用户的全局配置**：a) 发一个 Antigravity 插件，用户自己 `agy plugin install`（建议，可卸）；b) node 自动写 `~/.gemini/config/hooks.json`；c) 不做，只靠读屏回答授权框。
-6. **同一个会话两边都开着**：如果 agy 不拒绝第二个进程，手机发到 ACP 的消息和电脑上 TUI 会同时写一份存储。是一律以 herdr 窗格为准、ACP 不碰正在 TUI 里开着的会话（建议），还是别的规则。
-7. **Antigravity 桌面 App 不在这个 issue 里**：它的会话在另一个目录、没有公开接口。同意的话 issue 标题和验收里写明「Antigravity CLI」。
-8. **agy 自己的记忆**：助手用 Persona 共用的那份时，要不要关掉 agy 自己的 memory / knowledge（怎么关还要查）。
+1. **Whether to support personal Google accounts** (most important). Options: a) support only `GEMINI_API_KEY` / Gemini Enterprise / ADC; sessions from personal OAuth accounts are read-only, not driven; b) support everything, stating the ban risk in the docs and on the launcher; c) ask Google for a clear answer first.
+   Suggest a: only reading the local chat records is not "wrapping it in a third-party application"; driving it is. Under an API key there are only Gemini models; document that difference.
+2. **Shape**: a) herdr Agent + companion-process runtime (section 7 above, suggested); b) runtime only, with `agy` in panes shown only as "Not running" chat records; c) herdr Agent only, with Go code in node to read the transcript.
+3. **Assistant backend**: a) the companion process declares `caps.assistant` and uses `assistant_runtime.go` (no Go code added; Lark through the tools declared by the extension's command gate; suggested); b) as the issue says, write `assistant_antigravity.go` and have node start `agy acp` directly (symmetric with Codex, one more set of Go code; the Lark gate has to be wired into both ACP permissions and the hook).
+4. **Minimum version**: require ≥ 1.5.0 (ACP). Below it, list sessions read-only, or not support it at all.
+5. **Whether pane permissions on the phone may change the user's global config**: a) ship an Antigravity plugin that users install themselves with `agy plugin install` (suggested, removable); b) node writes `~/.gemini/config/hooks.json` automatically; c) don't, and only answer permission dialogs by reading the screen.
+6. **The same session open on both sides**: if agy does not refuse a second process, messages sent from the phone to ACP and the TUI on the computer would write to the same storage at once. Either always defer to the herdr pane and have ACP never touch a session open in a TUI (suggested), or some other rule.
+7. **The Antigravity desktop app is out of scope for this issue**: its sessions live in another directory with no public interface. If agreed, say "Antigravity CLI" in the issue title and acceptance criteria.
+8. **agy's own memory**: when the assistant uses Persona's shared memory, whether to turn off agy's own memory / knowledge (how to turn it off still needs looking into).
 
-## 第 1 步开工前要实测的
+## To test before step 1 starts
 
-- `agy acp`（1.5.0）的方法名和消息形状：授权请求、elicitation、`session/new` 的 `mcpServers`、取消时等着的授权怎么收尾、计划模式怎么批。
-- hook：`timeout` 能设多大、超时算什么；`ask_question` 能不能用 `overwrite` 代答；hooks 在 `agy acp` 里触不触发。
-- `presence/*.lock`：同一个会话第二个进程打开时的行为。
-- `transcript.jsonl`：`GENERIC` 和工具调用的配对、子 Agent 的记录、压缩和分支后会不会重写（决定 `history` 什么时候换）。
-- Linux hub 上的登录：钥匙串不可用时 OAuth 能不能存住。
+- `agy acp` (1.5.0) method names and message shapes: permission requests, elicitation, `mcpServers` in `session/new`, how pending permission requests are wrapped up on cancel, how plan mode is approved.
+- hooks: how large `timeout` can be and what a timeout counts as; whether `ask_question` can be answered via `overwrite`; whether hooks fire inside `agy acp`.
+- `presence/*.lock`: behavior when a second process opens the same session.
+- `transcript.jsonl`: pairing of `GENERIC` with tool calls, sub-Agent records, whether compaction and branching rewrite it (decides when `history` changes).
+- Sign-in on a Linux hub: whether OAuth can persist when the keychain is unavailable.
 
-## 出处
+## Sources
 
-本机（`agy` 1.4.10、herdr 0.9.5，2026-11-05 只读查看）：
+Local (`agy` 1.4.10, herdr 0.9.5, inspected read-only on 2026-11-05):
 
-- [L1] `agy --help`、`agy mcp add --help`、`agy plugin`、`agy remote-control start --help`。
-- [L2] `~/.gemini/antigravity-cli/` 的目录结构、`conversations/*.db` 的表结构、`transcript.jsonl` 的字段和工具名统计；`agy` 二进制里的 gRPC 方法名和环境变量名。
-- [L3] herdr 0.9.5 内置的 `agy` 识别规则（`id = "agy"`，aliases `antigravity` / `antigravity-cli`）和 `herdr integration install antigravity-cli` 装的 hook（只报 `conversationId` 和 `transcriptPath`）；`herdr integration status`。
+- [L1] `agy --help`, `agy mcp add --help`, `agy plugin`, `agy remote-control start --help`.
+- [L2] Directory layout of `~/.gemini/antigravity-cli/`, schema of `conversations/*.db`, field and tool-name stats of `transcript.jsonl`; gRPC method names and environment variable names in the `agy` binary.
+- [L3] herdr 0.9.5's built-in `agy` detection rules (`id = "agy"`, aliases `antigravity` / `antigravity-cli`) and the hook installed by `herdr integration install antigravity-cli` (only reports `conversationId` and `transcriptPath`); `herdr integration status`.
 
-官方文档（antigravity.google）：
+Official docs (antigravity.google):
 
-- [D1] FAQ：https://antigravity.google/docs/faq/ ；登录：https://antigravity.google/docs/install/
-- [D2] 执行模式：https://antigravity.google/docs/cli/modes/
-- [D3] 无头模式：https://antigravity.google/docs/cli/headless/
-- [D4] ACP（CLI）：https://antigravity.google/docs/cli/acp/
-- [D5] ACP（其他编辑器，能力、参数、登录方式）：https://antigravity.google/docs/ide/extensions/acp
-- [D6] Hooks：https://antigravity.google/docs/hooks/
-- [D7] Remote Control：https://antigravity.google/docs/remote-control?tab=cli
-- [D8] MCP：https://antigravity.google/docs/mcp/
-- [D9] SDK：https://antigravity.google/docs/sdk/overview/
-- [D10] 规则：https://antigravity.google/docs/rules/
-- [D11] Skills：https://antigravity.google/docs/skills/
-- [D12] 模型：https://antigravity.google/docs/models/ ；CLI 参考：https://antigravity.google/docs/cli/reference/
+- [D1] FAQ: https://antigravity.google/docs/faq/ ; sign-in: https://antigravity.google/docs/install/
+- [D2] Execution modes: https://antigravity.google/docs/cli/modes/
+- [D3] Headless mode: https://antigravity.google/docs/cli/headless/
+- [D4] ACP (CLI): https://antigravity.google/docs/cli/acp/
+- [D5] ACP (other editors: capabilities, arguments, sign-in methods): https://antigravity.google/docs/ide/extensions/acp
+- [D6] Hooks: https://antigravity.google/docs/hooks/
+- [D7] Remote Control: https://antigravity.google/docs/remote-control?tab=cli
+- [D8] MCP: https://antigravity.google/docs/mcp/
+- [D9] SDK: https://antigravity.google/docs/sdk/overview/
+- [D10] Rules: https://antigravity.google/docs/rules/
+- [D11] Skills: https://antigravity.google/docs/skills/
+- [D12] Models: https://antigravity.google/docs/models/ ; CLI reference: https://antigravity.google/docs/cli/reference/
 
-CHANGELOG、issue、论坛：
+CHANGELOG, issues, forum:
 
-- [C1] https://github.com/google-antigravity/antigravity-cli/blob/main/CHANGELOG.md （最新 1.5.0：`agy acp`、ACP 的模式、`session/resume`、`--login`；1.4.11：ADC 下的计费选择；1.3.6：ADC 下有 Claude 5.5）
-- [C2] 同上，较早部分（1.1.3 无头软拒绝、1.1.12 无头不再停在提问上、1.1.27 `denied_actions`、1.2.0 无头自动过计划审批）
-- [G1] `agy -p` 在非 TTY 下丢输出（1.1.1 已修，提示词作参数时关掉 stdin）：https://github.com/google-antigravity/antigravity-cli/issues/76
-- [G2] 官方 agent 能否经 shell / hook 调 `agy -p` 的条款问题（2026-11-02 提，未答）：https://github.com/google-antigravity/antigravity-cli/issues/1392
-- [F1] 论坛：个人计划下从本地子进程调官方 `agy`：https://discuss.ai.google.dev/t/clarification-on-consumer-plan-policy-for-invoking-official-agy-via-local-subprocess/189905
-- [F2] 论坛：外部编排无头模式（09-15 的回复说支持，被上面 10-16 的回复推翻）：https://discuss.ai.google.dev/t/is-external-orchestration-of-antigravity-cli-headless-mode-supported-with-account-based-usage/183051
+- [C1] https://github.com/google-antigravity/antigravity-cli/blob/main/CHANGELOG.md (latest 1.5.0: `agy acp`, ACP modes, `session/resume`, `--login`; 1.4.11: billing choice under ADC; 1.3.6: Claude 5.5 under ADC)
+- [C2] Same, earlier entries (1.1.3 headless soft-deny, 1.1.12 headless no longer stops on questions, 1.1.27 `denied_actions`, 1.2.0 headless auto-passes plan approval)
+- [G1] `agy -p` drops output without a TTY (fixed in 1.1.1; stdin is closed when the prompt is passed as an argument): https://github.com/google-antigravity/antigravity-cli/issues/76
+- [G2] Terms question on whether an official agent may call `agy -p` via shell / hook (filed 2026-11-02, unanswered): https://github.com/google-antigravity/antigravity-cli/issues/1392
+- [F1] Forum: calling the official `agy` from a local subprocess on a personal plan: https://discuss.ai.google.dev/t/clarification-on-consumer-plan-policy-for-invoking-official-agy-via-local-subprocess/189905
+- [F2] Forum: external orchestration of headless mode (a 09-15 reply said it was supported, overturned by the 10-16 reply above): https://discuss.ai.google.dev/t/is-external-orchestration-of-antigravity-cli-headless-mode-supported-with-account-based-usage/183051

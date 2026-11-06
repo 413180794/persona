@@ -1,16 +1,16 @@
-# hub 管理界面（`/admin`）
+# hub admin console (`/admin`)
 
-hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设备凭据、装扩展、互联、改网络和访问范围。地址 `<hub 地址>/admin`，
-接口前缀 `/api/v1/admin/`，和 App 的接口**分开鉴权**（管理员密码 + 会话 cookie，不认 App 的 token）。
-方案见 [plan-hub-mesh.md](plan-hub-mesh.md) 第 5 节，总览 #293，issue #296。以后一键安装（#287）、hub 版本更新（#284）也落在这里。
+The hub's built-in web admin console: view the hub's status, add / remove computers, manage device credentials, install extensions, link hubs, change networking and access scope. The address is `<hub address>/admin`,
+the API prefix is `/api/v1/admin/`, and it is **authenticated separately** from the app's API (admin password + session cookie; app tokens are not accepted).
+The proposal is section 5 of [plan-hub-mesh.md](plan-hub-mesh.md), overview #293, issue #296. One-click install (#287) and hub version updates (#284) will land here too.
 
-代码：服务端 `server/internal/hub/admin*.go`（扩展 `admin_extensions.go`）、`server/internal/db/admin.go`（迁移 `0161_admin.sql`），
-网页 `web/admin/index.html` + `web/src/admin/`（和网页操作页同一个工程、同一套设计 token，单独一个入口）。
-管理界面只在 hub 的根路径：网页操作页能挂在反向代理的子路径下（[web.md](web.md)「子路径」），管理界面不读 `X-Forwarded-Prefix`，经子路径打不开，直接访问 hub 的端口。
+Code: server `server/internal/hub/admin*.go` (extensions in `admin_extensions.go`), `server/internal/db/admin.go` (migration `0161_admin.sql`),
+web `web/admin/index.html` + `web/src/admin/` (same project and same design tokens as the web app, with its own entry point).
+The admin console is only at the hub's root path: the web app can be mounted under a reverse-proxy subpath ([web.md](web.md) ("Subpath")), but the admin console does not read `X-Forwarded-Prefix` and cannot be opened through a subpath; access the hub's port directly.
 
-## 访问范围 `admin.access`
+## Access scope `admin.access`
 
-`hub.json`：
+`hub.json`:
 
 ```json
 "admin": {
@@ -20,221 +20,221 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 }
 ```
 
-| `access` | 谁能打开 |
+| `access` | Who can open it |
 | --- | --- |
-| `loopback` | 只有 hub 机器本机（`127.0.0.1` / `::1`）。Docker 里是容器自己，等于只能 `docker compose exec` 进去用 |
-| `lan`（**默认**，不写也是它） | 本机 + 和 hub 同一网段的私网地址 + `security.trusted_cidrs` |
-| `cidrs` | 本机 + `admin.cidrs` 里列的网段 |
-| `any` | `lan` 能进的照样能进；此外任何来源**经 TLS 端口**（`public.tls_listen`）都能进。没开 TLS 时实际等于 `lan` |
+| `loopback` | Only the hub machine itself (`127.0.0.1` / `::1`). In Docker that is the container itself, i.e. only via `docker compose exec` |
+| `lan` (**default**, also when omitted) | Local + private addresses on the same subnet as the hub + `security.trusted_cidrs` |
+| `cidrs` | Local + the subnets listed in `admin.cidrs` |
+| `any` | Everything `lan` lets in; in addition, any source **through the TLS port** (`public.tls_listen`). Without TLS it is effectively `lan` |
 
-- **范围外当它不存在**：页面路径交给普通网页（和任何不存在的路径一样），接口交给 App 的接口（没带 token 是 401、带了是 404），
-  回包和一个从来没有管理界面的 hub 一模一样，扫描的人看不出来有管理界面。
-- **同一网段**：hub 每个网卡的地址前缀里的私网地址（RFC 1918、ULA、链路本地）；IPv6 全局地址只算前缀 /64 或更长、不是 VPN 网卡上的
-  （和 [network.md](network.md)「来源判断」一样，家里手机走全局 IPv6 也算家里）。网卡列表 30 秒刷新一次。
-  另一个私网网段（公司内网的别的楼层、别的 VLAN）不算；要放进来写 `security.trusted_cidrs` 或用 `cidrs`。
-  Tailscale 这类 `100.64.0.0/10` 的地址不是私网地址：要从 VPN 管理，把网段写进 `cidrs`（或 `trusted_cidrs`）。
-- **Docker 桥接网络**：容器里只看得到 Docker 自己的网段（`172.x`），看不到 NAS 所在的局域网，所以在容器里（有 `/.dockerenv` 或
-  `/run/.containerenv`）`lan` 放宽成「任何私网地址」，**但容器的网关不算**（`admin_gateway.go` 的 `containerGateway`：默认路由的下一跳，
-  加上容器每个网段的第一个地址）。原因是经端口映射进来的连接有两种：
-  - Linux 上 Docker 默认用 iptables DNAT 转外部来的 IPv4 连接，容器看到的是真实的来源地址，局域网里的电脑照常能进；
-  - 经 Docker 的用户态代理（docker-proxy）转的连接，来源一律显示成网关（`172.x.0.1`）：宿主机自己连的、Docker 没开 IPv6 时所有 IPv6 的
-    （公网来的也在里面）、Docker Desktop / OrbStack 上**所有**的。网关地址是私网地址，不排除的话公网请求就成了「局域网」，
-    一台刚部署、还没设密码的 hub 会被公网上的人抢先设管理员密码。
-  所以容器里网关来的请求一律当范围外（hub 日志每 10 分钟最多记一行 `admin: … is this container's gateway`），除非网关写进了
-  `security.trusted_cidrs` 或 `access: cidrs` 的 `admin.cidrs`（明确选择：这等于放行所有经端口映射进来的请求）。
-  Docker Desktop / OrbStack（开发机上试 Docker 部署）这种所有连接都来自网关的环境，`lan` 下打不开管理界面，可以：
-  端口只映射到 `127.0.0.1`（`127.0.0.1:18660:18660`）再把网关写进 `JARVIS_ADMIN_CIDRS`（这时能经映射进来的只有本机）；或用 host 网络；
-  或在 hub 机器上 `docker compose exec hub personad hub admin …` 用命令行管。入口脚本发现像 Docker Desktop / OrbStack
-  （容器里能解析 `host.docker.internal`）时打印一行这个提示。
-  hub 现有的 `sourceOf`（主 token、明文能不能用的判断）有同样的问题，另开 issue 复用 `containerGateway` 修。
-- **转发头只用来收紧**：hub 不靠 `X-Forwarded-For` 放行任何人（同 [network.md](network.md)）；但请求带了 `X-Forwarded-For`、`X-Real-IP` 或 `Forwarded` 时，
-  里面的每个地址也必须在范围内（解析不了的算范围外）；只带 `Via`、`X-Forwarded-Proto` / `-Host` / `-Port` / `-Server` 而不说来源地址的，
-  也算范围外（是代理，又不知道替谁转的）。所以把 hub 放在反向代理后面、代理又把公网请求转进来时，管理界面不会因为代理的地址
-  是本机就对公网打开。**什么头都不加的代理挡不住**（nginx 默认的 `proxy_pass` 就是）：对公网的反向代理要么加 `X-Forwarded-For`，
-  要么直接拦掉 `/admin` 和 `/api/v1/admin/`。TCP 转发、TLS 透传（nginx `stream`）加不了头，开 `security.proxy_protocol`
-  让 hub 拿到真实来源（[network.md](network.md#proxy-protocol)）。
-- **公网来源一律要 TLS**：`cidrs` 里列了公网网段时，这些来源也只能走 TLS 端口（明文是 403 `tls_required`），密码不在公网上明文传。
-- **只能在 hub 机器上放宽**：网页里只能收窄（`any` → `lan` / `cidrs` / `loopback`，`lan` → `loopback`，`cidrs` → 更小的 `cidrs` / `loopback`）。
-  放宽用命令行 `personad hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]` 或部署脚本（下面「部署时选择」）。
-  网页收窄后如果自己不在新范围里，要先确认（接口不带 `force` 时回 409 `would_lock_you_out`）。
-- **环境变量优先**：设了 `JARVIS_ADMIN_ACCESS`（和 `JARVIS_ADMIN_CIDRS`，逗号分隔）就以它为准、不写回 hub.json（同别的 `JARVIS_*`
-  覆盖，[docker.md](docker.md)）；这时网页里不能改，显示「由部署时的 JARVIS_ADMIN_ACCESS 决定」。
-- 改范围即时生效，不用重启：网页改的直接生效；命令行写完 hub.json 后经回环通知正在运行的 hub 重读（hub 没在跑就下次启动生效）。
+- **Out of scope, it does not exist**: page paths fall through to the normal web app (like any nonexistent path), and API paths fall through to the app's API (401 without a token, 404 with one),
+  so the responses are identical to a hub that never had an admin console; a scanner cannot tell that one exists.
+- **Same subnet**: private addresses (RFC 1918, ULA, link-local) within the address prefixes of each of the hub's network interfaces; IPv6 global addresses only count with a prefix of /64 or longer and not on a VPN interface
+  (same as [network.md](network.md) ("Source classification"): a phone at home on global IPv6 counts as home too). The interface list refreshes every 30 seconds.
+  Another private subnet (another floor or VLAN of the company network) does not count; to let it in, add it to `security.trusted_cidrs` or use `cidrs`.
+  Addresses like Tailscale's `100.64.0.0/10` are not private addresses: to administer over a VPN, put the subnet in `cidrs` (or `trusted_cidrs`).
+- **Docker bridge network**: inside a container you only see Docker's own subnet (`172.x`), not the LAN the NAS is on. So inside a container (with `/.dockerenv` or
+  `/run/.containerenv`), `lan` widens to "any private address", **except the container's gateway** (`containerGateway` in `admin_gateway.go`: the next hop of the default route,
+  plus the first address of each of the container's subnets). The reason is that connections arriving through port mapping come in two kinds:
+  - On Linux, Docker by default forwards external IPv4 connections with iptables DNAT, so the container sees the real source address and computers on the LAN get in as usual;
+  - Connections forwarded by Docker's userland proxy (docker-proxy) all show the gateway (`172.x.0.1`) as the source: connections from the host itself, all IPv6 ones when Docker has no IPv6 enabled
+    (including those from the public internet), and **all** of them on Docker Desktop / OrbStack. The gateway address is private, so without excluding it public requests would count as "LAN",
+    and someone on the internet could set the admin password on a freshly deployed hub before its owner does.
+  So inside a container, requests from the gateway are always out of scope (the hub logs at most one line `admin: … is this container's gateway` every 10 minutes), unless the gateway is listed in
+  `security.trusted_cidrs` or in `admin.cidrs` with `access: cidrs` (an explicit choice: it lets in every request coming through port mapping).
+  In environments like Docker Desktop / OrbStack (trying a Docker deployment on a dev machine), where every connection comes from the gateway, the admin console cannot be opened under `lan`. Options:
+  map the port only to `127.0.0.1` (`127.0.0.1:18660:18660`) and put the gateway in `JARVIS_ADMIN_CIDRS` (then only the local machine can come in through the mapping); or use host networking;
+  or manage it from the command line on the hub machine with `docker compose exec hub personad hub admin …`. The entrypoint script prints a one-line hint about this when it detects something like Docker Desktop / OrbStack
+  (`host.docker.internal` resolves inside the container).
+  The hub's existing `sourceOf` (which decides about the master token and whether plain HTTP is allowed) has the same problem; a separate issue will fix it by reusing `containerGateway`.
+- **Forwarding headers only tighten**: the hub never lets anyone in based on `X-Forwarded-For` (same as [network.md](network.md)); but when a request carries `X-Forwarded-For`, `X-Real-IP` or `Forwarded`,
+  every address in it must also be in scope (unparseable ones count as out of scope). A request with only `Via`, `X-Forwarded-Proto` / `-Host` / `-Port` / `-Server` and no source address
+  is also out of scope (it is a proxy, but we don't know whom it forwards for). So when the hub sits behind a reverse proxy that forwards public requests in, the admin console does not open to the internet just because the proxy's address
+  is local. **A proxy that adds no headers cannot be caught** (nginx's default `proxy_pass` is one): a public-facing reverse proxy must either add `X-Forwarded-For`
+  or block `/admin` and `/api/v1/admin/` outright. TCP forwarding and TLS passthrough (nginx `stream`) cannot add headers; enable `security.proxy_protocol`
+  so the hub gets the real source ([network.md](network.md#proxy-protocol)).
+- **Public sources always need TLS**: when `cidrs` lists public subnets, those sources may also only use the TLS port (plain HTTP gets 403 `tls_required`), so the password never travels in cleartext over the internet.
+- **Widening only on the hub machine**: the web page can only narrow (`any` → `lan` / `cidrs` / `loopback`, `lan` → `loopback`, `cidrs` → smaller `cidrs` / `loopback`).
+  To widen, use the command line `personad hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]` or the deploy script ("Choosing at deploy time" below).
+  If narrowing on the web page would leave you outside the new scope, it asks for confirmation first (the API returns 409 `would_lock_you_out` without `force`).
+- **Environment variables win**: if `JARVIS_ADMIN_ACCESS` (and `JARVIS_ADMIN_CIDRS`, comma-separated) is set, it takes precedence and is not written back to hub.json (like the other `JARVIS_*`
+  overrides, [docker.md](docker.md)); the web page then cannot change it and shows "Set by JARVIS_ADMIN_ACCESS at deploy time".
+- Scope changes take effect immediately without a restart: changes from the web page apply directly; after the command line writes hub.json it notifies the running hub over loopback to reload (if the hub is not running, it applies on next start).
 
-## 管理员密码和会话
+## Admin password and sessions
 
-- **首次设置**：没设过密码时，范围内第一次打开显示「设置管理员密码」。只有按地址就在范围里的来源（`lan` / `cidrs` 放进来的，含本机）
-  能做首次设置：`any` 下经 TLS 从公网来的人看到的是「请在 hub 所在的局域网里打开，或在 hub 机器上运行
-  `personad hub admin reset-password`」，不会被抢先设密码。两个人同时设，只有先写进数据库的那个成功。
-- **从本机回环来做首次设置要一次性设置码**：同一台机器上的反向代理（nginx 默认的 `proxy_pass` 不加任何转发头）把公网请求转进来时，
-  hub 看到的来源也是 `127.0.0.1`，和坐在 hub 机器前的人分不出来。所以来源是回环（看连接本身的地址，不看头）时，设第一个密码还要填
-  设置码：hub 启动时没有密码就在日志里打一行 `admin: first-run setup code XXXX-XXXX`（`journalctl --user -u jarvisd`，Docker 是
-  `docker compose logs hub`），过期了以后有人从回环打开设置页时再打一个新的；也可以在 hub 机器上 `personad hub admin setup-code` 现取
-  （经回环 + 主 token 向运行中的 hub 要）。码是 8 个字符（不含 0 / O / 1 / I，约 40 位随机），10 分钟有效，用一次就失效，只在 hub 内存里
-  （重启后作废，启动时会打新的）；填错计入登录限流。局域网来源照旧不用码；设过密码以后登录不受影响。
-- **新安装的局域网来源也要设置码**：`personad hub setup` 新写的 hub.json 带 `admin.first_setup: "code"`，这时任何来源设第一个密码都要码
-  （共享的局域网里别人能抢先设）。安装器经回环 + 主 token 取一个码，打印成 `http://<局域网 IP>:<端口>/admin#setup=<设置码>`；
-  `#setup=` 是片段，不发到服务器、不进日志，设置页读到后预填，再从地址栏里去掉。老 hub.json 没有这个字段，行为不变。
-- **密码**：至少 8 个字符、最多 256 字节；存 argon2id 哈希（m=19 MiB、t=2、p=1，PHC 格式）到 Postgres 的 `admin_credentials`，
-  明文不落盘、不进日志。同时最多算 2 个哈希，多出来的排队（防止用登录请求把内存打满）。
-- **会话 cookie**：`jarvis_admin`，32 字节随机值，库里只存 SHA-256；`HttpOnly`、`SameSite=Strict`、`Path=/api/v1/admin/`，
-  经 TLS 时加 `Secure`。有效期 `admin.session_hours`（默认 12 小时，从登录算起，不续期）。每个请求都查库，
-  所以退出、改密码、`reset-password` 立刻让别的会话失效。
-- **CSRF**：会话自带一个 CSRF token，`GET /api/v1/admin/state` 给网页；所有写操作（POST / PUT / DELETE）要带
-  `X-Jarvis-CSRF` 头且和会话的一致。另外写操作必须是 `Content-Type: application/json`，浏览器带了 `Sec-Fetch-Site` 时必须是
-  `same-origin`，带了 `Origin` 时主机名和端口必须和请求的 `Host` 一致。登录、首次设置也查后两条（那时还没有会话）。
-- **限流**：登录（和设置码）失败沿用 `security` 的阈值（`auth_failures` 次 / `auth_window_seconds` 秒，封 `auth_block_seconds` 秒），
-  但用一张单独的表、**局域网和本机回环也计数**（密码比设备 token 好猜得多；回环可能是同机反向代理转来的公网请求）。hub 机器的主人
-  因此被锁一会儿时，`personad hub admin …` 照样能用。局域网以外的来源另外共用一个十倍阈值的总额度，防很多地址一起猜。
-  被封时回 429 和 `Retry-After`。管理界面的失败不影响 App 的鉴权计数，反过来也一样。
-- **忘了密码**：在 hub 机器上 `personad hub admin reset-password`：有终端时输两遍新密码（不回显），没终端时从标准输入读一行；
-  `--clear` 清掉密码，回到首次设置。两种都会让所有已登录的会话失效。Docker 里：`docker compose exec hub personad hub admin reset-password`。
+- **First-time setup**: with no password set yet, the first in-scope visit shows **Set an admin password**. Only sources that are in scope by address (let in by `lan` / `cidrs`, including local)
+  can do the first-time setup: someone coming over TLS from the internet under `any` sees "open this page on the hub's local network, or run
+  `personad hub admin reset-password` on the hub machine", so nobody can claim the password first. If two people set it at the same time, only the one written to the database first succeeds.
+- **First-time setup from local loopback needs a one-time setup code**: when a reverse proxy on the same machine (nginx's default `proxy_pass` adds no forwarding headers) forwards public requests in,
+  the hub also sees the source as `127.0.0.1`, indistinguishable from someone sitting at the hub machine. So when the source is loopback (judged by the connection's own address, not headers), setting the first password also requires
+  a setup code: when the hub starts without a password, it logs a line `admin: first-run setup code XXXX-XXXX` (`journalctl --user -u jarvisd`; on Docker
+  `docker compose logs hub`), and after it expires, prints a new one when someone opens the setup page from loopback; you can also fetch one on the hub machine with `personad hub admin setup-code`
+  (it asks the running hub over loopback + master token). The code is 8 characters (excluding 0 / O / 1 / I, about 40 bits of randomness), valid for 10 minutes, single use, and kept only in hub memory
+  (invalid after a restart; a new one is printed at startup); wrong codes count toward login rate limiting. LAN sources still need no code; once a password is set, sign-in is unaffected.
+- **LAN sources on new installs need the setup code too**: hub.json freshly written by `personad hub setup` has `admin.first_setup: "code"`, and then setting the first password from any source needs the code
+  (on a shared LAN someone else could claim it first). The installer fetches a code over loopback + master token and prints it as `http://<LAN IP>:<port>/admin#setup=<setup code>`;
+  `#setup=` is a fragment, so it is never sent to the server or logged; the setup page reads it, pre-fills it, and then removes it from the address bar. Old hub.json files lack this field, so behavior is unchanged.
+- **Password**: at least 8 characters, at most 256 bytes; stored as an argon2id hash (m=19 MiB, t=2, p=1, PHC format) in Postgres's `admin_credentials`;
+  the plaintext never touches disk or logs. At most 2 hashes are computed at once, the rest queue (so login requests cannot exhaust memory).
+- **Session cookie**: `jarvis_admin`, a 32-byte random value of which only the SHA-256 is stored; `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/admin/`,
+  plus `Secure` over TLS. Lifetime is `admin.session_hours` (default 12 hours, counted from sign-in, not extended). Every request checks the database,
+  so signing out, changing the password and `reset-password` invalidate other sessions immediately.
+- **CSRF**: each session has a CSRF token, given to the web page by `GET /api/v1/admin/state`; every write (POST / PUT / DELETE) must carry
+  an `X-Jarvis-CSRF` header matching the session's. In addition, writes must be `Content-Type: application/json`; when the browser sends `Sec-Fetch-Site` it must be
+  `same-origin`; when it sends `Origin`, its host and port must match the request's `Host`. Sign-in and first-time setup check the last two as well (there is no session yet).
+- **Rate limiting**: failed sign-ins (and setup codes) use the `security` thresholds (`auth_failures` failures / `auth_window_seconds` seconds, blocked for `auth_block_seconds` seconds),
+  but in a separate table, and **LAN and local loopback count too** (a password is much easier to guess than a device token; loopback may be public requests forwarded by a reverse proxy on the same machine). If the hub machine's owner
+  gets locked out for a while because of this, `personad hub admin …` still works. Sources outside the LAN additionally share a combined budget at ten times the threshold, against many addresses guessing together.
+  Blocked requests get 429 with `Retry-After`. Admin console failures do not affect the app's auth counters, and vice versa.
+- **Forgot the password**: run `personad hub admin reset-password` on the hub machine: with a terminal, enter the new password twice (not echoed); without one, it reads a line from stdin;
+  `--clear` removes the password and returns to first-time setup. Both invalidate every signed-in session. In Docker: `docker compose exec hub personad hub admin reset-password`.
 
-## 改 hub.json
+## Editing hub.json
 
-管理界面改的东西写回 `~/.persona/hub.json`：
+Changes made in the admin console are written back to `~/.persona/hub.json`:
 
-- **原子写**：同目录写临时文件、`fsync`、`rename` 覆盖，权限一律 0600；同一时间只有一个写者（进程内的锁 + 对 `~/.persona` 目录加 flock，命令行和 hub 之间也互斥）。
-- **保留不认识的字段和顺序**：只改要改的那几个键，别的键（包括这个版本不认识的、别的分支加的）原样保留，顺序不变，缩进统一成两个空格。
-- **环境变量的值不写回**：Docker 的 `JARVIS_PUBLIC_URL` 之类只在内存里覆盖，管理界面改的是文件里的值。
-- **生效**：
+- **Atomic writes**: write a temp file in the same directory, `fsync`, `rename` over the original, always mode 0600; only one writer at a time (an in-process lock + flock on the `~/.persona` directory, so the command line and the hub exclude each other too).
+- **Unknown fields and order are preserved**: only the keys being changed are touched; other keys (including ones this version doesn't know and ones added by other branches) are kept as is, in the same order, with indentation normalized to two spaces.
+- **Environment variable values are not written back**: Docker's `JARVIS_PUBLIC_URL` and the like only override in memory; the admin console changes the values in the file.
+- **When it takes effect**:
 
-  | 改什么 | 什么时候生效 |
+  | What changes | When it takes effect |
   | --- | --- |
-  | hub 名字 `name` | 立刻（hello / health 里的 `hub_name` 下次请求就是新的） |
-  | 管理界面访问范围 `admin.access` / `admin.cidrs` | 立刻 |
-  | 加电脑（`machines`，kind link / service） | 立刻（加完就开始连） |
-  | 删电脑、改一台电脑的设置（`machines`） | 重启 hub 后 |
-  | `public_url`、`public.tls_listen`、`public.advertise` | 重启 hub 后 |
+  | hub name `name` | Immediately (the `hub_name` in hello / health is the new one on the next request) |
+  | Admin console access scope `admin.access` / `admin.cidrs` | Immediately |
+  | Adding a computer (`machines`, kind link / service) | Immediately (starts connecting once added) |
+  | Removing a computer, changing a computer's settings (`machines`) | After a hub restart |
+  | `public_url`, `public.tls_listen`, `public.advertise` | After a hub restart |
 
-  要重启的改动，接口在回包里带 `"restart": {"required": true, "reasons": ["…"]}`，网页顶部一直提示「有 N 项改动重启后生效」，直到重启。
-  「重启 hub」按钮只在 hub 有人管着重启时出现（systemd 的 `INVOCATION_ID`、容器里）：hub 正常退出，由 systemd / Docker 拉起来。
-  没人管的（手动在终端里跑的）只提示去重启。
+  For changes that need a restart, the API response carries `"restart": {"required": true, "reasons": ["…"]}`, and the top of the web page keeps showing "{count} changes take effect after a hub restart" until it restarts.
+  The **Restart hub** button only appears when something supervises the hub's restarts (systemd's `INVOCATION_ID`, inside a container): the hub exits cleanly and systemd / Docker brings it back up.
+  When nothing supervises it (run by hand in a terminal), it only tells you to restart.
 
-## 页面
+## Pages
 
-| 页面 | 路径 | 内容 |
+| Page | Path | Contents |
 | --- | --- | --- |
-| 首次设置 / 登录 | `/admin` | 没设密码时设密码，否则输密码登录 |
-| 概览 | `/admin` | hub 名字（可改）、版本、运行时长、监听 / TLS / 指纹、候选地址、电脑和设备数、「运行检查」（`personad hub doctor` 的结果）；除了本机没有别的电脑时，顶部引导「添加电脑」 |
-| 电脑 | `/admin/machines` | 「添加电脑」放在最上面，两种：**电脑来连**（kind link：填 id / 名字，生成 jarvis-link 配对链接，给 Mac / Linux / Windows 的装法）和 **hub 来连**（kind service：粘贴那台 `jarvis-link pair --listen` 打印的链接，可改地址、填 socks5 代理）；不再添加 ssh 电脑。每台的状态（在线 / 离线 / 错误、连接方式、node 版本）和**每条路**（方式、经哪台 hub、能不能用、RTT、哪条在用，[mesh.md](mesh.md)「一台电脑多条路」）；service 电脑的连接器被配给别的 hub 时「重新配对」；重连、删除（只在成员上配的电脑不能在这里删） |
-| 设备 | `/admin/devices` | 设备凭据列表、撤销、生成手机配对二维码；成员 hub 上只提示去中心的管理界面 |
-| 扩展 | `/admin/extensions`（老的 `/admin/plugins` 照样打开） | 这台 hub 的扩展：列表、开关、安装（hub 机器上的目录或包、带 sha256 的 https 链接、上传、remote socket；先预览它能做什么，同意才装）、升级（权限变多明确提示）、回滚、卸载（可留数据），以及扩展市场（登记市场、浏览目录、从市场安装 / 升级），见下面「扩展」和 [extensions.md](extensions.md)「管理界面：扩展」 |
-| 助手卡片 | `/admin/assistant` | 主对话富 UI 的开关 `assistant.persona_view`、各端实际支持、示例卡片的本地预览（下面「助手卡片」） |
-| 用量来源 | `/admin/usage` | 账号池网关（中转 relay 等）的订阅额度来源（`docs/usage-windows.md`「账号池网关」，#2595）：总开关和读取间隔、来源列表（名字、类型、地址、状态：上次读取、账号 / 窗口数、失败原因；每个来源的开关）、添加 / 编辑（类型、名字、地址、Key）和「测试连接」（只读一次、不保存，报告看到几个账号、几个窗口、各家几个）、删除（就地确认）。Key 只写不读，换了地址要重新填 |
-| 网络与访问 | `/admin/network` | 公网地址 / TLS / 候选地址（可改，重启生效）、`security` 的设置（只读）、管理界面的访问范围（只能收窄）、改管理员密码 |
-| 高级 › 互联 | `/admin/peers` | 一般用不到（推荐只装一台 hub）：组里的 hub（中心 / 成员、在线、任期，「设为中心」，原中心连不上时先确认）、发现到的 hub、生成 / 输入互联码、链路状态和 RTT、断开（[mesh.md](mesh.md)） |
+| First-time setup / sign-in | `/admin` | Set a password if none is set, otherwise sign in with it |
+| Overview | `/admin` | hub name (editable), version, uptime, listening / TLS / fingerprint, candidate addresses, computer and device counts, **Run checks** (the results of `personad hub doctor`); when there are no computers besides the local one, a prompt at the top to **Add computer** |
+| Computers | `/admin/machines` | **Add computer** at the top, two kinds: **Computer connects** (kind link: fill in id / name, generates a jarvis-link pairing link, with install instructions for Mac / Linux / Windows) and **Hub connects** (kind service: paste the link printed by `jarvis-link pair --listen` on that computer; the address can be edited and a socks5 proxy filled in); ssh computers can no longer be added. Each computer's status (online / offline / error, connection method, node version) and **every route** (method, via which hub, usable or not, RTT, which one is in use, [mesh.md](mesh.md) ("One computer, multiple routes")); "Re-pair" when a service computer's connector has been assigned to another hub; reconnect, delete (computers configured only on a member hub cannot be deleted here) |
+| Devices | `/admin/devices` | Device credential list, revoke, generate the phone pairing QR code; on a member hub it only points you to the primary hub's admin console |
+| Extensions | `/admin/extensions` (the old `/admin/plugins` still opens) | This hub's extensions: list, toggle, install (a directory or package on the hub machine, an https link with sha256, upload, remote socket; preview what it can do first, install only after agreeing), upgrade (clearly flagged when permissions grow), roll back, uninstall (optionally keeping data), and the extension market (register markets, browse the catalog, install / upgrade from a market); see "Extensions" below and [extensions.md](extensions.md) ("Admin console: extensions") |
+| Assistant cards | `/admin/assistant` | The main chat rich UI switch `assistant.persona_view`, what each client actually supports, local previews of example cards ("Assistant cards" below) |
+| Usage sources | `/admin/usage` | Subscription quota sources from account-pool gateways (such as relay gateways) (`docs/usage-windows.md` ("Account-pool gateways"), #2595): master switch and read interval, source list (name, type, address, status: last read, account / window counts, failure reason; a toggle per source), add / edit (type, name, address, Key) and **Test connection** (reads once without saving, reporting how many accounts, windows and providers it sees), delete (confirmed in place). The Key is write-only; changing the address requires entering it again |
+| Network & access | `/admin/network` | Public address / TLS / candidate addresses (editable, take effect after restart), `security` settings (read-only), the admin console's access scope (narrow only), change the admin password |
+| Advanced › Linked hubs | `/admin/peers` | Rarely needed (installing a single hub is recommended): hubs in the group (primary / member, online, term, **Make primary**, with a confirmation first when the old primary is unreachable), discovered hubs, generate / enter a link code, link status and RTT, disconnect ([mesh.md](mesh.md)) |
 
-成员 hub 的每一页顶部都写「这台 hub 是组里的成员，组由中心「X」管理」（中心连不上时多一句，并给「换中心」的入口）：设备、互联这些组的事去中心的管理界面做。
+Every page on a member hub says at the top "This hub is a member of a group run by the primary hub "X"" (with an extra sentence and a **Change primary** entry when the primary is unreachable): group matters like devices and linked hubs are handled in the primary's admin console.
 
-导航是一个列表（`web/src/admin/nav.ts`，带「高级」分组），以后加「更新」（#284）、「设置」（#287）就是加一项。
+Navigation is a list (`web/src/admin/nav.ts`, with an "Advanced" group); adding "Updates" (#284) or "Settings" (#287) later means adding an entry.
 
-## 接口
+## API
 
-都在 `/api/v1/admin/` 下，先过访问范围，再过会话（`state`、`setup`、`login` 除外）。错误是 `{"error": "…", "code": "…"}`；
-没登录或会话过期 401 `login_required`，CSRF 不对 403 `csrf`。写操作的请求体一律 JSON（没有内容也发 `{}`）。
+Everything is under `/api/v1/admin/`, checked first against the access scope, then the session (except `state`, `setup`, `login`). Errors are `{"error": "…", "code": "…"}`;
+not signed in or session expired is 401 `login_required`, a wrong CSRF token is 403 `csrf`. Write request bodies are always JSON (send `{}` when there is no content).
 
-| 接口 | 作用 |
+| Endpoint | Purpose |
 | --- | --- |
-| `GET state` | `{"password_set", "logged_in", "can_setup", "setup_code_required", "csrf", "hub_name", "version", "session_expires_at"}`；`csrf` 只在登录后有 |
-| `POST setup` `{"password", "setup_code"}` | 首次设密码并登录，回 state；409 `already_set`、403 `setup_local_only` / `setup_code_required`、401 `bad_setup_code`、400 `weak_password`、429 `rate_limited` |
-| `POST setup-code` | `personad hub admin setup-code` 用：只认回环 + 主 token，回 `{"code", "expires_at"}`；设过密码 409 `already_set` |
-| `POST reload` | `personad hub admin access` 写完 hub.json 后用：只认回环 + 主 token，重读 `admin` 和 `name` |
-| `POST login` `{"password"}` | 回 state；401 `bad_password`、429 `rate_limited`（`retry_after` 秒） |
-| `POST logout` | 退出；库里的会话没删掉时照样清 cookie，但回 500 `logout_failed`（cookie 的副本在过期前仍能登录） |
-| `POST password` `{"current", "new"}` | 改密码，别的会话全部失效 |
-| `GET overview` | `hub`（`hub_id`、`name`、`name_set`、`default_name`、`version`、`started_at`、`os`、`arch`、`container`、`can_restart`）、`listen`、`public_url`、`tls`（`listen`、`port`、`fp`；没开是 null）、`endpoints`、`machines`（`total`、`online`）、`devices`、`restart` |
-| `PUT hub` `{"name"}` | 改 hub 名字（空串 = 用默认名），立刻生效 |
-| `POST doctor` | 跑一遍 `hub doctor`：`{"items": [{"level": "ok｜problem｜info", "item", "detail"}], "next": ["…"], "ran_at"}` |
-| `POST restart` | 重启 hub（只在 `can_restart` 时）；409 `not_supervised` |
-| `GET machines` | `{"machines": [{id, name, kind, icon, ssh_host, online, error, transport, node_version, node_mismatch, os, last_seen, link, state, tailcat, address, proxy, hub_id, paths}], "tls": bool, "restart"}`；`state`：`active` / `pending_add`（写进 hub.json 了，hub 没在跑时重启后才连）/ `pending_remove`；kind `hub` 是只在成员上配的电脑；`paths` 每条路 `{via, hub_id, id, ok, rtt_ms, active, error}`；`proxy` 不含密码 |
-| `POST machines` `{"kind": "link", "id", "name", "icon"}` 或 `{"kind": "service", "id", "name", "icon", "pair_link", "address"?, "proxy"?}` | 加一台，立刻开始连，回 `{"machine", "restart"}`；service 先和连接器配对（凭据加密存库），成功才写 hub.json。400 `invalid_id` / `invalid_name` / `invalid_kind` / `invalid_proxy` / `ssh_unsupported`（不再添加 ssh、tailcat）、409 `exists`、502 `pair_failed`（`error` 是给人看的原因） |
-| `POST machines/{id}/connector` `{"pair_link", "address"?}` | service 电脑重新配对连接器：`{"ok", "address", "version", "restart_required"}`（换了地址要重启）；400 `not_service`、502 `pair_failed` |
-| `DELETE machines/{id}` | 从 hub.json 删掉，回 `{"ok", "restart"}` |
-| `POST machines/{id}/reconnect` | 重连；409 `not_active` |
-| `POST machines/{id}/link-pair` | 给 link 电脑的 jarvis-link 生成配对链接：`{"pair_url", "expires_at", "command"}`；409 `tls_required` / `not_active`、400 `not_link` |
+| `GET state` | `{"password_set", "logged_in", "can_setup", "setup_code_required", "csrf", "hub_name", "version", "session_expires_at"}`; `csrf` only after sign-in |
+| `POST setup` `{"password", "setup_code"}` | Set the first password and sign in, returns state; 409 `already_set`, 403 `setup_local_only` / `setup_code_required`, 401 `bad_setup_code`, 400 `weak_password`, 429 `rate_limited` |
+| `POST setup-code` | Used by `personad hub admin setup-code`: loopback + master token only, returns `{"code", "expires_at"}`; 409 `already_set` once a password is set |
+| `POST reload` | Used by `personad hub admin access` after writing hub.json: loopback + master token only, rereads `admin` and `name` |
+| `POST login` `{"password"}` | Returns state; 401 `bad_password`, 429 `rate_limited` (`retry_after` seconds) |
+| `POST logout` | Sign out; if the session in the database could not be deleted, it still clears the cookie but returns 500 `logout_failed` (a copy of the cookie can still sign in until it expires) |
+| `POST password` `{"current", "new"}` | Change the password; all other sessions are invalidated |
+| `GET overview` | `hub` (`hub_id`, `name`, `name_set`, `default_name`, `version`, `started_at`, `os`, `arch`, `container`, `can_restart`), `listen`, `public_url`, `tls` (`listen`, `port`, `fp`; null when off), `endpoints`, `machines` (`total`, `online`), `devices`, `restart` |
+| `PUT hub` `{"name"}` | Change the hub name (empty string = use the default name), effective immediately |
+| `POST doctor` | Run `hub doctor` once: `{"items": [{"level": "ok｜problem｜info", "item", "detail"}], "next": ["…"], "ran_at"}` |
+| `POST restart` | Restart the hub (only when `can_restart`); 409 `not_supervised` |
+| `GET machines` | `{"machines": [{id, name, kind, icon, ssh_host, online, error, transport, node_version, node_mismatch, os, last_seen, link, state, tailcat, address, proxy, hub_id, paths}], "tls": bool, "restart"}`; `state`: `active` / `pending_add` (written to hub.json, but if the hub is not running it only connects after a restart) / `pending_remove`; kind `hub` is a computer configured only on a member; `paths` has one `{via, hub_id, id, ok, rtt_ms, active, error}` per route; `proxy` excludes the password |
+| `POST machines` `{"kind": "link", "id", "name", "icon"}` or `{"kind": "service", "id", "name", "icon", "pair_link", "address"?, "proxy"?}` | Add one; it starts connecting immediately, returns `{"machine", "restart"}`; service first pairs with the connector (credentials stored encrypted in the database) and only writes hub.json on success. 400 `invalid_id` / `invalid_name` / `invalid_kind` / `invalid_proxy` / `ssh_unsupported` (ssh and tailcat can no longer be added), 409 `exists`, 502 `pair_failed` (`error` is a human-readable reason) |
+| `POST machines/{id}/connector` `{"pair_link", "address"?}` | Re-pair a service computer's connector: `{"ok", "address", "version", "restart_required"}` (a changed address needs a restart); 400 `not_service`, 502 `pair_failed` |
+| `DELETE machines/{id}` | Remove from hub.json, returns `{"ok", "restart"}` |
+| `POST machines/{id}/reconnect` | Reconnect; 409 `not_active` |
+| `POST machines/{id}/link-pair` | Generate a pairing link for a link computer's jarvis-link: `{"pair_url", "expires_at", "command"}`; 409 `tls_required` / `not_active`, 400 `not_link` |
 | `GET devices` | `{"devices": [{id, name, kind, role, created_at, last_seen, machine_id}]}` |
-| `DELETE devices/{id}` | 撤销 |
-| `POST devices/pair` | 手机配对：`{"pair_url", "url", "expires_at", "fp", "qr": {"size", "rows": ["0101…"]}}`（`rows` 每行一个 `0` / `1` 串，不含留白） |
-| `GET assistant` | `{"persona_view"}`：hub.json 的 `assistant.persona_view`（管理界面改过就是改后的值） |
-| `PUT assistant` `{"persona_view"}` | 写 hub.json 的 `assistant.persona_view`（关 = 删掉这个键），`assistant` 里别的键和文件里别的字段原样保留，hub 侧立刻生效（助手提示词见下面「助手卡片」）；缺字段 400 `bad_request` |
-| `GET network` | `listen`、`public_url`、`tls`（`listen`、`port`、`fp`）、`advertise`、`advertise_ipv6`、`advertise_lan`、`endpoints`、`security`（`trusted_cidrs`、`allow_public_plaintext`）、`admin`（`access`、`cidrs`、`session_hours`、`from_env`、`container`）、`you`（`address`、`tls`、`allowed`：四种范围各自放不放你进来）、`restart` |
-| `PUT network/access` `{"access", "cidrs", "force"}` | 收窄访问范围；403 `widen_cli_only`、409 `from_env` / `would_lock_you_out`、400 `invalid_cidr` |
-| `PUT network/public` `{"public_url", "tls_listen", "advertise"}` | 改公网地址 / TLS 监听 / 候选地址（省略的字段不变），重启生效 |
+| `DELETE devices/{id}` | Revoke |
+| `POST devices/pair` | Phone pairing: `{"pair_url", "url", "expires_at", "fp", "qr": {"size", "rows": ["0101…"]}}` (`rows` is one string of `0` / `1` per row, without the quiet zone) |
+| `GET assistant` | `{"persona_view"}`: hub.json's `assistant.persona_view` (the changed value if the admin console changed it) |
+| `PUT assistant` `{"persona_view"}` | Write hub.json's `assistant.persona_view` (off = delete the key); other keys in `assistant` and other fields in the file are kept as is; effective on the hub immediately (for the assistant prompt see "Assistant cards" below); missing field 400 `bad_request` |
+| `GET network` | `listen`, `public_url`, `tls` (`listen`, `port`, `fp`), `advertise`, `advertise_ipv6`, `advertise_lan`, `endpoints`, `security` (`trusted_cidrs`, `allow_public_plaintext`), `admin` (`access`, `cidrs`, `session_hours`, `from_env`, `container`), `you` (`address`, `tls`, `allowed`: whether each of the four scopes would let you in), `restart` |
+| `PUT network/access` `{"access", "cidrs", "force"}` | Narrow the access scope; 403 `widen_cli_only`, 409 `from_env` / `would_lock_you_out`, 400 `invalid_cidr` |
+| `PUT network/public` `{"public_url", "tls_listen", "advertise"}` | Change the public address / TLS listener / candidate addresses (omitted fields unchanged), effective after restart |
 | `GET mesh` | `{"role": "center｜member", "center": {hub_id, name, online}, "term", "hubs": [{hub_id, name, role, online, self, paired}]}` |
-| `POST peers/{hub_id}/center` `{"confirm"}` | 设为中心（hub_id 可以是自己）；409 `confirm_required`（原中心连不上，要确认）/ `unreachable`，404 `not_in_group` |
-| `…/peers`、`…/routes` | 互联：配过对的 hub（每项 `role`）、发现的 hub、互联码、断开、路由（[mesh.md](mesh.md)「管理接口和命令行」） |
-| 成员上的 `devices*` | 409 `member_hub`：设备由中心管 |
-| `GET extensions` | `{"extensions": [ExtensionDetail], "can_install", "upload_most"}`：每项是 App 接口的详情（[extensions.md](extensions.md)「hub 的接口」），`upload_most` 是上传的上限（字节） |
-| `GET extensions/{id}` | 一个扩展的详情；404 `not_found` |
-| `POST extensions/preview` `{"source", "upgrade"?}` | 预览（来源写法同 `personad extension install`），回预览（含 `permissions_digest`、升级时的 `more_permissions` / `added_permissions`）；400 `invalid_plugin`（`error` 是给人看的原因）、409 `busy`、429 `rate_limited` |
-| `POST extensions/upload?name=<文件名>&upgrade=<id>` | 请求体是 `.tar.gz` / `.tgz` / `.zip` 本身（`Content-Type: application/octet-stream`，唯一不是 JSON 的写操作，照样要 CSRF 头），最大 200 MB，回预览；413 `too_large`，别的同上 |
-| `POST extensions/install` `{"preview_id", "permissions_digest"}` | 安装预览过的那一份，回详情；不带摘要 400 `confirm_required`，摘要对不上、预览过期 400 `install_failed` |
-| `POST extensions/{id}/upgrade` `{"preview_id", "permissions_digest"?}` | 升级，权限变多时必须带新的摘要；400 `upgrade_failed` |
-| `POST extensions/{id}/rollback` | 回到上一个版本；400 `rollback_failed` |
-| `PUT extensions/{id}/enabled` `{"enabled"}` | 开关；hub.json 来的 409 `read_only` |
-| `DELETE extensions/{id}` `{"keep_data"}` | 卸载；内置的和 hub.json 来的 409 `uninstall_failed` |
-| `GET extensions/-/markets`、`POST extensions/-/markets` `{"spec", "token"?}`、`DELETE extensions/-/markets/{id}`、`POST extensions/-/markets/{id}/refresh`、`PUT extensions/-/markets/{id}/token` `{"token"}` | 扩展市场，和 App 的 `/api/v1/extensions/-/markets…` 同一套（[extensions.md](extensions.md)「扩展市场」）；登记前先读一次索引，读不到 400 `market_failed`（`error` 是给人看的原因），token 只写不回显 |
-| `GET extensions/-/catalog?q=&market=&refresh=1`、`POST extensions/-/catalog/preview` `{"market", "extension"}`（老键 `plugin` 也认） | 市场的目录（`{markets, extensions, platform}`），和从市场预览（回同样的预览，多一个 `market`）；拿到预览后照常 `extensions/install` / `extensions/{id}/upgrade` |
-| `GET extensions/-/metrics?window=`、`GET extensions/{id}/metrics?window=`、`GET extensions/{id}/logs?since=&q=&limit=`、`GET extensions/{id}/logs/stream?since=` | 扩展的运行情况（调用次数、错误率、延迟、重启）和日志（server-sent events 实时跟），见 [extensions.md](extensions.md)「运行情况」 |
-| `GET usage-sources` | `{"enabled", "poll_minutes", "limit", "sources": [{id, name, type, url, has_key, enabled, status: {ok_at?, tried_at?, error?, seen?: {accounts, windows, listed, providers}}}]}`；**从不带 Key**，只有 `has_key`。`error` 是读失败的代码（`unauthorized`、`forbidden`、`not_found`、`unreachable`、`timeout`、`bad_response`、`too_large`、`redirect`、`server_error`） |
-| `PUT usage-sources` `{"enabled"?, "poll_minutes"?}` | 总开关和读取间隔（1–1440），写回 hub.json，立刻生效，回同上；400 `invalid_poll` |
-| `POST usage-sources` `{"type", "url", "key", "name"?, "enabled"?}` | 添加，回 `{"source"}`；400 `invalid_type` / `invalid_url`（要 http(s)，不能带用户名密码）/ `invalid_name` / `invalid_key` / `key_required`（relay 必须有 Key）、409 `too_many`（最多 8 个） |
-| `PUT usage-sources/{id}` `{"name"?, "type"?, "url"?, "key"?, "clear_key"?, "enabled"?}` | 改；不带 `key` 保留原来的，**但改了 `url` 或 `type` 必须重新带 `key`**（400 `key_required`：已保存的 Key 不会跟着换去新地址）；404 `not_found` |
-| `DELETE usage-sources/{id}` | 删除；404 `not_found` |
-| `POST usage-sources/test` `{"type", "url", "key"?, "id"?}` | 只读地读一次，什么都不保存：`{"ok": true, "accounts", "windows", "listed", "providers"}` 或 `{"ok": false, "code"}`（读失败是结果，不是 HTTP 错误）。不带 `key` 且带 `id` 时用已保存的 Key，**只对已保存的那个地址**；同时只跑一个（429 `busy`），最长 25 秒 |
-| 没有扩展底座的 hub | `extensions*` 写操作 503 `no_plugins`；更老的 hub 没有这些路由（404），页面提示先升级 hub |
-| 老路径 `plugins…` | #1844 之前的路由，hub 照样认，回老字段名（`plugins`、`plugin`、`plugin_name`，市场的个数 `plugins`）；页面先读一次列表，`extensions` 回 404 就整页改用老路由（老 hub，`web/src/admin/api.ts`） |
+| `POST peers/{hub_id}/center` `{"confirm"}` | Make primary (hub_id may be this hub); 409 `confirm_required` (the old primary is unreachable, needs confirmation) / `unreachable`, 404 `not_in_group` |
+| `…/peers`, `…/routes` | Linked hubs: paired hubs (each with `role`), discovered hubs, link codes, disconnect, routes ([mesh.md](mesh.md) ("Admin API and command line")) |
+| `devices*` on a member | 409 `member_hub`: devices are managed by the primary |
+| `GET extensions` | `{"extensions": [ExtensionDetail], "can_install", "upload_most"}`: each item is the app API's detail ([extensions.md](extensions.md) ("hub API")); `upload_most` is the upload limit (bytes) |
+| `GET extensions/{id}` | One extension's detail; 404 `not_found` |
+| `POST extensions/preview` `{"source", "upgrade"?}` | Preview (source syntax same as `personad extension install`), returns the preview (with `permissions_digest`, and `more_permissions` / `added_permissions` on upgrade); 400 `invalid_plugin` (`error` is a human-readable reason), 409 `busy`, 429 `rate_limited` |
+| `POST extensions/upload?name=<file name>&upgrade=<id>` | The request body is the `.tar.gz` / `.tgz` / `.zip` itself (`Content-Type: application/octet-stream`, the only non-JSON write, still needs the CSRF header), at most 200 MB, returns the preview; 413 `too_large`, others as above |
+| `POST extensions/install` `{"preview_id", "permissions_digest"}` | Install the previewed package, returns the detail; without a digest 400 `confirm_required`; digest mismatch or expired preview 400 `install_failed` |
+| `POST extensions/{id}/upgrade` `{"preview_id", "permissions_digest"?}` | Upgrade; when permissions grow the new digest is required; 400 `upgrade_failed` |
+| `POST extensions/{id}/rollback` | Go back to the previous version; 400 `rollback_failed` |
+| `PUT extensions/{id}/enabled` `{"enabled"}` | Toggle; ones from hub.json 409 `read_only` |
+| `DELETE extensions/{id}` `{"keep_data"}` | Uninstall; built-in ones and ones from hub.json 409 `uninstall_failed` |
+| `GET extensions/-/markets`, `POST extensions/-/markets` `{"spec", "token"?}`, `DELETE extensions/-/markets/{id}`, `POST extensions/-/markets/{id}/refresh`, `PUT extensions/-/markets/{id}/token` `{"token"}` | Extension markets, the same set as the app's `/api/v1/extensions/-/markets…` ([extensions.md](extensions.md) ("Extension market")); the index is read once before registering, and if it cannot be read 400 `market_failed` (`error` is a human-readable reason); the token is write-only, never echoed |
+| `GET extensions/-/catalog?q=&market=&refresh=1`, `POST extensions/-/catalog/preview` `{"market", "extension"}` (the old key `plugin` is also accepted) | The market catalog (`{markets, extensions, platform}`) and previewing from a market (returns the same preview, plus `market`); once you have the preview, use `extensions/install` / `extensions/{id}/upgrade` as usual |
+| `GET extensions/-/metrics?window=`, `GET extensions/{id}/metrics?window=`, `GET extensions/{id}/logs?since=&q=&limit=`, `GET extensions/{id}/logs/stream?since=` | Extension health (call counts, error rate, latency, restarts) and logs (followed live via server-sent events), see [extensions.md](extensions.md) ("Health") |
+| `GET usage-sources` | `{"enabled", "poll_minutes", "limit", "sources": [{id, name, type, url, has_key, enabled, status: {ok_at?, tried_at?, error?, seen?: {accounts, windows, listed, providers}}}]}`; **never includes the Key**, only `has_key`. `error` is the read failure code (`unauthorized`, `forbidden`, `not_found`, `unreachable`, `timeout`, `bad_response`, `too_large`, `redirect`, `server_error`) |
+| `PUT usage-sources` `{"enabled"?, "poll_minutes"?}` | Master switch and read interval (1–1440), written back to hub.json, effective immediately, returns the same as above; 400 `invalid_poll` |
+| `POST usage-sources` `{"type", "url", "key", "name"?, "enabled"?}` | Add, returns `{"source"}`; 400 `invalid_type` / `invalid_url` (must be http(s), no username or password) / `invalid_name` / `invalid_key` / `key_required` (relay requires a Key), 409 `too_many` (at most 8) |
+| `PUT usage-sources/{id}` `{"name"?, "type"?, "url"?, "key"?, "clear_key"?, "enabled"?}` | Edit; without `key` the existing one is kept, **but changing `url` or `type` requires sending `key` again** (400 `key_required`: a saved Key never follows to a new address); 404 `not_found` |
+| `DELETE usage-sources/{id}` | Delete; 404 `not_found` |
+| `POST usage-sources/test` `{"type", "url", "key"?, "id"?}` | Reads once, read-only, saves nothing: `{"ok": true, "accounts", "windows", "listed", "providers"}` or `{"ok": false, "code"}` (a read failure is a result, not an HTTP error). Without `key` but with `id` it uses the saved Key, **only against the saved address**; only one runs at a time (429 `busy`), at most 25 seconds |
+| hubs without the extension base | `extensions*` writes return 503 `no_plugins`; older hubs don't have these routes (404), and the page says to upgrade the hub first |
+| Old paths `plugins…` | Routes from before #1844; the hub still accepts them and returns the old field names (`plugins`, `plugin`, `plugin_name`, and `plugins` for a market's count); the page reads the list once and if `extensions` returns 404 it switches the whole page to the old routes (old hubs, `web/src/admin/api.ts`) |
 
-`usage-sources…` 这几个是管理者的（`docs/usage-windows.md`「谁管这件事」）：hub 认过管理会话和 CSRF 后原样转给它，带上 `X-Persona-Admin`；管理者不在时回 `503 assistant_offline`。
+The `usage-sources…` endpoints belong to the manager (`docs/usage-windows.md` ("Who owns this")): after authenticating the admin session and checking CSRF, the hub forwards them unchanged with `X-Persona-Admin`; if the manager is unavailable, it returns `503 assistant_offline`.
 
-## 扩展
+## Extensions
 
-装扩展就是在 hub 机器上运行新程序。管理界面能加电脑、签发设备凭据，本来就和 hub 主人一样大，所以登录的会话也能装（[extensions.md](extensions.md)「安装、升级、回滚、卸载」），
-和 `personad extension` 用同一个注册表、同样的检查，另外：
+Installing an extension runs a new program on the hub machine. The admin console can add computers and issue device credentials, so it already has the same authority as the hub's owner; a signed-in session can therefore install extensions too ([extensions.md](extensions.md) ("Install, upgrade, roll back, uninstall")),
+using the same registry and checks as `personad extension`, plus:
 
-- **先预览、再同意**：安装和权限变多的升级都要带预览给的 `permissions_digest`，装的就是页面上给人看过的那一份；页面只在拿到预览后才给「同意并安装」。
-- **预览限流**：每份预览在暂存目录（`~/.persona/extensions/staging/`）里放最多 200 MB、10 分钟，所以同一时间只跑一个（另一个在跑时 409 `busy`），
-  10 分钟内最多 10 次（成功失败都算，超了 429 `rate_limited` 和 `Retry-After`），偷到会话的人也塞不满磁盘。
-- **上传**：浏览器把文件原样 POST 上来，hub 边收边写进这次预览的暂存目录（超过 200 MB 就停），解包后删掉原文件；先按 `Content-Length` 拒掉明显过大的。
-- **审计**：每一步记进 `plugin_audit`，执行者 `admin UI`；hub 日志里一行 `admin: installed plugin …`。
-- **运行情况**（#1857）：列表每行有近 24 小时的错误率和 p95，详情里有调用 / 出错 / 延迟的图、按方法的表、出错退出的原因和这个扩展的日志（搜索、实时跟随、拷贝），
-  见 [extensions.md](extensions.md)「运行情况」「管理界面：扩展」。日志只有登录的会话能看：扩展自己写的东西可能比 App 该看到的多。
-- **扩展市场**（#1330，页面 `web/src/admin/pages/ExtensionMarket.tsx`，逻辑和文字与网页共用 `web/src/lib/extension-market.ts`）：扩展列表上面（#5017）两张卡片，只在能装扩展（`can_install`）且 hub 有市场接口时出现（404 / 503 时整节不显示）。
-  「扩展市场」列出登记的市场：名字、有没有 token、地址（https / GitHub / git 各一个图标）、几个扩展 · 多久前读过、读不到的原因（红）和索引的警告（橙）；每个市场能重新读取、填 / 换 / 去掉 token（只写，不回显）、删除（就地确认；从它装的扩展留着）。
-  「添加市场」填地址和可选的 token：占位文字和说明列出三种写法（`https://…`、`github:owner/repo[@分支]`、`git:<地址>[#分支]`，#1373），页面不查写法，原样交给 hub，hub 读到索引才登记，读不到把原因写在对话框里；
-  `git:`（和省略前缀的 `git@host:path.git`）的市场用 hub 机器自己的 SSH 凭据，对话框里 token 不能填，列表里也没有「填 / 换 token」。
-  「市场里的扩展」可以搜索、按市场筛选，每行是名字、版本、状态（未安装 / 可升级到 x / 已装 / hub 自带 / 装不了）、发布者、市场、说明、标签和装不了的原因；
-  「安装」「升级」先 `extensions/-/catalog/preview`，弹出和别的来源一样的预览（权限、权限变多时的红色提示和「新增」、剩几分钟），同意后走上面的 `extensions/install` / `extensions/{id}/upgrade`（带预览的 id 和摘要），装完列表和目录一起刷新。
-  从市场装的扩展和别的已装扩展一样，在列表里升级、回滚、卸载。截图：`/admin/extensions?mock=app`，`&dialog=market` 直接打开第一个能升级的扩展的预览，`&dialog=market-add` 打开添加市场（`web/src/admin/mock.ts`）。
+- **Preview, then agree**: installation and upgrades that add permissions must include the preview's `permissions_digest`, ensuring the installed package is the one shown to the user; the page only offers **Agree and install** after receiving a preview.
+- **Preview rate limits**: each preview keeps up to 200 MB in the staging directory (`~/.persona/extensions/staging/`) for 10 minutes, so only one runs at a time (409 `busy` while another runs),
+  at most 10 in 10 minutes (successes and failures both count; exceeding it returns 429 `rate_limited` and `Retry-After`), so even someone who steals a session cannot fill the disk.
+- **Upload**: the browser POSTs the file unchanged; the hub writes it into this preview's staging directory as it arrives (stopping above 200 MB), then removes the original after unpacking; obviously oversized requests are rejected first by `Content-Length`.
+- **Audit**: every step goes into `plugin_audit`, actor `admin UI`; a hub log line says `admin: installed plugin …`.
+- **Health** (#1857): each list row shows the last 24 hours' error rate and p95; the detail has call / error / latency charts, a table by method, reasons for error exits, and the extension's logs (search, live follow, copy),
+  see [extensions.md](extensions.md) ("Health", "Admin console: extensions"). Only signed-in sessions can view logs: an extension's own output may reveal more than the app should see.
+- **Extension market** (#1330, page `web/src/admin/pages/ExtensionMarket.tsx`, sharing logic and copy with the web app in `web/src/lib/extension-market.ts`): two cards above the extension list (#5017), shown only when extensions can be installed (`can_install`) and the hub has the market API (the entire section is hidden on 404 / 503).
+  **Extension markets** lists registered markets: name, whether a token exists, address (separate icons for https / GitHub / git), extension count · time since last read, failure reason (red) and index warnings (orange); each market can be refreshed, have its token added / replaced / removed (write-only, never echoed), or be deleted (confirmed in place; extensions installed from it remain).
+  **Add market** takes an address and optional token: placeholders and instructions show three forms (`https://…`, `github:owner/repo[@branch]`, `git:<address>[#branch]`, #1373); the page does not validate the syntax, but passes it unchanged to the hub, which only registers it after reading the index and shows any failure reason in the dialog;
+  `git:` markets (and `git@host:path.git` with the prefix omitted) use the hub machine's own SSH credentials; the dialog disables the token field and the list has no "add / replace token" action.
+  **Extensions in markets** supports search and filtering by market; each row shows name, version, status (not installed / upgrade to x / installed / built into hub / cannot install), publisher, market, description, tags and the reason installation is unavailable;
+  **Install** and **Upgrade** first call `extensions/-/catalog/preview`, opening the same preview as other sources (permissions, red warning and "Added" when permissions increase, minutes remaining); after agreement they use `extensions/install` / `extensions/{id}/upgrade` above (with preview id and digest), then refresh both the installed list and catalog.
+  Extensions installed from markets are upgraded, rolled back and uninstalled in the same list as other installed extensions. Screenshots: `/admin/extensions?mock=app`; `&dialog=market` directly opens the preview for the first upgradable extension; `&dialog=market-add` opens Add market (`web/src/admin/mock.ts`).
 
-## 助手卡片
+## Assistant cards
 
-页面 `web/src/admin/pages/Assistant.tsx`，接口 `server/internal/hub/admin_assistant.go`（#2023，设计见 [assistant-views.md](assistant-views.md)「提示词与开关」）。
+Page `web/src/admin/pages/Assistant.tsx`, API `server/internal/hub/admin_assistant.go` (#2023; design in [assistant-views.md](assistant-views.md) ("Prompts and switches")).
 
-- **开关**：`assistant.persona_view`。打开前弹框确认各端版本（iPhone 要等对应的 TestFlight）；关闭不问，助手改回所有客户端都能显示的 persona-card。
-  不用重启 hub：hub 里读这个开关的地方统一走 `h.assistantPersonaView()`（管理界面改过就用改后的值，否则用启动时读到的 `h.cfg`），Hello 也是，改完发 `manager.updated` 给已连上的助手进程（`assistantUpdated`，它自己存一份 Hello），再向它重新要一次工具列表（`assistantToolsFollow`，`view_show` 等随开关出现 / 消失），所以卡片工具和动作、正文卡片登记、渠道转发在一秒内跟上。
-  **助手的提示词不是立刻换**：CLAUDE.md 只在准备助手目录时重写（开新对话，或 App 打开对话页预热新进程），助手进程启动时才读 CLAUDE.md 和工具列表；已经在跑的进程沿用启动时读到的，直到重新启动。新代码读这个开关时不要直接读 `h.cfg.Assistant.PersonaView`。`assistant.html_views` 由 hub 另管（#2019），这页只说明它只在本开关打开、且那一端通过安全验收时运行。
-- **各端支持**：按当前实现写明网页、Apple、Android、手表 / 通知各自能做什么，以各端实际安装的版本为准。
-- **示例预览**：读 `schema/extension/examples/assistant/` 的合成数据，用网页的共用组件（`views/extensions/ViewBody.tsx`）画。只在本页：点选项、填表单、提交只改本页状态，显示「真实对话里会发回……」，
-  不调用任何对话或动作接口；HTML 示例只显示文字 fallback，不建 iframe、不运行脚本。`web/src/admin/assistant-examples.test.tsx` 扫源码确认页面只调用这两个管理接口。
-- 验证：`python3 scripts/test/admin_assistant_e2e.py <网页地址> [--shots <目录>]`（dev server 的 `/admin/assistant?mock=app`；宽 / 窄 × 浅 / 深色，记录预览期间页面发出的请求，必须为零）。
-  截图：`?dialog=enable` 打开确认框，`?dialog=example-form` 等直接选中某个示例。
+- **Switch**: `assistant.persona_view`. Before enabling, a dialog confirms client versions (iPhone must wait for the corresponding TestFlight); disabling asks nothing and returns the assistant to persona-card, supported by every client.
+  No hub restart: every hub read of this switch uses `h.assistantPersonaView()` (the changed value if the admin console changed it, otherwise startup `h.cfg`), including Hello. After changing it, the hub sends `manager.updated` to the connected assistant process (`assistantUpdated`, which keeps its own Hello), then requests its tool list again (`assistantToolsFollow`; `view_show` and others appear / disappear with the switch), so card tools and actions, body-card registration and channel forwarding catch up within one second.
+  **The assistant prompt does not change immediately**: CLAUDE.md is only rewritten when preparing the assistant directory (opening a new chat, or the app opening the chat page to warm up a new process). The assistant process reads CLAUDE.md and the tool list at startup; an already-running process keeps those startup values until restarted. New code reading this switch must not read `h.cfg.Assistant.PersonaView` directly. `assistant.html_views` is managed separately by the hub (#2019); this page only explains that it runs when this switch is on and that client has passed security acceptance.
+- **Client support**: states what the web, Apple, Android and watch / notification clients can do in the current implementation; the version actually installed on each client is what matters.
+- **Example previews**: synthetic data from `schema/extension/examples/assistant/`, rendered by the web's shared component (`views/extensions/ViewBody.tsx`). Local to this page: selecting options, filling forms and submitting only change this page's state and show "In a real chat this would send back…",
+  never calling chat or action APIs; HTML examples show only the text fallback, with no iframe or scripts. `web/src/admin/assistant-examples.test.tsx` scans the source to ensure the page only calls these two admin APIs.
+- Verification: `python3 scripts/test/admin_assistant_e2e.py <web address> [--shots <directory>]` (dev server `/admin/assistant?mock=app`; wide / narrow × light / dark, recording requests made during previews, which must be zero).
+  Screenshots: `?dialog=enable` opens the confirmation; `?dialog=example-form` and similar directly select an example.
 
-## 部署时选择
+## Choosing at deploy time
 
-| 部署方式 | 怎么选 |
+| Deployment | How to choose |
 | --- | --- |
-| `scripts/deploy.sh` | `--admin-access <范围>`（`cidrs` 时再加 `--admin-cidrs a,b`）或 `JARVIS_ADMIN_ACCESS`；都没给且 hub 上还没选过时，有终端就问，没终端用 `lan` 并打印一行提醒 |
-| `install.sh`（公开版） | `curl … \| JARVIS_ADMIN_ACCESS=lan sh` 或 `sh -s -- --admin-access lan`；都没给时，有终端（`/dev/tty`）就问「这台要跑 hub 吗」再问范围，没终端打印一行提醒、不写 hub.json（不写就是 `lan`） |
-| Docker | `.env` 的 `JARVIS_ADMIN_ACCESS`（`cidrs` 时加 `JARVIS_ADMIN_CIDRS`）；没设时入口脚本打印一行提醒，用 hub.json 里的（没写就是 `lan`） |
+| `scripts/deploy.sh` | `--admin-access <scope>` (plus `--admin-cidrs a,b` for `cidrs`) or `JARVIS_ADMIN_ACCESS`; if neither is given and no choice has been made on the hub, asks when a terminal exists, otherwise uses `lan` and prints a reminder |
+| `install.sh` (public version) | `curl … \| JARVIS_ADMIN_ACCESS=lan sh` or `sh -s -- --admin-access lan`; if neither is given, asks "Will this machine run the hub?" and then the scope when a terminal (`/dev/tty`) exists; otherwise prints a reminder without writing hub.json (omitted means `lan`) |
+| Docker | `JARVIS_ADMIN_ACCESS` in `.env` (plus `JARVIS_ADMIN_CIDRS` for `cidrs`); when unset, the entrypoint prints a reminder and uses hub.json (omitted means `lan`) |
 
-问的时候把四个选项的意思和风险都说清楚（见 `scripts/deploy/install.sh` 的 admin access 一段，`deploy.sh` 原样取用，公开安装器和部署问的是同一段话）。
+The prompt explains all four options and their risks (see the admin access section of `scripts/deploy/install.sh`; `deploy.sh` uses it unchanged, so the public installer and deployment ask the same question).
 
-## 安全取舍
+## Security trade-offs
 
-- **为什么默认 `lan` 而不是 `loopback`**：NAS、没接显示器的服务器上，本机浏览器用不上；`lan` 已经挡住了公网和别的网段。
-- **为什么 `any` 也放局域网明文**：`any` 是 `lan` 的超集；局域网里明文传密码和 `lan` 下一样，是这个范围本来就接受的。
-- **为什么不用 App 的 token**：设备 token 能被撤销、能被窃取后在公网上用；管理界面能加电脑、发凭据、改访问范围，权限比 App 大，单独一套
-  密码 + 范围限制，token 泄露了也进不来。
-- **为什么不做多管理员 / 两步验证**：自己用的 hub，一个管理员；需要更严的话收窄到 `loopback`，用 ssh 隧道访问。
+- **Why default to `lan`, not `loopback`**: on a NAS or headless server, a local browser is not useful; `lan` already blocks the internet and other subnets.
+- **Why `any` also allows LAN plaintext**: `any` is a superset of `lan`; transmitting a password in plaintext on the LAN is the same as under `lan`, a risk that scope already accepts.
+- **Why not use the app token**: device tokens can be revoked or stolen and used over the internet; the admin console can add computers, issue credentials and change access scope, with more authority than the app. A separate
+  password + scope restriction keeps a leaked token from granting access.
+- **Why no multiple admins / two-factor auth**: this is a personal hub with one admin; for tighter security, narrow to `loopback` and access it over an ssh tunnel.

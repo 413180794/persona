@@ -1,111 +1,111 @@
-# App Intents（Siri / 快捷指令）
+# App Intents (Siri / Shortcuts)
 
-`apple/Persona/Intents/` 里有 9 个 intent，用来在不解锁、不打开 App 的情况下驱动 hub。本文写下面这 4 个：问 Claude、看状态、批准第一个待处理、打开会话；
-另外 5 个（问 Persona、让 Agent 去做、个人 Agent 未读、打开个人 Agent、新建待办）见 `docs/siri.md`；控制中心控件背后的两个 intent 在 `apple/LiveActivity/`，也见 `docs/siri.md`。
-它们不依赖 App 在前台，也不用 WebSocket：每次调用都现读 `Keychain.serverConfig`，用 `APIClient` 直连 hub 的 REST 接口。
+`apple/Persona/Intents/` holds 9 intents that drive the hub without unlocking the phone or opening the app. This doc covers these 4: Ask Claude, status, approve the first pending item, open a session.
+The other 5 (Ask Persona, have an Agent do it, personal Agent unread, open a personal Agent, new to-do) are in `docs/siri.md`; the two intents behind the Control Center controls live in `apple/LiveActivity/`, also covered in `docs/siri.md`.
+They do not need the app in the foreground and do not use WebSocket: each call reads `Keychain.serverConfig` fresh and talks to the hub's REST API directly through `APIClient`.
 
-| Intent | 标题 | 作用 | 运行模式 |
+| Intent | Title | What it does | Run mode |
 | --- | --- | --- | --- |
-| `AskClaudeIntent` | 问 Claude | 给某台机器上最近的活会话发一条消息，或按记住的目录/启动器新开一个 | 后台 |
-| `JarvisStatusIntent` | Persona 状态 | 「N 个在工作，M 个等你处理」+ 第一个待处理的内容 | 后台 |
-| `ApproveFirstIntent` | 批准第一个待处理 | 允许最早的一条工具授权，或批准计划（`bypassPermissions`） | 后台 |
-| `OpenSessionIntent` | 打开会话 | 把 App 切到对话页并跳到该会话（`AppModel.shared.openChat`） | 前台 |
+| `AskClaudeIntent` | Ask Claude | Sends a message to the most recent live session on a machine, or starts a new one with the remembered directory / launcher | Background |
+| `JarvisStatusIntent` | Persona Status | "N working, M need you" + the content of the first pending item | Background |
+| `ApproveFirstIntent` | Approve First Pending | Allows the oldest tool permission request, or approves a plan (`bypassPermissions`) | Background |
+| `OpenSessionIntent` | Open Session | Switches the app to the chat page and jumps to that session (`AppModel.shared.openChat`) | Foreground |
 
-`OpenSessionIntent` 不是给人单独用的：`AskClaudeIntent` 的返回值里带着它，Siri 结果卡片上的按钮点一下就进那个会话。
+`OpenSessionIntent` is not meant to be used on its own: `AskClaudeIntent` returns it, so one tap on the button in the Siri result card opens that session.
 
-## 文件
+## Files
 
-| 文件 | 内容 |
+| File | Contents |
 | --- | --- |
-| `IntentSupport.swift` | 文案（`IntentText`）、短语模板（`IntentPhrases`）、错误句子（`IntentFailure`）、取配置（`IntentSupport`）、选择规则（`IntentPicker`） |
-| `MachineEntity.swift` | `MachineEntity` + `MachineEntityQuery`（`/api/v1/machines`，在线优先，支持按名字模糊匹配） |
-| `OpenSessionIntent.swift` | `SessionEntity` + `SessionEntityQuery`、`OpenSessionIntent` |
-| `AskClaudeIntent.swift` / `PersonaStatusIntent.swift` / `ApproveFirstIntent.swift` | 三个业务 intent |
-| `AskPersonaIntent.swift` / `PersonalAgentIntents.swift` / `AddTodoIntent.swift` | 问 Persona、个人 Agent、新建待办（`docs/siri.md`） |
-| `IntentAnswerSnippet.swift` | 问 Persona 的回答卡片（问题 + 全文） |
-| `PersonaShortcuts.swift` | `AppShortcutsProvider`，中文短语和图标 |
+| `IntentSupport.swift` | Copy (`IntentText`), phrase templates (`IntentPhrases`), error sentences (`IntentFailure`), config loading (`IntentSupport`), selection rules (`IntentPicker`) |
+| `MachineEntity.swift` | `MachineEntity` + `MachineEntityQuery` (`/api/v1/machines`, online first, fuzzy match by name) |
+| `OpenSessionIntent.swift` | `SessionEntity` + `SessionEntityQuery`, `OpenSessionIntent` |
+| `AskClaudeIntent.swift` / `PersonaStatusIntent.swift` / `ApproveFirstIntent.swift` | The three business intents |
+| `AskPersonaIntent.swift` / `PersonalAgentIntents.swift` / `AddTodoIntent.swift` | Ask Persona, personal Agents, new to-do (`docs/siri.md`) |
+| `IntentAnswerSnippet.swift` | The answer card for Ask Persona (question + full text) |
+| `PersonaShortcuts.swift` | `AppShortcutsProvider`, Chinese phrases and icons |
 
-## 选择规则
+## Selection rules
 
-`AskClaudeIntent`：
+`AskClaudeIntent`:
 
-- 机器：显式给的 `machine` 参数 → `UserDefaults "newChat.machine"`（新建对话页记住的那台）→ 第一台在线的。手动选的机器离线会直接报错，不会偷偷换一台。
-- 不发新会话时：该机器上 `status != offline` 的会话里 `updated_at` 最新的那个（`docs/protocol.md` 的 `Session.updatedAt`）。
-- `newSession = true`：用 `UserDefaults "launcher.<machine>"` / `"cwd.<machine>"`（新建对话页每次开始对话都会写）调
-  `POST /api/v1/sessions`，把这句话作为 `prompt` 一起发过去 —— 只发一次，避免启动后再补一条造成重复。
-- 这两个 key 不存在时提示「先在 App 里新建一次对话」，因为 Siri 里没法选目录。
+- Machine: the explicit `machine` parameter → `UserDefaults "newChat.machine"` (the one the New Chat page remembers) → the first online machine. If a manually chosen machine is offline, it fails outright instead of quietly switching to another.
+- When not starting a new session: among that machine's sessions with `status != offline`, the one with the latest `updated_at` (`Session.updatedAt` in `docs/protocol.md`).
+- `newSession = true`: calls `POST /api/v1/sessions` with `UserDefaults "launcher.<machine>"` / `"cwd.<machine>"` (written every time a chat is started on the New Chat page),
+  sending the sentence along as `prompt`. It is sent only once, so there is no duplicate from sending it again after startup.
+- If either key is missing, it says "create a chat in the app first", because there is no way to pick a directory in Siri.
 
-`ApproveFirstIntent`：
+`ApproveFirstIntent`:
 
-- 待处理按 `created_at` 从早到晚取第一条。
-- `permission` → `{allow:true}`；`plan` → `{approve:true, mode:"bypassPermissions"}`（和 App 里「批准并自动执行」一样，
-  见 `docs/claude-integration.md`）。
-- `question` / `screen` 需要看屏幕，只回一句「需要打开 Persona 处理」，不落任何决议。
+- Takes the first pending item ordered by `created_at`, oldest first.
+- `permission` → `{allow:true}`; `plan` → `{approve:true, mode:"bypassPermissions"}` (same as **Approve & Auto-Run** in the app,
+  see `docs/claude-integration.md`).
+- `question` / `screen` need the screen, so it only replies "Open Persona to handle this." and records no decision.
 
-## 错误文案
+## Error messages
 
-全部是中文，一句话说清下一步做什么（`IntentFailure.sentence(for:host:)`）：
+All in Chinese, each a single sentence that says what to do next (`IntentFailure.sentence(for:host:)`):
 
-| 情况 | 文案 |
+| Case | Message |
 | --- | --- |
-| 没配对 | 还没配对。先打开 Persona 扫 `personad hub pair` 的二维码。 |
-| 401 / 403 | 配对已失效，打开 Persona 重新配对。 |
-| 410 | 这个已经处理过了。 |
-| 网络 / 超时 | 连不上 hub（`hub` 地址），手机要能连到 hub（公网直连、同一局域网或 VPN）。 |
-| 没有机器 | 现在没有在线的机器。看看 hub 机器上的 personad 和 SSH 隧道。 |
-| 该机器没活会话 | `<机器>` 上没有运行中的会话。打开 Persona 新建一个，或者说「新会话」。 |
-| 没有待处理 | 没有等你处理的事。 |
+| Not paired | Not paired yet. Open Persona and scan the QR code from `personad hub pair`. |
+| 401 / 403 | The pairing has expired. Open Persona to pair again. |
+| 410 | This was already handled. |
+| Network / timeout | Can't reach the hub (the `hub` address); the phone must be able to reach the hub (public direct connection, the same LAN, or VPN). |
+| No machines | No machines are online. Check personad on the hub machine and the SSH tunnels. |
+| No live session on that machine | No sessions are running on `<machine>`. Open Persona to start one, or say "new session". |
+| Nothing pending | Nothing needs you right now. |
 
-hub 是公司内网的明文 HTTP：intent 用 `.background` 模式，不会因为网络不可达把 App 拉到前台。
+The hub is plain HTTP on the company intranet: the intents use `.background` mode, so an unreachable network does not pull the app into the foreground.
 
-## 短语
+## Phrases
 
-`JarvisShortcuts` 里三个快捷指令（Spotlight / Siri / 快捷指令 App 都能看到）：
+The three shortcuts in `JarvisShortcuts` (visible in Spotlight, Siri and the Shortcuts app):
 
-- 「用 Persona 问 Claude」「Persona 问 Claude」「用 Persona 问一下 Claude」
-- 「Persona 状态」「Persona 现在怎么样」「用 Persona 看进度」
-- 「用 Persona 批准第一个」「Persona 批准待处理」
+- "Ask Claude in Persona", "Persona, ask Claude", "Quick question for Claude in Persona"
+- "Persona status", "How's Persona doing", "Check progress in Persona"
+- "Approve the first one in Persona", "Approve pending in Persona"
 
-规则（App Intents 的硬要求）：
+Rules (hard requirements of App Intents):
 
-- 每条短语必须含 `\(.applicationName)`，否则整条被系统丢掉。
-- 短语里只能插值 `AppEntity` / `AppEnum` 类型的参数，普通 `String` 参数（比如 `text`）插不进去，会报
-  `Invalid parameter type. AppEntity and AppEnum are the only allowed types for text`。所以「问 Claude」的短语不带内容，
-  说完之后 Siri 再问一句「要跟 Claude 说什么？」（`@Parameter(requestValueDialog:)`）。
-- `shortTitle` / `systemImageName` 必须给，短标题是 Siri 结果卡片和快捷指令 App 里显示的名字。
-- Release 必须保留反射名字（`project.yml` 的 `SWIFT_REFLECTION_METADATA_LEVEL: all`）：App Intents 按属性名把值放进 `@Parameter`，
-  去掉名字后参数全是空的，读非可选参数时 App 崩溃（#990，`docs/lessons/ios.md`）。只在 Release 出现，验证要用 Release 配置。
+- Every phrase must contain `\(.applicationName)`; otherwise the system drops the whole phrase.
+- Phrases can only interpolate parameters of type `AppEntity` / `AppEnum`. A plain `String` parameter (such as `text`) cannot be interpolated and fails with
+  `Invalid parameter type. AppEntity and AppEnum are the only allowed types for text`. So the "Ask Claude" phrases carry no content;
+  after you say one, Siri asks "What do you want to say to Claude?" (`@Parameter(requestValueDialog:)`).
+- `shortTitle` / `systemImageName` are required; the short title is the name shown in the Siri result card and the Shortcuts app.
+- Release must keep reflection names (`SWIFT_REFLECTION_METADATA_LEVEL: all` in `project.yml`): App Intents put values into `@Parameter` by property name.
+  Without the names every parameter is empty, and the app crashes when it reads a non-optional parameter (#990, `docs/lessons/ios.md`). This only shows up in Release, so verify with the Release configuration.
 
-## 并发
+## Concurrency
 
-项目开了 `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`，而 AppIntent / AppEntity / EntityQuery 的协议要求是 nonisolated。
-做法是把协议成员一个个标 `nonisolated`（`init`、`perform`、`title`、`supportedModes`、`parameterSummary`、query 方法），
-被它们调用的纯逻辑放在 `nonisolated enum` 里；`@Parameter` 存的是可变存储属性，不能标 `nonisolated`，保持 MainActor 即可。
+The project sets `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`, while the AppIntent / AppEntity / EntityQuery protocol requirements are nonisolated.
+The fix is to mark each protocol member `nonisolated` (`init`, `perform`, `title`, `supportedModes`, `parameterSummary`, the query methods),
+and put the pure logic they call into a `nonisolated enum`. `@Parameter` wraps mutable stored properties, which cannot be `nonisolated`; leaving them on MainActor is fine.
 
-`OpenSessionIntent` 是唯一碰 `AppModel` 的地方，用 `await MainActor.run { … }` 进去改 `selectedTab` / `openChat`。
-它的 `target` 是 `SessionEntity`，`id` 形如 `machine/session`，和 DEBUG 的 `-openSession` 参数同形。
+`OpenSessionIntent` is the only place that touches `AppModel`; it uses `await MainActor.run { … }` to change `selectedTab` / `openChat`.
+Its `target` is a `SessionEntity` whose `id` looks like `machine/session`, the same shape as the DEBUG `-openSession` argument.
 
-## 测试
+## Tests
 
 ```sh
 cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -scheme Persona \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test -only-testing:PersonaTests/IntentsTests
 ```
 
-`apple/PersonaTests/IntentsTests.swift` 只测纯函数：按机器 / 会话 / 待处理的选择规则、每种交互类型的文案、错误句子、
-`Resolution` 的构造、实体 id。网络部分不测（要真 hub）。
+`apple/PersonaTests/IntentsTests.swift` only tests pure functions: the selection rules by machine / session / pending item, the copy for each interaction type, the error sentences,
+how `Resolution` is built, entity ids. The network part is not tested (it needs a real hub).
 
-## 编译与元数据
+## Build and metadata
 
 ```sh
 cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -scheme Persona \
   -destination 'generic/platform=iOS Simulator' -derivedDataPath ../build/DerivedDataWorker build
 ```
 
-编出来的 `Persona.app/Metadata.appintents/extract.actionsdata` 里能看到 4 个 action、3 条 autoShortcut；
-Siri 是否可用还取决于真机安装后系统索引，模拟器里只能确认元数据生成正确。
+The built `Persona.app/Metadata.appintents/extract.actionsdata` shows 4 actions and 3 autoShortcuts.
+Whether Siri can use them also depends on the system indexing them after installing on a real device; in the simulator you can only confirm the metadata is generated correctly.
 
-## 已处理（2026-10-24 leader）
+## Handled (2026-10-24 leader)
 
-- CLAUDE.md 索引已补；release.sh 断言 AppIntents 元数据存在。
-- 本地化、Siri 记住机器：暂不做。
+- Added to the CLAUDE.md index; release.sh asserts the AppIntents metadata exists.
+- Localization, Siri remembering the machine: not doing these for now.
