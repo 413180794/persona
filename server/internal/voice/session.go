@@ -42,6 +42,9 @@ type line struct {
 	id, text, source string
 	at               time.Time // a user's line: when they stopped saying it; the model's: when it began
 	shown            bool      // a frame of it with words went to the app
+	// before is, on a user's line, the model's line it goes before in the app ("" at the end; protocol 2, #5673): its
+	// caption came after the model began to answer it.
+	before string
 }
 
 // show tells the app line l (role's) as it is, once it has words: a line that never had any is never shown, not even
@@ -52,8 +55,22 @@ func (c *conversation) show(l *line, role string, final bool) {
 		return
 	}
 	l.shown = true
-	c.sendApp(map[string]any{"type": "transcript", "id": l.id, "role": role, "text": text, "final": final})
+	f := map[string]any{"type": "transcript", "id": l.id, "role": role, "text": text, "final": final}
+	if l.before != "" {
+		f["before"] = l.before
+	}
+	c.sendApp(f)
 }
+
+// shownLine is a line of the model's the app has, as placeUser goes by it.
+type shownLine struct {
+	id string
+	at time.Time
+}
+
+// tailMost is the most of the model's lines since the user's last one that placeUser keeps: a caption is at most
+// captionLateMost late, and the model does not begin that many lines in that time.
+const tailMost = 8
 
 // heardLine is a line of what was said, with its line's at (zero: not known, a line the app handed back).
 type heardLine struct {
@@ -65,6 +82,12 @@ type heardLine struct {
 // line 1.2–1.4 s after they stop (docs/lessons/voice.md "Timeline"). The app's voice older than that is of something
 // before the caption (a line too quiet for the energy rule): the caption is then placed as it came.
 const captionLateMost = 3 * time.Second
+
+// captionHeldMost is the longest the caption of a new line of the user's comes after the voice it is of when nothing
+// of theirs (a caption, a typed line) came since that voice: when the model's reply only calls a tool (a status), the
+// measured service holds the user's caption until the reply that speaks, after the call's result (3.3 and 3.5 s after
+// they stopped in 2 of 5 runs, #5673; 4.2 s in #5672). The app's voice older than that is of something else.
+const captionHeldMost = 10 * time.Second
 
 type conversation struct {
 	pl     *Plugin
@@ -141,6 +164,12 @@ type conversation struct {
 	replied []string
 	// sus is the call's pausing of its upstream while its conversation works (suspend.go, protocol 2).
 	sus suspension
+	// tail are the model's lines after the user's last line in the app, oldest first (protocol 2): a user's caption
+	// that comes after the model began to answer it goes before them (placeUser, #5673).
+	tail []shownLine
+	// turnsEnd: the service says when the model's turn is over (evTurnEnd, or evReply, whose replies end with one): a
+	// line of the model's ends by that, not by a late caption of the user's (#5673).
+	turnsEnd bool
 }
 
 type outFrame struct {
@@ -703,17 +732,19 @@ func (c *conversation) handle(gen int, e event) {
 		}
 	case evUser:
 		c.dropAudio, c.cutAt = false, time.Time{}
+		spoke := c.spokeAt(time.Now()) // by the user's words before these
 		if strings.TrimSpace(e.text) != "" {
 			c.gate.user = time.Now()
 			c.userAt = c.gate.user
 		}
-		c.userText(e.text, e.replace, e.final, c.spokeAt(time.Now()))
+		c.userText(e.text, e.replace, e.final, spoke)
 	case evAssistant:
 		c.asstText(e.text, e.replace, e.final, e.name)
 	case evReply:
-		c.signals = true
+		c.signals, c.turnsEnd = true, true
 	case evTurnEnd:
 		c.dropAudio, c.cutAt = false, time.Time{}
+		c.turnsEnd = true
 		if e.id != "" {
 			c.signals = true
 			if c.replied = append(c.replied, e.id); len(c.replied) > repliedMost {
@@ -811,23 +842,43 @@ func voiceLines(lines []heardLine) []prompts.VoiceLine {
 }
 
 // spokeAt is when the user stopped saying what a caption arriving at now is of (mu held): the app's audio last had
-// their voice in it, unless that is too long ago to be it (captionLateMost) or there is none (no audio: now).
+// their voice in it, unless that is too long ago to be it or there is none (no audio: now). Too long ago is past
+// captionLateMost; for the first caption of a line, when nothing of the user's came since that voice (gate.user: it
+// has had no caption yet), past captionHeldMost.
 func (c *conversation) spokeAt(now time.Time) time.Time {
-	if v := c.pace.voice; !v.IsZero() && !v.After(now) && now.Sub(v) <= captionLateMost {
+	v := c.pace.voice
+	switch {
+	case v.IsZero() || v.After(now):
+		return now
+	case now.Sub(v) <= captionLateMost:
+		return v
+	case c.user == nil && v.After(c.gate.user) && now.Sub(v) <= captionHeldMost:
 		return v
 	}
 	return now
 }
 
 // userText adds to the user's line; spoke is when they stopped saying text (zero for no text).
+//
+// The measured service sends the caption 1.2–1.4 s after they stop, often after the model began to answer them
+// (docs/lessons/voice.md "Timeline"). On protocol 2 such a line goes before the model's lines that began after spoke
+// (placeUser: the frame's before), and the model's line still open is not ended by it where the service ends the
+// model's turns itself (turnsEnd): the rest of the answer stays in the same line (#5673). Without that the caption is
+// the only end the model's line has, and it still ends it. Protocol 1's frames are as they always were.
 func (c *conversation) userText(text string, replace, final bool, spoke time.Time) {
 	if c.user == nil {
 		if strings.TrimSpace(text) == "" { // no words: no line (#5587)
 			return
 		}
-		c.closeAsst()
+		before := ""
+		if c.version >= 2 {
+			before = c.placeUser(spoke)
+		}
+		if before == "" || !c.turnsEnd {
+			c.closeAsst()
+		}
 		c.userSeq++
-		c.user = &line{id: fmt.Sprintf("u%d", c.userSeq)}
+		c.user = &line{id: fmt.Sprintf("u%d", c.userSeq), before: before}
 	}
 	if replace {
 		c.user.text = text
@@ -850,6 +901,23 @@ func (c *conversation) closeUser() {
 	}
 }
 
+// placeUser is the model's line a new line of the user's, of what they stopped saying at spoke, goes before in the app
+// (mu held; "" for at the end): the first of the model's lines after the user's last one from which all began after
+// spoke, as place puts it in what was said. Those stay after the new line, the others are before it now: a later
+// caption never goes before this one.
+func (c *conversation) placeUser(spoke time.Time) string {
+	i := len(c.tail)
+	for i > 0 && !spoke.IsZero() && c.tail[i-1].at.After(spoke) {
+		i--
+	}
+	before := ""
+	if i < len(c.tail) {
+		before = c.tail[i].id
+	}
+	c.tail = slices.Clone(c.tail[i:])
+	return before
+}
+
 // asstText: source "transcript" or "text" for a service that sends the model's words both ways (only one is shown).
 func (c *conversation) asstText(text string, replace, final bool, source string) {
 	if source == "transcript" {
@@ -864,6 +932,11 @@ func (c *conversation) asstText(text string, replace, final bool, source string)
 		c.closeUser()
 		c.asstSeq++
 		c.asst = &line{id: fmt.Sprintf("a%d", c.asstSeq), source: source, at: time.Now()}
+		if c.version >= 2 { // it has words: it is shown below
+			if c.tail = append(c.tail, shownLine{id: c.asst.id, at: c.asst.at}); len(c.tail) > tailMost {
+				c.tail = c.tail[len(c.tail)-tailMost:]
+			}
+		}
 	}
 	if source == "transcript" && c.asst.source == "text" {
 		c.asst.text, c.asst.source = "", source

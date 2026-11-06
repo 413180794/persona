@@ -268,6 +268,9 @@ nonisolated struct VoiceTranscript: Equatable, Sendable {
     var role: String
     var text: String
     var final: Bool
+    /// The line this one goes before, when it is new (protocol 2, #5673): the user's caption came after the voice began
+    /// to answer it. nil: at the end.
+    var before: String? = nil
 }
 
 /// One text frame from the extension.
@@ -302,7 +305,8 @@ nonisolated enum VoiceFrame: Equatable, Sendable {
             return .clear
         case "transcript":
             return .transcript(VoiceTranscript(id: str(o["id"]) ?? "", role: str(o["role"]) ?? "", text: str(o["text"]) ?? "",
-                                               final: o["final"]?.bool ?? false))
+                                               final: o["final"]?.bool ?? false,
+                                               before: str(o["before"]).flatMap { $0.isEmpty ? nil : $0 }))
         case "tool":
             return .tool(id: str(o["id"]) ?? "", label: str(o["label"]) ?? "", done: o["done"]?.bool ?? false)
         case "run":

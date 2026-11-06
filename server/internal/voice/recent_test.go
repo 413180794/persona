@@ -79,7 +79,7 @@ func TestRecentInTheOrderSaid(t *testing.T) {
 // The user's caption is placed by when they stopped talking: a line of the model's that began before that (it spoke
 // while the user still talked, or the user typed) stays before it; nor does a caption go before a line handed back by
 // the app (no time), or a caption of the user's before it. The app's voice too old to be of the caption (a line too
-// quiet for the energy rule) leaves it where it came.
+// quiet for the energy rule) leaves it where it came (TestSpokeAt).
 func TestPlaceKeepsWhatCameBefore(t *testing.T) {
 	t0 := time.Now()
 	at := func(ms int) time.Time { return t0.Add(time.Duration(ms) * time.Millisecond) }
@@ -96,17 +96,6 @@ func TestPlaceKeepsWhatCameBefore(t *testing.T) {
 	if got := lineTexts(voiceLines(lines)); !slices.Equal(got, []string{"user:app", "assistant:handed back", "assistant:before",
 		"user:said", "assistant:after", "user:typed", "user:old", "assistant:later"}) {
 		t.Fatalf("placed: %v", got)
-	}
-
-	c := captionConversation(t)
-	now := time.Now()
-	c.pace.voice = now.Add(-captionLateMost - time.Second)
-	if got := c.spokeAt(now); !got.Equal(now) {
-		t.Fatalf("an old voice: spoke at %v, want now", got)
-	}
-	c.pace.voice = now.Add(-1300 * time.Millisecond)
-	if got := c.spokeAt(now); !got.Equal(c.pace.voice) {
-		t.Fatalf("the voice the caption is of: spoke at %v", got)
 	}
 }
 

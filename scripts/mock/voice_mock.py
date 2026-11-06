@@ -15,8 +15,9 @@ The model configuration's use plugin.voice comes from mock_hub.py's own MOCK_VOI
 The script (seconds after ready): the user's words come in as captions (partial, then final) and the voice hands them
 over (run sending → sent → working, the instruction in the conversation, the conversation working); the upstream pauses
 and comes back; a question card arrives and the voice asks it (ask asking; answered by voice at 21 s unless it was
-tapped first: then released); a second instruction is refused for the computer's unsent line (run refused,
-input_draft; resend picks it up); the first one is done and read out. interrupt while the voice speaks: clear.
+tapped first: then released; the answer's caption comes after the voice began to reply, with before); a second
+instruction is refused for the computer's unsent line (run refused, input_draft; resend picks it up); the first one is
+done and read out. interrupt while the voice speaks: clear.
 """
 import base64
 import hashlib
@@ -227,8 +228,11 @@ class Call:
     def say(self, obj):
         self.frame(0x1, json.dumps(obj, ensure_ascii=False).encode())
 
-    def caption(self, cid, role, text, final=True):
-        self.say({"type": "transcript", "id": cid, "role": role, "text": text, "final": final})
+    def caption(self, cid, role, text, final=True, before=None):
+        frame = {"type": "transcript", "id": cid, "role": role, "text": text, "final": final}
+        if before:
+            frame["before"] = before
+        self.say(frame)
 
     def run_frame(self, rid, state, **kw):
         run = self.runs.setdefault(rid, {"type": "run", "id": rid, "msg_ids": [rid], "base_seq": self._base(), "started_at": _now()})
@@ -344,7 +348,10 @@ class Call:
             if self.ask and self._pending(self.ask):
                 self._answer(self.ask)
                 self.say({"type": "ask", "interaction_id": self.ask, "state": "answered", "by": "voice"})
-                self.caption("u3", "user", "第一个")
+                # A late caption (#5673): the voice begins to answer before the user's caption comes, which goes
+                # before that answer; the answer goes on in its own line.
+                self.caption("a3", "assistant", "好，", final=False)
+                self.caption("u3", "user", "第一个", before="a3")
                 self.caption("a3", "assistant", "好，告诉它了。")
             elif self.ask:
                 self.say({"type": "ask", "interaction_id": self.ask, "state": "released", "by": "elsewhere"})

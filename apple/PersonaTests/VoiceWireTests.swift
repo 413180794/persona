@@ -112,6 +112,11 @@ struct VoiceWireTests {
         #expect(VoiceErrorCode(wire: "new_code") == .other("new_code"))
         #expect(VoiceFrame.parse(#"{"type":"transcript","id":"u1","role":"user","text":"你好"}"#)
             == .transcript(VoiceTranscript(id: "u1", role: "user", text: "你好", final: false)))
+        // #5673: the line a late caption goes before; an empty one is none.
+        #expect(VoiceFrame.parse(#"{"type":"transcript","id":"u2","role":"user","text":"它到哪了？","final":false,"before":"a1"}"#)
+            == .transcript(VoiceTranscript(id: "u2", role: "user", text: "它到哪了？", final: false, before: "a1")))
+        #expect(VoiceFrame.parse(#"{"type":"transcript","id":"u2","role":"user","text":"它到哪了？","before":""}"#)
+            == .transcript(VoiceTranscript(id: "u2", role: "user", text: "它到哪了？", final: false)))
         #expect(VoiceFrame.parse(#"{"type":"tool","id":"t1","label":"查知识库","done":true}"#) == .tool(id: "t1", label: "查知识库", done: true))
         #expect(VoiceFrame.parse(#"{"type":"clear"}"#) == .clear)
     }

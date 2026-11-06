@@ -144,6 +144,9 @@ class VoiceMockTests(unittest.TestCase):
             self.assertEqual([f["state"] for f in frames if f["type"] == "link"], ["paused", "live"])
             asks = [f for f in frames if f["type"] == "ask"]
             self.assertEqual([a["state"] for a in asks], ["asking", "answered"])
+            # The answer's late caption (#5673): it comes after the voice began to reply, and says it goes before that.
+            lines = [(f["id"], f.get("before")) for f in frames if f["type"] == "transcript" and f["id"] in ("u3", "a3")]
+            self.assertEqual(lines, [("a3", None), ("u3", "a3"), ("a3", None)])
             refused = next(f for f in frames if f["type"] == "run" and f["state"] == "refused")
             self.assertEqual(refused["code"], "input_draft")
             self.assertEqual(refused["clearable"], "fix it")

@@ -20,9 +20,10 @@ extension VoiceCalls {
 }
 
 /// The call's captions at the end of the thread (`VoiceThreadTail`): temporary rows, on this device only, not saved
-/// (docs/voice.md 1.2 C). What the user says and what the voice says, the last few; ⋯ › All Captions has them all. While
-/// the chat holds back what arrives (the user reads further up, `ChatView.frozen`), it stays as it was then, as the
-/// streamed words do.
+/// (docs/voice.md 1.2 C). What the user says and what the voice says, the last few, in the order they were said (a late
+/// caption of the user's is put before the answer it came in: `VoiceConversation.caption`, #5673); ⋯ › All Captions
+/// has them all. While the chat holds back what arrives (the user reads further up, `ChatView.frozen`), it stays as it
+/// was then, as the streamed words do.
 struct VoiceThreadTail: View {
     let key: SessionKey
     /// The chat holds back what arrives: the rows stay as they were drawn.
@@ -78,14 +79,14 @@ struct VoiceTailFollow: ViewModifier {
     let follow: () -> Void
 
     private struct Mark: Equatable {
-        var count: Int
-        var last: String?
+        /// The rows the tail shows: a new line, appended or put before another (#5673), even once the call keeps no more.
+        var shown: [String]
         var length: Int
     }
 
     func body(content: Content) -> some View {
         let captions = VoiceCalls.shared.call(on: key)?.captions ?? []
-        let mark = Mark(count: captions.count, last: captions.last?.id, length: (captions.last?.text.count ?? 0) / 40)
+        let mark = Mark(shown: captions.suffix(VoiceThreadTail.shown).map(\.id), length: (captions.last?.text.count ?? 0) / 40)
         content.onChange(of: mark) { _, _ in follow() }
     }
 }

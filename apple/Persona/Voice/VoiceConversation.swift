@@ -567,7 +567,14 @@ struct VoiceDeps {
                 captions[i].final = t.final
             }
         } else if !t.text.isEmpty {
-            captions.append(VoiceCaption(id: id, generation: generation, role: t.role, text: t.text, final: t.final))
+            let caption = VoiceCaption(id: id, generation: generation, role: t.role, text: t.text, final: t.final)
+            // In the order it was said: a caption that came after the voice began to answer it goes before that
+            // answer, when this connection's line is still here; else at the end (#5673).
+            if let before = t.before, let i = captions.lastIndex(where: { $0.id == "\(generation):\(before)" }) {
+                captions.insert(caption, at: i)
+            } else {
+                captions.append(caption)
+            }
             if captions.count > Self.captionLimit { captions.removeFirst(captions.count - Self.captionLimit) }
         }
         lastActivity = deps.clock.now

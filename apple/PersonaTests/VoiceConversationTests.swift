@@ -128,6 +128,35 @@ struct VoiceConversationTests {
         #expect(call.captions.map(\.id) == ["1:u1", "1:a1", "2:u1"])
     }
 
+    /// A caption the extension says goes before another line (#5673: the user's caption came after the voice began to
+    /// answer it) is put in front of that line, and stays there as both grow; one whose line this connection does not
+    /// have (an older connection's, or none) goes at the end, as does one without it.
+    @Test func aLateCaptionGoesBeforeTheAnswerItCameIn() async {
+        let rig = VoiceRig()
+        let (call, socket) = await live(rig)
+        socket.deliver(#"{"type":"transcript","id":"u1","role":"user","text":"你好","final":true}"#)
+        socket.deliver(#"{"type":"transcript","id":"a1","role":"assistant","text":"它还停在原地","final":false}"#)
+        socket.deliver(#"{"type":"transcript","id":"u2","role":"user","text":"它现在到哪了？","final":false,"before":"a1"}"#)
+        socket.deliver(#"{"type":"transcript","id":"a1","role":"assistant","text":"它还停在原地，还没往下做。","final":true}"#)
+        socket.deliver(#"{"type":"transcript","id":"u2","role":"user","text":"它现在到哪了？","final":true,"before":"a1"}"#)
+        #expect(call.captions.map(\.id) == ["1:u1", "1:u2", "1:a1"])
+        #expect(call.captions.map(\.text) == ["你好", "它现在到哪了？", "它还停在原地，还没往下做。"])
+        #expect(call.captions.map(\.final) == [true, true, true])
+        #expect(call.history.map(\.role) == ["user", "user", "assistant"], "a pick-up hands them back in the order said")
+
+        socket.deliver(#"{"type":"transcript","id":"u3","role":"user","text":"再说一句","final":true,"before":"a9"}"#)
+        socket.deliver(#"{"type":"transcript","id":"a2","role":"assistant","text":"好。","final":true}"#)
+        #expect(call.captions.map(\.id) == ["1:u1", "1:u2", "1:a1", "1:u3", "1:a2"])
+
+        socket.drop()
+        await rig.advance(1, sleepers: 2)
+        let second = rig.socket!
+        second.ready(rig.key)
+        // The new connection numbers its lines from the start again: its a2 is not the old a2.
+        second.deliver(#"{"type":"transcript","id":"u1","role":"user","text":"新的一句","final":true,"before":"a2"}"#)
+        #expect(call.captions.map(\.id) == ["1:u1", "1:u2", "1:a1", "1:u3", "1:a2", "2:u1"])
+    }
+
     @Test func atMostFortyCaptions() async {
         let rig = VoiceRig()
         let (call, socket) = await live(rig)

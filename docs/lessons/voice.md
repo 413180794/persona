@@ -249,7 +249,7 @@ The merged server work (#3501–#3505) driven as the App would, on one Mac, with
 - The model tried to answer a question card from an earlier utterance after the question was read; the user-speech gate refused it as `unprompted` ("that was not you, I did not send it"), as designed.
 - Found and fixed: a wait on the user listed `working` said "still working" (#5500), two-option questions read the last option twice (#5501), the voice context out of order and without the triggering request (#5506, fixed in #5560), captions without words (#5587).
   Filed: a message swallowed by Claude Code's one-off auto-mode dialog while the hub said 200 (#5504); `PERSONA_HOME` not applied to the assistant's directory, so this isolated hub's main chat ran in the machine's default `~/.jarvis/assistant` (#5505);
-  a voice answer refused as `unprompted` when the model only called the tool and the user's caption came 4.2 s after they stopped, past `gateWait` (#5672); a late user caption splitting the model's line in two in the App (#5673).
+  a voice answer refused as `unprompted` when the model only called the tool and the user's caption came 4.2 s after they stopped, past `gateWait` (#5672); a late user caption splitting the model's line in two in the App (#5673, fixed: "A late caption in the middle of an answer").
 - Still needs a real phone: echo cancellation, the 0.5 s barge-in threshold against real room noise, audio routes, the iOS call bar.
 
 ## Late captions on replies that only call a tool (#5672, 2026-11-06)
@@ -269,6 +269,17 @@ once the model has asked the card and its speech has played out (the computed pl
   At −20 dB, nobody answering (1 run): nothing handed over; the user answering (2 runs): answered both times. But the service took the echo for the user: at −20 dB it captioned the model's own reply as the user's words (2 of 3 runs), and at −10 dB (1 run) the model stopped itself and answered its own question as if the user had asked it.
   A caption counts as the user speaking, so on such a phone the model's speech can open the gate through its caption, before and after this change (filed separately). The voice rule itself does not count echo: frames while the model's speech plays and `echoTail` after never count.
 - `echoTail` covers the App playing later than the extension computes (network and output buffers) and its microphone's audio coming back later again; on these local runs there was no network. Confirm it, and `spokeVoice` against real room noise, on a real phone.
+
+## A late caption in the middle of an answer (#5673, 2026-11-06)
+
+This branch's `personad voice` (live, `tools`, `key_file`) against the tested service and a fake hub (an agent waiting on a question card), protocol 2, the user asking `他现在到哪了？` by voice (macOS `say`, 1.3 s) after the card was read out; 11 runs, and one on protocol 1.
+
+- **The App's rows followed the frames' order**: the user's line was opened (and the model's open line ended, `closeAsst`) only when its caption came, after the model had begun to answer: one answer split in two around the question, answer first (`a4` / `u3` / `a5` "做。"). #5560 had put only what was recorded (`place`) in the order said. Now protocol 2's user frame says which of the model's lines it goes before (`before`, `docs/voice.md` 3.3), the App inserts the row there, and the model's line goes on.
+- **The caption came after the model's speaking reply began in 11 of 11 runs**, 0.05–0.36 s after its first words: when the model read the status first (no words before it), that reply began 2.7–3.4 s after the user stopped, and the caption with it (9 runs); when it first said `我问一下它现在的进度。`, at 1.05 s, with the caption at 1.3–1.4 s (2 runs). The same hold #5672 measured on replies that only call a tool.
+  So the caption can be more than 3 s late: dated "now" past `captionLateMost` (3 s), 2 of the first 5 runs (3.29 s, 3.46 s) stayed at the end, one still split. A new line's caption is dated by the App's voice when nothing of the user's (a caption, a typed line) came since that voice, within `captionHeldMost` (10 s); after that, 6 of 6 runs were placed (3 of them 3.0–3.5 s late), each answer one line ended by its reply's end.
+- **Where nothing else ends the model's line, the caption must**: on an upstream without reply boundaries (a standard GPT-Live upstream may send no `response.event`) the user's caption is the only end the model's line gets. Kept open, the next answer's words, which come before its own caption, run into the last line (`TestHandoverHasTheRequestThatTriggeredIt` would have had `现在下午三点。好，这就交给它去建 hello.txt。` as one line). There the line is still placed and still ended; it stays open only once the service has said when replies end (`turnsEnd`).
+- Protocol 1 (the extra run): frames as before, no `before`, the caption ends the open line.
+- iOS: the tail's follow keyed on the caption count and the last id. Once 40 are kept an insertion changes neither, so it now keys on the shown rows' ids (`VoiceTailFollow`).
 
 ## Recommended constants (`docs/voice.md` 4.5 / 4.9)
 
