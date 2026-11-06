@@ -61,7 +61,9 @@ struct TodoLinkAgentSheet: View {
 
                 Section {
                     if draft.creating {
-                        TextField("输入新待办标题…", text: $draft.newTitle).font(Theme.Font.body)
+                        TextField("输入新待办标题…", text: $draft.newTitle)
+                            .font(Theme.Font.body)
+                            .onSubmit { createAndLink() }
                         Button("创建并挂上") { createAndLink() }
                             .lineLimit(1)
                             .disabled(draft.newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -113,6 +115,7 @@ struct TodoLinkAgentSheet: View {
 
     private func createAndLink() {
         let title = draft.newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
         submit {
             if let message = try await store.createAndLink(title: title, target: target) {
                 AppModel.shared.toast = Toast(message, style: .error)

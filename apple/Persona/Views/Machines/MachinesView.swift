@@ -121,16 +121,25 @@ struct MachinesView: View {
             #endif
         }
         .refreshable {
-            await model.refresh()
-            await loadMetrics()
+            // The requests hit different endpoints and write separate state, so start them together: one slow
+            // hub must not keep the others waiting (nor the refresh spinner).
+            async let refreshed: Void = model.refresh()
+            async let metricsLoaded: Void = loadMetrics()
             #if !os(macOS)
-            await UsageWindowsStore.shared.load(model)
+            async let usageLoaded: Void = UsageWindowsStore.shared.load(model)
+            #endif
+            await refreshed
+            await metricsLoaded
+            #if !os(macOS)
+            await usageLoaded
             #endif
         }
         #if os(macOS)
         .macRefreshes { // ⌘R: no pull to refresh on the Mac
-            await model.refresh()
-            await loadMetrics()
+            async let refreshed: Void = model.refresh()
+            async let metricsLoaded: Void = loadMetrics()
+            await refreshed
+            await metricsLoaded
         }
         #endif
         .tabActiveTask(id: phase == .active) {

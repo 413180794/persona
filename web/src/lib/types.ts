@@ -118,6 +118,8 @@ export interface TriageSwitches {
 export interface Session {
   /** Node-verified physical working directory; the original cwd stays available for existing session flows. */
   workspace_cwd?: string;
+  /** The main checkout of the repository cwd belongs to, when the host knows it (#2840: Paseo's worktrees); 按仓库 groups by it. */
+  repo_root?: string;
   machine_id: string;
   session_id: string;
   title: string;

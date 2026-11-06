@@ -521,7 +521,23 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 		if machine == "" || cwd == "" {
 			return toast("warning", i18n.T(l, "assistant-feishu_cards.pick_machine_dir"))
 		}
-		go s.botStartAgent(machine, cwd, prompt)
+		// A double tap, Feishu's 3 s redelivery, and the hub's own resend all arrive as presses of the same card
+		// message: within the window only the first starts an agent, the rest get the same toast.
+		mid := a.Context.MessageID
+		var at time.Time
+		if mid != "" {
+			var pressed bool
+			if pressed, at = s.startCardPressed(mid); pressed {
+				return toast("info", i18n.T(l, "assistant-feishu_cards.starting"))
+			}
+		}
+		go func() {
+			if err := s.botStartAgent(machine, cwd, prompt); err != nil && mid != "" {
+				// Nothing started, so a retry press of the same card must go through. at makes this a compare-and-swap:
+				// a failure arriving after the window only frees the slot if a later press has not re-stamped it.
+				s.forgetStartCard(mid, at)
+			}
+		}()
 		return toast("info", i18n.T(l, "assistant-feishu_cards.starting"))
 	}
 	return toast("info", i18n.T(l, "assistant-feishu_cards.card_expired"))
@@ -668,28 +684,74 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 	}
 }
 
-// botStartAgent starts a coding agent from the /start card and points the chat at it.
-func (s *Service) botStartAgent(machine, cwd, prompt string) {
+// botStartCardWindow is how long a repeat press of the same /start card is ignored: a double tap, Feishu's 3 s
+// redelivery, and the hub's ~2 s resend all fall inside it. It is deliberately shorter than botStartAgent's
+// 2-minute timeout: if the first start is still running when the window ends, the owner pressing again is a
+// deliberate manual retry and may start a second agent. The transport retries above arrive at ~2-3 s, while the
+// slot is held for the whole outstanding call, so they can never reach that second start.
+var botStartCardWindow = 60 * time.Second
+
+// startCardPressed reports whether the /start card message mid was already pressed within the window, and records
+// this press either way. A true answer means the caller must not start a second agent. The returned time is the
+// timestamp this press stored (or the existing one for a duplicate), for forgetStartCard's compare-and-swap.
+func (s *Service) startCardPressed(mid string) (bool, time.Time) {
+	b := &s.fbot
+	now := b.clock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	key := mid + "start"
+	if at, ok := b.startAt[key]; ok && now.Sub(at) < botStartCardWindow {
+		return true, at
+	}
+	if b.startAt == nil {
+		b.startAt = map[string]time.Time{}
+	}
+	for k, at := range b.startAt { // forget presses past the window so the map cannot grow without bound
+		if now.Sub(at) >= botStartCardWindow {
+			delete(b.startAt, k)
+		}
+	}
+	b.startAt[key] = now
+	return false, now
+}
+
+// forgetStartCard releases mid's dedup slot after its start failed, so pressing the same card again retries it
+// instead of being answered with a bare 「启动中」. It only deletes the slot this press stamped (at): if the window
+// passed and a later manual press re-stamped it while the first start was still hung, that newer slot must survive
+// the first start's late failure.
+func (s *Service) forgetStartCard(mid string, at time.Time) {
+	b := &s.fbot
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	key := mid + "start"
+	if cur, ok := b.startAt[key]; ok && cur.Equal(at) {
+		delete(b.startAt, key)
+	}
+}
+
+// botStartAgent starts a coding agent from the /start card and points the chat at it. A non-nil error was already
+// told to the owner as a note; it means no agent was started.
+func (s *Service) botStartAgent(machine, cwd, prompt string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	l := s.botLang(ctx)
 	d, ok := s.device(ctx, machine)
 	if !ok {
 		s.botSay(ctx, i18n.T(l, "assistant-feishu_cards.no_such_machine"))
-		return
+		return ErrNoDevice
 	}
 	cwd = proto.ExpandHome(cwd, d.Home)
 	params := map[string]any{"cwd": cwd, "prompt": prompt, "tab_name": s.tabName(ctx, prompt)} // agents_start.go
 	if err := s.applyModel(ctx, "agent.new", params); err != nil {
 		s.botSay(ctx, i18n.T(l, "assistant-feishu_cards.cannot_start", i18n.Args{"error": err.Error()}))
-		return
+		return err
 	}
 	var res struct {
 		Session proto.Session `json:"session"`
 	}
 	if err := s.call(ctx, d.ID, DeviceSessionStart, params, &res); err != nil {
 		s.botSay(ctx, i18n.T(l, "assistant-feishu_cards.cannot_start", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
-		return
+		return err
 	}
 	t := botTarget{Kind: targetAgent, MachineID: d.ID, SessionID: res.Session.SessionID}
 	label := agentLabel(res.Session)
@@ -711,6 +773,7 @@ func (s *Service) botStartAgent(machine, cwd, prompt string) {
 		s.startChannelRun(&channel.Run{ID: "fb_" + mid, Channel: channel.Feishu, ReplyTo: mid, MachineID: t.MachineID, SessionID: t.SessionID,
 			TargetKind: t.Kind, Label: label, Started: time.Now().UTC()})
 	}
+	return nil
 }
 
 // --- pushes and the sync mirror ---

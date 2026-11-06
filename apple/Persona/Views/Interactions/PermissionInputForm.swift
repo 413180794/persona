@@ -25,8 +25,10 @@ struct PermissionInputForm: View {
                             // passwords (#1598).
                             SecretField(field.placeholder ?? field.label, filled: String(localized: "已填写"), text: binding(field.key),
                                         identifier: "interaction.field." + field.key)
+                                .onSubmit { submit(allow: true) }
                         } else {
                             TextField(field.placeholder ?? field.label, text: binding(field.key))
+                                .onSubmit { submit(allow: true) }
                         }
                     }
                     .font(Theme.Font.body)

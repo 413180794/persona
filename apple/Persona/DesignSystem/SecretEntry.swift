@@ -28,6 +28,7 @@ struct SecretField: View {
     var filled: String
     @Binding var text: String
     var identifier: String?
+    var onSubmitAction: (() -> Void)?
 
     init(_ placeholder: String, filled: String = String(localized: "已填写"), text: Binding<String>, identifier: String? = nil) {
         self.placeholder = placeholder
@@ -36,14 +37,23 @@ struct SecretField: View {
         self.identifier = identifier
     }
 
+    /// Runs `action` when Return is pressed in the field, passed through to the real input control on every platform.
+    func onSubmit(_ action: @escaping () -> Void) -> SecretField {
+        var copy = self
+        copy.onSubmitAction = action
+        return copy
+    }
+
     var body: some View {
         #if os(iOS) || os(visionOS)
-        SecretTextField(placeholder: placeholder, filled: filled, identifier: identifier, text: $text)
+        SecretTextField(placeholder: placeholder, filled: filled, identifier: identifier, text: $text,
+                        onSubmit: onSubmitAction)
         #else
         // The standard field on a Mac.
         SecureField(placeholder, text: $text)
             .secretEntry()
             .accessibilityIdentifier(identifier ?? "")
+            .onSubmit { onSubmitAction?() }
         #endif
     }
 }
@@ -54,6 +64,7 @@ private struct SecretTextField: UIViewRepresentable {
     var filled: String
     var identifier: String?
     @Binding var text: String
+    var onSubmit: (() -> Void)?
 
     func makeUIView(context: Context) -> EmptyingSecureTextField {
         let f = EmptyingSecureTextField()
@@ -70,6 +81,7 @@ private struct SecretTextField: UIViewRepresentable {
         f.addTarget(c, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
         f.addTarget(c, action: #selector(Coordinator.refresh(_:)), for: [.editingDidBegin, .editingDidEnd])
         f.addTarget(c, action: #selector(Coordinator.refresh(_:)), for: .editingDidEndOnExit) // return closes the keyboard
+        f.addTarget(c, action: #selector(Coordinator.submit(_:)), for: .editingDidEndOnExit) // return runs onSubmit
         return f
     }
 
@@ -98,6 +110,8 @@ private struct SecretTextField: UIViewRepresentable {
         init(field: SecretTextField) { self.field = field }
 
         @objc func changed(_ f: UITextField) { field.text = f.text ?? "" }
+
+        @objc func submit(_ f: UITextField) { field.onSubmit?() }
 
         @objc func refresh(_ f: UITextField) {
             f.placeholder = f.isFirstResponder || field.text.isEmpty ? field.placeholder : field.filled

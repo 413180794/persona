@@ -191,3 +191,29 @@ func TestBotPostCardRejectedFallbackStillReplies(t *testing.T) {
 		t.Fatalf("second reply %v is not the rich-text fallback", replies[1])
 	}
 }
+
+// botNote to a withdrawn parent lands in the chat as a text send with the same text and a fresh one-shot key.
+func TestBotNoteDetoursWithdrawnReplyToSend(t *testing.T) {
+	f := newFakeDetourAPI(t)
+	f.replyCode = 230011
+	h := newTestManager(t)
+	const note = "note after withdrawn 4457"
+	h.botNote(context.Background(), f.client(false), "chat1", "om_n", note)
+	replies, sends := f.snapshot()
+	wantContent := feishubot.TextContent(note)
+	if len(replies) != 1 || replies[0]["content"] != wantContent || len(sends) != 1 || sends[0]["content"] != wantContent || sends[0]["msg_type"] != feishubot.TypeText {
+		t.Fatalf("replies=%v sends=%v", replies, sends)
+	}
+	if u, _ := sends[0]["uuid"].(string); !strings.HasPrefix(u, "s:") {
+		t.Fatalf("detoured send uuid %q is not a one-shot key", u)
+	}
+}
+
+// A dropped connection on the note's reply must not detour: nothing reaches the chat.
+func TestBotNoteNetworkFailureDoesNotDetour(t *testing.T) {
+	f := newFakeDetourAPI(t)
+	newTestManager(t).botNote(context.Background(), f.client(true), "chat1", "om_n", "note 4457")
+	if replies, sends := f.snapshot(); len(replies) != 0 || len(sends) != 0 {
+		t.Fatalf("replies=%v sends=%v, want no traffic after a transport error", replies, sends)
+	}
+}

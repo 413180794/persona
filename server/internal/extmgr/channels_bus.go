@@ -124,13 +124,8 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		id, err := h.botPostJSON(ctx, api, set.Owner.ChatID, a.ReplyTo, a.Card, a.Fallback)
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuText:
-		var id string
-		var err error
-		if a.ReplyTo != "" {
-			id, err = api.Reply(ctx, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), feishuReplyUUID(a.ReplyTo, "t", a.Text), false)
-		} else {
-			id, err = api.Send(ctx, "chat_id", set.Owner.ChatID, feishubot.TypeText, feishubot.TextContent(a.Text), feishuSendUUID())
-		}
+		// With no parent the key is unused: replyOrSend sends with its own fresh one-shot key.
+		id, _, err := h.replyOrSend(ctx, api, set.Owner.ChatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), feishuReplyUUID(a.ReplyTo, "t", a.Text))
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuUpdateCard:
 		return map[string]any{}, api.UpdateCard(ctx, a.MessageID, a.Card)

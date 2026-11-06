@@ -82,8 +82,9 @@ type feishuBook struct {
 	cards    map[string]botCard // interaction id -> the card asking it
 	status   *FeishuStatus
 	statusAt time.Time
-	now      func() time.Time // tests
-	cotOff   bool             // Feishu refused an agent message (feishu_cot.go)
+	now      func() time.Time     // tests
+	cotOff   bool                 // Feishu refused an agent message (feishu_cot.go)
+	startAt  map[string]time.Time // recent /start form presses, for one press one agent (feishu_cards.go)
 }
 
 type botCard struct {

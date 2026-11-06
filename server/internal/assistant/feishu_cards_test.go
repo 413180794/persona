@@ -2,11 +2,15 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -73,5 +77,215 @@ func TestBotCommandListCardsClipAndFallback(t *testing.T) {
 	}
 	if n := strings.Count(fallback, "\n- "); n != 10 || !strings.Contains(fallback, "🔴") || strings.ContainsAny(fallback, "*_[`") {
 		t.Fatalf("/agents fallback rows=%d, icon or escaping wrong: %q", n, fallback)
+	}
+}
+
+// startCardHub is a service whose feishu app has the Agents feature on and one machine "box"; posts counts the
+// started-cards and says the failure notes the start goroutine sends.
+func startCardHub(t *testing.T) (*Service, *fakeHub, chan struct{}, chan string) {
+	t.Helper()
+	f := newFakeHub().withMachine()
+	f.sessions["box"] = nil // the fake only answers a machine it knows
+	f.devices = []Device{{ID: "box", Name: "box", Home: "/home/me", Online: true, Reachable: true}}
+	s := newTestService(t, f)
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_me", Features: FeishuFeatures{Agents: true}}, nil
+	})
+	says := make(chan string, 8)
+	f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
+		var m struct {
+			Text string `json:"text"`
+		}
+		_ = json.Unmarshal(p, &m)
+		says <- m.Text
+		return map[string]any{"ok": true}, nil
+	})
+	posts := make(chan struct{}, 8)
+	f.answerApp(AppFeishu, FeishuPost, func(json.RawMessage) (any, error) {
+		posts <- struct{}{}
+		return map[string]any{"message_id": "om_started"}, nil
+	})
+	return s, f, posts, says
+}
+
+func startCardAction(mid string) *feishubot.CardAction {
+	var a feishubot.CardAction
+	a.Action.Value = map[string]any{"a": "start"}
+	a.Action.FormValue = map[string]any{"machine": "box", "cwd": "/home/me/work"} // prompt is optional on the card
+	a.Context.MessageID = mid
+	return &a
+}
+
+func (f *fakeHub) startCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.starts)
+}
+
+func (f *fakeHub) agentCount() int { // successful session.start calls only (the fake counts failed attempts in starts)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.agents
+}
+
+// startSlotHeld reports whether mid's dedup slot is still taken (test only).
+func (s *Service) startSlotHeld(mid string) bool {
+	s.fbot.mu.Lock()
+	defer s.fbot.mu.Unlock()
+	_, ok := s.fbot.startAt[mid+"start"]
+	return ok
+}
+
+// waitForStart polls until the fake saw wantStarts session starts and drains the newPosts started-cards that go
+// with this step, so the goroutine botStartAgent spawns has posted before the test moves on.
+func waitForStart(t *testing.T, f *fakeHub, posts chan struct{}, says chan string, wantStarts, newPosts int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && f.agentCount() < wantStarts {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if got := f.agentCount(); got != wantStarts {
+		var gotSays []string
+		for {
+			select {
+			case m := <-says:
+				gotSays = append(gotSays, m)
+			default:
+				t.Fatalf("agent starts = %d, want %d; says: %v", got, wantStarts, gotSays)
+			}
+		}
+	}
+	for i := 0; i < newPosts; i++ {
+		select {
+		case <-posts:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("only %d of %d started cards posted", i, newPosts)
+		}
+	}
+}
+
+// A double press of the same /start card (a double tap, Feishu's redelivery, or the hub's resend) starts one agent:
+// both presses get the same 「启动中」 toast and a different card can still start another agent (#4340).
+func TestStartCardDoublePressStartsOneAgent(t *testing.T) {
+	s, f, posts, says := startCardHub(t)
+	ctx := context.Background()
+	want := i18n.T("", "assistant-feishu_cards.starting")
+
+	first := s.botCardAction(ctx, startCardAction("om_card1"), "")
+	second := s.botCardAction(ctx, startCardAction("om_card1"), "")
+	if first.Toast == nil || second.Toast == nil || first.Toast.Content != want || second.Toast.Content != want {
+		t.Fatalf("toasts %+v %+v, want both %q", first.Toast, second.Toast, want)
+	}
+	waitForStart(t, f, posts, says, 1, 1)
+	// The swallowed press must not start anything later either: give a wrongly-spawned goroutine time to land and
+	// prove no second start, and no second started-card, exists.
+	time.Sleep(50 * time.Millisecond)
+	if got := f.agentCount(); got != 1 {
+		t.Fatalf("started agents after grace = %d, want 1", got)
+	}
+	select {
+	case <-posts:
+		t.Fatal("the duplicate press posted a second started-card")
+	default:
+	}
+
+	s.botCardAction(ctx, startCardAction("om_card2"), "")
+	waitForStart(t, f, posts, says, 2, 1)
+}
+
+// A press whose form fails validation (no directory) answers the warning without taking the dedup slot: a corrected
+// press of the same card right afterwards still starts one agent.
+func TestStartCardInvalidFormDoesNotTakeSlot(t *testing.T) {
+	s, f, posts, says := startCardHub(t)
+	ctx := context.Background()
+
+	bad := startCardAction("om_card1")
+	bad.Action.FormValue["cwd"] = "   "
+	r := s.botCardAction(ctx, bad, "")
+	want := i18n.T("", "assistant-feishu_cards.pick_machine_dir")
+	if r.Toast == nil || r.Toast.Content != want {
+		t.Fatalf("toast %+v, want %q", r.Toast, want)
+	}
+	s.botCardAction(ctx, startCardAction("om_card1"), "")
+	waitForStart(t, f, posts, says, 1, 1)
+}
+
+// When the start itself fails (the node refused it), the dedup slot is released: the owner sees the failure and can
+// press the same card again to retry, instead of getting a bare 「启动中」 with nothing starting.
+func TestStartCardFailedStartLetsNextPressThrough(t *testing.T) {
+	s, f, posts, says := startCardHub(t)
+	ctx := context.Background()
+	f.failStart = errors.New("node is down")
+
+	s.botCardAction(ctx, startCardAction("om_card1"), "")
+	select {
+	case <-says:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the failure note was not sent")
+	}
+	deadline := time.Now().Add(2 * time.Second) // the note lands before the slot is released
+	for s.startSlotHeld("om_card1") && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if s.startSlotHeld("om_card1") {
+		t.Fatal("the failed start kept its dedup slot")
+	}
+	if got := f.agentCount(); got != 0 {
+		t.Fatalf("started agents after failure = %d, want 0", got)
+	}
+	f.failStart = nil
+	s.botCardAction(ctx, startCardAction("om_card1"), "")
+	waitForStart(t, f, posts, says, 1, 1)
+}
+
+// After the dedup window passes, pressing the same card again starts another agent: the guard is not a permanent
+// block on the machine and directory. The window is shrunk after the first start fully posted; botStartAgent's
+// goroutine never reads the window, so shrinking it cannot race with that goroutine.
+func TestStartCardPressAgainAfterWindow(t *testing.T) {
+	s, f, posts, says := startCardHub(t)
+	ctx := context.Background()
+
+	s.botCardAction(ctx, startCardAction("om_card1"), "")
+	waitForStart(t, f, posts, says, 1, 1)
+	botStartCardWindow = 0 // the first press is now older than the window
+	t.Cleanup(func() { botStartCardWindow = 60 * time.Second })
+	s.botCardAction(ctx, startCardAction("om_card1"), "")
+	waitForStart(t, f, posts, says, 2, 1)
+}
+
+// A press without a card message id is never deduped (the guard keys on the card message), so a malformed callback
+// cannot lock the machine out.
+func TestStartCardWithoutMessageIDIsNotDeduped(t *testing.T) {
+	s, f, posts, says := startCardHub(t)
+	ctx := context.Background()
+
+	s.botCardAction(ctx, startCardAction(""), "")
+	s.botCardAction(ctx, startCardAction(""), "")
+	waitForStart(t, f, posts, says, 2, 2)
+}
+
+// A start that fails only after the window must not free a slot a later manual press has taken: the late failure
+// callback carries the timestamp its own press stamped, and the compare-and-swap leaves the newer slot in place, so
+// a third press is still swallowed instead of starting a third agent.
+func TestStartCardLateFailureKeepsNewerSlot(t *testing.T) {
+	s, _, _, _ := startCardHub(t)
+	mid := "om_card1"
+
+	botStartCardWindow = 0 // both presses are past the window, so the second press re-stamps the slot
+	t.Cleanup(func() { botStartCardWindow = 60 * time.Second })
+	_, first := s.startCardPressed(mid)
+	time.Sleep(time.Millisecond)
+	if blocked, second := s.startCardPressed(mid); blocked || !second.After(first) {
+		t.Fatalf("second press after the window: blocked=%v second=%v first=%v, want it to take a fresh slot", blocked, second, first)
+	}
+	// The first start's failure arrives late; it owns the old timestamp and must not delete the newer slot.
+	s.forgetStartCard(mid, first)
+	if !s.startSlotHeld(mid) {
+		t.Fatal("the late failure released the second press's slot")
+	}
+	// Inside the restored window a third press is therefore still swallowed.
+	botStartCardWindow = 60 * time.Second
+	if blocked, _ := s.startCardPressed(mid); !blocked {
+		t.Fatal("third press was not deduped: the late failure had dropped the newer slot")
 	}
 }

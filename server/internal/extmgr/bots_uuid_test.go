@@ -169,8 +169,8 @@ func TestBotNoteReplyUUID(t *testing.T) {
 	f := newFakeUUIDAPI(t)
 	h := newTestManager(t)
 	api := feishubot.New("cli", "sec", f.srv.URL)
-	h.botNote(context.Background(), api, "om_n", "cannot send")
-	h.botNote(context.Background(), api, "om_n", "cannot send")
+	h.botNote(context.Background(), api, "chat", "om_n", "cannot send")
+	h.botNote(context.Background(), api, "chat", "om_n", "cannot send")
 	got := f.uuids()
 	want := feishuReplyUUID("om_n", "n", "cannot send")
 	if len(got) != 2 || got[0] != want || got[1] != want {
@@ -221,5 +221,20 @@ func TestChannelFeishuTextUUID(t *testing.T) {
 	}
 	if len(sendKeys) != 2 || sendKeys[0] == sendKeys[1] || !strings.HasPrefix(sendKeys[0], "s:") {
 		t.Fatalf("send keys %v want two distinct random keys", sendKeys)
+	}
+}
+
+// A text reply whose parent was withdrawn (230011) is rerouted into the chat with a fresh one-shot key; 230110 takes
+// the same helper branch and is covered for both codes by TestBotPostDetoursWithdrawnReplyToSend.
+func TestChannelFeishuTextDetoursWithdrawnReplyToSend(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	w.api.rejectReply = 230011
+	const text = "gone parent text 4457"
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_gone"})
+	w.api.find(t, "/messages/om_gone/reply", text) // the anchored reply was attempted first
+	sendCall := w.api.find(t, "POST /open-apis/im/v1/messages ", text)
+	if m := uuidInCall.FindStringSubmatch(sendCall); m == nil || !strings.HasPrefix(m[1], "s:") {
+		t.Fatalf("detoured send %q key %v, want a fresh one-shot key", sendCall, m)
 	}
 }

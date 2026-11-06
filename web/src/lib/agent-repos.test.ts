@@ -39,6 +39,15 @@ describe("从 cwd 推断仓库与工作树", () => {
     expect(repoOf("/code/app/server/internal")).toEqual({ repo: "/code/app/server/internal", name: "internal", worktree: "/code/app/server/internal", main: true });
     expect(repoOf("")).toEqual({ repo: "", name: "", worktree: "", main: true });
   });
+
+  it("宿主给了仓库（repo_root，#2840）时按它分：在它里面是主工作树，别处是它的工作树", () => {
+    const wt = "/home/me/.paseo/worktrees/1a2b3c4d/brave-fox";
+    expect(repoOf(wt, "/code/app")).toEqual({ repo: "/code/app", name: "app", worktree: wt, main: false });
+    expect(repoOf("/code/app", "/code/app/")).toEqual({ repo: "/code/app", name: "app", worktree: "/code/app", main: true });
+    expect(repoOf("/code/app/server", "/code/app")).toEqual({ repo: "/code/app", name: "app", worktree: "/code/app", main: true });
+    expect(repoOf("/code/app-2", "/code/app").main).toBe(false);
+    expect(repoOf(wt, "")).toEqual(repoOf(wt)); // 空的 repo_root 和没有一样
+  });
 });
 
 const ids = (sessions: Session[]) => sessions.map((s) => s.session_id);
@@ -46,6 +55,18 @@ const names = (tree: RepoTree[]) => tree.map((r) => r.name);
 const worktrees = (r: RepoTree) => r.worktrees.map((w) => `${w.name}${w.main ? "*" : ""}`);
 
 describe("按仓库分组的树", () => {
+  it("带 repo_root 的会话（Paseo 的 worktree）归到主仓库下，不再各成一个仓库", () => {
+    const tree = buildRepoTree([
+      session("main", "/code/app", { repo_root: "/code/app" }),
+      session("w1", "/home/me/.paseo/worktrees/1a2b3c4d/brave-fox", { repo_root: "/code/app" }),
+      session("w2", "/home/me/.paseo/worktrees/1a2b3c4d/calm-bear", { repo_root: "/code/app" }),
+    ], machines);
+    expect(names(tree)).toEqual(["app"]);
+    expect(tree[0]!.worktrees.map((w) => [w.name, w.main, ids(w.sessions)])).toEqual([
+      ["app", true, ["main"]], ["brave-fox", false, ["w1"]], ["calm-bear", false, ["w2"]],
+    ]);
+  });
+
   it("先给主工作树，再按名字给工作树", () => {
     const all = [
       session("main", "/code/app"),

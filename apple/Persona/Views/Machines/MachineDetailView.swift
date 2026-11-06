@@ -99,17 +99,22 @@ struct MachineDetailView: View {
         .detailTitle(machine?.name ?? machineID)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
-            await model.refresh()
-            await load()
-            await loadLaunchers(refresh: true)
-            await plugins.load(ref, app: model, redraw: true)
+            // Four independent reloads of disjoint state (the hub snapshot, the metrics, the launchers, the
+            // plugin sections): run them together instead of one after another. A launchers read that races
+            // the machine coming online is covered again by the `.task(id: machine?.online == true)` below.
+            async let refreshed: Void = model.refresh()
+            async let metrics: Void = load()
+            async let launchersLoaded: Void = loadLaunchers(refresh: true)
+            async let sections: Void = plugins.load(ref, app: model, redraw: true)
+            _ = await (refreshed, metrics, launchersLoaded, sections)
         }
         #if os(macOS)
         .macRefreshes(id: machineID) {
-            await model.refresh()
-            await load()
-            await loadLaunchers(refresh: true)
-            await plugins.load(ref, app: model, redraw: true)
+            async let refreshed: Void = model.refresh()
+            async let metrics: Void = load()
+            async let launchersLoaded: Void = loadLaunchers(refresh: true)
+            async let sections: Void = plugins.load(ref, app: model, redraw: true)
+            _ = await (refreshed, metrics, launchersLoaded, sections)
         }
         #endif
         .tabActiveTask(id: Poll(range: range, active: phase == .active)) { // stops in the background and in another tab

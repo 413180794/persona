@@ -229,6 +229,7 @@ test("a project's worktrees are one space; a new session at a worktree goes into
   assert.deepEqual(['M', 'W', 'S'].map((x) => [byTitle[x].space_name, byTitle[x].slot_id, byTitle[x].slot_name]),
     [['app', 'wks_main', '主线'], ['app', 'wks_wt', '修登录'], ['app', 'wks_stray', 'brave-fox']],
     "one space named after the repository's project, the stray record's too; each workspace a slot")
+  assert.deepEqual(['M', 'W', 'S'].map((x) => byTitle[x].repo_root), [app, app, app], "按仓库: the repository's main checkout (#2840)")
 
   const started = (params) => call(node, 'session.start', { prompt: 'x', launcher: 'my-codex', ...params })
     .then(() => fake.requestsOf('agent.create.request').at(-1))

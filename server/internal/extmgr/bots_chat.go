@@ -207,7 +207,7 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	h.botNote(ctx, api, msg.MessageID, i18n.T(h.userLang(), "hub-bots_chat.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
+	h.botNote(ctx, api, msg.ChatID, msg.MessageID, i18n.T(h.userLang(), "hub-bots_chat.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
 }
 
 // botCardAction answers a press on one of the bot's cards: only the owner's count, and the assistant answers them.
@@ -346,9 +346,29 @@ func (h *Manager) botName(ctx context.Context, api *feishubot.Client, openID str
 	return name
 }
 
-// botNote replies to a message with a line of text.
-func (h *Manager) botNote(ctx context.Context, api *feishubot.Client, messageID, text string) {
-	if _, err := api.Reply(ctx, messageID, feishubot.TypeText, feishubot.TextContent(text), feishuReplyUUID(messageID, "n", text), false); err != nil {
+// replyOrSend replies to replyTo when its parent still stands, or sends into chatID when replyTo is "". A definitive
+// 230011/230110 (parent withdrawn/deleted, which proves the reply never landed) reroutes the same content to a chat
+// send with a fresh one-shot key and rerouted=true; transport or other failures come back untouched, so one blip
+// never becomes two messages.
+func (h *Manager) replyOrSend(ctx context.Context, api *feishubot.Client, chatID, replyTo, msgType, content, replyUUID string) (id string, rerouted bool, err error) {
+	if replyTo == "" {
+		id, err = api.Send(ctx, "chat_id", chatID, msgType, content, feishuSendUUID())
+		return
+	}
+	id, err = api.Reply(ctx, replyTo, msgType, content, replyUUID, false)
+	if !feishubot.MessageGone(err) {
+		return
+	}
+	h.logf("bots: parent message %s was withdrawn or deleted; resending the answer into chat %s", replyTo, chatID)
+	id, err = api.Send(ctx, "chat_id", chatID, msgType, content, feishuSendUUID())
+	rerouted = true
+	return
+}
+
+// botNote replies to a message with a line of text; a parent withdrawn meanwhile gets the note in the chat instead.
+func (h *Manager) botNote(ctx context.Context, api *feishubot.Client, chatID, messageID, text string) {
+	content := feishubot.TextContent(text)
+	if _, _, err := h.replyOrSend(ctx, api, chatID, messageID, feishubot.TypeText, content, feishuReplyUUID(messageID, "n", text)); err != nil {
 		h.logf("bots: note: %v", err)
 	}
 }
@@ -365,19 +385,11 @@ func (h *Manager) botPostJSON(ctx context.Context, api *feishubot.Client, chatID
 		cardUUID = feishuReplyUUID(replyTo, "c", card)
 	}
 	send := func(typ, content, uuid string) (string, error) {
-		if replyTo != "" {
-			id, err := api.Reply(ctx, replyTo, typ, content, uuid, false)
-			if feishubot.MessageGone(err) {
-				// The parent was recalled or deleted (230011/230110) before the reply landed: this definitive business
-				// rejection proves the reply did not land, so resending it cannot make a duplicate. Send the same
-				// content into the chat with a fresh one-shot key, and keep answering without the quote.
-				h.logf("bots: parent message %s was withdrawn or deleted; resending the answer into chat %s", replyTo, chatID)
-				replyTo = ""
-				return api.Send(ctx, "chat_id", chatID, typ, content, feishuSendUUID())
-			}
-			return id, err
+		id, rerouted, err := h.replyOrSend(ctx, api, chatID, replyTo, typ, content, uuid)
+		if rerouted {
+			replyTo = "" // a fallback after the detour must go to the chat too, never retry the dead reply
 		}
-		return api.Send(ctx, "chat_id", chatID, typ, content, uuid)
+		return id, err
 	}
 	id, err := send(feishubot.TypeInteractive, card, cardUUID)
 	if err != nil && feishubot.CardRejected(err) {

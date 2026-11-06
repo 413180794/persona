@@ -95,6 +95,7 @@ type fakeOpenAPI struct {
 	read  map[string]any // message id -> what GET /messages/:id answers (its items)
 	// rejectInteractive, when set, is the business code returned for interactive message sends (card rejection).
 	rejectInteractive int
+	rejectReply       int // business code for /reply, e.g. 230011 parent withdrawn
 }
 
 func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
@@ -133,8 +134,12 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 			code := 0
 			f.mu.Lock()
 			reject := f.rejectInteractive
+			replyGone := f.rejectReply
 			f.mu.Unlock()
-			if reject != 0 && strings.Contains(string(body), `"msg_type":"interactive"`) {
+			switch {
+			case strings.HasSuffix(p, "/reply") && replyGone != 0:
+				code = replyGone
+			case reject != 0 && strings.Contains(string(body), `"msg_type":"interactive"`):
 				code = reject
 			}
 			reply(map[string]any{"code": code, "data": map[string]any{"message_id": fmt.Sprintf("om_bot%d", n)}})

@@ -263,6 +263,9 @@ export function agentRow(agent, o = {}) {
     row.slot_id = agent.workspaceId
     row.slot_name = slotNameOf(p, cwd)
   }
+  // Its repository, for 按仓库 (#2840): Paseo keeps its worktrees under its own folder, where the path names none.
+  const repo = p?.checkout?.isGit ? repoRootOf(p) : undefined
+  if (repo) row.repo_root = repo
   if (row.agent === RUNTIME && o.labels?.[agent.provider]) row.agent_label = o.labels[agent.provider]
   const model = agent.model ?? agent.runtimeInfo?.model
   if (typeof model === 'string' && model) row.model = model

@@ -117,6 +117,8 @@ test("spaces: a project's checkout and its worktrees are one space, Paseo's work
   assert.deepEqual(rows.map((r) => [r.space_id, r.space_name, r.slot_id, r.slot_name]), [
     ['prj_app', 'app', 'wks_main', '主线'], ['prj_app', 'app', 'wks_wt', '修登录'], ['prj_app', 'app', 'wks_stray', 'fix-login'],
   ])
+  assert.deepEqual(rows.map((r) => r.repo_root), ['/w/app', '/w/app', '/w/app'], "按仓库: the repository's main checkout (#2840)")
+  assert.equal(row('wks_notes', folder).repo_root, undefined, 'not a git repository: the path says enough')
   const bare = agentRow(agentSnapshot({ provider: 'grok', cwd: '/w/x', workspaceId: 'wks_x' }), { roots })
   assert.deepEqual([bare.space_id, bare.space_name, bare.slot_id], ['wks_x', 'x', undefined], 'no placement: its workspace, as before')
 })

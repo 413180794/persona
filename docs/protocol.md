@@ -366,6 +366,8 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 // Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。
 {"machine_id":"server","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"<项目目录>",
  "workspace_cwd":"<node 验证的物理目录>",   // 可选；用于工作区关联，缺失时兼容回退 cwd，不替换原始 cwd
+ "repo_root":"<cwd 所属仓库的主检出目录>",   // 可选（#2840）：宿主知道仓库时才带（Paseo 的桥：它的 worktree 在 Paseo 自己的目录下，看路径认不出仓库）；
+                   // 「按仓库」按它分：cwd 在它里面是主检出，否则是它的一个 worktree。不带时客户端照旧按 cwd 的路径推断
  "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
  "pane_index":0,   // 可选（#2320）：这个窗格在它的 tab 里按位置的序号，从 0 起，左上为 0（别的窗格都是从它切出来的，有 Agent 时就是这组的发起者）；

@@ -192,6 +192,7 @@ struct TodosView: View {
                 Section {
                     TextField("标题", text: $creatingTitle)
                         .lineLimit(1)
+                        .onSubmit { add() }
                     TextField("说明（交给 Agent 时会一起发过去）", text: $creatingNotes, axis: .vertical)
                         .lineLimit(3...8)
                 }
@@ -205,25 +206,28 @@ struct TodosView: View {
                         .lineLimit(1)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
-                        let t = creatingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let n = creatingNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-                        // The sheet closes only once the todo is saved: a failed save keeps the typed title and notes.
-                        Task {
-                            do {
-                                _ = try await store.create(title: t, notes: n.isEmpty ? nil : n)
-                                showCreate = false
-                            } catch {
-                                AppModel.shared.show(error)
-                            }
-                        }
-                    }
-                    .lineLimit(1)
-                    .disabled(creatingTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("添加") { add() }
+                        .lineLimit(1)
+                        .disabled(creatingTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
         .presentationDetents([.medium])
+    }
+
+    private func add() {
+        let t = creatingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        let n = creatingNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The sheet closes only once the todo is saved: a failed save keeps the typed title and notes.
+        Task {
+            do {
+                _ = try await store.create(title: t, notes: n.isEmpty ? nil : n)
+                showCreate = false
+            } catch {
+                AppModel.shared.show(error)
+            }
+        }
     }
 }
 

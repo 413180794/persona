@@ -692,11 +692,15 @@ type Session struct {
 	// WorkspaceCwd is the node-verified physical directory for Cwd. Consumers
 	// matching workspace bindings prefer it and fall back to Cwd on older nodes.
 	WorkspaceCwd string `json:"workspace_cwd,omitempty"`
-	Status       string `json:"status"`
-	PaneID       string `json:"pane_id,omitempty"`
-	TabID        string `json:"tab_id,omitempty"`
-	WorkspaceID  string `json:"workspace_id,omitempty"`
-	AgentName    string `json:"agent_name,omitempty"`
+	// RepoRoot is the main checkout of the repository Cwd belongs to, when the host knows it (#2840: the Paseo bridge,
+	// whose worktrees live under Paseo's own folder): 按仓库 groups by it; without it the clients infer the repository
+	// from Cwd's path.
+	RepoRoot    string `json:"repo_root,omitempty"`
+	Status      string `json:"status"`
+	PaneID      string `json:"pane_id,omitempty"`
+	TabID       string `json:"tab_id,omitempty"`
+	WorkspaceID string `json:"workspace_id,omitempty"`
+	AgentName   string `json:"agent_name,omitempty"`
 	// CodexRoute: how Persona reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」) — "app_server" (joined on
 	// the shared app-server: questions, approvals and messages go through its protocol) or "terminal" (its rollout and
 	// screen, keys and typing); CodexRouteNote says why when it is the terminal.
