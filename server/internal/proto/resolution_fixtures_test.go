@@ -508,7 +508,7 @@ func TestResolutionFixtureSourceEvidence(t *testing.T) {
 		"apple/PersonaWatch/PersonaWatchApp.swift": {
 			"Resolution(approve: true, mode: \"bypassPermissions\")", "Resolution(approve: false, feedback: \"请重新考虑这个计划\")",
 			"Resolution(allow: true)", "Resolution(allow: false)", "Resolution(option: opt.key)", "Resolution(keys: [opt.key])",
-			"Button(\"提交\") { submit() }", "act(.dismissed)",
+			"Button(\"Submit\") { submit() }", "act(.dismissed)",
 		},
 		"apple/PersonaTests/NotificationActionsTests.swift": {
 			"#expect(allow.options.contains(.authenticationRequired))",
@@ -523,7 +523,7 @@ func TestResolutionFixtureSourceEvidence(t *testing.T) {
 			"#expect(DenyPermissionIntent.authenticationPolicy == .alwaysAllowed)",
 		},
 		"apple/PersonaWidgets/FleetLiveActivity.swift": {
-			"Button(intent: ApprovePlanIntent(interactionID: id))", "Link(destination: FleetLink.url(item)!)", ".widgetURL(FleetLink.whole(context.state))",
+			"Button(intent: ApprovePlanIntent(interactionID: id))", "Link(destination: FleetLink.url(item)!)", ".widgetURL(FleetLink.whole(state))",
 		},
 	}
 	for path, snippets := range evidence {
@@ -552,14 +552,13 @@ func TestResolutionFixtureSourceEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, snippet := range []string{
-		`identifier: allow, title: String(localized: "允许"), options: [.authenticationRequired]`,
-		`identifier: deny, title: String(localized: "拒绝"), options: [.destructive]`,
-		`identifier: approvePlan, title: String(localized: "批准"), options: [.authenticationRequired]`,
-		`identifier: rejectPlan, title: String(localized: "打回修改"), options: [.authenticationRequired]`,
+	// Each action's identifier and unlock options; the title is a localization key (#5430) and may change freely.
+	for id, options := range map[string]string{
+		"allow": ".authenticationRequired", "deny": ".destructive", "approvePlan": ".authenticationRequired", "rejectPlan": ".authenticationRequired",
 	} {
-		if !strings.Contains(string(notifications), snippet) {
-			t.Errorf("notification authentication changed: %s", snippet)
+		re := regexp.MustCompile(`identifier: ` + id + `, title: String\(localized: "[^"]*"\), options: \[` + regexp.QuoteMeta(options) + `\]`)
+		if !re.MatchString(string(notifications)) {
+			t.Errorf("notification authentication changed: %s must keep options [%s]", id, options)
 		}
 	}
 	// The existing Siri and watch code does not declare an unlock policy; never infer one from omission.
