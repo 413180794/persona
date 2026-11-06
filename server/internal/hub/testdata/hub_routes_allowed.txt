@@ -73,6 +73,7 @@ GET {devicewire.RelayPath}
 GET {link.Path}
 GET {link.StreamPath}
 GET {peerPath}
+GET /i/{code}
 PATCH /api/v1/managers/{id}
 POST /api/v1/admin/devices/pair
 POST /api/v1/admin/doctor

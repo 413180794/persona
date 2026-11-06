@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devices"
@@ -32,7 +34,6 @@ import (
 // from PERSONA_ASSISTANT_TOKEN (`personad hub assistant-token` makes one). It keeps its state in the hub's Postgres,
 // found as the hub finds it: hub.json's database_url, PERSONA_DATABASE_URL over it.
 func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
-	version := build.Version
 	logger := log.New(os.Stderr, "assistant: ", log.LstdFlags)
 	cfg, err := readHubConfig()
 	if err != nil {
@@ -67,7 +68,37 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	if deploy == "" {
 		deploy = "external"
 	}
-	database, err := db.Open(ctx, cfg.DatabaseURL)
+	return run(ctx, build, runOptions{ID: assistantwire.AssistantID, Hub: hub, Token: token, Deploy: deploy,
+		Dir: identity.HomeDir(), DatabaseURL: cfg.DatabaseURL, Logf: logger.Printf})
+}
+
+// runOptions are who a manager is and where its things are: the assistant the hub starts (Main), or a manager made
+// in the app with a manager.json of its own (RunManager, manager.go).
+type runOptions struct {
+	ID, Hub, Token, Deploy string
+	// Fingerprint pins the hub's TLS key (its public port's self-signed certificate); "" trusts the system's CAs.
+	Fingerprint string
+	// Dir is its data directory: the knowledge base (data/), secret.key, the extensions, hub.json's usage section.
+	Dir         string
+	DatabaseURL string
+	// StopWhenRevoked: once the hub refuses the token, stop (bus.ErrRevoked) rather than try it every minute.
+	StopWhenRevoked bool
+	Logf            func(format string, args ...any)
+}
+
+// run is a manager's process: its database, the computers, the extensions and the assistant itself on the hub's
+// bus, until ctx ends (or the token is refused, with StopWhenRevoked: bus.ErrRevoked).
+func run(ctx context.Context, build update.Build, o runOptions) error {
+	version := build.Version
+	hub, token, deploy, home := o.Hub, o.Token, o.Deploy, o.Dir
+	logf := o.Logf
+	var httpClient *http.Client
+	if o.Fingerprint != "" {
+		httpClient = pinnedHTTPClient(o.Fingerprint)
+	}
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	database, err := db.Open(ctx, o.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
@@ -76,7 +107,6 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	var bh *BusHub
 	var svc *Service
 	var ext *extmgr.Manager
-	home := identity.HomeDir()
 	// Dir: hub.json's usage section (the account-pool gateways and their keys) is the devices', read and written there.
 	devs := devices.New(devices.Options{Store: database, Dir: home, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
@@ -108,7 +138,7 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 			return []devicewire.NodeCall{{MachineID: machine, Method: DeviceLaunchersManaged, Params: b}}
 		},
 		DialRelay: func(ctx context.Context, query string) (*websocket.Conn, error) {
-			return bus.DialAt(ctx, hub, token, nil, devicewire.RelayPath, query)
+			return bus.DialAt(ctx, hub, token, httpClient, devicewire.RelayPath, query)
 		},
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
@@ -124,18 +154,19 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 		AssistantMachine: func() string { return svc.mainMachine(context.Background()) },
 		Ask:              func(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) { return svc.AskCard(ctx, ix) },
 		DialRelay: func(ctx context.Context, query string) (*websocket.Conn, error) {
-			return bus.DialAt(ctx, hub, token, nil, devicewire.RelayPath, query)
+			return bus.DialAt(ctx, hub, token, httpClient, devicewire.RelayPath, query)
 		},
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Lang:      func() i18n.Lang { return svc.lang(context.Background()) },
 		Timezone:  func() string { return svc.userTZ() }})
-	bh = NewBusHub(BusOptions{Hub: hub, Token: token, Version: version, Deploy: deploy, Logf: logger.Printf, Devices: devs, Extensions: ext})
+	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
+		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
 	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
 	// The model providers' keys are sealed with secret.key beside hub.json (the hub's; one elsewhere needs a copy).
-	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf, Devices: devs,
+	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logf, Devices: devs,
 		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}, SecretKey: filepath.Join(home, "secret.key")})
 	svc.SetExtensions(ext) // the connectors', Cua's and ego's tools, in this process (fleet_tools.go)
-	logger.Printf("connecting to %s", hub)
+	logf("connecting to %s as %s", hub, o.ID)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -147,6 +178,7 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 		_ = ext.Run(ctx) // after ctx: stops the extensions' programs (they are the manager's children)
 	}()
 	err = bh.Run(ctx, svc)
+	stop() // a refused token ends Run before ctx: the computers and the extensions stop with it
 	<-done
 	<-extDone
 	if err != nil && !errors.Is(err, context.Canceled) {

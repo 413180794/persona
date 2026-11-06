@@ -52,7 +52,7 @@ if [ "$(id -u)" = 0 ]; then
   cat /etc/passwd.new > /etc/passwd && rm -f /etc/passwd.new
   sed -i "s/^jarvis:x:[0-9]*:[0-9]*:/jarvis:x:$PUID:$PGID:/" /etc/passwd
   sed -i "s/^jarvis:x:[0-9]*:/jarvis:x:$PGID:/" /etc/group
-  seed_config
+  [ "${1:-}" = manager ] || seed_config
   # Anything not the hub's (PUID changed, files copied in with sudo) is handed over: a root-owned 0600 hub.json
   # would keep the hub from starting.
   find "$DATA" \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown -h "$PUID:$PGID" {} +
@@ -64,7 +64,11 @@ else
     echo "warning: running as uid $(id -u), which has no user in the image: PUID / PGID are ignored and ssh will" \
       "not work. Start the container as root (no user:) and set PUID / PGID instead." >&2
   fi
-  seed_config
+  [ "${1:-}" = manager ] || seed_config
+fi
+# A manager (docs/managers.md, "Containers"), not a hub: no hub.json and none of the hub's reminders.
+if [ "${1:-}" = manager ]; then
+  exec jarvisd "$@"
 fi
 # How phones reach the hub: nobody said, and the container cannot tell.
 if [ -z "${JARVIS_PUBLIC_URL:-}" ] && grep -q '"public_url": *""' "$DATA/hub.json" 2>/dev/null; then

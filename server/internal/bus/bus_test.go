@@ -122,6 +122,12 @@ type fakeHub struct {
 }
 
 func (f *fakeHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Only the client's dials count: other programs on this machine probe local ports too (a node's port scan in
+	// another package's tests, user agent jarvis-ports), and one could land on this server's.
+	if r.URL.Path != Path || r.Header.Get("Authorization") == "" {
+		http.NotFound(w, r)
+		return
+	}
 	f.dials.Add(1)
 	if f.refuse.Load() {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
@@ -220,5 +226,46 @@ func TestCloseReason(t *testing.T) {
 		if errors.Is(err, ErrRejected) != rejected {
 			t.Errorf("close %d: %v", code, err)
 		}
+	}
+}
+
+// With StopWhenRevoked a client whose token the hub revokes (closed 4002, then 401) returns ErrRevoked from Run
+// and dials no more; a refused handshake (4003) is not a revoked token.
+func TestClientStopsWhenRevoked(t *testing.T) {
+	f := &fakeHub{}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	c := &Client{Hub: srv.URL, Token: "t", HelloMethod: "manager.hello", StopWhenRevoked: true,
+		Backoff: 10 * time.Millisecond, MaxBackoff: 50 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ran := make(chan error, 1)
+	go func() { ran <- c.Run(ctx) }()
+	if err := c.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f.closeAll(CloseRevoked)
+	select {
+	case err := <-ran:
+		if !errors.Is(err, ErrRevoked) || !errors.Is(err, ErrRejected) {
+			t.Fatalf("Run returned %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run went on after the token was revoked")
+	}
+	dials := f.dials.Load()
+	time.Sleep(200 * time.Millisecond)
+	if f.dials.Load() != dials {
+		t.Fatal("dialed again after stopping")
+	}
+
+	// A token the hub never knew (401 at the dial) stops it too.
+	f.refuse.Store(true)
+	c2 := &Client{Hub: srv.URL, Token: "t", HelloMethod: "manager.hello", StopWhenRevoked: true, Backoff: 10 * time.Millisecond}
+	if err := c2.Run(ctx); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("401: %v", err)
+	}
+	if err := closeReason(websocket.CloseError{Code: CloseRefused}); errors.Is(err, ErrRevoked) || !errors.Is(err, ErrRejected) {
+		t.Fatalf("4003: %v", err)
 	}
 }

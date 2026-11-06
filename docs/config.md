@@ -336,6 +336,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   不给 `PERSONA_ASSISTANT_HUB` 时连本机 `listen` 的端口。助手没连着时它的接口回 `503 assistant_offline`。
   助手同时带着全部电脑（[machines.md](machines.md)「谁连电脑」）：跑在别的机器上时，`machines` 里的电脑由那台去连（ssh 主机名、tailcat key、
   hub 机器自己那台的 `node --stdio` 都在那台上）；它没连着时机器显示离线、机器的接口回 `503 assistant_offline`。
+  App 里新建的别的管理者不读 hub.json 的这一节：它的配置是自己目录里的 `manager.json`（[managers.md](managers.md)（"A second manager"））；在 hub 机器上它借 hub.json 的 `database_url` 找到同一个 Postgres，另建自己的库。
 - `assistant.persona_view`（默认 `false`）：助手回答里的卡片写成 ```` ```persona-view ````（扩展的组件，`docs/extensions.md`「UI 版本 3」），不再写 `persona-card`。
   各端（iOS / Mac、安卓、网页）都画得了 UI 版本 3 以后再打开；`persona-card` 在所有端都照样能画。
 - `assistant.html_views`（默认开，不写即开；写 `false` 关）：卡片的 `html` 组件可以经 `persona.reply` / `persona.open` 调用 hub（`…/views/{key}/html-actions`）。

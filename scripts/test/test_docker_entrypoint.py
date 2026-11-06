@@ -60,6 +60,30 @@ class DockerEntrypointTests(unittest.TestCase):
             written = files[".jarvis/hub.json"]
             return result.stderr, written.read_text(), written.stat().st_mode & 0o777
 
+    def test_manager_gets_no_hub_config_or_reminders(self):
+        # A manager in the hub's image (docs/managers.md, "Containers"): no hub.json is seeded, none of the hub's reminders.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            home = root / "home"
+            home.mkdir()
+            write_stubs(bin_dir, {
+                "id": '#!/bin/sh\ncase "$1" in -u) echo 1000 ;; -un) echo jarvis ;; *) exit 1 ;; esac\n',
+                "getent": '#!/bin/sh\nexit 1\n',
+                "jarvisd": '#!/bin/sh\nprintf "%s\\n" "$@"\n',
+            })
+            link_tools(bin_dir)
+            result = subprocess.run(
+                ["/bin/sh", str(ENTRYPOINT), "manager", "run", "--dir", "/home/jarvis/.jarvis/managers/m-0a1b2c"],
+                env={"PATH": str(bin_dir), "HOME": str(home)}, capture_output=True, text=True, timeout=5,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(), ["manager", "run", "--dir", "/home/jarvis/.jarvis/managers/m-0a1b2c"])
+            self.assertEqual([p for p in home.rglob("*") if p.is_file()], [])
+            self.assertNotIn("JARVIS_PUBLIC_URL", result.stderr)
+            self.assertNotIn("JARVIS_ADMIN_ACCESS", result.stderr)
+
     def test_desktop_api_guidance_is_independent_of_admin_access(self):
         for access in ("", "lan", "loopback", "cidrs", "any"):
             with self.subTest(access=access):

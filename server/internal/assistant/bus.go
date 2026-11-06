@@ -28,6 +28,8 @@ import (
 
 // BusOptions are where the hub is and how to reach it.
 type BusOptions struct {
+	// ID is the manager it connects as, the one its token is for (manager.hello); "" is the assistant the hub starts.
+	ID         string
 	Hub        string // the hub's base URL (http(s)://host:port)
 	Token      string // the assistant's bus token (jb_…)
 	HTTPClient *http.Client
@@ -39,6 +41,8 @@ type BusOptions struct {
 	Devices Devices
 	// Extensions is the manager's extensions, connectors and bots (extensions.go); nil: none here (tests).
 	Extensions Extensions
+	// StopWhenRevoked: Run returns bus.ErrRevoked once the hub refuses the token (bus.Client.StopWhenRevoked).
+	StopWhenRevoked bool
 }
 
 // BusHub is Hub over the bus.
@@ -80,13 +84,18 @@ func NewBusHub(o BusOptions) *BusHub {
 	}
 	b := &BusHub{opts: o, events: make(chan busEvent, 1024), helloed: make(chan struct{})}
 	host, _ := os.Hostname()
+	id := o.ID
+	if id == "" {
+		id = assistantwire.AssistantID
+	}
 	b.client = &bus.Client{
 		// The manager's extensions stop waiting for a card when their caller does (extmgr's interactions.wait).
 		Cancels: map[string]bool{assistantwire.MethodApp: true},
 		Hub:     o.Hub, Token: o.Token, HTTPClient: o.HTTPClient, Logf: o.Logf, Backoff: o.Backoff,
-		HelloMethod: assistantwire.MethodHello,
+		StopWhenRevoked: o.StopWhenRevoked,
+		HelloMethod:     assistantwire.MethodHello,
 		HelloParams: func() any {
-			return map[string]any{"id": assistantwire.AssistantID, "host": host, "os": runtime.GOOS, "arch": runtime.GOARCH,
+			return map[string]any{"id": id, "host": host, "os": runtime.GOOS, "arch": runtime.GOARCH,
 				"deploy": o.Deploy, "version": o.Version}
 		},
 		OnHello: b.onHello,

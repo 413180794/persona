@@ -45,6 +45,9 @@ type Client struct {
 	// Zero values are the protocol's: 1 s doubling to a minute; a ping every 30 s, 20 s for its pong.
 	Backoff, MaxBackoff    time.Duration
 	PingEvery, PingTimeout time.Duration
+	// StopWhenRevoked: Run returns ErrRevoked once the hub refuses the token itself, instead of trying it again every
+	// MaxBackoff (a manager whose token only a new install code replaces).
+	StopWhenRevoked bool
 
 	mu   sync.Mutex
 	peer *rpc.Peer     // the connection that said its handshake; nil between connections
@@ -64,7 +67,7 @@ func (c *Client) logf(format string, args ...any) {
 	}
 }
 
-// Run keeps the connection up until ctx ends, and returns ctx's error.
+// Run keeps the connection up until ctx ends, and returns ctx's error (or ErrRevoked, with StopWhenRevoked).
 func (c *Client) Run(ctx context.Context) error {
 	if c.HelloMethod == "" {
 		return errors.New("bus: the client has no HelloMethod")
@@ -79,6 +82,10 @@ func (c *Client) Run(ctx context.Context) error {
 		}
 		if helloed && time.Since(began) >= stableAfter {
 			delay = first
+		}
+		if c.StopWhenRevoked && errors.Is(err, ErrRevoked) {
+			c.logf("bus: the hub refused this token: %v; not trying again", err)
+			return err
 		}
 		wait := delay
 		if errors.Is(err, ErrRejected) {
@@ -149,7 +156,9 @@ func closeReason(err error) error {
 		return err
 	}
 	switch ce.Code {
-	case CloseRevoked, CloseRefused:
+	case CloseRevoked:
+		return fmt.Errorf("%w: %s", ErrRevoked, ce.Reason)
+	case CloseRefused:
 		return fmt.Errorf("%w: %s", ErrRejected, ce.Reason)
 	case CloseReplaced:
 		return fmt.Errorf("replaced by a newer connection: %s", ce.Reason)

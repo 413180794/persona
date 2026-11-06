@@ -25,6 +25,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
 	"github.com/nwverse/persona/server/internal/hub"
+	"github.com/nwverse/persona/server/internal/manager"
 	"github.com/nwverse/persona/server/internal/mcpserver"
 	"github.com/nwverse/persona/server/internal/node"
 	"github.com/nwverse/persona/server/internal/nodeupdate"
@@ -82,6 +83,9 @@ const usage = `usage:
   personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)
   personad assistant        the assistant (the Persona tab's) as its own process on the hub's bus; the hub starts it
                            unless hub.json says assistant.external (token: stdin or PERSONA_ASSISTANT_TOKEN)
+  personad manager join|run|install|uninstall|status
+                           another manager made in the app: trade its install code, run it, install it as a service
+                           (docs/managers.md; personad manager for the details)
 ` + nodeUsage + `
   personad hook             Claude Code hook entry (reads hook JSON on stdin)
   personad mcp              Claude Code MCP server (stdio)
@@ -225,6 +229,19 @@ func main() {
 		}
 	case "assistant": // the assistant as its own process on the hub's bus (the hub starts it, docs/assistant.md)
 		err = assistant.Main(ctx, buildInfo(), os.Stdin)
+	case "manager": // a manager made in the app: join, run, install as a service (docs/managers.md)
+		err = manager.Main(ctx, buildInfo(), os.Args[2:], os.Stdout)
+		var ce manager.ConfigError
+		switch {
+		case errors.Is(err, manager.ErrUsage):
+			fmt.Fprint(os.Stderr, named(manager.Usage))
+			os.Exit(2)
+		case errors.Is(err, manager.ErrHelp):
+			os.Exit(0)
+		case errors.As(err, &ce): // restarting cannot fix it: its service does not (RestartPreventExitStatus=2)
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
 	case "node":
 		if len(os.Args) == 3 && isHelpArg(os.Args[2]) {
 			fmt.Println(named(nodeUsage))

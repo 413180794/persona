@@ -132,6 +132,21 @@ func (d *DB) UseManagerInstallCode(ctx context.Context, hash string) (*ManagerIn
 	return &c, nil
 }
 
+// ManagerInstallCodeByHash is the code that hashes to hash while it is still good (not used, not expired), without
+// using it; nil when there is none.
+func (d *DB) ManagerInstallCodeByHash(ctx context.Context, hash string) (*ManagerInstallCode, error) {
+	var c ManagerInstallCode
+	err := d.pool.QueryRow(ctx, `SELECT manager_id, name, expires_at FROM manager_install_codes
+		WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()`, hash).Scan(&c.ManagerID, &c.Name, &c.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 // PendingManagerInstalls are the managers that have a code still good and no identity yet (being installed), by id.
 func (d *DB) PendingManagerInstalls(ctx context.Context) ([]ManagerInstallCode, error) {
 	rows, err := d.pool.Query(ctx, `SELECT DISTINCT ON (c.manager_id) c.manager_id, c.name, c.expires_at

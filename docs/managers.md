@@ -1,55 +1,112 @@
-# 管理者
+# Managers
 
-管理者就是助手的进程 `personad assistant`（`docs/assistant.md`「进程」）。一个 hub 可以接好几个管理者，**全部平级**：每个都是完整的助手，有自己的主对话、对话、定时任务、收件箱、知识库、模型配置、记忆、电脑和来源。没有总管，没有升级、交办、「看全部」。
+A manager is the assistant's process, `personad assistant` (`docs/assistant.md`「进程」). One hub can have several managers, and **they are all equal**: each one is a whole assistant with its own main conversation, conversations, scheduled tasks, inbox, knowledge base, model settings, memory, computers and sources. There is no chief manager: nothing is escalated, handed down, or seen "all at once".
 
-- hub 自己起的那个助手（id `assistant`）是第一个管理者，也是一开始的**默认管理者**：不属于任何管理者的入口（Siri、「问 Persona」快捷指令、App 打开时的助手页）走默认管理者，设置里可以换。
-- 每样东西属于一个管理者（电脑、来源、收件箱事件、会话、模型配置、知识库），hub 按归属转发；列表类接口由 hub 合并，每项带 `manager`（管理者的 id）。
-- 数据各管各的：每个管理者一个自己的库（同一个 Postgres 实例里各建一个 database，或者它自己带一个）；默认管理者继续用 hub 的库，不迁数据。
-- 跑在哪由用户决定：hub 机器上另一个服务、别的电脑上的服务、容器都行。机器人、渠道、插件、来源在各自管理者的设置里配，不做全局的。
+- The assistant the hub starts itself (id `assistant`) is the first manager and, to begin with, the **default manager**: entry points that belong to no manager (Siri, the 「问 Persona」 shortcut, the assistant page as the app opens) go to the default manager, which can be changed in settings.
+- Everything belongs to one manager (computers, sources, inbox events, sessions, model settings, the knowledge base), and the hub forwards by ownership; list endpoints are merged by the hub, each item carrying `manager` (the manager's id).
+- Each manager keeps its own data: a database of its own (one more database in the same Postgres instance, or one it brings); the default manager keeps using the hub's database, with nothing migrated.
+- Where a manager runs is the user's choice: another service on the hub machine, a service on another computer, or a container. Bots, channels, plugins and sources are set up in each manager's own settings; none of it is global.
 
-## 分步
+## Steps
 
-1. **名册和身份**（本页下面）：名册、每个管理者自己的 token、安装码、`/api/v1/managers`。行为不变。
-2. **归属和按归属转发**（下面「归属」）：电脑、会话、卡、列表项带 `manager`，hub 按它转发、合并列表；现在全归默认管理者，行为不变。
-3. 第二个管理者跑起来：自己的库和目录、连 hub、接管分给它的电脑和来源。
-4. 客户端：设置 › 管理者、助手页切换、分组、按管理者的推送开关（四端）。
+1. **Roster and identity** (below): the roster, each manager's own token, install codes, `/api/v1/managers`. Behavior unchanged.
+2. **Ownership and forwarding by owner** (see "Ownership" below): computers, sessions, cards and list items carry `manager`, and the hub forwards by it and merges lists; for now everything belongs to the default manager, so behavior is unchanged.
+3. A second manager runs: its own database and directory, connected to the hub, taking over the computers and sources given to it.
+4. Clients: 「设置 › 管理者」, switching managers on the assistant page, grouping, per-manager push switches (all four platforms).
 
-## 名册
+## Roster
 
-名册就是总线的身份表 `bus_identities`（`docs/protocol.md`「总线」），角色为 `manager` 的每一行是一个管理者。迁移 0419 加了它最后一次握手报的位置（`host`、`os`、`arch`、`deploy`、`version`）和 `last_seen`（握手时、断开时都记），App 据此显示离线管理者「在哪」「最后同步于…」。
+The roster is the bus's identity table `bus_identities` (`docs/protocol.md`, "Bus"): every row with role `manager` is a manager. Migration 0419 adds where its last handshake said it runs (`host`, `os`, `arch`, `deploy`, `version`) and `last_seen` (recorded on handshake and on disconnect), so the app can show an offline manager's place and 「最后同步于…」.
 
-- hub 每次启动都给自己起的助手换一个 token，但**名字不变**：用户改过的名字留着。
-- 管理者 id：App 新建的是 `m-` 加 6 位十六进制；hub 自己的是 `assistant`。
+- The hub gives the assistant it starts a new token on every start, but **the name stays**: a name the user gave it is kept.
+- Manager ids: `m-` plus 6 hex digits for one made in the app; `assistant` for the hub's own.
 
-## 安装码
+## Install codes
 
-App 里「新建管理者」（`POST /api/v1/managers {name}`）给回一个一次性的安装码 `mi_…`，**10 分钟有效、只能用一次**，hub 只存 sha256（表 `manager_install_codes`）。码换出之前，名册里这个管理者显示为「安装中」（`installing` 是码到期的时间）。
+「新建管理者」 in the app (`POST /api/v1/managers {name}`) returns a one-time install code `mi_…`, **valid for 10 minutes and usable once**; the hub keeps only its sha256 (table `manager_install_codes`). Until the code is traded, the manager shows in the roster as installing (`installing` is when the code expires).
 
-新管理者用码换自己的总线 token：`POST /api/v1/bus/join {"code"}` → `{id, name, token, hub_id}`。这个接口不要凭据（和总线一样在 App 的鉴权外面），换失败按来源计数、超了 `429 rate_limited`，和错 token 一样。已经有 token 的管理者再换一次码（`POST /api/v1/managers/{id}/code`，搬到别处装）会拿到新 token，旧的立刻失效、连着的连接以 4002 断开。
+The new manager trades the code for its bus token: `POST /api/v1/bus/join {"code"}` → `{id, name, token, hub_id}`. This endpoint needs no credential (like the bus, it sits outside the apps' auth); failed trades count against the source and go `429 rate_limited` past the limit, as a bad token does. A manager that already has a token and trades another code (`POST /api/v1/managers/{id}/code`, to install it somewhere else) gets a new token: the old one stops working at once and a connection using it is closed with 4002.
 
-给出安装命令（`curl … /i/<码> | sh`、`docker run …`）和 `personad manager join` 在第 3 步。
+The install commands handed out (`curl … /i/<code> | sh`, `docker run …`) and `personad manager join` are described under "A second manager" below.
 
-## 吊销
+## Revoking
 
-`DELETE /api/v1/managers/{id}`：删掉它的身份和码，token 立刻失效、连着的连接以 4002 断开；还在安装中的就是作废它的码。默认管理者不能删（先把别的设成默认，`409 default_manager`），hub 自己起的助手不能删（`409 builtin_manager`）。挂在它身上的来源、电脑凭据一起作废在第 3 步做。
+`DELETE /api/v1/managers/{id}` deletes its identity and codes: the token stops working at once and a connection using it is closed with 4002; for a manager still being installed it calls off the code. The default manager can't be deleted (make another one the default first: `409 default_manager`), nor can the assistant the hub starts (`409 builtin_manager`). Revoking the sources and computer credentials attached to it comes in step 3.
 
-## 归属
+## Ownership
 
-谁是一样东西的管理者只在一个地方定：`server/internal/hub/ownership.go`。第 3 步把一台电脑或一个来源挪给别的管理者，改的就是这里的归属，转发和列表跟着走。
+Who owns a thing is decided in one place: `server/internal/hub/ownership.go`. When step 3 moves a computer or a source to another manager, this ownership is what changes, and forwarding and lists follow.
 
-| 东西 | 归谁 | 怎么知道 |
+| Thing | Owner | How the hub knows |
 | --- | --- | --- |
-| 电脑 | 报它的管理者（`devices.state`） | 还没人报时归接 hub.json 里电脑的那个（现在是 `assistant`） |
-| 会话 | 管理者自己的对话归报它（快照）的那个，其余归电脑的 | |
-| 待处理的卡 | 报它的管理者（`fleet.interaction(s)`） | |
-| 收件箱、待办、知识库、模型配置、扩展和来源、助手页…… | 请求写的管理者，没写就是默认的 | 请求头 `X-Persona-Manager` 或 `?manager=`（`docs/protocol.md`「按管理者」） |
+| Computer | The manager that reports it (`devices.state`) | Until one does: the one that connects hub.json's computers (`assistant` today) |
+| Session | A manager's own conversations: the manager that reports them (snapshot); everything else: the computer's | |
+| Pending card | The manager that reports it (`fleet.interaction(s)`) | |
+| Inbox, todos, knowledge base, model settings, extensions and sources, the assistant page… | The manager the request names, else the default one | Header `X-Persona-Manager` or `?manager=` (`docs/protocol.md`, "Per-manager routing") |
 
-- 每个管理者报来的只替换它自己的那一份：一个管理者报 `devices.state` 只动它的电脑，报整份待处理的卡只换它的卡，别的管理者的留着。App 看到的电脑按管理者排：接 hub.json 电脑的在前，其他按 id。
-- hub 自己的功能要找助手时：带着电脑 / 会话的（发消息的参数、改名、新建 Agent、提问卡、已读）找它的管理者；不带的（Siri、快捷指令、知识库、扩展的 hub_call）找默认管理者；和谁都有关的通知（App 能填表单了、静音变了、来源有新东西、给扩展的事件）发给每个连着的管理者。扩展的 token 依次问各管理者（默认的先），谁认得就是谁的。
-- 默认管理者 hub 记 2 秒（每个转发的请求都要用），名册变了（`managersChanged`）就重读。
-- 列表的合并、`manager` 字段和离线时的样子见 `docs/protocol.md`「按管理者」。离线管理者的东西不另加字段，App 用名册里它的 `online`、`last_seen` 显示「最后同步于…」。
+- What a manager reports replaces only its own share: a manager reporting `devices.state` touches only its computers, a full list of pending cards replaces only its cards, and other managers' stay. The app gets computers ordered by manager: the one connecting hub.json's computers first, the rest by id.
+- When a hub feature needs the assistant: things tied to a computer or a session (message parameters, renaming, starting an Agent, question cards, read state) go to its manager; things that aren't (Siri, shortcuts, the knowledge base, an extension's hub_call) go to the default manager; notices that concern everyone (the app can fill in forms now, mutes changed, a source has something new, events for extensions) go to every connected manager. An extension's token is checked with each manager in turn (the default first); whichever recognizes it owns it.
+- The hub caches the default manager for 2 seconds (every forwarded request needs it) and reads it again when the roster changes (`managersChanged`).
+- How lists are merged, the `manager` field and what offline looks like are in `docs/protocol.md`, "Per-manager routing". An offline manager's things get no extra field: the app uses its `online` and `last_seen` in the roster to show 「最后同步于…」.
 
-还没做、留给第 3 步的：
+Not done yet, left for step 3:
 
-- hub 只留一份助手快照（`manager.snapshot`）、一份扩展报告（`extensions.report`）和一套工具（`assistant.tools`）；第二个管理者也报的话会盖掉前一份，第 3 步改成按管理者各留一份。
-- hub.json 里的电脑、Persona Link 主动连上来的电脑、监控、用量来源的管理页、jarvis_settings 都还交给 `assistant`（`devicesOwner`）；新连上的管理者不会在握手后马上收到 `fleet.clients`（要等 App 的能力变一次）。
+- The hub keeps one assistant snapshot (`manager.snapshot`), one extensions report (`extensions.report`) and one tool set (`assistant.tools`); if a second manager reported them it would overwrite the first, so step 3 keeps one per manager.
+- hub.json's computers, computers whose Persona Link dials in, monitoring, the usage sources' admin page and jarvis_settings still go to `assistant` (`devicesOwner`); a manager that connects doesn't get `fleet.clients` right after its handshake (only once the app's capabilities change).
+
+## A second manager (first half of step 3)
+
+A manager made in the app installs and runs on its own: its own id, directory and database; it connects to the hub, shows in the roster and is online. Its assistant page, conversations and the other assistant endpoints reach it through `X-Persona-Manager: <id>` (or `?manager=<id>`, see "Ownership" above). It may report everything the hub already keeps per manager: computers (`devices.*`), pending cards (`fleet.interaction(s)`, `fleet.interaction_resolved`) and messages for the apps (`ws.broadcast`); it may also call `device.call` and `app.call`. What the hub still keeps only one of (the assistant snapshot `manager.snapshot`, the extensions report `extensions.report`, `fleet.live`, the tools `assistant.tools`) is taken only from the assistant the hub starts; other managers' calls get `not_routed` and their events are dropped (`busRouted` / `busOpen` in `hub/bus.go`), so they can't overwrite the default manager's. That goes once those are kept per manager. Moving a computer or a source to it is the second half of step 3.
+
+### Directory and manager.json
+
+- The default directory is `managers/<id>` in this computer's data directory (`~/.persona/managers/<id>`); `--dir` picks another. The directory is 0700 and its `manager.json` 0600:
+  `{id, name, hub, hub_id, token, fingerprint?, database_url?}`. `hub` is the address it reaches the hub at; `fingerprint` is the pin of the hub's own TLS certificate (only when it was installed through the hub's TLS port).
+- Its knowledge base (`data/`), `secret.key` and extensions are all under this directory; it never writes to the hub's. While it runs, `PERSONA_HOME` points at it, so the programs it starts use it too.
+- Moving to another computer: copy the whole directory, and the same token still connects; or get a new code for it in the app and install it again there (the old token stops working at once).
+
+### Database
+
+- By default: one more database `persona_mgr_<id>` (the id's `-` as `_`) in the hub's Postgres, from the `database_url` in the hub machine's `hub.json` (`PERSONA_DATABASE_URL` wins) with the database name swapped. On its first run it does `CREATE DATABASE` through the same server's `postgres` database, then runs every migration. The database role must be allowed to create databases (the ones `hub setup` and the Docker setup make are); when it isn't, the manager says so, and you create the database yourself or give `--database-url`.
+- **The image brings no Postgres**: in a container (and on any other computer that doesn't run the hub) you must give it a Postgres with `--database-url`.
+- Off the hub machine (another computer, a container) there is no hub `hub.json`, and **the hub never hands out its database password** (the join answer has nothing about databases), so `--database-url postgres://USER:PASSWORD@HOST:5432/DBNAME` gives it a database: a Postgres of its own, or a separate database and role on the same Postgres. A database that isn't there yet is created the same way. It is written to `manager.json` and used from then on. With none given and no hub database to find, `manager join` and `manager run --join` print one line saying what to add (`--database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'`) and exit 2 (a service's or a container's restart won't loop on it), and the install code is not used.
+- It can't be the hub's own database (a `database_url` pointing at it is refused); the default manager (the assistant the hub starts) keeps using the hub's database, with nothing migrated.
+
+### Install commands
+
+The answers of `POST /api/v1/managers` and `POST /api/v1/managers/{id}/code` carry `commands`, built from the hub address the app used for that request (with the pin when it came through the hub's TLS port):
+
+| Key | Command | For |
+| --- | --- | --- |
+| `service` | `curl -fsSL <hub>/i/<code> \| sh` (through the hub's TLS port it adds `-k --pinnedpubkey 'sha256//<pin>'`) | Any Linux or Mac, the hub machine included |
+| `join` | `personad manager join <hub> <code> --install` | A computer that has personad already |
+| `docker` | `docker run -d --name persona-manager-<id> --restart unless-stopped -v persona-manager-<id>:/home/jarvis/.jarvis <image> manager run --dir /home/jarvis/.jarvis/managers/<id> --join <hub> <code> --database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'` | A container; only when the hub knows its image (`JARVIS_IMAGE` or the one it was built as); replace `USER:PASSWORD@HOST:5432/DBNAME` with the Postgres you give it |
+
+`GET /i/<code>` answers a POSIX sh script. It needs no credential (the code is the credential), and **fetching the script doesn't use up the code**: only the join does. Unknown codes are 404 and count against the source, as at the join; public plaintext requests get 403 `tls_required`. The script looks for this computer's personad (`~/.persona/bin/jarvisd`, personad or jarvisd on the PATH); if there is none, it downloads it from the hub's release address the way `install.sh` does and checks it against `SHA256SUMS`, then runs `personad manager join <hub> <code> --install`. Arguments after `sh -s --` go to the join, e.g. `curl … | sh -s -- --database-url '…'`.
+
+### Commands
+
+- `personad manager join <hub> <code> [--dir D] [--database-url U] [--fingerprint F] [--install]`: first checks that there will be a database (no hub database and no `--database-url`: it stops without using the code), then trades the code and writes `manager.json`. A directory that is already another manager's is not overwritten: the new manager goes to its own default directory.
+- `personad manager run [--dir D] [--join <hub> <code>]`: runs it. `--dir` can be left out when this computer has only one manager. `--join`: trades the code first when the directory has no `manager.json` yet (a container runs the same command on every start, and from the second start on the join is skipped). Configuration mistakes (no `manager.json`, no database to use) exit 2, which the service doesn't restart.
+- `personad manager install [--dir D]`: on Linux writes the systemd user unit `jarvis-manager-<id>.service` (`Restart=always`, `RestartPreventExitStatus=2`, with a reminder about linger); on a Mac the launchd agent `com.jarvis.manager.<id>` (its log is `manager.log` in its directory). The binary it runs is the hub machine's `~/.persona/bin/jarvisd` when there is one (so it upgrades with the hub), else the current one. On other systems, or without a systemd user instance, it says how to keep it running yourself.
+- `personad manager uninstall [--dir D]`: stops and removes the service; the directory and the database stay (deleting it in the app is what makes the hub stop accepting its token).
+- `personad manager status [--dir D]`: this computer's managers, with directory, hub, database and service state.
+
+### Containers
+
+Same image as the hub. When the entrypoint sees `manager` it writes no `hub.json` and shows none of the hub's reminders (`deploy/docker/entrypoint.sh`). The data volume is `/home/jarvis/.jarvis`, with the manager in its `managers/<id>`; don't share the hub's data volume (it holds the hub's keys). In the hub's compose file, a manager can use the same `JARVIS_DATABASE_URL` as the hub, and without `--database-url` it creates its own database in that Postgres. The database password must then be in `.env` as `JARVIS_DB_PASSWORD` (the password Postgres generates on its first start is in the hub's data volume, which the manager's container can't read):
+
+```yaml
+  manager-work:
+    image: ${JARVIS_IMAGE}
+    restart: unless-stopped
+    depends_on: { postgres: { condition: service_healthy } }
+    environment:
+      JARVIS_DATABASE_URL: postgres://jarvis:${JARVIS_DB_PASSWORD:?}@postgres:5432/jarvis?sslmode=disable
+    volumes: [ "./manager-work:/home/jarvis/.jarvis" ]
+    command: ["manager", "run", "--dir", "/home/jarvis/.jarvis/managers/<id>", "--join", "http://hub:18660", "<install code>"]
+```
+
+### After it is revoked
+
+When the hub deletes it (or it was installed again somewhere else), the connection is closed with 4002 and the next dial gets 401. It says once that the hub no longer accepts its token and **stops dialing**; the process stays up and checks `manager.json` every 10 seconds. Once you get a new code in the app and `personad manager join … --dir <the same directory>` writes a new token, it restarts itself in place (exec), with nothing to change in the service. The assistant the hub starts is not affected (it doesn't take this path and keeps retrying every minute).

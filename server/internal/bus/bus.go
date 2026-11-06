@@ -47,6 +47,7 @@ const (
 const (
 	CodeWrongIdentity   = "wrong_identity"   // the handshake names another identity than the token's: the hub hangs up
 	CodeStaleConnection = "stale_connection" // no handshake on this connection yet, or a newer one replaced it
+	CodeNotRouted       = "not_routed"       // a report the hub keeps only the assistant's of yet (another manager's is not taken)
 	CodeUnknownMethod   = "unknown_method"
 	CodeInvalidParams   = "invalid_params"
 )
@@ -62,6 +63,11 @@ const (
 // handshake does not match it. Retrying with the same token only helps once someone fixes it on the hub, so Client
 // waits its longest backoff between tries.
 var ErrRejected = errors.New("the hub rejected the token")
+
+// ErrRevoked is ErrRejected for the token itself: the hub does not know it (401) or hung up because it was revoked or
+// replaced (CloseRevoked). Only a new token helps (a manager made in the app: a new install code, `personad manager
+// join`). A Client with StopWhenRevoked returns it from Run instead of trying again.
+var ErrRevoked = fmt.Errorf("%w: it was revoked or replaced", ErrRejected)
 
 // Conn adapts a WebSocket to the io.Reader and io.Writer an rpc.Peer serves on: each line written goes out as one
 // text message, each message read comes back as one line.
@@ -163,7 +169,7 @@ func Dial(ctx context.Context, hub, token string, client *http.Client) (*websock
 	})
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
-			return nil, ErrRejected
+			return nil, ErrRevoked
 		}
 		return nil, err
 	}

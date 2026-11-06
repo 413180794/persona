@@ -145,6 +145,10 @@ func handshakeError(resp *http.Response, err error) error {
 	return he
 }
 
+// Pinned is an HTTP/1.1 client that only talks to the hub whose TLS key hashes to fp (Pin): what a manager on another
+// computer dials the hub's public port with (docs/managers.md).
+func Pinned(fp string) *http.Client { return pinned(fp, nil) }
+
 // pinned is an HTTP/1.1 client that only talks to the hub whose TLS key hashes to fp. onConn sees each new
 // connection (the link keeps its local address, to tell when the network under it is gone).
 func pinned(fp string, onConn func(net.Conn)) *http.Client {

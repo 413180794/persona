@@ -1613,15 +1613,15 @@ The channel itself is authentication, handshake, a roster, dispatch by method na
   when the assistant runs elsewhere, create one with `personad hub assistant-token` (`assistant.external` in `docs/config.md`). There's no endpoint or UI.
   Creating again for the same identity replaces the old token: the old one stops working immediately, and connections using it are closed with 4002.
 - Member hubs in a linked group don't forward the bus to the center: a service belongs to whichever hub it connects to.
-- The managers' roster, installation codes and revocation are described in `docs/managers.md`: an identity with role `manager` is a manager. The roster also records the location it reported at its last handshake and `last_seen` (migration 0419); a new manager exchanges a one-time installation code for a token (`POST /api/v1/bus/join`, no credentials required).
+- The managers' roster, installation codes and revocation are described in `docs/managers.md` (`GET /i/<code>` is the install script: no credential, and fetching it does not use the code up). Managers other than the assistant the hub starts may report their machines, cards and broadcasts; the bus methods the hub still keeps once (`manager.snapshot`, `fleet.live`, `extensions.report`, `extensions.looks_gone`) answer them `not_routed`. An identity with role `manager` is a manager. The roster also records the location it reported at its last handshake and `last_seen` (migration 0419); a new manager exchanges a one-time installation code for a token (`POST /api/v1/bus/join`, no credentials required).
 
 **Managers (`/api/v1/managers`, answered by the hub itself)**
 
 | Method | Path | Description |
 | --- | --- | --- |
 | GET | `/api/v1/managers` | `{managers:[{id, name, online, default?, builtin?, host?, os?, arch?, deploy?, version?, since?, last_seen?, installing?}], default}`: the default manager first, installations in progress last; `builtin` is the assistant started by the hub, `installing` is the installation code's expiry time. Roster changes (creation, rename, connection, disconnection, deletion) push `{"type":"managers"}` to apps that requested `managers` (`?features=` or `client_hello`'s `features`), without entering the event log (apps reread the list after reconnecting) |
-| POST | `/api/v1/managers` | `{name}` (1–40 characters) → 201 `{manager, code, expires_at}`: a one-time installation code, valid for 10 minutes and one use |
-| POST | `/api/v1/managers/{id}/code` | A new code for an existing manager (or an installation whose code expired) → `{code, expires_at}`; the hub's own assistant returns `409 builtin_manager` |
+| POST | `/api/v1/managers` | `{name}` (1–40 characters) → 201 `{manager, code, expires_at, commands}`: a one-time installation code, valid for 10 minutes and one use; `commands` are the commands that install it, `{service, join, docker?}` (`docs/managers.md`, install commands) |
+| POST | `/api/v1/managers/{id}/code` | A new code for an existing manager (or an installation whose code expired) → `{code, expires_at, commands}`; the hub's own assistant returns `409 builtin_manager` |
 | PATCH | `/api/v1/managers/{id}` | `{name?, default?: true}`: rename or set as default; an installation in progress returns `409 installing` |
 | DELETE | `/api/v1/managers/{id}` | Revoke (invalidate the code for an installation in progress) → `{ok}`; the default returns `409 default_manager`, the hub's own manager `409 builtin_manager`, a missing one `404 no_manager` |
 | POST | `/api/v1/bus/join` | `{code}` → `{id, name, token, hub_id}`; an incorrect, expired or used code returns `401 bad_install_code` (counted per source) |

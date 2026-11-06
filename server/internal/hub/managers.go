@@ -40,6 +40,7 @@ type managerStore interface {
 	RenameBusIdentity(ctx context.Context, id, name string) (bool, error)
 	AddManagerInstallCode(ctx context.Context, hash string, c db.ManagerInstallCode) error
 	UseManagerInstallCode(ctx context.Context, hash string) (*db.ManagerInstallCode, error)
+	ManagerInstallCodeByHash(ctx context.Context, hash string) (*db.ManagerInstallCode, error)
 	PendingManagerInstalls(ctx context.Context) ([]db.ManagerInstallCode, error)
 	DropManagerInstallCodes(ctx context.Context, id string) (int64, error)
 	Setting(ctx context.Context, key string, out any) (bool, error)
@@ -280,7 +281,8 @@ func (h *Hub) managerRoutes(api *http.ServeMux) {
 		h.logf("managers: [%s] made, waiting for its install", id)
 		h.managersChanged()
 		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, map[string]any{"manager": managerInfo{ID: id, Name: name, Installing: &until}, "code": code, "expires_at": until})
+		writeJSON(w, map[string]any{"manager": managerInfo{ID: id, Name: name, Installing: &until}, "code": code, "expires_at": until,
+			"commands": h.managerCommands(r, id, code)})
 	})
 	// A new install code for a manager there is: to install it again somewhere else (the old token stops working
 	// once the code is traded), or a fresh one for a pending install whose code ran out.
@@ -299,7 +301,7 @@ func (h *Hub) managerRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeJSON(w, map[string]any{"code": code, "expires_at": until})
+		writeJSON(w, map[string]any{"code": code, "expires_at": until, "commands": h.managerCommands(r, id, code)})
 	})
 	// {"name"?, "default"?: true}: rename it, make it the default.
 	api.HandleFunc("PATCH /api/v1/managers/{id}", func(w http.ResponseWriter, r *http.Request) {

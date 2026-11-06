@@ -172,6 +172,8 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 - 它同时是带着全部电脑的管理者（2026-11-04，[machines.md](machines.md)「谁连电脑」）：拿到握手回答里的 `devices` 就去连 hub.json 的机器（hub 机器自己的 `node --stdio` 现在是它的子进程），
   第二条 WebSocket `GET /api/v1/bus/relay`（同一个 token）接 hub 转过来的 Persona Link 和经别的 hub 的 node 流；停的时候先把在线机器交给下一个（warm start），再断开它们。
   它没连着时机器显示离线、机器的接口回 `503 assistant_offline`；回来后自己把电脑连回来。
+- **别的管理者**（2026-11-06）：App 里新建的管理者是同一个程序，跑法是 `personad manager run --dir <它的目录>`：身份、hub 地址和 token 在目录里的 `manager.json`，
+  知识库、`secret.key`、扩展都在那个目录下，数据库是它自己的（默认 hub 那个 Postgres 里的 `persona_mgr_<id>`），握手报它自己的 id。安装、目录、数据库、吊销见 [managers.md](managers.md)（"A second manager"）。
 
 ## 飞书：接飞书的扩展带的 skill（2026-10-30）
 
