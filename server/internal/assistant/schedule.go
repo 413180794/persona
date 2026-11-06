@@ -1558,19 +1558,27 @@ func runAsk(ask, prompt string) bool {
 	return ok && (rest == "" || strings.HasPrefix(rest, "\n"))
 }
 
+// turnPollInterval is how often waitTurnEnd reads the turn (Service.turnPoll shortens it in tests, for the same
+// reason as runRetryDelay).
+const turnPollInterval = 2 * time.Second
+
 // waitTurnEnd waits until the sent turn is over; ended is false when ctx ended, ran says the turn was seen working.
 // A poll whose read failed tells nothing and is skipped. Once the turn was seen working, it has ended after two
 // polls in a row that read it idle (one may be a status flap, a hookless Claude whose spinner was missed). Before
 // it was seen working, a changed last item also means it ended: an immediate failure (a bad model) is idle before
 // the first poll sees it working.
 func (s *Service) waitTurnEnd(ctx context.Context, machine, sid string) (ended, ran bool) {
+	poll := turnPollInterval
+	if s.turnPoll > 0 {
+		poll = s.turnPoll
+	}
 	before, beforeOK := s.lastItemID(ctx, machine, sid)
 	idle := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return false, ran
-		case <-time.After(2 * time.Second):
+		case <-time.After(poll):
 		}
 		c, ok := s.session(ctx, machine, sid)
 		if !ok {

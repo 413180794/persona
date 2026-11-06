@@ -228,10 +228,18 @@ func (h *Hub) decoratedSession(m *Machine, sid string) (proto.Session, bool) {
 	return s, ok
 }
 
-// awaitListed waits a little (2 s at most) for the manager's list of m to have session sid: a session just started
-// is shown as the manager has it.
+// listedWaitMax is how long awaitListed waits at most (Hub.listedWait shortens it in tests: their fake nodes start
+// sessions that are never listed, so each start would wait all of it).
+const listedWaitMax = 2 * time.Second
+
+// awaitListed waits a little (listedWaitMax at most) for the manager's list of m to have session sid: a session just
+// started is shown as the manager has it.
 func (h *Hub) awaitListed(ctx context.Context, m *Machine, sid string) (proto.Session, bool) {
-	for end := time.Now().Add(2 * time.Second); ; {
+	wait := listedWaitMax
+	if h.listedWait > 0 {
+		wait = h.listedWait
+	}
+	for end := time.Now().Add(wait); ; {
 		if s, ok := m.session(sid); ok {
 			return s, true
 		}

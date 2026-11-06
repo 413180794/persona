@@ -111,6 +111,8 @@ type tasksState struct {
 	retrying map[string]bool
 	// outcomes: the completions whose outcome was recorded (todo_outcome.go, outcomeKey).
 	outcomes map[string]time.Time
+	// outcomeRuns are the outcome recordings still going (goRecordTaskOutcome, waitTaskOutcomes).
+	outcomeRuns sync.WaitGroup
 }
 
 func newTasksState() tasksState {
@@ -522,7 +524,7 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 		if retry {
 			s.logf("task %s: start: %v; retrying", t.TodoID, err)
 			select {
-			case <-time.After(taskStartRetryDelay):
+			case <-time.After(s.taskStartRetry()):
 				mid, sid, err = s.startTaskAgent(ctx, &t)
 			case <-ctx.Done():
 			}
@@ -739,8 +741,17 @@ func (s *Service) continueTask(ctx context.Context, cur Todo) (json.RawMessage, 
 	return s.todoView(ctx, cur.ID)
 }
 
-// taskStartRetryDelay is how long a task waits before its one retry after a dropped link (tests shorten it).
-var taskStartRetryDelay = 3 * time.Second
+// taskStartRetryDelay is how long a task waits before its one retry after a dropped link (Service.taskRetry shortens
+// it in tests).
+const taskStartRetryDelay = 3 * time.Second
+
+// taskStartRetry is the wait before a failed task start's one retry: taskStartRetryDelay unless tests set taskRetry.
+func (s *Service) taskStartRetry() time.Duration {
+	if s.taskRetry > 0 {
+		return s.taskRetry
+	}
+	return taskStartRetryDelay
+}
 
 // Bounds of the bounded retry before a needs recheck treats a node as unreachable: agentReachBackoff before the
 // second try and doubled before the third; agentReachMax bounds one whole recheck, machines included (tests shorten).

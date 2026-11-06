@@ -277,6 +277,8 @@ func newTestHub(t *testing.T) *Hub {
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{},
 		calls: map[string]chan proto.ToolResult{},
 		push:  newPusher(cfg.dir, nil, func(string, ...any) {}),
+		// fake nodes start sessions they never list: do not wait the full listedWaitMax on each start
+		listedWait: 50 * time.Millisecond,
 	}
 	h.live = newLiveActivities(h)
 	playManagerAsks(h) // its own cards wait for h.resolve (fleet_helpers_test.go)

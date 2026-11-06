@@ -310,24 +310,25 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
 	h.runRetry = 50 * time.Millisecond
+	h.turnPoll = 200 * time.Millisecond
 	n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
 	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 
 	// The turn runs, then ends: the watcher sees working and then idle.
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
 		Cwd: "/home/me/.jarvis/assistant"})
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	// The turn ends after the first poll saw it working (started after the run went, so the watcher's polls line up).
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(3 * h.turnPoll / 2)
 		n.mu.Lock()
 		for i := range n.sessions["server"] {
 			n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
 		}
 		n.mu.Unlock()
 	}()
-
-	if _, err := runNow(t, h, "p"); err != nil {
-		t.Fatal(err)
-	}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		sc := h.loadSchedule(context.Background())
@@ -337,7 +338,7 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 		})
 		sc.mu.Unlock()
 		if failed {
-			if p := n.pushed(); len(p) == 0 || p[0].Title != "定时任务失败：值守" || p[0].SessionID != "s1" || p[0].DeviceID != "server" {
+			if p := n.pushedBy(deadline); len(p) == 0 || p[0].Title != "定时任务失败：值守" || p[0].SessionID != "s1" || p[0].DeviceID != "server" {
 				t.Fatalf("the failure is pushed: %+v", p)
 			}
 			// and the retry went, marked as such
@@ -365,24 +366,25 @@ func TestTaskSilentTurnFailsAndRetriesOnce(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
 	h.runRetry = 50 * time.Millisecond
+	h.turnPoll = 200 * time.Millisecond
 	n.items = []proto.Item{{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"},
 		{ID: "a1", Role: "assistant", Kind: proto.KindText, Text: ""}}
 	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
 		Cwd: "/home/me/.jarvis/assistant"})
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	// The turn ends after the first poll saw it working (started after the run went, so the watcher's polls line up).
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(3 * h.turnPoll / 2)
 		n.mu.Lock()
 		for i := range n.sessions["server"] {
 			n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
 		}
 		n.mu.Unlock()
 	}()
-
-	if _, err := runNow(t, h, "p"); err != nil {
-		t.Fatal(err)
-	}
 	want := silentTurnErrorIn(h.lang(context.Background()))
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
@@ -391,7 +393,7 @@ func TestTaskSilentTurnFailsAndRetriesOnce(t *testing.T) {
 		failed := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Status == runFailed && r.Error == want })
 		sc.mu.Unlock()
 		if failed {
-			if p := n.pushed(); len(p) == 0 || p[0].Title != "定时任务失败：早报" || p[0].SessionID != "s1" {
+			if p := n.pushedBy(deadline); len(p) == 0 || p[0].Title != "定时任务失败：早报" || p[0].SessionID != "s1" {
 				t.Fatalf("the failure is pushed: %+v", p)
 			}
 			h.fleet.mu.Lock()
@@ -425,18 +427,18 @@ func TestTaskPromptOnlyTurnIsNotJudgedSilent(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
 	h.runRetry = 50 * time.Millisecond
+	h.turnPoll = 200 * time.Millisecond
 	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusIdle, State: proto.StateIdle, Assistant: true,
 		Cwd: "/home/me/.jarvis/assistant"})
-	go func() {
-		time.Sleep(time.Second)
-		n.setItems(proto.Item{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"})
-	}()
-
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(6 * time.Second) // the watcher has seen the changed item and read the turn
+	go func() {
+		time.Sleep(h.turnPoll / 2) // before the first poll
+		n.setItems(proto.Item{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"})
+	}()
+	time.Sleep(6 * h.turnPoll) // the watcher has seen the changed item and read the turn
 	sc := h.loadSchedule(context.Background())
 	sc.mu.Lock()
 	failed := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Status == runFailed })
@@ -459,6 +461,7 @@ func TestTaskFlapMidTurnIsNotJudgedSilent(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
 	h.runRetry = 50 * time.Millisecond
+	h.turnPoll = 200 * time.Millisecond
 	// No items yet when the run is sent: the watcher's "before" is the empty conversation, so the prompt landing
 	// changes the last item, which is what made the old order end the wait on the first idle poll.
 	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
@@ -466,19 +469,18 @@ func TestTaskFlapMidTurnIsNotJudgedSilent(t *testing.T) {
 	idle := working
 	idle.Status, idle.State = proto.StatusIdle, proto.StateIdle
 	n.setSessions("server", working)
-	go func() {
-		time.Sleep(3 * time.Second) // after the first poll saw it working: the prompt and thinking land, and it flaps idle
-		n.setItems(proto.Item{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"},
-			proto.Item{ID: "t1", Role: "assistant", Kind: proto.KindThinking, Text: "先看日历"})
-		n.setSessions("server", idle)
-		time.Sleep(2 * time.Second) // one poll reads it idle
-		n.setSessions("server", working)
-	}()
-
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(10 * time.Second)
+	go func() {
+		time.Sleep(3 * h.turnPoll / 2) // after the first poll saw it working: the prompt and thinking land, and it flaps idle
+		n.setItems(proto.Item{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"},
+			proto.Item{ID: "t1", Role: "assistant", Kind: proto.KindThinking, Text: "先看日历"})
+		n.setSessions("server", idle)
+		time.Sleep(h.turnPoll) // one poll reads it idle
+		n.setSessions("server", working)
+	}()
+	time.Sleep(10 * h.turnPoll)
 	sc := h.loadSchedule(context.Background())
 	sc.mu.Lock()
 	failed := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Status == runFailed })
@@ -530,13 +532,18 @@ func TestTaskTurnEndingInSessionTurnErrorFailsAndRetriesOnce(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
 	h.runRetry = 50 * time.Millisecond
+	h.turnPoll = 200 * time.Millisecond
 	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 
 	// The turn runs, then ends: the session carries TurnError and no assistant text item.
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
 		Cwd: "/home/me/.jarvis/assistant"})
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	// The turn ends after the first poll saw it working (started after the run went, so the watcher's polls line up).
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(3 * h.turnPoll / 2)
 		n.mu.Lock()
 		for i := range n.sessions["server"] {
 			n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
@@ -545,10 +552,6 @@ func TestTaskTurnEndingInSessionTurnErrorFailsAndRetriesOnce(t *testing.T) {
 		}
 		n.mu.Unlock()
 	}()
-
-	if _, err := runNow(t, h, "p"); err != nil {
-		t.Fatal(err)
-	}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		sc := h.loadSchedule(context.Background())
@@ -558,7 +561,7 @@ func TestTaskTurnEndingInSessionTurnErrorFailsAndRetriesOnce(t *testing.T) {
 		})
 		sc.mu.Unlock()
 		if failed {
-			if p := n.pushed(); len(p) == 0 || p[0].Title != "定时任务失败：值守" || p[0].SessionID != "s1" || p[0].DeviceID != "server" {
+			if p := n.pushedBy(deadline); len(p) == 0 || p[0].Title != "定时任务失败：值守" || p[0].SessionID != "s1" || p[0].DeviceID != "server" {
 				t.Fatalf("the failure is pushed: %+v", p)
 			}
 			// and the retry went, marked as such
@@ -608,6 +611,7 @@ func TestTaskSwitchedOffOrDeletedAfterFailureIsNotRetried(t *testing.T) {
 			n := newFakeHub().withMachine()
 			h := newStorelessService(t, n)
 			h.runRetry = 50 * time.Millisecond
+			h.turnPoll = 200 * time.Millisecond
 			n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
 			setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 			n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
@@ -617,7 +621,7 @@ func TestTaskSwitchedOffOrDeletedAfterFailureIsNotRetried(t *testing.T) {
 			}
 			tc.undo(t, h) // while the turn still runs: before the watcher can retry
 			// The turn ends: the watcher sees working, then idle.
-			time.Sleep(3 * time.Second)
+			time.Sleep(3 * h.turnPoll / 2)
 			n.mu.Lock()
 			for i := range n.sessions["server"] {
 				n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
@@ -657,19 +661,25 @@ func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
 	h.runRetry = 50 * time.Millisecond
+	h.turnPoll = 200 * time.Millisecond
 	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 	n.items = []proto.Item{{ID: "before", Role: "assistant", Kind: "text", Text: "old"}}
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusOffline, State: proto.StateIdle, Assistant: true,
 		Cwd: "/home/me/.jarvis/assistant"})
+	from := n.callCount()
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
 	go func() {
-		time.Sleep(1500 * time.Millisecond)
+		// After the watcher read the last item, before its first poll (a turnPoll later): a fixed sleep raced with
+		// a watcher goroutine that started late.
+		for stop := time.Now().Add(15 * time.Second); !n.itemsReadAfter(from) && time.Now().Before(stop); {
+			time.Sleep(5 * time.Millisecond)
+		}
 		n.mu.Lock()
 		n.items = append(n.items, proto.Item{ID: "err", Role: "assistant", Kind: "text", Text: "There's an issue with the selected model (gone)."})
 		n.mu.Unlock()
 	}()
-	if _, err := runNow(t, h, "p"); err != nil {
-		t.Fatal(err)
-	}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		sc := h.loadSchedule(context.Background())

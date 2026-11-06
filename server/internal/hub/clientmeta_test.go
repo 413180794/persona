@@ -222,7 +222,18 @@ func TestWSLegacyProtocolPing(t *testing.T) {
 		}
 	}
 	// No client_hello is sent on this connection.
-	if err := conn.Ping(conn.CloseRead(ctx)); err != nil {
+	// Ping needs a concurrent reader to receive the pong. Do not use
+	// conn.CloseRead here: the hub keeps sending data messages, CloseRead's
+	// goroutine then calls Close, and Close plus the deferred CloseNow wait
+	// on each other until the library's 15 s timeout. Drain frames instead.
+	go func() {
+		for {
+			if _, _, err := conn.Read(ctx); err != nil {
+				return
+			}
+		}
+	}()
+	if err := conn.Ping(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

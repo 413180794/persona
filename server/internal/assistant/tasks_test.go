@@ -69,11 +69,8 @@ func startedTask(t *testing.T, s *Service, f *fakeHub) Todo {
 
 // A dropped link is retried once: the machine back by then, the task starts as usual; still down, the task ends.
 func TestTaskStartRetriesADroppedLink(t *testing.T) {
-	old := taskStartRetryDelay
-	taskStartRetryDelay = 300 * time.Millisecond
-	t.Cleanup(func() { taskStartRetryDelay = old })
-
 	s, f := newTaskService(t)
+	s.taskRetry = 300 * time.Millisecond
 	f.offline["box"] = true // offline when the task starts
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -93,6 +90,7 @@ func TestTaskStartRetriesADroppedLink(t *testing.T) {
 	}
 
 	s2, f2 := newTaskService(t)
+	s2.taskRetry = 300 * time.Millisecond
 	f2.offline["box"] = true // and it stays down
 	if _, err := s2.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
@@ -252,10 +250,8 @@ func TestTodayCard(t *testing.T) {
 // The "Today" card says what did not go through overnight (#4124): the conversation's tasks whose agent did not start and
 // the scheduled runs that failed or were skipped since yesterday 18:00, newest first, each with a short reason.
 func TestTodayCardListsWhatFailed(t *testing.T) {
-	old := taskStartRetryDelay
-	taskStartRetryDelay = 300 * time.Millisecond
-	t.Cleanup(func() { taskStartRetryDelay = old })
 	s, f := newTaskService(t)
+	s.taskRetry = 300 * time.Millisecond
 	ctx := context.Background()
 	f.offline["box"] = true // the task's agent does not start
 	if _, err := s.toolTaskPlan(ctx, "conv1", planArgs(true)); err != nil {

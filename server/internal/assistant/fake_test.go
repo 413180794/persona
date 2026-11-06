@@ -488,6 +488,38 @@ func (f *fakeHub) pushed() []Notification {
 	return append([]Notification(nil), f.pushes...)
 }
 
+// pushedBy is pushed once there is a push, or at deadline: a watcher records a run before it pushes it, so a test
+// that saw the run recorded waits for the push instead of reading it at once.
+func (f *fakeHub) pushedBy(deadline time.Time) []Notification {
+	for {
+		if p := f.pushed(); len(p) > 0 || !time.Now().Before(deadline) {
+			return p
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// itemsReadAfter reports whether a one-item session.items read (waitTurnEnd's lastItemID) came after the first
+// `from` calls.
+func (f *fakeHub) itemsReadAfter(from int) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.calls[min(from, len(f.calls)):] {
+		var a map[string]any
+		_ = json.Unmarshal(c.Params, &a)
+		if c.Method == DeviceSessionItems && a["limit"] == float64(1) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakeHub) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
 func (f *fakeHub) eventTypes() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -28,6 +28,7 @@ type Hub struct {
 	wsConnections map[*client]struct{} // includes connections still registering their device session
 	relay         relayState           // the connections relayed to the manager: Persona Link (devices_relay.go)
 	linkPing      [2]time.Duration     // tests: heartbeat interval and timeout of new links
+	listedWait    time.Duration        // tests: how long a started session is awaited in the list (0: listedWaitMax)
 	bus           busState             // the services' connections and the roster (bus.go)
 	// tests: replaces os.Hostname
 	hostname func() (string, error)

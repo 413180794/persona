@@ -1031,7 +1031,7 @@ func (s *Service) reviewDoneTodo(ctx context.Context, id, reason string, accepte
 		return false
 	})
 	if ok && accepted && row.DoneAt != nil {
-		go s.recordTaskOutcome(before, *row.DoneAt)
+		s.goRecordTaskOutcome(before, *row.DoneAt)
 	}
 	return ok, nil
 }

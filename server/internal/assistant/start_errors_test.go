@@ -132,21 +132,23 @@ func TestTaskTurnEndingNotLoggedInFails(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
 	h.runRetry = time.Hour // the retry is another test's
+	h.turnPoll = 200 * time.Millisecond
 	n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "Not logged in · Please run /login"}}
 	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
 		Cwd: "/home/me/.jarvis/assistant"})
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	// The turn ends after the first poll saw it working (started after the run went, so the watcher's polls line up).
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(3 * h.turnPoll / 2)
 		n.mu.Lock()
 		for i := range n.sessions["server"] {
 			n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
 		}
 		n.mu.Unlock()
 	}()
-	if _, err := runNow(t, h, "p"); err != nil {
-		t.Fatal(err)
-	}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		sc := h.loadSchedule(context.Background())
@@ -156,7 +158,7 @@ func TestTaskTurnEndingNotLoggedInFails(t *testing.T) {
 		})
 		sc.mu.Unlock()
 		if failed {
-			if p := n.pushed(); len(p) == 0 || p[0].Title != "定时任务失败：早报" {
+			if p := n.pushedBy(deadline); len(p) == 0 || p[0].Title != "定时任务失败：早报" {
 				t.Fatalf("the failure is pushed: %+v", p)
 			}
 			return

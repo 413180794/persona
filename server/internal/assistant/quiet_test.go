@@ -220,6 +220,7 @@ func TestNotQuietTasksAreNotTold(t *testing.T) {
 // A task whose agent does not start is told too.
 func TestQuietTaskFailedStart(t *testing.T) {
 	s, f := newQuietService(t)
+	s.taskRetry = 50 * time.Millisecond // the start fails again on the retry; the notice comes after it
 	f.failStart = errLauncherGone
 	if _, err := s.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)

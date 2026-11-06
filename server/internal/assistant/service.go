@@ -49,6 +49,11 @@ type Service struct {
 	logf     func(format string, args ...any)
 	// runRetry is how long after a failed run the retry goes (0: runRetryDelay; tests shorten it).
 	runRetry time.Duration
+	// turnPoll is how often a run's watcher reads its turn (0: turnPollInterval; tests shorten it).
+	turnPoll time.Duration
+	// taskRetry is how long a task waits before its one retry after a dropped link (0: taskStartRetryDelay; tests
+	// shorten it).
+	taskRetry time.Duration
 	// retryNow is the clock a due retry checks the task's time against (retryStillDue; nil: time.Now, tests set it).
 	retryNow func() time.Time
 

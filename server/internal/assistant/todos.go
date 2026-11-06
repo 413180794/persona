@@ -611,7 +611,7 @@ func (s *Service) todoRoutes() {
 		if cur.DoneAt == nil && updatedRow.DoneAt != nil {
 			// Done by the user: what the task came to goes in its decisions and its projects' timelines (#2820). cur
 			// still has the agents that were working on it.
-			go s.recordTaskOutcome(cur, *updatedRow.DoneAt)
+			s.goRecordTaskOutcome(cur, *updatedRow.DoneAt)
 		}
 		apierr.WriteJSON(w, map[string]any{"todo": resTodo})
 	})
@@ -1299,7 +1299,7 @@ func (s *Service) autoDoneTodo(ctx context.Context, id, reason string, work time
 		return false
 	})
 	if ok && row.DoneAt != nil {
-		go s.recordTaskOutcome(before, *row.DoneAt) // what the task came to (todo_outcome.go, #2820)
+		s.goRecordTaskOutcome(before, *row.DoneAt) // what the task came to (todo_outcome.go, #2820)
 	}
 	return ok, nil
 }
