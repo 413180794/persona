@@ -17,9 +17,9 @@ public nonisolated enum DirectoryPath {
         let m = message.lowercased()
         let name = (path as NSString).lastPathComponent
         let shown = name.isEmpty ? path : name
-        if m.contains("permission denied") { return "没有权限列出「\(shown)」里的目录。知道下一级的名字，可以在上面直接输入完整路径" }
-        if m.contains("no such file") { return "「\(path)」不存在" }
-        if m.contains("not a directory") { return "「\(path)」不是目录" }
-        return message.isEmpty ? "打不开「\(path)」" : message
+        if m.contains("permission denied") { return String(localized: "No permission to list the folders in “\(shown)”. If you know the next folder's name, type the full path above") }
+        if m.contains("no such file") { return String(localized: "“\(path)” doesn't exist") }
+        if m.contains("not a directory") { return String(localized: "“\(path)” isn't a folder") }
+        return message.isEmpty ? String(localized: "Can't open “\(path)”") : message
     }
 }

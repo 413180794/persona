@@ -62,9 +62,10 @@ struct ConnectorPromptTests {
 
     @Test func theNoteSaysWhatToDo() throws {
         let qr = try prompt(#"{"step":"qr","kind":"qr"}"#)
-        #expect(qr.cannotDrawNote(name: "微信") == "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试，或在 hub 的网页版 设置 › 连接器 › 微信 里扫码。")
+        // `swift test` has no app catalog, so the note comes back as its English development key (#5758).
+        #expect(qr.cannotDrawNote(name: "微信") == "This version of the app can't show this step. Update the app and tap Start Over, or scan the code on the hub's web page in Settings › Connectors › 微信.")
         let other = try prompt(#"{"step":"auth","kind":"open_url"}"#)
-        #expect(other.cannotDrawNote(name: "Example") == "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试。")
+        #expect(other.cannotDrawNote(name: "Example") == "This version of the app can't show this step. Update the app and tap Start Over to try again.")
     }
 
     /// A new code (it expired and the connector made another) restarts the polling.

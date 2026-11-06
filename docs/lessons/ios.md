@@ -1117,6 +1117,13 @@ but UIKit still had a page with only Agents Back and empty content.
   no longer has. `git diff origin/master --stat` should then show only `+` lines for your keys. Git's own text merge of two branches that added the
   same key leaves a duplicate JSON key, which `check` rejects: keep one copy.
 
+### Two PRs that add the same catalog key both pass, then break master (#5811)
+- #5743 and #5757 each added `"Run"` to `Localizable.xcstrings`. Each passed `apple_l10n.py check` against its own base, and git merged them
+  without a conflict, because the two entries sat at different places in the file. Master then had a duplicate JSON key: `check` failed,
+  and Xcode rejects such a catalog.
+- After every master merge into a branch, run `python3 scripts/i18n/apple_l10n.py check`, even when git reported no conflict in the catalog.
+  Only a run on master itself catches two PRs that merged close together; PR runs (scripts-tests.yml) each see their own base.
+
 ### An interpolated String looks up a `%@` key the catalog doesn't have (#5544)
 - `String(localized: "Exit code \(code)")` with `code` a `String` (or a regex match's `Substring`) asks for `"Exit code %@"`. The catalog had
   `"Exit code %lld"`, so the lookup missed and every language, Chinese too, showed the English key. The specifier comes from each

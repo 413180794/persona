@@ -15,19 +15,20 @@ struct LoopCommandTests {
     @Test func saysWhatIsMissing() {
         let usage = LoopCommand.hint("/loop ")
         #expect(usage?.missing == true)
-        #expect(usage?.text.contains("/loop 10m 看下 CI") == true)
+        // `swift test` has no app catalog, so the hints come back as their English development keys (#5758).
+        #expect(usage?.text.contains("/loop 10m check CI") == true)
         #expect(LoopCommand.hint("/loop") == usage)
-        #expect(LoopCommand.hint("/loop 10m") == LoopHint(text: "每 10 分钟：还没写要做的事", missing: true))
+        #expect(LoopCommand.hint("/loop 10m") == LoopHint(text: "Every 10 min: no task written yet", missing: true))
     }
 
     @Test func saysWhatItWillRepeatAndHowOften() {
-        #expect(LoopCommand.hint("/loop 10m 看下 CI") == LoopHint(text: "每 10 分钟重复：看下 CI", missing: false))
-        #expect(LoopCommand.hint("/loop 2H  跑一遍测试") == LoopHint(text: "每 2 小时重复：跑一遍测试", missing: false))
-        #expect(LoopCommand.hint("/loop 30s ping")?.text == "每 30 秒重复：ping")
-        #expect(LoopCommand.hint("/loop 1d 写日报")?.text == "每 1 天重复：写日报")
-        #expect(LoopCommand.hint("/loop 看下 CI 有没有过") == LoopHint(text: "由 Claude 自己定节奏重复：看下 CI 有没有过", missing: false))
-        #expect(LoopCommand.hint("/loop 10x 看下")?.text == "由 Claude 自己定节奏重复：10x 看下") // not an interval
-        #expect(LoopCommand.hint("/loop +5m 看下")?.text == "由 Claude 自己定节奏重复：+5m 看下")
+        #expect(LoopCommand.hint("/loop 10m 看下 CI") == LoopHint(text: "Repeats every 10 min: 看下 CI", missing: false))
+        #expect(LoopCommand.hint("/loop 2H  跑一遍测试") == LoopHint(text: "Repeats every 2 hr: 跑一遍测试", missing: false))
+        #expect(LoopCommand.hint("/loop 30s ping")?.text == "Repeats every 30 s: ping")
+        #expect(LoopCommand.hint("/loop 1d 写日报")?.text == "Repeats every 1d: 写日报")
+        #expect(LoopCommand.hint("/loop 看下 CI 有没有过") == LoopHint(text: "Repeats at Claude's own pace: 看下 CI 有没有过", missing: false))
+        #expect(LoopCommand.hint("/loop 10x 看下")?.text == "Repeats at Claude's own pace: 10x 看下") // not an interval
+        #expect(LoopCommand.hint("/loop +5m 看下")?.text == "Repeats at Claude's own pace: +5m 看下")
     }
 
     @Test func leavesOtherDraftsAlone() {

@@ -122131,6 +122131,512 @@
         }
       },
       "extractionState": "manual"
+    },
+    "The inference service has no GPU available right now": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The inference service has no GPU available right now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推論サービスで今使えるGPUがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推理服务暂时没有可用的 GPU"
+          }
+        }
+      }
+    },
+    "The model service is overloaded": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model service is overloaded"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルサービスが混み合っています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型服务太忙，过载了"
+          }
+        }
+      }
+    },
+    "The sign-in expired. Run /login again on the computer": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sign-in expired. Run /login again on the computer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログインの期限が切れました。コンピューターで/loginをやり直してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录过期了，要在电脑上重新 /login"
+          }
+        }
+      }
+    },
+    "Too many requests: rate limited": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many requests: rate limited"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リクエストが多すぎて制限されました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求太多，被限流了"
+          }
+        }
+      }
+    },
+    "The request timed out": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request timed out"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リクエストがタイムアウトしました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求超时了"
+          }
+        }
+      }
+    },
+    "Can't reach the model service": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach the model service"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルサービスに接続できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上模型服务"
+          }
+        }
+      }
+    },
+    "The request was refused: something is wrong with its parameters or context": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request was refused: something is wrong with its parameters or context"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リクエストが拒否されました：パラメーターかコンテキストに問題があります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求被拒绝：参数或上下文有问题"
+          }
+        }
+      }
+    },
+    "The model service is unavailable right now": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model service is unavailable right now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルサービスは一時的に利用できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型服务暂时不可用"
+          }
+        }
+      }
+    },
+    "The model request failed": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model request failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルへのリクエストが失敗しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型请求失败"
+          }
+        }
+      }
+    },
+    "This version of the app can't show this step. Update the app and tap Start Over, or scan the code on the hub's web page in Settings › Connectors › %@.": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This version of the app can't show this step. Update the app and tap Start Over, or scan the code on the hub's web page in Settings › Connectors › %1$@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このバージョンのアプリではこのステップを表示できません。アプリをアップデートして「最初からやり直す」をタップするか、hubのWeb版の設定 › コネクタ › %1$@でコードを読み取ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试，或在 hub 的网页版 设置 › 连接器 › %1$@ 里扫码。"
+          }
+        }
+      }
+    },
+    "This version of the app can't show this step. Update the app and tap Start Over to try again.": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This version of the app can't show this step. Update the app and tap Start Over to try again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このバージョンのアプリではこのステップを表示できません。アプリをアップデートして「最初からやり直す」をタップしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试。"
+          }
+        }
+      }
+    },
+    "No permission to list the folders in “%@”. If you know the next folder's name, type the full path above": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No permission to list the folders in “%1$@”. If you know the next folder's name, type the full path above"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」のフォルダを一覧表示する権限がありません。次のフォルダの名前がわかる場合は、上に完全なパスを入力してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有权限列出「%1$@」里的目录。知道下一级的名字，可以在上面直接输入完整路径"
+          }
+        }
+      }
+    },
+    "“%@” doesn't exist": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” doesn't exist"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」は存在しません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」不存在"
+          }
+        }
+      }
+    },
+    "“%@” isn't a folder": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” isn't a folder"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」はフォルダではありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」不是目录"
+          }
+        }
+      }
+    },
+    "Can't open “%@”": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't open “%1$@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」を開けません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打不开「%1$@」"
+          }
+        }
+      }
+    },
+    "Every %@: no task written yet": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every %1$@: no task written yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ごと：やることがまだ書かれていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每 %1$@：还没写要做的事"
+          }
+        }
+      }
+    },
+    "Format: /loop [interval] task, e.g. /loop 10m check CI; without an interval, Claude sets its own pace": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format: /loop [interval] task, e.g. /loop 10m check CI; without an interval, Claude sets its own pace"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "形式：/loop [間隔] やること（例：/loop 10m CIを確認）。間隔を省くとClaudeが自分でペースを決めます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式：/loop [间隔] 要做的事，如 /loop 10m 看下 CI；不写间隔由 Claude 自己定节奏"
+          }
+        }
+      }
+    },
+    "Repeats every %@: %@": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeats every %1$@: %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ごとに繰り返し：%2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每 %1$@重复：%2$@"
+          }
+        }
+      }
+    },
+    "Repeats at Claude's own pace: %@": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeats at Claude's own pace: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claudeが自分のペースで繰り返し：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 Claude 自己定节奏重复：%1$@"
+          }
+        }
+      }
+    },
+    "%lld min": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld min"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld分"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 分钟"
+          }
+        }
+      }
+    },
+    "Not a valid notebook file (its JSON can't be read)": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not a valid notebook file (its JSON can't be read)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有効なノートブックファイルではありません（JSONを読み取れません）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不是有效的笔记本文件（JSON 读不出来）"
+          }
+        }
+      }
+    },
+    "Notebooks in nbformat %lld aren't supported, so this one is shown as source": {
+      "comment": "PersonaKit (#5758)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notebooks in nbformat %1$lld aren't supported, so this one is shown as source"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nbformat %1$lldのノートブックには対応していないため、ソースとして表示します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持 nbformat %1$lld 的笔记本，按源文件显示"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

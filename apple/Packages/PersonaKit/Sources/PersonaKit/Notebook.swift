@@ -30,8 +30,8 @@ public nonisolated struct Notebook: Sendable, Equatable {
         case notJSON, unsupported(Int)
         public var errorDescription: String? {
             switch self {
-            case .notJSON: "不是有效的笔记本文件（JSON 读不出来）"
-            case .unsupported(let v): "不支持 nbformat \(v) 的笔记本，按源文件显示"
+            case .notJSON: String(localized: "Not a valid notebook file (its JSON can't be read)")
+            case .unsupported(let v): String(localized: "Notebooks in nbformat \(v) aren't supported, so this one is shown as source")
             }
         }
     }

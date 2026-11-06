@@ -65,7 +65,8 @@ extension ConnectorPrompt {
     /// Why a step is not drawn and what to do: update the app; a QR code can also be scanned from the hub's web page,
     /// which draws it (Settings › Connectors, #1693).
     public func cannotDrawNote(name: String) -> String {
-        let note = "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试"
-        return kind == "qr" ? note + "，或在 hub 的网页版 设置 › 连接器 › \(name) 里扫码。" : note + "。"
+        kind == "qr"
+            ? String(localized: "This version of the app can't show this step. Update the app and tap Start Over, or scan the code on the hub's web page in Settings › Connectors › \(name).")
+            : String(localized: "This version of the app can't show this step. Update the app and tap Start Over to try again.")
     }
 }

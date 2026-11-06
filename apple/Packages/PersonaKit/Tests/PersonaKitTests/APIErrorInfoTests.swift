@@ -9,7 +9,7 @@ struct APIErrorInfoTests {
     @Test func readsStatusReasonAndIds() throws {
         let e = try #require(APIErrorInfo.parse(gpu))
         #expect(e.status == 502)
-        #expect(e.reason == "推理服务暂时没有可用的 GPU")
+        #expect(e.reason == "The inference service has no GPU available right now") // English: `swift test` has no app catalog
         #expect(e.transient == true)
         #expect(e.requestID == "202610302115A1B2C3D4E5F6")
         #expect(e.session == "1ebd0000:7e470000")
@@ -24,9 +24,9 @@ struct APIErrorInfoTests {
     }
 
     @Test func hubNoticesAndOtherCauses() throws {
-        #expect(APIErrorInfo.parse("API 错误：Overloaded（正在重试）")?.reason == "模型服务太忙，过载了")
+        #expect(APIErrorInfo.parse("API 错误：Overloaded（正在重试）")?.reason == "The model service is overloaded")
         #expect(APIErrorInfo.parse("API Error: 429 rate_limit_error")?.transient == true)
-        #expect(APIErrorInfo.parse("API Error: Request timed out.")?.reason == "请求超时了")
+        #expect(APIErrorInfo.parse("API Error: Request timed out.")?.reason == "The request timed out")
         #expect(APIErrorInfo.parse("API Error: 400 messages: text content blocks must be non-empty")?.transient == false)
     }
 

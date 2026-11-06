@@ -24,11 +24,12 @@ struct DirectoryPathTests {
 
     @Test func theHubsErrorsInWords() {
         let denied = DirectoryPath.problem("open /home/me/eval: permission denied", path: "/home/me/eval")
-        #expect(denied.contains("没有权限列出「eval」"))
-        #expect(denied.contains("直接输入"))
-        #expect(DirectoryPath.problem("open /x/y: no such file or directory", path: "/x/y") == "「/x/y」不存在")
-        #expect(DirectoryPath.problem("readdirent /x/f: not a directory", path: "/x/f") == "「/x/f」不是目录")
+        // `swift test` has no app catalog, so these come back as their English development keys (#5758).
+        #expect(denied.contains("No permission to list the folders in “eval”"))
+        #expect(denied.contains("type the full path above"))
+        #expect(DirectoryPath.problem("open /x/y: no such file or directory", path: "/x/y") == "“/x/y” doesn't exist")
+        #expect(DirectoryPath.problem("readdirent /x/f: not a directory", path: "/x/f") == "“/x/f” isn't a folder")
         #expect(DirectoryPath.problem("machine mac-a is offline", path: "/x") == "machine mac-a is offline")
-        #expect(DirectoryPath.problem("", path: "/x") == "打不开「/x」")
+        #expect(DirectoryPath.problem("", path: "/x") == "Can't open “/x”")
     }
 }

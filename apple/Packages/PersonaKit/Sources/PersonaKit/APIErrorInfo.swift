@@ -27,8 +27,8 @@ public nonisolated struct APIErrorInfo: Hashable, Sendable {
         let body: String
         if t.hasPrefix("API Error:") {
             body = String(t.dropFirst("API Error:".count))
-        } else if t.hasPrefix("API 错误：") {
-            body = String(t.dropFirst("API 错误：".count))
+        } else if t.hasPrefix("API 错误：") { // i18n-ignore: the hub's Chinese retry notice, matched as it writes it
+            body = String(t.dropFirst("API 错误：".count)) // i18n-ignore
         } else {
             return nil
         }
@@ -46,17 +46,17 @@ public nonisolated struct APIErrorInfo: Hashable, Sendable {
 
     /// What went wrong, as a person would say it, and whether it is likely to pass.
     private static func explain(_ s: String, status: Int?) -> (String, Bool?) {
-        if s.contains("no available gpu") { return ("推理服务暂时没有可用的 GPU", true) }
-        if s.contains("overloaded") || status == 529 { return ("模型服务太忙，过载了", true) }
+        if s.contains("no available gpu") { return (String(localized: "The inference service has no GPU available right now"), true) }
+        if s.contains("overloaded") || status == 529 { return (String(localized: "The model service is overloaded"), true) }
         if status == 401 || status == 403 || s.contains("authentication") || s.contains("/login") || s.contains("login expire") {
-            return ("登录过期了，要在电脑上重新 /login", false)
+            return (String(localized: "The sign-in expired. Run /login again on the computer"), false)
         }
-        if status == 429 || s.contains("rate limit") || s.contains("rate_limit") { return ("请求太多，被限流了", true) }
-        if s.contains("timed out") || s.contains("timeout") { return ("请求超时了", true) }
-        if s.contains("connection") { return ("连不上模型服务", true) }
-        if status == 400 { return ("请求被拒绝：参数或上下文有问题", false) }
-        if let status, (500..<600).contains(status) { return ("模型服务暂时不可用", true) }
+        if status == 429 || s.contains("rate limit") || s.contains("rate_limit") { return (String(localized: "Too many requests: rate limited"), true) }
+        if s.contains("timed out") || s.contains("timeout") { return (String(localized: "The request timed out"), true) }
+        if s.contains("connection") { return (String(localized: "Can't reach the model service"), true) }
+        if status == 400 { return (String(localized: "The request was refused: something is wrong with its parameters or context"), false) }
+        if let status, (500..<600).contains(status) { return (String(localized: "The model service is unavailable right now"), true) }
         let temporary = s.contains("temporary") || s.contains("try again")
-        return ("模型请求失败", temporary ? true : nil)
+        return (String(localized: "The model request failed"), temporary ? true : nil)
     }
 }

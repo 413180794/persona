@@ -34,11 +34,12 @@ public enum LoopCommand {
         let every = words.first.flatMap(interval)
         let task = (every == nil ? words : Array(words.dropFirst())).joined(separator: " ")
         guard !task.isEmpty else {
-            return LoopHint(text: every.map { "每 \($0)：还没写要做的事" }
-                                ?? "格式：/loop [间隔] 要做的事，如 /loop 10m 看下 CI；不写间隔由 Claude 自己定节奏",
+            return LoopHint(text: every.map { String(localized: "Every \($0): no task written yet") }
+                                ?? String(localized: "Format: /loop [interval] task, e.g. /loop 10m check CI; without an interval, Claude sets its own pace"),
                             missing: true)
         }
-        return LoopHint(text: every.map { "每 \($0)重复：\(task)" } ?? "由 Claude 自己定节奏重复：\(task)", missing: false)
+        return LoopHint(text: every.map { String(localized: "Repeats every \($0): \(task)") } ?? String(localized: "Repeats at Claude's own pace: \(task)"),
+                        missing: false)
     }
 
     /// Claude Code has /loop; Codex, TRAEX and other runtimes do not, and the assistant's composer offers no commands
@@ -49,15 +50,15 @@ public enum LoopCommand {
         return claude && !(sourceKind ?? "").hasPrefix("codex")
     }
 
-    /// Claude Code's interval forms, a number and s / m / h / d, in words ("10m" → 「10 分钟」); nil for anything else.
+    /// Claude Code's interval forms, a number and s / m / h / d, in words ("10m" → "10 min"); nil for anything else.
     static func interval(_ word: String) -> String? {
         guard word.count >= 2, let unit = word.last?.lowercased(), let n = Int(word.dropLast()),
               word.dropLast().allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
         switch unit {
-        case "s": return "\(n) 秒"
-        case "m": return "\(n) 分钟"
-        case "h": return "\(n) 小时"
-        case "d": return "\(n) 天"
+        case "s": return String(localized: "\(n) s")
+        case "m": return String(localized: "\(n) min")
+        case "h": return String(localized: "\(n) hr")
+        case "d": return String(localized: "\(n)d")
         default: return nil
         }
     }
