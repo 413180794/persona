@@ -1134,6 +1134,29 @@ nonisolated struct APIClient: Sendable {
         let escaped = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? name
         try await delete("/api/v1/machines/\(machine)/health/reports/\(escaped)")
     }
+    /// One "always allow" remembered for an assistant conversation (docs/assistant.md「Always allow in this session」). The
+    /// hub keeps a hash of what was allowed and the tool's name, so the exact command or folder can't be shown.
+    struct AlwaysGrant: Decodable, Identifiable, Hashable, Sendable {
+        var keyHash: String
+        var toolName: String
+        var createdAt: Date?
+        var id: String { keyHash }
+        enum CodingKeys: String, CodingKey { case keyHash = "key_hash", toolName = "tool_name", createdAt = "created_at" }
+    }
+    struct AlwaysGrantsBody: Decodable { var grants: [AlwaysGrant] }
+    struct AlwaysRevoked: Decodable { var restartRequired: Bool?; enum CodingKeys: String, CodingKey { case restartRequired = "restart_required" } }
+    private func alwaysPath(_ conversation: String) -> String {
+        let escaped = conversation.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? conversation
+        return "/api/v1/assistant/conversations/\(escaped)/always"
+    }
+    func alwaysGrants(conversation: String) async throws -> [AlwaysGrant] {
+        try await get(alwaysPath(conversation), as: AlwaysGrantsBody.self).grants
+    }
+    /// Whether the conversation still has to be restarted: the grant is gone, but the running process could not be reset.
+    func revokeAlwaysGrant(hash: String, conversation: String) async throws -> Bool {
+        let data = try await request("DELETE", alwaysPath(conversation) + "/\(hash)")
+        return try JSON.decoder.decode(AlwaysRevoked.self, from: data).restartRequired ?? false
+    }
     /// `space`: nil for the assistant's own memory, `Session.healthSpace` for the health space's (docs/health.md).
     func assistantMemory(space: String? = nil) async throws -> [MemoryFile] {
         try await get("/api/v1/assistant/memory", query: ["space": space ?? ""], as: MemoryBody.self).files

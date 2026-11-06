@@ -55,13 +55,13 @@ struct AssistantTopBar: View {
                     #if os(macOS)
                     // A window sheet: SessionInfoSheet has no stack or Done of its own on the Mac (it is the chat's inspector there).
                     NavigationStack {
-                        SessionInfoSheet(key: key, session: session)
+                        SessionInfoSheet(key: key, session: session, assistant: true)
                             .navigationTitle("Session Info")
                             .macSheetDone { showInfo = false }
                     }
                     .macSheet()
                     #else
-                    SessionInfoSheet(key: key, session: session)
+                    SessionInfoSheet(key: key, session: session, assistant: true)
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
                     #endif

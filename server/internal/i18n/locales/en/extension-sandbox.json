@@ -1,3 +1,11 @@
 {
+  "agent_bad_path": "The data directory's path has characters the rules cannot hold: {dir}",
+  "agent_cwd_inside": "The agent's working directory ({cwd}) is inside the data directory: the rules would block files of the same names in this project",
+  "agent_home": "The data directory ({dir}) is the home directory or above it: the rules would block files of the same names across the home directory",
+  "agent_nested": "Already inside an outer agent sandbox",
+  "agent_no_command": "No command to start",
+  "agent_no_data_dir": "The data directory was not found",
+  "agent_profile_refused": "sandbox-exec refused the rules for this start: {err}",
+  "agent_unsupported": "The agent sandbox supports only macOS for now; not yet supported on this system ({os})",
   "probe_tmp": "The sandbox probe could not create a temporary directory: {err}"
 }

@@ -688,6 +688,22 @@ func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolF
 	return string(mcp), toolFlags
 }
 
+// assistantCLICommand is the command that runs the conversation's claude on the CLI: an interactive shell so ~/.zshrc
+// defines the launcher function, "$@" passing our flags through. In the agent sandbox when it is on (agentsandbox.go).
+// A managed launcher's shell is not wrapped: it runs `personad launch`, which fetches the launcher's settings outside
+// the sandbox and wraps only the agent it execs (launchExec).
+func (n *Node) assistantCLICommand(shell, launcher, cwd string, args, env []string) *exec.Cmd {
+	argv := append([]string{shell, "-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)
+	if _, managed := n.managedLauncher(launcher); !managed {
+		base := env
+		argv, env, _ = wrapAgent("assistant", n.home, n.dir, cwd, settingsArgs(args),
+			func() string { return claudeInner(args, base, cwd, n.home, n.claudeConfigDirs()) }, argv, env, n.logger.Printf)
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir, cmd.Env = cwd, env
+	return cmd
+}
+
 func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options ...modelExecution) (*assistantProc, error) {
 	execution := executionOption(options)
 	if err := execution.check(); err != nil {
@@ -768,10 +784,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		if err != nil {
 			return nil, err
 		}
-		// An interactive shell so ~/.zshrc defines the launcher function; "$@" passes our flags through.
-		cmd = exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
-		cmd.Dir = cwd
-		cmd.Env = env
+		cmd = n.assistantCLICommand(shell, launcher, cwd, args, env)
 	}
 	cmd.SysProcAttr = osproc.GroupAttr() // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()

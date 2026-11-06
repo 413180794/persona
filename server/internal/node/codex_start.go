@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/extension/sandbox"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/screen"
@@ -329,5 +331,25 @@ func CodexStart(args []string) error {
 	if f.Prompt != "" { // a resume without a message (`jarvisd tab-start`, pi.go) runs the words alone
 		argv = append(argv, "--", f.Prompt)
 	}
+	path, argv, env, _ = codexStartExec(path, argv, env)
 	return osproc.Exec(path, argv, env)
+}
+
+// codexStartExec is what codex-start execs for its words (path, argv, env): in the agent sandbox when it is on
+// (agentsandbox.go), for a Codex only when it is sure to run danger-full-access in its own process (codexInner). A
+// managed launcher (`personad launch`) is left to Launch, which wraps its own start; other words (pi resumed by
+// tab-start) are not in this phase. Not wrapped, they come back as they are.
+func codexStartExec(path string, argv, env []string) (string, []string, []string, sandbox.AgentStatus) {
+	if len(argv) == 0 || filepath.Base(argv[0]) != "codex" {
+		return path, argv, env, sandbox.AgentStatus{State: sandbox.AgentOff}
+	}
+	home, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
+	inner := func() string { return codexInner(argv, env, cwd, home) }
+	logf := func(format string, a ...any) { fmt.Fprintf(os.Stderr, "personad codex-start: "+format+"\n", a...) }
+	wrapped, wenv, st := wrapAgent("codex-start", home, identity.DataDir(home), cwd, nil, inner, append([]string{path}, argv[1:]...), env, logf)
+	if wrapped[0] == path {
+		return path, argv, env, st
+	}
+	return wrapped[0], wrapped, wenv, st
 }

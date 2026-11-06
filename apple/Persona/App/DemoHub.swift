@@ -264,6 +264,7 @@ final class DemoHub {
         case ("mail", 4) where p[1] == "messages":
             guard let m = data["mail"]?[p[3]] else { throw notFound() }
             return ["message": m]
+        case ("assistant", 4) where p[1] == "conversations" && p[3] == "always": return ["grants": .array([])]
         case ("lark", 4) where p[1] == "conversations" && p[3] == "messages":
             return ["messages": .array(lark[p[2]] ?? []), "has_older": false, "has_newer": false]
         case ("lark", 4) where p[1] == "conversations" && p[3] == "labels":

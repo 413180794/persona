@@ -42,18 +42,9 @@ var secretFiles = []string{
 // keyNames are private keys by their usual names, wherever they are.
 var keyNames = map[string]bool{"id_rsa": true, "id_dsa": true, "id_ecdsa": true, "id_ed25519": true, "id_ecdsa_sk": true, "id_ed25519_sk": true}
 
-// hubKeyExt matches key files in the hub's folder, including backup suffixes.
-var hubKeyExt = regexp.MustCompile(`\.(key|p8|pem|crt)([.~-][^/]*)?$`)
-
-// dataSecrets are the credential files in the data folder (and a manager's folder under it) by the start of their
-// name, so a backup beside one is refused too: hub.json (the token, the database password), Persona Link's credential,
-// the tunnel identities (a private key), the daemons' tokens, a manager's bus token, the APNs key.
-var dataSecrets = []string{"hub.json", "link.json", "tailcat.json", "tailcat-hub.json", "daemons.json", "manager.json", "apns",
-	"relay.json", "relay.secret", "devices.json", "mail_accounts.json"}
-
-// dataSecretDirs are folders in the data folder (or a manager's folder) refused whole: the launchers' merged settings
-// hold their tokens, tls/ the hub's TLS key (hub/public.go), link-tls/ Persona Link's (link/tlsid.go).
-var dataSecretDirs = []string{"launcher-settings", "tls", "link-tls"}
+// hubKeyExt matches key files in the hub's folder, including backup suffixes. The list of the data folder's secrets is
+// shared with the agent sandbox (identity/secrets.go).
+var hubKeyExt = regexp.MustCompile(identity.DataKeyPattern)
 
 // procSecrets are what Linux's /proc holds besides the processes' own folders that hands out a secret: the kernel's
 // memory, its log, its symbols' addresses, the keyrings' entries and the page tables (#4172).
@@ -113,13 +104,13 @@ func dataSecret(rel string) bool {
 		parts = parts[2:]
 	}
 	if len(parts) > 1 {
-		return slices.Contains(dataSecretDirs, parts[0])
+		return slices.Contains(identity.DataSecretDirs, parts[0])
 	}
 	base := parts[0]
 	if hubKeyExt.MatchString(base) {
 		return true
 	}
-	for _, name := range dataSecrets {
+	for _, name := range identity.DataSecrets {
 		if strings.HasPrefix(base, name) {
 			return true
 		}

@@ -13790,6 +13790,28 @@
       },
       "extractionState": "manual"
     },
+    "Always allowed in this conversation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always allowed in this conversation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この会話で常に許可している権限"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段对话中总是允许的权限"
+          }
+        }
+      }
+    },
     "Always connect to this hub through the SSH tunnel.": {
       "localizations": {
         "en": {
@@ -59598,6 +59620,28 @@
       },
       "extractionState": "manual"
     },
+    "No saved permissions.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No saved permissions."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存された権限はありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有已保存的权限。"
+          }
+        }
+      }
+    },
     "No token yet? Create one on GitHub: the name, purpose and a one-year expiry are filled in and no permissions are needed. Tap Generate token, then paste it above.": {
       "localizations": {
         "en": {
@@ -78953,6 +78997,28 @@
       },
       "extractionState": "manual"
     },
+    "Revoke": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoke"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取り消す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销"
+          }
+        }
+      }
+    },
     "Revoke and Unpair": {
       "localizations": {
         "en": {
@@ -78975,6 +79041,28 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Revoke this permission?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoke this permission?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この権限を取り消しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销这项权限？"
+          }
+        }
+      }
     },
     "Revoke “%@”?": {
       "localizations": {
@@ -79021,6 +79109,28 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Revoking stops the current response to clear its permissions. Send another message to continue.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoking stops the current response to clear its permissions. Send another message to continue."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取り消すと、現在の応答を停止して権限を消去します。次のメッセージを送ると続行できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销会停止当前回复，以清除运行中的权限。发送下一条消息即可继续。"
+          }
+        }
+      }
     },
     "Rewind": {
       "localizations": {
@@ -97460,6 +97570,28 @@
       },
       "extractionState": "manual"
     },
+    "The saved permission was revoked, but the running conversation could not be reset. Restart this conversation before relying on the revocation.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved permission was revoked, but the running conversation could not be reset. Restart this conversation before relying on the revocation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存された権限は取り消されましたが、実行中の会話をリセットできませんでした。取り消しを有効にするため、この会話を再起動してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已撤销保存的权限，但无法重置运行中的对话。请重启这段对话后再继续，确保撤销生效。"
+          }
+        }
+      }
+    },
     "The send result hasn't been saved. Check this device's storage.": {
       "localizations": {
         "en": {
@@ -98494,6 +98626,28 @@
         }
       },
       "extractionState": "manual"
+    },
+    "These saved permissions apply only to this conversation. Records store the tool name, but not detailed directory or command scope.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These saved permissions apply only to this conversation. Records store the tool name, but not detailed directory or command scope."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存された権限は、この会話だけに適用されます。記録にはツール名のみが保存され、ディレクトリやコマンドの詳細な範囲はありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些已保存的权限仅适用于这段对话。记录只保留工具名，没有目录或命令的详细范围。"
+          }
+        }
+      }
     },
     "They're only hidden in Persona; ~/.zshrc isn't changed. Open one to unhide it.": {
       "localizations": {
@@ -106206,6 +106360,28 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Unnamed permission": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unnamed permission"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前のない権限"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未命名权限"
+          }
+        }
+      }
     },
     "Unpack": {
       "localizations": {

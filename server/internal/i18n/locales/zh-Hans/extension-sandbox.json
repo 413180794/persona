@@ -1,3 +1,11 @@
 {
+  "agent_bad_path": "数据目录的路径里有规则写不了的字符：{dir}",
+  "agent_cwd_inside": "agent 的工作目录（{cwd}）在数据目录里：规则会挡住这个项目里的同名文件",
+  "agent_home": "数据目录（{dir}）是 home 或它的上级：规则会挡住整个 home 里的同名文件",
+  "agent_nested": "已在外层的 agent 沙箱里",
+  "agent_no_command": "没有要启动的命令",
+  "agent_no_data_dir": "找不到数据目录",
+  "agent_profile_refused": "sandbox-exec 不接受这次的规则：{err}",
+  "agent_unsupported": "agent 沙箱暂时只支持 macOS，这个系统（{os}）上尚未支持",
   "probe_tmp": "探测沙箱无法创建临时目录：{err}"
 }

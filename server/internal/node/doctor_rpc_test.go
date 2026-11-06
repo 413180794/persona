@@ -143,7 +143,7 @@ func TestDoctorRPCCheckNamesAreWhatTheWebGroups(t *testing.T) {
 		got = append(got, c.Name)
 	}
 	want := []string{"node.sock", "runtime.sock", "claude-settings.json", "claude-hooks", "assistant-settings.json", "assistant-hooks",
-		"mcp.json", "agent-plugin", "command-paths", "claude-version", "herdr", "global-permission-hooks"}
+		"mcp.json", "agent-plugin", "command-paths", "claude-version", "herdr", "global-permission-hooks", "agent-sandbox"}
 	if !slices.Equal(got, want) {
 		t.Errorf("checks = %v\nwant     %v", got, want)
 	}

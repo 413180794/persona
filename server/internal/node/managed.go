@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/nwverse/persona/server/internal/extension/sandbox"
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -235,7 +237,32 @@ func Launch(ctx context.Context, name string, args []string) error {
 			}
 		}
 	}
-	return osproc.Exec(exe, append(launchArgs, args...), env)
+	exe, argv, env, _ := launchExec(agent, exe, append(launchArgs, args...), env)
+	return osproc.Exec(exe, argv, env)
+}
+
+// launchExec is what `personad launch` execs (exe, argv, env; argv[0] is the agent's name): in the agent sandbox when
+// it is on (agentsandbox.go), Claude and Codex only when their own sandbox is sure to be off, another agent not. Not
+// wrapped, they come back as they are, and the pane says why.
+func launchExec(agent, exe string, argv, env []string) (string, []string, []string, sandbox.AgentStatus) {
+	home, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
+	rest := argv[1:]
+	inner := func() string {
+		switch agent {
+		case "claude":
+			return claudeInner(rest, env, cwd, home, nil)
+		case "codex":
+			return codexInner(append([]string{"codex"}, rest...), env, cwd, home)
+		}
+		return "这类 agent（" + agent + "）的自带沙箱还没核对过，先不包"
+	}
+	logf := func(format string, a ...any) { fmt.Fprintf(os.Stderr, "personad launch: "+format+"\n", a...) }
+	wrapped, wenv, st := wrapAgent("launch "+agent, home, identity.DataDir(home), cwd, settingsArgs(rest), inner, append([]string{exe}, rest...), env, logf)
+	if wrapped[0] == exe {
+		return exe, argv, env, st
+	}
+	return wrapped[0], wrapped, wenv, st
 }
 
 // launcherEnv answers `jarvisd launch` on the local socket.

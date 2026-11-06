@@ -29,6 +29,11 @@ func TestMain(m *testing.M) {
 			os.Exit(Run(os.Args[2:], os.Stderr))
 		case "probe":
 			os.Exit(probeInside(os.Args[2:]))
+		case "--version": // stands in for personad --version (agent_test.go)
+			fmt.Println("personad test")
+			os.Exit(0)
+		case "agent-dial": // connects to a unix socket (agent_test.go)
+			os.Exit(agentDial(os.Args[2]))
 		}
 	}
 	os.Exit(m.Run())

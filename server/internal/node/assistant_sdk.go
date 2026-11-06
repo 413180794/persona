@@ -247,9 +247,17 @@ func (n *Node) sdkCommand(b sdkBridge, launcher string, s sdkStart, base []strin
 	if err != nil {
 		return nil, nil, err
 	}
-	cmd := exec.Command(b.js.Path, b.script)
+	// The bridge in the agent sandbox when it is on (agentsandbox.go): the claude it starts is in it too.
+	settings := settingsArgs(s.launcherArgs)
+	innerArgs := append([]string(nil), s.launcherArgs...)
+	if s.settings != "" {
+		settings, innerArgs = append(settings, s.settings), append(innerArgs, "--settings", s.settings)
+	}
+	argv, env, _ := wrapAgent("assistant-sdk", n.home, n.dir, s.cwd, settings,
+		func() string { return claudeInner(innerArgs, base, s.cwd, n.home, n.claudeConfigDirs()) }, []string{b.js.Path, b.script}, b.js.env(base), n.logger.Printf)
+	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = s.cwd
-	cmd.Env = b.js.env(base)
+	cmd.Env = env
 	return cmd, line, nil
 }
 

@@ -4524,9 +4524,15 @@ struct SessionInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     let key: SessionKey
     var session: Session?
+    /// Opened from the Persona tab, where the conversation may not be in the fleet's list yet (`session` is nil then).
+    var assistant = false
     @State private var info: APIClient.SessionInfo?
     @State private var error: String?
     @State private var showTodo = false
+    @State private var grants = AlwaysGrantsModel()
+
+    /// Only assistant conversations remember "always allow" (docs/assistant.md); Agents sessions keep theirs in Claude.
+    private var isAssistant: Bool { assistant || (model.session(key) ?? session)?.assistant == true }
 
     var body: some View {
         InfoContainer {
@@ -4535,6 +4541,9 @@ struct SessionInfoSheet: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
                 if let link = session?.externalLink { Section { FeishuLink(url: link) } }
+                if isAssistant {
+                    AlwaysGrantsSection(page: grants, conversation: key.sessionID, api: model.api(key.group))
+                }
                 if let info {
                     Section("Runtime") {
                         row(Theme.Icon.model, String(localized: "Model [Assistant View c98e11]"), Fmt.model(info.model) ?? info.model)
@@ -4604,6 +4613,10 @@ struct SessionInfoSheet: View {
         }
         .task(id: key) {
             do { info = try await model.api(key.group)?.sessionInfo(key) } catch { self.error = error.shown }
+        }
+        // Keyed on `isAssistant` too: on a cold open the session arrives after this sheet does.
+        .task(id: isAssistant ? key : nil) {
+            if isAssistant { await grants.load(conversation: key.sessionID, api: model.api(key.group)) }
         }
     }
 
