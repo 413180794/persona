@@ -328,9 +328,11 @@ class HubSessionsRepository(
                     runCatching { JsonCodec.decodeFromString<List<String>>(encoded) }.getOrNull()
                         ?.takeIf { it.size == 2 }?.let { SessionKey(it[0], it[1]) }
                 }.toSet()
-                mutableSessions.value = mutableSessions.value.mapNotNull { row ->
+                val loaded = mutableSessions.value.mapTo(mutableSetOf()) { it.key }
+                val kept = mutableSessions.value.mapNotNull { row ->
                     if (row.key in removals) null else changes[row.key] ?: row
                 }
+                mutableSessions.value = arrivals(changes.values.filter { it.key !in loaded }, kept) + kept
                 candidates?.let { window ->
                     removals.forEach { window.remove(it) }
                     changes.forEach { (key, row) -> if (window.containsKey(key)) window[key] = row }
@@ -341,6 +343,22 @@ class HubSessionsRepository(
             require(next != cursor) { "Repeated session delta cursor" }
             cursor = next
         }
+    }
+
+    /**
+     * Called under [lock]. An unloaded delta row joins only while page zero is loaded and it sorts above the window's
+     * oldest row (or the whole list is loaded); rows that belong to later frozen pages wait for those pages.
+     */
+    private fun arrivals(rows: List<Session>, kept: List<Session>): List<Session> {
+        val top = loadedPages.firstOrNull()?.takeIf { it.index == 0 } ?: return emptyList()
+        val complete = loadedPages.last().index + 1 !in pageStarts.indices
+        val oldest = kept.mapNotNull { it.updated }.minOrNull()
+        val joined = rows.filter { row -> complete || (oldest != null && row.updated?.let { it > oldest } == true) }
+        if (joined.isEmpty()) return joined
+        // A burst past one extra page rebaselines page one rather than growing the window without bound.
+        if (top.keys.size + joined.size > 2 * WINDOW_SIZE) throw SessionListExpired()
+        loadedPages[0] = top.copy(keys = top.keys + joined.map { it.key })
+        return joined.sortedWith(compareByDescending<Session> { it.updated }.thenBy { it.machineId }.thenBy { it.sessionId })
     }
 
     /** Called under [lock]; never combines page tokens/checkpoints from different hub epochs. */

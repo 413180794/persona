@@ -82,6 +82,61 @@ class PagedSessionsRepositoryTest {
         assertEquals(0, transport.legacyCalls)
     }
 
+    @Test fun adoptedSessionNewerThanTheWindowJoinsPageOneAndSurvivesLoadingMore() = runTest {
+        val connection = Connection()
+        val started = Session("demo", "started", title = "Started", updatedAt = "2026-01-02T00:00:00Z")
+        val transport = Transport().apply { fetch = { _, cursor, since ->
+            when {
+                since != null -> page(listOf(started, rows[6000].copy(title = "Older edit")), "r2")
+                cursor != null -> page(rows.drop(50).take(50), cursor = "p3")
+                else -> page(rows.take(50), cursor = "p2")
+            }
+        } }
+        val repository = HubSessionsRepository(transport, connection, backgroundScope)
+        repository.refresh()
+        repository.adopt(started)
+        advanceTimeBy(100); runCurrent()
+        assertEquals(started, repository.sessions.value.first())
+        assertFalse(repository.sessions.value.any { it.key == rows[6000].key })
+        repository.loadMore()
+        assertEquals(101, repository.sessions.value.size)
+        assertEquals(1, repository.sessions.value.count { it.key == started.key })
+        assertEquals(0, transport.legacyCalls)
+    }
+
+    @Test fun sessionThatStartsNeedingYouJoinsTheFilteredListAndLeavesWhenItStops() = runTest {
+        val connection = Connection()
+        val waiting = Session("demo", "waiting", state = "needs_you", updatedAt = "2025-12-01T00:00:00Z")
+        var delta = page(listOf(waiting), "r2", total = 1)
+        val transport = Transport().apply { fetch = { _, _, since -> if (since == null) page(emptyList(), total = 0) else delta } }
+        val repository = HubSessionsRepository(transport, connection, backgroundScope)
+        repository.setListFilter(SessionListFilter(state = "needs_you"))
+        connection.events.emit(SessionsListEvent("r2")); advanceTimeBy(100); runCurrent()
+        assertEquals(listOf(waiting), repository.sessions.value)
+        delta = page(emptyList(), "r3", total = 0, remove = listOf(JsonCodec.encodeToString(listOf("demo", "waiting"))))
+        connection.events.emit(SessionsListEvent("r3")); advanceTimeBy(100); runCurrent()
+        assertTrue(repository.sessions.value.isEmpty())
+    }
+
+    @Test fun burstOfNewerRowsReloadsPageOneInsteadOfGrowingTheWindow() = runTest {
+        val connection = Connection()
+        val burst = (0 until 60).map { Session("demo", "burst/$it", updatedAt = "2026-01-02T00:00:00Z") }
+        var firstPages = 0
+        val transport = Transport().apply { fetch = { _, _, since ->
+            when {
+                since != null -> page(burst, "r2")
+                firstPages++ == 0 -> page(rows.take(50), cursor = "p2")
+                else -> page((burst + rows).take(50), "r2", "p2")
+            }
+        } }
+        val repository = HubSessionsRepository(transport, connection, backgroundScope)
+        repository.refresh()
+        connection.events.emit(SessionsListEvent("r2")); advanceTimeBy(100); runCurrent()
+        assertEquals(2, firstPages)
+        assertEquals(burst.take(50), repository.sessions.value)
+        assertEquals(0, transport.legacyCalls)
+    }
+
     @Test fun malformedRepeatedDeltaCursorDoesNotLoopOrAdvanceCheckpoint() = runTest {
         val connection = Connection()
         val transport = Transport().apply { fetch = { _, _, since ->
