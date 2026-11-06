@@ -141,6 +141,11 @@ export function ListPane({
 
           {q ? (
             <SearchResults found={found} error={searchError} searching={searching} isSel={isSel} onOpen={onOpen} />
+          ) : !list && !error ? (
+            // Paint the chips with their count and rows, so the count cannot wrap an already visible chip row.
+            <div className="py-10">
+              <Loading />
+            </div>
           ) : (
             <>
               <div className="mt-3 flex items-start gap-2">
@@ -180,11 +185,6 @@ export function ListPane({
               )}
 
               <div className="mt-4 flex flex-col gap-5">
-                {!list && !error && (
-                  <div className="py-10">
-                    <Loading />
-                  </div>
-                )}
                 {error && !list && <ErrorBox text={error} onRetry={() => setRetry((x) => x + 1)} />}
                 {list && sections.length === 0 && <Empty kind={kind} tag={tag} />}
                 {sections.map((s) => {
