@@ -1032,7 +1032,7 @@ struct ClaudeSettingsView: View {
                 }
             case "enum":
                 Picker(selection: Binding(get: { value?.string ?? "" }, set: { v in Task { await set(s.key, .string(v)) } })) {
-                    ForEach(s.options ?? [], id: \.self) { Text($0).tag($0) }
+                    ForEach(s.options ?? [], id: \.self) { Text(AgentSettingOptions.name($0, key: s.key)).tag($0) }
                 } label: { title(s) }
             default:
                 title(s)
