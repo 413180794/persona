@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of the web sidebar's entries (#1239, #5109): Persona, the column's first row, opens the main conversation, the one-off new
-conversation and New agent are the"+"of their sections, and the old links still land where they should.
+conversation and New agent are the"+"of their sections, and the old links still land where they should. Persona stays pinned at
+the top of the list while it scrolls and opens with Mod+Alt+P (#5581).
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome):
 
@@ -13,6 +14,7 @@ Prints one line per check and a verdict; exits 1 on the first failure. --shots s
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.request
 
@@ -54,7 +56,7 @@ def main():
 
 
 def run(browser, base, token, main_id, other, shots):
-    ctx = browser.new_context(viewport={"width": 1280, "height": 820}, device_scale_factor=2)
+    ctx = browser.new_context(viewport={"width": 1280, "height": 820}, device_scale_factor=2, locale="zh-CN")
     page = ctx.new_page()
     page.set_default_timeout(10000)
 
@@ -92,6 +94,19 @@ def run(browser, base, token, main_id, other, shots):
         expect(head).to_have_attribute("aria-expanded", "true")
     ok("folding「Persona 对话」or 页面 leaves the main row on show")
 
+    # Persona stays pinned at the top of the list while the rest scrolls under it (#5581), and shows its shortcut.
+    list_box = page.locator("aside [data-sidebar-rows]").bounding_box()
+    top = persona.bounding_box()["y"]
+    page.mouse.move(list_box["x"] + list_box["width"] / 2, list_box["y"] + list_box["height"] / 2)
+    page.mouse.wheel(0, 400)
+    page.wait_for_function("document.querySelector('aside [data-sidebar-rows]').scrollTop > 100")
+    page.wait_for_timeout(300)
+    assert abs(persona.bounding_box()["y"] - top) < 1, (top, persona.bounding_box())
+    expect(page.locator("aside [data-persona-fog]")).to_have_class(re.compile(r"\bopacity-100\b"))
+    expect(persona.locator("[data-persona-chord]")).to_have_text(re.compile(r"^(⌥⌘P|Ctrl\+Alt\+P)$"))
+    page.evaluate("document.querySelector('aside [data-sidebar-rows]').scrollTop = 0")
+    ok("Persona stays at the top while the list scrolls, the fog under it, its ⌥⌘P / Ctrl+Alt+P on the row")
+
     # 2. "Overview" and back to Persona.
     page.locator('aside a[href="/overview"]').click()
     page.wait_for_function("location.pathname === '/overview'")
@@ -100,6 +115,12 @@ def run(browser, base, token, main_id, other, shots):
     page.wait_for_function("location.pathname === '/'")
     expect(persona).to_have_attribute("aria-current", "page")
     ok("总览 is /overview; clicking Persona goes back to the main conversation")
+    page.locator('aside a[href="/overview"]').click()
+    page.wait_for_function("location.pathname === '/overview'")
+    page.keyboard.press("ControlOrMeta+Alt+P")
+    page.wait_for_function("location.pathname === '/'")
+    expect(persona).to_have_attribute("aria-current", "page")
+    ok("Mod+Alt+P opens the main conversation, as the click does")
 
     # 3. The main conversation is not listed twice.
     expect(page.locator(f'aside a[href="/j/{main_id}"]')).to_have_count(0)
@@ -153,7 +174,7 @@ def run(browser, base, token, main_id, other, shots):
 
     # 7. Narrow: the drawer has the same order, Persona closes it on the main conversation.
     for theme in ("light", "dark"):
-        ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, has_touch=True)
+        ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, has_touch=True, locale="zh-CN")
         page = ctx.new_page()
         page.set_default_timeout(10000)
         page.goto(base + "/overview?token=" + token)

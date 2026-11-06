@@ -106,6 +106,15 @@ export function formatChord(text: string, platform: Platform = currentPlatform()
   return chordParts(text, platform).join(platform === "mac" ? "" : "+");
 }
 
+const ARIA_KEYS: Record<string, string> = { Up: "ArrowUp", Down: "ArrowDown", Left: "ArrowLeft", Right: "ArrowRight", Space: "Space" };
+
+/** A chord as `aria-keyshortcuts` writes it ("Meta+Alt+P" on a Mac, "Control+Alt+P" elsewhere); "" for none or 1–9. */
+export function ariaKeyshortcuts(text: string, platform: Platform = currentPlatform()): string {
+  const c = parseChord(text);
+  if (!c || c.key === DIGITS) return "";
+  return [platform === "mac" ? "Meta" : "Control", c.alt && "Alt", c.shift && "Shift", ARIA_KEYS[c.key] ?? c.key].filter(Boolean).join("+");
+}
+
 // ── keyboard events → chords ─────────────────────────────
 
 /** The parts of a KeyboardEvent the shortcuts read (so they are tested with plain objects). */
@@ -231,7 +240,7 @@ export interface ShortcutDef {
  * Moshi's keymap, each mapped to the closest Persona action (docs/web.md "Keyboard shortcuts"):
  *   Mod+K go to · Mod+Shift+P command palette · Mod+J terminal ⇄ chat · Mod+B right panel · Mod+Alt+B sidebar · Mod+E sidebar groups ·
  *   Mod+Shift+Enter maximize the center area · Mod+I input · Mod+Alt+Shift+↑/↓ collapse / expand · Mod+Alt+↑/↓ previous / next row · Mod+, settings ·
- *   Mod+1–9 computers · Mod+Alt+←/→ previous / next tab on this machine.
+ *   Mod+1–9 computers · Mod+Alt+←/→ previous / next tab on this machine. Persona's own: Mod+Alt+P opens Persona.
  * Not taken over: Moshi's Mod+Alt+1–3 (choose the right panel's tab), which Persona has no single place for.
  */
 export const SHORTCUTS: readonly ShortcutDef[] = [
@@ -239,6 +248,9 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: "commands", label: t("lib-shortcuts.cmd_commands"), chord: "Mod+Shift+P", scope: "global", overlay: true, icon: "run" },
   { id: "help", label: t("lib-shortcuts.cmd_help"), chord: "Mod+/", scope: "global", overlay: true, icon: "keyboard" },
   { id: "settings", label: t("lib-shortcuts.cmd_settings"), chord: "Mod+,", scope: "global", icon: "gear" },
+  // the sidebar's first row, Persona's main conversation (#5581); not in Moshi's keymap. Mod+Alt+P: P for Persona, free in
+  // Chrome / Safari / Firefox and not a terminal's control key (Mod+Shift+P is the palette, Mod+P the browser's print)
+  { id: "persona", label: t("lib-shortcuts.cmd_persona"), chord: "Mod+Alt+P", scope: "global", icon: "chat" },
   { id: "machine", label: t("lib-shortcuts.cmd_machine"), chord: `Mod+${DIGITS}`, scope: "global", icon: "machine" },
   { id: "left-sidebar", label: t("lib-shortcuts.cmd_left_sidebar"), chord: "Mod+Alt+B", scope: "global", icon: "sidebar" },
   { id: "maximize", label: t("lib-shortcuts.cmd_maximize"), chord: "Mod+Shift+Enter", scope: "global", icon: "layers" },
@@ -353,21 +365,22 @@ export function sanitizeOverrides(raw: unknown, platform: Platform = currentPlat
     if (!chord || chord === canonChord(def.chord) || reservedWhy(chord, platform)) continue;
     out[id] = chord;
   }
-  // two commands on one chord (a default moved since): the first keeps it, the other goes back to its default (or, when
-  // that is taken too, to none)
+  // two commands on one chord: a chord the user chose wins over a default (a command added or a default moved since
+  // takes none, #5581); between two chosen ones the first keeps it and the other goes back to its default (or, when that
+  // is taken too, to none)
   const seen = new Set<string>();
   const taken = (chords: string[]) => chords.some((c) => seen.has(c));
   for (const s of SHORTCUTS) {
-    let chords = expandChord(out[s.id] ?? s.chord);
-    if (taken(chords)) {
-      if (out[s.id]) delete out[s.id];
-      chords = expandChord(s.chord);
-      if (taken(chords)) {
-        out[s.id] = "";
-        chords = [];
-      }
-    }
-    for (const c of chords) seen.add(c);
+    if (!out[s.id]) continue;
+    const chords = expandChord(out[s.id]);
+    if (taken(chords)) delete out[s.id];
+    else for (const c of chords) seen.add(c);
+  }
+  for (const s of SHORTCUTS) {
+    if (s.id in out) continue;
+    const chords = expandChord(s.chord);
+    if (taken(chords)) out[s.id] = "";
+    else for (const c of chords) seen.add(c);
   }
   return out;
 }

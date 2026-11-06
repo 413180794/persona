@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   activeBindings,
+  ariaKeyshortcuts,
   bindingsOf,
   clearBinding,
   conflictOf,
@@ -654,5 +655,63 @@ describe("clearing, turning off and the switch for all", () => {
   });
   it("the search box shows no hint once 跳转 has no chord", () => {
     expect(jumpHint(bindingsOf({ jump: "" }), "other")).toBe("");
+  });
+});
+
+describe("opening Persona (#5581)", () => {
+  afterEach(() => resetAllBindings());
+  it("is a global command on Mod+Alt+P, free of the reserved chords and the other commands on both platforms", () => {
+    const def = SHORTCUTS.find((s) => s.id === "persona")!;
+    expect(def).toMatchObject({ chord: "Mod+Alt+P", scope: "global", label: "打开 Persona" });
+    expect(def.overlay).toBeFalsy();
+    for (const p of ["mac", "other"] as const) expect(reservedWhy(def.chord, p)).toBeNull();
+    expect(conflictOf("persona", def.chord, bindingsOf({}))).toBeUndefined();
+    expect(formatChord(def.chord, "mac")).toBe("⌥⌘P");
+    expect(formatChord(def.chord, "other")).toBe("Ctrl+Alt+P");
+  });
+  it("⌥⌘P / Ctrl+Alt+P runs it, also when ⌥ composed the key into π", () => {
+    const run = vi.fn();
+    on("persona", run);
+    expect(dispatchKey(event(ctrl("p", { altKey: true }, { code: "KeyP" }), page), { platform: "other" })).toBe(true);
+    expect(dispatchKey(event(cmd("π", { altKey: true }, { code: "KeyP" }), page), { platform: "mac" })).toBe(true);
+    expect(run).toHaveBeenCalledTimes(2);
+    // not with a dialog or the palette open, and Mod+Shift+P is still the palette's
+    expect(dispatchKey(event(ctrl("p", { altKey: true }, { code: "KeyP" }), page), { platform: "other", overlay: true })).toBe(false);
+    expect(matchShortcut(ctrl("p", { shiftKey: true }), bindingsOf({}), "other")?.def.id).toBe("commands");
+  });
+  it("follows a rebinding, and a cleared or turned-off one does nothing", () => {
+    const run = vi.fn();
+    on("persona", run);
+    expect(checkBinding("persona", eventChord(ctrl("y", { shiftKey: true }), "other"), getConfigured(), "other")).toEqual({ ok: true, chord: "Mod+Shift+Y" });
+    setBinding("persona", "Mod+Shift+Y");
+    expect(getBindings().persona).toBe("Mod+Shift+Y");
+    expect(dispatchKey(event(ctrl("p", { altKey: true }), page), { platform: "other", bindings: getBindings() })).toBe(false);
+    expect(dispatchKey(event(ctrl("y", { shiftKey: true }), page), { platform: "other", bindings: getBindings() })).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    setShortcutEnabled("persona", false);
+    expect(getBindings().persona).toBe("");
+    expect(getConfigured().persona).toBe("Mod+Shift+Y");
+    setShortcutEnabled("persona", true);
+    clearBinding("persona");
+    expect(getBindings().persona).toBe("");
+    // another command can't silently take its chord
+    expect(checkBinding("jump", eventChord(ctrl("p", { altKey: true }), "other"), bindingsOf({}), "other")).toMatchObject({ reason: "conflict", with: "persona" });
+  });
+  it("a chord the user had already chosen for another command wins over the new default (upgrade)", () => {
+    // a command after it in the list, and one before it: either keeps its chord, Persona takes none
+    expect(sanitizeOverrides({ "focus-input": "Mod+Alt+P" }, "other")).toEqual({ "focus-input": "Mod+Alt+P", persona: "" });
+    expect(sanitizeOverrides({ jump: "Mod+Alt+P" }, "other")).toEqual({ jump: "Mod+Alt+P", persona: "" });
+    const b = bindingsOf(sanitizeOverrides({ "focus-input": "Mod+Alt+P" }, "other"));
+    expect(b["focus-input"]).toBe("Mod+Alt+P");
+    expect(b.persona).toBe("");
+    // two chosen chords still clash as before: the first keeps it, the other goes back to its default
+    expect(sanitizeOverrides({ jump: "Mod+Shift+O", help: "Mod+Shift+O" }, "other")).toEqual({ jump: "Mod+Shift+O" });
+  });
+  it("writes the chord for aria-keyshortcuts", () => {
+    expect(ariaKeyshortcuts("Mod+Alt+P", "mac")).toBe("Meta+Alt+P");
+    expect(ariaKeyshortcuts("Mod+Alt+P", "other")).toBe("Control+Alt+P");
+    expect(ariaKeyshortcuts("Mod+Shift+Up", "other")).toBe("Control+Shift+ArrowUp");
+    expect(ariaKeyshortcuts("Mod+1-9", "other")).toBe("");
+    expect(ariaKeyshortcuts("", "other")).toBe("");
   });
 });

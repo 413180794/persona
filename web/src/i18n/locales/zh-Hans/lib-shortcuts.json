@@ -8,6 +8,7 @@
   "scope_global": "全局",
   "scope_session": "会话页",
   "scope_sidebar": "侧边栏",
+  "cmd_persona": "打开 Persona",
   "cmd_jump": "跳转到会话或终端窗格",
   "cmd_commands": "命令面板",
   "cmd_help": "快捷键帮助",

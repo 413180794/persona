@@ -254,7 +254,7 @@ function Shell() {
   }, [drawer, narrow]);
 
   // the keyboard shortcuts (⌘K and the rest, lib/shortcuts.ts): what they do here, and the listener that runs them
-  useShortcuts({ route, pane, narrow, toggleDrawer: toggle });
+  useShortcuts({ route, pane, narrow, toggleDrawer: toggle, closeDrawer: close });
 
   useEffect(() => setDrawer(false), [route.name, pane ? pane.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
   // a session's files / Git belong to that conversation: moving to another page closes them (a link and a task stay),

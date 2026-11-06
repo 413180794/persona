@@ -68,7 +68,7 @@ import { hubMenuItems, useHubs } from "./Hubs";
 import { FoldScope, useFolded } from "../lib/use-folded";
 import { clipsOverflow, glideBox, glideStyle, sameBox, type GlideBox, type Span } from "../lib/glide";
 import { AGENTS_FOLD, onGrouping, setAgentsFolded } from "../lib/sidebar-api";
-import { formatChord, jumpHint, useBindings } from "../lib/shortcuts";
+import { ariaKeyshortcuts, formatChord, jumpHint, useBindings } from "../lib/shortcuts";
 import { toggleSidebarColumn } from "../lib/layout";
 import { markAllSeenLabel, stateCount } from "../lib/state-labels";
 import { NoComputers, useAddComputer } from "./machines/AddComputerEntry";
@@ -88,11 +88,28 @@ function reveal(el: HTMLElement): boolean {
     if (o !== "auto" && o !== "scroll") continue;
     const r = el.getBoundingClientRect(),
       b = p.getBoundingClientRect();
-    if (r.top >= b.top && r.bottom <= b.bottom) return false;
+    // a row under the pinned Persona row (#5581) is not in view; that row itself always is
+    const pinned = p.querySelector<HTMLElement>(":scope > [data-sidebar-sticky]");
+    const top = pinned && !pinned.contains(el) ? pinned.getBoundingClientRect().bottom : b.top;
+    if (r.top >= top && r.bottom <= b.bottom) return false;
     p.scrollTop += r.top + r.height / 2 - (b.top + b.height / 2);
     return true;
   }
   return false;
+}
+
+/** Whether a scrolling list is scrolled down from its top (rows have gone under its pinned head). */
+function useScrolled(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const n = ref.current;
+    if (!n) return;
+    const read = () => setScrolled(n.scrollTop > 0);
+    read();
+    n.addEventListener("scroll", read, { passive: true });
+    return () => n.removeEventListener("scroll", read);
+  }, [ref]);
+  return scrolled;
 }
 
 /** The gliding highlight under a list of rows (Beautiful UI's Sidebar Nav): rows register under their keys, and the
@@ -307,6 +324,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [pagesFolded, togglePages] = useFolded("pages", false, { all: false, holds: more.some((p) => p.k === activeKey) });
   const { nav, reg, hover, highlight } = useGlide(activeKey);
   const go = useGo(onNavigate);
+  const scrolled = useScrolled(nav);
 
   return (
     <aside className="flex h-full w-full flex-col bg-canvas">
@@ -323,14 +341,17 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         </button>
       </div>
 
-      <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
+      {/* scroll-pt: a row reached by Tab doesn't stop under the pinned Persona row (taller on a coarse pointer: 4 + 44 + 9px) */}
+      <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 scroll-pt-12 overflow-y-auto [@media(pointer:coarse)]:scroll-pt-16 overscroll-contain px-2.5 pb-3">
         {highlight}
-        <div className="flex flex-col gap-px pt-1">
-          {/* the main conversation is the column's first row, Persona with the app's mark, and only there (#2004, #5109) */}
-          <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />
+        {/* the main conversation is the column's first row, Persona with the app's mark, and only there (#2004, #5109); it
+            stays at the top while the rest scrolls (#5581), its line and a fog under it once rows go beneath */}
+        <div data-sidebar-sticky className="sticky top-0 z-30 flex flex-col gap-px bg-canvas pt-1">
+          <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} chord={bindings.persona} onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />
           <span aria-hidden data-persona-divider className="mx-2 my-1 h-px shrink-0 bg-line" />
-          {narrow && <NavGrid pages={pages} more={more} activeKey={activeKey} go={go} onNavigate={onNavigate} />}
+          <span aria-hidden data-persona-fog className={cx("pointer-events-none absolute inset-x-0 top-full h-3 bg-gradient-to-b from-canvas to-transparent transition-opacity duration-150", scrolled ? "opacity-100" : "opacity-0")} />
         </div>
+        {narrow && <NavGrid pages={pages} more={more} activeKey={activeKey} go={go} onNavigate={onNavigate} />}
         {!narrow && (
           <Section title={t("sidebar.pages")} folded={pagesFolded} onToggle={togglePages} right={pagesFolded ? <PagesTally pages={[...pages, ...more]} /> : undefined} first>
             {pages.map((p) => <NavRow key={p.k} {...p} reg={reg} hover={hover} active={activeKey === p.k} go={go} />)}
@@ -1644,7 +1665,7 @@ type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean
 // Persona's main conversation: the column's first and strongest entry (the app's mark, always in ink, #2004), with the
 // conversation's state when it is working or wants you. A line under it parts it from the pages.
 // Its menu (Copy session ID, End…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
-export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
+export function PersonaRow({ reg, hover, active, go, main, chord, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; /** The "Open Persona" shortcut as bound now ("": none). */ chord?: string; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
   const to: Route = { name: "jarvis" };
   const st = main ? stateOf(main) : undefined;
   const pending = main?.pending_interactions ?? 0;
@@ -1666,8 +1687,10 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegF
       onFocus={() => hover("persona")}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
+      aria-keyshortcuts={chord ? ariaKeyshortcuts(chord) : undefined}
       title={t("sidebar.persona_main")}
-      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
+      // pinned over the list (#5581), its own hover fill: the gliding highlight passes under the pinned box
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-[background-color,transform] duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active ? CURRENT_ROW : "hover:bg-hover focus-visible:bg-hover", onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
     >
       <AppMark size={18} radius={5} className="shadow-hairline" />
       {draft ? (
@@ -1678,6 +1701,7 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegF
       ) : (
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
       )}
+      {chord && <span aria-hidden data-persona-chord className={cx("hidden sm:inline-flex [@media(hover:none)]:hidden", aside)}><Kbd>{formatChord(chord)}</Kbd></span>}
       {pending > 0 ? (
         <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums", aside)}>{pending}</span>
       ) : st === "working" || st === "needs_you" || st === "unread" ? (
@@ -2254,7 +2278,7 @@ export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onS
           <AppMark size={20} radius={5} className="shadow-hairline" />,
           pending > 0 ? <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-red ring-2 ring-canvas" />
             : st === "working" || st === "needs_you" || st === "unread" ? <span aria-hidden className="absolute top-0.5 right-0.5 flex rounded-full ring-2 ring-canvas"><StatusMark state={st} /></span> : null,
-          t("sidebar.persona_main"),
+          bindings.persona ? `${t("sidebar.persona_main")} (${formatChord(bindings.persona)})` : t("sidebar.persona_main"),
         )}
         {pages.map((p) => link(
           p.k,

@@ -22,6 +22,8 @@ export interface ShortcutContext {
   /** A phone-width screen: the sidebar is a drawer, there is no column to hide. */
   narrow: boolean;
   toggleDrawer: () => void;
+  /** Closes the drawer (a no-op when it is shut), as a tap on one of its rows does. */
+  closeDrawer?: () => void;
 }
 
 /** The panel ⌘B closed last, to bring back. */
@@ -58,6 +60,12 @@ export function useShortcuts(ctx: ShortcutContext) {
       registerShortcut("commands", () => togglePalette("command")),
       registerShortcut("help", () => toggleHelp()),
       registerShortcut("settings", () => navigate({ name: "settings" })),
+      // what a click on the sidebar's Persona row does: the main conversation (#5581)
+      registerShortcut("persona", () => {
+        navigate({ name: "jarvis" });
+        // a route change closes the drawer (App.tsx); already on Persona it would stay open over it
+        if (at.current.narrow) at.current.closeDrawer?.();
+      }),
       registerShortcut("machine", ({ digit }) => {
         const m = machineAt(getState().machines, digit ?? 0);
         if (!m) return false;

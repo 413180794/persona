@@ -8,6 +8,7 @@
   "scope_global": "全体",
   "scope_session": "セッション画面",
   "scope_sidebar": "サイドバー",
+  "cmd_persona": "Personaを開く",
   "cmd_jump": "セッションまたはターミナルペインへ移動",
   "cmd_commands": "コマンドパレット",
   "cmd_help": "キーボードショートカット",

@@ -8,6 +8,7 @@
   "scope_global": "Global",
   "scope_session": "Session page",
   "scope_sidebar": "Sidebar",
+  "cmd_persona": "Open Persona",
   "cmd_jump": "Go to a session or terminal pane",
   "cmd_commands": "Command palette",
   "cmd_help": "Keyboard shortcuts",
