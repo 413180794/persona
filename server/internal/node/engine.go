@@ -15,6 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/orcart"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // A machine's node drives exactly one terminal host, its engine: herdr (the default, as every node did before),
@@ -194,10 +195,11 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	// longer than the hub's 30 s for engine.use, and the app's engine picker waits on that call (#635). Built outside
 	// n.eng.use, so a list finished after a later switch is dropped: it would cover the newer engine's until the next
 	// poll (the hub would see sessions vanish and finish).
+	// On the connection's ctx, not engine.use's: that one ends with the reply (#2645), which is before the list is built.
 	n.engLists.Add(1)
 	go func() {
 		defer n.engLists.Done()
-		list := n.sessionList(ctx, true)
+		list := n.sessionList(rpc.ConnContext(ctx), true)
 		n.mu.Lock()
 		current := n.engEpoch == epoch
 		n.mu.Unlock()

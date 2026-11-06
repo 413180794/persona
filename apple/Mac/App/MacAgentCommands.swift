@@ -176,6 +176,6 @@ struct MacAgentMenu: Commands {
 extension MacAgentCommands {
     /// `cd '<folder>' && claude --resume <id>`: the folder single-quoted, so a space, `;` or `$(…)` in it stays a path.
     static func resumeLine(cwd: String, command: String, id: String) -> String {
-        "cd '" + cwd.replacingOccurrences(of: "'", with: #"'\''"#) + "' && \(command) \(id)"
+        Session.resumeLine(cwd: cwd, command: command, id: id)
     }
 }

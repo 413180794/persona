@@ -491,3 +491,61 @@ func TestEngineSwitchEndsTerminalStreams(t *testing.T) {
 		}
 	}
 }
+
+// The new engine's list is pushed even though engine.use's own ctx has ended by then: since #2645 a request's ctx is
+// cancelled once its reply is written, which is before the list is built (TestEngineUseAnswersBeforeTheList). The
+// list is built on the connection's ctx (rpc.ConnContext).
+func TestEngineUseListOutlivesItsRequest(t *testing.T) {
+	n, _, home := herdrNode(t)
+	hc := newFakeHC(t)
+	t.Setenv("HC_SOCKET", hc.sock)
+	writeClaudePID(t, home, 4242, sidB)
+	writeTranscript(t, home, hcCwd, sidB, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"b"}`)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once, unblock sync.Once
+	t.Cleanup(func() { unblock.Do(func() { close(release) }) })
+	hc.handle("terminal.list", func(map[string]any) any {
+		once.Do(func() { close(entered) })
+		<-release
+		return map[string]any{"terminals": []any{hcTerminal("t1", "claude-code", "working", 4242, "claude", hcCwd, "", "", "")}}
+	})
+
+	// The hub's call over a real connection: its reply ends the request's own ctx (rpc.Peer.handle), the connection
+	// stays.
+	n2hR, n2hW := io.Pipe()
+	h2nR, h2nW := io.Pipe()
+	n.peer, n.events = rpc.New("n", n2hW), newHerdrEvents()
+	n.peer.OnRequest = n.handle
+	hub := rpc.New("h", h2nW)
+	pushes := make(chan string, 64)
+	hub.OnEvent = func(event string, params json.RawMessage) {
+		if event == "sessions.changed" {
+			pushes <- string(params)
+		}
+	}
+	conn, endConn := context.WithCancel(context.Background())
+	go func() { _ = hub.Serve(conn, n2hR) }()
+	go func() { _ = n.peer.Serve(conn, h2nR) }()
+	t.Cleanup(func() { endConn(); _ = n2hW.Close(); _ = h2nW.Close() })
+
+	if err := hub.Call(conn, "engine.use", map[string]any{"engine": "herdr-core"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	select { // the list is still built: with the request's ctx it was abandoned before herdr-core was even asked
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the new engine's list was never built once engine.use was answered")
+	}
+	unblock.Do(func() { close(release) })
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case p := <-pushes:
+			if strings.Contains(p, sidB) {
+				return
+			}
+		case <-deadline:
+			t.Fatal("the new engine's list was lost with engine.use's ctx")
+		}
+	}
+}

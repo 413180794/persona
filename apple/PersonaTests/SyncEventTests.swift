@@ -116,6 +116,15 @@ struct SyncEventTests {
         #expect(live.agentLabel == "Codex" && live.resumeCommand == "codex resume")
     }
 
+    @Test func resumeLineQuotesTheFolderAndSkipsAMissingOne() {
+        #expect(Session.resumeLine(cwd: "/w/My Projects", command: "codex resume", id: "abc")
+                == "cd '/w/My Projects' && codex resume abc")
+        #expect(Session.resumeLine(cwd: "/w/it's; rm -rf ~", command: "claude --resume", id: "abc")
+                == #"cd '/w/it'\''s; rm -rf ~' && claude --resume abc"#)
+        #expect(Session.resumeLine(cwd: nil, command: "claude --resume", id: "abc") == "claude --resume abc")
+        #expect(Session.resumeLine(cwd: "", command: "claude --resume", id: "abc") == "claude --resume abc")
+    }
+
     @MainActor @Test func rowMenuEqualityIncludesPermissions() {
         let actions = AgentRowMenu.Actions()
         let key = SessionKey(machineID: "m", sessionID: "s")

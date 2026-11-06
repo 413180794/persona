@@ -738,6 +738,12 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// How to pick the conversation up again on the computer (offered only with a terminal, canTerminal: a runtime's
     /// sessions are picked up in the runtime's own UI).
     var resumeCommand: String { isCodex ? "codex resume" : isTraex ? "traex resume" : "claude --resume" }
+    /// `cd '<folder>' && claude --resume <id>`: the folder single-quoted, so a space, `;` or `$(…)` in it stays a path.
+    /// Without a folder just the command: a bare `cd` would go home and resume in the wrong place.
+    static func resumeLine(cwd: String?, command: String, id: String) -> String {
+        guard let cwd, !cwd.isEmpty else { return "\(command) \(id)" }
+        return "cd '" + cwd.replacingOccurrences(of: "'", with: #"'\''"#) + "' && \(command) \(id)"
+    }
 
     enum CodingKeys: String, CodingKey {
         case title, cwd, status, launcher, model, agent, effort, efforts, capabilities, attached

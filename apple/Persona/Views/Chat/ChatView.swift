@@ -4442,7 +4442,7 @@ struct SessionInfoSheet: View {
                     Section {
                         copyButton(String(localized: "Copy Session ID [Chat View e63671]"), symbol: Theme.Icon.id, text: info.sessionID, toast: String(localized: "Session ID copied"))
                         if session?.canTerminal == true {
-                            copyButton(String(localized: "Copy Resume Command"), symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(session?.sourceThreadID ?? info.sessionID), toast: String(localized: "Resume command copied"))
+                            copyButton(String(localized: "Copy Resume Command"), symbol: Theme.Icon.terminal, text: Session.resumeLine(cwd: info.cwd ?? session?.cwd, command: session?.resumeCommand ?? "claude --resume", id: session?.sourceThreadID ?? info.sessionID), toast: String(localized: "Resume command copied"))
                         }
                     } footer: {
                         Text(info.sessionID).font(Theme.Font.label.monospaced()).textSelection(.enabled)
@@ -4541,12 +4541,6 @@ struct SessionInfoSheet: View {
 
     /// The coding agent in the pane: Claude Code unless the session names another agent.
     private var agent: String { session.map { $0.isClaude ? "Claude Code" : $0.agentLabel } ?? "Claude Code" }
-
-    private func resume(_ id: String) -> String {
-        if session?.isCodex == true { return "codex resume \(id)" }
-        if session?.isTraex == true { return "traex resume \(id)" }
-        return "claude --resume \(id)"
-    }
 
     static func tokens(_ n: Int) -> String {
         switch n {
