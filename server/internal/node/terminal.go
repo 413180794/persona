@@ -188,6 +188,14 @@ func (s *termStream) control() host.Control {
 	return s.ctl
 }
 
+// driver is the control without renewing the lease: the frame path's, which is the pane's output, not the hub
+// (output that kept coming used to hold a control the hub had forgotten for good, #5450).
+func (s *termStream) driver() host.Control {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ctl
+}
+
 func (s *termStream) leaseOver() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -312,12 +320,12 @@ func (n *Node) terminalControl(ctx context.Context, id string, ctlr host.Control
 		if replay > termReplayLimit {
 			// A resize to the same size: herdr sends a whole frame, the programs see no change (no SIGWINCH).
 			replay = 0
-			if c := s.control(); c != nil {
+			if c := s.driver(); c != nil {
 				go func() { _ = c.Resize(f.Width, f.Height) }()
 			}
 		}
 	}, refresh: func() {
-		if r, ok := s.control().(host.Redrawer); ok {
+		if r, ok := s.driver().(host.Redrawer); ok {
 			_ = r.Redraw()
 		}
 	}}

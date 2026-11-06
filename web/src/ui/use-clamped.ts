@@ -3,12 +3,13 @@
 // once the web fonts are in, as LarkTopicCard's Fold does. While `open` the last answer stays, so "Hide" stays under the text.
 import { useCallback, useLayoutEffect, useState } from "react";
 
-export function useClamped<T extends HTMLElement>(open: boolean): { ref: (el: T | null) => void; cut: boolean } {
+/** `axis` "x" for a one-line `truncate` (cut at its width), "y" (the default) for a `line-clamp` (cut at its height). */
+export function useClamped<T extends HTMLElement>(open: boolean, axis: "x" | "y" = "y"): { ref: (el: T | null) => void; cut: boolean } {
   const [el, setEl] = useState<T | null>(null);
   const [cut, setCut] = useState(false);
   const measure = useCallback(() => {
-    if (el && !open) setCut(el.scrollHeight > el.clientHeight + 1);
-  }, [el, open]);
+    if (el && !open) setCut(axis === "x" ? el.scrollWidth > el.clientWidth + 1 : el.scrollHeight > el.clientHeight + 1);
+  }, [el, open, axis]);
   useLayoutEffect(measure);
   useLayoutEffect(() => {
     if (!el) return;

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { t } from "../../i18n";
 import type { FeedItem } from "../../lib/feed";
 import { checkCount, checklist, latestReview, reviewBadge, reviewVerdictLabel, type CheckMark, type ReviewTone } from "../../lib/supervision";
 import type { Todo } from "../../lib/todos";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { useClamped } from "../../ui/use-clamped";
 
 // How a supervised task's review stands (#3124, docs/unified-entry.md "Supervision"): a chip and the count of criteria met
 // on its card, the checklist on its page, a line in the conversation for each review.
@@ -75,21 +77,48 @@ export function ReviewChecklist({ todo }: { todo: Todo }) {
   );
 }
 
-/** A review in the conversation (feed kind "review"): the verdict and the supervisor's note. */
+/** A review in the conversation (feed kind "review"): the verdict and the supervisor's note. A note cut at the line's
+ *  end opens in full on a click (what to decide, what is missing, #4861), as an answered card's line does. */
 export function ReviewLine({ item, title, onOpenTask }: { item: FeedItem; title: string; onOpenTask?: () => void }) {
   const body = (item.body ?? {}) as { verdict?: string; round?: number; note?: string };
+  const [open, setOpen] = useState(false);
+  const { ref, cut } = useClamped<HTMLSpanElement>(open, "x");
+  const expandable = Boolean(body.note) && (cut || open);
   return (
-    <div data-testid="review-line" className="flex max-w-full min-w-0 items-center gap-1.5 self-start rounded-full bg-field px-3 py-1.5 text-[12px] text-ink-2">
-      <Icon name="target" size={12} className="shrink-0" />
-      {onOpenTask ? (
-        <button type="button" onClick={onOpenTask} className="max-w-[45%] shrink-0 truncate text-left hover:text-ink hover:underline">
-          {title}
+    <div data-testid="review-line" className={cx("flex max-w-full min-w-0 flex-col self-start bg-field text-[12px] text-ink-2", open ? "w-full rounded-card" : "rounded-full")}>
+      <div className="flex min-w-0 items-center gap-1.5 px-3 py-1.5">
+        <Icon name="target" size={12} className="shrink-0" />
+        {onOpenTask ? (
+          <button type="button" onClick={onOpenTask} className="max-w-[45%] shrink-0 truncate text-left hover:text-ink hover:underline">
+            {title}
+          </button>
+        ) : (
+          <span className="max-w-[45%] shrink-0 truncate">{title}</span>
+        )}
+        <button
+          type="button"
+          aria-expanded={expandable ? open : undefined}
+          disabled={!expandable}
+          onClick={() => setOpen(!open)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left enabled:cursor-pointer"
+        >
+          <span className="shrink-0 whitespace-nowrap font-semibold">· {reviewVerdictLabel(body.verdict ?? "", body.round)}</span>
+          {body.note && !open && (
+            <span ref={ref} className="min-w-0 flex-1 truncate">
+              {body.note}
+            </span>
+          )}
+          {open && <span className="flex-1" />}
+          {expandable && (
+            <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : "none" }} />
+          )}
         </button>
-      ) : (
-        <span className="max-w-[45%] shrink-0 truncate">{title}</span>
+      </div>
+      {open && body.note && (
+        <div className="px-3 pt-0.5 pb-2.5 text-[13px] leading-[1.55] whitespace-pre-wrap text-ink select-text [overflow-wrap:anywhere]" data-testid="review-note">
+          {body.note}
+        </div>
       )}
-      <span className="shrink-0 whitespace-nowrap font-semibold">· {reviewVerdictLabel(body.verdict ?? "", body.round)}</span>
-      {body.note && <span className="min-w-0 flex-1 truncate">{body.note}</span>}
     </div>
   );
 }
