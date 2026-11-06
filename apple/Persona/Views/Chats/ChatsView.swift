@@ -198,10 +198,15 @@ struct ChatsView: View {
     private var fieldUp: Bool { header.up }
     /// Laid out for searching (`AgentsHeader.compact`).
     private var headerCompact: Bool { header.compact }
+    /// By how much of the field's way up the shell's bar has faded (`AgentsTopBarFade.gone`).
+    private var barGone: Double { AgentsTopBarFade.gone(bar: header.bar, field: header.listTop + AgentsHeader.room(shell: true)) }
+    private func barMoved(_ y: ClosedRange<CGFloat>) { if header.bar != y { header.bar = y } }
     #else
     private var ownsTop: Bool { false }
     private var fieldUp: Bool { false }
     private var headerCompact: Bool { false }
+    private var barGone: Double { AgentsTopBarFade.standard }
+    private func barMoved(_ y: ClosedRange<CGFloat>) {}
     #endif
     @State private var showNew = false
     /// The ⋯ menu's actions, kept current by the list (not observed: see `AgentsListMenu`).
@@ -375,7 +380,11 @@ struct ChatsView: View {
                     AgentsTopBar(shell: shell, menuActions: menuActions) { showNew = true }
                         .equatable()
                         .searchTraceMark("topbar")
-                        .modifier(AgentsTopBarFade(progress: fieldUp ? 1 : 0))
+                        .onGeometryChange(for: ClosedRange<CGFloat>.self) { g in
+                            let f = g.frame(in: .global)
+                            return f.minY...f.maxY
+                        } action: { barMoved($0) }
+                        .modifier(AgentsTopBarFade(progress: fieldUp ? 1 : 0, gone: barGone))
                         .allowsHitTesting(!searching)
                         .accessibilityHidden(searching)
                         .transition(.opacity)

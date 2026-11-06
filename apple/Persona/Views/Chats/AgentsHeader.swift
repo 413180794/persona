@@ -29,6 +29,9 @@ import UIKit
     var scrolled: CGFloat = 0
     /// Where the navigation bar ends on screen (global y): the list's top, and the shell's room under it.
     var listTop: CGFloat = 0
+    /// Where the shell's top bar is drawn (global y; nil before it is laid out). It grows with the text, the field's way
+    /// does not: how soon it fades as the field comes up follows it (`AgentsTopBarFade.gone`).
+    var bar: ClosedRange<CGFloat>?
     /// Rows (not just the field folded away) are under the bars: the list's edge effect shows (`AgentsEdge`). Set only
     /// when it changes, so what reads it is not drawn again on every frame of a scroll.
     var rowsUnder = false
@@ -482,16 +485,28 @@ struct SystemCloseButton: UIViewRepresentable {
 /// field has gone below it. `progress` is the same animated value as the field's (`AgentsSearchOverlay`).
 struct AgentsTopBarFade: ViewModifier, Animatable {
     var progress: Double
+    /// The share of the field's way up by which the bar has gone (`gone(bar:field:)`).
+    var gone = Self.standard
     var animatableData: Double {
         get { progress }
         set { progress = newValue }
     }
 
-    /// The share of the field's way up by which the bar has gone: the field reaches the bar's bottom at about 0.4 of
-    /// its way (150 → 62 pt, the bar 62–112).
-    static let gone = 0.35
+    /// At the standard text size the field reaches the bar's bottom at about 0.4 of its way (150 → 62 pt, the bar
+    /// 62–112): the bar is gone by 0.35.
+    static let standard = 0.35
+
+    /// By when the bar has gone, so that the field never comes into its rows while the bar still shows, with a little
+    /// air (`Theme.Space.sm`): sooner when larger text makes the bar taller, never later than `standard`. At XXXL the
+    /// bar is 62–122 and the field met it at 0.32 with the bar still 8 % there (#4928). `bar`: where it is drawn;
+    /// `field`: where the field starts up from (global y). The field ends at the bar's top: both at the top of the safe area.
+    static func gone(bar: ClosedRange<CGFloat>?, field: CGFloat) -> Double {
+        guard let bar, field - bar.lowerBound > 1 else { return standard }
+        let clear = field - bar.upperBound - Theme.Space.sm
+        return min(standard, max(0.05, Double(clear / (field - bar.lowerBound))))
+    }
 
     func body(content: Content) -> some View {
-        content.opacity(max(0, 1 - progress / Self.gone))
+        content.opacity(max(0, 1 - progress / gone))
     }
 }

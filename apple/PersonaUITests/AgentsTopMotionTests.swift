@@ -6,7 +6,8 @@ import XCTest
 ///
 /// - no block turns back on its way within a step (the list overshot ~140 pt and sprang back, 2026-11-05);
 /// - no block jumps more than `jump` in one frame, outside a finger's drag;
-/// - the shell's top bar and the floating field are never drawn over each other (TestFlight 70);
+/// - the shell's top bar and the floating field are never drawn over each other (TestFlight 70), nor both half drawn
+///   in the same rows (#4928), at the standard text size and a larger one;
 /// - each step ends where it should: the field out under the bar, up in the bar's row while searching, folded away
 ///   when the tab comes back (#740); while searching the filters scroll with the results (#1051, #2189); the field
 ///   is found again after a round trip (#314).
@@ -31,10 +32,17 @@ final class AgentsTopMotionTests: XCTestCase {
         try? FileManager.default.removeItem(atPath: tracePath)
     }
 
-    @MainActor func testTheTopMovesAsOnePiece() throws {
+    @MainActor func testTheTopMovesAsOnePiece() throws { try walk() }
+
+    /// The shell's top bar grows with the text (up to `Theme.Shell.topBarLargestTypeSize`), the field's way does not:
+    /// the field came into the bar's rows while the bar was still fading (#4928).
+    @MainActor func testTheTopMovesAsOnePieceInLargerText() throws { try walk(size: "UICTContentSizeCategoryXXXL") }
+
+    @MainActor private func walk(size: String? = nil) throws {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-app.tab", "chats", "-dev.openChat", "",
                                "-showSearchTrace", "YES", "-searchTracePath", tracePath]
+        if let size { app.launchArguments += ["-UIPreferredContentSizeCategoryName", size] }
         app.launchPinned()
         XCTAssertTrue(app.collectionViews.firstMatch.waitForExistence(timeout: 20), "the Agents list")
         let shell = app.buttons["agents-new"].firstMatch.waitForExistence(timeout: 5)
@@ -185,6 +193,11 @@ final class AgentsTopMotionTests: XCTestCase {
         for f in all {
             if let bar = f["topbar"], let field = f["float"], bar.a > 0.05, field.a > 0.05 {
                 XCTAssertGreaterThanOrEqual(field.y, bar.y + bar.h - 1, "\(step): the field under the shell's bar (bar \(bar), field \(field))")
+            }
+            // Nor both half drawn in the same rows: the bar's words fading out and the field's coming in ghosted (#4928).
+            if let bar = f["topbar"], let field = f["float"], (0.05...0.95).contains(bar.a), (0.05...0.95).contains(field.a),
+               field.y < bar.y + bar.h, bar.y < field.y + field.h {
+                XCTFail("\(step): the shell's bar and the field both half drawn in the same rows (bar \(bar), field \(field))")
             }
         }
         return all
