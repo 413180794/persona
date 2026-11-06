@@ -64,6 +64,20 @@ class HttpConnectorsManagementTest {
     }
 
     @Test
+    fun listConnectorsFailureIsThrownNotAnEmptyList() = withHub { server, api ->
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"internal","message":"boom"}"""))
+        val failure = runCatching { api.connectors(all = true) }.exceptionOrNull()
+        assertTrue("expected HubFailure, got $failure", failure is HubFailure)
+        assertEquals(500, (failure as HubFailure).status)
+    }
+
+    @Test
+    fun listConnectorsOnAnOlderHubIsEmpty() = withHub { server, api ->
+        server.enqueue(MockResponse().setResponseCode(404))
+        assertEquals(emptyList<Any>(), api.connectors(all = true))
+    }
+
+    @Test
     fun setConnectorEnabled() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"id":"github","name":"GitHub","status":"ok","enabled":true}"""))
         val result = api.setConnectorEnabled("github", true)

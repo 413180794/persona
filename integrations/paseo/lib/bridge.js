@@ -106,6 +106,7 @@ export function createPaseoBridge(deps = {}, options = {}) {
   function reindex() {
     bySession.clear()
     for (const { agent } of agents.values()) index(agent)
+    retarget()
   }
 
   function index(agent) {
@@ -134,7 +135,10 @@ export function createPaseoBridge(deps = {}, options = {}) {
     const oldSession = prev ? sessionIdOf(prev.agent, roots) : undefined
     agents.set(agent.id, { agent, project: project ?? prev?.project })
     if (oldSession && oldSession !== sessionIdOf(agent, roots)) reindex()
-    else index(agent)
+    else {
+      index(agent)
+      retarget()
+    }
     // Its requests: new ones to the phone, those no longer pending off it.
     const pending = new Set((agent.pendingPermissions ?? []).map((r) => r?.id))
     for (const r of agent.pendingPermissions ?? []) askFor(agent.id, r)
@@ -711,13 +715,33 @@ export function createPaseoBridge(deps = {}, options = {}) {
     void follow(sessionId)
   }
 
+  /**
+   * Watched sessions another agent now has (bySession moved: one closed, another took the session on): the watch
+   * leaves the old agent's timeline and follows the new one's, whose content is another history.
+   */
+  function retarget() {
+    for (const [sessionId, w] of watches) {
+      const agentId = bySession.get(sessionId)
+      if (!agentId || agentId === w.agentId) continue
+      clearTimeout(w.timer)
+      paseo.release(w.sub)
+      if (w.live.text) rt.streamEnd(sessionId)
+      watches.set(sessionId, { agentId, transcript: w.transcript, sub: undefined, last: 0, safe: undefined, epoch: undefined,
+        timer: undefined, fetching: false, again: false, live: { key: '', text: '' }, switched: true })
+      void follow(sessionId)
+      scheduleRefresh(sessionId)
+    }
+  }
+
   async function follow(sessionId) {
     const w = watches.get(sessionId)
     if (!w || !paseo.connected) return
+    paseo.release(w.sub) // followed again on this connection (an old one's subscriptions are gone with it: a no-op)
     w.sub = undefined
     try {
       const res = await paseo.subscribe('agent.timeline.set_subscription.request', { agentIds: [w.agentId] }, (inner) => onTimeline(sessionId, w, inner))
-      if (watches.get(sessionId) !== w) paseo.release(res?.subscriptionId)
+      // Gone meanwhile, or followed twice (a reconnect's follow while another was under way): one subscription.
+      if (watches.get(sessionId) !== w || w.sub !== undefined) paseo.release(res?.subscriptionId)
       else w.sub = res?.subscriptionId
     } catch (err) {
       log(`paseo: follow ${w.agentId}: ${err.message}`)
@@ -773,14 +797,18 @@ export function createPaseoBridge(deps = {}, options = {}) {
     try {
       const agent = agents.get(w.agentId)?.agent
       if (!agent || !paseo.connected) return
-      const incremental = w.epoch !== undefined && w.safe !== undefined
+      // Another agent's timeline (switched) is read whole, whatever a page read of it set meanwhile.
+      const incremental = !w.switched && w.epoch !== undefined && w.safe !== undefined
       let res = await fetchTimeline(agent.id, incremental ? { epoch: w.epoch, seq: w.safe } : undefined)
       if (watches.get(sessionId) !== w) return
       const moved = !incremental || res.reset || res.staleCursor || res.gap || res.epoch !== w.epoch
-      if (moved && incremental) res = await fetchTimeline(agent.id)
+      if (moved && incremental) {
+        res = await fetchTimeline(agent.id)
+        if (watches.get(sessionId) !== w) return
+      }
       const tl = timelineItems(res.entries, { maxSeq: res.window?.maxSeq, running: isRunning(res.agent ?? agent), echoes })
       const h = history(agent.id, res.epoch)
-      if (moved && w.epoch !== undefined && w.epoch !== res.epoch) {
+      if (moved && (w.switched || (w.epoch !== undefined && w.epoch !== res.epoch))) {
         // Another history: the phone takes the whole conversation again.
         rt.append(sessionId, { items: [], toSeq: tl.toSeq, history: h })
         w.last = tl.toSeq
@@ -792,6 +820,7 @@ export function createPaseoBridge(deps = {}, options = {}) {
         }
       }
       w.epoch = res.epoch
+      w.switched = false
       w.safe = Math.min(tl.safeSeq, w.last)
       if (tl.lastText) lastTexts.set(agent.id, tl.lastText)
     } catch (err) {

@@ -20,13 +20,11 @@ class HttpConnectorsManagement internal constructor(
 
     override suspend fun connectors(all: Boolean): List<HubConnector> {
         val path = if (all) "/api/v1/connectors?all=1" else "/api/v1/connectors"
-        return try {
-            val body = parse(call(path, "GET")) as? JsonObject ?: return emptyList()
-            val list = body["connectors"] as? JsonArray ?: return emptyList()
-            decode { JsonCodec.decodeFromJsonElement(ListSerializer(HubConnector.serializer()), list) }
-        } catch (_: Exception) {
-            emptyList()
-        }
+        // Only an older hub without the list (404) has none; any other failure is the page's error to show (#4814).
+        val text = try { call(path, "GET") } catch (failure: HubFailure) { if (failure.status == 404) return emptyList() else throw failure }
+        val body = parse(text) as? JsonObject ?: return emptyList()
+        val list = body["connectors"] as? JsonArray ?: return emptyList()
+        return decode { JsonCodec.decodeFromJsonElement(ListSerializer(HubConnector.serializer()), list) }
     }
 
     override suspend fun setConnectorEnabled(id: String, enabled: Boolean): HubConnector {

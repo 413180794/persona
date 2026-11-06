@@ -169,6 +169,46 @@ test("a Claude Code session's watch is its live text only: the node reads the tr
   assert.equal(fake.requestsOf('fetch_agent_timeline_request').filter((r) => r.agentId === a.claude.id).length, 0, 'its timeline is not read')
 })
 
+test('a watched session another agent takes on: the watch follows that agent, and its content is another history', async (t) => {
+  const { fake, node, bridge, a } = await setup(t)
+  // A Claude session (its items are the transcript's): the live text of the agent that has it now.
+  fake.update(a.claude.id, { status: 'closed' })
+  await until('closed', () => bridge.state.agents.get(a.claude.id)?.agent.status === 'closed')
+  await call(node, 'session.watch', { session_id: SID, since_seq: 0, transcript: true })
+  await until('followed', () => [...fake.subs.values()].some((s) => s.kind === 'timeline' && s.agentIds.includes(a.claude.id)))
+  const b = agentSnapshot({ provider: 'my-claude', cwd: '/tmp', title: 'A again', status: 'running',
+    persistence: { provider: 'my-claude', sessionId: SID, metadata: { provider: 'claude' } }, runtimeInfo: { provider: 'claude', sessionId: SID } })
+  fake.upsert(b, PROJECT)
+  await until('the new agent followed', () => [...fake.subs.values()].some((s) => s.kind === 'timeline' && s.agentIds.includes(b.id)))
+  assert.equal(bridge.state.watches.get(SID).agentId, b.id)
+  assert.ok(fake.requestsOf('subscription.release.request').length > 0, 'the old agent is let go')
+  fake.stream(b.id, { type: 'timeline', provider: 'claude', turnId: 't1', item: { type: 'assistant_message', text: '接着说', messageId: 'm1' } }, 5)
+  await until('its live text', () => node.all('session.delta').some((d) => d.session_id === SID && d.text === '接着说'))
+
+  // An agent whose items are its timeline: the new one's goes out as another history.
+  const id = 'paseo-e1' // the labeled agent's session
+  fake.setTimeline(a.labeled.id, [entry(1, { type: 'user_message', text: '一', messageId: 'u1' }), entry(2, { type: 'assistant_message', text: '答一' }),
+    entry(3, { type: 'user_message', text: '二', messageId: 'u2' })])
+  await call(node, 'session.watch', { session_id: id, since_seq: 0 })
+  await until('followed', () => [...fake.subs.values()].some((s) => s.kind === 'timeline' && s.agentIds.includes(a.labeled.id)))
+  fake.update(a.labeled.id, { status: 'closed' })
+  const c = agentSnapshot({ provider: 'my-claude', cwd: '/tmp', title: 'E again', status: 'running', labels: { 'persona.session': id },
+    persistence: { provider: 'my-claude', sessionId: SID2, metadata: { provider: 'claude' } } })
+  fake.setTimeline(c.id, [entry(1, { type: 'user_message', text: '一', messageId: 'u1' })])
+  fake.upsert(c, PROJECT)
+  const pushed = await until('another history', () => node.all('session.items').find((x) => x.session_id === id && x.history?.startsWith(`paseo:${c.id}:`)))
+  assert.equal(pushed.to_seq, 1)
+  assert.equal(pushed.from_seq, undefined, 'not a continuation of the old agent')
+  // The phone reads the new agent's page, then it writes on: pushed from its own seq, not the old agent's.
+  await call(node, 'session.items', { session_id: id, turns: 3 })
+  fake.setTimeline(c.id, [entry(1, { type: 'user_message', text: '一', messageId: 'u1' }), entry(2, { type: 'assistant_message', text: '新答' })])
+  fake.update(c.id, { status: 'idle' })
+  fake.stream(c.id, { type: 'turn_completed', provider: 'claude', turnId: 't2' })
+  const next = await until('the new agent writes on', () => node.all('session.items').find((x) => x.session_id === id && x.items.some((i) => i.text === '新答')))
+  assert.equal(next.from_seq, 1)
+  assert.equal(next.history, pushed.history)
+})
+
 test('sending: into the running turn, once per message, images as Paseo takes them', async (t) => {
   const { fake, node, a } = await setup(t)
   await call(node, 'session.send', { session_id: SID, text: '继续', client_msg_id: 'cm-1', images: [{ mime: 'image/png', data: 'iVBO' }] })
