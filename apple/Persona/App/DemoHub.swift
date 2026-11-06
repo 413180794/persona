@@ -177,7 +177,12 @@ final class DemoHub {
         switch p {
         case ["health"]: return ["ok": true, "version": "demo"]
         case ["machines"]: return ["machines": .array(machines)]
-        case ["metrics"]: return ["machines": .array(machines.compactMap { $0["id"]?.string }.map { metrics($0, span: 3600, step: 60) }), "step": 60]
+        case ["metrics"]:
+            return ["machines": .array(machines.compactMap { $0["id"]?.string }.map { id in
+                guard case .object(var o) = metrics(id, span: 3600, step: 60) else { return .null }
+                if let card = usageCard(id) { o["usage"] = card }
+                return .object(o)
+            }), "step": 60]
         case ["sessions"]: return ["sessions": .array(sessions)]
         case ["usage", "windows"]: return Self.usageWindows()
         case ["interactions"]: return ["interactions": .array(interactions)]
@@ -222,6 +227,8 @@ final class DemoHub {
         case ("machines", 3):
             let id = p[1]
             switch p[2] {
+            case "usage":
+                return ["usage": usage(id, range: q["range"] ?? "24h", model: q["model"], launcher: q["launcher"])]
             case "metrics":
                 let (span, step) = ["6h": (6 * 3600, 60), "24h": (86400, 240)][q["range"] ?? ""] ?? (3600, 10)
                 return ["metrics": metrics(id, span: span, step: step), "range": .string(q["range"] ?? "1h"), "step": .number(Double(step))]
@@ -790,6 +797,93 @@ final class DemoHub {
         return (cpu: (cpu * 10).rounded() / 10, load: ((cores * cpu / 100 * (0.9 + 0.3 * h)) * 100).rounded() / 100,
                 mem: (memFrac * memory).rounded(), swap: (p.swap * Self.gb).rounded(), rx: rx.rounded(), tx: (rx * p.tx * (0.7 + 0.6 * h)).rounded(),
                 disk: (p.disk * p.diskTotal * Self.gb).rounded())
+    }
+
+    // MARK: Token usage (docs/machines.md "Token usage")
+
+    /// Which models and launchers a demo machine runs, and its share of the work.
+    private static let usageMix: [String: (scale: Double, runs: [(model: String, launcher: String, share: Double)])] = [
+        "server": (1, [("claude-opus-5-5", "claude", 0.62), ("gpt-5.5", "codex", 0.3), ("claude-haiku-5-5", "claude", 0.08)]),
+        "macbook": (0.55, [("claude-opus-5-5", "claude", 0.7), ("claude-sonnet-5-5", "sonnetcc", 0.3)]),
+        "studio": (0.25, [("claude-opus-5-5", "claude", 1)]),
+    ]
+
+    /// A made-up minute of a machine's usage: quiet nights, busy afternoons, one bucket per model and launcher.
+    private func usageMinute(_ mid: String, _ minute: Int) -> [(model: String, launcher: String, tokens: UsageTokens)] {
+        guard let mix = Self.usageMix[mid], present(mid, minute) else { return [] }
+        let hour = Double(minute % 86400) / 3600
+        let work = (1...15).contains(hour) ? max(0.02, sin(Double.pi * (hour - 1) / 14)) : 0.03
+        let jitter = Double(abs((minute / 60 &* 2_654_435_761 &+ mid.count &* 97) % 1000)) / 1000
+        let w = work * (0.5 + jitter) * mix.scale
+        return mix.runs.map { r in
+            let f = w * r.share
+            let codex = r.model.hasPrefix("gpt")
+            return (r.model, r.launcher, UsageTokens(input: Int64(2600 * f * (0.5 + jitter)), cacheWrite: codex ? 0 : Int64(21000 * f * (0.4 + jitter)),
+                                                     cacheRead: Int64(310_000 * f * (codex ? 0.8 : 1)), output: Int64(5400 * f * (0.6 + jitter)),
+                                                     requests: max(1, Int(f * 6))))
+        }
+    }
+
+    private static func json(_ t: UsageTokens) -> [String: JSONValue] {
+        ["in": .number(Double(t.input)), "cache_write": .number(Double(t.cacheWrite)), "cache_read": .number(Double(t.cacheRead)),
+         "out": .number(Double(t.output)), "req": .number(Double(t.requests))]
+    }
+
+    /// GET /api/v1/machines/{id}/usage, like the manager's.
+    private func usage(_ mid: String, range: String, model: String?, launcher: String?) -> JSONValue {
+        let (span, step) = ["1h": (3600, 60), "7d": (7 * 86400, 3600)][range] ?? (86400, 600)
+        let now = Int(Date.now.timeIntervalSince1970)
+        let first = (now - span) / step * step + step
+        let wantLauncher = launcher == "-" ? "" : launcher
+        var points: [JSONValue] = []
+        var total = UsageTokens()
+        var models: [String: UsageTokens] = [:], launchers: [String: UsageTokens] = [:]
+        // A week by minute is 10,000 minutes: sample each step's middle minute, scaled to the step.
+        let perStep = max(1, step / 60)
+        var t = first
+        while t <= now / step * step {
+            var sum = UsageTokens()
+            let sample = usageMinute(mid, t + step / 2 / 60 * 60)
+            for r in sample {
+                let scaled = UsageTokens(input: r.tokens.input * Int64(perStep), cacheWrite: r.tokens.cacheWrite * Int64(perStep),
+                                         cacheRead: r.tokens.cacheRead * Int64(perStep), output: r.tokens.output * Int64(perStep),
+                                         requests: r.tokens.requests * perStep)
+                if wantLauncher == nil || r.launcher == wantLauncher { models[r.model, default: UsageTokens()] = models[r.model, default: UsageTokens()] + scaled }
+                if model == nil || r.model == model { launchers[r.launcher, default: UsageTokens()] = launchers[r.launcher, default: UsageTokens()] + scaled }
+                if (model == nil || r.model == model) && (wantLauncher == nil || r.launcher == wantLauncher) { sum = sum + scaled }
+            }
+            total = total + sum
+            var p = Self.json(sum)
+            p["t"] = .number(Double(t))
+            if sample.isEmpty, Self.usageMix[mid] != nil, !present(mid, t + step - 60) { p["gap"] = true }
+            points.append(.object(p))
+            t += step
+        }
+        let shares = { (m: [String: UsageTokens]) -> JSONValue in
+            .array(m.sorted { $0.value.total > $1.value.total }.map { name, v in .object(Self.json(v).merging(["name": .string(name)]) { a, _ in a }) })
+        }
+        return ["machine_id": .string(mid), "online": .bool(online(mid)), "range": .string(range), "step": .number(Double(step)),
+                "points": .array(points), "total": .object(Self.json(total)), "models": shares(models), "launchers": shares(launchers),
+                "launchers_known": true, "stored": true]
+    }
+
+    /// A machine's tokens on its card.
+    private func usageCard(_ mid: String) -> JSONValue? {
+        guard Self.usageMix[mid] != nil else { return nil }
+        let now = Int(Date.now.timeIntervalSince1970)
+        let minute = now / 60 * 60
+        var today = UsageTokens()
+        var t = now / 86400 * 86400
+        while t <= minute { // every 10 minutes, scaled: enough for a demo's total
+            for r in usageMinute(mid, t) {
+                today = today + UsageTokens(input: r.tokens.input * 10, cacheWrite: r.tokens.cacheWrite * 10, cacheRead: r.tokens.cacheRead * 10,
+                                            output: r.tokens.output * 10, requests: r.tokens.requests * 10)
+            }
+            t += 600
+        }
+        let recent = (0..<60).map { i in usageMinute(mid, minute - (59 - i) * 60).reduce(Int64(0)) { $0 + $1.tokens.total } }
+        return ["today": .object(Self.json(today)), "per_minute": .number(Double(recent.suffix(3).reduce(0, +) / 3)),
+                "recent": .array(recent.map { .number(Double($0)) })]
     }
 
     private func metrics(_ mid: String, span: Int, step: Int) -> JSONValue {

@@ -82,6 +82,9 @@ struct MachinesView: View {
                 if !machines.isEmpty {
                     summary(machines, alerts: alerts.values.filter { $0 > .normal }, waiting: tallies.values.reduce(0) { $0 + $1.needsYou })
                 }
+                // Today's tokens across the computers, from their cards' usage (#4973).
+                let shares = machines.compactMap { m in metrics[m.ref]?.usage.map { (name: m.name, usage: $0) } }
+                if !shares.isEmpty { TodayTokensCard(shares: shares) }
                 if model.isMultiHub {
                     // Several groups of hubs: one block each, under its name (docs/multi-hub.md).
                     ForEach(model.groupIDs, id: \.self) { g in
@@ -278,6 +281,8 @@ struct MachineCard: View {
     /// Its latest values (and for Machines the last hour); nil until they come, or from a hub without machine monitoring.
     var metrics: MachineMetrics?
     var showsMetrics = true
+    /// Off at the top of its own page, whose title is the name already.
+    var showsName = true
     /// In Machines' grid: as tall as the row, an online card's counts and charts at the bottom so they line up across it
     /// (an offline card keeps its words at the top). At the top of a machine's page it is as tall as its content.
     var fillsRow = false
@@ -294,8 +299,11 @@ struct MachineCard: View {
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         // Color.primary / Color.secondary, not .primary / .secondary: the hierarchical styles come out a step
                         // lighter where the card sits in a section header.
-                        Text(machine.name).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
-                        Text(Self.subtitle(machine, system: system)).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
+                        if showsName {
+                            Text(machine.name).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
+                        }
+                        // One line: "4 cores" no longer breaks in the middle on a narrow card.
+                        Text(Self.subtitle(machine, system: system)).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(1)
                     }
                     Spacer(minLength: Theme.Space.sm)
                     status
@@ -393,7 +401,85 @@ struct MachineCard: View {
                     ChartSeries(name: String(localized: "Up"), color: MetricColor.tx) { $0.tx },
                 ], domain: domain, yMax: nil)
             }
+            if let usage = metrics?.usage {
+                MetricCell(title: String(localized: "Tokens"), value: TokenFormat.perMinute(usage.perMinute),
+                           detail: String(localized: "Today \(TokenFormat.count(usage.today.total))"), level: .normal) {
+                    let (minutes, value) = Self.usageSparkline(usage, now: end)
+                    Sparkline(points: minutes, series: [ChartSeries(name: String(localized: "Tokens"), color: UsageColor.total) { value[$0.t] }],
+                              domain: domain, yMax: nil)
+                }
+            }
         }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The last hour of all tokens by minute as points for a sparkline, and each minute's value.
+    static func usageSparkline(_ usage: UsageCard, now: Date) -> ([MetricPoint], [Int64: Double]) {
+        let minute = Int64(now.timeIntervalSince1970) / 60 * 60
+        var values: [Int64: Double] = [:]
+        let points = usage.recent.enumerated().map { i, n in
+            let t = minute - Int64(usage.recent.count - 1 - i) * 60
+            values[t] = Double(n)
+            return MetricPoint(t: t)
+        }
+        return (points, values)
+    }
+}
+
+/// Today's tokens across the computers (#4973): the total, every token per minute now, the cache hit rate, and each
+/// computer's share as a bar in shades of the text ink (the four kinds' colors are the charts').
+struct TodayTokensCard: View {
+    var shares: [(name: String, usage: UsageCard)]
+
+    var body: some View {
+        let today = shares.reduce(UsageTokens()) { $0 + $1.usage.today }
+        let perMinute = shares.reduce(Int64(0)) { $0 + $1.usage.perMinute }
+        let ranked = shares.filter { $0.usage.today.total > 0 }.sorted { $0.usage.today.total > $1.usage.today.total }
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text("Today's Tokens").font(Theme.Font.heading)
+            HStack(alignment: .top, spacing: Theme.Space.m) {
+                cell(String(localized: "Total [Token Usage]"), TokenFormat.count(today.total))
+                cell(String(localized: "Now [Token Usage]"), TokenFormat.perMinute(perMinute))
+                cell(String(localized: "Cache Hit Rate"), today.hitRate.map { $0.formatted(.percent.precision(.fractionLength(0))) } ?? "—")
+            }
+            if today.total > 0 {
+                GeometryReader { g in
+                    HStack(spacing: Theme.Space.xxs) {
+                        ForEach(Array(ranked.enumerated()), id: \.offset) { i, s in
+                            Capsule().fill(Color.primary.opacity(Self.shade(i)))
+                                .frame(width: max(Theme.Size.dotXS, g.size.width * Double(s.usage.today.total) / Double(today.total)))
+                        }
+                    }
+                }
+                .scaledFrame(height: Theme.Size.dotS)
+                .accessibilityHidden(true)
+                FlowLayoutRow {
+                    ForEach(Array(ranked.enumerated()), id: \.offset) { i, s in
+                        HStack(spacing: Theme.Space.xs) {
+                            Circle().fill(Color.primary.opacity(Self.shade(i))).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
+                            Text(s.name).font(Theme.Font.label).lineLimit(1)
+                            Text(TokenFormat.count(s.usage.today.total)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(padding: 14)
+        .accessibilityIdentifier("machines.tokens")
+    }
+
+    /// The share bar's shade for the i-th largest: darkest first.
+    static func shade(_ i: Int) -> Double { max(0.85 - Double(i) * 0.2, 0.2) }
+
+    private func cell(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            Text(title).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            Text(value).font(Theme.Font.bodyStrong.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 }

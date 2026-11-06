@@ -137,10 +137,15 @@ struct NodeHealthSection: View {
             .padding(.horizontal, Theme.Space.l)
             .padding(.bottom, Theme.Space.m)
         }
-        Divider()
-        ForEach(features) { f in
-            if f.id != features.first?.id { Divider().padding(.leading, Theme.Space.l) }
-            HealthFeatureRow(feature: f)
+        // Everything works and nothing to repair: the summary says it, the features wait behind Show All Checks, so the
+        // section is two rows instead of a screen (#4973).
+        let folded = summary.attention == 0 && fixable.isEmpty && info.isEmpty && !showsAll
+        if !folded {
+            Divider()
+            ForEach(features) { f in
+                if f.id != features.first?.id { Divider().padding(.leading, Theme.Space.l) }
+                HealthFeatureRow(feature: f)
+            }
         }
         ForEach(info, id: \.name) { c in
             Divider().padding(.leading, Theme.Space.l)

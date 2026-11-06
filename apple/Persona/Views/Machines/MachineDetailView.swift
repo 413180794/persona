@@ -62,7 +62,7 @@ struct MachineDetailView: View {
             VStack(alignment: .leading, spacing: Theme.Space.section) {
                 if let machine {
                     VStack(spacing: Theme.Space.m) {
-                        MachineCard(machine: machine, metrics: data, showsMetrics: false)
+                        MachineCard(machine: machine, metrics: data, showsMetrics: false, showsName: false)
                         // The card says a known error_code in words; the hub's own words stay here.
                         if AddComputerText.machineProblem(machine.errorCode) != nil, let raw = machine.error, !raw.isEmpty {
                             problemDetails(raw)
@@ -71,11 +71,8 @@ struct MachineDetailView: View {
                     }
                     agentsSection(machine)
                     filesRow(online: online)
-                    // The node's self-check by feature, after the engine as on the web (#3018).
-                    NodeHealthSection(ref: ref, machine: machine)
-                    if let computer = machine.computer { ComputerSection(ref: ref, computer: computer, online: online) }
-                    if let browser = machine.browser { BrowserSection(ref: ref, browser: browser, online: online) }
-                    if machine.browser?.setUp == true { BrowserLoginsSection(ref: ref, online: online) }
+                    // Its token usage, then how busy it is, then what it can do (#4973).
+                    MachineUsageSection(ref: ref)
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
                         heading(String(localized: "Monitor [Message Views fdc390]"))
                         if let s = data?.latest, online { NowGrid(sample: s, cores: system?.cores) }
@@ -84,6 +81,11 @@ struct MachineDetailView: View {
                         charts(system: system)
                         if let cores = data?.latest?.cores, online, cores.count > 1 { CoreBars(cores: cores) }
                     }
+                    // The node's self-check by feature (#3018); two rows when everything works.
+                    NodeHealthSection(ref: ref, machine: machine)
+                    if let computer = machine.computer { ComputerSection(ref: ref, computer: computer, online: online) }
+                    if let browser = machine.browser { BrowserSection(ref: ref, browser: browser, online: online) }
+                    if machine.browser?.setUp == true { BrowserLoginsSection(ref: ref, online: online) }
                     if let system {
                         VStack(alignment: .leading, spacing: Theme.Space.m) {
                             heading(String(localized: "System"))

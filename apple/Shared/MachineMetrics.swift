@@ -103,11 +103,13 @@ nonisolated struct MachineMetrics: Codable, Hashable, Sendable, Identifiable {
     var system: MachineSystem?
     var latest: MetricSample?
     var points: [MetricPoint]
+    /// Its tokens, on the dashboard only; nil from an older hub or a node that never reported usage.
+    var usage: UsageCard?
 
     var id: String { machineID }
 
     enum CodingKeys: String, CodingKey {
-        case machineID = "machine_id", online, system, latest, points
+        case machineID = "machine_id", online, system, latest, points, usage
     }
 }
 

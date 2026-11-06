@@ -2209,6 +2209,29 @@
       },
       "extractionState": "manual"
     },
+    "%@ tokens in this range, peak %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ tokens in this range, peak %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この期間に %1$@ トークン、最大 %2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段时间共 %1$@ token，最高 %2$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "%@ total": {
       "localizations": {
         "en": {
@@ -5992,13 +6015,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld machine running high"
+                  "value": "%1$lld under heavy load"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$lld machines running high"
+                  "value": "%1$lld under heavy load"
                 }
               }
             }
@@ -6013,7 +6036,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld 台用量偏高"
+            "value": "%1$lld 台负载偏高"
           }
         }
       },
@@ -8996,6 +9019,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "6 小时"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "7 Days": {
+      "comment": "Token usage chart range",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 Days"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 日"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 天"
           }
         }
       },
@@ -12593,6 +12640,29 @@
       },
       "extractionState": "manual"
     },
+    "All Launchers": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Launchers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのランチャー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部启动器"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "All Machines": {
       "localizations": {
         "en": {
@@ -12611,6 +12681,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "全部机器"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "All Models": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Models"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのモデル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部模型"
           }
         }
       },
@@ -18156,6 +18249,29 @@
       },
       "extractionState": "manual"
     },
+    "By Kind": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By Kind"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "種類別"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分类"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "By Machine": {
       "localizations": {
         "en": {
@@ -18174,6 +18290,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "按机器"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "By Model": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By Model"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデル別"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按模型"
           }
         }
       },
@@ -18473,6 +18612,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "CPU、内存、网络每 10 秒更新，曲线是最近 1 小时。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Cache Hit Rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache Hit Rate"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュヒット率"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存命中率"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Cache Read": {
+      "comment": "Token usage: tokens read from the prompt cache",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache Read"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュ読み取り"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存读"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Cache Write": {
+      "comment": "Token usage: tokens written to the prompt cache",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache Write"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュ書き込み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存写"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Cache read ÷ (input + cache write + cache read). Steps with very few replies aren't drawn.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache read ÷ (input + cache write + cache read). Steps with very few replies aren't drawn."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュ読み取り ÷（入力 + キャッシュ書き込み + キャッシュ読み取り）。応答がごく少ない区間は描画しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存读 ÷（输入 + 缓存写 + 缓存读）。回复很少的时段不画。"
           }
         }
       },
@@ -23261,6 +23494,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "清除草稿并重新开始"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Clear Filters": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Filters"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "絞り込みを解除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除筛选"
           }
         }
       },
@@ -34175,6 +34431,29 @@
       },
       "extractionState": "manual"
     },
+    "Deploy a newer hub to see this computer's token usage here.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deploy a newer hub to see this computer's token usage here."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しい hub をデプロイすると、このコンピュータのトークン使用量がここに表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部署新版本的 hub 后，这里会显示这台电脑的 token 用量。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Deploy failed: %@": {
       "localizations": {
         "en": {
@@ -43935,6 +44214,53 @@
       },
       "extractionState": "manual"
     },
+    "Hit %@": {
+      "comment": "A model's cache hit rate, as in Hit 94%",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hit %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヒット %1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命中 %1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Hit Rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hit Rate"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヒット率"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命中率"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Host": {
       "localizations": {
         "en": {
@@ -45818,6 +46144,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入方式"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Input [Token Usage]": {
+      "comment": "Token usage: input tokens not from the cache",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Input"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "入力"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入"
           }
         }
       },
@@ -48073,6 +48423,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "密钥库密码"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Kind": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kind"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "種類"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "类别"
           }
         }
       },
@@ -61342,6 +61715,75 @@
       },
       "extractionState": "manual"
     },
+    "No usage for this filter in this range.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No usage for this filter in this range."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この期間、条件に合う使用量はありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段时间里没有符合筛选的用量。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "No usage in the last 7 days.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No usage in the last 7 days."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "過去 7 日間の使用量はありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 7 天没有用量。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "No usage in this range. Try a longer one.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No usage in this range. Try a longer one."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この期間の使用量はありません。より長い期間をお試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段时间没有用量，换个更长的范围看看。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "No valid send result yet. Check again later.": {
       "localizations": {
         "en": {
@@ -64272,6 +64714,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "現在%1$@、最大%2$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Now [Token Usage]": {
+      "comment": "Token usage: all tokens per minute right now",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在"
           }
         }
       },
@@ -68288,6 +68754,30 @@
       },
       "extractionState": "manual"
     },
+    "Output [Token Usage]": {
+      "comment": "Token usage: output tokens",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Output"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出力"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输出"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Overdue": {
       "localizations": {
         "en": {
@@ -69365,6 +69855,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "每个核心"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Per minute": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per minute"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 分あたり"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每分钟"
           }
         }
       },
@@ -76865,6 +77378,30 @@
       },
       "extractionState": "manual"
     },
+    "Replies": {
+      "comment": "Token usage: the model's replies (requests)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replies"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "応答"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回复"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Replies %lld": {
       "localizations": {
         "en": {
@@ -79494,6 +80031,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "SF Mono（系统）"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Shaded: the computer was offline. Its usage fills in once it's back.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shaded: the computer was offline. Its usage fills in once it's back."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "網掛けの時間帯はコンピュータがオフラインでした。再接続すると使用量が補完されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灰色时段电脑离线，连上后用量会补齐。"
           }
         }
       },
@@ -85275,6 +85835,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看每个账号的窗口"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Shows only this model's usage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows only this model's usage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このモデルの使用量だけを表示します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只看这个模型的用量"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Shows or hides it in the chart": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows or hides it in the chart"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グラフに表示または非表示にします"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在图上显示或隐藏"
           }
         }
       },
@@ -98789,6 +99395,29 @@
       },
       "extractionState": "manual"
     },
+    "This computer's node doesn't record launchers yet. Update it to filter by launcher.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer's node doesn't record launchers yet. Update it to filter by launcher."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータの node はまだランチャーを記録していません。ランチャーで絞り込むには更新してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑的 node 还不记录启动器，更新后才能按启动器筛选。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "This computer's node is too old. Update it to run the self-check here.": {
       "localizations": {
         "en": {
@@ -101066,6 +101695,29 @@
       },
       "extractionState": "manual"
     },
+    "Throughput": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throughput"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スループット"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吞吐"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Thu": {
       "comment": "Weekday, short: Thursday",
       "localizations": {
@@ -101735,6 +102387,29 @@
       },
       "extractionState": "manual"
     },
+    "Today's Tokens": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today's Tokens"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日のトークン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今天的 Token"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Token": {
       "shouldTranslate": true,
       "localizations": {
@@ -101781,6 +102456,29 @@
       },
       "extractionState": "manual"
     },
+    "Token Usage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token Usage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トークン使用量"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token 用量"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Token for “%@”": {
       "localizations": {
         "en": {
@@ -101822,6 +102520,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "配对链接里的 token"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Token throughput": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token throughput"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トークンのスループット"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token 吞吐"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Tokens": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokens"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トークン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token"
           }
         }
       },
@@ -102116,6 +102860,30 @@
       "extractionState": "manual"
     },
     "Total": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合計"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合计"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Total [Token Usage]": {
+      "comment": "Token usage: every token, cache reads included",
       "localizations": {
         "en": {
           "stringUnit": {

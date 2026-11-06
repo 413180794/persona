@@ -544,6 +544,15 @@ nonisolated struct APIClient: Sendable {
         struct R: Decodable { var metrics: MachineMetrics }
         return try await get("/api/v1/machines/\(machine)/metrics", query: ["range": range.rawValue], as: R.self).metrics
     }
+    /// A machine's token usage over a range (docs/machines.md "Token usage"); model / launcher nil: all ("" is the
+    /// unknown launcher, sent as "-"). 404 from a hub before it.
+    func machineUsage(_ machine: String, range: UsageRange, model: String? = nil, launcher: String? = nil) async throws -> MachineUsageSeries {
+        struct R: Decodable { var usage: MachineUsageSeries }
+        var query = ["range": range.rawValue]
+        if let model { query["model"] = model }
+        if let launcher { query["launcher"] = launcher.isEmpty ? "-" : launcher }
+        return try await get("/api/v1/machines/\(machine)/usage", query: query, as: R.self).usage
+    }
     func sessions() async throws -> [Session] {
         let data = try await request("GET", "/api/v1/sessions")
         return stamp(try await Task.detached(priority: .userInitiated) {

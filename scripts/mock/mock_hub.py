@@ -280,6 +280,7 @@ if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose jarvisd is another b
 
 # ---------- node self-check (#2429, docs/machines.md "Self-check") ----------
 # GET /api/v1/machines/{mid}/doctor and POST …/doctor/fix: the report `personad node doctor` prints, as the hub relays it.
+#   MOCK_TOKENS=none (a hub without per-machine token usage: no card tokens, the usage route 404s) | empty (nothing ran)
 #   MOCK_DOCTOR=healthy (default) | stale (hooks and MCP files out of date, "Repair" puts them right) | broken (node.sock gone)
 #                | mixed (stale files, the user's own PermissionRequest hook, no runtime.sock) | old (the node has no such method)
 #                | error (the check fails) | slow (the check takes MOCK_DOCTOR_SECONDS, default 3)
@@ -444,6 +445,95 @@ def machine_metrics(mid, span, step):
     m = next(x for x in MACHINES if x["id"] == mid)
     return {"machine_id": mid, "online": m["online"], "system": m.get("system"), "latest": metric_latest(mid),
             "points": metric_series(mid, span, step)}
+
+
+# Token usage by machine (docs/machines.md "Token usage", #4973). MOCK_TOKENS=none: a hub before it (the usage route
+# answers 404, the cards have no tokens); =empty: no machine ran anything. The studio's node is an older one (its usage
+# names no launcher), the NAS is offline (its monitoring stops 3 hours ago, and so does its usage).
+MOCK_TOKENS = os.environ.get("MOCK_TOKENS", "")
+USAGE_MIX = {  # machine: [(model, launcher, share)]
+    "server": [("claude-opus-5-5", "claude", 0.62), ("gpt-5.5", "codex", 0.3), ("claude-haiku-5-5", "claude", 0.08)],
+    "macbook": [("claude-opus-5-5", "claude", 0.7), ("claude-sonnet-5-5", "sonnetcc", 0.3)],
+    "studio": [("claude-opus-5-5", "", 1.0)],
+    "nas": [("claude-haiku-5-5", "claude", 1.0)],
+}
+USAGE_SCALE = {"server": 1.0, "macbook": 0.55, "studio": 0.25, "nas": 0.05}
+
+
+def usage_minute(mid, minute):
+    """A made-up minute of a machine's usage, one bucket per model and launcher: quiet nights, busy afternoons."""
+    import math
+    if MOCK_TOKENS == "empty" or mid not in USAGE_MIX or not metrics_present(mid, minute):
+        return []
+    hour = (minute % 86400) / 3600  # UTC; the shape only has to look like a day
+    work = max(0.02, math.sin(math.pi * (hour - 1) / 14)) if 1 <= hour <= 15 else 0.03
+    h = int(hashlib.md5(f"u{mid}{minute}".encode()).hexdigest()[:6], 16) / 0xFFFFFF
+    if h < 0.25 and work < 0.2:
+        return []
+    w = work * (0.5 + h) * USAGE_SCALE[mid] * (1.6 if mid == "server" and minute > T0 - 25 * 60 else 1)
+    out = []
+    for model, launcher, share in USAGE_MIX[mid]:
+        f = w * share
+        cr, cw = int(310000 * f), int(21000 * f * (0.4 + h))
+        inp, o = int(2600 * f * (0.5 + h)), int(5400 * f * (0.6 + h))
+        if "gpt" in model:
+            cr, cw = int(cr * 0.8), 0  # Codex has no cache write
+        if cr + cw + inp + o:
+            out.append({"minute": minute, "model": model, "launcher": launcher, "in": inp, "cache_write": cw,
+                        "cache_read": cr, "out": o, "req": max(1, int(f * 6))})
+    return out
+
+
+def usage_sum(rows):
+    t = {"in": 0, "cache_write": 0, "cache_read": 0, "out": 0, "req": 0}
+    for r in rows:
+        for k in t:
+            t[k] += r[k]
+    return t
+
+
+def machine_usage(mid, rng, model=None, launcher=None):
+    """GET /api/v1/machines/{id}/usage, like the manager: the range's steps, the filters, the shares, the breaks."""
+    span, step = {"1h": (3600, 60), "24h": (86400, 600), "7d": (7 * 86400, 3600)}[rng]
+    now = int(time.time())
+    first = (now - span) // step * step + step
+    rows = []
+    for minute in range(first, now // 60 * 60 + 1, 60):
+        rows.extend(usage_minute(mid, minute))
+    keep = lambda r, by_model=True, by_launcher=True: (not by_model or model is None or r["model"] == model) and (
+        not by_launcher or launcher is None or r["launcher"] == launcher)
+    points = []
+    for t in range(first, now // step * step + 1, step):
+        mine = [r for r in rows if t <= r["minute"] < t + step and keep(r)]
+        p = {"t": t, **usage_sum(mine)}
+        if not mine and not metrics_present(mid, t + step - 60):
+            p["gap"] = True
+        points.append(p)
+
+    def shares(by):
+        names = {}
+        for r in rows:
+            if keep(r, by_model=by != "model", by_launcher=by != "launcher"):
+                names.setdefault(r[by], []).append(r)
+        out = [{"name": n, **usage_sum(v)} for n, v in names.items()]
+        return sorted(out, key=lambda x: -(x["in"] + x["cache_write"] + x["cache_read"] + x["out"]))
+    m = next(x for x in MACHINES if x["id"] == mid)
+    return {"machine_id": mid, "online": m["online"], "range": rng, "step": step, "points": points,
+            "total": usage_sum([r for r in rows if keep(r)]), "models": shares("model"), "launchers": shares("launcher"),
+            "launchers_known": mid != "studio", "stored": True}
+
+
+def usage_card(mid):
+    """A machine's tokens on its card (GET /api/v1/metrics's usage): today, per minute now, the last hour by minute."""
+    if MOCK_TOKENS == "none" or mid not in USAGE_MIX:
+        return None
+    now = int(time.time())
+    minute = now // 60 * 60
+    today = [r for t in range(now // 86400 * 86400, minute + 1, 60) for r in usage_minute(mid, t)]
+    tot = lambda rows: sum(r["in"] + r["cache_write"] + r["cache_read"] + r["out"] for r in rows)
+    recent = [tot(usage_minute(mid, minute - 60 * (59 - i))) for i in range(60)]
+    now_rows = [r for t in (minute - 120, minute - 60, minute) for r in usage_minute(mid, t)]
+    return {"today": usage_sum(today), "per_minute": int(tot(now_rows) / ((now - (minute - 120)) / 60)), "recent": recent}
 
 
 def sess(mid, sid, title, cwd, status, state, space, sidx, slot, slidx, minutes, last, agent="claude", pending=0, **kw):
@@ -10939,7 +11029,25 @@ class H(BaseHTTPRequestHandler):
             METRICS_ASKED = METRICS_ASKED or time.time()
             if MOCK_METRICS_FAIL == "1" or (MOCK_METRICS_FAIL == "after" and time.time() - METRICS_ASKED > 5):
                 return self.send_json({"error": "hub 暂时取不到监控数据"}, 503)
-            return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES if kept(m["id"])], "step": 60})
+            cards = []
+            for m in MACHINES:
+                if kept(m["id"]):
+                    c = machine_metrics(m["id"], 3600, 60)
+                    if (u := usage_card(m["id"])) is not None:
+                        c["usage"] = u
+                    cards.append(c)
+            return self.send_json({"machines": cards, "step": 60})
+        if p.startswith("/api/v1/machines/") and p.endswith("/usage") and p.count("/") == 5:
+            mid, r = p.split("/")[4], q.get("range", ["24h"])[0]
+            if MOCK_TOKENS == "none":
+                return self.send_json({"error": "not found"}, 404)
+            if not any(m["id"] == mid for m in MACHINES):
+                return self.send_json({"error": "no such machine"}, 404)
+            if r not in ("1h", "24h", "7d"):
+                return self.send_json({"error": "range is 1h, 24h or 7d"}, 400)
+            lw = q["launcher"][0] if "launcher" in q else None
+            return self.send_json({"usage": machine_usage(mid, r, q["model"][0] if "model" in q else None,
+                                                          "" if lw == "-" else lw)})  # "-": the unknown launcher
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
             r = q.get("range", ["1h"])[0]
             secs, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))

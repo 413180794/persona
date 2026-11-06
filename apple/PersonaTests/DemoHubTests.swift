@@ -37,6 +37,14 @@ import Testing
         #expect(day.latest != nil)
         let studio = try await api.machineMetrics("studio", range: .day)
         #expect(studio.points.contains { $0.gap == true }, "the Mac Studio's two hours away")
+        // Token usage (#4973): the cards carry it, the machine's page has every range and filter.
+        #expect(try await api.metricsOverview().contains { $0.usage?.today.total ?? 0 > 0 })
+        for r in UsageRange.allCases {
+            let u = try await api.machineUsage("server", range: r)
+            #expect(u.total.total > 0 && u.models.count == 3 && u.launchers.count == 2, "\(r)")
+        }
+        let codex = try await api.machineUsage("server", range: .day, launcher: "codex")
+        #expect(codex.models.map(\.name) == ["gpt-5.5"] && codex.total.cacheWrite == 0)
 
         let a = try await api.assistant()
         #expect(a.conversations.count >= 4)

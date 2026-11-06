@@ -241,17 +241,19 @@ removing the **Machine Monitoring** name and entry point.
 
 - **Entry points** (all open `MachinesView`): **Machines** in the new shell drawer; **Settings › Machines**; **Machines** at the bottom of the Agents list's top-left menu (`MachineListRoute`, opens in the right column on iPad);
   Mac sidebar **Machines** (⌘5). Top-right ⓘ on Projects / machine projects opens machine detail (`MachineDetailRoute`).
-- **Machines page** (`MachinesView`): top line "N/M online · K high-usage machines · J Agents need you". One card per machine (`MachineCard`): OS icon, name, OS · cores · memory,
+- **Machines page** (`MachinesView`): top line "N/M online · K under heavy load · J Agents need you". Under it **Today's Tokens** (`TodayTokensCard`, #4973): the total, every token per minute now,
+  the cache hit rate, and each computer's share as a bar in shades of the text ink (not the kinds' colors). One card per machine (`MachineCard`): OS icon, name, OS · cores · memory (one line),
   online / offline (last online time and SSH error when offline); alert tags ("Alerts" below); Agent counts **Needs you / Working / Idle** (Idle = Unread + Seen + Unknown,
-  live sessions only, excluding assistant chats, matching Agents list); current CPU / memory / network values and past-hour sparklines; **Redeploy** when personad and hub aren't from the same deployment.
+  live sessions only, excluding assistant chats, matching Agents list); current CPU / memory / network values and past-hour sparklines, and **Tokens** (per minute now, today's total, the past hour) when its node reports usage; **Redeploy** when personad and hub aren't from the same deployment.
   iPad / Mac cards form multiple columns according to width. Tap to open machine detail.
   Web deployment entry depends on `can_deploy`: old Link nodes prompt a one-time local upgrade; supported nodes show waiting for idle / transfer / restart / version confirmation; details in [node-update.md](node-update.md).
 - **Ordering** (`MachineConcern`): attention-needed first: offline → severe alerts → caution alerts → Agents needing you → version mismatch; within each category and for remaining machines, hub config order.
   Reorder only when something shown on the card changes, with animation.
-- **Machine detail** (`MachineDetailView`): everything on one page, common actions first. Same card at top (without metrics, shown below); when offline, next comes **Hub connects through SSH …** and **Reconnect**.
-  Then **Agents**: Needs you first, Working next, first 5 shown, **Show all N** for the rest; tap to open chat. Next **Engine** (which engine's sessions this machine shows; tap to choose, `EngineSelectionView`). Then **Monitoring**: current CPU / memory / network / load / disk / swap,
+- **Machine detail** (`MachineDetailView`): everything on one page, common actions first. Same card at top (without metrics or the name, the title has it); when offline, next comes **Hub connects through SSH …** and **Reconnect**.
+  Then **Agents**: Needs you first, Working next, first 5 shown, **Show all N** for the rest; tap to open chat. Next **Engine** (which engine's sessions this machine shows; tap to choose, `EngineSelectionView`). Then **Token Usage** (`MachineUsageSection`, see "Token usage charts" below). Then **Monitoring**: current CPU / memory / network / load / disk / swap,
   1 hour / 6 hours / 24 hours selector, four charts for CPU, memory, network (download + upload), load (dashed core-count line); Linux also has per-core bars.
-  Hold and drag any chart to inspect a time; all four share the selected timestamp, showing its value and time in the header. Then **System** (OS, kernel, architecture, model, processor,
+  Hold and drag any chart to inspect a time; all four share the selected timestamp, showing its value and time in the header. Then **What This Computer Can Do** (two rows when everything works:
+  the summary and **Show All Checks**; the features show when something needs attention or after **Show All Checks**), the computer and browser sections, **System** (OS, kernel, architecture, model, processor,
   cores, memory, hostname, boot time and uptime, herdr / Claude Code / node versions), **Launchers**, and, when online, connection method and **Reconnect** last.
 - **Updates**: machine online state and Agents update live through hub pushes; numbers poll only while page is visible and App foreground: Machines every 10 seconds, detail's 1-hour range every 10 seconds, other ranges every minute;
   stops in background (`task(id: scenePhase)`). Pull to refresh (Mac ⌘R, `macRefreshes`) also reloads the machine list.
@@ -269,6 +271,23 @@ Follow dataviz rules:
 - Values use body color; series color appears only on lines and legend dots. Two-line charts (network) have dot + name legends; single-line titles name the metric.
 - Status colors (caution yellow, severe red) only indicate alerts, not ordinary series.
 - Each chart has a VoiceOver description (current value, maximum).
+
+### Token usage charts
+
+`MachineUsageSection` (`apple/Persona/Views/Machines/UsageCharts.swift`), from `GET /api/v1/machines/{id}/usage`:
+
+- **Controls**: 1 hour / 24 hours (default) / 7 days; **All Models** and **All Launchers** menus (from the response's shares; the unknown launcher is **Other**; greyed out with a note for an older node).
+- **Numbers**: the range's total, output, cache hit rate and replies.
+- **Throughput** per minute: **Total** (one line) or **By Kind** (default): input, output, cache write and cache read stacked from the bottom. Tapping a legend entry hides that kind (cache reads are often nine tenths of all tokens;
+  hiding them shows input and output). The legend lists the range's sums, or the held moment's per-minute values. Offline time is shaded.
+- **Cache hit rate**: cache read / (input + cache write + cache read), one line broken at steps with fewer than three replies or offline.
+- **By Model**: each model's total and hit rate; tapping one filters by it.
+- **Holding** either chart shows that moment in both. Polls every 20 seconds on the 1-hour range, every minute otherwise, only in front.
+- **States**: an older hub (404) says to deploy a newer one; a range or filter with no usage says so in the chart (with **Clear Filters**).
+- **Colors** (`UsageColor`, `apple/Shared/Design`): input blue, output orange, cache write violet, cache read teal, light and dark steps of the categorical palette, validated in the stacking order
+  (adjacent pairs ΔE ≥ 24.7 light / 17.3 dark for color-blind readers). Light teal is under 3:1 on a light card, so the legend always writes the numbers.
+- **Numbers** use `TokenFormat` (`apple/Shared/TokenUsage.swift`): K / M / B, three significant digits, no trailing zeros, under 1,000 as is, a rounding to 1,000 moves up a unit (999,500 → 1M). The web uses the same rules.
+- Screenshots: the mock hub serves usage for every machine (the Mac Studio's node is an older one, the NAS is offline); `MOCK_TOKENS=none` is a hub without it, `=empty` one where nothing ran; `-openUsageRange 1h|24h|7d` opens a range.
 
 ## Doctor: what this computer can do (#2429)
 
