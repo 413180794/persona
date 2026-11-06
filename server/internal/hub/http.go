@@ -95,6 +95,21 @@ func (h *Hub) routes() http.Handler {
 		q := r.URL.Query()
 		return map[string]any{"cwd": q.Get("cwd"), "skip": atoi(q.Get("skip")), "limit": atoi(q.Get("limit"))}
 	}))
+	// The Git panel's writes and the branch's pull request (#6121, node gitwrite.go / gitpr.go): each one a click of
+	// the user's that the client confirmed; a commit's hooks and a push may take a while.
+	api.HandleFunc("GET /api/v1/machines/{mid}/git/branches", h.proxy("git.branches", func(r *http.Request) any {
+		return map[string]any{"cwd": r.URL.Query().Get("cwd")}
+	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/git/pr", h.proxy("git.pr", func(r *http.Request) any {
+		return map[string]any{"cwd": r.URL.Query().Get("cwd")}
+	}))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/stage", h.proxyBody("git.stage"))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/commit", h.proxyBodyFor("git.commit", 5*time.Minute))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/push", h.proxyBodyFor("git.push", 3*time.Minute))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/switch", h.proxyBody("git.switch"))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/stash", h.proxyBody("git.stash"))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/pr", h.proxyBodyFor("git.pr_create", 2*time.Minute))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/pr/merge", h.proxyBodyFor("git.pr_merge", 3*time.Minute))
 	api.HandleFunc("POST /api/v1/machines/{mid}/files", h.withMachine(h.uploadFile))
 	api.HandleFunc("GET /api/v1/machines/{mid}/claude-settings", h.proxy("claude.settings", func(r *http.Request) any {
 		return map[string]any{"locale": h.requestLang(r)}
@@ -525,6 +540,12 @@ func (h *Hub) sessionImage(w http.ResponseWriter, r *http.Request, m *Machine) {
 
 // proxyBody forwards a POST body (plus session_id from the path) to the node.
 func (h *Hub) proxyBody(method string) http.HandlerFunc {
+	// Resuming an offline session can take a while (shell + claude startup).
+	return h.proxyBodyFor(method, 90*time.Second)
+}
+
+// proxyBodyFor is proxyBody that waits up to timeout for the node.
+func (h *Hub) proxyBodyFor(method string, timeout time.Duration) http.HandlerFunc {
 	return h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		p := map[string]any{}
 		if r.ContentLength != 0 {
@@ -541,8 +562,7 @@ func (h *Hub) proxyBody(method string) http.HandlerFunc {
 		if method == "claude.settings.set" {
 			p["locale"] = h.requestLang(r)
 		}
-		// Resuming an offline session can take a while (shell + claude startup).
-		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 		var out json.RawMessage
 		if err := m.call(ctx, method, p, &out); err != nil {

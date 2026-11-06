@@ -1178,6 +1178,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "git.log":
 		list, err := n.gitLog(ctx, p.Cwd, p.Skip, p.Limit)
 		return map[string]any{"commits": list}, err
+	case "git.stage", "git.commit", "git.push", "git.branches", "git.switch", "git.stash", "git.pr", "git.pr_create", "git.pr_merge":
+		return n.gitWrite(ctx, method, params) // the Git panel's writes and pull request (gitwrite.go, gitpr.go)
 	case "skills.list": // the skills the assistant gets on this machine (docs/hub-update.md "Moving skills out of the binary")
 		cwd := p.Cwd
 		if cwd == "" {
