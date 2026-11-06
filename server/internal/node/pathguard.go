@@ -50,8 +50,9 @@ var hubKeyExt = map[string]bool{".key": true, ".p8": true, ".pem": true, ".crt":
 var dataSecrets = []string{"hub.json", "link.json", "tailcat.json", "tailcat-hub.json", "daemons.json", "manager.json", "apns",
 	"relay.json", "relay.secret", "devices.json", "mail_accounts.json"}
 
-// dataSecretDirs are folders in the data folder refused whole: the launchers' merged settings hold their tokens.
-var dataSecretDirs = []string{"launcher-settings"}
+// dataSecretDirs are folders in the data folder (or a manager's folder) refused whole: the launchers' merged settings
+// hold their tokens, tls/ the hub's TLS key (hub/public.go), link-tls/ Persona Link's (link/tlsid.go).
+var dataSecretDirs = []string{"launcher-settings", "tls", "link-tls"}
 
 // procSecrets are what Linux's /proc holds besides the processes' own folders that hands out a secret: the kernel's
 // memory, its log, its symbols' addresses, the keyrings' entries and the page tables (#4172).
@@ -78,21 +79,8 @@ func (n *Node) offLimits(path string) error {
 	}
 	// The hub's, the node's and the managers' own folders: the credentials in them and the keys beside them (secret.key,
 	// handles.key, hub.key, the APNs .p8), wherever PERSONA_HOME puts the folder.
-	if rel, ok := n.inDataDir(p); ok {
-		base := filepath.Base(p)
-		if hubKeyExt[filepath.Ext(base)] {
-			return errOffLimits
-		}
-		for _, part := range strings.Split(rel, "/") {
-			if slices.Contains(dataSecretDirs, part) {
-				return errOffLimits
-			}
-		}
-		for _, name := range dataSecrets {
-			if strings.HasPrefix(base, name) {
-				return errOffLimits
-			}
-		}
+	if slices.ContainsFunc(n.inDataDirs(p), dataSecret) {
+		return errOffLimits
 	}
 	if n.home == "" {
 		return nil
@@ -112,6 +100,30 @@ func (n *Node) offLimits(path string) error {
 		}
 	}
 	return nil
+}
+
+// dataSecret says whether rel, a folded path in a data folder, is one of its credentials. They are matched only where
+// they are written: directly in the folder or in a manager's (managers/<id>/), or anywhere in a folder that holds
+// nothing else. Not at any depth: with PERSONA_HOME=~ the data folder is the home, and a project's link.json or
+// certs/dev.pem below it is the project's own.
+func dataSecret(rel string) bool {
+	parts := strings.Split(rel, "/")
+	if len(parts) > 2 && parts[0] == "managers" {
+		parts = parts[2:]
+	}
+	if len(parts) > 1 {
+		return slices.Contains(dataSecretDirs, parts[0])
+	}
+	base := parts[0]
+	if hubKeyExt[filepath.Ext(base)] {
+		return true
+	}
+	for _, name := range dataSecrets {
+		if strings.HasPrefix(base, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // pseudoFSSecret says whether the folded path p is a secret Linux's /proc or /sys makes up as it is read (#4172).
@@ -147,22 +159,24 @@ func isPID(s string) bool {
 	return true
 }
 
-// inDataDir says whether the folded path p is in a data folder, and where in it: one named .persona or .jarvis
-// anywhere (this machine's, another user's, a copy), or the one PERSONA_HOME names for this node (identity.DataDir), as
-// written or with its links followed.
-func (n *Node) inDataDir(p string) (string, bool) {
+// inDataDirs are where the folded path p is in each data folder it is in: one named .persona or .jarvis anywhere
+// (this machine's, another user's, a copy), and the one PERSONA_HOME names for this node (identity.DataDir), as
+// written or with its links followed. Every one is kept, not the first: a data folder PERSONA_HOME puts below a
+// .persona folder (~/.persona/inst2) has its credentials where they are written in it, not one level below .persona.
+func (n *Node) inDataDirs(p string) []string {
+	var rels []string
 	parts := strings.Split(p, "/")
 	for i, part := range parts {
 		if part == ".persona" || part == ".jarvis" {
-			return strings.Join(parts[i+1:], "/"), true
+			rels = append(rels, strings.Join(parts[i+1:], "/"))
 		}
 	}
 	for _, dir := range n.dataDirs() {
 		if rel, ok := strings.CutPrefix(p, dir+"/"); ok {
-			return rel, true
+			rels = append(rels, rel)
 		}
 	}
-	return "", false
+	return rels
 }
 
 // dataDirs are this node's data folder (folded), as written and with its links followed: looked up once, not on

@@ -232,3 +232,138 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 		t.Errorf("list the data folder: %v", err)
 	}
 }
+
+// With PERSONA_HOME=~ the data folder is the home folder: its credentials are refused where they are written (directly
+// in it, in a manager's folder, in the folders that hold only credentials), not every project file of the same name
+// or kind anywhere under the home.
+func TestPathGuardDataDirIsHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "~")
+	t.Setenv("JARVIS_HOME", "")
+	n := &Node{home: home}
+	refused := []string{
+		"hub.json", "hub.json.bak-20261106", "secret.key", "handles.key", "link.json", "tailcat.json", "tailcat-hub.json",
+		"daemons.json", "relay.json", "relay.secret", "devices.json.migrated", "mail_accounts.json", "apns.json", "apns_key.p8",
+		"managers/m1/manager.json", "managers/m1/secret.key", "managers/m1/handles.key",
+		"launcher-settings/work-claude-settings.json", "tls/hub.key", "tls/hub.crt", "link-tls/link.key",
+		".ssh/config", ".claude.json",
+	}
+	readable := []string{
+		"code/app/certs/dev.pem", "code/app/link.json", "code/app/devices.json", "code/svc/tls.crt", "notes/apns-setup.md",
+		"code/link.json", "code/launcher-settings/notes.md", "code/managers/m1/manager.json", "data/people/a.md",
+		"managers/m1/data/people/a.md",
+	}
+	for _, rel := range append(slices.Clone(refused), readable...) {
+		p := filepath.Join(home, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(`{"token":"x"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, rel := range refused {
+		if _, err := n.readFile("~/"+rel, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read ~/%s: %v, want it refused", rel, err)
+		}
+	}
+	for _, rel := range readable {
+		if _, err := n.readFile("~/"+rel, "", 0, false); err != nil {
+			t.Errorf("read ~/%s: %v", rel, err)
+		}
+	}
+	// A link or a way round with .. does not make a credential readable.
+	if err := os.Symlink(home, filepath.Join(home, "code/back")); err != nil {
+		t.Skip("symlinks:", err)
+	}
+	for _, rel := range []string{"code/back/hub.json", "code/back/managers/m1/manager.json", "code/../link.json", "code/app/../../tls/hub.key"} {
+		if _, err := n.readFile("~/"+rel, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read ~/%s: %v, want it refused", rel, err)
+		}
+	}
+	if _, err := n.listDir("~/code/app", ""); err != nil {
+		t.Errorf("list ~/code/app: %v", err)
+	}
+}
+
+// In the default layout every credential the guard knows stays refused, directly, in a manager's folder, in the
+// credential-only folders and through a link into the data folder; the rest of the data folder stays readable.
+func TestPathGuardDataDirDefaultLayout(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
+	t.Setenv("JARVIS_HOME", "")
+	n := &Node{home: home}
+	refused := []string{
+		".persona/hub.json", ".persona/hub.json.bak-20261106", ".persona/secret.key", ".persona/handles.key",
+		".persona/link.json", ".persona/tailcat.json", ".persona/tailcat-hub.json", ".persona/daemons.json",
+		".persona/relay.json", ".persona/relay.secret", ".persona/devices.json", ".persona/mail_accounts.json.migrated",
+		".persona/apns.json", ".jarvis/apns_key.p8", ".persona/managers/m1/manager.json", ".persona/managers/m1/secret.key",
+		".persona/launcher-settings/work-env-settings.json", ".persona/tls/hub.key", ".persona/tls/hub.crt",
+		".persona/link-tls/link.key", ".persona/link-tls/link.crt",
+	}
+	readable := []string{".persona/data/people/a.md", ".persona/managers/m1/data/people/a.md", "code/link.json", "code/certs/dev.pem"}
+	for _, rel := range append(slices.Clone(refused), readable...) {
+		p := filepath.Join(home, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(`{"token":"x"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(home, ".persona"), filepath.Join(home, "code/state")); err != nil {
+		t.Skip("symlinks:", err)
+	}
+	for _, rel := range refused {
+		if _, err := n.readFile("~/"+rel, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read ~/%s: %v, want it refused", rel, err)
+		}
+	}
+	for _, rel := range []string{"code/state/hub.json", "code/state/managers/m1/manager.json", "code/state/tls/hub.key", "code/../.persona/link.json"} {
+		if _, err := n.readFile("~/"+rel, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read ~/%s: %v, want it refused", rel, err)
+		}
+	}
+	for _, rel := range readable {
+		if _, err := n.readFile("~/"+rel, "", 0, false); err != nil {
+			t.Errorf("read ~/%s: %v", rel, err)
+		}
+	}
+	if _, err := n.listDir("~/.persona", ""); err != nil {
+		t.Errorf("list the data folder: %v", err)
+	}
+}
+
+// A data folder PERSONA_HOME puts below a .persona or .jarvis folder (a second instance, ~/.persona/inst2) keeps its
+// credentials refused: they are matched where they are written in it, not only one level below the .persona folder.
+func TestPathGuardDataDirNestedInPersona(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "~/.persona/inst2")
+	t.Setenv("JARVIS_HOME", "")
+	n := &Node{home: home}
+	refused := []string{
+		".persona/inst2/hub.json", ".persona/inst2/secret.key", ".persona/inst2/tls/hub.key",
+		".persona/inst2/managers/m1/manager.json", ".persona/inst2/launcher-settings/work-env-settings.json",
+		".persona/hub.json", ".persona/tls/hub.key",
+	}
+	readable := []string{".persona/inst2/data/people/a.md", ".persona/inst2/managers/m1/data/people/a.md"}
+	for _, rel := range append(slices.Clone(refused), readable...) {
+		p := filepath.Join(home, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(`{"token":"x"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, rel := range refused {
+		if _, err := n.readFile("~/"+rel, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read ~/%s: %v, want it refused", rel, err)
+		}
+	}
+	for _, rel := range readable {
+		if _, err := n.readFile("~/"+rel, "", 0, false); err != nil {
+			t.Errorf("read ~/%s: %v", rel, err)
+		}
+	}
+}
