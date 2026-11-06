@@ -147,6 +147,18 @@ There is no gate on the bus any more: every manager may call every method and pu
 
 ## Settings › Managers in the apps
 
+### Shared bot credentials (web)
+
+The web page warns when two or more managers report the same enabled Feishu bot (app ID) or bound, enabled WeChat account. It names the managers and platform and recommends using a separate bot or account for each manager: sharing credentials may disrupt delivery or disconnect clients. This is advisory; it does not stop either manager or change routing. One manager alone produces no warning.
+
+Managers include `bot_identities: [{kind, id}]` in `extensions.report`, with `kind` equal to `feishu` or `wechat`. These are stable account identities, never app secrets or access tokens; a WeChat display name is not an identity. Disabled or unbound bots and standby managers report no corresponding identity. Binding, unbinding and enabling changes refresh the report.
+
+The hub compares each installed manager's latest report, including reports retained while a manager is offline. `GET /api/v1/managers` adds `bot_conflicts: [{platform, managers: [id, ...]}]` only when duplicates exist; raw bot identities are not returned to clients. Changed identity reports push the existing `managers` event so an open page rereads the roster. Removing a manager removes its contribution. Old managers without this report field cannot be checked; other managers' reports remain in memory only and must arrive again after a hub restart, following the existing report retention policy.
+
+For screenshots, `MOCK_SHARED_BOTS=1` on the mock hub adds Feishu and WeChat conflicts between two sample managers.
+
+### Roster and actions
+
 Every client has the same page (web: `docs/web.md`, Android: `docs/android.md`). On iOS and the Mac it is the **Managers** row in Settings' server section (`SettingsPage.managers`, `Persona/Views/Settings/ManagersView.swift`; logic and words in `ManagersModel.swift`, tests `ManagersModelTests`):
 
 - The list shows each manager's name, a Default chip, a status dot with Online / Offline · last synced … / Installing · code expires in n min, and where it runs (host · OS · the hub's own / service / container / standalone).

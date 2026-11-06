@@ -496,5 +496,6 @@ func (h *Manager) updateBot(ctx context.Context, enabled *bool, appID, secret, d
 	if reconnect {
 		h.restartBot()
 	}
+	h.sendReport()
 	return nil
 }

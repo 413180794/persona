@@ -2,12 +2,12 @@
 // online or when it last synced, the default; one's details with Rename / Set as default / Install elsewhere / Delete; New manager gives a
 // one-time install code (and the install commands when the hub has them). The list follows the hub's `managers` pushes.
 import { useCallback, useEffect, useState } from "react";
-import { t } from "../../i18n";
+import { formatList, t } from "../../i18n";
 import { clock, secondsLeft } from "../../lib/connect-device";
 import { ago } from "../../lib/format";
 import {
   createManager, deleteBlocked, deleteManager, listManagers, makeDefault, managerError, NAME_MAX, newInstallCode, renameManager, statusLine,
-  unsupported, validName, whereText, type InstallCode, type Manager, type Tone,
+  unsupported, validName, whereText, type BotConflict, type InstallCode, type Manager, type Tone,
 } from "../../lib/managers";
 import { onHubEvent } from "../../lib/store";
 import { Button, copyText, cx, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
@@ -36,6 +36,7 @@ interface Shown {
 
 export function ManagersSettings() {
   const [list, setList] = useState<Manager[] | null>(null);
+  const [conflicts, setConflicts] = useState<BotConflict[]>([]);
   const [error, setError] = useState("");
   const [old, setOld] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
@@ -46,7 +47,7 @@ export function ManagersSettings() {
   const load = useCallback(
     () =>
       listManagers()
-        .then((r) => (setList(r.managers ?? []), setError("")))
+        .then((r) => (setList(r.managers ?? []), setConflicts(r.bot_conflicts ?? []), setError("")))
         .catch((e) => (unsupported(e) ? setOld(true) : setError(managerError(e)))),
     [],
   );
@@ -67,6 +68,24 @@ export function ManagersSettings() {
   const current = list.find((m) => m.id === open) ?? null;
   return (
     <>
+      {!!conflicts.length && (
+        <div role="alert" className="mb-6 flex items-start gap-3 rounded-card bg-orange-tint p-4 text-sm leading-relaxed">
+          <Icon name="warning" className="mt-1 size-4 shrink-0 text-orange" />
+          <div className="min-w-0 flex-1 break-words">
+            <h3 className="font-medium text-orange">{t("settings-managers.bot_conflicts_title")}</h3>
+            <ul className="mt-2 space-y-1 text-ink">
+              {conflicts.map((conflict, i) => (
+                <li key={i}>
+                  {t(`settings-managers.bot_conflict_${conflict.platform}`, {
+                    names: formatList(conflict.managers.map((id) => list.find((m) => m.id === id)?.name ?? id)),
+                  })}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-ink-2">{t("settings-managers.bot_conflicts_hint")}</p>
+          </div>
+        </div>
+      )}
       <Group
         footer={t("settings-managers.hint")}
         right={

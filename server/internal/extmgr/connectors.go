@@ -373,6 +373,9 @@ func (h *Manager) setConnectorEnabled(ctx context.Context, id string, on bool) e
 	if err := h.connectors.SetEnabled(id, on); err != nil {
 		return err
 	}
+	if id == "wechat" {
+		defer h.sendReport()
+	}
 	if was != on {
 		h.auditConnector(ctx, id, auditConnectorEnabled, map[string]any{"enabled": on})
 	}
@@ -520,7 +523,13 @@ func (s connectorSecrets) Save(ctx context.Context, data []byte) error {
 	if err != nil {
 		return err
 	}
-	return st.PutConnectorSecret(ctx, s.id, sealed)
+	if err := st.PutConnectorSecret(ctx, s.id, sealed); err != nil {
+		return err
+	}
+	if s.id == "wechat" {
+		s.h.reportWeChatIdentity(data)
+	}
+	return nil
 }
 
 func (s connectorSecrets) Delete(ctx context.Context) error {
@@ -528,7 +537,13 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 	if st == nil {
 		return nil
 	}
-	return st.DeleteConnectorSecret(ctx, s.id)
+	if err := st.DeleteConnectorSecret(ctx, s.id); err != nil {
+		return err
+	}
+	if s.id == "wechat" {
+		s.h.reportWeChatIdentity(nil)
+	}
+	return nil
 }
 
 // startConnectors registers the connectors, applies the user's switches and runs them.

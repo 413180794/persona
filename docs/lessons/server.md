@@ -2,6 +2,13 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Shared bot identities across managers (2026-11-06, #5826)
+
+- Compare each manager's extension report before merging away ownership. Ignore repeated identities within one manager, empty identities, and managers removed from the roster. Offline reports describe the last known configuration, not confirmed live connections.
+- WeChat's displayed account label may be localized or truncated. Compare the stable `user_id` in its encrypted binding instead, and refresh the report when binding secrets are saved or deleted as well as when the channel is enabled or disabled. Never report the credential object or access token.
+- The same secret store also saves WeChat polling cursors and context tokens. Compare the account identity before rebuilding an extension report; an unchanged account does not need to rebuild its look assets on every poll.
+- Identity changes must send the existing `managers` event; otherwise the warning stays stale while Settings is open. Keep raw identities out of the roster response: the platform and matching manager IDs are enough for the warning.
+
 ## Permission disclosures and legacy UI fallbacks must use the response language (#5057)
 
 - Keep compatibility-origin error resources separate from polished response summaries: changing the English resource used by `ErrEnglish.Error()` also changes legacy clients without a language header. Project explicit-language HTTP responses and old flattened status copies onto the new summary key instead.

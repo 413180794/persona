@@ -49,5 +49,9 @@
   "install_docker": "用 Docker",
   "commands_note": "在要运行它的电脑上执行其中一条命令，装好后它会出现在列表里。安装码只能用一次。",
   "code_note": "在要运行它的电脑上用这个安装码装好管理者，装好后它会出现在列表里。",
-  "copy": "复制"
+  "copy": "复制",
+  "bot_conflicts_title": "机器人凭据被多个管理者共用",
+  "bot_conflict_feishu": "{names}使用同一个飞书机器人 App ID。",
+  "bot_conflict_wechat": "{names}使用同一个微信账号。",
+  "bot_conflicts_hint": "这些提示基于各管理者最后上报的设置，包含离线管理者。消息可能被其他管理者接收，或连接互相干扰。请为每个管理者配置独立的机器人或微信账号。"
 }

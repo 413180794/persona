@@ -278,7 +278,10 @@ func (h *Manager) Hello(res json.RawMessage) {
 	h.isMemberNow.Store(hl.Assistant.Standby)
 	if was != hl.Assistant.Standby && h.extensions != nil {
 		go h.extensions.roleChanged(context.Background()) // a member's center runs what runs once (mesh_group.go)
-		go h.restartBot()                                 // the center's Feishu bot answers for the group
+		go func() {
+			h.restartBot() // the center's Feishu bot answers for the group
+			h.sendReport()
+		}()
 	}
 }
 
@@ -476,6 +479,7 @@ func (h *Manager) sendReport() {
 	same := string(raw) == string(h.reportSent)
 	if !same {
 		h.reportSent = raw
+		h.reportBotIdentities = r.BotIdentities
 	}
 	h.reportMu.Unlock()
 	if same || h.opts.Hub == nil {
@@ -490,7 +494,7 @@ func (h *Manager) sendReport() {
 
 // report is what the hub shows of the extensions now.
 func (h *Manager) report() extwire.Report {
-	r := extwire.Report{Features: h.features(), Machines: map[string]extwire.MachineExtras{}}
+	r := extwire.Report{Features: h.features(), Machines: map[string]extwire.MachineExtras{}, BotIdentities: h.botIdentities()}
 	if h.extensions != nil {
 		r.ScreenKeepAwake = h.cua().awake()
 		r.Looks = h.extensionLooks()

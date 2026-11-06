@@ -1876,7 +1876,13 @@ def managers_route(h, method, p):
     if p == "/api/v1/managers" and method == "GET":
         out = [dict(m, default=True) if m["id"] == dflt else m for m in ms]
         out.sort(key=lambda m: (m["id"] != dflt, bool(m.get("installing"))))
-        return h.send_json({"managers": out, "default": dflt}) or True
+        reply = {"managers": out, "default": dflt}
+        if os.environ.get("MOCK_SHARED_BOTS") == "1":
+            # Two managers report the same Feishu app and WeChat account; identities stay on the hub.
+            shared = [m["id"] for m in out if m["id"] in ("assistant", "m-3fa21c")]
+            reply["bot_conflicts"] = [{"platform": platform, "managers": shared}
+                                      for platform in ("feishu", "wechat")] if len(shared) > 1 else []
+        return h.send_json(reply) or True
     body = json.loads(getattr(h, "last_body", b"") or b"{}")
     if p == "/api/v1/managers" and method == "POST":
         name = str(body.get("name") or "").strip()
@@ -13499,6 +13505,7 @@ def features():
 MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_PLUGINS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
 MOCK_HELP.append("MOCK_MANAGER_EXPIRED=1  设置 › 管理者：多一个安装码过期了还没装的（码已过期，可以拿新的安装码），和一个过期超过 7 天的（像 hub 一样不在名册里）")
 MOCK_HELP.append("MOCK_MANAGER_COMMANDS=1  设置 › 管理者：新建 / 换个地方装的回答带安装命令（commands.service / docker）；MOCK_MANAGERS=0 是还没有名册的旧 hub（/api/v1/managers 404）")
+MOCK_HELP.append("MOCK_SHARED_BOTS=1  Settings > Managers: two managers share a Feishu app and a WeChat account (#5826)")
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
 MOCK_HELP.append("MOCK_INBOX_SOURCES=none  还没接任何消息来源：收件箱空、没有邮箱账号、飞书没设置、GitHub 没登录（#4480）")
 MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试「全部清理」的「将清理 N 件」确认")

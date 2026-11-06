@@ -67,6 +67,13 @@ func init() {
 		from := c.managerID()
 		before := h.extReport()
 		old := h.keepExtReport(from, &r)
+		var oldBots []extwire.BotIdentity
+		if old != nil {
+			oldBots = old.BotIdentities
+		}
+		if !slices.Equal(oldBots, r.BotIdentities) {
+			h.managersChanged()
+		}
 		after := h.extReport()
 		h.errorReportsChanged() // error_reports came or went (error_reports.go)
 		if old == nil || !slices.Equal(before.Features, after.Features) || !machineExtrasEqual(before.Machines, after.Machines) {

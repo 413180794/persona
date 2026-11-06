@@ -50,5 +50,9 @@
   "install_docker": "With Docker",
   "commands_note": "Run one of these on the computer that will run it. Once installed, it shows up in the list. The code works once.",
   "code_note": "Install the manager with this code on the computer that will run it. Once installed, it shows up in the list.",
-  "copy": "Copy"
+  "copy": "Copy",
+  "bot_conflicts_title": "Shared bot credentials",
+  "bot_conflict_feishu": "{names} use the same Lark bot app ID.",
+  "bot_conflict_wechat": "{names} use the same WeChat account.",
+  "bot_conflicts_hint": "Based on each manager's last reported settings, including offline managers. Messages may reach a different manager, or connections may interrupt each other. Configure a separate bot or WeChat account for each manager."
 }

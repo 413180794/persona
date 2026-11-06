@@ -127,8 +127,9 @@ type Manager struct {
 
 	started chan struct{} // closed once Run started everything
 
-	reportMu   sync.Mutex
-	reportSent []byte
+	reportMu            sync.Mutex
+	reportSent          []byte
+	reportBotIdentities []extwire.BotIdentity
 }
 
 // New is the manager of opts; nothing runs until Run.

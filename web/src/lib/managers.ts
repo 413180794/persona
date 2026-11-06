@@ -30,6 +30,13 @@ export interface Manager {
 export interface ManagerList {
   managers: Manager[];
   default: string;
+  /** Matching bot identities across managers, without exposing account identifiers or secrets. */
+  bot_conflicts?: BotConflict[];
+}
+
+export interface BotConflict {
+  platform: "feishu" | "wechat";
+  managers: string[];
 }
 
 export interface InstallCode {

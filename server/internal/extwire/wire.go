@@ -156,6 +156,14 @@ type Report struct {
 	// Looks are the looks of the extensions that are on (docs/extensions.md "Looks"), with their files: the hub serves
 	// them as persona packages beside its own.
 	Looks []LookPackage `json:"looks,omitempty"`
+	// BotIdentities identify enabled bots for cross-manager conflict warnings. Never include credentials.
+	BotIdentities []BotIdentity `json:"bot_identities,omitempty"`
+}
+
+// BotIdentity is a platform's stable identifier, not a display name or an authentication token.
+type BotIdentity struct {
+	Kind string `json:"kind"` // feishu or wechat
+	ID   string `json:"id"`   // Feishu app ID or the bound WeChat user's ID
 }
 
 // LookPackage is one extension's look: the manifest's item and the files it names (SVGs cleaned).

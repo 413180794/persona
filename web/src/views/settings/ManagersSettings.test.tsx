@@ -20,6 +20,7 @@ vi.mock("../../lib/store", async (orig) => ({
 }));
 
 const { ApiError } = await import("../../lib/api");
+const { initI18n } = await import("../../i18n");
 const { ManagersSettings } = await import("./ManagersSettings");
 
 const soon = (min: number) => new Date(Date.now() + min * 60_000).toISOString();
@@ -43,10 +44,11 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
 });
-afterEach(() => {
+afterEach(async () => {
   act(() => root.unmount());
   host.remove();
   document.body.innerHTML = "";
+  await initI18n("zh-Hans");
 });
 
 const render = () => act(async () => root.render(<ManagersSettings />));
@@ -88,6 +90,51 @@ describe("设置 › 管理者", () => {
     await answer(1, { ...ROSTER, managers: [ROSTER.managers[0], { ...ROSTER.managers[3], online: true, installing: undefined, host: "PC" }] });
     expect(row("测试")?.textContent).toContain("在线 · PC");
     expect(row("家里")).toBeUndefined();
+  });
+
+  it("leaves old hubs and a single manager without a bot warning", async () => {
+    await render();
+    await answer(0, ROSTER);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => listeners.get("managers")!({ type: "managers" }));
+    await answer(1, { ...ROSTER, managers: [ROSTER.managers[0]], bot_conflicts: [] });
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it.each([
+    ["zh-Hans", "机器人凭据被多个管理者共用", "助手和工作使用同一个飞书机器人 App ID。", "工作和家里使用同一个微信账号。", "包含离线管理者", "请为每个管理者配置独立的机器人或微信账号"],
+    ["en", "Shared bot credentials", "助手 and 工作 use the same Lark bot app ID.", "工作 and 家里 use the same WeChat account.", "including offline managers", "Configure a separate bot or WeChat account for each manager"],
+    ["ja", "ボットの認証情報が共有されています", "助手、工作が同じLarkボットのApp IDを使用しています。", "工作、家里が同じWeChatアカウントを使用しています。", "オフラインのマネージャーを含む", "マネージャーごとに別のボットまたはWeChatアカウントを設定してください"],
+  ])("shows shared bot warnings in %s with manager names and guidance", async (lang, title, feishu, wechat, offline, guidance) => {
+    await initI18n(lang);
+    await render();
+    await answer(0, {
+      ...ROSTER,
+      bot_conflicts: [
+        { platform: "feishu", managers: ["assistant", "m-1"] },
+        { platform: "wechat", managers: ["m-1", "m-2"] },
+      ],
+    });
+    const alert = host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(title);
+    expect(alert?.textContent).toContain(feishu);
+    expect(alert?.textContent).toContain(wechat);
+    expect(alert?.textContent).toContain(offline);
+    expect(alert?.textContent).toContain(guidance);
+    expect(alert?.textContent).not.toContain("m-1");
+  });
+
+  it("updates names and clears conflicts after a managers event", async () => {
+    await render();
+    const bot_conflicts = [{ platform: "feishu", managers: ["assistant", "m-1"] }];
+    await answer(0, { ...ROSTER, bot_conflicts });
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("助手和工作");
+    await act(async () => listeners.get("managers")!({ type: "managers" }));
+    await answer(1, { ...ROSTER, bot_conflicts, managers: ROSTER.managers.map((m) => m.id === "m-1" ? { ...m, name: "新的工作" } : m) });
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("助手和新的工作");
+    await act(async () => listeners.get("managers")!({ type: "managers" }));
+    await answer(2, { ...ROSTER, bot_conflicts: [] });
+    expect(host.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("新建：起名字 → 安装码和命令，能复制", async () => {

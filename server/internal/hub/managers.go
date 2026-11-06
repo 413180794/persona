@@ -255,7 +255,11 @@ func (h *Hub) managerRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusServiceUnavailable, err)
 			return
 		}
-		writeJSON(w, map[string]any{"managers": list, "default": h.defaultManager(r.Context())})
+		out := map[string]any{"managers": list, "default": h.defaultManager(r.Context())}
+		if conflicts := h.managerBotConflicts(list); len(conflicts) > 0 {
+			out["bot_conflicts"] = conflicts
+		}
+		writeJSON(w, out)
 	})
 	// New manager: a name → its id and a one-time install code (ten minutes). It shows in the roster as installing
 	// until the code is traded (POST /api/v1/bus/join).
