@@ -16,6 +16,9 @@ type cache struct {
 	// gen counts each source's forgets: what was asked of it before one is not put back (a list or page answered
 	// late by a removed source must not outlive it).
 	gen map[string]int
+	// Called under mu so a late response cannot overwrite a removed or invalidated
+	// source's index. The callback never calls back into the cache.
+	onSessions func(source string, list []Session)
 }
 
 type sessionsEntry struct {
@@ -54,6 +57,9 @@ func (c *cache) putSessions(source string, gen int, list []Session) {
 		return
 	}
 	c.sessions[source] = sessionsEntry{list: list, at: time.Now()}
+	if c.onSessions != nil {
+		c.onSessions(source, list)
+	}
 }
 
 func (c *cache) getLatest(id string, limit int) (*MessagePage, bool) {
@@ -82,6 +88,7 @@ func (c *cache) putLatest(source string, gen int, id string, limit int, p *Messa
 func (c *cache) invalidate(source string, ids []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.gen[source]++ // reject in-flight lists fetched before this change
 	delete(c.sessions, source)
 	for _, id := range ids {
 		delete(c.latest, id)
@@ -94,6 +101,9 @@ func (c *cache) forget(source string) {
 	defer c.mu.Unlock()
 	c.gen[source]++
 	delete(c.sessions, source)
+	if c.onSessions != nil {
+		c.onSessions(source, nil)
+	}
 	for id := range c.latest {
 		if strings.HasPrefix(id, source+":") {
 			delete(c.latest, id)

@@ -23,6 +23,14 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - A staged upgrade preview captures its old manifest. Return a presentation copy with regenerated permission lines, including bundled previews, rather than mutating the stored preview or using whatever version happens to be installed later.
 - UI downgrade captions, default loading labels, file badges, and review actions are hub-owned text too. Pass the UI locale through all fitting paths, including widgets and shortcuts; absent body locale retains the user's legacy language. Widget cache keys already include locale.
 
+## Large Agents lists have two different collections (#5929)
+
+- Claude Code / Codex runtime sessions come from `/api/v1/sessions`, not `/api/v1/agents/sessions`; the latter belongs to extension personal-agent bridges, and `/api/v1/agents` is source/setup status. Check client callers before optimizing the similarly named endpoint.
+- HTTP pagination alone does not bound startup traffic: the existing `sessions_delta` socket still sends a whole initial snapshot. Opt into `sessions_list` for lightweight invalidations and HTTP revision recovery; never silently change delivery for legacy Android, which still needs complete lists.
+- Missing task arrays in a row summary do not mean “nothing running.” Preserve bounded progress/wake fields and use the scalar `waiting`/running-count summaries; do not overwrite complete open-chat detail with a list-row projection.
+- A cursor freezes order and target revision, whereas a delta checkpoint advances only after all delta pages are applied. Expired cursors/checkpoints must return an explicit reset error, not an apparently successful empty page.
+- Measure cold initialization separately from warm first-page requests, and distinguish allocation churn, retained heap and process peak RSS. A transport index trades bounded retained memory for far smaller repeat requests; a warm-cache benchmark alone is not a cold-start measurement.
+
 ## Extension version notices must preserve localization through the response chain (#3598)
 
 - `engines.persona` supports both `>=N` lower bounds and `<N` upper bounds. Suggest updating the hub only when below the lower bound; reaching the upper bound is also rejected and must not use the same update advice.

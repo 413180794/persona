@@ -1,0 +1,5 @@
+{
+  "invalid_query": "The session list query is invalid. Check its filters and page size.",
+  "cursor_expired": "This session list page has expired. Refresh the list from the first page.",
+  "revision_expired": "This session list checkpoint has expired. Refresh the list from the first page."
+}

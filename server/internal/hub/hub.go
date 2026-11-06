@@ -63,6 +63,7 @@ type Hub struct {
 	// sessionsSent: each machine's last session list sent to the apps, as encoded (broadcastSessions).
 	sessionsMu   sync.Mutex
 	sessionsSent map[string][]sentSession
+	listCache    runtimeList // opt-in indexed transport rows; initialized by the first paginated reader
 
 	mu      sync.Mutex
 	clients map[*client]struct{}
@@ -274,6 +275,9 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 func (h *Hub) logf(format string, args ...any) { h.logger.Printf(format, args...) }
 
 func (h *Hub) broadcastMachines() {
+	if h.pruneSessionListMachines() {
+		h.broadcastSessionListNotice()
+	}
 	h.broadcast(map[string]any{"type": "machines", "machines": h.machineList()})
 	h.meshTouch() // a member's record says which of its computers the center can reach through it
 	h.assistantUpdated()

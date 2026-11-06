@@ -1218,6 +1218,128 @@ A machine's session list has hundreds of sessions at about 1 KB each, and a push
 - Replay (19 minutes recorded from a real hub): session pushes 2605 KB → 79 KB per minute, the snapshot on connect 602 KB → 227 KB (`docs/testing.md` ("Push replay")).
 - The web uses it too (`web/src/lib/sessions-delta.ts`, the same rules as `SessionPatch`): `wsQuery` adds `features=sessions_delta` on every connection, `store.ts` merges by `upsert` / `remove`, and `refresh()`, while connected to a delta-capable hub, only takes Codex history from `GET /api/v1/sessions`, replacing existing history with the copies in the response (pushes don't carry history, so seen / went offline can only be updated from here, #2425). Before this the web didn't send `features`, and each connection was measured receiving about 3 MB of full lists per second, slowing down the small events behind them (#1707).
 
+### Bounded Agents lists (`sessions_list`, #5929)
+
+**Choose the right collection.** Claude Code, Codex (including history), terminal-host and contributed-runtime sessions use **`GET /api/v1/sessions`** and snake_case `Session` rows, identified by `(machine_id, session_id)`. **`GET /api/v1/agents` is source/setup status**, not those sessions. Extension personal-agent conversations use **`GET /api/v1/agents/sessions`**, camelCase rows and the opaque `id` (`<source>:<sessionKey>`). The two collections are not combined or renamed.
+
+#### Opt-in parameters (both session collections)
+
+Any of `limit`, `cursor`, `since`, `summary`, `state`, `project`, `group`, or `counts` opts into the bounded API. Without them, legacy requests and response shapes remain unchanged: runtime `machine_id` filtering still returns the complete list; personal-agent `source`/`provider` filtering still returns the complete list; personal-agent `q` alone still searches messages and returns `items`.
+
+| Parameter | Contract |
+| --- | --- |
+| `limit` | Integer 1–200, default **50**. Full and delta pages both use it. A delta removal consumes one slot, just like an upsert. |
+| `cursor` | Opaque `next_cursor` from a preceding page. URL-encode it and repeat all original filters, `summary` and `since`; `limit` may change. Empty/invalid cursor is rejected, not treated as a first page. |
+| `summary` | `1`/`true` for list-row summaries, `0`/`false` for complete rows; default false. Does not change row identity or filter membership. |
+| `state` | Exact unified state: `needs_you`, `working`, `unread`, `idle`, `offline`, or `unknown`. Omit for all states. No user-specific mute/pin ordering is implied. |
+| `machine_id` | Exact runtime machine id. Personal-agent sources do not expose a machine, so this filter matches no personal-agent rows. |
+| `project` | Exact runtime `repo_root`, falling back to `workspace_cwd`, then `cwd`. This is the node's supplied path, **not** a guessed repository or a knowledge-base project id. Personal-agent rows have no project. |
+| `group` | Runtime `space_id`, falling back to `workspace_id`; personal-agent `accountId`. Machine-local space ids can overlap: use `machine_id` with `group` when expanding a particular computer's group. This does not represent personal-agent custom preference sections or to-do group ids. |
+| `source` | Runtime `source_kind` or personal-agent contribution id. |
+| `provider` | Runtime `agent` or personal-agent `provider`. Empty values on older runtime nodes stay empty; no agent name is guessed. |
+| `q` | Case-insensitive substring, at most 256 Unicode characters. Runtime title, cwd, repository, space/slot/agent names and last preview; personal-agent title/provider/account id. With an opt-in parameter this is **row search**, never remote transcript/message search. |
+| `counts` | `1`/`true` returns aggregates instead of rows. `0`/`false` selects a normal page. The same filters apply. |
+| `since` | Opaque `revision` from the completed baseline/previous delta. Returns only changed rows and removals, including state/title-only changes when `updated_at` did not advance. Keep the same filters; changing a filter requires a new first-page baseline. |
+
+Repeated recognized parameters, malformed booleans/page sizes/states and malformed tokens return HTTP **400** with `code: "invalid_query"`. Unknown parameters are ignored for compatibility. Responses retain the usual localized `error` field.
+
+#### Page and ordering
+
+```http
+GET /api/v1/sessions?summary=1&limit=50
+GET /api/v1/agents/sessions?summary=1&limit=50&source=demo
+```
+
+```json
+{
+  "sessions": [],
+  "remove": [],
+  "has_more": true,
+  "next_cursor": "<opaque cursor>",
+  "revision": "<opaque checkpoint>",
+  "total": 8000
+}
+```
+
+`total` is the number of matching sessions in the **whole collection**, not the page length or number of changes. Empty arrays are `[]`, not null. `next_cursor` is absent on the final page.
+
+- Order: newest `updated_at` first for runtime rows, newest `rankTimeMs` first for personal-agent rows, then composite identity ascending for ties. This is a latest-update timeline, not the clients' state-rank/pin sort.
+- A cursor traverses a **frozen filtered snapshot**: updates, deletions and inserts while scrolling cannot duplicate, omit or reorder rows in that snapshot. Every page returns its snapshot's same `revision` and `total`.
+- Snapshot retention is five minutes, with at most 32 active views per collection. A restart, expiry or eviction returns HTTP **409**, `code: "cursor_expired"`; restart at page one. Cursors bind filters and summary mode; a mismatched/tampered cursor returns 400.
+- The runtime collection includes Codex history. It uses the manager's already-decorated state, ownership, hidden/deleted-session rules and task metadata; it does not recompute business state in the hub.
+
+#### Summary rows
+
+Runtime summaries keep the existing snake_case names and decode as a `Session` with optional detail fields absent. They contain:
+
+- Identity/ownership: `machine_id`, `session_id`, `manager`; source/runtime and hierarchy fields (`source_kind`, `source_thread_id`, `source_instance_id`, `parent_thread_id`, `parent_session_id`, `root_session_id`, `is_subagent`).
+- Display/grouping: `title`, `cwd`, `workspace_cwd`, `repo_root`, `agent`, `agent_label`, `agent_name`; space, parent-space, slot, pane, tab and workspace identifiers/names/indices; `todo {id,title}`.
+- State/freshness: `state`, `status`, `updated_at`, `state_since`, `seen_at`, `pending_interactions`, `rev`, `quiet`, `awaits_reply`, `background_working`, `starting`, `start_error`, turn-error fields.
+- Row content/progress: `last_text`, `activity`, `activity_at`, `model`, context-token/window counts; bounded `work` (phase/on/line/wait/then/wake/attempts/agent/deferred), `plan`, `goal`, and `loop` timing with its prompt omitted.
+- Routing/action safety: `capabilities`, `attached`, `can_fork`, `read_only_reason`, `started_by_jarvis`, `assistant`, `archived`, `space`, `origin`, `origin_ref`.
+- Additional scalar summaries: **`waiting`** (loop, running background tasks/subagents/workflows or an eligible hub wake), **`background_count`**, **`running_subagents`**, **`running_workflows`**. Counts of zero may be omitted; `waiting` is always a boolean. A summary-aware client uses these rather than inferring “none running” from missing arrays.
+
+Titles and to-do titles are capped at 256 Unicode characters; previews, error lines, work/plan/goal text at 180; activity/loop reason at 120. Summaries omit `background`, `subagents`, `workflows`, `queued`, ports and chat-only configuration. Do **not** replace an open chat's complete detail state with an incomplete row summary; fetch its existing `info`/`items` routes. A new client needs a summary-aware decoder/waiting rule, not just a query change.
+
+Personal-agent rows are already compact: their summaries retain the existing entire row (`id`, `source`, `sessionKey`, `accountId`, `provider`, `title`, `kind`, `parentSessionKey`, `canSend`, `unreadCount`, `rankTimeMs`, avatar presence/version). Their bridge contract exposes only unread counts, not runtime execution state: unreadCount > 0 maps to `unread`, otherwise `idle`; no `working`/`needs_you` state is invented.
+
+#### Counts without downloading sessions
+
+```http
+GET /api/v1/sessions?counts=1
+GET /api/v1/sessions?counts=1&machine_id=demo&state=working
+GET /api/v1/agents/sessions?counts=1&source=demo
+```
+
+```json
+{
+  "total": 8000,
+  "machine": {"demo": 8000},
+  "project": {"/demo/app": 8000},
+  "group": {"space-a": 8000},
+  "state": {"working": 2000, "needs_you": 2000, "unread": 2000, "idle": 2000},
+  "revision": "<opaque checkpoint>"
+}
+```
+
+Each map counts the complete filtered membership by that dimension; missing attributes use the empty-string key. `limit` does not truncate counts. With a matching `cursor`, counts refer to that frozen view; without one they refer to the current collection. `since`, if supplied, is validated but does not turn counts into counts of changes. Read counts separately when a group expands, rather than deriving totals from loaded pages. The maps do not contain preference-defined custom sections, per-user pins/mutes or computed repository trees.
+
+#### Incremental recovery
+
+```http
+GET /api/v1/sessions?summary=1&limit=50&since=<URL-encoded checkpoint>
+```
+
+The page has the same envelope. `sessions` contains the latest copies of changed/new matching rows; `remove` includes deleted rows and rows leaving the filter. Multiple changes to one identity collapse to its final state. For runtime rows, each removal is a **JSON tuple encoded as a string**, e.g. `"[\"demo\",\"session/with/slashes\"]"`; decode it as `[machine_id, session_id]`, never split on `/`. Personal-agent removals are their existing opaque `id` strings.
+
+Retained deltas cover at most 128 revisions and 16,384 changed identities, evicting whole revisions. A restart or an older checkpoint returns HTTP **409**, `code: "revision_expired"`; obtain a fresh baseline, never silently treat it as a successful empty delta. Frozen delta cursors remain valid even if the underlying journal is subsequently evicted.
+
+Client sequence:
+
+1. Request the first summary page and counts; render immediately and fetch further pages only when needed. Keep page cursors distinct from the delta checkpoint.
+2. For a complete local baseline, finish all frozen pages before advancing its checkpoint. If only a window is loaded, retain `total`/counts separately; an incoming delta may contain rows outside that window and must not be interpreted as an instruction to materialize every row.
+3. After changes, fetch `since` with identical filters/summary, follow all delta pages, apply upserts/removals, and **only after the last page** advance to the returned target `revision`. Changes arriving meanwhile belong to the next delta.
+4. On 409, reset and reload; on a changed filter, obtain a new first page. A counts checkpoint alone is not a row baseline.
+
+#### Lightweight WebSocket negotiation
+
+`hello.features` advertises **`sessions_list`**. A new runtime-list client requests `?features=sessions_list` (may list other features too). When present, it takes precedence over `sessions_delta`:
+
+- On connect/reconnect the hub sends **no full `sessions` snapshot**, including no hidden Codex-history backlog. It sends `{"type":"sessions_list","revision":"<checkpoint>"}` once and again when the indexed collection changes.
+- This small event is an **invalidation hint**, not a delta payload or authoritative baseline. Coalesce bursts, then call the HTTP `since`/counts API with the client's saved checkpoint. Do not advance the checkpoint merely by receiving the event. Reconnect always receives a current hint; HTTP epoch checks cover restart recovery.
+- Existing subscribed chat items, interactions, machines and terminal streams are unchanged. Personal-agent `agents` events remain unchanged; on those events use the personal-agent collection's own HTTP checkpoint, not the runtime checkpoint.
+- Older hubs do not advertise the feature; fall back to their existing full-list/delta behavior. Existing iOS/web clients request `sessions_delta` and existing Android requests no list-delta feature: **all retain their original complete-list behavior** until explicitly migrated.
+
+#### Cost and verification
+
+The shared transport index lives in `server/internal/sessionlist`; the runtime adapter is `server/internal/hub/sessions_list.go`, the personal-agent adapter `server/internal/agents/list.go`, and its HTTP facade `server/internal/extmgr/agents.go`.
+
+Runtime indexing is lazy on the first paginated reader/negotiated socket, then updated by the manager's session-list reports and existing push hook. Personal-agent indexing updates when the existing 20-second source cache refreshes or its fallback poll runs; invalidation generations prevent late responses from resurrecting removed/stale data. Unchanged batches do not advance the revision. There is no database migration or new JSON state file.
+
+Filtered ordered views/counts are cached by revision (up to 64); warm pages and counts do not scan or sort the full collection. Unfiltered counters are maintained on changed records, so an unfiltered delta/count request does not scan or sort unrelated sessions even after a revision change. Filtered counts never build an ordered list merely to count matches. A new filter or changed revision builds one ordered view only when pages need it and reuses it. This moves work to updates/first cache misses; it does not claim that an upstream full-list report is O(1). Frozen views, query caches and the journal are bounded. Cold index initialization is a one-off cost and must be measured separately from warm request latency.
+
+`TestAgents8000Measurement` and `BenchmarkAgents8000Legacy` exercise the real runtime HTTP handler with 8,000 synthetic rows (four machines, previews and task metadata), reporting JSON bytes, request CPU, allocations, retained heap and process peak RSS. `TestPersonalAgentPagedRoutes8000` checks the extension HTTP adapter and warm source-call count. Index tests traverse all 8,000 frozen rows, filtered counts, field-only changes, removals, expired cursors/checkpoints and concurrent readers/writers. One-off before/after readings and local test output belong in the linked PR/archived acceptance record, not in this evolving contract.
+
 ### Live status (`session_live`, 2026-11-05)
 
 The status line at the bottom of the screen while Claude Code works (`✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`) has a verb, this turn's elapsed time, output tokens and whether it's thinking, none of which is in the transcript.

@@ -2,11 +2,14 @@ package extmgr
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/agents"
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/sessionlist"
 )
 
 // agentsPollFallback re-lists agent sessions in case realtime agent-bridge.updated events are missed (the stream
@@ -32,7 +35,18 @@ func (h *Manager) agentsChanged(ids []string) {
 
 func (h *Manager) agentsLoop(ctx context.Context) { h.agents.Poll(ctx, agentsPollFallback) }
 
-func agentsErr(w http.ResponseWriter, err error) { writeErr(w, agents.HTTPStatus(err), err) }
+func agentsErr(w http.ResponseWriter, err error) {
+	var listErr *sessionlist.Error
+	if errors.As(err, &listErr) {
+		status := http.StatusBadRequest
+		if listErr.Code == "cursor_expired" || listErr.Code == "revision_expired" {
+			status = http.StatusConflict
+		}
+		writeErrCode(w, status, listErr.Code, i18n.Err("session-list."+listErr.Code))
+		return
+	}
+	writeErr(w, agents.HTTPStatus(err), err)
+}
 
 // agentRoutes serve /api/v1/agents/*: every agent Persona can reach (the running plugins' agent sources). A session
 // id is "<source>:<sessionKey>" and must be percent-encoded in paths (bridge keys contain "/").
@@ -42,6 +56,29 @@ func (h *Manager) agentRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("GET /api/v1/agents/sessions", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		if sessionlist.Enabled(q) {
+			opts, err := sessionlist.Parse(q)
+			if err != nil {
+				agentsErr(w, err)
+				return
+			}
+			if counts := q.Get("counts"); counts == "1" || counts == "true" {
+				counts, err := h.agents.ListCounts(r.Context(), opts)
+				if err != nil {
+					agentsErr(w, err)
+					return
+				}
+				writeJSON(w, counts)
+			} else {
+				page, err := h.agents.ListPage(r.Context(), opts)
+				if err != nil {
+					agentsErr(w, err)
+					return
+				}
+				writeJSON(w, page)
+			}
+			return
+		}
 		if text := q.Get("q"); text != "" {
 			hits, err := h.agents.Search(r.Context(), q.Get("source"), text)
 			if err != nil {

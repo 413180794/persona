@@ -203,9 +203,13 @@ func sameSessions(a, b []sentSession) bool {
 // is connected, once for all of them. The lock is held until everything is queued, so what was recorded is what the
 // apps got last.
 func (h *Hub) broadcastSessions(m *Machine, list []proto.Session) {
-	enc := encodeSessions(h.shown(m.cfg.ID, list))
+	shown := h.shown(m.cfg.ID, list)
+	enc := encodeSessions(shown)
 	h.sessionsMu.Lock()
 	defer h.sessionsMu.Unlock()
+	before := h.listCache.index.Revision()
+	h.indexSessionsLocked(m.cfg.ID, shown, enc)
+	revision := h.listCache.index.Revision()
 	prev, sent := h.sessionsSent[m.cfg.ID]
 	changed := !sent || !sameSessions(prev, enc)
 	if changed {
@@ -220,6 +224,12 @@ func (h *Hub) broadcastSessions(m *Machine, list []proto.Session) {
 	var full []byte
 	for c := range h.clients {
 		var b []byte
+		if c.listMode {
+			if before != revision {
+				c.sendJSON(map[string]any{"type": "sessions_list", "revision": revision})
+			}
+			continue
+		}
 		if c.delta {
 			b, c.have[m.cfg.ID] = sessionsDelta(m.cfg.ID, enc, c.have[m.cfg.ID])
 		} else if changed {

@@ -127,7 +127,7 @@ func machineExtrasEqual(a, b map[string]extwire.MachineExtras) bool {
 
 // features are the hub's features with those of the extensions serving part of the API.
 func (h *Hub) features() []string {
-	out := slices.Clone(proto.Features)
+	out := append(slices.Clone(proto.Features), featureSessionsList)
 	// The assistant's card interfaces that answer now (docs/assistant-views.md): assistant_views is declarative actions
 	// (expected_version), live cards and transcript cards; assistant_html_bridge is …/html-actions with both switches
 	// on. Neither says a client may run HTML: that is each platform's own security sign-off, else fallback.

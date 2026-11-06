@@ -77,7 +77,8 @@
         "conversation_origin",
         "builtin_presets",
         "upload_dir",
-        "task_push"
+        "task_push",
+        "sessions_list"
       ],
       "fp": "",
       "hub_id": "00000000-0000-4000-8000-000000000001",
@@ -248,7 +249,8 @@
         "conversation_origin",
         "builtin_presets",
         "upload_dir",
-        "task_push"
+        "task_push",
+        "sessions_list"
       ],
       "fp": "",
       "hub_id": "00000000-0000-4000-8000-000000000001",

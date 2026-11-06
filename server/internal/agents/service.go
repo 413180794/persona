@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf16"
+
+	"github.com/nwverse/persona/server/internal/sessionlist"
 )
 
 // Error is a refusal with the HTTP status the hub should answer.
@@ -43,14 +45,15 @@ var FollowUps = []time.Duration{4 * time.Second, 15 * time.Second, 45 * time.Sec
 
 // Service is the agents layer the hub serves: sources, a cache, the outbox, and change notifications.
 type Service struct {
-	srcMu    sync.RWMutex
-	sources  map[string]Source
-	order    []string
-	cache    *cache
-	out      *outbox
-	prefs    *prefsStore
-	onChange func(ids []string) // sessions whose content changed: the apps re-pull them
-	logf     func(string, ...any)
+	srcMu     sync.RWMutex
+	sources   map[string]Source
+	order     []string
+	cache     *cache
+	listIndex sessionlist.Index
+	out       *outbox
+	prefs     *prefsStore
+	onChange  func(ids []string) // sessions whose content changed: the apps re-pull them
+	logf      func(string, ...any)
 
 	pollMu sync.Mutex
 	marks  map[string][2]int64 // id → rankTimeMs, unreadCount at the last poll
@@ -59,6 +62,7 @@ type Service struct {
 func NewService(kv KV, onChange func(ids []string), logf func(string, ...any), sources ...Source) *Service {
 	s := &Service{sources: map[string]Source{}, cache: newCache(20 * time.Second), out: &outbox{kv: kv}, prefs: &prefsStore{kv: kv},
 		onChange: onChange, logf: logf}
+	s.cache.onSessions = s.indexSessions
 	if s.onChange == nil {
 		s.onChange = func([]string) {}
 	}

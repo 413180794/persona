@@ -23,6 +23,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/sessionlist"
 )
 
 func (h *Hub) routes() http.Handler {
@@ -541,6 +542,10 @@ func (h *Hub) interruptSession(w http.ResponseWriter, r *http.Request, m *Machin
 }
 
 func (h *Hub) listSessions(w http.ResponseWriter, r *http.Request) {
+	if sessionlist.Enabled(r.URL.Query()) {
+		h.pagedSessions(w, r)
+		return
+	}
 	mid := r.URL.Query().Get("machine_id")
 	out := []proto.Session{}
 	for _, m := range h.machinesNow() {
@@ -747,8 +752,9 @@ type client struct {
 	pushDevice string
 	// delta: the app asked for sessions_delta (sessions_push.go); have is, by machine, each session it has (id -> its
 	// JSON as sent), under the hub's sessionsMu.
-	delta bool
-	have  map[string]map[string][]byte
+	delta    bool
+	listMode bool // sessions_list: HTTP pages plus lightweight invalidations, never a full snapshot
+	have     map[string]map[string][]byte
 	// urlFeatures: what the app listed in the WebSocket URL's ?features= (wants).
 	urlFeatures map[string]bool
 	// clean: the app closed the connection itself (gone to the background), rather than the network dropping it.
@@ -943,8 +949,11 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	who := principalOf(r.Context())
 	c := &client{cancel: cancel, hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
-		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), have: map[string]map[string][]byte{},
+		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), listMode: wantsFeature(r, featureSessionsList), have: map[string]map[string][]byte{},
 		urlFeatures: urlFeatures(r), acceptLang: i18n.FromRequest(r), meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
+	if c.listMode {
+		h.sessionListIndex() // before registration: never seed the index under h.mu
+	}
 	h.mu.Lock()
 	if h.wsStopping || h.isDeviceRevoked(c.device) {
 		h.mu.Unlock()
@@ -1015,11 +1024,15 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	c.sendJSON(map[string]any{"type": "machines", "machines": localizedMachines(c.lang(), h.machineList())})
-	for _, m := range h.machinesNow() {
-		if c.delta {
-			h.snapshotSessions(c, m)
-		} else {
-			c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.shown(m.cfg.ID, h.decorated(m))})
+	if c.listMode {
+		h.sessionListNotice(c)
+	} else {
+		for _, m := range h.machinesNow() {
+			if c.delta {
+				h.snapshotSessions(c, m)
+			} else {
+				c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.shown(m.cfg.ID, h.decorated(m))})
+			}
 		}
 	}
 	h.sendPendingInteractions(c, false)
