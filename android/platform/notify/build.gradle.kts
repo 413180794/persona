@@ -5,6 +5,9 @@ plugins {
 
 android {
     namespace = "persona.platform.notify"
+    defaultConfig.testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    sourceSets.getByName("test").kotlin.srcDir("src/sharedTest/kotlin")
+    sourceSets.getByName("androidTest").kotlin.srcDir("src/sharedTest/kotlin")
     testOptions.unitTests.isIncludeAndroidResources = true
     testOptions.unitTests.all {
         it.systemProperty("jarvis.repo.root", rootProject.projectDir.parentFile.absolutePath)
@@ -20,6 +23,8 @@ dependencies {
     implementation(libs.androidx.core)
     implementation(libs.androidx.work)
     implementation(libs.coroutines.android)
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.serialization.json)

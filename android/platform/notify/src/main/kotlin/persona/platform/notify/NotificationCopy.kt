@@ -58,8 +58,9 @@ private fun elicitationMessage(ix: Interaction): String? =
 // QUESTION_OPTIONS, each clipped) and how many questions follow, so a glance tells what can be picked (#4726).
 private const val QUESTION_OPTIONS = 4
 private const val QUESTION_OPTION_MAX = 20
-// Every Unicode space, as Go's strings.Fields: the JVM's plain \s misses a no-break space.
-private val UNICODE_SPACE = Regex("(?U)\\s+")
+// Unicode White_Space, as Go's strings.Fields, on both Android and the desktop JVM.
+// Android rejects the Unicode character class flag; plain \\s differs on the desktop JVM.
+private val UNICODE_SPACE = Regex("[\\p{Z}\\u0009-\\u000D\\u0085]+")
 
 private fun questionBody(context: Context, questions: List<Question>): String {
     val lines = mutableListOf<String>()
