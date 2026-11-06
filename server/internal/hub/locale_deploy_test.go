@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -122,5 +123,80 @@ func TestDeploymentErrorBodyKeepsCodesAndUnknownFields(t *testing.T) {
 		if got := string(localizedDeploymentError(i18n.Ja, []byte(raw))); got != raw {
 			t.Fatalf("changed unknown response: %s", got)
 		}
+	}
+}
+
+func TestComputerBrowserSnapshotsUseConnectionLanguage(t *testing.T) {
+	h := newTestHub(t)
+	note := i18n.T(i18n.ZhHans, "hub-computer.note_outdated")
+	browserNote := i18n.T(i18n.ZhHans, "hub-browser.note_outdated")
+	source := proto.Machine{ID: "example", Name: "Example", Computer: &proto.Computer{Note: note, Job: &proto.ComputerJob{Error: note, Step: note}}, Browser: &proto.Browser{Note: browserNote, Job: &proto.ComputerJob{Error: browserNote, Step: browserNote}}}
+	m := newMachine(h, MachineConfig{ID: "example", Name: "Example", Kind: kindLink})
+	m.snap = &source
+	computer, _ := json.Marshal(source.Computer)
+	browser, _ := json.Marshal(source.Browser)
+	h.ext.report.Store(&extwire.Report{Machines: map[string]extwire.MachineExtras{"example": {Computer: computer, Browser: browser}}})
+	h.machines = []*Machine{m}
+	h.byID = map[string]*Machine{"example": m}
+	clients := map[i18n.Lang]*client{}
+	h.clients = map[*client]struct{}{}
+	for _, l := range []i18n.Lang{i18n.En, i18n.ZhHans, i18n.Ja} {
+		c := &client{hub: h, role: roleFull, out: make(chan []byte, 16), acceptLang: l}
+		clients[l] = c
+		h.clients[c] = struct{}{}
+	}
+	h.broadcastMachines()
+	for l, c := range clients {
+		raw := <-c.out
+		var event struct {
+			Machines []proto.Machine `json:"machines"`
+		}
+		if err := json.Unmarshal(raw, &event); err != nil {
+			t.Fatal(err)
+		}
+		got := event.Machines[0]
+		if got.Computer == nil || got.Computer.Job == nil || got.Browser == nil {
+			t.Fatalf("missing extension snapshot: %s", raw)
+		}
+		if got.Computer.Note != i18n.T(l, "hub-computer.note_outdated") || got.Computer.Job.Error != got.Computer.Note || got.Browser.Note != i18n.T(l, "hub-browser.note_outdated") {
+			t.Fatalf("%s: %s", l, raw)
+		}
+		request := httptest.NewRequest("GET", "/api/v1/machines", nil)
+		request.RemoteAddr = "127.0.0.1:12345"
+		request.Header.Set("Accept-Language", string(l))
+		request.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+		rec := httptest.NewRecorder()
+		h.routes().ServeHTTP(rec, request)
+		if err := json.Unmarshal(rec.Body.Bytes(), &event); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != 200 || event.Machines[0].Computer.Note != got.Computer.Note {
+			t.Fatalf("HTTP %s: %s", l, rec.Body)
+		}
+	}
+	resumed := &client{hub: h, out: make(chan []byte, 8), acceptLang: i18n.Ja}
+	h.mu.Lock()
+	h.helloLocked(resumed, map[string]any{"type": "hello"}, h.events.stream, 0, true)
+	h.mu.Unlock()
+	<-resumed.out
+	var replay struct {
+		Machines []proto.Machine `json:"machines"`
+	}
+	if err := json.Unmarshal(<-resumed.out, &replay); err != nil {
+		t.Fatal(err)
+	}
+	if replay.Machines[0].Computer.Note != i18n.T(i18n.Ja, "hub-computer.note_outdated") {
+		t.Fatal("replay retained source locale")
+	}
+	if source.Computer.Note != note || source.Computer.Job.Error != note || source.Browser.Note != browserNote {
+		t.Fatal("shared canonical snapshot mutated")
+	}
+	// A subsequent client hello projects the same saved snapshot, without another report from the node.
+	h.onClientHello(clients[i18n.En], []byte(`{"locale":"ja"}`))
+	if err := json.Unmarshal(<-clients[i18n.En].out, &replay); err != nil {
+		t.Fatal(err)
+	}
+	if replay.Machines[0].Computer.Note != i18n.T(i18n.Ja, "hub-computer.note_outdated") {
+		t.Fatal("locale switch kept old status")
 	}
 }

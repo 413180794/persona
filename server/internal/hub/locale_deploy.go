@@ -3,6 +3,7 @@ package hub
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -15,6 +16,8 @@ func localizedMachines(l i18n.Lang, machines []proto.Machine) []proto.Machine {
 	for i := range out {
 		out[i].DeployError = i18n.DeploymentText(l, out[i].DeployError)
 		out[i].DeployReason = i18n.DeploymentText(l, out[i].DeployReason)
+		out[i].Computer = i18n.ComputerStatus(l, out[i].Computer)
+		out[i].Browser = i18n.BrowserStatus(l, out[i].Browser)
 	}
 	return out
 }
@@ -34,7 +37,8 @@ func localizedMachineEvent(l i18n.Lang, raw []byte) []byte {
 	translated := localizedMachines(l, machines)
 	changed := false
 	for i := range machines {
-		changed = changed || machines[i].DeployError != translated[i].DeployError || machines[i].DeployReason != translated[i].DeployReason
+		changed = changed || machines[i].DeployError != translated[i].DeployError || machines[i].DeployReason != translated[i].DeployReason ||
+			!reflect.DeepEqual(machines[i].Computer, translated[i].Computer) || !reflect.DeepEqual(machines[i].Browser, translated[i].Browser)
 	}
 	if !changed {
 		return raw
