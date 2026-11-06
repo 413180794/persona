@@ -51,13 +51,15 @@ type Devices interface {
 // Options are how the manager reaches what it needs.
 type Options struct {
 	// Dir is the data directory (~/.persona): hub.json, secret.key, extensions/ in it.
-	Dir     string
-	Config  *Config // nil: read from Dir
-	Store   Store   // nil: nothing is kept (tests)
-	Logf    func(format string, args ...any)
-	Build   update.Build
-	Hub     Host
-	Devices Devices
+	Dir string
+	// ConfigFile is the manager's manager.json, with its sections of the configuration (managerconf); "": hub.json's.
+	ConfigFile string
+	Config     *Config // nil: read from Dir and ConfigFile
+	Store      Store   // nil: nothing is kept (tests)
+	Logf       func(format string, args ...any)
+	Build      update.Build
+	Hub        Host
+	Devices    Devices
 	// Assistant asks the assistant in this process what the hub used to ask it over the bus (same methods and
 	// params: channels.receive, feishu.message, inbox.collected, kb.*…); nil: none here (tests).
 	Assistant func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
@@ -137,9 +139,12 @@ func New(opts Options) *Manager {
 	cfg := opts.Config
 	if cfg == nil {
 		var err error
-		if cfg, err = loadConfig(opts.Dir); err != nil {
-			opts.Logf("extensions: hub.json: %v", err)
+		if cfg, err = loadConfig(opts.Dir, opts.ConfigFile); err != nil {
+			opts.Logf("extensions: configuration: %v", err)
 			cfg = &Config{}
+		}
+		for _, w := range cfg.warnings {
+			opts.Logf("extensions: %s", w)
 		}
 	}
 	if cfg.dir == "" {

@@ -31,7 +31,7 @@ type sentStore interface {
 var _ sentStore = (*db.DB)(nil)
 
 const (
-	sentLedgerDays  = 90 // how long a row is kept unless hub.json sent_ledger_days says otherwise
+	sentLedgerDays  = 90 // how long a row is kept unless manager.json sent_ledger_days says otherwise
 	sentPruneEvery  = 6 * time.Hour
 	sentSummaryMost = 300 // characters of a row's one-line summary
 	sentValueMost   = 200 // characters of one value in a row's target

@@ -218,7 +218,7 @@ python3 scripts/release/asc_testflight.py external   # create the group, enable/
   `IN_BETA_REVIEW` → `BETA_APPROVED` / `BETA_REJECTED`.
 - Friends deploy their own hubs: without an APNs key from a developer account, newer Apps receive notifications and Live Activities through the publisher's push relay
   (requires `app.push_relay` in the release config and successful device registration; see `docs/push-relay.md`); older versions without a relay only receive live updates while the App is open.
-  For Gmail login they must create their own Google OAuth client and put it in their hub's `hub.json` (`docs/mail.md`).
+  For Gmail login they must create their own Google OAuth client and put it in their manager's `manager.json` on the hub machine (`docs/mail.md`).
 - Test info needs a privacy policy URL (`app_store.external.privacy_url`); Chinese and English descriptions live in `BETA_INFO` in `asc_testflight.py`.
 - Without a hub, the App only has a pairing page: review notes (`review.notes`) must explain that this App works with a self-hosted hub, or reviewers may ask how to use it.
 

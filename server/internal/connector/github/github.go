@@ -51,7 +51,7 @@ func (c *Config) host() string {
 
 // Why a token could not be had (TokenSource's errors, errors.Is).
 var (
-	ErrNoMachine   = errors.New("github.auth.from_machine is not a machine in hub.json")
+	ErrNoMachine   = errors.New("github.auth.from_machine is not one of the manager's machines")
 	ErrOffline     = errors.New("the machine is offline")
 	ErrNodeTooOld  = errors.New("the machine's jarvisd is too old")
 	ErrNoGh        = errors.New("gh is not installed")
@@ -249,13 +249,13 @@ func (c *Connector) explain(err error) (string, string) {
 	m := c.machine
 	switch {
 	case errors.Is(err, errBadProxy):
-		return connector.StateNotConfigured, "hub.json 的 github.proxy 不对（要 http://[用户名:密码@]主机:端口）"
+		return connector.StateNotConfigured, "manager.json 的 github.proxy 不对（要 http://[用户名:密码@]主机:端口）"
 	case errors.Is(err, errUnauthorized) && c.source == SourceDevice:
 		return connector.StateNotSignedIn, "设备码登录失效了（在 GitHub 上撤销了授权？）：重新登录"
 	case errors.Is(err, errNoDeviceLogin):
 		return connector.StateNotSignedIn, notSignedIn
 	case errors.Is(err, ErrNoMachine):
-		return connector.StateNotConfigured, "hub.json 的 github.auth.from_machine 不是 hub.json 里的机器"
+		return connector.StateNotConfigured, "manager.json 的 github.auth.from_machine 不是已有的电脑"
 	case errors.Is(err, ErrOffline):
 		return connector.StateNotSignedIn, "GitHub 未授权（" + m + " 离线）：它连上后会自动再读"
 	case errors.Is(err, ErrNodeTooOld):

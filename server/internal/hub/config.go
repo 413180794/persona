@@ -25,7 +25,6 @@ import (
 	"github.com/mdp/qrterminal/v3"
 
 	"github.com/nwverse/persona/server/internal/aiwire"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -118,14 +117,10 @@ type Config struct {
 	DatabaseURL string `json:"database_url"`
 	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
 	AI aiwire.Config `json:"ai"`
-	// Lark is how the hub and the assistant run lark-cli, and the gateway account Feishu items a plugin hands over
-	// came to (internal/lark). The Lark gateway itself is an extension's now; its old fields here are not read.
-	Lark lark.Config `json:"lark"`
-	// LarkGate: extra rules for the assistant's Feishu writes through the Feishu plugin's command gate, after
-	// connector_gate's lark rules and before the built-in ones (connector.LarkRules, node/larkgate.go; e.g.
-	// {"method":"POST","path":"/conversations/*/messages","action":"allow"}).
-	LarkGate []proto.LarkRule `json:"lark_gate,omitempty"`
-	Machines []MachineConfig  `json:"machines"`
+	// The manager's own sections (lark, lark_gate, connector_gate, github, imessage, google, microsoft, bots,
+	// extensions, plugins, trusted_extension_markets, usage) are in its manager.json now (internal/managerconf,
+	// docs/config.md "manager.json"): the hub reads none of them, and an older hub.json's copies stay as they were.
+	Machines []MachineConfig `json:"machines"`
 	// Assistant personalizes the chat tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
 	// know about them and their setup (where code lives, which skills reach work data, machines to stay out of).
 	Assistant AssistantProfile `json:"assistant"`
@@ -245,9 +240,6 @@ func LoadConfig() (*Config, error) {
 	cfg.applyEnv()
 	if cfg.Token == "" {
 		return nil, fmt.Errorf("%s: token is empty", path)
-	}
-	if err := cfg.Lark.Validate(); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if cfg.HookTimeoutMinutes <= 0 {
 		cfg.HookTimeoutMinutes = 30

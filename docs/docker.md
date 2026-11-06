@@ -22,7 +22,7 @@ Extensions (`docs/extensions.md`) work as usual; installed ones live in `data/ex
   it can then read and write all of `data/` (including `hub.json`), so install only ones you trust.
 - No `git`: git markets (`git:`, `git@…`, `ssh://…`) can't be added; `github:` and `https://` markets go over HTTPS and work as usual.
 - The image is Alpine (musl): TypeScript extensions packed by `personad extension pack` (bun's `bun-linux-*` targets, which need glibc) won't start; Go extensions (`CGO_ENABLED=0`) are unaffected.
-- No interpreters such as node or python: an extension whose command is an interpreter (e.g. one run with `node` in hub.json) won't start; write and pack extensions (`personad extension dev` / `pack`) on another computer.
+- No interpreters such as node or python: an extension whose command is an interpreter (e.g. one run with `node` in the manager's `manager.json`) won't start; write and pack extensions (`personad extension dev` / `pack`) on another computer.
 
 The Lark gateway comes in through the Lark extension, and its Agent token and address are set in that extension's settings. The image has no docker CLI, so the option that reads the token by container name doesn't work; enter the token directly.
 For the address use the NAS's LAN address, not `127.0.0.1` (loopback inside the container is the container itself). `lark.token` / `lark.container` in hub.json no longer take effect (`docs/config.md`).
@@ -100,7 +100,7 @@ Other notes:
 - If you set the database password yourself, use only letters and digits (it goes into the database URL as-is); `openssl rand -hex 24` works. Postgres only uses it when the data directory is first created;
   changing `.env` afterwards (or deleting `data/docker/db-password`) makes the database unreachable. To change it, also run `ALTER USER jarvis PASSWORD '…'` in the database.
 - The hub container has `init: true`: when an ssh started by personad is killed, its ProxyCommand / ProxyJump children are reaped by init, so no zombie processes are left.
-- Directories: `data/` is the hub's `~/.persona` (`hub.json`, secrets, tailcat key, the knowledge base `data/data`, the generated database password `data/docker/`), `postgres/` is the database. Both sit next to compose,
+- Directories: `data/` is the hub's `~/.persona` (`hub.json`, the built-in manager's `managers/assistant/manager.json`, secrets, tailcat key, the knowledge base `data/data`, the generated database password `data/docker/`), `postgres/` is the database. Both sit next to compose,
   visible in the NAS's file manager; back up these two directories. `hub.json` and the secret files are 0600.
 - An existing deployment (`.env` has `JARVIS_DB_PASSWORD` and `PUID` / `PGID`, `data/` has `hub.json`) behaves the same after switching to the new `compose.yaml`: it uses the password from `.env`, generates nothing, and doesn't change `hub.json`. The only additions are an empty `data/docker/` directory and the 18662 port mapping (nothing listens on it when `hub.json` hasn't enabled TLS).
 

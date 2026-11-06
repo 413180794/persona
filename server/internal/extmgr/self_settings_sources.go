@@ -78,7 +78,7 @@ func (h *Manager) setExtensionTriageRules(id, title string, v json.RawMessage) (
 		return nil, fmt.Errorf("no plugin %s", id)
 	}
 	if p.ReadOnly() {
-		return nil, fmt.Errorf("%s is set in hub.json: change it there (or in the admin page)", id)
+		return nil, fmt.Errorf("%s is set in manager.json: change it there (or in the admin page)", id)
 	}
 	before := h.extensionTriageRules(id)
 	l := h.userLang()

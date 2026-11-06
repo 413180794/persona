@@ -11,12 +11,12 @@ import (
 )
 
 // The built-in extension Messages (#1830 step 6, docs/plan-extensions.md "How iMessage uses it"): which Mac's Messages
-// the connector imessage reads, picked in Settings › Extensions › Messages instead of hub.json's imessage.machine. The
+// the connector imessage reads, picked in Settings › Extensions › Messages instead of manager.json's imessage.machine. The
 // connector is the one it always was (its id, inbox, knowledge base, "Hand to Persona", "Delete data"); only where its
 // Mac comes from changed:
 //
 //   - the extension on with a Mac picked: that Mac;
-//   - else hub.json's imessage.machine, as before (kept one version, read-only, never written);
+//   - else manager.json's imessage.machine, as before (kept one version, read-only, never written);
 //   - else no connector.
 //
 // hub.json's value moves into the extension once (migrateIMessage), marked so a Mac the user turns off later is not
@@ -26,7 +26,7 @@ import (
 
 const imessageExtensionID = "imessage"
 
-// imessageMigratedKey marks hub.json's imessage.machine moved into the extension (or found nothing to move).
+// imessageMigratedKey marks manager.json's imessage.machine moved into the extension (or found nothing to move).
 const imessageMigratedKey = "imessage.migrated_to_extension"
 
 const imessageConfig = `{
@@ -69,7 +69,7 @@ func (h *Manager) imessageMachine() string {
 	return ""
 }
 
-// migrateIMessage moves hub.json's imessage.machine into the extension, once: the Mac's id in its settings, the
+// migrateIMessage moves manager.json's imessage.machine into the extension, once: the Mac's id in its settings, the
 // extension on. Nothing is moved when the extension already has a Mac. A name that matches no machine, or a write
 // that fails, is logged and tried again at the next start; meanwhile the connector reads hub.json's.
 func (h *Manager) migrateIMessage(ctx context.Context) {
@@ -87,23 +87,23 @@ func (h *Manager) migrateIMessage(ctx context.Context) {
 	}
 	id := h.machineIDFor(im.Machine)
 	if id == "" {
-		h.logf("imessage: hub.json's imessage.machine names no machine of this hub; 信息 reads it from hub.json")
+		h.logf("imessage: manager.json's imessage.machine names no machine of this hub; 信息 reads it from manager.json")
 		return
 	}
 	reg := h.extensions.reg
 	raw, _ := json.Marshal(map[string]any{"machines": []string{id}})
 	if err := reg.SetConfig(ctx, imessageExtensionID, raw, "hub"); err != nil {
-		h.logf("imessage: moving hub.json's machine into 设置 › 扩展 › 信息: %v; 信息 reads it from hub.json", err)
+		h.logf("imessage: moving manager.json's machine into 设置 › 扩展 › 信息: %v; 信息 reads it from manager.json", err)
 		return
 	}
 	if err := reg.SetEnabled(ctx, imessageExtensionID, true, "hub"); err != nil {
-		h.logf("imessage: turning on 设置 › 扩展 › 信息: %v; 信息 reads it from hub.json", err)
+		h.logf("imessage: turning on 设置 › 扩展 › 信息: %v; 信息 reads it from manager.json", err)
 		return
 	}
 	if err := h.store.PutSetting(ctx, imessageMigratedKey, true); err != nil {
 		h.logf("imessage: marking the move done: %v", err)
 	}
-	h.logf("imessage: hub.json's imessage.machine moved to 设置 › 扩展 › 信息 (hub.json's is read-only now)")
+	h.logf("imessage: manager.json's imessage.machine moved to 设置 › 扩展 › 信息 (manager.json's is read-only now)")
 }
 
 // applyIMessage makes the connector read the Mac it should (imessageMachine): registered with it, taken out when

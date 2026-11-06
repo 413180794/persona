@@ -124,7 +124,7 @@ func TestOfflineMachine(t *testing.T) {
 
 func TestEveryFailureSaysWhatToDo(t *testing.T) {
 	for err, want := range map[error]string{
-		ErrNoMachine:   "不是 hub.json 里的机器",
+		ErrNoMachine:   "不是已有的电脑",
 		ErrNodeTooOld:  "Mac 的 jarvisd 太旧",
 		ErrNoGh:        "Mac 上没有 gh",
 		ErrNotSignedIn: "gh auth login --insecure-storage",

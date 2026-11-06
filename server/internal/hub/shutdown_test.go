@@ -19,7 +19,6 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/db"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -69,7 +68,6 @@ func TestHubShutdownWithOnlineDevice(t *testing.T) {
 				_ = ln.Close()
 				disabled := false
 				cfg := Config{Listen: addr, PublicURL: "http://" + addr, Token: randomHex(24),
-					Lark:        lark.Config{BaseURL: fakeLark.URL, Token: "test-token"},
 					DatabaseURL: url, Machines: []MachineConfig{}, KB: KBConfig{Enabled: &disabled},
 					ShutdownTimeoutSeconds: 4}
 				raw, _ := json.Marshal(cfg)

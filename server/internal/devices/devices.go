@@ -81,9 +81,9 @@ type Options struct {
 	Detached func(machine string)
 	// Location is the user's time zone ("today" of the token usage); nil: the machine's.
 	Location func() *time.Location
-	// Dir is the data directory with the hub.json the manager shares with the hub: its usage section (the
-	// account-pool gateways and their keys, usagegateways.go) is read and written here. "": none (tests).
-	Dir string
+	// ConfigFile is the manager's manager.json (internal/managerconf): its usage section (the account-pool gateways
+	// and their keys, usagegateways.go) is read and written there. "": none (tests).
+	ConfigFile string
 }
 
 // Devices is every computer the manager carries.
@@ -142,13 +142,13 @@ func New(o Options) *Devices {
 	}
 	d := &Devices{opts: o, logf: o.Logf, gotCh: make(chan struct{}), ready: make(chan struct{}), byID: map[string]*Machine{},
 		reportDue: make(chan struct{}, 1), usageWrites: make(chan usageWrite, 1024), reqPrefix: strconv.FormatInt(time.Now().UnixNano(), 36)}
-	// The account-pool gateways' usage windows (usagegateways.go, #2595): hub.json's usage section as it is now.
+	// The account-pool gateways' usage windows (usagegateways.go, #2595): manager.json's usage section as it is now.
 	var usage UsageConfig
-	if o.Dir != "" {
+	if o.ConfigFile != "" {
 		if u, err := d.diskUsage(); err == nil {
 			usage = u
 		} else if !os.IsNotExist(err) {
-			d.logf("hub.json usage: %v", err)
+			d.logf("manager.json usage: %v", err)
 		}
 	}
 	d.usageWin.gateways = d.usageGW.accounts

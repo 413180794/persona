@@ -129,7 +129,7 @@ func randomURLSafe(n int) string {
 // StartGoogleOAuth begins a "Sign in with Google" flow. loginHint preselects an account.
 func (s *Service) StartGoogleOAuth(loginHint string) (*OAuthStart, error) {
 	if s.googleClientID == "" {
-		return nil, errors.New("Google sign-in is not configured: set google.client_id in hub.json (docs/mail.md)")
+		return nil, errors.New("Google sign-in is not configured: set google.client_id in the manager's manager.json (docs/mail.md)")
 	}
 	verifier := randomURLSafe(48)
 	state, err := s.sealState(oauthState{Verifier: verifier, Created: s.now().Unix()})

@@ -116,7 +116,7 @@ a summary up to 40 characters, and a short reason:
 - When uncertain between action / fyi, choose action. If the model cannot triage (unconfigured, no quota / concurrency full, error, timeout), use fallback rules (private chat / mention of me → action; everyone-only mention without me → fyi, an announcement; group → fyi; direct mail → fyi; others → noise), with reason "Rule-based."
   Connector items use their rule-provided fallback (`tier`). Model-triaged items (empty `tier`) from hub-owned connectors (GitHub, Telegram, Messages) still fall back to noise.
   **Plugin-provided connectors have no fallback**: noise would silently hide items the user must see (below).
-- **Scope (requested 2026-11-04)**: "Triage before admission" and "No admission without fallback" below **apply only to plugin-provided connectors** (installed plugins or hub.json plugins, not bundled personad connectors;
+- **Scope (requested 2026-11-04)**: "Triage before admission" and "No admission without fallback" below **apply only to plugin-provided connectors** (installed plugins or plugins in the manager's manager.json, not bundled personad connectors;
   currently the Lark extension). Hub-owned mail, GitHub, Telegram, and Messages behave unchanged: new items appear immediately, then triage in the background; timing and fallback (no rule tier means noise) remain as before.
   Identify by plugin ownership (`extensionConnectors`, recorded when hub starts a plugin connector and passed each round as `InboxSource.extension`), not name.
 - **Triage before admission (#1644)**: hold new plugin-connector items aside for a collection round (`inbox_admit.go`). After collection, triage in the background; only then write to the database and list them:
@@ -220,7 +220,7 @@ Triage, drafting, AI twin, done state, and retention use hub's generic logic.
     - Default branch and my open PRs: Needs you; other branches: FYI; automatic branches (`train/*`, configurable): excluded entirely.
     - Automatically mark handled without deleting (`done_by=read`, explanatory `reason`) when the workflow later succeeds on that branch ("GitHub: later succeeded," immediately on a succeeded notification,
       otherwise check Actions runs every 10 minutes), branch deleted, or PR merged / closed.
-  - **Configuration** (Settings › Connectors › GitHub › Inbox; `github.inbox` in hub.json supplies defaults; stored as `connectors.options.github` in settings):
+  - **Configuration** (Settings › Connectors › GitHub › Inbox; `github.inbox` in the manager's manager.json supplies defaults; stored as `connectors.options.github` in settings):
     - CI failures: Off / Default branch only / Include my PRs (default) / All (all Needs you).
     - Muted repositories: exclude all activity and handle existing items.
     - `ignore_branches`: silent branches (`path.Match` patterns, default `["train/*"]`, editable only in hub.json).

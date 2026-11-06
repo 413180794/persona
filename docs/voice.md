@@ -4,7 +4,7 @@ Voice mode has two layers: the **fast layer** is the GPT-Live-compatible realtim
 the **slow layer** is the chat you were in when you opened voice mode (Persona's main chat, or any Claude Code / Codex session in Agents), responsible for doing the work.
 Your instructions go to that chat immediately; when the round finishes, the fast layer speaks the conclusion in a sentence or two. Agent questions can be answered by voice, but plan approvals and tool permissions require tapping cards on screen.
 The realtime voice service address and Key can be configured in the App (Key encrypted on the hub). This document is the feature design (finalized 2026-11-06, umbrella issue #3489).
-Phase one follows the sub-issues in section 7; after each step, align this document with the code. Protocol 1 frames and hub.json syntax remain defined by `docs/extensions.md`
+Phase one follows the sub-issues in section 7; after each step, align this document with the code. Protocol 1 frames and the config file syntax (the manager's manager.json) remain defined by `docs/extensions.md`
 ("Voice (kind = voice)" and "Built-in voice extension"); this document covers only protocol 2 and these changes. GPT-Live test findings go into docs/lessons/voice.md (created in #3495).
 
 ## 0. Decisions and current state
@@ -13,7 +13,7 @@ Phase one follows the sub-issues in section 7; after each step, align this docum
 | --- | --- |
 | 1 | Two layers. **Fast layer**: GPT-Live realtime model for immediate spoken replies, small talk, clarification, and announcements. **Slow layer**: "the chat you are in", either Persona's main chat or any Claude Code / Codex session in Agents. Opening voice binds it to that chat; it does the work, and the fast layer speaks the result |
 | 2 | Match Codex App's voice experience: one thread, GPT-Live in front, Agent behind |
-| 3 | Initially only GPT-Live-compatible upstreams. **Custom address and Key configurable in the App**, Key encrypted on the hub. Existing hub.json config still works. OpenAI Realtime and Doubao come later |
+| 3 | Initially only GPT-Live-compatible upstreams. **Custom address and Key configurable in the App**, Key encrypted on the hub. Existing config in the file (now the manager's manager.json) still works. OpenAI Realtime and Doubao come later |
 | 4 | Instructions to the Agent are sent **immediately**, without repeating them or waiting for confirmation |
 | 5 | Agent questions (AskUserQuestion) are spoken and can be answered by voice. Plan approvals and tool permissions **are not answered by voice**: cards appear in the voice UI and are completed with a tap |
 | 6 | Phase one covers server and iOS (iPhone; share views with Mac where possible), entered from main-chat and Agent-chat pages. Reuse the protocol and audio pipeline of PR #1931 (CarPlay, issue #1951, another contributor, unmerged), without changing that PR; coordinate with its author |
@@ -223,7 +223,7 @@ the hub forwards App HTTP / WS unchanged through `/api/v1/bus/relay` to the mana
 | `runs` | voice/runs.go (new) | One `channel.Run` per delegation: send, track, read reply, announce |
 | `hubLink` | voice/hublink.go (new) | One hub WS per extension process; ref-count subscriptions per session; nonblocking read loop; 5-second fallback polling |
 | `asks` / `status` / `suspend` | voice/asks.go, status.go, suspend.go (new) | Spoken questions and answers; status queries; suspension and wake |
-| Upstream config | extmgr/voice_extension.go (new), `voice/config.go` | Built-in manifest (form + secrets), adopt hub.json entries, merge, bind Key to address |
+| Upstream config | extmgr/voice_extension.go (new), `voice/config.go` | Built-in manifest (form + secrets), adopt manager.json entries, merge, bind Key to address |
 
 **State location and persistence**
 
@@ -348,7 +348,7 @@ ext  → run …"sent" → …"working" → {"type":"link","state":"paused"} →
 | `items.go` (new) | HTTP `ItemSource` for `channel.ReadTurn` |
 | `spoken.go` (new) | Make replies speakable: identify code blocks, tables, inline code, paths, `file:line`, hashes, URLs, Markdown markers; placeholders from `prompts/voice/spoken.md` (paths keep filename only); truncate as "beginning + end" |
 | `info.go` (new) | `GET /info` |
-| `fake.go` (new) | `fake` dialect (hub.json only, for development): no upstream, App `text` directly delegates, `say` / commentary returns unchanged as fast-layer captions. Works against real hub and Agent without GPT-Live |
+| `fake.go` (new) | `fake` dialect (manager.json only, for development): no upstream, App `text` directly delegates, `say` / commentary returns unchanged as fast-layer captions. Works against real hub and Agent without GPT-Live |
 | `config.go` (changed) / `hub.go` (changed) | Merge config, allow no upstream; send requests use ctx rather than a 30-second client timeout |
 
 ### 4.2 Bind target
@@ -854,20 +854,20 @@ Reject (ii), "add realtime type to model providers": it would need a new API ret
   - Empty `url` makes `PUT -/secrets/key` return 400.
   - Prevents changing the address to an attacker's host and receiving the Bearer Key.
   - Generic manifest `bound_to` field comes later.
-- `ssh`, `key_file`, `key_command`, `tools`, and `fake` dialect **hub.json only**: `key_command` executes on the manager's machine (usually hub machine).
+- `ssh`, `key_file`, `key_command`, `tools`, and `fake` dialect **manager.json only**: `key_command` executes on the manager's machine (usually hub machine).
 
-### 5.3 Adopt hub.json entries
+### 5.3 Adopt manager.json entries
 
-- `attachExtensions` (`extmgr/extensions.go`) finds the **first** hub.json entry meeting all three: empty or `voice` kind, `IsBuiltinCommand(command)`, `args[0] == "voice"`.
+- `attachExtensions` (`extmgr/extensions.go`) finds the **first** manager.json entry meeting all three: empty or `voice` kind, `IsBuiltinCommand(command)`, `args[0] == "voice"`.
 - Replace `AddHubJSON` with `AddBuiltin(voiceManifest(h, c.ID, c.Name), …)`:
   - **id unchanged**, preserving purpose `plugin.<id>`, selected model, and App voice preference;
   - same socket path `<root>/<id>.sock`.
-- **Enabled state**: hub.json `disabled: true` always disables; otherwise database row wins, default on without a row. With no hub.json voice entry, register built-in id `voice`, off by default (like cua).
-- Adoption of a hub.json entry as same-id built-in is unprecedented in `extension/registry.go` (`Load` recognizes only builtin database rows), so:
+- **Enabled state**: manager.json `disabled: true` always disables; otherwise database row wins, default on without a row. With no manager.json voice entry, register built-in id `voice`, off by default (like cua).
+- Adoption of a manager.json entry as same-id built-in is unprecedented in `extension/registry.go` (`Load` recognizes only builtin database rows), so:
   - document this rule in `docs/extensions.md`;
-  - test upgrade with hub.json entry/no DB row, rollback, `disabled`;
+  - test upgrade with manager.json entry/no DB row, rollback, `disabled`;
   - build atop #3263 (also changes `extensions.go`, `extension_routes.go`, merged); #3630 moved these files to `extmgr/`.
-- Adopt only `personad voice`. Third-party hub.json voice extensions written as node scripts remain legacy; migration still means "installed extension package" per `docs/extensions.md`, unaffected.
+- Adopt only `personad voice`. Third-party manager.json voice extensions written as node scripts remain legacy; migration still means "installed extension package" per `docs/extensions.md`, unaffected.
 
 ### 5.4 How the extension receives config
 
@@ -881,7 +881,7 @@ Reject (ii), "add realtime type to model providers": it would need a new API ret
 ### 5.5 Merge (`voice.LoadConfig`)
 
 - If `PERSONA_EXTENSION_CONFIG` has `providers`, read old format for manual local-run compatibility.
-- Otherwise hub.json upstreams come first; form upstream with `url` appends as fixed id `custom`. Id collisions favor hub.json, with `/info.warnings` entry.
+- Otherwise manager.json upstreams come first; form upstream with `url` appends as fixed id `custom`. Id collisions favor manager.json, with `/info.warnings` entry.
 - `owner` / `notes`: nonempty form values win.
 - **Start even without usable upstreams** (none, or form upstream missing Key and no `key_file` / `key_command`):
   - `/health` 200, `/info.setup` explains, `/ws` returns `no_upstream`;

@@ -253,10 +253,10 @@ func (h *Manager) ghTokenFor(ctx context.Context, machine, host string) (string,
 	return "", err
 }
 
-// githubMigratedKey marks hub.json's github.proxy / github.auth.host moved into the GitHub extension's settings.
+// githubMigratedKey marks manager.json's github.proxy / github.auth.host moved into the GitHub extension's settings.
 const githubMigratedKey = "github.migrated_to_extension"
 
-// migrateGitHubConfig moves hub.json's github.proxy and github.auth.host into the settings of the extension whose
+// migrateGitHubConfig moves manager.json's github.proxy and github.auth.host into the settings of the extension whose
 // connector took the hub's place, once, for keys the user has not set there: its GitHub traffic goes the way the hub's
 // own did. The extension restarts with them (a config change). A failure is logged and tried at the next start.
 func (h *Manager) migrateGitHubConfig(ctx context.Context, extensionID string) {
@@ -295,10 +295,10 @@ func (h *Manager) migrateGitHubConfig(ctx context.Context, extensionID string) {
 	if moved {
 		raw, _ := json.Marshal(cfg)
 		if err := reg.SetConfig(ctx, extensionID, raw, "hub"); err != nil {
-			h.logf("github: moving hub.json's github.proxy / auth.host into the extension's settings: %v", err)
+			h.logf("github: moving manager.json's github.proxy / auth.host into the extension's settings: %v", err)
 			return
 		}
-		h.logf("github: hub.json's github.proxy / auth.host moved into 设置 › 扩展 › %s", p.Full.Name)
+		h.logf("github: manager.json's github.proxy / auth.host moved into 设置 › 扩展 › %s", p.Full.Name)
 	}
 	if err := h.store.PutSetting(ctx, githubMigratedKey, true); err != nil {
 		h.logf("github: marking the move done: %v", err)

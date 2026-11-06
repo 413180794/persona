@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/usagesource"
 )
 
@@ -23,9 +23,8 @@ import (
 // it was: the hub relays the routes (devicewire.AdminUsageRoutes) from its admin UI only, so only a signed-in admin
 // session gets here (every /api/v1/admin/ route; a device token, even a full one, does not open them), and says so
 // in assistantwire.AdminHeader; a request without it is refused here too. Nothing answers with a key: a source says
-// only whether it has one. The keys live in hub.json (0600) in the data directory the manager shares with the hub,
-// written the way the hub's pages write it (editHubJSON: the same lock on the directory, so the two never write over
-// each other), and a change applies at once.
+// only whether it has one. The keys live in the manager's manager.json (0600, docs/config.md "manager.json"), written
+// in one step under a lock on its directory (managerconf.Edit), and a change applies at once.
 
 const usageTestMost = 25 * time.Second
 
@@ -48,7 +47,7 @@ type adminUsageView struct {
 	Limit       int                `json:"limit"`
 }
 
-// usageConfigNow is hub.json's usage as it is on disk now; the running config follows it (a hand edit is taken up the
+// usageConfigNow is manager.json's usage as it is on disk now; the running config follows it (a hand edit is taken up the
 // next time this page reads).
 func (d *Devices) usageConfigNow() UsageConfig {
 	disk, err := d.diskUsage()
@@ -62,12 +61,12 @@ func (d *Devices) usageConfigNow() UsageConfig {
 	return disk
 }
 
-// diskUsage is hub.json's usage section as it is on disk now.
+// diskUsage is manager.json's usage section as it is on disk now.
 func (d *Devices) diskUsage() (UsageConfig, error) {
 	var cfg struct {
 		Usage UsageConfig `json:"usage"`
 	}
-	b, err := os.ReadFile(filepath.Join(d.opts.Dir, "hub.json"))
+	b, err := os.ReadFile(d.opts.ConfigFile)
 	if err != nil { // none (or unreadable): the running config stays, as on the hub
 		return cfg.Usage, err
 	}
@@ -86,15 +85,15 @@ func (d *Devices) adminUsageView() adminUsageView {
 	return v
 }
 
-// editUsage changes hub.json's usage and applies the result.
-func (d *Devices) editUsage(edit func(u *jsonObject, list []json.RawMessage) (*jsonObject, []json.RawMessage, error)) error {
-	err := editHubJSON(d.opts.Dir, func(o *jsonObject) error {
-		u, err := o.object("usage")
+// editUsage changes manager.json's usage and applies the result.
+func (d *Devices) editUsage(edit func(u *managerconf.Object, list []json.RawMessage) (*managerconf.Object, []json.RawMessage, error)) error {
+	err := managerconf.Edit(d.opts.ConfigFile, func(o *managerconf.Object) error {
+		u, err := o.Object("usage")
 		if err != nil {
 			return err
 		}
 		var list []json.RawMessage
-		if raw, ok := u.get("sources"); ok && strings.TrimSpace(string(raw)) != "null" {
+		if raw, ok := u.Get("sources"); ok && strings.TrimSpace(string(raw)) != "null" {
 			if err := json.Unmarshal(raw, &list); err != nil {
 				return err
 			}
@@ -104,11 +103,11 @@ func (d *Devices) editUsage(edit func(u *jsonObject, list []json.RawMessage) (*j
 			return err
 		}
 		if len(list) == 0 {
-			u.del("sources")
-		} else if err := u.set("sources", list); err != nil {
+			u.Del("sources")
+		} else if err := u.Set("sources", list); err != nil {
 			return err
 		}
-		o.setObject("usage", u)
+		o.SetObject("usage", u)
 		return nil
 	})
 	if err != nil {
@@ -239,18 +238,18 @@ func (d *Devices) adminUsageRoutes(mux *http.ServeMux) {
 			writeErrCode(w, http.StatusBadRequest, "invalid_poll", i18n.Err("hub-admin_usage.invalid_poll"))
 			return
 		}
-		err := d.editUsage(func(u *jsonObject, list []json.RawMessage) (*jsonObject, []json.RawMessage, error) {
+		err := d.editUsage(func(u *managerconf.Object, list []json.RawMessage) (*managerconf.Object, []json.RawMessage, error) {
 			if in.Enabled != nil {
 				if *in.Enabled {
-					u.del("enabled") // on is the default
-				} else if err := u.set("enabled", false); err != nil {
+					u.Del("enabled") // on is the default
+				} else if err := u.Set("enabled", false); err != nil {
 					return u, list, err
 				}
 			}
 			if in.PollMinutes != nil {
 				if *in.PollMinutes == usagePollDefault {
-					u.del("poll_minutes")
-				} else if err := u.set("poll_minutes", *in.PollMinutes); err != nil {
+					u.Del("poll_minutes")
+				} else if err := u.Set("poll_minutes", *in.PollMinutes); err != nil {
 					return u, list, err
 				}
 			}
@@ -275,12 +274,12 @@ func (d *Devices) adminUsageRoutes(mux *http.ServeMux) {
 		}
 		s.ID = "src-" + randomHex(4)
 		tooMany := false
-		err = d.editUsage(func(u *jsonObject, list []json.RawMessage) (*jsonObject, []json.RawMessage, error) {
+		err = d.editUsage(func(u *managerconf.Object, list []json.RawMessage) (*managerconf.Object, []json.RawMessage, error) {
 			if len(list) >= usageSourcesMost {
 				tooMany = true
 				return u, list, nil
 			}
-			entry, err := marshalNoEscape(s)
+			entry, err := managerconf.MarshalNoEscape(s)
 			if err != nil {
 				return u, list, err
 			}
@@ -304,7 +303,7 @@ func (d *Devices) adminUsageRoutes(mux *http.ServeMux) {
 			return
 		}
 		found, bad, badCode := false, error(nil), ""
-		err := d.editUsage(func(u *jsonObject, list []json.RawMessage) (*jsonObject, []json.RawMessage, error) {
+		err := d.editUsage(func(u *managerconf.Object, list []json.RawMessage) (*managerconf.Object, []json.RawMessage, error) {
 			for i, raw := range list {
 				if usageEntryID(raw) != id {
 					continue
@@ -320,27 +319,27 @@ func (d *Devices) adminUsageRoutes(mux *http.ServeMux) {
 					return u, list, nil
 				}
 				// Only the fields this page owns change; the rest of the entry stays as it was written.
-				entry, err := parseJSONObject(raw)
+				entry, err := managerconf.ParseObject(raw)
 				if err != nil {
 					return u, list, err
 				}
 				for k, v := range map[string]any{"name": next.Name, "type": next.Type, "url": next.URL} {
-					if err := entry.set(k, v); err != nil {
+					if err := entry.Set(k, v); err != nil {
 						return u, list, err
 					}
 				}
 				if next.Key == "" {
-					entry.del("key")
-				} else if err := entry.set("key", next.Key); err != nil {
+					entry.Del("key")
+				} else if err := entry.Set("key", next.Key); err != nil {
 					return u, list, err
 				}
 				if next.Enabled == nil || *next.Enabled {
-					entry.del("enabled")
-				} else if err := entry.set("enabled", false); err != nil {
+					entry.Del("enabled")
+				} else if err := entry.Set("enabled", false); err != nil {
 					return u, list, err
 				}
 				list = append([]json.RawMessage(nil), list...)
-				list[i] = entry.marshal()
+				list[i] = entry.Marshal()
 				return u, list, nil
 			}
 			return u, list, nil
@@ -360,7 +359,7 @@ func (d *Devices) adminUsageRoutes(mux *http.ServeMux) {
 	handle("DELETE /api/v1/admin/usage-sources/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		found := false
-		err := d.editUsage(func(u *jsonObject, list []json.RawMessage) (*jsonObject, []json.RawMessage, error) {
+		err := d.editUsage(func(u *managerconf.Object, list []json.RawMessage) (*managerconf.Object, []json.RawMessage, error) {
 			kept := make([]json.RawMessage, 0, len(list))
 			for _, raw := range list {
 				if usageEntryID(raw) == id {

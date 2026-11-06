@@ -11,5 +11,5 @@
   "too_deep": "dependencies too deep",
   "list_separator": ", ",
   "has_dependents": "These extensions use it: {names}. Turn them off too?",
-  "read_only": "Extension “{name}” is set in hub.json. Turn it off there first"
+  "read_only": "Extension “{name}” is set in manager.json. Turn it off there first"
 }

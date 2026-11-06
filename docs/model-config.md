@@ -73,7 +73,7 @@ to seal and decrypt provider keys. It creates the file if missing (even if both 
 If the manager runs elsewhere (`assistant.external`), copy `secret.key` to that computer's data directory (0600). Otherwise old keys cannot be decrypted; status says “Provider key decryption failed,” and the user can re-enter the key in Settings › Model Providers.
 
 **When the manager is unavailable** (restarting, or the `assistant.external` computer disconnects): the routes above return `503 assistant_offline` and resume normally when it returns. Configuration lives in Postgres and survives both hub and manager restarts.
-Quota returns `503 assistant_offline`; plugins needing “Information screening” cannot be enabled (same error), and such plugins in hub.json do not receive items yet. Model-powered features already live in the manager and stop with it.
+Quota returns `503 assistant_offline`; plugins needing “Information screening” cannot be enabled (same error), and such plugins configured in the manager's manager.json do not receive items yet. Model-powered features already live in the manager and stop with it.
 
 ## Who resolves the Agents category (2026-11-04)
 

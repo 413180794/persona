@@ -30,7 +30,7 @@ type BotsConfig struct {
 	Feishu FeishuBotConfig `json:"feishu,omitempty"`
 }
 
-// FeishuBotConfig: the app's credentials, for those who would rather keep them in hub.json (0600) than enter them in
+// FeishuBotConfig: the app's credentials, for those who would rather keep them in manager.json (0600) than enter them in
 // the app. What the app saves wins.
 type FeishuBotConfig struct {
 	AppID     string `json:"app_id,omitempty"`
@@ -242,7 +242,7 @@ type feishuBotView struct {
 	AppID       string        `json:"app_id"`
 	Domain      string        `json:"domain"`
 	HasSecret   bool          `json:"has_secret"`
-	FromConfig  bool          `json:"from_config"` // the credentials are hub.json's
+	FromConfig  bool          `json:"from_config"` // the credentials are manager.json's
 	Features    BotFeatures   `json:"features"`
 	Connected   bool          `json:"connected"`
 	Error       string        `json:"error,omitempty"`

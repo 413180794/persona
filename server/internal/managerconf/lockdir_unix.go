@@ -1,6 +1,6 @@
 //go:build !windows
 
-package devices
+package managerconf
 
 import (
 	"os"

@@ -295,7 +295,7 @@ func (c *Config) extensionConfigs(logf func(string, ...any)) []ExtensionConfig {
 	out := slices.Clone(c.Extensions)
 	for _, e := range c.LegacyExtensions {
 		if slices.ContainsFunc(out, func(x ExtensionConfig) bool { return x.ID == e.ID }) {
-			logf("hub.json: extension %q is in both extensions and plugins: using the one in extensions", e.ID)
+			logf("manager.json: extension %q is in both extensions and plugins: using the one in extensions", e.ID)
 			continue
 		}
 		out = append(out, e)

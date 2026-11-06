@@ -1,11 +1,11 @@
 {
-  "disabled_in_hub_json": "hub.json でリアルタイム音声が無効になっています。その項目の disabled を外してからオンにしてください",
+  "disabled_in_hub_json": "manager.json でリアルタイム音声が無効になっています。その項目の disabled を外してからオンにしてください",
   "key_cleared": "アドレスが変わったため、キーを消去しました。もう一度入力してください",
   "key_needs_url": "キーより先にサービスのアドレスを入力してください。キーはそのアドレスにだけ送られます",
   "setup_key": "リアルタイム音声サービスのキー",
   "setup_url": "リアルタイム音声サービスのアドレス",
   "setup_url_and_key": "リアルタイム音声サービスのアドレスとキー",
-  "warn_default_unknown": "hub.json の default がどの上流のモデルでもないため、最初の上流のデフォルトモデルを使います",
-  "warn_form_id_taken": "hub.json に id が custom の上流がすでにあるため、この設定のサービスは使われていません",
+  "warn_default_unknown": "manager.json の default がどの上流のモデルでもないため、最初の上流のデフォルトモデルを使います",
+  "warn_form_id_taken": "manager.json に id が custom の上流がすでにあるため、この設定のサービスは使われていません",
   "warn_form_no_key": "この設定のサービスにはまだキーがないため、使われていません"
 }

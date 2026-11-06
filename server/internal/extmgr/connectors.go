@@ -535,8 +535,8 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 func (h *Manager) startConnectors(ctx context.Context) {
 	h.registerConnectors()
 	h.attachExtensions(ctx) // the plugins' connectors, after the hub's own: those ids are taken
-	h.migrateIMessage(ctx)  // hub.json's imessage.machine into Settings › Extensions › Messages, once (imessage_extension.go)
-	h.applyIMessage()       // Messages on the Mac picked there, else hub.json's
+	h.migrateIMessage(ctx)  // manager.json's imessage.machine into Settings › Extensions › Messages, once (imessage_extension.go)
+	h.applyIMessage()       // Messages on the Mac picked there, else manager.json's
 	h.restoreConnectorSwitches(ctx)
 	h.restoreGitHubSource(ctx)
 	h.connectors.Start(ctx, h.connectorChanged, h.logf) // GitHub's old muted repositories move when the manager connects
@@ -572,7 +572,7 @@ func (h *Manager) registerConnectors() {
 	if err := h.addConnector(ghc); err != nil {
 		h.logf("github connector: %v", err)
 	}
-	// Messages (imessage) is registered once the extensions are there: its Mac is the extension's, else hub.json's
+	// Messages (imessage) is registered once the extensions are there: its Mac is the extension's, else manager.json's
 	// (applyIMessage, startConnectors).
 }
 

@@ -44,7 +44,7 @@ The two complement each other and have separate switches.
 ## Pairing and permissions
 
 - App credentials: enter the App ID / App Secret in the App (it tries `GET /open-apis/bot/v3/info` once first and saves only if that works); the Secret is AES-GCM encrypted with `secret.key` and stored in settings
-  `bots.feishu` (the same master key as launcher keys), and no endpoint ever returns the plaintext. If you'd rather not go through the App, write `bots.feishu` in hub.json (0600); what's saved from the App takes precedence.
+  `bots.feishu` (the same master key as launcher keys), and no endpoint ever returns the plaintext. If you'd rather not go through the App, write `bots.feishu` in the manager's `manager.json` (0600, `docs/config.md` ("manager.json")); what's saved from the App takes precedence.
 - **Only the one paired person, only in the bot's DM**: the main chat can use all the data (Lark, mail, every computer, the phone's calendar and location), and anyone in a group can @ it, so group messages are never handled;
   anyone else who DMs it gets a single reply "This bot only works for its owner." (at most once per person per 10 minutes). Card buttons also only accept the owner's open_id.
 - Pairing: tap **Pair** in the App to get a 6-digit code (valid for 10 minutes) and send it to the bot in Lark; whoever sends it becomes the owner (its open_id and the DM's chat_id are recorded).
@@ -147,7 +147,7 @@ These routes belong to the hub; `target` and `agents` in the response are querie
 | Method | Path | Description |
 | --- | --- | --- |
 | GET | `/api/v1/bots/feishu` | `{enabled, app_id, domain, has_secret, from_config, features{main,cards,all_cards,pushes,sync,agents}, connected, error, last_event_at, bot_name, owner{name,paired_at}, pairing{code,expires_at}, target, agents[{title,machine_id,session_id}]}` |
-| PUT | `/api/v1/bots/feishu` | Changes only supplied fields: `enabled`, `app_id` + `app_secret` (validated first) + `domain`, `features` (replaced as a whole); `app_id: ""` clears the credentials saved in the App (falls back to hub.json) |
+| PUT | `/api/v1/bots/feishu` | Changes only supplied fields: `enabled`, `app_id` + `app_secret` (validated first) + `domain`, `features` (replaced as a whole); `app_id: ""` clears the credentials saved in the App (falls back to manager.json) |
 | POST | `/api/v1/bots/feishu/pair` | Generate a pairing code |
 | DELETE | `/api/v1/bots/feishu/owner` | Unpair (also clears chat state) |
 | POST | `/api/v1/bots/feishu/test` | Send the owner a test message |

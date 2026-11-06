@@ -25,7 +25,7 @@ holds the schema to the server's Go types (schema/extension/README.md, "Plugin-s
 
 ## Handshake
 
-1. Hub sends init: `{"protocol": 2, "config": {…}}`. Config is connector's hub.json section, possibly augmented at runtime, e.g. timezone.
+1. Hub sends init: `{"protocol": 2, "config": {…}}`. Config is connector's section of the manager's manager.json, possibly augmented at runtime, e.g. timezone.
 2. Program returns manifest:
 
    ```json

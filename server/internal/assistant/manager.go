@@ -13,11 +13,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -86,36 +88,44 @@ func ReadManagerConfig(dir string) (*ManagerConfig, error) {
 }
 
 // WriteManagerConfig writes manager.json in dir (made 0700 when missing), 0600, in one step: a manager running from
-// it reads either the old one or the new one.
+// it reads either the old one or the new one. Only who it is changes: its sections of the configuration and anything
+// else in the file stay as they are.
 func WriteManagerConfig(dir string, c ManagerConfig) error {
 	if err := c.check(); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(c, "", "  ")
+	b, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".manager-*.json")
+	who, err := managerconf.ParseObject(b)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
+	path := filepath.Join(dir, ManagerFile)
+	// One that does not read (cut short, edited wrong) is kept beside it rather than refused: the install code that
+	// gave this identity is spent already.
+	if b, err := os.ReadFile(path); err == nil {
+		if _, err := managerconf.ParseObject(b); err != nil {
+			if err := os.Rename(path, path+".unreadable-"+time.Now().UTC().Format("20060102T150405Z")); err != nil {
+				return err
+			}
+		}
 	}
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, ManagerFile))
+	return managerconf.Edit(path, func(o *managerconf.Object) error {
+		for _, k := range managerIdentity {
+			if v, ok := who.Get(k); ok {
+				o.SetRaw(k, v)
+			} else {
+				o.Del(k)
+			}
+		}
+		return nil
+	})
 }
+
+// managerIdentity are ManagerConfig's keys in manager.json.
+var managerIdentity = []string{"id", "name", "hub", "hub_id", "token", "fingerprint", "database_url", "database_container"}
 
 // HubDatabaseURL is the database_url of the hub on this machine (hub.json in the data directory,
 // PERSONA_DATABASE_URL over it); "" when there is none. A manager never uses it (SameDatabase).
@@ -184,8 +194,12 @@ func RunManager(ctx context.Context, build update.Build, dir string) error {
 			deploy = "docker"
 		}
 	}
+	// Its sections of the configuration are in its manager.json, beside who it is; a hub.json of its directory (an
+	// older build read the sections there) moves in once.
+	file := filepath.Join(dir, ManagerFile)
+	moveConfig(dir, file, logger.Printf)
 	return run(ctx, build, runOptions{ID: c.ID, Hub: c.Hub, Token: c.Token, Fingerprint: c.Fingerprint, Deploy: deploy,
-		Dir: dir, DatabaseURL: url, StopWhenRevoked: true, Logf: logger.Printf})
+		Dir: dir, ConfigFile: file, DatabaseURL: url, StopWhenRevoked: true, Logf: logger.Printf})
 }
 
 // pinnedHTTPClient dials the hub only when its TLS key is fp's.

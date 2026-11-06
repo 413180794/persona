@@ -5,7 +5,8 @@ The repo hard-codes nobody's machines, accounts, domains, or preferences. Everyt
 | Config | Location | Read by | Covers |
 | --- | --- | --- | --- |
 | Build / deploy config | `~/.config/persona/config.json` on the dev machine (point elsewhere with `PERSONA_CONFIG`; the old `JARVIS_CONFIG` still works), template `config.example.json` at the repo root | `scripts/*` (via `scripts/persona_config.py`), XcodeGen (via the generated `apple/Config.xcconfig`) | The App's bundle id and team, the App Store Connect account, TestFlight testers, which machine / address the hub is on, machines to deploy to, simulators |
-| hub runtime config | `~/.persona/hub.json` on the hub machine (0600, contains the token and database password; generated automatically the first time `personad hub` runs) | `personad hub` | Listen address, public address, which machines to connect, whose assistant it is and what it should know, the Gmail proxy, the AI gateway, lark-cli, hand-written extensions |
+| hub runtime config | `~/.persona/hub.json` on the hub machine (0600, contains the token and database password; generated automatically the first time `personad hub` runs) | `personad hub` | Listen address, public address, which machines to connect, whose assistant it is and what it should know, the AI gateway |
+| Manager config | `~/.persona/managers/assistant/manager.json` for the built-in manager, `~/.persona/managers/<id>/manager.json` for one made in the app (0600) | the manager (`personad assistant`, `personad manager run`) | Connectors, extensions written by hand, bots, mail sign-ins and the Gmail proxy, Lark and lark-cli, usage sources ("manager.json" below) |
 
 The configs live outside the repo: releases run in a clean worktree (`docs/release.md`), where anything outside the repo would be missing; it also avoids committing them by accident.
 `apple/Config.xcconfig` and `CLAUDE.local.md` are in `.gitignore`.
@@ -205,9 +206,7 @@ The Unix socket and its immediate parent directory must belong to the current us
     "machine": "server",
     "launcher": "claude"
   },
-  "google": { "client_id": "…", "proxy": "" },
-  "ai": {},
-  "lark": {}
+  "ai": {}
 }
 ```
 
@@ -276,60 +275,8 @@ The Unix socket and its immediate parent directory must belong to the current us
   The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
 - `machines[].launchers` (optional): add launchers the node cannot list on this computer (e.g. shell wrapper functions), or override `agent_type`, `base_url`, `model` for same-name launchers the node reports (omitted fields stay unchanged),
   e.g. `[{"name":"example_wrapper","agent_type":"codex"}]`: the wrapper actually runs Codex (`agent_type` is `claude` / `codex` / `traex` or a runtime's agent; `docs/protocol.md`, `docs/model-config.md`).
-- `usage` (optional): subscription usage sources from an account-pool gateway (such as a relay), merged into the sidebar's usage bar (`docs/usage-windows.md` ("Account-pool gateways"), #2595).
-  `usage.sources[]` (at most 8): `id`, `name` (source name in the sidebar), `type` (`relay` / `generic`; old type names are still read as `relay` and rewritten to the new name the next time this source is edited in the admin UI), `url`, `key` (the gateway's admin Key, **a secret: only in `hub.json` (0600)**, unreadable from the admin UI and APIs, absent from logs), `enabled` (false disables this source).
-  `usage.enabled` (false is the master switch), `usage.poll_minutes` (poll interval per source, default 5, 1 to 1440). This section belongs to **the manager** (`personad assistant`, which reads and writes the same `hub.json` itself; the hub does not read it): it only reads the gateway's cached numbers (`refresh=false`), requests come from the manager, and nodes never touch the gateway.
-  Edit in the admin UI at `/admin/usage` (the hub forwards to the manager) for immediate effect; manual edits require a hub restart (which restarts the manager too), or opening this admin page (the manager adopts the version on disk).
-- `microsoft` (optional): Outlook's "Sign In with Microsoft" (`docs/mail.md` ("Outlook integration")). `client_id` is the default client ID
-  (usually unnecessary: the user enters their own Microsoft Entra-registered one in the App, encrypted in the hub and preferred over this); `redirect_uri` defaults to
-  `jarvis-mail-oauth://outlook`, and changes must match the registration in Entra.
-- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token` (old syntax, **no longer effective**): since #1571, integration through the Lark gateway is provided by an extension
-  (start of `docs/feishu.md`, `docs/extensions.md`). The hub still reads these keys, but neither connects to the Lark gateway with them nor hands them to the assistant; if `token` or `container` is set,
-  the hub logs one warning at startup. Set the Agent token, container, address, and separate encrypted-message authorization (`native_olk_token`) in the Lark extension's settings instead; these keys can be removed from hub.json.
-- `lark.account` (optional integer, still effective): the default Lark gateway account number, `1` for the main account, `2` for the second; omitted or `0` uses the main account, valid range 1–999999999,
-  e.g. `"lark": {"account": 2}`. The number comes from the `id` in the Lark gateway's `/accounts`, not the Lark user ID. Operations on Inbox Lark items from the default account omit `ol_account`,
-  while other accounts pass their own number; the Inbox Agent also uses this default when handling Lark items (`docs/feishu.md` ("Multiple accounts")). The Lark extension's default account is authoritative (`default` in its messaging source's `GET accounts`, #5098):
-  if the extension cannot be queried, use the last retrieved value; only if none has been retrieved since the manager started is this field used. Restart the hub after changing (`systemctl --user restart jarvisd`).
-  Server-side Inbox records are isolated and retained per account, available again when switching back.
-- `lark.cli` (optional): Lark's official open-platform CLI, lark-cli, as a second Lark source besides the Lark extension (gateway) (`docs/plan-lark-cli.md`):
-  `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`. `bin` is a command name or absolute path, default `lark-cli`; non-absolute paths are found in a login shell
-  (global npm installs often live under nvm-like directories absent from systemd's PATH); `profile` is lark-cli's `--profile`, empty uses its default.
-  Application and user logins stay with lark-cli (`~/.lark-cli`), never in `hub.json`: run
-  `lark-cli auth login --domain all` yourself on the assistant's machine (user permissions for all domains; without a browser add `--no-wait --json` and authorize via the link on the phone); after a week unused, sign in again.
-  Currently (L1) only for the assistant: its PATH contains `lark-cli` (with the configured `profile`), and write operations go through the gate (`docs/assistant.md` ("Lark: lark-cli")).
-- `lark.prefer` (optional): which source is primary when both the Lark extension (gateway) and lark-cli are available: omitted (default, extension path preferred) or `cli`; other values are the Lark extension's own source names, passed through and validated by it. Currently only affects how the assistant prompt divides the work.
-- `lark_gate` (optional, old syntax, still effective; put new rules in `connector_gate` below with `connector: lark`): gate rules for the assistant's Lark writes (the Lark extension's command gate, and lark-cli), after `connector_gate`'s `lark` rules and before built-in rules; first match wins:
-  `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]` (`action` is `allow` / `confirm` / `deny`, optional `body` matches top-level fields;
-  `docs/assistant.md` ("Lark: the skill shipped with the Lark extension")). lark-cli commands use `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
-  (`path` joins command words with `/`, `*` / `**` wildcards as above); a match skips lark-cli's self-reported risk level.
-- `connector_gate` (optional): gate rules for connector writes (such as `github_comment`); first match wins, no match means confirm each operation on the phone:
-  `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
-  (`connector`, `action` allow `*` wildcards; `match` matches top-level tool arguments, strings may also use wildcards; `decision` is `allow` / `confirm` / `deny`,
-  invalid rules prevent hub startup; `server/internal/connector/gate.go`, `docs/plan-connectors.md`). Writes matching `confirm_always` in an extension manifest clamp even an `allow` rule to `confirm` (`docs/extensions.md`).
-  The assistant's Lark write rules also go here: `connector` is `lark`, `action` is "method path", e.g. `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`,
-  or lark-cli's `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}` (`*` matches one path segment, `**` the rest, `"*"` any call; `match` matches top-level body fields).
-  These precede the old `lark_gate`, followed by built-in rules (`docs/assistant.md` ("Lark: the skill shipped with the Lark extension")).
-- `sent_ledger_days` (optional): how many days the ledger of what was written as the user is kept (`docs/connectors.md` "Sent as the user"); omitted or 0 means 90, below 0 keeps it for good.
-- `github` (optional): GitHub connector. `{"auth": {"from_machine": "<machine id>"}}`: use `gh`'s login on that machine (the hub runs `gh auth token` via the node,
-  keeping the token only in hub memory, never in the database or logs, or exposing it to the App or assistant). Keep `gh` signed in there, with the login in `~/.config/gh/hosts.yml`
-  (keychain credentials cannot be read via ssh: `gh auth login --insecure-storage`). `auth.host` defaults to `github.com`; put a GitHub Enterprise host name here (not implemented yet).
-  Check status under **Settings › Connectors › GitHub**. `from_machine` is only a default: every hub has GitHub, and under "Sign In From" in **Settings › Connectors › GitHub**
-  you can switch to another computer's gh login, or use device-code login (the built-in GitHub CLI Client ID, no OAuth App registration needed; the authorization page shows "GitHub CLI", see `docs/connectors.md` ("II · 7"));
-  once chosen in the App, that wins (stored in hub settings). The connector needs `repo` scope: gh's default login has it; otherwise the page suggests `gh auth refresh -s repo`.
-  `github.proxy` (optional): HTTP proxy for all requests to GitHub (device-code creation and polling at `github.com`, API at `api.github.com`, plus CI logs),
-  `http://[user:password@]host:port`, same format as `google.proxy`; omitted means direct (does not read process `HTTPS_PROXY`). Some networks reach only `api.github.com`, not `github.com`,
-  so device-code login cannot obtain a code and needs this proxy. An invalid value does not fall back to direct: every GitHub request fails, and the settings page states "github.proxy in hub.json is invalid". Actual addresses belong only in the hub's own hub.json.
-  The extension market also uses it to read markets on GitHub and download extension packages from Releases (`github.com`, `*.github.com`, `*.githubusercontent.com`; when unset, uses process `HTTPS_PROXY`, #3277).
-  `github.inbox` (optional) supplies default Inbox rules (App changes take priority, `docs/inbox.md` ("Noise reduction")): `ci` (`off` / `default_branch` / `mine` (default) / `all`),
-  `muted_repos` (`["owner/name"]`), `ignore_branches` (branches not to notify for, `path.Match` patterns, default `["train/*"]`).
 - `personas.github_login` (optional): whose level on the NWVERSE board determines the tiered avatar (Milk Frog). Defaults to the GitHub connector's logged-in account;
   with neither, shows the default "Unhatched" tier (`docs/persona.md` ("Tiered avatars")).
-- `imessage` (optional, **old syntax, retained for one version, read-only**): now choose the Mac to read in **Settings › Extensions › Messages** in the App (#1830). If configured here, the hub migrates it once at startup;
-  when the extension is off or no Mac is selected, it still reads here. Messages connector. `{"machine": "<machine id>"}`: which Mac's "Messages" appear in the App (that Mac's node reads `~/Library/Messages/chat.db` read-only,
-  requiring Full Disk Access; **Settings › Connectors › Messages** explains how). Configure one machine only (Macs on the same Apple ID share the same messages).
-  The App can show all chats. With "Hand to Persona" on (**Settings › Connectors › Messages**, on by default, stored in the hub), real chats (members include someone in Contacts or you have spoken there)
-  incrementally enter the knowledge base and Inbox by ROWID (triaged like Lark); the assistant gets `imessage_chats` / `imessage_read` / `imessage_search`; verification codes are masked. Turning it off stops everything,
-  and existing data on the hub can be deleted separately. Logs contain neither numbers nor bodies (`docs/plan-connectors.md` ("V")).
 - `assistant.owner`: how the assistant in the "Chat" tab addresses you; `assistant.notes`: Markdown appended to the assistant instructions (`~/.persona/assistant/CLAUDE.md`),
   describing things specific to your environment: code locations, skills / CLIs for work data, directories it must not touch.
 - The everyday entry for model settings is **Settings › Model Providers / Model Configuration** (`docs/model-config.md`): the former manages connections and credentials; the latter manages uses such as chat, classification, translation, knowledge processing, `/agent`, and scheduled tasks. Old `ai`, `inbox.*_ai`, `kb.ai`, and launcher defaults remain as a compatibility baseline; unified-use overrides live in Postgres, not written back to `hub.json`. Without an override the original model is kept; opening settings does not migrate it to another provider.
@@ -394,15 +341,87 @@ The Unix socket and its immediate parent directory must belong to the current us
   with `assistant.external`, `extra_dirs` are paths on the assistant's machine (`docs/knowledge.md` ("Who owns what")).
 - `inbox.rules`: personal rules for Inbox AI triage (natural language, e.g. "anything from this person needs me", "this alert group is only noise"), appended to the triage prompt and preferred over default judgments (`docs/inbox.md`).
   When a connector item carries its own rules (`rules`, e.g. an extension's `triage_rules` setting), those are used instead of this setting.
+- `hook_timeout_minutes` (default 30, 0 or negative also means 30): maximum time Claude Code hooks wait for phone answers (questions, approvals); timeout hands control back to the terminal (`docs/claude-integration.md`).
+- `shutdown_timeout_seconds` (default 8): total hub shutdown budget, including closing the database connection pool; external `docker stop -t` must be longer (`docs/server.md` ("Shutdown")).
+
+## manager.json
+
+A manager's own sections of the configuration are in its `manager.json`, not in `hub.json`: the hub reads none of them (`server/internal/managerconf`).
+
+- The built-in manager (the assistant process the hub starts, `personad assistant`): `~/.persona/managers/assistant/manager.json` (0600, its directory 0700), where its own directory goes once it is a service of its own. It holds no identity: the hub hands this manager its token.
+- A manager made in the app: the `manager.json` of its own directory (`~/.persona/managers/<id>/manager.json`), next to who it is (`id`, `hub`, `token`…; [managers.md](managers.md) ("Directory and manager.json")).
+- **Upgrading**: the first time the built-in manager starts with this version it copies `lark`, `lark_gate`, `connector_gate`, `github`, `imessage`, `google`, `microsoft`, `bots`, `extensions`, `plugins`, `trusted_extension_markets`, `usage` and `sent_ledger_days` out of `hub.json` into its `manager.json`, once: `moved_from_hub_json` in `manager.json` records which sections it took over and when, and `hub.json.before-manager-json-<time>` beside it is a copy of `hub.json` as it was. A section `manager.json` already has keeps its value there; a section `hub.json` doesn't have isn't recorded, so if one appears there later (an older build switched back wrote it) the next start moves it too.
+  `hub.json` itself is not changed, so an older build switched back still finds what it read before; changes made after the move (in the app's admin pages or by hand in `manager.json`) are in `manager.json` only, and the older build does not see them. Nothing reads `hub.json`'s copies any more: when one of them is edited by hand after the move, the manager says at start (`configuration: hub.json's … changed after they moved …`) that the change belongs in `manager.json`. They can be deleted from `hub.json` once no older build will run.
+- Edits: the admin UI's **Usage sources** writes `manager.json`'s `usage`; hand edits of `manager.json` take effect when the hub restarts (which restarts the built-in manager), or the manager for one made in the app.
+- An invalid `lark` section no longer stops the hub: the manager says so at start and doesn't use it (lark-cli is then off for the assistant). A `manager.json` that doesn't read is said at start too; its sections are left out until it is fixed.
+
+```json
+{
+  "google": { "client_id": "…", "proxy": "" },
+  "lark": { "account": 2 },
+  "extensions": [{ "id": "voice", "command": "jarvisd", "args": ["voice"] }]
+}
+```
+
+- `usage` (optional): subscription usage sources from an account-pool gateway (such as a relay), merged into the sidebar's usage bar (`docs/usage-windows.md` ("Account-pool gateways"), #2595).
+  `usage.sources[]` (at most 8): `id`, `name` (source name in the sidebar), `type` (`relay` / `generic`; old type names are still read as `relay` and rewritten to the new name the next time this source is edited in the admin UI), `url`, `key` (the gateway's admin Key, **a secret: only in `manager.json` (0600)**, unreadable from the admin UI and APIs, absent from logs), `enabled` (false disables this source).
+  `usage.enabled` (false is the master switch), `usage.poll_minutes` (poll interval per source, default 5, 1 to 1440). This section belongs to **the manager** (`personad assistant`, which reads and writes it in its `manager.json`; the hub does not read it): it only reads the gateway's cached numbers (`refresh=false`), requests come from the manager, and nodes never touch the gateway.
+  Edit in the admin UI at `/admin/usage` (the hub forwards to the manager) for immediate effect; manual edits require a hub restart (which restarts the manager too), or opening this admin page (the manager adopts the version on disk).
+- `microsoft` (optional): Outlook's "Sign In with Microsoft" (`docs/mail.md` ("Outlook integration")). `client_id` is the default client ID
+  (usually unnecessary: the user enters their own Microsoft Entra-registered one in the App, encrypted in the hub and preferred over this); `redirect_uri` defaults to
+  `jarvis-mail-oauth://outlook`, and changes must match the registration in Entra.
+- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token` (old syntax, **no longer effective**): since #1571, integration through the Lark gateway is provided by an extension
+  (start of `docs/feishu.md`, `docs/extensions.md`). The manager still reads these keys, but doesn't connect to the Lark gateway with them; if `token` or `container` is set,
+  it logs one warning at startup. Set the Agent token, container, address, and separate encrypted-message authorization (`native_olk_token`) in the Lark extension's settings instead; these keys can be removed.
+- `lark.account` (optional integer, still effective): the default Lark gateway account number, `1` for the main account, `2` for the second; omitted or `0` uses the main account, valid range 1–999999999,
+  e.g. `"lark": {"account": 2}`. The number comes from the `id` in the Lark gateway's `/accounts`, not the Lark user ID. Operations on Inbox Lark items from the default account omit `ol_account`,
+  while other accounts pass their own number; the Inbox Agent also uses this default when handling Lark items (`docs/feishu.md` ("Multiple accounts")). The Lark extension's default account is authoritative (`default` in its messaging source's `GET accounts`, #5098):
+  if the extension cannot be queried, use the last retrieved value; only if none has been retrieved since the manager started is this field used. Restart the hub after changing (`systemctl --user restart jarvisd`).
+  Server-side Inbox records are isolated and retained per account, available again when switching back.
+- `lark.cli` (optional): Lark's official open-platform CLI, lark-cli, as a second Lark source besides the Lark extension (gateway) (`docs/plan-lark-cli.md`):
+  `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`. `bin` is a command name or absolute path, default `lark-cli`; non-absolute paths are found in a login shell
+  (global npm installs often live under nvm-like directories absent from systemd's PATH); `profile` is lark-cli's `--profile`, empty uses its default.
+  Application and user logins stay with lark-cli (`~/.lark-cli`), never in `manager.json`: run
+  `lark-cli auth login --domain all` yourself on the assistant's machine (user permissions for all domains; without a browser add `--no-wait --json` and authorize via the link on the phone); after a week unused, sign in again.
+  Currently (L1) only for the assistant: its PATH contains `lark-cli` (with the configured `profile`), and write operations go through the gate (`docs/assistant.md` ("Lark: lark-cli")).
+- `lark.prefer` (optional): which source is primary when both the Lark extension (gateway) and lark-cli are available: omitted (default, extension path preferred) or `cli`; other values are the Lark extension's own source names, passed through and validated by it. Currently only affects how the assistant prompt divides the work.
+- `lark_gate` (optional, old syntax, still effective; put new rules in `connector_gate` below with `connector: lark`): gate rules for the assistant's Lark writes (the Lark extension's command gate, and lark-cli), after `connector_gate`'s `lark` rules and before built-in rules; first match wins:
+  `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]` (`action` is `allow` / `confirm` / `deny`, optional `body` matches top-level fields;
+  `docs/assistant.md` ("Lark: the skill shipped with the Lark extension")). lark-cli commands use `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
+  (`path` joins command words with `/`, `*` / `**` wildcards as above); a match skips lark-cli's self-reported risk level.
+- `connector_gate` (optional): gate rules for connector writes (such as `github_comment`); first match wins, no match means confirm each operation on the phone:
+  `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
+  (`connector`, `action` allow `*` wildcards; `match` matches top-level tool arguments, strings may also use wildcards; `decision` is `allow` / `confirm` / `deny`,
+  an invalid list is reported in the manager's log at start; `server/internal/connector/gate.go`, `docs/plan-connectors.md`). Writes matching `confirm_always` in an extension manifest clamp even an `allow` rule to `confirm` (`docs/extensions.md`).
+  The assistant's Lark write rules also go here: `connector` is `lark`, `action` is "method path", e.g. `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`,
+  or lark-cli's `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}` (`*` matches one path segment, `**` the rest, `"*"` any call; `match` matches top-level body fields).
+  These precede the old `lark_gate`, followed by built-in rules (`docs/assistant.md` ("Lark: the skill shipped with the Lark extension")).
+- `sent_ledger_days` (optional): how many days the ledger of what was written as the user is kept (`docs/connectors.md` "Sent as the user"); omitted or 0 means 90, below 0 keeps it for good.
+- `github` (optional): GitHub connector. `{"auth": {"from_machine": "<machine id>"}}`: use `gh`'s login on that machine (the hub runs `gh auth token` via the node,
+  keeping the token only in hub memory, never in the database or logs, or exposing it to the App or assistant). Keep `gh` signed in there, with the login in `~/.config/gh/hosts.yml`
+  (keychain credentials cannot be read via ssh: `gh auth login --insecure-storage`). `auth.host` defaults to `github.com`; put a GitHub Enterprise host name here (not implemented yet).
+  Check status under **Settings › Connectors › GitHub**. `from_machine` is only a default: every hub has GitHub, and under "Sign In From" in **Settings › Connectors › GitHub**
+  you can switch to another computer's gh login, or use device-code login (the built-in GitHub CLI Client ID, no OAuth App registration needed; the authorization page shows "GitHub CLI", see `docs/connectors.md` ("II · 7"));
+  once chosen in the App, that wins (stored in hub settings). The connector needs `repo` scope: gh's default login has it; otherwise the page suggests `gh auth refresh -s repo`.
+  `github.proxy` (optional): HTTP proxy for all requests to GitHub (device-code creation and polling at `github.com`, API at `api.github.com`, plus CI logs),
+  `http://[user:password@]host:port`, same format as `google.proxy`; omitted means direct (does not read process `HTTPS_PROXY`). Some networks reach only `api.github.com`, not `github.com`,
+  so device-code login cannot obtain a code and needs this proxy. An invalid value does not fall back to direct: every GitHub request fails, and the settings page states that `github.proxy` in manager.json is invalid. Actual addresses belong only in manager.json.
+  The extension market also uses it to read markets on GitHub and download extension packages from Releases (`github.com`, `*.github.com`, `*.githubusercontent.com`; when unset, uses process `HTTPS_PROXY`, #3277).
+  `github.inbox` (optional) supplies default Inbox rules (App changes take priority, `docs/inbox.md` ("Noise reduction")): `ci` (`off` / `default_branch` / `mine` (default) / `all`),
+  `muted_repos` (`["owner/name"]`), `ignore_branches` (branches not to notify for, `path.Match` patterns, default `["train/*"]`).
+- `imessage` (optional, **old syntax, retained for one version, read-only**): now choose the Mac to read in **Settings › Extensions › Messages** in the App (#1830). If configured here, the manager migrates it once at startup;
+  when the extension is off or no Mac is selected, it still reads here. Messages connector. `{"machine": "<machine id>"}`: which Mac's "Messages" appear in the App (that Mac's node reads `~/Library/Messages/chat.db` read-only,
+  requiring Full Disk Access; **Settings › Connectors › Messages** explains how). Configure one machine only (Macs on the same Apple ID share the same messages).
+  The App can show all chats. With "Hand to Persona" on (**Settings › Connectors › Messages**, on by default, stored in the hub), real chats (members include someone in Contacts or you have spoken there)
+  incrementally enter the knowledge base and Inbox by ROWID (triaged like Lark); the assistant gets `imessage_chats` / `imessage_read` / `imessage_search`; verification codes are masked. Turning it off stops everything,
+  and existing data on the hub can be deleted separately. Logs contain neither numbers nor bodies (`docs/plan-connectors.md` ("V")).
 - `bots.feishu` (optional): application credentials for the bot used to chat with Persona in Lark: `app_id`, `app_secret`, `domain` (`feishu` / `lark` / open-platform address),
   for people who do not want to enter them in the App. Values saved in the App (**Settings › Connectors › Lark Bot**) win; switches, pairing, and all features are in the App (`docs/bots.md`).
-- `extensions` (old `plugins` key still read): extensions hand-written in hub.json, launched by the hub and forwarded to the App (voice chat, etc.): `id`, `name`, `kind`, `command` + `args` (or only `socket` for an extension running elsewhere),
-  `dir` (working directory), `env` (extra environment variables), `disabled` (`true` disables while keeping the config), `config` (the extension's own settings), see `docs/extensions.md` ("Extensions in hub.json");
+- `extensions` (old `plugins` key still read): extensions hand-written in manager.json, started by the manager and forwarded to the App (voice chat, etc.): `id`, `name`, `kind`, `command` + `args` (or only `socket` for an extension running elsewhere),
+  `dir` (working directory), `env` (extra environment variables), `disabled` (`true` disables while keeping the config), `config` (the extension's own settings), see `docs/extensions.md` ("Extensions in manager.json");
   extensions installed with `personad extension install` are registered in the database, not here. For personad's built-in voice extension (GPT-Live), use `"command": "jarvisd", "args": ["voice"]`,
   with upstreams in `config.providers` (`docs/extensions.md` ("Built-in voice extension")). Restart the hub after changes.
 - `trusted_extension_markets` (optional): signing public keys of additional trusted extension markets (key id, or `ed25519:…` from `market.pub`); extensions installed from these markets default to no sandbox, just like the official market (`docs/extensions.md` ("Sandbox")).
-- `hook_timeout_minutes` (default 30, 0 or negative also means 30): maximum time Claude Code hooks wait for phone answers (questions, approvals); timeout hands control back to the terminal (`docs/claude-integration.md`).
-- `shutdown_timeout_seconds` (default 8): total hub shutdown budget, including closing the database connection pool; external `docker stop -t` must be longer (`docs/server.md` ("Shutdown")).
 
 <a id="ddnspublicddns"></a>
 

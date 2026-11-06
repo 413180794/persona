@@ -18,18 +18,18 @@ import (
 
 const usageTestKey = "ag-secret-key-9f8e7d6c"
 
-// usageTestDevices is a manager's devices with hub.json in a directory of the test's, and a client of the usage
-// sources page as the hub's admin UI relays it (assistantwire.AdminHeader).
-func usageTestDevices(t *testing.T, hubJSON string) (*Devices, *usageClient) {
+// usageTestDevices is a manager's devices with its manager.json in a directory of the test's, and a client of the
+// usage sources page as the hub's admin UI relays it (assistantwire.AdminHeader).
+func usageTestDevices(t *testing.T, managerJSON string) (*Devices, *usageClient) {
 	t.Helper()
-	dir := t.TempDir()
-	if hubJSON != "" {
-		if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(hubJSON), 0o600); err != nil {
+	file := filepath.Join(t.TempDir(), "manager.json")
+	if managerJSON != "" {
+		if err := os.WriteFile(file, []byte(managerJSON), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	d := newTestDevices(t)
-	d.opts.Dir = dir
+	d.opts.ConfigFile = file
 	return d, &usageClient{t: t, h: d.Handler(http.NotFoundHandler()), admin: true}
 }
 
@@ -53,9 +53,9 @@ func (c *usageClient) do(method, path, body string) (int, map[string]any, *httpt
 	return w.Code, out, w
 }
 
-func hubJSON(t *testing.T, d *Devices) map[string]any {
+func managerJSON(t *testing.T, d *Devices) map[string]any {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(d.opts.Dir, "hub.json"))
+	b, err := os.ReadFile(d.opts.ConfigFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func hubJSON(t *testing.T, d *Devices) map[string]any {
 
 func usageFile(t *testing.T, h *Devices) map[string]any {
 	t.Helper()
-	u, _ := hubJSON(t, h)["usage"].(map[string]any)
+	u, _ := managerJSON(t, h)["usage"].(map[string]any)
 	return u
 }
 
@@ -110,7 +110,7 @@ func TestAdminUsageSourcesLifecycle(t *testing.T) {
 		t.Fatalf("empty: %d %v", code, out)
 	}
 
-	// add: the key is saved in hub.json and never comes back
+	// add: the key is saved in manager.json and never comes back
 	code, out = do("POST", "/api/v1/admin/usage-sources", `{"type":"relay","url":"https://gw.example.com/","key":"`+usageTestKey+`"}`)
 	src, _ := out["source"].(map[string]any)
 	if code != 200 || src == nil || src["name"] != "Relay" || src["url"] != "https://gw.example.com" || src["has_key"] != true || src["enabled"] != true {
@@ -122,10 +122,10 @@ func TestAdminUsageSourcesLifecycle(t *testing.T) {
 	id := src["id"].(string)
 	file := usageFile(t, h)
 	entries := file["sources"].([]any)
-	if len(entries) != 1 || entries[0].(map[string]any)["key"] != usageTestKey || hubJSON(t, h)["future_field"] == nil || hubJSON(t, h)["token"] != "t" {
-		t.Fatalf("hub.json: %v", hubJSON(t, h))
+	if len(entries) != 1 || entries[0].(map[string]any)["key"] != usageTestKey || managerJSON(t, h)["future_field"] == nil || managerJSON(t, h)["token"] != "t" {
+		t.Fatalf("manager.json: %v", managerJSON(t, h))
 	}
-	if st, err := os.Stat(filepath.Join(h.opts.Dir, "hub.json")); err != nil || st.Mode().Perm() != 0o600 {
+	if st, err := os.Stat(h.opts.ConfigFile); err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode: %v %v", st, err)
 	}
 	if got := h.usageGW.config(); len(got.Sources) != 1 || got.Sources[0].Key != usageTestKey { // applied at once
@@ -180,8 +180,8 @@ func TestAdminUsageSourcesLifecycle(t *testing.T) {
 	if code, out = do("DELETE", "/api/v1/admin/usage-sources/"+id, `{}`); code != 404 || out["code"] != "not_found" {
 		t.Fatalf("delete twice: %d %v", code, out)
 	}
-	if hubJSON(t, h)["usage"] != nil || len(h.usageGW.config().Sources) != 0 {
-		t.Fatalf("nothing left, nothing written: %v", hubJSON(t, h))
+	if managerJSON(t, h)["usage"] != nil || len(h.usageGW.config().Sources) != 0 {
+		t.Fatalf("nothing left, nothing written: %v", managerJSON(t, h))
 	}
 
 	for _, b := range bodies {
@@ -216,7 +216,7 @@ func TestAdminUsageSourcesValidation(t *testing.T) {
 		t.Errorf("unknown id: %d", status)
 	}
 	if usageFile(t, h) != nil {
-		t.Errorf("a rejected request wrote hub.json: %v", hubJSON(t, h))
+		t.Errorf("a rejected request wrote manager.json: %v", managerJSON(t, h))
 	}
 	for i := 0; i < usageSourcesMost; i++ {
 		if status, out, _ := c.do("POST", "/api/v1/admin/usage-sources", fmt.Sprintf(`{"type":"generic","url":"https://gw%d.example.com","name":"g%d"}`, i, i)); status != 200 {

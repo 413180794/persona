@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/identity"
@@ -333,12 +334,16 @@ func waitNewToken(ctx context.Context, dir string, before *assistant.ManagerConf
 // managersRoot is where the managers of this machine are by default (~/.persona/managers).
 func managersRoot() string { return filepath.Dir(assistant.DefaultManagerDir("x")) }
 
-// localManagers are the directories under managersRoot with a manager.json.
+// localManagers are the directories under managersRoot with a manager.json, but the built-in manager's (the
+// assistant the hub runs, managerconf.DefaultDir: its manager.json holds only its configuration).
 func localManagers() []string {
 	entries, _ := os.ReadDir(managersRoot())
 	var out []string
 	for _, ent := range entries {
 		d := filepath.Join(managersRoot(), ent.Name())
+		if ent.Name() == assistantwire.AssistantID {
+			continue
+		}
 		if ent.IsDir() && fileExists(filepath.Join(d, assistant.ManagerFile)) {
 			out = append(out, d)
 		}

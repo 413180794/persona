@@ -30,6 +30,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extmgr"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/update"
 )
@@ -74,8 +75,30 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	if deploy == "" {
 		deploy = "external"
 	}
+	home := identity.HomeDir()
+	file := managerconf.DefaultFile(home)
+	moveConfig(home, file, logger.Printf)
 	return run(ctx, build, runOptions{ID: assistantwire.AssistantID, Hub: hub, Token: token, Deploy: deploy, Errors: errs,
-		Dir: identity.HomeDir(), DatabaseURL: cfg.DatabaseURL, Logf: logger.Printf})
+		Dir: home, ConfigFile: file, DatabaseURL: cfg.DatabaseURL, Logf: logger.Printf})
+}
+
+// moveConfig takes the manager's sections out of the hub.json in hubDir into its manager.json, once
+// (managerconf.Move), and says what it did; a failure leaves them where they were and is said too: the manager then
+// runs with what manager.json has.
+func moveConfig(hubDir, file string, logf func(string, ...any)) {
+	rep, err := managerconf.Move(hubDir, file)
+	if err != nil {
+		logf("configuration: could not move the manager's sections of hub.json into %s: %v", file, err)
+		return
+	}
+	if len(rep.Moved) > 0 {
+		logf("configuration: moved %s from hub.json into %s (once; hub.json keeps its copy for an older build, "+
+			"which nothing here reads; hub.json as it was is in %s)", strings.Join(rep.Moved, ", "), file, rep.Backup)
+	}
+	if len(rep.Stale) > 0 {
+		logf("configuration: hub.json's %s changed after they moved to %s, which is the one read: make the change there",
+			strings.Join(rep.Stale, ", "), file)
+	}
 }
 
 // runOptions are who a manager is and where its things are: the assistant the hub starts (Main), or a manager made
@@ -84,8 +107,10 @@ type runOptions struct {
 	ID, Hub, Token, Deploy string
 	// Fingerprint pins the hub's TLS key (its public port's self-signed certificate); "" trusts the system's CAs.
 	Fingerprint string
-	// Dir is its data directory: the knowledge base (data/), secret.key, the extensions, hub.json's usage section.
-	Dir         string
+	// Dir is its data directory: the knowledge base (data/), secret.key, the extensions.
+	Dir string
+	// ConfigFile is its manager.json, with its sections of the configuration (internal/managerconf).
+	ConfigFile  string
 	DatabaseURL string
 	// StopWhenRevoked: once the hub refuses the token, stop (bus.ErrRevoked) rather than try it every minute.
 	StopWhenRevoked bool
@@ -119,8 +144,8 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	var bh *BusHub
 	var svc *Service
 	var ext *extmgr.Manager
-	// Dir: hub.json's usage section (the account-pool gateways and their keys) is the devices', read and written there.
-	devs := devices.New(devices.Options{Store: database, Dir: home, Logf: log.New(stderr, "devices: ", log.LstdFlags).Printf,
+	// ConfigFile: its usage section (the account-pool gateways and their keys) is the devices', read and written there.
+	devs := devices.New(devices.Options{Store: database, ConfigFile: o.ConfigFile, Logf: log.New(stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			if err := svc.machineTrust(ctx, machine); err != nil { // not confirmed yet: nothing of the assistant's (machine_trust.go)
 				return nil, true, err
@@ -154,8 +179,9 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		},
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
-	// The extensions, connectors and bots (internal/extmgr): the hub.json and secret.key of the data directory here.
-	ext = extmgr.New(extmgr.Options{Dir: home, Store: database, Build: build,
+	// The extensions, connectors and bots (internal/extmgr): the hub.json and secret.key of the data directory here,
+	// and its own sections in manager.json.
+	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, Store: database, Build: build,
 		Logf: log.New(stderr, "extensions: ", log.LstdFlags).Printf,
 		Hub:  lazyHost{func() *bus.Client { return bh.Client() }}, Devices: devs,
 		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {

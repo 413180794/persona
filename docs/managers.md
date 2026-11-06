@@ -59,6 +59,8 @@ A manager made in the app installs and runs on its own: its own id, directory an
 
 - The default directory is `managers/<id>` in this computer's data directory (`~/.persona/managers/<id>`); `--dir` picks another. The directory is 0700 and its `manager.json` 0600:
   `{id, name, hub, hub_id, token, fingerprint?, database_url?, database_container?}`. `hub` is the address it reaches the hub at; `fingerprint` is the pin of the hub's own TLS certificate (only when it was installed through the hub's TLS port); `database_url` is its database, with its password; `database_container` names the container install made for it (none for a database you gave).
+  The same file holds its sections of the configuration (connectors, extensions written by hand, bots, mail sign-ins, Lark, usage sources; `docs/config.md` ("manager.json")); joining again with a new code rewrites only who it is (an older build's join rewrites the whole file and drops them).
+  The built-in manager (the assistant the hub starts) has its `manager.json` in `managers/assistant`, with the sections only; `personad manager` commands leave that directory out.
 - Its knowledge base (`data/`), `secret.key` and extensions are all under this directory; it never writes to the hub's. While it runs, `PERSONA_HOME` points at it, so the programs it starts use it too.
 - Moving to another computer: copy the whole directory, and the same token still connects; or get a new code for it in the app and install it again there (the old token stops working at once).
 

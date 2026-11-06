@@ -10,7 +10,7 @@ Extensions come from three places; the App and the API show them as one list:
 | Source | What it is | What you can do |
 | --- | --- | --- |
 | `builtin` | Ships with personad, manifest compiled into the binary (Telegram connector, WeChat bot, computer control `cua`, browser `ego`) | Toggle, configure, secrets; cannot be uninstalled |
-| `hub.json` | `extensions[]` in hub.json, written by hand by the owner (the current voice extension), see "Extensions in hub.json" below | Read-only: change it in hub.json or the admin UI |
+| `hub.json` | `extensions[]` in the manager's `manager.json` (formerly hub.json, hence the source value), written by hand by the owner (the current voice extension), see "Extensions in manager.json" below | Read-only: change it in manager.json or the admin UI |
 | `installed` | A package installed on the hub machine with `personad extension install`, or an extension running elsewhere and attached over a socket | Everything: toggle, configure, secrets, upgrade, roll back, uninstall |
 
 A built-in extension with a program of its own (the WeChat bot) is a plugin like any other: its code is in `server/plugins/<id>`, written against the Go SDK (`sdk/go`) and its own packages only (`server/plugins/guard_test.go` fails on any `server/internal` dependency), and its program is built, released and bundled with personad (`server/cmd/personad-<id>`). The hub registers it before it runs from a declaration of its own, held to the plugin's by a test.
@@ -32,7 +32,7 @@ The user's decision: extensions, connectors and chat bots all belong to the **ma
 **What the manager does** (`internal/extmgr`; the hub does not import it and it does not import the hub):
 
 - Startup order is the same as the hub's used to be: mail, personal Agents, connector registry, WeChat state migration, bots, the loops (Inbox, Agent sources, keep-awake, leases for programs on computers, auto-upgrade, health), extensions. Extension programs are **child processes of the manager**: a hub restart no longer restarts them, only a manager restart does.
-- Reads the same `hub.json` in the same `~/.persona` (the extensions, connectors and bots sections, keys unchanged) and the same `secret.key` (`internal/secretkey`, no re-encryption; a manager running elsewhere must carry a copy). Table and setting keys are unchanged; no data migration.
+- Reads the extensions, connectors and bots sections (keys unchanged) from its own `manager.json` (`~/.persona/managers/assistant/manager.json` for the built-in manager, copied out of hub.json once on upgrade, `docs/config.md` ("manager.json")) and the same `secret.key` (`internal/secretkey`, no re-encryption; a manager running elsewhere must carry a copy). Table and setting keys are unchanged; no data migration.
 - Answers `extwire.Routes`: `/api/v1/extensions…`, `/api/v1/admin/extensions…`, the compatible `/api/v1/plugins…`, the extensions' own HTTP / WebSocket / SSE (`/api/v1/extensions/{id}/…`, plus prefixes contributed by an extension's `api` contribution, e.g. the Lark extension's `/api/v1/lark/…`), `/api/v1/connectors…`, `/api/v1/bots…`, `/api/v1/channels/{id}/bind`, `/api/v1/mail/…`, `/api/v1/imessage…`, `/api/v1/agents…`, `/api/v1/messaging…`, the machines' `…/computer…`, `…/browser…`, `/api/v1/devices/{id}/widgets`.
 - Inbox and knowledge base sources, channel transport, and the connector catalog for the assistant are all handed to the assistant directly **in the same process** (previously the hub's `inbox.collected`, `channels.receive`, `feishu.*`, `connectors.*`, `kb.*` over the bus; methods and parameters are unchanged, they just skip the bus). The `inbox.changed` and `kb.changed` the assistant sends to the hub also go to it first (pushed to extensions, and `{"type":"inbox"}` pushed to the App).
 - Computers are connected through its own devices: as soon as a node connects, it adds the extensions' Agent filters to `node.configure`, then starts Cua / ego state, extension programs on computers, and connectors (previously done in the hub's `devices.connected`). The node's `plugin.node.*` events and the streams it opens itself (`mx…`) are no longer handed to the hub; it answers `assistant.lark` itself (only to the assistant's machine).
@@ -82,7 +82,7 @@ so the old names **all keep working**. New code, manifests and docs use the new 
 | Command `personad plugin …` | `personad extension …`, short form `personad ext …` | `plugin` still works; the CLI calls the new path first and falls back to the old path when the hub is still an old version (not restarted yet) |
 | Marketplace index `persona-plugins.json`, list key `plugins` | `persona-extensions.json`, list key `extensions` | GitHub and git marketplaces look for the new file first and read the old one if it is missing; https marketplaces given as a directory (`https://…/dir/`) read `dir/persona-extensions.json` first and `dir/persona-plugins.json` on 404; ones registered earlier and stored as a full URL still read that file. Both list keys are accepted |
 | Env vars `PERSONA_PLUGIN_*`, `JARVIS_PLUGIN_*` | `PERSONA_EXTENSION_*` | Every variable is accepted in all four spellings (`PERSONA_` / `JARVIS_` × `EXTENSION_` / `PLUGIN_`) |
-| hub.json `plugins` | `extensions` | Both read; if the same id appears in both, the one in `extensions` is used |
+| manager.json `plugins` | `extensions` | Both read; if the same id appears in both, the one in `extensions` is used |
 | Directory `~/.persona/plugins/` | `~/.persona/extensions/` | At startup the hub moves the old directory over whole and leaves a link `plugins → extensions` in its place (manual `ssh -R` to `~/.persona/plugins/<id>.sock` and rollbacks to an old hub still find it). If it can't be moved or both exist, the old directory stays in use and a log line is written; startup is not blocked |
 | features `plugins` / `plugin_manager` / `plugin_ui_slots` / `plugin_auto_upgrade` | `extensions` / `extension_manager` / `extension_ui_slots` / `extension_auto_upgrade`, plus `extension_market_spec` | The old ones are still reported. A new client that sees `extensions` uses the new paths; otherwise (old hub) it uses the old paths |
 | WebSocket events `plugin_ui {plugin, …}`, `plugin_upgrade {plugin, …}` | `extension_ui {extension, …}`, `extension_upgrade {extension, …}` | During the compatibility period both are sent (old first); push payloads carry both `plugin_upgrade` and `extension_upgrade` keys |
@@ -226,7 +226,7 @@ and the API returns the ordered `form.fields`). Anything outside the subset can'
 - `triage_rules` (a top-level `string`; `maxLength` of at most 4000 is recommended, since the hub uses only the first 4000 characters): this source's Inbox triage rules, in the user's own words. The extension attaches it as `rules` when it hands over items (`docs/connector-protocol.md`),
   and the hub uses it instead of the global `inbox.rules` when triaging this source's items (`docs/inbox.md` ("AI triage")). An extension that declares it gets an item
   `inbox.rules.<extension id>` in the assistant's `jarvis_settings`: reading is free; changing it pops a confirmation on the phone (before → after), and only once approved is it written through the same config-change path (validated against the schema, only this item changed, extension restarted);
-  extensions from hub.json are read-only.
+  extensions configured in the manager's manager.json are read-only.
 
 Extensions that use the Inbox **must** have `triage_rules`; see "General rules for the Inbox" below.
 
@@ -247,8 +247,8 @@ Every extension that uses the Inbox (its connector declares `inbox`) must follow
      When an auto-upgrade is refused, the extension records an "Upgrade failed" with that sentence as the reason.
    - **Changing the model**: while such an extension is on, changing **Message triage** to something that can't be called (`PATCH /api/v1/model-config/purposes/inbox.triage`) returns **422 `triage_model_in_use`** (not 409: the App treats a 409 on model settings as "changed elsewhere" and would hide the reason),
      with `extensions` listing which extensions, and `error` asking to disable them first. Removing your own choice and falling back to a hub.json config or automatic pick that still works doesn't count as clearing it, and saves normally.
-   - **Extensions in hub.json** have no toggle, so the hub can't block them: they start as usual, but while the model can't be called **their Inbox items are not accepted**; in **Settings › Extensions** the status is `needs_setup`,
-     and `needs_setup` says "Needs a triage model"; it recovers once the model works. (hub.json can currently configure only HTTP extensions, not connectors; this rule is implemented ahead of time.)
+   - **Extensions in manager.json** have no toggle, so the hub can't block them: they start as usual, but while the model can't be called **their Inbox items are not accepted**; in **Settings › Extensions** the status is `needs_setup`,
+     and `needs_setup` says "Needs a triage model"; it recovers once the model works. (manager.json can currently configure only HTTP extensions, not connectors; this rule is implemented ahead of time.)
    - At runtime, per #1644: if the model can't triage and the item has no fallback, it does not enter the Inbox, and the `triage` in `GET /api/v1/inbox` says how many are waiting.
 
 **Old hubs**: hubs before #1680 don't know `fallback`, so a connector declaring it fails to register entirely; #1680 hubs drop it and log a line, treating it as having no fallback (so a model is needed).
@@ -312,7 +312,7 @@ To call the hub's HTTP API, an extension lists the scopes it uses in `permission
   The token lives only in the hub's memory: extension processes are the hub's child processes and restart with the hub (`docs/hub-restart.md`), and the new hub signs new ones; it will be persisted once extensions move out of the hub's cgroup.
 - Local only: requests with an extension token coming from the public internet return 403 `extension_token_local_only`. Routes without a scope return 403 `{"code": "permission_denied"}`, and a missing scope also carries `scope` (the missing one).
 - When an extension calls these routes with its token, it is treated like a device with full access (not limited the way read-only devices like the watch are: answering cards and sending messages work as usual), except Inbox replies with `changes` / `/agent`.
-- **Compatibility**: old extensions with `hub_api: true` still get the hub's full token (only in env vars), with an extra warning on install and upgrade, "hub_api is the legacy form"; extensions in hub.json still get the full token.
+- **Compatibility**: old extensions with `hub_api: true` still get the hub's full token (only in env vars), with an extra warning on install and upgrade, "hub_api is the legacy form"; extensions in manager.json still get the full token.
   The full token covers every scope: upgrading from `hub_api` to a new version that asks for only a few scopes needs no new consent; the reverse does.
 - The permission summary includes the scopes (normalized: sorted, deduplicated); for extensions without `hub` the summary is the same as before. An upgrade that adds scopes needs consent again, and `added_permissions` shows "Use more of the hub's features".
 
@@ -361,7 +361,7 @@ The hub pushes `event.kb.changed {kind,id,what}` and `event.kb.forgotten {source
 The hub has an **egress proxy** (`server/internal/extension/egress`), started the first time an extension needs it, listening only locally:
 
 - **Who goes through it**: sandboxed extensions ("Sandbox" below) have it as their only way out; when the sandbox is on but this machine has no sandbox, the env vars still point to it (well-behaved programs go through it, misbehaving ones can't be stopped, and the status says so).
-  Extensions with the sandbox off, built-in ones, and ones from hub.json are unchanged and don't go through it.
+  Extensions with the sandbox off, built-in ones, and ones from manager.json are unchanged and don't go through it.
 - **What it lets through**: only hosts in this extension's `permissions.network` (`*.example.com` means subdomains under it; IP addresses only if listed literally). Anything else gets 403 "`<host>` is not in this extension's
   permissions.network", a log line, and a per-extension count (allowed / denied counts and the last denied host, in `sandbox.egress` of the extension's details; also counted in the health counters `egress.allowed` / `egress.denied`).
   Names that resolve to local loopback or link-local addresses (cloud metadata services) are not allowed, unless that exact IP is listed. Any port.
@@ -386,11 +386,11 @@ The hub has an **egress proxy** (`server/internal/extension/egress`), started th
 
 ### Sandbox (#1856)
 
-**Who is sandboxed**: only **installed** extensions the hub runs from a package (not built-in ones, ones from hub.json, or `remote:` ones running elsewhere).
+**Who is sandboxed**: only **installed** extensions the hub runs from a package (not built-in ones, ones from manager.json, or `remote:` ones running elsewhere).
 
 | | Default |
 | --- | --- |
-| Installed from a **trusted marketplace**: the signing public key recorded for the marketplace ("Signing") belongs to the official marketplace (`persona-extensions`), or is in hub.json's `trusted_extension_markets` (add your own private marketplace here; key id, or the `ed25519:…` line of `market.pub`) | Off |
+| Installed from a **trusted marketplace**: the signing public key recorded for the marketplace ("Signing") belongs to the official marketplace (`persona-extensions`), or is in the manager's manager.json `trusted_extension_markets` (add your own private marketplace here; key id, or the `ed25519:…` line of `market.pub`) | Off |
 | Everything else: other marketplaces (unsigned ones included), `dir:`, `file:`, `https://…`, uploads | On |
 | **Installed before #1856 was deployed** (when the hub first starts with the sandbox) | Recorded as "off" and runs as before; use the command below to turn it on |
 
@@ -460,7 +460,7 @@ Private extensions: clone the private repository on the hub machine and install 
 4. **Roll back**: back to the previous version (one step only).
 5. **Toggle**: a disabled extension runs no process and none of its contributions take effect (connectors are removed from the registry); config and secrets are kept.
 6. **Uninstall**: stops the process and deletes the database rows and secrets, the package directory and the data directory (`--keep-data` keeps the data directory); the rows for its contributed connectors in `connector_secrets` and connector settings are deleted too.
-   Built-in ones and ones from hub.json can't be uninstalled.
+   Built-in ones and ones from manager.json can't be uninstalled.
    Servers that support cleanup warnings may return `{ok: true, warnings: [...]}`: the extension is uninstalled, but some files still need manual handling as indicated. The web marketplace and admin page keep the full result and refresh only after it is dismissed; the CLI keeps its success output and exit code and writes each warning to stderr. Old responses without warnings are handled as usual; cleanup warnings must not be treated as an uninstall failure and retried. The iOS / Mac market extension page (#4819) also counts it as uninstalled: an **Uninstalled** sheet lists every warning (selectable, so it can be copied) and closes only on **OK**, with no toast; for screenshots use `-tab settings -openMarketExtension <market>/<extension> -showRemovalWarnings YES`. Android is tracked in #4820.
 
 Every step is recorded in `plugin_audit` (who, when, from which version to which), without config values or secrets. Who: `personad extension` (CLI), `admin UI` (admin UI),
@@ -512,7 +512,7 @@ Exactly one of `archive` and `npm`; if this hub's platform has no `archive` entr
 - **Where it goes**: `~/.persona/extensions/tools/<id>/<name>-<spec hash>/` (`pkg/` is the unpacked content, `bin/<name>` points to the program); a reused one is `machine-<name>/bin/<name>`, pointing to the machine's copy;
   `versions/<version>.json` records which ones this version uses. The same spec hash means the same copy: upgrades don't re-download, rollbacks use the previous version's; only what the current and previous versions use is kept, and uninstall deletes it all (`--keep-data` deletes it too: it isn't data).
 - **Running**: when the hub starts an extension it puts this version's `bin/` directories at the front of `PATH` (dependencies first); in the sandbox this directory is mounted read-only (Linux `--ro-bind`, macOS allows reads), and reused programs live in system directories, which the sandbox can see anyway.
-  Child processes the extension runs inherit `PATH` as usual. This applies only to extensions installed from a package: nothing is installed for `dir:` during development (`extension dev`), hub.json or built-in ones.
+  Child processes the extension runs inherit `PATH` as usual. This applies only to extensions installed from a package: nothing is installed for `dir:` during development (`extension dev`), manager.json or built-in ones.
 - **No sudo, nothing global**: it writes only the hub's state directory; anything else the program needs (credentials, caches) goes in the extension's data directory, e.g. by pointing its config directory there with an env var.
 - `tools` in the list and details are the programs this version uses: `[{name, title?, version, reused}]`.
 
@@ -569,7 +569,7 @@ Besides the whole extension's toggle, **each contribution** (`<extension point>/
 - Ids that are off still belong to this extension: other extensions can't take them by installing; permissions, the permission summary and upgrade comparisons all use the full manifest, so turning off contributions doesn't make the extension "ask for fewer permissions".
 - A **connector**'s toggle is the connector's own toggle (already used by **Settings › Connectors**, the Inbox and the knowledge base); this is just another entry point to the same toggle. **Channels** bound to a connector follow that connector.
   In the list they are `via: "connector"`, `can_disable: false`, and changes go through the connector's toggle (409 `not_running` when the connector hasn't started yet).
-- Extensions from hub.json can't have individual contributions turned off (change hub.json instead).
+- Extensions from manager.json can't have individual contributions turned off (change manager.json instead).
 - Stored in `plugins.disabled_contributions` (migration `0363`, `["ui/usage", …]`); kept across upgrades and rollbacks (if the new version no longer has that item, it has no effect).
 - **Off by default** (#2829): the manifest's `off_by_default: ["<extension point>/<id>", …]` lists contributions that start off when installed, e.g. the extension's existing features are on at install while a newly added sidebar page waits for the user to turn it on.
   On first install these items are written into `disabled_contributions`; on upgrade only items that **the previous version didn't have** and the new version lists in `off_by_default` start off, and the user's choices for existing items are untouched; rollbacks don't change anything.
@@ -580,7 +580,7 @@ API (devices with full access):
 | Endpoint | What it does |
 | --- | --- |
 | `GET /api/v1/extensions/{id}/-/` | The details get an extra `contributions: [{point, id, title?, enabled, can_disable, via?}]` (by extension point, then in manifest order); the old `contributes` (extension point → ids) is still the full set |
-| `PUT /api/v1/extensions/{id}/-/contributions/{point}/{cid}` `{enabled}` | Toggles one item and returns the details; 404 if the item doesn't exist, 409 `read_only` for hub.json ones. The old path `/api/v1/plugins/…` works too |
+| `PUT /api/v1/extensions/{id}/-/contributions/{point}/{cid}` `{enabled}` | Toggles one item and returns the details; 404 if the item doesn't exist, 409 `read_only` for manager.json ones. The old path `/api/v1/plugins/…` works too |
 
 CLI: `personad extension contributions <id>` (list), `personad extension contribution <id> <point>/<cid> on|off`.
 
@@ -795,7 +795,7 @@ hubs that registered this marketplace go to `key_changed`, and each owner runs `
 
 ## Auto-upgrade
 
-For extensions installed from an extension marketplace (source `market:<marketplace id>/<extension id>`), the hub upgrades them itself when the marketplace has a new version (#1699). Built-in ones, ones in hub.json, and ones installed from elsewhere
+For extensions installed from an extension marketplace (source `market:<marketplace id>/<extension id>`), the hub upgrades them itself when the marketplace has a new version (#1699). Built-in ones, ones in manager.json, and ones installed from elsewhere
 (`dir:`, `file:`, `https://…`, `remote:`) never take part. Code is in `server/internal/extmgr/extension_autoupgrade.go`.
 
 - **Reading marketplaces**: once a minute the hub checks which marketplaces are due: last read 6 hours ago (plus a random 0–30 minutes per marketplace to spread them out); failed reads back off 15 minutes, 30 minutes… doubling, up to 6 hours.
@@ -881,7 +881,7 @@ the host side (every call, every run, every log line) is the `Observer` in `exte
 - Env vars: `PERSONA_EXTENSION_ID`, `PERSONA_EXTENSION_DIR` (package directory), `PERSONA_EXTENSION_DATA` (`~/.persona/extensions/data/<id>/`, the extension's own cache and data, deleted on uninstall),
   `PERSONA_EXTENSION_SOCKET` (when it has `http`); extensions that asked for `hub` scopes also get `PERSONA_HUB_URL` and `PERSONA_HUB_TOKEN` (only those scopes, a new one each start, see "Permissions", "The hub's API: scopes"), and ones that accepted `hub_api` (the old form) get the full token. The old `JARVIS_*` names are given too.
 - **Installed extensions do not get the hub's own environment**: the hub's environment may contain its own credentials (the database connection string in a Docker deployment), so installed extensions inherit only an allowlist
-  (`PATH`, `HOME`, `USER`, `LANG`, `TZ`, `TMPDIR`, a few proxy and certificate vars, `host.PassEnv`), plus the ones above. Built-in ones and ones from hub.json still inherit the hub's whole environment.
+  (`PATH`, `HOME`, `USER`, `LANG`, `TZ`, `TMPDIR`, a few proxy and certificate vars, `host.PassEnv`), plus the ones above. Built-in ones and ones from manager.json still inherit the hub's whole environment.
 - State a connector saves for itself while running (Telegram's session) still goes through `connector.secrets.*`, stored in `connector_secrets`, one copy per connector id: that is written by the program itself, separate from secrets the user fills in.
 
 ## The hub's API
@@ -892,7 +892,7 @@ The `-` endpoints below exist only when `features` in `/health` and hello includ
 | Endpoint | Who can call | Notes |
 | --- | --- | --- |
 | `GET /api/v1/extensions` | Any device | `{"extensions": [ExtensionView], "can_install"}`. `ExtensionView`: the old `id`, `name`, `kind` (the first extension point; voice extensions are still `voice`, connectors are `connectors`), `status`, `error`, plus `version`, `source`, `enabled`, `description`, `contributes` (extension point → id), `needs_setup` (what is still missing, human-readable), `warnings` |
-| `GET /api/v1/extensions/{id}/-/` | Full-access devices | Details: `ExtensionView` plus `publisher`, `homepage`, `origin`, `previous_version`, `read_only`, `form` (`{fields: [{name, type, title, description, default, required, enum: [{value, title}], format, pattern, min_length, max_length, minimum, maximum, items, min_items, max_items, unique_items, fields}]}`), `config`, `secrets: [{name, title, description, required, set}]`, `permissions` (a few human-readable lines). Ones from hub.json do not return `config` or `secrets` |
+| `GET /api/v1/extensions/{id}/-/` | Full-access devices | Details: `ExtensionView` plus `publisher`, `homepage`, `origin`, `previous_version`, `read_only`, `form` (`{fields: [{name, type, title, description, default, required, enum: [{value, title}], format, pattern, min_length, max_length, minimum, maximum, items, min_items, max_items, unique_items, fields}]}`), `config`, `secrets: [{name, title, description, required, set}]`, `permissions` (a few human-readable lines). Ones from manager.json do not return `config` or `secrets` |
 | `PUT /api/v1/extensions/{id}/-/enabled` `{enabled}` | Full-access devices | Returns the details; enabling an extension that uses the Inbox and has no fallback while **Message triage** cannot be called returns 409 `needs_triage_model` ("General Inbox rules" above); the same for install and upgrade |
 | `PUT /api/v1/extensions/{id}/-/config` `{config}` | Full-access devices | Replaces the whole thing; not matching the schema returns 400 `{code: "invalid_config", field, message}` |
 | `PUT /api/v1/extensions/{id}/-/secrets/{name}` `{value}`, `DELETE …` | Full-access devices | At most 16 KB; the value is never echoed and never goes into logs or the audit log |
@@ -1025,7 +1025,7 @@ Quota extensions contribute `quota` and answer a launcher's quota (`docs/launche
 - The reachable gateways are the same as in the launcher page section: when both the extension's `quota` and `launcher_section` specify `hosts`, only launchers with matching hosts are listed and opened; if either omits `hosts` (any gateway), it is all of them.
   Extensions that did not accept `launcher_keys` get `permission_denied` from both. Older hubs do not have these two methods (`unknown_method`), and the extension treats that as no data.
 
-**Gateway account inventory** (#4576): extensions that accepted `usage_gateways` can read all accounts of the account-pool gateways among the hub's usage sources (`usage.sources[]` in `hub.json`), not limited to the accounts one launcher key can reach:
+**Gateway account inventory** (#4576): extensions that accepted `usage_gateways` can read all accounts of the account-pool gateways among the hub's usage sources (`usage.sources[]` in the manager's `manager.json`), not limited to the accounts one launcher key can reach:
 
 - `usage.gateway_accounts {}` → `{sources: [{id, name, type, checked_at, error, listed, complete}], accounts: [{source, account_id, name, provider, plan, plan_raw, plan_display_name, status, schedulable, reason, cooldown_until, windows: [{kind, scope, scoped_model, used_ratio, limit, remaining, resets_at}], checked_at, cached, stale}]}`.
   What the fields mean, where the windows of disabled accounts come from, what `reason` keeps and the limits: see `docs/usage-windows.md` ("Gateway account inventory").
@@ -1036,7 +1036,7 @@ Quota extensions contribute `quota` and answer a launcher's quota (`docs/launche
 The open-source repo ships no quota extension for any particular gateway.
 
 > The subscription windows of the **upstream accounts an account-pool gateway maintains** (the sidebar usage bar, #2595) do not go through this extension point: a quota extension answers "how much this launcher key has left" and needs the launcher's key;
-> that other thing uses the gateway's own admin key and is a very small built-in source in the hub (`usage.sources[]` in `hub.json`); for the trade-offs see `docs/usage-windows.md` ("Account-pool gateways").
+> that other thing uses the gateway's own admin key and is a very small built-in source in the hub (`usage.sources[]` in the manager's `manager.json`); for the trade-offs see `docs/usage-windows.md` ("Account-pool gateways").
 
 ## Declarative UI
 
@@ -1929,7 +1929,7 @@ Views, components, actions, responses, placements and context all use schema-gen
 - List: each extension's name and status (**On** / **Starting** / **Needs Setup** / **Off** / **Not available on this hub** / **Something Went Wrong**; both `running` and `stopped` are **On**), opening details on tap; footer explains installation via the hub's admin UI (`/admin`) or on the hub machine (`personad extension`).
 - Details: status, version, source, description, small running-state text ("Running" / "Not running; starts when needed"), "Missing: …" and errors; **Enabled** switch; **Settings** form drawn from `form.fields` (text, numbers, toggles, choices, text lists / multiselect,
   objects as separate sections), **Save** at top right submits the whole config; hub-rejected fields show the reason below that item and preserve the draft; **Secrets** only shows set / not set per item, opening a separate input form (a saved value is never echoed; while typing, the eye button can show it for a moment; on iOS the field goes back to hidden and empty as soon as it gives up the keyboard),
-  with clear available for set values; **Provides**, **It Can**, **About** (version, previous version, source, installed from, publisher, homepage, warnings). Ones from hub.json are read-only, without switches or forms.
+  with clear available for set values; **Provides**, **It Can**, **About** (version, previous version, source, installed from, publisher, homepage, warnings). Ones from manager.json are read-only, without switches or forms.
 - Contributed connectors (#3178, iOS / Mac #3228): when contributing a connector with Inbox support (`contributes.connectors`, connector has `inbox`), web, Android and iOS / iPad / Mac details show a section per connector after **Pages**:
   its **Show in Inbox** switch (the hub connector switch `PUT /api/v1/connectors/{id}/settings {"inbox"}`, shared with **Settings › Connectors › …**, not stored separately) and a **Connector Settings** row (opens the connector page, refetches on return).
   Hidden without error when the extension is disabled, connector lists cannot be read, the hub lacks `connectors`, or the connector has no `inbox` field (old hub). Settings for which items enter the Inbox (e.g. GitHub repositories/types) remain the extension's own `configuration`, rendered as a form.
@@ -2017,8 +2017,8 @@ Views, components, actions, responses, placements and context all use schema-gen
 
 The hub admin UI ([admin.md](admin.md)) **Extensions** page (`web/src/admin/pages/Extensions.tsx`) handles installation; settings and secrets are still filled in the app:
 
-- List: name, version, source (built-in / hub.json / installed), status (same wording as app), description, "Missing: …" and errors; expand for **Now** (running state), **It can**, contributions, previous version, installed from, publisher, homepage, warnings.
-  Installed extensions have **Upgrade**, **Rollback** (with a previous version, non-remote), **Uninstall**; all except hub.json sources have switches.
+- List: name, version, source (built-in / `hub.json`, i.e. manager.json / installed), status (same wording as app), description, "Missing: …" and errors; expand for **Now** (running state), **It can**, contributions, previous version, installed from, publisher, homepage, warnings.
+  Installed extensions have **Upgrade**, **Rollback** (with a previous version, non-remote), **Uninstall**; all except `hub.json` sources (manager.json) have switches.
 - Install: choose a source (hub-machine path, https link with sha256, file upload, socket running elsewhere); the page checks syntax first, then **See what it can do**:
   only after a preview is returned does it show name, version, publisher, description, every **It can** item, contributions, warnings and minutes left on the preview; **only Agree and install submits the preview's `permissions_digest` to install**.
 - Upgrade: preview first likewise (`old → new`); extra permissions show a red "The new version requires more permissions" notice at the top and a separate **Added** list, changing the button to red **Agree to new permissions and upgrade**; without consent, no upgrade. No extra permissions means a normal **Upgrade**.
@@ -2109,9 +2109,9 @@ and the node follows (`node/plugins.go`). Reconciliation runs on computer connec
   **imessage** (step 6) is built-in too: method names remain connector protocol `connector.list/chats/older/changes/search`, through `plugin.node.call {id: "imessage", method: "connector.chats", …}`;
   old nodes still receive direct `connector.*`. Built-in **Messages (iMessage)** settings have one Mac selector `machines` (`x-os: darwin`, `maxItems: 1`):
   enabling a second Mac while one is already enabled returns hub 400 `invalid_config`, `field: machines`, "Only one Mac can be read; turn off ‘<that one>’ first". The `imessage` connector stays the same,
-  with its computer selected here: use it if the extension is enabled and one is selected, otherwise hub.json `imessage.machine`; with neither, no connector (`extmgr/imessage_extension.go`).
-  hub.json values migrate once at hub startup: name becomes machine id, extension enabled, marker recorded (`imessage.migrated_to_extension`); later user disable/switch choices are not overwritten.
-  Unknown machine names or failed writes produce one log line and retry next startup, reading hub.json meanwhile. The hub.json field remains unchanged for one version.
+  with its computer selected here: use it if the extension is enabled and one is selected, otherwise manager.json `imessage.machine`; with neither, no connector (`extmgr/imessage_extension.go`).
+  manager.json values migrate once at hub startup: name becomes machine id, extension enabled, marker recorded (`imessage.migrated_to_extension`); later user disable/switch choices are not overwritten.
+  Unknown machine names or failed writes produce one log line and retry next startup, reading manager.json meanwhile. The manager.json field remains unchanged for one version.
   All three built-in manifests specify `node: {command: "builtin", machines: "machines"}` (`NodeBuiltin`). Installed packages with `builtin` are rejected; only hub built-ins may use it.
   Their `Manifest.NodeProgram()` is nil: no packages, no `plugin.node.sync`, no `nodes` / `node_machines`, no added "Runs on this computer…" confirmation,
   no node permission rows, and the consent digest is the same as without a node section. UI is therefore unchanged. Anything related to packages, status, confirmation or consent uses `NodeProgram()`, not `Node` directly.
@@ -2209,15 +2209,15 @@ After TS SDK/template changes, run `python3 scripts/gen/sdk_bundle.py` (`scripts
 
 ### Voice extensions: from `/usr/bin/node` to packages
 
-External voice extensions declared in hub.json with `"command": "/usr/bin/node"`, `"args": ["…/main.mjs"]` depend on machine-installed Node. Migrate to a regular installed extension:
+External voice extensions declared in the manager's manager.json with `"command": "/usr/bin/node"`, `"args": ["…/main.mjs"]` depend on machine-installed Node. Migrate to a regular installed extension:
 
 1. `personad extension new voice-x --template ts`; move the old `main.mjs` into `src/` (Bun runs Node-style `http` / `ws` code directly; `Bun.serve`'s `websocket` is simpler for WebSocket servers).
 2. Manifest: remove template `ui`, add `"contributes": {"voice": [{"id": "voice-x", "name": "…"}]}`, `"runtime": {"command": {…four platforms…}, "rpc": "none", "http": true}`,
-   `"activation_events": ["on_startup"]`; if it needs the hub token, add `"permissions": {"hub_api": true}` (same as hub.json, listed at install).
+   `"activation_events": ["on_startup"]`; if it needs the hub token, add `"permissions": {"hub_api": true}` (same as manager.json, listed at install).
    Let `main({…, fetch})` handle HTTP (with `rpc: none`, the SDK does not wait on stdin and serves until the hub stops it); socket is `env().socket`.
-3. Old hub.json `config`: scalars become manifest `configuration` fields, credentials go in `secrets`; structures beyond the form subset (upstream object arrays) go in a `string` field containing JSON, parsed by the program.
+3. The old entry's `config`: scalars become manifest `configuration` fields, credentials go in `secrets`; structures beyond the form subset (upstream object arrays) go in a `string` field containing JSON, parsed by the program.
    Read `env().config` / `env().secrets` (hub supplies env vars with `rpc: none`).
-4. `personad extension pack` → `personad extension install file:dist/voice-x-<version>.tar.gz`; fill settings/secrets in the app, confirm voice works, then delete the hub.json entry and restart the hub.
+4. `personad extension pack` → `personad extension install file:dist/voice-x-<version>.tar.gz`; fill settings/secrets in the app, confirm voice works, then delete the manager.json entry and restart the hub.
    The app finds voice by extension `kind` (first extension point `voice`) and `running`; changing id also changes model-config purpose `plugin.<id>`, requiring model selection again.
 
 Built-in `personad voice` ("Built-in voice extension" below) is unaffected: it is personad itself, with no Node dependency.
@@ -2235,11 +2235,11 @@ The GitHub connector is moving to extension `github` in official repo `nwverse/p
 so an installed, enabled extension replaces the hub's own connector; disabling, uninstalling or failure to start restores the hub's. Hubs without the extension behave as before. The id stays, preserving login (device-code token in `connector_secrets`),
 Inbox, knowledge base `github-*` sessions, switches, options and mutes; uninstalling the extension **does not delete** these (the hub's connector still needs them, `hasOwnConnector`).
 
-- **Login source**: the user's choice remains in hub setting `github_auth` (hub.json `github.auth.from_machine` if unset), passed to the extension after every start via `connector.auth.set`;
+- **Login source**: the user's choice remains in hub setting `github_auth` (manager.json `github.auth.from_machine` if unset), passed to the extension after every start via `connector.auth.set`;
   for a computer's gh login, the extension calls `connector.credentials.gh_token` (`gh_login` permission). `GET/PUT /api/v1/connectors/github/auth` stays unchanged: the hub's own connector queries computers and gh sign-ins (even while sidelined),
   the extension answers source choice and token scopes (`connector.auth.get`), no app changes needed.
-- **Settings**: app-edited Inbox settings (`options.*`) remain on the hub by id, passed back after every extension start; unedited settings initially use the hub's own copy (including hub.json `github.inbox`).
-  hub.json `github.proxy` and `github.auth.host` migrate on first takeover into extension `proxy` and `host` (once only, never overwriting user input, `github.migrated_to_extension`).
+- **Settings**: app-edited Inbox settings (`options.*`) remain on the hub by id, passed back after every extension start; unedited settings initially use the hub's own copy (including manager.json `github.inbox`).
+  manager.json `github.proxy` and `github.auth.host` migrate on first takeover into extension `proxy` and `host` (once only, never overwriting user input, `github.migrated_to_extension`).
 - Hub code reading the GitHub account (avatar tiers) uses connector status, not concrete types.
 - Still undone: remove the hub's own GitHub connector (separate issue after a period of real-hub validation).
 
@@ -2256,9 +2256,9 @@ so the extension no longer gets the hub token or subscribes to events. A connect
 Purely declarative (no process), contributing extension point `computer` (version 1, `{id, name?}`). **Off by default**; config is `machines` (enabled machines, written by machine-page switches), `backend` (Cua Driver / LCU / Auto) and `confirm`
 (confirm on the phone before operations). Only when enabled does the assistant get `computer_state` / `computer_run` and the machine page show **Computer Control**. LCU runtime confirmation also uses these cards, not Claude / Codex. See [computer-use.md](computer-use.md).
 
-## Extensions in hub.json
+## Extensions in manager.json
 
-Manually configured extensions in `~/.persona/hub.json` (Node-based voice extensions use this; `personad voice` entries are taken over by the built-in voice extension, see "Built-in voice extension") each get a synthesized manifest from the registry: HTTP only, `on_startup`, `hub_api` accepted, contributing their `kind`. Behavior is unchanged from before the foundation,
+Manually configured extensions in the manager's `manager.json` (`~/.persona/managers/assistant/manager.json` for the built-in manager, `docs/config.md` ("manager.json"); API source value `hub.json`) (Node-based voice extensions use this; `personad voice` entries are taken over by the built-in voice extension, see "Built-in voice extension") each get a synthesized manifest from the registry: HTTP only, `on_startup`, `hub_api` accepted, contributing their `kind`. Behavior is unchanged from before the foundation,
 except the maximum backoff rises from 60 seconds to 5 minutes.
 
 ```json
@@ -2354,9 +2354,9 @@ Closing the WebSocket ends this conversation.
 personad includes a kind = `voice` extension, using a real-time service speaking the **GPT-Live protocol** (code `server/internal/voice`, prompts
 `server/internal/prompts/voice/`, tool descriptions `prompts/mcp/voice/`). No separate Node or SDK installation.
 
-Voice-mode design (turn-scoped delegation, binding the current chat, upstream setup in-app with keys encrypted on the hub, taking over hub.json entries) is in `docs/voice.md`; hub.json configuration below remains supported.
+Voice-mode design (turn-scoped delegation, binding the current chat, upstream setup in-app with keys encrypted on the hub, taking over manager.json entries) is in `docs/voice.md`; manager.json configuration below remains supported.
 
-It is built-in: appears in **Settings › Extensions** without a hub.json entry (off by default, except when hub.json configures another voice program); upstreams can be set up in-app, see "Configure upstreams in the app" below.
+It is built-in: appears in **Settings › Extensions** without a manager.json entry (off by default, except when manager.json configures another voice program); upstreams can be set up in-app, see "Configure upstreams in the app" below.
 
 ```json
 {
@@ -2386,8 +2386,8 @@ connecting to the upstream of the selected model. `config.default` specifies the
 | --- | --- |
 | `id`, `name` | `a-z0-9_-`; model-id prefix and display name |
 | `url` | Session WebSocket: `wss://<host>/v1/live` |
-| `dialect` | `live` (default): public GPT-Live protocol; `codex`: the dialect Codex uses with `gpt-live-1-codex` (below); `fake`: development only, no service connection (no `url`), app-typed text goes unchanged to main chat, text for the model returns unchanged as its caption, enabling real-hub/real-Agent end-to-end runs without GPT-Live. `fake` allowed only in hub.json |
-| `key` / `key_file` / `key_command` | Credentials sent as `Authorization: Bearer`: inline value, file's first line, or first line printed by command (`sh -c`). Command runs for every conversation, immediately using credentials renewed elsewhere. Credentials only on the hub machine (hub.json 0600 or separate file) |
+| `dialect` | `live` (default): public GPT-Live protocol; `codex`: the dialect Codex uses with `gpt-live-1-codex` (below); `fake`: development only, no service connection (no `url`), app-typed text goes unchanged to main chat, text for the model returns unchanged as its caption, enabling real-hub/real-Agent end-to-end runs without GPT-Live. `fake` allowed only in manager.json |
+| `key` / `key_file` / `key_command` | Credentials sent as `Authorization: Bearer`: inline value, file's first line, or first line printed by command (`sh -c`). Command runs for every conversation, immediately using credentials renewed elsewhere. Credentials only on the hub machine (manager.json 0600 or separate file) |
 | `ssh` | When the hub cannot reach the service, connect through this machine (`ssh -W host:port <machine>`, TLS still end-to-end); hub must have passwordless SSH access |
 | `models`, `default_model` | Listed models; if omitted, live dialect reads service `GET <url>/models`, codex dialect uses `gpt-live-1-codex` |
 | `tools` | Live dialect: declare Persona function tools in `session.start` (knowledge-base search, list Agents, send to Agent, hand to main chat). Public GPT-Live API rejects `session.tools`; enable only on self-hosted services supporting it. Some services delegate only when tools are declared (`docs/lessons/voice.md`), making it required. Full devices (`X-Persona-Role` `full` or absent) declare all four; calls from other extensions declare only `ask_jarvis` (hand to main chat, their only capability); protocol 2 calls bound to a chat declare knowledge-base search, list Agents and `delegate_task` (hand to bound chat, `docs/voice.md` 4.4) |
@@ -2405,15 +2405,15 @@ can set addresses, keys and switches; admin has a switch too:
 | `dialect` | `live` (default) / `codex` |
 | `models`, `default_model` | As above; omitted live-dialect values read the service's model list |
 | `input_rate` | 16000 / 24000 |
-| `owner`, `notes` | What to call you, extra instructions for the voice assistant; supplied values override hub.json |
+| `owner`, `notes` | What to call you, extra instructions for the voice assistant; supplied values override manager.json |
 | Secret `key` | API key sent as `Authorization: Bearer`; encrypted with `secret.key` in `plugin_secrets`, write-only, endpoint reports only "set" |
 
-`ssh`, `key_file`, `key_command`, `tools` and additional upstreams are hub.json-only (`key_command` executes on the hub machine, and the form subset has no object arrays).
+`ssh`, `key_file`, `key_command`, `tools` and additional upstreams are manager.json-only (`key_command` executes on the hub machine, and the form subset has no object arrays).
 
-- **Merge** (`voice.Merge`): hub.json upstreams first; the form upstream is appended when it has **both** address and key, fixed id `custom` (model ids `custom/<model>`).
-  If hub.json already has `custom`, it wins and the form upstream is unused, with a note in extension-page `warnings` and `GET /info` `warnings`;
-  likewise if hub.json `default` points to a nonexistent upstream (use the first upstream's default). A form with `providers` is read in full under the old format (manual `personad voice`).
-- **Starts even without a usable upstream**: if there are no hub.json upstreams and the form lacks address or key, the extension still runs, `GET /health` returns 200, `GET /info.setup` says what is missing
+- **Merge** (`voice.Merge`): manager.json upstreams first; the form upstream is appended when it has **both** address and key, fixed id `custom` (model ids `custom/<model>`).
+  If manager.json already has `custom`, it wins and the form upstream is unused, with a note in extension-page `warnings` and `GET /info` `warnings`;
+  likewise if manager.json `default` points to a nonexistent upstream (use the first upstream's default). A form with `providers` is read in full under the old format (manual `personad voice`).
+- **Starts even without a usable upstream**: if there are no manager.json upstreams and the form lacks address or key, the extension still runs, `GET /health` returns 200, `GET /info.setup` says what is missing
   (`url_and_key` / `key` / `url`), and `/ws` returns `error{code: "no_upstream", fatal: true}`. Hub extension status is `needs_setup`,
   with a sentence such as "Real-time voice service address and key" in `needs_setup` (like `hubJSONWaitsForTriageModel`: running but needs configuration); the app only recognizes `running` voice extensions, so no voice entry appears.
 - **Keys are sent only to the address they were set for**: when config changes `url` to another origin (scheme + host + port; case, default port and path differences do not count),
@@ -2423,21 +2423,21 @@ can set addresses, keys and switches; admin has a switch too:
     checking, key deletion, config save and key setting share one registry operation lock, so interleaved requests cannot pair a key with an address it was never set for.
   - **Prefer deletion on failure**: delete whether or not key-presence can be read (idempotent); unreadable presence still returns `secrets_cleared`. If deletion fails, save nothing, return 500 `secret_not_cleared`;
     if config save fails after deletion (database write failure, 409), the error also includes `secrets_cleared` and the old address remains. Invalid form config (400) changes nothing and keeps the key.
-- **Model fallback**: if the selected model's upstream disappears (address cleared, hub.json changed), no error/disconnect: use default model and voice, then send nonfatal `error{code: "model_unavailable"}` after connecting.
+- **Model fallback**: if the selected model's upstream disappears (address cleared, manager.json changed), no error/disconnect: use default model and voice, then send nonfatal `error{code: "model_unavailable"}` after connecting.
 - **`GET /info`**: `{"protocol": 2, "features": ["target", "runs", "asks", "resume", "suspend"], "setup"?: "…", "warnings"?: ["…"]}`, without keys or upstream list. `protocol` is the highest voice-frame version this extension speaks (2 since #3502; clients not sending `protocol: 2` in `start` still use protocol 1 from this section); `features` lists only implemented capabilities (`docs/voice.md` ("Version negotiation")).
 - **Extension env vars**: `PERSONA_EXTENSION_CONFIG` (form values with defaults), `PERSONA_EXTENSION_SECRETS` (`{"key": "…"}`, decrypted only in process environment),
   `PERSONA_VOICE_HUB_CONFIG` (original `config` of the taken-over entry), entry `env`, and `JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN` (manifest `hub_api`, as before);
   legacy `PERSONA_PLUGIN_*` names are also supplied and accepted.
 
-### Taking over hub.json entries
+### Taking over manager.json entries
 
-- The **first** hub.json entry with empty or `voice` `kind`, `command` of `personad` / `jarvisd` (no path), and `args[0]` of `voice` no longer runs as a hub.json extension,
+- The **first** manager.json entry with empty or `voice` `kind`, `command` of `personad` / `jarvisd` (no path), and `args[0]` of `voice` no longer runs as a manager.json extension,
   instead registering as a built-in with the same id: **id unchanged** (model-config purpose `plugin.<id>`, selected models and app voice choices remain), socket still `~/.persona/extensions/<id>.sock`,
-  with `dir`, `env`, `config` supplied as before (env vars above). Entry `socket` unused; later matching entries still run as hub.json extensions.
+  with `dir`, `env`, `config` supplied as before (env vars above). Entry `socket` unused; later matching entries still run as manager.json extensions.
 - **Switch**: `disabled: true` keeps it off (even if its database row says on; enabling in-app returns 409 with a reason, settings remain editable);
-  otherwise the database row wins, default on without a row, making upgrades transparent for existing entries. `disabled` is only a hub.json override (`Registry.KeepOff`), not written into the row:
+  otherwise the database row wins, default on without a row, making upgrades transparent for existing entries. `disabled` is only a manager.json override (`Registry.KeepOff`), not written into the row:
   config/key edits preserve that row's switch (default "on" if absent); removing `disabled` and restarting follows the row. Turning it off in-app during this period is the owner's choice and is recorded.
-- **No entry**: register built-in `voice`, off by default (like `cua`), enabled/configured under **Settings › Extensions**. Do not register if hub.json has another voice program (Node script),
+- **No entry**: register built-in `voice`, off by default (like `cua`), enabled/configured under **Settings › Extensions**. Do not register if manager.json has another voice program (Node script),
   which runs as before; nor if an installed package already owns id `voice` (also skip when database reads fail and package presence is unknown).
   The built-in **does not yield its id** (no `Yields`): installing a `voice` package is rejected as a duplicate, preventing another program from obtaining keys set here (`plugin_secrets` keyed by id, not cleared by install).
   Disabled voice extensions are absent from model-config purposes; channel-list **Voice** prioritizes enabled voice extensions.
@@ -2483,7 +2483,7 @@ at most 3 consecutive reconnects per conversation (reset after a session lasts 6
 
 ### Deployment
 
-Deploying personad normally with `scripts/deploy.sh` includes this extension; add the entry above to hub.json, then `systemctl --user restart jarvisd` (`extensions` changes require hub restart).
+Deploying personad normally with `scripts/deploy.sh` includes this extension; add the entry above to the manager's manager.json, then `systemctl --user restart jarvisd` (`extensions` changes require a hub restart, which restarts the built-in manager).
 Try locally: `PERSONA_EXTENSION_SOCKET=/tmp/v.sock PERSONA_EXTENSION_CONFIG='{"providers":[…]}' personad voice` (old format),
 or `PERSONA_EXTENSION_CONFIG='{"url":"wss://<real-time service>/v1/live"}' PERSONA_EXTENSION_SECRETS='{"key":"<key>"}'` (form format), then send `GET /info`, `GET /models` and open `/ws` on that socket.
 App-configured upstreams need no hub restart: changing settings/keys restarts the extension (disconnecting active calls).

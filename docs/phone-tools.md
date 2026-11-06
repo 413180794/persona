@@ -95,7 +95,7 @@ Both the assistant and Agents can use them (connector `AgentTools: mail_*`). See
 
 `mail_send` confirmation is separate from phone writes: it is a connector write passing through the hub gate (`server/internal/connector/gate.go`).
 If no rule matches, the default is confirm: the hub sends an approval card to the phone ("Send mail to …: subject"), returning `The user declined mail_send.` if denied;
-`connector_gate` rules in hub.json can set allow (send without asking) or deny (reject outright). Writes in health chats always ask; allow rules do not bypass confirmation (`docs/health.md`).
+`connector_gate` rules in the manager's manager.json can set allow (send without asking) or deny (reject outright). Writes in health chats always ask; allow rules do not bypass confirmation (`docs/health.md`).
 
 ## Permissions
 

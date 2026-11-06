@@ -19,8 +19,8 @@ import (
 // A relay (an account-pool gateway) holds several agent accounts and already knows how much of each one's 5-hour and weekly
 // allowance is used. The manager asks it, read-only, every few minutes (usagesource) and keeps the last answer of each
 // source in memory; the sidebar's merge (usagewindows.go) puts those accounts next to the ones the machines read and
-// shows an account both saw once. The key is only ever in hub.json (0600; the manager reads its usage section from
-// the data directory it shares with the hub, as the extensions' sections) and in the request's Authorization header:
+// shows an account both saw once. The key is only ever in the manager's manager.json (0600; its usage section, beside the
+// extensions' sections, docs/config.md "manager.json") and in the request's Authorization header:
 // not in a log line, an error, an API answer, the bus or the database.
 
 const (
@@ -35,7 +35,7 @@ const (
 	usageGatewayTick       = 15 * time.Second // how often the loop looks for a source that is due
 )
 
-// UsageConfig is hub.json's "usage".
+// UsageConfig is manager.json's "usage".
 type UsageConfig struct {
 	// Enabled false: no gateway is asked at all (unset: asked). The machines' own windows are not affected.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -49,15 +49,15 @@ type UsageSourceConfig struct {
 	ID string `json:"id"`
 	// Name is what the sidebar calls the source ("Relay").
 	Name string `json:"name"`
-	// Type: relay | generic (usagesource; an older hub.json's earlier name of relay reads as relay).
+	// Type: relay | generic (usagesource; an older manager.json's earlier name of relay reads as relay).
 	Type string `json:"type"`
 	URL  string `json:"url"`
-	// Key is the gateway's management key (a secret: hub.json is 0600; no API answer or log ever has it).
+	// Key is the gateway's management key (a secret: manager.json is 0600; no API answer or log ever has it).
 	Key     string `json:"key,omitempty"`
 	Enabled *bool  `json:"enabled,omitempty"`
 }
 
-// UnmarshalJSON reads a source as hub.json has it, older type names included (usagesource.StoredType): a hub.json
+// UnmarshalJSON reads a source as manager.json has it, older type names included (usagesource.StoredType): a section
 // written before the relay type had its name keeps working, and the next edit of the source saves the new name.
 func (s *UsageSourceConfig) UnmarshalJSON(b []byte) error {
 	type plain UsageSourceConfig

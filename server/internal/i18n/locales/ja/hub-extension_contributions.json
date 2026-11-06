@@ -1,4 +1,4 @@
 {
-  "read_only": "{id}は hub.json に書かれています：hub.json か管理画面で変更してください",
+  "read_only": "{id}は manager.json に書かれています：manager.json か管理画面で変更してください",
   "not_running": "コネクタがまだ起動していません：先にこの拡張機能をオンにしてください"
 }

@@ -60,7 +60,7 @@ App                         hub                                Google
 - Credentials: `{client_id, refresh_token}` are encrypted with AES-GCM and stored in `mail_accounts.oauth_enc`; the access token is cached in memory only and refreshed 1 minute before expiry.
 - Receiving: IMAP `AUTHENTICATE XOAUTH2`; the temporary connection for Gmail search uses XOAUTH2 too.
 - **Gmail traffic goes through a proxy**: the author's hub machine can only reach a few of Google's IPv4 addresses (`imap.gmail.com` / `smtp.gmail.com` mostly resolve to 173.194.x.x,
-  and 443 / 993 / 465 / 587 all time out; HTTPS only works because it goes over IPv6). `google.proxy` in `hub.json` (`http://[user:pass@]host:port`)
+  and 443 / 993 / 465 / 587 all time out; HTTPS only works because it goes over IPv6). `google.proxy` in the manager's `manager.json` (`http://[user:pass@]host:port`)
   sends Gmail accounts' IMAP / SMTP (HTTP CONNECT tunnel), Google token exchange, and the Gmail API all through the proxy; other providers still connect directly.
 - **Sending uses the Gmail API** (`POST gmail.googleapis.com/gmail/v1/users/me/messages/send`, raw MIME), not SMTP:
   this machine can't reach `smtp.gmail.com` (both 465 / 587 time out, tested 2026-10-25), while HTTPS to Google works; the `https://mail.google.com/` scope also covers the Gmail API
@@ -76,7 +76,7 @@ Open-source mail clients (Thunderbird, K-9, FairEmail, Mailspring, GNOME Online 
 and pass Google's verification for restricted scopes; Thunderbird's source explicitly says "don't copy these values, register your own". Persona is for personal use, so creating your own is enough.
 
 The client we created uses the consent screen "Persona", external / in production (unverified: at sign-in you see "Google hasn't verified this app"; click "Advanced → Go to Persona").
-The client ID is only written in the hub's `hub.json` (`google.client_id`), never in the repo or docs.
+The client ID is only written in the manager's `manager.json` (`google.client_id`, `docs/config.md` ("manager.json")), never in the repo or docs.
 Publishing to production requires the branding page to link a home page, privacy policy, and terms of service, with the domain listed under "Authorized domains", so we built a static site (repo `site/`, domain in `site/wrangler.jsonc`).
 
 Steps (for reference when recreating):
@@ -90,7 +90,7 @@ Steps (for reference when recreating):
    An unverified app is limited to 100 users, and Google shows "This app isn't verified" at sign-in; click "Advanced → Continue". For personal use there's no need for verification / the CASA security assessment.
 6. "Clients" → create an OAuth client of type **iOS**, with the Bundle ID and Team ID from `app.bundle_id` / `app.team_id` in the config, which yields
    `<digits>-<string>.apps.googleusercontent.com`.
-7. Write it into `~/.persona/hub.json` on the hub machine: `"google": {"client_id": "…apps.googleusercontent.com"}`, and restart the hub (`scripts/deploy/deploy.sh <hub machine id>`).
+7. Write it into the built-in manager's `~/.persona/managers/assistant/manager.json` on the hub machine: `"google": {"client_id": "…apps.googleusercontent.com"}`, and restart the hub (`scripts/deploy/deploy.sh <hub machine id>`).
    An iOS client's client ID is public information, not a secret.
 
 Without `google.client_id`, tapping the button shows "Google sign-in is not configured".
@@ -116,9 +116,9 @@ Personal Outlook.com / Hotmail and work or school Microsoft 365 mailboxes all us
 the system browser opens Microsoft sign-in and authorization → back to the App → the account is added, no password. It works like Gmail (previous section), with these differences:
 
 - **The client ID is not compiled in**: each user uses an app they register in Microsoft Entra themselves (free, steps below). The first time you tap "Outlook" the App asks for its
-  client ID; the hub encrypts it with `secret.key` and stores it in Postgres (`mail.microsoft_client` in the settings table), and this hub reuses it from then on. `microsoft.client_id` in hub.json
+  client ID; the hub encrypts it with `secret.key` and stores it in Postgres (`mail.microsoft_client` in the settings table), and this hub reuses it from then on. `microsoft.client_id` in the manager's `manager.json`
   can provide a default (the one entered in the App takes priority). The client ID appears in every sign-in URL and is not a secret.
-- **Redirect URI**: the fixed custom scheme `jarvis-mail-oauth://outlook`, the same for every hub (to change it, set `microsoft.redirect_uri` in hub.json and change it in Entra too).
+- **Redirect URI**: the fixed custom scheme `jarvis-mail-oauth://outlook`, the same for every hub (to change it, set `microsoft.redirect_uri` in the manager's `manager.json` and change it in Entra too).
   The App catches this scheme with ASWebAuthenticationSession, which needs no registration in Info.plist, so **no per-hub App release is needed**.
   We didn't use `msauth.<bundle id>://auth`: it follows the App's bundle ID, which differs for everyone who builds it themselves, while a fixed scheme is the same for everyone.
 - **Public client + PKCE**, with authority `common` (personal accounts and accounts from any organization can sign in), and no client secret; the token exchange happens on the hub, and the refresh token never passes through the phone.

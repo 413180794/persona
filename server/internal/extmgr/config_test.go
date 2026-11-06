@@ -1,0 +1,74 @@
+package extmgr
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// The manager's sections come from its manager.json; hub.json's copies (kept for an older build) are not read, its
+// own keys are.
+func TestConfigReadsTheManagerSectionsFromManagerJSON(t *testing.T) {
+	dir := t.TempDir()
+	hub := `{"listen":":18999","token":"hub-token","public_url":"http://hub.example.com:18999",
+		"google":{"client_id":"stale"},"extensions":[{"id":"stale"}],"lark":{"account":7},"inbox":{"rules":"hub rules"}}`
+	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(hub), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "managers", "assistant", "manager.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mine := `{"token":"not-the-hub's","google":{"client_id":"mine"},"bots":{"feishu":{"app_id":"cli_example"}}}`
+	if err := os.WriteFile(file, []byte(mine), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadConfig(dir, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Listen != ":18999" || cfg.Token != "hub-token" || cfg.PublicURL != "http://hub.example.com:18999" || cfg.Inbox.Rules != "hub rules" {
+		t.Fatalf("hub.json's own keys: %+v", cfg)
+	}
+	if cfg.Google.ClientID != "mine" || cfg.Bots.Feishu.AppID != "cli_example" {
+		t.Fatalf("manager.json's sections: %+v %+v", cfg.Google, cfg.Bots)
+	}
+	if len(cfg.Extensions) != 0 || cfg.Lark.Account != 0 {
+		t.Fatalf("read hub.json's stale copies: %+v %+v", cfg.Extensions, cfg.Lark)
+	}
+	// Without a manager.json yet everything moved stays empty (the move runs before, at start).
+	cfg, err = loadConfig(dir, filepath.Join(t.TempDir(), "manager.json"))
+	if err != nil || cfg.Google.ClientID != "" || cfg.Token != "hub-token" {
+		t.Fatalf("%+v %v", cfg, err)
+	}
+}
+
+// An invalid lark section no longer stops anything: it is said, and not read.
+func TestConfigInvalidLarkIsAWarning(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "manager.json")
+	if err := os.WriteFile(file, []byte(`{"lark":{"account":-1},"google":{"client_id":"mine"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadConfig(t.TempDir(), file)
+	if err != nil || cfg.Lark.Account != 0 || cfg.Google.ClientID != "mine" || len(cfg.warnings) != 1 {
+		t.Fatalf("%+v %v", cfg, err)
+	}
+}
+
+// A manager.json that does not read: its sections are left out and said, hub.json's part still holds.
+func TestConfigUnreadableManagerJSONKeepsTheHubPart(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(`{"token":"hub-token","listen":":18999"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{`{"google":`, `[1]`, `{"google":"not an object"}`} {
+		file := filepath.Join(t.TempDir(), "manager.json")
+		if err := os.WriteFile(file, []byte(bad), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := loadConfig(dir, file)
+		if err != nil || cfg.Token != "hub-token" || cfg.Listen != ":18999" || cfg.Google.ClientID != "" || len(cfg.warnings) != 1 {
+			t.Fatalf("%s: %+v %v", bad, cfg, err)
+		}
+	}
+}

@@ -1,11 +1,11 @@
 {
-  "disabled_in_hub_json": "Realtime voice is disabled in hub.json: remove disabled from its entry, then turn it on",
+  "disabled_in_hub_json": "Realtime voice is disabled in manager.json: remove disabled from its entry, then turn it on",
   "key_cleared": "The address changed, so the key was cleared. Enter it again",
   "key_needs_url": "Enter the service address before the key: the key is only sent to that address",
   "setup_key": "Realtime voice service key",
   "setup_url": "Realtime voice service address",
   "setup_url_and_key": "Realtime voice service address and key",
-  "warn_default_unknown": "hub.json's default is not a model of any upstream, so the first upstream's default model is used",
-  "warn_form_id_taken": "hub.json already has an upstream with the id custom, so the service in these settings is not used",
+  "warn_default_unknown": "manager.json's default is not a model of any upstream, so the first upstream's default model is used",
+  "warn_form_id_taken": "manager.json already has an upstream with the id custom, so the service in these settings is not used",
   "warn_form_no_key": "The service in these settings has no key yet, so it is not used"
 }

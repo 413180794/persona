@@ -49,7 +49,7 @@ func voiceManifest(h *Manager, id, name string) *extension.Manifest {
 	}
 	items, _ := json.Marshal([]extension.VoiceItem{{ID: id, Name: name}})
 	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: id, Name: name, Version: h.version,
-		Description:      "在 App 里和 Persona 实时语音对话，语音来自 GPT-Live 兼容的实时服务。填服务地址和 Key 后打开；hub.json 里写的上游照常可用。",
+		Description:      "在 App 里和 Persona 实时语音对话，语音来自 GPT-Live 兼容的实时服务。填服务地址和 Key 后打开；manager.json 里写的上游照常可用。",
 		Engines:          extension.Engines{ExtensionProtocol: extension.Protocol},
 		Runtime:          &extension.Runtime{Command: extension.Command{Path: "personad"}, Args: []string{"voice"}, RPC: "none", HTTP: true},
 		ActivationEvents: []string{extension.OnStartup}, Permissions: extension.Permissions{HubAPI: true},
@@ -105,7 +105,7 @@ func (h *Manager) addVoiceExtension(ctx context.Context, reg *extension.Registry
 		ps.mu.Unlock()
 		return
 	}
-	if c.Disabled { // hub.json has the last word on its switch
+	if c.Disabled { // manager.json has the last word on its switch
 		reg.KeepOff(c.ID, i18n.Err("hub-voice_extension.disabled_in_hub_json"))
 	}
 	ps.voiceID = c.ID

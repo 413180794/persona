@@ -381,7 +381,8 @@ Adding a migration:
 
 | File | Content |
 | --- | --- |
-| `hub.json` | listen, token, `public_url`, public (TLS / candidate addresses), security (trust / auth rate limits, [network.md](network.md#hubjson-网络配置)), name display name, admin access scope ([admin.md](admin.md)), `hook_timeout_minutes`, `database_url`, machines; `google.client_id` (Gmail iOS OAuth client), `google.proxy` (Gmail HTTP proxy, e.g. http://127.0.0.1:<port>, `docs/mail.md`); `github.proxy` (all GitHub connector requests, same format, `docs/config.md`); notify (notification timing, `docs/config.md`) |
+| `hub.json` | listen, token, `public_url`, public (TLS / candidate addresses), security (trust / auth rate limits, [network.md](network.md#hubjson-网络配置)), name display name, admin access scope ([admin.md](admin.md)), `hook_timeout_minutes`, `database_url`, machines; notify (notification timing, `docs/config.md`) |
+| `managers/assistant/manager.json` | The built-in manager's own sections (`docs/config.md` ("manager.json")): lark, `lark_gate`, `connector_gate`, github, imessage, google, microsoft, bots, extensions / plugins, `trusted_extension_markets`, usage; e.g. `google.client_id` (Gmail iOS OAuth client), `google.proxy` (Gmail HTTP proxy, e.g. http://127.0.0.1:<port>, `docs/mail.md`), `github.proxy` (all GitHub connector requests, same format) |
 | `tls/hub.key`, `tls/hub.crt` | Automatically managed ECDSA P-256 identity key / self-signed cert, directory 0700, files 0600, private key outside DB. Rotation requires device re-pairing |
 | `secret.key` | 32-byte mail-credential encryption key |
 | `apns.json`, `apns_key.p8` | Push config / key. Present → direct APNs; absent → per-phone registered relay (`docs/push-relay.md`); no relay → no push |

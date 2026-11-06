@@ -1,4 +1,4 @@
 {
-  "read_only": "{id} is set in hub.json: change it there or in the admin page",
+  "read_only": "{id} is set in manager.json: change it there or in the admin page",
   "not_running": "The connector isn’t running yet: turn on this extension first"
 }
