@@ -201,13 +201,6 @@ struct AssistantRoutinesView: View {
                     ForEach(repeating) { t in row(t) }
                 } header: {
                     Text("定时任务")
-                } footer: {
-                    #if os(macOS)
-                    // The Mac writes its own time zone to the hub too (AppModel), so not "the phone's".
-                    Text("到点时 Persona 按提示词去做，跑完推送到手机。时间按你所在的时区。")
-                    #else
-                    Text("到点时 Persona 按提示词去做，跑完推送到手机。时间按手机所在的时区。")
-                    #endif
                 }
             }
             if !oneOff.isEmpty {
@@ -215,13 +208,6 @@ struct AssistantRoutinesView: View {
                     ForEach(oneOff) { t in row(t) }
                 } header: {
                     Text("一次性跟进")
-                } footer: {
-                    #if os(macOS)
-                    // The Mac's long press is the right click (the row's contextMenu).
-                    Text("Persona 在对话里替自己安排的，到点自己醒来接着做。右键可以立即运行或删除。")
-                    #else
-                    Text("Persona 在对话里替自己安排的，到点自己醒来接着做。左滑删除，长按可以立即运行。")
-                    #endif
                 }
             }
             if !lastRuns.isEmpty {

@@ -9619,50 +9619,6 @@
         }
       }
     },
-    "Persona 在对话里替自己安排的，到点自己醒来接着做。右键可以立即运行或删除。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona scheduled these for itself in a chat and picks them up at the set time. Right-click to run now or delete."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personaがチャットの中で自分用に予約したもので、時刻になると続きを行います。右クリックで今すぐ実行または削除できます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona 在对话里替自己安排的，到点自己醒来接着做。右键可以立即运行或删除。"
-          }
-        }
-      }
-    },
-    "Persona 在对话里替自己安排的，到点自己醒来接着做。左滑删除，长按可以立即运行。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona scheduled these for itself in a chat and picks them up at the set time. Swipe left to delete; touch and hold to run now."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personaがチャットの中で自分用に予約したもので、時刻になると続きを行います。左にスワイプで削除、長押しで今すぐ実行できます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona 在对话里替自己安排的，到点自己醒来接着做。左滑删除，长按可以立即运行。"
-          }
-        }
-      }
-    },
     "Persona 在这台 Mac 上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。": {
       "localizations": {
         "en": {
@@ -26997,50 +26953,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "到点叫醒"
-          }
-        }
-      }
-    },
-    "到点时 Persona 按提示词去做，跑完推送到手机。时间按你所在的时区。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "At the set time Persona follows the prompt and sends a notification when it's done. Times use your time zone."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "設定した時刻にPersonaがプロンプトどおりに実行し、終わると通知します。時刻は現在地のタイムゾーンです。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "到点时 Persona 按提示词去做，跑完推送到手机。时间按你所在的时区。"
-          }
-        }
-      }
-    },
-    "到点时 Persona 按提示词去做，跑完推送到手机。时间按手机所在的时区。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "At the set time Persona follows the prompt and sends a notification when it's done. Times use your phone's time zone."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "設定した時刻にPersonaがプロンプトどおりに実行し、終わると通知します。時刻はiPhoneのタイムゾーンです。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "到点时 Persona 按提示词去做，跑完推送到手机。时间按手机所在的时区。"
           }
         }
       }
