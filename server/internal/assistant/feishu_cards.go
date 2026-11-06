@@ -235,6 +235,18 @@ func (s *Service) botCardDone(ctx context.Context, messageID string, ix proto.In
 	}
 }
 
+// endedText says in l why a card is no longer pending, from interactions.get's status: it expired, or it was
+// withdrawn (cancelled); otherwise (answered, dismissed, unknown) it is the text of fallback, a key.
+func endedText(l i18n.Lang, status, fallback string) string {
+	switch status {
+	case "expired":
+		return i18n.T(l, "assistant-feishu_cards.card_expired")
+	case "cancelled":
+		return i18n.T(l, "assistant-feishu_cards.card_withdrawn")
+	}
+	return i18n.T(l, fallback)
+}
+
 // resolutionText says in l how an interaction was answered, for its closed card.
 func resolutionText(l i18n.Lang, ix proto.Interaction, r proto.Resolution) string {
 	switch {
@@ -657,12 +669,13 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 	var got struct {
 		Interaction proto.Interaction `json:"interaction"`
 		OK          bool              `json:"ok"`
+		Status      string            `json:"status"`
 	}
 	if err := s.appCall(ctx, AppInteractions, InteractionsGet, map[string]any{"interaction_id": id}, &got); err != nil {
 		return toast("error", clip(oneLine(err.Error()), 80))
 	}
 	if !got.OK {
-		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
+		return toast("info", endedText(l, got.Status, "assistant-feishu_cards.already_handled"))
 	}
 	ix := got.Interaction
 	yes, no := true, false
@@ -729,14 +742,9 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 	card, had := b.cards[id]
 	delete(b.cards, id)
 	b.mu.Unlock()
-	restore := func() {
+	restore := func(ctx context.Context) {
 		if had {
-			b.mu.Lock()
-			if b.cards == nil {
-				b.cards = map[string]botCard{}
-			}
-			b.cards[id] = card
-			b.mu.Unlock()
+			s.botRestoreCard(ctx, id, card)
 		}
 	}
 	how := resolutionText(l, ix, r)
@@ -756,7 +764,7 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 	case o := <-done:
 		switch {
 		case o.err != nil:
-			restore()
+			restore(ctx)
 			return toast("error", clip(oneLine(o.err.Error()), 80))
 		case !o.ok:
 			return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
@@ -770,7 +778,9 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 				if o.err != nil {
 					s.logf("bots: answer %s: %v", id, o.err)
 				}
-				restore()
+				rctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				defer cancel()
+				restore(rctx)
 				return
 			}
 			if msg != "" {
@@ -781,6 +791,26 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 		}()
 		return toast("info", i18n.T(l, "assistant-feishu_cards.working_on_it"))
 	}
+}
+
+// botRestoreCard puts back the card of interaction id, closed optimistically for an answer that did not go through,
+// unless the hub says it is no longer pending: it ended while the answer was out, and its interaction.ended found no
+// card to close, so putting it back would leave a card waiting that nothing answers (#5012). When that cannot be
+// asked either, the card is put back, as before.
+func (s *Service) botRestoreCard(ctx context.Context, id string, card botCard) {
+	var got struct {
+		OK bool `json:"ok"`
+	}
+	if err := s.appCall(ctx, AppInteractions, InteractionsGet, map[string]any{"interaction_id": id}, &got); err == nil && !got.OK {
+		return
+	}
+	b := &s.fbot
+	b.mu.Lock()
+	if b.cards == nil {
+		b.cards = map[string]botCard{}
+	}
+	b.cards[id] = card
+	b.mu.Unlock()
 }
 
 // botStartCardWindow is how long a repeat press of the same /start card is ignored: a double tap, Feishu's 3 s

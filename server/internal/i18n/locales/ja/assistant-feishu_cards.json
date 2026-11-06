@@ -49,6 +49,7 @@
   "pick_machine_dir": "コンピューターを選んでディレクトリを入力してください",
   "starting": "起動中…",
   "card_expired": "このカードは期限切れです",
+  "card_withdrawn": "このカードは取り下げられました",
   "already_handled": "対応済みです",
   "answer_each": "すべての質問に回答してください",
   "question_mismatch": "質問の対応が取れなくなりました",

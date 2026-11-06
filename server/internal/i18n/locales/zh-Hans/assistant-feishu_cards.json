@@ -49,6 +49,7 @@
   "pick_machine_dir": "选好电脑、填上目录",
   "starting": "正在开…",
   "card_expired": "这张卡片已经过期了",
+  "card_withdrawn": "这张卡片已经撤回了",
   "already_handled": "已经处理过了",
   "answer_each": "每个问题都要回答",
   "question_mismatch": "问题对不上了",

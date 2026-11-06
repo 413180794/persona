@@ -49,6 +49,7 @@
   "pick_machine_dir": "Pick a computer and enter a directory",
   "starting": "Starting…",
   "card_expired": "This card has expired",
+  "card_withdrawn": "This card was withdrawn",
   "already_handled": "Already handled",
   "answer_each": "Answer every question",
   "question_mismatch": "The question doesn't match anymore",
