@@ -355,11 +355,19 @@ func TestDialSocketCancel(t *testing.T) {
 		}
 	}()
 
+	// The node's ends are held until the test is over: one nothing refers to is closed when the garbage collector
+	// finalizes it, and the dial then reads EOF (or a reset) as if the node had hung up.
+	var held []net.Conn
+	t.Cleanup(func() {
+		for _, c := range held {
+			c.Close()
+		}
+	})
 	dial := func(f Dialer) (cancel func(), done chan error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		done = make(chan error, 1)
 		go func() { _, err := f(ctx, map[string]any{"kind": "x"}); done <- err }()
-		<-conns
+		held = append(held, <-conns)
 		return cancel, done
 	}
 	cancel, done := dial(DialSocketInterruptible)

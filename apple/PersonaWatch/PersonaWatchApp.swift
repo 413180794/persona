@@ -513,15 +513,16 @@ struct WatchInteractionView: View {
                         }
                     }
                     if (interaction.questions ?? []).count > 1 || (interaction.questions ?? []).contains(where: \.multiSelect) {
-                        Button("Submit") { submit() }.buttonStyle(.borderedProminent)
+                        Button("Submit") { submit() }.lineLimit(1).buttonStyle(.borderedProminent)
                     }
                     if triedEarly && !allAnswered {
                         Label("Some questions are unanswered", systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.caution)
                     }
                 case .plan:
                     Text(WatchText.shown(interaction.plan ?? "")).font(.footnote)
-                    Button("Approve & Run") { act(Resolution(approve: true, mode: "bypassPermissions")) }.buttonStyle(.borderedProminent)
-                    Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) } // i18n-ignore: feedback sent to the agent
+                    Button("Approve & Run") { act(Resolution(approve: true, mode: "bypassPermissions")) }
+                        .lineLimit(1).minimumScaleFactor(0.8).buttonStyle(.borderedProminent)
+                    Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) }.lineLimit(1) // i18n-ignore: feedback sent to the agent
                 case .permission:
                     Text(interaction.summary ?? "").font(.caption2.monospaced())
                     if interaction.requiresInput {
@@ -552,6 +553,7 @@ struct WatchInteractionView: View {
                         Button(d.submit == "Next" ? String(localized: "Next [Interaction Views f82c68]") : String(localized: "Submit")) {
                             act(Resolution(options: d.options.map(\.key).filter(ticked.contains)))
                         }
+                        .lineLimit(1)
                         .buttonStyle(.borderedProminent)
                         .disabled(ticked.isEmpty)
                     } else if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first
@@ -574,7 +576,8 @@ struct WatchInteractionView: View {
                         Button("⏎") { act(Resolution(keys: ["enter"])) }
                     }
                 }
-                Button("Handle on Computer") { act(.dismissed) }.font(.caption2).foregroundStyle(.secondary)
+                Button("Handle on Computer") { act(.dismissed) }
+                    .lineLimit(1).minimumScaleFactor(0.8).font(.caption2).foregroundStyle(.secondary)
             }
         }
         .navigationTitle(interaction.kind.watchTitle)
