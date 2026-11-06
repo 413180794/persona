@@ -1092,6 +1092,12 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 		processPanel(l, c, steps)
 		cards = []botAnswerCard{{card: c.Note(foot)}}
 	}
+	var missing []int // the pieces that did not get out (1-based): said at the end, not sent again
+	defer func() {
+		if len(missing) > 0 {
+			s.botNote(ctx, r.ReplyTo, missingPiecesNote(l, missing))
+		}
+	}()
 	for i, ac := range cards {
 		c, piece := ac.card, ac.fallback
 		if i == 0 {
@@ -1117,9 +1123,10 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 		}
 		if err != nil {
 			if i == 0 && unreachable(err) {
-				return err
+				return err // nothing went out: the whole answer is tried again later
 			}
 			s.logf("bots: answer: %v", err)
+			missing = append(missing, i+1)
 			continue
 		}
 		s.rememberBotThread(mid, botTargetOf(r), r.Label)
@@ -1139,6 +1146,19 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 		}
 	}
 	return nil
+}
+
+// missingPiecesNote says, in l, which pieces of an answer did not get to Feishu (1-based) and where the whole is.
+func missingPiecesNote(l i18n.Lang, missing []int) string {
+	nums := make([]string, len(missing))
+	for i, n := range missing {
+		nums[i] = strconv.Itoa(n)
+	}
+	sep := "、" // Chinese and Japanese list numbers with an enumeration comma
+	if strings.HasPrefix(string(l), "en") {
+		sep = ", "
+	}
+	return i18n.T(l, "assistant-feishu.missing_pieces", i18n.Args{"count": len(missing), "pieces": strings.Join(nums, sep)})
 }
 
 // endFoot is an answer's last line: how it ended, the label and time it took, and how many tools it called (one

@@ -79,5 +79,7 @@
   "cot_done": "Done",
   "cot_tools_one": "Called a tool {count} time",
   "cot_tools_other": "Called tools {count} times",
-  "cot_tools_paragraph": "Tools"
+  "cot_tools_paragraph": "Tools",
+  "missing_pieces_one": "{count} part of this answer couldn't be sent to Lark (part {pieces}); see the whole answer in the app.",
+  "missing_pieces_other": "{count} parts of this answer couldn't be sent to Lark (parts {pieces}); see the whole answer in the app."
 }

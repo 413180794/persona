@@ -878,8 +878,10 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 	}
 	// The body laid out like the bot's answers (answerCards: sections, tables, link buttons, more cards when long, at
 	// most botAnswerCards); the push's title heads the first card, the open button goes under the last.
-	cards := answerCards(s.botLang(ctx), body, false, nil, "")
+	l := s.botLang(ctx)
+	cards := answerCards(l, body, false, nil, "")
 	head := feishubot.NewCard("", "", title)
+	var missing []int // the pieces that did not get out (1-based): said at the end
 	for i, ac := range cards {
 		if i == 0 {
 			// The push's title heads the card; the body's own heading and status (请验收 / 无变动) are kept (Retitle).
@@ -895,6 +897,7 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 			if i == 0 {
 				return // nothing went out: do not mark pushed, so the turn-end mirror delivers the turn
 			}
+			missing = append(missing, i+1)
 			continue
 		}
 		if i == 0 {
@@ -903,6 +906,9 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 		if session != "" {
 			s.rememberBotThread(mid, botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, title)
 		}
+	}
+	if len(missing) > 0 {
+		s.botSay(ctx, missingPiecesNote(l, missing))
 	}
 }
 
@@ -950,6 +956,7 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 	}
 	cards := answerCards(l, answer, false, nil, foot)
 	target := botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}
+	var missing []int // the pieces that did not get out (1-based): said at the end
 	for i, ac := range cards {
 		if i == len(cards)-1 {
 			ac.card.Buttons(s.openButton(ctx, machine, session))
@@ -960,9 +967,13 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 			if i == 0 {
 				return // nothing went out: the rest would read as an answer without its beginning
 			}
+			missing = append(missing, i+1)
 			continue
 		}
 		s.rememberBotThread(mid, target, label) // a reply to any of them goes to this conversation
+	}
+	if len(missing) > 0 {
+		s.botSay(ctx, missingPiecesNote(l, missing))
 	}
 }
 

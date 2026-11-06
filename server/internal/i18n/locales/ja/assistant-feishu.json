@@ -79,5 +79,7 @@
   "cot_done": "完了",
   "cot_tools_one": "ツールを{count}回呼び出しました",
   "cot_tools_other": "ツールを{count}回呼び出しました",
-  "cot_tools_paragraph": "ツールの呼び出し"
+  "cot_tools_paragraph": "ツールの呼び出し",
+  "missing_pieces_one": "この回答のうち {count} つの部分（{pieces} 番目）を Lark に送れませんでした。全文は App で確認してください。",
+  "missing_pieces_other": "この回答のうち {count} つの部分（{pieces} 番目）を Lark に送れませんでした。全文は App で確認してください。"
 }
