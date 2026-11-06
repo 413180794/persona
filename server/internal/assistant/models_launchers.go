@@ -42,7 +42,8 @@ type storedLauncher struct {
 	KeySealed string `json:"key_sealed,omitempty"`
 	// HeadersSealed: Headers (ANTHROPIC_CUSTOM_HEADERS) sealed like the key; the embedded Headers is never stored.
 	HeadersSealed string `json:"headers_sealed,omitempty"`
-	Preset        string `json:"preset,omitempty"` // the preset (built-in or a plugin's) it was added from
+	EnvSealed     string `json:"env_sealed,omitempty"` // Env (#5953) sealed the same way; Env itself is never stored
+	Preset        string `json:"preset,omitempty"`     // the preset (built-in or a plugin's) it was added from
 	// DisplayName is what the apps call it (any language, "Zhipu GLM"); Name stays the ASCII id the launch uses.
 	DisplayName string    `json:"display_name,omitempty"`
 	Created     time.Time `json:"created"`
@@ -77,6 +78,7 @@ type LauncherView struct {
 	FableModel    string                `json:"fable_model,omitempty"`
 	SubagentForce bool                  `json:"subagent_force,omitempty"`
 	HasHeaders    bool                  `json:"has_headers,omitempty"`
+	HasEnv        bool                  `json:"has_env,omitempty"` // never the environment itself
 	Proxy         string                `json:"proxy,omitempty"`
 	NoProxy       string                `json:"no_proxy,omitempty"`
 	TimeoutMS     int                   `json:"timeout_ms,omitempty"`
@@ -97,7 +99,7 @@ func launcherView(l storedLauncher) LauncherView {
 		SubagentModel: l.SubagentModel, CustomModel: l.CustomModel, CustomModelName: l.CustomModelName,
 		CustomModelDescription: l.CustomModelDescription, Args: l.Args, HasKey: l.KeySealed != "", Auth: l.Auth,
 		Models: l.Models, OpusModel: l.OpusModel, SonnetModel: l.SonnetModel, HaikuModel: l.HaikuModel, FableModel: l.FableModel,
-		SubagentForce: l.SubagentForce, HasHeaders: l.HeadersSealed != "", Proxy: l.Proxy, NoProxy: l.NoProxy, TimeoutMS: l.TimeoutMS,
+		SubagentForce: l.SubagentForce, HasHeaders: l.HeadersSealed != "", HasEnv: l.EnvSealed != "", Proxy: l.Proxy, NoProxy: l.NoProxy, TimeoutMS: l.TimeoutMS,
 		CompactWindow: l.CompactWindow, MaxContext: l.MaxContext, Effort: l.Effort, Origin: l.Source}
 }
 
@@ -161,6 +163,11 @@ func (s *Service) managedForNodes(ctx context.Context) []proto.ManagedLauncher {
 			m.Headers, m.HasHeaders = hd, hd != ""
 		} else {
 			s.logf("launchers: open headers of %s: %v", l.Name, err)
+		}
+		if env, err := s.openKey(l.EnvSealed); err == nil {
+			m.Env, m.HasEnv = env, env != ""
+		} else {
+			s.logf("launchers: open environment of %s: %v", l.Name, err)
 		}
 		out = append(out, m)
 	}
@@ -443,6 +450,7 @@ type launcherInput struct {
 	FableModel    *string                `json:"fable_model"`
 	SubagentForce *bool                  `json:"subagent_force"`
 	Headers       *string                `json:"headers"`
+	Env           *string                `json:"env"` // one NAME=value a line (#5953); "" clears it; sealed like Headers
 	Proxy         *string                `json:"proxy"`
 	NoProxy       *string                `json:"no_proxy"`
 	TimeoutMS     *int                   `json:"timeout_ms"`
@@ -486,6 +494,32 @@ func checkHeaders(raw string) error {
 	}
 	return nil
 }
+
+// checkEnv: one NAME=value a line ("export " before it is fine), NAME a shell variable's name; a line starting with #
+// is a comment. The rules of the node's envLine (node/launcherenv.go) and the web's envProblem. The error never quotes
+// a line: a value may be a secret.
+func checkEnv(raw string) error {
+	lines := 0
+	for i, line := range strings.Split(raw, "\n") {
+		line = strings.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '\uFEFF' })
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		lines++
+		name, _, ok := strings.Cut(exportPrefix.ReplaceAllString(line, ""), "=")
+		if !ok || !envName.MatchString(strings.TrimSpace(name)) || strings.ContainsRune(line, 0) {
+			return i18n.Err("assistant-models_launchers.err_env_line", i18n.Args{"line": i + 1})
+		}
+		if lines > 50 {
+			return i18n.Err("assistant-models_launchers.err_env_limit")
+		}
+	}
+	return nil
+}
+
+var exportPrefix = regexp.MustCompile(`^export\s+`)
+
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func (in launcherInput) checkProvider() error {
 	if in.Models != nil {
@@ -543,6 +577,11 @@ func (in launcherInput) checkProvider() error {
 	}
 	if in.Headers != nil {
 		if err := checkHeaders(*in.Headers); err != nil {
+			return err
+		}
+	}
+	if in.Env != nil {
+		if err := checkEnv(*in.Env); err != nil {
 			return err
 		}
 	}
@@ -1021,7 +1060,17 @@ func (s *Service) saveLauncher(ctx context.Context, in launcherInput, old *store
 			l.HeadersSealed = sealed
 		}
 	}
-	l.APIKey, l.Headers, l.HasHeaders = "", "", false // only ever stored sealed
+	if in.Env != nil { // left out keeps it, "" clears it
+		l.EnvSealed = ""
+		if env := strings.TrimSpace(*in.Env); env != "" {
+			sealed, err := s.sealKey(env)
+			if err != nil {
+				return l, err
+			}
+			l.EnvSealed = sealed
+		}
+	}
+	l.APIKey, l.Headers, l.HasHeaders, l.Env, l.HasEnv = "", "", false, "", false // only ever stored sealed
 	list := s.storedLaunchers(ctx)
 	if i := slices.IndexFunc(list, func(x storedLauncher) bool { return x.Name == l.Name }); i >= 0 {
 		list[i] = l

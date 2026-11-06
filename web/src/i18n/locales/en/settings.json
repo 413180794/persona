@@ -119,6 +119,7 @@
   "subagent": "Subagents",
   "subagent_force": "Always use the subagent model",
   "headers": "Headers",
+  "env": "Environment",
   "proxy": "Proxy",
   "timeout": "Timeout",
   "max_context": "Max context",

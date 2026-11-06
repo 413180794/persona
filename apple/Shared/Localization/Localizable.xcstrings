@@ -80862,6 +80862,121 @@
       },
       "extractionState": "manual"
     },
+    "Environment set (hidden; leave empty to keep)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Environment set (hidden; leave empty to keep)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "環境変数設定済み（非表示、変更しない場合は空欄）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "环境变量已设置（不显示，不改就留空）"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Environment, one NAME=value per line": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Environment, one NAME=value per line"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "環境変数（1行に1つ、NAME=value）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "环境变量，一行一个 NAME=value"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Clear Saved Environment": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Saved Environment"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定済みの環境変数を消去"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除已设置的环境变量"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Saved environment will be cleared when you save": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved environment will be cleared when you save"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存すると設定済みの環境変数が消去されます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存后清除已设置的环境变量"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, add the gateway's host to NO_PROXY instead.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, add the gateway's host to NO_PROXY instead."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最後に設定され、上の項目やコンピューター側の設定より優先されます。NAME= のように値を空にすると、その変数が空になります。プロキシを通さないようにするには、代わりにゲートウェイのホストを NO_PROXY に追加してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最后设置，优先于上面各项和这台电脑自己的设置；写 NAME= 不带值会把变量设成空。要让这个网关不走代理，请改为把它的主机名加进 NO_PROXY。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Saved password no longer works": {
       "localizations": {
         "en": {

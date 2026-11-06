@@ -49,6 +49,7 @@
     <string name="settings_providers_origin">导入自</string>
     <string name="settings_providers_models">可用模型</string>
     <string name="settings_providers_headers">请求头</string>
+    <string name="settings_providers_env">环境变量</string>
     <string name="settings_providers_set_hidden">已设置（不显示）</string>
     <string name="settings_providers_unset">未设置</string>
     <string name="settings_providers_auth">认证方式</string>

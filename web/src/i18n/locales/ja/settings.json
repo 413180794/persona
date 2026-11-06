@@ -116,6 +116,7 @@
   "subagent": "サブエージェント",
   "subagent_force": "常にサブエージェントモデルを使用",
   "headers": "リクエストヘッダー",
+  "env": "環境変数",
   "proxy": "プロキシ",
   "timeout": "タイムアウト",
   "max_context": "最大コンテキスト",

@@ -266,6 +266,7 @@ private fun providerFacts(l: HubLauncher, machineName: (String) -> String): List
     l.origin?.takeIf { it.startsWith("zshrc:") }?.let { add(stringResource(R.string.settings_providers_origin) to "~/.zshrc · " + it.removePrefix("zshrc:")) }
     if (l.models.size > 1) add(stringResource(R.string.settings_providers_models) to l.models.joinToString(stringResource(R.string.settings_providers_list_sep)) { it.id })
     if (l.hasHeaders) add(stringResource(R.string.settings_providers_headers) to stringResource(R.string.settings_providers_set_hidden))
+    if (l.hasEnv) add(stringResource(R.string.settings_providers_env) to stringResource(R.string.settings_providers_set_hidden))
     if (l.managed) add("API Key" to stringResource(if (l.hasKey) R.string.settings_providers_set_hidden else R.string.settings_providers_unset))
     if (l.managed && l.api != "responses") add(stringResource(R.string.settings_providers_auth) to if (l.auth == "bearer") "Bearer" else "x-api-key")
     if (l.args.isNotEmpty()) add(stringResource(R.string.settings_providers_args) to l.args.joinToString(" "))

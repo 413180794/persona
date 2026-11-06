@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -89,7 +90,7 @@ func managedEnv(l proto.ManagedLauncher) []string {
 		if l.APIKey != "" {
 			env = append(env, "OPENAI_API_KEY="+l.APIKey)
 		}
-		return env
+		return withLauncherEnv(env, l.Env)
 	case "agy":
 		var env []string
 		if l.BaseURL != "" {
@@ -98,9 +99,29 @@ func managedEnv(l proto.ManagedLauncher) []string {
 		if l.APIKey != "" {
 			env = append(env, "GEMINI_API_KEY="+l.APIKey)
 		}
-		return env
+		return withLauncherEnv(env, l.Env)
 	}
 	return envList(providerEnv(l, "", "", false))
+}
+
+// withLauncherEnv is env (KEY=value entries) with a launcher's own environment over it (#5953), for an agent that is no
+// Claude Code (providerEnv does that for one).
+func withLauncherEnv(env []string, raw string) []string {
+	for _, kv := range launcherEnvVars(raw) {
+		env = slices.DeleteFunc(env, func(e string) bool { return strings.HasPrefix(e, kv[0]+"=") })
+		env = append(env, kv[0]+"="+kv[1])
+	}
+	return env
+}
+
+// envNames are the names env (KEY=value entries) sets.
+func envNames(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		k, _, _ := strings.Cut(kv, "=")
+		out = append(out, k)
+	}
+	return out
 }
 
 // artifactsOff turns Claude Code's Artifact tool off for a claude a managed launcher runs. Artifacts publish to
@@ -171,11 +192,15 @@ func Launch(ctx context.Context, name string, args []string) error {
 		}
 		resp.Clear, resp.Env = launchEnvFor(resp.Clear, resp.Env, os.Getenv("PERSONA_ASSISTANT") == "1")
 		env = append(withoutEnv(os.Environ(), resp.Clear), resp.Env...)
+		// A proxy the shell still names that no longer answers would hold every request (deadproxy.go, #5953).
+		env = withoutDeadProxies(env, resp.Env, envValue(resp.Env, "ANTHROPIC_BASE_URL"),
+			func(msg string) { fmt.Fprintf(os.Stderr, "jarvisd launch %s: %s\n", name, msg) })
 		if err := approveClaudeAPIKey(env); err != nil { // apikeyapproval.go: else Claude asks whether to use the key, default No
 			fmt.Fprintf(os.Stderr, "jarvisd launch %s: could not mark the API key as approved for Claude Code: %v\n", name, err)
 		}
 	} else {
-		env = append(os.Environ(), resp.Env...)
+		// What the launcher sets replaces the shell's: with both, the agent would read the shell's (the first).
+		env = append(withoutEnv(os.Environ(), envNames(resp.Env)), resp.Env...)
 	}
 	hasModelArg := false
 	hasSettingsArg := false

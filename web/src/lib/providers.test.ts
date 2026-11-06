@@ -75,6 +75,10 @@ describe("formProblems", () => {
   it("checks the advanced fields", () => {
     expect(formProblems(ready({ headers: "no colon", headers_touched: true }), true).advanced).toMatch(/请求头第 1 行/);
     expect(formProblems(ready({ headers: "X-A: 1\n\nX-B: 2", headers_touched: true }), true).advanced).toBe("");
+    expect(formProblems(ready({ env: "A=1\nbad name=2", env_touched: true }), true).advanced).toMatch(/环境变量第 2 行/);
+    expect(formProblems(ready({ env: Array(51).fill("A=1").join("\n"), env_touched: true }), true).advanced).toMatch(/最多 50/);
+    expect(formProblems(ready({ env: "# off for this one\nexport HTTP_PROXY=\nno_proxy=*.example.com\nexport\tB=1\n\uFEFFC=2 # c", env_touched: true }), true).advanced).toBe("");
+    expect(formProblems(ready({ env: "\n\nexport =1", env_touched: true }), true).advanced).toMatch(/环境变量第 3 行/);
     expect(formProblems(ready({ proxy: "proxy.example.com" }), true).advanced).toMatch(/代理/);
     expect(formProblems(ready({ proxy: "socks5://127.0.0.1:1080" }), true).advanced).toBe("");
     expect(formProblems(ready({ timeout_ms: "-1" }), true).advanced).toMatch(/超时/);
@@ -88,17 +92,17 @@ describe("providerBody", () => {
     const b = providerBody(ready({ timeout_ms: "30000", subagent_force: true }), null);
     expect(b).toMatchObject({ name: "gw", base_url: "https://gw.example.com", model: "m1", auth: "bearer", api_key: "sk-test-1", timeout_ms: 30000, subagent_force: true });
     expect(b.models).toEqual([{ id: "m1", context_window: 200000 }]);
-    for (const k of ["headers", "proxy", "opus_model", "compact_window", "effort"]) expect(b).not.toHaveProperty(k);
+    for (const k of ["headers", "env", "proxy", "opus_model", "compact_window", "effort"]) expect(b).not.toHaveProperty(k);
   });
   it("an unchanged PUT leaves out the #2455 fields, the key and the headers", () => {
     const b = providerBody(formFromView(stored), stored);
     expect(b).toMatchObject({ name: "gw", base_url: "https://gw.example.com", model: "m1", auth: "bearer" });
-    for (const k of ["models", "opus_model", "subagent_force", "proxy", "timeout_ms", "effort", "headers", "api_key"]) expect(b).not.toHaveProperty(k);
+    for (const k of ["models", "opus_model", "subagent_force", "proxy", "timeout_ms", "effort", "headers", "env", "api_key"]) expect(b).not.toHaveProperty(k);
   });
   it("a PUT sends only what changed; cleared headers go as an empty string", () => {
-    const f = { ...formFromView(stored), proxy: "", timeout_ms: "900000", headers: "", headers_touched: true };
+    const f = { ...formFromView(stored), proxy: "", timeout_ms: "900000", headers: "", headers_touched: true, env: " HTTPS_PROXY=\n", env_touched: true };
     const b = providerBody(f, stored);
-    expect(b).toMatchObject({ proxy: "", timeout_ms: 900000, headers: "" });
+    expect(b).toMatchObject({ proxy: "", timeout_ms: 900000, headers: "", env: " HTTPS_PROXY=" });
     expect(b).not.toHaveProperty("models");
     expect(b).not.toHaveProperty("effort");
   });

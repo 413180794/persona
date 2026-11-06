@@ -732,6 +732,24 @@ struct ProviderWizard: View {
                     Text("Saved headers will be cleared when you save").font(Theme.Font.label).foregroundStyle(Theme.cautionText)
                 }
             }
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                TextField(wizard.hasStoredEnv ? String(localized: "Environment set (hidden; leave empty to keep)") : String(localized: "Environment, one NAME=value per line"),
+                          text: $wizard.env, axis: .vertical)
+                    .font(Theme.Font.body.monospaced())
+                    .lineLimit(2...5)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .privacySensitive() // values can be credentials, like the headers
+                    .accessibilityIdentifier("wizard.env")
+                if wizard.hasStoredEnv {
+                    Button("Clear Saved Environment", role: .destructive) { wizard.clearEnv = true }
+                        .lineLimit(1).buttonStyle(.borderless)
+                } else if wizard.clearEnv {
+                    Text("Saved environment will be cleared when you save").font(Theme.Font.label).foregroundStyle(Theme.cautionText)
+                } else {
+                    Text("Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, add the gateway's host to NO_PROXY instead.")
+                        .font(Theme.Font.label).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 

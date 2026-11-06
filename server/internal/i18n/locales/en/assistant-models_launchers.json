@@ -30,6 +30,8 @@
   "err_effort_model": "Thinking effort {effort} of model {model} isn’t supported (use {levels})",
   "err_effort_model_default": "Default thinking effort {effort} of model {model} isn’t supported (use {levels})",
   "err_header_line": "Header line {line} must be “Name: value”",
+  "err_env_line": "Environment line {line} must be NAME=value, NAME made of letters, digits and _",
+  "err_env_limit": "At most 50 environment variables",
   "err_model_no_id": "A model in the list has no ID",
   "err_model_duplicate": "Model {model} is listed twice",
   "err_model_context_negative": "The context window of model {model} can’t be negative",

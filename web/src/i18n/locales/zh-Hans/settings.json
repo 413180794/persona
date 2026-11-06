@@ -116,6 +116,7 @@
   "subagent": "子代理",
   "subagent_force": "强制使用子代理模型",
   "headers": "请求头",
+  "env": "环境变量",
   "proxy": "代理",
   "timeout": "超时",
   "max_context": "最大上下文",

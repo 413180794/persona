@@ -33,6 +33,8 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var subagentForce: Bool?
     /// Custom request headers stay sealed at the hub, never sent back: only whether there are some.
     var hasHeaders: Bool?
+    /// Its own environment (#5953) is sealed the same way: only whether there is some.
+    var hasEnv: Bool?
     var proxy: String?
     var noProxy: String?
     var timeoutMS: Int?
@@ -55,7 +57,7 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
         case opusModel = "opus_model", sonnetModel = "sonnet_model", haikuModel = "haiku_model", fableModel = "fable_model"
         case subagentForce = "subagent_force", hasHeaders = "has_headers", noProxy = "no_proxy", timeoutMS = "timeout_ms"
-        case compactWindow = "compact_window", maxContext = "max_context", displayName = "display_name"
+        case compactWindow = "compact_window", maxContext = "max_context", displayName = "display_name", hasEnv = "has_env"
     }
 
     var bearerAuth: Bool { auth == "bearer" }
@@ -168,6 +170,9 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     var subagentForce: Bool? = nil
     /// ANTHROPIC_CUSTOM_HEADERS: nil keeps what the hub has, "" clears it (a secret like the key).
     var headers: String? = nil
+    /// More environment for the launch, one NAME=value a line, set after everything else (#5953): nil keeps what the hub
+    /// has, "" clears it (a secret like the key). An empty value turns a variable off (HTTP_PROXY=).
+    var env: String? = nil
     var proxy: String? = nil
     var noProxy: String? = nil
     var timeoutMS: Int? = nil
@@ -180,7 +185,7 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     /// POST only, a hub with `builtin_presets`): the answer says which were and which were kept.
     var assign: [String]? = nil
     enum CodingKeys: String, CodingKey {
-        case name, model, args, kind, api, preset, auth, models, headers, proxy, effort, assign
+        case name, model, args, kind, api, preset, auth, models, headers, env, proxy, effort, assign
         case displayName = "display_name"
         case baseURL = "base_url", smallModel = "small_model", apiKey = "api_key"
         case subagentModel = "subagent_model", customModel = "custom_model"

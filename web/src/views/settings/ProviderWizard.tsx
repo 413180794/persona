@@ -399,7 +399,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
           <div className="flex flex-col gap-3">
             <ModelList f={f} setF={setF} />
             <Disclosure title={t("settings-providerwizard.advanced")} open={advanced} onToggle={() => setAdvanced((o) => !o)} badge={advanced ? undefined : t("settings-providerwizard.advanced_badge")}>
-              <Advanced f={f} setF={setF} set={set} hadHeaders={!!old?.has_headers} />
+              <Advanced f={f} setF={setF} set={set} hadHeaders={!!old?.has_headers} hadEnv={!!old?.has_env} />
             </Disclosure>
           </div>
         )}
@@ -729,11 +729,12 @@ function ModelRow({ m, isDefault, onChange, onDefault }: { m: FormModel; isDefau
   );
 }
 
-function Advanced({ f, setF, set, hadHeaders }: {
+function Advanced({ f, setF, set, hadHeaders, hadEnv }: {
   f: ProviderForm;
   setF: React.Dispatch<React.SetStateAction<ProviderForm>>;
   set: <K extends keyof ProviderForm>(k: K) => (v: ProviderForm[K]) => void;
   hadHeaders: boolean;
+  hadEnv: boolean;
 }) {
   const list = useId();
   const ids = useMemo(() => f.models.filter((m) => m.checked).map((m) => m.id), [f.models]);
@@ -787,6 +788,24 @@ function Advanced({ f, setF, set, hadHeaders }: {
             t("settings-providerwizard.headers_cleared")
           ) : (
             t("settings-providerwizard.headers_hint")
+          )
+        }
+      />
+      <SecretField
+        label={t("settings-providerwizard.env")}
+        multiline
+        value={f.env}
+        onChange={(v) => setF((x) => ({ ...x, env: v, env_touched: true }))}
+        placeholder={hadEnv && !f.env_touched ? t("settings-providerwizard.env_set") : t("settings-providerwizard.env_placeholder")}
+        hint={
+          hadEnv && !f.env_touched ? (
+            <button type="button" onClick={() => setF((x) => ({ ...x, env: "", env_touched: true }))} className="touch-hit text-red hover:underline">
+              {t("settings-providerwizard.env_clear")}
+            </button>
+          ) : f.env_touched && hadEnv && !f.env.trim() ? (
+            t("settings-providerwizard.env_cleared")
+          ) : (
+            t("settings-providerwizard.env_hint")
           )
         }
       />

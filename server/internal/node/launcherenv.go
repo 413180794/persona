@@ -3,9 +3,11 @@ package node
 import (
 	"cmp"
 	"maps"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -29,16 +31,96 @@ var providerEnvClear = append(slices.Clone(legacyEnvClear), "CLAUDE_CODE_EFFORT_
 var proxyEnvClear = []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"}
 
 // envClearFor is what to drop before l runs: a launcher from before #2455 keeps the shell's proxy and timeout, as it
-// always has; a provider keeps the shell's proxy unless it has one.
+// always has; a provider keeps the shell's proxy unless it has one (a dead one is dropped at launch,
+// withoutDeadProxies), and the shell's no_proxy, which Claude Code reads together with the NO_PROXY it sets. What the
+// launcher's own environment sets (Env) goes too, a proxy variable in both spellings: its value is the one that counts.
 func envClearFor(l proto.ManagedLauncher) []string {
-	if providerShaped(l) {
-		if l.Proxy != "" {
-			return append(slices.Clone(providerEnvClear), proxyEnvClear...)
-		}
-		return providerEnvClear
+	var clear []string
+	switch {
+	case !providerShaped(l):
+		clear = slices.Clone(legacyEnvClear)
+	case l.Proxy != "":
+		clear = append(slices.Clone(providerEnvClear), proxyEnvClear...)
+	case l.NoProxy != "":
+		clear = append(slices.Clone(providerEnvClear), "NO_PROXY")
+	default:
+		clear = slices.Clone(providerEnvClear)
 	}
-	return legacyEnvClear
+	for _, kv := range launcherEnvVars(l.Env) {
+		for _, k := range append([]string{kv[0]}, otherSpelling(kv[0])...) {
+			if !slices.Contains(clear, k) {
+				clear = append(clear, k)
+			}
+		}
+	}
+	return clear
 }
+
+// proxyNames are the proxy variables Claude Code (Node's fetch) reads in either spelling, the lower-case one first; an
+// empty value falls through to the other one.
+var proxyNames = []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"}
+
+// otherSpelling is k's other spelling when k is one of proxyNames in either case, none otherwise.
+func otherSpelling(k string) []string {
+	for _, p := range proxyNames {
+		switch k {
+		case p:
+			return []string{strings.ToLower(p)}
+		case strings.ToLower(p):
+			return []string{p}
+		}
+	}
+	return nil
+}
+
+// launcherEnvVars is a launcher's own environment (Env), in order: one NAME=value a line, "export " before it is fine,
+// a line starting with # is a comment. A value in quotes is what is inside them; one without loses a trailing " # …"
+// comment, as in a shell. Lines that are no assignment are skipped: the hub refuses them (checkEnv, the same rules).
+func launcherEnvVars(raw string) [][2]string {
+	var out [][2]string
+	for _, line := range strings.Split(raw, "\n") {
+		k, v, ok := envLine(line)
+		if ok && k != "" {
+			out = append(out, [2]string{k, v})
+		}
+	}
+	return out
+}
+
+// envLine reads one line of a launcher's environment: k "" (and ok) for a blank line or a comment, ok false for a line
+// that is no assignment.
+func envLine(line string) (k, v string, ok bool) {
+	line = strings.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '\uFEFF' })
+	if line == "" || strings.HasPrefix(line, "#") {
+		return "", "", true
+	}
+	line = exportRe.ReplaceAllString(line, "")
+	k, v, ok = strings.Cut(line, "=")
+	k = strings.TrimSpace(k)
+	if !ok || !envNameRe.MatchString(k) {
+		return "", "", false
+	}
+	rest := strings.TrimLeft(v, " \t")
+	if rest != v && strings.HasPrefix(rest, "#") {
+		return k, "", true // `A= # a note`: empty, as in a shell
+	}
+	v = rest
+	if v != "" && (v[0] == '"' || v[0] == '\'') {
+		if end := strings.IndexByte(v[1:], v[0]); end >= 0 {
+			return k, v[1 : end+1], true
+		}
+	}
+	for _, sep := range []string{" #", "\t#"} { // a comment after the value
+		if i := strings.Index(v, sep); i >= 0 {
+			v = v[:i]
+		}
+	}
+	return k, strings.TrimSpace(v), true
+}
+
+var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+var exportRe = regexp.MustCompile(`^export\s+`)
 
 // withoutEnv is environ (KEY=value entries) without the variables clear names.
 func withoutEnv(environ, clear []string) []string {
@@ -89,6 +171,7 @@ func sdkModel(m string, pm proto.ProviderModel) string {
 func providerShaped(l proto.ManagedLauncher) bool {
 	return l.Kind == "api" || len(l.Models) > 0 || l.OpusModel != "" || l.SonnetModel != "" || l.HaikuModel != "" ||
 		l.FableModel != "" || l.SubagentForce || l.Headers != "" || l.HasHeaders || l.Proxy != "" || l.NoProxy != "" ||
+		l.Env != "" || l.HasEnv ||
 		l.TimeoutMS != 0 || l.CompactWindow != 0 || l.MaxContext != 0 || l.Effort != "" || l.Source != ""
 }
 
@@ -151,10 +234,14 @@ func providerEnv(l proto.ManagedLauncher, model, effort string, mainConversation
 		set("CLAUDE_CODE_EFFORT_LEVEL", cmp.Or(effort, l.Effort, pm.DefaultEffort))
 	}
 	set("ANTHROPIC_CUSTOM_HEADERS", l.Headers)
+	// Both spellings: Node's fetch reads the lower-case one first, so an upper-case value alone would lose to a lower-case
+	// one in the user's settings env.
 	if l.Proxy != "" {
-		env["HTTP_PROXY"], env["HTTPS_PROXY"] = l.Proxy, l.Proxy
+		for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+			env[k] = l.Proxy
+		}
 	}
-	set("NO_PROXY", l.NoProxy)
+	set("NO_PROXY", l.NoProxy) // not no_proxy: Claude Code takes both, so the shell's own list stays in it
 	if l.CustomModel != "" {
 		env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = l.CustomModel
 		set("ANTHROPIC_CUSTOM_MODEL_OPTION_NAME", l.CustomModelName)
@@ -162,6 +249,25 @@ func providerEnv(l proto.ManagedLauncher, model, effort string, mainConversation
 	}
 	k, v, _ := strings.Cut(artifactsOff, "=")
 	env[k] = v
+	// The launcher's own environment last: it wins over all of the above (#5953); an empty value sets the variable
+	// empty. A proxy variable goes in both spellings unless both are given, or the shell's other spelling would still
+	// count. Not for the main conversation what it decides itself (perStartEnv).
+	vars := launcherEnvVars(l.Env)
+	given := map[string]bool{}
+	for _, kv := range vars {
+		given[kv[0]] = true
+	}
+	for _, kv := range vars {
+		if mainConversation && slices.Contains(perStartEnv, kv[0]) {
+			continue
+		}
+		env[kv[0]] = kv[1]
+		for _, o := range otherSpelling(kv[0]) {
+			if !given[o] {
+				env[o] = kv[1]
+			}
+		}
+	}
 	return env
 }
 

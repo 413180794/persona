@@ -122,6 +122,12 @@ func (n *Node) mergeManagedSettings(launcher string, l proto.ManagedLauncher, ou
 	for k, v := range managedSettingsEnv(l) {
 		env[k] = v
 	}
+	// A proxy the user's settings give every claude that no longer answers would hold this launcher's requests until
+	// they time out; one the launcher does not set itself is taken away (deadproxy.go, #5953).
+	for _, k := range n.deadSettingsProxies(env, l.BaseURL) {
+		env[k] = ""
+		n.logf("launcher %s: the proxy in Claude's settings.json (%s) does not answer; it runs without it", launcher, k)
+	}
 	mine["env"] = env
 	mine["enableArtifact"] = false // artifactsOff: a gateway cannot carry them
 	out, err := json.MarshalIndent(mine, "", "  ")

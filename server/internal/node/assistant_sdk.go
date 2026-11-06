@@ -232,9 +232,10 @@ func (n *Node) sdkCommand(b sdkBridge, launcher string, s sdkStart, base []strin
 		// the main conversation's provider env (launcherenv.go); its values hold the key: never logged
 		s.env, s.launcherArgs = providerEnv(l, s.model, "", true), l.Args
 		base = withoutEnv(base, envClearFor(l))
-		for k, v := range s.env {
-			base = append(base, k+"="+v)
-		}
+		own := envList(s.env)
+		base = append(base, own...)
+		// as `jarvisd launch` does: a proxy inherited that no longer answers holds every request (deadproxy.go)
+		base = withoutDeadProxies(base, own, l.BaseURL, func(msg string) { n.logf("assistant: launcher %s: %s", launcher, msg) })
 	} else if d := n.claudeStartDir.Load(); d != nil && *d != "" { // plain claude: as launcherCommand
 		base = append(base, "CLAUDE_CONFIG_DIR="+proto.ExpandHome(*d, userHome()))
 	}

@@ -65,7 +65,7 @@ interface ProviderSetup {
     suspend fun import(machine: String, providers: List<String>): LauncherImportResult = throw UnsupportedOperationException()
 }
 
-/** One provider of Settings › Model providers (the hub's `LauncherView`): never its key or headers, only whether it has them. */
+/** One provider of Settings › Model providers (the hub's `LauncherView`): never its key, headers or environment, only whether it has them. */
 @Serializable
 data class HubLauncher(
     @SerialName("name") val name: String,
@@ -82,6 +82,8 @@ data class HubLauncher(
     @SerialName("args") val args: List<String> = emptyList(),
     @SerialName("has_key") val hasKey: Boolean = false,
     @SerialName("has_headers") val hasHeaders: Boolean = false,
+    /** Its own environment for the launch (#5953), sealed at the hub like the headers. */
+    @SerialName("has_env") val hasEnv: Boolean = false,
     /** api_key (x-api-key) | bearer */
     @SerialName("auth") val auth: String? = null,
     /** ~/.zshrc ones: the machines whose ~/.zshrc defines it. */

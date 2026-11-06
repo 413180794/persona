@@ -92,6 +92,13 @@ Supported since herdr 0.7.1 (Linux) / 0.7.5 (macOS); ignored by older herdr and 
 - Settings `env` overrides process environment. A different gateway in the user's global `~/.claude/settings.json` `env` would override these variables, so Persona also writes the same variables (including the key)
   to `~/.persona/launcher-settings/<name>-env-settings.json` (0600) and passes it through `--settings` (`node/launcher_settings.go`). On older Claude Code, this is merged with
   Persona hooks in `<name>-<claude|assistant>-settings.json`. These files are rewritten on every start; manual edits are lost.
+- **A proxy that does not answer** (#5953): a provider with no `proxy` of its own keeps the proxy the shell gives it, since a gateway may be reachable only through it.
+  But a proxy app that has quit, still named in the shell or in the Claude config directory's `settings.json` `env`, held every request until it timed out.
+  So when the gateway itself takes a direct TCP connection (its Base URL's host and port; none: `api.anthropic.com:443`), `jarvisd launch` drops an inherited
+  `HTTP(S)_PROXY` / `ALL_PROXY` (either case) whose address takes no TCP connection within a second, twice, and says so on stderr; the settings file above sets such a
+  variable from `settings.json` empty (settings `env` cannot unset), noted in the node log; the main conversation through the Agent SDK does the same.
+  A gateway that does not answer directly either keeps every proxy: nothing would be gained, and the proxy may come back while the session runs.
+  Variables the launcher sets itself (`proxy`, `env`) are never touched (`node/deadproxy.go`).
 - **Artifacts are always disabled**: claude started by a Persona-managed launcher gets `CLAUDE_CODE_DISABLE_ARTIFACT=1` (both in `jarvisd launch` environment and the settings `env` above).
   The settings file also sets `"enableArtifact": false` (Claude Code honors disabling it through `--settings`). Artifacts publish to claude.ai and cannot work with a gateway + API key anyway.
   Since 2.1.26x, Claude Code enables them by default, adding Artifacts skill instructions to system messages in interactive sessions. Some gateways reject this in capability checks
@@ -187,13 +194,14 @@ Persona-managed providers add these fields following cindy's model (`proto.Manag
 | `opus_model` / `sonnet_model` / `haiku_model` / `fable_model` | Models for each tier (`ANTHROPIC_DEFAULT_*_MODEL`), falling back to `model` when empty |
 | `subagent_force` | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` |
 | `headers` | Custom request headers (`ANTHROPIC_CUSTOM_HEADERS`), one “name: value” per line |
-| `proxy` / `no_proxy` | Gateway `HTTP(S)_PROXY` / `NO_PROXY`; proxy must be an http(s) or socks5 address |
+| `proxy` / `no_proxy` | Gateway `HTTP(S)_PROXY`, set in both upper and lower case (Node's fetch reads the lower-case one first, and an empty one falls through to the other) / `NO_PROXY`, upper case only (Claude Code reads both spellings together, so the shell's `no_proxy` list still counts); proxy must be an http(s) or socks5 address |
+| `env` | The provider's own environment, one `NAME=value` per line (at most 50): `export` before it is fine, a line starting with `#` is a comment, a value in quotes is what is inside them, and an unquoted one loses a trailing ` # …`. Set after everything else, so it wins over the fields above, the shell and the user's settings `env`; `NAME=` with no value sets the variable empty. A proxy variable (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`) goes in both spellings unless both are given. To go around a proxy, put the gateway's host in `no_proxy` rather than emptying proxy variables: an empty `HTTPS_PROXY` still falls through to `HTTP_PROXY`. The main conversation ignores `CLAUDE_CODE_EFFORT_LEVEL` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` here (it decides them itself). Applied for Codex and Antigravity providers too (#5953) |
 | `timeout_ms` / `compact_window` / `max_context` | `API_TIMEOUT_MS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` / `CLAUDE_CODE_MAX_CONTEXT_TOKENS`; 0 means default |
 | `effort` | Default thinking level |
 
-- **Headers are secrets, like keys**: The manager encrypts them with the same key into `headers_sealed`, decrypting only when sending to node; GET returns only `has_headers`.
-  PUT without `headers` retains the value; an empty string clears it. Other new fields behave the same way: omission leaves them unchanged (old apps editing providers do not clear them).
-- **Validate on write**: Valid Base URL; thinking level only low / medium / high / xhigh / max, with each model's default level included in its supported levels; no negative numbers; no empty or duplicate model IDs; each header line must contain “:”.
+- **Headers and the environment are secrets, like keys**: The manager encrypts them with the same key into `headers_sealed` / `env_sealed`, decrypting only when sending to node; GET returns only `has_headers` / `has_env`.
+  PUT without `headers` (`env`) retains the value; an empty string clears it. Other new fields behave the same way: omission leaves them unchanged (old apps editing providers do not clear them).
+- **Validate on write**: Valid Base URL; thinking level only low / medium / high / xhigh / max, with each model's default level included in its supported levels; no negative numbers; no empty or duplicate model IDs; each header line must contain “:”; each environment line must be `NAME=value` with a shell variable's name. Errors never quote a line.
 - On read, `source` stays `jarvis` / `zshrc`; provider origin (`zshrc:<alias>@<machine>`, `preset:<id>`) lives in `origin`.
 - Names `test`, `discover`, `import`, `presets`, and `claude` are reserved for APIs and cannot be used.
 

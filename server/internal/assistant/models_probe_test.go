@@ -250,6 +250,43 @@ func TestLauncherHeadersSealedAndNewFields(t *testing.T) {
 	}
 }
 
+// The launcher's own environment (#5953) is sealed like the key: GET says has_env only, PUT without it keeps it, ""
+// clears it, and the node gets it in the clear.
+func TestLauncherEnvSealed(t *testing.T) {
+	s, mux := launcherTestService(t)
+	ctx := context.Background()
+	create := `{"name":"gw","base_url":"https://gw.example.com","model":"glm-5.3","api_key":"` + fakeKey + `",
+		"env":"# no proxy for this one\nHTTPS_PROXY=\nX_TEAM_TOKEN=env-secret-value"}`
+	if code, raw := launcherCall(t, mux, "POST", "/api/v1/launchers", create); code != 200 || strings.Contains(raw, "env-secret-value") {
+		t.Fatal(code, raw)
+	}
+	stored := s.storedLaunchers(ctx)
+	if len(stored) != 1 || stored[0].EnvSealed == "" || stored[0].Env != "" || strings.Contains(jsonText(stored), "env-secret-value") {
+		t.Fatalf("stored: %+v", stored)
+	}
+	_, list := launcherCall(t, mux, "GET", "/api/v1/launchers", "")
+	var got struct{ Launchers []LauncherView }
+	_ = json.Unmarshal([]byte(list), &got)
+	if strings.Contains(list, "env-secret-value") || len(got.Launchers) != 1 || !got.Launchers[0].HasEnv {
+		t.Fatal("GET:", list)
+	}
+	if m := s.managedForNodes(ctx); len(m) != 1 || !m[0].HasEnv || m[0].Env != "# no proxy for this one\nHTTPS_PROXY=\nX_TEAM_TOKEN=env-secret-value" {
+		t.Fatalf("managed: %+v", m)
+	}
+	if code, raw := launcherCall(t, mux, "PUT", "/api/v1/launchers/gw", `{"base_url":"https://gw.example.com","model":"glm-5.2"}`); code != 200 || s.storedLaunchers(ctx)[0].EnvSealed == "" {
+		t.Fatal("a PUT without env dropped it:", raw)
+	}
+	if code, raw := launcherCall(t, mux, "PUT", "/api/v1/launchers/gw", `{"base_url":"https://gw.example.com","model":"glm-5.2","env":"BAD NAME=1"}`); code == 200 || strings.Contains(raw, "BAD NAME") {
+		t.Fatal("a bad line went in, or the error quotes it:", code, raw)
+	}
+	if code, raw := launcherCall(t, mux, "PUT", "/api/v1/launchers/gw", `{"base_url":"https://gw.example.com","model":"glm-5.2","env":""}`); code != 200 {
+		t.Fatal(raw)
+	}
+	if l, m := s.storedLaunchers(ctx)[0], s.managedForNodes(ctx)[0]; l.EnvSealed != "" || m.Env != "" || m.HasEnv {
+		t.Fatalf("cleared: %+v / %+v", l, m)
+	}
+}
+
 // kind:api Messages providers go to the nodes; Responses ones do not.
 func TestManagedForNodesSendsMessagesAPIProviders(t *testing.T) {
 	s, _ := launcherTestService(t)
@@ -290,6 +327,9 @@ func TestLauncherProviderFieldsAreChecked(t *testing.T) {
 		"proxy":          {Proxy: &bad},
 		"proxy password": {Proxy: ptr("http://user:pw-secret@127.0.0.1:7890")},
 		"headers":        {Headers: &header},
+		"env name":       {Env: ptr("1ST=x")},
+		"env line":       {Env: ptr("FOO=1\njust words")},
+		"env export":     {Env: ptr("export =1")},
 		"reserved name":  {Name: "discover"},
 		"url":            {BaseURL: "gw.example.com"},
 	} {
@@ -298,8 +338,11 @@ func TestLauncherProviderFieldsAreChecked(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if err := (launcherInput{Name: "gw", BaseURL: ok.BaseURL, Model: "m", Effort: &empty, Headers: &empty}).check(); err != nil {
-		t.Fatal("empty effort / headers rejected:", err)
+	if err := (launcherInput{Name: "gw", BaseURL: ok.BaseURL, Model: "m", Effort: &empty, Headers: &empty, Env: &empty}).check(); err != nil {
+		t.Fatal("empty effort / headers / env rejected:", err)
+	}
+	if err := (launcherInput{Name: "gw", BaseURL: ok.BaseURL, Model: "m", Env: ptr("# a note\n\nexport HTTP_PROXY=\nno_proxy=*.example.com\nA_1='x y'\nexport\tB=1\n\uFEFFC=2 # c")}).check(); err != nil {
+		t.Fatal("a good environment rejected:", err)
 	}
 }
 

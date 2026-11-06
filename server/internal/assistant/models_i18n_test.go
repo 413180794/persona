@@ -131,6 +131,12 @@ func TestLauncherProviderErrorsInEachLanguage(t *testing.T) {
 	if err := checkHeaders("X-Ok: 1\nbroken"); i18n.Localize(err, i18n.En) != "Header line 2 must be “Name: value”" {
 		t.Fatalf("headers: %v", err)
 	}
+	if err := checkEnv("A=1\nbroken"); i18n.Localize(err, i18n.En) != "Environment line 2 must be NAME=value, NAME made of letters, digits and _" {
+		t.Fatalf("env: %v", err)
+	}
+	if err := checkEnv(strings.Repeat("A=1\n", 51)); i18n.Localize(err, i18n.En) != "At most 50 environment variables" {
+		t.Fatalf("env count: %v", err)
+	}
 }
 
 // Launcher role labels follow each request, even when the hub's language differs and the launcher list is cached.

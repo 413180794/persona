@@ -643,6 +643,11 @@ type ManagedLauncher struct {
 	// Proxy / NoProxy: HTTP_PROXY and HTTPS_PROXY / NO_PROXY for the gateway.
 	Proxy   string `json:"proxy,omitempty"`
 	NoProxy string `json:"no_proxy,omitempty"`
+	// Env: more environment for the launch, one NAME=value a line (#5953), set last: it wins over what Persona sets,
+	// the shell's environment and the user's settings env. A secret like the key: sealed at rest, never sent back to
+	// clients (they see HasEnv).
+	Env    string `json:"env,omitempty"`
+	HasEnv bool   `json:"has_env,omitempty"`
 	// TimeoutMS: API_TIMEOUT_MS; 0 is 3000000 for a gateway (BaseURL set), Claude Code's own default otherwise.
 	TimeoutMS int `json:"timeout_ms,omitempty"`
 	// CompactWindow: CLAUDE_CODE_AUTO_COMPACT_WINDOW; 0 is the default model's context window (none when unknown).

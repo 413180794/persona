@@ -713,6 +713,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
               {([["opus_model", "Opus"], ["sonnet_model", "Sonnet"], ["haiku_model", "Haiku"], ["fable_model", "Fable"]] as const).map(([k, tier]) => l[k] && <KVRow key={k} k={t("settings.tier_model", { tier })} v={l[k]} mono />)}
               {l.subagent_force && <KVRow k={t("settings.subagent")} v={t("settings.subagent_force")} />}
               {l.has_headers && <KVRow k={t("settings.headers")} v={t("settings.key_set_hidden")} />}
+              {l.has_env && <KVRow k={t("settings.env")} v={t("settings.key_set_hidden")} />}
               {l.proxy && <KVRow k={t("settings.proxy")} v={l.proxy} mono />}
               {l.no_proxy && <KVRow k="NO_PROXY" v={l.no_proxy} mono />}
               {l.timeout_ms ? <KVRow k={t("settings.timeout")} v={`${l.timeout_ms} ms`} mono /> : null}

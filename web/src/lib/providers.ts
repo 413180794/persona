@@ -19,7 +19,8 @@ export interface ProviderModel {
   default_effort?: string;
 }
 
-/** GET /api/v1/launchers' managed launcher (hub LauncherView): never the key or the headers, only has_key / has_headers. */
+/** GET /api/v1/launchers' managed launcher (hub LauncherView): never the key, the headers or the environment, only
+ *  has_key / has_headers / has_env. */
 export interface ProviderView {
   name: string;
   /** The name it shows, in any language (one added from a preset gets the provider's). */
@@ -44,6 +45,7 @@ export interface ProviderView {
   fable_model?: string;
   subagent_force?: boolean;
   has_headers?: boolean;
+  has_env?: boolean;
   proxy?: string;
   no_proxy?: string;
   timeout_ms?: number;
@@ -85,6 +87,9 @@ export interface ProviderForm {
   /** "Name: value" a line; only sent when touched (a stored one is never shown). */
   headers: string;
   headers_touched: boolean;
+  /** The provider's own environment, NAME=value a line, set last (#5953); like the headers only sent when touched. */
+  env: string;
+  env_touched: boolean;
   proxy: string;
   no_proxy: string;
   timeout_ms: string;
@@ -119,6 +124,8 @@ export function newForm(): ProviderForm {
     fable_model: "",
     headers: "",
     headers_touched: false,
+    env: "",
+    env_touched: false,
     proxy: "",
     no_proxy: "",
     timeout_ms: "",
@@ -216,6 +223,23 @@ export function headersProblem(raw: string): string {
   return "";
 }
 
+/** The hub's checkEnv (and the node's reading of it): NAME=value a line, "export " before it is fine, a line starting
+ *  with # is a comment, at most 50. */
+export function envProblem(raw: string): string {
+  const lines = raw.split("\n");
+  let count = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/^[\s\uFEFF]+|[\s\uFEFF]+$/g, "");
+    if (!line || line.startsWith("#")) continue;
+    const rest = line.replace(/^export\s+/, "");
+    const at = rest.indexOf("=");
+    const name = at < 0 ? "" : rest.slice(0, at).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return t("lib-providers.env_line", { line: i + 1 });
+    if (++count > 50) return t("lib-providers.env_limit");
+  }
+  return "";
+}
+
 export function proxyProblem(raw: string): string {
   const s = raw.trim();
   if (!s) return "";
@@ -261,6 +285,7 @@ export function formProblems(f: ProviderForm, isNew: boolean, hadKey = false): F
 
   const advanced =
     (f.headers_touched && headersProblem(f.headers)) ||
+    (f.env_touched && envProblem(f.env)) ||
     proxyProblem(f.proxy) ||
     (!nonNegInt(f.timeout_ms) && t("lib-providers.timeout_int")) ||
     (!nonNegInt(f.compact_window) && t("lib-providers.compact_int")) ||
@@ -306,8 +331,8 @@ function extraFields(f: ProviderForm): Record<string, unknown> {
 }
 
 /** POST / PUT /api/v1/launchers' body. The base fields always go (the hub replaces them); #2455's fields on a PUT only
- *  when they changed from `old` (left out keeps what is stored), the headers only when touched ("" clears them), the key
- *  only when typed. */
+ *  when they changed from `old` (left out keeps what is stored), the headers and the environment only when touched (""
+ *  clears them), the key only when typed. */
 export function providerBody(f: ProviderForm, old: ProviderView | null): Record<string, unknown> {
   const api = f.kind === "api";
   const responses = api && f.api === "responses";
@@ -333,6 +358,7 @@ export function providerBody(f: ProviderForm, old: ProviderView | null): Record<
     if (before ? !sameJSON(before[k], v) : v !== "" && v !== 0 && v !== false && !(Array.isArray(v) && v.length === 0)) body[k] = v;
   }
   if (f.headers_touched) body.headers = f.headers.trim();
+  if (f.env_touched) body.env = f.env.replace(/\s+$/, ""); // the start kept: the hub's line numbers match the box
   return body;
 }
 

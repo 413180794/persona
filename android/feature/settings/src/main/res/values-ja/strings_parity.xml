@@ -49,6 +49,7 @@
     <string name="settings_providers_origin">取り込み元</string>
     <string name="settings_providers_models">使えるモデル</string>
     <string name="settings_providers_headers">リクエストヘッダー</string>
+    <string name="settings_providers_env">環境変数</string>
     <string name="settings_providers_set_hidden">設定済み（非表示）</string>
     <string name="settings_providers_unset">未設定</string>
     <string name="settings_providers_auth">認証方式</string>

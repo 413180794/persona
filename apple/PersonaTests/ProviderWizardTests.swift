@@ -19,10 +19,10 @@ struct ProviderWizardTests {
         ProviderWizardModel(existing: existing, deps: .init(api: { hub.client }))
     }
 
-    private static func existing(headers: Bool = true) throws -> LauncherView {
+    private static func existing(headers: Bool = true, env: Bool = false) throws -> LauncherView {
         let json = #"""
         {"name":"jv_glm","source":"jarvis","kind":"launcher","base_url":"https://gateway.example.com","model":"glm-5","has_key":true,
-         "auth":"bearer","has_headers":\#(headers),"models":[{"id":"glm-5","context_window":200000}],"opus_model":"glm-5-plus",
+         "auth":"bearer","has_headers":\#(headers),"has_env":\#(env),"models":[{"id":"glm-5","context_window":200000}],"opus_model":"glm-5-plus",
          "timeout_ms":600000,"origin":"zshrc:cc_glm@macbook"}
         """#
         return try JSON.decoder.decode(LauncherView.self, from: Data(json.utf8))
@@ -122,6 +122,29 @@ struct ProviderWizardTests {
         w.headers = "X-Other: 1\n"
         #expect(await w.save())
         #expect(bodies[2]["headers"]?.string == "X-Other: 1")
+    }
+
+    @Test func editingKeepsTheEnvironmentUnlessClearedOrRetyped() async throws {
+        let hub = FakeHub()
+        var bodies: [[String: JSONValue]] = []
+        hub.on("PUT", "/api/v1/launchers/jv_glm") { req in
+            bodies.append(try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data()).object ?? [:])
+            return Data(#"{"ok":true}"#.utf8)
+        }
+        let w = wizard(hub, existing: try Self.existing(env: true))
+        #expect(w.hasStoredEnv && w.envValue == nil)
+        #expect(await w.save())
+        #expect(bodies[0].keys.contains("env") == false)
+
+        w.clearEnv = true
+        #expect(!w.hasStoredEnv)
+        #expect(await w.save())
+        #expect(bodies[1]["env"] == .string(""))
+
+        w.env = "HTTP_PROXY=\nX_TEAM=1\n"
+        #expect(await w.save())
+        #expect(bodies[2]["env"]?.string == "HTTP_PROXY=\nX_TEAM=1")
+        #expect(!wizard(hub, existing: try Self.existing()).hasStoredEnv)
     }
 
     @Test func aStoredProviderTestsWithItsStoredKey() async throws {

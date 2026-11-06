@@ -72,6 +72,9 @@ enum LauncherName {
     var headers = ""
     /// Clear Headers: the stored headers go when saved.
     var clearHeaders = false
+    /// Typed environment, NAME=value a line (#5953); empty keeps what the hub has unless `clearEnv`.
+    var env = ""
+    var clearEnv = false
 
     /// The models picked, in order; the default is `defaultModel`.
     private(set) var models: [ProviderModel] = []
@@ -193,6 +196,7 @@ enum LauncherName {
     var isNew: Bool { existing == nil }
     var hasStoredKey: Bool { existing?.hasKey == true }
     var hasStoredHeaders: Bool { existing?.hasHeaders == true && !clearHeaders }
+    var hasStoredEnv: Bool { existing?.hasEnv == true && !clearEnv }
 
     var address: String { kind == .anthropic ? Self.anthropicURL : baseURL.trimmingCharacters(in: .whitespaces) }
     var authMode: String { kind == .anthropic ? "api_key" : auth }
@@ -205,6 +209,14 @@ enum LauncherName {
         let h = headers.trimmingCharacters(in: .whitespacesAndNewlines)
         if !h.isEmpty { return h }
         return clearHeaders ? "" : nil
+    }
+
+    /// nil keeps the stored environment, "" clears it. Only its end is trimmed: the hub's line numbers then match the box.
+    var envValue: String? {
+        if !env.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return env.replacingOccurrences(of: #"\s+$"#, with: "", options: .regularExpression)
+        }
+        return clearEnv ? "" : nil
     }
 
     /// Connect is filled in: the next step can come.
@@ -299,7 +311,7 @@ enum LauncherName {
                              customModelDescription: e?.customModelDescription ?? "", args: e?.args ?? [],
                              apiKey: key.isEmpty ? nil : key, kind: e?.kind ?? "launcher", api: "messages", auth: authMode,
                              models: models, opusModel: t(opusModel), sonnetModel: t(sonnetModel), haikuModel: t(haikuModel),
-                             fableModel: t(fableModel), subagentForce: subagentForce, headers: headersValue, proxy: t(proxy),
+                             fableModel: t(fableModel), subagentForce: subagentForce, headers: headersValue, env: envValue, proxy: t(proxy),
                              noProxy: t(noProxy), timeoutMS: Int(t(timeoutMS)) ?? 0, compactWindow: Int(t(compactWindow)) ?? 0,
                              maxContext: Int(t(maxContext)) ?? 0, effort: t(effort))
     }

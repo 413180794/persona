@@ -49,6 +49,7 @@
     <string name="settings_providers_origin">Imported from</string>
     <string name="settings_providers_models">Models</string>
     <string name="settings_providers_headers">Request headers</string>
+    <string name="settings_providers_env">Environment variables</string>
     <string name="settings_providers_set_hidden">Set (not shown)</string>
     <string name="settings_providers_unset">Not set</string>
     <string name="settings_providers_auth">Authentication</string>

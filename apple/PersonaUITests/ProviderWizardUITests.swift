@@ -119,6 +119,21 @@ final class ProviderWizardUITests: XCTestCase {
                       "主对话's line does not say Agent SDK:\n\(app.debugDescription)")
     }
 
+    /// Choose Models › Advanced has the provider's own environment (#5953), written like the headers.
+    @MainActor func testAdvancedHasTheProvidersEnvironment() {
+        launch("models")
+        let advanced = el("wizard.advanced")
+        XCTAssertTrue(advanced.waitForExistence(timeout: 15), "no Advanced:\n\(app.debugDescription)")
+        advanced.tap()
+        // Found by its placeholder: the disclosure group's identifier is its fields' too.
+        let env = app.descendants(matching: .any).matching(NSPredicate(format: "placeholderValue == %@", "环境变量，一行一个 NAME=value")).firstMatch
+        for _ in 0..<8 where !(env.exists && env.isHittable) { app.swipeUp() }
+        XCTAssertTrue(env.isHittable, "no environment field:\n\(app.debugDescription)")
+        env.tap()
+        env.typeText("HTTP_PROXY=")
+        shot("9-advanced-env")
+    }
+
     @MainActor func testAnOutdatedNodeIsExplained() {
         launch("import")
         let mini = app.buttons["import.machine.mini"]
