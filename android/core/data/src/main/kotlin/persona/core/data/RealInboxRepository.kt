@@ -304,10 +304,10 @@ class RealInboxRepository(
                 if (owns(transport)) {
                     data.array("changed").forEach { replaceRecord(record(it.jsonObject, transport)) }
                     // Already so (another device filed it) keeps what was just shown; gone from the hub leaves the list;
-                    // only one that took new messages since goes back to how it was, until the refresh.
+                    // one that took new messages since, or that the hub failed to write, goes back to how it was, until the refresh.
                     val gone = result.missing.toSet()
                     if (gone.isNotEmpty()) current.update { it.copy(records = it.records.filter { r -> r.item.id !in gone }) }
-                    old.filter { it.item.id in result.changedSince }.forEach(::replaceRecord)
+                    old.filter { it.item.id in result.changedSince || it.item.id in result.failed }.forEach(::replaceRecord)
                 }
                 result
             } catch (e: Exception) {
@@ -316,7 +316,7 @@ class RealInboxRepository(
             }
         }
         // The hub's own state (when, by whom) for what this request did not move itself.
-        if (result.changedSince.isNotEmpty() || result.unchanged.isNotEmpty() || result.missing.isNotEmpty()) quietly { refresh() }
+        if (result.changedSince.isNotEmpty() || result.unchanged.isNotEmpty() || result.missing.isNotEmpty() || result.failed.isNotEmpty()) quietly { refresh() }
         return result
     }
 

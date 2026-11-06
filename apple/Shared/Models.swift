@@ -44,9 +44,16 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var hubGroup: String? = nil
     /// With several groups, the group's name, for lists to say where a machine is (`title`); nil with one group.
     var groupLabel: String? = nil
+    /// `pending` while it waits for the user's 是我的电脑 (feature machine_trust); nil = confirmed. Kept as the hub's
+    /// word: another value reads as confirmed.
+    var trust: String? = nil
+    /// What kind of trouble `error` is (node_service_down, link_offline, never_connected, node_outdated, or a word this
+    /// app does not know, which shows `error`); `error` keeps the hub's own words.
+    var errorCode: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines, computer, browser, route
+        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines, computer, browser, route, trust
+        case errorCode = "error_code"
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
         case nodeMismatch = "node_mismatch", nodeVersion = "node_version", deploying, deployError = "deploy_error"
         case hubID = "hub_id", hubName = "hub_name", machineUID = "machine_uid", hubGroup = "app_hub_group",
@@ -95,6 +102,8 @@ extension Machine {
         route = try? c.decodeIfPresent(MachineHubRoute.self, forKey: .route)
         hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)
         groupLabel = try? c.decodeIfPresent(String.self, forKey: .groupLabel)
+        trust = try? c.decodeIfPresent(String.self, forKey: .trust)
+        errorCode = try? c.decodeIfPresent(String.self, forKey: .errorCode)
     }
 }
 
@@ -134,6 +143,12 @@ nonisolated extension Machine {
     var ref: MachineRef { MachineRef(group: group, id: id) }
     /// What lists call it: its name, and with several groups the group's ("MacBook · 公司").
     var title: String { groupLabel.map { "\(name) · \($0)" } ?? name }
+    /// Waiting for the user to say it is theirs: no agents, no keys, not offered where a computer is picked.
+    var isPending: Bool { trust == "pending" }
+    /// Added but never online once (`never_connected`, or waiting with no `last_seen`): not 离线, it was never there.
+    var neverConnected: Bool {
+        !online && (errorCode == "never_connected" || (isPending && (lastSeen?.timeIntervalSince1970 ?? 0) <= 0))
+    }
 }
 
 /// A machine across groups of hubs (docs/multi-hub.md): its group and the id its hub gives it.

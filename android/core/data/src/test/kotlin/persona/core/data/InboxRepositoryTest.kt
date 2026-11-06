@@ -545,6 +545,40 @@ class InboxRepositoryTest {
         }
     }
 
+    @Test fun bulkPutsBackWhatTheHubFailedToWrite() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-bulk-failed-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, doneAt: String? = null) = buildJsonObject {
+                put("id", id); put("source", "mail"); put("kind", "mail"); put("title", id); put("version", "v$id")
+                if (doneAt != null) put("done_at", doneAt)
+            }
+            val transport = FakeTransport().apply { items = JsonArray(listOf(item("a"), item("b", "2026-11-06T07:00:00Z"))) }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            // The hub's store write failed for both: they were never filed (or reopened), and the refresh after it fails
+            // (offline), so what the list shows is what bulk() itself made of the answer.
+            transport.onBulk = { _, _ ->
+                transport.onInbox = { throw IOException("offline") }
+                buildJsonObject {
+                    put("changed", JsonArray(emptyList())); put("unchanged", JsonArray(emptyList()))
+                    put("skipped", JsonArray(emptyList())); put("failed", JsonArray(listOf(JsonPrimitive("a"), JsonPrimitive("b"))))
+                }
+            }
+            val calls = transport.inboxCalls.get()
+            repository.bulk(listOf(InboxDoneTarget("a", "va")), InboxBulkAction.Done)
+            assertNull(repository.snapshot.value.records.first { it.item.id == "a" }.item.doneAt)
+            // The hub's own state is asked for, as for the other ids it did not move.
+            assertEquals(calls + 1, transport.inboxCalls.get())
+            repository.bulk(listOf(InboxDoneTarget("b")), InboxBulkAction.Reopen)
+            assertEquals("2026-11-06T07:00:00Z", repository.snapshot.value.records.first { it.item.id == "b" }.item.doneAt)
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun bulkDoneIsOneRequestWithVersionsAndPutsBackWhatTheHubDidNotFile() = runBlocking {
         val directory = Files.createTempDirectory("inbox-bulk-test").toFile()
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)

@@ -386,10 +386,13 @@ struct ChatsView: View {
 /// The Agents list itself: what follows the hub's pushes (`ChatsView` holds the navigation and the toolbar).
 private struct AgentsList: View {
     #if os(macOS)
-    static let emptyMessage = String(localized: "在任意一台电脑的 herdr 里启动 Claude，在这里实时看、随时接手。")
+    static let emptyMessage = String(localized: "在你的任意一台电脑上开一个 Agent，在这里实时看、随时接手。")
     #else
-    static let emptyMessage = String(localized: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。")
+    static let emptyMessage = String(localized: "在你的任意一台电脑上开一个 Agent，手机上实时看、随时接手。")
     #endif
+    /// No computer yet (a hub with machines_add): as the machines page says it (docs/onboarding.md 4.5「空状态改写」).
+    static let emptyNoComputerTitle = String(localized: "还没有电脑")
+    static let emptyNoComputerMessage = String(localized: "添加一台，Persona 就能在上面替你干活。")
     @Environment(AppModel.self) private var model
     @Environment(\.shell) private var shell
     /// Regular width (iPhone Duo open): the list is the sidebar column of a split.
@@ -750,6 +753,13 @@ private struct AgentsList: View {
                                    message: String(localized: "空间、标签、会话的标题和内容都能搜，换个词试试。"))
                 }
                 .listRowBackground(Color.clear)
+            } else if base.isEmpty, machineFilter.isEmpty, machines.isEmpty, model.canAddComputer {
+                Section {
+                    EmptyStateView(symbol: Theme.Icon.machines, title: Self.emptyNoComputerTitle, message: Self.emptyNoComputerMessage,
+                                   action: (String(localized: "添加电脑"), { model.openAddComputer() }))
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(capsules ? .hidden : .automatic)
             } else if base.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.agents,

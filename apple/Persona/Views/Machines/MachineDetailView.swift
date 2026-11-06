@@ -54,7 +54,11 @@ struct MachineDetailView: View {
                 if let machine {
                     VStack(spacing: Theme.Space.m) {
                         MachineCard(machine: machine, metrics: data, showsMetrics: false)
-                        if !online { connection(machine) }
+                        // The card says a known error_code in words; the hub's own words stay here.
+                        if AddComputerText.machineProblem(machine.errorCode) != nil, let raw = machine.error, !raw.isEmpty {
+                            problemDetails(raw)
+                        }
+                        if !online, !machine.isPending { connection(machine) }
                     }
                     agentsSection(machine)
                     // The node's self-check by feature, after the engine as on the web (#3018).
@@ -247,10 +251,24 @@ struct MachineDetailView: View {
         }
     }
 
+    /// 详情: what the hub said, under the card's plain words.
+    private func problemDetails(_ raw: String) -> some View {
+        DisclosureGroup {
+            Text(raw).font(Theme.Font.label).foregroundStyle(.secondary).textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, Theme.Space.xs)
+        } label: {
+            Text("详情").font(Theme.Font.secondary).lineLimit(1)
+        }
+        .accessibilityIdentifier("machine.problemDetails")
+        .card(padding: 14)
+    }
+
     /// How the hub reaches the machine, and 重新连接.
     private func connection(_ machine: Machine) -> some View {
         HStack(spacing: Theme.Space.m) {
-            Text(machine.kind == "local" ? "hub 所在机器，直接运行 node。" : "hub 通过 `ssh \(machine.sshHost ?? machine.id)` 接入。")
+            Text(machine.kind == "local" ? "hub 所在机器，直接运行 node。"
+                 : machine.kind == "link" ? "这台电脑经 Persona Link 连到 hub。" : "hub 通过 `ssh \(machine.sshHost ?? machine.id)` 接入。")
                 .font(Theme.Font.label).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button { Task { await reconnect() } } label: {

@@ -258,6 +258,10 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `MOCK_BUILTIN_PRESETS=1` 不带场景，只加内置供应商和 `builtin_presets`。这两种情况下，`MOCK_PROVIDERS=1` 的「测试连接」遇到含 `region` 的 Key 时，回 Anthropic 按地区拦下的那句话和 `code: "region_blocked"`（#4482，文字取自 hub 的文案）。添加电脑和 hub 一样最多 3 台待确认（第 4 台 429 `too_many_pending`）；
 `MOCK_INBOX_SOURCES=none` 让收件箱什么来源都没接（没有条目、没有邮箱账号、飞书没设置、GitHub 没登录），和 `zero` 一起拍零电脑、零来源的空状态（#4485、#4480）。`mock_scenarios.py` 里是 `readiness-<场景>`（运行中切换）。
 
+iOS 的添加电脑（`AddComputerTests`，#4196）：`python3 scripts/mock/mock_scenarios.py --port <端口> --control <控制端口>`，
+`TEST_RUNNER_JARVIS_ADD_HUB=http://127.0.0.1:<端口> TEST_RUNNER_JARVIS_ADD_CONTROL=http://127.0.0.1:<控制端口>`，测试自己按需切 `MOCK_READINESS=zero` / `MOCK_ADD_COMPUTER=seed`、
+`MOCK_PAIR_SECONDS`：零电脑 → 添加 → 等待 → 确认 → 在线、Linux 的那一行和过期重出、待确认和 `error_code` 在列表里、拒绝后消失、Agents 零电脑；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存浅色、深色截图。
+
 不会漂移：`server/internal/assistant/readiness_scenarios_test.go` 在假 hub 上搭出同样的场景，把真代码回的就绪度（三种语言）和开对话的拒绝存进
 `testdata/readiness_scenarios/<场景>.json`；`scripts/mock/test_readiness_mock.py` 起 mock 逐个比对。改了就绪度或文案：`UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`，
 看 diff，再让 `scripts/mock/readiness_mock.py` 跟上。

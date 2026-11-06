@@ -137,6 +137,12 @@ struct MacCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .disabled(!model.isPaired)
+            // 添加电脑 (#4196): only a hub with machines_add takes it.
+            if model.canAddComputer {
+                Divider()
+                Button("添加电脑…") { model.openAddComputer() }
+                    .disabled(!model.isPaired)
+            }
         }
         // 前往: 快速打开 ⌘K.
         CommandGroup(after: .textEditing) {
@@ -175,9 +181,19 @@ struct MacCommands: Commands {
 }
 
 final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    #if DEBUG
+    private var launchArgumentsApplied = false
+    #endif
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         #if DEBUG
         MacSnapshot.applyAppearanceIfAsked()
+        // A snapshot paired with -pairURL (a mock hub): paired before the window is built. Launched in the background
+        // (`open -g`) the window kept its first frame, the welcome page, whatever the app did after (#4196).
+        if UserDefaults.standard.string(forKey: "macSnapshot") != nil, UserDefaults.standard.string(forKey: "pairURL") != nil {
+            MacLaunchArguments.apply()
+            launchArgumentsApplied = true
+        }
         #endif
     }
 
@@ -185,7 +201,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
         Task { await ExtensionNotificationActions.preserveAndRegister { NotificationActions.categories } }
         #if DEBUG
-        MacLaunchArguments.apply()
+        if !launchArgumentsApplied { MacLaunchArguments.apply() }
         #endif
         AppModel.shared.start()
         MacAttentionWatcher.shared.start(AppModel.shared)

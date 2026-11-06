@@ -112,6 +112,8 @@ struct RootView: View {
             Text(c.summary)
         }
         .sendRefusalAlert(model)
+        // 添加电脑 / 确认电脑 from anywhere (the readiness card's add_computer / confirm_computer, the Agents list).
+        .addComputerPresentation()
         .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)
         #if os(iOS) || os(visionOS)
         .onChange(of: LarkHomePreference.shared.shows) { _, enabled in

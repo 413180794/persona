@@ -151,6 +151,8 @@ struct MacRootView: View {
             .macSheet()
             .environment(model)
         }
+        // 添加电脑 / 确认电脑 from anywhere (the readiness card, the Agents list, the menu bar's 文件 › 添加电脑…).
+        .addComputerPresentation()
         #if DEBUG
         .preferredColorScheme(MacSnapshot.colorScheme)
         #endif

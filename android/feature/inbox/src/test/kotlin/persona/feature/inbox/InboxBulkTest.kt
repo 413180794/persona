@@ -64,6 +64,13 @@ class InboxBulkTest {
         assertEquals("已忽略 2 件", bulkNotice(res, result.copy(changedSince = emptyList()), dismissed = true))
     }
 
+    @Test fun theHubsAnswerSaysWhatItFailedToWrite() {
+        val result = InboxBulkResult.from(Json.parseToJsonElement("""
+            {"changed":[],"unchanged":[],"skipped":[],"failed":["a"]}
+        """).jsonObject)
+        assertEquals(listOf("a"), result.failed)
+    }
+
     @Test fun dismissAndTheConfirmationSayHowManyOverWhat() {
         assertEquals("全部忽略 · 12 件", bulkLabel(res, 12, null, dismiss = true))
         assertEquals("忽略当前筛选 · 3 件", bulkLabel(res, 3, "飞书", dismiss = true))

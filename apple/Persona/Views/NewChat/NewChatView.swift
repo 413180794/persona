@@ -294,8 +294,11 @@ struct NewChatView: View {
     }
 
     /// The machines offered: this hub's when a todo is handed over (`onlyGroup`), else all of them.
-    private var machinesShown: [Machine] {
-        onlyGroup.map { g in model.machines.filter { $0.group == g } } ?? model.machines
+    private var machinesShown: [Machine] { Self.offered(model.machines, onlyGroup: onlyGroup) }
+
+    /// Not one waiting to be confirmed (the hub refuses it, 409 machine_pending): it is not the user's yet.
+    static func offered(_ machines: [Machine], onlyGroup: String?) -> [Machine] {
+        machines.filter { m in !m.isPending && (onlyGroup.map { m.group == $0 } ?? true) }
     }
 
     /// The remembered machine belongs to another hub than the one the todo is on.
@@ -303,7 +306,7 @@ struct NewChatView: View {
 
     /// Remember the last machine, but fall back to the first online one (machines may arrive after the sheet opens).
     private func pickDefaultMachine() {
-        if machine == nil || machine?.online == false || machineOutsideGroup,
+        if machine == nil || machine?.online == false || machine?.isPending == true || machineOutsideGroup,
            let m = machinesShown.first(where: \.online) ?? machinesShown.first {
             machineID = m.ref.path
         }

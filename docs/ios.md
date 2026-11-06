@@ -833,6 +833,21 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 
 截图：`-openDevices YES -openConnectDevice YES`（`web`：打开在「浏览器」）；假 hub 的 `MOCK_PAIR_SECONDS` 缩短有效期，`POST /api/v1/auth/tokens` 假装新设备连上。
 
+## 添加电脑、确认电脑（#4196）
+
+照网页（#3934）和 Android：在 App 里加一台电脑并确认是自己的（`docs/onboarding.md` 4.2、5.3，接口见 `docs/protocol.md`「电脑的配对码」「电脑的信任」）。
+一张表单（`Views/Machines/AddComputerView.swift`，逻辑在 `AddComputerModel`）：选系统（Mac / Linux / Windows）、填名字（可以中文，最多 40 个字，不填 id）→
+`pair-codes` 的 `add`（加在 hub 级的那组）→ 按系统一屏：Linux 是 hub 给的那一行安装命令（没有时退回配对命令，说先装好 Persona Link），Mac 是安装说明和分享 / 拷贝配对链接，
+Windows 是 PowerShell 那一行 → 倒计时（`ConnectDeviceText` 的算法；过期后「重新生成」用 `{"machine": id}`），每 3 秒读一次机器列表 → 它连上来、还在待确认时同一屏问
+「有一台电脑想加入：<名字>（macOS），是你的吗？」，「是我的电脑」/「不是」。错误按 `code` 出中文（`AddComputerText.failure`），`tls_required` 用 hub 给的话，不认识的码显示 hub 的 `error`。
+
+- 入口：机器页的空状态和工具栏「+」、Agents 零电脑的空状态、Mac 的「文件 › 添加电脑…」，都只在 hub 有 `machines_add` 时出现（没有时机器页仍是原来的文案）。
+- 别的页面要打开它：`AppModel.openAddComputer()`（就绪度的 `add_computer`），`AppModel.openConfirmComputer(ref)`（`confirm_computer`；不给机器时取 `pendingToConfirm()`：先在线的待确认电脑），
+  都是设 `AppModel.addComputer`，由根视图的 `.addComputerPresentation()` 弹出；页面自己是一张 sheet 时用 `.addComputerSheet($request)` 在自己身上弹。
+- 列表和机器页：`trust == "pending"` 排最前、写「等你确认」，在线时「是我的电脑」/「不是」，没在线时「删掉」（hub 有 `machine_trust` 才有按钮）；`error_code` 写中文
+  （`AddComputerText.machineProblem`），hub 的原话在机器页「详情」里。新建 Agent（以及待办交给 Agent、邮件 / 知识库开 Agent，都走 `NewChatView.offered`）不列待确认的电脑。
+- 截图：`-showAddComputer YES`（`add:<mac|linux|windows>:<名字>` 填好并提交，`<机器 id>` 打开确认那台；Mac 用 `scripts/app/mac_shot.sh` 同样的参数）；UI 测试 `AddComputerTests`（见 `docs/testing.md`「就绪度场景」）。
+
 ## Mac 已登录（2026-11-01）
 
 照微信「Mac 微信已登录」：Mac 上的 Persona 连着 hub 时，Agents 列表最上面一行「Mac 上的 Persona 已登录」（几台就写几台），开了手机静音时右边带「手机静音」；

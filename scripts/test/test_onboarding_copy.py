@@ -107,6 +107,8 @@ SCOPES = [
     Scope("apple/welcome", "swift", "apple/Persona/Views/Settings/SettingsView.swift", "struct WelcomeView", langs=("zh-Hans",)),
     Scope("apple/agents-empty", "swift", "apple/Persona/Views/Chats/ChatsView.swift", r"\bempty[A-Z]\w*\s*=", langs=("zh-Hans",)),
     Scope("apple/machines", "swift", "apple/Persona/Views/Machines/MachinesView.swift", langs=("zh-Hans",)),
+    # 添加电脑 / 确认电脑 (#4196, docs/onboarding.md 4.2): the form, the steps for each system, the errors by code.
+    Scope("apple/add-computer", "swift", "apple/Persona/Views/Machines/AddComputerView.swift", langs=("zh-Hans",)),
     Scope("apple/inbox", "swift", "apple/Persona/Views/Inbox/InboxView.swift", langs=("zh-Hans",)),
     Scope("apple/assistant", "swift", "apple/Persona/Views/Assistant/AssistantView.swift", langs=("zh-Hans",)),
     Scope("apple/provider-wizard", "swift", "apple/Persona/Views/Settings/ProviderWizardView.swift", langs=("zh-Hans",)),
@@ -123,8 +125,6 @@ PENDING = {
     ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接"): "#4195（首屏，命令收进「其他方式」）",
     ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair` 显示二维码"): "#4195（首屏，命令收进「其他方式」）",
     ("apple/welcome", "你的每台电脑，herdr 里的同一个会话"): "#4195（首屏）",
-    ("apple/agents-empty", "在任意一台电脑的 herdr 里启动 Claude，在这里实时看、随时接手。"): "#4196（Agents 空状态）",
-    ("apple/agents-empty", "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。"): "#4196（Agents 空状态）",
     ("apple/provider-wizard", "网关只认 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN）时选 Bearer。Key 加密存在 hub，不会返回到客户端。"):
         "#4197（向导先选厂商，这一句只留在「自定义」里后移到 ALLOW）",
     ("apple/provider-wizard", "从 ~/.zshrc 导入"): "#4197（导入挪进「高级」后移到 ALLOW）",

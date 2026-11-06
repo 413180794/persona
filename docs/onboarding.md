@@ -510,6 +510,8 @@ POST /api/v1/auth/pair-codes      full 设备（不是由配对码临时身份�
 
 - Android 的实现（#4297）：照网页的添加电脑，确认在「等它连上来」那一屏；加电脑走选中的那组 hub，重出码、确认、拒绝按机器 id 去它那组；hub 没有 `machines_add` 时添加电脑页只说去网页或管理界面加（不再是弹窗）。设置 › 设备 › 连接新设备的网页登录地址取这台手机连 hub 用的地址。「重新出链接」只给 `error_code` 是 `never_connected` 的电脑（重出会作废那台电脑现有的配对，睡着的电脑只要叫醒）；从「确认电脑」进来却没有等确认的电脑时显示「没有等待确认的电脑」，不落到添加表单；机器页的「+」和空状态的「添加电脑」只在有 `machines_add` 时打开添加页，旧 hub 仍是说明弹窗。码的 `expires_at` 读不出、或和手机时钟差到已过期 / 超过 10 分钟时，按手机时间从现在起算 10 分钟。
 
+- iOS / macOS 的实现（#4196）：照网页的流程和文案，确认也在「等它连上来」那一屏；「重新出链接」同样只给从没连上过的待确认电脑。没有 `machines_add` 时不显示任何添加入口（机器页的空状态还是原来的话），没有 `machine_trust` 时不显示确认、拒绝按钮。别的页面（就绪度卡片的 `add_computer` / `confirm_computer`）经 `AppModel.openAddComputer()` / `openConfirmComputer(_:)` 打开，见 `docs/ios.md`「添加电脑、确认电脑」。
+
 机器列表（`GET /api/v1/machines` 和 hello 里的机器）每台加两个可选字段：
 
 | 字段 | 取值 |

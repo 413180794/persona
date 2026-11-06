@@ -2114,6 +2114,10 @@ final class AppModel {
     /// (`look`), and the rebuilt shell puts the sheet back on the same page (`settingsPath`).
     var shellSettings = false
 
+    /// 添加电脑 / 确认电脑 over the whole app (AddComputerView.swift): set it from anywhere without a sheet of its own
+    /// (`openAddComputer()`, `openConfirmComputer(_:)`, the main conversation's readiness card); nil closes it.
+    var addComputer: AddComputerRequest?
+
     /// The home screen icon, the 形象's (the system keeps it; this mirrors it and switches it, `followAppIcon`).
     let appIcon = AppIconModel.live()
 

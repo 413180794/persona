@@ -14,12 +14,13 @@ struct MachineDetailRoute: Hashable {
 /// What brings a machine to the top of 机器 (docs/machines.md「App」), most pressing first: it is offline, a value is
 /// too high, an agent there needs you, its jarvisd is not the hub's build.
 enum MachineConcern: Int, Comparable {
-    case offline, critical, warning, needsYou, mismatch
+    case pending, offline, critical, warning, needsYou, mismatch
 
     static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
 
     /// `alert`: the worst of the machine's latest values; `waiting`: its agents that need you.
     static func of(_ m: Machine, alert: MetricLevel, waiting: Int) -> MachineConcern? {
+        if m.isPending { return .pending } // waits for 是我的电脑: first of all
         if !m.online { return .offline }
         if alert == .critical { return .critical }
         if alert == .warning { return .warning }
@@ -66,6 +67,8 @@ struct MachinesView: View {
     @State private var metrics: [MachineRef: MachineMetrics] = [:]
     /// The groups whose hub keeps no metrics (404: before machine monitoring): their cards have no CPU / memory / network.
     @State private var unmonitoredGroups = Set<String>()
+    /// 添加电脑 is up.
+    @State private var adding: AddComputerRequest?
     private var unmonitored: Bool { !unmonitoredGroups.isEmpty && unmonitoredGroups.count >= model.groupIDs.count }
 
     var body: some View {
@@ -94,7 +97,12 @@ struct MachinesView: View {
                 #if !os(macOS)
                 UsageWindowsCard() // the Mac has it at the foot of its sections column
                 #endif
-                if machines.isEmpty {
+                if machines.isEmpty, model.canAddComputer {
+                    EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "还没有电脑"),
+                                   message: String(localized: "添加一台，Persona 就能在上面替你干活。"),
+                                   action: (String(localized: "添加电脑"), { adding = .add }))
+                } else if machines.isEmpty {
+                    // A hub without machines_add: computers are added in its admin page, as before.
                     EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "还没有机器"), message: String(localized: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。"))
                 } else if !unmonitored {
                     Text("CPU、内存、网络每 10 秒更新，曲线是最近 1 小时。")
@@ -119,7 +127,15 @@ struct MachinesView: View {
             #else
             ToolbarItem(placement: .principal) { ConnectionTitle() }
             #endif
+            if model.canAddComputer {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { adding = .add } label: { Label("添加电脑", systemImage: Theme.Icon.add) }
+                        .help("添加电脑")
+                        .accessibilityIdentifier("machines.add")
+                }
+            }
         }
+        .addComputerSheet($adding)
         .refreshable {
             // The requests hit different endpoints and write separate state, so start them together: one slow
             // hub must not keep the others waiting (nor the refresh spinner).
@@ -299,8 +315,12 @@ struct MachineCard: View {
                 // Sized before the stretching part above: second in line, the values (which may shrink to fit) came
                 // out smaller than in a card of their own.
                 .layoutPriority(1)
-            } else if let err = machine.error, !err.isEmpty {
-                Text(err).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
+            } else if let line = AddComputerText.machineLine(machine) {
+                // A known error_code in words (docs/onboarding.md 5.3); the hub's own words are on its page (详情).
+                Text(line).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
+            }
+            if machine.isPending, model.canConfirmComputer(machine.group) {
+                PendingRow(machine: machine)
             }
             if machine.nodeMismatch == true || machine.deploying == true {
                 DeployRow(machine: machine)
@@ -327,7 +347,12 @@ struct MachineCard: View {
     }
 
     @ViewBuilder private var status: some View {
-        if machine.online {
+        if machine.isPending {
+            Text("等你确认").font(Theme.Font.labelStrong).foregroundStyle(Theme.cautionText).lineLimit(1).fixedSize()
+                .accessibilityIdentifier("machine.pending")
+        } else if machine.neverConnected {
+            Text("还没连上").font(Theme.Font.labelStrong).foregroundStyle(Color.secondary).lineLimit(1).fixedSize()
+        } else if machine.online {
             HStack(spacing: Theme.Space.sm) {
                 Circle().fill(Theme.positive).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                 Text("在线").font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
@@ -487,6 +512,49 @@ struct DeployRow: View {
             await model.refresh()
         } catch {
             if let m = error.shown { model.toast = Toast(String(localized: "部署失败：\(m)"), style: .error) }
+        }
+    }
+}
+
+/// A computer waiting for the user (feature machine_trust): 是我的电脑 / 不是 once it is online (it can be looked at),
+/// 删掉 while it is not.
+struct PendingRow: View {
+    @Environment(AppModel.self) private var model
+    var machine: Machine
+    @State private var busy = false
+
+    var body: some View {
+        HStack(spacing: Theme.Space.s) {
+            if machine.online {
+                Button { Task { await run(confirm: true) } } label: { Text("是我的电脑").font(Theme.Font.labelStrong).lineLimit(1) }
+                    .themedButton(prominent: true)
+                    .accessibilityIdentifier("machine.confirm")
+                Button(role: .destructive) { Task { await run(confirm: false) } } label: { Text("不是").font(Theme.Font.labelStrong).lineLimit(1) }
+                    .themedButton()
+                    .accessibilityIdentifier("machine.reject")
+            } else {
+                Button(role: .destructive) { Task { await run(confirm: false) } } label: { Text("删掉").font(Theme.Font.labelStrong).lineLimit(1) }
+                    .themedButton()
+                    .accessibilityIdentifier("machine.reject")
+            }
+            if busy { ProgressView().controlSize(.small) }
+            Spacer(minLength: 0)
+        }
+        .disabled(busy)
+    }
+
+    private func run(confirm: Bool) async {
+        guard let api = model.api(machine.group) else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            if confirm { try await api.confirmMachine(machine.id) } else { try await api.rejectMachine(machine.id) }
+            confirm ? Haptics.success() : Haptics.tap()
+            model.toast = Toast(confirm ? String(localized: "已添加：\(machine.name)") : String(localized: "已删掉「\(machine.name)」"), style: .success)
+            await model.refresh()
+        } catch {
+            model.toast = Toast(AddComputerText.failure(error).message, style: .error)
+            await model.refresh()
         }
     }
 }

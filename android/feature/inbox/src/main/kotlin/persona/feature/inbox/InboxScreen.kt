@@ -136,7 +136,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         scope.launch {
             try {
                 val result = repository.bulk(asked, action)
-                error = null
+                // The hub could not write some of them: they are back as they were.
+                error = if (result.failed.isEmpty()) null else res.getString(R.string.inbox_failed_restored)
                 val notice = if (undoable) bulkNotice(res, result, action == InboxBulkAction.Dismiss) else null
                 if (notice != null) {
                     val back = result.changed.map { persona.core.contracts.api.InboxDoneTarget(it) }

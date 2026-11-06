@@ -1219,6 +1219,28 @@
         }
       }
     },
+    "%@ 后失效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expires in %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ で期限切れ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 后失效"
+          }
+        }
+      }
+    },
     "%@ 后失效，只能用一次": {
       "localizations": {
         "en": {
@@ -10059,6 +10081,28 @@
         }
       }
     },
+    "Persona 配对链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona pairing link"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona のペアリングリンク"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 配对链接"
+          }
+        }
+      }
+    },
     "Persona、AI 分身和各台电脑上的 Agent 都能直接读这个目录。": {
       "localizations": {
         "en": {
@@ -12643,6 +12687,28 @@
         }
       }
     },
+    "hub 还没打开安全连接，电脑接不进来。到 hub 的管理界面里打开安全连接后再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub hasn't turned on secure connections yet, so computers can't join. Turn them on in the hub's admin page, then try again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub で安全な接続がまだオンになっていないため、コンピュータを接続できません。hub の管理画面でオンにしてから、もう一度試してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 还没打开安全连接，电脑接不进来。到 hub 的管理界面里打开安全连接后再试。"
+          }
+        }
+      }
+    },
     "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在 hub.json 的 lark 里填上它（docs/feishu.md）。": {
       "localizations": {
         "en": {
@@ -13879,6 +13945,28 @@
         }
       }
     },
+    "「%@」已经不在了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” is no longer there"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」はもうありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」已经不在了"
+          }
+        }
+      }
+    },
     "「%@」暂时连不上，下面是较早的数据": {
       "localizations": {
         "en": {
@@ -14183,6 +14271,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "「%@」还没有手表的凭据"
+          }
+        }
+      }
+    },
+    "「%@」还没连上来": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” hasn't connected yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」はまだ接続していません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」还没连上来"
           }
         }
       }
@@ -16750,6 +16860,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "不改系统设置，和 hub 断开 30 分钟后自动恢复"
+          }
+        }
+      }
+    },
+    "不是": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Mine"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "違います"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不是"
           }
         }
       }
@@ -22605,6 +22737,28 @@
         }
       }
     },
+    "先在那台电脑上装好 Persona Link，再打开终端，粘贴下面这一行，回车。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install Persona Link on that computer first, then open a terminal, paste the line below and press Return."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まずそのコンピュータに Persona Link をインストールし、ターミナルを開いて下の 1 行を貼り付け、Return を押してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先在那台电脑上装好 Persona Link，再打开终端，粘贴下面这一行，回车。"
+          }
+        }
+      }
+    },
     "先安装这个扩展": {
       "localizations": {
         "en": {
@@ -25580,6 +25734,28 @@
         }
       }
     },
+    "分享配对链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share Pairing Link"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングリンクを共有"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享配对链接"
+          }
+        }
+      }
+    },
     "分叉": {
       "localizations": {
         "en": {
@@ -26413,6 +26589,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "删定期任务"
+          }
+        }
+      }
+    },
+    "删掉": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删掉"
           }
         }
       }
@@ -29771,6 +29969,666 @@
           "stringUnit": {
             "state": "translated",
             "value": "发到这里的提问"
+          }
+        }
+      }
+    },
+    "名字不能为空，最多 40 个字。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Give it a name of up to 40 characters."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前を入力してください（40 文字まで）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名字不能为空，最多 40 个字。"
+          }
+        }
+      }
+    },
+    "在 App 和网页里显示，可以用中文，最多 40 个字。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shown in the apps and on the web. Any language, up to 40 characters."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリとウェブに表示されます。どの言語でも使えます（40 文字まで）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 App 和网页里显示，可以用中文，最多 40 个字。"
+          }
+        }
+      }
+    },
+    "在你的任意一台电脑上开一个 Agent，在这里实时看、随时接手。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start an agent on any of your computers, then follow it live and take over here."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "どのコンピュータでもエージェントを始めれば、ここでリアルタイムに見て、いつでも引き継げます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在你的任意一台电脑上开一个 Agent，在这里实时看、随时接手。"
+          }
+        }
+      }
+    },
+    "在你的任意一台电脑上开一个 Agent，手机上实时看、随时接手。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start an agent on any of your computers, then follow it live and take over from your phone."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "どのコンピュータでもエージェントを始めれば、スマートフォンでリアルタイムに見て、いつでも引き継げます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在你的任意一台电脑上开一个 Agent，手机上实时看、随时接手。"
+          }
+        }
+      }
+    },
+    "在这个文件夹里打开 PowerShell，粘贴下面这一行，回车。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open PowerShell in that folder, paste the line below and press Enter."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのフォルダで PowerShell を開き、下の 1 行を貼り付けて Enter を押してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这个文件夹里打开 PowerShell，粘贴下面这一行，回车。"
+          }
+        }
+      }
+    },
+    "在那台 Mac 上装好 Persona Link。目前还没有安装包，要自己从源码编译。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install Persona Link on that Mac. There is no installer yet: you build it from source."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その Mac に Persona Link をインストールしてください。まだインストーラはなく、ソースからビルドする必要があります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在那台 Mac 上装好 Persona Link。目前还没有安装包，要自己从源码编译。"
+          }
+        }
+      }
+    },
+    "在那台电脑上打开终端，粘贴下面这一行，回车。它会装好 Persona 并连上来。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On that computer, open a terminal, paste the line below and press Return. It installs Persona and connects."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのコンピュータでターミナルを開き、下の 1 行を貼り付けて Return を押してください。Persona がインストールされ、接続されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在那台电脑上打开终端，粘贴下面这一行，回车。它会装好 Persona 并连上来。"
+          }
+        }
+      }
+    },
+    "在那台电脑上把 Persona 的两个程序放在同一个文件夹里。目前还没有安装包，要自己编译，托盘程序也还在做。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On that computer, put Persona's two programs in one folder. There is no installer yet: you build them yourself, and the tray app is still being made."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのコンピュータで、Persona の 2 つのプログラムを同じフォルダに置いてください。まだインストーラはなく自分でビルドする必要があり、トレイアプリも開発中です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在那台电脑上把 Persona 的两个程序放在同一个文件夹里。目前还没有安装包，要自己编译，托盘程序也还在做。"
+          }
+        }
+      }
+    },
+    "它会出现在机器列表里，新建 Agent 时可以选它。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It appears in the machine list, and you can pick it when you start a new agent."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マシンの一覧に表示され、新しいエージェントを始めるときに選べます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它会出现在机器列表里，新建 Agent 时可以选它。"
+          }
+        }
+      }
+    },
+    "它会装成登录时自动启动的后台任务，不弹窗口，也不用管理员权限。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It installs as a background task that starts when you sign in, with no window and no administrator rights."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サインイン時に自動で起動するバックグラウンドタスクとしてインストールされます。ウィンドウは開かず、管理者権限も不要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它会装成登录时自动启动的后台任务，不弹窗口，也不用管理员权限。"
+          }
+        }
+      }
+    },
+    "它可能在别处被删掉了，或者等确认等得太久。要加电脑，重新添加一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It may have been removed elsewhere, or it waited too long to be confirmed. To add a computer, start again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "別の場所で削除されたか、確認を待つ時間が長すぎた可能性があります。コンピュータを追加するには、もう一度追加してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它可能在别处被删掉了，或者等确认等得太久。要加电脑，重新添加一次。"
+          }
+        }
+      }
+    },
+    "它用过的配对链接也作废了。要加电脑，重新添加一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing link it used no longer works either. To add a computer, start again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使われたペアリングリンクも無効になりました。コンピュータを追加するには、もう一度追加してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它用过的配对链接也作废了。要加电脑，重新添加一次。"
+          }
+        }
+      }
+    },
+    "它连上来以后，这里会问你是不是你的电脑。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once it connects, you'll be asked here whether it's yours."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続すると、あなたのコンピュータかどうかをここで確認します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它连上来以后，这里会问你是不是你的电脑。"
+          }
+        }
+      }
+    },
+    "它连上来以后，这里会问你是不是你的电脑。那台电脑还没拿到配对链接，就重新出一个。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once it connects, you'll be asked here whether it's yours. If that computer never got the pairing link, make a new one."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続すると、あなたのコンピュータかどうかをここで確認します。そのコンピュータがペアリングリンクを受け取っていなければ、新しく作ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它连上来以后，这里会问你是不是你的电脑。那台电脑还没拿到配对链接，就重新出一个。"
+          }
+        }
+      }
+    },
+    "安装说明": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install guide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストール手順"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装说明"
+          }
+        }
+      }
+    },
+    "已删掉「%@」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removed “%@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」を削除しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删掉「%@」"
+          }
+        }
+      }
+    },
+    "已添加：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加しました：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已添加：%@"
+          }
+        }
+      }
+    },
+    "已经加了 3 台电脑还没处理完（有的可能还没连上来过）。到「机器」页删掉用不上的，再添加。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3 computers you added are still waiting (some may never have connected). Remove the ones you don't need on the Machines page, then add again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加した 3 台のコンピュータがまだ処理待ちです（一度も接続していないものもあるかもしれません）。「マシン」ページで不要なものを削除してから追加してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经加了 3 台电脑还没处理完（有的可能还没连上来过）。到「机器」页删掉用不上的，再添加。"
+          }
+        }
+      }
+    },
+    "怎么装": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to install"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストール方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "怎么装"
+          }
+        }
+      }
+    },
+    "把配对链接发到那台 Mac，点菜单栏里的 Persona Link 图标 › 配对…，粘贴进去。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send the pairing link to that Mac, click the Persona Link icon in the menu bar › Pair…, and paste it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングリンクをその Mac に送り、メニューバーの Persona Link アイコン › ペアリング… をクリックして貼り付けてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把配对链接发到那台 Mac，点菜单栏里的 Persona Link 图标 › 配对…，粘贴进去。"
+          }
+        }
+      }
+    },
+    "是我的电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It's Mine"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自分のものです"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "是我的电脑"
+          }
+        }
+      }
+    },
+    "有一台电脑想加入，等你确认是不是你的。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A computer wants to join. Confirm whether it's yours."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータが参加しようとしています。あなたのものか確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一台电脑想加入，等你确认是不是你的。"
+          }
+        }
+      }
+    },
+    "有一台电脑想加入：%@（%@），是你的吗？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A computer wants to join: %1$@ (%2$@). Is it yours?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータが参加しようとしています：%1$@（%2$@）。あなたのものですか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一台电脑想加入：%1$@（%2$@），是你的吗？"
+          }
+        }
+      }
+    },
+    "有一台电脑想加入：%@，是你的吗？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A computer wants to join: %@. Is it yours?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータが参加しようとしています：%@。あなたのものですか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一台电脑想加入：%@，是你的吗？"
+          }
+        }
+      }
+    },
+    "比如：办公室的台式机": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. Office desktop"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例：オフィスのデスクトップ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "比如：办公室的台式机"
+          }
+        }
+      }
+    },
+    "比如：家里的服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. Home server"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例：自宅のサーバー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "比如：家里的服务器"
+          }
+        }
+      }
+    },
+    "比如：我的 MacBook": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. My MacBook"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例：自分の MacBook"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "比如：我的 MacBook"
+          }
+        }
+      }
+    },
+    "添加一台，Persona 就能在上面替你干活。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add one and Persona can work on it for you."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 台追加すると、Persona がそこで作業できるようになります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加一台，Persona 就能在上面替你干活。"
+          }
+        }
+      }
+    },
+    "添加电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Computer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータを追加"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加电脑"
+          }
+        }
+      }
+    },
+    "添加电脑…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Computer…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータを追加…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加电脑…"
           }
         }
       }
@@ -77172,6 +78030,28 @@
         }
       }
     },
+    "看到「已配对」就好了，这一屏会自己往下走。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once it says it's paired, you're done: this screen moves on by itself."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ペアリング済み」と表示されれば完了です。この画面は自動で次に進みます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看到「已配对」就好了，这一屏会自己往下走。"
+          }
+        }
+      }
+    },
     "看卡片": {
       "localizations": {
         "en": {
@@ -77920,6 +78800,28 @@
         }
       }
     },
+    "确认之后，Persona 才会在上面替你干活、把模型的 Key 给它。不认识就拒绝，它会被删掉。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only once you confirm does Persona work on it and give it your model keys. If you don't recognize it, say no and it is removed."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認して初めて、Persona はそこで作業し、モデルのキーを渡します。心当たりがなければ拒否してください。削除されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认之后，Persona 才会在上面替你干活、把模型的 Key 给它。不认识就拒绝，它会被删掉。"
+          }
+        }
+      }
+    },
     "确认修改设置": {
       "localizations": {
         "en": {
@@ -78048,6 +78950,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "确认并继续"
+          }
+        }
+      }
+    },
+    "确认电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm Computer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータを確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认电脑"
           }
         }
       }
@@ -79791,6 +80715,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "等 hub 把程序发过去"
+          }
+        }
+      }
+    },
+    "等「%@」连上来…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for “%@” to connect…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」の接続を待っています…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等「%@」连上来…"
           }
         }
       }
@@ -90747,6 +91693,28 @@
         }
       }
     },
+    "还没有电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No computers yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだコンピュータがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有电脑"
+          }
+        }
+      }
+    },
     "还没有能发消息的个人 Agent 会话。先在飞书网关里开一个。": {
       "localizations": {
         "en": {
@@ -90985,6 +91953,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没连上"
+          }
+        }
+      }
+    },
+    "还没连上过：在那台电脑上用配对链接配对一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never connected: pair it once on that computer with the pairing link."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ一度も接続していません：そのコンピュータでペアリングリンクを使ってペアリングしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上过：在那台电脑上用配对链接配对一次。"
           }
         }
       }
@@ -92287,6 +93277,28 @@
         }
       }
     },
+    "这个设备不能添加电脑。用已经登录好的手机或电脑上的 Persona 再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device can't add computers. Try again from Persona on a phone or computer that is already signed in."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスではコンピュータを追加できません。サインイン済みのスマートフォンかコンピュータの Persona でもう一度試してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个设备不能添加电脑。用已经登录好的手机或电脑上的 Persona 再试。"
+          }
+        }
+      }
+    },
     "这个设备只能回答问题，自检要用完整权限的设备": {
       "localizations": {
         "en": {
@@ -92327,6 +93339,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个话题"
+          }
+        }
+      }
+    },
+    "这个链接已经过期，那台电脑还没连上来。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link has expired, and that computer hasn't connected yet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このリンクは期限切れになりました。そのコンピュータはまだ接続していません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个链接已经过期，那台电脑还没连上来。"
           }
         }
       }
@@ -92745,6 +93779,226 @@
           "stringUnit": {
             "state": "translated",
             "value": "触控 ID"
+          }
+        }
+      }
+    },
+    "这台 hub 是组里的成员，到中心 hub 上添加电脑。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This hub is a member of a group. Add computers on the group's central hub."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この hub はグループのメンバーです。中心の hub でコンピュータを追加してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 hub 是组里的成员，到中心 hub 上添加电脑。"
+          }
+        }
+      }
+    },
+    "这台电脑上的 Persona 后台服务没在运行，打开 Persona Link 让它重新装一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona's background service isn't running on this computer. Open Persona Link to install it again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータで Persona のバックグラウンドサービスが動いていません。Persona Link を開いてもう一度インストールしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑上的 Persona 后台服务没在运行，打开 Persona Link 让它重新装一次。"
+          }
+        }
+      }
+    },
+    "这台电脑上的 Persona 版本太旧，没法从这里更新。在那台电脑上重新安装一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona on this computer is too old to update from here. Install it again on that computer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータの Persona は古すぎて、ここからは更新できません。そのコンピュータでもう一度インストールしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑上的 Persona 版本太旧，没法从这里更新。在那台电脑上重新安装一次。"
+          }
+        }
+      }
+    },
+    "这台电脑已经不在了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer is no longer there."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータはもうありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑已经不在了。"
+          }
+        }
+      }
+    },
+    "这台电脑已经确认过了。要给它重新配对，到 hub 的管理界面里做。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer is already confirmed. To pair it again, use the hub's admin page."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータはすでに確認済みです。もう一度ペアリングするには、hub の管理画面で行ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑已经确认过了。要给它重新配对，到 hub 的管理界面里做。"
+          }
+        }
+      }
+    },
+    "这台电脑的系统": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer's system"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータのシステム"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑的系统"
+          }
+        }
+      }
+    },
+    "这台电脑离线了：Persona Link 没在运行，或者电脑睡着了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer is offline: Persona Link isn't running, or the computer is asleep."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータはオフラインです：Persona Link が動いていないか、スリープしています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑离线了：Persona Link 没在运行，或者电脑睡着了。"
+          }
+        }
+      }
+    },
+    "这台电脑经 Persona Link 连到 hub。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer connects to the hub through Persona Link."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータは Persona Link で hub に接続しています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑经 Persona Link 连到 hub。"
+          }
+        }
+      }
+    },
+    "选一个系统：Mac、Linux 或 Windows。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick a system: Mac, Linux or Windows."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムを選んでください：Mac、Linux、Windows。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选一个系统：Mac、Linux 或 Windows。"
+          }
+        }
+      }
+    },
+    "重新出链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Link"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リンクを作り直す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新出链接"
           }
         }
       }

@@ -13,13 +13,15 @@ import persona.core.domain.inbox.InboxRowType
 
 /**
  * What a bulk 已处理 / 忽略 / 移回 (`POST /api/v1/inbox/bulk`) did: [changed] moved (撤销 sends these back), [unchanged] were already
- * so, [changedSince] took new messages after the list was drawn and stay open, [missing] are gone from the hub.
+ * so, [changedSince] took new messages after the list was drawn and stay open, [missing] are gone from the hub, [failed]
+ * the hub could not write and stay as they were.
  */
 data class InboxBulkResult(
     val changed: List<String> = emptyList(),
     val unchanged: List<String> = emptyList(),
     val changedSince: List<String> = emptyList(),
     val missing: List<String> = emptyList(),
+    val failed: List<String> = emptyList(),
 ) {
     companion object {
         fun from(data: JsonObject): InboxBulkResult {
@@ -29,7 +31,7 @@ data class InboxBulkResult(
             val skipped = data["skipped"]?.jsonArray.orEmpty().mapNotNull { it as? JsonObject }
             fun skippedFor(reason: String) = skipped.filter { (it["reason"] as? JsonPrimitive)?.contentOrNull == reason }
                 .mapNotNull { (it["id"] as? JsonPrimitive)?.contentOrNull }
-            return InboxBulkResult(ids("changed"), ids("unchanged"), skippedFor("changed"), skippedFor("missing"))
+            return InboxBulkResult(ids("changed"), ids("unchanged"), skippedFor("changed"), skippedFor("missing"), ids("failed"))
         }
     }
 }

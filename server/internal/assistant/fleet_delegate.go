@@ -137,14 +137,34 @@ func (s *Service) delegatedBefore(ctx context.Context, ix proto.Interaction) boo
 	return false
 }
 
-// rememberDelegated notes that the assistant answered ix for the user (kept in the events, so a restart keeps it).
-func (s *Service) rememberDelegated(ix proto.Interaction) {
+// noteDelegated notes, in memory, that the assistant is answering ix, so delegatedBefore sees it from now on; forget
+// takes the note back when the answer did not go.
+func (s *Service) noteDelegated(ix proto.Interaction) (forget func()) {
 	text := delegateText(ix)
 	if text == "" {
-		return
+		return func() {}
 	}
-	s.addDelegated([2]string{ix.MachineID, ix.SessionID}, delegatedAsk{text: text, at: time.Now()})
-	s.workEvent(ix.MachineID, ix.SessionID, "delegated", map[string]any{"text": text})
+	k := [2]string{ix.MachineID, ix.SessionID}
+	d := delegatedAsk{text: text, at: time.Now()}
+	s.addDelegated(k, d)
+	return func() {
+		s.work.mu.Lock()
+		defer s.work.mu.Unlock()
+		list := s.work.delegated[k]
+		for i, o := range list {
+			if o == d {
+				s.work.delegated[k] = append(list[:i:i], list[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+// rememberDelegated keeps the answer the assistant gave for ix (noteDelegated's) in the events, so a restart keeps it.
+func (s *Service) rememberDelegated(ix proto.Interaction) {
+	if text := delegateText(ix); text != "" {
+		s.workEvent(ix.MachineID, ix.SessionID, "delegated", map[string]any{"text": text})
+	}
 }
 
 func (s *Service) addDelegated(k [2]string, d delegatedAsk) {
@@ -231,9 +251,13 @@ func (s *Service) delegateNow(ix proto.Interaction) {
 	case d.err != nil:
 		s.logf("delegate %s: %v; asking the user", ix.ID, d.err)
 	case d.res.Answer:
+		// Noted before the answer goes: the agent has it at once and may ask the same again before this goes on.
+		forget := s.noteDelegated(ix)
 		ok, err := s.answerQuestion(ix.MachineID, ix.SessionID, ix.ID, d.res.Answers, d.res.Reason)
 		if ok {
 			s.rememberDelegated(ix)
+		} else {
+			forget()
 		}
 		if ok || err == nil {
 			return // answered, or no longer pending (the user answered it meanwhile)

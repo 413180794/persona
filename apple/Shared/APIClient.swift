@@ -722,6 +722,54 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(PairCode.self, from: try await request("POST", "/api/v1/auth/pair-codes", body: Body(web: web)))
     }
 
+    /// The hub lets a signed-in device add a computer (pair-codes `add` / `machine`, docs/protocol.md「电脑的配对码」).
+    static let machinesAddFeature = "machines_add"
+    /// Machines carry `trust` / `error_code` and take confirm / reject (docs/protocol.md「电脑的信任」).
+    static let machineTrustFeature = "machine_trust"
+
+    /// A computer's pairing code (machine › 添加电脑): the app code's fields without `qr`, and the computer's own.
+    nonisolated struct ComputerCode: Decodable, Hashable, Sendable {
+        nonisolated struct Install: Decodable, Hashable, Sendable { var linux: String? }
+        var token: String
+        var expiresAt: Date
+        /// `jarvis://link?…`: what the computer's Persona Link pairs with.
+        var pairLink: String
+        /// The machine id the hub gave it (from the name).
+        var machine: String
+        var name: String?
+        /// `pending` / `confirmed`.
+        var trust: String?
+        /// This request added it (omitted when a pending one of the same name was reused).
+        var added: Bool?
+        /// The line that pairs an installed Persona Link.
+        var command: String?
+        /// One line that installs and pairs; only when the hub knows the site it was published from.
+        var install: Install?
+        enum CodingKeys: String, CodingKey {
+            case token, machine, name, trust, added, command, install, expiresAt = "expires_at", pairLink = "pair_url"
+        }
+    }
+
+    /// Adds a computer, waiting to be confirmed (`add`): `name` may be Chinese (40 characters at most), `os` is
+    /// mac / linux / windows (which instructions the app shows), `icon` laptop / desktop / server.
+    func computerCode(addNamed name: String, os: String, icon: String) async throws -> ComputerCode {
+        struct Add: Encodable { var name: String; var os: String; var icon: String }
+        struct Body: Encodable { var add: Add }
+        return try JSON.decoder.decode(ComputerCode.self, from: try await request("POST", "/api/v1/auth/pair-codes",
+                                                                                  body: Body(add: Add(name: name, os: os, icon: icon))))
+    }
+
+    /// A new code for a computer still waiting to be confirmed (`machine`); a confirmed one is 409 `not_pending`.
+    func computerCode(machine id: String) async throws -> ComputerCode {
+        struct Body: Encodable { var machine: String }
+        return try JSON.decoder.decode(ComputerCode.self, from: try await request("POST", "/api/v1/auth/pair-codes", body: Body(machine: id)))
+    }
+
+    /// 是我的电脑: the computer waiting to be confirmed is confirmed (it gets the keys, it can run agents).
+    func confirmMachine(_ id: String) async throws { _ = try await post("/api/v1/machines/\(id)/confirm") }
+    /// 不是: the hub removes the computer waiting to be confirmed and revokes its credential.
+    func rejectMachine(_ id: String) async throws { _ = try await post("/api/v1/machines/\(id)/reject") }
+
     struct KeysBody: Encodable { var keys: [String]; var text: String }
     func keys(_ k: SessionKey, keys: [String], text: String = "") async throws {
         try await post(sp(k) + "/keys", body: KeysBody(keys: keys, text: text))
