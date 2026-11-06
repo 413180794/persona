@@ -18,7 +18,6 @@ vi.mock("../lib/store", async (importOriginal) => {
   const real = await importOriginal<typeof import("../lib/store")>();
   return { ...real, useStore: <T,>(select: (s: ReturnType<typeof real.getState>) => T) => select({ ...real.getState(), loaded: true, machines: fake.machines, features: fake.features }) };
 });
-vi.mock("../lib/sessions", async (importOriginal) => ({ ...(await importOriginal<typeof import("../lib/sessions")>()), useAgentSessions: () => [] }));
 
 const { Machines } = await import("./Machines");
 

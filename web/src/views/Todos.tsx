@@ -1,5 +1,5 @@
 // Beautiful UI Todos View: left list (sorted by status & created_at), right detail, handover dialog.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../lib/api";
 import { ago, clock, shortPath, stateOf, tabLabel, uuid } from "../lib/format";
 import { launchAgent } from "../lib/new-agent";
@@ -34,9 +34,11 @@ import {
   type Todo,
   type TodoAgent,
   type TodoDecision,
+  type TodoStatus,
+  type SessionLookup,
   taskNow,
 } from "../lib/todos";
-import type { Interaction, Launcher, Machine } from "../lib/types";
+import type { AgentState, Interaction, Launcher, Machine } from "../lib/types";
 import { Button, cx, Dialog, IconButton, Loading, Menu, toast, useMenu } from "../ui/atoms";
 import { SearchField } from "../ui/SearchField";
 import { StatusMark } from "../ui/StatusMark";
@@ -91,6 +93,11 @@ export function TodosView({
       completed: sortTodos(comp, lookup),
     };
   }, [todos, lookup]);
+  // A sessions push builds a new lookup: what it leaves in the same order stays the same list (and the same groups,
+  // the same row views below), so the rows and sections it did not touch skip their render.
+  const steadyUncompleted = useSteady(uncompleted, sameList);
+  const steadyCompleted = useSteady(completed, sameList);
+  const views = useSteady(useMemo(() => todoRowViews(todos, lookup, interactions), [todos, lookup, interactions]), steadyViews);
 
   // Filter by search query
   const filterTodo = (t: Todo) => {
@@ -99,10 +106,15 @@ export function TodosView({
     return t.title.toLowerCase().includes(q) || (t.notes ?? "").toLowerCase().includes(q);
   };
 
-  const filteredUncompleted = useMemo(() => uncompleted.filter(filterTodo), [uncompleted, search]);
-  const filteredCompleted = useMemo(() => completed.filter(filterTodo), [completed, search]);
+  const filteredUncompleted = useMemo(() => steadyUncompleted.filter(filterTodo), [steadyUncompleted, search]);
+  const filteredCompleted = useMemo(() => steadyCompleted.filter(filterTodo), [steadyCompleted, search]);
   // open todos under the project their agents work in (#2526)
-  const projectGroups = useMemo(() => groupTodosByProject(filteredUncompleted, lookup), [filteredUncompleted, lookup]);
+  const projectGroups = useSteady(useMemo(() => groupTodosByProject(filteredUncompleted, lookup), [filteredUncompleted, lookup]), steadyGroups);
+  // each section gets only its own rows' views, so one row's change re-renders that row's section alone
+  const sectionViews = useSteady(
+    useMemo((): ReadonlyMap<string, TodoRowView[]> => new Map(projectGroups.map((g) => [g.key, g.todos.map((td) => views.get(td.id)!)])), [projectGroups, views]),
+    steadyLists,
+  );
 
   // Active selected todo
   const activeTodo = useMemo(() => {
@@ -128,12 +140,16 @@ export function TodosView({
   // The id a row click in this page pushed (/todos → /todos?id=…). Back from that detail pops the entry, as iOS pops
   // its NavigationStack, so the browser's Back does not return to the detail just left; a deep link replaces instead.
   const pushedId = useRef<string | undefined>(undefined);
-  const openFromList = (id: string) => {
-    setActiveId(id);
-    if (id === selectedId) return; // already this entry (a deep link stays a deep link)
-    pushedId.current = id;
-    navigate(`/todos?id=${encodeURIComponent(id)}`);
-  };
+  // stable across pushes, so the memoized rows keep the same props
+  const openFromList = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      if (id === selectedId) return; // already this entry (a deep link stays a deep link)
+      pushedId.current = id;
+      navigate(`/todos?id=${encodeURIComponent(id)}`);
+    },
+    [selectedId],
+  );
   const backToList = () => {
     if (selectedId && pushedId.current === selectedId) {
       pushedId.current = undefined;
@@ -141,7 +157,7 @@ export function TodosView({
     } else navigate("/todos", true);
   };
 
-  const toggleDone = async (todo: Todo) => {
+  const toggleDone = useCallback(async (todo: Todo) => {
     try {
       await updateTodo(todo.id, { done: !todo.done_at });
       await refreshTodos();
@@ -150,7 +166,7 @@ export function TodosView({
     } catch (e) {
       toast(t("todos.action_failed", { error: errorText(e) }), "error");
     }
-  };
+  }, []);
 
   const handleDelete = async () => {
     if (!activeTodo) return;
@@ -228,21 +244,14 @@ export function TodosView({
             ) : (
               <div className="flex flex-col gap-1">
                 {projectGroups.map((g) => (
-                  <TodoProjectSection key={g.key} group={g} holds={g.todos.some((td) => td.id === activeTodo?.id)}>
-                    {g.todos.map((todo) => (
-                      <TodoListItem
-                        key={todo.id}
-                        todo={todo}
-                        lookup={lookup}
-                        interactions={interactions}
-                        selected={activeTodo?.id === todo.id}
-                        onSelect={() => {
-                          openFromList(todo.id);
-                        }}
-                        onToggleDone={() => toggleDone(todo)}
-                      />
-                    ))}
-                  </TodoProjectSection>
+                  <TodoProjectSection
+                    key={g.key}
+                    group={g}
+                    views={sectionViews.get(g.key)!}
+                    selectedId={activeTodo?.id}
+                    onSelect={openFromList}
+                    onToggleDone={toggleDone}
+                  />
                 ))}
 
                 {/* Completed Fold */}
@@ -266,13 +275,10 @@ export function TodosView({
                           <TodoListItem
                             key={todo.id}
                             todo={todo}
-                            lookup={lookup}
-                            interactions={interactions}
+                            view={views.get(todo.id)!}
                             selected={activeTodo?.id === todo.id}
-                            onSelect={() => {
-                              openFromList(todo.id);
-                            }}
-                            onToggleDone={() => toggleDone(todo)}
+                            onSelect={openFromList}
+                            onToggleDone={toggleDone}
                           />
                         ))}
                       </div>
@@ -352,12 +358,84 @@ export function TodosView({
   );
 }
 
+// ── Steady values ────────────────────────────────────────────
+
+/** The last value while `steady` says the new one is the same, so memoized children see the same props. */
+function useSteady<T>(value: T, steady: (prev: T, next: T) => T): T {
+  const last = useRef(value);
+  if (last.current !== value) last.current = steady(last.current, value);
+  return last.current;
+}
+
+/** The same items in the same order. */
+function sameItems<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((x, i) => Object.is(x, b[i]));
+}
+
+const sameList = <T,>(prev: T[], next: T[]): T[] => (sameItems(prev, next) ? prev : next);
+
+/** Two objects with the same fields, each the same value or object. */
+function sameFields(a: object, b: object): boolean {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
+/** Each group that has the same title, state and todos stays the last one; so does the list when they all do. */
+function steadyGroups(prev: TodoProjectGroup[], next: TodoProjectGroup[]): TodoProjectGroup[] {
+  const byKey = new Map(prev.map((g) => [g.key, g]));
+  const out = next.map((g) => {
+    const old = byKey.get(g.key);
+    return old && old.name === g.name && old.state === g.state && old.folded === g.folded && sameItems(old.todos, g.todos) ? old : g;
+  });
+  return sameItems(prev, out) ? prev : out;
+}
+
+/** Each list that has the same items stays the last one; so does the map when they all do. */
+function steadyLists<T>(prev: ReadonlyMap<string, T[]>, next: ReadonlyMap<string, T[]>): ReadonlyMap<string, T[]> {
+  let same = prev.size === next.size;
+  const out = new Map<string, T[]>();
+  for (const [k, list] of next) {
+    const old = prev.get(k);
+    const kept = old && sameItems(old, list) ? old : list;
+    if (kept !== old) same = false;
+    out.set(k, kept);
+  }
+  return same ? prev : out;
+}
+
+/** Each todo's view that has the same fields stays the last one; so does the map when they all do. */
+function steadyViews(prev: ReadonlyMap<string, TodoRowView>, next: ReadonlyMap<string, TodoRowView>): ReadonlyMap<string, TodoRowView> {
+  let same = prev.size === next.size;
+  const out = new Map<string, TodoRowView>();
+  for (const [id, v] of next) {
+    const old = prev.get(id);
+    const kept = old && sameFields(old, v) ? old : v;
+    if (kept !== old) same = false;
+    out.set(id, kept);
+  }
+  return same ? prev : out;
+}
+
 // ── Project Section ──────────────────────────────────────────
 
 const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", done: "text-ink-3" };
 
 /** One project's open todos under a folding title with its 等你 / 在做 / 做完 (#2526). */
-function TodoProjectSection({ group, holds, children }: { group: TodoProjectGroup; holds: boolean; children: React.ReactNode }) {
+const TodoProjectSection = memo(function TodoProjectSection({
+  group,
+  views,
+  selectedId,
+  onSelect,
+  onToggleDone,
+}: {
+  group: TodoProjectGroup;
+  /** Its todos' row views, in the same order as group.todos. */
+  views: readonly TodoRowView[];
+  selectedId: string | undefined;
+  onSelect: (id: string) => void;
+  onToggleDone: (todo: Todo) => void;
+}) {
+  const holds = group.todos.some((td) => td.id === selectedId);
   const [folded, toggle] = useFolded(group.key, group.folded, { follow: true, holds });
   return (
     <div className="mt-1 first:mt-0">
@@ -368,72 +446,114 @@ function TodoProjectSection({ group, holds, children }: { group: TodoProjectGrou
         <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{group.todos.length}</span>
         <span className={cx("shrink-0 text-[11px] font-semibold whitespace-nowrap", TREE_TONE[group.state])}>{treeStateLabel(group.state)}</span>
       </button>
-      {!folded && <div className="flex flex-col gap-1 pl-2 pt-0.5">{children}</div>}
+      {!folded && (
+        <div className="flex flex-col gap-1 pl-2 pt-0.5">
+          {group.todos.map((todo, i) => (
+            <TodoListItem
+              key={todo.id}
+              todo={todo}
+              view={views[i]}
+              selected={selectedId === todo.id}
+              onSelect={onSelect}
+              onToggleDone={onToggleDone}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
-}
+});
 
 // ── Todo List Item ───────────────────────────────────────────
 
-function TodoListItem({
+/** What a todo's row draws from its agents and their cards: plain values, so a push that leaves them alone leaves an
+ *  equal view and the row skips its render. */
+export type TodoRowView = {
+  status: TodoStatus;
+  dotState: AgentState;
+  /** How long since it changed (「3 分钟前」): here so a push that moves the text still redraws it, as before. */
+  age: string;
+  /** Its agents not released. */
+  activeCount: number;
+  /** Whether the most urgent agent's line shows (open, with a session, something to say). */
+  urgentLine: boolean;
+  /** That line's red lead (「<agent> 等你<kicker>」), empty unless the agent waits on you. */
+  urgentLead: string;
+  /** What the agent asks (its card) or does / last said. */
+  urgentText: string;
+};
+
+const DOT_STATE: Record<TodoStatus, AgentState> = {
+  needs_you: "needs_you",
+  interrupted: "needs_you",
+  unread: "unread",
+  working: "working",
+  follow_up: "idle",
+  done: "offline",
+  not_started: "offline",
+  failed: "offline",
+};
+
+/** The view of one todo's row (TodoRowView). */
+export function todoRowView(todo: Todo, lookup: SessionLookup, interactions: Interaction[]): TodoRowView {
+  const status = todoStatus(todo, lookup);
+  const urgent = mostUrgentAgent(todo, lookup);
+  const activeCount = (todo.agents ?? []).filter((a) => !a.released_at).length;
+  const view: TodoRowView = { status, dotState: DOT_STATE[status], age: ago(todo.updated_at || todo.created_at), activeCount, urgentLine: false, urgentLead: "", urgentText: "" };
+  if (todo.done_at || !urgent?.session) return view;
+  const urgentNow = taskNow(urgent.session, stateOf(urgent.session) === "working");
+  const urgentIx = interactions.find((i) => i.machine_id === urgent.agent.machine_id && i.session_id === urgent.agent.session_id);
+  // what it waits on, from its card (#4111): the question, the command; not its last words
+  const urgentAsk = urgent.status === "needs_you" ? askText(urgentIx) : "";
+  if (!urgentAsk && !urgentNow) return view;
+  const kicker = urgentIx?.kind === "plan" ? t("todos.kicker_plan") : urgentIx?.kind === "permission" ? t("todos.kicker_permission") : urgentIx?.kind === "screen" ? t("todos.kicker_screen") : urgentIx?.kind === "elicitation" ? t("todos.kicker_elicitation") : t("todos.kicker_question");
+  view.urgentLine = true;
+  if (urgent.status === "needs_you") view.urgentLead = t("todos.urgent_line", { name: urgent.agent.title || urgent.session.title || "Agent", kicker });
+  view.urgentText = urgentAsk || (urgentNow ? (urgentNow.kind === "words" ? plainMarkdown(urgentNow.text) : urgentNow.text) : "");
+  return view;
+}
+
+/** Every todo's row view by id. */
+function todoRowViews(todos: Todo[], lookup: SessionLookup, interactions: Interaction[]): ReadonlyMap<string, TodoRowView> {
+  return new Map(todos.map((td) => [td.id, todoRowView(td, lookup, interactions)]));
+}
+
+const TONE_CLASS = {
+  red: "text-red",
+  green: "text-green",
+  amber: "text-orange",
+  idle: "text-ink-3",
+  off: "text-ink-3",
+};
+
+const TodoListItem = memo(function TodoListItem({
   todo,
-  lookup,
-  interactions,
+  view,
   selected,
   onSelect,
   onToggleDone,
 }: {
   todo: Todo;
-  lookup: ReturnType<typeof makeSessionLookup>;
-  interactions: Interaction[];
+  view: TodoRowView;
   selected: boolean;
-  onSelect: () => void;
-  onToggleDone: () => void;
+  onSelect: (id: string) => void;
+  onToggleDone: (todo: Todo) => void;
 }) {
-  const status = todoStatus(todo, lookup);
-  const statusInfo = TODO_STATUS_INFO[status];
-  const urgent = mostUrgentAgent(todo, lookup);
+  const { status, dotState, activeCount } = view;
+  const toneClass = TONE_CLASS[TODO_STATUS_INFO[status].tone];
   const held = heldDelivery(todo);
-  const urgentNow = urgent?.session && taskNow(urgent.session, stateOf(urgent.session) === "working");
-  const activeCount = (todo.agents ?? []).filter((a) => !a.released_at).length;
-
-  const toneClass = {
-    red: "text-red",
-    green: "text-green",
-    amber: "text-orange",
-    idle: "text-ink-3",
-    off: "text-ink-3",
-  }[statusInfo.tone];
-
-  const dotState =
-    status === "needs_you" || status === "interrupted"
-      ? "needs_you"
-      : status === "unread"
-        ? "unread"
-        : status === "working"
-          ? "working"
-          : status === "follow_up"
-            ? "idle"
-            : "offline";
-
-  const urgentIx = urgent
-    ? interactions.find((i) => i.machine_id === urgent.agent.machine_id && i.session_id === urgent.agent.session_id)
-    : undefined;
-  // what it waits on, from its card (#4111): the question, the command; not its last words
-  const urgentAsk = urgent?.status === "needs_you" ? askText(urgentIx) : "";
-  const urgentKicker = urgentIx?.kind === "plan" ? t("todos.kicker_plan") : urgentIx?.kind === "permission" ? t("todos.kicker_permission") : urgentIx?.kind === "screen" ? t("todos.kicker_screen") : urgentIx?.kind === "elicitation" ? t("todos.kicker_elicitation") : t("todos.kicker_question");
 
   return (
     <div
       role="button"
       tabIndex={0}
       aria-current={selected || undefined}
-      onClick={onSelect}
+      onClick={() => onSelect(todo.id)}
       // Enter / Space on the row itself (not on its own buttons) opens it, as a click does
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
         e.preventDefault();
-        onSelect();
+        onSelect(todo.id);
       }}
       className={cx(
         "group/item flex cursor-pointer gap-2.5 rounded-control p-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-accent",
@@ -446,7 +566,7 @@ function TodoListItem({
         aria-label={todo.done_at ? t("todos.reopen_todo") : t("todos.complete_todo")}
         onClick={(e) => {
           e.stopPropagation();
-          onToggleDone();
+          onToggleDone(todo);
         }}
         className={cx(
           "touch-hit mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors",
@@ -464,7 +584,7 @@ function TodoListItem({
           <span className={cx("truncate text-[13.5px] font-semibold text-ink", todo.done_at && "line-through text-ink-3 font-normal")}>
             {todo.title}
           </span>
-          <span className="shrink-0 text-[11px] text-ink-3">{ago(todo.updated_at || todo.created_at)}</span>
+          <span className="shrink-0 text-[11px] text-ink-3">{view.age}</span>
         </div>
 
         {/* Status Line */}
@@ -498,20 +618,16 @@ function TodoListItem({
         )}
 
         {/* Most Urgent Agent Line */}
-        {!todo.done_at && urgent?.session && (urgentAsk || urgentNow) && (
+        {view.urgentLine && (
           <div className="mt-1 truncate text-[11.5px] text-ink-3">
-            {urgent.status === "needs_you" && (
-              <span className="font-medium text-red">
-                {t("todos.urgent_line", { name: urgent.agent.title || urgent.session.title || "Agent", kicker: urgentKicker })}
-              </span>
-            )}
-            {urgentAsk || (urgentNow && (urgentNow.kind === "words" ? plainMarkdown(urgentNow.text) : urgentNow.text))}
+            {view.urgentLead && <span className="font-medium text-red">{view.urgentLead}</span>}
+            {view.urgentText}
           </div>
         )}
       </div>
     </div>
   );
-}
+});
 
 /** What a waiting agent's card asks, as one line of plain text; empty for a plan (its kicker says it) or no card. */
 function askText(ix: Interaction | undefined): string {

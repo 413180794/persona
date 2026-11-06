@@ -1,6 +1,6 @@
 // The inbox list (docs/inbox.md「App」): filters by source and kind, search, then 需要你 (agents waiting on you first),
 // 知悉即可, 已折叠 and 已处理, each a section that opens / closes from its title.
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
   listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, unmuteInbox,
@@ -41,9 +41,6 @@ export function InboxList({ selected }: { selected?: string }) {
   const loading = useInbox((s) => s.loading);
   const error = useInbox((s) => s.error);
   const triage = useInbox((s) => s.triage);
-  const interactions = useStore((s) => s.interactions);
-  const sessions = useStore((s) => s.sessions);
-  const mutes = useStore((s) => s.mutes);
   const storeLoaded = useStore((s) => s.loaded);
   // The waiting agents come with the store, often after the items: painting the items first and then the agents over
   // them pushed every row down (a layout shift of 600px on a phone), so the list waits for both and paints once.
@@ -51,6 +48,10 @@ export function InboxList({ selected }: { selected?: string }) {
   const [source, setSource] = useStored("inbox.source");
   const [kind, setKind] = useStored("inbox.kind");
   const [query, setQuery] = useState("");
+  // The agents waiting, picked in the store: the list holds the store's own interaction objects, so a sessions or
+  // machines push that leaves them as they were keeps the same array (useStore compares it item by item) and the list,
+  // with every row in it, does not render again.
+  const agents = useStore((st) => waitingAgents(st.interactions, st.sessions, st.mutes, { source, kind, query }));
   const [open, setOpen] = useState<Set<string>>(() => new Set(["action", "working", "fyi"]));
   const [editing, setEditing] = useState<InboxItem | null>(null);
   const accounts = useMailAccounts();
@@ -66,7 +67,6 @@ export function InboxList({ selected }: { selected?: string }) {
   }, [selected, loaded, storeLoaded]);
 
   const s = useMemo(() => sections(items, { source, kind, query }), [items, source, kind, query]);
-  const agents = useMemo(() => waitingAgents(interactions, sessions, mutes, { source, kind, query }), [interactions, sessions, mutes, source, kind, query]);
   const chips = mailAccounts(accounts, items);
   const connectors = useMemo(() => connectorSources(items), [items]);
   const failed = Boolean(error) && !items.length;
@@ -203,13 +203,13 @@ export function InboxList({ selected }: { selected?: string }) {
             <Section key={tier.key} k={tier.key} title={tier.title} count={sectionCount(list.length, waiting.length)} open={open.has(tier.key)} onToggle={() => toggle(tier.key)}
               action={clear && list.length ? { label: clear, run: () => setAllDone(list, true) } : undefined}>
               {waiting.map((ix) => <AgentRow key={ix.id} ix={ix} />)}
-              {list.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={() => setEditing(it)} />)}
+              {list.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={setEditing} />)}
             </Section>
           );
         })}
         {ready && s.done.length > 0 && (
           <Section k="done" title={t("inbox-inboxlist.done")} count={sectionCount(s.done.length, 0)} open={open.has("done")} onToggle={() => toggle("done")}>
-            {s.done.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={() => setEditing(it)} />)}
+            {s.done.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={setEditing} />)}
           </Section>
         )}
         {loading && loaded && <span className="sr-only">{t("inbox-inboxlist.refreshing")}</span>}
@@ -264,7 +264,8 @@ export async function markFromRow(it: InboxItem, done: boolean, touch = isNoHove
   if (ok && done && touch) toast(t("inbox-inboxlist.marked_done"), "ok", { label: t("lib-inbox.undo"), run: () => void setDone(it, false) });
 }
 
-function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selected: boolean; showAccount: boolean; onEdit: () => void }) {
+/** Memoized: a push that leaves this item's object as it was (or one for sessions and machines) skips the row. */
+const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selected: boolean; showAccount: boolean; onEdit: (it: InboxItem) => void }) {
   const to = { name: "inbox", id: it.id } as const;
   const done = isDone(it);
   const label = kindLabel(it);
@@ -318,7 +319,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
               {rows.length > 1 && <span className="shrink-0 text-ink-3">{t("inbox-inboxlist.more_rows", { count: rows.length - 1 })}</span>}
             </div>
           )}
-          {draft && <DraftCard it={it} onEdit={onEdit} onSend={() => void sendReply(it, draft, it.agent?.changes ?? [])} />}
+          {draft && <DraftCard it={it} onEdit={() => onEdit(it)} onSend={() => void sendReply(it, draft, it.agent?.changes ?? [])} />}
           {working && <AgentWorking it={it} />}
           {mark}
         </div>
@@ -338,7 +339,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
       {menu && <Menu anchor={menu.anchor ?? null} point={menu.point} onClose={() => setMenu(null)} width={224} items={rowMenu(it, done)} />}
     </div>
   );
-}
+});
 
 /** A row's menu: 已处理 (or 移回), then 静音这个仓库 / 会话 / 发件人 with the name under it (iOS InboxView.rowMenu). */
 export function rowMenu(it: InboxItem, done: boolean): MenuItem[] {
@@ -416,15 +417,17 @@ function MutesDialog({ onClose }: { onClose: () => void }) {
 
 const IX_GLYPH: Record<Interaction["kind"], GlyphName | "list" | "terminal"> = { question: "question", plan: "list", permission: "hand", screen: "terminal", elicitation: "sheet" };
 
-/** An agent waiting on you: which agent, what it asks, then what it waits for (red) and where. */
-function AgentRow({ ix }: { ix: Interaction }) {
-  const sessions = useStore((s) => s.sessions);
-  const assistant = useStore((s) => s.assistant);
-  const machines = useStore((s) => s.machines);
-  const to = conversationRoute(ix.machine_id, ix.session_id, sessions, assistant);
+/**
+ * An agent waiting on you: which agent, what it asks, then what it waits for (red) and where. Memoized, and it reads
+ * from the store only its route and its place, whose fields are strings: a sessions or machines push renders it again
+ * only when one of those changed.
+ */
+const AgentRow = memo(function AgentRow({ ix }: { ix: Interaction }) {
+  const to = useStore((s) => conversationRoute(ix.machine_id, ix.session_id, s.sessions, s.assistant));
+  const jarvis = to.name === "jarvis";
+  const where = useStore((s) => (jarvis ? "Persona" : machineWithHub(ix.machine_id, s.machines)));
   const ask = interactionAsk(ix);
   const glyph = IX_GLYPH[ix.kind];
-  const where = to.name === "jarvis" ? "Persona" : machineWithHub(ix.machine_id, machines);
   return (
     <a href={href(to)} onClick={(e) => onLinkClick(e, to)} className="flex gap-3 rounded-[14px] bg-surface p-3 shadow-card transition-colors duration-150 hover:bg-inset">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-red-tint text-red">
@@ -453,7 +456,7 @@ function AgentRow({ ix }: { ix: Interaction }) {
       </span>
     </a>
   );
-}
+});
 
 /** 「将处理 N 件」: asked before 全部已处理 / 全部忽略 over BULK_CONFIRM_AT items or more. */
 function BulkConfirm({ confirm, onClose }: { confirm: { action: "done" | "dismiss"; items: InboxItem[]; scope: string } | null; onClose: () => void }) {
