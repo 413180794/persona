@@ -718,7 +718,10 @@ struct CompactDivider: View {
 
 struct NoticeRow: View {
     var item: Item
-    @State private var expanded = false
+    /// Kept by the chat (`OpenTools`) so a row built again stays as it was (#5602); on its own without one.
+    @Environment(\.openTools) private var openTools
+    @State private var expandedHere = false
+    private var expanded: Bool { openTools?.isOpen("notice-" + item.id) ?? expandedHere }
     @Environment(\.chatPin) private var pin
 
     var body: some View {
@@ -732,7 +735,9 @@ struct NoticeRow: View {
 
     private var long: some View {
         Button {
-            toggleInPlace(pin, "notice-" + item.id, animation: Theme.Motion.state) { expanded.toggle() }
+            toggleInPlace(pin, "notice-" + item.id, animation: Theme.Motion.state) {
+                if let openTools { openTools.set("notice-" + item.id, !expanded) } else { expandedHere.toggle() }
+            }
         } label: {
             HStack(alignment: .top, spacing: Theme.Space.s) {
                 Image(systemName: Theme.Icon.info).font(Theme.Font.label).foregroundStyle(.tertiary)

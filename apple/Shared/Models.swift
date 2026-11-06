@@ -966,6 +966,26 @@ nonisolated struct Subagent: Codable, Identifiable, Hashable, Sendable {
 }
 
 nonisolated extension Subagent {
+    /// Whether it runs, as the chat's own lines tell it (#5602, the web's rule; Claude Desktop goes by the call's result
+    /// too): one its session waits on is over once its Agent call's result is in, whatever the hub's list says (that
+    /// list goes by when its transcript was last written, and one dropped from it kept its last word: Running for ever);
+    /// with no result yet it runs while its session is at work or the list says it does. One sent to the background (its
+    /// result is the launch receipt) is the list's word until it reported back (a notice for its call). A call not in the
+    /// loaded lines: the list's word.
+    func running(in tasks: TaskIndex, sessionWorks: Bool = false) -> Bool {
+        guard let call = toolUseID else { return running }
+        if tasks.started.contains(call) { return running && !tasks.notes[call, default: []].contains { $0.status != "event" } }
+        if tasks.answered.contains(call) { return false }
+        return running || (sessionWorks && tasks.asked.contains(call))
+    }
+
+    /// The same with `running` as the chat's lines tell it.
+    func shown(in tasks: TaskIndex, sessionWorks: Bool = false) -> Subagent {
+        var a = self
+        a.running = running(in: tasks, sessionWorks: sessionWorks)
+        return a
+    }
+
     /// A line of `tree(_:)`: the subagent and how deep it sits (0: the session launched it, or its launcher is not
     /// listed; 1: a subagent did; …).
     struct TreeRow: Hashable, Sendable {
@@ -1126,6 +1146,15 @@ nonisolated extension Session {
         x.lastText = nil
         x.activity = nil
         x.activityAt = nil
+        // A running subagent's transcript time and last line tick with each of its steps: the page shows neither (its
+        // sheet shows the time it started, its write time only when that is missing), and the whole chat page ran
+        // again for each (#5602).
+        x.subagents = x.subagents?.map { a in
+            var a = a
+            a.lastText = nil
+            if a.startedAt != nil { a.updatedAt = nil }
+            return a
+        }
         return x
     }
 }

@@ -854,6 +854,34 @@ if os.environ.get("MOCK_SOURCES"):
              **dict(NO_SPACE, space_kind="dsh")),
     ]
 
+# MOCK_OVERVIEW_DENSE=1: the overview on a wide screen with many finished rows: agents run through a runtime (a source
+# tag), tabs named after the agent's first words (the title must not be said twice), long titles and one with none.
+if os.environ.get("MOCK_OVERVIEW_DENSE"):
+    _dense = [
+        ("迁移共享存储客户端到新的区域配置，并保留旧端点的兼容开关", "infra", 2, "改完了：新区域配置走统一入口，旧端点留了开关，默认关闭。测试全过。"),
+        ("Review the cache loader adapter and list what blocks merging", "core", 3 * 60, "Two blockers: the loader swallows timeouts, and the adapter retries writes. Both have fixes on the branch."),
+        ("梳理事件接入的全生命周期并对比两套实现的差异", "events", 20 * 60, "五项都处理完了，已合入 develop 并推送。后端、配置、前端分别列在 notes.md 里。"),
+        ("Upgrade the async task SDK", "core", 23 * 60, "I pushed the branch and opened a merge request; CI is green."),
+        ("拉取最新的发布分支并修复端点处理", "infra", 23 * 60 + 30, "已把 SDK 的改动推送到发布分支，等你确认后合并。"),
+        ("", "events", 2 * 24 * 60, "结论：能做，链路上没有技术障碍，但目前只部署在测试环境，建议等上线后再接。"),
+        ("do code review", "core", 4 * 24 * 60, "Both diagrams pass the geometry check (errors=0, warnings=0) and the visual check."),
+        ("后端程序有一处代码读取了旧的密钥配置", "events", 8 * 24 * 60, "已记录到 docs/todo-deploy-env.md，合入 develop 并推送。"),
+        ("阅读问题树，回顾因子组的开发流程", "events", 8 * 24 * 60 + 60, "下面的接口来自各脚本里的实际调用：{id}、{e}/{c} 分别表示组 ID 和事件 ID。"),
+        ("帮我思考一个场景：告警怎么按主题找到对应的会话", "events", 9 * 24 * 60, "按主题查会话可以做，建议先在索引里加一列主题，再按最近活跃排序。"),
+        ("Write the weekly summary of merged changes", "core", 10 * 24 * 60, "Draft is in summary.md: 14 merged changes, grouped by area."),
+    ]
+    _ws = {"infra": 21, "core": 22, "events": 23}
+    for _i, (_title, _space, _mins, _last) in enumerate(_dense):
+        _tab = (_title or "回顾 common 代码，在哪里控制离线组请求查询数据的超时时间")[:28] + "…"
+        SESSIONS.append(sess("server", "d7e9f1a3-0000-4000-8000-%012d" % (_i + 1), _title, "", "idle", "unread", _space,
+                             _ws[_space], _tab, _i + 1, _mins, _last, source_kind="runtime", agent_label="claude",
+                             capabilities={"read": True, "send": True, "interrupt": True, "approve": True, "terminal": True, "attach": False}))
+    SESSIONS.append(sess("server", "d7e9f1a3-0000-4000-8000-000000000099", "按照以下改造方案迁移存储与键值访问到新区域", "/home/me/code/infra",
+                         "working", "working", "infra", 21, "按照以下改造方案迁移存储与键值访问到新区域"[:20] + "…", 30, 2,
+                         "The governance query CLI is read-only. Next I'll check which of its commands the migration needs.",
+                         source_kind="runtime", agent_label="claude", state_since=ago(minutes=2),
+                         capabilities={"read": True, "send": True, "interrupt": True, "approve": True, "terminal": True, "attach": False}))
+
 # MOCK_OPENCODE=1 (#3070, docs/opencode.md): opencode in herdr panes on the server. Four are herdr sessions the Persona
 # plugin completes (working, needs you with a permission card, finished unread, idle with a long conversation), one has
 # no plugin (terminal only, with why), and gemini is an agent nothing reads (terminal only).
@@ -4857,7 +4885,7 @@ if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
     split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
     inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
     inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
     legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
     reply = _lm("214", "我", "好的", mine=True, mins=36)
     reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}

@@ -208,7 +208,17 @@ struct ChatView: View {
     }
     private var session: Session? { model.session(key) }
     /// The latest state of the subagent being viewed (the list refreshes with the session).
-    private var viewedAgent: Subagent? { viewing.flatMap { v in session?.subagents?.first { $0.id == v.id } ?? v } }
+    private var viewedAgent: Subagent? {
+        viewing.flatMap { v in (session?.subagents?.first { $0.id == v.id } ?? v).shown(in: model.chat(key).tasks, sessionWorks: sessionWorks) }
+    }
+    /// The session's subagents, each running or not as its own chat's lines tell it (`Subagent.running(in:)`, #5602):
+    /// the session's, also while a subagent's is shown.
+    private var subagents: [Subagent] {
+        let tasks = model.chat(key).tasks, works = sessionWorks
+        return (session?.subagents ?? []).map { $0.shown(in: tasks, sessionWorks: works) }
+    }
+    /// At work, or waiting on the user (a subagent's question stops its session there).
+    private var sessionWorks: Bool { session?.state == .working || session?.state == .needsYou }
     private var status: SessionStatus {
         if let a = viewedAgent { return a.running ? .working : .idle }
         return session?.status ?? .unknown
@@ -460,7 +470,7 @@ struct ChatView: View {
     /// the chat only while there are any.
     @ViewBuilder private var macChrome: some View {
         let ports = session?.ports ?? []
-        let all = session?.subagents ?? []
+        let all = subagents
         if !ports.isEmpty || (pane == .chat && !all.isEmpty) || session?.goal != nil || hasWorkflows {
             VStack(spacing: Theme.Space.s) {
                 if let goal = session?.goal { GoalBar(goal: goal) }
@@ -2816,7 +2826,7 @@ struct ChatView: View {
 
     /// The header's third row (`HeaderStatusLine`): what its subagents are doing, when that is worth a line.
     @ViewBuilder private var statusLine: some View {
-        if let status = HeaderStatus.pick(session?.subagents ?? [], viewing: viewing) {
+        if let status = HeaderStatus.pick(subagents, viewing: viewing) {
             HeaderStatusLine(status: status, open: { a in view(a) }, openAll: { Haptics.tap(); showSubagents = true })
         }
     }
@@ -2824,7 +2834,7 @@ struct ChatView: View {
     /// Hosted (a task's sheet, #3255), which this header's redesign leaves as it was: Main Agent and a chip per running
     /// subagent, with "All subagents" for the rest.
     @ViewBuilder private var hostedAgentStrip: some View {
-        let all = session?.subagents ?? []
+        let all = subagents
         if !all.isEmpty {
             AgentStrip(agents: all.filter { $0.running || $0.id == viewing?.id }, all: all, viewing: viewing?.id) { a in view(a) }
         }
@@ -2832,7 +2842,7 @@ struct ChatView: View {
 
     /// "All subagents": every subagent by who launched whom; a tap reads it.
     private var subagentTree: some View {
-        SubagentTreeSheet(rows: Subagent.tree(session?.subagents ?? []), viewing: viewing?.id) { a in
+        SubagentTreeSheet(rows: Subagent.tree(subagents), viewing: viewing?.id) { a in
             showSubagents = false
             view(a)
         }

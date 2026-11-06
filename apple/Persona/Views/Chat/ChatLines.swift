@@ -206,27 +206,63 @@ struct ChatLines {
     /// so does a call that went to the background: its row says how the task went (Background · Done).
     func runLines(group: String, items: [WorkItem]) -> [ChatLine] {
         var out: [ChatLine] = []
+        for piece in runs(items) {
+            switch piece {
+            case .item(let n):
+                out.append(.workStep(group: group, item: items[n], first: n == 0))
+            case .run(let calls, let start, let key):
+                guard calls.count > 1 else {
+                    out.append(.workStep(group: group, item: .step(.call(calls[0])), first: start == 0))
+                    continue
+                }
+                let id = group + "/run-" + key
+                let open = isRunOpen(id)
+                out.append(.toolRun(id: id, calls: calls, open: open, first: start == 0))
+                if open { out += calls.map { .workStep(group: group, item: .step(.call($0)), first: false) } }
+            }
+        }
+        return out
+    }
+
+    /// A work line's steps cut into runs of calls that fold together and the steps between them.
+    private enum RunPiece { case item(Int), run([ToolCall], start: Int, key: String) }
+
+    /// Each run's key is its first call's id, except the first run of a stretch of calls, which takes the stretch's
+    /// first call: a call that goes to the background leaves its run (its row says how the task went), and when it was
+    /// the first one the run went on under a new id and an opened run closed (#5602). Now it keeps the id it had.
+    private func runs(_ items: [WorkItem]) -> [RunPiece] {
+        var out: [RunPiece] = []
         var run: [ToolCall] = []
         var runStart = 0
+        var stretch: String? // the first call of the calls in a row so far, until a run takes it
+        var inStretch = false
         func flush() {
-            defer { run = [] }
-            guard run.count > 1 else {
-                if let c = run.first { out.append(.workStep(group: group, item: .step(.call(c)), first: runStart == 0)) }
-                return
+            guard let first = run.first else { return }
+            if run.count > 1 {
+                out.append(.run(run, start: runStart, key: stretch ?? first.id))
+                stretch = nil
+            } else {
+                out.append(.run(run, start: runStart, key: first.id))
             }
-            let id = group + "/run-" + run[0].id
-            let open = isRunOpen(id)
-            out.append(.toolRun(id: id, calls: run, open: open, first: runStart == 0))
-            if open { out += run.map { .workStep(group: group, item: .step(.call($0)), first: false) } }
+            run = []
         }
         for (n, item) in items.enumerated() {
-            if case .step(.call(let c)) = item, foldsIntoRun(c) {
+            guard case .step(.call(let c)) = item else {
+                flush()
+                stretch = nil
+                inStretch = false
+                out.append(.item(n))
+                continue
+            }
+            if !inStretch { stretch = c.id }
+            inStretch = true
+            if foldsIntoRun(c) {
                 if run.isEmpty { runStart = n }
                 run.append(c)
                 continue
             }
             flush()
-            out.append(.workStep(group: group, item: item, first: n == 0))
+            out.append(.item(n))
         }
         flush()
         return out
@@ -236,17 +272,12 @@ struct ChatLines {
 
     /// The run line (`runLines`) a call is folded into, if it is.
     func runID(holding call: String, group: String, items: [WorkItem]) -> String? {
-        var run: [String] = []
-        func found() -> String? { run.count > 1 && run.contains(call) ? group + "/run-" + run[0] : nil }
-        for item in items {
-            if case .step(.call(let c)) = item, foldsIntoRun(c) { run.append(c.id); continue }
-            if let id = found() { return id }
-            run = []
+        for case .run(let calls, _, let key) in runs(items) where calls.count > 1 && calls.contains(where: { $0.id == call }) {
+            return group + "/run-" + key
         }
-        return found()
+        return nil
     }
 
-    /// The strip of what a work line's calls looked at, when they looked at any.
     static func viewed(_ id: String, _ work: [WorkItem]) -> [ChatLine] {
         let images = ViewedImages.of(work)
         return images.isEmpty ? [] : [.viewed(id: id, images: images)]

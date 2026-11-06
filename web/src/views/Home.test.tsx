@@ -30,7 +30,7 @@ vi.mock("../lib/sessions", async (importOriginal) => {
 // the extensions' overview cards are not this test's
 vi.mock("./extensions/ExtensionSlots", () => ({ OverviewCards: () => null }));
 
-const { Home, offlineLine } = await import("./Home");
+const { Home, offlineLine, rowTags } = await import("./Home");
 
 const mac: Machine = { id: "mac", name: "Mac", online: true };
 let n = 0;
@@ -186,6 +186,39 @@ describe("the overview", () => {
     const html = render([asking, agent(2, 0, "working"), agent(3, 0, "unread")], [ix]);
     expect(html).not.toContain("加载中");
     for (const group of ["需要你", "工作中", "完成未看", "电脑"]) expect(heading(html, group)).toBeGreaterThan(-1);
+  });
+});
+
+describe("compact rows", () => {
+  const tags = (html: string) => (html.match(/<span [^>]*data-row-tags[^>]*>([\s\S]*?)<\/span><\/span>/g) ?? []).map((t) => [...t.matchAll(/>([^<]+)<\/span>/g)].map((m) => m[1]));
+
+  it("shows the title once: a tab named after it is not a tag, its machine and space are", () => {
+    const title = "Migrate the shared storage client to the new region config";
+    const html = render([agent(1, 0, "unread", { title, slot_name: title.slice(0, 30) + "…", last_text: "Pushed the branch." })]);
+    expect(tags(html)).toEqual([["Mac", "app"]]);
+    expect(html.split(title).length - 1).toBe(2); // the title text and the row's tooltip
+  });
+
+  it("says a session's source once, as a tag, not again before its latest words", () => {
+    const html = render([agent(1, 0, "unread", { source_kind: "runtime", agent_label: "DSH", capabilities: { read: true, send: true }, last_text: "Report ready." })]);
+    expect(tags(html)[0]).toContain("DSH");
+    expect(html).not.toContain("DSH · Report ready.");
+    expect(html).toContain(">Report ready.<");
+  });
+
+  it("puts the rows of every agent section in columns on a wide page, cards with buttons later", () => {
+    const a = agent(1, 0, "needs_you");
+    const html = render([a, agent(2, 0, "unread"), agent(3, 0, "working")], [{ id: "p", kind: "permission", machine_id: "mac", session_id: a.session_id, tool_name: "Bash", tool_input: { command: "ls" } } as Interaction]);
+    expect(html.match(/@min-\[60rem\]:grid-cols-2 @min-\[100rem\]:grid-cols-3/g)?.length).toBe(2);
+    // the cards with buttons only once each has room for its question and buttons
+    expect(html.match(/@min-\[84rem\]:grid-cols-2 @min-\[120rem\]:grid-cols-3/g)?.length).toBe(1);
+    expect(html).toContain("@container");
+  });
+
+  it("keeps a short space name that only starts the title, and drops a repeat", () => {
+    expect(rowTags("app store listing", ["Mac", "app", "#2"])).toEqual(["Mac", "app", "#2"]);
+    expect(rowTags("Fix the login redirect loop", ["Mac", "web", "Fix the login redir…"])).toEqual(["Mac", "web"]);
+    expect(rowTags("Untitled", ["Mac", "", undefined, false, "Mac"])).toEqual(["Mac"]);
   });
 });
 

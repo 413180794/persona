@@ -156,6 +156,28 @@ struct TurnTests {
         #expect(ChatCache.tail(items, turns: 2).map(\.seq) == [3, 4, 5, 6, 7])
     }
 
+    /// Whether a subagent runs goes by its Agent call's result in the chat (#5602), not only by the hub's list: done once
+    /// the result is in, whatever the list says; one sent to the background, once it reported back.
+    @Test func aSubagentRunsUntilItsCallsResultIsIn() {
+        let agent = Subagent(id: "x", sessionID: "s@x", toolUseID: "a", running: true)
+        let asked = [item(1, .text, role: "user", text: "go"), item(2, .toolUse, tool: "Agent", id: "a")]
+        #expect(agent.running(in: TaskIndex.build(asked)))
+        let answered = asked + [item(3, .toolResult, role: "user", text: "found it", id: "a")]
+        #expect(!agent.running(in: TaskIndex.build(answered))) // the list still says running: the result wins
+        var stale = agent
+        stale.running = false
+        #expect(!stale.running(in: TaskIndex.build(asked))) // no result yet, its session not at work: the list's word
+        #expect(stale.running(in: TaskIndex.build(asked), sessionWorks: true)) // …at work: it runs
+        #expect(Subagent(id: "y", sessionID: "s@y", running: true).running(in: TaskIndex.build(answered))) // no call to go by
+
+        // In the background: its receipt is a result, but it runs until its notice.
+        let launched = asked + [item(3, .toolResult, role: "user", text: "Async agent launched successfully. agentId: x1", id: "a")]
+        #expect(agent.running(in: TaskIndex.build(launched)))
+        var done = item(4, .notice, role: "system", text: "Agent \"Explore\" completed")
+        done.task = TaskNote(kind: "agent", status: "completed", title: "Explore", toolUseID: "a")
+        #expect(!agent.running(in: TaskIndex.build(launched + [done])))
+    }
+
     @Test func agentOverridesItsMutedSpace() {
         var p = Pins()
         p.spaces = ["server/app"]

@@ -103,7 +103,12 @@ struct TaskNoteRow: View {
     var item: Item
     /// A row of an open work line's card (no tile of its own), like `ToolCallRow`.
     var grouped = false
-    @State private var open = false
+    /// Open or not: kept by the chat (`OpenTools`, as a tool row's) so a row the lazy list builds again keeps it (#5602);
+    /// on its own without one.
+    @Environment(\.openTools) private var openTools
+    @State private var openHere = false
+    private var open: Bool { openTools?.isOpen("task-" + item.id) ?? openHere }
+    private func toggleOpen() { if let openTools { openTools.set("task-" + item.id, !open) } else { openHere.toggle() } }
 
     @Environment(\.chatPin) private var pin
     private var pinKey: String { "task-" + item.id }
@@ -124,7 +129,7 @@ struct TaskNoteRow: View {
                                                          monospacedChip: subject.unicodeScalars.allSatisfy(\.isASCII)),
                                     isOpen: open) {
                             Haptics.tap()
-                            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+                            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { toggleOpen() }
                         } accessory: {
                             if let p = TaskNoteText.pill(n, startedAt: call.flatMap { index.startedAt[$0] }, at: item.ts) {
                                 BUIPill(p.text, tone: p.tone)
@@ -134,7 +139,7 @@ struct TaskNoteRow: View {
                     } else {
                         Button {
                             Haptics.tap()
-                            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+                            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { toggleOpen() }
                         } label: {
                             HStack(spacing: Theme.Space.m) {
                                 ZStack {

@@ -85,7 +85,8 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
         )}
       </header>
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-[760px] flex-col gap-9 px-5 pt-6 pb-16 sm:px-8 sm:pt-10">
+        {/* wide enough for two or three columns of rows: a desktop browser no longer reads one narrow column between margins */}
+        <div className="@container mx-auto flex max-w-[1920px] flex-col gap-8 px-5 pt-6 pb-16 sm:px-8 sm:pt-10">
           <div style={{ animation: `fade-up 420ms ${EASE} both` }}>
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{greeting()}</h1>
             <div className="mt-1 flex items-center gap-2">
@@ -105,7 +106,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 
           {/* the headline counts agents, this counts cards: say so when one agent has several cards waiting */}
           {loaded && (interactions.length > 0 || held.length > 0) && (
-            <Group title={stateName("needs_you")} count={interactions.length} hint={new Set(interactions.map((ix) => `${ix.machine_id}/${ix.session_id}`)).size < interactions.length ? t("home.needs_you_hint") : undefined}>
+            <Group title={stateName("needs_you")} count={interactions.length} hint={new Set(interactions.map((ix) => `${ix.machine_id}/${ix.session_id}`)).size < interactions.length ? t("home.needs_you_hint") : undefined} grid="cards">
               {withHeld(interactions, held).map(({ ix, held: h }, i, rows) => {
                 const s = sessions.find((x) => x.machine_id === ix.machine_id && x.session_id === ix.session_id);
                 const title = ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"));
@@ -132,9 +133,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                         done={done}
                         to={{ name: "session", mid: ix.machine_id, sid: ix.session_id }}
                         title={title}
-                        meta={[name(ix.machine_id), s?.space_name, s && tabLabel(s)].filter(Boolean).join(" › ")}
+                        tags={rowTags(title, [name(ix.machine_id), s?.space_name, s && tabLabel(s)])}
                         detail={(tool && ask && ask !== tool ? t("home.permission_detail", { tool, what: ask }) : ask) || undefined}
-                        pill={!done && <Pill tone="red">{KIND[ix.kind]}</Pill>}
+                        pill={!done && <Pill>{KIND[ix.kind]}</Pill>}
                         entry={cardState(ix.id)}
                         actions={done ? <AnsweredLine ix={ix} body={h.body} /> : quick && <QuickAnswers choices={quick} sending={h?.pick} onPick={(c) => void answer(ix, i, rows[i + 1]?.ix.id, c)} />}
                       />
@@ -146,17 +147,17 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           )}
 
           {loaded && groups.needs.length > 0 && (
-            <Group title={t("home.waiting_on_computer")} count={groups.needs.length} hint={t("home.waiting_on_computer_hint")}>
+            <Group title={t("home.waiting_on_computer")} count={groups.needs.length} hint={t("home.waiting_on_computer_hint")} grid>
               {groups.needs.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">{stateName("needs_you")}</Pill>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill>{stateName("needs_you")}</Pill>} />
               ))}
             </Group>
           )}
 
           {loaded && groups.working.length > 0 && (
-            <Group title={stateName("working")} count={groups.working.length}>
+            <Group title={stateName("working")} count={groups.working.length} grid>
               {groups.working.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{g.lead.state_since ? shortDuration(now - Date.parse(g.lead.state_since)) : ""}</span>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<When>{g.lead.state_since ? shortDuration(now - Date.parse(g.lead.state_since)) : ""}</When>} />
               ))}
             </Group>
           )}
@@ -166,9 +167,10 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
               title={stateName("unread")}
               count={groups.unread.length}
               right={markAllAt === "section" && markAll}
+              grid
             >
               {groups.unread.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="green">{ago(g.lead.updated_at) || stateName("done")}</Pill>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<When>{ago(g.lead.updated_at) || stateName("done")}</When>} />
               ))}
             </Group>
           )}
@@ -190,7 +192,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 
           {loaded && machines.length > 0 && (
             <Group title={t("home.computers")} count={machines.length} right={<a href={href({ name: "machines" })} onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12px] text-ink-3 hover:text-ink-2">{t("home.monitor")}</a>}>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 @min-[60rem]:grid-cols-3 @min-[84rem]:grid-cols-4 @min-[110rem]:grid-cols-5">
                 {machines.map((m) => {
                   const mine = m.online ? sessions.filter((s) => s.machine_id === m.id && stateOf(s) !== "offline") : [];
                   const hub = hubLabel(m, machines);
@@ -231,7 +233,14 @@ function MarkAllSeen({ count, onClick }: { count: number; onClick: () => void })
   );
 }
 
-function Group({ title, count, children, right, hint }: { title: string; count: number; children: React.ReactNode; right?: React.ReactNode; hint?: string }) {
+// `grid`: its rows go two, then three to a line as the page gets wider; "cards" (rows with buttons, read before
+// answering) only once each still has room for its question and buttons.
+const GRID = {
+  rows: "grid grid-cols-1 items-start gap-1.5 @min-[60rem]:grid-cols-2 @min-[100rem]:grid-cols-3",
+  cards: "grid grid-cols-1 items-start gap-1.5 @min-[84rem]:grid-cols-2 @min-[120rem]:grid-cols-3",
+};
+
+function Group({ title, count, children, right, hint, grid }: { title: string; count: number; children: React.ReactNode; right?: React.ReactNode; hint?: string; grid?: true | "cards" }) {
   return (
     <section>
       <div className={cx("flex items-baseline gap-2", hint ? "mb-1" : "mb-2.5")}>
@@ -242,17 +251,39 @@ function Group({ title, count, children, right, hint }: { title: string; count: 
       </div>
       {/* what the section is and why its rows are here, for a name that does not say it alone */}
       {hint && <p className="mb-2.5 text-[12.5px] leading-[1.5] text-ink-2">{hint}</p>}
-      <div className="flex flex-col gap-2">{children}</div>
+      <div className={grid ? GRID[grid === true ? "rows" : grid] : "flex flex-col gap-1.5"}>{children}</div>
     </section>
   );
 }
 
-function Pill({ tone, children }: { tone: "red" | "green"; children: React.ReactNode }) {
-  return <span className={cx("inline-flex h-5.5 shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium whitespace-nowrap", tone === "red" ? "bg-red-tint text-red" : "bg-green-tint text-green")}>{children}</span>;
+function Pill({ children }: { children: React.ReactNode }) {
+  return <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-red-tint px-1.5 text-[11px] font-medium whitespace-nowrap text-red">{children}</span>;
+}
+
+/** When a row last changed or how long it has worked: quiet text, its badge already says the state. */
+function When({ children }: { children: React.ReactNode }) {
+  return <span className="shrink-0 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums">{children}</span>;
+}
+
+/** A row's place as small tags, without one that only repeats the title: a tab is often named after its agent's first
+ *  words, and the title is not said twice. A short name repeats it only when equal ("app" is not "app store"'s). */
+export function rowTags(title: string, parts: (string | false | null | undefined)[]): string[] {
+  const norm = (x: string) => x.replace(/[.…\s]+$/u, "").trim().toLowerCase();
+  const head = norm(title);
+  const repeats = (x: string) => {
+    const tag = norm(x);
+    if (tag === head) return true;
+    const [short, long] = tag.length < head.length ? [tag, head] : [head, tag];
+    return short.length >= 8 && long.startsWith(short);
+  };
+  const kept = parts.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim());
+  return [...new Set(kept)].filter((x) => !repeats(x));
 }
 
 function SessionTask({ s, i, machine, pill }: { s: Session; i: number; machine: string; pill: React.ReactNode }) {
-  return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={sessionTitle(s)} meta={[sourceSubtitle(s), machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")} detail={s.source_kind ? [sourceSubtitle(s), sessionPreview(s)].filter(Boolean).join(" · ") : sessionPreview(s)} pill={pill} />;
+  const title = sessionTitle(s);
+  // the source is a tag once, not again in front of the latest words
+  return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={title} tags={rowTags(title, [sourceSubtitle(s), machine, s.space_name, tabLabel(s)])} detail={sessionPreview(s)} pill={pill} />;
 }
 
 // One tab's agents as one row (#2320): the "Lead"'s title (the first pane's when the panes are peers), the most urgent
@@ -268,11 +299,11 @@ function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: s
       state={g.state}
       to={paneRoute(s)}
       title={sessionTitle(head)}
-      meta={[machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")}
+      tags={rowTags(sessionTitle(head), [machine, s.space_name, tabLabel(s)])}
       detail={s === head ? preview : agentLabel(s) && preview ? t("home.agent_preview", { agent: agentLabel(s), preview }) : agentLabel(s) || preview}
       pill={
         <>
-          <span className="flex shrink-0 items-center gap-1 text-[12px] whitespace-nowrap text-ink-3 tabular-nums" title={g.sessions.map((x) => `${agentLabel(x)} · ${sessionTitle(x)} · ${STATE_LABEL[stateOf(x)]}`).join("\n")}>
+          <span className="flex shrink-0 items-center gap-1 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums" title={g.sessions.map((x) => `${agentLabel(x)} · ${sessionTitle(x)} · ${STATE_LABEL[stateOf(x)]}`).join("\n")}>
             <span aria-hidden className="flex items-center gap-0.5">
               {g.sessions.map((x) => <StatusMark key={x.session_id} state={stateOf(x)} size="sm" />)}
             </span>
@@ -290,7 +321,7 @@ const ANSWERED_HOLD_MS = 1600;
 /** A row's one-tap answers (lib/quick-answers.ts), under its words; the one being sent spins, the others wait. */
 function QuickAnswers({ choices, sending, onPick }: { choices: QuickChoice[]; sending?: string; onPick: (c: QuickChoice) => void }) {
   return (
-    <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 pl-12">
+    <div className="flex flex-wrap gap-1.5 px-3 pb-2 pl-10.5">
       {choices.map((c) => {
         const shown = optionDisplay(c.label);
         return (
@@ -310,7 +341,7 @@ function AnsweredLine({ ix, body }: { ix: Interaction; body: Resolution }) {
   const done = useStore((s) => s.answered[ix.id]);
   const answer = answerLines(ix, done?.resolution ?? body).map((l) => optionDisplay(l.answer).text).join(t("lib-answered.separator"));
   return (
-    <div className="px-3 pb-2.5 pl-12">
+    <div className="px-3 pb-2 pl-10.5">
       <p role="status" className="flex h-8 min-w-0 items-center gap-1.5 text-[12.5px] font-medium text-green" style={{ animation: `fade-in 200ms ${EASE} both` }}>
         <Icon name="check" size={13} stroke={2.6} className="shrink-0" />
         <span className="truncate">{t("home.answered", { answer })}</span>
@@ -319,39 +350,49 @@ function AnsweredLine({ ix, body }: { ix: Interaction; body: Resolution }) {
   );
 }
 
-// One Task Rows capsule: status badge, title, the latest words, a pill. With `actions` (a card's one-tap answers) they
+// One Task Rows capsule, compact: status badge, the title alone on its line (it is what tells rows apart), then
+// where it runs as small tags and the latest words; when on the right. With `actions` (a card's one-tap answers) they
 // sit under it in the same capsule, outside the link, and its words take up to three lines: read before answering.
-function TaskRow({ i, state, done, to, title, meta, detail, pill, entry, actions }: { i: number; state: AgentState; done?: boolean; to: Route; title: string; meta: string; detail?: string; pill: React.ReactNode; entry?: Record<string, unknown>; actions?: React.ReactNode }) {
+function TaskRow({ i, state, done, to, title, tags, detail, pill, entry, actions }: { i: number; state: AgentState; done?: boolean; to: Route; title: string; tags: string[]; detail?: string; pill: React.ReactNode; entry?: Record<string, unknown>; actions?: React.ReactNode }) {
   const enter = { animation: `fade-up 420ms ${EASE} ${Math.min(i, 8) * 50}ms both` };
   const link = (
     <a
       href={href(to)}
       onClick={(e) => onLinkClick(e, to, entry)}
-      className={cx("group flex items-center gap-3 rounded-[16px] px-3 py-2.5 transition-[background-color,transform] duration-150", !actions && "bg-surface shadow-card hover:bg-inset active:scale-[0.995]")}
+      title={[title, ...tags].join(" · ")}
+      className={cx("group flex min-w-0 items-center gap-2.5 rounded-card px-3 py-2 transition-[background-color,transform] duration-150", !actions && "bg-surface shadow-card hover:bg-inset active:scale-[0.995]")}
       style={actions ? undefined : enter}
     >
       {done ? (
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-green text-white" aria-label={t("chat-interactions.answered")}>
-          <Icon name="check" size={13} stroke={3.2} />
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-green text-white" aria-label={t("chat-interactions.answered")}>
+          <Icon name="check" size={11} stroke={3.2} />
         </span>
       ) : (
         <Badge state={state} />
       )}
       <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-[13.5px] font-medium text-ink">{title}</span>
-          <span className="hidden shrink-0 truncate text-[11.5px] text-ink-3 sm:inline">{meta}</span>
-        </span>
-        {detail && <span className={cx("mt-0.5 text-[12.5px] text-ink-2", actions ? "line-clamp-3 [overflow-wrap:anywhere]" : "block truncate")} title={actions ? detail : undefined}>{detail}</span>}
+        <span className="block truncate text-[13.5px] leading-[18px] font-medium text-ink">{title}</span>
+        {(detail || tags.length > 0) && (
+          <span className={cx("mt-0.5 flex min-w-0 gap-1.5 text-[12.5px] leading-[18px] text-ink-2", actions ? "flex-col items-start gap-0.5" : "items-center")}>
+            {tags.length > 0 && (
+              <span className="hidden shrink-0 items-center gap-1 sm:flex" data-row-tags>
+                {tags.map((x) => (
+                  <span key={x} className="max-w-[12em] truncate rounded-chip bg-field px-1.5 text-[11px] leading-[17px] text-ink-3">{x}</span>
+                ))}
+              </span>
+            )}
+            {detail && <span className={cx("min-w-0", actions ? "line-clamp-3 w-full [overflow-wrap:anywhere]" : "flex-1 truncate")} title={actions ? detail : undefined}>{detail}</span>}
+          </span>
+        )}
       </span>
       {pill}
-      <Icon name="chevronRight" size={14} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-150 group-hover:translate-x-0.5" />
+      <Icon name="chevronRight" size={13} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-150 group-hover:translate-x-0.5" />
     </a>
   );
   if (!actions) return link;
   return (
     // the capsule shades while the link part is hovered, not while a button is
-    <div className="rounded-[16px] bg-surface shadow-card transition-colors duration-150 has-[>a:hover]:bg-inset" style={enter}>
+    <div className="rounded-card bg-surface shadow-card transition-colors duration-150 has-[>a:hover]:bg-inset" style={enter}>
       {link}
       {actions}
     </div>
@@ -360,33 +401,33 @@ function TaskRow({ i, state, done, to, title, meta, detail, pill, entry, actions
 
 function Badge({ state }: { state: AgentState }) {
   if (state === "working") {
-    const size = 24,
+    const size = 20,
       stroke = 2,
       r = (size - stroke) / 2,
       c = 2 * Math.PI * r;
     return (
-      <span className="relative inline-flex size-6 shrink-0 items-center justify-center" aria-label={STATE_LABEL[state]}>
+      <span className="relative inline-flex size-5 shrink-0 items-center justify-center" aria-label={STATE_LABEL[state]}>
         <svg width={size} height={size} className={`absolute inset-0 ${BUSY_MOTION}`} style={spinStyle(1100)}>
-          <circle cx={12} cy={12} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
-          <circle cx={12} cy={12} r={r} fill="none" stroke="var(--orange)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c * 0.28} ${c * 0.72}`} />
+          <circle cx={10} cy={10} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
+          <circle cx={10} cy={10} r={r} fill="none" stroke="var(--orange)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c * 0.28} ${c * 0.72}`} />
         </svg>
       </span>
     );
   }
   if (state === "unread")
     return (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-green text-white" aria-label={STATE_LABEL[state]}>
-        <Icon name="check" size={13} stroke={3.2} />
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-green text-white" aria-label={STATE_LABEL[state]}>
+        <Icon name="check" size={11} stroke={3.2} />
       </span>
     );
   if (state === "needs_you")
     return (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-red text-[12px] font-bold text-white" aria-label={STATE_LABEL[state]}>
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-red text-[11px] font-bold text-white" aria-label={STATE_LABEL[state]}>
         !
       </span>
     );
   return (
-    <span className="flex size-6 shrink-0 items-center justify-center">
+    <span className="flex size-5 shrink-0 items-center justify-center">
       <StatusMark state={state} />
     </span>
   );

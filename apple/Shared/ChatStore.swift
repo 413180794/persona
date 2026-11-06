@@ -193,6 +193,9 @@ nonisolated struct TaskIndex: Equatable, Sendable {
     /// What each of those calls was: its description, and when it started.
     var descriptions: [String: String] = [:]
     var startedAt: [String: Date] = [:]
+    /// Every call in the lines, and those whose result is in (`Subagent.running(in:)`).
+    var asked: Set<String> = []
+    var answered: Set<String> = []
 
     nonisolated(unsafe) private static let launched = /(?:running in background with ID|agentId|Monitor started \(task|moved to the background \(ID):?\s*([A-Za-z0-9_-]+)/
 
@@ -203,8 +206,9 @@ nonisolated struct TaskIndex: Equatable, Sendable {
         for it in items {
             switch it.kind {
             case .toolUse:
-                if let id = it.toolUseID { uses[id] = it }
+                if let id = it.toolUseID { uses[id] = it; x.asked.insert(id) }
             case .toolResult:
+                if let id = it.toolUseID { x.answered.insert(id) }
                 guard let id = it.toolUseID, let text = it.text, text.contains("background") || text.contains("Monitor started") || text.contains("agentId"),
                       let m = text.firstMatch(of: launched) else { continue }
                 byTask[String(m.1)] = id

@@ -81,6 +81,25 @@ struct ChatLinesTests {
         #expect(kinds(apart) == ["user", "work", "step", "step", "end", "answer"])
     }
 
+    /// The first call of an opened run goes to the background (its result says so) and leaves the run for a line of
+    /// its own: the rest keep the run's id, so it stays open (#5602: it went on under a new id, closed).
+    @Test func aRunKeepsItsIdWhenItsFirstCallGoesToTheBackground() {
+        let items = [item(1, .text, role: "user", text: "做一下"), item(2, .toolUse, tool: "Agent", id: "a"),
+                     item(3, .toolResult, role: "user", text: "ok", id: "a"), item(4, .toolUse, tool: "Bash", id: "b"),
+                     item(5, .toolResult, role: "user", text: "ok", id: "b"), item(6, .toolUse, tool: "Read", id: "c"),
+                     item(7, .toolResult, role: "user", text: "ok", id: "c"), item(8, .text, text: "做完了")]
+        let b = blocks(items)
+        let work = ChatLines(openWork: []).build(b, live: nil)[1].id
+        let before = ChatLines(openWork: [work], chipRuns: true).build(b, live: nil)
+        guard let run = before.first(where: { if case .toolRun = $0.content { true } else { false } })?.id else {
+            Issue.record("no run \(kinds(before))"); return
+        }
+        let after = ChatLines(openWork: [work], openRuns: [run], chipRuns: true, foldsIntoRun: { $0.use.toolUseID != "a" })
+            .build(b, live: nil)
+        #expect(kinds(after) == ["user", "work", "step", "run", "step", "step", "end", "answer"]) // a, then the open run
+        #expect(after.contains { $0.id == run })
+    }
+
     @Test func aFinishedTurnOfSeveralMessagesReadsMessageByMessage() {
         // The second message was sent while the agent worked (queued), so it joined the same turn: each message still
         // opens its own exchange, the work after it and the answer under it (#2512).

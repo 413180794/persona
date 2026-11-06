@@ -142,6 +142,28 @@ import Testing
         #expect(!AgentsFeed.sameListing([m], [m, m]))
     }
 
+    /// A running subagent's write time and last line tick with each of its steps (#5602): its session's chat page shows
+    /// neither, so it is not built again; whether it runs is a change.
+    @Test func aSubagentsTicksAreNoChangeForItsSessionsPage() {
+        var a = session("a", state: "working")
+        let start = Date(timeIntervalSince1970: 100)
+        a.subagents = [Subagent(id: "x", sessionID: "a@x", type: "Explore", description: "看代码", toolUseID: "t", running: true,
+                                startedAt: start, updatedAt: Date(timeIntervalSince1970: 200), lastText: "读 a.swift")]
+        var b = a
+        b.subagents?[0].updatedAt = Date(timeIntervalSince1970: 260)
+        b.subagents?[0].lastText = "读 b.swift"
+        #expect(Session.sameForItsPage(a, b))
+        var c = b
+        c.subagents?[0].running = false
+        #expect(!Session.sameForItsPage(a, c))
+        // No start time: its write time is what the sheet shows, so that is a change.
+        var d = a, e = a
+        d.subagents?[0].startedAt = nil
+        e.subagents?[0].startedAt = nil
+        e.subagents?[0].updatedAt = Date(timeIntervalSince1970: 260)
+        #expect(!Session.sameForItsPage(d, e))
+    }
+
     /// A working agent's steps tick `rev` and `updatedAt` only: views about the agent that show neither (its chat, its
     /// row apart from the time) take that as no change; anything they show is one.
     @Test func ticksAreNoChangeForWhatShowsNeither() {

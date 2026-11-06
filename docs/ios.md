@@ -332,6 +332,7 @@ Chat page:
   `parent_id` indentation, missing parents top-level; running first then newest start within level); state dot/description/Running or Finished/type (forks labeled Fork)/start age, tap read-only.
   Mock `MOCK_CHAT_LINES=1`, `-openSession <machine>/a1f3c2d4-0000-4000-8000-0000000c1e01` for screenshots.
   Agents with running children show "👥 Sub-Agents N", not idle. Id `<main session>@<agent id>`, history/live/paging identical to normal.
+  Running or finished goes by the chat's own lines (`Subagent.running(in:)`, #5602, as Claude Desktop): done once its Agent call's result is in (whatever the hub's list says; one dropped from the list kept Running for ever), one sent to the background once its notice came; the list's word only until then or when the call is not loaded. A running child's write time and last line are no change for its session's page (`Session.sameForItsPage`), and a tool run whose first call goes to the background keeps its id (an opened run stays open). Task-notice and long-notice rows keep their open state in the chat's `OpenTools`.
 - Background workflows (#2935, `workflows` in `docs/protocol.md`): Claude Workflow tool multi-Agent background scripts keep Agent Working after turn ends while waiting for completion,
   `state` still drives colors/count/watch/to-dos; App label Working (background) (`Session.stateLabel`);
   Agents rows/to-do cards add `WorkflowLine` below last text: "Background workflow ‘parity-audit’ · Verify 2/2 · 169/185 · 14 min" (multiple add Waiting for N);
