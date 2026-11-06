@@ -1,13 +1,13 @@
 #!/bin/bash
-# End-to-end check of the push relay on a simulator (docs/push-relay.md「验证」), without Apple:
+# End-to-end check of the push relay on a simulator (docs/push-relay.md "Verification"), without Apple:
 #   app's public key → hub code seals a push → local `jarvisd relay` → fake APNs (writes what it got) → `simctl push`
-#   → the phone's code opens it. A tampered payload must stay 「有新消息」. What each hop got goes to $OUT
+#   → the phone's code opens it. A tampered payload must stay "New message" (the placeholder). What each hop got goes to $OUT
 #   (default /tmp/relay-e2e).
 #
 #   SIM=<udid> scripts/test/relay_sim_e2e.sh
 #
 # Needs `xcodebuild build-for-testing` done for $SIM (DERIVED: its derived data, default build/DerivedData) and the
-# key exported once: PersonaUITests/PushRelayTests/testAllowNotificationsAndExportKey (it also taps 允许).
+# key exported once: PersonaUITests/PushRelayTests/testAllowNotificationsAndExportKey (it also taps "Allow").
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 : "${SIM:?set SIM=<simulator udid>}"
@@ -78,7 +78,7 @@ say "APNs got only sealed payloads: $(cat "$OUT/apns-1.json" | head -c 160)…"
 
 # 6. Open them as the phone does. `simctl push` does not run notification service extensions (the simulator adds the
 #    request like a local one), so the extension's work (PushCrypto.service) runs in a test hosted in the app, with
-#    the same keychain group and key. A tampered copy must stay 「有新消息」.
+#    the same keychain group and key. A tampered copy must stay "New message".
 python3 - "$OUT/apns-1.json" "$OUT/garbage.json" <<'PY'
 import json, sys, base64
 p = json.load(open(sys.argv[1])); raw = bytearray(base64.b64decode(p["e"])); raw[-1] ^= 1

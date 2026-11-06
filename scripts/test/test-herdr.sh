@@ -1,6 +1,6 @@
 #!/bin/bash
 # Live tests of the node against a real herdr, in a herdr session of their own (never the one you work in), with a
-# throwaway claude in a fresh directory for the screen checks (docs/testing.md「herdr 联调」):
+# throwaway claude in a fresh directory for the screen checks (docs/testing.md "herdr integration"):
 #   ./scripts/test/test-herdr.sh
 # Needs herdr and claude on this machine. Go builds locally when there is a Go toolchain, else on the hub machine.
 set -euo pipefail

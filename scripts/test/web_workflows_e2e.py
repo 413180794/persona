@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """End-to-end check of how the web shows a background workflow (#2935): the agent's row in the sidebar says which run
-it waits for and how far it got, the chat's 后台 chip opens a card per run (phases, agents done, the stopped one's
+it waits for and how far it got, the chat's "Background" chip opens a card per run (phases, agents done, the stopped one's
 error), the card opens its agents with their last words, and an agent opens read-only in the side panel; the task card
-says the same in a line. With MOCK_WORKFLOWS=legacy (a hub without the workflows field) the row only says 后台运行中.
+says the same in a line. With MOCK_WORKFLOWS=legacy (a hub without the workflows field) the row only says "Running in the background".
 
     MOCK_WORKFLOWS=1 MOCK_TASKS=1 PORT=18835 python3 scripts/mock/mock_hub.py &
     (cd web && PERSONA_HUB_URL=http://127.0.0.1:18835 npx vite --port 5335 --strictPort &)

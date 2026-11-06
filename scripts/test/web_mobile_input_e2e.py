@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """End-to-end check of the chat's composer area on a phone (#1996): with three cards waiting the conversation still
-shows and the composer stays on screen (the first card open, 还有 N 件 for the others, one line while typing); a short
+shows and the composer stays on screen (the first card open, "N more" for the others, one line while typing); a short
 viewport (a keyboard on Android) and a twenty-line draft keep the send button on screen; the iOS keyboard moves the
 side panel with it (--kb-top / --kb-h); Back closes a full-screen side panel and stays on the conversation; switching
 panes writes no history; the header leaves the title room at 360; on a phone on its side the run's status and the
@@ -81,7 +81,7 @@ def phone(browser, w, h, theme="light", ios=False):
 
 
 def login(page, base):
-    """Signs in; the theme follows the context's color scheme (the page's own setting is left at 跟随系统)."""
+    """Signs in; the theme follows the context's color scheme (the page's own setting is left at "Match system")."""
     page.goto(base + "/overview?token=mock")
     page.wait_for_selector("aside", state="attached", timeout=15000)
 
@@ -134,7 +134,7 @@ def run(base, shots):
         if page.evaluate("matchMedia('(any-pointer: fine)').matches"):
             fail("the phone context reports a precise pointer: Enter would send")
         crowded(page, "390×844")
-        # the run's time and the live group's 正在工作… count from the same start (the turn's message)
+        # the run's time and the live group's "Working..." count from the same start (the turn's message)
         times = page.evaluate(r"""(() => {
           const secs = (t) => { const m = /(?:(\d+)\s*(?:分|m))?\s*(\d+)\s*(?:秒|s)/.exec(t); return m ? (+(m[1] || 0)) * 60 + +m[2] : null; };
           const bar = document.querySelector('[data-running-elapsed]')?.textContent ?? '';
@@ -189,7 +189,7 @@ def run(base, shots):
         page.locator(COMPOSER).blur()
         page.wait_for_timeout(400)  # the draft is saved 250 ms after the last change
 
-        # Scrolled up: the plan's Step N / M and 跳到底部 side by side, not over each other.
+        # Scrolled up: the plan's Step N / M and "Jump to bottom" side by side, not over each other.
         # a finger dragging the chat down (a programmatic scroll is not the reader leaving the end)
         cdp = page.context.new_cdp_session(page)
         y0 = box(page, "[data-chat-scroll]")["top"] + 20

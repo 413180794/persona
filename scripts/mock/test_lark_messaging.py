@@ -1,4 +1,10 @@
-""""""
+"""The mock's messaging source (MOCK_MESSAGING=1, scripts/mock/lark_messaging.py, #2138) answers what the hub would let
+through: every answer of the protocol's routes holds to schema/extension/messaging.schema.json, over the mock's Feishu
+fixtures (the plain chats, MOCK_LARK's rich chat, the trainer's, brave_climb), and the extension's handling is done (words
+decoded while the switch is on, a summary of words named while it is off).
+
+    python3 scripts/mock/test_lark_messaging.py
+"""
 import importlib.util
 import json
 import sys

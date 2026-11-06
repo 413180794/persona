@@ -17,7 +17,7 @@ LAUNCH = PINNED + ["-perfCounts", "YES", "-openAgentsFresh", "YES"]
 UNREAD = "未读 48"
 
 
-def row_text(s):  # a row is one element: "完成未看、platform 任务 4、3 分钟前、…"
+def row_text(s):  # a row is one element: "<state>, <title>, <age>, ..." (the Chinese label)
     return dict(labelContains="、" + s + "、")
 
 
@@ -25,7 +25,7 @@ def filt(name):
     return dict(id="agents.filter." + name)
 
 
-def header(space):  # a space's header, the button that folds it: "platform，已展开，…"
+def header(space):  # a space's header, the button that folds it: "<space>, expanded, ..." (the Chinese label)
     return dict(labelPrefix=space + "，", trait="button")
 
 
@@ -45,7 +45,7 @@ def to_top(t):
 
 
 def list_menu(t):
-    """The list's ⋯ menu (分组：… in the old layout's navigation bar), open."""
+    """The list's ⋯ menu ("Group: ..." in the old layout's navigation bar), open."""
     t.settle()
     for _ in range(2):
         t.tap("the list menu", labelContains="分组：", trait="button")

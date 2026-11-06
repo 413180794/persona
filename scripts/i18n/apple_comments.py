@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""The Apple sources' code comments are in English (#5055, CLAUDE.md「约定」).
+"""The Apple sources' code comments are in English (#5055, CLAUDE.md "Conventions").
 
-  apple_comments.py check            no comment under apple/ has Chinese or Japanese text outside 「…」
+  apple_comments.py check            no comment under apple/ has Chinese or Japanese text outside corner brackets
   apple_comments.py strip <file>     prints the file's code with its comments removed (to check that a comment-only
                                      change left the code as it was: compare the output before and after)
 
-Inside 「…」 the original text stays: a heading of a Chinese doc (`docs/ios.md「界面语言」`) or text the code must
+Inside paired U+300C/U+300D corner brackets the original text stays: a documentation heading or text the code must
 match word for word (hub output, a prompt, a test's expected UI string). Swift, Objective-C and JavaScript comments
 (`//`, `/* */`, nested), `#` comments in YAML and shell, `<!-- -->` in HTML are checked; string literals are not
 comments (the UI strings are checked by apple_l10n.py).
@@ -132,7 +132,7 @@ def offending(text):
 
 
 def problems(path, src):
-    """`line: comment` for each comment with Chinese / Japanese text outside 「…」."""
+    """`line: comment` for each comment with Chinese / Japanese text outside paired corner brackets."""
     out = []
     for s, e in comments(path, src):
         text = src[s:e]

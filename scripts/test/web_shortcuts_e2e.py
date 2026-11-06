@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""End-to-end check of 设置 › 快捷键 (#2586): recording a chord, a conflict's 替换 / 取消, clearing, turning one off, the
-switch for all, 恢复默认, and that the keys follow (they fire or not on the page) and survive a reload.
+"""End-to-end check of Settings › Shortcuts (#2586): recording a chord, a conflict's "Replace" / "Cancel", clearing, turning one off, the
+switch for all, "Reset", and that the keys follow (they fire or not on the page) and survive a reload.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome):
 
@@ -84,7 +84,7 @@ def run(browser, base, token, shots):
     assert not palette_opens("Control+k"), "the old chord should not"
     ok("a recorded chord fires, the old one does not")
 
-    # A chord another command has: 取消 keeps both, 替换 takes it and clears the other.
+    # A chord another command has: "Cancel" keeps both, "Replace" takes it and clears the other.
     chord_button(JUMP).click()
     page.keyboard.press("Control+j")
     page.get_by_text(f"Ctrl+J 已被「{TERMINAL_CHAT}」占用").wait_for()
@@ -108,7 +108,7 @@ def run(browser, base, token, shots):
     assert not palette_opens("Control+k"), "a cleared command should not fall back to its default"
     ok("a cleared command does not fire, and does not fall back to its default")
 
-    # 恢复默认 for the row.
+    # "Reset" for the row.
     page.get_by_role("button", name=f"恢复「{JUMP}」的默认快捷键").click()
     expect(chord_button(JUMP)).to_have_attribute("aria-label", f"{JUMP}：Ctrl K，点击改键")
     assert palette_opens("Control+k")
@@ -151,7 +151,7 @@ def run(browser, base, token, shots):
     ok("typing in the input box triggers nothing")
     box.fill("")
 
-    # 全部恢复默认.
+    # "Reset all".
     page.goto(base + "/settings?tab=shortcuts")
     page.get_by_role("button", name="全部恢复默认").click()
     expect(chord_button(TERMINAL_CHAT)).to_have_attribute("aria-label", f"{TERMINAL_CHAT}：Ctrl J，点击改键")

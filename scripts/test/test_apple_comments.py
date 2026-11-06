@@ -1,7 +1,7 @@
 """The code comments under apple/ are in English (#5055).
 
 Runs `scripts/i18n/apple_comments.py check` on the repository, and checks its comment lexer: string literals are not
-comments, 「…」 keeps a Chinese doc heading or matched text, and stripping comments leaves the code.
+comments, paired corner brackets preserve a documentation heading or matched text, and stripping comments leaves the code.
 """
 from pathlib import Path
 import subprocess

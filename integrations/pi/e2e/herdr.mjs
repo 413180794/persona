@@ -1,4 +1,4 @@
-// End-to-end check of pi in herdr (docs/pi.md「herdr 里的 pi」): a real herdr (a named session of its own, its config in
+// End-to-end check of pi in herdr (docs/pi.md "pi in herdr"): a real herdr (a named session of its own, its config in
 // a temp dir, with herdr's pi integration installed there), a real pi TUI in a herdr pane with this package, a real
 // `jarvisd node --stdio` on that herdr (the runtime SDK's harness plays the hub), the companion for sessions on disk,
 // and the SDK's scripted model.

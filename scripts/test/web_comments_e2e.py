@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of 评论 (comments on picked words and on lines of code, #2437) in the web chat.
+"""End-to-end check of comments (comments on picked words and on lines of code, #2437) in the web chat.
 
-Words in the transcript: selecting some shows a 「评论」 pill under the selection (the C key does the same); it puts a
+Words in the transcript: selecting some shows a "Comment" pill under the selection (the C key does the same); it puts a
 card above the input to write the note in (Enter keeps it, Esc takes a new card back); the words stay lit in the
 transcript with the card's number beside them, through a scroll, until the card goes or the message is sent; the
 message goes out with `Comment N` / `Selected text:` and the note in the `> ` block in front of it, and the sent bubble

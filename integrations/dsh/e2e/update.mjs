@@ -1,4 +1,4 @@
-// End-to-end check of the DSH plugin's self-update (docs/dsh.md「自动更新」, docs/runtimes.md「自动更新」): a real
+// End-to-end check of the DSH plugin's self-update (docs/dsh.md "Auto-update", docs/runtimes.md "Auto-update"): a real
 // `dsh web` with the plugin's loader (index.js) and a real `jarvisd node --stdio` whose packages come from a directory
 // (JARVIS_RUNTIME_PACKAGES), so it can carry another version of the plugin than DSH runs without another build.
 //

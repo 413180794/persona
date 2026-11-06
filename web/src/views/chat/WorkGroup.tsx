@@ -2,7 +2,8 @@
 // newest steps peeking out while it runs, "Worked for Xs" once done; open, every step on a 2 px rail. A finished
 // exchange's outer group is a timeline: the agent's words between inner groups that stay folded.
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import type { Item, SessionLive } from "../../lib/types";
+import { useSessionLive } from "../../lib/live";
+import type { Item } from "../../lib/types";
 import { groupOpens, groupTitle, isAgentStep, isPlanStep, isRowStep, planTodos, previewSteps, workDuration, type AgentStatus, type ToolStep, type WorkGroupNode, type WorkNode } from "../../lib/work-groups";
 import type { Step } from "../../lib/turns";
 import { Collapse, cx, Spinner, useNow } from "../../ui/atoms";
@@ -27,8 +28,6 @@ export interface WorkProps {
   expandFold: (f: Item) => Promise<void>;
   agentStatus: (s: ToolStep) => AgentStatus;
   thinking: Map<string, number>;
-  /** The screen's status line while this exchange is live (contract §3): a thinking card at the live group's end. */
-  status?: SessionLive | null;
   /** Inside an open group (a finished timeline's inner groups stay folded). */
   nested?: boolean;
 }
@@ -36,6 +35,29 @@ export interface WorkProps {
 /** Every fold under a group, nested ones too: opening it fetches their steps. */
 function foldsOf(g: WorkGroupNode): Item[] {
   return g.children.flatMap((c) => (c.kind === "group" ? foldsOf(c) : c.step.kind === "fold" ? [c.step.item] : []));
+}
+
+/** The screen's status line while this exchange is live (contract §3): a thinking card at the live group's end. Read
+ *  here, not handed down: it changes about once a second while the agent works, and only this card shows it (#5417). */
+function useThinkingNow(mid: string, sid: string) {
+  const status = useSessionLive(mid, sid);
+  return status?.thinking ? <ThinkingCard live={status} /> : null;
+}
+
+/** A live group's newest steps, peeking out while it is closed, and the thinking card after them. */
+function LivePreview({ preview, open, mid, sid }: { preview: Step[]; open: boolean; mid: string; sid: string }) {
+  const thinkingNow = useThinkingNow(mid, sid);
+  if (!(preview.length > 0 || (thinkingNow && !open))) return null;
+  return (
+    <div className="mt-1 flex min-w-0 flex-col border-l-2 border-tool-rail py-[2px] pl-3" data-live-preview>
+      {preview.map((s) => (s.kind === "tool" ? <ActionRow key={s.id} step={s} running={!s.result} mid={mid} sid={sid} /> : <ThinkingLine key={s.id} item={s.item} />))}
+      {thinkingNow}
+    </div>
+  );
+}
+
+function LiveThinking({ mid, sid }: { mid: string; sid: string }) {
+  return useThinkingNow(mid, sid);
 }
 
 export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p: WorkProps }) {
@@ -83,7 +105,6 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
     // the folds by their ids: a new `g` with the same folds is not a new fetch
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [foldKey, expandFold, attempt]);
-  const thinkingNow = g.live && p.status?.thinking ? <ThinkingCard live={p.status} /> : null;
   return (
     <div className="flex w-full min-w-0 flex-col" data-work-group={g.live ? "live" : "done"} data-group-id={g.id}>
       <button
@@ -107,16 +128,12 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
           <button type="button" onClick={() => setAttempt((n) => n + 1)} className="touch-hit rounded-control px-1.5 py-0.5 font-medium whitespace-nowrap text-accent-ink hover:bg-hover">{t("chat-workgroup.retry")}</button>
         </div>
       )}
-      {(preview.length > 0 || (thinkingNow && !open)) && (
-        <div className="mt-1 flex min-w-0 flex-col border-l-2 border-tool-rail py-[2px] pl-3" data-live-preview>
-          {preview.map((s) => (s.kind === "tool" ? <ActionRow key={s.id} step={s} running={!s.result} mid={p.mid} sid={p.sid} /> : <ThinkingLine key={s.id} item={s.item} />))}
-          {thinkingNow}
-        </div>
-      )}
+      {/* only a live group has a preview or a thinking card (previewSteps is empty otherwise) */}
+      {g.live && <LivePreview preview={preview} open={open} mid={p.mid} sid={p.sid} />}
       <Collapse open={open} lazy>
         <div className="mt-1 flex min-w-0 flex-col gap-2 border-l-2 border-tool-rail py-[2px] pl-3" data-work-detail>
           <WorkNodes nodes={g.children} p={inside} live={g.live} />
-          {thinkingNow}
+          {g.live && <LiveThinking mid={p.mid} sid={p.sid} />}
         </div>
       </Collapse>
     </div>

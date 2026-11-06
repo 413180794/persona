@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The pi-web companion (docs/pi.md「pi-web」): pi-web loads extensions only when a session opens, so after it starts
+// The pi-web companion (docs/pi.md "pi-web"): pi-web loads extensions only when a session opens, so after it starts
 // Persona would see none of its sessions until one is opened in a browser. This small resident process lists the recent
 // pi sessions on disk, pages them, and starts or wakes them through pi-web's HTTP API; the extension inside pi-web takes
 // over a session while it runs there (the node prefers the runtime running a session).
@@ -8,7 +8,7 @@
 //
 // It reads pi's sessions with pi's own SessionManager, from the pi install on PATH (or PI_PACKAGE_DIR).
 //
-// Updates (docs/pi.md「自动更新」): run from a store (<store>/current/pi/companion.mjs, as launchd / systemd keep it),
+// Updates (docs/pi.md "Auto-update"): run from a store (<store>/current/pi/companion.mjs, as launchd / systemd keep it),
 // it installs the version the node carries as current and exits; its supervisor starts it again on the new code
 // (KeepAlive / Restart=always). --no-update: never.
 

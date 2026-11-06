@@ -1,4 +1,4 @@
-"""验证关闭 mock 保留历史、隔离目标、返回失败并支持重置。"""
+"""The close mock keeps history, isolates targets, returns failures and can be reset."""
 import json
 import os
 from pathlib import Path

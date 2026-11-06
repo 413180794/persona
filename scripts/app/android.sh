@@ -7,8 +7,8 @@
 #   ./scripts/app/android.sh apk        # debug APK only (android/app/build/outputs/apk/debug/app-debug.apk)
 # shots takes optional environment variables for repeatable, pixel-comparable captures (docs/android.md):
 #   SHOTS_STYLE=glass|brief|board  pass debug.style on every launch
-#   SHOTS_PLUGINS=1                the mock hub serves MOCK_PLUGINS (设置 › 插件) and the plugin pages are captured too
-#                                  (a plugin's own page, 插件市场 and a launcher's page with a plugin's section);
+#   SHOTS_PLUGINS=1                the mock hub serves MOCK_PLUGINS (Settings › Plugins) and the plugin pages are captured too
+#                                  (a plugin's own page, the plugin market and a launcher's page with a plugin's section);
 #                                  off by default because its running voice plugin adds the voice button to Persona
 #   SHOTS_MOCK_PORT=<port>         run the mock hub on this port instead of a random one
 #   SHOTS_FROZEN=<ISO time>        e.g. 2026-11-02T04:00:00+00:00: freeze the mock hub's and the emulator's clock,
@@ -317,20 +317,20 @@ SHOTS_PY
       capture "$theme" diagnostics --es debug.openDiagnostics true
       for page in notifications readiness; do capture "$theme" "settings-$page" --es debug.openLink "'jarvis://open?target=settings&page=$page'"; done
       for page in machines knowledge phone catalog; do capture "$theme" "$page" --es debug.openPage "$page"; done
-      # 设置 › 管理者 (docs/managers.md): the mock's roster, a manager on another computer and the hub's own (删除 off).
+      # Settings › Managers (docs/managers.md): the mock's roster, a manager on another computer and the hub's own (Delete off).
       # The install code sheet is drawn by ManagersShotsTest (feature/settings, build/managers-shots/).
       capture "$theme" settings-managers --es debug.openPage managers
       for id in m-3fa21c assistant; do capture "$theme" "manager-$id" --es debug.openPage "manager:$id"; done
-      # 设置 › 模型配置 and 新增模型供应商, typed in and from a plugin's preset (the mock offers two example presets).
+      # Settings › Model configuration and Add model provider, typed in and from a plugin's preset (the mock offers two example presets).
       capture "$theme" settings-modelconfig --es debug.openLink "'jarvis://open?target=settings&page=modelconfig'"
       for mode in manual preset; do
         capture "$theme" "new-provider-$mode" --es debug.openLink "'jarvis://open?target=settings&page=modelconfig'" --es debug.newProvider "$mode"
       done
       if [ -n "$PLUGINS_MODE" ]; then
-        # 设置 › 插件 and three of the mock's plugins: one to set up (every kind of field), hub.json's, a broken one.
+        # Settings › Plugins and three of the mock's plugins: one to set up (every kind of field), hub.json's, a broken one.
         capture "$theme" settings-plugins --es debug.openLink "'jarvis://open?target=settings&page=plugins'"
         for id in example-notes voice example-weather example-gateway; do capture "$theme" "plugin-$id" --es debug.openPage "plugin:$id"; done
-        # A page a plugin draws (every kind of item), 插件市场 (the catalog, an upgradable plugin, one this hub cannot
+        # A page a plugin draws (every kind of item), the plugin market (the catalog, an upgradable plugin, one this hub cannot
         # install, the markets) and a launcher's page with a plugin's section (#1329).
         capture "$theme" plugin-ui --es debug.openPage "plugin-ui:example-gateway:home"
         capture "$theme" plugin-market --es debug.openPage market

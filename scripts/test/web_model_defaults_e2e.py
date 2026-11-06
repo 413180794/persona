@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""End-to-end check of the launcher defaults and 主对话's 运行方式 in the web (#2455): 模型配置's 主对话 offers
-Claude Code CLI / Agent SDK, a switch is saved and still there after a reload; 新建 Agent's launcher picker and the
-conversation's launcher menu open with 「默认：<供应商> · <模型>」 from the hub's `default`, and a launcher picked over it
-says 「仅这一次」; the main conversation that fell back to the CLI says so above the composer.
+"""End-to-end check of the launcher defaults and the main chat's "Runtime" in the web (#2455): model config's main chat offers
+Claude Code CLI / Agent SDK, a switch is saved and still there after a reload; "New agent"'s launcher picker and the
+conversation's launcher menu open with "Default: <provider> · <model>" from the hub's `default`, and a launcher picked over it
+says "This time only"; the main conversation that fell back to the CLI says so above the composer.
 
 Needs a running web page against the fake hub with MOCK_MODEL_DEFAULTS=1 and Playwright for Python (it drives the
 installed Chrome):
@@ -22,7 +22,7 @@ from playwright.sync_api import expect, sync_playwright
 
 SIZES = {"wide": {"width": 1280, "height": 900}, "narrow": {"width": 390, "height": 844}}
 MAIN = "b2e4d6f8-0000-4000-8000-000000000001"  # the fake hub's main conversation
-DEFAULT = "默认：claude · model-chat"  # the fake hub's 模型配置 default for 主对话 and 新建 Agent
+DEFAULT = "默认：claude · model-chat"  # the fake hub's model config default for the main chat and "New agent"
 FALLBACK = "已退回 CLI：这台电脑没有 Node.js 22+"
 
 

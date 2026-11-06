@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mock_scenarios.py: scripts/mock/mock_hub.py whose data set can be switched while the app runs (docs/runtime-cli.md「注入状态」).
+"""mock_scenarios.py: scripts/mock/mock_hub.py whose data set can be switched while the app runs (docs/runtime-cli.md "Injecting state").
 
     python3 scripts/mock/mock_scenarios.py --port 18897 --control 18896 [--scenario default]
 
@@ -8,7 +8,7 @@ and answers on --control (127.0.0.1 only):
     GET /scenario                      the scenario and the MOCK_* it runs with
     GET /scenario?name=agents          restart the hub with that scenario's variables (below), wait until it answers
     GET /scenario?env=MOCK_X=1,MOCK_Y=2  any set of MOCK_* variables
-    GET /scenario?name=offline         no hub at all: the app goes 连接中… / 等待网络
+    GET /scenario?name=offline         no hub at all: the app goes "Connecting..." / "Waiting for network"
 The app reconnects by itself (`jarvisctl.py scenario` waits for `online`). A hub that exits by itself (another agent's
 `pkill -f mock_hub.py` took one down mid-run) is started again with the same scenario within a second; GET /scenario
 lists those restarts (`restarts`: when, exit code, scenario) and `jarvisctl.py online` reports them. Standard library
@@ -42,7 +42,7 @@ SCENARIOS = {
     "tasks": {"MOCK_TASKS": "1"},  # BackgroundNoticeTests
     "offline": None,  # no hub
 }
-# The main conversation's readiness (docs/testing.md「就绪度场景」): readiness-zero, readiness-not_logged_in…
+# The main conversation's readiness (docs/testing.md "Readiness scenarios"): readiness-zero, readiness-not_logged_in…
 sys.path.insert(0, HERE)
 import readiness_mock  # noqa: E402
 

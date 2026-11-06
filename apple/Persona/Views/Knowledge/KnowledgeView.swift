@@ -34,6 +34,9 @@ struct KnowledgeView: View {
     @Environment(\.kbOpenEntry) private var opener
 
     private var list: KBList? { lists[kind] }
+    /// Searching only once there is text besides spaces: `search()` trims the same way and asks for nothing when that
+    /// leaves nothing, so the results area would spin for good on a field of spaces (#4086).
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     /// Recordings on a phone is this device's own list (with what is still recording or transcribing), not the hub's copy.
     private var localRecordings: Bool {
@@ -61,7 +64,7 @@ struct KnowledgeView: View {
     var body: some View {
         List {
             // Search covers every kind: the chips (one of them lit) would say otherwise.
-            if query.isEmpty {
+            if !searching {
                 #if os(macOS)
                 kindBar // not in a section: the Mac's inset list gave it an empty header band and a rule (#830)
                 #else
@@ -69,7 +72,7 @@ struct KnowledgeView: View {
                     .listSectionSpacing(.compact)
                 #endif
             }
-            if !query.isEmpty {
+            if searching {
                 searchResults
             } else if kind == .recordings, localRecordings {
                 #if os(iOS) || os(visionOS)

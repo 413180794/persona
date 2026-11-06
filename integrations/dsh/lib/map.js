@@ -1,4 +1,4 @@
-// Pure mapping from DSH session events to Persona items (docs/dsh.md「映射」). No I/O here: the runtime (dsh.js) pages
+// Pure mapping from DSH session events to Persona items (docs/dsh.md "Mapping"). No I/O here: the runtime (dsh.js) pages
 // DSH and hands the events to these functions; the tests feed them recorded event shapes. The generic item helpers
 // (page limits, clipping, one-line summaries) are the runtime SDK's.
 

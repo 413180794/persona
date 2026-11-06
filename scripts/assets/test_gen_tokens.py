@@ -285,7 +285,7 @@ class RepositoryTests(unittest.TestCase):
                     self.assertEqual(self.catalog.values[f"status.{mode}.{state}.{part}"], {**base, "alpha": base["alpha"] * opacity})
 
     def test_ios_theme_explicit_colors_match(self):
-        # Since 2026-11-01 iOS keeps a look as 界面风格 × 主题色 (apple/Shared/Design): each catalog style is its component
+        # Since 2026-11-01 iOS keeps a look as UI style × theme color (apple/Shared/Design): each catalog style is its component
         # with the colors it came with, and Claude is Liquid Glass in coral.
         design = gen.ROOT / "apple/Shared/Design"
         styles = "".join(p.read_text() for p in sorted((design / "Styles").glob("*.swift")))

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of the installable web client (PWA, #1772, docs/web.md「安装成 App」): Chrome finds nothing
+"""End-to-end check of the installable web client (PWA, #1772, docs/web.md "Install as an app"): Chrome finds nothing
 missing to install it, the service worker takes over, keeps the shell and its assets but nothing from the API, the
-page still opens with the hub unreachable, and 设置 shows the install row.
+page still opens with the hub unreachable, and Settings shows the install row.
 
 The service worker only runs in a build, so this needs `vite preview` (not `vite`) against the fake hub, on 127.0.0.1
 (a secure context like https), and Playwright for Python (it drives the installed Chrome):
@@ -80,7 +80,7 @@ def run(ctx, base, token, shots_dir):
         fail("installability errors: %s" % errs)
     ok("Chrome reports no installability errors")
 
-    # Installable, Chrome offers its prompt; 设置 turns it into the 安装 button (lib/pwa.ts).
+    # Installable, Chrome offers its prompt; Settings turns it into the "Install" button (lib/pwa.ts).
     page.goto(base + "/settings")
     button = page.get_by_role("button", name="安装", exact=True)
     try:

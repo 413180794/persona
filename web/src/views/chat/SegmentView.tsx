@@ -5,7 +5,7 @@ import { agentStatus, subagentFor } from "../../lib/tasks";
 import { turnImages } from "../../lib/turn-images";
 import { TurnImages } from "./TurnImages";
 import { exchangeSteps, isLoopTick, isOwnMessage, type Segment, type UserMessage } from "../../lib/turns";
-import type { Item, SessionLive } from "../../lib/types";
+import type { Item } from "../../lib/types";
 import { planSteps, thinkingDurations, workBlocks, type ToolStep } from "../../lib/work-groups";
 import { channelOf, useChannels } from "../../lib/channels";
 import { splitQuotes } from "../../lib/drafts";
@@ -183,7 +183,6 @@ export const SegmentView = memo(function SegmentView({
   mid,
   sid,
   streaming,
-  status,
   expandFold,
 }: {
   seg: Segment;
@@ -191,8 +190,6 @@ export const SegmentView = memo(function SegmentView({
   mid: string;
   sid: string;
   streaming?: string;
-  /** The screen's status line, for the live exchange only. */
-  status?: SessionLive | null;
   expandFold: (f: Item) => Promise<void>;
 }) {
   const { subagents, scope } = useChatContext();
@@ -201,8 +198,8 @@ export const SegmentView = memo(function SegmentView({
   const thinking = useMemo(() => thinkingDurations(steps, turnStart), [steps, turnStart]);
   const p = useMemo<WorkProps>(() => {
     const agent = (s: ToolStep) => agentStatus(s.result, subagentFor(subagents, s.use), live);
-    return { mid, sid, scope, expandFold, agentStatus: agent, thinking, status };
-  }, [mid, sid, scope, expandFold, subagents, live, thinking, status]);
+    return { mid, sid, scope, expandFold, agentStatus: agent, thinking };
+  }, [mid, sid, scope, expandFold, subagents, live, thinking]);
   const nodes = useMemo(() => workBlocks(steps, { live, turnStart, agentStatus: p.agentStatus }), [steps, live, turnStart, p.agentStatus]);
   // the pictures the agent looked at this turn, between its work and its last words
   const images = useMemo(() => turnImages(seg, getState().machines.find((m) => m.id === mid)?.name), [seg, mid]);

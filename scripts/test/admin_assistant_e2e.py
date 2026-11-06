@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the admin UI's 助手卡片 page (#2023) against the dev server's canned admin API (/admin?mock=app).
+"""Check the admin UI's "Assistant cards" page (#2023) against the dev server's canned admin API (/admin?mock=app).
 
 Run the web dev server (cd web && npx vite --port <port>), then:
     python3 scripts/test/admin_assistant_e2e.py http://127.0.0.1:<port> [--shots <directory>]

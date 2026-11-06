@@ -7,7 +7,7 @@ import { retryable, type APIErrorInfo } from "../../lib/api-errors";
 import { runAction, turnErrorFix } from "../../lib/readiness";
 import { wakeSummary } from "../../lib/tasks";
 import { wakeDrawer, workSegment, type ChatLine, type OpenRecap, type Turn } from "../../lib/turns";
-import type { Item, SessionLive } from "../../lib/types";
+import type { Item } from "../../lib/types";
 import { Button, Collapse, copyText, cx, Dialog, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
@@ -18,8 +18,6 @@ import { ScrollFold } from "./fold-scroll";
 
 export interface LineProps {
   line: ChatLine;
-  /** The screen's status line (contract §3), handed to the live line only. */
-  status?: SessionLive | null;
   mid: string;
   sid: string;
   streaming?: string;
@@ -41,14 +39,13 @@ export const ChatLineView = memo(function ChatLineView(props: LineProps) {
   );
 });
 
-function LineBody({ line, status, mid, sid, streaming, expandFold, onRetry, fix, assistant }: LineProps) {
+function LineBody({ line, mid, sid, streaming, expandFold, onRetry, fix, assistant }: LineProps) {
   switch (line.kind) {
     case "segment":
       return (
         <SegmentView
           seg={line.seg}
           live={line.live}
-          status={status}
           mid={mid}
           sid={sid}
           streaming={line.live ? streaming : undefined}

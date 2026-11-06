@@ -30,7 +30,7 @@ def packages():
 def package_go_paths(line, names):
     """Yield each backticked <pkg>/<file>.go in line whose <pkg> is one of names."""
     for token in QUOTED.findall(line):
-        # A symbol may follow a colon (`hub/hub.go:120`, `devices/link.go：send`), as in test_doc_paths.
+        # A symbol may follow a colon (`hub/hub.go:120`, `devices/link.go` + full-width colon + `send`), as in test_doc_paths.
         path = re.split(r"[:：]", token.split("#", 1)[0], maxsplit=1)[0].rstrip(".,;/")
         if not path.endswith(".go") or "/" not in path or path.split("/", 1)[0] not in names:
             continue

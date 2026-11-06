@@ -1,4 +1,4 @@
-// End-to-end check of the DSH runtime (docs/dsh.md「验证」, the acceptance list of docs/runtimes.md): a real `dsh web`
+// End-to-end check of the DSH runtime (docs/dsh.md "Verification", the acceptance list of docs/runtimes.md): a real `dsh web`
 // (isolated DSH_HOME, the model played by DSH's own llm-mock-server) with this plugin loaded through --patch, a real
 // `jarvisd node --stdio` started by the runtime SDK's harness, which plays the hub. It starts a session from the
 // "phone", sends to it, and answers an approval and a question.
@@ -78,7 +78,7 @@ if (daemon) {
 node = await startNode({ jarvisd, keep, home })
 check('the node starts without herdr', typeof node.info.version === 'string')
 if (!daemon) pluginConn = `socket: ${node.runtimeSocket}`
-// The hub's tools (the phone's): DSH's agents get them through the plugin (docs/dsh.md「手机工具」).
+// The hub's tools (the phone's): DSH's agents get them through the plugin (docs/dsh.md "Phone tools").
 node.tools = [{ name: 'phone_echo', description: 'Echo a text on the phone (e2e)', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }]
 node.callTool = (params) => ({ content: [{ type: 'text', text: `the phone echoes ${params.args?.text}` }], is_error: false })
 
@@ -151,7 +151,7 @@ try {
   await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__jarvis__phone_echo', toolArguments: JSON.stringify({ text: 'JARVIS_E2E_PHONE' }), successText: 'The phone answered' })
   await node.call('session.send', { session_id: sid, text: 'ask the phone', client_msg_id: randomUUID() })
   if (daemon) {
-    // A daemon gets no phone tools (docs/daemons.md「隔离」): the agent's call never reaches the hub.
+    // A daemon gets no phone tools (docs/daemons.md "Isolation"): the agent's call never reaches the hub.
     await until('the reply after the tool call', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
     check('a daemon\'s agent gets no phone tools: nothing reaches the hub', !node.toolCalls.some((c) => c.name === 'phone_echo'), JSON.stringify(node.toolCalls))
   } else {
@@ -161,8 +161,8 @@ try {
     await until('the reply after the phone tool', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
   }
 
-  // A background subagent (docs/dsh.md「子 Agent 和后台任务」): the parent's turn ends while it runs; the parent's row
-  // lists it running (the apps' 待唤醒), the phone reads and watches it as "<parent>@<child>", and when it finishes the
+  // A background subagent (docs/dsh.md "Subagents and background jobs"): the parent's turn ends while it runs; the parent's row
+  // lists it running (the apps' "Waiting"), the phone reads and watches it as "<parent>@<child>", and when it finishes the
   // parent is woken. (DSH pins a delegated child's approvals to never: it runs within the scope it was given and asks
   // nobody, so no card comes from it here; the unit tests cover the cards of a child whose policy was switched back.)
   await until('idle before the subagent', async () => node.status(sid) === 'done', 30_000).catch(() => {})

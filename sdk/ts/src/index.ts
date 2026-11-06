@@ -1,4 +1,4 @@
-// Persona extension SDK for TypeScript (docs/extensions.md「写扩展：SDK、模板和命令行」): an extension program's side of
+// Persona extension SDK for TypeScript (docs/extensions.md "Writing an extension: SDK, templates and CLI"): an extension program's side of
 // the process protocol, for Bun. Build the program with `bun build --compile` into one executable per platform:
 // the package holds only that, and the hub needs no runtime.
 //
@@ -67,7 +67,7 @@ export interface Program {
   namespaces?: Record<string, Handler>;
   /** Pages by ui contribution id (widgets too: placement widget, drawn per family; see isWidget). */
   ui?: Record<string, Page>;
-  /** Shortcuts by contribution id: shortcut.run goes to them (docs/extensions.md「系统级位置」). */
+  /** Shortcuts by contribution id: shortcut.run goes to them (docs/extensions.md "System-level places"). */
   shortcuts?: Record<string, (req: ShortcutRequest) => wire.ShortcutResult | void | Promise<wire.ShortcutResult | void>>;
   /** If set, served on the hub's socket (runtime.http in the manifest) by main(). */
   fetch?(req: Request): Response | Promise<Response>;

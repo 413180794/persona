@@ -1,12 +1,12 @@
 // Helpers every runtime needs to turn its own content into Persona items the way the apps expect (docs/runtimes.md
-// 「内容」): the page limits and the notes of server/internal/transcript, interaction ids that survive a node
+// "Content"): the page limits and the notes of server/internal/transcript, interaction ids that survive a node
 // restart, one-line summaries.
 
 import { createHash } from 'node:crypto'
 
 // Pages and pushes carry at most this much text per item; the whole of a cut item comes from session.item.
 export const PAGE_TEXT = 24 * 1024
-/** Tool output is cut shorter: the app has a 看全文 button for it. */
+/** Tool output is cut shorter: the app has a "Show all" button for it. */
 export const PAGE_OUTPUT = 4 * 1024
 /** Tool inputs are not fetched whole: long strings in them are clipped for good. */
 export const MAX_INPUT = 24 * 1024
@@ -118,7 +118,7 @@ export function appToolName(name, own = {}) {
 
 /**
  * One session.items page over items a runtime has in memory (sorted by seq; several may share a seq), with the
- * paging every runtime needs (docs/protocol.md「session.items」): from the end by `turns` (a turn starts at a user's
+ * paging every runtime needs (docs/protocol.md "session.items"): from the end by `turns` (a turn starts at a user's
  * message) or `limit`, back from `before_seq`, forward from `after_seq` (at most 500 items, `more_after` when cut),
  * or the span `from_seq` … `through_seq`. Texts are cut with light(). toSeq is the session's current to_seq.
  * @param {object[]} all

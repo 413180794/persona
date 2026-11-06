@@ -1,4 +1,4 @@
-// The smallest complete Persona runtime (docs/runtimes.md「最小例子」): sessions in memory, every message answered with
+// The smallest complete Persona runtime (docs/runtimes.md "Smallest example"): sessions in memory, every message answered with
 // an echo after a short "thinking" stream, and a permission card before each echo when the text says so. Start it
 // next to a jarvisd node to see a runtime in the apps without any agent, or copy it as the skeleton of a new runtime:
 //

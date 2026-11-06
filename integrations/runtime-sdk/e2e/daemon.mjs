@@ -1,4 +1,4 @@
-// End-to-end acceptance of a daemon (docs/daemons.md「验收」) against a real `jarvisd node`: the echo example as a
+// End-to-end acceptance of a daemon (docs/daemons.md "Acceptance") against a real `jarvisd node`: the echo example as a
 // daemon (the SDK's listen mode), dialed by the node from daemons.json; the script plays the hub. A daemon's own e2e
 // copies this and starts its service instead of the echo daemon.
 //

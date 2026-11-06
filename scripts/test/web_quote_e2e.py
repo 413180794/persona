@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of 引用 in the web chat (#2427): quoting a reply of the main conversation puts a bar above the input
+"""End-to-end check of "Quote" in the web chat (#2427): quoting a reply of the main conversation puts a bar above the input
 (who and when, a plain two-line summary, × to drop it) and leaves the input empty and focused; sending carries the quote
 as the same `> ` block in front of the message; the sent bubble (and the same message after a reload, from the
 history: MOCK_QUOTE's earlier message) shows it as a folded quote card at its top, not `>` lines, opening to the whole passage.
@@ -8,8 +8,8 @@ history: MOCK_QUOTE's earlier message) shows it as a folded quote card at its to
     (cd web && PERSONA_HUB_URL=http://127.0.0.1:18841 npx vite --port 5341 --strictPort &)
     python3 scripts/test/web_quote_e2e.py http://127.0.0.1:5341 [--shots <dir>]
 
-`--tasks` checks a task's receipt card instead (#2462; the fake hub with `MOCK_TASKS=1`): 复制 / 引用 in its corner on
-hover, 引用 names the task above the input, and the sent block's first line carries its title and todo id.
+`--tasks` checks a task's receipt card instead (#2462; the fake hub with `MOCK_TASKS=1`): "Copy" / "Quote" in its corner on
+hover, "Quote" names the task above the input, and the sent block's first line carries its title and todo id.
 
 `--before` only takes the same screenshots (for the build before #2427, which typed `> ` lines into the input).
 Prints one line per check and a verdict; exits 1 on the first failure. Runs light and dark, at desktop and phone
@@ -39,7 +39,7 @@ def shot(page, shots, name):
 
 
 def quote_reply(page):
-    """Opens the long reply's menu (right-click works at both widths) and picks 引用."""
+    """Opens the long reply's menu (right-click works at both widths) and picks "Quote"."""
     reply = page.locator(".prose-j").filter(has_text="件事需要你").first
     reply.scroll_into_view_if_needed()
     reply.click(button="right")

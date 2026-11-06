@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of how the web chat draws an agent's work (#1963, cindy's grammar): 「已工作 Xs」 groups that open and
+"""End-to-end check of how the web chat draws an agent's work (#1963, the design's grammar): "Worked for Xs" groups that open and
 fold, a command opening in place, an edit's diff over the page, delivered prose staying out of the fold, subagent cards
-(one opened, its whole conversation in the side panel with the chat left as it was), and the 跳到底部 / 有新消息 pill.
+(one opened, its whole conversation in the side panel with the chat left as it was), and the "Jump to bottom" / "New messages" pill.
 
 Needs a running web page against the fake hub with the two conversations made for it, and Playwright for Python (it
 drives the installed Chrome):
@@ -11,7 +11,7 @@ drives the installed Chrome):
     python3 scripts/test/web_chat_trace_e2e.py http://127.0.0.1:5311 --hub http://127.0.0.1:18811 [--shots <dir>]
 
 Prints one line per check and a verdict; exits 1 on the first failure. Runs at desktop (1280) and phone (390) widths,
-light and dark; --shots saves each state there. --hub lets the fake hub push a reply (GET /mock/say) for 有新消息.
+light and dark; --shots saves each state there. --hub lets the fake hub push a reply (GET /mock/say) for "New messages".
 """
 import argparse
 import os
@@ -113,7 +113,7 @@ def groups_page(page, tag, shot):
     ok(f"{tag}: a delivered report between two steps stays in the open")
     no_overflow(page, tag, "work groups")
 
-    # away from the end: 跳到底部; back at the end; a reply coming in while away: 有新消息
+    # away from the end: "Jump to bottom"; back at the end; a reply coming in while away: "New messages"
     page.evaluate(WHEEL_UP, 0)
     pill = page.locator("[data-jump-pill]")
     expect(pill).to_have_text("跳到底部")

@@ -1,5 +1,5 @@
 """hub-systemd.sh with systemd: the units unchanged and the hub running, it switches the hub's edge to the new binary
-(blue-green, docs/hub-restart.md「蓝绿切换」) instead of restarting; no edge, it restarts as before; the new binary
+(blue-green, docs/hub-restart.md "Blue-green switch") instead of restarting; no edge, it restarts as before; the new binary
 failing to take over puts the old one back and fails the deploy."""
 import os
 from pathlib import Path

@@ -1,5 +1,5 @@
 """The main conversation's readiness and coded refusals, as the hub answers them (docs/onboarding.md 4.4–4.6, 5.1–5.4;
-docs/protocol.md「主对话就绪度」「错误体」), for mock_hub.py's MOCK_READINESS scenarios (docs/testing.md「就绪度场景」).
+docs/protocol.md "Main chat readiness" "Error body"), for mock_hub.py's MOCK_READINESS scenarios (docs/testing.md "Readiness scenarios").
 
 Nothing here is copied from the server: the words come from the hub's own catalogs (server/internal/i18n/locales) and
 the built-in providers from server/internal/assistant/presets_builtin.json, so a change there shows up here. The
@@ -19,7 +19,7 @@ DEFAULT_LANG = "zh-Hans"  # i18n.Default: the hub's words were Chinese before i1
 
 # MOCK_READINESS=<name>: what each scenario is (mock_hub.py sets the machines and the main conversation up from it).
 #   machine  none: no computer; pending: one waiting to be confirmed (so none the assistant may use); offline;
-#            outdated (a node from before 模型配置); ok
+#            outdated (a node from before model config); ok
 #   claude   missing (Claude Code not installed), launcher_missing (the ~/.zshrc launcher is gone), or the machine's
 #            claude_version
 #   model    None: never verified (unknown + model_unverified); ok; or the turn error code of the main conversation's
@@ -218,7 +218,7 @@ def probe_result(sc, launcher="claude"):
     return {"ok": True, "agent": "claude", "model": "claude-sonnet-5-5", "answer": "好", "millis": 1830}
 
 
-# ---------- the coded refusals (apierr.Call, docs/protocol.md「错误体」) ----------
+# ---------- the coded refusals (apierr.Call, docs/protocol.md "Error body") ----------
 
 START_DETAILS = {
     "no_machine": "assistant machine is not configured",
@@ -227,7 +227,7 @@ START_DETAILS = {
 CODE_ACTIONS = {"no_machine": "add_computer", "machine_pending": "confirm_computer", "claude_missing": "install_claude",
                 "launcher_missing": "connect_model"}
 START_CODES = tuple(CODE_ACTIONS) + ("node_unreachable", "node_outdated", "assistant_offline")
-# What devices/machine.go call() refuses assistant.send / session.start with on a node from before 模型配置 once a model
+# What devices/machine.go call() refuses assistant.send / session.start with on a node from before model config once a model
 # is configured (apierr.Call: 409, the node's words, no action).
 NODE_OUTDATED_ERROR = "这台电脑的 node 还不支持统一模型配置，请更新 node"
 

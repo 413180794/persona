@@ -9,7 +9,7 @@ RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)
 cd apple
 SIM="${SIM:-$JARVIS_SIM}"
 [ -n "$SIM" ] || { echo "set SIM=<udid or name> or \"simulator\" in the config (docs/config.md)" >&2; exit 2; }
-# boots it slim (SIM_PROFILE picks the simslim profile; a booted one is used as it is), docs/testing.md「模拟器」
+# boots it slim (SIM_PROFILE picks the simslim profile; a booted one is used as it is), docs/testing.md "Simulators"
 SIM=$(../scripts/app/sim-boot.sh "$SIM") || exit 1
 xcodegen generate -q
 xcodebuild -project Persona.xcodeproj -scheme Persona -destination "id=$SIM" -derivedDataPath ../build/DerivedData build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | sort -u

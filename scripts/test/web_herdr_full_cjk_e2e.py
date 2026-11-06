@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Check that the terminal's 完整界面 keeps every cell on the grid when a row holds Chinese, full-width punctuation,
-symbols and emoji (docs/terminal.md「字符宽度与 CJK 对齐」, #2751).
+"""Check that the terminal's "Full view" keeps every cell on the grid when a row holds Chinese, full-width punctuation,
+symbols and emoji (docs/terminal.md "Character width and CJK alignment", #2751).
 
 The fake hub runs this script as the herdr client (MOCK_TERMINAL_FULL_EXEC, `--client`): it draws what herdr's own
 client writes for a two-pane layout, a box table in the left pane, with the cursor placed before every wide character
@@ -8,7 +8,7 @@ the way herdr does (docs/lessons/terminal.md). The page draws it in xterm's DOM 
 browser put every border glyph:
 
   - the `│` of every row is in the same place as on the row that holds only ASCII (before the fix the full-width
-    punctuation 「」（）、，：；！？ drifted a row by up to three cells and the pane next to it zig-zagged);
+    full-width brackets, parentheses and punctuation drifted a row by up to three cells and the pane next to it zig-zagged);
   - an emoji covers two cells like it does in herdr (xterm's default table makes it one: the cell herdr leaves to its
     second half kept what an earlier frame drew there).
 

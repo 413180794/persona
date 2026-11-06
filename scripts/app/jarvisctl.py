@@ -13,7 +13,7 @@
   jarvisctl.py reset [--cold-chats] [--drop-chat-cache]                      a new view tree, as after a launch
   jarvisctl.py navigate home|assistant|agents|chat|inbox|settings|machines [--session m/s] [--machine id]
                [--flag key=value …] [--keep] [--cold-chats]                    the page a launch switch opens
-  jarvisctl.py set-style <glass|clay|island|lark|beautiful> [--color c]       界面风格 / 主题色
+  jarvisctl.py set-style <glass|clay|island|lark|beautiful> [--color c]       UI style / theme color
   jarvisctl.py appearance light|dark [--in-app]                               the simulator's (default) or the app's
   jarvisctl.py defaults [--set k=v …] [--remove k …] [--get k …]              this run's switches, saved keys
   jarvisctl.py tree [filters] | find [filters]                                the accessibility tree (what XCUITest sees)
@@ -31,7 +31,7 @@
   jarvisctl.py perf | refresh                                                 view-body counts (-perfCounts YES) | pull the hub
   jarvisctl.py call <command> [key=value …]                                   any command the app knows
 
-A DEBUG build on a real phone, through the hub (docs/runtime-cli.md「经 hub 连真机」): --via-hub <hub url> (or
+A DEBUG build on a real phone, through the hub (docs/runtime-cli.md "A real phone through the hub"): --via-hub <hub url> (or
 $JARVISCTL_VIA_HUB) sends every command to POST /api/v1/phone/runtime-cli; the hub's token comes from $JARVISCTL_HUB_TOKEN,
 the file $JARVISCTL_HUB_TOKEN_FILE, or hub.json in the selected state root on the hub's machine, and is never printed. state, settle, tree,
 find, wait, tap (accessibility activation only), scroll, type, snapshot and screenshot work that way; launch, reset and
@@ -344,7 +344,7 @@ class Ctl:
     def online(self, timeout=None, control=None):
         """Waits for the hub's live connection. When the hub is scripts/mock/mock_scenarios.py's, also says whether it had to
         start the hub again since it began (`mockRestarts`: when, exit code, scenario): what a long run shot while the
-        hub was down shows 连接中…, so the script can take those again."""
+        hub was down shows "Connecting...", so the script can take those again."""
         r = self.call("online", timeout=timeout)
         if self.hub or control:
             port = control or urllib.parse.urlparse(self.hub).port - 1

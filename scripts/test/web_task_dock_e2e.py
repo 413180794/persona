@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""End-to-end check of the main conversation's task dock above the composer (#1381): 全部 N and the pills are one
+"""End-to-end check of the main conversation's task dock above the composer (#1381): "All N" and the pills are one
 capsule high and share their top and bottom edges, the pills' row draws no scrollbar and takes no height for one, and
 it still scrolls sideways by wheel, trackpad and touch.
 
 The bug: a global `* { scrollbar-width: thin }` sat outside the CSS layers and beat the row's `scrollbar-width: none`,
 so browsers that keep scrollbars on (Linux, Windows, macOS set to always show them) drew a bar under the pills; it
-pushed them up while 全部, centred on the whole row, sat lower.
+pushed them up while "All", centred on the whole row, sat lower.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome; WebKit too
 when Playwright's WebKit runs on this machine):
@@ -27,7 +27,7 @@ from playwright.sync_api import sync_playwright
 
 BOARD = '[data-testid="task-dock-board"]'
 
-# The capsules' boxes: 全部, every pill, and the pills' scroller.
+# The capsules' boxes: "All", every pill, and the pills' scroller.
 METRICS = """() => {
   const board = document.querySelector('[data-testid="task-dock-board"]');
   if (!board) return null;
@@ -71,7 +71,7 @@ def metrics(page, what):
 
 def check_aligned(m, what):
     b, first = m["board"], m["pills"][0]
-    # The ask: 全部 and the first pill's getBoundingClientRect top and height are equal.
+    # The ask: "All" and the first pill's getBoundingClientRect top and height are equal.
     if not (near(b["top"], first["top"]) and near(b["height"], first["height"])):
         fail(f"{what}: 全部 top {b['top']} height {b['height']}, first pill top {first['top']} height {first['height']}")
     for i, p in enumerate(m["pills"]):
@@ -129,7 +129,7 @@ def check_touch(page, m, what):
 
 
 def check_forced_bar(page, what):
-    """Even an engine that still draws a bar under the pills does not move them off 全部's line."""
+    """Even an engine that still draws a bar under the pills does not move them off "All"'s line."""
     page.add_style_tag(content='[data-testid="task-dock-board"] + div { scrollbar-width: auto !important; overflow-x: scroll !important; }'
                                '[data-testid="task-dock-board"] + div::-webkit-scrollbar { display: block !important; height: 12px; }')
     m = metrics(page, what)

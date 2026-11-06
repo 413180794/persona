@@ -106,7 +106,7 @@ def module_docs():
 
 def quoted_paths(line):
     for token in QUOTED.findall(line):
-        # The spec READMEs name a symbol after a full-width colon: `apple/Shared/Models.swift：Interaction`.
+        # The spec READMEs name a symbol after a full-width colon: `apple/Shared/Models.swift` + the colon + `Interaction`.
         path = re.split(r"[:：]", token.split("#", 1)[0], maxsplit=1)[0].rstrip(".,;/")
         if "/" not in path or path.split("/", 1)[0] not in TOP + SERVER_RELATIVE:
             continue

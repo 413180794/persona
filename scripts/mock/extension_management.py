@@ -1,4 +1,4 @@
-"""仅 MOCK_EXTENSION_MANAGEMENT=1 启用的内存夹具，不访问生产 hub 或安装真实包。"""
+"""In-memory fixture enabled only with MOCK_EXTENSION_MANAGEMENT=1; never touches a production hub or installs real packages."""
 import copy
 import json
 from datetime import datetime, timedelta, timezone
@@ -146,7 +146,7 @@ class ExtensionManagementMock:
                 self.plugins.pop(eid)
                 removed = []
                 if q.get('members') == ['1']:
-                    # 保留一个成员，验证客户端不把部分结果说成全成功。
+                    # Keep one member, to check the client does not report a partial result as full success.
                     if self.plugins.pop('sample-kit', None): removed.append('sample-kit')
                 handler.send_json({'ok': True, 'removed_members': removed})
                 return True

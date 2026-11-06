@@ -197,7 +197,7 @@ def literals(source):
             found.append((line, source[start:i + 1]))
             i += 1
         elif c == "'":
-            # A character literal ('中'), or an apostrophe of nothing in particular: skip a short one.
+            # A character literal (a single CJK character in quotes), or an apostrophe of nothing in particular: skip a short one.
             end = source.find("'", i + 1)
             i = end + 1 if 0 < end - i <= 8 else i + 1
         else:

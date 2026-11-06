@@ -1,4 +1,4 @@
-"""A made-up model for end-to-end tests of the hub's inbox (triage, grouping, the AI 分身's judge): an Anthropic
+"""A made-up model for end-to-end tests of the hub's inbox (triage, grouping, the AI twin's judge): an Anthropic
 Messages endpoint (POST /v1/messages) that answers deterministic JSON, so a real hub can be pointed at it.
 
     PORT=18790 python3 scripts/mock/mock_model.py
@@ -8,12 +8,12 @@ Messages endpoint (POST /v1/messages) that answers deterministic JSON, so a real
     (or "ai": {…} for every purpose; the key is never checked). Grouping uses the triage model (inbox.triage).
 
 What it answers, by the system prompt (server/internal/prompts/inbox/):
-- grouping (group.md, "归到「事件」里"): every new message of the batch into the first open event the input lists,
-  else into new:1; title 「模拟：<first new message>」, tier action when the batch's text has a question mark,
+- grouping (group.md, matched by its Chinese heading): every new message of the batch into the first open event the input lists,
+  else into new:1; title "<Chinese mock prefix> <first new message>", tier action when the batch's text has a question mark,
   else fyi. With MOCK_MODEL_GROUP_TOOL=1 it first asks messages_before for the first message (once per batch).
-- triage (triage.md, "替用户分拣"): action when the item has a question mark or 「@我」, else fyi.
-- the judge (judge.md, "AI 分身的调度员"): never hands over.
-- translation (tools/translate_texts.md, translate_mail.md): each text, the subject and the body with 「【译】」 in front.
+- triage (triage.md, matched by its Chinese heading): action when the item has a question mark or an @-me mention (in Chinese), else fyi.
+- the judge (judge.md, matched by its Chinese heading): never hands over.
+- translation (tools/translate_texts.md, translate_mail.md): each text, the subject and the body with the Chinese "[translated]" tag in front.
 - anything else: "ok".
 
 Control (for a test): POST /_mode {"mode": "ok" | "fail" | "quota" | "bad"} — fail answers HTTP 500, quota a 429

@@ -29,7 +29,7 @@ func TestSearchAndOpen(t *testing.T) {
 		t.Fatalf("search box: %+v", v.Search)
 	}
 	rows := v.Sections[1].Items
-	if len(rows) != 2 { // 条目 2 and 条目 20
+	if len(rows) != 2 { // items 2 and 20
 		t.Fatalf("searching 条目 2 found %d", len(rows))
 	}
 	push := rows[1].Action.Push

@@ -144,7 +144,7 @@ def builds(limit: int = 5, platform: str | None = None):
 def next_build() -> int:
     """The next build number: one more than the largest on either platform, so a number never means two commits.
 
-    The Mac build of a release reuses that release's iPhone number instead (docs/release.md「构建号」)."""
+    The Mac build of a release reuses that release's iPhone number instead (docs/release.md "Build numbers")."""
     return max((int(b["attributes"]["version"]) for b in builds(50, platform="")), default=0) + 1
 
 

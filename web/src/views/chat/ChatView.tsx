@@ -44,7 +44,6 @@ import { UserBubble } from "./SegmentView";
 import { scrollsAFold } from "./fold-scroll";
 import { ActivityChips, GoalChip } from "./Activity";
 import { paneRoute, tabSessions } from "../../lib/herdr-tree";
-import { useSessionLive } from "../../lib/live";
 import { CommentMarks } from "./CommentMarks";
 import { PaneTabs } from "./PaneTabs";
 import { RunningStatusBar } from "./RunningStatusBar";
@@ -169,7 +168,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const answered = useStore((s) => Object.values(s.answered).filter((a) => a.ix.machine_id === mid && a.ix.session_id === sid));
   const viewed = readOnly ? (subagents?.find((a) => a.session_id === sid) ?? null) : null;
   const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at });
-  const status = useSessionLive(mid, sid);
   // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/onboarding.md 4.4)
   const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure; fromBox?: boolean } | null>(null);
   // the composer's own send, for the failure card's "Send again": the words are back in the box, so the box is what goes
@@ -896,8 +894,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                 <ChatLineView
                   key={line.id}
                   line={line}
-                  // only a live line streams and shows the status line: the others keep their memo
-                  status={line.kind === "segment" && line.live ? status : undefined}
+                  // only a live line streams: the others keep their memo
                   mid={mid}
                   sid={sid}
                   streaming={line.kind === "segment" && line.live ? tr.streaming || undefined : undefined}

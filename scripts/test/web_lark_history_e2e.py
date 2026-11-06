@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of a Feishu chat's older pages on the web page (#2893, iOS #1033 / #1034): scrolling up loads the
 next older page by itself with the message being read held in place, a failed page waits for a click, a topic group
-keeps its button, and 回到最新 shows once the list is more than a screen up.
+keeps its button, and "Back to latest" shows once the list is more than a screen up.
 
 Needs the fake hub's synthetic history (20 messages a page) and Playwright for Python:
 
@@ -118,7 +118,7 @@ def run(browser, base, hub, shots):
     ok("回到最新 shows more than a screen up")
     shot("lark-history-older")
 
-    # 4. 回到最新 goes to the newest message.
+    # 4. "Back to latest" goes to the newest message.
     page.get_by_role("button", name="回到最新").click()
     page.wait_for_timeout(900)
     expect(row(120)).to_be_in_viewport()

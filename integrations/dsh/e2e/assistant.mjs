@@ -1,6 +1,6 @@
-// End-to-end check of the Persona assistant on DSH (docs/dsh.md「助手」, docs/runtimes.md「助手」): a real `dsh web` with
+// End-to-end check of the Persona assistant on DSH (docs/dsh.md "Assistant", docs/runtimes.md "Assistant"): a real `dsh web` with
 // the plugin (isolated DSH_HOME, DSH's own mock model), a real `jarvisd node --stdio` (the harness plays the hub). The
-// "hub" sends assistant messages with the DSH launcher, as the Persona tab, AI 分身, Feishu /agent and scheduled tasks
+// "hub" sends assistant messages with the DSH launcher, as the Persona tab, AI twin, Feishu /agent and scheduled tasks
 // do (all go through assistant.send): a new conversation in the assistant's directory, the live snapshot and the
 // memory with the first message, the user's skills in the assistant's directory, ask_user and the other assistant
 // tools, the permission mode, an interrupt, and the conversation going on after the node restarts.

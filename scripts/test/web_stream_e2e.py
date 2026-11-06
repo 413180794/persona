@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of the web chat's streaming (#1963): the assistant's reply fades in word by word while its deltas
 arrive and is plain Markdown once it is written (no fade spans left); a working Claude's status bar shows the status
-line's verb (思考中 while thinking), the time and the tokens counting up, then lingers and fades out when the turn ends.
+line's verb ("Thinking" while thinking), the time and the tokens counting up, then lingers and fades out when the turn ends.
 
 Needs a running web page against the fake hub with MOCK_STREAM=1 MOCK_LIVE_STATUS=1 (the status bar's run starts
 when the page subscribes to the widget session) and Playwright for Python (it drives the installed Chrome):

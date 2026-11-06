@@ -4,7 +4,7 @@
 //
 // This file is only the loader, and stays as it is: DSH keeps it for as long as the plugin is enabled. The runtime
 // itself (lib/plugin.js and what it imports) comes from a versioned directory — the copy shipped next to this file, or
-// the one the node sent when it carries another (docs/runtimes.md「自动更新」) — and is swapped without DSH's plugin
+// the one the node sent when it carries another (docs/runtimes.md "Auto-update") — and is swapped without DSH's plugin
 // manager. config.autoUpdate: take the node's versions (default: yes, except as a daemon with config.listen).
 
 import { dirname, join } from 'node:path'

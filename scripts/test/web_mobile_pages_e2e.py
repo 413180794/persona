@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of the web client's pages on a phone (#1996): Dialog is a bottom sheet at phone width (its
 footer in sight, Tab kept inside, Back closes it) and still the centred card on a wide screen; icon buttons take a
-44pt touch; 设置 is a list of categories with Back between them; the inbox filters keep to one row; a todo's circle is
+44pt touch; Settings is a list of categories with Back between them; the inbox filters keep to one row; a todo's circle is
 hit without opening the row, and the row opens from the keyboard; a long-pressed message keeps its menu.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome):
@@ -21,7 +21,7 @@ import sys
 from playwright.sync_api import expect, sync_playwright
 
 UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-REVIEW = "a1f3c2d4-0000-4000-8000-000000000006"  # the fake hub's session with「看一下 PR #42」
+REVIEW = "a1f3c2d4-0000-4000-8000-000000000006"  # the fake hub's session titled "take a look at PR #42"
 
 
 def ok(msg):
@@ -108,7 +108,7 @@ def sheet_checks(page, w, h, tag, shots):
     check(page.evaluate("location.pathname") == path, f"{tag}: Back closes the sheet and stays on the page")
     focus_back = page.evaluate("() => document.activeElement && document.activeElement.textContent.includes('新建 Agent')")
     check(focus_back, f"{tag}: the focus went back to 新建 Agent")
-    # Closing it from the page (取消, Esc) takes its history entry back off: no dead entry for Back to land on.
+    # Closing it from the page ("Cancel", Esc) takes its history entry back off: no dead entry for Back to land on.
     for close in (lambda: page.get_by_role("button", name="取消").tap(), lambda: page.keyboard.press("Escape")):
         open_new_agent(page)
         close()
@@ -236,7 +236,7 @@ def wide_dialog(browser, base, token, shots):
     if shots:
         open_new_agent(page, tap=False)
         shot(page, shots, "dialog_1280")
-    # 设置 keeps its tab bar
+    # Settings keeps its tab bar
     page.goto(f"{base}/settings")
     page.locator('nav[aria-label="设置分类"] button[aria-current="page"]', has_text="通用").wait_for()
     check(page.locator("header nav[aria-label='设置分类']").count() == 1, "1280: 设置 keeps the tab bar, /settings is 通用")

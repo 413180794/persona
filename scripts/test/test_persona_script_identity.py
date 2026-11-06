@@ -357,7 +357,7 @@ sys.exit(2)
 
     def test_actual_hub_deploy_replaces_service_binary_and_web_in_its_installed_profile(self):
         self.run_script('scripts/deploy/deploy.sh', '--admin-access', 'lan', 'hub-fixture')
-        # Every platform a node can run, the ones 重新部署 takes a machine's build from (#3103).
+        # Every platform a node can run, the ones "Redeploy" takes a machine's build from (#3103).
         for name in ('jarvisd', 'jarvisd-wechat', 'nodes/jarvisd-linux-amd64', 'nodes/jarvisd-linux-arm64',
                      'nodes/jarvisd-darwin-amd64', 'nodes/jarvisd-darwin-arm64'):
             self.assertTrue((self.state / 'bin' / name).is_file(), name)

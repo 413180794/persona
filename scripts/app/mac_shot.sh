@@ -1,5 +1,5 @@
 #!/bin/bash
-# Screenshots of the Mac app, light and dark, without the screen (docs/mac.md「截图」): the app renders its own
+# Screenshots of the Mac app, light and dark, without the screen (docs/mac.md "Screenshots"): the app renders its own
 # window into a PNG (`-macSnapshot`, DEBUG builds) and quits, so this works while the Mac is locked.
 #
 #   scripts/app/mac_shot.sh <name> [launch args…]
@@ -8,7 +8,7 @@
 #   BUILD=1 scripts/app/mac_shot.sh settings -tab settings     # build JarvisMac (Debug) first
 #
 # Writes $OUT/<name>-light.png and $OUT/<name>-dark.png (OUT defaults to /tmp/jarvis-mac-shots) and prints the paths.
-# Always 体验模式 (`-demo.on YES`, made-up data, nothing leaves the Mac) unless DEMO=0 (then pass -pairURL for
+# Always demo mode (`-demo.on YES`, made-up data, nothing leaves the Mac) unless DEMO=0 (then pass -pairURL for
 # scripts/mock/mock_hub.py yourself). SIZE=1280x820, DELAY=4 (seconds before the shot), APP=<path to Persona.app>,
 # APPEARANCES="light dark".
 set -euo pipefail

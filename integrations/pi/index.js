@@ -5,7 +5,7 @@
 // Configuration (optional): <agent dir>/jarvis.json — { "approve": ["bash"], "askUser": true, "answerFirst": "auto",
 // "autoUpdate": true }.
 //
-// Updates (docs/pi.md「自动更新」): installed from a store (pi's settings name <store>/current/pi), this extension takes
+// Updates (docs/pi.md "Auto-update"): installed from a store (pi's settings name <store>/current/pi), this extension takes
 // the version the node carries — installs it as current and, once its sessions are idle, has each of them reload
 // (pi reads extensions afresh on reload), so the new code runs in this same process. Installed from anywhere else (a
 // checkout), it never updates itself.

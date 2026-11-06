@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """End-to-end check of the web sidebar's entries (#1239, #5109): Persona, the column's first row, opens the main conversation, the one-off new
-conversation and 新建 Agent are the「+」of their sections, and the old links still land where they should.
+conversation and New agent are the"+"of their sections, and the old links still land where they should.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome):
 
@@ -82,7 +82,7 @@ def run(browser, base, token, main_id, other, shots):
     chats = page.locator("aside .group\\/sec", has=page.locator("button", has_text="Persona 对话")).locator("xpath=..")
     expect(chats.locator(PERSONA)).to_have_count(0)
     ok("Persona + app mark is the first row, a line under it, above the pages; not in「Persona 对话」")
-    # folding「Persona 对话」and 页面 keeps the main row on show
+    # folding"Persona chats"and Pages keeps the main row on show
     for title in ("Persona 对话", "页面"):
         head = page.locator("aside button[aria-expanded]", has_text=title).first
         head.click()
@@ -92,7 +92,7 @@ def run(browser, base, token, main_id, other, shots):
         expect(head).to_have_attribute("aria-expanded", "true")
     ok("folding「Persona 对话」or 页面 leaves the main row on show")
 
-    # 2. 总览 and back to Persona.
+    # 2. "Overview" and back to Persona.
     page.locator('aside a[href="/overview"]').click()
     page.wait_for_function("location.pathname === '/overview'")
     expect(persona).not_to_have_attribute("aria-current", "page")
@@ -117,7 +117,7 @@ def run(browser, base, token, main_id, other, shots):
         page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
         page.reload()
 
-    # 4. A new one-off conversation is the「+」of「Persona 对话」, without a 主对话 button on it.
+    # 4. A new one-off conversation is the "+" of "Persona chats", without a main chat button on it.
     page.locator('aside a[aria-label="新对话"]').click()
     page.wait_for_function("location.pathname === '/j/new'")
     expect(page.get_by_text(STARTER)).to_be_visible()
@@ -125,7 +125,7 @@ def run(browser, base, token, main_id, other, shots):
     expect(persona).not_to_have_attribute("aria-current", "page")
     ok("「Persona 对话」+ opens a new conversation at /j/new, no 主对话 button")
 
-    # 5. 新建 Agent is the「+」of Agents and still opens the dialog.
+    # 5. "New agent" is the "+" of Agents and still opens the dialog.
     page.locator('aside button[aria-label="新建 Agent"]').click()
     expect(page.get_by_role("dialog").get_by_text("新建 Agent").first).to_be_visible()
     if shots:

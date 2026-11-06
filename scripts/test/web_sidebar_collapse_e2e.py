@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """End-to-end check of folding the web sidebar (#2524): the button and Ctrl+Alt+B fold it to a rail of icons and back,
-a reload keeps the fold, 页面 / Agents / a state group fold under their titles and stay folded, and a narrow screen
+a reload keeps the fold, "Pages" / Agents / a state group fold under their titles and stay folded, and a narrow screen
 still has the full drawer whatever the wide screen chose.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome):

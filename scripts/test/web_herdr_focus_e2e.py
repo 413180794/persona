@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""End-to-end check of the focus sync between herdr's own client (the terminal's 完整界面) and the page
-(docs/terminal.md「焦点联动」), against the fake hub's made-up herdr client.
+"""End-to-end check of the focus sync between herdr's own client (the terminal's "Full view") and the page
+(docs/terminal.md "Focus sync"), against the fake hub's made-up herdr client.
 
 Checks, one line each: choosing another session of the machine in the sidebar moves herdr's focus (one herdr_focus)
 without closing or reopening the client or rebuilding xterm, and the focus coming back does not move the page; a focus
 change made in this view (the hub says so) moves the page to that pane's address (an agent's page in the terminal
-view, a plain shell on the 终端 page), the sidebar highlights and shows the row, the same client and screen stay, and the
+view, a plain shell on the "Terminal" page), the sidebar highlights and shows the row, the same client and screen stay, and the
 page sends no focus back; a change made elsewhere (the computer's window, another browser) leaves the page where it is and
 shows a small chip that follows it when tapped; going to another machine opens that machine's client and lets the first
 go; switching to the conversation and back keeps the client; a hub without the feature sends no herdr_focus.
@@ -167,7 +167,7 @@ def main_checks(browser, port, shots):
     assert [m.get("session_id") for m in sent(port, "herdr_focus", start2)] == [S1], sent(port, "herdr_focus", start2)
     ok("after following, a sidebar choice moves herdr again")
 
-    # a plain shell: the 终端 page, by its address
+    # a plain shell: the "Terminal" page, by its address
     start3 = len(log(port))
     focus(port, pane="w1:p9", source="client", mine=1)
     page.wait_for_function("location.pathname === '/terminal/macbook/pane%3Aw1%3Ap9'")

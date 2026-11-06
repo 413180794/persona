@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Draws the example looks extension's pictures (schema/extension/examples/example-looks, docs/extensions.md「形象」).
+"""Draws the example looks extension's pictures (schema/extension/examples/example-looks, docs/extensions.md "Looks").
 
 Two original looks, drawn here so nothing third-party is in the repo:
-- 极光 (aurora): a glowing jellyfish, avatar PNGs and SVGs for light and dark, and all five dot states as APNGs.
-- 石子 (pebble): a round grey pebble, one PNG and an SVG only: the hub gives it an idle dot from its avatar.
+- aurora: a glowing jellyfish, avatar PNGs and SVGs for light and dark, and all five dot states as APNGs.
+- pebble: a round grey pebble, one PNG and an SVG only: the hub gives it an idle dot from its avatar.
 
     python3 scripts/assets/make_example_looks.py [--out schema/extension/examples/example-looks]
 """
@@ -32,7 +32,7 @@ PEBBLE = {
 
 
 def jelly(side, scheme, *, t=0.0, state="idle", blink=1.0):
-    """One frame of 极光 at side px: t in [0, 1) is the loop's phase, blink 1 open … 0 shut."""
+    """One frame of aurora at side px: t in [0, 1) is the loop's phase, blink 1 open … 0 shut."""
     c = AURORA[scheme]
     n = side * SS
     img = Image.new("RGBA", (n, n), (0, 0, 0, 0))

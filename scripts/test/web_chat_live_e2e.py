@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """End-to-end check that an open agent page shows what the agent writes without a reload (#3036): in the chat view,
-after the page was switched 终端 ⇄ 对话 a few times (the chat stays mounted under the terminal, docs/web.md「终端 ⇄ 对话」),
+after the page was switched Terminal ⇄ Chat a few times (the chat stays mounted under the terminal, docs/web.md "Terminal ⇄ chat"),
 and when a push carries another `history` token (a rewound or rewritten transcript: the page starts over and must come
 back with everything, then keep following), and after the socket was dropped and came back.
 

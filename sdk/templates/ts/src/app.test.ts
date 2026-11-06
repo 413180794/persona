@@ -25,7 +25,7 @@ test("search and open", async () => {
   let { result } = await call("ui.action", { ...ctx, action: "search", values: { q: "条目 2" } });
   expect(result.view.sections[0].items[0].text).toBe("早");
   expect(result.view.search.value).toBe("条目 2");
-  // 条目 2 and 条目 20; a row opens its detail on top of the list.
+  // Items 2 and 20; a row opens its detail on top of the list.
   const rows = result.view.sections[1].items;
   expect(rows).toHaveLength(2);
   ({ result } = await call("ui.render", { ...ctx, state: rows[1].action.push.state }));

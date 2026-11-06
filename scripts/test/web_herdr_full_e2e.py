@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""End-to-end check of the terminal's 完整界面 (herdr's own client in the browser, docs/terminal.md「完整 herdr 界面」)
+"""End-to-end check of the terminal's "Full view" (herdr's own client in the browser, docs/terminal.md "Full herdr view")
 against the fake hub's made-up herdr client, and screenshots of both surfaces and of the switch between them.
 
-Checks, one line each: a terminal opens as 完整界面 by default and the sidebar / tab bar / panes are drawn; what is
+Checks, one line each: a terminal opens as "Full view" by default and the sidebar / tab bar / panes are drawn; what is
 acknowledged and what the page answers when herdr asks about the colour scheme; typing and the key bar reach the client;
-a copy the client makes (OSC 52) lands on the browser's clipboard; the header's switch goes to 单窗格 and back, the client
-is let go on the way (herdr_close) and the choice is kept; 设置 chooses the default; reduced motion cuts the transition;
+a copy the client makes (OSC 52) lands on the browser's clipboard; the header's switch goes to "Single pane" and back, the client
+is let go on the way (herdr_close) and the choice is kept; Settings chooses the default; reduced motion cuts the transition;
 resizing the panel is told to the client; a client that ends can be reconnected; a hub or machine that cannot show it
-falls back to 单窗格 and says why; a hub without the feature has no switch.
+falls back to "Single pane" and says why; a hub without the feature has no switch.
 
 Needs the fake hub with terminals and the full client (MOCK_TERMINAL_FULL=1), a web page against it and Playwright for
 Python (the installed Chrome, or the browser PERSONA_E2E_CHROMIUM points at):
@@ -124,7 +124,7 @@ def main_checks(browser, base_port, shots):
     start = len(log(base_port))
     open_terminal(page, base)
 
-    # ── the default is 完整界面 and it is herdr's own screen ──
+    # ── the default is "Full view" and it is herdr's own screen ──
     mode_is(page, "完整界面")
     wait_text(page, "spaces", "the sidebar")
     wait_text(page, "1 main", "the tab bar")
@@ -168,7 +168,7 @@ def main_checks(browser, base_port, shots):
     assert got == "copied by herdr", got
     ok("a copy the client makes (OSC 52) is on the browser's clipboard")
 
-    # ── the switch: 单窗格 and back, the client let go on the way ──
+    # ── the switch: "Single pane" and back, the client let go on the way ──
     n = len(log(base_port))
     radio(page, "单窗格").click()
     page.wait_for_timeout(60)  # mid-transition: both surfaces are on the page
@@ -226,7 +226,7 @@ def main_checks(browser, base_port, shots):
     assert sent(base_port, "herdr_dropped", n), log(base_port)[n:]
     ok("closing the page drops its client with the connection")
 
-    # ── 设置 chooses the default ──
+    # ── Settings chooses the default ──
     expect(page.get_by_role("radio", name="完整界面", exact=True)).to_have_attribute("aria-checked", "true")
     page.get_by_role("radio", name="单窗格", exact=True).click()
     assert page.evaluate("localStorage.getItem('jarvis.terminal.defaultMode')") == "pane"
@@ -239,7 +239,7 @@ def main_checks(browser, base_port, shots):
     page.goto(f"{base}/settings")
     page.get_by_role("radio", name="记住上次", exact=True).click()
     page.goto(f"{base}/terminal/server/{SHELL}")
-    mode_is(page, "完整界面")  # nothing remembered yet: 完整界面
+    mode_is(page, "完整界面")  # nothing remembered yet: "Full view"
     wait_text(page, "spaces", "full before a choice is remembered")
     radio(page, "单窗格").click()
     page.wait_for_function("document.querySelectorAll('[data-surface]').length === 1")

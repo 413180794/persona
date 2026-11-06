@@ -1,4 +1,4 @@
-// End-to-end harness for a runtime (docs/runtimes.md「验收」): starts a real `jarvisd node --stdio` in an isolated HOME
+// End-to-end harness for a runtime (docs/runtimes.md "Acceptance"): starts a real `jarvisd node --stdio` in an isolated HOME
 // and plays the hub on its stdio, so a check can drive the runtime the way the phone does and watch what reaches the
 // hub. The runtime under test connects to `runtimeSocket`. Nothing outside the temp directory is touched.
 

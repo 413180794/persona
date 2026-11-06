@@ -99,7 +99,7 @@ def row_menu_holds_still(t):
 
 
 def swiped_row_stays_open(t):
-    """A row swiped open (关闭 showing) stays open while its agent keeps working."""
+    """A row swiped open ("Close" showing) stays open while its agent keeps working."""
     at_list(t, row_in_view=True)
     t.c.swipe("left", **ROW)
     t.see("the row's swipe actions", label="关闭", trait="button", timeout=5)

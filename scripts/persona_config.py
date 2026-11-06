@@ -129,7 +129,7 @@ def xcconfig(cfg: dict):
     with open(out, "w") as f:
         f.write("// Generated from %s by scripts/jarvis_config.py; do not edit or commit.\n" % path())
         f.write("JARVIS_BUNDLE_ID = %s\n" % get(cfg, "app.bundle_id", ""))
-        # The App Group the app shares files with the widget extension (docs/release.md「App Group」).
+        # The App Group the app shares files with the widget extension (docs/release.md "App Group").
         f.write("JARVIS_APP_GROUP = %s\n" % app_group(cfg))
         f.write("PERSONA_BUNDLE_ID = $(JARVIS_BUNDLE_ID)\n")
         f.write("PERSONA_APP_GROUP = $(JARVIS_APP_GROUP)\n")
@@ -139,12 +139,12 @@ def xcconfig(cfg: dict):
         f.write("JARVIS_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
         # Which entitlements the app signs with (app_entitlements; docs/carplay.md).
         f.write("PERSONA_APP_ENTITLEMENTS = %s\n" % app_entitlements(cfg))
-        # 「还没有 hub？」 on the first screen opens this page (docs/getting-started.md published; empty: the row is hidden).
+        # "No hub yet?" on the first screen opens this page (docs/getting-started.md published; empty: the row is hidden).
         f.write("PERSONA_GETTING_STARTED_URL = %s\n" % get(cfg, "publish.getting_started_url", "").replace("//", "/$()/"))
         # Meta Wearables (docs/meta-glasses.md): 0 means Developer Mode (no attestation), as Meta's docs say.
         f.write("PERSONA_META_APP_ID = %s\n" % (str(get(cfg, "app.meta_wearables.app_id", "") or "") or "0"))
         f.write("PERSONA_META_CLIENT_TOKEN = %s\n" % (get(cfg, "app.meta_wearables.client_token", "") or ""))
-        # The in-app tunnel core (docs/network.md「经 App 内隧道连 hub」): linked into device builds only when set.
+        # The in-app tunnel core (docs/network.md"Connect to the hub through an in-app tunnel"): linked into device builds only when set.
         include, ldflags = tunnel_core(cfg)
         f.write("PERSONA_TUNNEL_INCLUDE = %s\n" % include)
         f.write("PERSONA_TUNNEL_LDFLAGS = %s\n" % ldflags)

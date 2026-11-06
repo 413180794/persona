@@ -32,6 +32,6 @@ florak/
 /deploy/docker/.env
 /deploy/docker/data/
 /deploy/docker/postgres/
-# App Store Connect API keys and asc's repo-local config stay on the machine (docs/release.md「用 asc 发版」).
+# App Store Connect API keys and asc's repo-local config stay on the machine (docs/release.md "Releasing with asc").
 *.p8
 /.asc/

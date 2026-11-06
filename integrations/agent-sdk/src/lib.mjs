@@ -183,7 +183,7 @@ export function transcriptUUIDs(id, cwd, env = process.env) {
   return uuids
 }
 
-// ReplayGuard drops what a resumed CLI sends again from before this start (README「resume 去重」): a message whose
+// ReplayGuard drops what a resumed CLI sends again from before this start (README "Resume dedup"): a message whose
 // uuid the transcript already had, and a result before this process streamed anything — a turn of this process
 // always streams (partial messages are on) before its result, a replayed result is synthesized fresh and is in no
 // transcript.

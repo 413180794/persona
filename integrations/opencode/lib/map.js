@@ -1,4 +1,4 @@
-// Pure mapping from opencode's session messages to Persona items (docs/opencode.md「映射」). No I/O: the host
+// Pure mapping from opencode's session messages to Persona items (docs/opencode.md "Mapping"). No I/O: the host
 // (opencode.js) hands in the messages (rows of opencode.db's session_message, or what the plugin API's
 // session.context returns: the same fields) and the tests feed recorded shapes.
 //

@@ -3,9 +3,10 @@
 // "Install Cua Driver" (after a confirmation) when it is not there, "Grant access" when a permission is missing (macOS asks on the
 // Mac's own screen), the node's progress while it works, and VNC (the web's live screen, /screen/<mid>) when
 // Screen Sharing is on. The hub is asked again when the page opens, and every 2 s while a job runs.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { computerView, computerWatching, GRANT_HINT, NO_SCREEN_SHARING, screenPath, type ComputerAction, type MachineComputer } from "../../lib/computer";
+import { latestRequest } from "../../lib/visible-poll";
 import { Button, cx, Dialog, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Switch } from "../settings/SettingsParts";
@@ -21,13 +22,31 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
   const enabled = shown.enabled;
   const watching = computerWatching(shown, online);
 
-  useEffect(() => setFresh(null), [mid]);
+  // One request line per Mac, like BrowserSection: only the latest read or write is shown, so a read sent before the
+  // switch or an action (or before a newer read) never puts an older state back (#5455).
+  const reads = useRef<ReturnType<typeof latestRequest<MachineComputer>> | null>(null);
+  useEffect(() => {
+    setFresh(null);
+    // a failed read leaves the machine list's copy (or the last answer) on screen
+    const line = latestRequest<MachineComputer>(setFresh, () => {});
+    reads.current = line;
+    return () => {
+      line.dispose();
+      if (reads.current === line) reads.current = null;
+    };
+  }, [mid]);
 
-  const refresh = async () => {
+  const refresh = () => reads.current?.run(() => api<MachineComputer>(`/machines/${enc(mid)}/computer`)) ?? Promise.resolve();
+
+  // Runs a write and shows its answer as the latest one (an older read still in flight is dropped). If another Mac is
+  // shown by the time it comes back, both its answer and its failure belong to the Mac left behind and are dropped.
+  const write = async (send: () => Promise<MachineComputer>) => {
+    const line = reads.current;
     try {
-      setFresh(await api<MachineComputer>(`/machines/${enc(mid)}/computer`));
-    } catch {
-      // the machine list's copy stays
+      const value = await send();
+      void line?.run(() => Promise.resolve(value));
+    } catch (e) {
+      if (line && line === reads.current) throw e;
     }
   };
 
@@ -46,7 +65,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
   const set = async (on: boolean) => {
     setSaving(true);
     try {
-      setFresh(await api<MachineComputer>(`/machines/${enc(mid)}/computer`, { method: "PUT", json: { enabled: on } }));
+      await write(() => api<MachineComputer>(`/machines/${enc(mid)}/computer`, { method: "PUT", json: { enabled: on } }));
     } catch (e) {
       toast(on ? t("machines-computersection.turn_on_failed", { error: errorText(e) }) : t("machines-computersection.turn_off_failed", { error: errorText(e) }), "error");
     } finally {
@@ -57,7 +76,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
   const run = async (what: ComputerAction) => {
     setAsking(true);
     try {
-      setFresh(await api<MachineComputer>(`/machines/${enc(mid)}/computer/${what}`, { method: "POST" }));
+      await write(() => api<MachineComputer>(`/machines/${enc(mid)}/computer/${what}`, { method: "POST" }));
     } catch (e) {
       toast(errorText(e), "error");
     } finally {

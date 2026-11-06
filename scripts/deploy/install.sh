@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install jarvisd (docs/release.md「发布 jarvisd」). scripts/release/publish.sh serves this file as <site>/install.sh with
+# Install jarvisd (docs/release.md "Publishing jarvisd"). scripts/release/publish.sh serves this file as <site>/install.sh with
 # JARVIS_DL filled in:
 #
 #   curl -fsSL <site>/install.sh | sh
@@ -8,10 +8,10 @@
 # over ssh), after checking it against the published SHA256SUMS. JARVIS_DL=<url> installs from somewhere else.
 #
 # One hub is enough for a home (docs/plan-hub-center.md section 0); every other computer gets the node service: the
-# resident node and the connector jarvis-link, paired with the hub (docs/link.md「装 node 服务」):
+# resident node and the connector jarvis-link, paired with the hub (docs/link.md "Installing the node service"):
 #
-#   curl -fsSL <site>/install.sh | sh -s -- --node --pair '<jarvisd hub pair --machine <id> 的链接>'   # 这台去连 hub
-#   curl -fsSL <site>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 连这台用的地址>]         # 让 hub 来连
+#   curl -fsSL <site>/install.sh | sh -s -- --node --pair '<link from jarvisd hub pair --machine <id>>'   # this one connects to the hub
+#   curl -fsSL <site>/install.sh | sh -s -- --node --listen [:18663] [--addr <address the hub reaches this one at>]  # the hub connects here
 #
 # --pair and --listen imply --node (JARVIS_ROLE=node, JARVIS_PAIR, JARVIS_LISTEN do the same). Without a role and with
 # a terminal it asks, and says so when it hears a hub on this LAN already (mDNS). --hub is the machine that runs the hub.

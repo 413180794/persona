@@ -1,4 +1,4 @@
-"""Made-up Office documents for the mock hub's file viewer (docs/ios.md「文件查看器」): the smallest valid docx, xlsx,
+"""Made-up Office documents for the mock hub's file viewer (docs/ios.md "File viewer"): the smallest valid docx, xlsx,
 pptx and rtf that QuickLook and the table viewer open, built with the standard library only. All text is invented."""
 import datetime
 import io

@@ -49,7 +49,7 @@ fi
 eval "$(python3 scripts/jarvis_config.py env)"
 cd server
 # Straight from master, for when a change cannot wait for a release: the build number is the build time (UTC), so an
-# older release never replaces it and the next release does (docs/hub-update.md「直接部署」).
+# older release never replaces it and the next release does (docs/hub-update.md "Deploying directly").
 BUILD="$(date -u +%Y%m%d%H%M)"
 VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD"
 TARGETS=("$@")
@@ -112,14 +112,14 @@ $command"
 }
 mkdir -p bin
 # The commit it is built from, "-dirty" after it with changes in server/ not committed: a release installs itself over
-# this build only when its code contains that commit (docs/hub-update.md「防退回」).
+# this build only when its code contains that commit (docs/hub-update.md "No rollback").
 COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
 [ -n "$COMMIT" ] && [ -n "$(git status --porcelain -- . 2>/dev/null)" ] && COMMIT="$COMMIT-dirty"
 LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$COMMIT${JARVIS_PUBLISH_URL:+ -X main.updateURL=$JARVIS_PUBLISH_URL/dl}"
-# The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md「自动更新」), from integrations/.
+# The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
 go generate ./internal/runtimepkg
 # Every platform a machine can run, the same four the release and the Docker image build (docs/release.md): each
-# machine gets the one it runs (machine_platform), and the hub keeps all four for 重新部署 (#3103).
+# machine gets the one it runs (machine_platform), and the hub keeps all four for "Redeploy" (#3103).
 PLATFORMS=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)
 for plat in "${PLATFORMS[@]}"; do
   GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "bin/jarvisd-$plat" ./cmd/personad
@@ -207,7 +207,7 @@ install_bin() {
     root=$(state_root "$role")
     mkdir -p "$root/bin" || return 1
     # The hub's binary before it is replaced: hub-systemd.sh switches the running edge to the new one and goes back
-    # to this one if it fails while taking over (docs/hub-restart.md「蓝绿切换」).
+    # to this one if it fails while taking over (docs/hub-restart.md "Blue-green switch").
     if [ "$role" = hub ] && [ -f "$root/bin/jarvisd" ]; then cp -p "$root/bin/jarvisd" "$root/bin/jarvisd.prev" || return 1; fi
     { cp "$bin" "$root/bin/jarvisd.new" && mv "$root/bin/jarvisd.new" "$root/bin/jarvisd"; } || return 1
     [ -d "$root/bin/personad" ] || ln -sfn jarvisd "$root/bin/personad" || return 1

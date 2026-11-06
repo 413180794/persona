@@ -1,10 +1,10 @@
 #!/bin/bash
-# Run on a machine (a Mac in its login session, or Linux) to keep a resident jarvisd node there (docs/server.md「常驻 node」):
+# Run on a machine (a Mac in its login session, or Linux) to keep a resident jarvisd node there (docs/server.md "Resident node"):
 #   ./scripts/deploy/node-launchd.sh install    # Mac: launchd agent com.jarvis.node; Linux: systemd user service jarvisd-node;
 #                                        # started at login / boot, restarted whenever it exits
 #   ./scripts/deploy/node-launchd.sh restart    # after a new binary, now (ends the assistant's running conversations)
 #   ./scripts/deploy/node-launchd.sh restart-idle  # after a new binary (deploy.sh does this): once no conversation is
-#                                        # busy (SIGHUP to the node only; docs/hub-restart.md「对话不中断」)
+#                                        # busy (SIGHUP to the node only; docs/hub-restart.md "Conversations are not interrupted")
 #   ./scripts/deploy/node-launchd.sh uninstall  # back to the hub starting the node over ssh
 # The hub keeps connecting over ssh as before; `jarvisd node --stdio` relays to this node when it's running, so what
 # the node starts runs in the login session and can read the login keychain. Set up for tailcat

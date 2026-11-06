@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Writes the app's 体验模式 data (apple/Persona/Resources/Demo.json) from scripts/mock/mock_hub.py's made-up hub.
+"""Writes the app's demo mode data (apple/Persona/Resources/Demo.json) from scripts/mock/mock_hub.py's made-up hub.
 
     python3 scripts/mock/make_demo_data.py        # rerun after changing mock_hub.py's data; commit the JSON
 
-体验模式 (docs/ios.md) lets someone without a hub, App Review included, walk through every page: the app answers its
+Demo mode (docs/ios.md) lets someone without a hub, App Review included, walk through every page: the app answers its
 own requests from this file (apple/Persona/App/DemoHub.swift) and never connects anywhere. Everything here is made up,
 like the mock hub's: no real names, hosts or messages (scripts/privacy_check.py scans the file, check_bundle_privacy.py
 the built app). Times are stored relative to when this ran ("@rel:<seconds>", "@unix:<seconds>") and the app puts
@@ -48,8 +48,8 @@ EXTRA = [
     ("server", "infra", 2, "给 API 加限流", "working", "working", 3, "按 token 做令牌桶限流，正在补压测。"),
     ("macbook", "weather", 1, "整理小组件的截图素材", "idle", "idle", 900, "六张截图都按 App Store 的尺寸导出了。"),
 ]
-# 细列表 needs every density on screen (docs/ios.md「Agents 列表」): a space with many finished-unread agents, spaces
-# where every agent is idle (空闲的空间), and a machine where nothing runs at all (the Mac mini, filtered to it).
+# The compact list needs every density on screen (docs/ios.md "Agents list"): a space with many finished-unread agents, spaces
+# where every agent is idle ("Idle spaces"), and a machine where nothing runs at all (the Mac mini, filtered to it).
 EXTRA += [("studio", "ios-app", 5, t, "done", "unread", mins, last) for t, mins, last in [
     ("App Store 截图换成新版界面", 4, "六种尺寸的截图都换好了，深浅色各一套。"),
     ("修复横屏时键盘挡住输入框", 9, "输入框改成跟着键盘高度走，横竖屏都验证过。"),
@@ -164,7 +164,7 @@ def phone_frames(cols=38, rows=30, ticks=40):
     return out
 
 
-# A machine where every agent is idle (全部空闲 when the list is filtered to it).
+# A machine where every agent is idle ("All idle" when the list is filtered to it).
 MINI = dict(next(x for x in m.MACHINES if x["id"] == "studio"), id="mini", name="Mac mini", ssh_host="mini", hostname="mini",
             icon="desktop")
 MINI["system"] = dict(MINI["system"], model="Mac mini", cpu="Apple M4", cores=10, memory=32 * m.GB)

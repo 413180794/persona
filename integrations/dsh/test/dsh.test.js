@@ -496,7 +496,7 @@ test('the assistant\'s own tools are only for its conversations, called as the a
   assert.equal(n.toolCalls.at(-1).assistant, undefined)
 })
 
-// ---- subagents and background work (docs/dsh.md「子 Agent 和后台任务」) ----
+// ---- subagents and background work (docs/dsh.md "Subagents and background jobs") ----
 
 const ev2 = (seq, type, data) => ({ type, seq, time: 1_700_000_000_000 + seq, data })
 const toolCall = (seq, callId, name) => ev2(seq, 'tool/call', { callId, name, arguments: '{}' })

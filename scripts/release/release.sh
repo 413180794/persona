@@ -17,7 +17,7 @@ echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks ano
 # No private values in what is about to ship from this tree (CLAUDE.md).
 python3 scripts/privacy_check.py
 # The App ID must have every capability the entitlements need and the App Store profiles must be current, or the export
-# fails after a ten-minute archive (a new entitlement invalidates them, docs/release.md「entitlements」). Needs the API key.
+# fails after a ten-minute archive (a new entitlement invalidates them, docs/release.md "entitlements"). Needs the API key.
 if [ -f "${ASC_KEY_PATH:-}" ]; then python3 scripts/release/asc_signing.py --check >/dev/null; fi
 # Export the ipa and check it like NO_UPLOAD does, then upload it with asc instead of xcodebuild.
 EXPORT_ONLY="${NO_UPLOAD:-}"
@@ -60,7 +60,7 @@ if strings "$APP/Persona" | grep -qE 'runtimeCLI|RuntimeCLI|_AXSSet(Automation|R
 fi
 
 # Every bundle signed with its target's keychain groups (the app shares the Live Activity's persona with JarvisWidgets,
-# the push key with JarvisNotify): build 92 shipped without them (docs/release.md「entitlements」).
+# the push key with JarvisNotify): build 92 shipped without them (docs/release.md "entitlements").
 python3 scripts/release/entitlements.py check "$ARCHIVE"
 
 OPTS=$(mktemp -t export).plist
@@ -98,7 +98,7 @@ else
   echo "Build $BUILD uploaded. It appears in App Store Connect → TestFlight in ~10–30 min (python3 scripts/release/asc_testflight.py wait 45 $BUILD)."
 fi
 
-# The same release of jarvisd for anyone to install (publish.sh, docs/release.md「发布 jarvisd」), versioned with this
+# The same release of jarvisd for anyone to install (publish.sh, docs/release.md "Publishing jarvisd"), versioned with this
 # build's number. Not with NO_UPLOAD or NO_PUBLISH, nor when the config has no publish.site_url.
 if [ -z "${NO_UPLOAD:-}" ] && [ -z "${NO_PUBLISH:-}" ] && [ -n "${JARVIS_PUBLISH_URL:-}" ]; then
   VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD" ./scripts/release/publish.sh

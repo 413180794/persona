@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """End-to-end check of Persona's messages for the model in the web's main conversation (#2360, docs/protocol.md
-「Persona 注入的消息」): a task's notice (unmarked, as an older hub sends it) and a daily task's run (marked injected)
+"Messages Persona injects"): a task's notice (unmarked, as an older hub sends it) and a daily task's run (marked injected)
 show as one centered line each, never the words for the model; the notice's line opens its task, the run's line
 shows what the task asks.
 

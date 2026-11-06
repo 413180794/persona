@@ -82,7 +82,7 @@ def main():
             fh.write(f"{f}\t{t:.2f}\t{ok}\t{n}\n")
     print(f"DONE id-cli {out}: {len(times)} shots in {time.time() - t0:.0f} s "
           f"({sum(1 for t in times if not t[2])} not settled)")
-    if restarts:  # mock_scenarios.py had to start the hub again: shots around then may show 连接中…
+    if restarts:  # mock_scenarios.py had to start the hub again: shots around then may show "Connecting..."
         print(f"WARNING the mock hub was restarted {len(restarts)} time(s): {restarts}")
 
 

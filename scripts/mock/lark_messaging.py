@@ -1,4 +1,11 @@
-""""""
+"""The messaging extension point over the mock's Feishu (MOCK_MESSAGING=1, #2138, docs/extension-messaging.md).
+
+The mock answers /api/v1/messaging/lark/… the way the Lark extension will: it reads its own /api/v1/lark/… (every
+Feishu fixture of the mock: MOCK_LARK, the trainer's, brave_climb, encryption, pins…) and turns the answers into the
+protocol's shapes, with the vendor's handling (brave_climb decoded, sealed messages opened or covered, cards turned into
+views) done here, not in the app. The settings page is the extension's `display` page (POST /api/v1/extensions/
+larkext/-/ui/display).
+"""
 import base64
 import json
 import re
@@ -28,7 +35,7 @@ def source():
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# [removed] (the extension's own handling now): decode for reading, encode for sending.
+# The brave_climb encoding (the extension's own handling now): decode for reading, encode for sending.
 
 def climb_encode(text):
     n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
@@ -251,7 +258,7 @@ def forwarded(m):
 
 
 def climb_parts(parts):
-    """"""
+    """The parts with their brave_climb words decoded (a run of text parts joined first), and whether any were."""
     out, decoded, i = [], False, 0
     while i < len(parts):
         if parts[i].get("kind") != "text":
@@ -274,7 +281,8 @@ def climb_parts(parts):
 
 
 def message(m, display):
-    """"""
+    """One Feishu message as the protocol's, with the extension's handling: retained recall content and edit history
+    only as the display settings allow, brave_climb decoded while the switch is on, a sealed message opened or covered."""
     sender = {"name": m.get("sender_name") or ""}
     if m.get("sender_id"):
         sender["id"] = m["sender_id"]
@@ -816,7 +824,7 @@ def pins(handler, lark, seg, method, query, body):
 
 
 def settings_page(handler, body):
-    """The extension's display settings page (extension_page `display`): the switches as fields, saved on 保存."""
+    """The extension's display settings page (extension_page `display`): the switches as fields, saved on "Save"."""
     req = json.loads(body or b"{}")
     lark = _Lark(handler, "")
     status, d = lark.json("GET", "/message-display")

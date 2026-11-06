@@ -8,7 +8,7 @@ import time
 class HistoryFixture:
     def __init__(self, account, window, push, chats=None, ago=None):
         self.account, self.window, self.push = account, window, push
-        # 回到最新 (#1034): a chat opened at its first unread message. Every reset gives it a new id, so no test finds
+        # "Back to latest" (#1034): a chat opened at its first unread message. Every reset gives it a new id, so no test finds
         # the newest messages of an earlier one in the app's cache.
         self.chats, self.ago, self.jumps = chats if chats is not None else [], ago, 0
         # The ids must not come back after a restart either: the app keeps a chat's newest messages by its id.

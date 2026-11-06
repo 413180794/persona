@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""App icon: 纸色, the hand-drawn helper waving on warm paper (#709, picked by the user in 2026-11). The art was
+"""App icon: "Paper", the hand-drawn helper waving on warm paper (#709, picked by the user in 2026-11). The art was
 generated and chosen, not drawn here: the iPhone set's icon.png (light) and icon-dark.png (dark) are it, 1024, RGB,
 no alpha. This derives the rest from them: the tinted look, the watch icon (the light one; the system masks it round),
 the Mac sizes and docs/icon-preview.png:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of the phone shell (#1996): the sidebar drawer dragged open and shut with real touches (CDP
 Input.dispatchTouchEvent), Esc and Back closing it, its focus and inert, the drawer's first screen reaching the Agents,
-「助手 | Agents」 with the buttons in the same place on both pages, the pane tabs sharing the width, an old /s/ link
+"Assistant | Agents" with the buttons in the same place on both pages, the pane tabs sharing the width, an old /s/ link
 becoming its /t/, the pages that load on demand, the offline empty state, and a landscape notch clear of the drawer.
 
 Needs a running web page against the fake hub with split tabs (MOCK_SPLIT_TABS=1) and Playwright for Python (it
@@ -414,7 +414,7 @@ def offline(browser, base, token, shots):
         if shots:
             page.wait_for_timeout(300)
             page.screenshot(path=os.path.join(shots, f"offline-{theme}.png"))
-        # back online: a tap on 重试 brings the page back
+        # back online: a tap on "Retry" brings the page back
         page.unroute("**/api/v1/**")
         page.evaluate("window.__hubDown = false")
         retry.tap()

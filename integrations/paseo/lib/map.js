@@ -1,4 +1,4 @@
-// Pure mapping between Paseo's shapes and Persona's (docs/paseo.md「映射」): an agent → a session row, its timeline →
+// Pure mapping between Paseo's shapes and Persona's (docs/paseo.md "Mapping"): an agent → a session row, its timeline →
 // items, its providers → launchers, a permission request ↔ an interaction and its answer. No I/O: the bridge
 // (bridge.js) hands in what the daemon said; the tests feed recorded shapes.
 
@@ -100,7 +100,7 @@ export function defaultProvider(entries = [], roots = {}) {
 /**
  * The id a Paseo agent has in Persona, undefined while it has none: the label Persona left on it (it started or took
  * the session over); else, for Claude Code, its Claude session id — the id the same conversation has everywhere in
- * Persona (未运行, herdr) — once Paseo has one; else paseo-<agent id>.
+ * Persona ("Offline", herdr) — once Paseo has one; else paseo-<agent id>.
  */
 export function sessionIdOf(agent, roots = {}) {
   const l = agent?.labels?.[SESSION_LABEL]
@@ -131,7 +131,7 @@ export function transcriptOf(agent, roots = {}) {
 }
 
 /**
- * A session row's status for an agent: needing you while a request waits, working, 未运行 when closed. Stopped (idle,
+ * A session row's status for an agent: needing you while a request waits, working, "Offline" when closed. Stopped (idle,
  * or a turn that failed): done while Paseo says it waits for you to look at it (requiresAttention, cleared once you
  * open it in Paseo), idle — seen — once it does not (#2831), as herdr's done / idle carry herdr's own seen state.
  * A Paseo without that flag: done once it has run a turn.
@@ -152,7 +152,7 @@ export function rowStatus(agent) {
 // ---- spaces ----
 
 /**
- * The Paseo project of a placement (docs/paseo.md「显示哪些会话」): a repository's checkout and all its worktrees, as
+ * The Paseo project of a placement (docs/paseo.md "Which sessions show"): a repository's checkout and all its worktrees, as
  * in Paseo's sidebar. The placement's projectKey is Paseo's project record id (its buildProjectPlacementForWorkspace),
  * not the project's own key. Undefined without a placement.
  */
@@ -234,7 +234,7 @@ export function projectSpaces(placed, canon = (p) => p) {
 }
 
 /**
- * The runtime.sessions row of an agent (docs/runtimes.md「列表」), undefined for one not listed.
+ * The runtime.sessions row of an agent (docs/runtimes.md "List"), undefined for one not listed.
  * @param {object} agent - an AgentSnapshotPayload
  * @param {{ project?: object, roots?: Record<string, string>, labels?: Record<string, string>, lastText?: string,
  *   spaceId?: string, spaceName?: string }} [o]
@@ -266,7 +266,7 @@ export function agentRow(agent, o = {}) {
     row.slot_id = agent.workspaceId
     row.slot_name = slotNameOf(p, cwd)
   }
-  // Its repository, for 按仓库 (#2840): Paseo keeps its worktrees under its own folder, where the path names none.
+  // Its repository, for "By repo" (#2840): Paseo keeps its worktrees under its own folder, where the path names none.
   const repo = p?.checkout?.isGit ? repoRootOf(p) : undefined
   if (repo) row.repo_root = repo
   if (row.agent === RUNTIME && o.labels?.[agent.provider]) row.agent_label = o.labels[agent.provider]

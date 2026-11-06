@@ -129,7 +129,7 @@ machine_platform m
 
 class DeployBuildsEveryPlatformTests(unittest.TestCase):
     def test_the_deploy_and_the_hub_carry_all_four_platforms(self):
-        # 重新部署 takes the node binary from the hub's bin/nodes, so the hub needs every platform a node can run.
+        # "Redeploy" takes the node binary from the hub's bin/nodes, so the hub needs every platform a node can run.
         text = DEPLOY.read_text()
         self.assertIn('PLATFORMS=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)', text)
         self.assertIn('for plat in "${PLATFORMS[@]}"; do\n  GOOS=${plat%-*} GOARCH=${plat#*-}', text)

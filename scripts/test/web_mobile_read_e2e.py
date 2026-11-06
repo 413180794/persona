@@ -93,7 +93,7 @@ def check_sizes(page, tag, body, secondary, group_min=None):
     fs = page.evaluate("() => getComputedStyle(document.querySelector('main [data-answer] .prose-j')).fontSize")
     if fs != body:
         fail(f"{tag}: the answer is {fs}, not {body}")
-    # the row's words (跑测试), in the open once the group is open
+    # the row's words ("run tests"), in the open once the group is open
     open_group(page)
     row = page.locator('main [data-action-row="Bash"] button span', has_text="跑测试").first.evaluate("e => getComputedStyle(e).fontSize")
     if row != secondary:
@@ -205,7 +205,7 @@ def check_viewer(page, tag):
     img = dlg.locator("img").first
     expect(img).to_be_visible()
     page.wait_for_timeout(400)
-    # the bottom bar (下载, 拷贝路径, 在文件页打开 …) fits the screen
+    # the bottom bar ("Download", "Copy path", "Open in Files" ...) fits the screen
     out = dlg.evaluate("""d => { const w = document.documentElement.clientWidth;
       return [...d.querySelectorAll(':scope > div:last-of-type button')].filter(b => { const r = b.getBoundingClientRect(); return r.left < 0 || r.right > w; }).length; }""")
     if out:
@@ -274,7 +274,7 @@ def check_long_press(page, tag):
 
 
 def check_revisit(page, tag):
-    """A work group left open shows its steps when the chat comes back (it stayed at 正在取 N 条)."""
+    """A work group left open shows its steps when the chat comes back (it stayed at "Fetching N")."""
     go(page, READ)
     open_group(page)
     go(page, GROUPS)

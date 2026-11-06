@@ -3,7 +3,7 @@
     python3 scripts/test/test_extension_schema.py
 
 Each schema/extension/examples/<Definition>.<name>.json must validate against that definition, each file under
-examples/invalid/ must not. The validator below knows the subset the generator does (README「子集」) and nothing more.
+examples/invalid/ must not. The validator below knows the subset the generator does (README "Subset") and nothing more.
 """
 
 import json
@@ -205,7 +205,7 @@ class ExtensionSchemaTests(unittest.TestCase):
                     self.assertEqual(self.v.validate("View", c["view"]), [])
 
     def test_showcase_snapshots_hold_to_the_schema(self):
-        # examples/showcase/<page>.json: every page of the 组件展示 extension (persona-extensions, #1852), which each
+        # examples/showcase/<page>.json: every page of the component showcase extension (persona-extensions, #1852), which each
         # app's screenshot tests draw; copied from the extension's snapshots/.
         pages = sorted((SCHEMA_DIR / "examples" / "showcase").glob("*.json"))
         self.assertGreater(len(pages), 30)

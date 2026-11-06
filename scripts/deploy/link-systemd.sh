@@ -1,5 +1,5 @@
 #!/bin/bash
-# Kept for old notes: jarvis-link looks after its systemd user service itself now (docs/link.md「Linux（headless）」).
+# Kept for old notes: jarvis-link looks after its systemd user service itself now (docs/link.md "Linux (headless)").
 #   ./scripts/deploy/link-systemd.sh install     # = ~/.jarvis/bin/jarvis-link install
 #   ./scripts/deploy/link-systemd.sh restart     # after a new ~/.jarvis/bin/jarvis-link (install again does the same)
 #   ./scripts/deploy/link-systemd.sh uninstall   # = ~/.jarvis/bin/jarvis-link uninstall

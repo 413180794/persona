@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Restart a hub over and over while a client watches, and check that the client could not tell (docs/hub-restart.md
-「怎么验证」).
+"How to verify").
 
 What runs at the same time:
   - a probe: GET /api/v1/health every 100 ms; any refused / failed request is a failure (socket activation: a

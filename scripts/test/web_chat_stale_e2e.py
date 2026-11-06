@@ -2,7 +2,7 @@
 """End-to-end check of the chat page's safety net under its live stream (#3139): the fake hub writes a reply and moves the
 session's updated_at but drops the items push (/mock/say?drop=1), and the page must still show the reply within seconds
 (it asks for `items?after_seq=` once, silently, without reloading), must not ask more often than every 10 s, and after
-repeated recoveries says 「不是实时的」 with a reload that clears it.
+repeated recoveries says "Not live" with a reload that clears it.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome, or the
 bundled Chromium when there is none):

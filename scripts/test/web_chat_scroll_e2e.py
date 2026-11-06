@@ -135,7 +135,7 @@ def scrolled_up_stays(page, what):
     if abs(after["top"] - m["top"]) > 2:
         fail(f"{what}: a reader who scrolled up was moved from {m['top']} to {after['top']}")
     ok(f"{what}: scrolled up, content landing does not pull the reader back")
-    down = page.locator("[data-jump-pill]")  # 跳到底部 (有新消息 once something came in)
+    down = page.locator("[data-jump-pill]")  # "Jump to bottom" ("New messages" once something came in)
     down.wait_for(state="visible")
     down.click()
     at_end(page, what + ", 跳到底部")

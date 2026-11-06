@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of the web sidebar's folding groups (#1417): 「其他 Agent」 (agents outside any space) folds from its
+"""End-to-end check of the web sidebar's folding groups (#1417): "Other agents" (agents outside any space) folds from its
 title like every other group, shows what wants a look while folded, and stays folded after a reload; under every
-grouping (按仓库 / 按项目 / 按状态 / 按机器 / 按待办) each group's title folds it; on a touch screen the fold arrow shows.
+grouping ("By repo" / "By project" / "By status" / "By machine" / "By to-do") each group's title folds it; on a touch screen the fold arrow shows.
 
 Needs a running web page against the fake hub with sources outside any space (MOCK_SOURCES=1) and Playwright for
 Python (it drives the installed Chrome):
@@ -11,7 +11,7 @@ Python (it drives the installed Chrome):
     python3 scripts/test/web_sidebar_fold_e2e.py http://127.0.0.1:5297 [--shots <dir>]
 
 Prints one line per check and a verdict; exits 1 on the first failure. --shots saves the sidebar in light / dark,
-「其他 Agent」 open and folded.
+"Other agents" open and folded.
 """
 import argparse
 import os
@@ -41,7 +41,7 @@ def rows_inert(page, title):
 
 
 def toggle(btn):
-    # the title's empty end: a 按待办 group's name is a link to its todo
+    # the title's empty end: a "By to-do" group's name is a link to its todo
     box = btn.bounding_box()
     btn.click(position={"x": box["width"] - 3, "y": box["height"] / 2})
 
@@ -77,7 +77,7 @@ def run(browser, base, token, shots):
     page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('fold:')).forEach(k => localStorage.removeItem(k)); localStorage.setItem('jarvis.agentGrouping', 'space'); localStorage.setItem('jarvis.theme', 'light')")
     page.reload()
 
-    # 1. 「其他 Agent」 is a toggle with a count; with an agent in it that wants a look it starts open.
+    # 1. "Other agents" is a toggle with a count; with an agent in it that wants a look it starts open.
     loose = header(page, LOOSE)
     expect(loose).to_be_enabled()
     expect(loose).to_have_attribute("aria-expanded", "true")
@@ -151,7 +151,7 @@ def run(browser, base, token, shots):
     ctx.new_cdp_session(page).send("Emulation.setEmulatedMedia", {"features": [{"name": "hover", "value": "none"}]})
     page.goto(base + "/overview?token=" + token)
     expect(page.locator("main").get_by_role("button", name="侧边栏").first).to_be_visible()
-    # 「其他 Agent」 is 按项目's (a new browser groups 按机器, where the machines' titles fold the same way)
+    # "Other agents" is "By project"'s (a new browser groups "By machine", where the machines' titles fold the same way)
     page.evaluate("localStorage.setItem('jarvis.agentGrouping', 'space')")
     page.reload()
     page.locator("main").get_by_role("button", name="侧边栏").first.click()

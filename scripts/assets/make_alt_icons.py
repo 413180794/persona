@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""The home screen icons of the built-in 形象 (设置 › 外观 › 形象, docs/persona.md「App 图标」), and the previews the app
+"""The home screen icons of the built-in looks (Settings › Appearance › Persona, docs/persona.md "App icon"), and the previews the app
 draws them with in its own pages.
 
-The 形象 decides the icon (AppIconChoice): 团子, the default, is the app's own `AppIcon` (make_icon.py), with a set
-for each fixed look (`AppIcon-PaperLight` / `…Dark`, for 设置 › 外观 › 深浅色); 面罩, 汇流, 像素, 晶面 and 软糖 are their faces drawn by
+The look decides the icon (AppIconChoice): Dango, the default, is the app's own `AppIcon` (make_icon.py), with a set
+for each fixed look (`AppIcon-PaperLight` / `…Dark`, for Settings › Appearance › Light / Dark); Mask, Confluence, Pixel, Facet and Gummy are their faces drawn by
 the app's own PersonaFace (rendered on this Mac by persona_face/main.swift, so the icon is the face the app shows)
 on a square ground. Each set has any / dark / tinted (iOS 18 home screen looks); the previews are image sets
 (any + dark) of every icon, the default one included, read from its own icon set. Rerun after changing a drawing:
@@ -28,8 +28,8 @@ FACE_SOURCE = os.path.join(ROOT, "apple/Shared/Design/PersonaFace.swift")
 # The face's share of the icon's side: the disc sits inside the home screen's squircle with room around it.
 FACE_SHARE = 0.80
 
-# 面罩 in the default style's accent (system blue), 汇流 in teal, 像素 in indigo, 晶面 in purple, 软糖 in orange: the
-# icon cannot follow 主题色, so each has its own.
+# Mask in the default style's accent (system blue), Confluence in teal, Pixel in indigo, Facet in purple, Gummy in orange: the
+# icon cannot follow the theme color, so each has its own.
 # Ground: the light icon's pale wash of the accent, the dark one's near-black of it.
 FACES = {
     "AppIcon-Visor": ("visor", (0, 122, 255), (232, 241, 255), (9, 16, 30)),
@@ -82,7 +82,7 @@ def kept(name):
     return light, dark, tinted_from(dark)
 
 
-# The icons that follow the app's 深浅色 (AppIconChoice.fixedLooks): set-name prefix → the set the pictures come from.
+# The icons that follow the app's light / dark mode (AppIconChoice.fixedLooks): set-name prefix → the set the pictures come from.
 FIXED_LOOKS = {"AppIcon-Paper": "AppIcon"}
 
 # Preview image set: the icon set it shows. The default's is read from the app icon (scripts/assets/make_icon.py).
@@ -123,7 +123,7 @@ def write_preview(name, icon_set):
     write_json(os.path.join(folder, "Contents.json"), {
         "images": [
             # No scale: one picture for every scale and platform. Marked 3x, the Mac (1x / 2x only) found no image and
-            # 设置's header showed an empty tile there; both views that draw it are resizable.
+            # Settings' header showed an empty tile there; both views that draw it are resizable.
             {"filename": "preview.png", "idiom": "universal"},
             {"appearances": [{"appearance": "luminosity", "value": "dark"}], "filename": "preview-dark.png",
              "idiom": "universal"},
@@ -137,7 +137,7 @@ def main():
         binary = build_renderer(workdir)
         for name, (design, accent, light_ground, dark_ground) in FACES.items():
             write_icon_set(name, *face_icon(binary, workdir, design, accent, light_ground, dark_ground))
-    # 设置 › 外观 › 深浅色 set to 浅色 / 深色 (#710): for the icons that follow it, a set with only that look whatever the
+    # Settings › Appearance › Light / Dark set to Light / Dark (#710): for the icons that follow it, a set with only that look whatever the
     # home screen is (tinted as usual).
     for prefix, source in FIXED_LOOKS.items():
         light, dark, tinted = kept(source)

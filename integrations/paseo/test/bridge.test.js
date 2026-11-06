@@ -136,7 +136,7 @@ test('a rewind in Paseo goes to the phone as another history, even when the time
   ])
   await call(node, 'session.watch', { session_id: id, since_seq: 0 })
   await until('the subscription made', () => [...fake.subs.values()].some((s) => s.kind === 'timeline'))
-  // Rewound to before "二": a new epoch, two entries.
+  // Rewound to before the second entry: a new epoch, two entries.
   fake.setTimeline(a.codex.id, [
     entry(1, { type: 'user_message', text: '一', messageId: 'u1' }),
     entry(2, { type: 'assistant_message', text: '答一' }),

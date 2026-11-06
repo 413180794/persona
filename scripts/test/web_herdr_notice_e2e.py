@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""End-to-end check of the web Agents list's「<电脑> 的 herdr 没在运行」row with 启动 (#1916): a row only for the
-machine whose herdr is down; 启动 turns it to 正在启动… (the button kept unseen, not pressable) and then the row goes,
-the node asked once; a start that fails says why in words (not the node's English) and keeps 启动, the raw text and
-request id behind 复制详情.
+"""End-to-end check of the web Agents list's "herdr is not running on <computer>" row with "Start" (#1916): a row only for the
+machine whose herdr is down; "Start" turns it to "Starting..." (the button kept unseen, not pressable) and then the row goes,
+the node asked once; a start that fails says why in words (not the node's English) and keeps "Start", the raw text and
+request id behind "Copy details".
 
 Needs a running web page against the fake hub (its GET /mock/herdr?stopped=&start= picks which machine is down and how
-启动 goes) and Playwright for Python:
+"Start" goes) and Playwright for Python:
 
     PORT=18871 python3 scripts/mock/mock_hub.py &
     (cd web && PERSONA_HUB_URL=http://127.0.0.1:18871 npx vite --port 5871 --strictPort &)

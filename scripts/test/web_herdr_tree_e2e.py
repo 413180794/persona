@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of the sidebar's 按机器 tree (machine → herdr workspace → tab, #1963): the default grouping, folding
+"""End-to-end check of the sidebar's "By machine" tree (machine → herdr workspace → tab, #1963): the default grouping, folding
 machines and workspaces (kept across a reload), a tab row opening its most urgent pane under /t/…, the chat's pane tabs,
 the old /s/ links, a tab whose ids changed, the tree in the narrow drawer, and Enter making a new line on a touch screen.
 
@@ -78,7 +78,7 @@ def desktop(browser, base, token, shots):
     page.set_default_timeout(10000)
     fresh(page, base, token)
 
-    # 1. A browser that never picked a grouping gets 按机器; the offline machine starts folded.
+    # 1. A browser that never picked a grouping gets "By machine"; the offline machine starts folded.
     expect(page.get_by_role("button", name="Agent 分组：按机器")).to_be_visible()
     expect(tree_header(page, "服务器")).to_have_attribute("aria-expanded", "true")
     expect(tree_header(page, "NAS")).to_have_attribute("aria-expanded", "false")

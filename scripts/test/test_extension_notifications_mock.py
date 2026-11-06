@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""扩展通知专用 mock 的回归；不监听端口、不发通知、不访问生产数据。"""
+"""Regression tests for the extension notification mock; no port is opened, no notification is sent, no production data is read."""
 import importlib.util
 import json
 from pathlib import Path

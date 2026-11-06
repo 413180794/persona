@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of who gets what in the terminal's 完整界面 (herdr's own client, #2700, docs/terminal.md 第二十六节)
+"""End-to-end check of who gets what in the terminal's "Full view" (herdr's own client, #2700, docs/terminal.md section 26)
 against the fake hub's made-up herdr client, which turns on mouse reporting and bracketed paste as the real one does,
 opens a pane menu on a right-click report and types a bracketed paste at its prompt.
 
@@ -316,7 +316,7 @@ def checks(browser, port, shots):
     page.locator('[data-surface="shown"] .xterm').click()
     n = mark(port)
     assert page.evaluate("navigator.platform") == "MacIntel"
-    page.get_by_role("button", name="显示按键栏").click()  # its 复制 key is enabled while xterm holds a selection
+    page.get_by_role("button", name="显示按键栏").click()  # its "Copy" key is enabled while xterm holds a selection
     x, y = point_in(page, "On branch main")  # on a word of the shell pane
     right_click(page, x, y)
     wait_inputs(port, n, "\x1b[<2;", "the right press on a Mac")

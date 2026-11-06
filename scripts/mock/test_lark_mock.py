@@ -1,6 +1,6 @@
 """The mock hub's Feishu chat lists decode in the app: every chat carries the keys the app's LarkConversation requires,
-which the hub always sends (server/internal/lark/feed.go, no omitempty). 设置 › 翻译 › 飞书会话 failed with 「未能读取数据，
-因为数据丢失。」 on the mock while they were missing."""
+which the hub always sends (server/internal/lark/feed.go, no omitempty). Settings › Translation › Lark chats failed with "The data couldn't be read
+because it is missing." on the mock while they were missing."""
 import json
 import os
 from pathlib import Path
@@ -90,7 +90,7 @@ class LarkTopicGroupTests(unittest.TestCase):
         self.assertEqual([m["position"] for m in page["messages"] if m.get("sender_type") == "bot"], ["401", "402", "403"])
 
     def test_the_topic_group_has_recalled_and_edited_topics(self):
-        # 风灵月影 on topic cards: an edited topic with an old version, recalled topics kept and not kept by the Lark gateway, and
+        # The gateway's message display on topic cards: an edited topic with an old version, recalled topics kept and not kept by the Lark gateway, and
         # a recalled reply (kept) as the edited topic's newest.
         page = self.hub.get("/api/v1/lark/conversations/f4/messages?topic=1")
         by = {m["position"]: m for m in page["messages"]}
@@ -128,7 +128,7 @@ class LarkDeliveryProofTests(unittest.TestCase):
 
 
 class LarkMeasuringTests(unittest.TestCase):
-    """The switches docs/testing.md「卡顿测量」 measures the Feishu pages with (#674)."""
+    """The switches docs/testing.md "Measuring jank" measures the Feishu pages with (#674)."""
 
     def test_rich_history_has_cards_pictures_and_posts(self):
         hub = MockHub(MOCK_LARK_RICH="1")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live check of the 完整界面 conflicts (#2700) against a REAL herdr client: the fake hub runs `herdr session attach <name>`
+"""Live check of the "Full view" conflicts (#2700) against a REAL herdr client: the fake hub runs `herdr session attach <name>`
 in a PTY (MOCK_TERMINAL_FULL_EXEC) and relays its bytes the way the node does. A plain right click must open herdr's own
 pane menu and not Persona's; Shift + right click must open Persona's and not herdr's; a screenshot pasted with Ctrl+V must
 arrive in the focused pane as its path (herdr passes the bracketed paste on to the shell).

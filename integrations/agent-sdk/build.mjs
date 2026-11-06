@@ -1,4 +1,4 @@
-// Bundles src/bridge.mjs and the Agent SDK into dist/bridge.mjs, the one file the node runs (README.md「构建」).
+// Bundles src/bridge.mjs and the Agent SDK into dist/bridge.mjs, the one file the node runs (README.md "Build").
 // The SDK's Claude Code binary (its optional per-platform packages) stays out: the node passes the machine's claude
 // as pathToClaudeCodeExecutable.
 

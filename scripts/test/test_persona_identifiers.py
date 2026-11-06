@@ -1,4 +1,4 @@
-"""无需 Android SDK 的源码改名兼容契约检查；不替代 Gradle 或升级实测。"""
+"""Source-level rename compatibility checks that need no Android SDK; not a substitute for Gradle or a real upgrade test."""
 import re
 import unittest
 import xml.etree.ElementTree as ET

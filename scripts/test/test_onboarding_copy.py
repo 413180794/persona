@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Guards the words a new user reads while getting started (docs/onboarding.md 8.1「文案守门」).
+"""Guards the words a new user reads while getting started (docs/onboarding.md 8.1 "Copy guard").
 
     python3 -m unittest -v test_onboarding_copy      (from scripts/test; CI runs every scripts/**/test_*.py)
 
 The setup card, the main conversation's coded errors, the login page, adding a computer, the first steps of the model
-wizard and the empty states must not ask a beginner to know hub.json, a token (配对码 is fine), jq, personad, TLS, a
+wizard and the empty states must not ask a beginner to know hub.json, a token ("pairing code" is fine), jq, personad, TLS, a
 node, herdr, a launcher, localhost or a ~/. path. SCOPES lists where those words are read, in every language the
 client has: the web's i18n catalogs, Android's string resources, the hub's catalogs (the words it sends for the codes
 and the readiness). Apple scopes resolve source keys through the shared String Catalog, independent of its development
@@ -28,8 +28,8 @@ import apple_l10n
 import swift_literals
 
 
-# The words, each a pattern that does not fire inside a longer ASCII word (Chinese next to it is fine: 「用token登录」 is
-# caught, 「https」 is not TLS). Case does not matter. The ja catalogs spell some of them in katakana.
+# The words, each a pattern that does not fire inside a longer ASCII word (Chinese next to it is fine: "token" right after a Chinese word is
+# caught, "https" is not TLS). Case does not matter. The ja catalogs spell some of them in katakana.
 BANNED = [
     ("hub.json", r"hub\.json"),
     ("token", r"(?<![A-Za-z])tokens?(?![A-Za-z])|トークン"),
@@ -87,8 +87,8 @@ SCOPES = [
     Scope("web/home", "json", WEB + "home.json"),
     Scope("web/assistant-persona", "json", WEB + "assistant-persona.json"),
     Scope("web/personaassistant", "json", WEB + "personaassistant.json"),
-    # Zero computers / zero sources (#4485, #4480): 新建 Agent's empty 电脑 field, the inbox's sources, the composer's
-    # 还没发出去 line, 设置 › 通用's line under 运行在.
+    # Zero computers / zero sources (#4485, #4480): "New agent"'s empty "Computer" field, the inbox's sources, the composer's
+    # "Not sent yet" line, Settings › General's line under "Runs on".
     Scope("web/newagent-no-computer", "json", WEB + "newagent.json", r"^no_computer_"),
     Scope("web/lib-inbox-sources", "json", WEB + "lib-inbox-sources.json"),
     Scope("web/chat-composer-blocked", "json", WEB + "chat-composer.json", r"^blocked_hint$"),
@@ -103,7 +103,7 @@ SCOPES = [
     Scope("server/assistant-models_probe", "json", SERVER + "assistant-models_probe.json"),
     # The assistant_offline refusal's text.
     Scope("server/hub-assistant_link", "json", SERVER + "hub-assistant_link.json"),
-    # Android: the first screen and pairing, the 准备清单, the empty states.
+    # Android: the first screen and pairing, the checklist, the empty states.
     Scope("android/settings-pairing", "android", "android/feature/settings/src/main/res/{dir}/strings_connect.xml",
           r"settings_pairing_"),
     Scope("android/settings-ready", "android", "android/feature/settings/src/main/res/{dir}/strings_core.xml", r"settings_ready_"),
@@ -114,7 +114,7 @@ SCOPES = [
     Scope("apple/welcome", "swift", "apple/Persona/Views/Settings/SettingsView.swift", "struct WelcomeView", langs=("zh-Hans",)),
     Scope("apple/agents-empty", "swift", "apple/Persona/Views/Chats/ChatsView.swift", r"\bempty[A-Z]\w*\s*=", langs=("zh-Hans",)),
     Scope("apple/machines", "swift", "apple/Persona/Views/Machines/MachinesView.swift", langs=("zh-Hans",)),
-    # 添加电脑 / 确认电脑 (#4196, docs/onboarding.md 4.2): the form, the steps for each system, the errors by code.
+    # "Add computer" / "Confirm computer" (#4196, docs/onboarding.md 4.2): the form, the steps for each system, the errors by code.
     Scope("apple/add-computer", "swift", "apple/Persona/Views/Machines/AddComputerView.swift", langs=("zh-Hans",)),
     Scope("apple/inbox", "swift", "apple/Persona/Views/Inbox/InboxView.swift", langs=("zh-Hans",)),
     Scope("apple/assistant", "swift", "apple/Persona/Views/Assistant/AssistantView.swift", langs=("zh-Hans",)),
@@ -122,13 +122,13 @@ SCOPES = [
     # The main conversation's readiness card, its help and the coded refusals (#4193).
     Scope("apple/readiness", "swift", "apple/Persona/Views/Assistant/ReadinessViews.swift", langs=("zh-Hans",)),
     Scope("apple/readiness-data", "swift", "apple/Shared/AssistantReadiness.swift", langs=("zh-Hans",)),
-    # The checklist after pairing and 设置's 「还有 N 步」 (#4195), the pairing sheet but for its 其他方式 (the command).
+    # The checklist after pairing and Settings' "N steps left" (#4195), the pairing sheet except for "Other ways" (the command).
     Scope("apple/checklist", "swift", "apple/Persona/Views/Assistant/OnboardingChecklist.swift", langs=("zh-Hans",)),
     Scope("apple/pair", "swift", "apple/Persona/Views/Settings/SettingsView.swift", "struct PairView", langs=("zh-Hans",)),
     Scope("apple/intents", "swift", "apple/Persona/Intents/IntentSupport.swift", langs=("zh-Hans",)),
 ]
 
-# (scope, key) → why a 高级 / 详情 section may say it. For swift the key is the literal.
+# (scope, key) → why an "Advanced" / "Details" section may say it. For swift the key is the literal.
 ALLOW = {
     ("web/login", "master_placeholder"): "登录页「高级」里用 hub 的总钥匙登录（Login.tsx 的 advanced Disclosure），只有自己装 hub 的人用",
     ("web/settings-providerwizard", "auth_bearer_hint"): "选了「自定义」才出现的网关表单（connect 步），说的是网关认的环境变量名；内置厂商只粘 Key，不经过这一步",

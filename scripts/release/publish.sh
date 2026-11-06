@@ -1,8 +1,8 @@
 #!/bin/bash
-# Publish jarvisd for anyone to install (docs/release.md「发布 jarvisd」): build the four binaries with the web client
+# Publish jarvisd for anyone to install (docs/release.md "Publishing jarvisd"): build the four binaries with the web client
 # inside (no skills in them: those live in each machine's ~/.jarvis/skills), and the connector jarvis-link for the
 # same four (the node service, docs/link.md), check them for private values, write the release manifest latest.json
-# (every file's sha256, docs/hub-update.md「发布」), then deploy the site/ worker with dl/ and install.sh added, at the
+# (every file's sha256, docs/hub-update.md "Publishing"), then deploy the site/ worker with dl/ and install.sh added, at the
 # config's publish.site_url. Every hub of the release channel updates itself to it. The worker also runs the push
 # relay (/relay/*): it is deployed with it.
 #
@@ -90,7 +90,7 @@ BUILD="$(date -u +%Y%m%d%H%M)"
 VERSION="${VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD}"
 COMMIT="$(git rev-parse HEAD)"
 # A release is the committed code: latest.json says which commit and lists every one it contains, and a hub
-# installs a release by itself only when its own commit is among them (docs/hub-update.md「防退回」). Published with
+# installs a release by itself only when its own commit is among them (docs/hub-update.md "No rollback"). Published with
 # changes not committed, every hub running it would wait for a person from then on. The binaries say which commit
 # they are (STAMP, "-dirty" only in a NO_DEPLOY build).
 STAMP="$COMMIT"
@@ -116,7 +116,7 @@ cp -R web/dist/. "$WEBDIST/"
 # Public dependency constants are classified by build-info checksums; verify the actual module cache before building.
 (cd server && go mod verify)
 LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$STAMP -X main.updateURL=$JARVIS_PUBLISH_URL/dl"
-# The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md「自动更新」), from integrations/.
+# The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
 (cd server && go generate ./internal/runtimepkg)
 # -tags public changes no code (no file builds differently with it, TestOneBuild): it marks the binary for
 # check_bundle_privacy.py, which then knows the dependency constants it may skip.
@@ -165,7 +165,7 @@ done
 (cd "$OUT/bin" && shasum -a 256 jarvisd-*.gz jarvis-link-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
 # The manifest hubs update from: version, build number, commit and every download's sha256 (not signed, the user's
-# call: it guards against a broken download over HTTPS, docs/hub-update.md「安全」).
+# call: it guards against a broken download over HTTPS, docs/hub-update.md "Security").
 "$host_bin" release manifest --dir "$OUT/bin" --version "$VERSION" --build "$BUILD" --commit "$COMMIT" --out "$OUT/bin/latest.json"
 
 # The site with dl/ and install.sh added, deployed from a copy (site/ in the tree stays as committed).

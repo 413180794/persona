@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """End-to-end check of a task the model service cut off (#1516), in the web's main conversation: its agent's turn ended
-in an API error, so its receipt is red (「整理发布说明 中断了」, why in words, 继续), not a green 完成 with the error as
-its summary; its card says 中断了 with 继续, and the dock has it in red. 继续 sends one retry; the card goes to 进行中 and
-the receipt folds to a quiet line, and once the agent finishes the card is 待查看.
+in an API error, so its receipt is red ("<task> Interrupted", why in words, "Continue"), not a green "Done" with the error as
+its summary; its card says "Interrupted" with "Continue", and the dock has it in red. "Continue" sends one retry; the card goes to "Active" and
+the receipt folds to a quiet line, and once the agent finishes the card is "Unread".
 
 Needs a running web page against the fake hub with a cut-off task (MOCK_TASKS=1 MOCK_TASKS_CUT=1; GET /mock/cut puts
 it back) and Playwright for Python (it drives the installed Chrome):

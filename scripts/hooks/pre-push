@@ -1,7 +1,7 @@
 #!/bin/bash
 # Refuse a push whose commits would bring private values (scripts/privacy_check.py --range) toward master: what each
 # pushed branch adds on top of origin/master, with the commit messages. Install: git config core.hooksPath scripts/hooks
-# Only this machine's values are known (its config, private-words.txt, CLAUDE.local.md): see docs/testing.md「隐私扫描」.
+# Only this machine's values are known (its config, private-words.txt, CLAUDE.local.md): see docs/testing.md "Privacy scan".
 set -u
 root="$(git rev-parse --show-toplevel)"
 base="$(git rev-parse --verify -q refs/remotes/origin/master || true)"

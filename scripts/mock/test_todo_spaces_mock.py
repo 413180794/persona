@@ -1,4 +1,4 @@
-"""测试 mock_hub 对待办整组挂空间 (todo spaces) 相关接口与字段的支持。"""
+"""Tests mock_hub's support for the todo spaces endpoints and fields (attaching a whole space to a to-do)."""
 import json
 import os
 from pathlib import Path
@@ -71,7 +71,7 @@ class TodoSpacesMockTests(unittest.TestCase):
         self.assertEqual(weather["spaces"][1]["space"], "docs")
         self.assertEqual(weather["spaces"][1]["machine_id"], "studio")
 
-        # 检查 agents 的 source 和 via 字段
+        # Check the agents' source and via fields
         agents = {a["session_id"]: a for a in weather["agents"]}
         # WIDGET & TESTS: source=space
         self.assertEqual(agents["a1f3c2d4-0000-4000-8000-000000000001"]["source"], "space")
@@ -81,13 +81,13 @@ class TodoSpacesMockTests(unittest.TestCase):
         self.assertEqual(agents["a1f3c2d4-0000-4000-8000-000000000008"]["via"], "macbook/a1f3c2d4-0000-4000-8000-000000000001")
 
     def test_put_and_delete_space(self):
-        # 把 studio 的 blog 工作区整组挂到 todo_blog
+        # Attach studio's whole blog workspace to todo_blog
         space_name = quote("blog")
         res = self.request(f"/api/v1/todos/todo_blog/spaces/studio/{space_name}", method="PUT")
         self.assertTrue(res["ok"])
         self.assertGreaterEqual(res["linked"], 1)
 
-        # 验证 GET /todos 中已包含该 space
+        # GET /todos now includes the space
         data = self.request("/api/v1/todos")
         blog_todo = next(t for t in data["todos"] if t["id"] == "todo_blog")
         self.assertTrue(any(sp["machine_id"] == "studio" and sp["space"] == "blog" for sp in blog_todo["spaces"]))
@@ -95,28 +95,28 @@ class TodoSpacesMockTests(unittest.TestCase):
         self.assertEqual(blog_agent["source"], "space")
         self.assertEqual(blog_agent["via"], "studio/blog")
 
-        # 移出 space
+        # Detach the space
         del_res = self.request(f"/api/v1/todos/todo_blog/spaces/studio/{space_name}", method="DELETE")
         self.assertTrue(del_res["ok"])
 
-        # 验证 GET /todos 中该 space 及随项目挂上的 agent 已被移除
+        # GET /todos no longer has the space or the agents attached with it
         data2 = self.request("/api/v1/todos")
         blog_todo2 = next(t for t in data2["todos"] if t["id"] == "todo_blog")
         self.assertFalse(any(sp["machine_id"] == "studio" and sp["space"] == "blog" for sp in blog_todo2["spaces"]))
         self.assertFalse(any(a["session_id"] == "a1f3c2d4-0000-4000-8000-000000000003" for a in blog_todo2["agents"]))
 
     def test_put_space_conflict_and_permissions(self):
-        # 只读角色
+        # Read-only role
         with self.assertRaises(HTTPError) as cm:
             self.request("/api/v1/todos/todo_weather/spaces/macbook/weather", method="PUT", role="readonly")
         self.assertEqual(cm.exception.code, 403)
 
-        # 待办不存在
+        # No such to-do
         with self.assertRaises(HTTPError) as cm:
             self.request("/api/v1/todos/nonexistent/spaces/macbook/weather", method="PUT")
         self.assertEqual(cm.exception.code, 404)
 
-        # 待办已完成 409
+        # To-do already done: 409
         with self.assertRaises(HTTPError) as cm:
             self.request("/api/v1/todos/todo_done_1/spaces/macbook/weather", method="PUT")
         self.assertEqual(cm.exception.code, 409)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Live sessions against the truth, on every machine: is each herdr pane listed with the session it really runs, and is
-a Codex pane whose turn is open listed as working? (docs/archive/lanes/session-verify.md 「正在进行中的会话」)
+a Codex pane whose turn is open listed as working? (docs/archive/lanes/session-verify.md "Sessions in progress")
 
 Run on the hub machine: python3 live_panes_check.py [machine id…]
 Reads ~/.jarvis/hub.json (token, machines), asks the hub's /api/v1/sessions, runs pane_probe.py on each machine

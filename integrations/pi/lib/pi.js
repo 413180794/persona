@@ -17,7 +17,7 @@ import { ALLOW_ENTRY, alwaysAllowed, branchItems, branchKey, entryItems, firstTe
 export const RUNTIME_VERSION = '0.3.0'
 const DISK_EVERY = 30_000 // ms: list the sessions on disk at most this often (pi-web)
 const TERMINAL_HOSTS = new Set(['herdr', 'terminal']) // resumed in the machine's terminal engine, not in pi-web
-const RELOAD_COMMAND = 'jarvis-reload' // the command a session runs on itself to load a new version (docs/pi.md「自动更新」)
+const RELOAD_COMMAND = 'jarvis-reload' // the command a session runs on itself to load a new version (docs/pi.md "Auto-update")
 const IDLE_EVERY = 5000 // ms: how often to look whether the process is idle enough to switch versions
 
 /**
@@ -38,7 +38,7 @@ const IDLE_EVERY = 5000 // ms: how often to look whether the process is idle eno
  *   maxSessions?: number, retryMs?: number, pushDelayMs?: number, listDisk?: boolean, runtime?: string,
  *   instance?: string, update?: { name: string, hash: string, store: string, exit?: (hash: string) => void } }} [options]
  *   listDisk: list the recent sessions on disk too, and start new ones (the companion; needs web). update: this code
- *   runs from a version in a store (selfPackage), so it takes the node's version (docs/pi.md「自动更新」): installs it
+ *   runs from a version in a store (selfPackage), so it takes the node's version (docs/pi.md "Auto-update"): installs it
  *   as the store's current, then — exit given (the companion) — calls exit for its supervisor to start the new code,
  *   or reloads this process's sessions onto it once they are all idle and no card of theirs is on the phone.
  *   instance: this process's identity on the node, kept by the next version's host in the same process.
@@ -399,7 +399,7 @@ export function createPiHost(deps, options = {}) {
     const name = e.toolName ?? e.name
     if (!approve.has(name)) return undefined
     const entries = ctx.sessionManager.getEntries()
-    if (alwaysAllowed(entries, name)) return undefined // 总是同意 on an earlier card of this session
+    if (alwaysAllowed(entries, name)) return undefined // "Always allow" on an earlier card of this session
     const input = e.input ?? e.args ?? {}
     const summary = summaryOf(name, input)
     /** The phone's answer: { out } when it answered (out undefined = allowed), undefined when nobody did there. */
@@ -435,7 +435,7 @@ export function createPiHost(deps, options = {}) {
     return { block: true, reason: '没有人批准（没有界面，手机也没回答）' }
   }
 
-  // ---- the node's version (docs/pi.md「自动更新」) ----
+  // ---- the node's version (docs/pi.md "Auto-update") ----
 
   /** Every session of this process is between turns and no card of this runtime waits on the phone. */
   function idle() {

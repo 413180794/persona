@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of 重试 on a task whose agent did not start (#1396), in the web's main conversation: the failed task
-card has 重试 next to 移除 and is the one place that says why (#4145): the plan says nothing more and the receipt is one
-line pointing at the card, with no second 重试. Tapped, the card turns to starting where it is (no second card) and the
+"""End-to-end check of "Retry" on a task whose agent did not start (#1396), in the web's main conversation: the failed task
+card has "Retry" next to "Remove" and is the one place that says why (#4145): the plan says nothing more and the receipt is one
+line pointing at the card, with no second "Retry". Tapped, the card turns to starting where it is (no second card) and the
 pointer folds to a quiet line; once the agent is up the card follows it. A retry
 that fails again puts the card back with the new error, still one receipt; with the machine offline it says so.
 
@@ -86,7 +86,7 @@ class Page:
         expect(self.card.get_by_role("button", name="重试")).to_be_visible()
         expect(self.card.get_by_role("button", name="移除")).to_be_visible()
         expect(self.card).to_contain_text(error)
-        # said once (#4145): no red banner, no plan line repeating the error, one 重试 in the chat
+        # said once (#4145): no red banner, no plan line repeating the error, one "Retry" in the chat
         expect(self.banner).to_have_count(0)
         expect(self.plan_line).to_have_count(0)
         expect(self.pointer).to_have_count(1)

@@ -1,4 +1,4 @@
-// Pure mapping from pi session entries to Persona items (docs/pi.md「映射」). No I/O: the runtime (pi.js) hands in the
+// Pure mapping from pi session entries to Persona items (docs/pi.md "Mapping"). No I/O: the runtime (pi.js) hands in the
 // session's entries (file order) and its current branch; the tests feed recorded shapes.
 //
 // seq: an entry's 1-based position in the session file (pi appends only, so it is stable and grows). A page shows only
@@ -15,14 +15,14 @@ export const toolName = (name) => appToolName(name, OWN_TOOLS)
 
 // Where a session last ran, as the extension records it in the session (a custom entry, not in the model's context):
 // "herdr", "terminal" (pi's TUI outside herdr) or "pi-web". A session that ran in a terminal is resumed in the
-// machine's terminal engine (herdr), one from pi-web in pi-web (docs/pi.md「谁管理会话」).
+// machine's terminal engine (herdr), one from pi-web in pi-web (docs/pi.md "Who manages a session").
 export const HOST_ENTRY = 'jarvis-host'
 
-// A tool the user allowed for the rest of a session on the phone (总是同意 on an approval card): a custom entry too, so a
+// A tool the user allowed for the rest of a session on the phone ("Always allow" on an approval card): a custom entry too, so a
 // session resumed in another pi process does not ask about it again.
 export const ALLOW_ENTRY = 'jarvis-allow'
 
-/** Whether a session's entries hold 总是同意 for tool (pi's own name). */
+/** Whether a session's entries hold "Always allow" for tool (pi's own name). */
 export function alwaysAllowed(entries, tool) {
   return entries.some((e) => e?.type === 'custom' && e.customType === ALLOW_ENTRY && e.data?.tool === tool)
 }
@@ -141,7 +141,7 @@ export function entryItems(entry, seq) {
   return out
 }
 
-/** An image item's payload in a page: its bytes come from session.image (docs/protocol.md「数据类型」Item.image). */
+/** An image item's payload in a page: its bytes come from session.image (docs/protocol.md "Data types" Item.image). */
 const placeholder = (mime) => ({ mime: typeof mime === 'string' && mime ? mime : 'image/png', data: '', lazy: true })
 
 /** The image block the item at index of an entry stands for (as entryItems numbers them), undefined for others. */

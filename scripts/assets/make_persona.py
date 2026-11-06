@@ -2,9 +2,9 @@
 """Makes a persona package (docs/persona.md): Jarvis's name, face, the animated dot in the Jarvis tab's top bar and
 the colors, from a few pictures of a character.
 
-  python3 scripts/assets/make_persona.py new --id doudou --name 豆豆 a.jpg b.jpg c.jpg   # generate, then build
+  python3 scripts/assets/make_persona.py new --id doudou --name Doudou a.jpg b.jpg c.jpg   # generate, then build
   python3 scripts/assets/make_persona.py generate --work W a.jpg b.jpg [--only think,sleep] [--force]
-  python3 scripts/assets/make_persona.py build --work W --id doudou --name 豆豆 [--out DIR]
+  python3 scripts/assets/make_persona.py build --work W --id doudou --name Doudou [--out DIR]
   python3 scripts/assets/make_persona.py demo --out DIR      # an original placeholder (the mock hub, UI tests)
   python3 scripts/assets/make_persona.py check DIR           # the hub's and the app's rules, no hub needed
   python3 scripts/assets/make_persona.py install DIR [--hub HOST]   # to the hub's ~/.jarvis/personas/<id>/
@@ -45,14 +45,14 @@ MAX_FILE = 4 << 20
 MAX_TOTAL = 16 << 20
 # A package built into personad rides along with every hub update: the whole of it at most this.
 BUILTIN_BUDGET = 5 << 20
-# about: the second line of the look's card in 设置 › 外观 › 形象 (like 「颜色随主题色」), characters without spaces.
+# about: the second line of the look's card in Settings › Appearance › Persona (like "colors follow the theme color"), Chinese written without spaces.
 ABOUT_MAX = 10
 # The app's readability floors (StyleSpecTests): white words on the accent, words on the user's bubble, the accent as
 # a link on the page (white in light, black in dark).
 FLOOR_ON_ACCENT = 3.5
 FLOOR_BUBBLE = 4.5
 FLOOR_LINK = 3.0
-# 需要你 (StatusPalette.needsYou, light): the ring of the dot that calls you.
+# "Needs you" (StatusPalette.needsYou, light): the ring of the dot that calls you.
 NEEDS_YOU = (0xE5, 0x48, 0x4D)
 
 # The poses generate draws, in order; an edit starts from the pose it names so the two stay the same picture.
@@ -638,7 +638,7 @@ class Frames:
                 for i in range(n)], 10
 
     def needs_you(self):
-        """The wave's two beats inside a ring that pulses in 需要你's red (12 frames, 6 fps)."""
+        """The wave's two beats inside a ring that pulses in "Needs you"'s red (12 frames, 6 fps)."""
         n = 12
 
         def ring(i):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""在部署前检查 Workers 静态资源的单文件限制。"""
+"""Check the Workers per-file limit on static assets before deploying."""
 from pathlib import Path
 import sys
 

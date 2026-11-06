@@ -12,7 +12,7 @@ mkdir -p "$ROOT" && chmod 700 "$ROOT"
 url() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("database_url",""))' "$CFG" 2>/dev/null || true; }
 
 # No docker on the hub machine: the database is one set up by hand (the distribution's own Postgres, docs/server.md
-# 「数据库」) and hub.json's database_url points at it. Nothing to create here; only check that it answers.
+# "Database") and hub.json's database_url points at it. Nothing to create here; only check that it answers.
 if ! command -v docker >/dev/null 2>&1; then
   [ -n "$(url)" ] || { echo "no docker and no database_url in hub.json: install docker, or set up Postgres yourself (docs/server.md)" >&2; exit 1; }
   if command -v pg_isready >/dev/null 2>&1; then

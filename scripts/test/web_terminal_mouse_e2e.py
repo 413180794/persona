@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of the mouse on a terminal the web page drives (#2441): press / drag / release with the button and
 modifiers go to the hub as `terminal_input.mouse` (one drag event per cell), Shift keeps the pointer on the page (a
-selection in xterm, Persona's right-click menu), 本地选择 turns that around, a touch-less watcher sends nothing, and the
+selection in xterm, Persona's right-click menu), "Select locally" turns that around, a touch-less watcher sends nothing, and the
 wheel is untouched.
 
 Needs the fake hub with terminals (and panes), a running web page against it, and Playwright for Python (the installed
@@ -72,7 +72,7 @@ class Grid:
     def __init__(self, page):
         screen = page.locator('section[aria-label="终端"] > div:not(.invisible) .xterm-screen').first
         self.box = screen.bounding_box()
-        # the 接管 / 只看 switch carries the grid (data-grid="44x30"; its hint says it in columns and rows)
+        # the "Take over" / "Watch" switch carries the grid (data-grid="44x30"; its hint says it in columns and rows)
         m = re.fullmatch(r"(\d+)x(\d+)", page.locator("[role=radiogroup][data-grid]").first.get_attribute("data-grid") or "")
         assert m, "the switch does not carry the grid"
         cols, self.rows = int(m.group(1)), int(m.group(2))

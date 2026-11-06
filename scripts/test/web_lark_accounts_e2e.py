@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""End-to-end check of the web page's Feishu accounts (#1321, docs/feishu.md「多账号」): the 消息 page's account chips,
-a chat of the second account read and named as that account, its inbox item opening in it, and 设置 › 连接器 listing
+"""End-to-end check of the web page's Feishu accounts (#1321, docs/feishu.md "Multiple accounts"): the "Messages" page's account chips,
+a chat of the second account read and named as that account, its inbox item opening in it, and Settings › Connectors listing
 the accounts.
 
 Needs a running web page against the fake hub with two Feishu accounts and Playwright for Python:
@@ -60,7 +60,7 @@ def run(browser, base, token, shots):
     page.goto(base + "/?token=" + token)
     page.evaluate("localStorage.setItem('lark.homeMessages', '1'); localStorage.removeItem('lark.account')")
 
-    # 1. 消息: the hub's own account first, a chip per signed-in account (not the signed-out one).
+    # 1. "Messages": the hub's own account first, a chip per signed-in account (not the signed-out one).
     page.goto(base + "/messages")
     accounts = page.get_by_role("group", name="飞书账号")
     expect(accounts.get_by_role("button")).to_have_count(2)
@@ -70,7 +70,7 @@ def run(browser, base, token, shots):
     expect(page.locator('[data-chat="f2"]').first).to_be_visible()
     ok("消息 lists the hub's own account's chats, chips for the two signed-in accounts")
 
-    # 2. 工作号: its own chats, read as account 2.
+    # 2. The work account: its own chats, read as account 2.
     lark.clear()
     work.click()
     expect(work).to_have_attribute("aria-pressed", "true")
@@ -89,12 +89,12 @@ def run(browser, base, token, shots):
     ok("工作号's chat is read with ol_account=2, its header says 工作号")
     shot("messages-second-chat")
 
-    # 4. The choice is kept: a reload stays on 工作号.
+    # 4. The choice is kept: a reload stays on the work account.
     page.goto(base + "/messages")
     expect(page.get_by_role("group", name="飞书账号").get_by_role("button").nth(1)).to_have_attribute("aria-pressed", "true")
     ok("the account choice survives a reload")
 
-    # 5. The inbox item from 工作号 opens its chat in that account.
+    # 5. The inbox item from the work account opens its chat in that account.
     lark.clear()
     page.goto(base + "/inbox/" + "lark%3Aaccount%3A2%3Aw1%3A10")
     expect(page.get_by_text("下周一前把排期填一下").first).to_be_visible()
@@ -102,7 +102,7 @@ def run(browser, base, token, shots):
     ok("工作号's inbox item opens its chat with ol_account=2")
     shot("inbox-second")
 
-    # 6. 设置 › 连接器: every account, the default one marked, the signed-out one too.
+    # 6. Settings › Connectors: every account, the default one marked, the signed-out one too.
     page.goto(base + "/settings?tab=connectors")
     for i in ("1", "2", "3"):
         expect(page.locator(f'[data-account="{i}"]')).to_be_visible()

@@ -1,15 +1,15 @@
 # The hub as a container image (docs/docker.md): jarvisd hub with the web client inside, and every node build for the
-# app's 重新部署. Built for linux/amd64 and linux/arm64 (.github/workflows/hub-image.yml); the binaries are cross
+# app's "Redeploy". Built for linux/amd64 and linux/arm64 (.github/workflows/hub-image.yml); the binaries are cross
 # compiled on the build machine, only the last stage runs on the target platform.
 #
 #   docker build -t jarvis-hub .
 #
-# No skills are inside: the assistant's come from ~/.jarvis/skills on its machine (docs/hub-update.md「skill 从二进制里拿出来」).
+# No skills are inside: the assistant's come from ~/.jarvis/skills on its machine (docs/hub-update.md "Skills out of the binary").
 
 FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-# Packages the project keeps in web/vendor/ (SheetJS publishes its current releases only as a tarball, docs/web.md「表格」).
+# Packages the project keeps in web/vendor/ (SheetJS publishes its current releases only as a tarball, docs/web.md "Spreadsheets").
 COPY web/vendor/ ./vendor/
 # A lockfile written against a mirror names the mirror's host, which no other network can reach: refuse it rather
 # than fail later in npm (docs/lessons/server.md).
@@ -26,7 +26,7 @@ COPY spec/fixtures/injected/ /src/spec/fixtures/injected/
 RUN npm run build --ignore-scripts
 
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
-# VERSION: what the hub reports and compares with its nodes' (a node of another build gets 重新部署). The image's
+# VERSION: what the hub reports and compares with its nodes' (a node of another build gets "Redeploy"). The image's
 # hub never replaces itself (channel docker): it says when a newer image is out (docs/hub-update.md), looking up the
 # tags of IMAGE (the workflow passes ghcr.io/<owner>/<repo>) unless the compose file says which image it runs.
 ARG VERSION=dev
@@ -38,7 +38,7 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /src/web/dist/ internal/hub/webdist/
-# The runtime packages jarvisd carries and keeps its runtimes on (docs/runtimes.md「自动更新」): the DSH plugin's and
+# The runtime packages jarvisd carries and keeps its runtimes on (docs/runtimes.md "Auto-update"): the DSH plugin's and
 # the pi extension's, the Paseo bridge's and the Agent SDK bridge's code.
 COPY integrations/agent-sdk/ /src/integrations/agent-sdk/
 COPY integrations/dsh/ /src/integrations/dsh/

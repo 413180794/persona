@@ -1,6 +1,6 @@
 #!/bin/bash
 # Optionally slim a simulator for UI tests with simslim (https://github.com/mobai-app/simslim): turns off the
-# background services the tests don't use (docs/testing.md「UI 测试」). Without simslim it changes nothing.
+# background services the tests don't use (docs/testing.md "UI tests"). Without simslim it changes nothing.
 #   scripts/app/slim-sim.sh <udid> [profile]   # profile: default apple/simslim/default.json
 # Usually called by scripts/app/sim-boot.sh (the entry that picks the profile and never reboots a booted simulator).
 # Run it after taking the ui lock (it boots the simulator) and before the tests. A shut-down simulator ends up

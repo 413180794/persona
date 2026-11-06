@@ -3,7 +3,7 @@
 A case is a function taking a `T`. `run(cases, setup, runs, launch)` launches the app once, calls `setup(t)` before each
 case (no relaunch: the mock is reset and the app moved back to where the case starts), times every case, prints one line
 per run and a summary, and exits non-zero when any run failed. A failed run leaves the screen as it was then in
-CLITEST_OUT (default <tmp>/clitest)/<time>/<case>-<run>/: `dump`. docs/runtime-cli.md「用 CLI 写的 UI 用例」.
+CLITEST_OUT (default <tmp>/clitest)/<time>/<case>-<run>/: `dump`. docs/runtime-cli.md "UI cases written with the CLI".
 """
 import base64
 import json
@@ -34,7 +34,7 @@ def mock(c, path):
 
 
 def allow_alerts(c, wait=4):
-    """A system alert over the app (the notification prompt an earlier `xcodebuild test` leaves) answered with 允许.
+    """A system alert over the app (the notification prompt an earlier `xcodebuild test` leaves) answered with "Allow".
     System alerts are not in the app's own tree: found through `idb ui describe-all`."""
     deadline = time.time() + wait
     while time.time() < deadline:

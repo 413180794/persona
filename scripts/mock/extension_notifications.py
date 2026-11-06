@@ -1,4 +1,4 @@
-"""只在专用 mock 中运行的扩展通知夹具，所有动作只记录在内存里。"""
+"""Extension notification fixture that runs only in its own mock; every action is only recorded in memory."""
 import json
 import threading
 

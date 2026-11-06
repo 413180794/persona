@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of 设置 › 模型供应商 (#2455, docs/launchers.md): the three-step add wizard (pick → connect → models,
-高级 folded), 测试连接 passing and failing, 获取模型列表, the advanced fields coming back when a provider is reopened, a PUT
-that leaves out what was not touched, and 从 ~/.zshrc 导入 (preview, merge, the outdated and offline computers).
+"""End-to-end check of Settings › Model providers (#2455, docs/launchers.md): the three-step add wizard (pick → connect → models,
+"Advanced" folded), "Test" passing and failing, "Fetch models", the advanced fields coming back when a provider is reopened, a PUT
+that leaves out what was not touched, and "Import from ~/.zshrc" (preview, merge, the outdated and offline computers).
 
 Needs the web page against the fake hub with MOCK_PROVIDERS=1 and Playwright for Python:
 
@@ -94,7 +94,7 @@ def wizard(r):
     r.shot("wizard-connect")
     ok("测试连接 passes in 412 ms with the first discovered model; 获取模型列表 finds 3")
 
-    # step 3: pick, set the default, edit a context window, add one by hand, fill 高级
+    # step 3: pick, set the default, edit a context window, add one by hand, fill "Advanced"
     d.get_by_role("button", name="下一步").click()
     rows = d.get_by_role("list", name="模型").locator("li")
     expect(rows).to_have_count(3)

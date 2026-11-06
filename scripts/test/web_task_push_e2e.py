@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""End-to-end check of a scheduled task's 跑完推送 in the web (#2570, docs/assistant.md「跑完推送」): the editor shows
-每次 / 只在它自己提醒时 when the hub has the task_push feature; picking the second hides 接着原来的对话, says what it
-means, and saves push "asked"; the list marks the task; picking 每次 again saves "".
+"""End-to-end check of a scheduled task's "Push when done" in the web (#2570, docs/assistant.md "Push when done"): the editor shows
+"Every time" / "Alerts only" when the hub has the task_push feature; picking the second hides "Continue the original chat", says what it
+means, and saves push "asked"; the list marks the task; picking "Every time" again saves "".
 
     PORT=18832 python3 scripts/mock/mock_hub.py &
     (cd web && PERSONA_HUB_URL=http://127.0.0.1:18832 npx vite --port 5332 --strictPort &)
@@ -76,7 +76,7 @@ def case(browser, base, hub, token, size, theme, shots):
     ok(f"{tag}: saved push asked, in its own conversation")
     page.keyboard.press("Escape")
     page.wait_for_timeout(400)
-    # Its own row: the mock hub has another task that already pushes only when it alerts (项目巡检).
+    # Its own row: the mock hub has another task that already pushes only when it alerts ("project patrol").
     expect(page.locator('[role="button"]', has_text=TASK).filter(has_text="只在提醒时推送").first).to_be_visible()
     ok(f"{tag}: the list marks it")
     if shots:

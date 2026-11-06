@@ -18,7 +18,7 @@ the "Apple Distribution" identity in the login keychain (see docs/release.md).
   python3 scripts/release/asc_signing.py --only <bundle id>  # just that target (the others' profiles stay untouched)
 
 The App Group itself (group.<bundle id>, or config.json app.app_group) can't be made or put on an App ID through the
-API, only on the developer website (docs/release.md「App Group」): each profile is checked for it, and a missing one
+API, only on the developer website (docs/release.md "App Group"): each profile is checked for it, and a missing one
 prints those steps.
 """
 import base64

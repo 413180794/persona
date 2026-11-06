@@ -3,11 +3,11 @@
 # the one you work in):
 #   JARVIS_CODEX_BINS="codex /path/to/other/codex" JARVIS_CODEX_DAEMON_BINS="/path/to/codex-0.163" \
 #     JARVIS_CODEX_ARGS="-m <model>" ./scripts/test/test-codex.sh
-# JARVIS_CODEX_BINS: the terminal route (docs/codex.md「提问和审批」). JARVIS_CODEX_DAEMON_BINS: the app-server route
-# (「守护进程上的会话」) — a `codex app-server` of the test's own on a private socket, a TUI attached with --remote, and the
+# JARVIS_CODEX_BINS: the terminal route (docs/codex.md "Questions and approvals"). JARVIS_CODEX_DAEMON_BINS: the app-server route
+# ("Sessions on the daemon") — a `codex app-server` of the test's own on a private socket, a TUI attached with --remote, and the
 # first of JARVIS_CODEX_BINS beside it to check it stays on the terminal route. Every case runs JARVIS_CODEX_ROUNDS
 # times (default 2); JARVIS_CODEX_COLS=<n> adds a run of each in a window that many columns wide; JARVIS_CODEX_CASES=a,b
-# runs only those. Starting a Codex from the phone (「从手机新建」): every JARVIS_CODEX_DAEMON_BINS on the test's own
+# runs only those. Starting a Codex from the phone ("New from the phone"): every JARVIS_CODEX_DAEMON_BINS on the test's own
 # app-server and as a launcher with -c, the first of JARVIS_CODEX_BINS as it is. JARVIS_CODEX_TESTS="cards daemon start"
 # (the default) picks which of the three run. The Codex use your ~/.codex login and send
 # real (small) model requests. Trusting the scratch folders writes them into ~/.codex/config.toml and each test thread

@@ -1,7 +1,7 @@
 """English-source Apple catalogs are complete in en / zh-Hans / ja, with compatible arguments and source keys.
 
 Runs `scripts/i18n/apple_l10n.py check` on the repository, and checks catalog validation, the Swift literal
-lexer and explicit localized-key matching. See docs/ios.md「界面语言」.
+lexer and explicit localized-key matching. See docs/ios.md "UI languages".
 """
 import copy
 import json

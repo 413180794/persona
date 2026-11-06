@@ -45,13 +45,13 @@ def identity():
 # Optional: this mock as one hub of a mesh group, so a client can be tried against several fake hubs (two groups, one
 # of them two hubs). With none of these set every answer is exactly what it was before.
 #   MOCK_HUB_ID=hub-b                    a fixed hub_id (otherwise a random uuid each run)
-#   MOCK_HUB_NAME=公司                    the mesh fields: hub_name in health / endpoints / hello, mesh in hello, and
+#   MOCK_HUB_NAME=Office                    the mesh fields: hub_name in health / endpoints / hello, mesh in hello, and
 #                                        hub_id / hub_name / machine_uid / route on every machine
-#   MOCK_MESH_PEERS='[{"hub_id":"hub-c","name":"公司 2","endpoints":["http://127.0.0.1:18762"]}]'
+#   MOCK_MESH_PEERS='[{"hub_id":"hub-c","name":"Office 2","endpoints":["http://127.0.0.1:18762"]}]'
 #                                        the group's other hubs, after this one in mesh.hubs (missing fields: defaults)
 #   MOCK_MACHINE_OWNER='{"macbook":"hub-c"}'   machines another hub of the group owns: its hub_id / hub_name,
 #                                        route via peer, 1 hop (the hub_id must be one of the peers)
-#   MOCK_MACHINE_NAMES='{"server":"工作服务器"}'   machines' display names (works without MOCK_HUB_NAME too)
+#   MOCK_MACHINE_NAMES='{"server":"Work server"}'   machines' display names (works without MOCK_HUB_NAME too)
 #   MOCK_MACHINES_KEEP=server,macbook     only these machines, and only their sessions and interactions (works alone too)
 # GET /mock/mesh: {hub_id, hub_name, peers, owners}; GET /mock/mesh?peers=<url-encoded JSON array> replaces the peers
 # (the next WebSocket's hello carries them; machines owned by a hub no longer among them drop out).
@@ -278,9 +278,9 @@ MACHINES = [
 if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose jarvisd is another build than the hub's
     MACHINES[2]["node_mismatch"] = True
 
-# ---------- node self-check (#2429, docs/machines.md「自检」) ----------
+# ---------- node self-check (#2429, docs/machines.md "Self-check") ----------
 # GET /api/v1/machines/{mid}/doctor and POST …/doctor/fix: the report `personad node doctor` prints, as the hub relays it.
-#   MOCK_DOCTOR=healthy (default) | stale (hooks and MCP files out of date, 修复 puts them right) | broken (node.sock gone)
+#   MOCK_DOCTOR=healthy (default) | stale (hooks and MCP files out of date, "Repair" puts them right) | broken (node.sock gone)
 #                | mixed (stale files, the user's own PermissionRequest hook, no runtime.sock) | old (the node has no such method)
 #                | error (the check fails) | slow (the check takes MOCK_DOCTOR_SECONDS, default 3)
 # MOCK_DOCTOR_OLD=macbook,studio   only these machines answer like an old node, whatever MOCK_DOCTOR says.
@@ -454,7 +454,7 @@ def sess(mid, sid, title, cwd, status, state, space, sidx, slot, slidx, minutes,
          "tab_id": f"w{sidx}:t{slidx}", "workspace_id": f"w{sidx}", "updated_at": ago(minutes=minutes),
          "last_text": last, "pending_interactions": pending, "rev": 1000}
     if agent == "claude":
-        s.update(permission_mode="default", effort="high", can_fork=True)  # 分支到新聊天 (#2137)
+        s.update(permission_mode="default", effort="high", can_fork=True)  # "Fork to new chat" (#2137)
     s.update(kw)
     return s
 
@@ -472,7 +472,7 @@ ASK2 = "b2e4d6f8-0000-4000-8000-000000000002"
 ASK3 = "b2e4d6f8-0000-4000-8000-000000000003"
 ASK4 = "b2e4d6f8-0000-4000-8000-000000000004"  # a long one (the top bar must not move as it scrolls)
 
-# MOCK_WORKFLOWS=1 (#2935, docs/protocol.md「workflows」): the widget agent's turn ended to wait for a workflow it runs in
+# MOCK_WORKFLOWS=1 (#2935, docs/protocol.md "workflows"): the widget agent's turn ended to wait for a workflow it runs in
 # the background (one earlier run was stopped). Each agent's transcript reads like a subagent's ("<session>@<agent>").
 MOCK_WORKFLOW_AGENTS = [
     ("wa1", "audit:timeline", "Audit", False, "时间线刷新预算没问题：每小时 1 次，在 WidgetKit 的限额里。"),
@@ -533,7 +533,7 @@ SESSIONS = [
          "计划写好了，等你批准后开始改。", pending=1, permission_mode="plan", effort="xhigh"),
     sess("server", ORDERS, "排查 /orders 接口变慢", "/home/me/code/shop-api", "working", "working", "shop-api", 1, "perf", 1, 1,
          "慢在订单列表的 N+1 查询，正在改成一次 JOIN 并补索引。", agent="codex",
-         # how Jarvis reaches it (docs/codex.md「守护进程上的会话」); MOCK_CODEX_ROUTE=terminal: the terminal, with why
+         # how Jarvis reaches it (docs/codex.md "Sessions on daemons"); MOCK_CODEX_ROUTE=terminal: the terminal, with why
          codex_route=os.environ.get("MOCK_CODEX_ROUTE", "app_server"),
          codex_route_note="不在共享的 app-server 上（带 -c 的启动器、在自己进程里跑的会话、没有守护进程的 0.153）"
          if os.environ.get("MOCK_CODEX_ROUTE") == "terminal" else None),
@@ -541,7 +541,7 @@ SESSIONS = [
          "搜索做好了，支持按食材和用时筛选。", space_kind=None, space_id=None, space_name=None, slot_id=None, slot_name=None),
 ]
 
-# #2430 agent-details: what the node reads off a transcript for the 「Agent 行显示详情」 line and the session header's
+# #2430 agent-details: what the node reads off a transcript for the "Show details on agent rows" line and the session header's
 # context bar — the model id as Claude Code records it, the latest reply's input tokens, the model's window. Some
 # sessions say nothing (no reply yet, a model the node does not know), as real ones do.
 _CONTEXT = {
@@ -632,7 +632,7 @@ if os.environ.get("MOCK_WORKFLOW") == "crowded":
                            "agents_running": 0, "started_at": ago(minutes=38), "ended_at": ago(minutes=30)}])
 
 # MOCK_WORKTREES=1 (#2108): the widget agent works in a working tree of weather's own, with an idle agent beside it; an
-# idle one in a second tree; and MacBook has a repository with nothing going on: every level of the Agents list's 按仓库.
+# idle one in a second tree; and MacBook has a repository with nothing going on: every level of the Agents list's "By repository".
 if os.environ.get("MOCK_WORKTREES") == "1":
     for _s in SESSIONS:
         if _s["session_id"] == WIDGET: _s.update(cwd="/Users/me/code/weather/.worktrees/widget")
@@ -665,7 +665,7 @@ if MOCK_MACHINES:
                              pending=1 if state == "needs_you" else 0))
 # MOCK_AGENTS=1: a long Agents list (AgentsListTests): ~120 agents, one big space with 35 finished-unread, a quiet
 # space, idle ones to fold. Sessions marked seen (WS "seen" or POST …/seen) turn idle; GET /mock/seen lists them.
-# MOCK_QUIET=1: a quiet space (two seen agents, nothing running) under 空闲的空间, for screenshots of its card
+# MOCK_QUIET=1: a quiet space (two seen agents, nothing running) under "Idle spaces", for screenshots of its card
 # (`-openQuietSpaces YES` opens it).
 # MOCK_QUIET=order: only one quiet space, with tab order deliberately different from activity order.
 if os.environ.get("MOCK_QUIET"):
@@ -697,7 +697,7 @@ if os.environ.get("MOCK_AGENTS"):
                                      status, state, proj, sidx, "t%d" % slot, slot, n * 3,
                                      "第 %d 个 Agent 的最新一句话，看看细列表和卡片里会不会挤在一起。" % n,
                                      pending=1 if state == "needs_you" else 0))
-# MOCK_TREE=1: a mid-size Agents tree for screenshots of 电脑 → 空间 → 会话: every online machine gets quiet spaces
+# MOCK_TREE=1: a mid-size Agents tree for screenshots of Computer → Space → "Conversation": every online machine gets quiet spaces
 # (all finished and seen) that sit folded at the bottom of their machine, and one muted agent (GET /api/v1/mutes).
 # (Read straight from the environment: the module's MOCK_TREE is the files tree further down.)
 TREE_MUTED = []
@@ -721,10 +721,10 @@ if os.environ.get("MOCK_TREE"):
                                  minutes, "「%s」这一步做完了，结果写在最后一条回复里。" % title, **extra))
             if title == "调学习率预热":
                 TREE_MUTED.append("%s/%s" % (mid, sid))
-# 同时显示 botmux 会话 per machine (PUT /api/v1/machines/{mid}/botmux); unset is on, as on a real hub.
+# "Show botmux sessions too" per machine (PUT /api/v1/machines/{mid}/botmux); unset is on, as on a real hub.
 BOTMUX_ON: dict = {}
 
-# MOCK_BOTMUX=1: a botmux session (docs/engines.md「botmux」) that needs you, with botmux's reason and its Feishu topic
+# MOCK_BOTMUX=1: a botmux session (docs/engines.md "botmux") that needs you, with botmux's reason and its Feishu topic
 # (attention_reason, external_url), a working one with only the topic, and one botmux stopped on an error
 # (failure_reason).
 BOTMUX_BLOCKED = "b0700000-0000-4000-8000-000000000001"
@@ -741,7 +741,7 @@ if os.environ.get("MOCK_BOTMUX"):
         sess("server", BOTMUX_WORKING, "1104 | 功能 | 看板筛选", "/home/me/code/report", "working", "working", "", 0, "", 0, 1,
              "筛选条件加好了，在补测试。", **_bmx, pane_id="botmux:" + BOTMUX_WORKING,
              external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t2"),
-        # botmux stopped its turn on an error (its own notice): done, with failure_reason, not 「需要你」.
+        # botmux stopped its turn on an error (its own notice): done, with failure_reason, not "Needs you".
         sess("server", BOTMUX_FAILED, "1104 | 功能 | 干货整理", "/home/me/code/report", "done", "idle", "", 0, "", 0, 3,
              "标题改好了。", **_bmx, pane_id="botmux:" + BOTMUX_FAILED,
              failure_reason="⚠️ Claude 本轮执行失败，且当前错误不能安全自动续跑。请检查 Web 终端和模型服务状态后，再发送一条消息继续。",
@@ -778,8 +778,8 @@ if os.environ.get("MOCK_ORCA_CHILDREN"):
         _orca("c2073000-0000-4000-8000-000000000004", "续期的文档", "refresh-docs", 4, "done", "unread", 3, "文档写好了。", parent="session-refresh"),
         _orca("c2073000-0000-4000-8000-000000000005", "登录埋点", "login-metrics", 5, "done", "unread", 6, "埋点加好了，等你看。", parent="main"),
     ]
-# MOCK_MANUAL_HERDR=1: two agents opened by hand in herdr (started_by_jarvis false) on no todo: Agents' 按待办 lists them
-# in 手动开的 (#2608 web, #2917 iOS / Mac).
+# MOCK_MANUAL_HERDR=1: two agents opened by hand in herdr (started_by_jarvis false) on no todo: Agents' "By to-do" lists them
+# in "Opened manually" (#2608 web, #2917 iOS / Mac).
 if os.environ.get("MOCK_MANUAL_HERDR"):
     SESSIONS += [
         sess("macbook", "a2917000-0000-4000-8000-000000000001", "试一下新的图表库", "/Users/me/code/sandbox", "working", "working",
@@ -789,7 +789,7 @@ if os.environ.get("MOCK_MANUAL_HERDR"):
     ]
 # MOCK_WORK=1: stopped agents the hub triaged (docs/agent-work.md): one done with its conclusion, one waiting for a
 # deploy the hub will wake it after, one cut off by a 503 the hub retries, one waiting for the user's decision on a card;
-# 设置 › 会话分诊 reads and writes TRIAGE.
+# Settings › Session triage reads and writes TRIAGE.
 TRIAGE = {"enabled": bool(os.environ.get("MOCK_WORK")), "auto_continue": bool(os.environ.get("MOCK_WORK")),
           "wake": bool(os.environ.get("MOCK_WORK")), "decide": bool(os.environ.get("MOCK_WORK"))}
 if os.environ.get("MOCK_WORK"):
@@ -811,7 +811,7 @@ if os.environ.get("MOCK_WORK"):
              work={"phase": "blocked", "on": "user", "line": "等你选 D2 / D4，要不要推到 beta"}),
     ]
 
-# MOCK_SOURCES=1: sessions that do not live in a terminal engine (docs/protocol.md「Codex 来源与能力」): a live Codex
+# MOCK_SOURCES=1: sessions that do not live in a terminal engine (docs/protocol.md "Codex sources and capabilities"): a live Codex
 # app-server thread the phone can write to and join (POST …/attach; joining lets it approve), a Codex history thread it
 # can only read, and an agent runtime's session (DSH: agent_label, no terminal) whose permission card has no
 # always_label, so it offers no "always allow".
@@ -890,8 +890,8 @@ if os.environ.get("MOCK_AGENT_MARKS"):
         SESSIONS.append(sess("server", sid, title, "/home/me/code/marks", status, state, MARKS_SPACE, 12, f"agent-{i}", i, mins,
                              "好的，我先看一下。", agent=agent, **extra))
 
-# MOCK_SPLIT_TABS=1: herdr's layout for the sidebar's 按机器 tree and the chat's pane tabs (#1963): two machines (the
-# NAS offline, its agent only under 最近), workspaces whose tabs hold one pane or two (claude and codex in one slot),
+# MOCK_SPLIT_TABS=1: herdr's layout for the sidebar's "By machine" tree and the chat's pane tabs (#1963): two machines (the
+# NAS offline, its agent only under "Recent"), workspaces whose tabs hold one pane or two (claude and codex in one slot),
 # and a botmux space without tabs.
 SPLIT_CLAUDE = "5b1170b5-0000-4000-8000-000000000001"
 SPLIT_CODEX = "5b1170b5-0000-4000-8000-000000000002"
@@ -937,10 +937,10 @@ if os.environ.get("MOCK_SPLIT_TABS"):
             if _used:
                 _s.update(model="claude-opus-5-5", context_tokens=_used, context_window=200_000)
 
-# MOCK_TAB_PANES=1: one herdr tab holding three agents (#2320): the 发起者 in the tab's first pane (pane_index 0) and two
+# MOCK_TAB_PANES=1: one herdr tab holding three agents (#2320): the "Initiator" in the tab's first pane (pane_index 0) and two
 # panes it split off (a Codex that stopped on a dialog on the computer, a Claude that is done), with herdr's real-looking
-# pane ids; beside it ordinary one-agent tabs and a tab whose top left pane is a shell (two peers, no 发起者). No cards,
-# so the overview files the three-agent tab under「停在电脑上」.
+# pane ids; beside it ordinary one-agent tabs and a tab whose top left pane is a shell (two peers, no "Initiator"). No cards,
+# so the overview files the three-agent tab under "On the computer".
 PANES_LEAD = "7ab5e000-0000-4000-8000-000000000001"
 PANES_REVIEW = "7ab5e000-0000-4000-8000-000000000002"
 PANES_TESTS = "7ab5e000-0000-4000-8000-000000000003"
@@ -984,7 +984,7 @@ if os.environ.get("MOCK_TAB_PANES"):
 ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
 SEEN = []  # session ids marked seen (GET /mock/seen)
 SESSION_CLOSE = {"fail": False, "attempts": [], "closed": [], "interactions": []}
-# 删除对话 (DELETE /api/v1/sessions/{mid}/{sid}): what was taken out, so /mock/reset puts it back.
+# Delete conversation (DELETE /api/v1/sessions/{mid}/{sid}): what was taken out, so /mock/reset puts it back.
 SESSION_DELETED = []
 PINS = {"spaces": ["macbook/weather"], "sessions": []}  # GET / PUT /api/v1/pins: what the Agents list keeps on top
 
@@ -1047,9 +1047,9 @@ ASSISTANT = [
     assistant_sess(ASK4, "整理这个季度的读书笔记", 60 * 50, "第 30 本整理好了。"),
 ]
 
-# MOCK_ORIGINS=1 (#3264, docs/protocol.md「助手对话的来源」): conversations the hub opened by itself — the inbox's AI 分身,
+# MOCK_ORIGINS=1 (#3264, docs/protocol.md "Assistant conversation sources"): conversations the hub opened by itself — the inbox's AI twin,
 # scheduled tasks, a Feishu /agent, one another conversation started — next to the user's own; one of them runs, one
-# waits for the user. The sidebar keeps them out of 最近 under 自动对话.
+# waits for the user. The sidebar keeps them out of "Recent" under "Automatic conversations".
 if os.environ.get("MOCK_ORIGINS") == "1":
     ASSISTANT[1]["origin"], ASSISTANT[1]["origin_ref"] = "task", "morning"
     ASSISTANT[1]["title"] = "1106 | 定时 | 早报"
@@ -1080,7 +1080,7 @@ ASSISTANT += [
     health_sess("hlth0003-0000-4000-8000-000000000003", "步数目标", 60 * 70, "最近 7 天平均 7,860 步，离每天 8,000 步差一点。"),
     health_sess("hlth0004-0000-4000-8000-000000000004", "今天吃了什么", 15, "今天吃了 1,830 kcal，还能吃 420 kcal。"),
 ]
-# The health space's reports/ (docs/health.md「体检报告」): originals with their records, an original not summarized yet,
+# The health space's reports/ (docs/health.md"Health reports"): originals with their records, an original not summarized yet,
 # a record alone (a photo sent in a conversation).
 HEALTH_REPORT_RECORD = "报告日期：2026-10-28\n机构：示例体检中心\n类型：年度体检\n\n| 项目 | 结果 | 单位 | 参考范围 | 异常 |\n| --- | --- | --- | --- | --- |\n| 总胆固醇 | 5.8 | mmol/L | < 5.2 | 偏高 |\n| 低密度脂蛋白 | 3.6 | mmol/L | < 3.4 | 偏高 |\n| 空腹血糖 | 5.1 | mmol/L | 3.9–6.1 | |\n\n结论：血脂略高，建议三个月后复查。\n"
 HEALTH_REPORTS_DIR = "/home/me/.jarvis/health/reports/"
@@ -1099,7 +1099,7 @@ HEALTH_MEMORY = [
      "updated_at": ago(days=6)},
 ]
 
-# ---------- the assistant's schedule (设置 › 助手 › 主动做事; Jarvis › 资料 › 定时任务) ----------
+# ---------- the assistant's schedule (Settings › Assistant › Act proactively; Jarvis › Info › Scheduled tasks) ----------
 # One list, like the hub's (assistant_schedule.go): every day at a time, every N minutes, or once. GET
 # /api/v1/assistant/tasks serves it whole; the routines (the daily tasks) and follow-ups (the enabled once / interval
 # ones, by their next run) are the hub's two older views of the same list, which the Android app reads and writes.
@@ -1109,7 +1109,7 @@ SCHEDULE_TZ = timezone(timedelta(hours=8))
 WEEKDAYS = [1, 2, 3, 4, 5]
 
 
-# MOCK_ASSISTANT_SIDEBAR=1: the Jarvis sidebar's 最近 holds more than the 30 it shows before 查看全部
+# MOCK_ASSISTANT_SIDEBAR=1: the Jarvis sidebar's "Recent" holds more than the 30 it shows before "View all"
 # (`AssistantSidebar.recentCount`), and one row in each state it marks at the end: waiting for you (red dot), unread
 # (blue dot), working (spinner).
 if os.environ.get("MOCK_ASSISTANT_SIDEBAR") == "1":
@@ -1120,10 +1120,10 @@ if os.environ.get("MOCK_ASSISTANT_SIDEBAR") == "1":
                   pending_interactions=1 if _state == "needs_you" else 0)
         ASSISTANT.append(_s)
 
-# MOCK_AUTO_CONVERSATIONS=1 (#3264, docs/protocol.md「助手对话的来源」): the hub says who opened each assistant
+# MOCK_AUTO_CONVERSATIONS=1 (#3264, docs/protocol.md "Assistant conversation sources"): the hub says who opened each assistant
 # conversation (`origin`, feature conversation_origin): the user's own say "user", and ten more were opened by Persona
-# itself: 收件箱's AI 分身 (one waits for the user, one works), scheduled tasks, 飞书 /agent and one conversation another
-# started. The sidebar keeps those in 自动对话; the list of conversations filters them by source.
+# itself: Inbox's AI twin (one waits for the user, one works), scheduled tasks, Lark /agent and one conversation another
+# started. The sidebar keeps those in "Automatic conversations"; the list of conversations filters them by source.
 if os.environ.get("MOCK_AUTO_CONVERSATIONS") == "1":
     for _s in ASSISTANT:
         _s.setdefault("origin", "user")
@@ -1175,7 +1175,7 @@ SCHEDULE = [
     {"id": "morning", "title": "早报", "prompt": "给我今天的早报，一屏以内，结论先行。", "repeat": "daily", "time": "09:00",
      "weekdays": WEEKDAYS, "enabled": True, "last_run": prev_at("09:00", WEEKDAYS, late=timedelta(minutes=3)),
      "last_session_id": ASK2, "last_status": "ok",
-     "run_machine_id": "server", "run_session_id": ASK2, "run_launcher": "claude",  # its own conversation (早报 · 周三)
+     "run_machine_id": "server", "run_session_id": ASK2, "run_launcher": "claude",  # its own conversation ("Morning briefing · Wednesday")
      "next_run": next_at("09:00", WEEKDAYS)},
     {"id": "fu_patrol", "title": "Agent 巡检", "prompt": "看看各台电脑上的 Agent：哪些在等我、哪些卡住了，有要我处理的就列出来；都正常就回一句。",
      "repeat": "interval", "every_minutes": 30, "at": later(minutes=12), "enabled": True, "created_by": "assistant",
@@ -1187,7 +1187,7 @@ SCHEDULE = [
     {"id": "rt_patrol", "title": "项目巡检", "prompt": "看看各台电脑上的 Agent 和昨晚的 CI，有卡住的就告诉我。", "repeat": "daily",
      "time": "22:00", "weekdays": [], "enabled": True, "created_by": "assistant", "last_run": prev_at("22:00", []),
      "last_session_id": ASK4, "last_status": "ok", "next_run": next_at("22:00", []),
-     "push": "asked"},  # 跑完推送: only what a run sends (#2396, #2676); the apps mark it on the row
+     "push": "asked"},  # "Notify after a run": only what a run sends (#2396, #2676); the apps mark it on the row
     {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "repeat": "daily", "time": "21:30", "weekdays": WEEKDAYS,
      "enabled": False, "last_run": prev_at("21:30", WEEKDAYS, back=1, late=timedelta(minutes=45)), "last_status": "skipped",
      "last_error": "Jarvis 停机，错过了时间"},
@@ -1200,7 +1200,7 @@ SCHEDULE = [
     {"id": "fu_call", "repeat": "once", "at": later(hours=9), "next_run": later(hours=9), "title": "提醒回电话",
      "prompt": "提醒我给物业回电话，问一下周末停水的安排。", "enabled": True, "created_by": "assistant", "machine_id": "server",
      "session_id": ASK3, "created_at": ago(hours=2)},
-    {"id": "fu_data", "title": "", "repeat": "once", "at": later(hours=70), "next_run": later(hours=70),  # untitled: 定时跟进
+    {"id": "fu_data", "title": "", "repeat": "once", "at": later(hours=70), "next_run": later(hours=70),  # untitled: "Scheduled follow-up"
      "prompt": "周五发周报前，把这周的数据再核对一遍，有对不上的列出来。", "enabled": True, "created_by": "assistant",
      "machine_id": "macbook", "created_at": ago(hours=5)},
 ]
@@ -1213,7 +1213,7 @@ def save_task(old, new):
     for k in ("launcher", "permission_mode", "effort"):
         if not t.get(k): t.pop(k, None)
     if not new.get("session_id"): t.pop("session_id", None)
-    # 跑完推送 (#2396): left out of an edit it stays; "asked" runs in the task's own conversation; "" is the default.
+    # "Notify after a run" (#2396): left out of an edit it stays; "asked" runs in the task's own conversation; "" is the default.
     if t.get("push") == "asked": t.pop("session_id", None)
     if not t.get("push"): t.pop("push", None)
     if t.get("repeat") == "daily":
@@ -1273,7 +1273,7 @@ def task_label(t):
 
 
 def record_run(kind, ref, title, session, due=None, machine="server"):
-    """A manual run, newest first, as the hub records 立即运行."""
+    """A manual run, newest first, as the hub records "Run now"."""
     at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     RUNS.insert(0, {"id": "run_" + uuid.uuid4().hex[:8], "kind": kind, "ref_id": ref, "title": title, "due": due or at, "at": at,
                     "status": "ok", "manual": True, "machine_id": machine, "session_id": session})
@@ -1305,13 +1305,13 @@ MEMORY = [
     {"name": "weekly-report.md", "content": "---\nname: weekly-report\ndescription: 周报先给草稿\nmetadata:\n  type: feedback\n---\n\n周报先给草稿，不要直接发。",
      "updated_at": ago(days=3)},
 ]
-SCHEDULE_RAN = []  # what 立即运行 started (UI tests read it back at /mock/schedule)
+SCHEDULE_RAN = []  # what "Run now" started (UI tests read it back at /mock/schedule)
 
-# ---------- where the assistant runs (设置 › 助手) ----------
-# What hub.json's assistant.notes says; the app's 关于我 replaces it once saved there (notes stops being None).
+# ---------- where the assistant runs (Settings › Assistant) ----------
+# What hub.json's assistant.notes says; the app's "About me" replaces it once saved there (notes stops being None).
 ASSISTANT_HUB_NOTES = "代码都在 ~/code 下，平时用 MacBook 开发。\n周报每周五下班前先给我草稿，不要直接发。\n服务器上的 /srv 目录不要动。"
 ASSISTANT_CONFIG = {"machine_id": "server", "launcher": "claude", "timezone": "Asia/Shanghai", "notes": None, "main": ASK1,
-                    "main_tasks_quiet": True}  # 主对话派的任务只在主对话里通知 (#1731), on by default
+                    "main_tasks_quiet": True}  # Notify tasks dispatched from the main chat only in that chat (#1731), on by default
 
 
 def assistant_state(space="", archived=False):
@@ -1331,7 +1331,7 @@ def assistant_state(space="", archived=False):
     return out
 
 
-# ---------- todos (待办, docs/todos.md) ----------
+# ---------- todos (To-dos, docs/todos.md) ----------
 TODOS_INIT = [
     {
         "id": "todo_weather",
@@ -1512,7 +1512,7 @@ TODOS_INIT = [
         "agents": [],
     },
     {
-        # A task done as asked but held short of live (docs/todos.md「交付」, #3306): stays open, says where it is held.
+        # A task done as asked but held short of live (docs/todos.md "Delivery", #3306): stays open, says where it is held.
         "id": "todo_held_pr",
         "title": "登录页加验证码",
         "notes": "登录页加图形验证码，走 PR 合并后部署。",
@@ -1527,7 +1527,7 @@ TODOS_INIT = [
         "agents": [],
     },
     {
-        # A task the hub closed itself (docs/todos.md「自动完成」).
+        # A task the hub closed itself (docs/todos.md "Automatic completion").
         "id": "todo_done_auto",
         "title": "统一连接器 logo 尺寸",
         "notes": "设置页里各个连接器的 logo 统一成同样大小、同一中心，走 PR 合并后发 TestFlight。",
@@ -1570,7 +1570,7 @@ TODOS_INIT = [
     },
 ]
 # MOCK_TODO_OFFLINE=1: the weather todo also has a project on the NAS, which is disconnected; its session there is
-# unknown (what the hub makes of a disconnected computer's sessions), so the todo's detail says 「当前没有 Agent」 (#1110).
+# unknown (what the hub makes of a disconnected computer's sessions), so the todo's detail says "No agents currently" (#1110).
 if os.environ.get("MOCK_TODO_OFFLINE") == "1" and not MOCK_MACHINES:
     TODOS_INIT[0]["spaces"].append({"machine_id": "nas", "space": "backup", "linked_at": ago(minutes=20)})
     SESSIONS.append(sess("nas", "a1f3c2d4-0000-4000-8000-0000000000b1", "备份照片库", "/home/me/backup", "unknown",
@@ -1639,7 +1639,7 @@ def is_read_only(h):
     return False
 
 
-# ---------- the knowledge base (Jarvis › 知识库, docs/knowledge.md) ----------
+# ---------- the knowledge base (Jarvis › Knowledge base, docs/knowledge.md) ----------
 KB = {
     "projects": [
         {"kind": "projects", "id": "weather-app", "name": "天气 App", "one_line": "小组件时间线已按小时刷新，等中号布局的降雨条",
@@ -1668,8 +1668,8 @@ KB = {
     "events": [],
 }
 KB_TAGS = {"projects": ["iOS", "前端", "个人"]}
-KB_UPDATES = []  # what 打标 saved (read back at /mock/kb_updates)
-# Recordings synced from the phone (docs/protocol.md「录音同步」, #3235): uuid → the last body PUT; deleted ids are
+KB_UPDATES = []  # what "Tagging" saved (read back at /mock/kb_updates)
+# Recordings synced from the phone (docs/protocol.md "Recording sync", #3235): uuid → the last body PUT; deleted ids are
 # tombstones (a later PUT gets 410). GET /mock/recordings reads both back. MOCK_RECORDINGS_DOWN=1: 503 (the hub away).
 RECORDINGS = {}
 RECORDINGS_DELETED = set()
@@ -1891,7 +1891,7 @@ for _kind, _id, _links in (("projects", "photo-sync", (("people", "lilei"), ("pr
                                "recent": _e["one_line"], "links": [kb_link(k, i) for k, i in _links]}
 
 
-# MOCK_KB_MANY_LINKS=1: 天气 App links six people, so its page folds them after four (全部 6 个 / 收起).
+# MOCK_KB_MANY_LINKS=1: the weather app links six people, so its page folds them after four ("All 6" / "Collapse").
 if os.environ.get("MOCK_KB_MANY_LINKS") == "1":
     for _i, (_name, _line) in enumerate((("示例同事甲", "后端，负责天气数据接口"), ("示例同事乙", "测试，跑小组件的回归"),
                                          ("示例同事丙", "设计，出降雨条的样式"), ("示例同事丁", "产品，排期和验收"))):
@@ -1996,7 +1996,7 @@ ITEMS[REVIEW] = _REVIEW_BEFORE + [it("user", "text", 100, text="看一下 PR #42
 if os.environ.get("MOCK_RECAPS"):
     ITEMS[REVIEW] += [it("system", "recap", 11, text="作者改了 `fetchAll` 的命名，`tmp` 还没改。CI 上新的重试测试跑了 3 次都过。"),
                       it("system", "recap", 3, text="两条建议都改完了，CI 绿。等你看一眼就可以合。")]
-# MOCK_REWIND=1: the review chat has four messages of yours (two with the same words) to try 回退到这里 on (#2436).
+# MOCK_REWIND=1: the review chat has four messages of yours (two with the same words) to try "Rewind here" on (#2436).
 if os.environ.get("MOCK_REWIND"):
     ITEMS[REVIEW] = _REVIEW_BEFORE + [
         it("user", "text", 100, text="看一下 PR #42"), it("assistant", "text", 95, text="PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。"),
@@ -2053,7 +2053,7 @@ ITEMS[ASK1] = (
 - 14:00 设计评审（会议室 3）
 - 16:30 和李雷 1:1""")]
 )
-# MOCK_QUOTE=1: a message sent with 引用 earlier (#2427): the main conversation's history has one that starts with a
+# MOCK_QUOTE=1: a message sent with "Quote" earlier (#2427): the main conversation's history has one that starts with a
 # `> ` block of the answer above, and a reply to it, so the bubble's quote card shows for a message from the transcript.
 if os.environ.get("MOCK_QUOTE") == "1":
     ITEMS[ASK1] += [
@@ -2146,7 +2146,7 @@ if MOCK_TASKS:
         "plan_mock_4": _plan("plan_mock_4", "started", 8, [
             dict(_ptask("设置页按钮对齐", False, "weather 在 MacBook 上。", "todo_task_align"), error="rpc: connection closed")]),
         "plan_mock_3": _plan("plan_mock_3", "open", 2, [
-            # a model Persona picked: 改一下's model field says an empty one keeps it (#2975)
+            # a model Persona picked: "Edit"'s model field says an empty one keeps it (#2975)
             dict(_ptask("处理 PR #42 的 review 意见", False, "PR #42 在 weather 仓库；review 类的活你常用 Codex。"), model="gpt-5.5")]),
     })
 
@@ -2222,7 +2222,7 @@ if MOCK_TASKS:
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_3 is on the user's screen as a card.", 2)
         + [it("assistant", "text", 1.9, text="这个要改代码，计划在下面，你点开始就开。")]
     )
-    # MOCK_INJECTED=1: what the hub typed in for the model (docs/protocol.md「Persona 注入的消息」): the release-notes
+    # MOCK_INJECTED=1: what the hub typed in for the model (docs/protocol.md "Messages injected by Persona"): the release-notes
     # task's notice after its receipt (unmarked, as an older hub sends it: the apps read the text) and the assistant's
     # answer, then a daily task's run marked by the hub (injected); the apps draw each as one centered line.
     if os.environ.get("MOCK_INJECTED") == "1":
@@ -2258,7 +2258,7 @@ if MOCK_TASKS:
         for _i, _x in enumerate(ITEMS[ASK1]):
             _x["seq"] = _base + _i
     # MOCK_TASKS_CUT=1: the model service cut the release-notes task off (#1516): its agent's last words are the API
-    # error (the hub's turn_error) and its receipt is interrupted; 继续 (POST …/retry) makes it work and then finish.
+    # error (the hub's turn_error) and its receipt is interrupted; "Continue" (POST …/retry) makes it work and then finish.
     if os.environ.get("MOCK_TASKS_CUT") == "1":
         _cut_text = "API Error: Connection lost mid-response. The response above may be incomplete."
         for _s in SESSIONS:
@@ -2294,7 +2294,7 @@ def retry_task(h, tid):
     mode = RETRY_MODE["mode"]
     cut = [x for x in SESSIONS if x.get("turn_error") and any(a["session_id"] == x["session_id"] for a in t.get("agents", []))]
     if cut and not t.get("done_at"):
-        # 继续 on a task the model service cut off (#1516): its agent works, and a moment later finishes.
+        # "Continue" on a task the model service cut off (#1516): its agent works, and a moment later finishes.
         s0 = cut[0]
         s0.pop("turn_error", None)
         s0.update(status="working", state="working", last_text="接着整理发布说明。", updated_at=ago())
@@ -2489,7 +2489,7 @@ if MAIN_ACTIONS and os.environ.get("MOCK_COMPACTION") in ("running", "done", "fa
 
 ITEMS[ASK2] = [it("user", "text", 60 * 5, text="⏰ 早报")] + [it("assistant", "text", 60 * 5, text="早上好！今天 2 个会议，3 封邮件需要回复。")]
 ITEMS[ASK3] = [it("user", "text", 60 * 29, text="帮我约周五和韩梅梅吃饭")] + [it("assistant", "text", 60 * 28, text="已经在日历里加好了。")]
-# MOCK_LARK_AGENT=1: 帮我约周五… is a Feishu /agent conversation instead (prompts/lark/chat_agent.md): the
+# MOCK_LARK_AGENT=1: the Friday scheduling request is a Feishu /agent conversation instead (prompts/lark/chat_agent.md): the
 # instructions and context in <jarvis-context> blocks, only the request outside them (the apps fold the blocks, #876).
 if os.environ.get("MOCK_LARK_AGENT") == "1":
     _lark_ctx = [
@@ -2539,7 +2539,7 @@ if os.environ.get("MOCK_SETTINGS_INPUT"):
         "fields": [{"key": "password", "label": "密码 / 授权码", "placeholder": "填写邮箱授权码", "secret": True}],
     })
 
-# MOCK_ELICITATION=1: two MCP elicitation requests on the PR review session (docs/protocol.md「MCP elicitation」), a
+# MOCK_ELICITATION=1: two MCP elicitation requests on the PR review session (docs/protocol.md "MCP elicitation"), a
 # form in the schema subset the clients render and a link to open first; =unsupported makes the form one they don't.
 if os.environ.get("MOCK_ELICITATION"):
     _props = {
@@ -2565,7 +2565,7 @@ if os.environ.get("MOCK_ELICITATION"):
     ])
 
 # MOCK_CODEX=1: the Codex session's question (Plan mode, two questions) and an approval, as a node reads them off the
-# Codex TUI (docs/codex.md「提问和审批」); the first answer to the approval is refused as if the computer's input box held
+# Codex TUI (docs/codex.md "Questions and approvals"); the first answer to the approval is refused as if the computer's input box held
 # a draft (409 input_draft), the next one goes through (GET /mock/resolved has them all). /mock/reset puts both back
 # unanswered (CodexCardsTests: each case starts from the two cards).
 CODEX_INTERACTIONS = []
@@ -2637,7 +2637,7 @@ if os.environ.get("MOCK_SCREEN_MULTI"):
                          "text": "平板也看一眼"},
                         {"key": "5", "label": "Chat about this", "kind": "chat", "keys": ["5"]}]}})
 # MOCK_SCREEN_CHAT=1: a terminal dialog with a header and a "chat about this" option (kind: chat), as Claude Code's
-# plan-mode question reads: the request panel shows the header, numbers the options and offers 改在对话里说.
+# plan-mode question reads: the request panel shows the header, numbers the options and offers "Say it in chat instead".
 if os.environ.get("MOCK_SCREEN_CHAT"):
     INTERACTIONS.append(
         {"id": "scr_studio_photos_plan", "machine_id": "studio", "session_id": PHOTOS, "session_title": "照片同步脚本支持 HEIC",
@@ -2749,7 +2749,7 @@ def mock_interactions():
 # home-screen widget and Quick Settings tile. Sent on every connect and after each answer (the real hub pushes it when
 # it changes; GET /api/v1/fleet always serves it). Values pick what is in it, for captures:
 #   1 / all     every pending request, working and finished-unseen agent the mock has
-#   permission  only the permission requests (the first request gets 拒绝 / 允许)
+#   permission  only the permission requests (the first request gets "Deny" / "Allow")
 #   working     only working agents (the clock), plus the finished ones
 #   done        only finished-unseen agents
 #   one         exactly one working agent (a tap opens it)
@@ -2789,7 +2789,7 @@ def _fleet_first_line(text):
 
 def _fleet_detail(ix):
     kind = ix.get("kind")
-    if kind == "permission":  # the node writes the summary as 「Tool: command」
+    if kind == "permission":  # the node writes the summary as "Tool: command"
         command = (ix.get("tool_input") or {}).get("command")
         return ix.get("summary") or ("%s: %s" % (ix.get("tool_name"), command) if command else ix.get("tool_name") or "")
     if kind == "plan":
@@ -2866,7 +2866,7 @@ def set_fleet_mode(mode):
 
 def mock_notify(interaction_id):
     """GET /mock/notify?interaction=<id>: the hub's notify event for a pending request (server/internal/hub/notifyws.go),
-    sent to the apps that declared ws_notify: the phone's 需要你处理 notification, with its buttons."""
+    sent to the apps that declared ws_notify: the phone's "Needs your attention" notification, with its buttons."""
     ix = next((x for x in mock_interactions() if x["id"] == interaction_id), None)
     if ix is None:
         return {"error": "no pending request " + interaction_id}, 404
@@ -3020,7 +3020,7 @@ PANES_NEW = {}  # machine id -> [(workspace id, pane)] opened by POST
 # layout above: a closed pane or tab is gone, a renamed tab has its new name, a split adds a shell.
 NODE_ACTIONS = []
 CLOSED_PANES, CLOSED_TABS, TAB_NAMES, SPLIT_PANES = set(), set(), {}, {}
-# #2431 新建 worktree…: worktree/create adds a workspace (with one shell pane) next to the persona one; a branch or a path
+# #2431 "New worktree…": worktree/create adds a workspace (with one shell pane) next to the persona one; a branch or a path
 # containing "taken" is refused the way git refuses a branch checked out elsewhere / a directory with files in it.
 WORKTREES = {}  # machine id -> [(workspace id, label, path, branch)]
 
@@ -3160,7 +3160,7 @@ def phone_screen(cols, rows, typed="", tick=0):
 # MOCK_TERMINAL_FULL_REFUSE=forbidden|unsupported|too_many answers herdr_open with that end; MOCK_TERMINAL_FULL_END_AFTER=
 # seconds ends a view after that long (the Reconnect button). The hub also says herdr_focus: a herdr_focus from the page is
 # answered with the focus coming back as the page's own, and GET /mock/herdr_focus?pane=w1:p2[&session=<id>&source=client|persona|other
-# &mine=1|0&view=<id>] makes herdr's focus move as the node would tell the views (docs/terminal.md「焦点联动」);
+# &mine=1|0&view=<id>] makes herdr's focus move as the node would tell the views (docs/terminal.md "Focus synchronization");
 # MOCK_TERMINAL_FULL_NOFOCUS=1 leaves herdr_focus out (an older hub).
 TERMINAL_FULL = bool(os.environ.get("MOCK_TERMINAL_FULL"))
 FULL_EXEC = os.environ.get("MOCK_TERMINAL_FULL_EXEC", "")
@@ -3405,7 +3405,7 @@ def herdr_message(msg, send, views):
 
 # MOCK_TERMINAL_SCROLL=1 (with MOCK_TERMINAL_CONTROL): at the phone's grid Claude writes a numbered line every tick,
 # so the screen scrolls; every row is redrawn one up (as herdr does), and the app keeps what goes off the top
-# (the terminal's 选择文本 shows it). MOCK_TERMINAL_INTERVAL sets the tick.
+# (the terminal's "Select text" shows it). MOCK_TERMINAL_INTERVAL sets the tick.
 TERMINAL_SCROLL = bool(os.environ.get("MOCK_TERMINAL_SCROLL"))
 
 
@@ -3422,7 +3422,7 @@ def scrolling_screen(cols, rows, typed="", tick=0):
 PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60,
          "island": {"preset": "a", "left": "", "right": "", "machine": ""}}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
-# 设置 › 连接器 › 飞书机器人 (GET/PUT /api/v1/bots/feishu); MOCK_BOT=pairing shows a code waiting, =off a fresh hub.
+# Settings › Connectors › Lark bot (GET/PUT /api/v1/bots/feishu); MOCK_BOT=pairing shows a code waiting, =off a fresh hub.
 FEISHU_BOT = {"enabled": True, "app_id": "cli_example0001", "domain": "https://open.feishu.cn", "has_secret": True,
               "from_config": False, "connected": True, "bot_name": "Jarvis", "target": "主对话",
               "features": {"main": True, "cards": True, "all_cards": False, "pushes": True, "sync": False, "agents": True},
@@ -3448,13 +3448,13 @@ PAIR_DROPPED = [False]
 PAIR_TRADED = [None]  # when the pairing token was traded (MOCK_PAIR_TOKEN)
 PAIR_DEVICE_TOKENS = set()
 
-TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
+TOKENS = [  # Settings › Devices (GET/POST/DELETE /api/v1/auth/tokens)
     {"id": "dev_phone", "name": "我的 iPhone", "kind": "phone", "role": "full", "created_at": ago(days=12), "last_seen": ago()},
     {"id": "dev_watch", "name": "Apple Watch", "kind": "watch", "role": "answer", "created_at": ago(days=12), "last_seen": ago(hours=3)},
     {"id": "dev_ipad", "name": "iPad", "kind": "phone", "role": "full", "created_at": ago(days=40), "last_seen": ago(days=20),
      "revoked_at": ago(days=2)},
 ]
-def _claude_settings():  # 设置 › Claude Code 设置: the node's whitelist (server/internal/node/claudeconfig.go)
+def _claude_settings():  # Settings › Claude Code Settings: the node's whitelist (server/internal/node/claudeconfig.go)
     return [
         {"key": "awaySummaryEnabled", "title": "回来时先说进展", "detail": "离开 5 分钟以上再回来时，Claude 先简单说说这段时间做了什么",
          "type": "bool", "default": True, "value": None},
@@ -3466,7 +3466,7 @@ def _claude_settings():  # 设置 › Claude Code 设置: the node's whitelist (
     ]
 
 
-def _codex_settings():  # 设置 › Codex 设置: the node's whitelist (server/internal/node/codexconfig.go)
+def _codex_settings():  # Settings › Codex Settings: the node's whitelist (server/internal/node/codexconfig.go)
     return [
         {"key": "model", "title": "模型", "detail": "没指定模型时 Codex 用哪个，比如 gpt-5.5", "type": "string", "default": "", "value": "gpt-5.5"},
         {"key": "model_reasoning_effort", "title": "思考强度", "detail": "越高越慢、越仔细", "type": "enum",
@@ -3480,7 +3480,7 @@ def _codex_settings():  # 设置 › Codex 设置: the node's whitelist (server/
 CLAUDE_SETTINGS = {}  # machine id → its settings, made on first use
 CODEX_SETTINGS = {}
 
-# 设置 › Claude Code › 屏蔽的配置目录 (server/internal/hub/claudedirs.go): machine id → blocked patterns; the directories
+# Settings › Claude Code › Blocked configuration directories (server/internal/hub/claudedirs.go): machine id → blocked patterns; the directories
 # every machine has (home written as ~ here, expanded with the machine's home).
 CLAUDE_DIRS_BLOCKED = {}
 _CLAUDE_DIRS = [("~/.claude", "default", 0, 86), ("~/.config/claude/work", "config", 2, 41),
@@ -3517,9 +3517,9 @@ UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
 SENT_TO = []  # where each of them went: machine_id, session_id, client_msg_id, text (GET /mock/sent_to)
 LARK_READS = []  # Feishu read reports, {"feed", **body} (GET /mock/lark_reads): what a chat page saw
-MAIL_SENT = []  # POST /api/v1/mail/send bodies (GET /mock/mail_sent): 写邮件 / 回复
+MAIL_SENT = []  # POST /api/v1/mail/send bodies (GET /mock/mail_sent): "Compose mail" / "Reply"
 MAIL_FLAGS = []  # POST …/mail/messages/{aid}/{uid}/flags, {"account_id", "uid", **body} (GET /mock/mail_flags)
-QUEUE_EDITS = []  # bodies of …/queue (撤回编辑 / 删除 of a queued message; GET /mock/queue_edits)
+QUEUE_EDITS = []  # bodies of …/queue ("Withdraw to edit" / "Delete" of a queued message; GET /mock/queue_edits)
 
 
 def queue_messages(text=None, clear=False):
@@ -3572,8 +3572,8 @@ INBOX = [
      "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [503], "from": {"name": "Weekly Digest", "email": "news@example.com"}}},
 ]
 
-# MOCK_DOCS=1: Feishu documents that @'d me (docs/inbox.md「云文档」): a Base with my rows and their status, a sheet
-# whose AI 分身 proposes a status move with its draft, a docx comment.
+# MOCK_DOCS=1: Feishu documents that @'d me (docs/inbox.md "Cloud documents"): a Base with my rows and their status, a sheet
+# whose AI twin proposes a status move with its draft, a docx comment.
 DOC_STATES = [{"name": "待处理", "color": "#bacefd"}, {"name": "进行中", "color": "#fed4a4"},
               {"name": "待验收", "color": "#b1e8fc"}, {"name": "已完成", "color": "#c5f2bb"}]
 if os.environ.get("MOCK_DOCS"):
@@ -3642,7 +3642,7 @@ if os.environ.get("MOCK_IMESSAGE_INBOX"):
     ]
 
 
-# What each item can be muted by (the row's menu: 静音这个仓库 / 会话 / 发件人), as the hub lists it (`mutes`).
+# What each item can be muted by (the row's menu: "Mute this repository" / "Conversation" / "Sender"), as the hub lists it (`mutes`).
 ITEM_MUTES = {
     "lark:f1:100": [{"tag": "chat", "value": "f1", "name": "韩梅梅"}],
     "lark:f2:200": [{"tag": "chat", "value": "f2", "name": "设计评审"}, {"tag": "sender", "value": "u-lilei", "name": "李雷"}],
@@ -3698,9 +3698,9 @@ def inbox_for(query):
 
 # New items waiting for triage (GET /api/v1/inbox `triage`, #1773; the hub's inbox_admit.go). Unset: no `triage` at all,
 # as from a hub older than #1644. MOCK_INBOX_TRIAGE=<state>[:<waiting>[:<source name>[:<reason>]]]:
-#   unconfigured                  3 Feishu items wait, no model set up (the apps offer 去配置)
-#   behind:12:飞书,邮件            12 wait from two sources (6 each): the banner names none
-#   error:2:GitHub:模型没有额度     the hub's own reason instead of the state's words
+#   unconfigured                  3 Feishu items wait, no model set up (the apps offer "Configure")
+#   behind:12:Lark,Mail            12 wait from two sources (6 each): the banner names none
+#   error:2:GitHub:Model quota exhausted     the hub's own reason instead of the state's words
 #   ok                            triage is fine: {"state": "ok", "waiting": 0}
 # States: ok | unconfigured | paused | error | timeout | behind. Several names, comma-separated, share the waiting.
 def inbox_triage_from(spec):
@@ -3739,7 +3739,7 @@ def inbox_list(query):
     return body
 
 
-# What each bulk 已处理 / 撤销 asked for (POST /api/v1/inbox/done), kept at /mock/inbox_bulk.
+# What each bulk "Handled" / "Undo" asked for (POST /api/v1/inbox/done), kept at /mock/inbox_bulk.
 INBOX_BULK = []
 
 
@@ -3773,14 +3773,14 @@ def inbox_bulk(body):
     return out
 
 
-# Mail bodies (GET /api/v1/mail/messages/{aid}/{uid}); 504 is in English, for 设置 › 翻译.
+# Mail bodies (GET /api/v1/mail/messages/{aid}/{uid}); 504 is in English, for Settings › Translation.
 INBOX.insert(next(i for i, x in enumerate(INBOX) if x["kind"] == "mail"), {"id": "mail:acc1:t4:504", "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
      "title": "Can we move the design review?", "sender": "Lucy Wang",
      "preview": "Hi, I'm travelling on Thursday. Could we move the design review to Tuesday afternoon?", "count": 1,
      "started_at": ago(hours=1), "updated_at": ago(hours=1), "tier": "action", "summary": "Lucy 想把设计评审挪到周二下午",
      "reason": "要你确认时间", "read": False,
      "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [504], "from": {"name": "Lucy Wang", "email": "lucy@example.com"}, "direct": True},
-     # Translated by the hub as it came in (设置 › 翻译 on this device).
+     # Translated by the hub as it came in (Settings › Translation on this device).
      "translations": {"zh-Hans": {"subject": "设计评审能改期吗？", "preview": "你好，我周四要出差，赶不上设计评审了。能不能改到周二下午？"}}})
 # MOCK_INBOX=empty: nothing in the inbox (the shell's persona button without its inbox mark).
 # The hub's GitHub connector (GET /api/v1/connectors), signed in with the gh login of a machine, or not.
@@ -3801,14 +3801,14 @@ if os.environ.get("MOCK_GITHUB") == "guide":  # a status with the steps to fix i
 LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilities": ["tools", "inbox", "archive"], "enabled": True},
                      {"id": "mail", "name": "邮件", "status": "ok", "capabilities": ["tools", "actions", "inbox", "archive"], "enabled": True}]
 
-# Telegram (the Telegram extension, #1704; docs/archive/plan-telegram.md): the user's own account, signed in from 设置 › 连接器 › Telegram a step at a time.
+# Telegram (the Telegram extension, #1704; docs/archive/plan-telegram.md): the user's own account, signed in from Settings › Connectors › Telegram a step at a time.
 # All made up: api_id 1234567 (a hash of 32 zeros is refused), any phone starting with +, the code 12345, the 2FA
 # password example-password. MOCK_TELEGRAM=off|signed_out|signed_in|2fa|limited (unset: no Telegram connector at all;
 # limited: signed in and waiting out a flood wait Telegram asked for);
 # MOCK_TELEGRAM_2FA=1 gives the account two-step verification in any mode; MOCK_TELEGRAM_INBOX=1 adds its two kinds
 # of inbox items. As a hub from before #669 (the harder case for the app): its program has not run while off since the
 # hub started, so it lists no capabilities (and has no sign-in, 409) until switched on and started (TELEGRAM_START
-# seconds; meanwhile 进程还没启动). A hub from #669 on lists Telegram's declared capabilities from the start.
+# seconds; meanwhile "Process not started yet"). A hub from #669 on lists Telegram's declared capabilities from the start.
 # MOCK_GITHUB=device: GitHub signed in neither way, its device-flow sign-in from the app (connector/github/login.go):
 # straight to the code ABCD-1234 (the hub uses the GitHub CLI's client ID); it is entered after two asks (one second
 # apart).
@@ -4049,7 +4049,7 @@ def wechat_connector():
 
 
 def triage_route(h, method, p, raw):
-    """设置 › 会话分诊 (GET / PUT /api/v1/agents/triage); True when it answered."""
+    """Settings › Session triage (GET / PUT /api/v1/agents/triage); True when it answered."""
     if p != "/api/v1/agents/triage":
         return False
     if method == "PUT":
@@ -4117,7 +4117,7 @@ def telegram_connector():
     described = telegram_described()
     c = {"id": "telegram", "name": "Telegram", "enabled": t["enabled"],
          "capabilities": ["status", "tools", "actions", "events", "inbox", "archive", "login", "threads"] if described else []}
-    if described:  # 进知识库 / 进收件箱 (#989)
+    if described:  # "Save to knowledge base" / "Send to inbox" (#989)
         c.update(archive=t["archive"], inbox=t["inbox"])
     if not t["enabled"]:
         c.update(status="disabled")
@@ -4346,7 +4346,7 @@ def telegram_area(h, method, p, raw):
                 t["started"] = time.monotonic()
             t["enabled"] = bool(body["enabled"])
         return h.send_json(telegram_connector()) or True
-    if what == "archive" and method == "DELETE":  # 删除已存的知识库内容: 进知识库 off with it
+    if what == "archive" and method == "DELETE":  # Delete stored knowledge-base content: "Save to knowledge base" off with it
         t["archive"] = False
         return h.send_json({"chats": 3, "people": 5, "inbox": 0}) or True
     if what == "data" and method == "DELETE":
@@ -4376,9 +4376,9 @@ if os.environ.get("MOCK_TELEGRAM_INBOX"):
 
 
 # MOCK_CONNECTOR_PLUGIN=1: a plugin's connector the apps know nothing about (the generic page: switch, a one-step
-# sign-in with a token, 进收件箱, sign-out, delete). The token is example-token; all made up.
-# MOCK_CONNECTOR_PLUGIN=examplechat: shaped like a chat service's extension connector (#1426): 示例聊天, with no mark of
-# its own, a sign-in with its server's address and an app key, 进知识库 / 进收件箱, and a private chat that opens as a
+# sign-in with a token, Send to inbox, sign-out, delete). The token is example-token; all made up.
+# MOCK_CONNECTOR_PLUGIN=examplechat: shaped like a chat service's extension connector (#1426): Example chat, with no mark of
+# its own, a sign-in with its server's address and an app key, Save to knowledge base / Send to inbox, and a private chat that opens as a
 # conversation page. The address is https://chat.example.com, the key example-key; the account user_example_a.
 PLUGIN_CHAT = os.environ.get("MOCK_CONNECTOR_PLUGIN") == "examplechat"
 if PLUGIN_CHAT:
@@ -4456,7 +4456,7 @@ if PLUGIN_CHAT:
          "connector": {"thread": "user_example_b", "label": "私聊", "open_url": "https://chat.example.com/c/user_example_b"}},
     ]
 
-# 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
+# Messages (GET /api/v1/imessage…, docs/plan-connectors.md "5"): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.
 IMESSAGE_DENIED = os.environ.get("MOCK_IMESSAGE") == "denied"
 IMESSAGE_STATUS = {"machine": "MacBook", "status": "ok", "via": "ssh", "ai": True}
@@ -4521,24 +4521,24 @@ IMESSAGE_MESSAGES = {
 if os.environ.get("MOCK_INBOX") == "empty":
     INBOX.clear()
 # MOCK_INBOX_SOURCES=none (#4480): nothing feeds the inbox yet: no items, no mail account, Feishu not set up, GitHub not
-# signed in; the inbox says 还没接入消息来源 and offers the sources.
+# signed in; the inbox says "No message sources connected yet" and offers the sources.
 NO_SOURCES = os.environ.get("MOCK_INBOX_SOURCES") == "none"
 if NO_SOURCES:
     INBOX.clear()
     GITHUB_CONNECTOR.update(status="not_configured", account=None, via=None)
 
-# MOCK_INBOX_EXTRA=<n>: n more 知悉即可 mails (示例通知), for 全部清理's confirmation over many items (docs/inbox.md).
+# MOCK_INBOX_EXTRA=<n>: n more FYI mails (example notices), for Clean up all's confirmation over many items (docs/inbox.md).
 for _i in range(int(os.environ.get("MOCK_INBOX_EXTRA", "0"))):
     INBOX.append({"id": "mail:acc1:x%d" % _i, "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
                   "title": "示例通知 %d" % (_i + 1), "sender": "示例商城", "preview": "你的订单已发货", "count": 1,
                   "started_at": ago(hours=3, minutes=_i), "updated_at": ago(hours=3, minutes=_i), "tier": "fyi", "read": False,
                   "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [900 + _i], "from": {"name": "示例商城", "email": "shop@example.com"}}})
 
-# MOCK_INBOX_EVENTS=1: inbox events (docs/inbox.md「事件、处理链条、建议」): the list is scripts/mock/inbox_events.json, one
-# item per state (a reply suggestion, 急事 preparing, waiting, an Agent working, an agent suggestion, failed, a
-# conclusion in 知悉即可, noise, done by a self-reply and by the manager), its times shifted so `as_of` is now. POST /api/v1/inbox/{id}/suggestion acts as
+# MOCK_INBOX_EVENTS=1: inbox events (docs/inbox.md"Events, handling chains, and suggestions"): the list is scripts/mock/inbox_events.json, one
+# item per state (a reply suggestion, Urgent preparing, waiting, an Agent working, an agent suggestion, failed, a
+# conclusion in FYI, noise, done by a self-reply and by the manager), its times shifted so `as_of` is now. POST /api/v1/inbox/{id}/suggestion acts as
 # the hub does (409 suggestion_stale on another version); GET /mock/inbox_events/bump?id=<item> puts a new suggestion
-# version in place, for 「建议已更新」. MOCK_INBOX_EVENTS=legacy: the same items without any of the new fields (an old hub).
+# version in place, for "Suggestion updated". MOCK_INBOX_EVENTS=legacy: the same items without any of the new fields (an old hub).
 MOCK_INBOX_EVENTS = os.environ.get("MOCK_INBOX_EVENTS", "")
 EVENT_FIELDS = ("status", "urgent", "recap", "handling", "suggestion", "chain", "related")
 
@@ -4601,7 +4601,7 @@ def inbox_suggestion(iid, body):
         elif s["kind"] == "agent":
             _chain_add(x, "agent", "开了子会话：" + text[:40], link={"type": "session", "machine_id": "m1", "session_id": "s-mock-agent"})
             h.update(state="agent", since=ago()); x["status"] = "working"
-        else:  # a conclusion: 知道了 files it (the chain says so)
+        else:  # a conclusion: Got it files it (the chain says so)
             _chain_add(x, "done", "你标了已处理")
             x["done_at"], x["done_by"] = ago(), "user"
     x["updated_at"] = ago()
@@ -4617,8 +4617,8 @@ def inbox_suggestion_bump(iid):
     return x, 200
 
 
-# MOCK_INBOX_LINE=1: a 线索 (#2128): 设计评审 grew out of the chat with 韩梅梅 (continues), which hangs under a todo; the
-# 周末徒步群 item grew out of 设计评审. GET /api/v1/inbox/tree/{kind}/{id} answers from the items' parents.
+# MOCK_INBOX_LINE=1: a "Thread" (#2128): the design review grew out of the chat with the sample contact (continues), which hangs under a todo; the
+# the weekend hiking group item grew out of the design review. GET /api/v1/inbox/tree/{kind}/{id} answers from the items' parents.
 if os.environ.get("MOCK_INBOX_LINE") == "1":
     for x in INBOX:
         if x["id"] == "lark:f1:100": x["parent"] = {"kind": "todo", "id": "todo-1", "by": "user"}
@@ -4644,8 +4644,8 @@ def inbox_tree(kind, nid):
     out["children"] = [x for x in INBOX if (x.get("parent") or {}).get("kind") == kind and x["parent"]["id"] == nid]
     return out
 
-# MOCK_INBOX_LABELS=1: the inbox rows the Android port's labels and drafts need: an @所有人 in a group, and a mail the
-# AI 分身 drafted a reply to (with its basis), next to the mails the user was only copied on (no direct flag).
+# MOCK_INBOX_LABELS=1: the inbox rows the Android port's labels and drafts need: an @everyone in a group, and a mail the
+# AI twin drafted a reply to (with its basis), next to the mails the user was only copied on (no direct flag).
 if os.environ.get("MOCK_INBOX_LABELS") == "1":
     INBOX.insert(1, {"id": "lark:f9:900", "source": "lark", "kind": "mention", "account": "feishu", "account_name": "飞书",
                      "title": "全员通知", "sender": "行政", "preview": "@所有人 周五下午三点在大会议室做消防演练", "count": 1,
@@ -4656,12 +4656,12 @@ if os.environ.get("MOCK_INBOX_LABELS") == "1":
             x["agent"] = {"state": "drafted", "task": "确认分享能否挪到周二下午",
                           "draft": "可以，周二下午三点以后都行。议程我看过了，没有问题。",
                           "note": "日历上周二下午三点以后空着；议程附件已读，没有冲突。"}
-# MOCK_NO_LIVE_AGENTS=1: every Agent is offline (交给 AI then only offers Jarvis).
+# MOCK_NO_LIVE_AGENTS=1: every Agent is offline ("Give to AI" then only offers Jarvis).
 if os.environ.get("MOCK_NO_LIVE_AGENTS") == "1":
     for x in SESSIONS:
         if not x.get("assistant"): x["status"], x["state"] = "offline", "offline"
 
-# AI 草拟 / AI 改 (POST /api/v1/inbox/{id}/draft): what each request asked for is kept at /mock/inbox_drafts.
+# "AI draft" / "AI edit" (POST /api/v1/inbox/{id}/draft): what each request asked for is kept at /mock/inbox_drafts.
 # MOCK_DRAFT_SECONDS: how long the "model" takes (default 1.5); MOCK_DRAFT_FAIL=1: it cannot write one (502).
 INBOX_DRAFTS = []
 
@@ -4699,14 +4699,14 @@ MAIL_TRANSLATIONS = {
                   "还没定的两个问题是标签栏和空状态。\n\n谢谢，\nLucy"},
 }
 
-# The 设计评审 chat (inbox f2): a few messages, some in English (设置 › 翻译 picks chats to translate).
+# The design review chat (inbox f2): a few messages, some in English (Settings › Translation picks chats to translate).
 LARK_CHATS = [{"id": "f2", "is_mine": False, "name": "设计评审", "is_group": True, "unread": 3, "at_me": True, "muted": False, "preview": "@你 新版图标放在这里了",
                "updated_at": ago(minutes=55)},
               {"id": "f3", "is_mine": False, "name": "周末徒步群", "is_group": True, "unread": 12, "at_me": False, "muted": False, "preview": "周六早上 8 点地铁站集合",
                "preview_sender": "Tom", "read_position": "299", "updated_at": ago(minutes=30)},
               {"id": "f1", "is_mine": False, "name": "韩梅梅", "is_group": False, "unread": 2, "at_me": False, "muted": False, "preview": "新包发你了",
                "read_position": "99", "updated_at": ago(minutes=2)}]
-# MOCK_LARK_ACCOUNTS=1: a second Feishu account signed in on the Lark gateway (docs/feishu.md「多账号」): GET
+# MOCK_LARK_ACCOUNTS=1: a second Feishu account signed in on the Lark gateway (docs/feishu.md "Multiple accounts"): GET
 # /api/v1/lark/accounts lists both, ol_account=2 reads its own chats, and the inbox has an item from it.
 LARK_ACCOUNTS = [{"id": 1, "name": "我", "tenant": "示例公司", "signed_in": True, "primary": True, "unread": 17},
                  {"id": 2, "name": "工作号", "tenant": "示例集团", "signed_in": True, "unread": 4},
@@ -4734,18 +4734,79 @@ LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {
         {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
         {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
     {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
-    # a second section, so the reader's outline (目录) has levels to show
+    # a second section, so the reader's outline (Outline) has levels to show
     {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "下一步"}]},
     {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "导出尺寸"}]},
     {"type": "paragraph", "content": [{"type": "text", "text": "16、20、24、32 四档，每档单独微调。"}]},
 ]}}
-# GET /api/v1/lark/raw/documents/ai-summary: Feishu's cached AI summary of a document (the reader''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+# GET /api/v1/lark/raw/documents/ai-summary: Feishu's cached AI summary of a document (the reader's summary card).
+LARK_DOC_SUMMARY = {"state": "ready", "summary": "这篇评审确定了新版图标的方向：统一圆角和描边，深色模式单独调对比度。\n\n- 还要确认：主色是否再暖一点、小尺寸下的描边粗细\n- 导出四档尺寸，每档单独微调\n- 下周一前出第二版"}
+
+LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
+
+# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
+if os.environ.get("MOCK_LARK_OLK"):
+    def _olk(pos, state, body, cover, handout=False):
+        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
+        m["parts"] = [{"kind": "text", "text": m["text"]}]
+        m["olk"] = {"version": 1, "state": state,
+                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
+        if state == "decrypted":
+            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
+        return m
+    LARK_MESSAGES["f2"] = [
+        _olk(200, "decrypted", "", "稍等", True),
+        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
+        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
+        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
+        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
+    ]
+    LARK_MESSAGES["f2"][2]["reply_to"] = {
+        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
+        "olk": LARK_MESSAGES["f2"][1]["olk"],
+    }
+    LARK_MESSAGES["f2"][4]["reply_to"] = {
+        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
+        "olk": LARK_MESSAGES["f2"][3]["olk"],
+    }
+
+LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
+# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
+LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
+def lark_pin_rows():
+    rows = [dict(c) for c in LARK_CHATS]
+    for i in range(1, 81):
+        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
+                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
+                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
+    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
+    if LARK_PIN_FIXTURE["newest"]:
+        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
+        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
+    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
+        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
+    return rows
+
+LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
+                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
+# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no "Brave Climb" switch.
+if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
+    del LARK_DISPLAY["brave_climb_codec"]
+
+BRAVE_CLIMB_ALPHABET = "[removed]"
+def brave_climb(text):
+    """The Lark gateway's "Brave Climb" words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
     n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
     while True:
         n, d = divmod(n, 34)
         out = BRAVE_CLIMB_ALPHABET[d] + out
         if n == 0:
-            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
+            return "**字" + out + "**"
+
+# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and the design review (f2) has "Brave Climb" words: a whole message, one split over
+# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
+# the list is words too.
+if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
     whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
     whole["parts"] = [{"kind": "text", "text": whole["text"]}]
     words = brave_climb("标签栏改粗一号")
@@ -4778,7 +4839,7 @@ if os.environ.get("MOCK_LARK_TRAINER"):
     anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
     LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
 
-# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
+# The weekend hiking group chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
 # one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
 # thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
 # MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose Lark gateway
@@ -4834,7 +4895,7 @@ def _lark_f3():
 
 LARK_MESSAGES["f3"], LARK_THREADS = _lark_f3()
 LARK_MESSAGES["w1"] = [_lm("10", "王芳", "@你 下周一前把排期填一下，表格在群公告里", mins=8)]
-if MOCK_INBOX_EVENTS:  # the chat behind the first event, for 看原文 and its 收到 3 条新消息 entry
+if MOCK_INBOX_EVENTS:  # the chat behind the first event, for "View original" and its "3 new messages received" entry
     LARK_MESSAGES["oc_demo1"] = [_lm("98", "我", "报价单我下周更新", mine=True, mins=1500), _lm("99", "张三", "好的", mins=1490),
                                  _lm("100", "张三", "在吗", mins=12), _lm("101", "张三", "客户催报价了", mins=11),
                                  _lm("102", "张三", "周五前能把报价给客户吗？", mins=10)]
@@ -4848,7 +4909,7 @@ if os.environ.get("MOCK_LARK_ACCOUNTS"):
                      "reason": "@了你，有截止时间", "read": False,
                      "lark": {"account_id": 2, "ol_account": 2, "feed_id": "w1", "is_group": True, "start_position": "10"}})
 
-# The direct chat with 韩梅梅 (inbox f1): unread from 100, then my answers with each kind of read receipt.
+# The direct chat with the sample contact (inbox f1): unread from 100, then my answers with each kind of read receipt.
 LARK_MESSAGES["f1"] = [_lm(str(pos), who, text, mine=who == "我", mins=mins) for pos, who, text, mins in (
     (90, "韩梅梅", "早，周五的发布还按计划吗？", 300), (91, "我", "按计划，今天把最后两个问题合进去", 298),
     (92, "韩梅梅", "好的，合完和我说一声", 296), (93, "我", "两个都合进去了，晚上出包", 180), (94, "韩梅梅", "收到", 178),
@@ -4946,10 +5007,10 @@ def lark_window(msgs, q, default_limit=40):
     page = msgs[start:end]
     return {"messages": page, "has_older": start > 0, "has_newer": end < len(msgs),
             "older_cursor": page[0]["position"] if page else "", "newer_cursor": page[-1]["position"] if page else ""}
-# ---------- area: feishu chat page (Android's Feishu chat and 公司圈 pages; made-up data only) ----------
+# ---------- area: feishu chat page (Android's Feishu chat and Moments pages; made-up data only) ----------
 # MOCK_LARK=1: the chats behind the inbox's Feishu items (f1 / f2 / f3) have messages covering every kind of part the
 # chat page draws (rich post, mentions, links, emoji, pictures, a file, voice, video, a sticker, cards with columns and
-# buttons, a table and a chart, merge-forward, a 公司圈 share, reactions, replies, a thread, system lines), with paging
+# buttons, a table and a chart, merge-forward, a Moments share, reactions, replies, a thread, system lines), with paging
 # (before / after / around), people's cards, the emoji catalogue and the media (made-up PNGs, Range answered). Off by
 # default: the iOS screenshots and TranslationTests read the plainer f2 above. What the app sends is kept: GET
 # /mock/lark (sent / reads / reactions / card actions); POST /mock/lark/incoming?feed=f1 adds a message from someone
@@ -5132,15 +5193,15 @@ FS_CONVS = [
      "read_position": "299"},
 ]
 # The hub always sends these (server/internal/lark/feed.go, no omitempty) and the app's LarkConversation requires them:
-# without them 设置 › 翻译 › 飞书会话 read 「未能读取数据，因为数据丢失。」 (test_lark_mock.py).
+# without them Settings › Translation › Lark conversations read "The data could not be read because it is missing." (test_lark_mock.py).
 for _c in LARK_CHATS + FS_CONVS:
     for _k in ("at_me", "muted", "is_mine"):
         _c.setdefault(_k, False)
 
-# MOCK_LARK_TOPIC=1 (#1087): a topic group, 版本发布 (inbox f4, and on the 消息 page). Each message is a topic, its replies
+# MOCK_LARK_TOPIC=1 (#1087): a topic group, the release group (inbox f4, and on the Messages page). Each message is a topic, its replies
 # are in its thread, which the Lark gateway answers with the topic first and then the newest replies (`limit` of them). What the
 # topic cards have to draw: three topics in a row from the release bot (each its own card, not run together like chat
-# messages), a card taller than the fold (展开 / 收起), one of mine, a link, and topics with 0, 1, 2 and 6 replies.
+# messages), a card taller than the fold ("Expand" / "Collapse"), one of mine, a link, and topics with 0, 1, 2 and 6 replies.
 LARK_TOPIC_FEEDS = set()
 if os.environ.get("MOCK_LARK_TOPIC"):
     def _topic(pos, who, text, mins, replies=(), **kw):
@@ -5167,7 +5228,7 @@ if os.environ.get("MOCK_LARK_TOPIC"):
               "消息支持定时发送", "群公告支持富文本", "修复弱网下图片重复上传", "修复切换账号后角标不清零",
               "修复深色模式下二维码看不清", "安装包小了 8 MB"]  # long enough that what the fold hides reaches past the card's foot
     LARK_MESSAGES["f4"] = [
-        # 风灵月影 (LarkMessageDisplayTests' f2, as topics): an edited topic with an old version kept, whose newest reply
+        # the edited-topic fixture (LarkMessageDisplayTests' f2, as topics): an edited topic with an old version kept, whose newest reply
         # was recalled with its text kept; a recalled topic the Lark gateway kept (with reactions and a reply, which a recalled
         # topic does not show), and one it did not (the text must never show).
         _topic(397, "Tom", "周四上架，商店审核预计一天", mins=29 * 60, edited=True, edit_history=[
@@ -5214,7 +5275,7 @@ if os.environ.get("MOCK_LARK_TOPIC"):
                   "lark": {"feed_id": "f4", "is_group": True, "is_topic": True, "start_position": "405", "read_position": "404"}})
 
 
-# MOCK_LARK_RICH=1 (docs/testing.md「卡顿测量」): f3's history is heavier, like a busy work group's: every third message
+# MOCK_LARK_RICH=1 (docs/testing.md "Measuring stalls"): f3's history is heavier, like a busy work group's: every third message
 # before the unread ones is a card, a picture or a rich post instead of a line of chatter.
 if os.environ.get("MOCK_LARK_RICH"):
     for _i, _m in enumerate(m for m in LARK_MESSAGES["f3"] if int(m["position"]) < 300 and not m.get("is_mine")):
@@ -5410,7 +5471,7 @@ def fs_post(h, p, q, body):
             out.append({"message_id": m["id"], "read_count": read, "unread_count": members - 1 - read})
         h.send_json({"states": out}); return True
     if p.startswith("/api/v1/lark/users/") and p.endswith("/chat"):
-        # 发消息 on a profile card: the one-to-one chat with them (韩梅梅's is f1; anyone else gets an empty one).
+        # "Send message" on a profile card: the one-to-one chat with them (the sample contact's is f1; anyone else gets an empty one).
         uid = p.split("/")[5]
         feed = "f1" if uid == "u_hmm" else "dm-" + uid
         FS_MESSAGES.setdefault(feed, [])
@@ -5479,7 +5540,7 @@ def model_configuration(include_uses=False):
                            provider_ids=[p["id"] for p in providers if p["kind"] == kind], status="未验证")
             if pid in MODEL_SCOPES:
                 purpose["uses"] = [{"name": use} for use in MODEL_SCOPES[pid]]
-            # MOCK_MODEL_LIMIT=1: the default API connection is out of quota for 23 more minutes (docs/model-config.md「上游限流」).
+            # MOCK_MODEL_LIMIT=1: the default API connection is out of quota for 23 more minutes (docs/model-config.md "Upstream rate limits").
             if os.environ.get("MOCK_MODEL_LIMIT") and effective["provider"] == "legacy.ai":
                 purpose["limit"] = {"reason": "quota", "until": later(minutes=23)}
                 purpose["status"] = "额度用完，23 分钟后重试"
@@ -5487,7 +5548,7 @@ def model_configuration(include_uses=False):
     return {"purposes": purposes, "providers": providers}
 
 
-# 新建 Agent's model picker: what each launcher's agent lists in its /model menu (node/launcher_models.go). Claude
+# "New Agent"'s model picker: what each launcher's agent lists in its /model menu (node/launcher_models.go). Claude
 # Code's aliases resolved with the launcher's settings, then its gateway's models; Codex's model/list. sonnetcc passes
 # its own --model, so a pick would not reach it. MOCK_MODELS_SECONDS: how long the CLI takes to answer.
 _CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
@@ -5511,7 +5572,7 @@ LAUNCHER_MODELS = {
 LAUNCHER_MODELS["sonnetcc"] = dict(LAUNCHER_MODELS["claude"], locked="启动器固定了模型参数，不能覆盖具体模型")
 
 
-# 设置 › 模型供应商: ~/.zshrc launchers, two of them through made-up example gateways a quota plugin can read.
+# Settings › Model providers: ~/.zshrc launchers, two of them through made-up example gateways a quota plugin can read.
 LAUNCHERS = [
     {"name": "cc_main", "source": "zshrc", "base_url": "http://gateway.example.com:18000", "model": "claude-opus-5-5", "machines": ["macbook"]},
     {"name": "cc_team", "source": "zshrc", "base_url": "https://relay.example.net", "model": "example-pro", "machines": ["macbook"]},
@@ -5519,7 +5580,7 @@ LAUNCHERS = [
     {"name": "cc_old", "source": "zshrc", "base_url": "https://relay.example.com", "model": "claude-opus-4-7", "machines": ["macbook"], "hidden": True},
     {"name": "cc_test", "source": "zshrc", "base_url": "https://relay.example.com", "model": "model_api/experimental", "machines": ["macbook"], "hidden": True},
 ]
-if os.environ.get("MOCK_MANAGED_LAUNCHER"):  # one added in Jarvis (LauncherSwipeTests swipes it to 删除)
+if os.environ.get("MOCK_MANAGED_LAUNCHER"):  # one added in Jarvis (LauncherSwipeTests swipes it to "Delete")
     LAUNCHERS.insert(0, {"name": "jv_strong", "source": "jarvis", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "has_key": True, "auth": "bearer"})
 def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, exhausted=False):
     w = {"label": label, "unit": unit}
@@ -5529,7 +5590,7 @@ def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, ex
     if resets: w["resets_at"] = resets
     if exhausted: w["exhausted"] = True
     return w
-LAUNCHER_QUOTAS = {  # as a quota plugin would answer (docs/extensions.md「额度」); gateway_name is what the app shows
+LAUNCHER_QUOTAS = {  # as a quota plugin would answer (docs/extensions.md "Quotas"); gateway_name is what the app shows
     "cc_main": {"gateway": "example-gateway", "gateway_name": "示例网关", "key_name": "cc_main",
         "budget": [_w("每周预算", 0.62, 496, 800, "usd", later(hours=60))],
         "pools": [
@@ -5546,7 +5607,7 @@ LAUNCHER_QUOTAS = {  # as a quota plugin would answer (docs/extensions.md「额�
              "models": [{"model": "example-flash", "windows": [_w("TPM", 0.02, 8400, 500000, "tokens")]}]},
             {"name": "供应商 B", "state": "unsupported", "detail": "上游没有额度接口，只有网关统计"}]},
 }
-# 新增供应商 › 从插件添加 (docs/extensions.md「模型供应商」): the providers made-up plugins offer (GET /api/v1/launchers/presets).
+# "Add provider" › "Add from plugin" (docs/extensions.md "Model providers"): the providers made-up plugins offer (GET /api/v1/launchers/presets).
 LAUNCHER_PRESETS = [
     {"id": "example-gateway/team", "plugin": "example-gateway", "name": "示例网关 · 团队", "description": "团队共用的 Claude Code 网关，按 Key 计费",
      "kind": "launcher", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "small_model": "claude-haiku-5-5",
@@ -5557,9 +5618,9 @@ LAUNCHER_PRESETS = [
      "models_error": "插件读模型列表超时"},
 ]
 
-# MOCK_PROVIDERS=1 (#2455, scripts/test/web_providers_e2e.py): 设置 › 模型供应商's wizard and ~/.zshrc import. Two managed
-# providers (one with every advanced field), 测试连接 that passes or fails (a key or address with "bad" in it fails),
-# 获取模型列表 with 3 models, and an import preview of 3 providers on macbook (one merging into gw_full); studio's node is
+# MOCK_PROVIDERS=1 (#2455, scripts/test/web_providers_e2e.py): Settings › Model providers's wizard and ~/.zshrc import. Two managed
+# providers (one with every advanced field), "Test connection" that passes or fails (a key or address with "bad" in it fails),
+# "Fetch models" with 3 models, and an import preview of 3 providers on macbook (one merging into gw_full); studio's node is
 # too old (409 node_outdated), nas is offline (503). Keys and headers are kept only as has_key / has_headers.
 MOCK_PROVIDERS = os.environ.get("MOCK_PROVIDERS") == "1"
 PROVIDER_LOG = {"post": None, "put": None, "test": [], "discover": [], "import": None}
@@ -5676,7 +5737,7 @@ def providers_route(h, method, p, q, body):
         h.send_json({"launcher": l}); return True
     return False
 
-# The 公司圈 post behind the inbox's moment item (LarkMomentsPostView reads these).
+# The Moments post behind the inbox's moment item (LarkMomentsPostView reads these).
 def _ms(minutes): return int((datetime.now(timezone.utc) - timedelta(minutes=minutes)).timestamp() * 1000)
 MOMENT_POST = {"id": "mp1", "userName": "我", "userId": "me", "commentCount": 3, "reactionCount": 12, "createTime": _ms(150),
                "content": {"text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好", "segments": [{"kind": "text", "text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好"}]},
@@ -5916,7 +5977,7 @@ if os.environ.get("MOCK_TASKS") == "1":
 
 
 # MOCK_WAKES=1: a session whose answer started three background tasks; each woke the agent when it ended (wake notices),
-# and it worked a little and answered each (the 3 个后台任务完成 drawer).
+# and it worked a little and answered each (the "3 background tasks completed" drawer).
 WAKES = "a1f3c2d4-0000-4000-8000-00000000000b"
 if os.environ.get("MOCK_WAKES") == "1":
     SESSIONS.append(sess("macbook", WAKES, "发版前检查", "/Users/me/code/weather", "done", "unread", "weather", 1, "check", 6, 2,
@@ -5994,7 +6055,7 @@ if os.environ.get("MOCK_CHAT_LINES") == "1":
         + tool("Bash", {"command": "npm run test:e2e -- search", "description": "跑搜索的用例"}, "31 passed, 2 failed", 30)
         + [it("assistant", "thinking", 29, text="两个失败都在价格筛选，看一下是不是数据的问题。")]
         + tool("Read", {"file_path": "/Users/me/code/shop-web/e2e/search.spec.ts"}, "test('price filter', …)", 28))
-    # the search one launched one of its own, which forked itself once (they show nested in 全部子 Agent, web and iOS)
+    # the search one launched one of its own, which forked itself once (they show nested in "All sub-agents", web and iOS)
     ITEMS[LINES + "@sa3price"] = (
         [it("user", "text", 27, text="查价格筛选的测试数据")]
         + [it("assistant", "text", 26, text="测试数据里有两件商品没有价格，筛选把它们排除了。")])
@@ -6020,9 +6081,9 @@ if os.environ.get("MOCK_CHAT_LINES") == "1":
 
 
 # MOCK_SUBAGENT_CARDS=1: subagent cards in the chat (#1963, web): a finished exchange whose subagents completed, failed
-# and nested (one launched another, which launched a third) fold into its 已工作; then the live exchange, with one
+# and nested (one launched another, which launched a third) fold into its "Work done"; then the live exchange, with one
 # still running in the background (its card stays in the open) and a command running after it. Every subagent has a
-# transcript ("<session>@<agent>") for the card's latest steps and the side panel's 查看完整过程.
+# transcript ("<session>@<agent>") for the card's latest steps and the side panel's "View full process".
 SUBCARDS = "a1f3c2d4-0000-4000-8000-0000000c1e02"
 
 
@@ -6145,7 +6206,7 @@ if os.environ.get("MOCK_WORK_GROUPS") == "1":
 
 
 # MOCK_API_ERRORS=1: model API errors as Claude Code writes them when it gives up. The home conversation ends with the
-# same 502 three times (the user said 继续 twice in between); an idle Agent's last answer is a login error. The texts
+# same 502 three times (the user said "Continue" twice in between); an idle Agent's last answer is a login error. The texts
 # follow real ones with every id, host and region replaced.
 # MOCK_CARDS=1: the main conversation ends with a health answer drawn as cards (#886, ```persona-card): a stacked bar
 # with a rest, a stat with a note, a line and bars, and a block the app cannot read (stays a code block).
@@ -6168,7 +6229,7 @@ if os.environ.get("MOCK_CARDS") == "1":
             _card({"type": "pie", "segments": [{"label": "a", "value": 1}]}),
         ])),
     ]
-# The health space's conversations (docs/health.md「图表」, #3140): the numbers in each answer come with the charts its
+# The health space's conversations (docs/health.md "Charts", #3140): the numbers in each answer come with the charts its
 # CLAUDE.md asks for: sleep and steps by day as lines, a stat for today's steps, each meal's calories as bars, how the
 # day's calories split as a stacked bar, the details as a table. Made-up numbers.
 _hcard = lambda d: "```persona-card\n" + json.dumps(d, ensure_ascii=False) + "\n```"
@@ -6206,7 +6267,7 @@ ITEMS["hlth0004-0000-4000-8000-000000000004"] = (
         "| 午餐 | 米饭一碗、宫保鸡丁一份、清炒西兰花 | 870 kcal |\n| 晚餐 | 荞麦面一碗、无糖酸奶一杯 | 480 kcal |",
         "剩下的 420 kcal 够一份水果加一杯牛奶；宫保鸡丁油多，下次可以换成清蒸鱼，能少 200 kcal 左右。"]))]
 )
-# 统一渲染器的助手截图：一个只读 persona-view 和一个旧 persona-card，不影响其他 mock 模式。
+# Assistant screenshots with the shared renderer: a read-only persona-view and a legacy persona-card, leaving other mock modes unchanged.
 if os.environ.get("MOCK_EXTENSION_CARDS") == "1":
     _view = {"sections": [{"title": "本周概览", "items": [
         {"type": "markdown", "text": "**会议记录已整理**，可以查看摘要。"},
@@ -6247,9 +6308,9 @@ if os.environ.get("MOCK_API_ERRORS") == "1":
            "\"request_id\":\"req_011CUdExampleExample01\"} · Please run /login"),
     ]
 
-# MOCK_CHAT_CONTENT=1: what a conversation draws beyond plain text (docs/android.md「对话内容」). A 「看图、文件和计划」
+# MOCK_CHAT_CONTENT=1: what a conversation draws beyond plain text (docs/android.md "Conversation content"). A "Images, files and plans"
 # session on the MacBook: photos sent from the phone (<attached_images>, one of them gone), file paths in the messages,
-# a photo-only message, a plan / a question / a sub-agent, and a reply the hub cut (看全文 loads it). The /orders Codex
+# a photo-only message, a plan / a question / a sub-agent, and a reply the hub cut ("View full text" loads it). The /orders Codex
 # session gets two file changes (a patch and a new file), so its live work line shows them; a Jarvis conversation gets a
 # photo too. The photos are files of the MOCK_FILES tree (served without MOCK_FILES as well); the server's one only
 # without MOCK_FILES (its fallback reads the MacBook).
@@ -6337,8 +6398,8 @@ if os.environ.get("MOCK_DRAWER") == "1":
             "```\n\n同一秒拍的会自动加上 -1、-2。")),
     ]
 
-# MOCK_TITLES=1: the assistant's conversations have the hub's titles (docs/assistant.md「对话标题」), one with a topic
-# too long for a narrow drawer; 重命名 is recorded at /mock/renamed (AssistantTitlesTests).
+# MOCK_TITLES=1: the assistant's conversations have the hub's titles (docs/assistant.md "Conversation titles"), one with a topic
+# too long for a narrow drawer; "Rename" is recorded at /mock/renamed (AssistantTitlesTests).
 RENAMED = []
 if os.environ.get("MOCK_TITLES") == "1":
     for s, title in zip(ASSISTANT[1:], ("1029 | 定时 | 早报", "1031 | 功能 | 约周五和韩梅梅吃饭", "1028 | 研究 | 这个季度读书笔记的主题和书单整理")):
@@ -6346,7 +6407,7 @@ if os.environ.get("MOCK_TITLES") == "1":
 
 # MOCK_LONG_ASSISTANT=1: the Jarvis tab's main conversation is a long one, like the one a user keeps for weeks: sixty
 # exchanges, each with a few tool calls and a long Markdown reply (headings, lists, a table, a code block), for measuring
-# the Jarvis page's frames (docs/testing.md「卡顿测量」).
+# the Jarvis page's frames (docs/testing.md "Measuring stalls").
 if os.environ.get("MOCK_LONG_ASSISTANT") == "1":
     _long = []
     for _n in range(60):
@@ -6435,7 +6496,7 @@ def mock_chat_read():
 if os.environ.get("MOCK_CHAT_READ") == "1":
     mock_chat_read()
 
-# MOCK_SELECT_TEXT=1: 选择文本 (#3189, SelectTextTests). Your message is plain text with Markdown-looking marks that must
+# MOCK_SELECT_TEXT=1: "Select text" (#3189, SelectTextTests). Your message is plain text with Markdown-looking marks that must
 # stay; the reply has a fence inside a longer fence, a formula with `*`, indented code, a rule and a tab-indented item.
 SELECT_TEXT = "a1f3c2d4-0000-4000-8000-0000005e1ec7"
 if os.environ.get("MOCK_SELECT_TEXT") == "1":
@@ -6467,7 +6528,7 @@ header{padding:56px 24px 24px}h1{font-size:34px;margin:0 0 8px}p{color:var(--mut
 <div class="card"><div class="big">18℃</div><p>降雨概率 70%，记得带伞</p></div>
 <div class="card"><p>这是 Agent 在电脑上起的页面，通过 hub 转发到手机。</p><p id="loads">第 {n} 次加载</p></div>
 </body></html>"""
-    _loads = [0]  # how many times the page itself was asked for: a reopen or 刷新 loads it again (PortForwardTests)
+    _loads = [0]  # how many times the page itself was asked for: a reopen or "Refresh" loads it again (PortForwardTests)
 
     class _Dev(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -6527,7 +6588,7 @@ def port_listening(port):
 
 
 # MOCK_LINKS=1: links in the Jarvis tab's main conversation and in an inbox item, to open in the link sheet
-# (docs/android.md「链接」): a plain web page, a jarvis:// link that only navigates, and a javascript: link that is dropped.
+# (docs/android.md "Links"): a plain web page, a jarvis:// link that only navigates, and a javascript: link that is dropped.
 if os.environ.get("MOCK_LINKS") == "1":
     ITEMS[ASK1] = ITEMS[ASK1] + [it("assistant", "text", 1, text=(
         "资料在 [示例页面](https://example.com/) 里；要看那个 Agent 就点 [这里](jarvis://session/macbook/" + RICH +
@@ -6536,14 +6597,14 @@ if os.environ.get("MOCK_LINKS") == "1":
                      "title": "评审材料", "sender": "Lucy Wang", "preview": "材料在 https://example.org/ ，评审前看一下",
                      "count": 1, "started_at": ago(minutes=8), "updated_at": ago(minutes=8), "tier": "action",
                      "summary": "评审材料的链接：https://example.org/", "read": False})
-    # A web page from a mail (the HTML mail about the talk) and from the knowledge base (天气 App's profile): both open
-    # in the app, where picked text goes to Jarvis (交给 Jarvis).
+    # A web page from a mail (the HTML mail about the talk) and from the knowledge base (the weather app's profile): both open
+    # in the app, where picked text goes to Jarvis ("Give to Jarvis").
     MAIL_MESSAGES[501]["html"] += '<p>议程放在 <a href="https://example.org/agenda">example.org/agenda</a>。</p>'
     KB_DETAIL[("projects", "weather-app")]["summary"] += "\n- **设计稿**：[小组件设计稿 v3](https://example.com/design/widgets)"
 
 
 # MOCK_LINK_SCHEMES=1: a fresh reply in the first Agent conversation with a link of every kind the link sheet handles
-# (docs/android.md「终端与链接」): a web page written a minute ago (preloaded), mailto: and tel: (asked first, then
+# (docs/android.md "Terminal and links"): a web page written a minute ago (preloaded), mailto: and tel: (asked first, then
 # another app), a jarvis:// tab link (navigates), jarvis://pair (ignored in a conversation) and a javascript: link.
 if os.environ.get("MOCK_LINK_SCHEMES") == "1":
     _first = SESSIONS[0]["session_id"]
@@ -6719,7 +6780,7 @@ if os.environ.get("MOCK_PHOTO") == "1":
 
 GAP = os.environ.get("MOCK_GAP") == "1"
 
-# ---------- files (docs/ios.md「文件查看器」) ----------
+# ---------- files (docs/ios.md "File viewer") ----------
 # MOCK_FILES=1: a made-up checkout of the weather app under /Users/me/code/weather that GET …/file and …/stat answer
 # from, with big files for timing the viewer (a 3 MB JSON, a 20 000-line Go file, a 5 000-line README, a 5 MB log),
 # one small file per language for screenshots, and a last message in the widget conversation that names some of them
@@ -7209,7 +7270,7 @@ def file_read(path, cwd, offset, stream=False):
         return {"path": p, "name": name, "size": 0, "is_dir": True, "entries": names, "truncated": False}
     value = FILES[p]
     if isinstance(value, bytes):
-        if stream:  # file?stream=1 (docs/protocol.md「文件预览」): described, the bytes from …/file/download
+        if stream:  # file?stream=1 (docs/protocol.md "File preview"): described, the bytes from …/file/download
             return {"path": p, "name": name, "size": len(value), "mime": mock_mime(p), "stream": True, "revision": "%x-1" % len(value),
                     "truncated": False, "is_dir": False}
         return {"path": p, "name": name, "size": len(value), "mime": mock_mime(p), "data": base64.b64encode(value[:FILE_PAGE]).decode(),
@@ -7229,7 +7290,7 @@ def file_read(path, cwd, offset, stream=False):
 # MOCK_PERSONAS=<dir>: the packages in it, as the hub lists and serves ~/.jarvis/personas. MOCK_PERSONAS=demo: the
 # original placeholder (scripts/assets/make_persona.py demo), made into a temporary directory at start. With "builtin"
 # among them (MOCK_PERSONAS=builtin, demo,builtin): the packages built into personad too (server/internal/hub/personas,
-# 奶蛙), first, as the hub lists them. A tiered one shows MOCK_PERSONA_TIER (default: its default tier); GET
+# the frog look), first, as the hub lists them. A tiered one shows MOCK_PERSONA_TIER (default: its default tier); GET
 # /mock/persona-tier?tier=<key> moves it and pushes "personas", as the hub does when the board moves the user.
 _PERSONA_ARGS = [x for x in os.environ.get("MOCK_PERSONAS", "").split(",") if x]
 BUILTIN_PERSONAS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "server", "internal", "hub", "personas")
@@ -7314,7 +7375,7 @@ def set_persona_tier(key):
             pass
 
 
-# ---------- looks (docs/extensions.md「形象」, #3200) ----------
+# ---------- looks (docs/extensions.md "Persona look", #3200) ----------
 # MOCK_LOOKS=example (or a package directory): an extension's looks (schema/extension/examples/example-looks), listed
 # and served as the hub does (a made persona.json; only the files a look names). GET /api/v1/looks lists the built-in
 # looks, the packages and these; PUT /api/v1/looks/current chooses one (MOCK_LOOK: chosen at start) and pushes "look".
@@ -7537,7 +7598,7 @@ if os.environ.get("MOCK_HUB_LINKS"):
 
 # MOCK_COMPACT=1: compactions as Claude Code writes them, after the hub turned them into items: the Jarvis main
 # conversation compacted while idle after its last answer (the boundary, the summary it went on from, the idle note);
-# 检查 PR #42 compacted with /compact, then in the middle of a later turn (auto). For the chat's compaction divider.
+# Review PR #42 compacted with /compact, then in the middle of a later turn (auto). For the chat's compaction divider.
 if os.environ.get("MOCK_COMPACT"):
     def _compaction(ts, trigger, idle=False):
         b = it("system", "notice", ts, text="上下文已压缩")
@@ -7877,7 +7938,7 @@ def mock_files(p, q):
 # --- end of Files & Git ---
 
 
-# --- Files & Git on Android (docs/android.md「对话里的文件和 Git」): a PDF in the tree, a tag in the history, the
+# --- Files & Git on Android (docs/android.md "Files and Git in conversations"): a PDF in the tree, a tag in the history, the
 # folders above the home (the browser can walk up to /), and with MOCK_FILES=1 the tree's files readable too (the
 # big-file set answers …/file first). MOCK_TIME_OFFSET=+08:00: file and commit times carry the machine's own offset,
 # as a real node sends them ("2026-10-31T13:58:40.205893083+08:00"), not Z.
@@ -8056,7 +8117,7 @@ if os.environ.get("MOCK_OFFICE"):
         _ext = os.path.splitext(_name)[1]
         MOCK_TREE[MOCK_REPO + "/docs/" + _name] = _body if isinstance(_body, str) else _body.decode() if _ext == ".rtf" else (
             MOCK_MIMES.get(_ext, "audio/wav" if _ext == ".wav" else "application/octet-stream"), base64.b64encode(_body).decode())
-# MOCK_TURN_IMAGES=one|many: the pictures the agent looked at in a turn, under its answer (docs/protocol.md「这一轮看过的图片」),
+# MOCK_TURN_IMAGES=one|many: the pictures the agent looked at in a turn, under its answer (docs/protocol.md "Images viewed in this turn"),
 # with the Office files it made as cards. `many`: the blog conversation's last turn reads design pictures, a phone
 # screenshot and a picture too big to keep (only its path), looks at the browser and the screen; the weather one is
 # still at it (two so far); the assistant looked at a Mac's screen. `one`: the blog turn looked at one page. All
@@ -8153,7 +8214,7 @@ if os.environ.get("MOCK_TURN_IMAGES"):
             "mcp__jarvis__computer_state", {"machine": "studio"}, "屏幕上：Safari（首页）、备忘录", 2, (SHOT_SCREEN, 504, 328)) + [
             it("assistant", "text", 1, text="Studio 上开着 Safari（博客首页）和备忘录，备忘录里是一张发布前的检查清单。")]
     ITEMS[BLOG] = ITEMS[BLOG] + _ask  # it() numbers lines in order: appended ones come after
-# MOCK_RENDER=1: formulas and a diagram (docs/ios.md「公式和图」): the last turn of the release-notes conversation, and docs/算法.md.
+# MOCK_RENDER=1: formulas and a diagram (docs/ios.md "Formulas and diagrams"): the last turn of the release-notes conversation, and the algorithm document fixture.
 RENDER_MD = ("降雨概率按逻辑回归估：$p = \\sigma(w^\\top x + b)$，其中 \\(\\sigma(z) = 1/(1+e^{-z})\\)。损失是交叉熵：\n\n"
              "$$\nL = -\\frac{1}{n}\\sum_{i=1}^{n} \\big[y_i \\log p_i + (1-y_i)\\log(1-p_i)\\big]\n$$\n\n"
              "刷新流程：\n\n```mermaid\nflowchart LR\n  A[小组件请求] --> B{缓存新鲜?}\n  B -- 是 --> C[读缓存]\n"
@@ -8268,7 +8329,7 @@ def net_control(path, q):
 # machine list (a new last_seen), and `steps` new steps in the turn of each conversation a connection has open. GET
 # /mock/churned tells how many rounds have gone out. &final=1: then the turn ends (a last reply, the working agents
 # done; counted as one more round). For checking that what the user is doing survives the updates.
-# &inbox=1: each round also changes an inbox item (a new Feishu message: the inbox's 需要你 count changes every other
+# &inbox=1: each round also changes an inbox item (a new Feishu message: the inbox's "Needs you" count changes every other
 # round) and pushes `inbox`, and pushes the pending interactions again; &waiting=1: one more interaction comes and goes
 # (the waiting count changes every round, its card shows and goes on the Agents list). The real hub does both all day;
 # the tab bar's and the shell's badges read them, the mock's other pushes never touched them.
@@ -8277,7 +8338,7 @@ def net_control(path, q):
 # and one of them finishes and starts again every three rounds (its space changes rank). ScrollUnderPushTests.
 # MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
 # MOCK_HUB_UPDATE=available|waiting|notice|held|docker|docker-pinned: the hub's version and its updating itself
-# (docs/hub-update.md): a newer release to install (auto-update off), an update waiting for two busy agents, 「自动更新已开启」
+# (docs/hub-update.md): a newer release to install (auto-update off), an update waiting for two busy agents, "Automatic updates enabled"
 # told for the first time, a newer release auto-update holds back (its code does not contain the hub's commit, with
 # the held line in the history), or a Docker hub with a newer image (on :latest, or on a pinned version tag). Unset:
 # GET /api/v1/hub/update is 404 (a hub from before), no line anywhere.
@@ -8379,7 +8440,7 @@ def png(w, h, rgb):
 # MOCK_SCREEN=fake (#1322): the live screen's 5900 goes to a Screen Sharing of the mock's own instead of this Mac's: it
 # signs in with VeNCrypt Plain (noVNC asks for an account and a password, as for macOS's), takes FAKE_SCREEN's account
 # and password (GET /mock/screen-password?p=… changes the password: the Mac's was changed), then shows one frame.
-# …&slow=S: it answers S seconds late (the small window's 连接中…); …&down=1: it hangs up on everyone, now and on
+# …&slow=S: it answers S seconds late (the small window's "Connecting…"); …&down=1: it hangs up on everyone, now and on
 # connecting (0: back).
 FAKE_SCREEN = {"account": "me", "password": "mock-pass", "port": 0, "signins": [], "typed": "",  # typed: keys after signing in
                "pointer": None, "clicks": [], "clipboard": "", "conns": [], "frames": 0, "slow": 0.0, "down": False}
@@ -8516,7 +8577,7 @@ def fake_screen_sharing():
                         new = (80 + (t * 7) % 300, 120 + (t * 3) % 120)
                         x0, y0 = min(old[0], new[0]), min(old[1], new[1])
                         update([(0, 0, 2, 1), (x0, y0, min(FAKE_W - x0, abs(new[0] - old[0]) + 40), min(FAKE_H - y0, abs(new[1] - old[1]) + 40))])
-                elif kind == 4:  # a key: what is typed on the lock screen (一键解锁, #1507 a-2), Return as \n
+                elif kind == 4:  # a key: what is typed on the lock screen ("Unlock", #1507 a-2), Return as \n
                     down, _, key = struct.unpack(">BHI", exact(c, 7))
                     if down and key == 0xff0d: FAKE_SCREEN["typed"] += "\n"
                     elif down and (0x20 <= key <= 0xff): FAKE_SCREEN["typed"] += chr(key)
@@ -8884,7 +8945,7 @@ def say(text, user=None, stream=False, steps=10, ms=300, late=0, drop=False):
 
 
 if os.environ.get("MOCK_COMPUTER", "") not in ("", "off"):
-    # The assistant operating MacBook (#1182, #1184), in a conversation of its own: its tools read 操控电脑 / 看电脑, the
+    # The assistant operating MacBook (#1182, #1184), in a conversation of its own: its tools read "Control computer" / "View computer", the
     # screenshot is a made-up Calculator (calculator_png), and under them VNC opens the live screen.
     _steps = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "6", "Multiply", "7", "Equals")]
     _run = tool("mcp__jarvis__computer_run", {"machine": "macbook", "steps": _steps}, '{"ok":true,"executed":5,"total":5}', 1)
@@ -8898,7 +8959,7 @@ if os.environ.get("MOCK_COMPUTER", "") not in ("", "off"):
         [it("assistant", "text", 1, text="算好了：6 × 7 = 42。截图在上面。")]
     if os.environ.get("MOCK_COMPUTER_OPERATING") == "1":
         # It is operating MacBook right now (#1343): the last call has no result yet, in the assistant's conversation and
-        # in an agent's (its own Cua Driver MCP), so the running work shows 「正在操作 MacBook · …」.
+        # in an agent's (its own Cua Driver MCP), so the running work shows "Operating MacBook · …".
         _again = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "9", "Multiply", "8")]
         ITEMS[ASK_CUA] += [it("user", "text", 0, text="再算一下 9×8"),
                            it("assistant", "tool_use", 0, tool_use_id="toolu_mock_operating", tool_name="mcp__jarvis__computer_run",
@@ -8924,7 +8985,7 @@ if os.environ.get("MOCK_CHURN") == "1":
 # MOCK_COMPUTER=ready|permissions|locked: the hub's plugin cua is on (docs/computer-use.md) and macbook is turned on
 # in that state; Mac Studio is a Mac it is not on for yet. =off: on, but for no machine yet. Unset: the plugin is off.
 MOCK_COMPUTER = os.environ.get("MOCK_COMPUTER", "")
-MOCK_METRICS_FAIL = os.environ.get("MOCK_METRICS_FAIL", "")  # the 机器 page's failed refresh (G219): 1 | after
+MOCK_METRICS_FAIL = os.environ.get("MOCK_METRICS_FAIL", "")  # the Machines page's failed refresh (G219): 1 | after
 METRICS_ASKED = 0.0  # when /metrics was first asked (MOCK_METRICS_FAIL=after)
 MOCK_WEB = os.environ.get("MOCK_WEB", "")  # web/dist: serve the built client's live screen page (#1184)
 COMPUTER_STATES = {
@@ -8941,8 +9002,8 @@ COMPUTER_STATES = {
                "note": "这台 Mac 锁屏了：解锁后才能操控。屏幕共享开着时，可以在它的画面上输登录密码解锁"},
     "missing": {"installed": False, "daemon": False, "ready": False, "note": "这台 Mac 上没有装 Cua Driver"},
 }
-# 安装 Cua Driver and 去授权 (#1183) move on by the clock: each step MOCK_COMPUTER_STEP seconds (default 2), then the
-# grant's dialogs, then 允许 is clicked on the Mac.
+# "Install Cua Driver" and "Grant access" (#1183) move on by the clock: each step MOCK_COMPUTER_STEP seconds (default 2), then the
+# grant's dialogs, then "Allow" is clicked on the Mac.
 COMPUTER_STEP = float(os.environ.get("MOCK_COMPUTER_STEP", "2"))
 # MOCK_COMPUTER_APPS=1: MacBook has two apps always allowed for the assistant (#1507), the machine page lists them.
 COMPUTER_APPS = {"macbook": [{"bundle_id": "com.apple.calculator", "name": "计算器", "at": "2026-11-04T10:00:00Z"},
@@ -8989,7 +9050,7 @@ if MOCK_COMPUTER:
 
 # MOCK_BROWSER=missing|setup|ready (docs/plan-ego-browser.md): the plugin ego is on and MacBook is turned on, with ego
 # lite not installed / installed but its first-run setup not done / ready (its usage statistics still on);
-# MOCK_BROWSER_ANALYTICS=off has them off. 安装 ego lite and 打开 ego lite move on by the clock (MOCK_COMPUTER_STEP
+# MOCK_BROWSER_ANALYTICS=off has them off. "Install ego lite" and "Open ego lite" move on by the clock (MOCK_COMPUTER_STEP
 # seconds a step); an open setup is done a few steps later. Mac Studio is a Mac it is not on for, not installed.
 MOCK_BROWSER = os.environ.get("MOCK_BROWSER", "")
 
@@ -9024,8 +9085,8 @@ def mock_usage_windows():
          "windows": [win("7d", 10080, 12, 5 * 24 * 3600)]},
     ], "checked_at": iso(now)}
 BROWSER_JOBS = {}  # machine id -> {"kind": install|open, "at": started, "started": iso, "cancelled": bool}
-# MOCK_HERDR_STOPPED=macbook,studio: those machines' classic herdr does not run (the Agents list's 「herdr 没在运行」
-# row with 启动, #1916); every other machine's does. MOCK_HERDR_START: how 启动 goes, "" (it comes up after 1.5 s),
+# MOCK_HERDR_STOPPED=macbook,studio: those machines' classic herdr does not run (the Agents list's "herdr is not running"
+# row with "Start", #1916); every other machine's does. MOCK_HERDR_START: how "Start" goes, "" (it comes up after 1.5 s),
 # "fail" (502 with the node's reason), "slow" (6 s), "stale" (it comes up but GET keeps saying it does not, as a hub
 # that only knew what node.info said). GET /mock/herdr: how many starts each machine was asked for; with
 # ?stopped=<ids>&start=<how> it sets both (HerdrNoticeTests), and /mock/reset puts the environment's back.
@@ -9137,11 +9198,11 @@ for _m in MACHINES:
                         **({"note": "Orca 协议版本不兼容，请先更新 Orca。"} if _m["id"] == "server" else {})}]
                       if _m.get("online") else [])
 
-# ---------- MOCK_NEEDS / MOCK_HISTORY: the Jarvis page (docs/android.md「Jarvis 页」) ----------
-# By default five agent requests and several inbox items in 需要你 wait: the Jarvis home's 现在要你处理的事 shows three
-# lines and 还有 N 件在收件箱. MOCK_NEEDS=none: nothing waits (no section); MOCK_NEEDS=two: one request, one inbox item.
-# MOCK_HISTORY=1: a long Jarvis history (46 more conversations: 最近 lists 30, then 查看全部 N 个), one of them started
-# from 交给 Jarvis (titled by its <jarvis-context> tag), one pinned; the hub's pins are kept as the app writes them.
+# ---------- MOCK_NEEDS / MOCK_HISTORY: the Jarvis page (docs/android.md "Jarvis page") ----------
+# By default five agent requests and several inbox items in "Needs you" wait: the Jarvis home's "Things that need you now" shows three
+# lines and "N more items in the inbox". MOCK_NEEDS=none: nothing waits (no section); MOCK_NEEDS=two: one request, one inbox item.
+# MOCK_HISTORY=1: a long Jarvis history (46 more conversations: "Recent" lists 30, then "View all N"), one of them started
+# from "Give to Jarvis" (titled by its <jarvis-context> tag), one pinned; the hub's pins are kept as the app writes them.
 NEEDS_MODE = os.environ.get("MOCK_NEEDS", "")
 if NEEDS_MODE == "none":
     MOCK_INTERACTIONS.clear()
@@ -9199,12 +9260,12 @@ def chat_pins_route(handler, path, query=None):
 
 
 def pins_route(handler, p):
-    """MOCK_HISTORY: GET and PUT /api/v1/pins keep the hub's pins (the history's 置顶). False otherwise."""
+    """MOCK_HISTORY: GET and PUT /api/v1/pins keep the hub's pins (the history's Pin). False otherwise."""
     if not HISTORY_MODE or p != "/api/v1/pins":
         return False
     if handler.command == "PUT":
         # The hub replaces the pins whole: a list left out is empty (server/internal/hub/pins.go). The app leaves out
-        # an empty list (it does not encode defaults), so 全部取消置顶 sends no "sessions" at all.
+        # an empty list (it does not encode defaults), so "Unpin all" sends no "sessions" at all.
         body = json.loads(handler.last_body or b"{}")
         HUB_PINS["spaces"] = list(body.get("spaces") or [])
         HUB_PINS["sessions"] = list(body.get("sessions") or [])
@@ -9212,7 +9273,7 @@ def pins_route(handler, p):
     return True
 
 
-# ---------- MOCK_PLUGINS: the plugin base (docs/extensions.md「hub 的接口」) ----------
+# ---------- MOCK_PLUGINS: the plugin base (docs/extensions.md "Hub API") ----------
 # MOCK_PLUGINS=1 lists five made-up plugins, one of each state the app draws (needs setup, running, hub.json's,
 # switched off, incompatible), with feature plugin_manager; their pages, switches, settings and secrets work in memory.
 # The form of example-notes has every kind of field. A base_url that is not a URL is refused like the hub does.
@@ -9264,9 +9325,9 @@ PLUGINS["example-gateway"] = {
     "ui": [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "home", "title": "概况", "placement": "plugin_page", "size": "full"},
            {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "usage", "title": "用量", "placement": "nav_page", "size": "full",
             "icon": "chart", "badge": {"text": "3", "tone": "danger"}},
-           # UI version 3's components and pages (docs/extensions.md「UI 版本 3」): -openPlugin example-gateway -openPluginPage notes
+           # UI version 3's components and pages (docs/extensions.md "UI version 3"): -openPlugin example-gateway -openPluginPage notes
            {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "notes", "title": "笔记（组件 v3）", "placement": "plugin_page", "size": "full"}]}
-# A plugin whose program runs on computers (docs/extensions.md「在电脑上运行的程序」, #1830): its field picking them asks
+# A plugin whose program runs on computers (docs/extensions.md "Programs running on computers", #1830): its field picking them asks
 # before one is switched on (the hub's x-confirm), each machine's row says how the program is there (nodes).
 PLUGINS["example-helper"] = {
     "id": "example-helper", "name": "Example 助手", "kind": "providers", "status": "running", "version": "1.0.0", "source": "installed",
@@ -9284,14 +9345,14 @@ PLUGINS["example-helper"] = {
                     {"key": "node_network", "title": "在这些电脑上访问网络", "detail": "api.example.com"},
                     {"key": "node_files", "title": "读写这些电脑上的文件", "detail": "不只是它自己的数据目录"},
                     {"key": "node_secrets", "title": "把密钥发给这些电脑", "detail": "API Key"}]}
-# The UI slots (docs/extensions.md「UI 插槽」): example-gateway's nav_page, overview_card and machine_section.
+# The UI slots (docs/extensions.md "UI slots"): example-gateway's nav_page, overview_card and machine_section.
 _SLOT_UI = [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "today", "title": "今天的用量", "placement": "overview_card",
              "size": "compact", "opens": "usage"},
             {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "gpu", "title": "网关调用", "placement": "machine_section", "size": "full"}]
 
 if MOCK_COMPUTER:
     # The built-in plugin cua, on (MOCK_COMPUTER, docs/computer-use.md): its list of Macs is each Mac's computer.enabled,
-    # both ways, like the hub's (a switch here is the machine page's 允许助手操控这台电脑).
+    # both ways, like the hub's (a switch here is the machine page's "Allow the assistant to control this computer").
     PLUGINS["cua"] = {"id": "cua", "name": "操控电脑（Cua）", "kind": "computer", "status": "running", "version": "202611041200",
                       "source": "builtin", "enabled": True, "contributes": {"computer": ["cua"]},
                       "description": "让助手经 Cua Driver 操控你的 Mac：看窗口和屏幕、点按、输入、截图。要在那台 Mac 上装好 Cua Driver 并给它辅助功能和屏幕录制权限。",
@@ -9330,7 +9391,7 @@ if MOCK_BROWSER:
                       "config": {"machines": ["macbook"]}, "secrets": [], "permissions": []}
 
 
-# 信息（iMessage） as a built-in extension (#1830 step 6): which Mac's Messages the connector reads, one Mac only.
+# Messages (iMessage) as a built-in extension (#1830 step 6): which Mac's Messages the connector reads, one Mac only.
 # MOCK_PLUGINS=1 lists it on MacBook; MOCK_IMESSAGE_EXT=off lists it off with no Mac (a hub without iMessage).
 if PLUGINS_MODE:
     _im_off = os.environ.get("MOCK_IMESSAGE_EXT") == "off"
@@ -9344,7 +9405,7 @@ if PLUGINS_MODE:
                            "config": {} if _im_off else {"machines": ["macbook"]}, "secrets": [], "permissions": []}
 
 # MOCK_PLUGINS=1 with MOCK_CHANNELS=1: WeChat as an installed extension that contributes the channel (its page links to
-# 设置 › 渠道), run in a sandbox with a few connections through the egress proxy (its 运行隔离 section, #2968).
+# Settings › Channels), run in a sandbox with a few connections through the egress proxy (its Runtime isolation section, #2968).
 if PLUGINS_MODE and os.environ.get("MOCK_CHANNELS"):
     PLUGINS["wechat"] = {"id": "wechat", "name": "微信", "kind": "", "status": "running", "version": "0.3.1", "source": "installed",
                          "enabled": True, "description": "在个人微信里私聊机器人：扫码绑定，消息进主对话，回答以纯文字发回。",
@@ -9356,12 +9417,12 @@ if PLUGINS_MODE and os.environ.get("MOCK_CHANNELS"):
                                            "egress": {"allowed": 0, "denied": 0}}
 
 # MOCK_PLUGINS=1 with MOCK_GITHUB_EXTENSION=1: GitHub as an installed extension that contributes the github connector
-# (#3228, #3178): its page shows the connector's 进收件箱 switch (the same GITHUB_CONNECTOR["inbox"] as the connector
+# (#3228, #3178): its page shows the connector's "Send to inbox" switch (the same GITHUB_CONNECTOR["inbox"] as the connector
 # page's, PUT /api/v1/connectors/github/settings) and its own inbox rules in the form. MOCK_GITHUB_EXTENSION=old: a hub
 # from before the switch (the connector lists no inbox), so the page has no such section.
 MOCK_GITHUB_EXTENSION = os.environ.get("MOCK_GITHUB_EXTENSION", "")
 if PLUGINS_MODE and MOCK_GITHUB_EXTENSION:
-    # Signed in from the app's side as a hub of now lists it (login), so its page draws its own 进收件箱 too.
+    # Signed in from the app's side as a hub of now lists it (login), so its page draws its own "Send to inbox" too.
     GITHUB_CONNECTOR.update(enabled=True, capabilities=sorted(set(GITHUB_CONNECTOR.get("capabilities", [])) | {"login"}))
     if MOCK_GITHUB_EXTENSION != "old":
         GITHUB_CONNECTOR["inbox"] = True
@@ -9389,7 +9450,7 @@ def cua_config(pl):
 _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings",
                 "auto_upgrade", "upgrade", "upgrade_note", "nodes"]
 
-# ---------- MOCK_PLUGINS: declarative UI (docs/extensions.md「声明式 UI」) ----------
+# ---------- MOCK_PLUGINS: declarative UI (docs/extensions.md "Declarative UI") ----------
 # example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),
 # with every kind of item; its buttons answer (a toast, a new view, a link), the form's values come back.
 _UI_STATE = {"note": "", "auto": "true", "plan": "team", "refreshed": 0, "capsule_refreshed": 0}
@@ -9489,8 +9550,8 @@ def _ui_view(ui, launcher=""):
             {"type": "text", "text": "GET /v1/usage → 200", "style": "code"}]}]}
 
 
-# "notes" draws UI version 3 (docs/extensions.md「UI 版本 3」): a list with a search box, a filter and 加载更多, rows
-# with an icon, an avatar and a thumbnail pushing a detail page (markdown, a table), whose 编辑 pushes a form that
+# "notes" draws UI version 3 (docs/extensions.md "UI version 3"): a list with a search box, a filter and "Load more", rows
+# with an icon, an avatar and a thumbnail pushing a detail page (markdown, a table), whose "Edit" pushes a form that
 # saves and pops; an empty state and loading. An older app gets what the hub would draw it (_fit_v3).
 _NOTES = [{"id": "n%d" % i, "title": t, "folder": f, "when": w} for i, (t, f, w) in enumerate([
     ("周会纪要", "work", "昨天 18:02"), ("和 Alex 的对话", "work", "昨天 11:20"), ("白板截图", "work", "11-03"),
@@ -9605,7 +9666,7 @@ def _ui_action(ui, action, values):
     return {}
 
 
-# ---------- MOCK_PLUGINS: plugin markets (docs/extensions.md「扩展市场」) ----------
+# ---------- MOCK_PLUGINS: plugin markets (docs/extensions.md "Extension market") ----------
 # Two made-up markets (a public site, a private GitHub repository with its token set); their catalog has a plugin to
 # install, one installed from the market with an upgrade, one installed elsewhere, and one this hub cannot install.
 # Previews, installs, upgrades and removals work in memory.
@@ -9673,7 +9734,7 @@ def _catalog_item(c):
     return {k: v for k, v in it.items() if v not in (None, "", False)} | {"tags": c.get("tags", [])}
 
 
-# Auto-upgrade (docs/extensions.md「自动升级」): example-gateway, from a market at 1.0.0, has 1.1.0 there asking for one more
+# Auto-upgrade (docs/extensions.md "Automatic upgrades"): example-gateway, from a market at 1.0.0, has 1.1.0 there asking for one more
 # host. MOCK_PLUGIN_UPGRADE picks how it stands: needs_permission (default), waiting_idle, skipped, upgraded (the last
 # one went in by itself), none.
 AUTO_UPGRADE = {"auto": True}
@@ -9723,7 +9784,7 @@ def upgrades_route(handler, p, req):
     return False
 
 
-# ---------- MOCK_PLUGINS: places outside the app (docs/extensions.md「系统级位置」) ----------
+# ---------- MOCK_PLUGINS: places outside the app (docs/extensions.md "System-level placements") ----------
 # example-gateway draws a widget "today" (small / medium / Lock Screen and watch face complications) that opens its
 # nav_page "usage", and has two shortcuts. The hub's new paths only (these came after the rename). A sample of an
 # extension's notification with buttons is scripts/mock/apns/extension-notification.apns:
@@ -9788,7 +9849,7 @@ def system_route(handler, p, req):
     return False
 
 
-# ---------- MOCK_EXTENSION_OPS: installs in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277, #3307) ----------
+# ---------- MOCK_EXTENSION_OPS: installs in steps (docs/protocol.md "Extension installation, upgrade and removal progress", #3277, #3307) ----------
 # MOCK_EXTENSION_OPS=1 (with MOCK_PLUGINS): the hub says extension_operations. A preview asked for with async answers
 # 202 {"operation"} at once and goes through download (in four parts) → verify → unpack → check, then waits at consent
 # (needs_consent, GET …/-/operations/{id} carries the preview); the install or upgrade agreed to with async goes on with
@@ -10068,7 +10129,7 @@ def markets_route(handler, p, body):
                 ui = [u for u in PLUGINS["example-gateway"]["ui"] + _SLOT_UI if placement in ("", u["placement"])]
             elif q.get("launcher"):
                 # "elsewhere" has no hosts (listed on every launcher) and always says the launcher is not its gateway:
-                # clients hide it (docs/extensions.md「声明式 UI」, #1339)
+                # clients hide it (docs/extensions.md "Declarative UI", #1339)
                 ui = [{"plugin": "example-gateway", "id": "panel", "title": "Example 网关", "placement": "launcher_section"},
                       {"plugin": "example-gateway", "id": "elsewhere", "title": "别家网关", "placement": "launcher_section"}]
         ui += [u for u in INBOX_ITEM_UI if placement in ("", u["placement"])]
@@ -10145,7 +10206,7 @@ def file_ops_key(mid, path, cwd):
 
 
 def file_ops_free(dir_rel, name, conflict):
-    """The name `name` takes in folder `dir_rel` (a tree key ending in / or ""): itself, or 「名字 2.扩展名」 to keep both;
+    """The name `name` takes in folder `dir_rel` (a tree key ending in / or ""): itself, or "name 2.extension" to keep both;
     None when it is taken and nothing was said."""
     taken = lambda n: dir_rel + n in MOCK_TREE or dir_rel + n + "/" in MOCK_TREE
     if not taken(name) or conflict == "replace": return name
@@ -10349,13 +10410,13 @@ def plugins_route(handler, p, body):
     return True
 
 
-# ---------- MOCK_VOICE: the hub's voice plugin (docs/extensions.md「语音」, docs/android.md「语音对话」) ----------
+# ---------- MOCK_VOICE: the hub's voice plugin (docs/extensions.md "Voice", docs/android.md "Voice chat") ----------
 # MOCK_VOICE=1 serves a running voice plugin: /api/v1/plugins, its voices and models, the model configuration of
 # plugin.voice, and a socket that answers start with ready, then talks by a script (captions, a tool, audio). Modes for
 # captures: drop (closes with 1001, a plugin restart, while Jarvis speaks), bad-model (the model configuration says the
 # model cannot be used), missing-model (the configured model is not in the plugin's catalog), old-hub (no model
 # configuration for it: 404), error (a fatal error after ready), off (no running voice plugin; its socket is a 404),
-# slow (ready comes 8 s after start: the page stays 正在连接…).
+# slow (ready comes 8 s after start: the page stays "Connecting…").
 VOICE_MODE = os.environ.get("MOCK_VOICE", "")
 VOICE_LOG = {"starts": [], "interrupts": 0, "audio": 0}  # what the app sent (GET /mock/voice)
 VOICE_MODELS = {"models": [{"id": "voice-deep", "name": "深度对话"}, {"id": "voice-fast", "name": "快速"}], "default": "voice-deep"}
@@ -10548,8 +10609,8 @@ def voice_socket(h):
 
 
 # ---------- area: model defaults (#2455) ----------
-# MOCK_MODEL_DEFAULTS=1: 主对话 has a 运行方式 (runtimes cli / agentsdk, saved in its binding; "cli" is stored as none),
-# GET /api/v1/machines/{mid}/launchers carries `default` (?purpose=, 新建 Agent's agent.new when absent), and the main
+# MOCK_MODEL_DEFAULTS=1: the main chat has a "Runtime" (cli / agentsdk, saved in its binding; "cli" is stored as none),
+# GET /api/v1/machines/{mid}/launchers carries `default` (?purpose=, "New Agent"'s agent.new when absent), and the main
 # conversation asked for the Agent SDK but runs on the CLI (runtime_fallback).
 MODEL_DEFAULTS = os.environ.get("MOCK_MODEL_DEFAULTS") == "1"
 MODEL_DEFAULTS_FALLBACK = "这台电脑没有 Node.js 22+"
@@ -10572,7 +10633,7 @@ def model_configuration(include_uses=False):
 
 
 def model_defaults_launchers(h, p, q):
-    """GET /api/v1/machines/{mid}/launchers with the purpose's 「默认：…」 (hub launcherDefault). False otherwise."""
+    """GET /api/v1/machines/{mid}/launchers with the purpose's "Default: …" (hub launcherDefault). False otherwise."""
     if not MODEL_DEFAULTS or not (p.startswith("/api/v1/machines/") and p.endswith("/launchers")):
         return False
     pid = q.get("purpose", ["agent.new"])[0]
@@ -10645,7 +10706,7 @@ class H(BaseHTTPRequestHandler):
     def token_refused(self):
         """MOCK_DEVICE_TOKEN=<token>: /api/ takes only that token, in Authorization or ?token=, and answers anything else
         401 invalid token as the hub does (#1498: the live screen's page got the app's token encoded twice).
-        MOCK_PAIR_TOKEN=<jp_…>: a temporary pairing code as `personad hub pair` makes (docs/protocol.md「临时配对」):
+        MOCK_PAIR_TOKEN=<jp_…>: a temporary pairing code as `personad hub pair` makes (docs/protocol.md "Temporary pairing"):
         it opens everything until traded once on POST /api/v1/auth/tokens, then for MOCK_PAIR_GRACE seconds (default 10,
         the hub's 2 minutes made short); the device tokens it was traded for keep working (#2766)."""
         u = urlparse(self.path)
@@ -10726,7 +10787,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
             # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
             # &history=mock-1.r1: the transcript's history token from now on, on pushes and pages alike (a branch was abandoned,
-            # the file was rewritten: docs/protocol.md「items 的连续性」); /mock/reset puts mock-1 back.
+            # the file was rewritten: docs/protocol.md "Item continuity"); /mock/reset puts mock-1 back.
             if q.get("history", [""])[0]: HISTORY_NOW["token"] = q["history"][0]
             args = (SAY_PRESETS.get(q.get("preset", [""])[0]) or q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",
                     int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]), int(q.get("late", ["0"])[0]), q.get("drop", ["0"])[0] == "1")
@@ -10760,7 +10821,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": out_machines()})
         if p.startswith("/api/v1/machines/") and p.endswith("/browser/cookies") and MOCK_BROWSER:  # sign-ins in ego (#1304)
-            # MOCK_COOKIES_FAIL=1: the first read fails as a node says ego's script failed (#1926); 再试一次 then works.
+            # MOCK_COOKIES_FAIL=1: the first read fails as a node says ego's script failed (#1926); "Try again" then works.
             if os.environ.get("MOCK_COOKIES_FAIL") and not COOKIES_FAILED[0]:
                 COOKIES_FAILED[0] = True
                 return self.send_json({"error": "读不到这台 Mac 上 ego 的登录，点「再试一次」；还不行就在那台 Mac 上重新打开 ego lite"}, 502)
@@ -10785,7 +10846,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"apps": COMPUTER_APPS.get(p.split("/")[4], [])})
         if p.startswith("/api/v1/machines/") and p.endswith("/computer/clipboard") and os.environ.get("MOCK_SCREEN") == "fake":
             return self.send_json({"text": FAKE_SCREEN["clipboard"]})  # the Mac's clipboard through its node (#1343)
-        if p.startswith("/api/v1/machines/") and p.endswith("/botmux"):  # 同时显示 botmux 会话 (#2575): on by default
+        if p.startswith("/api/v1/machines/") and p.endswith("/botmux"):  # "Show botmux sessions too" (#2575): on by default
             return self.send_json({"on": BOTMUX_ON.get(p.split("/")[4], True)})
         if p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua (MOCK_COMPUTER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
@@ -11000,7 +11061,7 @@ class H(BaseHTTPRequestHandler):
             if not f: return self.send_json({"error": "stat %s: no such file or directory" % q.get("path", [""])[0]}, 404)
             return self.send_json(file_streamed(f, q))
         # The Lark extension's personal agents (hub agents.go): none here, as on a hub without the Lark extension; the web's sidebar hid
-        # the section only after these answered, and showed 「个人 Agent 加载失败」 on the 404 instead.
+        # the section only after these answered, and showed "Failed to load personal agents" on the 404 instead.
         if p == "/api/v1/agents": return self.send_json({"sources": []})
         if p == "/api/v1/agents/sessions": return self.send_json({"sessions": [], "items": []})
         if p == "/api/v1/agents/prefs": return self.send_json({"pins": [], "view": {}, "sections": [], "assign": {}})
@@ -11071,12 +11132,12 @@ class H(BaseHTTPRequestHandler):
         if wechat_area(self, "GET", p, b""): return
         if github_thread_area(self, "GET", p, b""): return
         if github_area(self, "GET", p, b""): return
-        if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
+        if p == "/api/v1/connectors":  # Settings › Connectors › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
             listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}] + ([telegram_connector()] if TELEGRAM_MODE else [])
             listed += [PLUGIN_CONNECTOR] if PLUGIN_CONNECTOR else []
             listed += [wechat_connector()] if WECHAT_MODE else []
             return self.send_json({"connectors": (LEGACY_CONNECTORS if q.get("all") == ["1"] else []) + listed})
-        if p == "/api/v1/imessage":  # 设置 › 连接器 › 信息; MOCK_IMESSAGE=denied: no Full Disk Access on the Mac
+        if p == "/api/v1/imessage":  # Settings › Connectors › Messages; MOCK_IMESSAGE=denied: no Full Disk Access on the Mac
             return self.send_json(IMESSAGE_STATUS)
         if p == "/api/v1/imessage/chats" or p.startswith("/api/v1/imessage/chats/") and p.endswith("/messages"):
             if IMESSAGE_DENIED:
@@ -11090,7 +11151,7 @@ class H(BaseHTTPRequestHandler):
             msgs = IMESSAGE_MESSAGES.get(cid) or [{"id": cid[-4:], "at": chat["last"], "kind": "message", "text": chat["preview"],
                                                    "from_me": chat.get("from_me", False), "sender": None if chat.get("from_me") else chat["members"][0]}]
             return self.send_json({"chat": chat, "messages": msgs})
-        if p == "/api/v1/bots/feishu":  # 设置 › 连接器 › 飞书机器人
+        if p == "/api/v1/bots/feishu":  # Settings › Connectors › Lark bot
             st = dict(FEISHU_BOT, last_event_at=int(time.time()) - 40 if FEISHU_BOT["connected"] else None)
             return self.send_json({k: v for k, v in st.items() if v is not None})
         if p == "/api/v1/lark/raw/accounts":
@@ -11117,7 +11178,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"accountId": "123", "configured": True, "locked": LARK_NATIVE_OLK["locked"], "unifiedPassword": False})
         if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
             return self.send_json(LARK_PIN_FIXTURE)
-        if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
+        if p == "/api/v1/lark/status":  # Settings › Connectors › Lark
             if NO_SOURCES:
                 return self.send_json({"configured": False, "connected": False})
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
@@ -11199,19 +11260,19 @@ class H(BaseHTTPRequestHandler):
             n = p.split("/")[4]
             l = next((x for x in LAUNCHERS if x["name"] == n), None)
             if l: return self.send_json({"launcher": l})
-        if p.startswith("/api/v1/model-config/providers/") and p.endswith("/models"):  # 模型配置's model list (#943)
+        if p.startswith("/api/v1/model-config/providers/") and p.endswith("/models"):  # Model configuration's model list (#943)
             pid = unquote(p.split("/")[5])
             if not pid.startswith("launcher.") or pid[len("launcher."):] not in {l["name"] for l in LAUNCHERS} | {"claude"}:
                 return self.send_json({"error": "这个供应商没有可列的模型"}, 404)
             time.sleep(float(os.environ.get("MOCK_MODELS_SECONDS", "0.8")))
             return self.send_json(dict(LAUNCHER_MODELS["claude"], machine="macbook"))
-        if p.startswith("/api/v1/machines/") and "/launchers/" in p and p.endswith("/models"):  # 新建 Agent's model picker
+        if p.startswith("/api/v1/machines/") and "/launchers/" in p and p.endswith("/models"):  # "New Agent"'s model picker
             time.sleep(float(os.environ.get("MOCK_MODELS_SECONDS", "0.8")))
             return self.send_json(LAUNCHER_MODELS.get(unquote(p.split("/")[6]), {"agent": "traex", "models": []}))
         if doctor_route(self, p, "GET"): return
         if p.startswith("/api/v1/machines/") and p.endswith("/launchers"):
             return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "sonnetcc", "model": "sonnet"},
-                                                 {"name": "codex", "model": "gpt-5.5", "agent": "codex", "agent_type": "codex"}]})  # Codex: 从手机新建
+                                                 {"name": "codex", "model": "gpt-5.5", "agent": "codex", "agent_type": "codex"}]})  # Codex: "Create from the phone"
         if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"):
             return self.send_json({"settings": CLAUDE_SETTINGS.setdefault(p.split("/")[4], _claude_settings())})
         if p.startswith("/api/v1/machines/") and p.endswith("/claude-dirs"):
@@ -11254,7 +11315,7 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/sessions/") and "/items/" in p and p.endswith("/full"):
             item = FULL.get(unquote(p.split("/")[7]))
             return self.send_json(item) if item else self.send_json({"error": "not found"}, 404)
-        if p.startswith("/api/v1/sessions/") and p.endswith("/info"):  # the chat's 开发信息 card
+        if p.startswith("/api/v1/sessions/") and p.endswith("/info"):  # the chat's "Developer info" card
             s = next((s for s in all_sessions() if s["session_id"] == p.split("/")[5]), {})
             codex = s.get("agent") == "codex"
             return self.send_json({"session_id": s.get("session_id", ""), "cwd": s.get("cwd"),
@@ -11274,15 +11335,15 @@ class H(BaseHTTPRequestHandler):
                 if t > float(after) and not (back and t > float(after) + float(back)):
                     return self.send_json({"error": "node macbook: not connected"}, 503)
             return self.send_json({"text": TERMINAL, "status": "idle"})
-        if p.startswith("/api/v1/kb/"):  # the knowledge base (Jarvis › 知识库)
+        if p.startswith("/api/v1/kb/"):  # the knowledge base (Jarvis › Knowledge base)
             parts = p.split("/")[4:]
             kind = parts[0]
             if len(parts) == 1:
                 tag = (q.get("tag") or [""])[0]
                 items = [e for e in KB.get(kind, []) if not tag or tag in (e.get("tags") or [])]
                 return self.send_json({"items": items, "tags": kb_tags(kind)})
-            if kind == "moments" and len(parts) == 2:  # one archived 公司圈 post
-                feed = os.environ.get("MOCK_MOMENTS_FEED", "")  # the feed's name as the archive keeps it ("": none, 公司圈)
+            if kind == "moments" and len(parts) == 2:  # one archived Moments post
+                feed = os.environ.get("MOCK_MOMENTS_FEED", "")  # the feed's name as the archive keeps it ("": none, Moments)
                 return self.send_json({"post": {"id": parts[1], **({"feed": feed} if feed else {})}, "markdown": "# " + (feed or "公司圈") + " · 帖子\n\n王五 · 2026-10-30 10:00 · 评论 2\n\n有人在用天气小组件吗？中号的降雨条看不太清\n\n## 评论（2）\n\n- 赵六: 同感，颜色太浅\n- 我: 在改了"})
             if kind == "chats" and len(parts) == 4 and parts[2] == "days":
                 days = sorted(KB_DAYS.get(parts[1], {}))
@@ -11430,7 +11491,7 @@ class H(BaseHTTPRequestHandler):
         if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/spaces/[^/]+/rename", p):
             NODE_ACTIONS.append({"machine": p.split("/")[4], "route": "spaces/rename", "workspace_id": p.split("/")[6], **json.loads(self.last_body or b"{}")})
             return self.send_json({})
-        if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/panes", p):  # 新建终端
+        if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/panes", p):  # "New terminal"
             mid, req = p.split("/")[4], json.loads(self.last_body or b"{}")
             n = len(PANES_NEW.setdefault(mid, [])) + 4
             pane = {"pane": "%s:p%d" % (req.get("workspace_id", "w1"), n), "terminal": "pane:%s:p%d" % (req.get("workspace_id", "w1"), n),
@@ -11494,7 +11555,7 @@ class H(BaseHTTPRequestHandler):
                  "role": "answer" if kind == "watch" else "full", "created_at": ago(), "last_seen": ago()}
             TOKENS.append(t)
             return self.send_json({"id": t["id"], "token": "mock", "role": t["role"], "name": t["name"]})
-        if p == "/api/v1/auth/pair-codes" and self.command == "POST":  # 设置 › 设备 › 连接新设备 (#2731)
+        if p == "/api/v1/auth/pair-codes" and self.command == "POST":  # Settings › Devices › "Connect new device" (#2731)
             # A made-up QR (not scannable): the web draws the hub's rows. POST /api/v1/auth/tokens plays the device using it.
             web = (json.loads(self.last_body or b"{}") or {}).get("web") or ""
             tok = "jp_mock%d" % (len(TOKENS) + 1)
@@ -11768,7 +11829,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"port": port, "listening": True, "http": True})
         if self.command == "PUT" and p == "/api/v1/connectors/github/settings":  # GitHub's inbox options
             body = json.loads(self.last_body or b"{}")
-            if "inbox" in body:  # 进收件箱 (MOCK_GITHUB_EXTENSION), from the connector's page or the extension's
+            if "inbox" in body:  # "Send to inbox" (MOCK_GITHUB_EXTENSION), from the connector's page or the extension's
                 if not isinstance(body["inbox"], bool) or "inbox" not in GITHUB_CONNECTOR:
                     return self.send_json({"error": "inbox: true or false"}, 400)
                 GITHUB_CONNECTOR["inbox"] = body["inbox"]
@@ -11778,12 +11839,12 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "bad options"}, 400)
             GITHUB_CONNECTOR.setdefault("options", {}).update({k: v for k, v in o.items() if v is not None})
             return self.send_json(GITHUB_CONNECTOR)
-        if self.command == "PUT" and p == "/api/v1/imessage/settings":  # 交给 Jarvis on / off
+        if self.command == "PUT" and p == "/api/v1/imessage/settings":  # "Give to Jarvis" on / off
             body = json.loads(self.last_body or b"{}")
             if not isinstance(body.get("ai"), bool): return self.send_json({"error": "ai: true or false"}, 400)
             IMESSAGE_STATUS["ai"] = body["ai"]
             return self.send_json(IMESSAGE_STATUS)
-        if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once 交给 Jarvis is off
+        if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once "Give to Jarvis" is off
             if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Jarvis」再删除", "code": "ai_on"}, 409)
             return self.send_json({"chats": 6, "people": 9, "inbox": 1})
         if p.startswith("/api/v1/machines/") and p.endswith("/browser/cookies") and MOCK_BROWSER:  # sign-ins in ego (#1304)
@@ -11806,11 +11867,11 @@ class H(BaseHTTPRequestHandler):
                 else:
                     return self.send_json({"error": "unknown action"}, 404)
             return self.send_json(browser_now(machine))
-        if self.command == "POST" and p.startswith("/api/v1/machines/") and p.endswith("/herdr/start"):  # 启动 (#1916)
+        if self.command == "POST" and p.startswith("/api/v1/machines/") and p.endswith("/herdr/start"):  # "Start" (#1916)
             out, status = herdr_start(p.split("/")[4])
-            # the hub's request id on a failure, as the real one sends it (the clients put it behind 复制详情)
+            # the hub's request id on a failure, as the real one sends it (the clients put it behind "Copy details")
             return self.send_json(out, status, {"X-Request-Id": "20261105A1B2C3D4"} if status >= 500 else None)
-        if self.command == "POST" and p.startswith("/api/v1/machines/") and "/computer/" in p:  # 安装 / 去授权 / 取消
+        if self.command == "POST" and p.startswith("/api/v1/machines/") and "/computer/" in p:  # "Install" / "Grant access" / "Cancel"
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             action = p.rsplit("/", 1)[1]
             if machine is None or not machine.get("computer", {}).get("enabled"):
@@ -11819,7 +11880,7 @@ class H(BaseHTTPRequestHandler):
                 if machine["id"] in COMPUTER_JOBS: COMPUTER_JOBS[machine["id"]]["cancelled"] = True
             elif action in ("install", "grant"):
                 COMPUTER_JOBS[machine["id"]] = {"kind": action, "at": time.time(), "started": ago()}
-            elif action == "lock":  # 锁上 (#1507 a-2): locked until unlocked on the screen (GET /mock/unlock)
+            elif action == "lock":  # "Lock" (#1507 a-2): locked until unlocked on the screen (GET /mock/unlock)
                 machine["computer"] = {**COMPUTER_STATES["locked"], "enabled": True}
             elif action == "unlocking":
                 pass
@@ -11837,7 +11898,7 @@ class H(BaseHTTPRequestHandler):
             body = json.loads(self.last_body or b"{}")
             if "enabled" in body:
                 machine["computer"] = {**computer_of(machine["id"], bool(body["enabled"])), "no_auto_lock": machine["computer"].get("no_auto_lock", False)}
-            if "no_auto_lock" in body:  # 「插件开着时不自动锁屏」 (#1507 b2)
+            if "no_auto_lock" in body:  # "Do not lock automatically while the plugin is open" (#1507 b2)
                 machine["computer"] = {**machine["computer"], "no_auto_lock": bool(body["no_auto_lock"]) and machine["computer"].get("enabled", False)}
             for send, _ in list(LIVE):
                 try: send({"type": "machines", "machines": out_machines()})
@@ -11863,7 +11924,7 @@ class H(BaseHTTPRequestHandler):
                 try: send({"type": "machines", "machines": out_machines()})
                 except Exception: pass
             return self.send_json(out_machine(machine))
-        if self.command == "PUT" and p.startswith("/api/v1/kb/"):  # 打标: kept over the automatic tagging
+        if self.command == "PUT" and p.startswith("/api/v1/kb/"):  # "Tagging": kept over the automatic tagging
             if os.environ.get("MOCK_KB_SAVE_FAIL") == "1": return self.send_json({"error": "知识库暂时写不进去"}, 502)
             kind, eid = p.split("/")[4:6]
             body = json.loads(self.last_body or b"{}")
@@ -11961,7 +12022,7 @@ class H(BaseHTTPRequestHandler):
             if body.get("name") == "idless-receipt.txt":
                 return self.send_json({"message_id": ""})
             return self.send_json({"message_id": m["id"]})
-        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: the Lark gateway takes a moment
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # Send Lark messages: the Lark gateway takes a moment
             body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]
             if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
             if body.get("text", "").startswith("**字") and not LARK_DISPLAY.get("brave_climb_codec"):  # the Lark gateway refuses them
@@ -11977,11 +12038,11 @@ class H(BaseHTTPRequestHandler):
             m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
             msgs.append(m)
             return self.send_json({"ok": True, "message_id": m["id"]})
-        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read-states"):  # 飞书已读回执 of my messages
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read-states"):  # Lark read receipts of my messages
             ids = json.loads(self.last_body or b"{}").get("message_ids") or []
             if len(ids) > 100: return self.send_json({"error": "at most 100 message_ids"}, 400)
             return self.send_json({"states": lark_read_states(p.split("/")[5], ids)})
-        if p.startswith("/api/v1/lark/messages/") and p.endswith("/replies"):  # 飞书回复: in the thread or quoted in the chat
+        if p.startswith("/api/v1/lark/messages/") and p.endswith("/replies"):  # Lark replies: in the thread or quoted in the chat
             body, mid = json.loads(self.last_body or b"{}"), p.split("/")[5]
             if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
             time.sleep(lark_send_seconds())
@@ -12013,7 +12074,7 @@ class H(BaseHTTPRequestHandler):
             # hub returns, the machine's list pushed, and no transcript yet: the node answers a starting session's items
             # with none, and its watch sends the first line once claude has written it (MOCK_ASSISTANT_TRANSCRIPT_SECONDS
             # later, default 1). MOCK_ASSISTANT_START_SECONDS: the request itself takes that long (the hub prepares the
-            # directory, the model config and the live snapshot first); meanwhile the app shows 正在准备.
+            # directory, the model config and the live snapshot first); meanwhile the app shows "Preparing".
             time.sleep(float(os.environ.get("MOCK_ASSISTANT_START_SECONDS", "0")))
             body = json.loads(self.last_body or b"{}")
             prompt = body.get("prompt", "")
@@ -12022,7 +12083,7 @@ class H(BaseHTTPRequestHandler):
             sid = str(uuid.uuid4())
             session = assistant_sess(sid, "", 0, "")  # what the hub returns: no title, model or transcript rev yet
             for k in ("model", "rev", "seen_at", "agent"): session.pop(k)  # the hub sends agent only when not Claude Code
-            # On the machine the assistant runs on (设置 › 助手 can move it), and a main one becomes the hub's main
+            # On the machine the assistant runs on (Settings › Assistant can move it), and a main one becomes the hub's main
             # conversation (assistant/start.go startMain).
             mid = body.get("machine_id") or ASSISTANT_CONFIG["machine_id"]
             home = next((m.get("home") for m in MACHINES if m["id"] == mid), None)
@@ -12097,7 +12158,7 @@ class H(BaseHTTPRequestHandler):
                                     "client_msg_id": body.get("client_msg_id"), "text": body.get("text")})
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json(inbox_list(parse_qs(urlparse(self.path).query)))
-        if p == "/api/v1/inbox/done" and self.command == "POST":  # 全部标为已处理 / 撤销
+        if p == "/api/v1/inbox/done" and self.command == "POST":  # "Mark all as handled" / "Undo"
             body = json.loads(self.last_body or b"{}")
             if body.get("done") is None: return self.send_json({"error": "done and items are required"}, 400)
             res = inbox_bulk(body)
@@ -12105,7 +12166,7 @@ class H(BaseHTTPRequestHandler):
                 try: send({"type": "inbox"})
                 except Exception: pass
             return self.send_json(res)
-        if p == "/api/v1/inbox/bulk" and self.command == "POST":  # 全部清理 (dismiss; done from older clients) / 撤销
+        if p == "/api/v1/inbox/bulk" and self.command == "POST":  # Clean up all (dismiss; done from older clients) / Undo
             body = json.loads(self.last_body or b"{}")
             if body.get("action") not in ("done", "dismiss", "reopen"): return self.send_json({"error": "action is done, dismiss or reopen"}, 400)
             res = inbox_bulk(body)
@@ -12124,7 +12185,7 @@ class H(BaseHTTPRequestHandler):
             mid = p.rsplit("/", 1)[1]
             MUTES[:] = [m for m in MUTES if m["id"] != mid]
             return self.send_json({"ok": True})
-        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read"):  # 可见即读: the positions a page saw
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read"):  # Mark visible messages as read: the positions a page saw
             body = json.loads(self.last_body or b"{}")
             if not body.get("position"): return self.send_json({"error": "position is required"}, 400)
             LARK_READS.append(dict(body, feed=p.split("/")[5]))
@@ -12161,9 +12222,9 @@ class H(BaseHTTPRequestHandler):
                             st["value"] = ch.get("value")
                             return self.send_json(x)
             return self.send_json({"error": "no such row"}, 400)
-        if p.startswith("/api/v1/inbox/") and p.endswith("/suggestion") and self.command == "POST":  # 确认 / 驳回 / 说一句话
+        if p.startswith("/api/v1/inbox/") and p.endswith("/suggestion") and self.command == "POST":  # "Confirm" / "Reject" / "Say something"
             return self.send_json(*inbox_suggestion(unquote(p[len("/api/v1/inbox/"):-len("/suggestion")]), json.loads(self.last_body or b"{}")))
-        if p.startswith("/api/v1/inbox/") and p.endswith("/draft"):  # AI 草拟回复
+        if p.startswith("/api/v1/inbox/") and p.endswith("/draft"):  # AI draft reply
             return self.send_json({"text": "看过了，退避时间没问题，可以合。"})
         if p.startswith("/api/v1/inbox/") and p.endswith("/reply"):
             iid, body = p[len("/api/v1/inbox/"):-len("/reply")], json.loads(self.last_body or b"{}")
@@ -12184,7 +12245,7 @@ class H(BaseHTTPRequestHandler):
             saved, error = put_routines(json.loads(self.last_body or b"{}"))
             if error: return self.send_json({"error": error}, 400)
             return self.send_json({"routines": saved})
-        # 立即运行 behaves like the hub, whichever list it comes from: an unknown id is a 404, every run lands in the
+        # "Run now" behaves like the hub, whichever list it comes from: an unknown id is a 404, every run lands in the
         # history (manual), a one-off is done (it leaves the list), a repeating task's run updates its last status and
         # conversation but not last_run, and the first run of one that has no conversation starts its own.
         if p.startswith(("/api/v1/assistant/tasks/", "/api/v1/assistant/routines/", "/api/v1/assistant/followups/")) \
@@ -12205,12 +12266,12 @@ class H(BaseHTTPRequestHandler):
                 t.update(last_status="ok", last_session_id=session)
                 t.pop("last_error", None)
             return self.send_json({"session_id": session, "machine_id": machine})
-        if p.startswith("/api/v1/assistant/tasks/") and p.endswith("/fresh"):  # 下次开新对话
+        if p.startswith("/api/v1/assistant/tasks/") and p.endswith("/fresh"):  # "Start a new chat next time"
             t = next((t for t in SCHEDULE if t["id"] == p.split("/")[5]), None)
             if t is None: return self.send_json({"error": "这个定时任务已经不在了"}, 404)
             for k in ("run_machine_id", "run_session_id", "run_launcher"): t.pop(k, None)
             return self.send_json({"task": t})
-        if p == "/api/v1/launchers" and self.command == "POST":  # 新增供应商 (from a plugin's preset: the rest filled in)
+        if p == "/api/v1/launchers" and self.command == "POST":  # "Add provider" (from a plugin's preset: the rest filled in)
             b = json.loads(self.last_body or b"{}")
             name = (b.get("name") or "").strip()
             if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", name) or name in ("claude", "presets"):
@@ -12233,7 +12294,7 @@ class H(BaseHTTPRequestHandler):
             if l["source"] == "jarvis" and self.command == "DELETE": LAUNCHERS.remove(l)  # a Jarvis one is deleted
             else: l["hidden"] = self.command == "DELETE"
             return self.send_json({"ok": True})
-        if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":  # the Android app's 取消
+        if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":  # the Android app's "Cancel"
             fid = p.split("/")[5]
             if not any(t["id"] == fid for t in SCHEDULE): return self.send_json({"error": "这个定时任务已经不在了"}, 404)
             SCHEDULE[:] = [t for t in SCHEDULE if t["id"] != fid]
@@ -12248,7 +12309,7 @@ class H(BaseHTTPRequestHandler):
             SCHEDULE[i] = save_task(SCHEDULE[i], json.loads(self.last_body or b"{}"))
             return self.send_json({"task": SCHEDULE[i]})
         if p.startswith("/api/v1/sessions/") and self.command == "DELETE" and len(p.split("/")) == 6:
-            # 删除对话 (docs/protocol.md): out of the lists; refused while it runs, as the hub's deleted_sessions.go.
+            # Delete conversation (docs/protocol.md): out of the lists; refused while it runs, as the hub's deleted_sessions.go.
             if is_read_only(self): return self.send_json({"error": "read-only role cannot delete conversations"}, 403)
             mid, sid = p.split("/")[4:6]
             s = next((s for s in SESSIONS if s["machine_id"] == mid and s["session_id"] == sid), None)
@@ -12261,7 +12322,7 @@ class H(BaseHTTPRequestHandler):
             push_machine(mid)
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/fork") and self.command == "POST":
-            # 分支到新聊天 (#2137): a copy of the session up to the reply's turn, offline until its next message.
+            # "Fork to new chat" (#2137): a copy of the session up to the reply's turn, offline until its next message.
             if is_read_only(self): return self.send_json({"error": "只读角色不能分支"}, 403)
             mid, sid = p.split("/")[4:6]
             s = next((s for s in SESSIONS if s["machine_id"] == mid and s["session_id"] == sid), None)
@@ -12280,7 +12341,7 @@ class H(BaseHTTPRequestHandler):
             push_machine(mid)
             return self.send_json({"session_id": new})
         if p.startswith("/api/v1/sessions/") and p.endswith("/rewind") and self.command == "POST":
-            # 回退到这里 (#2436): the node drives Claude's /rewind; the mock records the request and answers like the node. MOCK_REWIND_ERROR=<code>:<message> makes it refuse the way the node does.
+            # "Rewind here" (#2436): the node drives Claude's /rewind; the mock records the request and answers like the node. MOCK_REWIND_ERROR=<code>:<message> makes it refuse the way the node does.
             if is_read_only(self): return self.send_json({"error": "回退要用完整权限的设备"}, 403)
             mid, sid = p.split("/")[4:6]
             body = json.loads(self.last_body or b"{}")
@@ -12341,7 +12402,7 @@ class H(BaseHTTPRequestHandler):
             body = json.loads(self.last_body or b"{}")
             PINS.update(spaces=list(body.get("spaces") or []), sessions=list(body.get("sessions") or []))
             return self.send_json(PINS)
-        if p == "/api/v1/assistant" and self.command == "PUT":  # 设置 › 助手: only the fields sent change
+        if p == "/api/v1/assistant" and self.command == "PUT":  # Settings › Assistant: only the fields sent change
             body = json.loads(self.last_body or b"{}")
             if body.get("machine_id"):
                 if not any(m["id"] == body["machine_id"] for m in MACHINES):
@@ -12373,7 +12434,7 @@ class H(BaseHTTPRequestHandler):
                     if f["name"] == "MEMORY.md":
                         f["content"] = "\n".join(line for line in f["content"].split("\n") if "(%s)" % name not in line)
             return self.send_json({"ok": True})
-        if p.startswith("/api/v1/machines/") and p.endswith("/deploy"):  # 重新部署: deploying for 3 s, then the hub's build
+        if p.startswith("/api/v1/machines/") and p.endswith("/deploy"):  # "Redeploy": deploying for 3 s, then the hub's build
             mid = p.split("/")[4]
             m = next((m for m in MACHINES if m["id"] == mid), None)
             if not m or not m.get("node_mismatch"):
@@ -12382,7 +12443,7 @@ class H(BaseHTTPRequestHandler):
             def done(m=m):
                 time.sleep(3)
                 m.pop("deploying", None)
-                # MOCK_DEPLOY_ERROR=<why>: the deploy fails; the card shows 上次部署没成 with the reason and keeps 重新部署.
+                # MOCK_DEPLOY_ERROR=<why>: the deploy fails; the card shows "Last deployment failed" with the reason and keeps "Redeploy".
                 if os.environ.get("MOCK_DEPLOY_ERROR"): m["deploy_error"] = os.environ["MOCK_DEPLOY_ERROR"]
                 else: m.pop("node_mismatch", None); m.pop("deploy_error", None)
                 for send, _ in list(LIVE):
@@ -12401,7 +12462,7 @@ class H(BaseHTTPRequestHandler):
                     m.update(online=True, error=None, hostname="lab", os="linux", arch="amd64", home="/home/me",
                              herdr_version="0.9.5", claude_version="2.1.320", last_seen=ago())
             return self.send_json({"ok": True})
-        if p == "/api/v1/sessions" and self.command == "POST":  # 新建会话
+        if p == "/api/v1/sessions" and self.command == "POST":  # "New conversation"
             body = json.loads(self.last_body or b"{}")
             todo_id = body.get("todo_id")
             if todo_id:
@@ -12423,14 +12484,14 @@ class H(BaseHTTPRequestHandler):
                      "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "",
                      agent="codex" if codex else "claude")
             s["launcher"] = body.get("launcher") or "claude"
-            if body.get("model"): s["model"] = body["model"]  # picked in 新建 Agent
+            if body.get("model"): s["model"] = body["model"]  # picked in "New Agent"
             if codex:  # the node answers once the first message is in the thread's rollout
                 ITEMS[s["session_id"]] = [it("user", "text", 0, text=body["prompt"])]
             if body.get("async"):  # answered at once, claude still starting (node/starting.go); MOCK_START_SECONDS later it is up
                 s.update(status="idle", state="idle", starting=True, title=body.get("name_hint") or s["title"])
                 def started(s=s):
                     s.pop("starting", None)
-                    # MOCK_START_ERROR=<why>: claude never gets ready; the chat says 没有启动起来 and sends get the error.
+                    # MOCK_START_ERROR=<why>: claude never gets ready; the chat says "Failed to start" and sends get the error.
                     if os.environ.get("MOCK_START_ERROR"): s.update(status="offline", state="offline", start_error=os.environ["MOCK_START_ERROR"])
                 threading.Timer(float(os.environ.get("MOCK_START_SECONDS", "6")), started).start()
             SESSIONS.append(s)
@@ -12499,7 +12560,7 @@ class H(BaseHTTPRequestHandler):
                 if st["key"] == body.get("key"):
                     st["value"] = body.get("value")
             return self.send_json({"settings": store[mid]})
-        if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # 设置 › 通知
+        if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # Settings › Notifications
             body = json.loads(self.last_body or b"{}")
             PREFS.update({k: v for k, v in body.items() if k in ("input", "done", "live_activity", "lock_details")})
             PREFS["island"].update({k: v for k, v in (body.get("island") or {}).items() if k in ("preset", "left", "right", "machine")})
@@ -12538,7 +12599,7 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/sessions/") and p.endswith("/keys"):
             KEYS.append(json.loads(self.last_body or b"{}"))
             return self.send_json({"ok": True})
-        if p.startswith("/api/v1/sessions/") and p.endswith("/attach"):  # 实时接入 a Codex app-server thread
+        if p.startswith("/api/v1/sessions/") and p.endswith("/attach"):  # Attach live to a Codex app-server thread
             for s in all_sessions():
                 if s["session_id"] == unquote(p.split("/")[5]):
                     caps = s.get("capabilities") or {}
@@ -12954,7 +13015,7 @@ class H(BaseHTTPRequestHandler):
         self.close_connection = True
 
 
-# ---------- MOCK_CHANNELS: 设置 › 插件 › 渠道 (docs/channels.md) ----------
+# ---------- MOCK_CHANNELS: Settings › Plugins › Channels (docs/channels.md) ----------
 # MOCK_CHANNELS=1 lists the channels: the apps, the Feishu bot and WeChat bound, /agent off (hub.json's), a third-party
 # chat app's plugin channel waiting to be bound with a token, one broken, and one in a market not installed. Their
 # settings, binding (WeChat's QR code, the Feishu bot's pairing code, a token) and test messages live in memory. The
@@ -13129,9 +13190,9 @@ MOCK_HELP.append("MOCK_AUTO_CONVERSATIONS=1  助手对话带来源 origin（feat
 
 
 # ---------- area: Feishu through the Lark extension (#1530) ----------
-# The plugin adds `lark` (the 消息 page, the chats, the native readers of documents and 公司圈 posts, /api/v1/lark/…) and
-# `lark_moments` (公司圈) to the features, its `lark_attachments` / `lark_native_encryption` with them. MOCK_NO_LARK=1: a
-# hub without the plugin: none of those features, /api/v1/lark/… 404 and no 飞书 connector.
+# The plugin adds `lark` (the Messages page, the chats, the native readers of documents and Moments posts, /api/v1/lark/…) and
+# `lark_moments` (Moments) to the features, its `lark_attachments` / `lark_native_encryption` with them. MOCK_NO_LARK=1: a
+# hub without the plugin: none of those features, /api/v1/lark/… 404 and no Lark connector.
 NO_LARK = os.environ.get("MOCK_NO_LARK") == "1"
 LARK_PLUGIN_FEATURES = ("lark", "lark_moments", "lark_attachments", "lark_native_encryption", "lark_attachment_reply")
 # MOCK_LARK_OLD_ATTACHMENTS=1: a plugin from before attachments could quote or go into a thread (#1035).
@@ -13390,11 +13451,11 @@ MOCK_HELP.append("MOCK_RESTART=1  hub 无感重启（#1634）：hello 带 event_
 MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290）：features 带 lark_doc_comments，每篇文档三条编造的评论，回复 / 新评论 / 解决 / 重新打开 / @人都改它们；GET /mock/doc-comments 看写了什么；「给天气 App 加主屏幕小组件」最后一条带这篇文档的链接（网页从这里打开阅读页）；=read 是不能写的插件（没有 lark_doc_comments，只读评论）")
 
 
-# ---------- area: an inbox item's page drawn by a plugin (docs/extensions.md「收件箱条目」, #1681) ----------
+# ---------- area: an inbox item's page drawn by a plugin (docs/extensions.md "Inbox items", #1681) ----------
 # MOCK_INBOX_ITEM_UI=1 (with MOCK_PLUGINS=1): a plugin example-chat draws the page of Feishu's items (inbox_item for
 # connector lark), from the item it is told of (context.item): the people, the time it spans, the thing it continues
-# and its messages, a reply (files the item as replied) and 在会话里看 (persona://inbox/<item>/source: the apps open the
-# item's own chat). 已处理 stays the app's own. Items of another source are refused (403), an unknown one is 404, like
+# and its messages, a reply (files the item as replied) and "View in conversation" (persona://inbox/<item>/source: the apps open the
+# item's own chat). "Handled" stays the app's own. Items of another source are refused (403), an unknown one is 404, like
 # the hub; it fails (502) on groups' items. The hub's own detail stays for other sources.
 INBOX_ITEM_UI = [{"plugin": "example-chat", "plugin_name": "Example 飞书事件", "id": "event", "title": "事件", "placement": "inbox_item",
                   "size": "full", "connector": "lark"}] if os.environ.get("MOCK_INBOX_ITEM_UI") == "1" else []
@@ -13522,7 +13583,7 @@ def chat_cards_mock():
              background=[{"id": "b1", "kind": "shell", "description": "跑中间件的单元测试", "command": "go test ./middleware/...",
                           "started_at": ago(minutes=3)}],
              pending_interactions=3)
-    # a plan under way and a long answer before it: scrolled up, the plan's Step N / M pill and 跳到底部 both show
+    # a plan under way and a long answer before it: scrolled up, the plan's Step N / M pill and "Jump to bottom" both show
     todos = {"todos": [{"content": c, "status": st, "activeForm": c} for c, st in
                        [("写刷新中间件", "completed"), ("删掉重复逻辑", "in_progress"), ("补测试", "pending")]]}
     ITEMS[SPLIT_CLAUDE] = ([it("user", "text", 30, text="讲讲 token 刷新为什么要放到中间件里")]
@@ -13573,7 +13634,7 @@ if os.environ.get("MOCK_GOAL"):
     goal_mock(os.environ["MOCK_GOAL"])
 MOCK_HELP.append("MOCK_GOAL=1|stopped  macbook 上「给天气 App 加主屏幕小组件」有一个进行中的 goal（带最近一次检查的理由），「检查 PR #42 的改动」的 goal 已达成；stopped 时小组件那个 goal 用完了 token 预算（#2420）")
 
-# ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md「命名和兼容」) ----------
+# ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md "Naming and compatibility") ----------
 # It says `extensions` and the extension_* features beside the old ones and answers /api/v1/extensions/… with the new keys
 # (extensions, extension, extension_name; a market's count extensions), by way of the old routes above.
 # MOCK_PLUGINS_LEGACY=1: a hub from before the rename, /api/v1/plugins only.
@@ -13613,7 +13674,7 @@ def plugins_route(handler, p, body):
 
 
 def mock_showcase(handler, ui, body):
-    """共享快照原样交给 App 的真实渲染器；索引只用于测试导航，不另定 View 协议。"""
+    """Pass shared snapshots unchanged to the app's actual renderer; the index is only for test navigation, not a separate View protocol."""
     from pathlib import Path
     root = Path(__file__).resolve().parents[2] / "schema/extension/examples/showcase"
     names = sorted(p.stem for p in root.glob("*.json"))
@@ -13637,7 +13698,7 @@ def mock_showcase(handler, ui, body):
 
 def mock_invalidate(handler):
     """GET /mock/invalidate: example-gateway's notes changed (a note synced in, the sync done) and it says so
-    (`ui.invalidate`, docs/extensions.md「ui.invalidate」): extension_ui {invalidate} to every app, no plugin_ui."""
+    (`ui.invalidate`, docs/extensions.md "ui.invalidate"): extension_ui {invalidate} to every app, no plugin_ui."""
     if not any(x["id"] == "n0" for x in _NOTES):
         _NOTES.insert(0, {"id": "n0", "title": "刚同步的笔记", "folder": "work", "when": "刚刚"})
     _NOTES_SYNCED[0] = True
@@ -13703,9 +13764,9 @@ if os.environ.get("MOCK_EXTENSION_NOTIFICATIONS") == "1" and EXTENSIONS_API:
         return _plugins_route_without_notifications(handler, p, body)
 
 
-# ---------- MOCK_EXTENSION_AUTH: CLI tools and sign-in (docs/extensions.md「命令行程序（tools）」「登录（auth）」, #4507) ----------
+# ---------- MOCK_EXTENSION_AUTH: CLI tools and sign-in (docs/extensions.md "Command-line programs (tools)" "Sign-in (auth)", #4507) ----------
 # MOCK_EXTENSION_AUTH=1 (with MOCK_PLUGINS and MOCK_EXTENSION_OPS): the hub says extension_auth, and the first market lists
-# 「Example 查询」, which installs two command-line programs (node: the machine's own; example-cli: downloaded in four
+# "Example queries", which installs two command-line programs (node: the machine's own; example-cli: downloaded in four
 # parts in the operation's tools step, between consent and install) and signs in. The install ends with next "auth";
 # signing in is a QR step (=1, or =device: a device code with its link) asked again until the third poll
 # (MOCK_EXTENSION_AUTH_POLLS) says done; logout signs out. =installed / =device-installed: installed already, not signed
@@ -13829,7 +13890,7 @@ if EXT_AUTH:
     _features_without_auth = features
 
     def features():
-        # MOCK_EXTENSION_AUTH_OLD=1: a hub from before extension_auth (no 登录 section; its warning and own page instead).
+        # MOCK_EXTENSION_AUTH_OLD=1: a hub from before extension_auth (no Sign-in section; its warning and own page instead).
         return _features_without_auth() + ([] if os.environ.get("MOCK_EXTENSION_AUTH_OLD") else ["extension_auth"])
 
     _plugins_route_without_auth = plugins_route
@@ -13866,7 +13927,7 @@ if EXT_AUTH:
 MOCK_HELP.append("MOCK_EXTENSION_AUTH=1|device|installed|device-installed  （配合 MOCK_PLUGINS、MOCK_EXTENSION_OPS）扩展市场里的「Example 查询」装两个命令行程序（安装步骤多一步「安装命令行」）并要登录：装完 next=auth，登录是扫码（device：验证码和链接），第 3 次轮询登录成功（MOCK_EXTENSION_AUTH_POLLS）；installed：已经装好、未登录；MOCK_EXTENSION_AUTH_OLD=1 不说 extension_auth（旧 hub，#4507）")
 
 
-# MOCK_RELAY_ACCOUNTS=<fixture> (with MOCK_PLUGINS=1): quota-relay's sidebar page 「中转账号」 as a nav_page, drawn from
+# MOCK_RELAY_ACCOUNTS=<fixture> (with MOCK_PLUGINS=1): quota-relay's sidebar page "Relay accounts" as a nav_page, drawn from
 # the extension's exported Views (web/src/views/extensions/testdata/relay-accounts-view.json, made-up accounts, #4576).
 if os.environ.get("MOCK_RELAY_ACCOUNTS") and PLUGINS_MODE:
     from relay_accounts import RelayAccountsMock
@@ -14028,13 +14089,13 @@ MOCK_HELP.append("MOCK_ADD_COMPUTER=1|seed  机器 › 添加电脑（#287）：
                  "MOCK_ADD_COMPUTER_ERROR=tls_required|mesh_member|too_many_pending 拒绝添加，MOCK_ADD_COMPUTER_NO_SITE=1 不给安装命令")
 
 # ---------- area: the main conversation's readiness (#287, docs/onboarding.md 4.4–4.6, 5.1–5.4) ----------
-# MOCK_READINESS=<scenario> (docs/testing.md「就绪度场景」, scripts/mock/readiness_mock.py): a new user's hub in one of
+# MOCK_READINESS=<scenario> (docs/testing.md "Readiness scenarios", scripts/mock/readiness_mock.py): a new user's hub in one of
 # the states the setup card shows, in the hub's shapes and words (its own catalogs, by Accept-Language): the features
 # assistant_readiness, machines_add, machine_trust and builtin_presets; GET /api/v1/assistant/readiness[?probe=1],
 # POST …/readiness/dismiss, POST /api/v1/assistant/warm with readiness; POST /api/v1/assistant/conversations refused
 # with the scenario's code (409 no_machine / claude_missing / launcher_missing, 503 node_unreachable); POST
 # /api/v1/sessions on a pending computer 409 machine_pending; GET /api/v1/launchers/presets with the built-in providers
-# (presets_builtin.json) before the plugins'. The computer is 小林的 MacBook (mbp) alone, with no agents, except in
+# (presets_builtin.json) before the plugins'. The computer is the example user's MacBook (mbp) alone, with no agents, except in
 # demo (full on the usual data, the assistant on server). Adding and confirming a computer works (MOCK_ADD_COMPUTER), and the
 # readiness follows the machines: zero → add → it joins → confirm → the computer step is ok.
 # MOCK_START_ERROR=<code> refuses every conversation start with that code whatever the scenario (no_machine,
@@ -14074,7 +14135,7 @@ if READINESS:
         if _sc["machine"] == "pending":
             _mbp.update(trust="pending", error=ADD_COMPUTER_PENDING_TEXT)
         if _sc["machine"] == "outdated":
-            _mbp["error_code"] = "node_outdated"  # a node from before 模型配置: it cannot run the main conversation
+            _mbp["error_code"] = "node_outdated"  # a node from before Model configuration: it cannot run the main conversation
         MACHINES_KEEP = set()
         if _sc["machine"] != "none":
             MACHINES.append(_mbp)
@@ -14095,7 +14156,7 @@ if READINESS:
 
 
 def ready_machine():
-    """The main conversation's computer as readiness_mock wants it: the one set in 设置 › 助手 when it is among the
+    """The main conversation's computer as readiness_mock wants it: the one set in Settings › Assistant when it is among the
     confirmed ones served, else the first of them (assistant/profile.go effective); None when there is none."""
     ok = [m for m in out_machines() if m.get("trust") != "pending"]
     m = next((x for x in ok if x["id"] == ASSISTANT_CONFIG["machine_id"]), ok[0] if ok else None)
@@ -14121,7 +14182,7 @@ def ready_state(handler, probe=False):
 
 
 def _builtin_preset_route(handler, p, body):
-    """A built-in preset's key test and add (docs/launchers.md「内置预设」): the test in the hub's words (a key with
+    """A built-in preset's key test and add (docs/launchers.md"Built-in presets"): the test in the hub's words (a key with
     "bad" 401, "forbid" 403, "nopath" 404, "busy" 429, "slow" the timeout, "region" Anthropic's region block); the add
     with the name made up from the preset (-2, -3 when taken), its display name, and `assign` put only on the uses
     not in MOCK_ASSIGN_KEPT (purpose:reason,…, e.g. agent.new:customized). False for what is not a built-in preset."""
@@ -14272,7 +14333,7 @@ if __name__ == "__main__":
             threading.Thread(target=secure.serve_forever, daemon=True).start()
             print("TLS 端口=%d fp=%s" % (secure.server_port, fp), flush=True)
         if os.environ.get("MOCK_ENDPOINTS"):
-            # Documentation addresses nobody can reach, for Android 设置 › 连接诊断 (failed probes, disabling).
+            # Documentation addresses nobody can reach, for Android Settings › Connection diagnostics (failed probes, disabling).
             port, scheme = (TLS["port"], "https") if TLS["port"] else (PORT, "http")
             ENDPOINTS.insert(0, endpoint("[2001:db8::10]", port, scheme, "ipv6"))
             ENDPOINTS.insert(1, endpoint("hub.example.com", port, scheme, "name"))
