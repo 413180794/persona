@@ -820,6 +820,9 @@ type client struct {
 	desktop bool
 	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
 	device, role string
+	uiConnection string // hub-owned identity for targeted extension page transport
+	uiRequests   chan struct{}
+	uiManagers   map[string]bool
 	// pushDevice: the app's id for pushes (register_phone's / register_desktop's device_id, PushRegistrar.deviceID in
 	// the app): while it is connected its app is open, and a phone draws its Live Activity itself (liveactivity.go), a
 	// desktop posts its own notifications (desktopOpen). Empty for an older app.
@@ -1025,6 +1028,9 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	c := &client{cancel: cancel, hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
 		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), listMode: wantsFeature(r, featureSessionsList), have: map[string]map[string][]byte{},
 		urlFeatures: urlFeatures(r), acceptLang: i18n.FromRequest(r), meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
+	c.uiConnection = randomHex(24)
+	c.uiRequests = make(chan struct{}, 8)
+	c.uiManagers = map[string]bool{}
 	if c.listMode {
 		h.sessionListIndex() // before registration: never seed the index under h.mu
 	}
@@ -1061,6 +1067,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		}
 		h.terminalDrop(c)
 		h.fullDrop(c)
+		h.uiConnectionGone(c)
 	}()
 
 	// Track registration too: shutdown must not miss a newly hijacked connection.
@@ -1174,6 +1181,8 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	c.activeAt = time.Now()
 	h.mu.Unlock()
 	switch msg.Type {
+	case "extension_ui_stream":
+		h.forwardUIStream(ctx, c, data)
 	case "client_hello":
 		h.onClientHello(c, data)
 	case "ping":

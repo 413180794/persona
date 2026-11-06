@@ -10,7 +10,8 @@ import (
 
 // Apply stages a complete batch on a private topology copy. Any failure leaves
 // both inputs untouched and returns ErrSnapshotRequired. Nonempty batches advance
-// exactly one version; empty batches retain it (protocol 1, not an event fence).
+// exactly one version; empty batches may retain it or advance exactly one as an
+// accepted-event fence. They never encode a root replacement just for the fence.
 func Apply(t *Tree, d *Delta) (*Tree, error) {
 	if t == nil || t.root == nil || d == nil {
 		return nil, rejected(errors.New("missing tree or delta"))
@@ -19,7 +20,7 @@ func Apply(t *Tree, d *Delta) (*Tree, error) {
 		return nil, rejected(errors.New("delta identity or base mismatch"))
 	}
 	want := t.Version()
-	if len(d.ops) > 0 {
+	if len(d.ops) > 0 || d.frame.Version != want {
 		if want == VersionMost {
 			return nil, rejected(errors.New("rotate epoch before version exhaustion"))
 		}

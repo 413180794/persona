@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "stream.schema.json",
   "title": "Extension native UI stream protocol",
-  "description": "Stage 1 contracts only (#5956): server-only TSX execution with native snapshots/deltas over WebSocket. Runtime activation requires later security acceptance. Maximum frame 1 MiB UTF-8, interaction/request 64 KiB, 256 operations, 300 total logical nodes, depth 16. Byte/depth/global limits and authorization/topology are later manager/reducer gates, not enforced by JSON Schema.",
+  "description": "Native UI stream protocol 1 (#5956). Server-only JSX execution, manager-owned sessions and native snapshots/deltas over the existing authenticated app WebSocket. Engine activation remains subject to independent sandbox gates. Empty deltas may retain a version for unchanged non-event work or advance exactly one to consume every accepted/ambiguous callback, including no-UI-change writes.",
   "$defs": {
     "UIStreamItem": {
       "$ref": "view.schema.json#/$defs/Component",
@@ -973,6 +973,380 @@
       ],
       "additionalProperties": false,
       "description": "Read-only recovery request: reauthorize and send a complete snapshot, never replay an interaction or write."
+    },
+    "UIStreamClientEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "request": {
+          "$ref": "#/$defs/UIStreamRequest"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "request"
+          ]
+        }
+      ]
+    },
+    "UIStreamActionResult": {
+      "x-preserve-required": true,
+      "allOf": [{"$ref": "view.schema.json#/$defs/ActionResult"}],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toast": {"type": "string", "maxLength": 2000},
+        "open_url": {"type": "string", "maxLength": 4096},
+        "push": {"$ref": "#/$defs/UIStreamPush"},
+        "pop": {"type": "boolean"},
+        "lines": {"$ref": "#/$defs/UIStreamFileLines"}
+      },
+      "description": "Bounded presentation-only subset of native ActionResult, at most 64 KiB UTF-8 JSON. Carried in the correlated event receipt and cached on replay. Clients apply it once per session/epoch/event_id, only after reaching receipt.version; never execute HTML, JavaScript or infer authorization from a result. JSX state owns view/items updates through snapshots/deltas. Manager validates push ownership and credential-free HTTPS (or its own permitted native URL)."
+    },
+    "UIStreamPush": {
+      "x-preserve-required": true,
+      "allOf": [{"$ref": "view.schema.json#/$defs/Push"}],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ui": {"type": "string", "maxLength": 64},
+        "state": {"type": "string", "maxLength": 16384},
+        "title": {"type": "string", "maxLength": 2000}
+      },
+      "description": "Extension-owned native Push only: no assistant page or arbitrary target. State is additionally bounded to 16 KiB UTF-8. Not authority to invoke an action."
+    },
+    "UIStreamFileLines": {
+      "allOf": [{"$ref": "view.schema.json#/$defs/FileLines"}],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "side": {"$ref": "view.schema.json#/$defs/DiffSide"},
+        "start": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "lines": {"type": "array", "maxItems": 20000, "items": {"type": "string", "maxLength": 20000}},
+        "total": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+      },
+      "required": ["path", "start", "lines"],
+      "x-preserve-required": true,
+      "description": "Native FileLines presentation response correlated to the saved event, not filesystem access or code execution. The complete result remains limited to 64 KiB UTF-8 JSON."
+    },
+    "UIStreamReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "epoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-go-type": "int64"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "ambiguous",
+            "rejected"
+          ]
+        },
+        "result": {"$ref": "#/$defs/UIStreamActionResult"}
+      },
+      "required": [
+        "session",
+        "epoch",
+        "event_id",
+        "version",
+        "status"
+      ]
+    },
+    "UIStreamFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "UIStreamSnapshotEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "snapshot"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "snapshot": {
+          "$ref": "#/$defs/UIStreamSnapshot"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "snapshot"
+      ]
+    },
+    "UIStreamDeltaEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "delta"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "delta": {
+          "$ref": "#/$defs/UIStreamDelta"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "delta"
+      ]
+    },
+    "UIStreamReceiptEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "receipt"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "receipt": {
+          "$ref": "#/$defs/UIStreamReceipt"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "receipt"
+      ]
+    },
+    "UIStreamErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "error"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "error": {
+          "$ref": "#/$defs/UIStreamFailure"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "error"
+      ]
+    },
+    "UIStreamClosedEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "closed"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "session"
+      ]
+    },
+    "UIStreamServerEnvelope": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UIStreamSnapshotEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamDeltaEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamReceiptEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamErrorEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamClosedEnvelope"
+        },
+        {
+          "$ref": "#/$defs/UIStreamSuspendedEnvelope"
+        }
+      ],
+      "x-discriminator": "kind",
+      "x-preserve-required": true,
+      "x-unknown-policy": "reject"
+    },
+    "UIStreamSuspendedEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "type": {
+          "const": "extension_ui_stream"
+        },
+        "kind": {
+          "const": "suspended"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "session"
+      ]
+    },
+    "UIPageSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-preserve-required": true,
+      "properties": {
+        "generation": {
+          "$ref": "#/$defs/UIStreamID"
+        },
+        "version": {
+          "$ref": "#/$defs/UIStreamVersion"
+        },
+        "rootKey": {
+          "$ref": "#/$defs/UIStreamKey"
+        },
+        "view": {
+          "$ref": "#/$defs/UIStreamView"
+        }
+      },
+      "required": [
+        "generation",
+        "version",
+        "rootKey",
+        "view"
+      ],
+      "description": "Source-process native render revision, independent of manager-owned wire revisions. Validate original JSON before fitting; never trust source recipients or owners."
     }
   }
 }

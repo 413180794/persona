@@ -337,6 +337,7 @@ func (h *Hub) relayTo(w http.ResponseWriter, r *http.Request, admin bool, id str
 			who.Set(k, v)
 		}
 	}
+	set(extwire.HeaderHub, h.hubID())
 	set(extwire.HeaderDevice, p.ID)
 	set(extwire.HeaderDeviceName, p.Name)
 	set(extwire.HeaderRole, p.Role)

@@ -166,6 +166,52 @@ func DecodeDelta(raw []byte) (*Delta, error) {
 	return &Delta{frame: frame, ops: ops}, nil
 }
 
+// ValidatePageSnapshot checks original source JSON before a fitter or DTO can
+// normalize duplicate fields, invalid UTF-8, lone surrogates or native presence.
+func ValidatePageSnapshot(raw []byte) error {
+	if err := validateRaw("UIPageSnapshot", raw, FrameMost); err != nil {
+		return err
+	}
+	var source map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &source); err != nil {
+		return err
+	}
+	framed, err := json.Marshal(map[string]any{"protocol": 1, "session": "source-validation", "epoch": "source-validation", "version": 1, "root_key": source["rootKey"], "view": source["view"]})
+	if err != nil {
+		return err
+	}
+	_, err = DecodeSnapshot(framed)
+	return err
+}
+
+// DecodePageSnapshot returns a detached source header/native DTO after validating
+// the original bytes. Callers retain raw view JSON rather than serializing this DTO.
+func DecodePageSnapshot(raw []byte) (wire.UIPageSnapshot, error) {
+	var out wire.UIPageSnapshot
+	if err := ValidatePageSnapshot(raw); err != nil {
+		return out, err
+	}
+	err := decodeDTO(raw, &out)
+	return out, err
+}
+
+// DecodeClientEnvelope applies the same raw byte, number, duplicate-member and
+// exact-shape boundary to the canonical main-app WebSocket request envelope.
+func DecodeClientEnvelope(raw []byte) (wire.UIStreamClientEnvelope, error) {
+	var out wire.UIStreamClientEnvelope
+	if err := validateRaw("UIStreamClientEnvelope", raw, RequestMost); err != nil {
+		return out, err
+	}
+	err := decodeDTO(raw, &out)
+	return out, err
+}
+
+// ValidateActionResult checks original bounded presentation JSON, before DTO projection.
+// It carries no callback, tree mutation or result-based authority.
+func ValidateActionResult(raw []byte) error {
+	return validateRaw("UIStreamActionResult", raw, RequestMost)
+}
+
 // DecodeRequest checks the 64 KiB boundary before parsing. Authorization,
 // lifecycle quotas, deduplication and anti-replay fences remain caller duties.
 func DecodeRequest(raw []byte) (wire.UIStreamRequest, error) {
@@ -186,7 +232,8 @@ func DecodeEvent(raw []byte) (wire.UIStreamEvent, error) {
 	if err := validateRaw("UIStreamEvent", raw, RequestMost); err != nil {
 		return out, err
 	}
-	return out, decodeDTO(raw, &out)
+	err := decodeDTO(raw, &out)
+	return out, err
 }
 
 // validateRaw walks tokens first: bounds, UTF-8, duplicate members and nesting

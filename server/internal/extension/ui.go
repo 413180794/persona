@@ -356,6 +356,10 @@ func ParseView(raw json.RawMessage) (*View, error) {
 // app draws, so that a view is refused or drawn alike for every app; then what the app gets is checked again
 // (wire.CheckFitted), a compact one to its limits. It says what types it left out.
 func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped []string, err error) {
+	return fit(v, slot, uiVersion, false, languages...)
+}
+
+func fit(v *View, slot UISlot, uiVersion int, native bool, languages ...i18n.Lang) (dropped []string, err error) {
 	l := i18n.Default
 	if len(languages) > 0 {
 		l = languages[0].Or(i18n.Default)
@@ -387,8 +391,10 @@ func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped [
 	case v.RefreshAfter > RefreshMost:
 		v.RefreshAfter = RefreshMost
 	}
-	if err := CheckView(v); err != nil {
-		return dropped, err
+	if !native {
+		if err := CheckView(v); err != nil {
+			return dropped, err
+		}
 	}
 	compact := slot.Size == SizeCompact
 	if compact {
@@ -430,8 +436,10 @@ func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped [
 		sections = append(sections, s)
 	}
 	v.Sections = sections
-	if err := wire.CheckFitted(v); err != nil {
-		return dropped, err
+	if !native {
+		if err := wire.CheckFitted(v); err != nil {
+			return dropped, err
+		}
 	}
 	if compact {
 		if v.Search != nil || v.Filter != nil || slices.ContainsFunc(v.Sections, func(s Section) bool { return s.More != nil }) {

@@ -61,6 +61,9 @@ class ExtensionWireTest {
         "UIStreamDelta" to ExtensionUIStreamDelta.serializer(),
         "UIStreamEvent" to ExtensionUIStreamEvent.serializer(),
         "UIStreamRequest" to ExtensionUIStreamRequest.serializer(),
+        "UIStreamClientEnvelope" to ExtensionUIStreamClientEnvelope.serializer(),
+        "UIStreamServerEnvelope" to ExtensionUIStreamServerEnvelope.serializer(),
+        "UIPageSnapshot" to ExtensionUIPageSnapshot.serializer(),
     )
 
     @Suppress("UNCHECKED_CAST")

@@ -1,8 +1,10 @@
 package extension
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 )
@@ -42,6 +44,24 @@ func TestFitAssistantOnlySections(t *testing.T) {
 	dropped, err := Fit(v, card, UIVersion)
 	if err != nil || len(v.Sections) != 0 || !slices.Contains(dropped, "html") {
 		t.Fatalf("sections=%+v dropped=%v err=%v", v.Sections, dropped, err)
+	}
+}
+
+func TestRestoreNativePresenceByKeyAfterSiblingChanges(t *testing.T) {
+	decode := func(raw string) any {
+		t.Helper()
+		var value any
+		if err := json.Unmarshal([]byte(raw), &value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	source := decode(`[{"key":"a","title":"A","disabled":false},{"key":"b","title":"B","disabled":false},{"key":"c","title":"C","disabled":false}]`)
+	old := decode(`[{"key":"a","title":"A"},{"key":"b","title":"B"},{"key":"c","title":"C"}]`)
+	next := decode(`[{"key":"c","title":"Changed"},{"key":"b","title":"B"},{"key":"new","title":"New"}]`)
+	want := decode(`[{"key":"c","title":"Changed","disabled":false},{"key":"b","title":"B","disabled":false},{"key":"new","title":"New"}]`)
+	if got := restorePresence(source, old, next); !reflect.DeepEqual(got, want) {
+		t.Fatalf("shifted native presence: got %#v, want %#v", got, want)
 	}
 }
 

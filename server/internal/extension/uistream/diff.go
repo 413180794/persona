@@ -10,7 +10,8 @@ import (
 
 // Diff emits deterministic stable-key edits without regenerating callback IDs.
 // The target must use the same session/epoch/root and the protocol's next version
-// (or the same version for an identical tree). Page metadata uses root replacement;
+// (or the same version for unchanged non-event work). Identical trees may also
+// advance exactly one revision to consume an accepted event. Page metadata uses root replacement;
 // tiles use whole grid/carousel replacement. The bool recommends a full snapshot
 // when a delta is not smaller or topology/operation budgets need root fallback.
 // A returned delta remains valid and lossless even when a snapshot is preferred.
@@ -25,7 +26,7 @@ func Diff(from, to *Tree) (*Delta, bool, error) {
 	}
 	same := bytes.Equal(from.ViewJSON(), to.ViewJSON())
 	want := from.Version()
-	if !same {
+	if !same || to.Version() != want {
 		if want == VersionMost {
 			return nil, false, errors.New("rotate epoch before version exhaustion")
 		}

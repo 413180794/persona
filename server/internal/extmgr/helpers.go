@@ -187,6 +187,7 @@ const (
 // principal is the caller of a relayed request as the hub's auth found it; the hub replaces whatever the client sent
 // in these headers.
 type principal struct {
+	Hub       string
 	ID        string
 	Name      string
 	Role      string
@@ -216,7 +217,7 @@ func withPrincipal(ctx context.Context, p principal) context.Context {
 // principalFrom reads the hub's headers off a relayed request.
 func principalFrom(r *http.Request) principal {
 	h := r.Header
-	p := principal{ID: h.Get(extwire.HeaderDevice), Name: h.Get(extwire.HeaderDeviceName), Role: h.Get(extwire.HeaderRole),
+	p := principal{Hub: h.Get(extwire.HeaderHub), ID: h.Get(extwire.HeaderDevice), Name: h.Get(extwire.HeaderDeviceName), Role: h.Get(extwire.HeaderRole),
 		Paired: h.Get(extwire.HeaderPaired) == "1", Extension: h.Get(extwire.HeaderExtension),
 		Owner: h.Get(extwire.HeaderOwner) == "1", Admin: h.Get(extwire.HeaderAdmin) == "1", Lang: i18n.Lang(h.Get(extwire.HeaderLang))}
 	if s := h.Get(extwire.HeaderScopes); s != "" {

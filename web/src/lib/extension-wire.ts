@@ -3228,3 +3228,129 @@ export interface UIStreamSnapshotRequest {
   epoch: string;
   version: number;
 }
+
+export type UIStreamClientEnvelope = {
+  type: "extension_ui_stream";
+  manager?: string;
+} & (
+  | { request: UIStreamRequest }
+);
+
+/**
+ * Bounded presentation-only subset of native ActionResult, at most 64 KiB UTF-8 JSON. Carried in the correlated event
+ * receipt and cached on replay. Clients apply it once per session/epoch/event_id, only after reaching
+ * receipt.version; never execute HTML, JavaScript or infer authorization from a result. JSX state owns view/items
+ * updates through snapshots/deltas. Manager validates push ownership and credential-free HTTPS (or its own permitted
+ * native URL).
+ */
+export interface UIStreamActionResult {
+  toast?: string;
+  open_url?: string;
+  push?: UIStreamPush;
+  pop?: boolean;
+  lines?: UIStreamFileLines;
+}
+
+/**
+ * Extension-owned native Push only: no assistant page or arbitrary target. State is additionally bounded to 16 KiB
+ * UTF-8. Not authority to invoke an action.
+ */
+export interface UIStreamPush {
+  ui?: string;
+  state?: string;
+  title?: string;
+}
+
+/**
+ * Native FileLines presentation response correlated to the saved event, not filesystem access or code execution. The
+ * complete result remains limited to 64 KiB UTF-8 JSON.
+ */
+export interface UIStreamFileLines {
+  path: string;
+  side?: DiffSide;
+  start: number;
+  lines: string[];
+  total?: number;
+}
+
+export interface UIStreamReceipt {
+  session: string;
+  epoch: string;
+  event_id: string;
+  version: number;
+  status: string;
+  result?: UIStreamActionResult;
+}
+
+export interface UIStreamFailure {
+  code: string;
+  message: string;
+}
+
+export interface UIStreamSnapshotEnvelope {
+  kind: "snapshot";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  snapshot: UIStreamSnapshot;
+}
+
+export interface UIStreamDeltaEnvelope {
+  kind: "delta";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  delta: UIStreamDelta;
+}
+
+export interface UIStreamReceiptEnvelope {
+  kind: "receipt";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  receipt: UIStreamReceipt;
+}
+
+export interface UIStreamErrorEnvelope {
+  kind: "error";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  error: UIStreamFailure;
+}
+
+export interface UIStreamClosedEnvelope {
+  kind: "closed";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  session: string;
+}
+
+export type UIStreamServerEnvelope =
+  | UIStreamSnapshotEnvelope
+  | UIStreamDeltaEnvelope
+  | UIStreamReceiptEnvelope
+  | UIStreamErrorEnvelope
+  | UIStreamClosedEnvelope
+  | UIStreamSuspendedEnvelope;
+export const UISTREAM_SERVER_ENVELOPE_KINDS = ["snapshot", "delta", "receipt", "error", "closed", "suspended"] as const;
+
+export interface UIStreamSuspendedEnvelope {
+  kind: "suspended";
+  type: "extension_ui_stream";
+  request_id?: string;
+  manager?: string;
+  session: string;
+}
+
+/**
+ * Source-process native render revision, independent of manager-owned wire revisions. Validate original JSON before
+ * fitting; never trust source recipients or owners.
+ */
+export interface UIPageSnapshot {
+  generation: string;
+  version: number;
+  rootKey: string;
+  view: View;
+}

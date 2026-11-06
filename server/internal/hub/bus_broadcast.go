@@ -50,7 +50,8 @@ var hubMessageTypes = map[string]bool{
 	"screen": true, "tool_call": true, "hook_event": true, "fs_changed": true, "desktops": true, "endpoints": true,
 	"terminal": true, "terminal_control": true, "herdr_state": true, "herdr_focus": true, "herdr_end": true, "herdr_data": true,
 	"fleet": true, "liveactivity": true, "look": true, "personas": true, "managers": true, "hub_update": true,
-	"hub_restarting": true,
+	"hub_restarting":      true,
+	"extension_ui_stream": true, // reserved targeted transport; never a manager broadcast
 }
 
 // checkedKeys are the keys the hub reads to place a message: a key that differs from one only by case is refused.

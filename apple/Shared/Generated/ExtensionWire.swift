@@ -9713,3 +9713,447 @@ nonisolated struct ExtensionUIStreamSnapshotRequest: Codable, Hashable, Sendable
         self.version = try c.decode(Int64.self, forKey: .version)
     }
 }
+
+nonisolated struct ExtensionUIStreamClientEnvelope: Codable, Hashable, Sendable {
+    var type: String
+    var manager: String?
+    var request: ExtensionUIStreamRequest?
+
+    init(type: String = "", manager: String? = nil, request: ExtensionUIStreamRequest? = nil) {
+        self.type = type
+        self.manager = manager
+        self.request = request
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case manager
+        case request
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.manager = c.contains(.manager) ? try c.decode(String.self, forKey: .manager) : nil
+        self.request = c.contains(.request) ? try c.decode(ExtensionUIStreamRequest.self, forKey: .request) : nil
+    }
+}
+
+/// Bounded presentation-only subset of native ActionResult, at most 64 KiB UTF-8 JSON. Carried in the correlated
+/// event receipt and cached on replay. Clients apply it once per session/epoch/event_id, only after reaching
+/// receipt.version; never execute HTML, JavaScript or infer authorization from a result. JSX state owns view/items
+/// updates through snapshots/deltas. Manager validates push ownership and credential-free HTTPS (or its own permitted
+/// native URL).
+nonisolated struct ExtensionUIStreamActionResult: Codable, Hashable, Sendable {
+    var toast: String?
+    var openUrl: String?
+    var push: ExtensionUIStreamPush?
+    var pop: Bool?
+    var lines: ExtensionUIStreamFileLines?
+
+    init(toast: String? = nil, openUrl: String? = nil, push: ExtensionUIStreamPush? = nil, pop: Bool? = nil, lines: ExtensionUIStreamFileLines? = nil) {
+        self.toast = toast
+        self.openUrl = openUrl
+        self.push = push
+        self.pop = pop
+        self.lines = lines
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case toast
+        case openUrl = "open_url"
+        case push
+        case pop
+        case lines
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.toast = c.contains(.toast) ? try c.decode(String.self, forKey: .toast) : nil
+        self.openUrl = c.contains(.openUrl) ? try c.decode(String.self, forKey: .openUrl) : nil
+        self.push = c.contains(.push) ? try c.decode(ExtensionUIStreamPush.self, forKey: .push) : nil
+        self.pop = c.contains(.pop) ? try c.decode(Bool.self, forKey: .pop) : nil
+        self.lines = c.contains(.lines) ? try c.decode(ExtensionUIStreamFileLines.self, forKey: .lines) : nil
+    }
+}
+
+/// Extension-owned native Push only: no assistant page or arbitrary target. State is additionally bounded to 16 KiB
+/// UTF-8. Not authority to invoke an action.
+nonisolated struct ExtensionUIStreamPush: Codable, Hashable, Sendable {
+    var ui: String?
+    var state: String?
+    var title: String?
+
+    init(ui: String? = nil, state: String? = nil, title: String? = nil) {
+        self.ui = ui
+        self.state = state
+        self.title = title
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case ui
+        case state
+        case title
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.ui = c.contains(.ui) ? try c.decode(String.self, forKey: .ui) : nil
+        self.state = c.contains(.state) ? try c.decode(String.self, forKey: .state) : nil
+        self.title = c.contains(.title) ? try c.decode(String.self, forKey: .title) : nil
+    }
+}
+
+/// Native FileLines presentation response correlated to the saved event, not filesystem access or code execution. The
+/// complete result remains limited to 64 KiB UTF-8 JSON.
+nonisolated struct ExtensionUIStreamFileLines: Codable, Hashable, Sendable {
+    var path: String
+    var side: String?
+    var start: Int
+    var lines: [String]
+    var total: Int?
+
+    init(path: String = "", side: String? = nil, start: Int = 0, lines: [String] = [], total: Int? = nil) {
+        self.path = path
+        self.side = side
+        self.start = start
+        self.lines = lines
+        self.total = total
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case path
+        case side
+        case start
+        case lines
+        case total
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.path = try c.decode(String.self, forKey: .path)
+        self.side = c.contains(.side) ? try c.decode(String.self, forKey: .side) : nil
+        self.start = try c.decode(Int.self, forKey: .start)
+        self.lines = try c.decode([String].self, forKey: .lines)
+        self.total = c.contains(.total) ? try c.decode(Int.self, forKey: .total) : nil
+    }
+}
+
+nonisolated struct ExtensionUIStreamReceipt: Codable, Hashable, Sendable {
+    var session: String
+    var epoch: String
+    var eventId: String
+    var version: Int64
+    var status: String
+    var result: ExtensionUIStreamActionResult?
+
+    init(session: String = "", epoch: String = "", eventId: String = "", version: Int64 = 0, status: String = "", result: ExtensionUIStreamActionResult? = nil) {
+        self.session = session
+        self.epoch = epoch
+        self.eventId = eventId
+        self.version = version
+        self.status = status
+        self.result = result
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case session
+        case epoch
+        case eventId = "event_id"
+        case version
+        case status
+        case result
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+        self.eventId = try c.decode(String.self, forKey: .eventId)
+        self.version = try c.decode(Int64.self, forKey: .version)
+        self.status = try c.decode(String.self, forKey: .status)
+        self.result = c.contains(.result) ? try c.decode(ExtensionUIStreamActionResult.self, forKey: .result) : nil
+    }
+}
+
+nonisolated struct ExtensionUIStreamFailure: Codable, Hashable, Sendable {
+    var code: String
+    var message: String
+
+    init(code: String = "", message: String = "") {
+        self.code = code
+        self.message = message
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case code
+        case message
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.code = try c.decode(String.self, forKey: .code)
+        self.message = try c.decode(String.self, forKey: .message)
+    }
+}
+
+nonisolated struct ExtensionUIStreamSnapshotEnvelope: Codable, Hashable, Sendable {
+    var type: String
+    var requestId: String?
+    var manager: String?
+    var snapshot: ExtensionUIStreamSnapshot
+
+    init(type: String = "", requestId: String? = nil, manager: String? = nil, snapshot: ExtensionUIStreamSnapshot = ExtensionUIStreamSnapshot()) {
+        self.type = type
+        self.requestId = requestId
+        self.manager = manager
+        self.snapshot = snapshot
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case requestId = "request_id"
+        case manager
+        case snapshot
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.requestId = c.contains(.requestId) ? try c.decode(String.self, forKey: .requestId) : nil
+        self.manager = c.contains(.manager) ? try c.decode(String.self, forKey: .manager) : nil
+        self.snapshot = try c.decode(ExtensionUIStreamSnapshot.self, forKey: .snapshot)
+    }
+}
+
+nonisolated struct ExtensionUIStreamDeltaEnvelope: Codable, Hashable, Sendable {
+    var type: String
+    var requestId: String?
+    var manager: String?
+    var delta: ExtensionUIStreamDelta
+
+    init(type: String = "", requestId: String? = nil, manager: String? = nil, delta: ExtensionUIStreamDelta = ExtensionUIStreamDelta()) {
+        self.type = type
+        self.requestId = requestId
+        self.manager = manager
+        self.delta = delta
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case requestId = "request_id"
+        case manager
+        case delta
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.requestId = c.contains(.requestId) ? try c.decode(String.self, forKey: .requestId) : nil
+        self.manager = c.contains(.manager) ? try c.decode(String.self, forKey: .manager) : nil
+        self.delta = try c.decode(ExtensionUIStreamDelta.self, forKey: .delta)
+    }
+}
+
+nonisolated struct ExtensionUIStreamReceiptEnvelope: Codable, Hashable, Sendable {
+    var type: String
+    var requestId: String?
+    var manager: String?
+    var receipt: ExtensionUIStreamReceipt
+
+    init(type: String = "", requestId: String? = nil, manager: String? = nil, receipt: ExtensionUIStreamReceipt = ExtensionUIStreamReceipt()) {
+        self.type = type
+        self.requestId = requestId
+        self.manager = manager
+        self.receipt = receipt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case requestId = "request_id"
+        case manager
+        case receipt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.requestId = c.contains(.requestId) ? try c.decode(String.self, forKey: .requestId) : nil
+        self.manager = c.contains(.manager) ? try c.decode(String.self, forKey: .manager) : nil
+        self.receipt = try c.decode(ExtensionUIStreamReceipt.self, forKey: .receipt)
+    }
+}
+
+nonisolated struct ExtensionUIStreamErrorEnvelope: Codable, Hashable, Sendable {
+    var type: String
+    var requestId: String?
+    var manager: String?
+    var error: ExtensionUIStreamFailure
+
+    init(type: String = "", requestId: String? = nil, manager: String? = nil, error: ExtensionUIStreamFailure = ExtensionUIStreamFailure()) {
+        self.type = type
+        self.requestId = requestId
+        self.manager = manager
+        self.error = error
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case requestId = "request_id"
+        case manager
+        case error
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.requestId = c.contains(.requestId) ? try c.decode(String.self, forKey: .requestId) : nil
+        self.manager = c.contains(.manager) ? try c.decode(String.self, forKey: .manager) : nil
+        self.error = try c.decode(ExtensionUIStreamFailure.self, forKey: .error)
+    }
+}
+
+nonisolated struct ExtensionUIStreamClosedEnvelope: Codable, Hashable, Sendable {
+    var type: String
+    var requestId: String?
+    var manager: String?
+    var session: String
+
+    init(type: String = "", requestId: String? = nil, manager: String? = nil, session: String = "") {
+        self.type = type
+        self.requestId = requestId
+        self.manager = manager
+        self.session = session
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case requestId = "request_id"
+        case manager
+        case session
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.requestId = c.contains(.requestId) ? try c.decode(String.self, forKey: .requestId) : nil
+        self.manager = c.contains(.manager) ? try c.decode(String.self, forKey: .manager) : nil
+        self.session = try c.decode(String.self, forKey: .session)
+    }
+}
+
+nonisolated enum ExtensionUIStreamServerEnvelope: Codable, Hashable, Sendable {
+    case snapshot(ExtensionUIStreamSnapshotEnvelope)
+    case delta(ExtensionUIStreamDeltaEnvelope)
+    case receipt(ExtensionUIStreamReceiptEnvelope)
+    case error(ExtensionUIStreamErrorEnvelope)
+    case closed(ExtensionUIStreamClosedEnvelope)
+    case suspended(ExtensionUIStreamSuspendedEnvelope)
+    /// A kind this app does not know, or a variant it could not read: reject the entire request.
+    case unknown(kind: String)
+
+    static let kinds = ["snapshot", "delta", "receipt", "error", "closed", "suspended"]
+
+    private enum TagKey: String, CodingKey {
+        case tag = "kind"
+    }
+
+    var kind: String {
+        switch self {
+        case .snapshot: "snapshot"
+        case .delta: "delta"
+        case .receipt: "receipt"
+        case .error: "error"
+        case .closed: "closed"
+        case .suspended: "suspended"
+        case .unknown(let t): t
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let t = (try? decoder.container(keyedBy: TagKey.self).decode(String.self, forKey: .tag)) ?? ""
+        switch t {
+        case "snapshot": self = (try? ExtensionUIStreamSnapshotEnvelope(from: decoder)).map { .snapshot($0) } ?? .unknown(kind: t)
+        case "delta": self = (try? ExtensionUIStreamDeltaEnvelope(from: decoder)).map { .delta($0) } ?? .unknown(kind: t)
+        case "receipt": self = (try? ExtensionUIStreamReceiptEnvelope(from: decoder)).map { .receipt($0) } ?? .unknown(kind: t)
+        case "error": self = (try? ExtensionUIStreamErrorEnvelope(from: decoder)).map { .error($0) } ?? .unknown(kind: t)
+        case "closed": self = (try? ExtensionUIStreamClosedEnvelope(from: decoder)).map { .closed($0) } ?? .unknown(kind: t)
+        case "suspended": self = (try? ExtensionUIStreamSuspendedEnvelope(from: decoder)).map { .suspended($0) } ?? .unknown(kind: t)
+        default: self = .unknown(kind: t)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .snapshot(let v): try v.encode(to: encoder)
+        case .delta(let v): try v.encode(to: encoder)
+        case .receipt(let v): try v.encode(to: encoder)
+        case .error(let v): try v.encode(to: encoder)
+        case .closed(let v): try v.encode(to: encoder)
+        case .suspended(let v): try v.encode(to: encoder)
+        case .unknown: break
+        }
+        var c = encoder.container(keyedBy: TagKey.self)
+        try c.encode(kind, forKey: .tag)
+    }
+}
+
+nonisolated struct ExtensionUIStreamSuspendedEnvelope: Codable, Hashable, Sendable {
+    var type: String
+    var requestId: String?
+    var manager: String?
+    var session: String
+
+    init(type: String = "", requestId: String? = nil, manager: String? = nil, session: String = "") {
+        self.type = type
+        self.requestId = requestId
+        self.manager = manager
+        self.session = session
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case requestId = "request_id"
+        case manager
+        case session
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.requestId = c.contains(.requestId) ? try c.decode(String.self, forKey: .requestId) : nil
+        self.manager = c.contains(.manager) ? try c.decode(String.self, forKey: .manager) : nil
+        self.session = try c.decode(String.self, forKey: .session)
+    }
+}
+
+/// Source-process native render revision, independent of manager-owned wire revisions. Validate original JSON before
+/// fitting; never trust source recipients or owners.
+nonisolated struct ExtensionUIPageSnapshot: Codable, Hashable, Sendable {
+    var generation: String
+    var version: Int64
+    var rootKey: String
+    var view: ExtensionView
+
+    init(generation: String = "", version: Int64 = 0, rootKey: String = "", view: ExtensionView = ExtensionView()) {
+        self.generation = generation
+        self.version = version
+        self.rootKey = rootKey
+        self.view = view
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case generation
+        case version
+        case rootKey
+        case view
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.generation = try c.decode(String.self, forKey: .generation)
+        self.version = try c.decode(Int64.self, forKey: .version)
+        self.rootKey = try c.decode(String.self, forKey: .rootKey)
+        self.view = try c.decode(ExtensionView.self, forKey: .view)
+    }
+}

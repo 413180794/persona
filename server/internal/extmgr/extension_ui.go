@@ -160,8 +160,9 @@ var uiItemBlocks = []string{"lark", "doc", "moment", "mail", "connector"}
 // plugin's state.
 type uiRequest struct {
 	// lang is set only by an explicit HTTP preference; older clients retain their body locale.
-	lang    i18n.Lang
-	Context struct {
+	lang         i18n.Lang
+	nativeResult *json.RawMessage // HTTP-only fitted source-presence result, not guest input
+	Context      struct {
 		Launcher string `json:"launcher,omitempty"`
 		Machine  string `json:"machine,omitempty"`
 		// Item is the inbox item an inbox_item is drawn for.
@@ -221,8 +222,9 @@ func (h *Manager) uiParams(item extension.UIItem, slot extension.UISlot, in uiRe
 	return out
 }
 
-// uiCall asks plugin id's ui contribution to render or act.
-func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extension.ActionResult, error) {
+// withUI checks the same contribution, context and permissions for every UI path.
+// The callback runs while temporary gateway capabilities remain scoped and live.
+func (h *Manager) withUI(ctx context.Context, id, uiID string, in uiRequest, call func(*extension.Extension, *hubExtension, extension.UIItem, extension.UISlot, extension.UIParams) (extension.ActionResult, error)) (extension.ActionResult, error) {
 	var res extension.ActionResult
 	p := h.extensions.reg.Get(id)
 	hp := h.extensions.get(id)
@@ -302,71 +304,82 @@ func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (ex
 		}
 		params.Item = it
 	}
-	method := "ui.render"
-	if in.Action != "" {
-		method = "ui.action"
-	}
-	cctx, cancel := context.WithTimeout(ctx, uiTimeout)
-	defer cancel()
-	var out json.RawMessage
-	if err := hp.proc.Call(cctx, method, params, &out); err != nil {
-		var re *rpc.Error
-		if errors.As(err, &re) {
-			if re.Code == extension.CodeUnsupported {
-				return res, errUnsupportedGateway
+	return call(p, hp, *item, slot, params)
+}
+
+func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extension.ActionResult, error) {
+	return h.withUI(ctx, id, uiID, in, func(p *extension.Extension, hp *hubExtension, item extension.UIItem, slot extension.UISlot, params extension.UIParams) (extension.ActionResult, error) {
+		var res extension.ActionResult
+		if result, handled, err := h.pageLegacy(ctx, p, hp, item, slot, params, in); handled {
+			return result, err
+		}
+		method := "ui.render"
+		if in.Action != "" {
+			method = "ui.action"
+		}
+		cctx, cancel := context.WithTimeout(ctx, uiTimeout)
+		defer cancel()
+		var out json.RawMessage
+		if err := hp.proc.Call(cctx, method, params, &out); err != nil {
+			var re *rpc.Error
+			if errors.As(err, &re) {
+				if re.Code == extension.CodeUnsupported {
+					return res, errUnsupportedGateway
+				}
+				return res, errors.New(re.Message)
 			}
-			return res, errors.New(re.Message)
-		}
-		return res, err
-	}
-	fit := func(v *extension.View) error {
-		dropped, err := extension.Fit(v, slot, params.UIVersion, h.uiFallbackLang(ctx, params.Locale))
-		if len(dropped) > 0 && params.UIVersion == extension.UIVersion {
-			h.extensions.logf("plugin %s: ui %s drew items this hub does not know (%s): left out", id, uiID, strings.Join(dropped, ", "))
-		}
-		if err != nil {
-			return i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
-		}
-		return nil
-	}
-	if method == "ui.render" {
-		var v extension.View
-		if err := json.Unmarshal(out, &v); err != nil {
-			return res, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
-		}
-		if err := fit(&v); err != nil {
 			return res, err
 		}
-		if err := checkPushes(p.Manifest, *item, &v, nil); err != nil {
+		fit := func(v *extension.View) error {
+			dropped, err := extension.Fit(v, slot, params.UIVersion, h.uiFallbackLang(ctx, params.Locale))
+			if len(dropped) > 0 && params.UIVersion == extension.UIVersion {
+				h.extensions.logf("plugin %s: ui %s drew items this hub does not know (%s): left out", id, uiID, strings.Join(dropped, ", "))
+			}
+			if err != nil {
+				return i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
+			}
+			return nil
+		}
+		if method == "ui.render" {
+			var v extension.View
+			if err := json.Unmarshal(out, &v); err != nil {
+				return res, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
+			}
+			if err := fit(&v); err != nil {
+				return res, err
+			}
+			if err := checkPushes(p.Manifest, item, &v, nil); err != nil {
+				return res, err
+			}
+			res.View = &v
+			return res, nil
+		}
+		if err := json.Unmarshal(out, &res); err != nil {
 			return res, err
 		}
-		res.View = &v
-		return res, nil
-	}
-	if err := json.Unmarshal(out, &res); err != nil {
-		return res, err
-	}
-	if res.View != nil {
-		if err := fit(res.View); err != nil {
+		if res.View != nil {
+			if err := fit(res.View); err != nil {
+				return extension.ActionResult{}, err
+			}
+		}
+		if err := extension.FitResult(&res, slot, params.UIVersion, h.uiFallbackLang(ctx, params.Locale)); err != nil {
+			return extension.ActionResult{}, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
+		}
+		if err := checkPushes(p.Manifest, item, &extension.View{Sections: []extension.Section{{Items: res.Items}}}, nil); err != nil {
 			return extension.ActionResult{}, err
 		}
-	}
-	if err := extension.FitResult(&res, slot, params.UIVersion, h.uiFallbackLang(ctx, params.Locale)); err != nil {
-		return extension.ActionResult{}, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
-	}
-	if err := checkPushes(p.Manifest, *item, &extension.View{Sections: []extension.Section{{Items: res.Items}}}, nil); err != nil {
-		return extension.ActionResult{}, err
-	}
-	if err := checkPushes(p.Manifest, *item, res.View, res.Push); err != nil {
-		return extension.ActionResult{}, err
-	}
-	if params.UIVersion < 3 {
-		res.Push, res.Pop = nil, false // an older app knows neither: it draws the view it got, or draws again
-	}
-	if err := checkOpenURL(id, *item, in.Context.Item, res.OpenURL); err != nil {
-		return extension.ActionResult{}, err
-	}
-	return res, nil
+		if err := checkPushes(p.Manifest, item, res.View, res.Push); err != nil {
+			return extension.ActionResult{}, err
+		}
+		if params.UIVersion < 3 {
+			res.Push, res.Pop = nil, false // an older app knows neither: it draws the view it got, or draws again
+		}
+		if err := checkOpenURL(id, item, in.Context.Item, res.OpenURL); err != nil {
+			return extension.ActionResult{}, err
+		}
+		return res, nil
+
+	})
 }
 
 // checkPushes holds the pages a view's actions (and an action's answer) push to the extension's own whole pages: a
@@ -458,6 +471,8 @@ func (h *Manager) extensionUIRoutes(api *http.ServeMux) {
 			return
 		}
 		in.lang = i18n.FromRequest(r)
+		var nativeResult json.RawMessage
+		in.nativeResult = &nativeResult
 		res, err := h.uiCall(r.Context(), r.PathValue("id"), r.PathValue("ui"), in)
 		switch {
 		case errors.Is(err, errNoExtension), errors.Is(err, errNoMachine), errors.Is(err, errNoItem):
@@ -473,7 +488,11 @@ func (h *Manager) extensionUIRoutes(api *http.ServeMux) {
 		case err != nil:
 			writeExtensionResponseError(w, r, http.StatusBadGateway, "plugin_failed", err)
 		default:
-			writeJSON(w, res)
+			if len(nativeResult) > 0 {
+				writeJSON(w, nativeResult)
+			} else {
+				writeJSON(w, res)
+			}
 		}
 	})
 }

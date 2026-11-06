@@ -233,6 +233,16 @@ func TestExtensionUIAndEvents(t *testing.T) {
 	if out["toast"] != "存好了：你好" {
 		t.Fatalf("%v", out)
 	}
+	for _, state := range []string{"ui.session.current", "ui.session.fixture.epoch.1"} {
+		code, rendered := call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/list", master, fmt.Sprintf(`{"state":%q}`, state))
+		if code != http.StatusOK || !strings.Contains(fmt.Sprint(rendered["view"]), state) {
+			t.Fatalf("opaque legacy state was treated as a checkpoint: %d %v", code, rendered)
+		}
+		code, acted := call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/home", master, fmt.Sprintf(`{"action":"save","values":{"note":"fixture"},"state":%q}`, state))
+		if code != http.StatusOK || acted["toast"] == nil {
+			t.Fatalf("legacy action rejected opaque state: %d %v", code, acted)
+		}
+	}
 	if code, out := call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/broken", master, `{}`); code != 502 || !strings.Contains(fmt.Sprint(out["error"]), "画不了") {
 		t.Fatalf("a view the apps cannot draw is refused: %d %v", code, out)
 	}

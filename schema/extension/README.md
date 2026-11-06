@@ -8,7 +8,7 @@ from them instead of being written once per platform:
 | --- | --- |
 | `manifest.schema.json` | The manifest `persona-extension.json` (called `persona-plugin.json` before the rename, same fields): the root, `engines`, `runtime`, `secrets`, `permissions`, `contributes` and each extension point's contributions |
 | `protocol.schema.json` | The process protocol: one frame a line (`Frame`, `RPCError`), error codes, `initialize`'s params and answer, `ui.render` / `ui.action`'s params `UIParams`, the badge event, and the `UIContext` / `UIRequest` the apps send the hub to draw a slot and the `UIPlace` the hub lists |
-| `stream.schema.json` | **Contract-only (#5956).** Native UI stream protocol 1: explicit `UIStreamCapability`, owner-session lifecycle requests, complete keyed snapshots, atomic deltas and bounded interaction values; no runtime or transport activation |
+| `stream.schema.json` | Native UI stream protocol 1 (#5956): explicit capability, canonical app WebSocket envelopes, owner-session lifecycle requests, complete keyed snapshots, atomic deltas and bounded interaction values; source runtime activation remains independently gated |
 | `view.schema.json` | Views, sections, components (`Component`, told apart by `type`), actions, `ui.action`'s answer, and the `persona-card` in assistant answers (`PersonaCard`, folded into components in #1850) |
 | `messaging.schema.json` | The `messaging` extension point (#2138): the manifest's sources (`MessagingItem`), conversations, messages and parts (`MessagingPart`, by `kind`), sends, composer modes, documents, posts, events and errors; see `docs/extension-messaging.md` |
 | `connector.schema.json` | **Plugin-side.** The `connectors` extension point's calls (`docs/connector-protocol.md`): everything the hub asks a connector program (`connector.status`, `connector.inbox.collect`, `connector.thread.page`, `connector.archive.changes`, `connector.group.*`, `connector.login.step`…), what the program asks back (`connector.secrets.*`, the knowledge base's `connector.posts.*` and `connector.archive.chats`, `connector.credentials.gh_token`, and the hub's own `sent.record`, which puts a send of the connector's in the sent-as-user ledger), the `connector.changed` event, the capabilities, states and error codes |
@@ -40,13 +40,13 @@ module): `wire.Validate(<definition>, value)` checks against them. The hub check
 knows the same subset as the validator in `scripts/test/test_extension_schema.py`.
 The View semantics both extensions and the assistant check (charts, tables, fields) are in `sdk/go/wire/viewcheck.go`.
 
-## Native UI stream protocol 1 (contract only)
+## Native UI stream protocol 1
 
-Stage 1 of #5956 defines the wire for **server-only TSX execution, native client rendering and WebSocket deltas**.
-It installs no engine, handlers, endpoints, subscriptions or reducer. Runtime activation requires later sandbox,
-resource-isolation and egress verification; existing process extensions and HTTP render/action/invalidation behavior
-are unchanged. The hub still
-advertises UI version 6 and no stream capability; adding generated client models does not enable client support.
+Stage 1 of #5956 defined the contracts for **server-only TSX execution, native client rendering and WebSocket
+deltas**. Later stages add the immutable keyed-tree core, process page bridge and manager-owned lifecycle below.
+Runtime activation still requires independent sandbox, resource-isolation and egress verification. Existing
+process extensions and HTTP render/action/invalidation behavior remain compatible. The hub still advertises UI
+version 6; generated client models and transport forwarding do not alone enable client or source-runtime support.
 
 ### Negotiation and messages
 
@@ -63,7 +63,8 @@ fit the complete View to supported components and UI version. Widgets/system sur
   after resume, reconnect or recovery. Future WebSocket relaying must identify these payloads independently from
   other traffic; this stage does not register transport event names.
 - `UIStreamDelta` is `{protocol, session, epoch, base_version, version, operations}`. Apply only to the matching
-  session/epoch and exact base. Changed batches advance the version; an empty batch keeps it. Rotate the epoch
+  session/epoch and exact base. Changed batches advance exactly one version. Empty batches may retain the version
+  for unchanged non-event work, or advance exactly one as an accepted/ambiguous callback fence. Rotate the epoch
   before the positive JSON-safe version range `1..9007199254740991` is exhausted.
 - `UIStreamEvent` is `{protocol, session, epoch, version, event_id, key, action, event, value}`. `action` is the opaque
   registered `Action.id` for this node/event slot; a node may expose several distinct actions. It grants no authority.
@@ -110,33 +111,87 @@ values cannot recover discarded digits.
 Suspend stops UI-only timers/polling and bounds/cancels pending UI work, independently of service work. Resume and
 reconnect reauthorize and send a fresh full snapshot rather than replaying a stale chain. Close is idempotent for
 already closed/unknown owned sessions, and releases effects, timers, callbacks and ephemeral state. Upgrade,
-disable, revocation or runtime restart disposes the generation; the client reopens. These are requirements for the
-later implementation, not lifecycle code implemented here.
+disable, revocation or runtime restart disposes the generation; the client reopens. Lifecycle code now lives in
+`server/internal/extmgr/ui_page_sessions.go`, with thin connection forwarding in `server/internal/hub/ui_stream.go`.
 
 `UIStreamSnapshot.keyed.json` → `UIStreamDelta.operations.json` → `UIStreamSnapshot.after-operations.json` is the
 shared native operation trace (root metadata clearing, zero ratio, insert, move, remove, empty section replacement).
 Stage 1 checks schemas and serialization, **not trace reduction**. `UIStreamDelta.empty.json` and event fixtures
 cover empty batches, null/false/zero/empty strings and collections. Stream-bound Go wrappers preserve required
 native component fields (`code.text`, empty table rows, file entries and comments), without changing the public
-legacy Component encoder. The required-empty fixture checks stream shape/round trips only: legacy `CheckView`
-re-encodes native Components and still rejects these fields as missing. Resolve that validation boundary before
-stream runtime activation; do not treat the fixture as semantic acceptance. General optional empty component
-properties still have their existing Go `omitempty` behavior and require a later explicitly scoped serialization decision.
-
+legacy Component encoder. Legacy `CheckView` re-encodes native Components and still rejects these fields as
+missing; that remains a legacy codec limitation, not evidence that required-empty native values are semantically
+invalid. General optional empty component properties still have their existing Go `omitempty` behavior.
 The native keyed-tree core in `server/internal/extension/uistream` now retains raw JSON property presence and
 applies the generated stream contracts before detached semantic decoding. Serialize its `Tree` / `Delta`, not
-their generated DTO projections. This core resolves the stream validation/presence boundary without changing
-legacy Component encoding: `wire.CheckViewJSON` checks the source shape and native semantics without
-re-encoding Components. `examples/traces/UIStreamSnapshot.native-presence.json` is shared lossless-core evidence,
-deliberately separate from the legacy DTO round-trip examples.
+their generated DTO projections.
+`wire.CheckViewJSON` checks the source shape and native semantics without re-encoding Components; legacy
+`CheckView` and Component encoding remain unchanged. `examples/traces/UIStreamSnapshot.native-presence.json`
+is shared lossless-core evidence, deliberately separate from the legacy DTO round-trip examples.
 
 The core stages batches atomically, bounds the resulting serialized tree, and emits deterministic stable-key diffs.
 `Diff` recommends snapshots when deltas are not smaller; it returns a nil delta with that recommendation when even
 root replacement would exceed the frame byte budget. Nonempty deltas advance exactly one version to reject gaps;
-empty deltas retain the same version. This is not an interaction anti-replay fence: a later manager must separately
-prevent accepted no-UI-change callbacks from executing again after receipt eviction. Changing empty-version
-advancement requires an explicit protocol decision, not a silent reducer change. Owner/session authorization,
-fitting, quotas, runtime and transport activation remain outside this core.
+empty deltas may retain it for unchanged non-event work or advance exactly one to fence accepted interactions.
+The manager consumes a revision after every entered or ambiguous callback, so receipt eviction cannot repeat a
+no-UI-change write. SDK native revisions also consume every invoked callback and remain independent of emitted
+wire revisions: several native renders may coalesce into one wire delta.
+
+### Canonical main-app WebSocket envelopes
+
+`UIPageSnapshot = {generation, version, rootKey, view}` describes source-process renders. Its revision is independent
+of the manager-owned wire revision. The manager validates original source bytes, keys, topology and semantics
+before fitting; duplicate fields, invalid UTF-8 and lone surrogates cannot disappear in a DTO/fitting round trip.
+
+`UIStreamClientEnvelope = {type: "extension_ui_stream", manager?, request: UIStreamRequest}`. The manager selector
+only routes to an authenticated manager; it supplies no ownership. The hub adds its authenticated principal, hub
+identity and random connection ID through `extwire`. Both feature `extension_ui_stream_v1` and `context.stream`
+are required; no extra app socket is opened. Production stream capability advertisement remains gated by the
+independent source-runtime acceptance lanes.
+
+`UIStreamServerEnvelope` uses `type: "extension_ui_stream"` and discriminator `kind`: `snapshot`, `delta`,
+`receipt`, `error`, `closed` or `suspended`. Payloads are under their matching names; lifecycle acknowledgments
+carry `session`. Optional `request_id` correlates requests, and `manager` identifies the authenticated sender.
+A receipt carries `session`, `epoch`, `event_id`, consumed `version`, `status` (`accepted` / `ambiguous` /
+`rejected`) and an optional presentation-only `result`. `UIStreamActionResult` is a strict, bounded overlay of native
+`ActionResult`: `toast`, `open_url`, extension-owned `push`, `pop`, and correlated `lines`. The complete result is at
+most 64 KiB UTF-8 JSON, its push state at most 16 KiB. No result `view`, `items`, HTML, JavaScript, assistant-page
+navigation, callback or approval fields are accepted; JSX state owns tree updates. Native push-ownership, URL and
+saved-action/confirmation/write gates remain authoritative. Unsafe or malformed results consume the callback's
+fence and return `ambiguous` without presentation effects.
+
+The client must apply the fence delta (or recovery snapshot) before consuming `receipt.result`, waiting until its
+matching session/epoch has reached `receipt.version`. Deduplicate presentation by `(session, epoch, event_id)`, not
+`request_id`: accepted retries return the cached result and status with the new request correlation, never invoke
+the callback or issue another delta. Do not repeat a toast, navigation or file-line insertion on that receipt retry.
+A result grants no authorization and must not trigger code or another write. Preserve the event's local target when
+correlating review/file-line responses. A saved native `Action.push` navigates directly in existing clients without
+calling the extension; a callback's returned `result.push` is handled only after its accepted event. Serialize
+canonical Tree/Delta/result bytes, not detached lossy generated DTOs. Frames are routed only to their exact
+authenticated connection, never the global broadcast/replay log.
+
+Manager sessions default to eight per principal, 64 per extension and 256 total, configurable downward through
+manager-only `ui_page_sessions`. Suspended/disconnected sessions expire after five minutes and are swept at most
+every minute. Resume/reconnect reauthorizes and queues a full snapshot before deltas. Legacy HTTP clients receive
+full fitted snapshots backed by owner-bound server sessions, with opaque state/version checkpoints and no stream
+or code; their UI work is suspended after each response. Their fitted HTTP `ActionResult` also carries validated
+presentation results; an old checkpoint action retry is rejected as stale, so neither writes nor effects repeat.
+HTTP UI versions below 3 omit push/pop and below 5 omit file lines. Widgets/system calls retain full snapshot behavior.
+
+### Source module and client capability boundaries
+
+`componentPage` supplies a renderer factory captured from the page's own SDK module. The trusted transport passes
+host-issued invocation-ticket authorization and publication callbacks into that factory. A separately bundled
+root must never be mounted by the transport adapter's different Renderer/hook context; sharing only element
+symbols does not fix the hook stack. A missing factory fails closed. Snapshot-only widget rendering uses the same
+factory and disposes it; full pages keep their own owner-bound sessions.
+
+Current native component declarations are not proof of client implementation. `html` is never a stream/JSX
+component. Unadvertised tags fail negotiation, including an explicitly empty tag list. Sections/items update by
+stable key; grid/carousel tiles update only through the containing component. Stream result `items`/`view` are
+intentionally unsupported: callbacks change JSX state, and file-line results use the correlated `lines` field.
+Native Apple/client implementation and visual acceptance remain independent work. Service namespaces and
+headless shortcuts keep working while UI sessions are suspended or disposed.
 
 ## Plugin-side schemas and calls
 

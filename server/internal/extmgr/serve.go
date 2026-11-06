@@ -16,9 +16,11 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/uistream"
 	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -53,6 +55,7 @@ func (h *Manager) Run(ctx context.Context) error {
 	h.startExtensions(ctx)
 	go h.extensionUpgradeLoop(ctx)
 	go h.extensionMetricsLoop(ctx)
+	go h.pageLoop(ctx)
 	go h.sentLedgerLoop(ctx)
 	h.apiMux = http.NewServeMux()
 	h.registerRoutes(h.apiMux)
@@ -60,7 +63,9 @@ func (h *Manager) Run(ctx context.Context) error {
 	h.sendReport()
 	go h.inboxManagerConnected() // the assistant is here: its inbox gets a full round now, as when it connected to the hub
 	<-ctx.Done()
+	h.pageDropExtension("")
 	h.stopExtensions()
+	h.pageStopDelivery()
 	return nil
 }
 
@@ -290,6 +295,7 @@ func (h *Manager) Hello(res json.RawMessage) {
 // minute of the extensions not started): what the manager kept while the hub was away goes after it (the hub takes an
 // extension's live update only once it knows the extension, internal/assistant outbox.go).
 func (h *Manager) BusUp() {
+	h.pageBusReset()
 	select {
 	case <-h.started:
 	case <-time.After(time.Minute):
@@ -304,6 +310,31 @@ func (h *Manager) BusUp() {
 // Request takes the hub's extensions.* calls (handled false: not one).
 func (h *Manager) Request(ctx context.Context, method string, params json.RawMessage) (any, bool, error) {
 	switch method {
+	case extwire.MethodUIStream:
+		var call extwire.UIStreamCall
+		if len(params) > 128<<10 || json.Unmarshal(params, &call) != nil {
+			return nil, true, pageError("invalid")
+		}
+		if !h.ready(ctx) {
+			return nil, true, errAssistantOffline
+		}
+		frame, err := h.uiStream(ctx, call)
+		if err != nil {
+			requestID := ""
+			if env, decodeErr := uistream.DecodeClientEnvelope(call.Envelope); decodeErr == nil && env.Request != nil {
+				requestID = env.Request.RequestID
+			}
+			frame = streamFrame("error", requestID, &wire.UIStreamFailure{Code: "rejected", Message: i18n.Localize(err, i18n.Resolve(call.Who.Lang))})
+		}
+		var envelope struct {
+			Kind string `json:"kind"`
+		}
+		_ = json.Unmarshal(frame, &envelope)
+		// Snapshots are enqueued by the manager while it still owns publication order.
+		if envelope.Kind != "snapshot" {
+			h.pageEmit(call.Who, frame)
+		}
+		return map[string]any{}, true, nil
 	case extwire.MethodAccept:
 		var a struct {
 			ID string `json:"id"`
@@ -343,6 +374,13 @@ func (h *Manager) Request(ctx context.Context, method string, params json.RawMes
 
 // Event takes the hub's extensions.* events (handled false: not one).
 func (h *Manager) Event(name string, params json.RawMessage) bool {
+	if name == extwire.EventUIConnectionGone {
+		var who extwire.UIPrincipal
+		if json.Unmarshal(params, &who) == nil {
+			go h.pageDisconnect(who)
+		}
+		return true
+	}
 	if name == extwire.EventErrorReports {
 		h.hubErrorReports(params)
 		return true

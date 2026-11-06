@@ -169,18 +169,19 @@ type Proc struct {
 	kick   chan struct{}
 	client *http.Client // to its HTTP socket
 
-	mu       sync.Mutex
-	state    string
-	err      string
-	sess     *session
-	ready    bool          // initialized (RPC) or answering /health (HTTP only)
-	change   chan struct{} // closed and replaced whenever state, sess or ready change
-	holds    int
-	openHTTP int
-	calls    int // in flight
-	lastUse  time.Time
-	strikes  int
-	kill     func() // ends the current run (a restart); nil between runs
+	mu         sync.Mutex
+	generation uint64 // manager-owned binding to this process run
+	state      string
+	err        string
+	sess       *session
+	ready      bool          // initialized (RPC) or answering /health (HTTP only)
+	change     chan struct{} // closed and replaced whenever state, sess or ready change
+	holds      int
+	openHTTP   int
+	calls      int // in flight
+	lastUse    time.Time
+	strikes    int
+	kill       func() // ends the current run (a restart); nil between runs
 }
 
 // Start runs spec until Stop or ctx ends. Nothing starts before something needs it, unless spec.Startup.
@@ -219,6 +220,16 @@ func (p *Proc) Stop() {
 	if p.client != nil {
 		p.client.CloseIdleConnections()
 	}
+}
+
+// Generation identifies the active initialized process run, never a source claim.
+func (p *Proc) Generation() uint64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sess == nil || !p.ready {
+		return 0
+	}
+	return p.generation
 }
 
 // Spec is what the plugin runs as.
@@ -583,6 +594,7 @@ func (p *Proc) runOnce(ctx context.Context) error {
 	killed := make(chan struct{})
 	var once sync.Once
 	p.mu.Lock()
+	p.generation++
 	p.sess = s
 	p.kill = func() { once.Do(func() { close(killed) }) }
 	p.mu.Unlock()

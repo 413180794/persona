@@ -1,0 +1,11 @@
+{
+ "forbidden": "This page belongs to another signed-in connection.",
+ "invalid": "The page request could not be validated.",
+ "expired": "This page session expired. Open it again.",
+ "conflict": "This interaction ID was already used for a different request.",
+ "inactive": "This page is suspended or is already handling an interaction.",
+ "stale": "The page changed. Refresh it before trying again.",
+ "confirmation": "Confirm this action on its permission card before continuing.",
+ "negotiation": "This client cannot open a native streaming page.",
+ "quota": "Too many pages are open. Close a page and try again."
+}

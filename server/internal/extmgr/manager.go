@@ -107,6 +107,8 @@ type Manager struct {
 	extensions    *extensions
 	extTokens     extTokens
 	legacyCalls   legacyCalls
+	uiPages       pageSessions
+	uiDelivery    pageDelivery
 	agents        *agents.Service
 	bots          botHub
 	channels      channelsHub

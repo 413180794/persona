@@ -55,7 +55,12 @@ func checkView(v *View, hubNames bool) error {
 // Unlike CheckView, it does not re-encode Component: optional zero values and required
 // empty fields must not disappear at a stream's validation boundary. Legacy encoding
 // and CheckView behavior are unchanged. Stream callers also apply UIStreamView's overlay.
-func CheckViewJSON(raw []byte) error {
+func CheckViewJSON(raw []byte) error { return checkViewJSON(raw, false) }
+
+// CheckFittedJSON retains native source presence while allowing only fitter-owned names.
+func CheckFittedJSON(raw []byte) error { return checkViewJSON(raw, true) }
+
+func checkViewJSON(raw []byte, hubNames bool) error {
 	if err := ValidateJSON("View", raw); err != nil {
 		return err
 	}
@@ -63,7 +68,7 @@ func CheckViewJSON(raw []byte) error {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return err
 	}
-	return checkViewSemantics(&v, false)
+	return checkViewSemantics(&v, hubNames)
 }
 
 func checkViewSemantics(v *View, hubNames bool) error {

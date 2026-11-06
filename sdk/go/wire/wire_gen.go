@@ -4550,6 +4550,167 @@ func (v UIStreamRequest) MarshalJSON() ([]byte, error) {
 	}
 }
 
+type UIStreamClientEnvelope struct {
+	Type    string           `json:"type"`
+	Manager string           `json:"manager,omitempty"`
+	Request *UIStreamRequest `json:"request,omitempty"`
+}
+
+// UIStreamActionResult: bounded presentation-only subset of native ActionResult, at most 64 KiB UTF-8 JSON. Carried
+// in the correlated event receipt and cached on replay. Clients apply it once per session/epoch/event_id, only after
+// reaching receipt.version; never execute HTML, JavaScript or infer authorization from a result. JSX state owns
+// view/items updates through snapshots/deltas. Manager validates push ownership and credential-free HTTPS (or its own
+// permitted native URL).
+type UIStreamActionResult struct {
+	Toast   string             `json:"toast,omitempty"`
+	OpenURL string             `json:"open_url,omitempty"`
+	Push    *UIStreamPush      `json:"push,omitempty"`
+	Pop     bool               `json:"pop,omitempty"`
+	Lines   *UIStreamFileLines `json:"lines,omitempty"`
+}
+
+// UIStreamPush: extension-owned native Push only: no assistant page or arbitrary target. State is additionally
+// bounded to 16 KiB UTF-8. Not authority to invoke an action.
+type UIStreamPush struct {
+	UI    string `json:"ui,omitempty"`
+	State string `json:"state,omitempty"`
+	Title string `json:"title,omitempty"`
+}
+
+// UIStreamFileLines: native FileLines presentation response correlated to the saved event, not filesystem access or
+// code execution. The complete result remains limited to 64 KiB UTF-8 JSON.
+type UIStreamFileLines struct {
+	Path  string   `json:"path"`
+	Side  string   `json:"side,omitempty"`
+	Start int      `json:"start"`
+	Lines []string `json:"lines"`
+	Total int      `json:"total,omitempty"`
+}
+
+type UIStreamReceipt struct {
+	Session string                `json:"session"`
+	Epoch   string                `json:"epoch"`
+	EventID string                `json:"event_id"`
+	Version int64                 `json:"version"`
+	Status  string                `json:"status"`
+	Result  *UIStreamActionResult `json:"result,omitempty"`
+}
+
+type UIStreamFailure struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// One struct for every variant: kind says which fields mean something.
+type UIStreamServerEnvelope struct {
+	Kind      string            `json:"kind"`
+	Type      string            `json:"type,omitempty"`
+	RequestID string            `json:"request_id,omitempty"`
+	Manager   string            `json:"manager,omitempty"`
+	Snapshot  *UIStreamSnapshot `json:"snapshot,omitempty"`
+	Delta     *UIStreamDelta    `json:"delta,omitempty"`
+	Receipt   *UIStreamReceipt  `json:"receipt,omitempty"`
+	Error     *UIStreamFailure  `json:"error,omitempty"`
+	Session   string            `json:"session,omitempty"`
+}
+
+// UIStreamServerEnvelope kinds.
+const (
+	UIStreamServerEnvelopeSnapshot  = "snapshot"
+	UIStreamServerEnvelopeDelta     = "delta"
+	UIStreamServerEnvelopeReceipt   = "receipt"
+	UIStreamServerEnvelopeError     = "error"
+	UIStreamServerEnvelopeClosed    = "closed"
+	UIStreamServerEnvelopeSuspended = "suspended"
+)
+
+// UIStreamServerEnvelopeKinds are the kinds of UIStreamServerEnvelope, in order.
+var UIStreamServerEnvelopeKinds = []string{"snapshot", "delta", "receipt", "error", "closed", "suspended"}
+
+func (v UIStreamServerEnvelope) MarshalJSON() ([]byte, error) {
+	type plain UIStreamServerEnvelope
+	switch v.Kind {
+	case "snapshot":
+		return json.Marshal(struct {
+			plain
+			Type     string            `json:"type"`
+			Snapshot *UIStreamSnapshot `json:"snapshot"`
+		}{
+			plain:    plain(v),
+			Type:     v.Type,
+			Snapshot: v.Snapshot,
+		})
+	case "delta":
+		return json.Marshal(struct {
+			plain
+			Type  string         `json:"type"`
+			Delta *UIStreamDelta `json:"delta"`
+		}{
+			plain: plain(v),
+			Type:  v.Type,
+			Delta: v.Delta,
+		})
+	case "receipt":
+		return json.Marshal(struct {
+			plain
+			Type    string           `json:"type"`
+			Receipt *UIStreamReceipt `json:"receipt"`
+		}{
+			plain:   plain(v),
+			Type:    v.Type,
+			Receipt: v.Receipt,
+		})
+	case "error":
+		return json.Marshal(struct {
+			plain
+			Type  string           `json:"type"`
+			Error *UIStreamFailure `json:"error"`
+		}{
+			plain: plain(v),
+			Type:  v.Type,
+			Error: v.Error,
+		})
+	case "closed", "suspended":
+		return json.Marshal(struct {
+			plain
+			Type    string `json:"type"`
+			Session string `json:"session"`
+		}{
+			plain:   plain(v),
+			Type:    v.Type,
+			Session: v.Session,
+		})
+	default:
+		return json.Marshal(plain(v))
+	}
+}
+
+// UIPageSnapshot: source-process native render revision, independent of manager-owned wire revisions. Validate
+// original JSON before fitting; never trust source recipients or owners.
+type UIPageSnapshot struct {
+	Generation string `json:"generation"`
+	Version    int64  `json:"version"`
+	RootKey    string `json:"rootKey"`
+	View       View   `json:"view"`
+}
+
+func (v UIPageSnapshot) MarshalJSON() ([]byte, error) {
+	type plain UIPageSnapshot
+	return json.Marshal(struct {
+		plain
+		Generation string           `json:"generation"`
+		Version    int64            `json:"version"`
+		RootKey    string           `json:"rootKey"`
+		View       requiredJSONView `json:"view"`
+	}{
+		plain:      plain(v),
+		Generation: v.Generation,
+		Version:    v.Version,
+		RootKey:    v.RootKey,
+		View:       (requiredJSONView)(v.View),
+	})
+}
+
 // requiredJSONComponent preserves required fields only inside stream payloads.
 type requiredJSONComponent Component
 
@@ -5143,6 +5304,14 @@ var newDef = map[string]func() any{
 	"UIStreamEvent":                func() any { return new(UIStreamEvent) },
 	"UIStreamOperation":            func() any { return new(UIStreamOperation) },
 	"UIStreamRequest":              func() any { return new(UIStreamRequest) },
+	"UIStreamClientEnvelope":       func() any { return new(UIStreamClientEnvelope) },
+	"UIStreamActionResult":         func() any { return new(UIStreamActionResult) },
+	"UIStreamPush":                 func() any { return new(UIStreamPush) },
+	"UIStreamFileLines":            func() any { return new(UIStreamFileLines) },
+	"UIStreamReceipt":              func() any { return new(UIStreamReceipt) },
+	"UIStreamFailure":              func() any { return new(UIStreamFailure) },
+	"UIStreamServerEnvelope":       func() any { return new(UIStreamServerEnvelope) },
+	"UIPageSnapshot":               func() any { return new(UIPageSnapshot) },
 }
 
 // Call is one call or event of an extension point's protocol (the schemas' x-methods and x-events): who

@@ -55,6 +55,7 @@ var KeptRoutes = []string{
 
 // Headers the hub sets on a relayed request: who asked, as its auth found it. Any the client sent are dropped.
 const (
+	HeaderHub        = "X-Persona-Hub"
 	HeaderDevice     = "X-Persona-Device"      // the device token's id ("" for the master token)
 	HeaderDeviceName = "X-Persona-Device-Name" // its name
 	HeaderRole       = "X-Persona-Role"        // full | answer | extension | …

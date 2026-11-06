@@ -11,8 +11,8 @@ import (
 // callback's node/event slot, returning a detached native Action for the caller's
 // confirmation/write gates. It does not authorize, deduplicate, consume an event
 // or execute anything. The caller must resolve accepted retries before this stale
-// check, and maintain a separate monotonic anti-replay fence even for no-UI-change
-// callbacks: protocol 1's empty deltas deliberately do not advance the UI version.
+// check. Managers consume an empty-delta revision after every entered/ambiguous
+// callback, so bounded receipt eviction cannot repeat no-UI-change writes.
 func (t *Tree) EventAction(event wire.UIStreamEvent) (*wire.Action, error) {
 	if t == nil || t.root == nil {
 		return nil, errors.New("uninitialized tree")

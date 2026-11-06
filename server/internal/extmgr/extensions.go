@@ -552,6 +552,7 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 	delete(ps.byID, id)
 	ps.mu.Unlock()
 	if ps.h != nil {
+		ps.h.pageDropExtension(id)
 		// Switched off, upgraded (maybe to fewer scopes), uninstalled or reconfigured: its token goes now, and a new
 		// one comes with its next start.
 		ps.h.extTokens.revoke(id)
@@ -934,6 +935,10 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "unknown method " + method}
 	}
 	s.OnEvent = func(event string, params json.RawMessage) {
+		if event == "ui.page.snapshot" && ps.h != nil && hp.proc != nil {
+			ps.h.pageSnapshot(id, hp.proc, params)
+			return
+		}
 		if event == "api.broadcast" {
 			ps.apiBroadcast(id, params)
 			return
