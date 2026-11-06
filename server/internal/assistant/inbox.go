@@ -1053,7 +1053,7 @@ func (s *Service) inboxRoutes() {
 			}
 		}
 		send := func() (InboxItem, error) {
-			return s.replyInboxChecked(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.ClientID, in.ExpectedUID, in.ExpectedVersion, in.Changes...)
+			return s.replyInboxChecked(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.ClientID, in.Card != "", in.ExpectedUID, in.ExpectedVersion, in.Changes...)
 		}
 		var it InboxItem
 		var err error
@@ -1131,9 +1131,10 @@ func mailTarget(it InboxItem) *inboxMailTarget {
 	return &inboxMailTarget{UID: it.Mail.UIDs[len(it.Mail.UIDs)-1], Version: hex.EncodeToString(sum[:])}
 }
 
-func (s *Service) replyInboxChecked(ctx context.Context, id, text, clientID string, uid *uint32, version *string, changes ...DocChange) (InboxItem, error) {
+// replyInboxChecked is replyInboxFrom with the mail the app saw (expected_uid / expected_version), if it gave one.
+func (s *Service) replyInboxChecked(ctx context.Context, id, text, clientID string, fromCard bool, uid *uint32, version *string, changes ...DocChange) (InboxItem, error) {
 	if uid == nil && version == nil {
-		return s.replyInboxAs(ctx, id, text, clientID, changes...)
+		return s.replyInboxFrom(ctx, id, text, clientID, fromCard, changes...)
 	}
 	// Collection and checked sends must not change the target between validation and sending.
 	b := &s.inbox
@@ -1152,7 +1153,7 @@ func (s *Service) replyInboxChecked(ctx context.Context, id, text, clientID stri
 	if target == nil || uid != nil && *uid != target.UID || version != nil && *version != target.Version {
 		return InboxItem{}, errMailReplyTargetChanged
 	}
-	return s.replyInboxAs(ctx, id, text, clientID, changes...)
+	return s.replyInboxFrom(ctx, id, text, clientID, fromCard, changes...)
 }
 
 // inboxList is every open item and the recently done ones, newest first; connectors' only when all (rows stored

@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -291,5 +292,47 @@ func TestMessageCardOfAFiledItemSendsNothing(t *testing.T) {
 		if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/example:1/reply", string(body)); code != 200 || len(rc.got) != 1 {
 			t.Fatalf("filed by %s, moved back: 发送 = %d, sent %+v", by, code, rc.got)
 		}
+	}
+}
+
+// An item filed after 发送 on its card looked (between sendFromCard's check and the reply taking its copy) is not
+// answered either: nothing goes out and the item keeps the mark the user gave it (#4871).
+func TestMessageCardOfAnItemFiledWhileSendingSendsNothing(t *testing.T) {
+	for _, by := range []string{"user", "dismissed", "read"} {
+		h, rc, it := cardHub(t)
+		draft(t, h, "在修了")
+		list := cards(t, h, time.Time{})
+		if len(list) != 1 {
+			t.Fatalf("filed by %s: feed = %+v", by, list)
+		}
+		send := func() (InboxItem, error) {
+			h.inbox.mu.Lock()
+			it.done(time.Now(), by) // filed after sendFromCard's check, before the reply
+			h.inbox.mu.Unlock()
+			return h.replyInboxChecked(context.Background(), it.ID, "在修了", "", true, nil, nil)
+		}
+		if _, _, err := h.sendFromCard(context.Background(), list[0].ID, it.ID, send); !errors.Is(err, errInboxItemDone) {
+			t.Fatalf("filed by %s: 发送 = %v", by, err)
+		}
+		h.inbox.mu.Lock()
+		doneBy, open := it.DoneBy, it.open()
+		h.inbox.mu.Unlock()
+		if len(rc.got) != 0 || open || doneBy != by {
+			t.Fatalf("filed by %s: sent %+v, the item is now open=%v by %q", by, rc.got, open, doneBy)
+		}
+		if got := cards(t, h, time.Time{}); cardSentAt(got[0]) != nil {
+			t.Fatalf("filed by %s: the card says sent: %+v", by, got)
+		}
+	}
+}
+
+// A reply that is not from a card answers a filed item as before (it is how the user replies from the item itself).
+func TestReplyNotFromACardAnswersAFiledItem(t *testing.T) {
+	h, rc, it := cardHub(t)
+	h.inbox.mu.Lock()
+	it.done(time.Now(), "user")
+	h.inbox.mu.Unlock()
+	if _, err := h.replyInboxChecked(context.Background(), it.ID, "在修了", "", false, nil, nil); err != nil || len(rc.got) != 1 {
+		t.Fatalf("reply = %v, sent %+v", err, rc.got)
 	}
 }

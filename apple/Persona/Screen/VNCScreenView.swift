@@ -17,6 +17,7 @@ enum VNCMode: String, CaseIterable {
 /// - 鼠标模式: a tap clicks there; one finger drags; two scroll (or, zoomed in, move the picture); two tapping or one
 ///   held down is the right button; pinching zooms.
 /// - 触控板模式: one finger moves the pointer by as much; a tap clicks where it is; a tap then a drag drags; two scroll.
+/// Two fingers scroll as VNCWheel says: a notch every few points, coasting after a flick.
 final class VNCScreenUIView: UIView, UIGestureRecognizerDelegate {
     let display = AVSampleBufferDisplayLayer()
     private let pointerLayer = CALayer()
@@ -26,7 +27,10 @@ final class VNCScreenUIView: UIView, UIGestureRecognizerDelegate {
     private var gestures: [UIGestureRecognizer] = []
     /// Where the Mac's screen is drawn, in this view; nil: fitted (not zoomed).
     private var shown: CGRect?
-    private var scrolled: CGFloat = 0
+    /// Two fingers turned into the wheel, and where it goes (a coast keeps going there after they let go).
+    private var wheel = VNCWheel()
+    private var wheelAt = CGPoint.zero
+    private var coast: CADisplayLink?
     private var lastTap = Date.distantPast
     private var dragging = false
     private var lastPan = CGPoint.zero
@@ -191,14 +195,46 @@ final class VNCScreenUIView: UIView, UIGestureRecognizerDelegate {
             place()
             return
         }
-        if g.state == .began { scrolled = 0 }
-        let step: CGFloat = Theme.Space.xl
-        let at = mode == .mouse ? toScreen(g.location(in: self)) : s.pointer
-        let notches = Int((t.y - scrolled) / step)
-        if notches != 0 {
-            s.scroll(notches: notches, at: at)
-            scrolled += CGFloat(notches) * step
+        let zoom = rect.width / fitted.width
+        wheelAt = mode == .mouse ? toScreen(g.location(in: self)) : s.pointer
+        if g.state == .began { wheel.began() }
+        let notches = wheel.moved(t.y, zoom: zoom)
+        g.setTranslation(.zero, in: self)
+        if notches != 0 { s.scroll(notches: notches, at: wheelAt) }
+        if g.state == .ended {
+            wheel.released(velocity: g.velocity(in: self).y, zoom: zoom)
+            if wheel.coasting { startCoast() }
         }
+    }
+
+    private func startCoast() {
+        coast?.invalidate()
+        let link = CADisplayLink(target: self, selector: #selector(coasted(_:)))
+        link.add(to: .main, forMode: .common)
+        coast = link
+    }
+
+    @objc private func coasted(_ link: CADisplayLink) {
+        let notches = wheel.tick(link.targetTimestamp - link.timestamp)
+        if notches != 0 { session?.scroll(notches: notches, at: wheelAt) }
+        if !wheel.coasting { stopCoast() }
+    }
+
+    /// A touch, or the view going away, stops a coast where it is.
+    private func stopCoast() {
+        wheel.stop()
+        coast?.invalidate()
+        coast = nil
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        stopCoast()
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
+        if newWindow == nil { stopCoast() }
     }
 
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {

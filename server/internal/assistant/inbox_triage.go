@@ -303,9 +303,20 @@ func (s *Service) replyInbox(ctx context.Context, id, text string, changes ...Do
 // replyInboxAs is replyInbox with the app's own id for the send (client_id): a retry of the same request is sent once.
 // Empty: one derived from the item and the text.
 func (s *Service) replyInboxAs(ctx context.Context, id, text, clientID string, changes ...DocChange) (InboxItem, error) {
+	return s.replyInboxFrom(ctx, id, text, clientID, false, changes...)
+}
+
+// replyInboxFrom is replyInboxAs; fromCard: it is 发送 on a message card (sendFromCard), which does not reply to an
+// item filed since (errInboxItemDone). Checked with the copy for the reply, so an item filed after sendFromCard
+// looked is not answered and keeps its mark (#4871).
+func (s *Service) replyInboxFrom(ctx context.Context, id, text, clientID string, fromCard bool, changes ...DocChange) (InboxItem, error) {
 	b := &s.inbox
 	b.mu.Lock()
 	it, ok := b.items[id]
+	if ok && fromCard && !it.open() {
+		b.mu.Unlock()
+		return InboxItem{}, errInboxItemDone
+	}
 	var c InboxItem
 	if ok {
 		c = *it
