@@ -1,37 +1,37 @@
-# 扩展模型网页验收（#1854，2026-11-05）
+# Extension model web acceptance (#1854, 2026-11-05)
 
-## 本轮
+## This round
 
-- 设置 › 扩展详情：贡献逐项开关、连接器管理项不可点、依赖状态、合集成员。
-- 停用依赖项：服务端列出完整依赖链，网页确认后 `cascade: true`；不卸载依赖者。
-- 市场安装 / 升级：普通网页和管理界面均展示 `bundle` 各项权限，回传逐项预览 id / 权限摘要；任一预览过期或存在 `unresolved` 禁止确认。
-- 卸载合集可选择成员；服务端先检查成员的外部依赖，再按确认停用。默认保留数据。
-- 旧 hub 不带模型字段时保留旧详情和请求格式。
+- Settings › Extension details: per-contribution toggles, non-clickable connector-management entries, dependency status, and pack members.
+- Disabling dependencies: the server lists the full dependency chain; the web client sends `cascade: true` after confirmation. Dependents are not uninstalled.
+- Marketplace installation / upgrade: both the regular web client and admin UI show permissions for every `bundle` item, returning each preview ID / permission summary. Confirmation is blocked if any preview expires or contains `unresolved`.
+- Uninstalling a pack lets the user select members; the server first checks members' external dependencies, then disables them as confirmed. Data is retained by default.
+- Older hubs without model fields retain the old detail view and request format.
 
-## 验证
+## Validation
 
-- 网页 `npm test`：141 文件、1361 测试通过；`npm run build` 通过（现有大 chunk / pptx 静态动态导入警告仍在）。
-- hub 指定回归：`TestExtensionDependenciesAndPacks|TestContribution|TestDeclarativeKit` 通过，覆盖合集成员外部依赖拒绝前不删包。
-- 隐私检查和文档路径检查通过。
-- 浏览器：独立假 hub + CDP 拦截模型接口，以演示数据实际点开详情、连带停用确认、合集预览；普通页和管理页均查看浅深色截图。页面保留，不关闭用户页面。
-- 管理页假接口未模拟完整 metrics，因此截图后台的运行统计出现预期模拟数据错误；安装预览本身可正常显示，不能把该次浏览器日志写成零错误。
+- Web `npm test`: 141 files, 1361 tests passed; `npm run build` passed (existing large-chunk / pptx static-and-dynamic-import warnings remain).
+- Targeted hub regressions: `TestExtensionDependenciesAndPacks|TestContribution|TestDeclarativeKit` passed, covering that no package is deleted before a pack member's external dependency is rejected.
+- Privacy and documentation-path checks passed.
+- Browser: a separate fake hub + CDP interception of model APIs, with actual clicks through details, cascade-disable confirmation, and pack previews using demo data. Light and dark screenshots were inspected for both regular and admin pages. Pages were retained; user pages were not closed.
+- The fake admin APIs did not simulate full metrics, so the runtime statistics behind the screenshot showed expected mock-data errors. The installation preview itself displayed correctly; this browser run's log must not be described as error-free.
 
-## 已发布示例
+## Published examples
 
-- `persona-extensions` #5：`39ab940`，入门套件 / 合集 0.1.0。原 CI 通过；与 main 整合后 CI 排队未运行，本地 `scripts/ci.sh` 全通过，按 runner 异常约定合并。
-- 两个 Release 已创建；#10 统一双索引及签名，发布包摘要来自实际资产，不用重新打包的 tar 摘要。
-- hub 从签名市场装合集：已有满足版本的 `linuxdo` 没重装，只补装 `starter-kit`。
-- 三条快捷提示、一个无 problems 的主题、两份规则模板接口均 200；关闭 `prompts/today` 后仅该项从接口消失，再打开回来。
-- 卸载只移除本次新增的合集和套件，保留它们的数据，已有 `linuxdo`、其他扩展及飞书版本不动；旧列表接口仍 200。
+- `persona-extensions` #5: `39ab940`, starter kit / pack 0.1.0. Original CI passed; after integration with main, CI remained queued and did not run. Local `scripts/ci.sh` passed in full, and the PR was merged under the runner-outage policy.
+- Two Releases were created; #10 unified the two indexes and signatures. Published package digests come from the actual assets, not from a repacked tar archive.
+- The hub installed a pack from the signed marketplace: the existing `linuxdo`, already meeting the version requirement, was not reinstalled; only `starter-kit` was added.
+- APIs for three quick prompts, one theme with no problems, and two rule templates all returned 200. After disabling `prompts/today`, only that item disappeared from the API; enabling it restored it.
+- Uninstall removed only the pack and kit added in this round, retaining their data. Existing `linuxdo`, other extensions, and the Lark version were untouched; the legacy list API still returned 200.
 
-## 纯声明客户端收尾
+## Declarative client wrap-up
 
-- #2285（79974cd5）：快捷提示接到现有 composer 菜单，浅深色真实点击，选中后只填草稿，未调用发送 / 建会话接口。
-- #2316（4c30b5f1）：`triage_rules` 用设计系统的多行字段，模板选择先确认，只替换草稿，未自动保存；浅深色确认截图已看。
-- 扩展主题：允许的角色色按实际设计系统背景校验，只有明确选择才写 role token，切回默认或扩展停用后精确恢复之前的 inline token；现有样式表不改。浅深色真实选择截图已看，问题色不列。默认「无主题」vs「新增但未选中」PNG 逐像素 diff 均为空；颜色切换往返 token 一致，原始 PNG 仍有少量光栅边缘差异，不写成零。
-- #2306（73e8fe5c，Fixes #2288）：合集成员删除失败返回逐项结果，保留合集重试；本机 / 管理员与市场设备的卸载权限不混用。fake 存储故障回归和完整 hub / extension 包测试通过；没有在真实 hub 上制造故障。
-- 安卓 #2300 由其负责人完成，test / APK / Robolectric 像素回归与未运行项分别记录；Apple #1861 仍由原负责人推进，不接管或宣称已完成。
+- #2285 (79974cd5): quick prompts were connected to the existing composer menu. Actual clicks in light and dark mode confirmed that selection only fills a draft; no send / session-creation API was called.
+- #2316 (4c30b5f1): `triage_rules` uses the design system's multiline field. Template selection asks for confirmation first, replaces only the draft, and does not save automatically. Light and dark confirmation screenshots were inspected.
+- Extension themes: allowed role colors are validated against the actual design-system backgrounds. Role tokens are written only after explicit selection; switching back to default or disabling the extension precisely restores the previous inline tokens. Existing stylesheets are unchanged. Screenshots of actual selection in light and dark mode were inspected; problematic colors are not listed. Pixel-by-pixel PNG diffs between the default “No theme” and “Added but not selected” were empty in both modes. Tokens matched after a round-trip color switch, but the original PNGs still had a few raster-edge differences; do not report zero differences.
+- #2306 (73e8fe5c, Fixes #2288): pack-member deletion failures return per-item results, retaining the pack for retry. Local / admin uninstall permissions are not mixed with marketplace-device permissions. Fake-storage fault regressions and full hub / extension package tests passed; no faults were injected into a real hub.
+- Android #2300 was completed by its owner, with test / APK / Robolectric pixel regressions and unrun items recorded separately. Apple #1861 remains with its original owner; it was neither taken over nor claimed complete.
 
-## 验收边界
+## Acceptance boundaries
 
-依赖模型的跨扩展环检测、bundle 全计划校验及失败回滚、导出贡献与多层就绪传播、生成类型保留自定义导出点仍是早期模型实现的边界，未在本次客户端收尾中补齐。不要把接口或网页存在等同于四端全链路完成；总验收仍以 #1843 为准。
+Cross-extension cycle detection in the dependency model, full bundle-plan validation and failure rollback, exported contributions and multilevel readiness propagation, and preserving custom export points in generated types remain limits of the early model implementation. They were not completed in this client wrap-up. The existence of APIs or web pages does not mean the full flow works on all four clients; overall acceptance is still governed by #1843.

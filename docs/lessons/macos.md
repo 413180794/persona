@@ -1,298 +1,298 @@
-# 经验：macOS
+# Lessons: macOS
 
-踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
+Pitfalls, unusual behavior, and the decisions made at the time (formerly in `CLAUDE.md`, “Lessons”; see `docs/lessons/README.md` for the index). Add new lessons to the relevant section, or create one if none fits.
 
-- 给单表达式 getter 增加提前返回后，末尾 `switch` 要显式写 `return switch`（2026-11-06，#2024）：截图的 `colorScheme` 原本靠整个 getter 的单表达式推断类型，加入批量截图分支后，Mac 实编报 `.dark`／`.light` 无上下文、`nil` 缺类型。保留分支，只补显式返回；不能拿 iOS 编过代替 Mac 验证。
+- After adding an early return to a single-expression getter, explicitly write `return switch` for the final `switch` (2026-11-06, #2024). Screenshot `colorScheme` previously relied on type inference from the getter's single expression. Adding a batch-screenshot branch made a real Mac build report no context for `.dark` / `.light` and no type for `nil`. Keep the branch and add only the explicit return; an iOS build cannot substitute for Mac validation.
 
-- 助手富卡片也不能挂页面级链接包装（2026-11-06，#2024）：`InteractiveAssistantViewCard` 是聊天的 lazy row，Mac 的 `.pluginLinks` 即使没有打开链接也引入 `GeometryReader`，行高不能跟着正文，截图只露标题、正文跑到下一行输入区后面。Mac 行去掉包装，HTTPS 仍交给 `ChatView` 已有的整页 `openLink`／链接面板；iOS 的原包装不变，不给卡片补固定高度，也不先改翻转或滚动。截图先检查正文标记，不能只等标题。
+- Rich assistant cards must not have page-level link wrappers either (2026-11-06, #2024). `InteractiveAssistantViewCard` is a lazy chat row; Mac `.pluginLinks` introduces `GeometryReader` even without an open link, preventing row height from following the body. Screenshots showed only the title, with the body running behind the next row's input area. Remove the wrapper from Mac rows; HTTPS still goes through `ChatView`'s existing page-level `openLink` / link panel. Keep iOS's wrapper unchanged; do not add a fixed card height or change inversion or scrolling first. Check body markers in screenshots, not just the title.
 
-- 同名的系统文字样式在 Mac 上比 iPhone 小一截，级差也不一样（2026-11-03，#779）：Mac 的 body 13、callout 12、subheadline 11、footnote 和 caption 都是 10。
-  照搬 iPhone 的选法（说明用 footnote、标签用 caption），时间、来源都只有 10pt；而 Markdown 的基础字号写死 17（iPhone 的 body），回答和档案比用户消息大一截，
-  同一页上忽大忽小。`Theme.Font` 在 Mac 上按自己的字号表画系统字体，`Theme.Level.size` 跟着分两套，凡是按「正文大小」算的地方（Markdown、表格、飞书的 `LarkTextBase`）取 `Theme.Level`。
-  另外 Mac 上系统文字样式和 `@ScaledMetric` 都不跟 `dynamicTypeSize` 变，靠它实现的「小 / 标准 / 大」在 Mac 上不改字号（#833）。
+- System text styles with the same name are smaller on Mac than iPhone, with different steps between them (2026-11-03, #779): Mac body is 13, callout 12, subheadline 11, and footnote and caption both 10.
+  Copying iPhone choices (footnote for descriptions, caption for labels) makes times and sources only 10pt. Meanwhile, Markdown's base size was hardcoded to 17 (iPhone body), making replies and profiles much larger than user messages,
+  with inconsistent sizes on one page. `Theme.Font` uses its own Mac size table for system fonts; `Theme.Level.size` also has two platform tables. Anything calculated from “body size” (Markdown, tables, Lark's `LarkTextBase`) uses `Theme.Level`.
+  Also, system text styles and `@ScaledMetric` on Mac do not respond to `dynamicTypeSize`, so “Small / Standard / Large” based on it does not change Mac font sizes (#833).
 
-- SwiftUI 的竖向 `TextField`（`axis: .vertical`）在 Mac 上底下是 AppKit 的字段编辑器，回车和滚轮都不按聊天输入框的习惯来（2026-11-03，#785）：
-  ⏎ 和 ⇧⏎ 都是「结束编辑」，还会把框里的字全选，接着打的字就把原来的覆盖了；只有 ⌥⏎ 换行。超过 `lineLimit` 的行数以后，框只跟着光标滚，滚轮滚不动。
-  输入框获焦时用本地事件监听（`MacComposerEventMonitor`，`Mac/Chat/MacComposerKeys.swift`，和 ⌘V 同一个）：⏎ 发送、⇧⏎ 调字段编辑器的
-  `insertNewlineIgnoringFieldEditor`，输入法有没确认的字（`hasMarkedText`）时 ⏎ 交给输入法；滚轮滚字段编辑器外面那层 `NSClipView`，滚到头就交还给页面。
-  cua 的 `type_text` 是直接插字，测不到拼音组字时的 ⏎，这一条只有单测。
+- SwiftUI's vertical `TextField` (`axis: .vertical`) uses AppKit's field editor on Mac; Return and the scroll wheel do not behave like a chat composer (2026-11-03, #785).
+  Both ⏎ and ⇧⏎ end editing and select all text, so subsequent typing replaces it; only ⌥⏎ inserts a newline. Beyond `lineLimit`, the field scrolls only with the cursor, not the wheel.
+  While the composer has focus, use a local event monitor (`MacComposerEventMonitor`, `Mac/Chat/MacComposerKeys.swift`, the same as ⌘V): ⏎ sends, ⇧⏎ calls the field editor's
+  `insertNewlineIgnoringFieldEditor`, and ⏎ goes to the input method while there is uncommitted text (`hasMarkedText`). Scroll the `NSClipView` outside the field editor; at its edge, return wheel events to the page.
+  cua's `type_text` inserts text directly and cannot test ⏎ during pinyin composition; this behavior has only unit-test coverage.
 
-- Persona Link 的界面和 helper 必须共用运行根（2026-11-03，#277）：只让 Go helper 支持 `PERSONA_HOME`，而界面继续固定读 `~/.jarvis/link.json`，会出现 helper 已配对、菜单却显示未配对。两端按新旧环境与默认软链解析同一目录；登录启动没有显式环境时，只从既有 `com.jarvis.node` 的环境字段恢复自定义根，并把解析结果同时传给常驻与一次性 helper。显式空的新变量不回退到旧环境或服务记录。解析器只查询路径，不读取凭据、不迁移文件、不启动真实 launchd 服务。
+- Persona Link's UI and helper must share the runtime root (2026-11-03, #277). If only the Go helper supports `PERSONA_HOME` while the UI still reads fixed `~/.jarvis/link.json`, the helper can be paired while the menu says unpaired. Both resolve the same directory using new/old environment variables and default symlinks. At login startup without explicit environment variables, restore a custom root only from the existing `com.jarvis.node` environment fields, passing the resolved result to both persistent and one-shot helpers. An explicitly empty new variable does not fall back to old environment variables or service records. The parser queries only paths; it does not read credentials, migrate files, or launch real launchd services.
 
-- `pluginLinks` / `macLinkPanel` 只能挂在整页上（2026-11-04，#1517）：Mac 的链接面板用 `GeometryReader` 把内容和面板并排包起来，挂在 `Form` 里的一个
-  `Section` 上时，那一行被压成只剩第一行（插件卡片只剩标题，iPhone 上的 sheet 没这个问题）。列表里的一节只接收页面的 `Binding<LinkTarget?>`。
-- 改了 Mac 也编的共享页面（`apple/Persona/Views/…`，如助手的任务视图）只编 iOS 不够，合入前 `PersonaMac` 也要 build（2026-11-04，#1083）：
-  #1080 在 `TaskViews.swift` 里用了 `contentShape(.contextMenuPreview, …)`，这个成员 `@available(macOS, unavailable)`，iOS 编过、单测和截图都正常，master 上的 Mac 却编不过了。
-  长按预览的形状用 `menuPreviewShape(_:)`（iOS 设形状，Mac 什么都不做）。
+- `pluginLinks` / `macLinkPanel` belong only on whole pages (2026-11-04, #1517). The Mac link panel uses `GeometryReader` to wrap content and panel side by side. Attached to a
+  `Section` inside `Form`, it compresses that row to its first line (a plugin card shows only its title; iPhone sheets do not have this issue). A list section should receive only the page's `Binding<LinkTarget?>`.
+- Changing a shared page compiled for Mac (`apple/Persona/Views/…`, such as the assistant task view) requires more than an iOS build: build `PersonaMac` before merging too (2026-11-04, #1083).
+  #1080 used `contentShape(.contextMenuPreview, …)` in `TaskViews.swift`; that member is `@available(macOS, unavailable)`. iOS built, unit tests and screenshots worked, but Mac on master no longer compiled.
+  Use `menuPreviewShape(_:)` for long-press preview shapes (sets the shape on iOS, does nothing on Mac).
 
-- Mac 版（`JarvisMac`，`docs/mac.md`）和 iOS 共用页面：iOS 专用的 SwiftUI 修饰符 / 枚举成员在 `apple/Mac/Compat/` 里写同名的 Mac 版本（被标成 unavailable 的系统符号会让位给模块里的同名声明），
-  UIKit 视图在 `apple/Mac/` 下写同名的 AppKit 类型；iOS 文件只加 `#if os(iOS)`。Mac target 和 App 一样默认 MainActor 隔离：Compat 里的纯数据类型、给解码线程用的 `NSImage` 辅助都要标 `nonisolated`。
-- 别把页面的分栏（`SplitNavigation`、iOS 上 Persona 页的 `NavigationSplitView`）放进另一个 `NavigationSplitView` 的详情栏：里面的详情栏会按外层侧栏还在前面来排，
-  对话整个往右挪一个侧栏宽、输入框被裁掉（2026-10-31）。Mac 壳的六项侧栏是 HStack 里的一列。
-- Mac 锁屏时 `screencapture` 只拍到锁屏：截图用 `scripts/app/mac_shot.sh`（App 自己 `cacheDisplay` 出 PNG，`docs/mac.md`「构建、运行、截图」）。
-  它画不出毛玻璃 / Liquid Glass；SwiftUI `List` 的行要单独再画一遍；深色下 List 行文字是浅色方案的颜色，还没确认是不是截图的问题。
-  深浅色用 `-macAppearance`，`-AppleInterfaceStyle Dark` 当启动参数不生效。
-- 直接跑 `Jarvis.app/Contents/MacOS/Jarvis` 能带启动参数（`-demo.on YES -tab dev`…），未签名的 Debug 构建不进沙盒，写 `/tmp` 没问题；`open` 要写成 `open -n Jarvis.app --args -demo.on YES …` 才带得上参数（不带 `--args` 就没有，2026-11-02 实测）。
-- Mac 锁屏时 `xcodebuild test -scheme JarvisMac` 报「The test runner hung before establishing connection」（2026-11-01）：测试宿主 Jarvis.app 启动时读钥匙串（`Keychain.serverConfig` → `SecItemCopyMatching`），读别的未签名构建写的条目会一直卡在 securityd。Mac 的 DEBUG 构建在 XCTest 下（有 `XCTestConfigurationFilePath`）和截图模式一样不读钥匙串（`Shared/Keychain.swift`）。
-- 这台开发机上 `swift build` 默认的构建系统报「Could not determine path to developer directory」，换 `xcodebuild -scheme … -destination 'generic/platform=macOS'`
-  编 Swift 包就好（`scripts/app/mac-link.sh`）。菜单栏 App 的截图不靠屏幕录制：App 带 `--snapshot <目录>`，把自己的视图放进离屏窗口用 `cacheDisplay` 画成 PNG。
-- Mac 的推送 entitlement 叫 `com.apple.developer.aps-environment`，不是 iOS 的 `aps-environment`。App ID 开过推送就够（iPhone 和 Mac 同一个 UNIVERSAL 的 App ID），归档里写 `development`，App Store 导出时变成 `production`；本机不签名编的版本签名里没有任何 entitlement，收不到远程推送，只有本地通知（2026-11-02，`docs/mac.md`「远程推送（Mac）」）。
-- 要和扩展共用钥匙串条目，macOS 上的 `SecItem` 查询得加 `kSecUseDataProtectionKeychain: true`：不加时走老式的文件钥匙串，`kSecAttrAccessGroup` 不起作用，条目只属于创建它的那个 App，扩展读不到（iOS 一直是 data protection 钥匙串，同样的代码在手机上是好的）。Mac 的推送私钥就是这样（`PushCrypto`，#432）；App 自己用的 `Keychain.swift` 还在文件钥匙串里，没动。
-- 共用页面里碰到 `pin.list` 这类滚动视图时，iOS 上是 `UIScrollView`、Mac 上是 `NSScrollView`（`ChatPin+Mac.swift`），`isTracking`、`isDragging`、`isDecelerating` 这些 Mac 没有：用 `#if os(iOS)` 隔开，或者在 `Mac/Compat/` 补等价的。
-  2026-11-02 #243 在 `ChatView` 里加了一行 `pin.list?.isTracking`，只跑了 iOS，master 上 `JarvisMac` 编译不过（terminal 车道发现）。改了 `apple/Persona/Views` 的共用页面，合入前也跑一次 `PersonaMac` 的构建（`docs/mac.md`「构建、运行、截图」）。
-- 构建配置（`~/.config/jarvis/config.json`）没有 `app.bundle_id` 时，`Config.xcconfig` 的 `JARVIS_BUNDLE_ID` 是空的，xcodebuild 照样 BUILD SUCCEEDED，
-  但 Info.plist 里没有 `CFBundleIdentifier`，Mac App 一启动就在 `applicationDidFinishLaunching` 的 `UNUserNotificationCenter.current()` 断言崩溃（SIGABRT，2026-11-02）。
-  只在本机编来自己用、不发版的 Mac，可以在 xcodebuild 后面加 `JARVIS_BUNDLE_ID=<随便一个反向域名>` 覆盖，不用改配置。
-  真配对用 `open -a <Jarvis.app> 'jarvis://pair?…'`（`jarvisd hub pair` 打印的链接）；`-pairURL` 只是 DEBUG 的临时配对，不换设备凭据（`DeviceCredentials`），但会把这条配对写进钥匙串（`MacLaunchArguments.apply`）。
-- 窗口的 sheet 不继承主窗口的 `.formStyle(.grouped)`（`macLook` 里设的那个）：iOS 的 Form 在 sheet 里退回 Mac 默认的两栏，
-  标题贴着 sheet 左边、输入框拉满右边（2026-11-02「连接 hub」）。sheet 的内容自己加 `macSheet()`。分组表单里 `TextField` 的标题在左、
-  输入在右且没有框，要给 `prompt:` 才看得出能输入。
-- sheet 里的 `NavigationStack`：最小尺寸（`macSheet()`）要加在栈上，不能加在栈的根内容上。加在根上时，推入的页面（新对话的启动器 / 目录）
-  按自己的高度撑 sheet，`List` 还没量出行高就是 0：从 Agents 列表的「新建会话」打开时，一点启动器 sheet 缩成只剩标题和搜索框的一条，
-  看上去像选不了（#303，2026-11-02）。⌘N 那条外面还套了一层带 `macSheet()` 的栈，所以没坏。
-- Mac 上的 `Menu` 画成带下拉箭头的按钮：iOS 那种 `.themedButton().clipShape(.circle)` 的圆形 + 菜单被裁成半个图形；`.buttonStyle(.glass)`
-  也不给 `Menu` 画底，`.glassProminent` 裁成圆后连填充都没了。输入栏的圆钮在 Mac 上用 `.menuStyle(.button).menuIndicator(.hidden)`，
-  圆底自己画（`Mac/Design/MacRoundButton.swift`）。只要标签本身的（⋯、自己画了 ⌃⌄ 的 chip）用 `.labelOnlyMenu()`（`DesignSystem/Styling.swift`，iOS 上原样返回）：对话顶栏的 ⋯、输入框上方和新对话页的 chip、侧栏分组和 Agents 列表空间行的 ⋯ 原来都画成带 ⌄ 的灰色弹出按钮（#502）。工具栏里和带边框的按钮并排的（文件查看器的 ⋯，挨着「完成」）用 `.arrowlessMenu()`：只去掉 ⌄，留着系统画的按钮。放在 `.surface` 胶囊里的 `TextField` 要 `.textFieldStyle(.plain)`，否则 Mac 自带的边框在里面再画一层。
-- 主窗口的 `.unified` 工具栏有底色和一条分隔线：伸到红绿灯后面的侧栏被它横着切断（2026-11-02）。壳上
-  `.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)` 去掉。壳不是分栏，工具栏的 `.navigation` 项排在红绿灯旁边、压在壳的侧栏上，
-  页面自己放在那里的按钮（原来的「隐藏列表」）会被当成壳的按钮；标题栏高度随页面的工具栏变（28 / 52pt），侧栏顶上的留白用固定的 `macToolbarHeight`。
-- macOS 26 的 `NavigationSplitView` 把侧栏那一栏画成离窗口四边一点的玻璃卡片（`NSContainerConcentricGlassEffectView`），周围露出窗口底色，
-  看上去像浮在背景板上（2026-11-02 用户：非常丑）；SwiftUI 和 `NSSplitViewItem` 都没有关掉它的 API，`.listStyle`、`.background` 只改卡片里面。
-  内容栏和详情栏是贴边的：Mac 上分栏写成三栏，侧栏一栏放 `Color.clear.toolbar(removing: .sidebarToggle)`、可见性 `.doubleColumn`，
-  列表放内容栏（`SplitColumns`）。内容栏里的列表要自己 `.listStyle(.sidebar)` + `.scrollContentBackground(.hidden)`，否则有行分隔线、页脚被截断、底色发灰。
-- 这样的三栏分栏收不起内容栏（2026-11-04，#856）：`columnVisibility` 从 `.doubleColumn` 设成 `.detailOnly`，几毫秒后系统经绑定写回 `.all`，
-  空的侧栏那一栏冒出来成一条灰栏，列表也还在；去掉动画一样。要收起的列表（Persona 页的历史）不用分栏，用 `MacListBeside`（HStack：列表、
-  `MacPanelResizeHandle`、页面），收起时页面的身份不变。查这类问题：在 `.onChange(of: columns)` 里打日志，看系统有没有改写绑定。
-- 离屏截图画不出玻璃，看材质要截真窗口：解锁时另起一个体验模式实例（`open -n Jarvis.app --args -demo.on YES -ApplePersistenceIgnoreState YES …`），
-  用有屏幕录制权限的 computer-use 工具（比如 cua-driver 的 `get_window_state` 加 `screenshot_out_file`）截这个实例的窗口，窗口不在当前屏幕上也截得到；
-  这是 `CLAUDE.md`「截图验证不用 computer-use」的 Mac 例外：只截图、不操作，后台发的快捷键到不了菜单（窗口不是 key），要点按就别用这条路。
-  别动用户自己开着的那个实例，`-pairURL` 会改写钥匙串里的配对。
-- 只截不在前台的窗口会漏掉一类问题：系统控件在活跃窗口里换颜色。玻璃按钮（`.buttonStyle(.glass)`）在活跃窗口里整个填成主题色，
-  按钮里紫色的「推荐」标签看不见；后台窗口里它是灰的，之前的截图全是后台窗口，一直没发现（2026-11-02 用户：文字被背景色盖住都看不清）。
-  `.glassProminent` 的字是青色、`.foregroundStyle` 改不动。Mac 的 `themedButton` 因此自己画胶囊（`MacCapsuleButton`）。
-  截活跃窗口：cua-driver 的 `bring_to_front`（带 `window_id`）把那个体验实例提到前台再截，会抢几秒焦点，实例退出后焦点回到原来的 App。
-- 侧边栏样式的 `List`（`.listStyle(.sidebar)`）放在分栏的侧栏以外，窗口不在前台时行的字整个变浅灰，像禁用了一样；选中在活跃窗口里是主题色，和壳的灰色选中不是一套。
-  收件箱的筛选栏改用壳的行（`MacSidebarRow`）。
-- `List(selection:)` 的选中行在活跃窗口里是主题色实底，系统只把 `.primary` / `.secondary` 和 `Color.primary` 换成白色，行里自己定的颜色
-  （草稿卡片的紫色标题、主题色的「修改」、星标）照原样画在蓝底上，看不见。`.environment(\.backgroundProminence, .standard)` 拦不住这次变白。
-  做法（`MacHoverRow`）：`.listRowBackground(页面底色)` 盖住系统的选中底，选中的灰底自己画；行上 `.foregroundStyle(Color(nsColor: .labelColor))`，
-  层级样式（`.primary`、`.secondary`）就跟着它走、不再变白；但子视图里写死的 `Color.primary` 还是会变白，要改成 `.primary`（iOS 上两者一样）。
-- `.toolbar(removing: .title)` 之后，`.primaryAction` 的按钮排到工具栏最左边（Mac 上它本来就靠前，原来是标题把它们推到了右边）：
-  去掉标题的同时补一个 `ToolbarSpacer(.flexible)`。
-- 去掉工具栏的标题以后，那一行只剩按钮，页面上面就是一条空带（2026-11-03，#830）：自己画的分栏外壳（不是 `NavigationSplitView`）里系统不知道页面从哪一栏开始，
-  标题只会排在红绿灯旁边、压在侧栏上。做法：壳在页面那一栏左上角叠一个不接点击的标题，`ignoresSafeArea(.container, edges: .top)` 放进标题栏那一行。
-  对一个容器加 `ignoresSafeArea` 不会让 `NavigationSplitView` 里各栏的内容跟着上移，要加在每一栏自己的根视图上（Persona 页的列表栏和对话栈的根）；
-  推进去的页面不加，它们照旧在标题栏下面。只有 `.primaryAction` 的工具栏，按钮会停在中间偏左，窄窗口里盖住左边的标题：加一个空的 `.principal` 项占住中间。
-  Mac 的 `.inset` 列表给第一个 `Section` 留一条空的分组头和一条分隔线，放在最上面的 chip 行不要包 `Section`。
-- 一直在动的 `TimelineView(.animation)` 在 Mac 上可能很贵（实测的只有 `StatusDot` 这一处）：每一帧都让 `NSHostingView` 申请更新约束，
-  一路报到窗口，整个窗口重新布局，锁屏时也照跑。「需要你」圆点的呼吸圈这样让 Agents 页空闲占一个核的 14%（2026-11-02；iOS 上没量过）。
-  Mac 上一直重复的动画交给 Core Animation（`NSViewRepresentable` 里的 `CAShapeLayer` + 无限重复的 `CAAnimationGroup`，`MacBreathingRing`），
-  App 主线程不参与；记得在动画组上（不是子动画上）设 `preferredFrameRateRange`，否则按屏幕刷新率跑（内建屏 120 Hz）。几个圆点要同相，就按 Core Animation 的时钟对齐
-  （`beginTime` 取整秒）；按墙钟对齐不行，Mac 睡眠时 Core Animation 的时钟停、墙钟照走，睡醒后新加的圆点就错开了。
-  每秒一次的 `.periodic` 计时按同样的代价算是 1/30，没单独量。查空闲开销：锁屏时起体验实例，`ps -o cputime` 量 20 秒，再 `sample` 看主线程。
-- `MenuBarExtra` 的标签或菜单读了推送会变的东西（`model.allSessions`），每次推送状态栏按钮都重新设图、量宽、重画，菜单整份重建，
-  不管显示的变没变；在 Mac 上停在哪一页都要付，约占每次推送主线程时间的四分之一（#1495）。让它们读一份只在显示的东西变了才换的快照（`MacMenuBarState`）。
-  同理，往 `MacShellState` 这种全局对象里放页面的闭包，页面走了要放掉：闭包抓着页面的 `@State`，页面的 feed 在别的分区照样跟着每次推送干活。
-  量推送开销用 `ps -M`（第一行是主线程）在推送前后相减；`PerfCount` 的 ms 只算推送到 run loop 空闲那一段，少算很多。
-- 想让切换侧栏分区不重建页面，把去过的页面留在 `ZStack` 里藏起来不行：隐藏的视图照样往窗口工具栏注册 `.toolbar` 项和 `.searchable`，
-  两个页面各有一个搜索框就直接崩（`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`，2026-11-02）。
-  系统 `TabView` 在 macOS 26 上是按标签页隔开工具栏的（StackOverflow 76032647 说的是 macOS 13），也保留各页状态；但它在工具栏正中放的
-  分段选择器 SwiftUI 藏不掉，而且保活之后切换并没有变快：时间不在建视图，在新页面进窗口后的 AppKit 布局和整批换工具栏项（`docs/mac.md` 性能，#390）。
-  先 `sample` 看时间去哪，再决定要不要保活。后来的做法（每页一个 hosting view，工具栏等这一帧提交后再换）见下面「分区的页面常驻在窗口里」。
-- 别用写死的 `listRowInsets` 去对齐 `List` 里的分组标题：iOS 上分组标题的缩进是 20，Mac 上是行自带的缩进（窄得多），iOS 那套数值在 Mac 上把行往里多推一截。
-  折起的空间只剩标题、画成普通一行，写死 20 时在 Mac 上比展开的空间标题左右各缩 20pt，名字被截成「weat…」（#405，2026-11-02）。Mac 上传 `nil`，用行自带的缩进。
-- 这台 Mac 的 hub 反向隧道（launchd `dev.jarvis.hub-tunnel`）断线后，hub 那台机器上死掉的 sshd 会继续占着 2232 好几小时
-  （`ClientAliveInterval 28800`）：重试全是 `remote port forwarding failed for listen port 2232`，hub 一直报 `::1:2232 timed out`，
-  打向这台 Mac 的会话、git、发送全 503，主对话在 hub 上所以看起来像「只有部分 503」（2026-11-02、2026-11-04 各一次）。
-  两处一起改：hub 那台机器的 sshd `ClientAliveInterval` 改成 60（改完 `sshd -t` 再 reload），launchd 的隧道命令换成
-  `~/.local/bin/hub-tunnel.sh`（先 ssh 过去杀掉仍在监听该端口的进程，`sort -u | xargs -r kill`，再建 `-R` 隧道）。
-  卡住时 `launchctl kickstart -k gui/$(id -u)/dev.jarvis.hub-tunnel` 让 wrapper 自己清。
-- 两个视图各往窗口工具栏的 `.navigation` 放一项（壳的侧栏按钮、Agents 列表的过滤菜单），先后顺序靠不住：详情栏里的页面一带上自己的工具栏项
-  （空间页的 ⋯、机器页的 ⓘ，放在什么位置都一样），SwiftUI 重排整个工具栏，列表那项就排到了壳那项前面（#483，2026-11-02）。
-  要固定顺序就放进同一个 `ToolbarItemGroup`：Mac 上过滤菜单由壳画在侧栏按钮后面（`MacShellState.agentsList`），ChatsView 自己那项只留给 iOS。
-  离屏截图看得出这个顺序（`scripts/app/mac_shot.sh … -openSession <对话> -openSpaceFromChat YES`），菜单本身只能在真窗口里点开。
-- 自己处理鼠标事件的 `NSGestureRecognizer` 子类（覆盖 `rightMouseDown` 等直接改 `state`）不会记录事件位置：`location(in:)` 一直是 (0, 0)，
-  即窗口左下角，SwiftUI 的 `context.converter` 也是从它换算的。Mac 上消息右键的操作条就这样被摆到左下角、压在输入框底下看不见（#501，2026-11-03）。
-  子类要在事件里记下 `event.locationInWindow`，覆盖 `location(in:)` 返回它（`SecondaryClickRecognizer`）。单元测试要经 `window.sendEvent(_:)` 发事件：
-  直接调 `rightMouseDown(with:)` 时 AppKit 不认状态变化，`state` 停在 `.possible`；按住 Control 的左键在测试里送不到识别器（窗口不是 key，视图 `acceptsFirstMouse` 返回 true 也一样），所以单测只测了右键，Control 点击在真窗口里验。
-- 窗口工具栏里一个 `.principal` 项（哪怕是空的）会把分栏里列表栏声明的 `.primaryAction` 按钮挤出这一栏，摆到右边那一栏它的前面，左边空出一大块（#907）。
-  想让按钮留在列表栏的右端，就别在这一栏放 `.principal`。在详情栏的 `NavigationStack` 或它的根视图上加 `.navigation` 项没用：对话页隐藏了导航栏
-  （`.toolbarVisibility(.hidden, for: .navigationBar)`），推进对话后这些项一起消失；`ToolbarSpacer(.flexible)` 只和壳里的那个平分空白，也贴不过去。
-- Persona Link 的面板是老样子（直角、一圈浅色细边框，不是系统别的菜单栏面板那种圆角玻璃，2026-11-03，#956）：`xcodebuild` 编 SwiftPM 包的可执行文件时，
-  `LC_BUILD_VERSION` 里的 sdk 记成了部署目标（`vtool -show-build` 看到 `sdk 15.0`），虽然实际用的是 Xcode 27 的 SDK；直接 `swiftc` 编同样的 target 是对的。
-  系统按这个 sdk 版本决定给不给新外观，记成 15.0 就一直是老样子，离屏截图（`mac-link.sh snapshot`）看不出来，因为截的只是内容不是窗口。
-  `scripts/app/mac-link.sh` 编完用 `vtool -set-build-version macos <最低版本> <SDK 版本> -replace` 改回真实的 SDK（胖二进制两个架构一起改），再签名，并检查改对了。
-- Mac 的 sheet 没有导航栏，只画底栏那一排动作（2026-11-04，#743，`mac_shot.sh` 离屏实测）：`.topBarLeading`（兼容层映射成 `.navigation`）画不出来；
-  `.confirmationAction` 只画一个按钮，放两个 `ToolbarItem` 或一个 `ToolbarItemGroup` 都只出第一个，另一个消失。
-  要两个按钮时，「完成」放 `.cancellationAction`（Esc 关闭），另一个放 `.primaryAction`，两个都画在底栏右侧、都不是回车的默认按钮（文件查看器、「工具输出」都这样）。
-- Mac 窗口工具栏去掉了系统标题以后（#830），推进去的页面的 `navigationTitle` 没地方显示（#855）：推入页面用 `pageTitle(_:subtitle:)`（iOS 上就是 `navigationTitle`），
-  Mac 上它把标题画在这一页顶上的标题栏那一行，并用 `MacTitleRowTaken` 告诉外壳别再画分区名。左边距是标题自己量的（这一页是否贴着窗口左边缘），
-  不读 `macTitleRowLeading`：分栏详情栏里推进去的页面拿到的是整页的值，环境值加在 `navigationDestination` 外面、`NavigationStack` 外面都试过，没用。
-- Mac 上 SwiftUI 的系统文字样式（`.body`、`.subheadline`…）和 `@ScaledMetric` 都不跟 `.dynamicTypeSize(...)` 变（#833，2026-11-03 实测：套 `.medium` 到 `.xxxLarge`，`Font.body` 行高一直 16，ScaledMetric 一直 13），
-  `Font.system(size:relativeTo:)` 也一样。所以 小 / 标准 / 大 在 Mac 上只能自己乘：`Theme.Font` 的每一级在 Mac 上是读 `Theme.Font.scale` 的计算属性，
-  Markdown 主题的基础字号也乘它（主题是点数，`PerTextScale` 按比例缓存），改设置后 `macLook` 用 `.id(model.textSize)` 让整窗重画（SwiftUI 不观察这个静态值）。
-  在别处把 `Theme.Font.xxx` 存进 `static let` 会停在第一次的字号（`CompactList` 改成了计算属性）；兼容层的 `UIFontMetrics` 原来按 iOS 的 body 表（16 / 17 / 19）换算，一档 6–12%，和 Mac 的一点一档对不上，改成 Mac 自己的表。
-  按比例缩，「小」会把 11 pt 那几级（caption / label / code）压到约 10.2，违反 #779 用户定的「不小于 11」：`Theme.Font.pointSize` 在 Mac 上取 `max(级别 × scale, 11)`，只有这几级在「小」时停在 11，别的照比例。
-- 设置列表在 Mac 上一半的行是灰的，像禁用了（2026-11-04，#1170）：列表在分栏的内容栏里用 `.listStyle(.sidebar)`（`SplitNavigation`），
-  侧栏样式把一行里只有一个 `Label` 的行当源列表的行来画，文字是「活力」色，要靠背后的侧栏材质才显白；内容栏没有那层材质，就成了灰的。
-  行其实能点。带值的行是 `LabeledContent`，不受影响，所以只有「模型供应商」「设备」这些没有值的行灰。Mac 上没有值的行也包一层 `LabeledContent`（`SettingsRow`）。
-- Mac 的 sheet 只能靠底栏那一排的取消 / 完成（Esc）关：不能下滑，点 sheet 外面只响一声（2026-11-04，#1248）。所以一个 sheet 的关闭键放错位置（`.topBarLeading`），
-  它就关不掉了：「模型配置」的「关闭」在 `.topBarLeading`、「保存」在 `.topBarTrailing`，Mac 上两个都看不到，改了存不了也关不掉。做法（`DesignSystem/SheetActions.swift`）：
-  编辑类 sheet 用 `sheetCancel(unsaved:)`（`.cancellationAction`；Mac 上有未保存的修改先问「放弃未保存的修改？」，iOS 照旧直接关），
-  只看的 sheet 用 `macSheetDone`（Mac 上底栏一个「完成」，iOS 什么都不加）。确认框挂在页面上、不挂在底栏的按钮上：底栏和页面不在一棵视图里。
-  从待办详情弹出的「交给 Agent」没套 `macSheet()`，表单退回两栏，标签被 sheet 左边裁掉、说明文字超出右边（同上）。
-- sheet 里的 `NavigationStack` 推进一页时，sheet 会缩到新页面的最小宽度，表单却按原来的宽度排，右边被裁掉，返回键还是 iPhone 那种圆形玻璃键（同上）。
-  Mac 的 sheet 里别推页面：要再填一组东西就在上面再开一个 sheet，自己的「取消」放 `.cancellationAction`，「保存」放 `.confirmationAction`（配对页的「经 SSH 隧道连接…」；
-  「模型配置」的分类列表点一类，在上面叠开这一类的编辑 sheet，#1248）。
-- 分栏详情栏里推进第二层的页面（设置 › hub › SSH 隧道），系统的返回键不在这一栏，而是在窗口工具栏的最左边、红绿灯旁边，压在分区列上，画成圆形玻璃键（同上）。
-  `splitDetailPage()` 在 Mac 上隐藏系统的返回键，在这一栏标题栏那一行的左边画一个 ‹（`MacDetailBack`）。这一行能点：内容延伸到标题栏下面，按钮照常收到点击（真窗口里实测过）。
-- 列表最上面加一个没有标题的 `Section`，上面会空出一条（2026-11-05，#1916）：分组列表的第一段上方留着标题的位置（约 28 pt），
-  平常是「需要你处理」的标题占着它；Mac 上筛选栏不是列表的一行（在列表上面），新加的提示行成了第一段，就在筛选栏下面隔着一条空白。
-  空标题（`header: { EmptyView() }`）没用，那一条还在（有时看着贴上了，是列表正好往下滚了这一条）。改成在分栏旁（`widthClass == .regular`）把提示行放到列表上面、
-  筛选栏下面（`herdrNoticesAbove`），不当列表的一段。iPhone 上筛选栏是第一段，提示行是第二段，看不出来。
-- 玻璃容器里 `opacity(0)` 藏不住按钮（2026-11-05，#1337）：Agents 对话顶栏的 ‹ 在分栏第一页上用 `opacity(0).disabled(true).accessibilityHidden(true)` 藏，
-  但它在 `GlassEffectContainer` 里、自己带 `.glassEffect`，玻璃和里面的符号由容器画，外面的 `opacity` 不起作用：Mac 上每个对话都画着一个点了没反应、无障碍树里也没有的 ‹
-  （打日志看 `isFirstPage` 是对的才想到这里）。要藏就别画它（Mac 上换成同样大小的空白，标题照样居中）。iPhone 上的同一个 ‹ 只在分栏（iPhone Duo 展开）里会藏，没有去查是否同样藏不住。
-- 窗口拉到最小时页面被窗口右边裁掉，不是压窄（2026-11-04，#1200）：`HStack` 里定宽的列表（`MacListBeside`、收件箱）不会因为窗口变窄而让位，
-  旁边的页面拿到的宽度比它的内容能排开的最小宽度还小，SwiftUI 就按内容的最小宽度排、超出窗口的部分被裁（输入框里的字竖着排、停止键只剩一半）；
-  同时它会去压别处能压的东西（分区列的图标被压没了）。定宽的列表要量整页的宽度（`onGeometryChange`），给旁边的页面留出 `macDetailMin` 再定自己的宽度；
-  窗口的最小宽度按各列最小值之和定。分栏（`NavigationSplitView`）的内容栏在窗口变窄时不会自己缩到它的 `min`，详情栏的 `navigationSplitViewColumnWidth(min:)` 也压不动它，
-  所以窗口最小宽度要按内容栏的理想宽度留余地（920 时 Agents 的对话约 308 宽，排得开）。
-- Mac 上 SwiftUI `List` 的分组页脚只排一行，后面是省略号；`.listStyle(.sidebar)` 干脆不显示页脚（2026-11-04，#1212，单独写了个最小程序在真窗口里试过）。
-  `fixedSize(horizontal: false, vertical: true)`、`lineLimit(nil)`、`lineLimit(5)`、套一层 `VStack`、`.plain` / `.bordered` / `.inset` 样式都一样。
-  只有 `Form` + `.formStyle(.grouped)` 的页脚会换行（或者把说明当成一行内容放进分组里）。设置的子页因此在 Mac 上用 `SettingsForm`（分组表单）。
-- Mac 分组表单（`Form` + `.grouped`）里 `.listRowBackground(Color.clear)` 不起作用，那一行的圆角卡片还在（2026-11-04，#1221，真窗口看过；我在第二批里写了「去掉底色」，是错的，第三批改正）。
-  单独一个按钮的行在 Mac 上就是卡片里靠右的标准按钮。Mac 表单里输入框的标题画在左边当标签：标题本身就是提示的（「添加一项」「默认：…」「静音仓库：owner/name」）要 `.labelsHidden()`，否则左边一串提示、右边一个空框。
-- 窗口工具栏里的 `.primaryAction`（兼容层的 `.topBarTrailing`）在我们这种自己拼的分栏里不跟着栏走（2026-11-04，#1223，真窗口 920 / 1280 / 1800 宽对比）：
-  它的位置约是「窗口宽度的一半减几十点」，列表栏的按钮在宽窗口里跑到对话栏中间；页面有 `.searchable` 时右端被搜索框占了，按钮被排到窗口中间。
-  改成 `.automatic` 也一样。要钉在某一栏上的按钮，画在那一栏自己的标题行里（`overlay` + `ignoresSafeArea(.container, edges: .top)`，那一行能点），或者放进页面内容。
-  另外：macOS 26 上 `.toolbar { }` 的内容在某个平台分支里为空会编不过（`EmptyView` 当 `ToolbarContent` 要 macOS 27），整个 `.toolbar` 用 `#if` 包起来。
-- 在 App 里推着滚动视图量帧（`clip.setBoundsOrigin`），SwiftUI 不当成用户在滚（2026-11-04，#1337）：滚动阶段一直是 `.idle`，
-  对话页照样「跟着最新」、落到上次读到的位置，和推着它的这边每帧拉扯，量出来 342–356 ms/s，按用户滚动的方式量是 65–86。
-  前后发 `NSScrollView.willStartLiveScrollNotification` / `didLiveScrollNotification` / `didEndLiveScrollNotification`，阶段就是 `.interacting`（`-showPerfGlide live`）。
-  合成带阶段的滚轮事件交给 `scrollWheel(with:)` 或 `NSWindow.sendEvent` 也不行：AppKit 另有手势跟踪，6 秒只滚 380 pt。量完看移动了多少（`scrolledPt`），到头停住的那一轮不算。
-- `NSColor.withAlphaComponent(_:)` 是把透明度换成给的值，不是乘上去（2026-11-04，#1224）：兼容层里 `tertiaryLabelColor.withAlphaComponent(0.18)` 得到的是 18% 的黑 / 白，
-  不是 tertiaryLabel 本来的 26% 再乘 0.18，所以 Mac 的 `Theme.Fill.well` / `chip` 比 iPhone 深好几倍（真窗口取像素：卡片 248，选项区 212；深色 54 对 98）。量颜色用真窗口截图取像素，别凭感觉。
-  #1169 把兼容层的四档填充改成了 UIKit 的原值：要照搬 iPhone 的颜色，在模拟器里 `simctl spawn` 一个打印 `resolvedColor(with:)` 的小程序取值，别凭记忆。
-- 列表往上滚时，行从标题栏那一行透出来，和壳画在那里的分区标题（`MacPageTitle`）叠在一起（2026-11-04，#1243，真窗口实测）：列表的滚动视图自己伸到窗口工具栏下面、内容往下让出工具栏的高度，
-  本来有系统的滚动边缘效果（AppKit 的 `NSScrollPocket`）在那一行挡住滚上去的行；壳为了让分区列伸到红绿灯后面隐藏了工具栏的底色
-  （`.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)`），这块挡板也跟着没了。设置、收件箱、机器（窄窗口）都能滚出来，
-  分区列收起时设置的列表还会盖到红绿灯；Agents 的列表滚到快速筛选那一排底下就被挡住，待办的列表上面是搜索框，这两个碰不到这一行。
-  把工具栏底色打开不行：每个滚动视图顶上出现一块不透明的挡板和一条分隔线，静止时也在；Persona 页自己画在那一行的头被盖成模糊的，Agents 滚动后连分区列顶上也变白。
-  `scrollEdgeEffectStyle(.soft / .hard)` 改得动挡板的样式值，样子却没区别；窗口和分栏项的 `titlebarSeparatorStyle = .none` 都去不掉那条线（它只受挡板私有的 `allowsSeparator` 管）。
-  做法：`MacBelowTitleRow` 让列表从这一行下面开始排，并裁在自己的 frame 上，滚上去的行在这一行的下沿消失；只加 `padding` + `ignoresSafeArea` 不够，
-  分栏内容栏里 `List` 的滚动视图照样伸到工具栏下面（收件箱那种 `HStack` 里的列表倒是被裁了），要再 `.clipped()`。
-  裁剪要加在页面底色的里面：加在外面连底色一起裁掉，黏土这类带底色的风格里标题那一行成了白的。所以加在设置的列表上（`.themedPage()` 之前）、
-  收件箱的筛选栏上（底色在外层的 `HStack`），知识库和机器的首页由壳经 environment `macBelowTitleRow` 请页面自己加（这两页在 Persona 页、设置的详情栏里也会打开，那里不加）。
-  收件箱中间的列表不加：标题不在它上面，而它钉住的分组头（「需要你」）靠的就是系统那块挡板，挪到这一行下面后挡板没了，分组头直接压在滚上去的行上。
-  Agents 不加：列表栏的标题行里有它自己的按钮（`MacTitleRowButton`，画在列表那一层的 overlay 里），整栏裁掉按钮也没了；它的列表本来也碰不到这一行。
-  静止时真窗口截图和改之前逐像素对比，标题栏那一行没有差别，别处只有时间、动画这些本来就会变的地方（各分区，液态玻璃深浅色、黏土、飞书，分区列收起）。
-  推进去自己画标题的页（`pageTitle`）这次没加：滚动后只有钉在顶上的分组头的模糊探进这一行几个点，没有行压着标题。
-- 截图前后对比之前，先用同一个构建连拍几次，看哪些地方本来就不稳定：Persona 页推进去的档案页（`-tab assistant -openAssistantPage profile`），
-  标题下面有时空着一条带分隔线的带、有时内容直接贴着标题行，同一构建连拍三次两次有（2026-11-04，#1243 时看到，和那次改动无关，没追）。
-  只拍一次就当成改动的后果，差点得出错误的结论。
-- 离屏截图看不出上面这个问题修没修好：列表的行是截图时单独再画、贴回原处的，原来只按所在滚动视图的可见区域裁，`.clipped()` 挡掉的行照样画在标题栏那一行。
-  现在按行上面所有裁剪的视图（`clipsToBounds` / `masksToBounds`）裁。要看滚动以后的样子用 `-macSnapshotScroll <点数>`（`mac_shot.sh` 后面加上）。
-  没锁屏、终端有屏幕录制权限时，`screencapture -x -o -l <窗口号>` 能直接截体验实例的窗口（窗口号按 pid 从 `CGWindowListCopyWindowInfo` 找，宽高过滤掉菜单栏那个窗口），
-  不用 computer-use 工具；实例偶尔会被激活抢一下焦点。
-- 子页面改了数据，下面那页在 Mac 上不会自己重拉（2026-11-04，#1433）：iOS 的 NavigationStack 弹回时下面那页重新出现，`.task` 会再跑一次（`ios.md` 里 NavigationStack 根视图那条）；
-  Mac 上同一份代码回到列表，`.task` 不再跑，设置 › 模型供应商在启动器详情页隐藏之后列表还是旧的。只在 iOS 上验证会漏掉这个。
-  子页面改了列表要用的数据时，在模型上加一个版本号，列表写 `.task(id: 版本号)`（`AppModel.launchersRevision`），不要指望页面重新出现。
-- `@AppStorage` 在任何 UserDefaults 写入时都让持有它的视图重算，不管写的是哪个键（2026-11-04，#1337，`_printChanges` 和写入计数确认）。
-  Mac 上拖窗口改大小时，`NavigationSplitView` 背后的 `NSSplitView` 每一帧都自动保存一次 `NSSplitView Subview Frames …`，外壳和 Agents 列表每帧重算、137 行整表比对，
-  窗口拉起来只有约 4 fps。在常显示、重的视图里用 `@StoredValue`（只在自己那个键的值变了时重算）。
-- 一页拖窗口卡、哪块单独量都不卡时，是几块加起来超了预算（2026-11-05，#1337）：Mac 拖窗口每帧给整页一个新宽度，对话页的顶栏、输入框、列表各花 4–6 ms，
-  单独都在 16.7 ms 内，一起就掉到 30 fps；`sample` 里几乎全是 SwiftUI 的布局，看不出是哪个视图。临时加一个启动参数把各块逐个换成 `Color.clear` 量（不提交），
-  再在最贵的那块里逐个去掉子视图。`ViewThatFits` 每个宽度都重新量全部候选，在常随宽度变的一行里换成 `FirstFitting`（理想宽度记在 `Layout` 的缓存里）。
-  `sample` 挂着时 App 会被停住、量出来的帧不能用，量帧和采样分开跑。
-- 自己写的 `Layout` 把不显示的子视图挪到看不见的地方，它们还在无障碍树里（2026-11-05，#2181）：`FirstFitting` 把没选中的那行放到上方 100 000 pt，
-  UI 测试按文字找「正在工作…」找到的是这一行（y ≈ −99 290），点不到也滚不过去；VoiceOver 同样能落到它上面。`ViewThatFits` 只把选中的放进树里，`Layout` 做不到按子视图隐藏：
-  给整块 `.firstFittingText(_:)`（`accessibilityElement(children: .ignore)` 加完整文字），树里只剩显示位置上的一个元素。
-- 冷启动时一个大页面的第一次 `body` 慢，而采样里全是 `lazy protocol witness table accessor for type ModifiedContent<…>`（2026-11-05，#1337）：
-  不是代码在算，是 Swift 运行时第一次建这个页面的类型（几十个修饰符嵌套成一个类型，`swift_getTypeByMangledName` 一层层解析）。
-  在长修饰符链中间用 `AnyView` 隔开几段（隔开的那处每次都是同一个类型，不丢状态），ChatView 的第一次 body 106 → 49 ms。
-  只在冷启动付一次，拖窗口、推送不受影响；别为了它把整个页面都拆成 `AnyView`。
-- 这台开发机的 Instruments 录不到 Animation Hitches 的显示数据（开发者模式关着、要 sudo），`CGEvent.postToPid` 发的滚轮事件被系统过滤（发事件的进程没有辅助功能授权），
-  看起来都「成功」但什么都没发生。量顺不顺用 App 自己的 display link（`MacPerfHarness`），看主线程用 `sample`。
-- sheet 的最小尺寸要放在 sheet 内容的最外层，中间隔着 `GeometryReader` 就传不出去（2026-11-04，#1502）：Mac 的 sheet 按内容的最小尺寸开，
-  `GeometryReader` 接受任何尺寸、最小是 0，里面再写 `.frame(minWidth:minHeight:)` 也到不了 sheet。#813 给文件查看器的栈外面套了 `.macLinkPanel`（最外层是 `GeometryReader`），
-  `.macLargeSheet` 还留在栈的内容上，sheet 就缩成了工具栏的 470 × 80，什么文件都看不见。`MacFileViewerSheetTests` 用 `NSHostingView.fittingSize` 量 sheet 会开多大，加了外层修饰符时跑它。
-  挪到栈外面也还是要 `bars: true`：栈的标题栏和底部工具栏是 sheet 窗口自己加的，量不进 `fittingSize`。写成 `bars: false` 时 sheet 有 1216 × 821，比 820 高的主窗口还高，
-  第一次启动就在 SwiftUI 的窗口布局里断言崩了（`EXC_BREAKPOINT`，栈上全是 `_layoutSubtreeWithOldSize`）。
-- 插件页面的进度条、额度条在 Mac 上是灰的（2026-11-04，#1512）：只在**非活动窗口**里灰，窗口在前台、是 key window 时按 `.tint` 画（主题色 / 红 / 橙），
-  同一个窗口里的开关、按钮底色也一起变灰，这是系统对非活动窗口的统一画法，不是 tint 没生效，不改。结论要用两张图对比：同一个实例分别在活动、非活动时 `screencapture -l <窗口号>`。
-  截图别把 App 强行拉到前台（`osascript … set frontmost`、每张都重启 App）：用户在这台 Mac 上干活，一直被打断；要活动窗口的图就请用户自己把窗口切到前面。
-- `Button(role: .destructive)` 在 Mac 的 grouped `Form` 里画成主题色（蓝），不像 iPhone 的列表那样自动变红（2026-11-04，#1512 截图发现）。
-  要红就 `.tint(Theme.danger)`（Form 里的按钮）或 `.foregroundStyle(Theme.danger)`（borderless 按钮）；确认框（`confirmationDialog`）里的不用管，系统按 role 画。
+- The Mac app (`JarvisMac`, `docs/mac.md`) shares pages with iOS. Add same-name Mac versions of iOS-only SwiftUI modifiers / enum members in `apple/Mac/Compat/` (system symbols marked unavailable yield to same-name declarations in the module).
+  Write same-name AppKit types for UIKit views under `apple/Mac/`; add only `#if os(iOS)` to iOS files. Like the app, the Mac target defaults to MainActor isolation: Compat pure-data types and `NSImage` helpers used by decoding threads must be `nonisolated`.
+- Do not put a page's split navigation (`SplitNavigation`, the iOS Persona page's `NavigationSplitView`) inside another `NavigationSplitView`'s detail column. The inner detail column lays out as if the outer sidebar is still ahead of it,
+  shifting the entire chat right by one sidebar width and clipping the composer (2026-10-31). The Mac shell's six-item sidebar is a column in an HStack.
+- When a Mac is locked, `screencapture` captures only the lock screen. Use `scripts/app/mac_shot.sh` for screenshots (the app renders its own PNG with `cacheDisplay`; `docs/mac.md`, “Build, run, screenshots”).
+  It cannot render frosted glass / Liquid Glass; SwiftUI `List` rows must be redrawn separately. In dark mode, List-row text uses light-scheme colors; whether this is a screenshot issue is still unconfirmed.
+  Use `-macAppearance` for light/dark mode; `-AppleInterfaceStyle Dark` does not work as a launch argument.
+- Running `Jarvis.app/Contents/MacOS/Jarvis` directly accepts launch arguments (`-demo.on YES -tab dev`…); unsigned Debug builds are not sandboxed and may write `/tmp`. With `open`, use `open -n Jarvis.app --args -demo.on YES …` to pass arguments (without `--args` they are lost, tested 2026-11-02).
+- On a locked Mac, `xcodebuild test -scheme JarvisMac` reports “The test runner hung before establishing connection” (2026-11-01). Test host Jarvis.app reads the keychain at startup (`Keychain.serverConfig` → `SecItemCopyMatching`); reading entries written by another unsigned build hangs indefinitely in securityd. Mac DEBUG builds under XCTest (with `XCTestConfigurationFilePath`) skip keychain reads, like screenshot mode (`Shared/Keychain.swift`).
+- On a development machine, `swift build`'s default build system reported “Could not determine path to developer directory.” Building the Swift package with `xcodebuild -scheme … -destination 'generic/platform=macOS'`
+  works (`scripts/app/mac-link.sh`). Menu-bar app screenshots do not require screen recording: launch with `--snapshot <directory>`, put its own views in an offscreen window, and use `cacheDisplay` to render PNGs.
+- Mac's push entitlement is `com.apple.developer.aps-environment`, not iOS's `aps-environment`. Enabling push on the App ID suffices (iPhone and Mac use the same UNIVERSAL App ID). The archive has `development`, changed to `production` on App Store export. Locally built unsigned versions have no entitlements in their signatures, so they receive only local notifications, not remote pushes (2026-11-02, `docs/mac.md`, “Remote push (Mac)”).
+- To share keychain entries with extensions, macOS `SecItem` queries need `kSecUseDataProtectionKeychain: true`. Without it, they use the old file keychain, where `kSecAttrAccessGroup` has no effect: entries belong only to the creating app and extensions cannot read them (iOS always uses the data-protection keychain, so the same code works on the phone). This affected Mac's push private key (`PushCrypto`, #432); the app-only `Keychain.swift` still uses the file keychain and was unchanged.
+- Shared pages using scroll views such as `pin.list` get `UIScrollView` on iOS and `NSScrollView` on Mac (`ChatPin+Mac.swift`). Mac lacks `isTracking`, `isDragging`, and `isDecelerating`; isolate these with `#if os(iOS)` or add equivalents in `Mac/Compat/`.
+  On 2026-11-02, #243 added `pin.list?.isTracking` in `ChatView` and tested only iOS, breaking `JarvisMac` compilation on master (found by the terminal lane). After changing shared pages in `apple/Persona/Views`, also build `PersonaMac` before merging (`docs/mac.md`, “Build, run, screenshots”).
+- Without `app.bundle_id` in build configuration (`~/.config/jarvis/config.json`), `JARVIS_BUNDLE_ID` in `Config.xcconfig` is empty, but xcodebuild still says BUILD SUCCEEDED.
+  Info.plist then lacks `CFBundleIdentifier`, and the Mac app crashes on startup at `UNUserNotificationCenter.current()` in `applicationDidFinishLaunching` (SIGABRT, 2026-11-02).
+  For a local-only Mac build that will not ship, override with `JARVIS_BUNDLE_ID=<any reverse-domain identifier>` on xcodebuild, without changing configuration.
+  For real pairing, use `open -a <Jarvis.app> 'jarvis://pair?…'` (the link printed by `jarvisd hub pair`). `-pairURL` is only temporary DEBUG pairing; it does not replace device credentials (`DeviceCredentials`), but writes the pairing to the keychain (`MacLaunchArguments.apply`).
+- Window sheets do not inherit the main window's `.formStyle(.grouped)` (set by `macLook`). An iOS Form inside a sheet falls back to Mac's default two columns,
+  with titles against the sheet's left edge and fields filling the right (2026-11-02, “Connect hub”). Apply `macSheet()` to sheet content itself. In grouped forms, `TextField` titles appear left,
+  with unbordered input on the right; provide `prompt:` so users can see it is editable.
+- For `NavigationStack` inside a sheet, apply the minimum size (`macSheet()`) to the stack, not its root content. When applied to the root, pushed pages (launcher / directory in new chat)
+  resize the sheet to their own height; a `List` has height 0 before its rows are measured. Opening “New session” from the Agents list and choosing a launcher shrank the sheet to a strip containing only title and search,
+  making it look unselectable (#303, 2026-11-02). The ⌘N route had an outer stack with `macSheet()`, so it was unaffected.
+- On Mac, `Menu` renders as a button with a dropdown arrow. iOS's round `.themedButton().clipShape(.circle)` + menu gets clipped to half a shape; `.buttonStyle(.glass)`
+  draws no background for `Menu`, and clipping `.glassProminent` to a circle removes even its fill. Mac composer round buttons use `.menuStyle(.button).menuIndicator(.hidden)`,
+  drawing their own circular background (`Mac/Design/MacRoundButton.swift`). Label-only menus (⋯, chips drawing their own ⌃⌄) use `.labelOnlyMenu()` (`DesignSystem/Styling.swift`, unchanged on iOS). The chat header's ⋯, chips above the composer and on the new-chat page, sidebar groups, and Agents-list space-row ⋯ previously all rendered as gray popup buttons with ⌄ (#502). Menus beside bordered toolbar buttons (file viewer ⋯ beside “Done”) use `.arrowlessMenu()`: remove only ⌄, retaining the system button. A `TextField` inside a `.surface` capsule needs `.textFieldStyle(.plain)`, or Mac draws its own border inside it.
+- The main window's `.unified` toolbar has a background and divider that cut across the sidebar extending behind the traffic lights (2026-11-02). Remove them on the shell with
+  `.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)`. The shell is not a split view: toolbar `.navigation` items sit beside the traffic lights over the shell sidebar,
+  so page buttons placed there (the old “Hide list”) look like shell buttons. Title-bar height varies with the page toolbar (28 / 52pt); use fixed `macToolbarHeight` for space above the sidebar.
+- macOS 26 `NavigationSplitView` draws its sidebar as a glass card inset from all four window edges (`NSContainerConcentricGlassEffectView`), exposing the window background around it
+  and looking like it floats on a backing panel (2026-11-02, user: very ugly). Neither SwiftUI nor `NSSplitViewItem` has an API to disable it; `.listStyle` and `.background` change only the card interior.
+  Content and detail columns are edge-to-edge: on Mac, use three columns, put `Color.clear.toolbar(removing: .sidebarToggle)` in the sidebar with visibility `.doubleColumn`,
+  and the list in the content column (`SplitColumns`). Give that list `.listStyle(.sidebar)` + `.scrollContentBackground(.hidden)` explicitly, or it gets row separators, clipped footers, and a gray background.
+- This three-column arrangement cannot collapse the content column (2026-11-04, #856). Changing `columnVisibility` from `.doubleColumn` to `.detailOnly` makes the system write `.all` back through the binding a few milliseconds later,
+  revealing the empty sidebar as a gray strip while retaining the list; removing animation does not help. For collapsible lists (Persona chat history), use `MacListBeside` (HStack: list,
+  `MacPanelResizeHandle`, page), preserving page identity on collapse. Diagnose this in `.onChange(of: columns)` logs to see whether the system rewrites the binding.
+- Offscreen screenshots cannot render glass; inspect materials in a real-window screenshot. While unlocked, launch a separate demo instance (`open -n Jarvis.app --args -demo.on YES -ApplePersistenceIgnoreState YES …`),
+  then capture that instance's window with a computer-use tool authorized for screen recording (for example cua-driver `get_window_state` with `screenshot_out_file`); it can capture windows outside the current screen too.
+  This is a Mac exception to `CLAUDE.md`'s “Do not use computer-use for screenshot validation”: screenshots only, no interaction. Background keystrokes do not reach menus (the window is not key); do not use this route for clicking.
+  Leave the user's own running instance alone; `-pairURL` rewrites pairing in the keychain.
+- Capturing only background windows misses a class of issues: system controls change color in active windows. Glass buttons (`.buttonStyle(.glass)`) become fully theme-colored in an active window,
+  hiding the purple “Recommended” label; in a background window they are gray. All earlier screenshots used background windows and missed it (2026-11-02, user: the text is obscured by the background).
+  `.glassProminent` text is cyan and cannot be changed by `.foregroundStyle`. Mac `themedButton` therefore draws its own capsule (`MacCapsuleButton`).
+  For an active-window screenshot, cua-driver `bring_to_front` (with `window_id`) brings the demo instance forward before capturing, taking focus for a few seconds; when it exits, focus returns to the original app.
+- A sidebar-style `List` (`.listStyle(.sidebar)`) outside the split view's sidebar renders all row text light gray while the window is inactive, as though disabled; active-window selection uses the theme color, unlike the shell's gray selection.
+  Inbox filters now use shell rows (`MacSidebarRow`).
+- Active-window selection in `List(selection:)` is a solid theme background. The system turns only `.primary` / `.secondary` and `Color.primary` white; explicit row colors
+  (purple draft-card titles, theme-colored “Edit,” stars) remain on the blue background and become unreadable. `.environment(\.backgroundProminence, .standard)` does not stop this whitening.
+  Solution (`MacHoverRow`): cover the system selection with `.listRowBackground(page background)`, drawing the selected gray background yourself. Set `.foregroundStyle(Color(nsColor: .labelColor))` on the row;
+  hierarchical styles (`.primary`, `.secondary`) follow it rather than turning white. Hardcoded `Color.primary` in children still turns white, so change it to `.primary` (equivalent on iOS).
+- After `.toolbar(removing: .title)`, `.primaryAction` buttons move to the toolbar's far left (they are naturally earlier on Mac; the title previously pushed them right).
+  Add `ToolbarSpacer(.flexible)` when removing the title.
+- Removing the toolbar title leaves only buttons and an empty strip above the page (2026-11-03, #830). In a custom split shell (not `NavigationSplitView`), the system does not know where the page column begins,
+  so titles sit beside the traffic lights over the sidebar. Have the shell overlay a noninteractive title at the page column's top left, using `ignoresSafeArea(.container, edges: .top)` to place it in the title-bar row.
+  Applying `ignoresSafeArea` to a container does not move each `NavigationSplitView` column's content upward; apply it to each column's own root (Persona's list column and chat-stack root).
+  Do not apply it to pushed pages; they still sit below the title bar. With only `.primaryAction` toolbar items, buttons sit left of center and overlap the left title in narrow windows; reserve the center with an empty `.principal` item.
+  Mac `.inset` lists give the first `Section` an empty group header and divider; do not wrap a top chip row in `Section`.
+- A continuously running `TimelineView(.animation)` can be costly on Mac (only `StatusDot` was measured): every frame makes `NSHostingView` request constraint updates,
+  propagating to a full-window layout even while locked. The “Needs you” dot's breathing ring made the idle Agents page consume 14% of one core this way (2026-11-02; not measured on iOS).
+  Use Core Animation for indefinitely repeating Mac animations (`CAShapeLayer` + infinitely repeating `CAAnimationGroup` in `NSViewRepresentable`, `MacBreathingRing`),
+  keeping the app main thread uninvolved. Set `preferredFrameRateRange` on the group, not child animations, or it follows the screen refresh rate (120 Hz on the built-in display). To synchronize dots, align to Core Animation's clock
+  (`beginTime` rounded to whole seconds), not wall time: Core Animation's clock stops during sleep while wall time continues, so newly added dots drift after waking.
+  A once-per-second `.periodic` timer would cost 1/30 as much by the same estimate; it was not measured separately. For idle cost, launch a demo instance while locked, measure 20 seconds with `ps -o cputime`, then `sample` the main thread.
+- When `MenuBarExtra` labels or menus read push-changing data (`model.allSessions`), every push resets the status-bar button image, measures width, redraws, and rebuilds the entire menu,
+  whether displayed content changed or not. Every page pays this Mac cost, roughly a quarter of each push's main-thread time (#1495). Read a snapshot that changes only when displayed content changes (`MacMenuBarState`).
+  Likewise, release page closures stored in global objects such as `MacShellState` when leaving the page: closures retain its `@State`, so its feed still processes every push while another section is active.
+  Measure push cost with the difference in `ps -M` (first row is main thread) before and after pushes. `PerfCount` ms counts only the interval from push to idle run loop, missing much of the cost.
+- Keeping visited pages hidden in a `ZStack` does not prevent rebuilding on sidebar-section switches: hidden views still register `.toolbar` items and `.searchable` with the window toolbar,
+  and two pages with one search field each crash immediately (`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`, 2026-11-02).
+  System `TabView` on macOS 26 isolates toolbars per tab (StackOverflow 76032647 discusses macOS 13) and retains page state, but SwiftUI cannot hide its center-toolbar
+  segmented picker. Retaining pages did not make switching faster anyway: time was spent in AppKit layout after the new page entered the window and in replacing all toolbar items, not creating views (`docs/mac.md`, performance, #390).
+  `sample` where time goes before deciding to retain pages. See “Keeping section pages resident in the window” below for the later approach (one hosting view per page, toolbar replacement after this frame commits).
+- Do not align `List` group headers with hardcoded `listRowInsets`: group-header inset is 20 on iOS, but the much narrower built-in row inset on Mac. iOS numbers push Mac rows too far inward.
+  Collapsed spaces show only a title as a regular row; hardcoded 20 makes it 20pt narrower on each side than an expanded space header, truncating the name to “weat…” (#405, 2026-11-02). Pass `nil` on Mac for the row's built-in inset.
+- After a Mac's hub reverse tunnel (launchd `dev.jarvis.hub-tunnel`) disconnects, a dead sshd on the hub computer can keep port 2232 occupied for hours
+  (`ClientAliveInterval 28800`), making every retry fail with `remote port forwarding failed for listen port 2232`. hub keeps reporting `::1:2232 timed out`,
+  and sessions, git, and sends to that Mac all return 503. The main chat runs on hub, so it looks like “only some requests return 503” (once each on 2026-11-02 and 2026-11-04).
+  Change both ends: set hub-computer sshd `ClientAliveInterval` to 60 (run `sshd -t` before reload), and replace the launchd tunnel command with
+  `~/.local/bin/hub-tunnel.sh` (first ssh to kill processes still listening on that port, `sort -u | xargs -r kill`, then create the `-R` tunnel).
+  When stuck, `launchctl kickstart -k gui/$(id -u)/dev.jarvis.hub-tunnel` lets the wrapper clean up itself.
+- Two views each contributing a `.navigation` window-toolbar item (shell sidebar button, Agents-list filter menu) have unreliable ordering. As soon as the detail page adds any toolbar item
+  (space-page ⋯, machine-page ⓘ, regardless of placement), SwiftUI rearranges the entire toolbar and puts the list item before the shell item (#483, 2026-11-02).
+  Put them in one `ToolbarItemGroup` for fixed order: on Mac, the shell draws the filter menu after its sidebar button (`MacShellState.agentsList`); ChatsView's own item remains iOS-only.
+  Offscreen screenshots show this ordering (`scripts/app/mac_shot.sh … -openSession <chat> -openSpaceFromChat YES`); opening the menu itself requires a real window.
+- `NSGestureRecognizer` subclasses handling mouse events themselves (overriding `rightMouseDown`, etc., and changing `state` directly) do not record event position. `location(in:)` always returns (0, 0),
+  the window's bottom-left corner; SwiftUI's `context.converter` converts from that value too. This placed Mac message right-click action bars at the bottom left, hidden beneath the composer (#501, 2026-11-03).
+  Record `event.locationInWindow` in the event handler and override `location(in:)` to return it (`SecondaryClickRecognizer`). Unit tests must send events through `window.sendEvent(_:)`:
+  direct `rightMouseDown(with:)` calls do not let AppKit recognize state changes, leaving `state` at `.possible`. Control-left-click never reached the recognizer in tests (the window was not key, even with `acceptsFirstMouse` true), so unit tests cover only right-click; Control-click was validated in a real window.
+- Any `.principal` window-toolbar item, even empty, pushes the split-list column's `.primaryAction` buttons out of their column and ahead of the right column's buttons, leaving a large gap on the left (#907).
+  To keep buttons at the list column's right edge, do not put `.principal` in that column. Adding `.navigation` to the detail column's `NavigationStack` or root does not help: the chat page hides the navigation bar
+  (`.toolbarVisibility(.hidden, for: .navigationBar)`), so those items disappear after navigating to chat. `ToolbarSpacer(.flexible)` only shares empty space with the shell spacer and cannot push them to the edge either.
+- Persona Link's panel kept the old appearance (square corners and a thin light border, not the rounded glass of other system menu-bar panels; 2026-11-03, #956). When `xcodebuild` builds a SwiftPM executable,
+  it records sdk in `LC_BUILD_VERSION` as the deployment target (`vtool -show-build` shows `sdk 15.0`), despite actually using Xcode 27's SDK; compiling the same target with `swiftc` records it correctly.
+  The system grants the new appearance based on this sdk version, so 15.0 keeps the old look. Offscreen screenshots (`mac-link.sh snapshot`) miss this because they capture only content, not the window.
+  After building, `scripts/app/mac-link.sh` restores the actual SDK with `vtool -set-build-version macos <minimum version> <SDK version> -replace` (both architectures for a fat binary), then signs and verifies it.
+- Mac sheets have no navigation bar, only a bottom action row (2026-11-04, #743, measured offscreen with `mac_shot.sh`). `.topBarLeading` (mapped to `.navigation` by compatibility code) does not render;
+  `.confirmationAction` renders only one button. Two `ToolbarItem`s or a `ToolbarItemGroup` still show only the first, losing the other.
+  For two buttons, put “Done” in `.cancellationAction` (Esc closes) and the other in `.primaryAction`; both appear at bottom right, neither as Return's default button (file viewer and “Tool output” do this).
+- After removing the system window-toolbar title on Mac (#830), pushed pages' `navigationTitle` has nowhere to appear (#855). Use `pageTitle(_:subtitle:)` on pushed pages (`navigationTitle` on iOS).
+  On Mac it draws the title in that page's top title-bar row, and `MacTitleRowTaken` tells the shell not to draw the section name too. The title measures its own leading inset (whether the page touches the window's left edge),
+  rather than reading `macTitleRowLeading`: pushed pages in split detail columns receive the whole-page value. Moving the environment value outside `navigationDestination` or `NavigationStack` did not help.
+- Mac SwiftUI system text styles (`.body`, `.subheadline`…) and `@ScaledMetric` do not respond to `.dynamicTypeSize(...)` (#833, tested 2026-11-03: from `.medium` to `.xxxLarge`, `Font.body` line height stayed 16 and ScaledMetric stayed 13),
+  nor does `Font.system(size:relativeTo:)`. Mac Small / Standard / Large therefore needs explicit multiplication: each `Theme.Font` level is a Mac computed property reading `Theme.Font.scale`.
+  Markdown's base size is multiplied too (themes use points; `PerTextScale` caches by scale); after a setting change, `macLook` uses `.id(model.textSize)` to redraw the whole window (SwiftUI does not observe this static value).
+  Storing `Theme.Font.xxx` in `static let` elsewhere freezes the first size (`CompactList` changed to a computed property). Compatibility `UIFontMetrics` previously converted with the iOS body table (16 / 17 / 19), changing 6–12% per step rather than Mac's one point per step; it now uses Mac's own table.
+  Proportional “Small” shrank 11 pt levels (caption / label / code) to about 10.2, violating the user's #779 “at least 11” requirement. `Theme.Font.pointSize` uses `max(level × scale, 11)` on Mac; only those levels stay at 11 in Small, while the rest scale normally.
+- Half the Mac settings rows were gray as though disabled (2026-11-04, #1170). The list used `.listStyle(.sidebar)` in the split content column (`SplitNavigation`);
+  sidebar style treats rows containing only one `Label` as source-list rows, with “vibrant” text that needs the sidebar material behind it to appear white. The content column has no such material, so they appear gray.
+  Rows are still clickable. Value-bearing `LabeledContent` rows are unaffected, so only valueless rows such as “Model Providers” and “Devices” turn gray. Wrap valueless Mac rows in `LabeledContent` too (`SettingsRow`).
+- Mac sheets can close only through the bottom row's Cancel / Done (Esc): no swipe-down dismissal, and clicks outside only beep (2026-11-04, #1248). Put a sheet's close button in the wrong place (`.topBarLeading`)
+  and it cannot close: “Model Configuration” had “Close” at `.topBarLeading` and “Save” at `.topBarTrailing`, neither visible on Mac, leaving edits impossible to save or dismiss. Solution (`DesignSystem/SheetActions.swift`):
+  editors use `sheetCancel(unsaved:)` (`.cancellationAction`; on Mac, first ask “Discard unsaved changes?” if needed; iOS still closes directly);
+  read-only sheets use `macSheetDone` (one bottom “Done” on Mac, nothing added on iOS). Attach confirmation to the page, not the bottom button: the bottom bar and page are not in the same view tree.
+  “Hand to Agent” from to-do details lacked `macSheet()`, reverting its form to two columns, clipping labels at the sheet's left edge and descriptions at the right (same issue).
+- Pushing a page in a sheet's `NavigationStack` shrinks the sheet to that page's minimum width while the form still lays out at its original width, clipping the right edge; the back button also remains an iPhone-style round glass button (same issue).
+  Do not push pages in Mac sheets: present another sheet for another group of fields, with its own “Cancel” at `.cancellationAction` and “Save” at `.confirmationAction` (pairing's “Connect via SSH tunnel…”;
+  tapping a category in “Model Configuration” opens its editor sheet on top, #1248).
+- On a second-level page in a split detail column (Settings › hub › SSH tunnel), the system back button is at the window toolbar's far left beside the traffic lights, over the section column, as a round glass button, not in that column (same issue).
+  On Mac, `splitDetailPage()` hides it and draws ‹ at the left of that column's title-bar row (`MacDetailBack`). This row is interactive: content extends beneath the title bar, and buttons receive clicks normally (tested in a real window).
+- Adding an untitled `Section` at the top of a list leaves an empty strip above it (2026-11-05, #1916). Grouped lists reserve about 28 pt for the first section's header,
+  normally occupied by “Needs your attention.” Mac's filter row is above the list rather than in it, so the new notice became the first section, leaving a blank strip below the filters.
+  An empty header (`header: { EmptyView() }`) does not remove it (apparent alignment sometimes means the list was scrolled down by that amount). In split layouts (`widthClass == .regular`), place notices above the list,
+  below filters (`herdrNoticesAbove`), not in a list section. On iPhone, filters are the first section and notices the second, so this is not visible.
+- `opacity(0)` cannot hide a button inside a glass container (2026-11-05, #1337). The chat header's ‹ used `opacity(0).disabled(true).accessibilityHidden(true)` on the first split page,
+  but inside `GlassEffectContainer` with its own `.glassEffect`, the container draws the glass and symbol independently of the outer `opacity`. Every Mac chat showed an inert ‹ absent from the accessibility tree
+  (logs showed `isFirstPage` was correct, pointing here). To hide it, do not render it (on Mac, use equally sized blank space so the title stays centered). iPhone hides the same ‹ only in a split layout (expanded iPhone Duo); whether it has the same failure was not checked.
+- At minimum window size, the page clips at the right edge instead of narrowing (2026-11-04, #1200). Fixed-width `HStack` lists (`MacListBeside`, Inbox) do not yield as the window narrows;
+  the adjacent page receives less width than its content's minimum, so SwiftUI lays out at minimum content width and clips the excess (composer text stacks vertically, only half the stop button remains).
+  It also compresses other compressible content (section-column icons disappear). Fixed-width lists must measure whole-page width (`onGeometryChange`), reserve `macDetailMin` for the adjacent page, then choose their own width.
+  Set minimum window width to the sum of column minima. A `NavigationSplitView` content column does not shrink to its `min` as the window narrows, nor can detail `navigationSplitViewColumnWidth(min:)` squeeze it,
+  so minimum window width must allow the content column's ideal width (at 920, Agents chat is about 308 wide and fits).
+- Mac SwiftUI `List` section footers render only one line with an ellipsis; `.listStyle(.sidebar)` hides them entirely (2026-11-04, #1212, tested with a separate minimal app in a real window).
+  `fixedSize(horizontal: false, vertical: true)`, `lineLimit(nil)`, `lineLimit(5)`, a `VStack` wrapper, and `.plain` / `.bordered` / `.inset` all behave the same.
+  Only `Form` + `.formStyle(.grouped)` wraps footers (or place explanations as content rows within the section). Mac settings subpages therefore use `SettingsForm` (grouped form).
+- `.listRowBackground(Color.clear)` does not remove a row's rounded card in Mac grouped forms (`Form` + `.grouped`) (2026-11-04, #1221, inspected in a real window; I incorrectly wrote “remove the background” in batch two and corrected it in batch three).
+  A standalone button row is a standard right-aligned button inside a card on Mac. Form input titles appear as left labels: when the title itself is a prompt (“Add an item,” “Default: …,” “Muted repository: owner/name”), use `.labelsHidden()`, or the left shows a long prompt and the right an empty field.
+- Window-toolbar `.primaryAction` (compatibility `.topBarTrailing`) does not follow columns in our custom split layout (2026-11-04, #1223, compared real windows at widths 920 / 1280 / 1800).
+  Its position is roughly “half the window width minus a few dozen points”; list-column buttons drift into the chat column in wide windows. With `.searchable`, search occupies the right edge and pushes buttons toward the center.
+  `.automatic` is no different. Buttons pinned to a column belong in that column's own title row (`overlay` + `ignoresSafeArea(.container, edges: .top)`, interactive) or in page content.
+  Also, on macOS 26, `.toolbar { }` whose content is empty in a platform branch fails compilation (`EmptyView` as `ToolbarContent` requires macOS 27). Wrap the whole `.toolbar` in `#if`.
+- Programmatically moving a scroll view to measure frames (`clip.setBoundsOrigin`) does not count as user scrolling in SwiftUI (2026-11-04, #1337): scroll phase remains `.idle`,
+  so the chat still follows latest content or restores the last-read position, fighting the measurement driver every frame. This measured 342–356 ms/s, versus 65–86 using user-scroll semantics.
+  Send `NSScrollView.willStartLiveScrollNotification` / `didLiveScrollNotification` / `didEndLiveScrollNotification` around it to get `.interacting` (`-showPerfGlide live`).
+  Synthetic phased wheel events through `scrollWheel(with:)` or `NSWindow.sendEvent` also fail: AppKit has additional gesture tracking, and they scrolled only 380 pt in 6 seconds. Check distance (`scrolledPt`) afterward; runs stopped at an edge do not count.
+- `NSColor.withAlphaComponent(_:)` replaces alpha rather than multiplying it (2026-11-04, #1224). Compatibility `tertiaryLabelColor.withAlphaComponent(0.18)` produces black / white at 18%,
+  not the original tertiaryLabel 26% × 0.18. Mac `Theme.Fill.well` / `chip` were therefore several times darker than iPhone (real-window pixels: card 248, option well 212; dark 54 versus 98). Measure colors from real-window screenshot pixels, not impressions.
+  #1169 changed compatibility's four fill levels to UIKit's original values. To copy iPhone colors, `simctl spawn` a small program printing `resolvedColor(with:)` in a simulator; do not rely on memory.
+- Scrolling a list upward reveals rows in the title-bar row, overlapping the shell's section title (`MacPageTitle`) (2026-11-04, #1243, tested in a real window). The list scroll view extends beneath the window toolbar and offsets content downward by toolbar height;
+  the system scroll-edge effect (AppKit `NSScrollPocket`) normally blocks scrolled rows there. Hiding toolbar background so the section column extends behind the traffic lights
+  (`.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)`) removes that shield too. Settings, Inbox, and Machines (narrow window) can all scroll into it;
+  with the section column collapsed, settings rows even cover the traffic lights. Agents stops at its quick-filter row; to-dos has search above the list, so neither reaches this row.
+  Restoring toolbar background does not work: an opaque shield and divider appear above every scroll view, even at rest. Persona's custom header there becomes blurred, and after Agents scrolls, even the section-column top turns white.
+  `scrollEdgeEffectStyle(.soft / .hard)` changes the shield's style value but not its appearance. `titlebarSeparatorStyle = .none` on the window and split items cannot remove the divider (controlled only by the shield's private `allowsSeparator`).
+  Solution: `MacBelowTitleRow` starts lists below this row and clips them to their own frame, making scrolled rows disappear at its lower edge. `padding` + `ignoresSafeArea` alone is insufficient;
+  a content-column `List` scroll view still extends under the toolbar (an `HStack` list like Inbox's is clipped), so add `.clipped()` too.
+  Clip inside the page background: clipping outside also removes the background, making the title row white in styles with colored backgrounds, such as Clay. Apply it to the settings list (before `.themedPage()`),
+  Inbox filters (background belongs to the outer `HStack`), and Knowledge/Machines home pages via the shell's `macBelowTitleRow` environment request (those pages also open inside Persona or settings detail, where it is not applied).
+  Do not apply it to Inbox's middle list: its title is not above it, and its pinned “Needs you” group header relies on the system shield; moving below this row removes the shield and overlays the header directly on scrolling rows.
+  Do not apply it to Agents: its list-column title row has custom buttons (`MacTitleRowButton`, overlay at the list layer), which whole-column clipping would remove; its list never reaches this row anyway.
+  At rest, pixel-by-pixel real-window screenshot comparisons showed no difference in the title-bar row; elsewhere only naturally changing times and animations differed (all sections, Liquid Glass light/dark, Clay, Lark, and collapsed section column).
+  Pushed pages drawing their own `pageTitle` were not changed: after scrolling, only pinned-header blur extends a few points into this row, with no rows overlapping titles.
+- Before comparing screenshots before/after a change, take several with the same build to see what is already unstable. On the profile pushed from Persona (`-tab assistant -openAssistantPage profile`),
+  sometimes a strip with a divider appears beneath the title and sometimes content touches it directly; two of three captures from one build showed the strip (seen during #1243 on 2026-11-04, unrelated to that change, not investigated).
+  Treating a single capture as the change's effect nearly produced a wrong conclusion.
+- Offscreen screenshots cannot show whether the issue above is fixed: list rows are redrawn separately and pasted back during capture. Previously they were clipped only to their scroll view's visible area, so rows hidden by `.clipped()` still appeared in the title-bar row.
+  They now clip to all ancestor clipping views (`clipsToBounds` / `masksToBounds`). To inspect after scrolling, use `-macSnapshotScroll <points>` (append to `mac_shot.sh`).
+  When unlocked and the terminal has screen-recording permission, `screencapture -x -o -l <window ID>` captures the demo window directly (find window ID by pid with `CGWindowListCopyWindowInfo`, filtering out the menu-bar window by dimensions),
+  without computer-use tools; the instance occasionally activates and briefly takes focus.
+- After a subpage changes data, the underlying page does not automatically refetch on Mac (2026-11-04, #1433). On iOS, popping a NavigationStack reveals the underlying page again and reruns `.task` (the NavigationStack-root lesson in `ios.md`);
+  on Mac the same code returns to the list without rerunning `.task`, leaving Settings › Model Providers stale after hiding a launcher in details. iOS-only validation misses this.
+  If a subpage changes data needed by a list, add a model revision and use `.task(id: revision)` on the list (`AppModel.launchersRevision`), not assumptions about reappearance.
+- Every UserDefaults write recomputes views holding `@AppStorage`, regardless of the key written (2026-11-04, #1337, confirmed with `_printChanges` and write counts).
+  During Mac window resizing, `NSSplitView` behind `NavigationSplitView` automatically saves `NSSplitView Subview Frames …` every frame, recomputing the shell and Agents list and comparing all 137 rows,
+  leaving resizing at roughly 4 fps. Use `@StoredValue` in persistent, expensive views (recompute only when their own key changes).
+- If resizing a page is slow but each isolated piece is fast, their combined cost exceeds the budget (2026-11-05, #1337). Every resize frame gives the whole page a new width; the chat header, composer, and list each take 4–6 ms,
+  individually under 16.7 ms but together dropping to 30 fps. `sample` shows almost only SwiftUI layout and cannot identify the view. Temporarily add a launch argument to replace each piece with `Color.clear` for measurement (do not commit),
+  then remove children individually from the most expensive piece. `ViewThatFits` remeasures every candidate at every width; replace it in a frequently width-changing row with `FirstFitting` (ideal widths cached in `Layout`).
+  `sample` pauses the app while attached, invalidating measured frames; measure frames and sample separately.
+- Custom `Layout` that moves hidden children offscreen leaves them in the accessibility tree (2026-11-05, #2181). `FirstFitting` placed an unselected row 100 000 pt above;
+  UI tests searching for “正在工作…” (“Working…”) found that row (y ≈ −99 290), impossible to click or scroll to. VoiceOver can also land on it. `ViewThatFits` includes only the chosen child in the tree; `Layout` cannot hide children individually.
+  Apply `.firstFittingText(_:)` to the whole group (`accessibilityElement(children: .ignore)` plus full text), leaving one element at the displayed position.
+- If a large page's first `body` is slow on cold start and samples show only `lazy protocol witness table accessor for type ModifiedContent<…>` (2026-11-05, #1337),
+  it is not application computation: Swift runtime is first constructing the page's type (dozens of nested modifier types, recursively parsed by `swift_getTypeByMangledName`).
+  Break a long modifier chain into a few segments with `AnyView` (each break has a stable type, preserving state). ChatView's first body went from 106 → 49 ms.
+  This is a one-time cold-start cost, not resize or push cost; do not turn the entire page into `AnyView` for it.
+- A development machine's Instruments could not record Animation Hitches display data (Developer Mode disabled, sudo required), and the system filtered wheel events from `CGEvent.postToPid` (the sender lacked Accessibility authorization).
+  Both appeared “successful” but did nothing. Measure smoothness with the app's own display link (`MacPerfHarness`), and inspect the main thread with `sample`.
+- A sheet's minimum size must be on the outermost sheet content; an intervening `GeometryReader` stops propagation (2026-11-04, #1502). Mac sheets open at content minimum size,
+  but `GeometryReader` accepts any size and has minimum 0, so `.frame(minWidth:minHeight:)` inside it does not reach the sheet. #813 wrapped the file-viewer stack in `.macLinkPanel` (outermost `GeometryReader`),
+  leaving `.macLargeSheet` on stack content; the sheet shrank to its toolbar's 470 × 80, hiding every file. `MacFileViewerSheetTests` uses `NSHostingView.fittingSize` to measure opening size; run it after adding outer modifiers.
+  Even outside the stack, `bars: true` is required: the sheet window adds stack title and bottom toolbars itself, outside `fittingSize`. With `bars: false`, the sheet was 1216 × 821, taller than the 820-high main window,
+  and crashed on first launch with a SwiftUI window-layout assertion (`EXC_BREAKPOINT`, stack full of `_layoutSubtreeWithOldSize`).
+- Plugin progress and quota bars are gray on Mac (2026-11-04, #1512) only in **inactive windows**; in a foreground key window, `.tint` applies (theme / red / orange).
+  Toggles and button backgrounds in the same window also turn gray. This is the system's standard inactive-window appearance, not tint failure; do not change it. Establish this with two `screencapture -l <window ID>` images of the same instance, active and inactive.
+  Do not force the app forward for screenshots (`osascript … set frontmost`, or restarting for every capture): the user is working on that Mac and gets interrupted repeatedly. For active-window images, ask the user to bring the window forward themselves.
+- `Button(role: .destructive)` in a Mac grouped `Form` renders in the theme color (blue), not automatically red as in an iPhone list (found in screenshots, 2026-11-04, #1512).
+  To make it red, use `.tint(Theme.danger)` for Form buttons or `.foregroundStyle(Theme.danger)` for borderless buttons. `confirmationDialog` buttons need no change; the system honors the role there.
 
-## 滚到列表外面再滑回来：`NSClipView` 不让停（2026-11-05，#1123）
+## Scrolling past the list, then sliding back: `NSClipView` will not stay there (2026-11-05, #1123)
 
-- iOS 在最新处收起工作行，是先让列表停在越过最新端的位置（标题不动），再 `setContentOffset(animated:)` 滑回去。Mac 上照做不行：
-  - `clipView.animator().setBoundsOrigin` 滑不起来，下一次布局就到终点了；
-  - 越过最新端的偏移 `scroll(to:)` 当时收下了，但列表变短后的那次布局又把它夹回最新端，那一帧画的是终点，再从原处往下滑，看起来是闪了一下；
-  - 在 AppKit 那边临时把 `contentInsets.top` 加大：SwiftUI 下一步就改回它自己的 content margin；
-  - 改成在 SwiftUI 里临时加大最新端的 content margin：它到的那一下 SwiftUI 把列表跟着挪了这么多，标题闪到顶上。
-- 现在的做法：滑动是一帧一步自己放的；滑的过程中听 clip view 的 `boundsDidChangeNotification`（同步发，在同一次布局里），谁把列表挪走就马上放回滑到的位置，那一帧画出来之前已经放回去了。
-- 只看行自己报的位置会看漏：夹回去的那一帧行还没报新位置。要在每帧（`CADisplayLink`）读 clip view 的 `bounds.origin` 才看得到。
+- On iOS, collapsing the work row at the latest end first parks the list past that end (title stays still), then slides back with `setContentOffset(animated:)`. The same approach fails on Mac:
+  - `clipView.animator().setBoundsOrigin` does not animate; the next layout is already at the destination.
+  - `scroll(to:)` initially accepts an offset past the latest end, but the layout after the list shortens clamps it back. That frame draws the destination, then slides down from the original position, looking like a flash.
+  - Temporarily increasing AppKit `contentInsets.top`: SwiftUI immediately resets it to its own content margin.
+  - Temporarily increasing the latest-end content margin in SwiftUI: on arrival, SwiftUI moves the list by that amount, flashing the title to the top.
+- Current approach: set each animation frame manually. During the slide, listen for the clip view's `boundsDidChangeNotification` (sent synchronously within the same layout). If anything moves the list, immediately restore the current animation position, before that frame is drawn.
+- Watching only row-reported positions misses it: the clamped frame has not yet reported its new row position. Read clip view `bounds.origin` every frame (`CADisplayLink`) to see it.
 
-## 系统权限的「现在是什么状态」别在主线程上问（2026-11-05，#1337）
+## Do not query current system-permission status on the main thread (2026-11-05, #1337)
 
-- `EKEventStore.authorizationStatus(for:)` 是一次同步的 XPC（Mac 上第一次还要建到日历守护进程的连接）。连上 hub 时注册手机工具，
-  日历、提醒的 5 个工具各问一次，主线程被占 100–150 ms。只去重不够：大头是第一次建连接。改成在后台问、主线程只拿结果（`CalendarAccess.statusesOffMain`）。
-- 量这种「连上之后才发生」的事别只看首帧时间：负载一高首帧乱跳；冷启动时 `sample` 主线程 6 秒，按函数统计采样数前后比。
-- 新编出来的包头一两次启动会慢很多（LaunchServices、签名检查），A/B 之前每个包先启动一次扔掉。
+- `EKEventStore.authorizationStatus(for:)` is a synchronous XPC call (the first on Mac must also establish a calendar-daemon connection). Registering phone tools after connecting to hub
+  queried it once for each of 5 calendar/reminder tools, occupying the main thread for 100–150 ms. Deduplication alone is insufficient: initial connection setup dominates. Query in the background; the main thread consumes only results (`CalendarAccess.statusesOffMain`).
+- For work that happens only after connecting, do not measure only first-frame time: high load makes it fluctuate. `sample` the main thread for 6 seconds on cold start and compare sample counts by function.
+- A freshly built app is much slower on its first one or two launches (LaunchServices, signature checks). Launch each build once and discard that run before A/B testing.
 
-## 拖窗口卡：先数 body，再看采样（2026-11-05，#1337）
+## Slow window resizing: count body calls, then inspect samples (2026-11-05, #1337)
 
-- 采样只看得到 AppKit / SwiftUI 的整窗布局，分不出是哪一页。`-showPerfRun resize -perfCounts YES` 一跑就看到设置页的 body 一帧两次：
-  还拿着 `@AppStorage` 的视图在分栏每帧写 UserDefaults 时整页重算（#1473 只换了外壳和 Agents 列表）。剩下的都换成 `@StoredValue`，
-  `AppStorageRatchetTests` 管着不再新加。
-- 看「每帧主线程 CPU」（`mainCPUMsPerS ÷ fps`）比看卡顿稳：卡顿跟着机器负载乱跳，每帧 CPU 在负载几十时还算稳。
+- Samples show only whole-window AppKit / SwiftUI layout, not which page. `-showPerfRun resize -perfCounts YES` immediately revealed settings body running twice per frame:
+  remaining `@AppStorage` views recomputed the whole page when the split view wrote UserDefaults every frame (#1473 had replaced only shell and Agents-list storage). Replace the rest with `@StoredValue`;
+  `AppStorageRatchetTests` prevents new additions.
+- “Main-thread CPU per frame” (`mainCPUMsPerS ÷ fps`) is steadier than hitch measurements: hitches fluctuate with machine load, while per-frame CPU remains fairly stable even with load averages in the tens.
 
-## 分区的页面常驻在窗口里（2026-11-05，#390，`MacPageStack`）
+## Keeping section pages resident in the window (2026-11-05, #390, `MacPageStack`)
 
-每页放在自己的 `NSHostingView` 里，藏起来就设 `isHidden`。踩到的几处：
+Each page has its own `NSHostingView`, with `isHidden` set while inactive. Pitfalls:
 
-- 藏起来的页照样把自己的 `.toolbar` 项和 `.searchable` 挂到窗口工具栏上，`sceneBridgingOptions = []` 也拦不住。
-  两个搜索框会直接崩溃：`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`。
-  页面一律用 `pageToolbar` / `pageSearchable`，这样只有前台页提供工具栏项。
-- SwiftUI 没有办法让藏起来的子树暂停。`NSHostingView.layout()` 可以跳过，body 和 `List` 的行照样跟着推送更新，所以要逐页处理：
-  - Agents 列表的 `Hold` 加了 `.behind`；
-  - 待办、机器页读 `allSessions(inFront:)` / `machines(inFront:)`；只要名字的读 `namedMachine`（`List` 的行在藏起来的页里拿到的 `tabIsActive` 不一定是新的，别靠它）；
-  - 对话页藏起来时退订（回到前台按 `since_seq` 补齐），形象的时钟和眨眼停下（空闲时每 10 秒 80 ms）。
-  新写的页面也要这样做，否则每次推送都要多算一页。查哪一页还在跟：在 body 里临时加 `Self._printChanges()`，
-  正常退出（`osascript … quit`）才会把 stdout 刷出来，`kill` 掉就什么都没有。
-- 把藏起来的 hosting view 从窗口上摘掉（`removeFromSuperview`）反而更糟：每次推送约多 30 ms。
-- 「等第一帧画完再做」别用一次 `DispatchQueue.main.async`：它有时排在这一轮 Core Animation 提交之前，工具栏的重排又落回第一帧。
-  在 run loop 的 `beforeWaiting` 观察者（排在 Core Animation 提交之后）里再 `async` 一次。
-- `NSViewRepresentable` 没写 `sizeThatFits` 时，SwiftUI 每画一次外壳，都会用 Auto Layout 量一遍里面的视图（`systemLayoutSizeFitting`）。
-  七页都常驻时，这一步占了每次推送一半的时间。容器类的 representable 要直接返回提议的尺寸。
-- 在 body 里读 `tabIsActive` 的视图，每次进出前台都会整个重算。Agents 列表因此每次切回来都多花约 80 ms。
-  只需要知道进出前台、不需要因此重画的，用 `PageFrontWatcher` 放在 background 里。
-- 页面的 hosting view 拿不到窗口那棵树的环境：`openWindow`、`scenePhase`、`markdownInlineImageProvider`、标题行的边距等。
-  这些由 `MacPageRoot` 补上（`MacPageChrome`）。新加窗口级的环境值时，记得这里也要加。
-- 写 UserDefaults 会让每一页里的 `@AppStorage` 视图都重算，页面常驻后这个代价乘以页数。
-  所以切分区时记的 `app.tab` / `mac.section` 改成延后写（`DeferredDefaults`）。
-- 不要用 lldb attach 去看异常：会弹「开发者工具访问」的密码框并卡住，之后连 `sample` 也会卡；在 SecurityAgent 窗口点「取消」能恢复。
-- 分栏中间那栏的 `List(selection:)`：选中一变，系统就把右边详情栏清空。通知、⌘K 直接打开的对话会立刻被关掉（#2213）。
-  Agents 列表因此不选中：↑↓ 按 `AgentListRows` 算出的显示顺序打开下一个，打开的那行自己画底色。
-- 懒加载 `List` 的 `ScrollViewProxy.scrollTo`：目标在很远的下面时，第一次按估计的行高滚，会停在目标前面。
-  等那段行排好（约 0.1 s）再滚一次就准了（`MacRowOrder.scroll`）。
-- 页面常驻以后，系统的返回键会漏到别的分区（2026-11-05，#2318）：知识库、机器在自己的 `NavigationStack` 里推一页，系统把 ‹ 画成红绿灯旁的圆形玻璃按钮，它是窗口工具栏的一项，不归 `pageToolbar` 管。
-  切到设置以后它还在，点一下退的是藏着的知识库。这类栈（Persona、知识库、机器）设 `macSectionStack`，推进去的页用 `pageTitle` / `detailTitle` 就会自己在标题行画 ‹；判断「推进去的」用 `isPresented`，栈的第一页不画。
-- 对话里的回答开 `.textSelection(.enabled)`（#2542，和网页一样能拖选、⌘C）：体验模式下 `-showPerfRun chats` 各量 6 轮，
-  第一次打开对话主线程 CPU 中位数 162 → 177 ms（约 +9%），再次打开 139 → 141 ms（持平），轮与轮之间差得比这还多。
-  比 `docs/lessons/ios.md` 里文件查看器长文档的 +40% 小，所以只给回答、用户气泡、别的 Agent 的消息和工具详情开；
-  还在生成的回复（`StreamingText`，每 80 ms 重排一次）不开，生成完就能选。MarkdownUI 一块一个 Text，只能在块内选，整条用悬停的「拷贝」。
-- Persona Link 菜单栏 App（`apple/PersonaLink`）在 Xcode 26.1 上 `swift build` / `mac-link.sh` 报 `PairView.swift` 的「unable to type-check this expression in reasonable time」（2026-11-05，#2573，master 上就有）：
-  被动模式那页的 `Text("…" + (optional.map { … } ?? "") + …)` 一串可选值拼接拖垮了整个 `VStack` 的类型推断。拼字符串挪进一个标了类型的静态函数（`pairedText`）就好；SwiftUI 的 `body` 里不要写长的 `+` 拼接。
+- Hidden pages still attach `.toolbar` items and `.searchable` to the window toolbar; `sceneBridgingOptions = []` does not prevent it.
+  Two search fields crash immediately: `NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`.
+  All pages use `pageToolbar` / `pageSearchable`, so only the foreground page supplies toolbar items.
+- SwiftUI cannot pause a hidden subtree. Skipping `NSHostingView.layout()` does not stop body and `List` rows updating on pushes, so handle each page:
+  - Agents-list `Hold` adds `.behind`.
+  - To-dos and Machines read `allSessions(inFront:)` / `machines(inFront:)`; views needing only names read `namedMachine` (`tabIsActive` received by `List` rows on hidden pages may be stale; do not rely on it).
+  - Chat pages unsubscribe while hidden (catch up with `since_seq` on return); avatar clocks and blinking stop (80 ms every 10 seconds while idle).
+  New pages need this too, or every push computes an extra page. To identify pages still updating, temporarily add `Self._printChanges()` to body;
+  only a normal exit (`osascript … quit`) flushes stdout; `kill` loses it all.
+- Detaching a hidden hosting view from the window (`removeFromSuperview`) makes things worse: about 30 ms more per push.
+- “After the first frame” is not one `DispatchQueue.main.async`: it can run before that round's Core Animation commit, putting toolbar rearrangement back in the first frame.
+  Schedule another `async` from a run-loop `beforeWaiting` observer ordered after Core Animation commit.
+- Without `sizeThatFits` on `NSViewRepresentable`, SwiftUI measures the embedded view with Auto Layout (`systemLayoutSizeFitting`) every time it renders the shell.
+  With seven resident pages, this took half of each push's time. Container representables should return the proposed size directly.
+- Views reading `tabIsActive` in body recompute entirely on every foreground/background transition, adding about 80 ms each time the Agents list returns.
+  If a view needs notification of transitions but no redraw, put `PageFrontWatcher` in its background.
+- Page hosting views do not inherit the window view tree's environment: `openWindow`, `scenePhase`, `markdownInlineImageProvider`, title-row insets, etc.
+  `MacPageRoot` supplies these (`MacPageChrome`). Add new window-level environment values here too.
+- UserDefaults writes recompute every page's `@AppStorage` views; resident pages multiply that cost by page count.
+  Section-switch writes to `app.tab` / `mac.section` are therefore deferred (`DeferredDefaults`).
+- Do not attach lldb to inspect exceptions: it opens a “Developer Tools Access” password prompt and hangs, after which even `sample` hangs. Clicking “Cancel” in SecurityAgent restores it.
+- With `List(selection:)` in the middle split column, changing selection makes the system clear the right detail column. Chats opened directly by notifications or ⌘K close immediately (#2213).
+  The Agents list therefore does not select rows: ↑↓ opens the next row in `AgentListRows` display order, and the open row draws its own background.
+- Lazy `List` `ScrollViewProxy.scrollTo`: for a target far down, the first scroll estimates row height and stops before it.
+  Scroll again after those rows lay out (about 0.1 s) for accuracy (`MacRowOrder.scroll`).
+- Resident pages let system back buttons leak into other sections (2026-11-05, #2318). When Knowledge or Machines pushes a page in its `NavigationStack`, the system draws ‹ as a round glass button beside the traffic lights. It is a window-toolbar item outside `pageToolbar` control.
+  It remains after switching to Settings, and clicking it pops hidden Knowledge. Such stacks (Persona, Knowledge, Machines) use `macSectionStack`; pushed pages with `pageTitle` / `detailTitle` draw their own ‹ in the title row. Use `isPresented` to identify pushed pages; the stack's first page has none.
+- Chat replies enable `.textSelection(.enabled)` (#2542, allowing drag selection and ⌘C like web). Six rounds each with `-showPerfRun chats` in demo mode measured
+  median main-thread CPU on first chat open at 162 → 177 ms (about +9%), and reopening at 139 → 141 ms (unchanged); variation between runs was larger.
+  This is smaller than the +40% for long file-viewer documents in `docs/lessons/ios.md`, so enable it only for replies, user bubbles, other Agents' messages, and tool details.
+  Generating replies (`StreamingText`, relayout every 80 ms) do not enable it until complete. MarkdownUI has one Text per block, so selection stays within a block; use hover “Copy” for the entire message.
+- Persona Link menu-bar app (`apple/PersonaLink`) on Xcode 26.1 reports “unable to type-check this expression in reasonable time” in `PairView.swift` under `swift build` / `mac-link.sh` (2026-11-05, #2573, already on master).
+  A long optional-value concatenation `Text("…" + (optional.map { … } ?? "") + …)` on the passive-mode page overwhelmed type inference for the whole `VStack`. Moving string construction to an explicitly typed static function (`pairedText`) fixes it; do not write long `+` concatenations in SwiftUI `body`.
 
-## 列表底色（2026-11-05，#3080）
+## List backgrounds (2026-11-05, #3080)
 
-- **浮动分组**：收件箱最上面的「需要你」是 `NSTableRowView.isFloating == true` 的分组行，内部还有 `NSBannerView`、`NSHardPocketView` 和分隔线。
-  `.scrollContentBackground(.hidden)` 只隐藏列表底色；`.scrollEdgeEffectHidden(true, for: .top)` 和隐藏滚动视图自己的 `NSScrollPocket` 都去不掉这个浮动横条。
-  运行时分别关闭滚动挡板和 `NSTableView.floatsGroupRows` 对照后，只有关闭浮动分组消除了横条。收件箱在分组标题内部挂 `MacInlineListHeaders`，
-  只沿祖先找到这张表、关闭浮动，分组标题跟内容一起滚；不遍历窗口、不改系统私有视图，原有选择、悬停、折叠和行分隔线保留。
-- **整栏同色**：Persona 的 `macListRow` 为盖住系统选中底色，会给每条对话铺 `Theme.pageBackground`；标题、任务入口和空白处原本透明，露出窗口底色。
-  默认玻璃风格的真窗口截图也能看到色带，但离屏截图里两种颜色可能一样，不能据此说没问题；黏土风格深浅色都能稳定复现。Mac 的 `AssistantSidebar` 整栏也铺同一个 token，
-  不改行的选中和悬停，也不改 iOS。核对时要同时看标题、分组标题、未选中行和底部空白，并补看带页面底色的风格。
+- **Floating groups**: Inbox's top “Needs you” header is a group row with `NSTableRowView.isFloating == true`, containing `NSBannerView`, `NSHardPocketView`, and a divider.
+  `.scrollContentBackground(.hidden)` hides only the list background; neither `.scrollEdgeEffectHidden(true, for: .top)` nor hiding the scroll view's own `NSScrollPocket` removes this floating bar.
+  Comparing runtime changes to scroll shields and `NSTableView.floatsGroupRows` showed that only disabling floating groups removed it. Inbox attaches `MacInlineListHeaders` inside group headers,
+  follows ancestors only to that table, and disables floating so headers scroll with content. It does not traverse the window or alter private system views; existing selection, hover, collapse, and row dividers remain.
+- **One background for the whole column**: Persona's `macListRow` covers system selection with `Theme.pageBackground` on every chat row; title, task entry, and empty areas were transparent, showing the window background.
+  Real-window screenshots in the default glass style show a color band too, but offscreen screenshots may render both colors alike and cannot establish that no issue exists. Clay reproduces reliably in light and dark mode. Mac `AssistantSidebar` now fills its whole column with the same token,
+  without changing row selection/hover or iOS. Check title, group headers, unselected rows, and bottom empty space together, and also inspect a style with a colored page background.

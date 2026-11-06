@@ -1,77 +1,77 @@
-# Windows 上的坑
+# Windows pitfalls
 
-改 Windows 上的 node（#1090）、在 Windows 机器上开发或测试 `personad` 之前读。设计和现状见 [windows.md](../windows.md)。
+Read this before changing the Windows node (#1090), or developing or testing `personad` on a Windows computer. See [windows.md](../windows.md) for the design and current status.
 
-## 开发环境
+## Development environment
 
-- **仓库要用 LF 检出**：Git for Windows 默认 `core.autocrlf=true`，检出的 `.go` 全是 CRLF，`gofmt -l` 报一大片，脚本、golden 文件也会对不上。
-  克隆后在这个仓库里 `git config core.autocrlf false && git config core.eol lf`，再 `git rm -q --cached -r . && git reset -q --hard` 重新检出（先提交或暂存自己的改动）。
-- **Unix socket 路径不能超过 108 个字节**：Go 的 AF_UNIX 在 Windows 上能用，但路径一长 `bind` 就报 `invalid argument`（不是「不支持」）。
-  `~/.persona/node-attach.sock` 这类路径没问题；测试里别把 socket 放在很深的临时目录下（Claude Code 的 scratchpad 就超了）。
-- **`/tmp` 不是临时目录**：`os.MkdirTemp("/tmp", …)` 在 Windows 上是当前盘符下的 `\tmp`，多半不存在。要短路径的测试按平台分文件（`orcarttest` 的 `listen_*.go`）。
+- **Check out the repository with LF endings**: Git for Windows defaults to `core.autocrlf=true`, so every checked-out `.go` file has CRLF endings. `gofmt -l` reports many files, and scripts and golden files can also fail to match.
+  After cloning, run `git config core.autocrlf false && git config core.eol lf` in this repository, then `git rm -q --cached -r . && git reset -q --hard` to check it out again (commit or stash your changes first).
+- **Unix socket paths must not exceed 108 bytes**: Go supports AF_UNIX on Windows, but a long path makes `bind` return `invalid argument` (not “unsupported”).
+  Paths such as `~/.persona/node-attach.sock` are fine; do not put test sockets deep inside temporary directories (Claude Code's scratchpad exceeded the limit).
+- **`/tmp` is not the temporary directory**: On Windows, `os.MkdirTemp("/tmp", …)` means `\tmp` on the current drive, which usually does not exist. Tests that need short paths should use platform-specific files (`listen_*.go` in `orcarttest`).
 
-## 进程和 shell
+## Processes and shells
 
-- **`bash` 可能是 WSL**：服务拿到的系统 PATH 里 `C:\Windows\System32\bash.exe` 排在 Git 前面，它会进 WSL 里执行（另一台「Linux」，看到的是那边的 claude 和 `~/.zshrc`）。
-  node 在 Windows 上跑 shell 脚本一律用 Git for Windows 的 bash（`loginShellProgram`，和 Claude Code 自己一样，认 `CLAUDE_CODE_GIT_BASH_PATH`），找不到就让命令起不来，不要退回裸的 `bash`。
-  起启动器的地方用 `interactiveShell()`：助手、Codex 助手和列启动器模型曾各自写死「没有 zsh 就 bash」，Windows 上助手的 claude 进了 WSL、
-  以「open terminal failed: not a terminal」马上退出，主对话没有任何回应、日志里也没有（#1994）。新加起 shell 的地方别再自己挑。
-- **读别的进程的环境变量要读 PEB**：没有 `/proc`、没有 `ps -E`。`procs_windows.go` 用 Toolhelp32 列进程，再对候选进程 `NtQueryInformationProcess` + `ReadProcessMemory`
-  读 `RTL_USER_PROCESS_PARAMETERS`（命令行、当前目录、环境块）。PEB 里的指针是对方进程的地址：按字节读出来、按 x/sys 的偏移取字段，
-  不要直接读进 `windows.PEB` 这种带 Go 指针字段的结构体（GC 会把对方的地址当成自己的指针）。
-- **环境变量的值里有空格**：`envVarRe` 这类按空白切的正则是给 `ps -E` 用的，`C:\Users\A B\.claude` 会被截断。Windows 上直接按名字取整个值（`pickEnv`），名字不分大小写。
-- **没有「前台进程组」和「挂起」**：Orca 宿主在 Windows 上把「父进程链上没有同一窗格的 agent 进程」的 claude / codex 当作在前台，见 [windows.md](../windows.md)「Orca」。
-- **pid 会很快复用、也不递增**：按 pid 大小排「包装在前」在 Windows 上不成立，按启动时间排；顺着父进程链找祖先时要求祖先比自己先启动。
+- **`bash` may be WSL**: In the system PATH inherited by the service, `C:\Windows\System32\bash.exe` precedes Git. It runs commands inside WSL (another “Linux” machine, with its own claude and `~/.zshrc`).
+  On Windows, node must always run shell scripts with Git for Windows bash (`loginShellProgram`, like Claude Code itself, honoring `CLAUDE_CODE_GIT_BASH_PATH`). If it cannot be found, fail to start the command; do not fall back to bare `bash`.
+  Use `interactiveShell()` wherever a launcher is started. The assistant, Codex assistant, and launcher-model listing each once hardcoded “bash if zsh is missing.” On Windows, the assistant's claude entered WSL
+  and immediately exited with “open terminal failed: not a terminal”; the main chat did not respond, and there was nothing in the logs (#1994). Do not choose a shell independently in new launch sites.
+- **Read other processes' environment variables from the PEB**: There is no `/proc` or `ps -E`. `procs_windows.go` lists processes with Toolhelp32, then uses `NtQueryInformationProcess` + `ReadProcessMemory` on candidates
+  to read `RTL_USER_PROCESS_PARAMETERS` (command line, current directory, environment block). Pointers in the PEB are addresses in the other process: read bytes and extract fields using x/sys offsets.
+  Do not read directly into a struct such as `windows.PEB` that contains Go pointer fields (the GC would treat the other process's addresses as its own pointers).
+- **Environment-variable values can contain spaces**: Whitespace-splitting regexes such as `envVarRe` are for `ps -E`; they truncate `C:\Users\A B\.claude`. On Windows, fetch the complete value by name (`pickEnv`); names are case-insensitive.
+- **There is no “foreground process group” or “suspended” state**: On Windows, the Orca host considers claude / codex foreground when its parent-process chain contains no agent process for the same pane. See [windows.md](../windows.md) (“Orca”).
+- **PIDs are reused quickly and do not increase monotonically**: Sorting by PID to put wrappers first does not work on Windows. Sort by start time; when walking the parent chain, require ancestors to have started before the current process.
 
-## 计划任务（开机自启）
+## Scheduled tasks (automatic startup)
 
-`jarvis-link install` 在 Windows 上注册计划任务（[windows.md](../windows.md)「安装和开机自启」）。都是 2026-11-04 在 Windows 11 真机上试出来的：
+`jarvis-link install` registers scheduled tasks on Windows ([windows.md](../windows.md), “Installation and automatic startup”). These findings were all tested on a physical Windows 11 machine on 2026-11-04:
 
-- **标准用户注册不了「不管是否登录都运行」的任务**：`LogonType` 用 S4U（不存密码）时 `Register-ScheduledTask` 报拒绝访问（没提权的管理员账号也一样）。
-  只能 `InteractiveToken`，跟着登录会话跑。
-- **「失败后重启」不管程序退出**：`RestartOnFailure` 只在任务起不来时重启；程序以退出码 1 结束后 4 分钟都没再起。要看护就加一个每几分钟一次的触发，
-  多实例策略 `IgnoreNew`（在跑就什么都不做）。
-- **登录触发器上的「重复」要到下次登录才开始**：刚装好、没重新登录前它不会每 5 分钟起一次。看护用单独的时间触发（`StartBoundary` 写安装那一刻），重启后照样按时触发。
-- **控制台程序会弹窗口**：用户会话里的任务起控制台程序，会给它开一个控制台窗口（默认终端是 Windows Terminal 时是 Windows Terminal 的窗口）。
-  任务改起 GUI 子系统的程序（把 PE 头的 Subsystem 从 3 改成 2 的一份副本），由它用 `CREATE_NO_WINDOW` 起控制台程序：有控制台、没窗口。
-- **默认值要改**：`ExecutionTimeLimit` 默认 72 小时，到点结束任务（写 `PT0S`）；`Priority` 默认 7 是「低于正常」（写 5）；默认用电池时不启动、拔电源就停。
-- **schtasks 的输出是系统代码页**（中文系统是 GBK），`/Query` 的状态列是本地化的字（Running / 正在运行）：只拿来显示，不解析。
-  XML 文件写成 UTF-16LE 带 BOM，用户名、路径里有中文也不会乱。
-- **结束任务只杀守护进程本身**：它起的子进程会留下来。守护进程把自己放进 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 的 Job（之后起的进程自动在里面），
-  它一没（`/End`、崩溃、被杀）子进程跟着没。
-- 跑着的 `.exe` 不能覆盖也不能删：重装前先 `/End` 任务、等 jarvis-link 放开运行锁；卸载时守护进程的文件可能要等一下才删得掉。
+- **Standard users cannot register “Run whether user is logged on or not” tasks**: With S4U `LogonType` (no stored password), `Register-ScheduledTask` returns access denied (even for an unelevated administrator account).
+  Only `InteractiveToken` works, running with the login session.
+- **“Restart on failure” does not cover program exits**: `RestartOnFailure` restarts only when the task cannot start. A program that exited with code 1 was not restarted even after 4 minutes. For supervision, add a trigger that fires every few minutes,
+  with the `IgnoreNew` multiple-instance policy (do nothing if already running).
+- **Repetition on a logon trigger starts only at the next login**: Immediately after installation, before another login, it will not start every 5 minutes. Use a separate time trigger for supervision (`StartBoundary` set to the installation time); it still fires on schedule after a restart.
+- **Console programs open windows**: A task running a console program in the user session opens a console window for it (a Windows Terminal window if Windows Terminal is the default terminal).
+  Have the task start a GUI-subsystem program instead (a copy with Subsystem in the PE header changed from 3 to 2), which starts the console program with `CREATE_NO_WINDOW`: a console, but no window.
+- **Change the defaults**: `ExecutionTimeLimit` defaults to 72 hours, after which the task ends (set `PT0S`); `Priority` defaults to 7, “below normal” (set 5); by default it will not start on battery and stops when unplugged.
+- **schtasks output uses the system code page** (GBK on a Chinese system), and the `/Query` status column is localized (Running / 正在运行, both meaning “running”): display it, but do not parse it.
+  Write XML files as UTF-16LE with a BOM so Chinese characters in usernames and paths are not corrupted.
+- **Ending a task kills only the daemon itself**: Its children survive. The daemon puts itself in a Job with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (subsequent children automatically join it),
+  so when it disappears (`/End`, a crash, or a kill), its children disappear too.
+- A running `.exe` cannot be overwritten or deleted. Before reinstalling, `/End` the task and wait for jarvis-link to release the run lock; during uninstall, the daemon file may take a moment to become deletable.
 
-## 机器监控（sysmon）
+## Machine monitoring (sysmon)
 
-`sysmon/windows.go`，口径见 [machines.md](../machines.md)。2026-11-04 在真机上试出来的：
+`sysmon/windows.go`; see [machines.md](../machines.md) for measurement definitions. Findings tested on a physical machine on 2026-11-04:
 
-- **`NtQuerySystemInformation(SystemProcessorPerformanceInformation)` 只认正好的缓冲区**：给 4096 字节它回 `STATUS_INFO_LENGTH_MISMATCH`，
-  按回的长度加大也一样，要正好「逻辑 CPU 数 × 48 字节」。别的类（页面文件）可以按回的长度加大。每核数据一开始全是空的就是这个。
-- **注册表的 ProductName 在 Windows 11 上还写着「Windows 10」**：同一个 NT 10.0 内核，按 CurrentBuild ≥ 22000 认 Windows 11。
-- **Google Drive 的 G: 是假的固定盘**：`GetDriveType` 说 `DRIVE_FIXED`、文件系统自称 FAT32、容量照抄 C 盘，还有卷 GUID；
-  只有问卷在磁盘上的区段（`IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS`，不要管理员）时露馅：磁盘 0、起点 0、长度 0。按这个排除，不按文件系统名猜。
-- **`net.Interfaces()` 一次要约 7 ms**（底下是 `GetAdaptersAddresses`），读一块网卡的计数（`GetIfEntry2Ex`）只要几十微秒：网卡列表缓存一分钟。
-- 网卡算不算看 `MIB_IF_ROW2.InterfaceAndOperStatusFlags`：第 0 位 HardwareInterface、第 1 位 FilterInterface。Tailscale（wintun）、
-  Wi-Fi Direct、蓝牙个人局域网、回环都没有 HardwareInterface。
+- **`NtQuerySystemInformation(SystemProcessorPerformanceInformation)` requires an exact-size buffer**: Given 4096 bytes, it returns `STATUS_INFO_LENGTH_MISMATCH`;
+  increasing the buffer to the returned length does not help. It must be exactly “logical CPU count × 48 bytes.” Other classes (page files) allow increasing to the returned length. This was why all per-core data was initially empty.
+- **The registry ProductName still says “Windows 10” on Windows 11**: They share the NT 10.0 kernel; identify Windows 11 by CurrentBuild ≥ 22000.
+- **Google Drive's G: is a fake fixed disk**: `GetDriveType` reports `DRIVE_FIXED`, the filesystem claims FAT32, capacity copies C:, and it even has a volume GUID.
+  Only asking for the volume's disk extents (`IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS`, no administrator privileges needed) reveals it: disk 0, offset 0, length 0. Exclude it using this, not guesses based on the filesystem name.
+- **One `net.Interfaces()` call takes about 7 ms** (using `GetAdaptersAddresses` underneath), while reading counters for one adapter (`GetIfEntry2Ex`) takes only tens of microseconds. Cache the adapter list for one minute.
+- Determine which adapters count from `MIB_IF_ROW2.InterfaceAndOperStatusFlags`: bit 0 is HardwareInterface, bit 1 is FilterInterface. Tailscale (wintun),
+  Wi-Fi Direct, Bluetooth personal-area networking, and loopback all lack HardwareInterface.
 
 ## Orca
 
-- **Windows 版 Orca 的 runtime 走命名管道**：`orca-runtime.json` 的 `transports` 是 `named-pipe`（`\\.\pipe\orca-<pid>-…`）和 `websocket`，没有 `unix`。
-  `orcart` 按平台挑传输：Windows 先 `named-pipe`（`tailscale/go-winio` 拨号）再 `unix`，其他平台只 `unix`。协议（一行一个 JSON）不变。
-- Orca 终端里的环境变量和 macOS 一样有 `ORCA_PANE_KEY` / `ORCA_AGENT_PANE`；还有 `ORCA_USER_DATA_PATH`（`%APPDATA%\orca`）。
-- `terminal.list` 的 `topologyRevisions` 键里路径分隔符混用（同一台机器上有 `C:/Users/…` 也有 `C:\Users\…`），别拿它和 `worktreePath` 直接比字符串。
+- **Orca runtime on Windows uses named pipes**: `transports` in `orca-runtime.json` contains `named-pipe` (`\\.\pipe\orca-<pid>-…`) and `websocket`, but no `unix`.
+  `orcart` selects the transport by platform: on Windows, `named-pipe` first (`tailscale/go-winio` for dialing), then `unix`; on other platforms, only `unix`. The protocol (one JSON per line) is unchanged.
+- Orca terminals have `ORCA_PANE_KEY` / `ORCA_AGENT_PANE`, just like macOS, plus `ORCA_USER_DATA_PATH` (`%APPDATA%\orca`).
+- Paths in the `topologyRevisions` keys of `terminal.list` mix separators (`C:/Users/…` and `C:\Users\…` on the same computer). Do not compare them directly to `worktreePath` as strings.
 
 ## herdr
 
-- **herdr 的 API 是命名管道，名字就是 socket 路径**：herdr 用 interprocess 的 `GenericNamespaced`，`C:\Users\<你>\AppData\Roaming\herdr\herdr.sock` 对应
-  `\\.\pipe\C:\Users\<你>\AppData\Roaming\herdr\herdr.sock`；路径本身不是文件，`os.Stat` 这个路径永远不存在，要 stat 管道名。配置目录是 `%APPDATA%\herdr`，不是 `~/.config/herdr`。
-- **从 ssh 起的 `herdr server` 随 ssh 会话一起退出**（Windows OpenSSH 关会话时结束整个作业），`Start-Process` 也一样。要常驻就用登录时启动的计划任务，跑在用户的桌面会话里。
-- **窗格默认是 PowerShell**：node 输入的命令按 POSIX shell 写（`'…'` 引号、`A=1 cmd`），PowerShell 里会被拆错。`config.toml` 的 `[terminal] default_shell` 设成 Git Bash；
-  这个键必须在 `[terminal]` 下，写在顶层时 `reload-config` 只报「unknown config key default_shell; ignoring key」。
-- **新装的 Claude Code 先出选主题的引导**：node 的 `waitReady` 一分钟等不到输入框就报「claude did not become ready」，屏幕上是主题列表。`~/.claude.json` 设 `hasCompletedOnboarding: true`，或手动跑一次。
-- **apiKeyHelper 在 Windows 上由 cmd 执行**：`cat ~/.config/…` 报「'cat' 不是内部或外部命令」；写 `type "C:\…\key"`。
-- **MinGit 没有 bash.exe**（只有 `usr\bin\sh.exe`），Git Bash 要用 PortableGit 或安装版。
-- **经 ssh 跑 PowerShell 时引号会被 cmd 再拆一遍**：长脚本用 `powershell -EncodedCommand <UTF-16LE 的 base64>`；PowerShell 5.1 给原生程序传 `-test.run=A|B` 这类参数也会拆错，套一层 `cmd /c "…"`。
-- **`signal.Ignore(os.Interrupt)` 挡不住 Ctrl+C**：Windows 上只有 `signal.Notify` 能关掉 Ctrl+C / Ctrl+Break 的默认退出（os/signal 文档）。`osproc.Exec` 用 Ignore 时，
-  控制台上一个 Ctrl+C 就把启动器以 `0xc000013a` 结束了，子进程（claude）还在、父进程没了，退出码也丢了；`TestExecSurvivesCtrlC` 盯着这个。
-- 测试程序 `xxx.test.exe` 退出后可能还在跑一会儿（子进程），scp 覆盖同名文件报 `dest open … Failure`：换个文件名或先结束进程。
+- **herdr's API is a named pipe whose name is the socket path**: herdr uses interprocess's `GenericNamespaced`; `C:\Users\<you>\AppData\Roaming\herdr\herdr.sock` maps to
+  `\\.\pipe\C:\Users\<you>\AppData\Roaming\herdr\herdr.sock`. The path itself is not a file, so `os.Stat` on it always reports missing; stat the pipe name instead. The configuration directory is `%APPDATA%\herdr`, not `~/.config/herdr`.
+- **`herdr server` started over ssh exits with the ssh session** (Windows OpenSSH ends the entire job when closing a session); `Start-Process` behaves the same way. For a persistent server, use a scheduled task triggered at login, running in the user's desktop session.
+- **Panes default to PowerShell**: node's input commands use POSIX shell syntax (`'…'` quotes, `A=1 cmd`), which PowerShell splits incorrectly. Set `[terminal] default_shell` in `config.toml` to Git Bash.
+  This key must be under `[terminal]`; at the top level, `reload-config` only reports “unknown config key default_shell; ignoring key.”
+- **A fresh Claude Code install first shows the theme-selection onboarding**: node's `waitReady` cannot find the input box within a minute and reports “claude did not become ready,” while the screen shows a theme list. Set `hasCompletedOnboarding: true` in `~/.claude.json`, or run it manually once.
+- **apiKeyHelper is executed by cmd on Windows**: `cat ~/.config/…` returns “'cat' 不是内部或外部命令” (“'cat' is not recognized as an internal or external command”); use `type "C:\…\key"`.
+- **MinGit does not contain bash.exe** (only `usr\bin\sh.exe`). For Git Bash, use PortableGit or the installed distribution.
+- **Quotes are parsed again by cmd when running PowerShell over ssh**: For long scripts, use `powershell -EncodedCommand <UTF-16LE base64>`. PowerShell 5.1 also splits arguments such as `-test.run=A|B` incorrectly when passing them to native programs; wrap them in `cmd /c "…"`.
+- **`signal.Ignore(os.Interrupt)` cannot block Ctrl+C**: On Windows, only `signal.Notify` disables the default exit behavior for Ctrl+C / Ctrl+Break (see the os/signal documentation). When `osproc.Exec` used Ignore,
+  one Ctrl+C in the console ended the launcher with `0xc000013a`; the child (claude) survived, the parent disappeared, and the exit code was lost. `TestExecSurvivesCtrlC` guards this.
+- A test program `xxx.test.exe` can keep running briefly after exit (child processes), making scp fail to overwrite it with `dest open … Failure`. Use another filename or end the process first.

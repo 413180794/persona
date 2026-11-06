@@ -1,25 +1,25 @@
-# 聊天内 Pin 消息
+# Pinned messages inside a chat
 
-验证使用 `MOCK_LARK_CHAT_PINS=1` 的隔离 mock 与 `LarkChatPinFlowTests`。不读取真实账号的 Pin、不发送真实消息、不修改真实 Pin。
+Validation uses an isolated mock with `MOCK_LARK_CHAT_PINS=1` and `LarkChatPinFlowTests`. It does not read real-account pins, send real messages, or modify real pins.
 
-场景：聊天打开不预取 Pin；列表分页、加密正文与撤回占位、权限隐藏；关闭保留聊天位置；普通消息和话题回复定位；空列表、离线保留、旧 Hub、旧飞书网关、账号切换；分页失败重试、定位失败；添加/移除确认、未知写回执只查列表不重发；最大辅助字号。
+Scenarios: no pin prefetch when opening a chat; list pagination, encrypted bodies and recalled-message placeholders, permission-based hiding; preserving chat position on close; locating regular messages and thread replies; empty lists, offline retention, old hubs, old Lark gateways, account switching; pagination-failure retry and locate failures; add/remove confirmation, checking only the list after an unknown write receipt without resending; maximum accessibility text size.
 
-2026-11-04：iPhone 18 Pro / iOS 27 模拟器，默认玻璃风格，浅色、深色各完整运行 5 个 UI 测试，均通过。每轮 16 张截图逐张检查；下表保留主要画面。已修正空占位重复文案和最大辅助字号下的头像文字溢出。
+2026-11-04: iPhone 18 Pro / iOS 27 simulator, default glass style, all 5 UI tests run in full in both light and dark mode; all passed. All 16 screenshots in each run were inspected individually; the table below retains the main views. Duplicate empty-placeholder text and avatar-text overflow at maximum accessibility text size were fixed.
 
-| 场景 | 浅色 | 深色 |
+| Scenario | Light | Dark |
 | --- | --- | --- |
-| 列表、加密摘要、撤回占位与权限 | [截图](light-list.png) | [截图](dark-list.png) |
-| 定位话题回复 | [截图](light-thread-target.png) | [截图](dark-thread-target.png) |
-| 添加确认 | [截图](light-add-confirm.png) | [截图](dark-add-confirm.png) |
-| 写入结果未知，不自动重发 | [截图](light-lost-receipt.png) | [截图](dark-lost-receipt.png) |
-| Hub 缺少接口 | [截图](light-upgrade-hub.png) | [截图](dark-upgrade-hub.png) |
-| 飞书网关缺少接口 | [截图](light-upgrade-gateway.png) | [截图](dark-upgrade-gateway.png) |
-| 最大辅助字号 | [截图](light-large.png) | [截图](dark-large.png) |
+| List, encrypted summaries, recalled-message placeholders, and permissions | [Screenshot](light-list.png) | [Screenshot](dark-list.png) |
+| Locate a thread reply | [Screenshot](light-thread-target.png) | [Screenshot](dark-thread-target.png) |
+| Add confirmation | [Screenshot](light-add-confirm.png) | [Screenshot](dark-add-confirm.png) |
+| Unknown write result, no automatic resend | [Screenshot](light-lost-receipt.png) | [Screenshot](dark-lost-receipt.png) |
+| Hub missing the API | [Screenshot](light-upgrade-hub.png) | [Screenshot](dark-upgrade-hub.png) |
+| Lark gateway missing the API | [Screenshot](light-upgrade-gateway.png) | [Screenshot](dark-upgrade-gateway.png) |
+| Maximum accessibility text size | [Screenshot](light-large.png) | [Screenshot](dark-large.png) |
 
-同轮还验证了空列表、移除确认、普通聊天定位、关闭后滚动位置不变、自动分页、分页失败重试、离线保留旧列表、账号切换清空、定位失败保留当前聊天。
+The same round also verified empty lists, remove confirmation, locating regular chat messages, unchanged scroll position after closing, automatic pagination, pagination-failure retry, retaining the old list offline, clearing on account switch, and retaining the current chat after a locate failure.
 
-模型测试覆盖分页去重、游标循环、完整页原子替换、实时刷新合并、账号隔离、页面关闭后的迟到结果、未知写回执不重试和 OLK 正文编码脱敏。服务端测试覆盖角色权限、写前权限复核、Pin/消息/会话关联、账号切换、no-store、正常/话题定位以及资源不存在与旧接口的区别。
+Model tests cover pagination deduplication, cursor loops, atomic replacement of complete pages, merging live refreshes, account isolation, late results after closing the page, no retry after an unknown write receipt, and redaction of OLK body encodings. Server tests cover role permissions, permission rechecks before writes, pin/message/chat associations, account switching, no-store, regular/thread location, and the distinction between missing resources and old APIs.
 
-复现：用 `MOCK_LARK_CHAT_PINS=1` 启动 `scripts/mock/mock_hub.py`，将 `TEST_RUNNER_JARVIS_MOCK_HUB` 指向该隔离实例，再运行 `PersonaUITests/LarkChatPinFlowTests`。可用 `TEST_RUNNER_JARVIS_SHOTS` 指定截图目录；使用 `simctl ui <模拟器> appearance light|dark` 分别运行。
+To reproduce: start `scripts/mock/mock_hub.py` with `MOCK_LARK_CHAT_PINS=1`, point `TEST_RUNNER_JARVIS_MOCK_HUB` to that isolated instance, then run `PersonaUITests/LarkChatPinFlowTests`. Set `TEST_RUNNER_JARVIS_SHOTS` to choose a screenshot directory; run separately with `simctl ui <simulator> appearance light|dark`.
 
-飞书网关读取聊天 Pin 会清除该聊天的未读 Pin 标记，因此真实账号未用这条接口做冒烟；真实消息、Pin 写入及已读行为未执行。本目录均为合成数据，不包含真实聊天内容。
+Reading chat pins through the Lark gateway clears that chat's unread-pin marker, so this API was not smoke-tested with a real account. No real messages, pin writes, or read-status actions were performed. Everything in this directory is synthetic data, with no real chat content.
