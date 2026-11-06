@@ -39,6 +39,7 @@ const linkManagerWait = 5 * time.Second
 type relayState struct {
 	mu      sync.Mutex
 	pending map[string]chan *relayTaken
+	owner   map[string]string // pending id → the manager it was handed to (only it may take it)
 	links   map[*relayLink]struct{}
 }
 
@@ -239,12 +240,12 @@ func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire
 // handToManager has the manager take a connection the hub holds: it dials the relay with the id and the hub waits
 // for it.
 func (h *Hub) handToManager(ctx context.Context, a devicewire.Accept) (*relayTaken, error) {
-	return h.handToManagerVia(ctx, devicewire.MethodAccept, &a)
+	return h.handToManagerVia(ctx, devicesOwner, devicewire.MethodAccept, &a)
 }
 
 // handToManagerVia is handToManager with the manager's method that takes it: the devices' (devices.accept, a) or the
-// extensions' relayed requests (extensions.accept, a nil: only the id).
-func (h *Hub) handToManagerVia(ctx context.Context, method string, a *devicewire.Accept) (*relayTaken, error) {
+// extensions' relayed requests (extensions.accept, a nil: only the id), handed to manager to.
+func (h *Hub) handToManagerVia(ctx context.Context, to, method string, a *devicewire.Accept) (*relayTaken, error) {
 	rs := &h.relay
 	id := randomHex(12)
 	ch := make(chan *relayTaken, 1)
@@ -253,6 +254,10 @@ func (h *Hub) handToManagerVia(ctx context.Context, method string, a *devicewire
 		rs.pending = map[string]chan *relayTaken{}
 	}
 	rs.pending[id] = ch
+	if rs.owner == nil {
+		rs.owner = map[string]string{}
+	}
+	rs.owner[id] = to
 	rs.mu.Unlock()
 	cctx, cancel := context.WithTimeout(ctx, relayWait)
 	defer cancel()
@@ -261,7 +266,7 @@ func (h *Hub) handToManagerVia(ctx context.Context, method string, a *devicewire
 		a.ID = id
 		params = *a
 	}
-	err := h.callBus(cctx, devicesOwner, method, params, nil)
+	err := h.callBus(cctx, to, method, params, nil)
 	if err == nil {
 		select {
 		case t := <-ch:
@@ -274,6 +279,7 @@ func (h *Hub) handToManagerVia(ctx context.Context, method string, a *devicewire
 	// handshake is not waited for under it).
 	rs.mu.Lock()
 	delete(rs.pending, id)
+	delete(rs.owner, id)
 	var late *relayTaken
 	select {
 	case late = <-ch:
@@ -296,8 +302,10 @@ func (h *Hub) serveRelay(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if ident.ID != devicesOwner {
-		writeErr(w, http.StatusForbidden, errors.New("only the manager that carries the machines relays them"))
+	q := r.URL.Query()
+	rs := &h.relay
+	if ident.ID != h.relayOwner(q) {
+		writeErr(w, http.StatusForbidden, errors.New("only the manager it is for relays it"))
 		return
 	}
 	if !h.enterWS() {
@@ -305,12 +313,10 @@ func (h *Hub) serveRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.wsHandlers.Done()
-	q := r.URL.Query()
 	if hub := q.Get("hub"); hub != "" {
 		h.relayThroughHub(w, r, hub, q.Get("machine"))
 		return
 	}
-	rs := &h.relay
 	id := q.Get("id")
 	rs.mu.Lock()
 	ch := rs.pending[id]
@@ -329,6 +335,7 @@ func (h *Hub) serveRelay(w http.ResponseWriter, r *http.Request) {
 	delivered := rs.pending[id] == ch
 	if delivered {
 		delete(rs.pending, id)
+		delete(rs.owner, id)
 		ch <- t // buffered: one delivery per id
 	}
 	rs.mu.Unlock()
@@ -337,6 +344,22 @@ func (h *Hub) serveRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	<-t.done
+}
+
+// relayOwner is the manager a relay request (serveRelay's query) is for: the machine's for a node stream through
+// another hub, the one it was handed to for a connection the hub holds (the carrier of hub.json's machines for an
+// id it does not know: it answers 404).
+func (h *Hub) relayOwner(q url.Values) string {
+	if q.Get("hub") != "" {
+		return h.machineOwner(q.Get("machine"))
+	}
+	rs := &h.relay
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	if o, ok := rs.owner[q.Get("id")]; ok {
+		return o
+	}
+	return devicesOwner
 }
 
 // relayThroughHub opens a node stream through hub of the mesh for the manager and copies it to the relay.

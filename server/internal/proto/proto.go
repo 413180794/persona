@@ -15,7 +15,9 @@ import (
 )
 
 type Machine struct {
-	ID      string `json:"id"`
+	ID string `json:"id"`
+	// Manager is the manager it belongs to (docs/managers.md「归属」); the hub stamps it on what it sends the apps.
+	Manager string `json:"manager,omitempty"`
 	Name    string `json:"name"`
 	Kind    string `json:"kind"` // local | ssh | tailcat | link
 	Icon    string `json:"icon"` // server | laptop | desktop
@@ -679,6 +681,8 @@ const (
 )
 
 type Session struct {
+	// Manager is the manager it belongs to (docs/managers.md「归属」); the hub stamps it on what it sends the apps.
+	Manager          string               `json:"manager,omitempty"`
 	MachineID        string               `json:"machine_id"`
 	SessionID        string               `json:"session_id"`
 	SourceKind       string               `json:"source_kind,omitempty"`
@@ -1201,6 +1205,8 @@ type Question struct {
 }
 
 type Interaction struct {
+	// Manager is the manager it belongs to (docs/managers.md「归属」); the hub stamps it on what it sends the apps.
+	Manager         string          `json:"manager,omitempty"`
 	ID              string          `json:"id"`
 	MachineID       string          `json:"machine_id"`
 	SessionID       string          `json:"session_id"`

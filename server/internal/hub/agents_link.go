@@ -49,8 +49,11 @@ var managerStartWait = 60 * time.Second // after the hub started, for a manager 
 
 // waitManager waits, within ctx (less a few seconds for the call that follows), for the manager to be connected,
 // only while it has not connected since the hub started; false when it is not.
-func (h *Hub) waitManager(ctx context.Context) bool {
-	if h.busConnOf(assistantwire.AssistantID) != nil {
+func (h *Hub) waitManager(ctx context.Context) bool { return h.waitManagerOf(ctx, h.defaultOwner(ctx)) }
+
+// waitManagerOf is waitManager for manager id.
+func (h *Hub) waitManagerOf(ctx context.Context, id string) bool {
+	if h.busConnOf(id) != nil {
 		return true
 	}
 	aw := &h.agentWork
@@ -70,11 +73,11 @@ func (h *Hub) waitManager(ctx context.Context) bool {
 	}
 	for time.Now().Before(until) && ctx.Err() == nil {
 		time.Sleep(100 * time.Millisecond)
-		if h.busConnOf(assistantwire.AssistantID) != nil {
+		if h.busConnOf(id) != nil {
 			return true
 		}
 	}
-	return h.busConnOf(assistantwire.AssistantID) != nil
+	return h.busConnOf(id) != nil
 }
 
 // managerConnected: the manager's handshake went through. A build other than the hub's may not split the Agents
@@ -99,8 +102,8 @@ func (h *Hub) agentStartParams(ctx context.Context, m *Machine, params map[strin
 		Params map[string]any `json:"params"`
 	}
 	err := errBusOffline
-	if h.waitManager(ctx) {
-		err = h.asst().call(ctx, assistantwire.MethodAgentStartParams, assistantwire.AgentStartParams{MachineID: m.cfg.ID,
+	if owner := h.machineOwner(m.cfg.ID); h.waitManagerOf(ctx, owner) {
+		err = h.asstOf(owner).call(ctx, assistantwire.MethodAgentStartParams, assistantwire.AgentStartParams{MachineID: m.cfg.ID,
 			Params: params, NameFrom: nameFrom}, &res)
 	}
 	var re *rpc.Error
@@ -134,8 +137,8 @@ func (h *Hub) applyResumeLauncher(ctx context.Context, m *Machine, sid string, p
 		Params map[string]any `json:"params"`
 	}
 	err := errBusOffline
-	if h.waitManager(ctx) {
-		err = h.asst().call(ctx, assistantwire.MethodAgentResumeParams, assistantwire.AgentResumeParams{MachineID: m.cfg.ID,
+	if owner := h.sessionOwner(m.cfg.ID, sid); h.waitManagerOf(ctx, owner) {
+		err = h.asstOf(owner).call(ctx, assistantwire.MethodAgentResumeParams, assistantwire.AgentResumeParams{MachineID: m.cfg.ID,
 			SessionID: sid, Params: map[string]any{}}, &res)
 	}
 	if err != nil {

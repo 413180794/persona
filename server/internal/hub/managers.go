@@ -147,6 +147,7 @@ func (h *Hub) builtinManager(id string) bool {
 // roster changed: they read GET /api/v1/managers again. Not in the event log: an app that reconnects reads the list
 // anyway.
 func (h *Hub) managersChanged() {
+	h.ownersChanged() // the default may be another one now (ownership.go)
 	b := []byte(`{"type":"managers"}`)
 	h.mu.Lock()
 	defer h.mu.Unlock()

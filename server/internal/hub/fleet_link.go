@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -51,11 +52,12 @@ func init() {
 		}
 		h.takeFleetSessions(p)
 	})
-	handleBusEvent(assistantwire.EventFleetInteraction, func(h *Hub, _ *busConn, params json.RawMessage) {
+	handleBusEvent(assistantwire.EventFleetInteraction, func(h *Hub, c *busConn, params json.RawMessage) {
 		var p assistantwire.FleetInteraction
 		if json.Unmarshal(params, &p) != nil || p.Interaction.ID == "" {
 			return
 		}
+		p.Interaction.Manager = c.managerID() // its manager's (ownership.go)
 		f := &h.reported
 		f.mu.Lock()
 		if f.interactions == nil {
@@ -65,13 +67,17 @@ func init() {
 		f.mu.Unlock()
 		h.broadcast(map[string]any{"type": "interaction", "interaction": p.Interaction})
 	})
-	handleBusEvent(assistantwire.EventFleetResolved, func(h *Hub, _ *busConn, params json.RawMessage) {
+	handleBusEvent(assistantwire.EventFleetResolved, func(h *Hub, c *busConn, params json.RawMessage) {
 		var p assistantwire.FleetResolved
 		if json.Unmarshal(params, &p) != nil || p.ID == "" {
 			return
 		}
 		f := &h.reported
 		f.mu.Lock()
+		if ix, ok := f.interactions[p.ID]; ok && ix.Manager != c.managerID() {
+			f.mu.Unlock()
+			return // another manager's
+		}
 		delete(f.interactions, p.ID)
 		f.mu.Unlock()
 		event := map[string]any{"type": "interaction_resolved", "id": p.ID}
@@ -86,12 +92,12 @@ func init() {
 		}
 		h.broadcast(event)
 	})
-	handleBusEvent(assistantwire.EventFleetInteractions, func(h *Hub, _ *busConn, params json.RawMessage) {
+	handleBusEvent(assistantwire.EventFleetInteractions, func(h *Hub, c *busConn, params json.RawMessage) {
 		var p assistantwire.FleetInteractions
 		if json.Unmarshal(params, &p) != nil {
 			return
 		}
-		h.takeFleetInteractions(p.Interactions)
+		h.takeFleetInteractionsFrom(c.managerID(), p.Interactions)
 	})
 	handleBusEvent(assistantwire.EventFleetLive, func(h *Hub, _ *busConn, params json.RawMessage) {
 		var p assistantwire.FleetLive
@@ -130,17 +136,35 @@ func (h *Hub) takeFleetSessions(p assistantwire.FleetSessions) {
 	h.broadcastSessions(m, h.decorated(m))
 }
 
-// takeFleetInteractions replaces the pending interactions with what a manager that (re)connected has: those gone
-// are over for the apps, the others are sent as they are.
+// takeFleetInteractions is takeFleetInteractionsFrom the assistant the hub starts.
 func (h *Hub) takeFleetInteractions(list []proto.Interaction) {
+	h.takeFleetInteractionsFrom(assistantwire.AssistantID, list)
+}
+
+// takeFleetInteractionsFrom replaces manager owner's pending interactions with what it has now that it
+// (re)connected: those gone are over for the apps, the others are sent as they are. The other managers' stay.
+func (h *Hub) takeFleetInteractionsFrom(owner string, list []proto.Interaction) {
 	f := &h.reported
+	list = slices.Clone(list)
 	now := make(map[string]proto.Interaction, len(list))
-	for _, ix := range list {
-		now[ix.ID] = ix
+	for i := range list {
+		list[i].Manager = owner
+		now[list[i].ID] = list[i]
 	}
 	f.mu.Lock()
-	old := f.interactions
-	f.interactions = now
+	old := map[string]proto.Interaction{}
+	all := make(map[string]proto.Interaction, len(f.interactions)+len(now))
+	for id, ix := range f.interactions {
+		if ix.Manager == owner || ix.Manager == "" {
+			old[id] = ix
+		} else {
+			all[id] = ix
+		}
+	}
+	for id, ix := range now {
+		all[id] = ix
+	}
+	f.interactions = all
 	f.mu.Unlock()
 	for id := range old {
 		if _, ok := now[id]; !ok {
@@ -162,12 +186,28 @@ func sameJSON(a, b any) bool {
 
 // decorated is a machine's sessions as the apps get them: the manager's last list.
 func (h *Hub) decorated(m *Machine) []proto.Session {
-	return m.sessionList()
+	list := m.sessionList()
+	h.stampSessions(m, list)
+	return list
+}
+
+// stampSessions puts on each of m's sessions the manager it belongs to (ownership.go).
+func (h *Hub) stampSessions(m *Machine, list []proto.Session) {
+	owner := m.ownerOrCarrier()
+	for i := range list {
+		list[i].Manager = cmp.Or(h.conversationOwner(list[i].SessionID), owner)
+	}
 }
 
 // decoratedSession is one of m's sessions as the apps get it.
 func (h *Hub) decoratedSession(m *Machine, sid string) (proto.Session, bool) {
-	return m.session(sid)
+	s, ok := m.session(sid)
+	if ok {
+		one := []proto.Session{s}
+		h.stampSessions(m, one)
+		s = one[0]
+	}
+	return s, ok
 }
 
 // awaitListed waits a little (2 s at most) for the manager's list of m to have session sid: a session just started
@@ -236,7 +276,7 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 		return h.askVia(ctx, ix)
 	}
 	var r proto.Resolution
-	if err := h.asst().call(ctx, assistantwire.MethodFleetAsk, map[string]any{"interaction": ix}, &r); err != nil {
+	if err := h.asstOf(h.machineOwner(ix.MachineID)).call(ctx, assistantwire.MethodFleetAsk, map[string]any{"interaction": ix}, &r); err != nil {
 		h.logf("[%s] ask %s: %v", ix.MachineID, ix.ToolName, err)
 		return proto.Resolution{Dismiss: true}, nil
 	}
@@ -264,7 +304,7 @@ func (h *Hub) fleetClientsChanged() {
 	f.elicitation, f.clientsSent = el, true
 	f.mu.Unlock()
 	if !same {
-		if err := h.notifyBus(assistantwire.AssistantID, assistantwire.EventClients, assistantwire.Clients{Elicitation: el}); err != nil {
+		if err := h.notifyManagers(assistantwire.EventClients, assistantwire.Clients{Elicitation: el}); err != nil {
 			f.mu.Lock()
 			f.clientsSent = false
 			f.mu.Unlock()
@@ -283,12 +323,12 @@ func (h *Hub) fleetConnected() {
 
 // markSeen tells the manager the user looked at a session (an app's WebSocket seen).
 func (h *Hub) markSeen(machine, session string) {
-	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventSeen, assistantwire.FleetSeen{MachineID: machine, SessionID: session})
+	_ = h.notifyBus(h.sessionOwner(machine, session), assistantwire.EventSeen, assistantwire.FleetSeen{MachineID: machine, SessionID: session})
 }
 
 // mutesChanged tells the manager the muted spaces / agents changed (settings mutes).
 func (h *Hub) mutesChanged() {
-	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventMutes, map[string]any{})
+	_ = h.notifyManagers(assistantwire.EventMutes, map[string]any{})
 }
 
 // fleetRoutesRelayed relays the apps' requests on the manager's routes on the interactions and the sessions' states
@@ -311,7 +351,7 @@ func (h *Hub) fleetRoutesRelayed(api *http.ServeMux) {
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
-		h.forwardHTTP(w, r, assistantwire.AssistantID)
+		h.forwardOwned(w, r, h.byInteraction)
 	}))
 	// 改答: a question the assistant answered gets the user's answer (assistant/fleet_delegate.go); a device that may
 	// only answer cards does not send agents messages.
@@ -320,7 +360,7 @@ func (h *Hub) fleetRoutesRelayed(api *http.ServeMux) {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only answer with a card's own choices"))
 			return
 		}
-		h.forwardHTTP(w, r, assistantwire.AssistantID)
+		h.forwardOwned(w, r, h.byRequest) // answered already: no longer pending, the request names its manager
 	})
 	api.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
 		if h.requestHasElicitation(r) {
@@ -328,10 +368,10 @@ func (h *Hub) fleetRoutesRelayed(api *http.ServeMux) {
 		} else {
 			r.Header.Del(assistantwire.ElicitationHeader)
 		}
-		h.forwardHTTP(w, r, assistantwire.AssistantID)
+		h.forwardOwned(w, r, h.byRequest)
 	})
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/seen", h.withMachine(func(w http.ResponseWriter, r *http.Request, _ *Machine) {
-		h.forwardHTTP(w, r, assistantwire.AssistantID)
+		h.forwardOwned(w, r, h.bySession)
 	}))
 }
 

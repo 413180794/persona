@@ -19,17 +19,27 @@ import (
 // (assistant_in_doubt: it may have gone out; asked again, the manager's send id has the hub send it once:
 // sendInboxOnce).
 func (h *Hub) inboxRoutesRelayed(api *http.ServeMux) {
-	relay := func(w http.ResponseWriter, r *http.Request) { h.forwardHTTP(w, r, assistantwire.AssistantID) }
+	// An item is its manager's: the request names it (the manager its list stamped on it), else the default.
+	relay := func(w http.ResponseWriter, r *http.Request) { h.forwardOwned(w, r, h.byRequest) }
 	for _, pattern := range assistantwire.InboxRoutes {
+		if key, ok := mergedLists[pattern]; ok { // the list: every manager's items
+			api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.mergeList(w, r, key, h.forwardHTTP) })
+			continue
+		}
 		if pattern == "POST /api/v1/inbox/{id}/reply" {
 			receipt := h.withReplyReceipt("inbox_reply", func(w http.ResponseWriter, r *http.Request) {
-				h.forwardSend(w, r, assistantwire.AssistantID)
+				h.forwardSend(w, r, managerOfContext(r))
 			})
 			api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 				if answerOnly(r) && !answerMayReply(w, r) {
 					return
 				}
-				if h.busConnOf(assistantwire.AssistantID) == nil {
+				id, ok := h.owner(w, r, h.byRequest)
+				if !ok {
+					return
+				}
+				r = withManager(r, id)
+				if h.busConnOf(id) == nil {
 					writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
 					return
 				}

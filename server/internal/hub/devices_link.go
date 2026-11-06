@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -56,8 +57,9 @@ type devicesState struct {
 	up        chan struct{}
 	upOpen    bool
 	warmUntil time.Time
-	// fresh: the manager's connection is new; at its first report the hub asks it to watch what the apps watch.
-	fresh bool
+	// fresh: the manager's connection is new (by manager); at its first report the hub asks it to watch what the
+	// apps watch.
+	fresh map[string]bool
 	// sent is the config last handed over; due: a devices.config is to go out.
 	sent    []byte
 	due     bool
@@ -75,7 +77,7 @@ func init() {
 			h.logf("bus: [%s] %s: %v", c.ident.ID, devicewire.EventState, err)
 			return
 		}
-		h.applyDeviceStates(st)
+		h.applyDeviceStatesFrom(c.managerID(), st)
 	})
 	handleBusEvent(devicewire.EventNode, func(h *Hub, _ *busConn, params json.RawMessage) {
 		var ev devicewire.NodeEvent
@@ -528,8 +530,13 @@ func (h *Hub) awaitManager(ctx context.Context, limit time.Duration) bool {
 	return h.waitDevices(ctx) == nil
 }
 
-// applyDeviceStates takes devices.state: every machine as the manager has it, in the apps' order.
-func (h *Hub) applyDeviceStates(st devicewire.States) {
+// applyDeviceStates is applyDeviceStatesFrom the manager that carries hub.json's machines.
+func (h *Hub) applyDeviceStates(st devicewire.States) { h.applyDeviceStatesFrom(devicesOwner, st) }
+
+// applyDeviceStatesFrom takes devices.state from manager owner: every machine it carries, in the apps' order. The
+// other managers' machines stay as they were; a machine another manager reported before is owner's now
+// (ownership.go). The apps get the managers' machines grouped: devicesOwner's first, then the others' by id.
+func (h *Hub) applyDeviceStatesFrom(owner string, st devicewire.States) {
 	now := time.Now()
 	type change struct {
 		m              *Machine
@@ -554,6 +561,7 @@ func (h *Hub) applyDeviceStates(st devicewire.States) {
 			m.managed, m.peer = true, &busNode{h: h, id: id, done: make(chan struct{})}
 		}
 		m.mu.Lock()
+		m.owner = owner
 		was := m.online || m.warmLocked(now)
 		wasConn, wasAt := m.connected, m.connectedAt
 		snap := s.Machine
@@ -585,29 +593,60 @@ func (h *Hub) applyDeviceStates(st devicewire.States) {
 		changes = append(changes, c)
 	}
 	var gone []*Machine
-	for id, m := range prev {
-		if byID[id] == nil && m.managed {
+	groups := map[string][]*Machine{owner: order}
+	var unmanaged []*Machine
+	for _, m := range h.machines { // the previous order
+		if byID[m.cfg.ID] != nil {
+			continue
+		}
+		if !m.managed {
+			unmanaged = append(unmanaged, m) // a test's machine stays
+			continue
+		}
+		if o := m.ownerOrCarrier(); o != owner {
+			groups[o] = append(groups[o], m)
+		} else {
 			gone = append(gone, m)
-		} else if byID[id] == nil {
-			byID[id], order = m, append(order, m) // a test's machine stays
 		}
 	}
-	h.machines, h.byID = order, byID
+	for id, m := range prev { // one not in the order (none, but a map is the truth)
+		if byID[id] == nil && !slices.Contains(h.machines, m) && !m.managed {
+			unmanaged = append(unmanaged, m)
+		}
+	}
+	owners := make([]string, 0, len(groups))
+	for o := range groups {
+		if o != devicesOwner {
+			owners = append(owners, o)
+		}
+	}
+	sort.Strings(owners)
+	all := slices.Clone(groups[devicesOwner])
+	for _, o := range owners {
+		all = append(all, groups[o]...)
+	}
+	all = append(all, unmanaged...)
+	for _, m := range all {
+		byID[m.cfg.ID] = m
+	}
+	h.machines, h.byID = all, byID
 	h.fleet.mu.Unlock()
 
 	d := &h.devices
 	d.mu.Lock()
-	d.absorbed, d.recEntries = st.Absorbed, st.Entries
-	if d.up == nil {
-		d.up = make(chan struct{})
+	if owner == devicesOwner { // hub.json's machines, the hub's start: the carrier's
+		d.absorbed, d.recEntries = st.Absorbed, st.Entries
+		if d.up == nil {
+			d.up = make(chan struct{})
+		}
+		if !d.upOpen {
+			close(d.up)
+			d.upOpen = true
+		}
+		d.warmUntil = time.Time{} // the hub's start is over: from now on a call without the manager fails at once
 	}
-	if !d.upOpen {
-		close(d.up)
-		d.upOpen = true
-	}
-	fresh := d.fresh
-	d.fresh = false
-	d.warmUntil = time.Time{} // the hub's start is over: from now on a call without the manager fails at once
+	fresh := d.fresh[owner]
+	delete(d.fresh, owner)
 	d.mu.Unlock()
 	// The rejected computers the manager let go are not kept out any more (machine_trust.go).
 	h.fleetLeft(func(id string) bool { return byID[id] != nil || st.Absorbed[id] != "" })
@@ -662,15 +701,18 @@ func (h *Hub) mirrorConfig(s devicewire.State) MachineConfig {
 // devicesConnected: the manager that carries the machines connected (its handshake). The port streams and terminals
 // that ran through its last connection ended with it, as they do when a node's own connection ends (the manager ends
 // them on the nodes: internal/devices hubopen.go); a terminal whose first watch waits for this connection stays.
-func (h *Hub) devicesConnected() {
+func (h *Hub) devicesConnected(owner string) {
 	d := &h.devices
 	d.mu.Lock()
-	d.fresh = true
+	if d.fresh == nil {
+		d.fresh = map[string]bool{}
+	}
+	d.fresh[owner] = true
 	d.mu.Unlock()
 	for _, m := range h.machinesNow() {
 		m.mu.Lock()
 		mux := m.streams
-		if !m.managed || mux == nil {
+		if !m.managed || mux == nil || cmp.Or(m.owner, devicesOwner) != owner {
 			m.mu.Unlock()
 			continue
 		}
@@ -688,7 +730,7 @@ func (h *Hub) devicesConnected() {
 	}
 	t.mu.Unlock()
 	for k, r := range ran {
-		if m := h.machineByID(k[0]); m != nil && m.managed {
+		if m := h.machineByID(k[0]); m != nil && m.managed && m.ownerOrCarrier() == owner {
 			h.terminalEnded(k[0], k[1], errAssistantOffline.Error(), r)
 		}
 	}
@@ -741,10 +783,10 @@ func (h *Hub) connectionEnded(m *Machine, why string) {
 
 // devicesGone: the manager that carries the machines disconnected. The machines show offline (why: it is not
 // there), their terminals and streams close, their questions end; when it is back it reports them again.
-func (h *Hub) devicesGone() {
+func (h *Hub) devicesGone(owner string) {
 	d := &h.devices
 	d.mu.Lock()
-	if d.upOpen {
+	if d.upOpen && owner == devicesOwner {
 		d.up = make(chan struct{})
 		d.upOpen = false
 	}
@@ -752,13 +794,13 @@ func (h *Hub) devicesGone() {
 	// The hub's own stop (the manager gets its SIGTERM at the same time): the next hub shows them as they were
 	// (startDevices). A moment's wait lets the hub's stop begin first.
 	time.Sleep(500 * time.Millisecond)
-	if h.stopping.Load() || h.devicesUp() {
+	if h.stopping.Load() || h.busConnOf(owner) != nil || owner == devicesOwner && h.devicesUp() {
 		return
 	}
 	var off []*Machine
 	for _, m := range h.machinesNow() {
 		m.mu.Lock()
-		if !m.managed {
+		if !m.managed || cmp.Or(m.owner, devicesOwner) != owner {
 			m.mu.Unlock()
 			continue
 		}
@@ -782,7 +824,7 @@ func (h *Hub) devicesGone() {
 		h.connectionEnded(m, i18n.Localize(errAssistantOffline, h.userLang()))
 	}
 	if len(off) > 0 {
-		h.logf("devices: the manager is gone: %d machines offline until it is back", len(off))
+		h.logf("devices: [%s] the manager is gone: %d machines offline until it is back", owner, len(off))
 		h.broadcastMachines()
 		for _, m := range off {
 			h.sessionsChanged(m)
@@ -825,8 +867,11 @@ type busNode struct {
 }
 
 func (b *busNode) Call(ctx context.Context, method string, params, out any) error {
-	if err := b.h.waitDevices(ctx); err != nil {
-		return fmt.Errorf("%s: %w", b.id, err)
+	owner := b.h.machineOwner(b.id)
+	if owner == devicesOwner {
+		if err := b.h.waitDevices(ctx); err != nil {
+			return fmt.Errorf("%s: %w", b.id, err)
+		}
 	}
 	raw, err := json.Marshal(params)
 	if err != nil {
@@ -837,7 +882,7 @@ func (b *busNode) Call(ctx context.Context, method string, params, out any) erro
 		p.TimeoutMS = managerTimeout(time.Until(dl)).Milliseconds()
 	}
 	var res json.RawMessage
-	if err := b.h.callBusAsIs(ctx, devicesOwner, devicewire.MethodCall, p, &res); err != nil {
+	if err := b.h.callBusAsIs(ctx, owner, devicewire.MethodCall, p, &res); err != nil {
 		return deviceError(b.id, err)
 	}
 	if out != nil && len(res) > 0 {
@@ -858,7 +903,7 @@ func (b *busNode) Notify(event string, params any) error {
 	if err != nil {
 		return err
 	}
-	if err := b.h.notifyBus(devicesOwner, devicewire.EventNotify, devicewire.NodeEvent{MachineID: b.id, Event: event, Params: raw}); err != nil {
+	if err := b.h.notifyBus(b.h.machineOwner(b.id), devicewire.EventNotify, devicewire.NodeEvent{MachineID: b.id, Event: event, Params: raw}); err != nil {
 		return fmt.Errorf("%s: %w", b.id, errManagerOffline)
 	}
 	return nil
@@ -1008,9 +1053,13 @@ func (h *Hub) linkPingTimes() (every, timeout time.Duration, set bool) {
 // the token usage) to the manager, which keeps them.
 func (h *Hub) metricsRoutesRelayed(api *http.ServeMux) {
 	for _, pattern := range devicewire.MetricsRoutes {
+		by := h.byRequest
+		if strings.Contains(pattern, "/machines/{id}/") {
+			by = h.byMachine
+		}
 		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			_ = h.waitDevices(r.Context()) // the hub just started: the manager is on its way (bounded); else 503 at once
-			h.forwardHTTP(w, r, devicesOwner)
+			h.forwardOwned(w, r, by)
 		})
 	}
 }
@@ -1022,7 +1071,7 @@ func (h *Hub) usageRoutesRelayed(api *http.ServeMux) {
 	for _, pattern := range devicewire.UsageRoutes {
 		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			_ = h.waitDevices(r.Context()) // the hub just started: the manager is on its way (bounded); else 503 at once
-			h.forwardHTTP(w, r, devicesOwner)
+			h.forwardOwned(w, r, h.byRequest)
 		})
 	}
 }
@@ -1050,7 +1099,7 @@ func (h *Hub) deviceRoutesRelayed(api *http.ServeMux) {
 				return
 			}
 			_ = h.waitDevices(r.Context()) // the hub just started: the manager is on its way (bounded); else 503 at once
-			h.forwardHTTP(w, r, devicesOwner)
+			h.forwardOwned(w, r, h.byMachine)
 		})
 	}
 }

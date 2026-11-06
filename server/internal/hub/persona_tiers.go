@@ -117,7 +117,7 @@ func (h *Hub) personaLogin(ctx context.Context) (login string, known bool) {
 		Login string `json:"login"`
 		Known bool   `json:"known"`
 	}
-	if h.busConnOf(devicesOwner) == nil || h.extCall(ctx, extwire.HubGitHubLogin, map[string]any{}, &res) != nil {
+	if h.busConnOf(h.defaultOwner(ctx)) == nil || h.extCall(ctx, extwire.HubGitHubLogin, map[string]any{}, &res) != nil {
 		return "", false
 	}
 	return res.Login, res.Known

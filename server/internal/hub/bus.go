@@ -350,8 +350,8 @@ func (h *Hub) busAccept(ctx context.Context, c *busConn, p busPresence) error {
 	if c.ident.ID == assistantwire.AssistantID {
 		go h.assistantConnected()
 	}
-	if c.ident.ID == devicesOwner {
-		h.devicesConnected() // its first report: the sessions the apps watch, watched again (devices_link.go)
+	if c.ident.Role == bus.RoleManager {
+		h.devicesConnected(c.ident.ID) // its first report: the sessions the apps watch, watched again (devices_link.go)
 	}
 	return nil
 }
@@ -380,8 +380,8 @@ func (h *Hub) busEnded(c *busConn) {
 	h.bus.mu.Unlock()
 	if current {
 		h.logf("bus: [%s] disconnected", c.ident.ID)
-		if c.ident.ID == devicesOwner {
-			go h.devicesGone() // its machines (devices_link.go)
+		if c.ident.Role == bus.RoleManager {
+			go h.devicesGone(c.ident.ID) // its machines (devices_link.go)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

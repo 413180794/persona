@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -27,7 +29,8 @@ import (
 // assistantState is what the assistant last reported and told the hub.
 type assistantState struct {
 	mu       sync.RWMutex
-	got      bool // a snapshot came in
+	got      bool   // a snapshot came in
+	from     string // the manager that sent it (ownership.go: its conversations are its)
 	partial  bool
 	epoch    string
 	seq      uint64
@@ -54,7 +57,18 @@ var taskSettleDelay = func(c NotifyConfig) time.Duration { return c.doneDelay() 
 // caller's role goes with them); while it is not connected they are answered 503 assistant_offline.
 func (h *Hub) assistantRoutesRelayed(api *http.ServeMux) {
 	for _, pattern := range assistantwire.Routes {
-		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.forwardHTTP(w, r, assistantwire.AssistantID) })
+		if key, ok := mergedLists[pattern]; ok { // the todos: every manager's
+			api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.mergeList(w, r, key, h.forwardHTTP) })
+			continue
+		}
+		by := h.byRequest
+		switch {
+		case strings.Contains(pattern, "/machines/{mid}/"):
+			by = h.byMachine
+		case strings.Contains(pattern, "/assistant/conversations/{id}/"):
+			by = h.byConversation
+		}
+		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.forwardOwned(w, r, by) })
 	}
 }
 
@@ -75,7 +89,7 @@ func (h *Hub) assistantReported() *assistantState {
 	a.mu.RUnlock()
 	if now := time.Now().UnixNano(); need && now-a.resyncAt.Load() > int64(5*time.Second) {
 		a.resyncAt.Store(now)
-		_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventResync, map[string]any{})
+		_ = h.notifyBus(cmp.Or(a.from, assistantwire.AssistantID), assistantwire.EventResync, map[string]any{})
 	}
 	a.mu.RLock()
 	return a
@@ -225,7 +239,12 @@ func (l assistantLink) Broadcast(_ context.Context, b assistantwire.Broadcast) {
 }
 
 // Snapshot keeps what the assistant reported for the hub's own features.
-func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (assistantwire.SnapshotResult, error) {
+func (l assistantLink) Snapshot(ctx context.Context, s assistantwire.Snapshot) (assistantwire.SnapshotResult, error) {
+	return l.snapshotFrom(ctx, assistantwire.AssistantID, s)
+}
+
+// snapshotFrom is Snapshot from manager from.
+func (l assistantLink) snapshotFrom(_ context.Context, from string, s assistantwire.Snapshot) (assistantwire.SnapshotResult, error) {
 	h := l.h
 	a := &h.assistant
 	views := make(map[string]assistantwire.SessionView, len(s.Sessions))
@@ -238,7 +257,7 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 		return assistantwire.SnapshotResult{}, assistantwire.ErrStaleSnapshot
 	}
 	old, oldProfile := a.sessions, a.profile
-	a.got, a.partial, a.epoch, a.seq, a.sessions, a.tasks = true, s.Partial, s.Epoch, s.Seq, views, s.Tasks
+	a.got, a.partial, a.epoch, a.seq, a.sessions, a.tasks, a.from = true, s.Partial, s.Epoch, s.Seq, views, s.Tasks, from
 	if s.Profile != nil {
 		a.profile = s.Profile
 	}
@@ -276,8 +295,12 @@ func init() {
 		}
 		return map[string]bool{"ok": true}, nil
 	})
-	handleBusCall(assistantwire.MethodSnapshot, func(h *Hub, ctx context.Context, s assistantwire.Snapshot) (assistantwire.SnapshotResult, error) {
-		res, err := assistantLink{h}.Snapshot(ctx, s)
+	handleBus(assistantwire.MethodSnapshot, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var s assistantwire.Snapshot
+		if err := json.Unmarshal(params, &s); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: assistantwire.MethodSnapshot + ": " + err.Error()}
+		}
+		res, err := assistantLink{h}.snapshotFrom(ctx, c.managerID(), s)
 		return res, busCodedError(err)
 	})
 	// ws.broadcast is relayBroadcast's (bus_forward.go), the same as Broadcast's.
@@ -366,18 +389,32 @@ func (h *Hub) assistantConnected() {
 // ---- on the bus: what the hub asks of the assistant ----
 
 // asst is the assistant, reached over the bus.
-func (h *Hub) asst() assistantRemote { return assistantRemote{h} }
+func (h *Hub) asst() assistantRemote { return assistantRemote{h: h} }
+
+// asstOf is manager id's assistant (ownership.go: the one a machine, a session, an interaction belongs to).
+func (h *Hub) asstOf(id string) assistantRemote { return assistantRemote{h: h, id: id} }
 
 // assistantRemote is assistant.Handler over the assistant's bus connection: calls for what the hub needs an answer
 // to, one-way events for what it saw happen. Not connected, a call fails with assistant_offline and an event is not
 // sent (the assistant asks for what it missed when it is back: its snapshot, the session lists).
-type assistantRemote struct{ h *Hub }
+type assistantRemote struct {
+	h  *Hub
+	id string // the manager; "" is the default one (ownership.go)
+}
+
+// to is the manager the call goes to.
+func (a assistantRemote) to(ctx context.Context) string {
+	if a.id != "" {
+		return a.id
+	}
+	return a.h.defaultOwner(ctx)
+}
 
 // errAssistantOffline is what an assistant tool or request answers while the assistant is not connected.
 var errAssistantOffline = i18n.Err("hub-assistant_link.offline")
 
 func (a assistantRemote) call(ctx context.Context, method string, params, out any) error {
-	err := a.h.callBus(ctx, assistantwire.AssistantID, method, params, out)
+	err := a.h.callBus(ctx, a.to(ctx), method, params, out)
 	if errors.Is(err, errBusOffline) {
 		return &rpc.Error{Code: assistantwire.CodeAssistantOffline, Message: errAssistantOffline.Error()}
 	}
@@ -385,7 +422,7 @@ func (a assistantRemote) call(ctx context.Context, method string, params, out an
 }
 
 func (a assistantRemote) notify(event string, params any) {
-	_ = a.h.notifyBus(assistantwire.AssistantID, event, params)
+	_ = a.h.notifyBus(a.to(context.Background()), event, params)
 }
 
 // assistantToolsWait is how long a question about the assistant's tools waits for it while it has not connected since

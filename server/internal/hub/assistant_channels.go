@@ -36,7 +36,7 @@ type managerChannels struct {
 // channelNoted tells the assistant a channel's message went into a conversation through the apps' routes (a voice
 // conversation's errand, POST …/messages with client_msg_id voice-…): the conversation shows where it came from.
 func (h *Hub) channelNoted(id, machine, session string) {
-	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventChannelNoted, assistantwire.ChannelNoted{Channel: id, MachineID: machine, SessionID: session})
+	_ = h.notifyBus(h.sessionOwner(machine, session), assistantwire.EventChannelNoted, assistantwire.ChannelNoted{Channel: id, MachineID: machine, SessionID: session})
 }
 
 // ---- following a conversation for the assistant ----

@@ -1619,6 +1619,14 @@ hub 要变成只是一条通道：助手（以后还有别的服务）是另一�
 
 改名单、建码、删除要完整权限的设备（只读设备 403）。
 
+**按管理者（归属，`docs/managers.md`「归属」）**
+
+- **请求哪个管理者**：请求头 `X-Persona-Manager: <id>`，或查询参数 `?manager=<id>`（WebSocket、浏览器里打开的链接用它；两个都给时以请求头为准）。不写就是默认管理者（`GET /api/v1/managers` 的 `default`）。名册里没有这个 id：`404 no_manager`；有但没连着：和以前助手离线一样 `503 assistant_offline`。
+- **带着东西的请求由 hub 自己找归属，写了也不改**：`/machines/{mid}/…` 归电脑的管理者，`/sessions/{mid}/{sid}/…` 归会话的（管理者自己的对话归报它的那个，其余归电脑的），`POST /interactions/{id}/resolve` 归报这张卡的。其余（助手页、对话、定时任务、收件箱、待办、知识库、模型配置、扩展和来源、用量……）按上面的请求头 / 参数；列表里某一项（一条收件箱、一个扩展）带着 `manager`，对它的请求照着写上。
+- **`manager` 字段**：电脑（`GET /api/v1/machines`、`machines` 推送）、会话（`GET /api/v1/sessions`、`sessions` / `sessions_delta` 推送）、待处理的卡（`GET /api/v1/interactions`、`interaction` 推送）每项顶层带 `manager`（管理者 id）。只有一个管理者时除了多这个字段，回答和以前一样。
+- **合并的列表**：`GET /api/v1/inbox`（`items`）、`/api/v1/todos`（`todos`）、`/api/v1/extensions`（`extensions`）、`/api/v1/plugins`（`plugins`）、`/api/v1/connectors`（`connectors`）不写管理者时，hub 依次问默认管理者和其他连着的管理者，把各自的列表接在一起（默认的在前），每项加 `manager`；其余字段（`as_of`、`triage`、`can_install`……）取默认管理者的。写了管理者就只回它的。没答上的管理者不在里面；都没答上就原样回默认管理者的回答（比如 `503 assistant_offline`）。
+- **离线的管理者**：hub 本来就留着的照旧留着、照旧带 `manager`：它的电脑（`online: false`，`error` 是助手离线）和会话（状态 `unknown`），扩展列表这类留着最后一次回答的 GET（`extwire.KeptRoutes`）。每项不另加字段，「最后同步于…」用 `GET /api/v1/managers` 里这个管理者的 `online: false` 和 `last_seen`。经它的操作 `503 assistant_offline`。
+
 **线上格式**：每条 WebSocket 文本消息是一行 `internal/rpc` JSON（和 hub ↔ node 同一套），permessage-deflate，单条最大 64 MiB，两个方向都能调用：
 
 ```jsonc

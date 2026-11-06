@@ -62,7 +62,7 @@ func (h *Hub) kbAsk(ctx context.Context, method string, params, out any) error {
 // kbAskWaiting is kbAsk that first waits up to wait for the assistant to connect (a hub that just started, an
 // assistant restarting): for the connectors' programs, which call as soon as they run.
 func (h *Hub) kbAskWaiting(ctx context.Context, wait time.Duration, method string, params, out any) error {
-	for until := time.Now().Add(wait); h.busConnOf(assistantwire.AssistantID) == nil && time.Now().Before(until) && ctx.Err() == nil; {
+	for until := time.Now().Add(wait); h.busConnOf(h.defaultOwner(ctx)) == nil && time.Now().Before(until) && ctx.Err() == nil; {
 		select {
 		case <-ctx.Done():
 		case <-time.After(100 * time.Millisecond):
@@ -82,7 +82,7 @@ func kbOffline(err error) bool {
 // reads every source when it connects.
 func (h *Hub) kbKick() {
 	if !h.kbOff() {
-		_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventKBKick, map[string]any{})
+		_ = h.notifyManagers(assistantwire.EventKBKick, map[string]any{})
 	}
 }
 

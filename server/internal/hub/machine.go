@@ -73,7 +73,9 @@ type Machine struct {
 	// The manager's report (devices_link.go): managed is set once one came for this machine (or the hub made it for
 	// one the manager will report); snap is the machine as it said; connected, a call would reach the node now;
 	// hookedAt, the connection the hub did its part for (devices.connected); paths, its ways for the admin page.
-	managed   bool
+	managed bool
+	// owner is the manager that reported it (ownership.go); "" before one did.
+	owner     string
 	snap      *proto.Machine
 	connected bool
 	hookedAt  time.Time
@@ -86,6 +88,20 @@ type nodeCaller interface {
 	Notify(event string, params any) error
 	Done() <-chan struct{}
 	Close(err error)
+}
+
+// ownerID is the manager that reported m; "" before one did.
+func (m *Machine) ownerID() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.owner
+}
+
+// ownerOrCarrier is m's owner, the carrier of hub.json's machines before one reported it; m.mu must not be held.
+func (m *Machine) ownerOrCarrier() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return cmp.Or(m.owner, devicesOwner)
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
@@ -151,7 +167,7 @@ func (m *Machine) canDeployLocked() (bool, string) {
 
 // reconnect has the manager connect the machine's node again.
 func (m *Machine) reconnect() {
-	if err := m.hub.callBus(context.Background(), devicesOwner, devicewire.MethodReconnect, map[string]any{"machine_id": m.cfg.ID}, nil); err != nil {
+	if err := m.hub.callBus(context.Background(), m.ownerOrCarrier(), devicewire.MethodReconnect, map[string]any{"machine_id": m.cfg.ID}, nil); err != nil {
 		m.hub.logf("[%s] reconnect: %v", m.cfg.ID, err)
 	}
 }

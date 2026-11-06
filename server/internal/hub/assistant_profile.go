@@ -159,7 +159,7 @@ func (a assistantRemote) Rename(ctx context.Context, machine, session string, pa
 
 // assistantSend fills p, a message for the assistant's conversation sid on m, as the assistant runs it.
 func (h *Hub) assistantSend(ctx context.Context, m *Machine, sid string, p map[string]any) error {
-	out, err := h.asst().SendParams(ctx, m.cfg.ID, sid, p)
+	out, err := h.asstOf(h.sessionOwner(m.cfg.ID, sid)).SendParams(ctx, m.cfg.ID, sid, p)
 	if err != nil {
 		return err
 	}
@@ -210,7 +210,7 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	defer cancel()
 	out := json.RawMessage(`{"ok":true}`)
 	if s, _ := m.session(sid); isAssistant(s, m.assistantCwd()) {
-		res, err := h.asst().Rename(ctx, m.cfg.ID, sid, p)
+		res, err := h.asstOf(h.sessionOwner(m.cfg.ID, sid)).Rename(ctx, m.cfg.ID, sid, p)
 		if err != nil {
 			writeAssistantErr(w, err)
 			return

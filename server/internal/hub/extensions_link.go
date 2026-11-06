@@ -175,7 +175,7 @@ func (h *Hub) extCall(ctx context.Context, method string, params, out any) error
 	if err != nil {
 		return err
 	}
-	return h.callBus(ctx, devicesOwner, extwire.MethodHubCall, extwire.HubCall{Method: method, Params: raw}, out)
+	return h.callBus(ctx, h.defaultOwner(ctx), extwire.MethodHubCall, extwire.HubCall{Method: method, Params: raw}, out)
 }
 
 // emitToExtensions tells the extensions something the hub saw (agent.finished, agent.needs_you).
@@ -184,7 +184,7 @@ func (h *Hub) emitToExtensions(event string, params any) {
 	if err != nil {
 		return
 	}
-	_ = h.notifyBus(devicesOwner, extwire.EventEmit, extwire.Emit{Event: event, Params: raw})
+	_ = h.notifyManagers(extwire.EventEmit, extwire.Emit{Event: event, Params: raw}) // each manager's extensions
 }
 
 // ---- the routes ----
@@ -193,6 +193,14 @@ func (h *Hub) emitToExtensions(event string, params any) {
 func (h *Hub) extensionRoutesRelayed(api *http.ServeMux) {
 	for _, pattern := range extwire.Routes {
 		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.relayToManager(w, r, false) })
+	}
+	// The lists: every manager's extensions and sources (ownership.go).
+	for pattern, key := range mergedLists {
+		if p, ok := strings.CutPrefix(pattern, "GET "); ok && slices.Contains(extwire.Routes, p) {
+			api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+				h.mergeList(w, r, key, func(w http.ResponseWriter, r *http.Request, id string) { h.relayTo(w, r, false, id) })
+			})
+		}
 	}
 }
 
@@ -265,13 +273,27 @@ func hubOwns(mux *http.ServeMux, prefix string) bool {
 
 var ownedPrefixes sync.Map
 
-// relayToManager passes r on to the manager over a relay stream and streams its answer back. Who asked goes with it
-// in the hub's headers (any the client sent are dropped); the hub's credentials stay with the hub. While the manager
-// is away: 503 assistant_offline, or the last answer of a kept GET.
+// relayToManager is relayTo the manager r is for: its machine's ({mid}), else the one it names, else the default.
 func (h *Hub) relayToManager(w http.ResponseWriter, r *http.Request, admin bool) {
+	by := h.byRequest
+	if r.PathValue("mid") != "" {
+		by = h.byMachine
+	}
+	if id, ok := h.owner(w, r, by); ok {
+		h.relayTo(w, r, admin, id)
+	}
+}
+
+// relayTo passes r on to manager id over a relay stream and streams its answer back. Who asked goes with it in the
+// hub's headers (any the client sent are dropped); the hub's credentials stay with the hub. While the manager is
+// away: 503 assistant_offline, or the last answer of a kept GET.
+func (h *Hub) relayTo(w http.ResponseWriter, r *http.Request, admin bool, id string) {
 	keep := r.Method == http.MethodGet && slices.Contains(extwire.KeptRoutes, r.URL.Path)
 	key := r.URL.Path + "?" + r.URL.RawQuery
-	if h.busConnOf(devicesOwner) == nil && !h.awaitManager(r.Context(), linkManagerWait) {
+	if id != devicesOwner {
+		key = id + " " + key // each manager's own (the carrier's keys as before)
+	}
+	if h.busConnOf(id) == nil && (id != devicesOwner || !h.awaitManager(r.Context(), linkManagerWait)) {
 		if keep && h.writeKept(w, key) {
 			return
 		}
@@ -326,11 +348,11 @@ func (h *Hub) relayToManager(w http.ResponseWriter, r *http.Request, admin bool)
 			pr.Out.Header["X-Forwarded-For"] = nil
 		},
 		Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return h.dialManager(ctx)
+			return h.dialManager(ctx, id)
 		}, DisableKeepAlives: true, ResponseHeaderTimeout: 5 * time.Minute},
 		FlushInterval: -1,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			if errors.Is(err, errBusOffline) || h.busConnOf(devicesOwner) == nil {
+			if errors.Is(err, errBusOffline) || h.busConnOf(id) == nil {
 				writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
 				return
 			}
@@ -400,12 +422,12 @@ func (k *keptRecorder) Flush() {
 
 func (k *keptRecorder) Unwrap() http.ResponseWriter { return k.ResponseWriter }
 
-// dialManager opens a relay stream the manager serves HTTP on (extwire.MethodAccept).
-func (h *Hub) dialManager(ctx context.Context) (net.Conn, error) {
-	if h.busConnOf(devicesOwner) == nil {
+// dialManager opens a relay stream manager id serves HTTP on (extwire.MethodAccept).
+func (h *Hub) dialManager(ctx context.Context, id string) (net.Conn, error) {
+	if h.busConnOf(id) == nil {
 		return nil, errBusOffline
 	}
-	taken, err := h.handToManagerVia(ctx, extwire.MethodAccept, nil)
+	taken, err := h.handToManagerVia(ctx, id, extwire.MethodAccept, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -448,9 +470,16 @@ func (h *Hub) authorizeExtension(ctx context.Context, tok string, r *http.Reques
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	// The token is one manager's extension's: each is asked, the default first, until one knows it.
 	var a extwire.Authorized
-	if err := h.callBus(ctx, devicesOwner, extwire.MethodAuthorize, extwire.Authorize{Hash: hashToken(tok), Pattern: pattern,
-		Method: method, Path: path}, &a); err != nil || a.Extension == "" {
+	for _, id := range h.listManagers(ctx) {
+		a = extwire.Authorized{}
+		if err := h.callBus(ctx, id, extwire.MethodAuthorize, extwire.Authorize{Hash: hashToken(tok), Pattern: pattern,
+			Method: method, Path: path}, &a); err == nil && a.Extension != "" {
+			break
+		}
+	}
+	if a.Extension == "" {
 		return principal{}, false, false, ""
 	}
 	p = principal{ID: "extension:" + a.Extension, Name: a.Name, Role: roleExtension, Extension: a.Extension, Scopes: a.Scopes}
