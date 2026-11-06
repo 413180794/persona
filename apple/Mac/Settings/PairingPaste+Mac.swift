@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Pairing on a Mac (iOS scans the QR code `jarvisd hub pair` prints, `Views/Settings/SettingsView.swift`): there is
-/// no camera scanner here, so the same place takes the printed `jarvis://pair?…` link from the pasteboard.
+/// Pairing on a Mac (iOS scans the hub's QR code, `Views/Settings/SettingsView.swift`): there is no camera scanner
+/// here, so the same place takes the `jarvis://pair?…` link from the pasteboard.
 enum DataScannerViewController {
     static let isSupported = true
     static let isAvailable = true

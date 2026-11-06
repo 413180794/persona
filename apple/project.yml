@@ -144,6 +144,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
         JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         UILaunchScreen:
@@ -167,6 +168,7 @@ targets:
         # The groups' prefix is the team, not $(AppIdentifierPrefix): that one is only set when Xcode signs, and an
         # archive built unsigned for a cloud-signed export left it empty (scripts/release/entitlements.py, 2026-11-02).
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
         JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         # Where the app leaves the persona the Live Activity draws for the widget extension (FleetLookStore). An App
         # Group's id has no team prefix: the same in an archive built unsigned.
@@ -266,6 +268,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
         JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "26.0"
@@ -344,6 +347,7 @@ targets:
             CFBundleURLSchemes: [jarvis, persona]
         ITSAppUsesNonExemptEncryption: false
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
         JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         UIApplicationSupportsIndirectInputEvents: true

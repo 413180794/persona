@@ -1549,6 +1549,28 @@
         }
       }
     },
+    "%@ 现在离线，可能睡着了，或者上面的 Persona Link 没在运行。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is offline: it may be asleep, or Persona Link isn't running on it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ はオフラインです。スリープ中か、Persona Link が動いていないのかもしれません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 现在离线，可能睡着了，或者上面的 Persona Link 没在运行。"
+          }
+        }
+      }
+    },
     "%@ 现在离线，看看 personad 和 SSH 隧道。": {
       "localizations": {
         "en": {
@@ -10279,6 +10301,28 @@
         }
       }
     },
+    "Persona 要在你的一台电脑上、用一个模型干活。下面每一步做完会自己打勾，不用刷新。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona works on one of your computers, with a model. Each step below ticks itself once it's done; no need to refresh."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona はあなたのコンピュータの 1 台で、モデルを使って動きます。下の各ステップは完了すると自動でチェックが付きます。再読み込みは不要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 要在你的一台电脑上、用一个模型干活。下面每一步做完会自己打勾，不用刷新。"
+          }
+        }
+      }
+    },
     "Persona 记住的事，一条一个文件，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。": {
       "localizations": {
         "en": {
@@ -18497,6 +18541,28 @@
         }
       }
     },
+    "之后可以在「设置」顶部回到这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can come back here from the top of Settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あとで「設定」の一番上からここに戻れます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之后可以在「设置」顶部回到这里。"
+          }
+        }
+      }
+    },
     "也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在 App 里确认后就加好了。": {
       "localizations": {
         "en": {
@@ -20455,6 +20521,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "会在 %@ 的 herdr 这个 workspace 里新开一个标签。"
+          }
+        }
+      }
+    },
+    "会用 hub 所在机器的终端的话：在那台机器上运行这一行，它会打印二维码和配对链接。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If you use the terminal on the hub's machine: run this line there and it prints a QR code and a pairing link."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub のマシンでターミナルを使う場合：そのマシンでこの行を実行すると、QR コードとペアリングリンクが表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会用 hub 所在机器的终端的话：在那台机器上运行这一行，它会打印二维码和配对链接。"
           }
         }
       }
@@ -22872,6 +22960,28 @@
         }
       }
     },
+    "像聊天一样让它做事": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get things done by chatting"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットするように作業を頼める"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "像聊天一样让它做事"
+          }
+        }
+      }
+    },
     "像聊天一样驱动 Claude": {
       "localizations": {
         "en": {
@@ -23110,6 +23220,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "先不发"
+          }
+        }
+      }
+    },
+    "先体验一下（数据都是编造的）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try it first (made-up data)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まず試してみる（データは架空です）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先体验一下（数据都是编造的）"
           }
         }
       }
@@ -23952,6 +24084,28 @@
         }
       }
     },
+    "其他方式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other ways"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その他の方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他方式"
+          }
+        }
+      }
+    },
     "内网隧道": {
       "localizations": {
         "en": {
@@ -24062,6 +24216,28 @@
         }
       }
     },
+    "在 hub 装好时的屏幕上，或者已经连上的设备里打开 设置 › 设备 › 连接新设备，再出一个码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get a new code on the screen from setting up the hub, or on a connected device in Settings › Devices › Connect a new device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub のセットアップ画面、または接続済みのデバイスの「設定 › デバイス › 新しいデバイスを接続」で、新しいコードを出してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 hub 装好时的屏幕上，或者已经连上的设备里打开 设置 › 设备 › 连接新设备，再出一个码。"
+          }
+        }
+      }
+    },
     "在要加入的那台电脑上打开这条链接": {
       "localizations": {
         "en": {
@@ -24124,6 +24300,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "好"
+          }
+        }
+      }
+    },
+    "它在你的电脑上看文件、跑命令，动手前先问你": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It reads files and runs commands on your computer, and asks you before it acts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータ上でファイルを読んだりコマンドを実行したりし、実行前に確認します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它在你的电脑上看文件、跑命令，动手前先问你"
           }
         }
       }
@@ -24304,6 +24502,28 @@
         }
       }
     },
+    "开始使用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get started"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使い始める"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始使用"
+          }
+        }
+      }
+    },
     "总是走隧道": {
       "localizations": {
         "en": {
@@ -24348,6 +24568,28 @@
         }
       }
     },
+    "手动输入地址、经 SSH 隧道连接，或者在 hub 所在的机器上用命令出码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type the address, connect through an SSH tunnel, or make a code with a command on the hub's machine."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アドレスを入力する、SSH トンネル経由で接続する、または hub のマシンでコマンドを使ってコードを出します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动输入地址、经 SSH 隧道连接，或者在 hub 所在的机器上用命令出码。"
+          }
+        }
+      }
+    },
     "打不开 Persona Link：%@": {
       "localizations": {
         "en": {
@@ -24366,6 +24608,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "打不开 Persona Link：%@"
+          }
+        }
+      }
+    },
+    "扫 hub 装好时屏幕上的二维码，或者已经连上的设备里 设置 › 设备 › 连接新设备 出的码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan the QR code shown when the hub was set up, or the one from Settings › Devices › Connect a new device on a connected device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub のセットアップ時に表示された QR コード、または接続済みのデバイスの「設定 › デバイス › 新しいデバイスを接続」のコードを読み取ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫 hub 装好时屏幕上的二维码，或者已经连上的设备里 设置 › 设备 › 连接新设备 出的码。"
+          }
+        }
+      }
+    },
+    "扫码连接 hub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan to connect a hub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR コードで hub に接続"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫码连接 hub"
+          }
+        }
+      }
+    },
+    "把你的电脑和手机连在一起，交给 AI 去做事。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your computers and your phone, and let AI get things done."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータとスマートフォンをつないで、AI に作業を任せましょう。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把你的电脑和手机连在一起，交给 AI 去做事。"
+          }
+        }
+      }
+    },
+    "拷贝配对链接（hub 装好时给出，或者已经连上的设备里 设置 › 设备 › 连接新设备），再点「粘贴配对链接」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the pairing link (given when the hub was set up, or from Settings › Devices › Connect a new device on a connected device), then click Paste pairing link."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングリンク（hub のセットアップ時、または接続済みのデバイスの「設定 › デバイス › 新しいデバイスを接続」で表示）をコピーして、「ペアリングリンクを貼り付け」をクリックしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拷贝配对链接（hub 装好时给出，或者已经连上的设备里 设置 › 设备 › 连接新设备），再点「粘贴配对链接」。"
+          }
+        }
+      }
+    },
+    "接上电脑和模型，Persona 才能回答": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a computer and a model so Persona can answer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータとモデルを接続すると Persona が答えられます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接上电脑和模型，Persona 才能回答"
           }
         }
       }
@@ -78224,6 +78576,28 @@
         }
       }
     },
+    "现在没有在线的电脑。看看你的电脑是不是开着、Persona Link 在不在运行。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No computer is online right now. Check that your computer is on and Persona Link is running."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンラインのコンピュータがありません。コンピュータの電源が入っていて、Persona Link が動いているか確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在没有在线的电脑。看看你的电脑是不是开着、Persona Link 在不在运行。"
+          }
+        }
+      }
+    },
     "现在用的是 hub.json 里的凭证；在这里保存会改用这里的。": {
       "localizations": {
         "en": {
@@ -87261,6 +87635,50 @@
         }
       }
     },
+    "装好 hub 时会给出配对链接；也可以在已经连上的设备里打开 设置 › 设备 › 连接新设备，拷贝那里的链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting up the hub gives you a pairing link; or, on a device that's already connected, open Settings › Devices › Connect a new device and copy the link there"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub をセットアップするとペアリングリンクが表示されます。接続済みのデバイスで「設定 › デバイス › 新しいデバイスを接続」を開いて、そのリンクをコピーすることもできます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "装好 hub 时会给出配对链接；也可以在已经连上的设备里打开 设置 › 设备 › 连接新设备，拷贝那里的链接"
+          }
+        }
+      }
+    },
+    "装好 hub 时屏幕上会出二维码；也可以在已经连上的设备里打开 设置 › 设备 › 连接新设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting up the hub shows a QR code; or, on a device that's already connected, open Settings › Devices › Connect a new device"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub をセットアップすると画面に QR コードが出ます。接続済みのデバイスで「設定 › デバイス › 新しいデバイスを接続」を開くこともできます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "装好 hub 时屏幕上会出二维码；也可以在已经连上的设备里打开 设置 › 设备 › 连接新设备"
+          }
+        }
+      }
+    },
     "装好以后回到这里绑定。": {
       "localizations": {
         "en": {
@@ -89766,6 +90184,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "试了一句，没成功"
+          }
+        }
+      }
+    },
+    "试了一句，没成功：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tried a message, it didn't work: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試しましたが、うまくいきませんでした：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "试了一句，没成功：%@"
+          }
+        }
+      }
+    },
+    "试过了，回答：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tried it; it answered: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試しました。返答：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "试过了，回答：%@"
           }
         }
       }
@@ -93493,6 +93955,28 @@
         }
       }
     },
+    "还差几步就能用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A few steps to go"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あと数ステップで使えます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还差几步就能用"
+          }
+        }
+      }
+    },
     "还有 %lld 个空闲": {
       "localizations": {
         "en": {
@@ -93719,6 +94203,28 @@
         }
       }
     },
+    "还有 %lld 步就能用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld steps to go"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あと %lld ステップで使えます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还有 %lld 步就能用"
+          }
+        }
+      }
+    },
     "还有未解决的依赖，添加对应市场后重新预览。": {
       "localizations": {
         "en": {
@@ -93935,6 +94441,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没有 Pin 消息"
+          }
+        }
+      }
+    },
+    "还没有 hub？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hub yet?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ hub がありませんか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有 hub？"
           }
         }
       }
@@ -94815,6 +95343,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没配对。先打开 Persona 连接 hub。"
+          }
+        }
+      }
+    },
+    "还没配对。先打开 Persona，扫 hub 给出的二维码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not paired yet. Open Persona and scan the QR code your hub shows."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだペアリングされていません。Persona を開いて、hub が表示する QR コードを読み取ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没配对。先打开 Persona，扫 hub 给出的二维码。"
           }
         }
       }
@@ -95897,6 +96447,28 @@
         }
       }
     },
+    "这个码过期了或已经用过了，再出一个": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This code has expired or was already used; get a new one"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコードは期限切れか、すでに使われています。新しいコードを出してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个码过期了或已经用过了，再出一个"
+          }
+        }
+      }
+    },
     "这个窗口打开的 Agent 已经不在了。": {
       "localizations": {
         "en": {
@@ -96910,6 +97482,50 @@
         }
       }
     },
+    "配对码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing code"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングコード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配对码"
+          }
+        }
+      }
+    },
+    "配对链接里的配对码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code in the pairing link"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングリンク内のコード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配对链接里的配对码"
+          }
+        }
+      }
+    },
     "重新出链接": {
       "localizations": {
         "en": {
@@ -96928,6 +97544,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新出链接"
+          }
+        }
+      }
+    },
+    "重新扫码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "もう一度読み取る"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新扫码"
           }
         }
       }

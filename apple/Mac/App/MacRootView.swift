@@ -109,6 +109,9 @@ struct MacRootView: View {
         Group {
             if let ref = model.pairingEngineMachine {
                 PairingEngineView(ref: ref)
+            } else if model.isPaired, model.showsChecklist {
+                // Just paired: what the main conversation still needs, before the app (#4195).
+                OnboardingChecklistView()
             } else if model.isPaired {
                 MacShell()
             } else {
@@ -117,6 +120,9 @@ struct MacRootView: View {
             }
         }
         .frame(minWidth: Theme.Size.macWindowMinWidth, minHeight: Theme.Size.macWindowMinHeight)
+        .task(id: model.checklistPending && model.hubFeatures.contains(AssistantReadiness.feature)) {
+            if model.checklistPending { await model.refreshReadiness() }
+        }
         .extensionSystemPresentation()
         .macLook(model)
         .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)

@@ -129,6 +129,15 @@ final class AppModel {
     @ObservationIgnored private var answering = AnsweringInteractions()
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
     var pairingEngineMachine: MachineRef?
+    /// Just paired (#4195): the checklist page comes up once the hub says what the main conversation still needs
+    /// (`showsChecklist`), unless it was put off before. Not stored: a relaunch goes to the app.
+    var checklistPending = false
+
+    /// The checklist page is in place of the app: after pairing, on a hub with readiness, not put off.
+    var showsChecklist: Bool {
+        guard checklistPending, hubFeatures.contains(AssistantReadiness.feature), let r = readiness.current else { return false }
+        return r.dismissed != true
+    }
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
     /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「连接状态和 toast」).
     var toast: Toast?
@@ -489,6 +498,7 @@ final class AppModel {
             replaceMachines(group, pairedMachines.map { var m = $0; m.group = group; return m })
             // The engine step only when the hub reports engines (an older hub cannot save one; the step must not trap).
             pairingEngineMachine = EngineSelectionModel.pairingMachine(pairedMachines).flatMap { $0.engines.isEmpty ? nil : MachineRef(group: group, id: $0.id) }
+            checklistPending = !isDemo
         }
         if links.count == 1 { hubGroup = group }
         guard let link = link(group) else { return }
@@ -558,6 +568,7 @@ final class AppModel {
         LarkChatOutbox.forget()
         LarkDrafts.shared.forget()
         pairingEngineMachine = nil
+        checklistPending = false
         if isDemo { leaveDemo() }
         for link in links { link.live.disconnect() }
         closeAllTunnels() // no hub left to route through a tunnel (also drops HubTransport's routes)

@@ -37,7 +37,7 @@ struct PersonaApp: App {
                             let host = cfg.url.host() ?? String(localized: "服务器")
                             model.toast = Toast(String(localized: "已连接到 \(host)"), style: .success)
                         }
-                        catch { model.show(error) }
+                        catch { model.showPairing(error) }
                     }
                 }
         }
@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             Task { @MainActor in
                 for i in 0..<times {
                     if i > 0 { try? await Task.sleep(for: .seconds(3)) }
-                    do { try await AppModel.shared.pair(cfg) } catch { AppModel.shared.show(error) }
+                    do { try await AppModel.shared.pair(cfg) } catch { AppModel.shared.showPairing(error) }
                 }
             }
         }

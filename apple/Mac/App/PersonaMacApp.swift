@@ -116,7 +116,7 @@ extension AppModel {
                 let host = cfg.url.host() ?? String(localized: "服务器")
                 toast = Toast(String(localized: "已连接到 \(host)"), style: .success)
             }
-            catch { show(error) }
+            catch { showPairing(error) }
         }
     }
 }

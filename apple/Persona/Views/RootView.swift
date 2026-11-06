@@ -34,6 +34,9 @@ struct RootView: View {
         Group {
             if let ref = model.pairingEngineMachine {
                 PairingEngineView(ref: ref)
+            } else if model.isPaired, model.showsChecklist {
+                // Just paired: what the main conversation still needs, before the app (#4195).
+                OnboardingChecklistView()
             } else if model.isPaired {
                 #if os(visionOS)
                 RootTabs().visionShell()
@@ -45,6 +48,9 @@ struct RootView: View {
             } else {
                 WelcomeView()
             }
+        }
+        .task(id: model.checklistPending && model.hubFeatures.contains(AssistantReadiness.feature)) {
+            if model.checklistPending { await model.refreshReadiness() }
         }
         // The plugins' main-navigation entries and cards, for Settings' badge (docs/extensions.md「UI 插槽」).
         .task(id: ExtensionSlots.source(model)) {

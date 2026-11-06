@@ -97,11 +97,11 @@ nonisolated enum IntentFailure: LocalizedError {
     var sentence: String {
         switch self {
         case .notPaired:
-            String(localized: "还没配对。先打开 Persona 扫 `personad hub pair` 的二维码。")
+            String(localized: "还没配对。先打开 Persona，扫 hub 给出的二维码。")
         case .noMachine:
-            String(localized: "现在没有在线的机器。看看 hub 上的 personad 和各台电脑的 SSH 连接。")
+            String(localized: "现在没有在线的电脑。看看你的电脑是不是开着、Persona Link 在不在运行。")
         case .offline(let name):
-            String(localized: "\(name) 现在离线，看看 personad 和 SSH 隧道。")
+            String(localized: "\(name) 现在离线，可能睡着了，或者上面的 Persona Link 没在运行。")
         case .noSession(let name):
             String(localized: "\(name) 上没有运行中的会话。打开 Persona 新建一个，或者说「新会话」。")
         case .noLauncher(let name):

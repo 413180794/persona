@@ -139,6 +139,8 @@ def xcconfig(cfg: dict):
         f.write("JARVIS_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
         # Which entitlements the app signs with (app_entitlements; docs/carplay.md).
         f.write("PERSONA_APP_ENTITLEMENTS = %s\n" % app_entitlements(cfg))
+        # 「还没有 hub？」 on the first screen opens this page (docs/getting-started.md published; empty: the row is hidden).
+        f.write("PERSONA_GETTING_STARTED_URL = %s\n" % get(cfg, "publish.getting_started_url", "").replace("//", "/$()/"))
         # Meta Wearables (docs/meta-glasses.md): 0 means Developer Mode (no attestation), as Meta's docs say.
         f.write("PERSONA_META_APP_ID = %s\n" % (str(get(cfg, "app.meta_wearables.app_id", "") or "") or "0"))
         f.write("PERSONA_META_CLIENT_TOKEN = %s\n" % (get(cfg, "app.meta_wearables.client_token", "") or ""))

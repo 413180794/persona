@@ -59,12 +59,20 @@ struct SettingsView: View {
                     }
                     .padding(.vertical, Theme.Space.xs)
                 }
+                // Again once the hub's features are in (right after pairing they come after this page asked).
+                .task(id: model.hubFeatures.contains(AssistantReadiness.feature)) {
+                    if !model.isDemo { await model.refreshReadiness(force: false) }
+                }
                 #if os(iOS) || os(visionOS)
                 // On the section that is always there: the plugins' one is empty until they are read.
                 .task(id: SlotsKey(source: ExtensionSlots.source(model), depth: model.settingsPath.count)) {
                     await ExtensionSlots.shared.reload()
                 }
                 #endif
+
+                // What the main conversation still needs (#4195): N steps left, back to the checklist. Settings may be the
+                // first page that asks (the app opened on it).
+                if !model.isDemo { ChecklistSettingsRow() }
 
                 #if os(iOS) || os(visionOS)
                 // The plugins' cards and pages (docs/extensions.md「UI 插槽」): at the top, where the main navigation's
@@ -694,19 +702,22 @@ struct AppGlyph: View {
     }
 }
 
+/// The first screen (docs/onboarding.md 4.5「首屏」, #4195): what Persona is, one button that pairs (scan the hub's code;
+/// the Mac pastes the link), "No hub yet?" (the public getting-started page, when the build has its address), the demo,
+/// and Other ways for the rest — typing the address, an SSH tunnel, the command line. No command on the screen itself.
 struct WelcomeView: View {
     @Environment(AppModel.self) private var model
-    @State private var showPair = false
+    @State private var pair: PairView.Start?
+    @State private var guide: LinkTarget?
     @State private var appear = false
-    // The iPhone scans the QR code `personad hub pair` prints; the Mac has no camera and pastes the link it prints.
     #if os(macOS)
-    private static let tagline = String(localized: "把每台电脑上的 Claude 收进一个窗口")
-    private static let pairIcon = Theme.Icon.link
-    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接"
+    private static let pairTitle = String(localized: "粘贴配对链接")
+    private static let pairIcon = Theme.Icon.paste
+    private static let pairHint = String(localized: "装好 hub 时会给出配对链接；也可以在已经连上的设备里打开 设置 › 设备 › 连接新设备，拷贝那里的链接")
     #else
-    private static let tagline = String(localized: "把每台电脑上的 Claude 装进口袋")
+    private static let pairTitle = String(localized: "扫码连接 hub")
     private static let pairIcon = "qrcode.viewfinder"
-    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `personad hub pair` 显示二维码"
+    private static let pairHint = String(localized: "装好 hub 时屏幕上会出二维码；也可以在已经连上的设备里打开 设置 › 设备 › 连接新设备")
     #endif
 
     var body: some View {
@@ -718,17 +729,17 @@ struct WelcomeView: View {
             Text("Persona")
                 .font(Theme.Font.display)
                 .padding(.top, Theme.Space.xl)
-            Text(Self.tagline)
+            Text("把你的电脑和手机连在一起，交给 AI 去做事。")
                 .font(Theme.Font.title)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .padding(.top, Theme.Space.sm)
+                .padding(.horizontal, Theme.Space.xl)
             VStack(alignment: .leading, spacing: Theme.Space.l) {
-                feature("bubble.left.and.text.bubble.right", String(localized: "像聊天一样驱动 Claude"), String(localized: "你的每台电脑，herdr 里的同一个会话"))
+                feature("bubble.left.and.text.bubble.right", String(localized: "像聊天一样让它做事"), String(localized: "它在你的电脑上看文件、跑命令，动手前先问你"))
                 feature("bolt.horizontal", String(localized: "实时看它在做什么"), String(localized: "思考、工具调用、终端画面，流式更新"))
                 #if os(macOS)
-                // A Mac decides in its own window and has no health data (PhoneDataSource.onThisDevice).
                 feature(Theme.Icon.click, String(localized: "在一个窗口里拍板"), String(localized: "回答提问、审批计划、授权工具，不用切到终端"))
-                // The phone's data comes from the iPhone's Persona; the Mac is a desktop (AppModel.registration).
                 feature(Theme.Icon.mailAccounts, String(localized: "带上邮箱和你的 iPhone"), String(localized: "Gmail 等邮箱；日历、通讯录、照片来自 iPhone 上的 Persona"))
                 #else
                 feature("hand.tap", String(localized: "在手机上拍板"), String(localized: "回答提问、审批计划、授权工具，手表也行"))
@@ -738,8 +749,9 @@ struct WelcomeView: View {
             .padding(.top, 40)
             .padding(.horizontal, Theme.Space.xxl)
             Spacer()
-            Button { showPair = true } label: {
-                Label("连接 hub", systemImage: Self.pairIcon).font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
+            Button { pair = .scan } label: {
+                Label(Self.pairTitle, systemImage: Self.pairIcon).font(Theme.Font.heading).lineLimit(1)
+                    .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
             }
             .themedButton(prominent: true)
             .controlSize(.large)
@@ -748,35 +760,48 @@ struct WelcomeView: View {
             Text(Self.pairHint)
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, Theme.Space.m)
-            // Without a hub there is nothing else to see: App Review and friends with the TestFlight link start here.
-            Button { model.enterDemo() } label: {
-                Label("没有 hub？先体验一下", systemImage: "play.circle").font(Theme.Font.heading).lineLimit(1).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
+                .padding(.horizontal, Theme.Space.xl)
+            VStack(spacing: Theme.Space.s) {
+                if let url = GettingStarted.url {
+                    link(String(localized: "还没有 hub？"), id: "welcome.guide") { guide = LinkTarget(url: url) }
+                }
+                // Without a hub there is nothing else to see: App Review and friends with the TestFlight link start here.
+                link(String(localized: "先体验一下（数据都是编造的）"), id: "welcome.demo") { model.enterDemo() }
+                link(String(localized: "其他方式"), id: "welcome.other") { pair = .other }
             }
-            .themedButton()
-            .controlSize(.large)
-            .padding(.horizontal, Theme.Space.xl)
             .padding(.top, Theme.Space.l)
-            .accessibilityIdentifier("welcome.demo")
-            Text("用编造的数据看看每个页面，不连接任何服务器")
-                .font(Theme.Font.label)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.top, Theme.Space.s)
-                .padding(.bottom, Theme.Space.m)
+            .padding(.bottom, Theme.Space.m)
         }
         // iPad: a centered column, not buttons from edge to edge.
         .frame(maxWidth: Theme.Size.readable)
         .frame(maxWidth: .infinity)
-        .sheet(isPresented: $showPair) { PairView() }
+        .sheet(item: $pair) { PairView(start: $0) }
+        .sheet(item: $guide) { LinkSheet(target: $0) }
         .onAppear { withAnimation(.spring(duration: 0.8, bounce: 0.35)) { appear = true } }
-        #if os(macOS) && DEBUG
-        // `-openWelcome YES -openPairSheet YES`: the Connect Hub sheet, for screenshots (scripts/app/mac_shot.sh).
-        .onAppear { if UserDefaults.standard.bool(forKey: "openPairSheet") { showPair = true } }
+        #if DEBUG
+        // `-openPairSheet YES` (or `other`): the pairing sheet, for screenshots (scripts/app/mac_shot.sh).
+        .onAppear {
+            switch UserDefaults.standard.string(forKey: "openPairSheet") {
+            case "other": pair = .other
+            case "YES", "1", "scan": pair = .scan
+            default: break
+            }
+        }
         #endif
+    }
+
+    private func link(_ title: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(Theme.Font.secondaryStrong).lineLimit(1).minimumScaleFactor(0.8)
+                .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(Theme.accent)
+        .padding(.horizontal, Theme.Space.xl)
+        .accessibilityIdentifier(id)
     }
 
     private func feature(_ symbol: String, _ title: String, _ detail: String) -> some View {
@@ -793,9 +818,24 @@ struct WelcomeView: View {
     }
 }
 
+/// The public 「开始使用」 page (docs/getting-started.md as published): from the build config (`publish.getting_started_url`,
+/// Info.plist `PersonaGettingStartedURL`); nil when the build has none, and "No hub yet?" is not shown.
+enum GettingStarted {
+    static var url: URL? {
+        guard let s = Bundle.main.object(forInfoDictionaryKey: "PersonaGettingStartedURL") as? String,
+              s.hasPrefix("https://"), let u = URL(string: s) else { return nil }
+        return u
+    }
+}
+
 struct PairView: View {
+    /// What the sheet opens on: the scanner (the Mac: pasting the link), or Other ways — typing the address, an SSH
+    /// tunnel, the command line (#4195: commands only here).
+    enum Start: String, Identifiable { case scan, other; var id: String { rawValue } }
+
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    var start: Start = .scan
     @State private var url = ""
     @State private var token = ""
     /// The SSH tunnel set up here, for a hub this device cannot reach directly (docs/network.md「经 SSH 隧道连 hub」).
@@ -806,11 +846,32 @@ struct PairView: View {
     @State private var connecting = false
     @State private var error: String?
     @State private var scanning = DataScannerViewController.isSupported && DataScannerViewController.isAvailable
+    /// The code was refused as expired or used (401 invalid_token): say so, and offer to scan again.
+    @State private var expired = false
+    @State private var showOther = false
+
+    private var other: Bool { start == .other || showOther }
 
     var body: some View {
         NavigationStack {
             Form {
-                if scanning {
+                if expired {
+                    Section {
+                        Label("这个码过期了或已经用过了，再出一个", systemImage: Theme.Icon.error)
+                            .font(Theme.Font.secondaryStrong).foregroundStyle(Theme.danger)
+                        #if os(iOS) || os(visionOS)
+                        Button {
+                            expired = false
+                            error = nil
+                            scanning = DataScannerViewController.isSupported && DataScannerViewController.isAvailable
+                        } label: { Label("重新扫码", systemImage: "qrcode.viewfinder").lineLimit(1) }
+                        .accessibilityIdentifier("pair.rescan")
+                        #endif
+                    } footer: {
+                        Text("在 hub 装好时的屏幕上，或者已经连上的设备里打开 设置 › 设备 › 连接新设备，再出一个码。")
+                    }
+                }
+                if scanning && !other {
                     Section {
                         QRScanner { code in
                             if let cfg = ServerConfig(pairURL: code) {
@@ -827,23 +888,54 @@ struct PairView: View {
                         #endif
                     } footer: {
                         #if os(iOS) || os(visionOS)
-                        Text("扫描 `personad hub pair` 打印的二维码。")
+                        Text("扫 hub 装好时屏幕上的二维码，或者已经连上的设备里 设置 › 设备 › 连接新设备 出的码。")
                         #else
-                        Text("拷贝 `personad hub pair` 打印的配对链接（jarvis://pair?…），再点「粘贴配对链接」。")
+                        Text("拷贝配对链接（hub 装好时给出，或者已经连上的设备里 设置 › 设备 › 连接新设备），再点「粘贴配对链接」。")
                         #endif
                     }
                 }
+                if !other {
+                    Section {
+                        Button { withAnimation(Theme.Motion.standard) { showOther = true } } label: {
+                            Label("其他方式", systemImage: Theme.Icon.more).lineLimit(1)
+                        }
+                        .accessibilityIdentifier("pair.other")
+                    } footer: {
+                        Text("手动输入地址、经 SSH 隧道连接，或者在 hub 所在的机器上用命令出码。")
+                    }
+                }
+                if other { otherWays }
+                if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
+            }
+            .themedPage()
+            #if os(macOS)
+            .sheet(isPresented: $editingSSH) {
+                NavigationStack {
+                    SSHTunnelForm(saved: ssh, dismissOnSave: true) { ssh = $0 }.navigationTitle("SSH 隧道")
+                }
+            }
+            #if DEBUG
+            // `-openPairSheet other -openPairSSH YES`: this sheet's SSH Tunnel sheet, for screenshots.
+            .onAppear { if UserDefaults.standard.bool(forKey: "openPairSSH") { editingSSH = true } }
+            #endif
+            #endif
+            .modifier(PairSheetChrome(url: $url, token: $token, connecting: connecting, connect: { await connect() }))
+        }
+    }
+
+    /// Other ways: the address and the one-time code typed in, an SSH tunnel, and how the hub prints a code on its machine.
+    @ViewBuilder private var otherWays: some View {
                 Section("手动输入") {
                     #if os(macOS)
                     // A grouped form puts the label on the left and the field on the right with no box: the prompt
                     // shows where to type.
                     TextField("服务器地址", text: $url, prompt: Text(verbatim: "http://hub.example.com:18660")).autocorrectionDisabled()
-                    SecureField("Token", text: $token, prompt: Text("配对链接里的 token"))
+                    SecureField("配对码", text: $token, prompt: Text("配对链接里的配对码"))
                     #else
                     TextField("服务器地址", text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     // A one-time credential, not a password: beside the address it looks like a login form, and iOS
                     // would offer to save it as one ("Save Password?") once the sheet goes (#1598).
-                    SecretField("Token", filled: String(localized: "已填写，点连接"), text: $token, identifier: "pair.token")
+                    SecretField(String(localized: "配对码"), filled: String(localized: "已填写，点连接"), text: $token, identifier: "pair.token")
                     #endif
                 }
                 Section {
@@ -873,22 +965,31 @@ struct PairView: View {
                     Text(ssh == nil ? "这台设备访问不到 hub 的地址时（不在同一个网络、没开 VPN），可以经一台能访问 hub 的 SSH 服务器转过去。"
                                     : ssh!.always ? "总是经 SSH 隧道连接这台 hub。" : "先直连这个地址，连不上再经 SSH 隧道。")
                 }
-                if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
-            }
-            .themedPage()
+                Section {
+                    Text(verbatim: "personad hub pair")
+                        .font(Theme.Font.code).textSelection(.enabled)
+                } header: {
+                    Text("命令行")
+                } footer: {
+                    Text("会用 hub 所在机器的终端的话：在那台机器上运行这一行，它会打印二维码和配对链接。")
+                }
+    }
+}
+
+/// The pairing sheet's title, Cancel / Connect and the Mac's paste handling, around its form.
+private struct PairSheetChrome: ViewModifier {
+    @Binding var url: String
+    @Binding var token: String
+    var connecting: Bool
+    var connect: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        content
             #if os(macOS)
             // A window sheet does not take the main window's grouped forms: without this the Mac laid the fields out
             // in two columns, the labels flush against the sheet's left edge (2026-11-02).
             .macSheet()
-            .sheet(isPresented: $editingSSH) {
-                NavigationStack {
-                    SSHTunnelForm(saved: ssh, dismissOnSave: true) { ssh = $0 }.navigationTitle("SSH 隧道")
-                }
-            }
-            #if DEBUG
-            // `-openPairSheet YES -openPairSSH YES`: this sheet's SSH Tunnel sheet, for screenshots.
-            .onAppear { if UserDefaults.standard.bool(forKey: "openPairSSH") { editingSSH = true } }
-            #endif
             // ⌘V lands in the focused field (the address field has it when the sheet opens), not on the paste button:
             // a pairing link pasted there pairs as the button does; an address stays an address.
             .onChange(of: url) { _, typed in
@@ -907,10 +1008,35 @@ struct PairView: View {
                         .disabled(connecting || token.isEmpty || URL(string: url) == nil)
                 }
             }
-        }
+    }
+}
+
+/// What a failed pairing says (#4195).
+enum PairError {
+    /// The hub refused the one-time code: expired, already used or revoked (401 `invalid_token`; older hubs: the words).
+    static func isExpiredCode(_ error: Error) -> Bool {
+        guard let api = error as? APIError else { return false }
+        return api.code == "invalid_token" || (api.status == 401 && api.message.lowercased().contains("invalid token")) // i18n-ignore: the hub's words
+    
     }
 
-    private func connect() async {
+    static var expiredText: String { String(localized: "这个码过期了或已经用过了，再出一个") }
+}
+
+extension AppModel {
+    /// A pairing link opened from outside (the camera, a pasted link) failed: an expired code in words, else as any error.
+    func showPairing(_ error: Error) {
+        if PairError.isExpiredCode(error) {
+            toast = Toast(PairError.expiredText, style: .error)
+            Haptics.error()
+        } else {
+            show(error)
+        }
+    }
+}
+
+extension PairView {
+    fileprivate func connect() async {
         guard let u = URL(string: url.trimmingCharacters(in: .whitespaces)) else { return }
         connecting = true
         defer { connecting = false }
@@ -919,7 +1045,11 @@ struct PairView: View {
             Haptics.success()
             dismiss()
         } catch {
-            if ssh != nil {
+            if PairError.isExpiredCode(error) {
+                // A code already used or out of date (401 invalid_token): not 「invalid token」, and a way to scan again.
+                self.error = nil
+                expired = true
+            } else if ssh != nil {
                 if !error.isCancellation { self.error = String(localized: "连接失败：\(error.localizedDescription)") }
             } else {
             #if os(macOS)
@@ -928,6 +1058,7 @@ struct PairView: View {
             if !error.isCancellation { self.error = String(localized: "连接失败：\(error.localizedDescription)。确认手机能访问这个地址（比如在同一个网络或 VPN 上），或者经 SSH 隧道连接。") }
             #endif
             }
+            if !expired { scanning = DataScannerViewController.isSupported && DataScannerViewController.isAvailable } // scan again
             Haptics.error()
         }
     }

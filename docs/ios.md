@@ -848,6 +848,15 @@ hub 有 `assistant_readiness` 时，App 读 `GET /api/v1/assistant/readiness`（
 - 开对话、发消息被 hub 带码拒绝（`no_machine`、`claude_missing`…，`CodedFailure`）画成卡片（`CodedFailureCard`），原文和请求 ID 在「详情」，不弹 toast；`assistant_offline` 安静地重试三次。
 - Persona 对话最后一轮带 `turn_error_code`（`not_logged_in` / `auth_failed` / `model_route`）时，最后那条「Not logged in」换成「模型没接好」卡片加「去修」。
 
+## 首屏和配对后的清单（#4195，onboarding M2）
+
+- 首屏（`WelcomeView`）不出现命令：主按钮「扫码连接 hub」（Mac「粘贴配对链接」），下面一句码从哪来（hub 装好时的屏幕、已连上设备的 设置 › 设备 › 连接新设备）；
+  「还没有 hub？」打开构建配置 `publish.getting_started_url` 的公开页面（Info.plist `PersonaGettingStartedURL`，没有就不显示）、「先体验一下」、「其他方式」。
+  手动输入、SSH 隧道和命令行写法只在 `PairView` 的「其他方式」里。码过期或用过（401 `invalid_token`）说「这个码过期了或已经用过了，再出一个」，iPhone 加「重新扫码」；从外面打开的配对链接同样（`AppModel.showPairing`）。
+- 配对成功后（`AppModel.checklistPending`，在引擎那一步之后），hub 有 `assistant_readiness` 且没有「以后再说」过时，整页换成清单（`OnboardingChecklistView`）：
+  电脑、Claude Code、模型、试一句四行，按就绪度的 `state` 画勾、叉、转圈、问号，按钮同主对话的卡片（`ReadinessRoute`）。「以后再说」调 dismiss；
+  全部打勾时是「开始使用」。设置顶部「还有 N 步就能用」（`ChecklistSettingsRow`，N 是 computer / claude / model 里没做完的）点了回到清单。老 hub 配对后不插清单。
+
 ## 连接新设备（#3077）
 
 设置 › 设备 最上面「连接新设备」，照网页的（#2731，`docs/web.md`「设置」）：向 hub 要一个一次性临时配对码（`POST /api/v1/auth/pair-codes`，带 `{"web": hub 的地址}`，

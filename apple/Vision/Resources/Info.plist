@@ -38,6 +38,8 @@
 	<string>$(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push</string>
 	<key>JarvisPushRelay</key>
 	<string>$(JARVIS_PUSH_RELAY)</string>
+	<key>PersonaGettingStartedURL</key>
+	<string>$(PERSONA_GETTING_STARTED_URL)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>NSAppTransportSecurity</key>

@@ -148,6 +148,7 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
 | `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os`（`linux` / `darwin`）和 `arch`（`amd64` / `arm64`，可选）决定装哪个二进制，缺的那个问机器自己（`uname`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh；跑部署的那台要写上，没写的一律走 ssh）；`via` 是另一台的 id：开发机连不上这台时，经那台再 ssh 一次把二进制传过去（那台上不留文件），这时 `ssh` 是那台上的主机名 |
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `publish.site_url` | `publish.sh` 把 `personad` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 personad」）；不写就不发布 |
+| `publish.getting_started_url` | iOS / Mac 首屏「还没有 hub？」打开的公开页面（`docs/getting-started.md` 发布出来的地址），写进 Info.plist 的 `PersonaGettingStartedURL`；不写这一行就不显示（#4195） |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`persona_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
 | `android.application_id` | Android App 的 application id（`scripts/app/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |

@@ -115,6 +115,10 @@ SCOPES = [
     # The main conversation's readiness card, its help and the coded refusals (#4193).
     Scope("apple/readiness", "swift", "apple/Persona/Views/Assistant/ReadinessViews.swift", langs=("zh-Hans",)),
     Scope("apple/readiness-data", "swift", "apple/Shared/AssistantReadiness.swift", langs=("zh-Hans",)),
+    # The checklist after pairing and 设置's 「还有 N 步」 (#4195), the pairing sheet but for its 其他方式 (the command).
+    Scope("apple/checklist", "swift", "apple/Persona/Views/Assistant/OnboardingChecklist.swift", langs=("zh-Hans",)),
+    Scope("apple/pair", "swift", "apple/Persona/Views/Settings/SettingsView.swift", "struct PairView", langs=("zh-Hans",)),
+    Scope("apple/intents", "swift", "apple/Persona/Intents/IntentSupport.swift", langs=("zh-Hans",)),
 ]
 
 # (scope, key) → why a 高级 / 详情 section may say it. For swift the key is the literal.
@@ -132,9 +136,6 @@ ALLOW = {
 
 # (scope, key) → who is fixing it (the issue or the design's work item). Each must still be wrong somewhere.
 PENDING = {
-    ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接"): "#4195（首屏，命令收进「其他方式」）",
-    ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair` 显示二维码"): "#4195（首屏，命令收进「其他方式」）",
-    ("apple/welcome", "你的每台电脑，herdr 里的同一个会话"): "#4195（首屏）",
 }
 
 ANDROID_DIRS = {"zh-Hans": "values-zh", "en": "values", "ja": "values-ja"}
