@@ -58,7 +58,7 @@ class HubChatRepository(
         var lastUserId: String? = null
         var eventError: String? = null
         var observedTranscript: List<Item>? = null
-        /** Back online and no live delta since: the empty delta that ends a turn may have been lost while offline. */
+        /** Back online or reopened and no live delta since: the empty delta that ends a turn may have been missed. */
         var reconnected = false
     }
 
@@ -244,6 +244,7 @@ class HubChatRepository(
                     entry.opening = entry.scope.launch {
                         entry.ready.await()
                         // Cold opens always verify against a folded latest page, including when cache exists.
+                        entry.lock.withLock { entry.reconnected = true }
                         latest(entry, initial = true)
                         dispatch(entry, entry.lock.withLock { entry.sync.reconnect() })
                     }
