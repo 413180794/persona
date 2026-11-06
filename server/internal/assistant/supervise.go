@@ -845,7 +845,10 @@ func (s *Service) toolTaskReview(ctx context.Context, self string, args json.Raw
 	if !ok {
 		return "", fmt.Errorf("no task %q", a.TodoID)
 	}
-	if t.Origin == "" || t.Origin != self && (t.Supervision == nil || t.Supervision.Supervisor != self) {
+	// The main conversation may review any supervised task: after the main conversation changes, the old tasks'
+	// supervision messages come to the new one, which has to be able to close them (#4262).
+	isMain := s.isMain(ctx, self)
+	if t.Origin == "" || t.Origin != self && (t.Supervision == nil || t.Supervision.Supervisor != self && !isMain) {
 		return "", fmt.Errorf("task %s was not handed out from this conversation", t.ID)
 	}
 	if t.DoneAt != nil && (a.Verdict == reviewRework || a.Verdict == reviewNeedsUser) {
@@ -862,7 +865,7 @@ func (s *Service) toolTaskReview(ctx context.Context, self string, args json.Raw
 	// Only the main conversation supervises (task_plan, quietAgentTask): another conversation's task without a ledger
 	// gets none here either, or its signals would go into the main conversation's supervision messages (#4262). It can still
 	// be closed; rework and needs_user are what supervision is for.
-	ledger := t.Supervision != nil || s.isMain(ctx, self)
+	ledger := t.Supervision != nil || isMain
 	if !ledger && (verdict == reviewRework || verdict == reviewNeedsUser) {
 		return "", fmt.Errorf("task %s is not supervised: send what is missing to its agent with agent_send, or ask the user in your answer", t.ID)
 	}
@@ -871,7 +874,9 @@ func (s *Service) toolTaskReview(ctx context.Context, self string, args json.Raw
 	var err error
 	if ledger {
 		v, _, err = s.updateSupervision(ctx, t.ID, func(v *Supervision) bool {
-			if v.Supervisor == "" {
+			if isMain {
+				v.Supervisor = self // the main conversation takes over an old main conversation's task
+			} else if v.Supervisor == "" {
 				v.Supervisor = t.Origin
 			}
 			if verdict == reviewRework && v.Round >= maxReworkRounds {

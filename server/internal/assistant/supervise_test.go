@@ -359,6 +359,45 @@ func TestTaskPlanSaysDuplicates(t *testing.T) {
 	waitFor(t, "the task", func() bool { return todoCount(s) == 1 })
 }
 
+// When the main conversation changes, the new main conversation can review older supervised tasks (#4262).
+func TestSupervisedTaskNewMainConversationCanReview(t *testing.T) {
+	s, f, todo := newSupervisedService(t)
+	ctx := context.Background()
+	f.known["conv2"] = true
+	f.setSessions("server",
+		proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle},
+		proto.Session{SessionID: "conv2", MachineID: "server", Assistant: true, Status: proto.StatusIdle},
+		proto.Session{SessionID: "conv3", MachineID: "server", Assistant: true, Status: proto.StatusIdle})
+
+	// Make the agent finish its work and wait for review.
+	f.judge = `{"verdict":"done","reason":"PR 已合并"}`
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, "修好了，提了 PR", 0)
+	waitFor(t, "the review state", func() bool { return todoNow(s, todo.ID).Supervision.State == reviewPending })
+
+	// Switch main conversation to conv2.
+	setSettings(t, s, func(v *Settings) { v.Main = "conv2" })
+
+	// conv3 is neither origin, nor supervisor, nor main -> refused.
+	raw, _ := json.Marshal(map[string]any{"todo_id": todo.ID, "verdict": "accepted", "note": "验收通过"})
+	if _, err := s.runTool(ctx, "server", "conv3", "task_review", raw); err == nil {
+		t.Fatal("conv3 should not be allowed to review")
+	}
+
+	// conv2 is the new main conversation -> succeeds!
+	res, err := s.runTool(ctx, "server", "conv2", "task_review", raw)
+	if err != nil {
+		t.Fatalf("conv2 review failed: %v", err)
+	}
+	if !strings.Contains(res, "accepted and closed") {
+		t.Fatalf("unexpected review result: %s", res)
+	}
+	done := todoNow(s, todo.ID)
+	if done.DoneAt == nil || done.Supervision.State != reviewAccepted || done.Supervision.Supervisor != "conv2" {
+		t.Fatalf("unexpected done todo: %+v, supervision: %+v", done, done.Supervision)
+	}
+}
+
 func TestGoldenSupervise(t *testing.T) {
 	golden(t, "supervise.digest", prompts.RenderSupervise(prompts.Supervise{Entries: sortEntries([]prompts.SuperviseEntry{
 		{ID: "todo_1", Title: "修登录崩溃", Kind: sigReview, Detail: "PR 已合并", DoneWhen: []string{"PR 合并到 master", "浅色 / 深色截图贴进 PR"},
