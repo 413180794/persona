@@ -2,6 +2,10 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Copied SDK commands need their development inputs (#6132)
+
+- Copying a package's scripts without their referenced configs, helper scripts and typecheck fixtures leaves a plausible-looking but unusable SDK. Keep the official TypeScript copy complete, including its dependency lockfile; exclude installed dependencies and build output. Test a fresh destination, not only the source checkout, and verify selective copying leaves the other SDK untouched. Schema-conformance fixtures must also be collected from their canonical source into the SDK package and archive; tests cannot depend on an outer repository schema directory or silently skip missing fixtures. Installing these declared development dependencies is a build-time operation, never source-runtime dependency resolution.
+
 ## SDK transport shutdown and error identity (2026-11-07, #6125)
 
 - At input EOF, feed the final unterminated frame, then call `connect().shutdown()`: stop input, reject unreachable outbound hub calls, and only then drain accepted request answers. Draining first deadlocks a handler awaiting a hub reply; an idle runtime can instead exit early and hide the missing answer. Keep the writer open through shutdown and flush it before closing. `drain()` alone remains nonclosing, and outbound `close()` does not change inbound initialization checks. Arbitrary handler work and event lifetimes still need runner-owned bounds.

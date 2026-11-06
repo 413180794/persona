@@ -31,6 +31,10 @@ def files():
                     continue
                 path = os.path.join(dirpath, name)
                 yield prefix + "/" + os.path.relpath(path, top).replace(os.sep, "/"), path
+    examples = os.path.join(ROOT, "schema", "extension", "examples")
+    for name in sorted(os.listdir(examples)):
+        if name == "Manifest.custom-contributions.json" or (name.startswith("UIStream") and name.endswith(".json")):
+            yield "ts/fixtures/" + name, os.path.join(examples, name)
 
 
 def build():
