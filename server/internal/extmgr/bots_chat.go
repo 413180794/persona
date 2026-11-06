@@ -440,11 +440,26 @@ func (h *Manager) botPost(ctx context.Context, api *feishubot.Client, chatID, re
 }
 
 func (h *Manager) botPostJSON(ctx context.Context, api *feishubot.Client, chatID, replyTo, card, fallback string) (string, error) {
+	return h.botPostJSONKeyed(ctx, api, chatID, replyTo, card, fallback, "")
+}
+
+// botPostJSONKeyed is botPostJSON with the caller's key for a send into the chat (no parent): the same key, the
+// card and its fallback each land once however often the send is made again. "" is a fresh one-shot key.
+func (h *Manager) botPostJSONKeyed(ctx context.Context, api *feishubot.Client, chatID, replyTo, card, fallback, key string) (string, error) {
+	if len(key) > feishuMaxUUID-4 {
+		key = key[:feishuMaxUUID-4]
+	}
 	cardUUID := feishuSendUUID()
-	if replyTo != "" {
+	switch {
+	case replyTo != "":
 		cardUUID = feishuReplyUUID(replyTo, "c", card)
+	case key != "":
+		cardUUID = "k:" + key + ":c"
 	}
 	send := func(typ, content, uuid string) (string, error) {
+		if replyTo == "" && key != "" {
+			return api.Send(ctx, "chat_id", chatID, typ, content, uuid) // the caller's key, not a fresh one
+		}
 		id, rerouted, err := h.replyOrSend(ctx, api, chatID, replyTo, typ, content, uuid)
 		if rerouted {
 			replyTo = "" // a fallback after the detour must go to the chat too, never retry the dead reply
@@ -458,8 +473,11 @@ func (h *Manager) botPostJSON(ctx context.Context, api *feishubot.Client, chatID
 			fallback = i18n.T(h.botLang(ctx), "hub-bots_chat.card_refused")
 		}
 		fallbackUUID := feishuSendUUID()
-		if replyTo != "" {
+		switch {
+		case replyTo != "":
 			fallbackUUID = feishuReplyUUID(replyTo, "f", fallback)
+		case key != "":
+			fallbackUUID = "k:" + key + ":f"
 		}
 		return send(feishubot.TypePost, feishubot.PostMarkdown(fallback), fallbackUUID)
 	}

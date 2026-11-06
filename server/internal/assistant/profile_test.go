@@ -83,6 +83,53 @@ func TestPutSettings(t *testing.T) {
 	}
 }
 
+// Read-only devices (an answer-only watch) may view the assistant but cannot change its settings or write/delete
+// memory: the three mutating routes answer 403 before touching anything. No role (a test's own request) and "full"
+// keep working, and GET stays open.
+func TestSettingsAndMemoryRequireFullRole(t *testing.T) {
+	f := newFakeHub().withMachine()
+	f.devices = []Device{{ID: "server", Name: "server", Kind: "local", Home: "/home/me"}}
+	f.hello.Assistant.Machines = []string{"server"}
+	s := newTestService(t, f)
+	do := func(method, path, role, body string) int {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		if role != "" {
+			r.Header.Set(RoleHeader, role)
+		}
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		return rec.Code
+	}
+	for _, tc := range []struct {
+		method, path, body string
+	}{
+		{http.MethodPut, "/api/v1/assistant", `{}`},
+		{http.MethodPut, "/api/v1/assistant/memory/note-1", `{"content":"x"}`},
+		{http.MethodDelete, "/api/v1/assistant/memory/note-1", ``},
+	} {
+		// Read-only devices and extensions are stopped by the role; full devices go through (the fake services all
+		// three, so they answer 200 rather than failing somewhere past the gate).
+		for _, role := range []string{"answer", roleExtension} {
+			if code := do(tc.method, tc.path, role, tc.body); code != http.StatusForbidden {
+				t.Fatalf("%s %s as %s: %d, want 403", tc.method, tc.path, role, code)
+			}
+		}
+		if code := do(tc.method, tc.path, "full", tc.body); code != http.StatusOK {
+			t.Fatalf("%s %s as full: %d, want 200", tc.method, tc.path, code)
+		}
+	}
+	// No role header is a full-role request; the empty PUT is a valid no-op settings change.
+	if code := do(http.MethodPut, "/api/v1/assistant", "", `{}`); code != http.StatusOK {
+		t.Fatalf("PUT without a role header: %d, want 200", code)
+	}
+	// Reading the settings and memory stays open to a read-only device.
+	for _, path := range []string{"/api/v1/assistant", "/api/v1/assistant/memory"} {
+		if code := do(http.MethodGet, path, "answer", ""); code != http.StatusOK {
+			t.Fatalf("GET %s as answer: %d, want 200", path, code)
+		}
+	}
+}
+
 // A transient settings read failure keeps serving the settings read last instead of the defaults: one locked-database
 // round must not silently turn a 365-day recording retention into 14 days and let the next KB prune delete recordings.
 // Only settings never successfully read fall back to the default.

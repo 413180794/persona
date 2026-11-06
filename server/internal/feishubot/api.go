@@ -411,6 +411,16 @@ func (c *Client) Resource(ctx context.Context, messageID, key, kind string, limi
 	}
 }
 
+// Refused: Feishu will not take this message however often it is sent (the card's content refused, the bot not in
+// the chat or not allowed to reach the user, the app missing a permission); sending it again cannot help.
+func Refused(err error) bool {
+	switch errorCode(err) {
+	case 230099, 230025, 200621, 200830, 230002, 230006, 230013, 99991672, 99991679:
+		return true
+	}
+	return false
+}
+
 // RateLimited: Feishu refused the call for coming too often (230020: a message updated too often; 99991400: the
 // app's rate limit; HTTP 429).
 func RateLimited(err error) bool {

@@ -2,6 +2,8 @@ package assistant
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -974,7 +976,7 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 	if !ok || sess.WokeByTask && !main || spaceOf(sess) == SpaceHealth { // a health task's runs stay off Feishu (health.go)
 		return
 	}
-	asked, answer, ok := s.channelLastTurn(ctx, machine, session)
+	asked, answer, turn, ok := s.channelLastTurnOf(ctx, machine, session)
 	if !ok {
 		return
 	}
@@ -993,25 +995,83 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 		foot = i18n.T(l, "assistant-feishu_cards.asked_elsewhere", i18n.Args{"asked": clip(oneLine(stripContext(asked)), 80)}) + "\n" + label
 	}
 	cards := answerCards(l, answer, false, nil, foot)
-	target := botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}
+	if len(cards) > 0 {
+		cards[len(cards)-1].card.Buttons(s.openButton(ctx, machine, session))
+	}
+	// The turn is in the key: two runs an hour apart that asked and answered alike (a task's "no change") are two
+	// sends, not one Feishu drops as a repeat.
+	sum := sha256.Sum256([]byte(machine + "\x00" + session + "\x00" + turn + "\x00" + asked + "\x00" + answer))
+	m := &mirrorSend{l: l, cards: cards, target: botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, label: label,
+		main: main, answer: answer, turn: turn, key: "m" + hex.EncodeToString(sum[:8])}
+	s.feishuMirrorPost(ctx, m, 0)
+}
+
+// mirrorSend is one mirrored answer, as it is sent again when its first card did not get out.
+type mirrorSend struct {
+	l      i18n.Lang
+	cards  []botAnswerCard
+	target botTarget
+	label  string
+	main   bool   // the main conversation's (the sync switch), else a scheduled task's own (pushes)
+	answer string // the turn's answer: a retry goes only while it is still the conversation's last
+	turn   string // the turn's last item: with answer, what tells it from a later turn that answered alike
+	key    string // the answer's key: card i is sent with key + i, the same on every try
+}
+
+// stillDue: a retry of m may go now: the switch its conversation needs is on, its notify_user did not go to Feishu
+// meanwhile, and its turn is still the conversation's last (an old 早报 must not land under a newer answer).
+func (s *Service) mirrorStillDue(ctx context.Context, m *mirrorSend) bool {
+	f, ready := s.feishuFeatures(ctx)
+	switch {
+	case !ready, m.main && !f.Sync, !m.main && !f.Pushes:
+		return false
+	case f.Pushes && s.pushedLately(m.target.SessionID):
+		return false
+	}
+	_, answer, turn, ok := s.channelLastTurnOf(ctx, m.target.MachineID, m.target.SessionID)
+	return ok && answer == m.answer && turn == m.turn
+}
+
+// feishuMirrorRetry is how long a mirrored answer whose first card did not get out waits before it is sent again, and
+// feishuMirrorRetries how many times: the mirror is the last way a 早报 reaches Feishu, so one error must not lose it.
+var (
+	feishuMirrorRetry   = 30 * time.Second
+	feishuMirrorRetries = 3
+)
+
+// feishuMirrorPost sends a mirrored answer's cards, each with its own key that is the same on every try (Feishu lands a
+// key once: a card that went out although its reply was lost is not shown twice). When the first does not get out,
+// nothing did: the same cards go again later, while mirrorStillDue, up to feishuMirrorRetries times; not when Feishu
+// refused it for good. Later ones that fail are named at the end.
+func (s *Service) feishuMirrorPost(ctx context.Context, m *mirrorSend, attempt int) {
 	var missing []int // the pieces that did not get out (1-based): said at the end
-	for i, ac := range cards {
-		if i == len(cards)-1 {
-			ac.card.Buttons(s.openButton(ctx, machine, session))
-		}
-		mid, err := s.botPost(ctx, "", ac.card, ac.fallback)
+	for i, ac := range m.cards {
+		mid, err := s.botPostKeyed(ctx, "", ac.card, ac.fallback, m.key+strconv.Itoa(i))
 		if err != nil {
 			s.logf("bots: mirror: %v", err)
 			if i == 0 {
-				return // nothing went out: the rest would read as an answer without its beginning
+				// Nothing went out: the rest would read as an answer without its beginning. Tried again later.
+				if feishubot.Refused(err) || attempt >= feishuMirrorRetries {
+					s.logf("bots: mirror: given up after %d tries", attempt+1)
+					return
+				}
+				time.AfterFunc(feishuMirrorRetry, func() {
+					rctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					if !s.mirrorStillDue(rctx, m) {
+						return // switched off, unpaired, pushed meanwhile, or a newer turn
+					}
+					s.feishuMirrorPost(rctx, m, attempt+1)
+				})
+				return
 			}
 			missing = append(missing, i+1)
 			continue
 		}
-		s.rememberBotThread(mid, target, label) // a reply to any of them goes to this conversation
+		s.rememberBotThread(mid, m.target, m.label) // a reply to any of them goes to this conversation
 	}
 	if len(missing) > 0 {
-		s.botSay(ctx, missingPiecesNote(l, missing))
+		s.botSay(ctx, missingPiecesNote(m.l, missing))
 	}
 }
 

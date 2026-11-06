@@ -238,3 +238,20 @@ func TestChannelFeishuTextDetoursWithdrawnReplyToSend(t *testing.T) {
 		t.Fatalf("detoured send %q key %v, want a fresh one-shot key", sendCall, m)
 	}
 }
+
+// A send into the chat with the caller's key uses it, the same each time it is sent (Feishu lands it once).
+func TestBotPostJSONKeyed(t *testing.T) {
+	f := newFakeUUIDAPI(t)
+	h := newTestManager(t)
+	api := feishubot.New("cli", "sec", f.srv.URL)
+	card := feishubot.NewCard("t", "green", "a").Markdown("card-a").JSON()
+	for range [2]int{} {
+		if _, err := h.botPostJSONKeyed(context.Background(), api, "chat", "", card, "fb", "mcafe00a10"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := f.uuids()
+	if len(got) != 2 || got[0] != "k:mcafe00a10:c" || got[1] != got[0] {
+		t.Fatalf("uuids %v", got)
+	}
+}

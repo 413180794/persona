@@ -333,10 +333,19 @@ func (s *Service) feishuFeatures(ctx context.Context) (FeishuFeatures, bool) {
 // botPost sends a card: as a reply to replyTo, else into the owner's chat; one Feishu refuses goes as rich text
 // (fallback).
 func (s *Service) botPost(ctx context.Context, replyTo string, card *feishubot.Card, fallback string) (string, error) {
+	return s.botPostKeyed(ctx, replyTo, card, fallback, "")
+}
+
+// botPostKeyed is botPost with a key for a send into the chat that may be made again: the same key lands once.
+func (s *Service) botPostKeyed(ctx context.Context, replyTo string, card *feishubot.Card, fallback, key string) (string, error) {
 	var res struct {
 		MessageID string `json:"message_id"`
 	}
-	err := s.appCall(ctx, AppFeishu, FeishuPost, map[string]any{"reply_to": replyTo, "card": card.JSON(), "fallback": fallback}, &res)
+	p := map[string]any{"reply_to": replyTo, "card": card.JSON(), "fallback": fallback}
+	if key != "" {
+		p["uuid"] = key
+	}
+	err := s.appCall(ctx, AppFeishu, FeishuPost, p, &res)
 	return res.MessageID, err
 }
 

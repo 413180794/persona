@@ -79,6 +79,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		ReplyTo    string               `json:"reply_to"`
 		Card       string               `json:"card"`
 		Fallback   string               `json:"fallback"`
+		UUID       string               `json:"uuid"`
 		Text       string               `json:"text"`
 		MessageID  string               `json:"message_id"`
 		Emoji      string               `json:"emoji"`
@@ -124,7 +125,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		if a.Card == "" {
 			return nil, errors.New("feishu.post needs a card")
 		}
-		id, err := h.botPostJSON(ctx, api, set.Owner.ChatID, a.ReplyTo, a.Card, a.Fallback)
+		id, err := h.botPostJSONKeyed(ctx, api, set.Owner.ChatID, a.ReplyTo, a.Card, a.Fallback, a.UUID)
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuText:
 		// With no parent the key is unused: replyOrSend sends with its own fresh one-shot key.

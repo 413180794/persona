@@ -848,8 +848,9 @@ const (
 	AppFeishu = "feishu"
 	// FeishuStatusGet: {} → FeishuStatus.
 	FeishuStatusGet = "feishu.status"
-	// FeishuPost: {reply_to?, card, fallback?} → {message_id}: a card (JSON 2.0) as a reply, else into the owner's
-	// chat; one Feishu refuses goes again as rich text (fallback, Markdown).
+	// FeishuPost: {reply_to?, card, fallback?, uuid?} → {message_id}: a card (JSON 2.0) as a reply, else into the
+	// owner's chat; one Feishu refuses goes again as rich text (fallback, Markdown). uuid (≤ 40 chars) is the caller's
+	// key for a send into the chat that may be made again (a retried 早报): the same key lands once.
 	FeishuPost = "feishu.post"
 	// FeishuText: {reply_to?, text} → {message_id}: plain text as a reply, else into the owner's chat.
 	FeishuText = "feishu.text"

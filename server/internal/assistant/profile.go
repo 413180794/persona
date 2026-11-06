@@ -369,6 +369,10 @@ func (s *Service) profileRoutes() {
 		_, _ = w.Write(res)
 	})
 	s.handle("PUT /api/v1/assistant/memory/{name}", func(w http.ResponseWriter, r *http.Request) {
+		if !fullRole(r) {
+			apierr.Write(w, http.StatusForbidden, errors.New("read-only role cannot change memory"))
+			return
+		}
 		var in struct {
 			Content string `json:"content"`
 		}
@@ -383,6 +387,10 @@ func (s *Service) profileRoutes() {
 		apierr.WriteJSON(w, map[string]any{"ok": true})
 	})
 	s.handle("DELETE /api/v1/assistant/memory/{name}", func(w http.ResponseWriter, r *http.Request) {
+		if !fullRole(r) {
+			apierr.Write(w, http.StatusForbidden, errors.New("read-only role cannot change memory"))
+			return
+		}
 		if err := s.memory(r.Context(), map[string]any{"op": "delete", "name": r.PathValue("name"), "space": r.URL.Query().Get("space")}, nil); err != nil {
 			apierr.Call(w, err)
 			return
@@ -394,6 +402,10 @@ func (s *Service) profileRoutes() {
 // putSettings is PUT /api/v1/assistant: what the body sets changes ("-" as main clears it); a launcher is checked
 // on the assistant's machine and goes into Model configuration › Main chat too.
 func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
+	if !fullRole(r) {
+		apierr.Write(w, http.StatusForbidden, errors.New("read-only role cannot change settings"))
+		return
+	}
 	ctx := r.Context()
 	var in Settings
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {

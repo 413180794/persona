@@ -689,11 +689,18 @@ func (s *Service) extensionMirror(ctx context.Context, machine, session string) 
 
 // channelLastTurn is the conversation's last turn: what was asked and its answer (false when it has no answer).
 func (s *Service) channelLastTurn(ctx context.Context, machine, session string) (string, string, bool) {
+	asked, answer, _, ok := s.channelLastTurnOf(ctx, machine, session)
+	return asked, answer, ok
+}
+
+// channelLastTurnOf is channelLastTurn with what tells this turn from another with the same words: its last item's ID
+// (else its time), so two runs that asked and answered alike are still two turns.
+func (s *Service) channelLastTurnOf(ctx context.Context, machine, session string) (string, string, string, bool) {
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
 	if err := s.call(ctx, machine, DeviceSessionItems, map[string]any{"session_id": session, "turns": 1, "lazy_images": true}, &res); err != nil {
-		return "", "", false
+		return "", "", "", false
 	}
 	asked := ""
 	for _, it := range res.Items {
@@ -706,7 +713,13 @@ func (s *Service) channelLastTurn(ctx context.Context, machine, session string) 
 		texts = append(texts, p.Text)
 	}
 	answer := strings.TrimSpace(strings.Join(texts, "\n\n"))
-	return asked, answer, answer != ""
+	turn := ""
+	if n := len(res.Items); n > 0 {
+		if turn = res.Items[n-1].ID; turn == "" {
+			turn = res.Items[n-1].TS.UTC().Format(time.RFC3339Nano)
+		}
+	}
+	return asked, answer, turn, answer != ""
 }
 
 // isMainOn: session on machine is the main conversation.
