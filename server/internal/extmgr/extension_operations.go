@@ -700,7 +700,7 @@ func (h *Manager) operationRoutes(api *http.ServeMux) {
 		v := h.snapshot(op)
 		if v.State == opNeedsConsent {
 			if pv := ps.reg.PreviewOf(v.PreviewID); pv != nil {
-				v.Preview = pv
+				v.Preview = pv.In(h.requestLang(r))
 			}
 		}
 		writeJSON(w, v)

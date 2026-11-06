@@ -438,6 +438,7 @@ type Preview struct {
 	// Unresolved are the dependencies or members no registered market has (it does not install while one is missing).
 	Unresolved []string `json:"unresolved,omitempty"`
 
+	previous              *Manifest // immutable consent baseline captured when the preview was staged
 	source                Source
 	marketSpec, marketKey string
 	fingerprint           string // all staged package bytes/modes as approved at preview
@@ -681,6 +682,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	if upgrade != "" {
 		pv.Upgrade, pv.From = true, cur.Record.Version
 		pv.MorePermissions = MorePermissions(cur, m)
+		pv.previous = cur.Full
 		pv.AddedPermissions = Added(cur.Full, m)
 	}
 	r.previews[pv.ID] = pv

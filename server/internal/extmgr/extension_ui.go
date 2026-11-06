@@ -176,6 +176,14 @@ type uiRequest struct {
 	Values map[string]string `json:"values,omitempty"`
 }
 
+// uiFallbackLang keeps legacy requests on the user's language while matching explicit UI locales.
+func (h *Manager) uiFallbackLang(ctx context.Context, locale string) i18n.Lang {
+	if locale == "" {
+		return h.contextLang(ctx)
+	}
+	return i18n.Resolve(locale)
+}
+
 var localePattern = regexp.MustCompile(`^[A-Za-z]{2,3}([-_][A-Za-z0-9]{1,8}){0,4}$`)
 
 // uiParams are what the plugin is told of a request to draw item: the app's context held to what is known (a time
@@ -297,7 +305,7 @@ func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (ex
 		return res, err
 	}
 	fit := func(v *extension.View) error {
-		dropped, err := extension.Fit(v, slot, params.UIVersion)
+		dropped, err := extension.Fit(v, slot, params.UIVersion, h.uiFallbackLang(ctx, params.Locale))
 		if len(dropped) > 0 && params.UIVersion == extension.UIVersion {
 			h.extensions.logf("plugin %s: ui %s drew items this hub does not know (%s): left out", id, uiID, strings.Join(dropped, ", "))
 		}
@@ -328,7 +336,7 @@ func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (ex
 			return extension.ActionResult{}, err
 		}
 	}
-	if err := extension.FitResult(&res, slot, params.UIVersion); err != nil {
+	if err := extension.FitResult(&res, slot, params.UIVersion, h.uiFallbackLang(ctx, params.Locale)); err != nil {
 		return extension.ActionResult{}, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
 	}
 	if err := checkPushes(p.Manifest, *item, &extension.View{Sections: []extension.Section{{Items: res.Items}}}, nil); err != nil {

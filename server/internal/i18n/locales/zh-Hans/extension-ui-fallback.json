@@ -1,0 +1,18 @@
+{
+  "truncated": "……（更多内容请在新版 App 中查看）",
+  "binary": "二进制文件",
+  "comment": "评论",
+  "too_long": "内容太多，其余的请在新版 App 中查看",
+  "discard": "放弃草稿",
+  "draft": "草稿",
+  "loading": "加载中…",
+  "load_more": "加载更多",
+  "files_remaining": "还有 {count} 个文件",
+  "comments_remaining": "还有 {count} 条",
+  "review_drafts": "评审草稿 · {count} 条",
+  "line_comment": "第 {line} 行 · {author}：{body}",
+  "file_added": "新增",
+  "file_modified": "修改",
+  "file_deleted": "删除",
+  "file_renamed": "重命名"
+}

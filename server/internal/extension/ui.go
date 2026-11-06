@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Declarative UI (docs/extensions.md "Declarative UI"): a plugin never runs code in the apps. It answers ui.render with a View
@@ -69,17 +70,17 @@ var UISlots = []UISlot{
 	// extension_page is plugin_page's new name: the same slot (PageSlot).
 	{Name: "extension_page", Size: SizeFull, Since: 3},
 	{Name: "launcher_section", Size: SizeFull, Context: "launcher", Since: 1},
-	{Name: "nav_page", Size: SizeFull, Badge: true, Shown: "主导航上的入口", Since: 2},
-	{Name: "overview_card", Size: SizeCompact, Shown: "总览上的卡片", Since: 2},
-	{Name: "capsule_card", Size: SizeCompact, Shown: "Android 跨 App 悬浮胶囊里的卡片（在 App 外显示）", Since: 3},
-	{Name: "machine_section", Size: SizeFull, Context: "machine", Shown: "机器详情页里的一节（会知道是哪台机器）", Since: 2},
+	{Name: "nav_page", Size: SizeFull, Badge: true, Shown: permissionText(i18n.Default, "slot_nav_page"), Since: 2},
+	{Name: "overview_card", Size: SizeCompact, Shown: permissionText(i18n.Default, "slot_overview_card"), Since: 2},
+	{Name: "capsule_card", Size: SizeCompact, Shown: permissionText(i18n.Default, "slot_capsule_card"), Since: 3},
+	{Name: "machine_section", Size: SizeFull, Context: "machine", Shown: permissionText(i18n.Default, "slot_machine_section"), Since: 2},
 	// inbox_item draws the body of an inbox item from the plugin's connector (its own header stays the app's): the
 	// same items a plugin's connector brought in, with the hub's triage on them. Drawn with UI version 2's items.
-	{Name: "inbox_item", Size: SizeFull, Context: "item", Shown: "收件箱里它的连接器的条目详情（会读到那一条的标题、总结和分级）", Since: 2},
+	{Name: "inbox_item", Size: SizeFull, Context: "item", Shown: permissionText(i18n.Default, "slot_inbox_item"), Since: 2},
 	// widget is drawn outside the app (docs/extensions.md "System-level places"): a home screen widget, a Lock Screen or watch
 	// face complication. The size it is asked for is the family (FitWidget holds the view to it); the apps list
 	// widgets on their own (GET /api/v1/extensions/-/widgets), not with the slots drawn in the app.
-	{Name: "widget", Size: WidgetFamilySmall, Shown: "主屏幕小组件和表盘（在 App 外显示）", Since: 3},
+	{Name: "widget", Size: WidgetFamilySmall, Shown: permissionText(i18n.Default, "slot_widget"), Since: 3},
 }
 
 // Widgets: the families a widget is drawn at and how often it is drawn again (docs/extensions.md "System-level places").
@@ -216,11 +217,11 @@ type EventsItem struct {
 // Events this hub has.
 var (
 	EventTopics = map[string]string{
-		"kb.changed":      "知识库里的条目有变化（类型、标识、变化部分；需读知识库权限）",
-		"kb.forgotten":    "知识库删除了一个来源的数据（来源；需读知识库权限）",
-		"inbox.changed":   "收件箱里有新的或更新了的条目（来源、种类、标题）",
-		"agent.needs_you": "有 Agent 在等你回答或批准（哪台电脑、哪个会话、问的什么）",
-		"agent.finished":  "有 Agent 做完了（哪台电脑、哪个会话、标题）",
+		"kb.changed":      permissionText(i18n.Default, "event_kb_changed"),
+		"kb.forgotten":    permissionText(i18n.Default, "event_kb_forgotten"),
+		"inbox.changed":   permissionText(i18n.Default, "event_inbox_changed"),
+		"agent.needs_you": permissionText(i18n.Default, "event_agent_needs_you"),
+		"agent.finished":  permissionText(i18n.Default, "event_agent_finished"),
 	}
 )
 
@@ -327,7 +328,11 @@ func ParseView(raw json.RawMessage) (*View, error) {
 // empty state as a text and a button, a section's more as a button, a filter as a segmented), left out where it does
 // not; refresh_after is held to its bounds. Then it is checked (CheckView), a compact one to its limits. It says what
 // types it left out.
-func Fit(v *View, slot UISlot, uiVersion int) (dropped []string, err error) {
+func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped []string, err error) {
+	l := i18n.Default
+	if len(languages) > 0 {
+		l = languages[0].Or(i18n.Default)
+	}
 	if v == nil {
 		return nil, errors.New("no view")
 	}
@@ -336,13 +341,13 @@ func Fit(v *View, slot UISlot, uiVersion int) (dropped []string, err error) {
 		v.Sections = []Section{}
 	}
 	if uiVersion < 5 {
-		downgrade5(v)
+		downgrade5(v, l)
 	}
 	if uiVersion < 4 {
-		downgrade4(v)
+		downgrade4(v, l)
 	}
 	if uiVersion < 3 {
-		downgrade(v, uiVersion)
+		downgrade(v, uiVersion, l)
 	}
 	sections := v.Sections[:0]
 	for _, s := range v.Sections {
@@ -413,7 +418,7 @@ var newIcons = []string{"branch", "commit", "code", "pull_request", "merge", "fi
 // ones): tabs as a segmented, a split view as one column, a header as a text and rows, code and diffs as code texts, a
 // file tree as rows, a thread as rows and markdown, a composer as a field and buttons. An action's values are left out
 // (an older app sends none). What does not fit in ItemsMost is cut, with a word saying so.
-func downgrade4(v *View) {
+func downgrade4(v *View, l i18n.Lang) {
 	if t := v.Tabs; t != nil {
 		choices := make([]UIChoice, 0, SegmentsMost)
 		for _, it := range t.Items {
@@ -466,7 +471,7 @@ func downgrade4(v *View) {
 			}
 		}
 		if text != "" {
-			out = append(out, UIElem{Type: "text", Text: "……（更多内容请在新版 App 中查看）", Style: "caption"})
+			out = append(out, UIElem{Type: "text", Text: i18n.T(l, "extension-ui-fallback.truncated"), Style: "caption"})
 		}
 		return out
 	}
@@ -522,7 +527,7 @@ func downgrade4(v *View) {
 			case "file_tree":
 				for k, en := range e.Entries {
 					if k == oldTreeRows {
-						items = append(items, UIElem{Type: "text", Text: fmt.Sprintf("还有 %d 个文件", len(e.Entries)-k), Style: "caption"})
+						items = append(items, UIElem{Type: "text", Text: i18n.T(l, "extension-ui-fallback.files_remaining", i18n.Args{"count": len(e.Entries) - k}), Style: "caption"})
 						break
 					}
 					row := UIElem{Type: "row", Title: clip(en.Path, StringMost), Icon: "doc"}
@@ -535,6 +540,7 @@ func downgrade4(v *View) {
 					if en.Badge != nil {
 						row.Badge = en.Badge
 					} else if t, ok := fileStatusBadge[en.Status]; ok {
+						t.Text = i18n.T(l, t.Text)
 						row.Badge = &t
 					}
 					items = append(items, row)
@@ -551,6 +557,7 @@ func downgrade4(v *View) {
 				}
 				row.Value = fmt.Sprintf("+%d −%d", e.Additions, e.Deletions)
 				if t, ok := fileStatusBadge[e.Status]; ok {
+					t.Text = i18n.T(l, t.Text)
 					row.Badge = &t
 				}
 				items = append(items, row)
@@ -565,7 +572,7 @@ func downgrade4(v *View) {
 				}
 				switch {
 				case e.Binary:
-					items = append(items, UIElem{Type: "text", Text: "二进制文件", Style: "caption"})
+					items = append(items, UIElem{Type: "text", Text: i18n.T(l, "extension-ui-fallback.binary"), Style: "caption"})
 				case b.Len() > 0:
 					items = append(items, codeTexts(b.String())...)
 				}
@@ -575,7 +582,7 @@ func downgrade4(v *View) {
 					}
 					c := t.Comments[0]
 					items = append(items, UIElem{Type: "text", Style: "secondary",
-						Text: clip(fmt.Sprintf("第 %d 行 · %s：%s", t.Line, c.Author, strings.TrimSpace(c.Body)), StringMost)})
+						Text: clip(i18n.T(l, "extension-ui-fallback.line_comment", i18n.Args{"line": t.Line, "author": c.Author, "body": strings.TrimSpace(c.Body)}), StringMost)})
 				}
 			case "comment_thread":
 				if e.Title != "" {
@@ -583,13 +590,13 @@ func downgrade4(v *View) {
 				}
 				for k, c := range e.Comments {
 					if k == oldComments {
-						items = append(items, UIElem{Type: "text", Text: fmt.Sprintf("还有 %d 条", len(e.Comments)-k), Style: "caption"})
+						items = append(items, UIElem{Type: "text", Text: i18n.T(l, "extension-ui-fallback.comments_remaining", i18n.Args{"count": len(e.Comments) - k}), Style: "caption"})
 						break
 					}
 					items = append(items, commentItems(c)...)
 				}
 			case "composer":
-				items = append(items, UIElem{Type: "field", Name: e.Name, Label: cmp.Or(e.Placeholder, "评论"), Kind: "text", Value: e.Value})
+				items = append(items, UIElem{Type: "field", Name: e.Name, Label: cmp.Or(e.Placeholder, i18n.T(l, "extension-ui-fallback.comment")), Kind: "text", Value: e.Value})
 				for _, b := range e.Buttons {
 					a := b.Action
 					a.Submit = true
@@ -604,7 +611,7 @@ func downgrade4(v *View) {
 			}
 		}
 		if total+len(items) > ItemsMost-1 {
-			items = append(items[:max(ItemsMost-1-total, 0)], UIElem{Type: "text", Text: "内容太多，其余的请在新版 App 中查看", Style: "caption"})
+			items = append(items[:max(ItemsMost-1-total, 0)], UIElem{Type: "text", Text: i18n.T(l, "extension-ui-fallback.too_long"), Style: "caption"})
 			s.Items = items
 			v.Sections = v.Sections[:i+1]
 			return
@@ -618,14 +625,14 @@ func downgrade4(v *View) {
 // files, drafts and suggestions, a thread's resolve, a code's line link. A draft thread's first comment gets a badge
 // saying so; the pending review's bar becomes a section on top: a line saying how many drafts, its composer and discard
 // as a button.
-func downgrade5(v *View) {
+func downgrade5(v *View, l i18n.Lang) {
 	if r := v.Review; r != nil {
 		items := []UIElem{
-			{Type: "text", Text: fmt.Sprintf("评审草稿 · %d 条", r.Count), Style: "secondary"},
+			{Type: "text", Text: i18n.T(l, "extension-ui-fallback.review_drafts", i18n.Args{"count": r.Count}), Style: "secondary"},
 			{Type: "composer", Name: r.Name, Placeholder: r.Placeholder, Buttons: r.Buttons},
 		}
 		if r.Discard != nil {
-			items = append(items, UIElem{Type: "button", Title: "放弃草稿", Action: r.Discard, Role: "destructive"})
+			items = append(items, UIElem{Type: "button", Title: i18n.T(l, "extension-ui-fallback.discard"), Action: r.Discard, Role: "destructive"})
 		}
 		v.Sections = append([]Section{{Items: items}}, v.Sections...)
 		v.Review = nil
@@ -642,7 +649,7 @@ func downgrade5(v *View) {
 			for k := range e.Threads {
 				t := &e.Threads[k]
 				if t.Pending && len(t.Comments) > 0 && t.Comments[0].Badge == nil {
-					t.Comments[0].Badge = &Badge{Text: "草稿", Tone: "caution"}
+					t.Comments[0].Badge = &Badge{Text: i18n.T(l, "extension-ui-fallback.draft"), Tone: "caution"}
 				}
 				t.Pending, t.Resolve = false, nil
 			}
@@ -653,7 +660,11 @@ func downgrade5(v *View) {
 // FitResult makes what ui.action answered something the app can use, past the view (Fit): lines and components in
 // place (UI version 5) are checked and the components fitted one by one; an older app gets neither, so it draws the
 // page again.
-func FitResult(res *ActionResult, slot UISlot, uiVersion int) error {
+func FitResult(res *ActionResult, slot UISlot, uiVersion int, languages ...i18n.Lang) error {
+	l := i18n.Default
+	if len(languages) > 0 {
+		l = languages[0].Or(i18n.Default)
+	}
 	if uiVersion < 5 {
 		res.Lines, res.Items = nil, nil
 		return nil
@@ -670,7 +681,7 @@ func FitResult(res *ActionResult, slot UISlot, uiVersion int) error {
 			return errors.New("items: each has the key of the one it stands for")
 		}
 	}
-	if _, err := Fit(&v, slot, uiVersion); err != nil {
+	if _, err := Fit(&v, slot, uiVersion, l); err != nil {
 		return err
 	}
 	if len(v.Sections) == 0 || len(v.Sections[0].Items) != len(res.Items) {
@@ -682,14 +693,14 @@ func FitResult(res *ActionResult, slot UISlot, uiVersion int) error {
 
 // fileStatusBadge is how an older app shows a file's status.
 var fileStatusBadge = map[string]Badge{
-	"added":    {Text: "新增", Tone: "positive"},
-	"modified": {Text: "修改", Tone: "neutral"},
-	"deleted":  {Text: "删除", Tone: "danger"},
-	"renamed":  {Text: "重命名", Tone: "caution"},
+	"added":    {Text: "extension-ui-fallback.file_added", Tone: "positive"},
+	"modified": {Text: "extension-ui-fallback.file_modified", Tone: "neutral"},
+	"deleted":  {Text: "extension-ui-fallback.file_deleted", Tone: "danger"},
+	"renamed":  {Text: "extension-ui-fallback.file_renamed", Tone: "caution"},
 }
 
 // downgrade draws v3's components and fields with those of uiVersion (1 or 2), in place: what an older app gets.
-func downgrade(v *View, uiVersion int) {
+func downgrade(v *View, uiVersion int, l i18n.Lang) {
 	var filter []UIElem
 	if f := v.Filter; f != nil && uiVersion >= 2 && len(f.Choices) <= SegmentsMost &&
 		!slices.ContainsFunc(f.Choices, func(c UIChoice) bool { return utf8.RuneCountInString(cmp.Or(c.Title, c.Value)) > 12 }) {
@@ -730,7 +741,7 @@ func downgrade(v *View, uiVersion int) {
 					items = append(items, UIElem{Type: "button", Title: b.Title, Action: &a})
 				}
 			case "loading":
-				items = append(items, UIElem{Type: "text", Text: cmp.Or(e.Title, "加载中…"), Style: "secondary"})
+				items = append(items, UIElem{Type: "text", Text: cmp.Or(e.Title, i18n.T(l, "extension-ui-fallback.loading")), Style: "secondary"})
 			default:
 				items = append(items, e)
 			}
@@ -738,7 +749,7 @@ func downgrade(v *View, uiVersion int) {
 		if m := s.More; m != nil {
 			a := m.Action
 			a.Push = nil
-			items = append(items, UIElem{Type: "button", Title: cmp.Or(m.Title, "加载更多"), Action: &a})
+			items = append(items, UIElem{Type: "button", Title: cmp.Or(m.Title, i18n.T(l, "extension-ui-fallback.load_more")), Action: &a})
 		}
 		s.More, s.Items = nil, items
 	}
@@ -764,12 +775,16 @@ var widgetKinds = []string{"metric", "stat_grid", "progress", "chart", "text", "
 // text, a few rows, nothing to tap (a tap opens the widget's page), no search, filter or more — cutting what is too
 // long rather than refusing it. A complication (accessory_*) draws one metric, progress or line of text, the first.
 // It says what it left out.
-func FitWidget(v *View, family string, uiVersion int) (dropped []string, err error) {
+func FitWidget(v *View, family string, uiVersion int, languages ...i18n.Lang) (dropped []string, err error) {
+	l := i18n.Default
+	if len(languages) > 0 {
+		l = languages[0].Or(i18n.Default)
+	}
 	if !slices.Contains(WidgetFamilies, family) {
 		return nil, fmt.Errorf("a widget is drawn at one of %s", strings.Join(WidgetFamilies, ", "))
 	}
 	slot, _ := Slot("widget")
-	if dropped, err = Fit(v, slot, uiVersion); err != nil {
+	if dropped, err = Fit(v, slot, uiVersion, l); err != nil {
 		return dropped, err
 	}
 	drop := func(what string) {
@@ -800,7 +815,7 @@ func FitWidget(v *View, family string, uiVersion int) (dropped []string, err err
 			case "empty":
 				e = UIElem{Type: "text", Text: strings.TrimSpace(e.Title + "\n" + e.Detail), Style: "secondary"}
 			case "loading":
-				e = UIElem{Type: "text", Text: cmp.Or(e.Title, "加载中…"), Style: "secondary"}
+				e = UIElem{Type: "text", Text: cmp.Or(e.Title, i18n.T(l, "extension-ui-fallback.loading")), Style: "secondary"}
 			}
 			if !slices.Contains(widgetKinds, e.Type) {
 				drop(e.Type)

@@ -570,7 +570,7 @@ func (h *Manager) catalogIn(l i18n.Lang, q, market string) []CatalogItem {
 				continue
 			}
 			it := CatalogItem{Market: s.rec.ID, MarketName: marketName(l, s.rec), ID: m.ID, Name: m.Name, Version: m.Version, Description: m.Description,
-				Publisher: m.Publisher, Homepage: m.Homepage, Tags: append([]string{}, e.Tags...), Contributes: m.Contributions(), Permissions: extension.Explain(m)}
+				Publisher: m.Publisher, Homepage: m.Homepage, Tags: append([]string{}, e.Tags...), Contributes: m.Contributions(), Permissions: extension.ExplainIn(l, m)}
 			if s.rec.Signature.Bad() {
 				it.Problem = i18n.T(l, "hub-extension_market.bad_signature", i18n.Args{"err": s.rec.Error})
 			} else if e.PackageFor(extension.Platform()) == nil {
@@ -869,7 +869,7 @@ func (h *Manager) marketRoutesAt(api *http.ServeMux, base string, allow func(w h
 		case err != nil:
 			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
 		default:
-			writeJSON(w, withOperation(pv, op))
+			writeJSON(w, withOperation(pv.In(h.requestLang(r)), op))
 		}
 	}))
 }

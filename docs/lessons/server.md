@@ -2,6 +2,12 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Permission disclosures and legacy UI fallbacks must use the response language (#5057)
+
+- Generate permission titles and descriptions from the manifest and the requested language; never reverse-translate extension-authored names, secret titles, comments, or view text. Scope IDs, consent digests, and package fingerprints stay language-independent.
+- A staged upgrade preview captures its old manifest. Return a presentation copy with regenerated permission lines, including bundled previews, rather than mutating the stored preview or using whatever version happens to be installed later.
+- UI downgrade captions, default loading labels, file badges, and review actions are hub-owned text too. Pass the UI locale through all fitting paths, including widgets and shortcuts; absent body locale retains the user's legacy language. Widget cache keys already include locale.
+
 ## Extension version notices must preserve localization through the response chain (#3598)
 
 - `engines.persona` supports both `>=N` lower bounds and `<N` upper bounds. Suggest updating the hub only when below the lower bound; reaching the upper bound is also rejected and must not use the same update advice.

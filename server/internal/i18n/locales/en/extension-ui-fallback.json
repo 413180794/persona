@@ -1,0 +1,21 @@
+{
+  "truncated": "… (View more in a newer app version)",
+  "binary": "Binary file",
+  "comment": "Comment",
+  "too_long": "Too much content; view the rest in a newer app version",
+  "discard": "Discard draft",
+  "draft": "Draft",
+  "loading": "Loading…",
+  "load_more": "Load more",
+  "line_comment": "Line {line} · {author}: {body}",
+  "file_added": "Added",
+  "file_modified": "Modified",
+  "file_deleted": "Deleted",
+  "file_renamed": "Renamed",
+  "files_remaining_one": "{count} more file",
+  "files_remaining_other": "{count} more files",
+  "comments_remaining_one": "{count} more comment",
+  "comments_remaining_other": "{count} more comments",
+  "review_drafts_one": "Review drafts · {count}",
+  "review_drafts_other": "Review drafts · {count}"
+}

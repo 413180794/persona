@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Command-line programs an extension needs (docs/extensions.md "Command-line programs (tools)", #4507): the hub installs them
@@ -154,16 +156,19 @@ func (t *ToolSpec) consent() string {
 }
 
 // Describe is the tool for people: "example-cli 2.3.4 (npm: registry.example.com)", with full-width punctuation.
-func (t *ToolSpec) Describe() string {
+func (t *ToolSpec) Describe() string { return t.DescribeIn(i18n.Default) }
+
+// DescribeIn formats tool provenance without translating its author-provided title or package data.
+func (t *ToolSpec) DescribeIn(l i18n.Lang) string {
 	name := t.Name
 	if t.Title != "" && t.Title != t.Name {
-		name = t.Title + "（" + t.Name + "）"
+		name = permissionText(l, "tool_name", i18n.Args{"title": t.Title, "name": t.Name})
 	}
-	from := strings.Join(t.Hosts(), "、")
+	from := strings.Join(t.Hosts(), permissionText(l, "list_separator"))
 	if t.NPM != nil {
-		from = "npm：" + from
+		from = permissionText(l, "tool_npm", i18n.Args{"hosts": from})
 	}
-	return name + " " + t.Version + "（" + from + "）"
+	return permissionText(l, "tool_description", i18n.Args{"name": name, "version": t.Version, "from": from})
 }
 
 // ToolsConsent are the tools as agreed to, sorted; nil without any.

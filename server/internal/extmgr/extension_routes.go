@@ -59,7 +59,7 @@ type ExtensionSecretView struct {
 func (ps *extensions) detail(ctx context.Context, p *extension.Extension) ExtensionDetail {
 	m := p.Full
 	d := ExtensionDetail{ExtensionView: ps.view(ctx, p), Publisher: m.Publisher, Homepage: m.Homepage, Origin: p.Record.Origin,
-		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.Explain(m),
+		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.ExplainIn(ps.h.contextLang(ctx), m),
 		Contributions: ps.contributionViews(p), Depends: ps.reg.DependenciesContext(ctx, m), ExtensionPack: m.ExtensionPack}
 	if d.Permissions == nil {
 		d.Permissions = []extension.PermissionLine{}
@@ -307,7 +307,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		case err != nil:
 			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
 		default:
-			writeJSON(w, withOperation(pv, op))
+			writeJSON(w, withOperation(pv.In(h.requestLang(r)), op))
 		}
 	}))
 	api.HandleFunc("POST /api/v1/extensions/-/install", func(w http.ResponseWriter, r *http.Request) {

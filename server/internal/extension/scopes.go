@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Defined in the contract package extwire (docs/architecture.md "Contract packages"); the old names stay.
@@ -27,46 +28,53 @@ var HubScopes = []string{ScopeKBRead, ScopeKBWrite, ScopeInboxRead, ScopeInboxWr
 	ScopeMachinesRead, ScopeNotify, ScopeAssistantAsk, ScopeTodosRead, ScopeTodosWrite}
 
 var scopeTitles = map[string]string{
-	ScopeKBRead:        "读知识库",
-	ScopeKBWrite:       "改知识库里的条目",
-	ScopeInboxRead:     "读收件箱",
-	ScopeInboxWrite:    "处理收件箱（标为已处理、起草和发送回复、静音）",
-	ScopeAgentsRead:    "看各台电脑上的 Agent 和对话",
-	ScopeAgentsControl: "驱动 Agent（新建、发消息、打断、回答提问和批准）",
-	ScopeMachinesRead:  "看你的各台电脑（在不在线、负载）",
-	ScopeNotify:        "给你的设备发通知",
-	ScopeAssistantAsk:  "给 Persona 开对话、读对话动态",
-	ScopeTodosRead:     "看待办",
-	ScopeTodosWrite:    "新建和修改待办、把对话挂到待办上（不能删待办）",
+	ScopeKBRead:        "scope_kb_read",
+	ScopeKBWrite:       "scope_kb_write",
+	ScopeInboxRead:     "scope_inbox_read",
+	ScopeInboxWrite:    "scope_inbox_write",
+	ScopeAgentsRead:    "scope_agents_read",
+	ScopeAgentsControl: "scope_agents_control",
+	ScopeMachinesRead:  "scope_machines_read",
+	ScopeNotify:        "scope_notify",
+	ScopeAssistantAsk:  "scope_assistant_ask",
+	ScopeTodosRead:     "scope_todos_read",
+	ScopeTodosWrite:    "scope_todos_write",
 }
 
 // ScopeTitle is how the install screen says scope s; ok false for what is not a scope.
-func ScopeTitle(s string) (string, bool) {
+func ScopeTitle(s string) (string, bool) { return ScopeTitleIn(i18n.Default, s) }
+
+// ScopeTitleIn names a known scope in the requested language.
+func ScopeTitleIn(l i18n.Lang, s string) (string, bool) {
 	if id, ok := strings.CutPrefix(s, ScopeCallPrefix); ok {
 		if !idPattern.MatchString(id) {
 			return "", false
 		}
-		return "调用扩展「" + id + "」的接口", true
+		return permissionText(l, "scope_call", i18n.Args{"id": id}), true
 	}
-	t, ok := scopeTitles[s]
-	return t, ok
+	key, ok := scopeTitles[s]
+	if !ok {
+		return "", false
+	}
+	return permissionText(l, key), true
 }
 
 // hubLine is the line for scopes (all an extension asks for, or those an upgrade adds), in HubScopes' order.
-func hubLine(title string, scopes []string) PermissionLine {
+func hubLine(l i18n.Lang, title string, scopes []string) PermissionLine {
 	var what []string
 	for _, known := range HubScopes {
 		for _, s := range scopes {
 			if s == known {
-				what = append(what, scopeTitles[s])
+				t, _ := ScopeTitleIn(l, s)
+				what = append(what, t)
 			}
 		}
 	}
 	for _, s := range scopes {
 		if strings.HasPrefix(s, ScopeCallPrefix) {
-			t, _ := ScopeTitle(s)
+			t, _ := ScopeTitleIn(l, s)
 			what = append(what, t)
 		}
 	}
-	return PermissionLine{Key: "hub", Title: title, Detail: strings.Join(what, "；")}
+	return PermissionLine{Key: "hub", Title: title, Detail: strings.Join(what, permissionText(l, "sentence_separator"))}
 }

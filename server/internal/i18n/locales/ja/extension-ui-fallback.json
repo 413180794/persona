@@ -1,0 +1,18 @@
+{
+  "truncated": "…（続きは新しいバージョンのアプリで表示）",
+  "binary": "バイナリファイル",
+  "comment": "コメント",
+  "too_long": "内容が多すぎます。残りは新しいバージョンのアプリで表示してください",
+  "discard": "下書きを破棄",
+  "draft": "下書き",
+  "loading": "読み込み中…",
+  "load_more": "さらに読み込む",
+  "files_remaining": "ほか {count} ファイル",
+  "comments_remaining": "ほか {count} 件のコメント",
+  "review_drafts": "レビューの下書き · {count}",
+  "line_comment": "{line} 行目 · {author}：{body}",
+  "file_added": "追加",
+  "file_modified": "変更",
+  "file_deleted": "削除",
+  "file_renamed": "名前変更"
+}

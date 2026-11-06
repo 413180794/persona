@@ -290,7 +290,7 @@ func (u *extensionUpgrades) candidateIn(p *extension.Extension, l i18n.Lang) (up
 	case s.Skipped[id] == m.Version:
 		up.State, up.Detail = upgradeSkipped, i18n.T(l, "hub-extension_autoupgrade.skipped")
 	case extension.MorePermissions(p, m) || extension.Digest(m) != granted(p):
-		up.State, up.AddedPermissions = upgradeNeedsConsent, extension.Added(p.Manifest, m)
+		up.State, up.AddedPermissions = upgradeNeedsConsent, extension.AddedIn(l, p.Manifest, m)
 	case bundleConsent:
 		up.State, up.Detail = upgradeNeedsConsent, i18n.T(l, "hub-extension_autoupgrade.bundle_confirmation")
 	case (s.Auto != nil && !*s.Auto) || slices.Contains(s.Off, id):

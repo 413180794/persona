@@ -115,7 +115,7 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 			return
 		}
 		h.logf("admin: previewed plugin %s %s (%s)", pv.Manifest.ID, pv.Manifest.Version, map[bool]string{true: "upgrade", false: "install"}[pv.Upgrade])
-		writeJSON(w, pv)
+		writeJSON(w, pv.In(i18n.OfWriter(w)))
 	}
 
 	// The markets, as the apps have them (the admin session is the gate).

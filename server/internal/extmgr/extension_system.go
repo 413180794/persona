@@ -186,7 +186,7 @@ func (h *Manager) widgetCall(ctx context.Context, id, uiID string, in uiRequest)
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return out, i18n.Err("hub-extension_system.widget_unsupported", i18n.Args{"err": err.Error()})
 	}
-	dropped, err := extension.FitWidget(&v, family, params.UIVersion)
+	dropped, err := extension.FitWidget(&v, family, params.UIVersion, h.uiFallbackLang(ctx, params.Locale))
 	if err != nil {
 		return out, i18n.Err("hub-extension_system.widget_unsupported", i18n.Args{"err": err.Error()})
 	}
@@ -260,7 +260,7 @@ func (h *Manager) shortcutCall(ctx context.Context, id, sid string, in wire.Shor
 	}
 	out.Text = clipRunes(out.Text, extension.StringMost)
 	if out.View != nil {
-		if _, err := extension.FitWidget(out.View, "large", params.UIVersion); err != nil {
+		if _, err := extension.FitWidget(out.View, "large", params.UIVersion, h.uiFallbackLang(ctx, params.Locale)); err != nil {
 			return wire.ShortcutResult{}, i18n.Err("hub-extension_system.result_unsupported", i18n.Args{"err": err.Error()})
 		}
 	}

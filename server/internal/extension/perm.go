@@ -132,13 +132,13 @@ func Digest(m *Manifest) string {
 }
 
 // toolsLine is the tools as the install screen shows them.
-func toolsLine(tools []ToolSpec, title string) PermissionLine {
+func toolsLine(l i18n.Lang, tools []ToolSpec, title string) PermissionLine {
 	var what []string
 	for i := range tools {
-		what = append(what, tools[i].Describe())
+		what = append(what, tools[i].DescribeIn(l))
 	}
 	return PermissionLine{Key: "tools", Title: title,
-		Detail: strings.Join(what, "、") + "。装在扩展自己的目录，不用管理员权限；机器上已有能用的会直接用"}
+		Detail: permissionText(l, "tools_detail", i18n.Args{"tools": strings.Join(what, permissionText(l, "list_separator"))})}
 }
 
 // NewTools are m's tools old did not install the same way (a new name, or from somewhere else).
@@ -160,39 +160,33 @@ type PermissionLine struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-var (
-	runsCode      = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行；默认在沙箱里，只能读写自己的包和数据目录（受信任市场来的、主人关了沙箱的，能读写这个用户能读写的文件）"}
-	launcherKeys  = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 访问它的网关", Detail: "查额度、画启动器页上的面板和它自己的页面（比如侧边栏里的额度）；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
-	ghLogin       = PermissionLine{Key: "gh_login", Title: "用你电脑上 gh 的 GitHub 登录", Detail: "从你选的那台电脑上读 gh 登录的 token，只放在它的内存里，用来访问 GitHub"}
-	agentRuntimes = PermissionLine{Key: "agent_runtimes", Title: i18n.T(i18n.Default, "extension-permissions.agent_runtimes_title"),
-		Detail: i18n.T(i18n.Default, "extension-permissions.agent_runtimes_detail")}
-	usageGateway = PermissionLine{Key: "usage_gateways", Title: "读取额度来源里网关的账号清单（不含 Key）", Detail: "hub 管理 › 额度来源里接的账号池网关有哪些账号、状态和额度，用的是 hub 上次读到的；拿不到管理 Key"}
-	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整权限（旧写法）", Detail: "拿到 hub 的完整 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……；新的扩展只要用得到的那几项（permissions.hub）"}
-	nodeFiles    = PermissionLine{Key: "node_files", Title: "读写这些电脑上的文件", Detail: "不只是它自己的数据目录"}
-	nodePrivacy  = PermissionLine{Key: "node_macos_privacy", Title: "请求 Mac 的系统权限", Detail: "完全磁盘访问、辅助功能这类，要你在那台 Mac 上同意"}
-)
+// permissionText and permissionLine generate only hub-owned presentation text.
+func permissionText(l i18n.Lang, key string, args ...i18n.Args) string {
+	return i18n.T(l, "extension-permissions."+key, args...)
+}
 
-// systemNames are how the install screen names the systems a node program runs on.
-var systemNames = map[string]string{"darwin": "Mac", "linux": "Linux 电脑"}
+func permissionLine(l i18n.Lang, key string) PermissionLine {
+	return PermissionLine{Key: key, Title: permissionText(l, key+"_title"), Detail: permissionText(l, key+"_detail")}
+}
 
 // nodeRunsCode is the line for a program that runs on the computers the user picks.
-func nodeRunsCode(r *NodeRuntime) PermissionLine {
+func nodeRunsCode(l i18n.Lang, r *NodeRuntime) PermissionLine {
 	var on []string
 	for _, sys := range r.Systems() {
-		on = append(on, systemNames[sys])
+		on = append(on, permissionText(l, "system_"+sys))
 	}
-	return PermissionLine{Key: "node_runs_code", Title: "在你选的电脑上运行程序",
-		Detail: strings.Join(on, "、") + "；每台打开时会再问一次。以 node 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
+	return PermissionLine{Key: "node_runs_code", Title: permissionText(l, "node_runs_code_title"),
+		Detail: permissionText(l, "node_run_detail", i18n.Args{"systems": strings.Join(on, permissionText(l, "list_separator"))})}
 }
 
 // nodeLines are the lines of what r asks for on the computers, of all it asks (old nil) or what it asks more than old.
-func nodeLines(r, old *NodeRuntime) []PermissionLine {
+func nodeLines(l i18n.Lang, r, old *NodeRuntime) []PermissionLine {
 	var out []PermissionLine
 	if old == nil {
-		out = append(out, nodeRunsCode(r))
+		out = append(out, nodeRunsCode(l, r))
 	} else if slices.ContainsFunc(r.Systems(), func(sys string) bool { return !slices.Contains(old.Systems(), sys) }) {
-		line := nodeRunsCode(r)
-		line.Title = "在更多种电脑上运行程序"
+		line := nodeRunsCode(l, r)
+		line.Title = permissionText(l, "node_more_title")
 		out = append(out, line)
 	}
 	var hosts []string
@@ -202,13 +196,13 @@ func nodeLines(r, old *NodeRuntime) []PermissionLine {
 		}
 	}
 	if len(hosts) > 0 {
-		out = append(out, PermissionLine{Key: "node_network", Title: "在这些电脑上访问网络", Detail: strings.Join(hosts, "、")})
+		out = append(out, PermissionLine{Key: "node_network", Title: permissionText(l, "node_network_title"), Detail: strings.Join(hosts, permissionText(l, "list_separator"))})
 	}
 	if r.Permissions.Files && (old == nil || !old.Permissions.Files) {
-		out = append(out, nodeFiles)
+		out = append(out, permissionLine(l, "node_files"))
 	}
 	if r.Permissions.MacOSPrivacy && (old == nil || !old.Permissions.MacOSPrivacy) {
-		out = append(out, nodePrivacy)
+		out = append(out, permissionLine(l, "node_macos_privacy"))
 	}
 	return out
 }
@@ -232,76 +226,79 @@ func nodeSecrets(m, old *Manifest) []string {
 // NodeAdds says whether m's program on computers asks for more than old's: a first one, more systems, hosts,
 // permissions or secrets sent to the computers.
 func NodeAdds(old, m *Manifest) bool {
-	return m.NodeProgram() != nil && (len(nodeLines(m.Node, old.NodeProgram())) > 0 || len(nodeSecrets(m, old)) > 0)
+	return m.NodeProgram() != nil && (len(nodeLines(i18n.Default, m.Node, old.NodeProgram())) > 0 || len(nodeSecrets(m, old)) > 0)
 }
 
 // Explain is every line the user is shown before installing m.
-func Explain(m *Manifest) []PermissionLine {
+func Explain(m *Manifest) []PermissionLine { return ExplainIn(i18n.Default, m) }
+
+// ExplainIn generates permission disclosures without changing manifest or consent data.
+func ExplainIn(l i18n.Lang, m *Manifest) []PermissionLine {
 	out := []PermissionLine{} // never null on the wire: nothing to agree to is an empty list
 	if m.Runtime != nil {
-		out = append(out, runsCode)
+		out = append(out, permissionLine(l, "runs_code"))
 	}
 	if len(m.Permissions.Network) > 0 {
-		out = append(out, PermissionLine{Key: "network", Title: "访问网络",
-			Detail: strings.Join(m.Permissions.normalized().Network, "、") + "（在沙箱里时只能连这些）"})
+		out = append(out, PermissionLine{Key: "network", Title: permissionText(l, "network_title"),
+			Detail: permissionText(l, "network_detail", i18n.Args{"hosts": strings.Join(m.Permissions.normalized().Network, permissionText(l, "list_separator"))})})
 	}
 	if m.Permissions.FullHub() {
-		out = append(out, hubAPI)
+		out = append(out, permissionLine(l, "hub_api"))
 	} else if hub := m.Permissions.normalized().Hub; len(hub) > 0 {
-		out = append(out, hubLine("使用 hub 的这些功能", hub))
+		out = append(out, hubLine(l, permissionText(l, "hub_title"), hub))
 	}
 	if m.Permissions.LauncherKeys {
-		out = append(out, launcherKeys)
+		out = append(out, permissionLine(l, "launcher_keys"))
 	}
 	if m.Permissions.GhLogin {
-		out = append(out, ghLogin)
+		out = append(out, permissionLine(l, "gh_login"))
 	}
 	if m.Permissions.UsageGateways {
-		out = append(out, usageGateway)
+		out = append(out, permissionLine(l, "usage_gateways"))
 	}
 	if m.Permissions.AgentRuntimes {
-		out = append(out, agentRuntimes)
+		out = append(out, permissionLine(l, "agent_runtimes"))
 	}
 	if to := m.ContributesTo(); len(to) > 0 {
-		out = append(out, PermissionLine{Key: "contributes_to", Title: "给别的扩展提供内容",
-			Detail: "它在清单里写的贡献交给这些扩展：" + strings.Join(to, "、")})
+		out = append(out, PermissionLine{Key: "contributes_to", Title: permissionText(l, "contributes_title"),
+			Detail: permissionText(l, "contributes_detail", i18n.Args{"names": strings.Join(to, permissionText(l, "list_separator"))})})
 	}
 	if chans := m.Channels(); len(chans) > 0 {
 		var names []string
 		for _, c := range chans {
 			names = append(names, c.Name)
 		}
-		out = append(out, PermissionLine{Key: "channel", Title: "作为和 Persona 对话的渠道",
-			Detail: "把你在" + strings.Join(names, "、") + "里发给它的消息交给 Persona，再把回答和 Agent 的提问发回给你"})
+		out = append(out, PermissionLine{Key: "channel", Title: permissionText(l, "channel_title"),
+			Detail: permissionText(l, "channel_detail", i18n.Args{"names": strings.Join(names, permissionText(l, "list_separator"))})})
 	}
 	if topics := m.Topics(); len(topics) > 0 {
 		var what []string
 		for _, t := range topics {
-			what = append(what, EventTopics[t])
+			what = append(what, permissionText(l, "event_"+strings.ReplaceAll(t, ".", "_")))
 		}
-		out = append(out, PermissionLine{Key: "events", Title: "收到 hub 的事件", Detail: strings.Join(what, "；")})
+		out = append(out, PermissionLine{Key: "events", Title: permissionText(l, "events_title"), Detail: strings.Join(what, permissionText(l, "sentence_separator"))})
 	}
 	if surfaces := m.Surfaces(); len(surfaces) > 0 {
-		title := "在 App 里显示自己的界面"
+		title := permissionText(l, "surfaces_title")
 		if slices.Contains(surfaces, "capsule_card") {
-			title = "在 App 内外显示自己的界面"
+			title = permissionText(l, "surfaces_external_title")
 		}
-		out = append(out, PermissionLine{Key: "ui_surfaces", Title: title, Detail: surfacesDetail(m, surfaces)})
+		out = append(out, PermissionLine{Key: "ui_surfaces", Title: title, Detail: surfacesDetail(l, m, surfaces)})
 	}
 	if len(m.Secrets) > 0 {
 		names := make([]string, 0, len(m.Secrets))
 		for _, s := range m.Secrets {
 			names = append(names, s.Title)
 		}
-		out = append(out, PermissionLine{Key: "secrets", Title: "使用你填的密钥", Detail: strings.Join(names, "、")})
+		out = append(out, PermissionLine{Key: "secrets", Title: permissionText(l, "secrets_title"), Detail: strings.Join(names, permissionText(l, "list_separator"))})
 	}
 	if len(m.Tools) > 0 {
-		out = append(out, toolsLine(m.Tools, "安装命令行程序"))
+		out = append(out, toolsLine(l, m.Tools, permissionText(l, "tools_title")))
 	}
 	if m.NodeProgram() != nil {
-		out = append(out, nodeLines(m.Node, nil)...)
+		out = append(out, nodeLines(l, m.Node, nil)...)
 		if names := nodeSecrets(m, nil); len(names) > 0 {
-			out = append(out, PermissionLine{Key: "node_secrets", Title: "把密钥发给这些电脑", Detail: strings.Join(names, "、")})
+			out = append(out, PermissionLine{Key: "node_secrets", Title: permissionText(l, "node_secrets_title"), Detail: strings.Join(names, permissionText(l, "list_separator"))})
 		}
 	}
 	return out
@@ -310,13 +307,16 @@ func Explain(m *Manifest) []PermissionLine {
 // Added is what upgrading from old to m adds to what the plugin may do, in Explain's words: running a program when old
 // ran none, the hosts and secrets old did not have, the hub's token or launchers' keys when old did not get them, the
 // channels and the extensions it contributes to that old did not have. Nil when nothing is added.
-func Added(old, m *Manifest) []PermissionLine {
+func Added(old, m *Manifest) []PermissionLine { return AddedIn(i18n.Default, old, m) }
+
+// AddedIn generates only the permissions added by an upgrade, in the requested language.
+func AddedIn(l i18n.Lang, old, m *Manifest) []PermissionLine {
 	var out []PermissionLine
 	if m.Runtime != nil && old.Runtime == nil {
-		out = append(out, runsCode)
+		out = append(out, permissionLine(l, "runs_code"))
 	}
 	if more := NewTools(old, m); len(more) > 0 {
-		out = append(out, toolsLine(more, "安装更多命令行程序"))
+		out = append(out, toolsLine(l, more, permissionText(l, "tools_more_title")))
 	}
 	var hosts []string
 	for _, h := range m.Permissions.normalized().Network {
@@ -325,10 +325,10 @@ func Added(old, m *Manifest) []PermissionLine {
 		}
 	}
 	if len(hosts) > 0 {
-		out = append(out, PermissionLine{Key: "network", Title: "访问更多网络", Detail: strings.Join(hosts, "、")})
+		out = append(out, PermissionLine{Key: "network", Title: permissionText(l, "network_more_title"), Detail: strings.Join(hosts, permissionText(l, "list_separator"))})
 	}
 	if m.Permissions.FullHub() && !old.Permissions.FullHub() {
-		out = append(out, hubAPI)
+		out = append(out, permissionLine(l, "hub_api"))
 	} else if !m.Permissions.FullHub() && !old.Permissions.FullHub() {
 		var more []string
 		for _, s := range m.Permissions.normalized().Hub {
@@ -337,20 +337,20 @@ func Added(old, m *Manifest) []PermissionLine {
 			}
 		}
 		if len(more) > 0 {
-			out = append(out, hubLine("使用 hub 的更多功能", more))
+			out = append(out, hubLine(l, permissionText(l, "hub_more_title"), more))
 		}
 	}
 	if m.Permissions.LauncherKeys && !old.Permissions.LauncherKeys {
-		out = append(out, launcherKeys)
+		out = append(out, permissionLine(l, "launcher_keys"))
 	}
 	if m.Permissions.GhLogin && !old.Permissions.GhLogin {
-		out = append(out, ghLogin)
+		out = append(out, permissionLine(l, "gh_login"))
 	}
 	if m.Permissions.UsageGateways && !old.Permissions.UsageGateways {
-		out = append(out, usageGateway)
+		out = append(out, permissionLine(l, "usage_gateways"))
 	}
 	if m.Permissions.AgentRuntimes && !old.Permissions.AgentRuntimes {
-		out = append(out, agentRuntimes)
+		out = append(out, permissionLine(l, "agent_runtimes"))
 	}
 	var to []string
 	for _, owner := range m.ContributesTo() {
@@ -359,25 +359,25 @@ func Added(old, m *Manifest) []PermissionLine {
 		}
 	}
 	if len(to) > 0 {
-		out = append(out, PermissionLine{Key: "contributes_to", Title: "给更多别的扩展提供内容",
-			Detail: "它在清单里写的贡献交给这些扩展：" + strings.Join(to, "、")})
+		out = append(out, PermissionLine{Key: "contributes_to", Title: permissionText(l, "contributes_more_title"),
+			Detail: permissionText(l, "contributes_detail", i18n.Args{"names": strings.Join(to, permissionText(l, "list_separator"))})})
 	}
 	if chans := newChannels(old, m); len(chans) > 0 {
 		var names []string
 		for _, c := range chans {
 			names = append(names, c.Name)
 		}
-		out = append(out, PermissionLine{Key: "channel", Title: "作为和 Persona 对话的更多渠道",
-			Detail: "把你在" + strings.Join(names, "、") + "里发给它的消息交给 Persona，再把回答和 Agent 的提问发回给你"})
+		out = append(out, PermissionLine{Key: "channel", Title: permissionText(l, "channel_more_title"),
+			Detail: permissionText(l, "channel_detail", i18n.Args{"names": strings.Join(names, permissionText(l, "list_separator"))})})
 	}
 	var topics []string
 	for _, t := range m.Topics() {
 		if !slices.Contains(old.Topics(), t) {
-			topics = append(topics, EventTopics[t])
+			topics = append(topics, permissionText(l, "event_"+strings.ReplaceAll(t, ".", "_")))
 		}
 	}
 	if len(topics) > 0 {
-		out = append(out, PermissionLine{Key: "events", Title: "收到更多 hub 的事件", Detail: strings.Join(topics, "；")})
+		out = append(out, PermissionLine{Key: "events", Title: permissionText(l, "events_more_title"), Detail: strings.Join(topics, permissionText(l, "sentence_separator"))})
 	}
 	var surfaces []string
 	for _, sl := range m.Surfaces() {
@@ -386,7 +386,7 @@ func Added(old, m *Manifest) []PermissionLine {
 		}
 	}
 	if len(surfaces) > 0 {
-		out = append(out, PermissionLine{Key: "ui_surfaces", Title: "在 App 的更多位置显示自己的界面", Detail: surfacesDetail(m, surfaces)})
+		out = append(out, PermissionLine{Key: "ui_surfaces", Title: permissionText(l, "surfaces_more_title"), Detail: surfacesDetail(l, m, surfaces)})
 	}
 	var names []string
 	for _, s := range m.Secrets {
@@ -395,12 +395,12 @@ func Added(old, m *Manifest) []PermissionLine {
 		}
 	}
 	if len(names) > 0 {
-		out = append(out, PermissionLine{Key: "secrets", Title: "使用更多密钥", Detail: strings.Join(names, "、")})
+		out = append(out, PermissionLine{Key: "secrets", Title: permissionText(l, "secrets_more_title"), Detail: strings.Join(names, permissionText(l, "list_separator"))})
 	}
 	if m.NodeProgram() != nil {
-		out = append(out, nodeLines(m.Node, old.NodeProgram())...)
+		out = append(out, nodeLines(l, m.Node, old.NodeProgram())...)
 		if names := nodeSecrets(m, old); len(names) > 0 {
-			out = append(out, PermissionLine{Key: "node_secrets", Title: "把更多密钥发给这些电脑", Detail: strings.Join(names, "、")})
+			out = append(out, PermissionLine{Key: "node_secrets", Title: permissionText(l, "node_secrets_more_title"), Detail: strings.Join(names, permissionText(l, "list_separator"))})
 		}
 	}
 	return out
@@ -418,8 +418,8 @@ func newChannels(old, m *Manifest) []channel.Item {
 	return out
 }
 
-// surfacesDetail says where in the apps m draws, of surfaces: "entry in the main navigation: Token usage; card on the overview: ..." (in Chinese)
-func surfacesDetail(m *Manifest, surfaces []string) string {
+// surfacesDetail describes consented UI placements while preserving extension-authored titles.
+func surfacesDetail(l i18n.Lang, m *Manifest, surfaces []string) string {
 	var parts []string
 	for _, name := range surfaces {
 		if name == SurfaceShortcuts {
@@ -427,7 +427,7 @@ func surfacesDetail(m *Manifest, surfaces []string) string {
 			for _, s := range m.Shortcuts() {
 				titles = append(titles, s.Title)
 			}
-			parts = append(parts, "快捷指令和 Siri 里的动作："+strings.Join(titles, "、"))
+			parts = append(parts, permissionText(l, "shortcuts_title")+strings.Join(titles, permissionText(l, "list_separator")))
 			continue
 		}
 		sl, _ := Slot(name)
@@ -437,7 +437,7 @@ func surfacesDetail(m *Manifest, surfaces []string) string {
 				titles = append(titles, u.Title)
 			}
 		}
-		parts = append(parts, sl.Shown+"："+strings.Join(titles, "、"))
+		parts = append(parts, permissionText(l, "slot_"+sl.Name)+permissionText(l, "label_separator")+strings.Join(titles, permissionText(l, "list_separator")))
 	}
-	return strings.Join(parts, "；")
+	return strings.Join(parts, permissionText(l, "sentence_separator"))
 }
