@@ -51,35 +51,68 @@ type pendingAutoLink struct {
 	source     string
 	via        string
 	linkedAt   time.Time
+	released   []string // the done todos it took part in, whose links it released
 }
 
 // undoAutoLink takes back in memory an automatic link the store did not keep (b.mu held): only while its entry is
 // still the one item made (same LinkedAt, not dismissed). Then the entry goes, also when a hand link to another todo
 // released it meanwhile (#2704), and the agent's active todo with it if that is still item's. One relinked by hand since
 // has another LinkedAt and stays, with its active todo; one the user dismissed stays too (the unlink cleared that
-// already). True when memory changed.
+// already). The links on done todos it released come back while the agent is linked to no todo (#2904): a link by
+// hand since released them in the store as well. True when memory changed.
 func (b *todoBook) undoAutoLink(item pendingAutoLink, now time.Time) bool {
-	target, ok := b.todos[item.todoID]
-	if !ok {
-		return false
+	key := [2]string{item.machineID, item.sessionID}
+	changed := false
+	if target, ok := b.todos[item.todoID]; ok {
+		kept := target.Agents[:0:0]
+		for _, a := range target.Agents {
+			if a.MachineID == item.machineID && a.SessionID == item.sessionID && a.LinkedAt.Equal(item.linkedAt) && a.DismissedAt == nil {
+				continue
+			}
+			kept = append(kept, a)
+		}
+		if len(kept) != len(target.Agents) {
+			target.Agents = kept
+			target.UpdatedAt = now
+			if b.activeBySession[key] == item.todoID {
+				delete(b.activeBySession, key)
+			}
+			changed = true
+		}
 	}
-	kept := target.Agents[:0:0]
-	for _, a := range target.Agents {
-		if a.MachineID == item.machineID && a.SessionID == item.sessionID && a.LinkedAt.Equal(item.linkedAt) && a.DismissedAt == nil {
+	if len(item.released) == 0 || b.linkedNow(key) {
+		return changed
+	}
+	for _, id := range item.released {
+		t := b.todos[id]
+		if t == nil {
 			continue
 		}
-		kept = append(kept, a)
+		for i := range t.Agents {
+			a := &t.Agents[i]
+			if a.MachineID == key[0] && a.SessionID == key[1] && a.DismissedAt == nil && a.ReleasedAt != nil && a.ReleasedAt.Equal(item.linkedAt) {
+				a.ReleasedAt = nil
+				t.UpdatedAt = now
+				if t.DoneAt == nil { // reopened meanwhile: it works for it again
+					b.activeBySession[key] = t.ID
+				}
+				changed = true
+			}
+		}
 	}
-	if len(kept) == len(target.Agents) {
-		return false
+	return changed
+}
+
+// linkedNow: the agent has a link that is neither released nor dismissed, on any todo (b.mu held).
+func (b *todoBook) linkedNow(key [2]string) bool {
+	for _, t := range b.todos {
+		for _, a := range t.Agents {
+			if a.MachineID == key[0] && a.SessionID == key[1] && a.ReleasedAt == nil && a.DismissedAt == nil {
+				return true
+			}
+		}
 	}
-	target.Agents = kept
-	target.UpdatedAt = now
-	key := [2]string{item.machineID, item.sessionID}
-	if b.activeBySession[key] == item.todoID {
-		delete(b.activeBySession, key)
-	}
-	return true
+	return false
 }
 
 // autoLinkTodos links the online agents of machine that join a todo on their own: spawned by an agent of an open todo
@@ -97,12 +130,24 @@ func (s *Service) autoLinkTodos(machine string, sessions []proto.Session) bool {
 				return // it was on this todo before (active, released or dismissed): not again
 			}
 		}
+		// It works for no open todo: a link still active is on a done todo, which it only took part in now, as a link by
+		// hand and the store have it (#2904).
+		var released []string
+		for oid, other := range s.todos.todos {
+			for i := range other.Agents {
+				if a := &other.Agents[i]; a.MachineID == machine && a.SessionID == c.SessionID && a.ReleasedAt == nil {
+					a.ReleasedAt = &now
+					other.UpdatedAt = now
+					released = append(released, oid)
+				}
+			}
+		}
 		target.Agents = append(target.Agents, TodoAgent{MachineID: machine, SessionID: c.SessionID, LinkedAt: now, Title: c.Title,
 			Cwd: c.Cwd, Agent: c.Agent, StartError: c.StartError, Source: source, Via: via})
 		s.todos.activeBySession[[2]string{machine, c.SessionID}] = target.ID
 		target.UpdatedAt = now
 		pending = append(pending, pendingAutoLink{todoID: target.ID, machineID: machine, sessionID: c.SessionID, title: c.Title,
-			cwd: c.Cwd, agent: c.Agent, startError: c.StartError, source: source, via: via, linkedAt: now})
+			cwd: c.Cwd, agent: c.Agent, startError: c.StartError, source: source, via: via, linkedAt: now, released: released})
 	}
 	s.todos.seeBotmux(machine, sessions, now)
 	byChat := s.todos.chatTodos(now)

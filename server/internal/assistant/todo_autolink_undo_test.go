@@ -121,3 +121,44 @@ func TestTodoHandLinkDuringAutoLinkToTheSameTodo(t *testing.T) {
 		t.Fatalf("after reload s1 works for %q", got)
 	}
 }
+
+// An automatic link the store did not keep gives back the done todo's link it released, unless the agent was linked
+// by hand since (that link released it in the store too); a todo reopened meanwhile has the agent working for it again
+// (#2904).
+func TestUndoAutoLinkGivesBackTheDoneTodo(t *testing.T) {
+	t0 := time.Date(2026, 11, 5, 8, 0, 0, 0, time.UTC)
+	before, later := t0.Add(-time.Hour), t0.Add(time.Second)
+	key := [2]string{"m", "s"}
+	item := pendingAutoLink{todoID: "big", machineID: "m", sessionID: "s", linkedAt: t0, released: []string{"old"}}
+	for _, c := range []struct {
+		name         string
+		hand, reopen bool
+		wantReleased bool
+		wantActive   string
+	}{
+		{name: "refused", wantActive: ""},
+		{name: "linked by hand since", hand: true, wantReleased: true, wantActive: "other"},
+		{name: "reopened meanwhile", reopen: true, wantActive: "old"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			old := &Todo{ID: "old", DoneAt: &before, Agents: []TodoAgent{{MachineID: "m", SessionID: "s", LinkedAt: before, ReleasedAt: &t0, Source: "manual"}}}
+			if c.reopen {
+				old.DoneAt = nil
+			}
+			b := &todoBook{todos: map[string]*Todo{"old": old, "other": {ID: "other"},
+				"big": {ID: "big", Agents: []TodoAgent{{MachineID: "m", SessionID: "s", LinkedAt: t0, Source: "space"}}}},
+				activeBySession: map[[2]string]string{key: "big"}}
+			if c.hand {
+				b.todos["big"].Agents[0].ReleasedAt = &later
+				b.todos["other"].Agents = []TodoAgent{{MachineID: "m", SessionID: "s", LinkedAt: later, Source: "manual"}}
+				b.activeBySession[key] = "other"
+			}
+			if !b.undoAutoLink(item, later) {
+				t.Fatal("nothing changed")
+			}
+			if released := old.Agents[0].ReleasedAt != nil; released != c.wantReleased || b.activeBySession[key] != c.wantActive || len(b.todos["big"].Agents) != 0 {
+				t.Fatalf("old %+v, active %q, big %+v", old.Agents[0], b.activeBySession[key], b.todos["big"].Agents)
+			}
+		})
+	}
+}

@@ -144,3 +144,46 @@ func TestTodoLinksOfDifferentAgents(t *testing.T) {
 		}
 	}
 }
+
+// An automatic link of an agent whose only active link is on a done todo moves it there: the done todo keeps it as
+// taking part (#2904). A link on an open todo, or one made after the automatic decision, stays.
+func TestAutoLinkReleasesADoneTodo(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	for _, id := range []string{"t_new", "t_done", "t_open"} {
+		if err := d.CreateTodo(ctx, TodoRow{ID: id, Title: id, CreatedAt: now, UpdatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, link := range [][2]string{{"t_done", "s_done"}, {"t_open", "s_open"}} {
+		if _, err := d.LinkTodoAgent(ctx, link[0], "m", link[1], "", "", "", "", now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	done := true
+	if _, err := d.UpdateTodo(ctx, "t_done", nil, nil, &done, now); err != nil {
+		t.Fatal(err)
+	}
+	decided := now.Add(time.Second)
+	if inserted, released, err := d.AutoLinkUnlinkedTodoAgent(ctx, "t_new", "m", "s_done", "", "", "", "", "space", "m/w", decided); err != nil ||
+		!inserted || len(released) != 1 || released[0] != "t_done" {
+		t.Fatalf("done todo: %v %v %v", inserted, released, err)
+	}
+	if got := activeTodosOf(t, d, "m", "s_done"); len(got) != 1 || got[0] != "t_new" {
+		t.Fatalf("done todo: active %v", got)
+	}
+	if inserted, released, err := d.AutoLinkUnlinkedTodoAgent(ctx, "t_new", "m", "s_open", "", "", "", "", "space", "m/w", decided); err != nil ||
+		inserted || len(released) != 0 {
+		t.Fatalf("open todo: %v %v %v", inserted, released, err)
+	}
+	// Linked to the done todo after the decision (a task's agent, LinkTodoAgentOfDoneTask): left there.
+	if _, err := d.LinkTodoAgentOfDoneTask(ctx, "t_done", "m", "s_late", "", "", "", "", "manual", "", decided.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if inserted, _, err := d.AutoLinkUnlinkedTodoAgent(ctx, "t_new", "m", "s_late", "", "", "", "", "space", "m/w", decided); err != nil || inserted {
+		t.Fatalf("late link: %v %v", inserted, err)
+	}
+	if got := activeTodosOf(t, d, "m", "s_late"); len(got) != 1 || got[0] != "t_done" {
+		t.Fatalf("late link: active %v", got)
+	}
+}

@@ -210,6 +210,68 @@ func TestTodoOfflineAndReopen(t *testing.T) {
 	}
 }
 
+// An agent of a todo now done that joins another on its own (its workspace) took part in the done one and works for
+// the new one: in the list, the report and the store, after the next list and a reload, and when the done todo is
+// renamed or reopened (#2904).
+func TestTodoAutoLinkReleasesTheDoneTodo(t *testing.T) {
+	todoStores(t, func(t *testing.T, e *todoEnv, database *db.DB) {
+		a, b := e.create("A"), e.create("B")
+		e.f.setSessions("macbook", proto.Session{SessionID: "s1", Title: "Agent 1", Status: proto.StatusWorking})
+		e.must("PUT", "/api/v1/todos/"+a.ID+"/spaces/macbook/work", "")
+		e.must("PUT", "/api/v1/todos/"+b.ID+"/agents/macbook/s1", "")
+		e.must("PATCH", "/api/v1/todos/"+b.ID, `{"done":true}`)
+		s1 := proto.Session{SessionID: "s1", Title: "Agent 1", SpaceName: "work", Status: proto.StatusWorking}
+		e.sessions("macbook", s1)
+		stored := func() (active []string, all int) {
+			rows, err := database.ListAllTodoAgents(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range rows {
+				if r.SessionID == "s1" {
+					all++
+					if r.ReleasedAt == nil {
+						active = append(active, r.TodoID)
+					}
+				}
+			}
+			return active, all
+		}
+		if database != nil {
+			waitFor(t, "s1 stored on A only", func() bool {
+				active, all := stored()
+				return len(active) == 1 && active[0] == a.ID && all == 2
+			})
+		}
+		check := func(when string) {
+			t.Helper()
+			if got := e.todoOf("macbook", "s1"); got != a.ID {
+				t.Fatalf("%s: the report says s1 works for %q, want A (%q)", when, got, a.ID)
+			}
+			if ag := agentOf(*e.get(a.ID), "s1"); ag == nil || ag.ReleasedAt != nil || ag.Source != "space" {
+				t.Fatalf("%s: s1 on A = %+v", when, ag)
+			}
+			if ag := agentOf(*e.get(b.ID), "s1"); ag == nil || ag.ReleasedAt == nil {
+				t.Fatalf("%s: the done todo lists s1 as a current agent: %+v", when, ag)
+			}
+			if database != nil {
+				if active, all := stored(); len(active) != 1 || active[0] != a.ID || all != 2 {
+					t.Fatalf("%s: stored active %v of %d rows", when, active, all)
+				}
+			}
+		}
+		check("linked")
+		e.sessions("macbook", s1)
+		check("the next list")
+		reloadTodos(t, e.s)
+		check("after a reload")
+		e.must("PATCH", "/api/v1/todos/"+b.ID, `{"title":"B renamed"}`)
+		check("the done todo renamed")
+		e.must("PATCH", "/api/v1/todos/"+b.ID, `{"done":false}`)
+		check("the done todo reopened")
+	})
+}
+
 // An agent removed right after it joined on its own is removed (no 404), and the link being written does not bring it
 // back.
 func TestTodoImmediateUnlinkRaceDoesNotReviveLink(t *testing.T) {

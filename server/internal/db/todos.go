@@ -475,8 +475,9 @@ func (d *DB) AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID
 }
 
 // AutoLinkUnlinkedTodoAgent is AutoLinkTodoAgent for an agent that worked for no todo when the link was decided (the
-// assistant's automatic links): it links nothing when the agent works for another todo by the time it is written, so
-// a link by hand committed in between is never moved (#2704).
+// assistant's automatic links): it links nothing when the agent works for another open todo by the time it is
+// written, or was linked to any todo after linkedAt, so a link by hand committed in between is never moved (#2704).
+// A done todo it was on before took part only: that link is released, as a link by hand releases it (#2904).
 func (d *DB) AutoLinkUnlinkedTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) (bool, []string, error) {
 	return d.autoLinkTodoAgent(ctx, todoID, machineID, sessionID, title, cwd, agent, startError, source, via, linkedAt, true)
 }
@@ -510,22 +511,29 @@ func (d *DB) autoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID
 			return nil
 		}
 
-		// Find other active links for this agent and release them.
-		rows, err := tx.Query(ctx, `SELECT todo_id FROM todo_agents WHERE machine_id = $1 AND session_id = $2 AND released_at IS NULL AND todo_id != $3`,
-			machineID, sessionID, todoID)
+		// Find other active links for this agent and release them. held: one on an open todo, or made after linkedAt.
+		rows, err := tx.Query(ctx, `SELECT a.todo_id, t.done_at IS NULL OR a.linked_at > $4 FROM todo_agents a JOIN todos t ON t.id = a.todo_id
+			WHERE a.machine_id = $1 AND a.session_id = $2 AND a.released_at IS NULL AND a.todo_id != $3`,
+			machineID, sessionID, todoID, linkedAt)
 		if err != nil {
 			return err
 		}
+		heldElsewhere := false
 		for rows.Next() {
 			var oid string
-			if err := rows.Scan(&oid); err != nil {
+			var held bool
+			if err := rows.Scan(&oid, &held); err != nil {
 				rows.Close()
 				return err
 			}
 			releasedTodoIDs = append(releasedTodoIDs, oid)
+			heldElsewhere = heldElsewhere || held
 		}
 		rows.Close()
-		if onlyUnlinked && len(releasedTodoIDs) > 0 {
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if onlyUnlinked && heldElsewhere {
 			releasedTodoIDs = nil // it works for another todo now (under the membership lock): leave it there
 			return nil
 		}
