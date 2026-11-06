@@ -93,9 +93,12 @@ var (
 // Conn is the connector of one program.
 type Conn struct {
 	cfg    Config
-	events chan connector.Scope // scopes the program reported, for Watch
+	events chan struct{} // a scope is pending; one slot, so Watch wakes once for any number of them
 
-	mu      sync.Mutex
+	mu sync.Mutex
+	// pending are the scopes the program reported changed that Watch has not passed on yet: one each, so a backlog
+	// of one scope never pushes out another's.
+	pending map[connector.Scope]bool
 	peer    *rpc.Peer // nil while the program is not running
 	man     serve.Manifest
 	tools   []proto.Tool
@@ -113,6 +116,9 @@ type Conn struct {
 	// refreshing is the round of fetch running (nil when none); again is the round asked for while it runs, which
 	// starts when it ends.
 	refreshing, again *round
+	// run is the context of the Run under way (hold), nil outside one: what calls with no caller's context of their
+	// own (MachineOnline, SetOptions) use, so they end with the connector instead of outliving it.
+	run context.Context
 }
 
 // round is one fetch that every refresh asked for meanwhile shares. Its context ends only once every asker's has,
@@ -130,7 +136,7 @@ func New(cfg Config) *Conn {
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
-	return &Conn{cfg: cfg, events: make(chan connector.Scope, 16),
+	return &Conn{cfg: cfg, events: make(chan struct{}, 1), pending: map[connector.Scope]bool{},
 		man:    serve.Manifest{ID: cfg.ID, Name: cfg.Name},
 		status: connector.Status{State: connector.StateError, Error: cfg.Name + " 进程还没启动"}}
 }
@@ -187,6 +193,8 @@ func (c *Conn) setDown(why string) {
 // Run keeps the program running until ctx ends: checks it is the hub's build, starts it, restarts it after a
 // backoff when it exits. A linked one holds its plugin's process instead, which the plugin host runs.
 func (c *Conn) Run(ctx context.Context) {
+	ctx, stop := c.hold(ctx)
+	defer stop()
 	if c.cfg.Link != nil {
 		c.runLinked(ctx)
 		return
@@ -223,6 +231,33 @@ func (c *Conn) Run(ctx context.Context) {
 		}
 		wait = min(wait*2, restartLast)
 	}
+}
+
+// hold makes ctx the connector's run (life) until stop, which ends what was started under it.
+func (c *Conn) hold(ctx context.Context) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	c.mu.Lock()
+	c.run = ctx
+	c.mu.Unlock()
+	return ctx, func() {
+		c.mu.Lock()
+		if c.run == ctx {
+			c.run = nil
+		}
+		c.mu.Unlock()
+		cancel()
+	}
+}
+
+// life is the context of the connector's run; outside one, a background one (a call then finds the program not
+// running, as before Run).
+func (c *Conn) life() context.Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.run == nil {
+		return context.Background()
+	}
+	return c.run
 }
 
 // runLinked holds the plugin's process while ctx lasts, refreshing the status and tools each time it comes up and
@@ -655,9 +690,12 @@ func (c *Conn) onEvent(event string, params json.RawMessage) {
 		c.cfg.Logf("connector %s: unknown scope %q changed", c.cfg.ID, e.Scope)
 		return
 	}
+	c.mu.Lock()
+	c.pending[scope] = true
+	c.mu.Unlock()
 	select {
-	case c.events <- scope:
-	default: // the hub has a kick pending already
+	case c.events <- struct{}{}:
+	default: // Watch is woken already and takes this scope too
 	}
 }
 
@@ -667,9 +705,20 @@ func (c *Conn) Watch(ctx context.Context, changed func(connector.Scope)) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case scope := <-c.events:
+		case <-c.events:
+			c.mu.Lock()
+			pending := c.pending
+			c.pending = map[connector.Scope]bool{}
+			c.mu.Unlock()
+			if len(pending) == 0 { // the scopes went with the wake before, as onEvent's signal came after
+				continue
+			}
 			c.kick(ctx) // what changed may be its status too (signed out elsewhere)
-			changed(scope)
+			for _, scope := range []connector.Scope{connector.ScopeChats, connector.ScopeItems, connector.ScopeInbox} {
+				if pending[scope] {
+					changed(scope)
+				}
+			}
 		}
 	}
 }

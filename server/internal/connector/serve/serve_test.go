@@ -2,6 +2,7 @@ package serve
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -40,6 +41,45 @@ func TestWritesRunOnce(t *testing.T) {
 	}
 	for i := range doneMost + 1 {
 		_, _ = w.do(string(rune('a'+i%26))+string(rune(i)), func() (CallResult, error) { return CallResult{}, nil })
+	}
+	if len(w.runs) > doneMost || len(w.order) > doneMost {
+		t.Fatalf("remembers %d writes", len(w.runs))
+	}
+}
+
+// A write still running keeps its request id however many other writes finish meanwhile: the same id again waits
+// for it and answers what it did, instead of running the action a second time.
+func TestWritesKeepRunningWrite(t *testing.T) {
+	var w writes
+	started, release := make(chan struct{}), make(chan struct{})
+	first := make(chan CallResult, 1)
+	go func() {
+		res, _ := w.do("r1", func() (CallResult, error) {
+			close(started)
+			<-release
+			return CallResult{Text: "sent"}, nil
+		})
+		first <- res
+	}()
+	<-started
+	for i := range doneMost {
+		_, _ = w.do(fmt.Sprintf("other-%d", i), func() (CallResult, error) { return CallResult{}, nil })
+	}
+	var again atomic.Int32
+	second := make(chan CallResult, 1)
+	go func() {
+		res, _ := w.do("r1", func() (CallResult, error) {
+			again.Add(1)
+			return CallResult{Text: "sent again"}, nil
+		})
+		second <- res
+	}()
+	close(release)
+	if res1, res2 := <-first, <-second; res1.Text != "sent" || res2.Text != "sent" {
+		t.Fatalf("first %+v, second %+v", res1, res2)
+	}
+	if n := again.Load(); n != 0 {
+		t.Fatalf("the same request id ran %d more time(s)", n)
 	}
 	if len(w.runs) > doneMost || len(w.order) > doneMost {
 		t.Fatalf("remembers %d writes", len(w.runs))

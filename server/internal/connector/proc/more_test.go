@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
@@ -195,6 +198,53 @@ func TestSyncOptionsRetriesAfterFailure(t *testing.T) {
 	}
 }
 
+// optionsPeer is a running program, over pipes, that takes settings but fails to say which it keeps (options.get
+// timing out, or the program dying between the two calls).
+func optionsPeer(t *testing.T) *rpc.Peer {
+	t.Helper()
+	return pipedProgram(t, func(_ context.Context, method string, _ json.RawMessage) (any, error) {
+		if method == serve.MOptionsSet {
+			return struct{}{}, nil
+		}
+		return nil, &rpc.Error{Code: "timeout", Message: "no answer"}
+	})
+}
+
+// Settings the program took are kept when it then fails to say which it keeps: they are what the hub stores and
+// what it gives the program again after a restart, not the settings from before.
+func TestSetOptionsKeptWhenReadFails(t *testing.T) {
+	var logs []string
+	c := New(Config{ID: "example", Name: "Example", Manifest: (&settingsProgram{}).Manifest(),
+		Logf: func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }})
+	c.options = json.RawMessage(`{"ci":"all"}`)
+	c.peer = optionsPeer(t)
+	if err := c.SetOptions(json.RawMessage(`{"ci":"none"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(c.Options()); got != `{"ci":"none"}` {
+		t.Fatal("options after a failed read:", got)
+	}
+	if len(logs) != 1 {
+		t.Fatal("the failed read is logged:", logs)
+	}
+	// The program restarts: the hub gives it the user's settings again.
+	c.sent = false
+	var resent json.RawMessage
+	c.syncOptions(context.Background(), func(method string, params, _ any) error {
+		if method == serve.MOptionsSet {
+			resent = params.(serve.OptionsParams).Options
+			return nil
+		}
+		return &rpc.Error{Code: serve.CodeNoCapability, Message: "no options"}
+	})
+	if string(resent) != `{"ci":"none"}` {
+		t.Fatal("re-sent after a restart:", string(resent))
+	}
+	if len(logs) != 1 {
+		t.Fatal("no_capability is not logged:", logs)
+	}
+}
+
 // Without machines declared, a program is not told of computers (connector.As); without options it has none.
 func TestUndeclaredSettings(t *testing.T) {
 	c := New(Config{ID: "example", Name: "Example", Manifest: (&exampleProgram{}).Manifest()})
@@ -229,5 +279,123 @@ func TestGhToken(t *testing.T) {
 	}
 	if _, err := c.Handle(ctx, serve.MGhToken, json.RawMessage(`{"machine":"m9"}`)); !errors.As(err, &re) || re.Code != serve.CodeNoMachine {
 		t.Fatal("the code goes to the program:", err)
+	}
+}
+
+// pipedProgram is a program reached over an in-process rpc pair: answer handles the hub's calls on the program's
+// side. The returned peer is the hub's end, given to the connector as the running program's.
+func pipedProgram(t *testing.T, answer rpc.Handler) *rpc.Peer {
+	t.Helper()
+	toProg, fromHub := io.Pipe()
+	toHub, fromProg := io.Pipe()
+	hub := rpc.New("h", fromHub)
+	prog := rpc.New("p", fromProg)
+	prog.OnRequest = answer
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { _ = hub.Serve(ctx, toHub) }()
+	go func() { _ = prog.Serve(ctx, toProg) }()
+	t.Cleanup(func() {
+		cancel()
+		_ = toProg.Close()
+		_ = toHub.Close()
+		hub.Close(rpc.ErrClosed)
+		prog.Close(rpc.ErrClosed)
+	})
+	return hub
+}
+
+// A computer's coming that the program refuses is logged, and one it does not answer ends with the connector's run
+// instead of outliving it.
+func TestMachineOnline(t *testing.T) {
+	t.Run("refused is logged", func(t *testing.T) {
+		deadline := time.After(10 * time.Second)
+		logs := make(chan string, 4)
+		c := New(Config{ID: "example", Name: "Example", Logf: func(f string, a ...any) { logs <- fmt.Sprintf(f, a...) }})
+		peer := pipedProgram(t, func(_ context.Context, method string, _ json.RawMessage) (any, error) {
+			return nil, &rpc.Error{Code: "busy", Message: "cannot take it now"}
+		})
+		_, stop := c.hold(context.Background())
+		defer stop()
+		c.mu.Lock()
+		c.peer = peer
+		c.mu.Unlock()
+		c.MachineOnline("m1")
+		select {
+		case line := <-logs:
+			if !strings.Contains(line, serve.MMachineOnline) || !strings.Contains(line, "cannot take it now") {
+				t.Fatal("log line:", line)
+			}
+		case <-deadline:
+			t.Fatal("the refusal was not logged")
+		}
+	})
+	t.Run("ends with the run", func(t *testing.T) {
+		deadline := time.After(10 * time.Second)
+		started, canceled := make(chan struct{}), make(chan struct{})
+		c := New(Config{ID: "example", Name: "Example"})
+		peer := pipedProgram(t, func(ctx context.Context, method string, _ json.RawMessage) (any, error) {
+			close(started)
+			<-ctx.Done()
+			close(canceled)
+			return nil, ctx.Err()
+		})
+		// The program hears when the hub stops waiting, so its handler shows whether MachineOnline's call ended.
+		peer.Cancels = map[string]bool{serve.MMachineOnline: true}
+		_, stop := c.hold(context.Background())
+		defer stop()
+		c.mu.Lock()
+		c.peer = peer
+		c.mu.Unlock()
+		c.MachineOnline("m1")
+		select {
+		case <-started:
+		case <-deadline:
+			t.Fatal("the program was not asked")
+		}
+		stop()
+		select {
+		case <-canceled:
+		case <-deadline:
+			t.Fatal("the call outlived the connector's run")
+		}
+	})
+}
+
+// Settings given while the run ends under the call stay pending for the next run instead of being lost.
+func TestSetOptionsEndsWithTheRun(t *testing.T) {
+	deadline := time.After(10 * time.Second)
+	started := make(chan struct{})
+	c := New(Config{ID: "example", Name: "Example"})
+	peer := pipedProgram(t, func(ctx context.Context, method string, _ json.RawMessage) (any, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	_, stop := c.hold(context.Background())
+	defer stop()
+	c.mu.Lock()
+	c.peer = peer
+	c.mu.Unlock()
+	done := make(chan error, 1)
+	go func() { done <- c.SetOptions(json.RawMessage(`{"ci":"none"}`)) }()
+	select {
+	case <-started:
+	case <-deadline:
+		t.Fatal("the program was not asked")
+	}
+	stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal("SetOptions:", err)
+		}
+	case <-deadline:
+		t.Fatal("the call outlived the connector's run")
+	}
+	c.mu.Lock()
+	options, sent := string(c.options), c.sent
+	c.mu.Unlock()
+	if options != `{"ci":"none"}` || sent {
+		t.Fatalf("settings %s sent %v, want them pending", options, sent)
 	}
 }

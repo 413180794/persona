@@ -21,10 +21,12 @@ func (c *Conn) Options() json.RawMessage {
 	return c.options
 }
 
-// SetOptions gives the program the user's settings; one not running gets them when it starts (syncOptions).
+// SetOptions gives the program the user's settings; one not running gets them when it starts (syncOptions). A run
+// ending under the call counts as not running: the settings stay pending for the next one instead of being lost.
 func (c *Conn) SetOptions(raw json.RawMessage) error {
-	err := c.call(context.Background(), serve.MOptionsSet, serve.OptionsParams{Options: raw}, nil)
-	if errors.Is(err, errNotRunning) {
+	ctx := c.life()
+	err := c.call(ctx, serve.MOptionsSet, serve.OptionsParams{Options: raw}, nil)
+	if errors.Is(err, errNotRunning) || (err != nil && ctx.Err() != nil) {
 		c.mu.Lock()
 		c.options, c.sent = raw, false
 		c.mu.Unlock()
@@ -33,8 +35,13 @@ func (c *Conn) SetOptions(raw json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	c.readOptions(context.Background(), func(method string, params, out any) error {
-		return c.call(context.Background(), method, params, out)
+	// The program took raw: keep it until it says what it kept, so a failed read neither stores nor re-sends the
+	// settings it had before.
+	c.mu.Lock()
+	c.options = raw
+	c.mu.Unlock()
+	c.readOptions(ctx, func(method string, params, out any) error {
+		return c.call(ctx, method, params, out)
 	})
 	c.mu.Lock()
 	c.sent = true
@@ -79,6 +86,10 @@ func (c *Conn) syncOptions(ctx context.Context, call func(method string, params,
 func (c *Conn) readOptions(_ context.Context, call func(method string, params, out any) error) {
 	var out serve.OptionsResult
 	if err := call(serve.MOptionsGet, struct{}{}, &out); err != nil {
+		var re *rpc.Error
+		if !errors.As(err, &re) || re.Code != serve.CodeNoCapability {
+			c.cfg.Logf("connector %s: read settings: %v", c.cfg.ID, err)
+		}
 		return
 	}
 	c.mu.Lock()
@@ -99,10 +110,19 @@ func (c *Conn) Settle(ctx context.Context, threads []string) map[string]string {
 	return out.Settled
 }
 
-// MachineOnline tells the program a computer connected (in the background: the hub does not wait).
+// MachineOnline tells the program a computer connected (in the background: the hub does not wait). The call ends
+// with the connector's run; a refusal is logged, as the program then never hears the computer is back.
 func (c *Conn) MachineOnline(id string) {
+	ctx := c.life()
 	go func() {
-		_ = c.call(context.Background(), serve.MMachineOnline, serve.MachineParams{Machine: id}, nil)
+		err := c.call(ctx, serve.MMachineOnline, serve.MachineParams{Machine: id}, nil)
+		if err == nil || errors.Is(err, errNotRunning) || ctx.Err() != nil {
+			return
+		}
+		if re := (*rpc.Error)(nil); errors.As(err, &re) && re.Code == serve.CodeNoCapability {
+			return
+		}
+		c.cfg.Logf("connector %s: %s %s: %v", c.cfg.ID, serve.MMachineOnline, id, err)
 	}()
 }
 

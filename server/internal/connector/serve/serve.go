@@ -877,8 +877,9 @@ const doneMost = 256
 // writes runs each write (actions.do) once by its request id: the same id again answers what the first run did,
 // waiting for it if it is still running.
 type writes struct {
-	mu    sync.Mutex
-	runs  map[string]*write
+	mu   sync.Mutex
+	runs map[string]*write
+	// order is the finished writes (failed ones too), oldest first; a running write is not in it.
 	order []string
 }
 
@@ -900,13 +901,16 @@ func (w *writes) do(id string, run func() (CallResult, error)) (CallResult, erro
 	}
 	cur := &write{done: make(chan struct{})}
 	w.runs[id] = cur
+	w.mu.Unlock()
+	cur.res, cur.err = run()
+	// Count the write toward doneMost only once it finished, so a write still running is never forgotten.
+	w.mu.Lock()
 	w.order = append(w.order, id)
 	if len(w.order) > doneMost {
 		delete(w.runs, w.order[0])
 		w.order = w.order[1:]
 	}
 	w.mu.Unlock()
-	cur.res, cur.err = run()
 	close(cur.done)
 	return cur.res, cur.err
 }

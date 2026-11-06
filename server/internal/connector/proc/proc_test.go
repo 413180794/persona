@@ -682,7 +682,7 @@ func TestChattyProgramAsPlugin(t *testing.T) {
 		out, err := c.Call(ctx, "chatty_burst", nil)
 		return err == nil && out == "sent"
 	})
-	waitUntil(t, "the burst's events", func() bool { return len(scopes) >= 16 })
+	waitUntil(t, "the burst's events", func() bool { return len(scopes) >= 1 }) // coalesced per scope
 	waitUntil(t, "the refreshes to finish", func() bool {
 		_, inFlight, calls := stats()
 		return inFlight == 0 && calls > before
@@ -773,5 +773,30 @@ func TestLogLinesReadsPastALongLine(t *testing.T) {
 			short[i] = l[:min(len(l), 40)]
 		}
 		t.Fatalf("logged %d lines: %q", len(got), short)
+	}
+}
+
+// Changed events wait for Watch per scope: a full backlog of one scope (Watch not draining yet, or backing off)
+// does not drop another scope's change, which would leave, say, the inbox uncollected.
+func TestChangedEventsKeepEveryScope(t *testing.T) {
+	c := New(Config{ID: "example", Name: "Example"})
+	for range 16 {
+		c.onEvent(serve.EChanged, json.RawMessage(`{"scope":"chats"}`))
+	}
+	c.onEvent(serve.EChanged, json.RawMessage(`{"scope":"inbox"}`))
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	seen := map[connector.Scope]int{}
+	_ = c.Watch(ctx, func(s connector.Scope) {
+		seen[s]++
+		if seen[connector.ScopeChats] > 0 && seen[connector.ScopeInbox] > 0 {
+			cancel()
+		}
+	})
+	if seen[connector.ScopeInbox] == 0 {
+		t.Fatalf("Watch passed on %v: the inbox change was dropped", seen)
+	}
+	if seen[connector.ScopeChats] != 1 {
+		t.Fatalf("Watch passed on %v: the chats changes are one change", seen)
 	}
 }
