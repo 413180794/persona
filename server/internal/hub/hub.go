@@ -32,18 +32,17 @@ type Hub struct {
 	// tests: replaces os.Hostname
 	hostname func() (string, error)
 
-	cfg         *Config
-	version     string
-	build       update.Build // channel, build number, where updates come from (docs/hub-update.md)
-	upd         *updater     // updating itself to the publisher's release (selfupdate.go)
-	logger      *log.Logger
-	machines    []*Machine
-	byID        map[string]*Machine
-	push        *Pusher
-	agentWork   agentWork    // whether the manager is there to ask (agents_link.go)
-	store       Store        // nil in unit tests: nothing is persisted
-	workspaceMu sync.Mutex   // serializes read-only workspace discovery and snapshot commits
-	lockTests   lockTestWake // wakes the lock test dispatcher when a test is scheduled (locktest.go)
+	cfg       *Config
+	version   string
+	build     update.Build // channel, build number, where updates come from (docs/hub-update.md)
+	upd       *updater     // updating itself to the publisher's release (selfupdate.go)
+	logger    *log.Logger
+	machines  []*Machine
+	byID      map[string]*Machine
+	push      *Pusher
+	agentWork agentWork    // whether the manager is there to ask (agents_link.go)
+	store     Store        // nil in unit tests: nothing is persisted
+	lockTests lockTestWake // wakes the lock test dispatcher when a test is scheduled (locktest.go)
 
 	terms terminals  // the terminal tab's live streams (terminal.go)
 	fulls fullRelays // the web's full herdr views (herdrclient.go)

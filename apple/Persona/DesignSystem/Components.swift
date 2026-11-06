@@ -498,11 +498,13 @@ struct CloseAgentSheet: View {
                 }
                 .themedButton(prominent: true)
                 .tint(Theme.danger)
+                .keyboardShortcut(.defaultAction)
                 .disabled(closing)
                 Button { dismiss() } label: {
                     Text("取消").lineLimit(1).font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
                 }
                 .themedButton()
+                .keyboardShortcut(.cancelAction)
                 .disabled(closing)
             }
             .controlSize(.large)

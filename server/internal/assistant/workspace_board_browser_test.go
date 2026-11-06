@@ -1,8 +1,9 @@
-package hub
+package assistant
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -30,16 +32,9 @@ func TestWorkspaceBoardBrowserHarness(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	if existing, _ := database.DeviceTokenByHash(context.Background(), hashToken("mock-readonly")); existing == nil {
-		if err := database.CreateDeviceToken(context.Background(), db.DeviceToken{ID: "board-viewer", Name: "Board viewer", Kind: "watch", Role: roleAnswer}, hashToken("mock-readonly")); err != nil {
-			t.Fatal(err)
-		}
-	}
-	makeHub := func() *Hub {
-		h := newTestHub(t)
-		h.cfg.Token = "mock"
-		h.store = database
-		m := boardNode(t, h, "computer", func(_ context.Context, method string, p json.RawMessage) (any, error) {
+	makeService := func() *Service {
+		d := newBoardDevs()
+		d.add("computer", func(_ context.Context, method string, p json.RawMessage) (any, error) {
 			switch method {
 			case "workspaces.list":
 				return proto.WorkspacesResponse{Workspaces: []proto.Workspace{{ID: "design", Source: "herdr", SourceID: "design", Title: "Design", Cwd: "/projects/design", Available: true}, {ID: "api", Source: "herdr", SourceID: "api", Title: "API", Cwd: "/projects/api", Available: true}, {ID: "new", Source: "herdr", SourceID: "new", Title: "New project", Cwd: "/projects/new", Available: true}}}, nil
@@ -56,11 +51,10 @@ func TestWorkspaceBoardBrowserHarness(t *testing.T) {
 				return nil, &rpc.Error{Code: "unsupported", Message: "harness does not run agents"}
 			}
 		})
-		m.sessions = []proto.Session{{SessionID: "one", Cwd: "/projects/design", SpaceID: "design", SpaceName: "Design", Agent: "codex"}, {SessionID: "two", Cwd: "/projects/design", SpaceID: "design", SpaceName: "Design", Agent: "codex"}}
-		offline := newMachine(h, MachineConfig{ID: "offline", Name: "Offline"})
-		h.machines = append(h.machines, offline)
-		h.byID["offline"] = offline
-		return h
+		d.setSessions("computer", []proto.Session{{SessionID: "one", Cwd: "/projects/design", SpaceID: "design", SpaceName: "Design", Agent: "codex"}, {SessionID: "two", Cwd: "/projects/design", SpaceID: "design", SpaceName: "Design", Agent: "codex"}})
+		d.add("offline", nil)
+		s, _ := newBoardService(t, database, d)
+		return s
 	}
 	initial, err := database.WorkspaceBoard(context.Background())
 	if err != nil {
@@ -81,11 +75,21 @@ func TestWorkspaceBoardBrowserHarness(t *testing.T) {
 		}
 	}
 	var mu sync.RWMutex
+	// The hub's part: token "mock" is a full device, "mock-readonly" an answer-only one (the role the relay passes on).
 	newHandler := func() http.Handler {
-		h := makeHub()
-		api := http.NewServeMux()
-		h.workspaceBoardRoutes(api)
-		return h.auth(api)
+		svc := makeService()
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Header.Get("Authorization") {
+			case "Bearer mock":
+				r.Header.Set(RoleHeader, roleFull)
+			case "Bearer mock-readonly":
+				r.Header.Set(RoleHeader, roleAnswer)
+			default:
+				apierr.Write(w, http.StatusUnauthorized, errors.New("invalid token"))
+				return
+			}
+			svc.ServeHTTP(w, r)
+		})
 	}
 	handler := newHandler()
 	mux := http.NewServeMux()
@@ -93,7 +97,7 @@ func TestWorkspaceBoardBrowserHarness(t *testing.T) {
 		mu.Lock()
 		handler = newHandler()
 		mu.Unlock()
-		writeJSON(w, map[string]bool{"restarted": true})
+		apierr.WriteJSON(w, map[string]bool{"restarted": true})
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		mu.RLock()

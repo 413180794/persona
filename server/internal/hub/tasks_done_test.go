@@ -292,7 +292,7 @@ func TestTaskDoneSkipAndCheck(t *testing.T) {
 	// A todo made by hand: never closed by the hub, whatever the model says.
 	stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"做完了"}`)
 	hand := plainTodo(t, h, "自己记的事")
-	if err := h.linkTodoAgent(context.Background(), hand.ID, "box", "s2", "", "/code/app", "", ""); err != nil {
+	if _, err := h.asst().TodoLink(context.Background(), assistantwire.TodoLinkParams{TodoID: hand.ID, MachineID: "box", SessionID: "s2", Cwd: "/code/app"}); err != nil {
 		t.Fatal(err)
 	}
 	// Its agent works and stops: no receipt, no judgment (it is no task of a conversation).

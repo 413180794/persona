@@ -136,6 +136,7 @@ type (
 	TodoHandoff       = assistantwire.TodoHandoff
 	TodoHandoffResult = assistantwire.TodoHandoffResult
 	TodoLinkParams    = assistantwire.TodoLinkParams
+	TodoLinkResult    = assistantwire.TodoLinkResult
 	TodoSpaceRenamed  = assistantwire.TodoSpaceRenamed
 )
 

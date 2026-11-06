@@ -85,6 +85,9 @@ struct PersonalAgentSessionView: View {
                     Image(systemName: Theme.Icon.submit).font(Theme.Font.title)
                 }
                 .disabled(!session.canSend || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                // Match the main chat composer (ComposerRow): ⌘⏎ sends. SwiftUI does not fire the shortcut while
+                // the button is disabled, and keyboardShortcut is cross-platform (iPad hardware keyboards get it too).
+                .keyboardShortcut(.return, modifiers: .command)
             }
         }
         .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.s)

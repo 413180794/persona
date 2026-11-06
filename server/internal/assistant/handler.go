@@ -56,11 +56,11 @@ type Handler interface {
 	Resync(ctx context.Context)
 
 	// The todos (todos.go).
-	// TodoHandoff is assistant.todo_handoff: an agent is about to be handed work for a todo: the todo, and the text
-	// with its decisions before it.
+	// TodoHandoff is assistant.todo_handoff: an agent is about to be handed work for a todo: the todo, whether the
+	// hand-off may go, and the text with its decisions before it.
 	TodoHandoff(ctx context.Context, h TodoHandoff) (TodoHandoffResult, error)
-	// TodoLink is assistant.todo_link: the agent handed the work works for the todo from now on.
-	TodoLink(ctx context.Context, p TodoLinkParams) error
+	// TodoLink is assistant.todo_link: the agent handed the work works for the todo from now on; the todo's title.
+	TodoLink(ctx context.Context, p TodoLinkParams) (TodoLinkResult, error)
 	// TodoSpaceRenamed is todos.space_renamed: the hub renamed a workspace.
 	TodoSpaceRenamed(ctx context.Context, r TodoSpaceRenamed)
 

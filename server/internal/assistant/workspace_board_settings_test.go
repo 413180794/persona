@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -41,9 +41,9 @@ func (s *settingsBoardStore) WorkspaceBoardInUse(context.Context) (bool, error) 
 	return s.state.Revision > 0, nil
 }
 
-func boardEnabled(t *testing.T, h *Hub, role string) (bool, bool) {
+func boardEnabled(t *testing.T, s *Service, role string) (bool, bool) {
 	t.Helper()
-	w := boardCall(h, "GET", "/api/v1/workspace-board/settings", "", role)
+	w := boardCall(s, "GET", "/api/v1/workspace-board/settings", "", role)
 	if w.Code != 200 {
 		t.Fatalf("HTTP %d: %s", w.Code, w.Body)
 	}
@@ -59,7 +59,7 @@ func boardEnabled(t *testing.T, h *Hub, role string) (bool, bool) {
 
 func TestWorkspaceBoardOffByDefaultAndSwitchKeepsBoard(t *testing.T) {
 	store := newSettingsBoardStore()
-	h := &Hub{store: store}
+	h, _ := newBoardService(t, store, nil)
 	// an untouched board (opened once, revision 0) is not "in use"
 	if on, can := boardEnabled(t, h, roleFull); on || !can {
 		t.Fatalf("new hub: enabled=%v can_write=%v, want off and writable", on, can)
@@ -88,7 +88,7 @@ func TestWorkspaceBoardUsedBeforeUpgradeCountsAsOn(t *testing.T) {
 	store := newSettingsBoardStore()
 	store.state = workspaceboard.Default()
 	store.state.Revision = 3
-	h := &Hub{store: store}
+	h, _ := newBoardService(t, store, nil)
 	if on, _ := boardEnabled(t, h, roleFull); !on {
 		t.Fatal("a board used before the switch existed must stay on")
 	}
@@ -98,7 +98,7 @@ func TestWorkspaceBoardUsedBeforeUpgradeCountsAsOn(t *testing.T) {
 }
 
 func TestWorkspaceBoardSettingsRoles(t *testing.T) {
-	h := &Hub{store: newSettingsBoardStore()}
+	h, _ := newBoardService(t, newSettingsBoardStore(), nil)
 	if _, can := boardEnabled(t, h, roleAnswer); can {
 		t.Fatal("answer device reported writable")
 	}
@@ -110,7 +110,7 @@ func TestWorkspaceBoardSettingsRoles(t *testing.T) {
 			t.Fatalf("PUT %s: HTTP %d", body, w.Code)
 		}
 	}
-	if w := boardCall(&Hub{}, "GET", "/api/v1/workspace-board/settings", "", roleFull); w.Code != 503 {
+	if w := boardCall(func() *Service { s, _ := newBoardService(t, nil, nil); return s }(), "GET", "/api/v1/workspace-board/settings", "", roleFull); w.Code != 503 {
 		t.Fatalf("no store: HTTP %d", w.Code)
 	}
 }

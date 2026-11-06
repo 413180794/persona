@@ -358,7 +358,7 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		if err := decode(&p); err != nil {
 			return nil, err
 		}
-		return map[string]any{}, s.TodoLink(ctx, p)
+		return s.TodoLink(ctx, p)
 	case assistantwire.MethodStart:
 		var p StartParams
 		if err := decode(&p); err != nil {

@@ -522,7 +522,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 
 ## 工作区看板
 
-工作流说明、升级和持久化见 [工作区看板](workspace-board.md)。下列接口以当前 hub 的 Postgres 为唯一持久状态，没有内存或 JSON 文件写入降级。`answer` 允许 GET 看板和清单，POST 要求 `full`；`can_write` 表示当前请求的角色能否编辑，不额外授予文件、Git 或 Agent 操作权限。
+工作流说明、升级和持久化见 [工作区看板](workspace-board.md)。下列接口是管理者的（hub 经总线 `http.request` 原样转发，见「转发 App 的请求」；管理者不在时 `503 assistant_offline`），两个事件由管理者经 `ws.broadcast` 发、hub 原样推。接口以 hub 机器的 Postgres 为唯一持久状态，没有内存或 JSON 文件写入降级。`answer` 允许 GET 看板和清单，POST 要求 `full`；`can_write` 表示当前请求的角色能否编辑，不额外授予文件、Git 或 Agent 操作权限。
 
 ```text
 BoardState { revision: int64, columns: Column[], cards: Card[], can_write: bool }
@@ -1656,7 +1656,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   hub 的错误带码回去，助手按码认回原来的错误：`no_device`（没有这台机器）、`machine_offline`、`node_closed`（node 的连接断了）、`stale_snapshot`、`model_paused`（`data` 是暂停的 `{reason, until}`：额度用完 `quota` 还是并发满 `busy`）、`model_unconfigured`（这个用途没配模型）、`assistant_in_doubt`（收件箱的回复上次发到一半断了，可能已经发出去）；node 自己回的 `rpc.Error` 原样。
 - hub → 助手，调用：`http.request`（下面的转发）、`manager.action`（App 回答了它的提问）、`assistant.tools {}` → `{tools:[…]}`（hub 在它每次连上时要一次、记着，断开后也留着）、
   `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、
-  `assistant.todo_handoff {todo_id,text?,new?,machine_id?,cwd?}` → `{found,title?,done_at?,text?}`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id`：待办在不在、完成没有，`text` 前面拼上生效的决策；`new` 时 `text` 是新 Agent 的第一句，再在最前面拼上 `cwd` 所属项目的背景，#2820）、`assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?}` → `{}`（交出去以后挂上；待办没了、完成了回错误）。
+  `assistant.todo_handoff {todo_id,text?,new?,machine_id?,cwd?}` → `{found,title?,done_at?,text?,status?,error?}`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id`：待办在不在、完成没有，`text` 前面拼上生效的决策；`new` 时 `text` 是新 Agent 的第一句，再在最前面拼上 `cwd` 所属项目的背景，#2820；`text` 为空时原样回；不能交时 `status` 404 没有这个待办、409 已完成，hub 拿 `status`、`error` 原样回给 App）、`assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?,prompt?}` → `{title?}`（交出去以后挂上；会话没有标题时管理者从 `prompt` 取上下文块后的第一行当挂上的标题；回待办的标题，新建会话的回应 `todo` 用它；待办没了、完成了回错误）。
   `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}`（hub 的功能开对话；收件箱的 AI 分身、飞书机器人和渠道 2026-11-04 起都由助手自己开，hub 现在不用它）、
   `assistant.send_params {machine_id,session_id,params}` → `{params}`（发给它某段对话的消息跑在哪个启动器和模型上、新主对话第一条前面带的背景）、
   `assistant.rename {machine_id,session_id,params}` → node 的回答（App 给它的对话改名）；这几个请求本身不对时回 `bad_request`，hub 回 App 400。

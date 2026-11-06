@@ -76,7 +76,7 @@ hub 只是通道：助手是自己的一个进程（`personad assistant`），�
 node 问的 `assistant.model`、`assistant.context` 也在进程里直接答（`Service.NodeAnswer`），hub 不再转；快照的 `profile.keep` 由它告诉各台 node（上面）。
 
 **hub 找助手只经** `assistant.Handler`（`assistant/handler.go`；hub 那头是 `assistantRemote`，同一组消息），每个方法是一条消息：App 的请求（助手的路由 `assistantwire.Routes`，经总线是 `http.request`，hub 原样转过去，调用方的角色放在 `X-Persona-Role`，客户端自己带的会被盖掉）、
-`assistant.tools`（hub 把它们和自己的工具一起列给助手的对话）、`assistant.tool`、`assistant.context`（node 每条消息前要的实时快照）、`manager.action`（用户回答了助手的提问）、`assistant.todo_handoff`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id` 时：这个待办在不在、完成没有，要交给 Agent 的话前面拼上生效的决策）、`assistant.todo_link`（交出去以后把这个 Agent 挂上待办）、
+`assistant.tools`（hub 把它们和自己的工具一起列给助手的对话）、`assistant.tool`、`assistant.context`（node 每条消息前要的实时快照）、`manager.action`（用户回答了助手的提问）、`assistant.todo_handoff`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id` 时：这个待办在不在、完成没有，能不能交由它定，要交给 Agent 的话前面拼上生效的决策）、`assistant.todo_link`（交出去以后把这个 Agent 挂上待办，没有标题时从开头的提示取）、
 `assistant.start`（hub 自己的功能要开一段助手的对话；收件箱的 AI 分身、飞书机器人和渠道 2026-11-04 起都是助手自己开，hub 现在不用它，`{text, images?, launcher?, permission_mode?, effort?, purpose?, machine_id?, main?, untitled?}` → `{session}`；AI 分身的带 `untitled`，不按助手的对话起标题）、
 `assistant.send_params`（`{machine_id, session_id, params}` → `{params}`：发给助手某段对话的消息跑在哪个启动器和模型上，新主对话空着开、第一条消息前面带上旧主对话留下的；手机发的、node 自己发的（`assistant.model`）都问它（飞书机器人和渠道发的是助手自己算）；这台机器还没列出、又不是主对话的原样返回；请求本身不对的回 `bad_request`，hub 回 400）、
 `assistant.rename`（`{machine_id, session_id, params}` → node 的回答：App 给助手的对话改名，主对话不能改名回 `bad_request`，Codex 的只改助手记的标题，node 改名照旧由它发 `session.rename`）、

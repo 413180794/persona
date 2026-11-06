@@ -711,10 +711,19 @@ func (s *Service) InteractionEnded(_ context.Context, p InteractionEnded) {
 }
 
 // channelsPushed: the conversation pushed what matters itself (notify_user): it goes to the channels with pushes on
-// too, and their sync mirror leaves the turn alone.
+// too, and their sync mirror leaves the turn alone. The "pushed" mark is written only once the first Feishu card
+// actually lands (markPushed from feishuPush): a failed first card must not make the turn-end mirror skip the turn.
 func (s *Service) channelsPushed(machine, session, title, body string) {
+	go s.feishuPush(machine, session, title, body)
+	go s.channelPush(title, body)
+}
+
+// markPushed records that the session's notify_user first card reached Feishu, so the turn-end mirrors leave the
+// turn alone for the next three minutes (pushedLately). Entries older than an hour are swept, as before.
+func (s *Service) markPushed(session string) {
 	c := &s.chans
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.notified == nil {
 		c.notified = map[string]time.Time{}
 	}
@@ -725,9 +734,6 @@ func (s *Service) channelsPushed(machine, session, title, body string) {
 		}
 	}
 	c.notified[session] = now
-	c.mu.Unlock()
-	go s.feishuPush(machine, session, title, body)
-	go s.channelPush(title, body)
 }
 
 // interactionEnded: the card ended (interaction.ended came) — maybe while it was being sent to a channel.

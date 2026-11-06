@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -1345,24 +1346,73 @@ func (s *Service) reopenFailedTodo(ctx context.Context, id string) (Todo, bool, 
 
 // ---- what the hub asks about them ----
 
-// TodoHandoff: an agent is handed work for todo h.TodoID (assistant.todo_handoff): the todo as it is, and the text
-// with the todo's decisions in effect before it (and, for a new agent, its project's background before those).
+// TodoHandoff: an agent is handed work for todo h.TodoID (assistant.todo_handoff, POST /api/v1/sessions or
+// …/messages with todo_id): the todo as it is, whether the hand-off may go (no such todo: 404, a done one: 409, the
+// words the hub answers with), and the text with the todo's decisions in effect before it (#1618) and, for a new
+// agent, its project's background before those (#2820); a blank text stays as it is.
 func (s *Service) TodoHandoff(ctx context.Context, h TodoHandoff) (TodoHandoffResult, error) {
 	t, ok, err := s.todo(ctx, h.TodoID)
 	if err != nil {
 		return TodoHandoffResult{}, err
 	}
 	if !ok {
-		return TodoHandoffResult{Text: h.Text}, nil
+		return TodoHandoffResult{Text: h.Text, Status: http.StatusNotFound, Error: "todo not found"}, nil
 	}
-	text := s.withTodoDecisions(ctx, h.TodoID, h.Text)
-	if h.New {
-		text = s.withProjectContext(ctx, h.MachineID, h.Cwd, text) // a new agent: its project's background first (#2820)
+	text := h.Text
+	if strings.TrimSpace(text) != "" {
+		text = s.withTodoDecisions(ctx, h.TodoID, text)
+		if h.New {
+			text = s.withProjectContext(ctx, h.MachineID, h.Cwd, text) // a new agent: its project's background first
+		}
 	}
-	return TodoHandoffResult{Found: true, Title: t.Title, DoneAt: t.DoneAt, Text: text}, nil
+	res := TodoHandoffResult{Found: true, Title: t.Title, DoneAt: t.DoneAt, Text: text}
+	if t.DoneAt != nil {
+		res.Status, res.Error = http.StatusConflict, "todo is already completed"
+	}
+	return res, nil
 }
 
-// TodoLink: the agent handed work for a todo works for it from now on (assistant.todo_link).
-func (s *Service) TodoLink(ctx context.Context, p TodoLinkParams) error {
-	return s.linkTodoAgent(ctx, p.TodoID, p.MachineID, p.SessionID, p.Title, p.Cwd, p.Agent)
+// TodoLink: the agent handed work for a todo works for it from now on (assistant.todo_link); the todo's title.
+// Without a title the link's comes from the prompt the agent was started with.
+func (s *Service) TodoLink(ctx context.Context, p TodoLinkParams) (TodoLinkResult, error) {
+	title := p.Title
+	if title == "" {
+		title = cleanPromptTitle(p.Prompt)
+	}
+	if err := s.linkTodoAgent(ctx, p.TodoID, p.MachineID, p.SessionID, title, p.Cwd, p.Agent); err != nil {
+		return TodoLinkResult{}, err
+	}
+	res := TodoLinkResult{Title: title}
+	if t, ok, err := s.todo(ctx, p.TodoID); err == nil && ok {
+		res.Title = t.Title
+	}
+	return res, nil
+}
+
+// contextLeadRe and contextCloseRe are where a prompt's context block starts and ends (contextOpenRe: channels_plugin.go).
+var (
+	contextLeadRe  = regexp.MustCompile(`^<(?:jarvis|persona)-context\b`)
+	contextCloseRe = regexp.MustCompile(`</(?:jarvis|persona)-context>`)
+)
+
+// cleanPromptTitle is a title for an agent from the prompt it was started with: its first line past a
+// context block (<persona-context>, or <jarvis-context> as older ones were, #3182).
+func cleanPromptTitle(prompt string) string {
+	s := strings.TrimSpace(prompt)
+	if contextLeadRe.MatchString(s) {
+		if loc := contextCloseRe.FindStringIndex(s); loc != nil {
+			s = s[loc[1]:]
+		} else if endTagIdx := strings.Index(s, ">"); endTagIdx != -1 {
+			s = s[endTagIdx+1:]
+		} else {
+			s = ""
+		}
+	}
+	for _, line := range strings.Split(s, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !contextOpenRe.MatchString(trimmed) {
+			return trimmed
+		}
+	}
+	return ""
 }

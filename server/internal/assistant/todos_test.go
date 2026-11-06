@@ -316,25 +316,26 @@ func TestTodoRoutesReadOnlyForbidden(t *testing.T) {
 func TestTodoHandoffAndLink(t *testing.T) {
 	e := newTodoEnv(t, nil)
 	ctx := context.Background()
-	if res, err := e.s.TodoHandoff(ctx, TodoHandoff{TodoID: "nope", Text: "x"}); err != nil || res.Found || res.Text != "x" {
+	if res, err := e.s.TodoHandoff(ctx, TodoHandoff{TodoID: "nope", Text: "x"}); err != nil || res.Found || res.Text != "x" || res.Status != 404 {
 		t.Fatalf("unknown todo: %+v %v", res, err)
 	}
 	todo := e.create("发版")
 	res, err := e.s.TodoHandoff(ctx, TodoHandoff{TodoID: todo.ID, Text: "去发版"})
-	if err != nil || !res.Found || res.Title != "发版" || res.DoneAt != nil || res.Text != "去发版" {
+	if err != nil || !res.Found || res.Title != "发版" || res.DoneAt != nil || res.Text != "去发版" || res.Status != 0 {
 		t.Fatalf("open todo (no decisions without a store): %+v %v", res, err)
 	}
-	if err := e.s.TodoLink(ctx, TodoLinkParams{TodoID: todo.ID, MachineID: "box", SessionID: "s9", Title: "Agent", Cwd: "/code"}); err != nil {
-		t.Fatal(err)
+	if linked, err := e.s.TodoLink(ctx, TodoLinkParams{TodoID: todo.ID, MachineID: "box", SessionID: "s9", Cwd: "/code",
+		Prompt: "<persona-context kind=\"context\" title=\"待办\">说明</persona-context>\n去发版"}); err != nil || linked.Title != "发版" {
+		t.Fatalf("link: %+v %v", linked, err)
 	}
 	if got := e.todoOf("box", "s9"); got != todo.ID {
 		t.Fatalf("linked to %q", got)
 	}
 	e.must("PATCH", "/api/v1/todos/"+todo.ID, `{"done":true}`)
-	if res, _ := e.s.TodoHandoff(ctx, TodoHandoff{TodoID: todo.ID}); res.DoneAt == nil {
+	if res, _ := e.s.TodoHandoff(ctx, TodoHandoff{TodoID: todo.ID}); res.DoneAt == nil || res.Status != 409 {
 		t.Fatalf("done todo: %+v", res)
 	}
-	if err := e.s.TodoLink(ctx, TodoLinkParams{TodoID: todo.ID, MachineID: "box", SessionID: "s8"}); !errors.Is(err, db.ErrTodoCompleted) {
+	if _, err := e.s.TodoLink(ctx, TodoLinkParams{TodoID: todo.ID, MachineID: "box", SessionID: "s8"}); !errors.Is(err, db.ErrTodoCompleted) {
 		t.Fatalf("link to a done todo: %v", err)
 	}
 }

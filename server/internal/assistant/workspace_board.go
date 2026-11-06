@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -10,13 +10,20 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/workspaceboard"
 )
+
+// The workspace board (docs/workspace-board.md) is the manager's: its cards bind a computer's code directory, and
+// only the manager reaches the computers (devices.go). Its routes are assistantwire's boardRoutes, relayed by the hub
+// (503 assistant_offline while the manager is away); its events (workspace_board, workspace_board_settings) go to
+// the apps as they are (ws.broadcast).
 
 // A separate store capability keeps older/test stores explicit: board writes never fall back to memory.
 type workspaceBoardStore interface {
@@ -26,36 +33,78 @@ type workspaceBoardStore interface {
 	SaveWorkspaceSnapshot(context.Context, string, json.RawMessage) error
 }
 
-func (h *Hub) workspaceBoardRoutes(api *http.ServeMux) {
-	api.HandleFunc("GET /api/v1/workspace-board", h.getWorkspaceBoard)
-	api.HandleFunc("POST /api/v1/workspace-board", h.mutateWorkspaceBoard)
-	api.HandleFunc("GET /api/v1/workspaces", h.getWorkspaces)
-	h.workspaceBoardSettingsRoutes(api)
+// boardBook serializes workspace discovery so a slow earlier request cannot overwrite a later snapshot.
+type boardBook struct {
+	discoverMu sync.Mutex
 }
 
-func (h *Hub) boardStore(w http.ResponseWriter) workspaceBoardStore {
-	s, ok := h.store.(workspaceBoardStore)
-	if !ok {
-		writeErrCode(w, 503, "not_supported", i18n.Err("hub-workspace_board.err_no_store"))
+func (s *Service) workspaceBoardRoutes() {
+	s.handle("GET /api/v1/workspace-board", s.getWorkspaceBoard)
+	s.handle("POST /api/v1/workspace-board", s.mutateWorkspaceBoard)
+	s.handle("GET /api/v1/workspaces", s.getWorkspaces)
+	s.workspaceBoardSettingsRoutes()
+}
+
+func (s *Service) boardStore(w http.ResponseWriter) workspaceBoardStore {
+	st, ok := s.store().(workspaceBoardStore)
+	if !ok || st == nil {
+		apierr.WriteCode(w, 503, "not_supported", i18n.Err("hub-workspace_board.err_no_store"))
 		return nil
 	}
-	return s
+	return st
 }
 
-func (h *Hub) effectiveBoardMachine(id string) string {
-	if m := h.localMachine(id); m != nil {
-		return m.cfg.ID
+// boardMachine is a computer as the board needs it: its routable id and whether its node is connected.
+type boardMachine struct {
+	ID     string
+	Online bool
+}
+
+// boardMachines are the computers the devices carry.
+func (s *Service) boardMachines() []boardMachine {
+	if s.devs == nil {
+		return nil
+	}
+	var out []boardMachine
+	for _, d := range s.devs.List() {
+		out = append(out, boardMachine{ID: d.ID, Online: d.Online})
+	}
+	return out
+}
+
+// boardMachineOf is the computer id names (an id another one absorbed: that one); false when there is none.
+func (s *Service) boardMachineOf(id string) (boardMachine, bool) {
+	if s.devs == nil || id == "" || !s.devs.Has(id) {
+		return boardMachine{}, false
+	}
+	canon := s.devs.Canonical(id)
+	for _, m := range s.boardMachines() {
+		if m.ID == canon {
+			return m, true
+		}
+	}
+	return boardMachine{}, false
+}
+
+func (s *Service) boardMachineOnline(id string) bool {
+	m, ok := s.boardMachineOf(id)
+	return ok && m.Online
+}
+
+func (s *Service) effectiveBoardMachine(id string) string {
+	if m, ok := s.boardMachineOf(id); ok {
+		return m.ID
 	}
 	return id
 }
 
 // Fleet aliases can be absorbed after a card was bound. Project current routing
 // identities without rewriting durable card bindings or merging their workflow state.
-func (h *Hub) presentBoard(state workspaceboard.State) workspaceboard.State {
+func (s *Service) presentBoard(state workspaceboard.State) workspaceboard.State {
 	state.Cards = append([]workspaceboard.Card{}, state.Cards...)
 	for i := range state.Cards {
 		c := &state.Cards[i]
-		machine := h.effectiveBoardMachine(c.MachineID)
+		machine := s.effectiveBoardMachine(c.MachineID)
 		if machine != c.MachineID {
 			ws := qualifyWorkspace(machine, proto.Workspace{ID: c.WorkspaceID, Source: c.Source, SourceID: c.SourceID, Cwd: c.Cwd})
 			c.MachineID, c.WorkspaceID = machine, ws.ID
@@ -64,32 +113,32 @@ func (h *Hub) presentBoard(state workspaceboard.State) workspaceboard.State {
 	return state
 }
 
-func (h *Hub) writeBoard(w http.ResponseWriter, r *http.Request, state workspaceboard.State) {
-	writeJSON(w, struct {
+func (s *Service) writeBoard(w http.ResponseWriter, r *http.Request, state workspaceboard.State) {
+	apierr.WriteJSON(w, struct {
 		workspaceboard.State
 		CanWrite bool `json:"can_write"`
-	}{h.presentBoard(state), principalOf(r.Context()).Role == roleFull})
+	}{s.presentBoard(state), fullRole(r)})
 }
 
-func (h *Hub) getWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
-	store := h.boardStore(w)
+func (s *Service) getWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
+	store := s.boardStore(w)
 	if store == nil {
 		return
 	}
 	state, err := store.WorkspaceBoard(r.Context())
 	if err != nil {
-		writeErr(w, 503, err)
+		apierr.Write(w, 503, err)
 		return
 	}
-	h.writeBoard(w, r, state)
+	s.writeBoard(w, r, state)
 }
 
-func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
-	if principalOf(r.Context()).Role != roleFull {
-		writeErr(w, 403, i18n.Err("hub-workspace_board.err_readonly"))
+func (s *Service) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
+	if !fullRole(r) {
+		apierr.Write(w, 403, i18n.Err("hub-workspace_board.err_readonly"))
 		return
 	}
-	store := h.boardStore(w)
+	store := s.boardStore(w)
 	if store == nil {
 		return
 	}
@@ -103,27 +152,27 @@ func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(strings.NewReader(string(body)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&op); err != nil {
-		writeErr(w, 400, err)
+		apierr.Write(w, 400, err)
 		return
 	}
 	state, err := store.WorkspaceBoard(r.Context())
 	if err != nil {
-		writeErr(w, 503, err)
+		apierr.Write(w, 503, err)
 		return
 	}
 	if state.Revision != op.Revision {
-		writeErrCode(w, 409, "conflict", db.ErrWorkspaceBoardConflict)
+		apierr.WriteCode(w, 409, "conflict", db.ErrWorkspaceBoardConflict)
 		return
 	}
 	switch op.Action {
 	case "add_card":
-		if err := h.resolveBoardCard(r.Context(), &op); err != nil {
-			writeErr(w, 400, err)
+		if err := s.resolveBoardCard(r.Context(), &op); err != nil {
+			apierr.Write(w, 400, err)
 			return
 		}
 		for _, card := range state.Cards {
-			if h.effectiveBoardMachine(card.MachineID) == op.MachineID && workspaceDirectory(card.Cwd) == workspaceDirectory(op.Cwd) {
-				writeErr(w, 400, i18n.Err("hub-workspace_board.err_already_bound"))
+			if s.effectiveBoardMachine(card.MachineID) == op.MachineID && workspaceDirectory(card.Cwd) == workspaceDirectory(op.Cwd) {
+				apierr.Write(w, 400, i18n.Err("hub-workspace_board.err_already_bound"))
 				return
 			}
 		}
@@ -133,41 +182,39 @@ func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	next, err := workspaceboard.Apply(state, op)
 	if err != nil {
-		writeErr(w, 400, err)
+		apierr.Write(w, 400, err)
 		return
 	}
 	saved, err := store.SaveWorkspaceBoard(r.Context(), op.Revision, next)
 	if errors.Is(err, db.ErrWorkspaceBoardConflict) {
-		writeErrCode(w, 409, "conflict", err)
+		apierr.WriteCode(w, 409, "conflict", err)
 		return
 	}
 	if err != nil {
-		writeErr(w, 503, err)
+		apierr.Write(w, 503, err)
 		return
 	}
-	h.broadcast(map[string]any{"type": "workspace_board", "revision": saved.Revision})
-	h.writeBoard(w, r, saved)
+	s.event(r.Context(), map[string]any{"type": "workspace_board", "revision": saved.Revision})
+	s.writeBoard(w, r, saved)
 }
 
 // Only the node can resolve a directory on its filesystem; the HTTP caller cannot forge discovery metadata.
-func (h *Hub) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation) error {
-	m := h.localMachine(op.MachineID)
-	if m == nil {
+func (s *Service) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation) error {
+	m, ok := s.boardMachineOf(op.MachineID)
+	if !ok {
 		return i18n.Err("hub-workspace_board.err_unknown_machine")
 	}
-	if !m.isOnline() {
+	if !s.boardMachineOnline(m.ID) {
 		return i18n.Err("hub-workspace_board.err_offline")
 	}
-	op.MachineID = m.cfg.ID
+	op.MachineID = m.ID
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	var selected *proto.Workspace
 	if op.WorkspaceID != "" {
-		m.mu.Lock()
-		sessions := append([]proto.Session(nil), m.sessions...)
-		m.mu.Unlock()
+		sessions := s.nodeSessions(m.ID)
 		for _, session := range sessions {
-			candidate := workspaceForSession(m.cfg.ID, session)
+			candidate := workspaceForSession(m.ID, session)
 			if candidate.Cwd != "" && candidate.ID == op.WorkspaceID {
 				selected = &candidate
 				break
@@ -175,11 +222,11 @@ func (h *Hub) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation)
 		}
 		if selected == nil {
 			var found proto.WorkspacesResponse
-			if err := m.call(ctx, "workspaces.list", map[string]any{}, &found); err != nil {
+			if err := s.nodeCall(ctx, m.ID, "workspaces.list", map[string]any{}, &found); err != nil {
 				return i18n.Err("hub-workspace_board.err_list_failed", i18n.Args{"error": err.Error()})
 			}
 			for _, item := range found.Workspaces {
-				candidate := qualifyWorkspace(m.cfg.ID, item)
+				candidate := qualifyWorkspace(m.ID, item)
 				if candidate.ID == op.WorkspaceID {
 					selected = &candidate
 					break
@@ -199,7 +246,7 @@ func (h *Hub) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation)
 		return i18n.Err("hub-workspace_board.err_pick_directory")
 	}
 	var resolved proto.Workspace
-	if err := m.call(ctx, "workspace.resolve", map[string]any{"path": op.Cwd}, &resolved); err != nil {
+	if err := s.nodeCall(ctx, m.ID, "workspace.resolve", map[string]any{"path": op.Cwd}, &resolved); err != nil {
 		return i18n.Err("hub-workspace_board.err_resolve_failed", i18n.Args{"error": err.Error()})
 	}
 	if resolved.Cwd == "" || !resolved.Available {
@@ -209,7 +256,7 @@ func (h *Hub) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation)
 		op.Source, op.SourceID, op.Branch = selected.Source, selected.SourceID, selected.Branch
 		op.WorkspaceID = selected.ID
 	} else {
-		resolved = qualifyWorkspace(m.cfg.ID, resolved)
+		resolved = qualifyWorkspace(m.ID, resolved)
 		op.Source, op.SourceID, op.Branch = resolved.Source, resolved.SourceID, resolved.Branch
 		op.WorkspaceID = resolved.ID
 	}
@@ -268,23 +315,23 @@ type workspaceDiscoveryError struct {
 	Error     string `json:"error"`
 }
 
-func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
-	l := h.requestLang(r)
-	store := h.boardStore(w)
+func (s *Service) getWorkspaces(w http.ResponseWriter, r *http.Request) {
+	l := s.requestLang(r)
+	store := s.boardStore(w)
 	if store == nil {
 		return
 	}
 	// Serialize discovery so a slow earlier request cannot overwrite a later snapshot in this hub.
-	h.workspaceMu.Lock()
-	defer h.workspaceMu.Unlock()
+	s.board.discoverMu.Lock()
+	defer s.board.discoverMu.Unlock()
 	cached, err := store.ListWorkspaceSnapshots(r.Context())
 	if err != nil {
-		writeErr(w, 503, err)
+		apierr.Write(w, 503, err)
 		return
 	}
 	byMachine := map[string]db.WorkspaceSnapshotRow{}
 	for _, row := range cached {
-		machine := h.effectiveBoardMachine(row.MachineID)
+		machine := s.effectiveBoardMachine(row.MachineID)
 		if previous, ok := byMachine[machine]; ok && !row.UpdatedAt.After(previous.UpdatedAt) {
 			continue
 		}
@@ -299,36 +346,36 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 	}
 	state, err := store.WorkspaceBoard(r.Context())
 	if err != nil {
-		writeErr(w, 503, err)
+		apierr.Write(w, 503, err)
 		return
 	}
-	state = h.presentBoard(state)
+	state = s.presentBoard(state)
 	type discovered struct {
-		machine      *Machine
+		machine      boardMachine
 		workspaces   []proto.Workspace
 		err          error
 		at           time.Time
 		directories  map[string]bool
 		sourceErrors []proto.WorkspaceSourceError
 	}
-	machines := h.machinesNow()
+	machines := s.boardMachines()
 	results := make(chan discovered, len(machines))
 	for _, m := range machines {
-		go func(m *Machine) {
+		go func(m boardMachine) {
 			v := discovered{machine: m, at: time.Now().UTC()}
-			if !m.isOnline() {
+			if !s.boardMachineOnline(m.ID) {
 				results <- v
 				return
 			}
 			ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 			defer cancel()
 			var response proto.WorkspacesResponse
-			v.err = m.call(ctx, "workspaces.list", map[string]any{}, &response)
+			v.err = s.nodeCall(ctx, m.ID, "workspaces.list", map[string]any{}, &response)
 			v.sourceErrors = response.Errors
 			if v.err == nil {
 				v.workspaces = make([]proto.Workspace, 0, len(response.Workspaces))
 				for _, item := range response.Workspaces {
-					item = qualifyWorkspace(m.cfg.ID, item)
+					item = qualifyWorkspace(m.ID, item)
 					item.Online = true
 					item.LastSeen = v.at.Format(time.RFC3339Nano)
 					v.workspaces = append(v.workspaces, item)
@@ -336,7 +383,7 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 			}
 			var paths []string
 			for _, c := range state.Cards {
-				if c.MachineID == m.cfg.ID {
+				if c.MachineID == m.ID {
 					paths = append(paths, c.Cwd)
 				}
 			}
@@ -349,7 +396,7 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 						Kind string `json:"kind"`
 					} `json:"stats"`
 				}
-				if err := m.call(ctx, "fs.stat", map[string]any{"paths": paths[start:end]}, &stats); err != nil {
+				if err := s.nodeCall(ctx, m.ID, "fs.stat", map[string]any{"paths": paths[start:end]}, &stats); err != nil {
 					break
 				}
 				for _, st := range stats.Stats {
@@ -365,12 +412,12 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 	for range machines {
 		result := <-results
 		m := result.machine
-		online := m.isOnline()
+		online := s.boardMachineOnline(m.ID)
 		entries := result.workspaces
 		if entries == nil {
-			if old, ok := byMachine[m.cfg.ID]; ok {
+			if old, ok := byMachine[m.ID]; ok {
 				if err := json.Unmarshal(old.Data, &entries); err != nil {
-					errs = append(errs, workspaceDiscoveryError{m.cfg.ID, i18n.T(l, "hub-workspace_board.err_snapshot_read")})
+					errs = append(errs, workspaceDiscoveryError{m.ID, i18n.T(l, "hub-workspace_board.err_snapshot_read")})
 				}
 			}
 		}
@@ -382,9 +429,9 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 			}
 			for _, failure := range result.sourceErrors {
 				failed[failure.Source] = true
-				errs = append(errs, workspaceDiscoveryError{m.cfg.ID, failure.Source + ": " + failure.Error})
+				errs = append(errs, workspaceDiscoveryError{m.ID, failure.Source + ": " + failure.Error})
 			}
-			if old, ok := byMachine[m.cfg.ID]; ok {
+			if old, ok := byMachine[m.ID]; ok {
 				var previous []proto.Workspace
 				if json.Unmarshal(old.Data, &previous) == nil {
 					for _, item := range previous {
@@ -397,18 +444,16 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for i := range entries {
-			entries[i] = qualifyWorkspace(m.cfg.ID, entries[i])
+			entries[i] = qualifyWorkspace(m.ID, entries[i])
 			entries[i].Online = online
 			if result.err != nil || !online {
 				entries[i].Available = false
 			}
 		}
 		if result.err != nil {
-			errs = append(errs, workspaceDiscoveryError{m.cfg.ID, i18n.Localize(result.err, l)})
+			errs = append(errs, workspaceDiscoveryError{m.ID, i18n.Localize(result.err, l)})
 		}
-		m.mu.Lock()
-		sessions := append([]proto.Session(nil), m.sessions...)
-		m.mu.Unlock()
+		sessions := s.nodeSessions(m.ID)
 		containsDirectory := func(cwd string) bool {
 			for _, item := range entries {
 				if workspaceDirectory(item.Cwd) == workspaceDirectory(cwd) {
@@ -421,7 +466,7 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 			if sessionBoardDirectory(session) == "" || containsDirectory(sessionBoardDirectory(session)) {
 				continue
 			}
-			item := workspaceForSession(m.cfg.ID, session)
+			item := workspaceForSession(m.ID, session)
 			item.Online, item.Available = online, online
 			if online {
 				item.LastSeen = result.at.Format(time.RFC3339Nano)
@@ -429,14 +474,14 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 			entries = append(entries, item)
 		}
 		for _, card := range state.Cards {
-			if card.MachineID != m.cfg.ID || containsDirectory(card.Cwd) {
+			if card.MachineID != m.ID || containsDirectory(card.Cwd) {
 				continue
 			}
 			entries = append(entries, proto.Workspace{ID: card.WorkspaceID, MachineID: card.MachineID, Source: card.Source, SourceID: card.SourceID, Title: card.Title, Cwd: card.Cwd, Branch: card.Branch, Online: online})
 		}
 		for i := range entries {
 			for _, card := range state.Cards {
-				if card.MachineID == m.cfg.ID && workspaceDirectory(card.Cwd) == entries[i].Cwd {
+				if card.MachineID == m.ID && workspaceDirectory(card.Cwd) == entries[i].Cwd {
 					entries[i].Available = online && result.directories[card.Cwd]
 					if entries[i].Available {
 						entries[i].LastSeen = result.at.Format(time.RFC3339Nano)
@@ -448,8 +493,8 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 		// Persist the merged directory catalog, not only spaces that still have a host terminal.
 		if online && (result.err == nil || len(sessions) > 0) {
 			raw, _ := json.Marshal(entries)
-			if err := store.SaveWorkspaceSnapshot(r.Context(), m.cfg.ID, raw); err != nil {
-				errs = append(errs, workspaceDiscoveryError{m.cfg.ID, i18n.T(l, "hub-workspace_board.err_snapshot_save")})
+			if err := store.SaveWorkspaceSnapshot(r.Context(), m.ID, raw); err != nil {
+				errs = append(errs, workspaceDiscoveryError{m.ID, i18n.T(l, "hub-workspace_board.err_snapshot_save")})
 			}
 		}
 		for _, item := range entries {
@@ -477,5 +522,13 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 		}
 		return out[i].ID < out[j].ID
 	})
-	writeJSON(w, map[string]any{"workspaces": out, "errors": errs})
+	apierr.WriteJSON(w, map[string]any{"workspaces": out, "errors": errs})
+}
+
+// requestLang is the language the request asked for (the hub's relay passes Accept-Language on), else the user's.
+func (s *Service) requestLang(r *http.Request) i18n.Lang {
+	if l := i18n.From(r.Context()); l != "" {
+		return l
+	}
+	return i18n.FromRequest(r).Or(s.lang(r.Context()))
 }

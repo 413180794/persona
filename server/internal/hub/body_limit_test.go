@@ -82,9 +82,3 @@ func TestPairCodeBodyLimit(t *testing.T) {
 	newPairCode(t, h)
 	requireCode(t, securityRequest(mux, "POST", "/api/v1/auth/pair-codes", h.cfg.Token, `{"machine":`, "127.0.0.1:1", false), 400, "")
 }
-
-// PUT /api/v1/workspace-board/settings: an over-the-cap body is 413 too_large, not "needs enabled".
-func TestWorkspaceBoardSettingsBodyLimit(t *testing.T) {
-	h := &Hub{store: newSettingsBoardStore()}
-	requireTooLarge(t, "board settings", boardCall(h, "PUT", "/api/v1/workspace-board/settings", oversizedJSON("note", 16<<10), roleFull))
-}

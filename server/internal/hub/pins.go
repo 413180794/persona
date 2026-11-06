@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
 // Pins are the spaces and agents the user keeps at the top of the 开发 list (saved in Postgres, so a reinstall or
@@ -149,7 +151,8 @@ func (h *Hub) renameSpace(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if old != "" && old != name {
-		h.renameTodoSpace(m.cfg.ID, old, name) // a todo linked to it follows (the assistant's)
+		// A todo linked to it by name follows (the manager's; not while it is not connected).
+		h.asst().TodoSpaceRenamed(context.Background(), assistantwire.TodoSpaceRenamed{MachineID: m.cfg.ID, Old: old, New: name})
 	}
 	if old != "" && old != name && h.store != nil {
 		from, to := m.cfg.ID+"/"+old, m.cfg.ID+"/"+name

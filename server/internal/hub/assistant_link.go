@@ -472,8 +472,10 @@ func (a assistantRemote) TodoHandoff(ctx context.Context, p assistantwire.TodoHa
 	return res, err
 }
 
-func (a assistantRemote) TodoLink(ctx context.Context, p assistantwire.TodoLinkParams) error {
-	return a.call(ctx, assistantwire.MethodTodoLink, p, nil)
+func (a assistantRemote) TodoLink(ctx context.Context, p assistantwire.TodoLinkParams) (assistantwire.TodoLinkResult, error) {
+	var res assistantwire.TodoLinkResult
+	err := a.call(ctx, assistantwire.MethodTodoLink, p, &res)
+	return res, err
 }
 
 func (a assistantRemote) TodoSpaceRenamed(_ context.Context, r assistantwire.TodoSpaceRenamed) {

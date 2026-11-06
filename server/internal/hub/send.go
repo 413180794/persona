@@ -101,36 +101,37 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	p["session_id"] = sid
 	todoID, _ := p["todo_id"].(string)
 	delete(p, "todo_id")
-	if todoID != "" {
-		if principalOf(r.Context()).Role != roleFull {
-			writeErr(w, http.StatusForbidden, errors.New("read-only role cannot modify todos"))
-			return
-		}
-		t, err := h.getTodoForLink(r.Context(), todoID)
-		if err != nil {
-			writeAssistantErr(w, err) // 503 assistant_offline while the assistant is not connected
-			return
-		}
-		if t == nil {
-			writeErr(w, http.StatusNotFound, errors.New("todo not found"))
-			return
-		}
-		if t.DoneAt != nil {
-			writeErr(w, http.StatusConflict, errors.New("todo is already completed"))
-			return
+	if todoID != "" && principalOf(r.Context()).Role != roleFull {
+		writeErr(w, http.StatusForbidden, errors.New("read-only role cannot modify todos"))
+		return
+	}
+	text, isText := p["text"].(string)
+	var start freshStart
+	fresh := false
+	if isText && strings.TrimSpace(text) != "" && !answerOnly(r) {
+		// The first message of an agent started for a todo with none: a new agent's first prompt, with its project's
+		// background and the todo's decisions first (#2820; iOS and Android send it without todo_id).
+		if f, ok := h.fresh.peek(m.cfg.ID, sid); ok && (todoID == "" || todoID == f.todoID) {
+			start, fresh = f, true
 		}
 	}
-	fresh := false
-	if text, ok := p["text"].(string); ok && strings.TrimSpace(text) != "" && !answerOnly(r) {
-		if f, ok := h.fresh.peek(m.cfg.ID, sid); ok && (todoID == "" || todoID == f.todoID) {
-			fresh = true
-			// The first message of an agent started for a todo with none: a new agent's first prompt, with its
-			// project's background and the todo's decisions first (#2820; iOS and Android send it without todo_id).
-			p["text"] = h.withTodoStart(r.Context(), f.todoID, m.cfg.ID, f.cwd, text)
-		} else if todoID != "" {
-			// Handed to the agent for the todo: the calls already made on it go first (#1618).
-			p["text"] = h.withTodoDecisions(r.Context(), todoID, text)
+	if todoID != "" {
+		// The manager checks the todo (404, 409, 503 assistant_offline while it is away); handed to the agent for it,
+		// the calls already made on it go first (#1618).
+		hand := assistantwire.TodoHandoff{TodoID: todoID, Text: text}
+		if fresh {
+			hand.New, hand.MachineID, hand.Cwd = true, m.cfg.ID, start.cwd
 		}
+		decided, ok := h.todoHandoff(r.Context(), w, hand)
+		if !ok {
+			return
+		}
+		if isText {
+			p["text"] = decided
+		}
+	} else if fresh {
+		p["text"] = h.todoStartText(r.Context(), assistantwire.TodoHandoff{TodoID: start.todoID, Text: text, New: true,
+			MachineID: m.cfg.ID, Cwd: start.cwd})
 	}
 	if answerOnly(r) {
 		// An answer-only device says something to a conversation it can see, no more. A message to an id nobody has starts
@@ -201,7 +202,8 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			if s, ok := m.session(sid); ok {
 				title, cwd, agent = s.Title, s.Cwd, s.Agent
 			}
-			if err := h.linkTodoAgent(ctx, todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
+			if _, err := h.asst().TodoLink(ctx, assistantwire.TodoLinkParams{TodoID: todoID, MachineID: m.cfg.ID, SessionID: sid,
+				Title: title, Cwd: cwd, Agent: agent}); err != nil {
 				h.logf("sendMessage: link todo %s for %s/%s failed: %v", todoID, m.cfg.ID, sid, err)
 			}
 		}
@@ -264,7 +266,8 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		if s, ok := m.session(sid); ok {
 			title, cwd, agent = s.Title, s.Cwd, s.Agent
 		}
-		if err := h.linkTodoAgent(ctx, todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
+		if _, err := h.asst().TodoLink(ctx, assistantwire.TodoLinkParams{TodoID: todoID, MachineID: m.cfg.ID, SessionID: sid,
+			Title: title, Cwd: cwd, Agent: agent}); err != nil {
 			h.logf("sendMessage: link todo %s for %s/%s failed: %v", todoID, m.cfg.ID, sid, err)
 		}
 	}

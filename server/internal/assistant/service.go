@@ -73,6 +73,7 @@ type Service struct {
 	fbot       feishuBook        // feishu.go
 	kb         kbState           // kb.go
 	inbox      inboxBook         // inbox.go
+	board      boardBook         // workspace_board.go: the workspace board
 	viewEvents viewNotifications // views.go: only coalesced notifications; contents are stored first
 
 	devs  Devices   // the computers (devices.go); nil: no fleet
@@ -113,6 +114,7 @@ func New(o Options) *Service {
 	s.todayRoutes()
 	s.todoRoutes()
 	s.agentRoutes()
+	s.workspaceBoardRoutes()
 	s.channelRoutes()
 	s.kbInit(o.KB)
 	s.kbRoutes()

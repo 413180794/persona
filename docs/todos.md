@@ -13,7 +13,7 @@
 - **助手**：存储（下面的四张表，还在 hub 的 Postgres 里、没有迁移，只有助手的进程读写）、下面「接口概要」里待办的全部接口、随项目自动挂和派生跟随、herdr 标记的对账、Agent 标题和启动错误的快照、决策记录、自动完成、做完的任务关掉 Agent。
   hub 收到某台电脑的会话列表时发 `sessions.changed`，用户处理了卡片发 `interaction.resolved`，这几件事都从这两个事件来。
 - **hub**：只转发待办的接口（`assistantwire.Routes`，调用方的角色一起带过去，只读角色照旧 403），给 App 的会话列表、提问卡片、推送用助手在快照里报的那份（`todos`：每个 Agent 在为哪个未完成的待办干活、哪些 Agent 是安静的，`hub/assistant_todos.go`；安静的只报未完成或完成不到 7 天的安静任务的 Agent（`quietKeep`），让这份报告保持小，更早的任务的 Agent 再干活时照常推送）；
-  `POST /api/v1/sessions`、`POST /api/v1/sessions/{mid}/{sid}/messages` 带 `todo_id` 时先问助手这个待办在不在、完成没有、要交给 Agent 的话前面拼上决策、新开的 Agent 再拼上项目背景（`assistant.todo_handoff`），交出去以后让助手挂上（`assistant.todo_link`）；经 hub 改工作区名字时告诉助手（`todos.space_renamed`）。协议见 `docs/protocol.md`「总线」。
+  `POST /api/v1/sessions`、`POST /api/v1/sessions/{mid}/{sid}/messages` 带 `todo_id` 时先问助手（`assistant.todo_handoff`）：待办在不在、完成没有（不能交时它给 404 / 409 和原话，hub 照回）、要交给 Agent 的话前面拼上决策、新开的 Agent 再拼上项目背景，一次问完；交出去以后让助手挂上（`assistant.todo_link`，挂上的标题、待办的标题都是它定）；经 hub 改工作区名字时告诉助手（`todos.space_renamed`）。协议见 `docs/protocol.md`「总线」。
 - **助手没连着时**（hub 刚起来、助手的进程在重启）：待办的接口回 `503 assistant_offline`「助手暂时连不上，稍后再试」，带 `todo_id` 的新建会话和发消息同样 503（不知道待办在不在）；会话列表上的待办、安静的标记照 hub 留着的最后一份显示（hub 刚起来、助手还没报的那一两秒里没有）；这期间 hub 不发事件，所以自动挂、标记对账、决策记录要等它连上以后的下一份会话列表或下一次回答，经 hub 改名的工作区不迁移。
 
 ## 数据模型

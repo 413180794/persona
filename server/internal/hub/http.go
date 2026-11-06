@@ -30,7 +30,6 @@ func (h *Hub) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/health", h.health)
 	api := http.NewServeMux()
 	h.apiMux = api
-	h.workspaceBoardRoutes(api)
 	if h.upd != nil {
 		h.upd.routes(api)
 	}
@@ -571,24 +570,9 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		writeBodyErr(w, err, err)
 		return
 	}
-	if p.TodoID != "" {
-		if principalOf(r.Context()).Role != roleFull {
-			writeErr(w, http.StatusForbidden, errors.New("read-only role cannot modify todos"))
-			return
-		}
-		t, err := h.getTodoForLink(r.Context(), p.TodoID)
-		if err != nil {
-			writeAssistantErr(w, err) // 503 assistant_offline while the assistant is not connected
-			return
-		}
-		if t == nil {
-			writeErr(w, http.StatusNotFound, errors.New("todo not found"))
-			return
-		}
-		if t.DoneAt != nil {
-			writeErr(w, http.StatusConflict, errors.New("todo is already completed"))
-			return
-		}
+	if p.TodoID != "" && principalOf(r.Context()).Role != roleFull {
+		writeErr(w, http.StatusForbidden, errors.New("read-only role cannot modify todos"))
+		return
 	}
 	m := h.localMachine(p.MachineID)
 	if m == nil {
@@ -598,6 +582,20 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	if h.machineUntrusted(m.cfg.ID) { // not confirmed yet (machine_trust.go)
 		writeErrCode(w, http.StatusConflict, "machine_pending", i18n.Err("hub-machine_trust.start_pending"))
 		return
+	}
+	decided := ""
+	if p.TodoID != "" {
+		// The manager checks the todo (404, 409, 503 assistant_offline while it is away) and puts its decisions before
+		// the prompt, a new agent's project background before those (#1618, #2820); they go to the agent, not into
+		// its tab's name (nameFrom is taken from the prompt as sent).
+		hand := assistantwire.TodoHandoff{TodoID: p.TodoID, Text: p.Prompt}
+		if p.ResumeSessionID == "" {
+			hand.New, hand.MachineID, hand.Cwd = true, m.cfg.ID, startCwd(m, p.Cwd)
+		}
+		var ok bool
+		if decided, ok = h.todoHandoff(r.Context(), w, hand); !ok {
+			return
+		}
 	}
 	if p.AgentType == "" {
 		for _, launcher := range m.cfg.Launchers {
@@ -616,12 +614,8 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(p.NameHint) != "" {
 		nameFrom = p.NameHint
 	}
-	if p.TodoID != "" && p.ResumeSessionID == "" {
-		// The project background and the decisions go to the agent, not into its tab's name (nameFrom is taken
-		// before, #1618, #2820).
-		p.Prompt = h.withTodoStart(r.Context(), p.TodoID, m.cfg.ID, startCwd(m, p.Cwd), p.Prompt)
-	} else if p.TodoID != "" {
-		p.Prompt = h.withTodoDecisions(r.Context(), p.TodoID, p.Prompt)
+	if p.TodoID != "" {
+		p.Prompt = decided
 	}
 	async := startsAsync(p.Async, p.ResumeSessionID, p.AgentType)
 	parent := r.Context()
@@ -668,17 +662,13 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		h.fresh.add(m.cfg.ID, res.Session.SessionID, p.TodoID, cwd) // its first message gets the background
 	}
 	if p.TodoID != "" {
-		title := res.Session.Title
-		if title == "" {
-			title = cleanPromptTitle(nameFrom)
-		}
-		if err := h.linkTodoAgent(ctx, p.TodoID, m.cfg.ID, res.Session.SessionID, title, res.Session.Cwd, res.Session.Agent, ""); err != nil {
+		// The manager links it (a session without a title is named from its prompt) and says the todo's title.
+		linked, err := h.asst().TodoLink(ctx, assistantwire.TodoLinkParams{TodoID: p.TodoID, MachineID: m.cfg.ID,
+			SessionID: res.Session.SessionID, Title: res.Session.Title, Cwd: res.Session.Cwd, Agent: res.Session.Agent, Prompt: nameFrom})
+		if err != nil {
 			h.logf("startSession: link todo %s for %s/%s failed: %v", p.TodoID, m.cfg.ID, res.Session.SessionID, err)
 		} else {
-			res.Session.Todo = &proto.TodoRef{ID: p.TodoID, Title: title}
-			if t, err := h.getTodoForLink(ctx, p.TodoID); err == nil && t != nil {
-				res.Session.Todo.Title = t.Title
-			}
+			res.Session.Todo = &proto.TodoRef{ID: p.TodoID, Title: linked.Title}
 		}
 	}
 	writeJSON(w, res)

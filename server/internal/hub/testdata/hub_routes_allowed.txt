@@ -65,9 +65,6 @@ GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full
 GET /api/v1/sessions/{mid}/{sid}/items/{iid}/image
 GET /api/v1/sessions/{mid}/{sid}/screen
 GET /api/v1/skills
-GET /api/v1/workspace-board # moving to the manager
-GET /api/v1/workspace-board/settings # moving to the manager
-GET /api/v1/workspaces # moving to the manager
 GET /api/v1/ws
 GET {bus.Path}
 GET {devicewire.RelayPath}
@@ -132,7 +129,6 @@ POST /api/v1/sessions/{mid}/{sid}/rename
 POST /api/v1/sessions/{mid}/{sid}/rewind
 POST /api/v1/sessions/{mid}/{sid}/screen/before
 POST /api/v1/sessions/{mid}/{sid}/seen
-POST /api/v1/workspace-board # moving to the manager
 POST {peerPairPath}
 PUT /api/v1/admin/assistant
 PUT /api/v1/admin/hub
@@ -145,4 +141,3 @@ PUT /api/v1/machines/{mid}/claude-settings
 PUT /api/v1/machines/{mid}/codex-settings
 PUT /api/v1/mutes
 PUT /api/v1/pins
-PUT /api/v1/workspace-board/settings # moving to the manager

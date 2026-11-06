@@ -481,16 +481,20 @@ type TodoHandoff struct {
 }
 
 // TodoHandoffResult is assistant.todo_handoff's answer: the todo (Found false: no such todo) and Text with the todo's
-// decisions in effect before it (as it was without any, or when they could not be read).
+// decisions in effect before it (as it was without any, or when they could not be read). Status and Error, when set,
+// say the hand-off may not go (404: no such todo, 409: it is done); the hub answers the app with them as they are.
 type TodoHandoffResult struct {
 	Found  bool       `json:"found"`
 	Title  string     `json:"title,omitempty"`
 	DoneAt *time.Time `json:"done_at,omitempty"`
 	Text   string     `json:"text,omitempty"`
+	Status int        `json:"status,omitempty"`
+	Error  string     `json:"error,omitempty"`
 }
 
 // TodoLinkParams is assistant.todo_link's params: the agent handed work for a todo works for it from now on (a link
-// by hand; title, cwd and agent as the session has them).
+// by hand; title, cwd and agent as the session has them). Prompt is what the agent was started with: without a
+// title, the link's comes from it (its first line past a context block).
 type TodoLinkParams struct {
 	TodoID    string `json:"todo_id"`
 	MachineID string `json:"machine_id"`
@@ -498,6 +502,12 @@ type TodoLinkParams struct {
 	Title     string `json:"title,omitempty"`
 	Cwd       string `json:"cwd,omitempty"`
 	Agent     string `json:"agent,omitempty"`
+	Prompt    string `json:"prompt,omitempty"`
+}
+
+// TodoLinkResult is assistant.todo_link's answer: the todo's title (the session the start answers names it).
+type TodoLinkResult struct {
+	Title string `json:"title,omitempty"`
 }
 
 // TodoSpaceRenamed is todos.space_renamed's params: the hub renamed a workspace (PATCH …/spaces/{wid}); a todo linked
@@ -511,7 +521,7 @@ type TodoSpaceRenamed struct {
 const (
 	// MethodTodoHandoff: TodoHandoff → TodoHandoffResult (the hub calls it before an agent is handed work for a todo).
 	MethodTodoHandoff = "assistant.todo_handoff"
-	// MethodTodoLink: TodoLinkParams → {} (after the hand-off went through); an error says why it was not linked
+	// MethodTodoLink: TodoLinkParams → TodoLinkResult (after the hand-off went through); an error says why it was not linked
 	// (db.ErrTodoNotFound / ErrTodoCompleted's words).
 	MethodTodoLink = "assistant.todo_link"
 	// EventTodoSpaceRenamed: TodoSpaceRenamed, one way.

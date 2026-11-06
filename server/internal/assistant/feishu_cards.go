@@ -739,9 +739,12 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 		if err != nil {
 			s.logf("bots: push: %v", err)
 			if i == 0 {
-				return // nothing went out: the rest would read as a push without its beginning
+				return // nothing went out: do not mark pushed, so the turn-end mirror delivers the turn
 			}
 			continue
+		}
+		if i == 0 {
+			s.markPushed(session) // only after the first card lands: a failed push must not suppress the mirror
 		}
 		if session != "" {
 			s.rememberBotThread(mid, botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, title)
