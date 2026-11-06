@@ -73,6 +73,24 @@ struct FoldedWorkTests {
         #expect(t.toolCount == 4)
     }
 
+    /// Work opened here stays open when a page folds it again. As a chat opens, the latest page can come twice (over
+    /// HTTP and in the socket's backlog); the fold put back over its steps had already had its row fetch them, and the
+    /// row stayed on "Loading N steps…" (#6038). A fold that reaches further covers steps not fetched here, and a page
+    /// that starts over (a reload) has none of them: those fold the work again.
+    @Test func workOpenedHereStaysOpenWhenAPageFoldsItAgain() {
+        let s = store()
+        let prompt = item(1, .text, role: "user", text: "go"), answer = item(20, .text, text: "done")
+        let f = fold(2, 8, tools: 3, thoughts: 1), page = ItemSpan(history: "h", from: nil, to: 20)
+        s.apply([prompt, f, answer], span: page, backlog: true, hasMore: false)
+        s.unfold(f, into: work())
+        s.apply([prompt, f, answer], span: page, backlog: true, hasMore: false)
+        #expect(s.items.map(\.seq) == [1, 2, 3, 4, 5, 6, 7, 8, 20])
+        s.apply([prompt, fold(2, 10, tools: 4, thoughts: 1), answer], span: page, backlog: true, hasMore: false)
+        #expect(s.items.map(\.id) == ["1#0", "fold:2#0", "20#0"])
+        s.replace(with: [prompt, f, answer], hasMore: false, span: page)
+        #expect(s.items.map(\.id) == ["1#0", "fold:2#0", "20#0"] && s.items[1].fold?.throughSeq == 8)
+    }
+
     /// A tool call outside the fold (still running when the page was cut) keeps its result when the result comes.
     @Test func stepsOutsideAFoldStay() {
         let s = store()

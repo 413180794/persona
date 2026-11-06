@@ -434,6 +434,10 @@ final class ChatStore {
     /// Everything from the first item through this seq is here, without holes (lines without items count). Catch-ups
     /// ask for what comes after it; 0 = no baseline yet (nothing loaded from the end of the transcript).
     @ObservationIgnored private(set) var covered = 0
+    /// Folds opened here (`unfold`), as far as each reached. A page with one of them again (the latest page can come
+    /// twice as a chat opens) leaves its work open: folded again, its row had already fetched it and stayed on
+    /// "Loading N steps…" (#6038). Starting over forgets them.
+    @ObservationIgnored private var opened: [String: Fold] = [:]
 
     init(key: SessionKey) {
         self.key = key
@@ -500,6 +504,7 @@ final class ChatStore {
         resets += 1
         items = []
         ids = []
+        opened = [:]
         covered = 0
         hasMore = false
         loadedOnce = false
@@ -509,10 +514,11 @@ final class ChatStore {
 
     func merge(_ new: [Item], backlog: Bool = false, hasMore: Bool? = nil) {
         if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
-        var changed = dropFolded(by: new)
+        let fresh = opened.isEmpty ? new : new.filter { !stillOpen($0) }
+        var changed = dropFolded(by: fresh)
         var inOrder = true
         var added: [Item] = []
-        for it in Self.withImageRefs(new, key) where !ids.contains(it.id) {
+        for it in Self.withImageRefs(fresh, key) where !ids.contains(it.id) {
             if let last = items.last, (it.seq, it.part) < (last.seq, last.part) { inOrder = false }
             ids.insert(it.id)
             items.append(it)
@@ -561,11 +567,18 @@ final class ChatStore {
         return true
     }
 
+    /// A fold over work opened here that reaches no further than what was opened (`opened`).
+    private func stillOpen(_ f: Item) -> Bool {
+        guard f.kind == .fold, let was = opened[f.id], let now = f.fold else { return false }
+        return (now.throughSeq, Item.part(of: now.throughID)) <= (was.throughSeq, Item.part(of: was.throughID))
+    }
+
     /// The work a fold stood for, fetched (`AppModel.unfold`): it takes the fold's place.
     func unfold(_ fold: Item, into work: [Item]) {
         guard let i = items.firstIndex(where: { $0.id == fold.id }) else { return }
         items.remove(at: i)
         ids.remove(fold.id)
+        opened[fold.id] = fold.fold
         settled = nil
         merge(work.filter { $0.kind != .fold })
         scheduleRebuild()
@@ -740,6 +753,7 @@ final class ChatStore {
         resets += 1
         items = []
         ids = []
+        opened = [:]
         self.hasMore = hasMore
         if let h = span.history { history = h }
         merge(latest)

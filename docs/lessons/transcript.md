@@ -71,3 +71,9 @@ The parent gets the report on a hidden user line (`isMeta: true`, `origin: {kind
 Read the old way, the report was nowhere: the hidden line was skipped, the notice's detail was the pointer, the subagent's `last_text` was its first words, and the hand-back counted as a step and was its `last_tool` ("Calling SubagentHandback").
 `transcript` now reads the call as the subagent's last words (a text item, `LastText`; its "Report delivered to your caller." result is not shown) and gives the parent's notice the handed-back report as its detail (`reportFor`; a pointer with no report known is dropped).
 When Claude Code changes how something reports back, record a real session and look at what is hidden (`isMeta`) as well as what is shown.
+
+## Work opened in the App folded again by the same page (2026-11-07, #6038)
+
+As a chat opens, the latest page can arrive twice: once over HTTP (`loadInitial`, when the socket is not up yet) and once in the socket's subscribe backlog, both with `fold_work`. With "open all work" on, the first fold row fetched its steps (`AppModel.unfold`) before the second page came; that page carried the same fold, `dropFolded` took the steps out again and the fold came back under the same row id.
+`FoldedWorkRow` fetches in `.task(id: attempt)`, which had already run for that id, so the row stayed on "Loading N steps…" (about 1 run in 3 on the mock hub). `ChatStore` now remembers the folds it opened (`opened`): a page with the same fold over the same or a shorter range leaves the work open, a fold that reaches further folds it again, and starting over (`reset`, `replace`) forgets them.
+A view that fetches once per id cannot recover when the store puts the same id back: the store must not undo what the view already did.
