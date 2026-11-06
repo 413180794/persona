@@ -1,71 +1,71 @@
-# 消息链路车道（阶段 2–4）的真实数据验证
+# Real-data verification of the message pipeline lane (stages 2–4)
 
-2026-10-29。语料：一台开发机的全部 Codex rollout、随机抽的 Claude transcript（含 subagent）、最大的 15 个 transcript（60–332 MB），
-加本机的 transcript 快照；共 **435 个文件、5.8 GB、127 万行**。语料只在本机 `~/jarvis-corpus`，不进仓库；这里只有数字。
+2026-10-29. Corpus: every Codex rollout on one dev machine, a random sample of Claude transcripts (including subagents), the 15 largest transcripts (60–332 MB),
+plus the local transcript snapshot; **435 files, 5.8 GB, 1.27 million lines** in total. The corpus lives only in `~/jarvis-corpus` on that machine and is not in the repo; only the numbers are here.
 
-工具都在仓库里，不带参数时跳过：
+All tools are in the repo and are skipped when run without arguments:
 
-| 做什么 | 怎么跑 |
+| What | How to run |
 | --- | --- |
-| 解析：每个文件的 item（按类型）、没出 item 的行（按行类型）、坏行、Meta | `server/internal/transcript/corpus_test.go`：`go test -c -o corpus.test ./internal/transcript`，`./corpus.test -test.run 'TestCorpus$' -corpus <目录,…> -out x.jsonl`。旧版本只要配一份 `corpus_shim_test.go`（API 差异），同一份工具对新旧解析器逐文件跑，再用脚本按 item id 对比 |
-| 连续性模拟 | `continuity_corpus_test.go`：`-test.run CorpusContinuity -sim 3` |
-| 冷打开耗时、常驻内存 | `TestCorpus -perf -minsize 20000000` |
-| App 每条事件的重建耗时 | `TestCorpusDumpItems -dumpitems <目录>` 导出，`TEST_RUNNER_JARVIS_ITEMS_DIR=<目录> xcodebuild test`（`RebuildTests.realSessionsRebuildIncrementally`） |
+| Parsing: items per file (by type), lines that produced no item (by line type), bad lines, Meta | `server/internal/transcript/corpus_test.go`: `go test -c -o corpus.test ./internal/transcript`, `./corpus.test -test.run 'TestCorpus$' -corpus <dir,…> -out x.jsonl`. For an old version, add one `corpus_shim_test.go` (API differences); the same tool then runs the old and new parsers file by file, and a script compares them by item id |
+| Continuity simulation | `continuity_corpus_test.go`: `-test.run CorpusContinuity -sim 3` |
+| Cold-open time, resident memory | `TestCorpus -perf -minsize 20000000` |
+| App rebuild time per event | Export with `TestCorpusDumpItems -dumpitems <dir>`, then `TEST_RUNNER_JARVIS_ITEMS_DIR=<dir> xcodebuild test` (`RebuildTests.realSessionsRebuildIncrementally`) |
 
-## 数字表
+## Numbers
 
-| 项 | 结果 |
+| Item | Result |
 | --- | --- |
-| 文件 / 行 / item | 435 / 1,271,802 / 477,153 |
-| 解析报错（panic） | 新旧都是 0 |
-| 坏行（JSON 不完整） | 20 行，分布在 8 个文件中间（每个 1–5 行，源文件里本来就坏），新旧都跳过 |
-| **master → 本车道**：item 差异 | **0**（477,153 vs 477,153；截断长度不同的文本按前 24 KB 和真实长度比，相同） |
-| 车道前（79c5d68）→ 本车道：item 差异 | 6 类，全部是阶段 1 有意的改动，见下 |
-| 没出 item 的 assistant 行 | 全部是空 thinking 块（只有签名，3,513 / 本机快照）；其余没出 item 的行是 api-request、mode、ai-title 等元数据 |
-| **连续性模拟**：运行次数 | 1,305（435 文件 × 3 个种子）——**断言失败 0** |
-| 模拟中的事件 | 75.6 万次分段写入（含半行）、13,912 次丢推送、12,991 次补洞、203 次整页重来、445 次截短重写 / 换文件、435 次「完全不丢」的对照运行 |
-| 模拟本身能抓到错 | 把 App 两条规则改回旧的：「covered=0 时不认第 0 行开始的批次」38 次失败、「没有基准时不重来」8 次失败 |
-| 冷打开（≥20 MB 的 52 个文件，4.6 GB）P50 / P99 / 最大 | master 222 / 1819 / 1819 ms → 本车道 218 / 1813 / 1813 ms（不变；窗口化冷打开是下一个 PR） |
-| 打开后常驻内存（同 52 个文件，合计） | master 1,271 MB → 本车道 **569 MB**（−55%）；最大的 15 个 845 → 410 MB |
-| App 每条事件重建（10 个最大的真实会话，各最后 200 条逐条到达） | 全量 1.6–899 ms（78,758 条的会话 899 ms）→ 增量 0.2–14.7 ms；**2,000 次增量与全量逐条比对，不一致 0** |
-| 端到端：最大 6 个会话（202–332 MB）首页（turns=2） | 冷 0.66–1.82 s，热 1–20 ms |
-| 端到端：被截断的工具输出取全文 | 31 / 31 与 transcript 原文逐字节一致（子 Agent 的 3 / 3 也一致；用主会话 id 取会 502，就是评审指出的 bug） |
-| 端到端：App 里的对话 vs 冷读 | 332 MB 会话：81 条，等于冷读的尾部；正在写入的会话（中途 hub 停 20 秒）：一次重连补了 625 条，最终 1,490 条等于冷读的尾部，重复 0 |
-| 端到端：往上翻时内容不动 | 真实会话边写边读（期间来了一条电脑上打的消息）：修前 1,727 pt，修后 **0 pt**（103 条到达） |
+| Files / lines / items | 435 / 1,271,802 / 477,153 |
+| Parse errors (panic) | 0 for both old and new |
+| Bad lines (incomplete JSON) | 20 lines in the middle of 8 files (1–5 each, already broken in the source); both old and new skip them |
+| **master → this lane**: item differences | **0** (477,153 vs 477,153; texts with different truncation lengths compared by the first 24 KB and the real length: identical) |
+| Before the lane (79c5d68) → this lane: item differences | 6 kinds, all intentional stage 1 changes, see below |
+| Assistant lines that produced no item | All are empty thinking blocks (signature only, 3,513 / local snapshot); the other lines with no item are metadata such as api-request, mode, ai-title |
+| **Continuity simulation**: runs | 1,305 (435 files × 3 seeds): **0 assertion failures** |
+| Events in the simulation | 756K chunked writes (including half lines), 13,912 dropped pushes, 12,991 gap fills, 203 full-page restarts, 445 truncate-and-rewrite / file switches, 435 "nothing dropped" control runs |
+| The simulation itself catches bugs | Reverting two App rules to the old ones: "don't accept a batch starting at line 0 when covered=0" fails 38 times, "don't restart without a baseline" fails 8 times |
+| Cold open (52 files ≥20 MB, 4.6 GB) P50 / P99 / max | master 222 / 1819 / 1819 ms → this lane 218 / 1813 / 1813 ms (unchanged; windowed cold open is the next PR) |
+| Resident memory after opening (same 52 files, total) | master 1,271 MB → this lane **569 MB** (−55%); the 15 largest 845 → 410 MB |
+| App rebuild per event (10 largest real sessions, last 200 events each arriving one by one) | Full 1.6–899 ms (899 ms for the 78,758-item session) → incremental 0.2–14.7 ms; **2,000 incremental vs full comparisons item by item, 0 mismatches** |
+| End to end: first page (turns=2) of the 6 largest sessions (202–332 MB) | Cold 0.66–1.82 s, warm 1–20 ms |
+| End to end: fetching the full text of truncated tool output | 31 / 31 byte-identical to the transcript (3 / 3 for subagents too; fetching with the main session id returns 502, which is the bug the review pointed out) |
+| End to end: chat in the App vs cold read | 332 MB session: 81 items, equal to the tail of the cold read; session being written (hub stopped for 20 s midway): one reconnect filled in 625 items, ending with 1,490 items equal to the tail of the cold read, 0 duplicates |
+| End to end: content stays put while scrolling up | Real session read while being written (a message typed on the computer arrived meanwhile): 1,727 pt before the fix, **0 pt** after (103 items arrived) |
 
-## 车道前 → 本车道的差异，逐类说明
+## Differences before the lane → this lane, by kind
 
-| 差异 | 数量 | 为什么新的才对 |
+| Difference | Count | Why the new one is right |
 | --- | --- | --- |
-| 少了的后台任务通知 | 2,041 | 同一条 `<task-notification>` 会同时记成 user 行和 queued_command 附件，旧解析器显示两遍。**每一条被去掉的都有一条文字完全相同、更早的仍在**（2,041 / 2,041）；内容不同的同一任务的多次通知不合并 |
-| 同一行的 item 换了顺序 | 1,316 行（8,596 条） | Codex FileChange 一次改多个文件，旧版按 map 遍历（每次顺序随机），新版按路径排序；集合完全相同 |
-| 新增 Codex 网页搜索 / 打开网页 | 149 + 167 个调用，316 个结果 | Codex 的 `Extension`（web.search）以前整行丢掉 |
-| 新增 /loop 到点的提示 | 173 | `system/scheduled_task_fire` 以前丢掉，看不出是定时任务开启了新一轮 |
-| 新增本地命令 | 5 条用户消息 + 5 条输出 | `/model` 这类 `system/local_command` 以前丢掉（会话轮数因此 +1，3 个文件的 Meta.Turns 变了） |
-| 通知文字变了 | 6 + 1 | 本地命令输出里的 ANSI 颜色码去掉了（47 → 38 字节）；api_error 显示真正的错误信息而不是笼统的「请求失败」 |
+| Fewer background task notifications | 2,041 | The same `<task-notification>` is recorded both as a user line and as a queued_command attachment, and the old parser showed it twice. **For every one removed, an earlier one with identical text is still there** (2,041 / 2,041); multiple notifications for the same task with different content are not merged |
+| Items in the same line reordered | 1,316 lines (8,596 items) | A Codex FileChange edits several files at once; the old version iterated a map (random order each time), the new one sorts by path; the sets are identical |
+| New Codex web search / open page | 149 + 167 calls, 316 results | Codex's `Extension` (web.search) lines used to be dropped entirely |
+| New /loop fire prompts | 173 | `system/scheduled_task_fire` used to be dropped, so you couldn't tell a scheduled task had started a new round |
+| New local commands | 5 user messages + 5 outputs | `system/local_command` such as `/model` used to be dropped (this adds a turn, so Meta.Turns changed in 3 files) |
+| Notice text changed | 6 + 1 | ANSI color codes removed from local command output (47 → 38 bytes); api_error shows the real error message instead of a generic "request failed" |
 
-## 验证中发现并修好的问题
+## Problems found and fixed during verification
 
-1. **新会话丢了第一批推送就永远有洞**（模拟抓到：把这条规则拿掉，1,305 次里 8 次失败）：App 打开时 transcript 还不存在，backlog 不带基准；第一批推送（从第 0 行开始）丢了的话，
-   之后的批次因为「没有基准」都不检查连续性。现在第 0 行开始的批次本身就是基准；已经收到过 backlog 还没有基准时，收到接续的批次就取最新一页重来。
-2. **电脑上打的消息会把正在翻历史的人拉回最新**（端到端抓到，1,727 pt）：「自己发的消息回到最新」原来对所有新的用户消息生效，现在只对这台手机发的。
-3. 评审：子 Agent 的「看全文」用了主会话 id；只有工具输出有「点开看全文」；`File.Full` 重读失败时报错而不是返回截断的副本；
-   store 整页替换时解除冻结；整页替换时保留在途期间到的更新的推送。
+1. **A new session that lost its first batch of pushes had a gap forever** (caught by the simulation: removing this rule fails 8 of 1,305 runs): when the App opens, the transcript does not exist yet, so the backlog carries no baseline. If the first batch of pushes (starting at line 0) was lost,
+   later batches never checked continuity because there was "no baseline". Now a batch starting at line 0 is itself the baseline; if a backlog has been received but there is still no baseline, a following batch triggers a restart from the latest page.
+2. **A message typed on the computer pulled someone reading history back to the latest** (caught end to end, 1,727 pt): "your own message returns you to the latest" used to apply to every new user message; now it only applies to messages sent from this phone.
+3. Review: "view full text" for subagents used the main session id; only tool output had "tap to view full text"; `File.Full` now reports an error when a re-read fails instead of returning a truncated copy;
+   the store unfreezes on a full-page replace; a full-page replace keeps newer pushes that arrived while it was in flight.
 
-## 没覆盖到的
+## Not covered
 
-- 手表：本机没有 watchOS 模拟器运行时，只验证了编译和 `WatchText` 单测。
-- 冷打开耗时没变（这批改动不针对它）：一台开发机上 317 MB 的会话冷打开 22 秒、hub 超时 502，窗口化冷打开（方案 C2）单独做。
+- Watch: this machine has no watchOS simulator runtime; only the build and the `WatchText` unit tests were verified.
+- Cold-open time did not change (this batch was not aimed at it): on one dev machine a 317 MB session takes 22 s to cold-open and the hub times out with 502. Windowed cold open (option C2) is done separately.
 
-## C2：大 transcript 冷打开只解析末尾窗口（同一批语料）
+## C2: cold open of large transcripts parses only the tail window (same corpus)
 
-| 项 | 结果 |
+| Item | Result |
 | --- | --- |
-| 窗口读 vs 整份读（≥2 MB 的 181 个文件 × 窗口 1 MB / 8 MB，共 240 次，190 次真的按窗口读） | **不一致 0**：首页、冷读返回的 item、往前翻到第一行的每一页、从随机行开始的 after_seq、没解析到的 item 取全文、Meta 全部逐字节相同 |
-| 首页变短（只为超长的一轮：往前解析超过 24 MB 还凑不够两轮，`has_more: true`，再翻接着取） | 240 次里 37 次；短的那页一定是整份读首页的尾部，往前翻拼起来和整份读一样 |
-| 连续性模拟（加上「node 重启」：半数运行中途换一个新 File 冷读，窗口 256 KB） | 1,305 次，393 次重启（190 次按窗口读），**断言失败 0** |
-| 冷打开 + 首页（≥20 MB 的 52 个文件，本机） | P50 219 → 64 ms，P99 1,790 → 370 ms；332 MB：1,790 → 115 ms |
-| 端到端：本机测试 hub 冷打开最大的 60 个会话（turns=2） | master P50 0.04 / P90 0.69 / P99 1.84 s → C2 0.04 / 0.08 / **0.17 s**，全部 200 |
-| 端到端：App 冷打开 332 MB 会话 | 81 条，等于整份读的尾部；看全文 29/29 与原文一致；边写边读 + hub 停 20 秒：一次补 624 条，最终与整份读一致 |
+| Window read vs full read (181 files ≥2 MB × 1 MB / 8 MB windows, 240 runs, 190 actually read by window) | **0 mismatches**: first page, items returned by the cold read, every page when scrolling back to the first line, after_seq from a random line, full text of unparsed items, and Meta are all byte-identical |
+| Shorter first page (only for a very long turn: parsing back more than 24 MB still doesn't yield two turns, `has_more: true`, scrolling further keeps fetching) | 37 of 240 runs; the short page is always the tail of the full read's first page, and scrolling back joins up to the same result as a full read |
+| Continuity simulation (with "node restart" added: half the runs switch to a new File cold read midway, 256 KB window) | 1,305 runs, 393 restarts (190 read by window), **0 assertion failures** |
+| Cold open + first page (52 files ≥20 MB, local) | P50 219 → 64 ms, P99 1,790 → 370 ms; 332 MB: 1,790 → 115 ms |
+| End to end: local test hub cold-opening the 60 largest sessions (turns=2) | master P50 0.04 / P90 0.69 / P99 1.84 s → C2 0.04 / 0.08 / **0.17 s**, all 200 |
+| End to end: App cold-opening the 332 MB session | 81 items, equal to the tail of the full read; view full text 29/29 matches the original; reading while writing + hub stopped for 20 s: one fill of 624 items, ending identical to the full read |
 
-冷打开的时间现在主要是数行（只找换行和两个标记，不解析 JSON）和末尾 8 MB 的解析；开发机上的实测在部署后用 `bench-items.sh` 补上。
+Cold-open time is now mostly line counting (only looking for newlines and two markers, no JSON parsing) plus parsing the last 8 MB; measurements on the dev machine get added with `bench-items.sh` after deployment.

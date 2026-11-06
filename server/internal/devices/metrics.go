@@ -73,6 +73,25 @@ func (b *metricsBook) now(machine string, at time.Time) *proto.MetricSample {
 	return &s
 }
 
+// forget drops a machine's latest sample (it is no longer one of the machines). What it is (systems) stays: it is
+// kept in Postgres as well and is only shown for a machine the apps list.
+func (b *metricsBook) forget(machine string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.latest, machine)
+}
+
+// forgetMachine drops what is kept in memory of a machine that went away (no longer in hub.json, or a member's
+// computer no longer reachable), so the island does not list it for another day. Kept if another machine still
+// answers to the id (a hub.json entry became a member's computer, or the other way round).
+func (d *Devices) forgetMachine(id string) {
+	if d.machineByID(id) != nil {
+		return
+	}
+	d.usage.forget(id)
+	d.metrics.forget(id)
+}
+
 func (d *Devices) metricsStore() metricsStore {
 	if s, ok := d.opts.Store.(metricsStore); ok {
 		return s
@@ -329,6 +348,13 @@ func (u *usageBook) apply(machine string, params json.RawMessage, now time.Time)
 		}
 	}
 	return true
+}
+
+// forget drops a machine's usage: it is no longer one of the machines.
+func (u *usageBook) forget(machine string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	delete(u.machines, machine)
 }
 
 // UsageSummary is what the island and the app show.

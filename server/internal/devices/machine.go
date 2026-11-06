@@ -537,16 +537,36 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 	case "claude.dirs":
 		m.rememberClaudeDirs(params)
 	case "metrics": // the monitoring is the manager's (metrics.go)
-		m.d.onMetrics(m.cfg.ID, params)
+		if !m.stopped() { // a late one from a machine let go would bring it back (forgetMachine)
+			m.d.onMetrics(m.cfg.ID, params)
+			m.forgetIfStopped()
+		}
 		return
 	case "usage":
-		m.d.usage.apply(m.cfg.ID, params, time.Now())
+		if !m.stopped() {
+			m.d.usage.apply(m.cfg.ID, params, time.Now())
+			m.forgetIfStopped()
+		}
 		return
 	}
 	if f := m.d.opts.OnEvent; f != nil && f(m.cfg.ID, event, params) {
 		return
 	}
 	m.d.forward(m.cfg.ID, event, params)
+}
+
+// forgetIfStopped closes the window between onEvent's stopped check and its write: a machine is stopped before it
+// is forgotten, so a write that raced the stop is either cleared by that forgetMachine or, seen stopped here, by
+// this one.
+func (m *Machine) forgetIfStopped() {
+	if m.stopped() {
+		m.d.forgetMachine(m.cfg.ID)
+	}
+}
+
+// stopped: the machine was let go (no longer in hub.json, its entry replaced, or no longer reachable).
+func (m *Machine) stopped() bool {
+	return m.ctx != nil && m.ctx.Err() != nil
 }
 
 // onRequest answers what is the manager's of a node's requests and passes the rest on to the hub.

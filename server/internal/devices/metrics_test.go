@@ -1,10 +1,12 @@
 package devices
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -101,5 +103,161 @@ func TestUsageSummary(t *testing.T) {
 	report("b", true)
 	if s := book.summary(now, loc); s.Output != 500 {
 		t.Fatalf("after a full report: %+v", s)
+	}
+}
+
+// A machine taken out of hub.json is no longer in the usage summary nor has live metrics, and a late notification
+// from its stopping connection does not bring it back.
+func TestUsageAndMetricsForgetARemovedMachine(t *testing.T) {
+	d := newTestDevices(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	d.mu.Lock()
+	d.ctx = ctx
+	d.mu.Unlock()
+	t.Cleanup(func() { cancel(); d.workers.Wait() })
+	entry := func(id string) json.RawMessage {
+		b, _ := json.Marshal(MachineConfig{ID: id, Name: id, Kind: kindLink})
+		return b
+	}
+	d.Configure(devicewire.Config{Machines: []json.RawMessage{entry("kept"), entry("gone")}})
+	gone, kept := d.cfgMachine("gone"), d.cfgMachine("kept")
+	if gone == nil || kept == nil {
+		t.Fatal("machines not started")
+	}
+	cpu := 1.0
+	sample, _ := json.Marshal(map[string]any{"sample": proto.MetricSample{T: time.Now().Unix(), CPU: &cpu}})
+	usage, _ := json.Marshal(map[string]any{"full": true, "load": 1.0, "cpus": 2,
+		"buckets": []proto.UsageBucket{{Minute: time.Now().Unix() / 60 * 60, Model: "m", Output: 10, Requests: 1}}})
+	for _, m := range []*Machine{gone, kept} {
+		m.onEvent("metrics", sample)
+		m.onEvent("usage", usage)
+	}
+	ids := func() []string {
+		var out []string
+		for _, m := range d.Usage().Machines {
+			out = append(out, m.ID)
+		}
+		return out
+	}
+	if got := ids(); len(got) != 2 {
+		t.Fatalf("usage machines before = %v", got)
+	}
+
+	d.Configure(devicewire.Config{Machines: []json.RawMessage{entry("kept")}})
+	gone.onEvent("metrics", sample) // late, from the connection being let go
+	gone.onEvent("usage", usage)
+	if got := ids(); len(got) != 1 || got[0] != "kept" {
+		t.Fatalf("usage machines after removal = %v", got)
+	}
+	if d.metrics.now("gone", time.Now()) != nil {
+		t.Fatal("the removed machine still has live metrics")
+	}
+	if d.metrics.now("kept", time.Now()) == nil {
+		t.Fatal("the kept machine lost its live metrics")
+	}
+}
+
+// newCancelledOnCleanup is newTestDevices whose machines are stopped and waited for when the test ends.
+func newCancelledOnCleanup(t *testing.T) *Devices {
+	d := newTestDevices(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	d.mu.Lock()
+	d.ctx = ctx
+	d.mu.Unlock()
+	t.Cleanup(func() { cancel(); d.workers.Wait() })
+	return d
+}
+
+// usageIDs are the machines the usage summary lists.
+func usageIDs(d *Devices) []string {
+	var out []string
+	for _, m := range d.Usage().Machines {
+		out = append(out, m.ID)
+	}
+	return out
+}
+
+func testMetricsAndUsage(t *testing.T) (sample, usage json.RawMessage) {
+	t.Helper()
+	cpu := 1.0
+	sample, _ = json.Marshal(map[string]any{"sample": proto.MetricSample{T: time.Now().Unix(), CPU: &cpu}})
+	usage, _ = json.Marshal(map[string]any{"full": true, "load": 1.0, "cpus": 2,
+		"buckets": []proto.UsageBucket{{Minute: time.Now().Unix() / 60 * 60, Model: "m", Output: 10, Requests: 1}}})
+	return sample, usage
+}
+
+func memberMesh(hubID string, ids ...string) *devicewire.Mesh {
+	rec := devicewire.MemberRecord{HubID: hubID}
+	for _, id := range ids {
+		cfg, _ := json.Marshal(MachineConfig{ID: id, Name: id})
+		rec.Machines = append(rec.Machines, devicewire.RecMachine{ID: id, Cfg: cfg, Kind: kindHub})
+	}
+	return &devicewire.Mesh{Members: []devicewire.MemberRecord{rec}}
+}
+
+// A member's computer no longer reachable through any hub is no longer in the usage summary nor has live metrics,
+// and a late notification from its stopping connection does not bring it back.
+func TestUsageAndMetricsForgetAnUnreachableMemberComputer(t *testing.T) {
+	d := newCancelledOnCleanup(t)
+	base := d.config()
+	cfg := base
+	cfg.Mesh = memberMesh("hub-member", "pc")
+	d.Configure(cfg)
+	pc := d.machineByID("pc")
+	if pc == nil || !pc.derived {
+		t.Fatalf("member computer not derived: %v", pc)
+	}
+	sample, usage := testMetricsAndUsage(t)
+	pc.onEvent("metrics", sample)
+	pc.onEvent("usage", usage)
+	if got := usageIDs(d); len(got) != 1 || got[0] != "pc" {
+		t.Fatalf("usage machines before = %v", got)
+	}
+
+	cfg = base
+	cfg.Mesh = &devicewire.Mesh{}
+	d.Configure(cfg)
+	if d.machineByID("pc") != nil {
+		t.Fatal("the member computer is still a machine")
+	}
+	pc.onEvent("metrics", sample) // late, from the connection being let go
+	pc.onEvent("usage", usage)
+	if got := usageIDs(d); len(got) != 0 {
+		t.Fatalf("usage machines after it went = %v", got)
+	}
+	if d.metrics.now("pc", time.Now()) != nil {
+		t.Fatal("the unreachable member computer still has live metrics")
+	}
+}
+
+// A member's computer that went while a hub.json entry took its id keeps its usage and live metrics: the id still
+// stands for a machine.
+func TestForgetMachineKeepsAnIDStillInUse(t *testing.T) {
+	d := newCancelledOnCleanup(t)
+	base := d.config()
+	cfg := base
+	cfg.Mesh = memberMesh("hub-member", "pc")
+	d.Configure(cfg)
+	pc := d.machineByID("pc")
+	if pc == nil || !pc.derived {
+		t.Fatalf("member computer not derived: %v", pc)
+	}
+	sample, usage := testMetricsAndUsage(t)
+	pc.onEvent("metrics", sample)
+	pc.onEvent("usage", usage)
+
+	entry, _ := json.Marshal(MachineConfig{ID: "pc", Name: "pc", Kind: kindLink})
+	cfg = base
+	cfg.Mesh = &devicewire.Mesh{}
+	cfg.Machines = []json.RawMessage{entry}
+	d.Configure(cfg)
+	if m := d.machineByID("pc"); m == nil || m.derived {
+		t.Fatalf("the hub.json entry does not stand for the id: %v", m)
+	}
+	if got := usageIDs(d); len(got) != 1 || got[0] != "pc" {
+		t.Fatalf("usage machines after the entry took the id = %v", got)
+	}
+	if d.metrics.now("pc", time.Now()) == nil {
+		t.Fatal("the id still in use lost its live metrics")
 	}
 }

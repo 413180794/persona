@@ -3,6 +3,7 @@ package devices
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -68,6 +69,7 @@ type pathInfo = devicewire.PathInfo
 
 type fleet struct {
 	mu       sync.Mutex
+	saveUIDs sync.Mutex            // one write of "mesh.path_uids" at a time, of the newest (savePathUIDs)
 	derived  map[string]*Machine   // group key -> a machine only members have
 	absorbed map[*Machine]*Machine // a hub.json entry whose computer another entry has -> that one
 	paths    map[*Machine][]*nodePath
@@ -209,21 +211,28 @@ func (d *Devices) learnUID(p *nodePath, uid string) {
 		return
 	}
 	f.uids[p.key] = uid
-	save := make(map[string]string, len(f.uids))
-	for k, v := range f.uids {
-		save[k] = v
-	}
 	f.mu.Unlock()
 	if d.opts.Store != nil {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := d.opts.Store.PutSetting(ctx, "mesh.path_uids", save); err != nil {
-				d.logf("mesh: save path uids: %v", err)
-			}
-		}()
+		go d.savePathUIDs()
 	}
 	d.fleetRegroup()
+}
+
+// savePathUIDs writes which computer each path reached as it is now. The copy is taken after the previous write,
+// under the lock: a write started earlier never lands after a newer one, so a restart does not read a map that
+// misses a path learnt last (and list that path's computer twice).
+func (d *Devices) savePathUIDs() {
+	f := &d.fleet
+	f.saveUIDs.Lock()
+	defer f.saveUIDs.Unlock()
+	f.mu.Lock()
+	uids := maps.Clone(f.uids)
+	f.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := d.opts.Store.PutSetting(ctx, "mesh.path_uids", uids); err != nil {
+		d.logf("mesh: save path uids: %v", err)
+	}
 }
 
 // memberRecords are the members' computers the center reaches through them (the hub's mesh, devicewire.Mesh).
@@ -385,6 +394,7 @@ func (d *Devices) fleetRegroup() {
 		}
 		mctx, cancel := context.WithCancel(ctx)
 		f.cancel[m] = cancel
+		m.ctx = mctx // set before its run loop starts: onEvent reads it
 		d.workers.Add(1)
 		go func() {
 			defer d.workers.Done()
@@ -414,6 +424,7 @@ func (d *Devices) fleetRegroup() {
 			cancel()
 		}
 		d.logf("[%s] no longer reachable through any hub of the group: removed", m.cfg.ID)
+		d.forgetMachine(m.cfg.ID)
 	}
 	for _, m := range started {
 		d.logf("[%s] a member's computer: reached through %s", m.cfg.ID, d.hubNameOf(d.pathsOf(m)[0].hub))

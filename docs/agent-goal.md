@@ -1,63 +1,63 @@
-# Agent 的 goal（目标）
+# Agent goals
 
-#2420。Claude Code 的 `/goal <条件>` 和 Codex 的 thread goal 都是「给 Agent 一个完成条件，没达成就不停」：Claude Code 每次要停下时由一个
-Stop hook 判断条件成没成立，没成立就接着做；Codex 记一个目标和它的状态（进行中、暂停、受阻、用量到了上限、完成）。
-以前 Persona 只把当时敲的 `/goal …` 当成一条普通消息显示，往上翻久了就找不到，达成、清除、没达成的理由都看不到（这一节之前的样子）。
+#2420. Claude Code's `/goal <condition>` and Codex's thread goal both mean "give the Agent a completion condition and don't stop until it is met". In Claude Code, each time the Agent is about to stop, a
+Stop hook checks whether the condition holds; if not, it keeps going. Codex records a goal and its status (active, paused, blocked, usage limit reached, complete).
+Before this, Persona showed the `/goal …` you typed only as an ordinary message. After scrolling a while you could not find it, and you never saw whether it was met, cleared, or why it was not met (how things were before this section).
 
-## 用户看到的
+## What the user sees
 
-- **对话页顶部**（手机的展开标题、iPad / 分栏的侧栏标题、Mac 对话上方那一行、Android 顶栏下面）：有 goal 时多一行「目标」条：图标 + 目标的第一行 + 状态
-  （进行中 / 已达成 / 已暂停 / 受阻 / 用量到上限）。点按打开详情：目标全文、状态、最近一次判断的理由（Claude Code）、已用的 token 和时间、
-  token 预算（Codex）。没有 goal 时这一行不出现，界面和以前一样。
-- **对话里**：goal 达成时插一条通知「目标已达成」（Claude Code 带判断的理由）；Codex 的 goal 变成暂停、受阻、到了用量上限时各插一条。
-  设置和清除在 Claude Code 里本来就有「Goal set: …」「Goal cleared: …」两条命令输出的通知，照旧。
-- 手机上标题折叠时（默认往下读时就折叠），折叠的标题栏右边有一个目标图标（颜色同状态），点按直接打开详情。
-- 网页的对话页同样在顶部的活动行显示，点开是同样的详情。
-- 已达成的 goal 继续显示（状态「已达成」），直到设置新的 goal 或清除；清除后这一行消失。
+- **Top of the chat** (the expanded title on the phone, the sidebar title on iPad / split view, the row above the chat on Mac, below the top bar on Android): when there is a goal, an extra "Goal" bar appears: icon + first line of the goal + status
+  (Active / Achieved / Paused / Blocked / Usage Limit). Tapping it opens the details: the full goal, status, the reason from the latest check (Claude Code), tokens and time used,
+  and the token budget (Codex). With no goal the row does not appear and the screen looks as before.
+- **In the chat**: when a goal is met, a "Goal achieved" notice is inserted (with the check's reason for Claude Code). When a Codex goal becomes paused, blocked, or hits its usage limit, a notice is inserted for each.
+  Setting and clearing already produce two command-output notices in Claude Code, "Goal set: …" and "Goal cleared: …"; those stay as they are.
+- On the phone, when the title is collapsed (it collapses by default as you read down), the collapsed title bar has a goal icon on the right (colored by status); tapping it opens the details directly.
+- The web chat page shows it the same way in the activity row at the top, and opens the same details.
+- An achieved goal stays visible (status "Achieved") until a new goal is set or it is cleared; once cleared the row disappears.
 
-## 两种来源的格式（2026-11-05 用本机真实 transcript / rollout 核对）
+## Formats of the two sources (checked 2026-11-05 against real transcripts / rollouts on this machine)
 
-### Claude Code（transcript 的 jsonl）
+### Claude Code (transcript jsonl)
 
-goal 的状态写成 `type: "attachment"` 的一行，`attachment.type` 是 `goal_status`：
+Goal status is written as a `type: "attachment"` line whose `attachment.type` is `goal_status`:
 
-| 什么时候 | 字段 |
+| When | Fields |
 | --- | --- |
-| 设置（`/goal <条件>`） | `{condition, met: false, sentinel: true}`，写在命令那一行之前 |
-| 要停下、判断没达成 | `{condition, met: false, reason}` |
-| 判断达成 | `{condition, met: true, reason, iterations, durationMs, tokens}`；之后 hook 自己清掉 |
-| 清除（`/goal clear`） | `{condition, met: true, sentinel: true}`，接着是命令输出 `Goal cleared: <条件>` |
+| Set (`/goal <condition>`) | `{condition, met: false, sentinel: true}`, written before the command line |
+| About to stop, check says not met | `{condition, met: false, reason}` |
+| Check says met | `{condition, met: true, reason, iterations, durationMs, tokens}`; the hook then clears itself |
+| Cleared (`/goal clear`) | `{condition, met: true, sentinel: true}`, followed by the command output `Goal cleared: <condition>` |
 
-- 命令和输出：新版写成 `type: "system", subtype: "local_command"`，老版写成 user 行；输出是 `<local-command-stdout>Goal set: <条件>` /
-  `<local-command-stdout>Goal cleared: <条件>`。有的老版本只有这两行、没有 `goal_status`，所以两者都认：「Goal set」设一个进行中的 goal，
-  「Goal cleared」清掉。
-- 设置时还有一条 `isMeta` 的 user 行（「A session-scoped Stop hook is now active…」），是给模型看的，照旧不显示。
+- Commands and output: newer versions write `type: "system", subtype: "local_command"`, older versions write a user line; the output is `<local-command-stdout>Goal set: <condition>` /
+  `<local-command-stdout>Goal cleared: <condition>`. Some older versions have only these two lines and no `goal_status`, so both are recognized: "Goal set" sets an active goal,
+  "Goal cleared" clears it.
+- Setting a goal also writes an `isMeta` user line ("A session-scoped Stop hook is now active…"). It is meant for the model and stays hidden as before.
 
-### Codex（rollout 的 jsonl）
+### Codex (rollout jsonl)
 
-`type: "event_msg"`、`payload.type: "thread_goal_updated"`，`payload.goal` 是整份当前状态：
-`{threadId, objective, status, tokensUsed, timeUsedSeconds, tokenBudget?, createdAt, updatedAt}`；`status` 是
-`active` / `paused` / `blocked` / `usage_limited` / `budget_limited` / `complete`（同 `~/.codex/goals_*.sqlite` 的 `thread_goals` 表）。
-用量变了也会再写一条。`goal` 是 `null` 时当作清除。本机语料（Codex 0.166）里只见过 `active`，其余状态的取值来自那张表的约束，没有实测。
+`type: "event_msg"`, `payload.type: "thread_goal_updated"`; `payload.goal` is the full current state:
+`{threadId, objective, status, tokensUsed, timeUsedSeconds, tokenBudget?, createdAt, updatedAt}`. `status` is
+`active` / `paused` / `blocked` / `usage_limited` / `budget_limited` / `complete` (same as the `thread_goals` table in `~/.codex/goals_*.sqlite`).
+A new line is written when usage changes too. A `null` `goal` means cleared. The local corpus (Codex 0.166) only contains `active`; the other values come from the table's constraints and have not been observed.
 
-## 怎么做
+## How it works
 
-- **解析**（`server/internal/transcript`）：`Meta.Goal`（`proto.GoalInfo`）跟着读到的行更新，以最新的一条为准；Claude Code 的 `met`
-  映射成 `complete`、`met: false` 是 `active`，判断理由放 `reason`。达成和 Codex 的非进行中状态在对话里生成 `notice`，只在状态变了时生成。
-- **node**：goal 可能设在一份几百 MB 的 transcript 的开头，只读尾部 384 KB 的 quick meta 看不到。所以和 `/loop`、后台任务一起由 `bgScan`
-  读：整份读一次，之后只读追加的部分，只解析含标记的行（`goal_status`、`Goal set: `、`Goal cleared`、`thread_goal_updated`）。
-  会话列表上带 `goal`，列表的签名（`node/sessions.go` 的 `listKey` / `listKeySized`）里带上目标、状态和理由，变了就推一次。
-- **协议**：`Session.goal`，见 `docs/protocol.md`。只加字段，旧客户端不认就不显示。
-- **客户端**：iOS / Mac 的 `GoalBar`（`Views/Session/SessionPanes.swift`）和详情 `GoalSheet`；网页 `views/chat/Activity.tsx` 的活动行。
-  Android（#2888）：`core:contracts` 的 `Session.goal`（`GoalInfo`），对话页顶栏下面的 `ChatGoalBar`（`feature/chat/ChatGoal.kt`，设计系统的 `JActivityBar`），点按打开 `ChatGoalSheet`；
-  对话里的达成 / 停下通知是 hub 生成的 `notice`，照普通通知显示。顶栏不折叠，所以没有 iOS 折叠标题里的那个目标图标。
-  对话条目（item）的结构没有变，`ChatCache` 的版本号不用加。
+- **Parsing** (`server/internal/transcript`): `Meta.Goal` (`proto.GoalInfo`) updates with each line read, and the latest one wins. Claude Code's `met`
+  maps to `complete`, `met: false` to `active`, and the check's reason goes into `reason`. Achievement and Codex's non-active statuses produce a `notice` in the chat, only when the status changes.
+- **node**: a goal may be set at the start of a transcript hundreds of MB long, which the quick meta (reading only the last 384 KB) cannot see. So `bgScan` reads it, together with `/loop` and background tasks:
+  the whole file once, then only appended data, parsing only lines containing a marker (`goal_status`, `Goal set: `, `Goal cleared`, `thread_goal_updated`).
+  The session list carries `goal`, and the list signature (`listKey` / `listKeySized` in `node/sessions.go`) includes the goal, status, and reason, so any change triggers a push.
+- **Protocol**: `Session.goal`, see `docs/protocol.md`. Fields are only added; old clients that don't know it simply don't show it.
+- **Clients**: `GoalBar` on iOS / Mac (`Views/Session/SessionPanes.swift`) and the `GoalSheet` details; the activity row in `views/chat/Activity.tsx` on the web.
+  Android (#2888): `Session.goal` (`GoalInfo`) in `core:contracts`, `ChatGoalBar` below the chat's top bar (`feature/chat/ChatGoal.kt`, the design system's `JActivityBar`), tapping opens `ChatGoalSheet`;
+  the achieved / stopped notices in the chat are `notice` items generated by the hub and show as ordinary notices. The top bar does not collapse, so there is no goal icon like in the iOS collapsed title.
+  The structure of chat items is unchanged, so the `ChatCache` version does not need a bump.
 
-## 截图
+## Screenshots
 
-假 hub 加 `MOCK_GOAL=1`：MacBook 上「给天气 App 加主屏幕小组件」有一个进行中的 goal（带最近一次检查的理由），「检查 PR #42 的改动」的 goal 已达成；
-`MOCK_GOAL=stopped` 时小组件那个 goal 用完了 token 预算。
+Mock hub with `MOCK_GOAL=1`: on the MacBook, "Add a home screen widget to the weather app" has an active goal (with the reason from the latest check), and the goal of "Review the changes in PR #42" is achieved;
+with `MOCK_GOAL=stopped`, the widget goal has used up its token budget.
 
-## 不做的
+## Out of scope
 
-- 不在 App 里设置、暂停或清除 goal：在终端里或者在输入框里发 `/goal …` 就行（Claude Code 的命令照常发过去）。
+- No setting, pausing, or clearing goals in the App: send `/goal …` in the terminal or in the composer (Claude Code commands are sent through as usual).

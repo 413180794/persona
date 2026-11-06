@@ -1,325 +1,325 @@
-# hub 互联（mesh）：一台中心
+# Linked hubs (mesh): one primary
 
-几台 hub 配对后连成一组，组里**有且只有一台中心 hub**：它服务所有 App、保存所有状态、连所有电脑；其余 hub 是**成员**，只做两件事——
-把 App 的请求原样转给中心，把自己连着的电脑的 node 流交给中心。电脑经预装的服务（常驻 node + 连接器 jarvis-link）接入，不用 SSH；
-同一台电脑有几条路能到时只出现一次，用最好的那条。方案见 [plan-hub-center.md](plan-hub-center.md)（总览 #293，这一路 issue #435），
-本文是实现：协议、取舍、怎么验证。
+Pair several hubs into a group with **exactly one primary hub**: it serves all Apps, stores all state, and connects all computers. The other hubs are **members**, doing only two things:
+forward App requests unchanged to the primary, and hand the node streams of their connected computers to the primary. Computers connect through a preinstalled service (resident node + jarvis-link connector), not SSH;
+a computer reachable through several paths appears only once and uses the best path. The proposal is in [plan-hub-center.md](plan-hub-center.md) (overview #293, this track's issue #435).
+This document covers the implementation: protocol, tradeoffs, and verification.
 
-> 推荐的部署是**只装一台 hub**，其他电脑都装 node 服务（[plan-hub-center.md](plan-hub-center.md) 第 0 节）。多台 hub 互联只给少数场景：
-> 两处各有一台常开、互相连不通的机器，或者已经装了好几台 hub 想合并。管理界面里「互联」在「高级」下面。
+> The recommended deployment is **one hub only**, with node services on all other computers ([plan-hub-center.md](plan-hub-center.md) section 0). Linked hubs are for a few cases:
+> always-on machines in two locations that cannot reach each other, or several existing hubs you want to combine. "Linked hubs" is under "Advanced" in the admin UI.
 
 ```text
- App / 网页 ──► 中心 hub ◄══ 互联链路（WSS，钉扎）══ 成员 hub ◄── App（连成员也行：成员转给中心）
-                 │    ▲                              │    ▲
-     hub 来连（service）│    │电脑来连（link）               │    │  成员的电脑：中心经成员的链路开 node 流
-                 ▼    │                              ▼    │
-              电脑：常驻 node + 连接器 jarvis-link
+ App / Web ──► Primary hub ◄══ Mesh link (WSS, pinned) ══ Member hub ◄── App (connecting to a member also works: it forwards to the primary)
+                 │    ▲                                  │    ▲
+ Hub connects (service)│    │Computer connects (link)        │    │  Member's computers: primary opens node streams through the member link
+                 ▼    │                                  ▼    │
+              Computer: resident node + jarvis-link connector
 ```
 
-代码在 `server/internal/hub/`：`mesh.go`（记录、视图循环）、`mesh_view.go`（记录和路由）、`mesh_group.go`（中心、任期、角色）、
-`peer_*.go`（配对、链路、拨号、转发、node 流、管理接口、命令行）；数据库在 `internal/db/peers.go`（迁移 0151）和 `internal/db/center.go`（迁移 0191）；
-多条路、去重、选路在 `internal/devices/paths.go`，一台电脑的连接（建、用、换）在 `internal/devices/conn.go`，kind service（拨连接器）在 `internal/devices/service.go`；发现在 `internal/mdns/`。
+Code in `server/internal/hub/`: `mesh.go` (records, view loop), `mesh_view.go` (records and routing), `mesh_group.go` (primary, term, roles),
+`peer_*.go` (pairing, links, dialing, forwarding, node streams, admin APIs, CLI); database in `internal/db/peers.go` (migration 0151) and `internal/db/center.go` (migration 0191);
+multiple paths, deduplication, and path selection in `internal/devices/paths.go`, a computer's connection (create, use, switch) in `internal/devices/conn.go`, kind service (dialing connectors) in `internal/devices/service.go`; discovery in `internal/mdns/`.
 
-第一版（#394，对等互联：每台电脑有归属 hub、hub 之间泛洪事件和订阅、凭据组内通用）已经整个换掉，见文末「第一版」。
+The first version (#394, peer-to-peer mesh: each computer had an owning hub, events and subscriptions flooded between hubs, credentials shared across the group) has been replaced entirely; see "First version" at the end.
 
-## 机器身份 machine_uid
+## Machine identity: machine_uid
 
-- node 第一次运行生成 `~/.persona/machine-uid`（UUIDv4，0600），之后一直用它；`node.info` 带 `machine_uid`（`internal/node/machineuid.go`）。
-  文件坏了（不是 UUIDv4）就换一个新的。
-- 克隆出来的虚拟机会带着同一个文件：在那台上跑 `personad node reset-uid`，再重启常驻 node。
-- 旧 node 没有这个字段：不参与去重，每条路各算一台。
+- On first run the node generates `~/.persona/machine-uid` (UUIDv4, 0600) and keeps using it; `node.info` carries `machine_uid` (`internal/node/machineuid.go`).
+  A corrupt file (not UUIDv4) is replaced with a new one.
+- Cloned VMs carry the same file: run `personad node reset-uid` there, then restart the resident node.
+- Older nodes lack this field: no deduplication, and each path counts as a separate machine.
 
-## 配对和信任
+## Pairing and trust
 
-- **互联码**：在 hub B 上生成（管理界面「高级 › 互联 › 生成互联码」，或 `personad hub pair --peer`），一次性、10 分钟：
-  `jarvis://peer?hub=<hub_id>&name=<名字>&fp=<公钥指纹>&tls=<TLS 端口>&url=<https 候选>…&code=jx_<64 位十六进制>`。
-  只存 hash（`peer_codes`）。没开 TLS 的 hub 生成不了，也用不了别人的码（409，提示去开 TLS）。
-- **兑换**（A 拿到 B 的码，`POST /api/v1/admin/peers {"code"}` 或 `personad hub peer add`）：
-  1. A 先给 B 签一个互联凭据（设备凭据，kind / role 都是 `peer`，`machine_id` 存 B 的 hub_id）；
-  2. A 按码里的 `fp` 钉扎、按候选地址赛跑（内网 → 公网 IPv6 → 域名 → 公网 IPv4，每 300 ms 起一个），
-     `POST /api/v1/peer/pair`（`Authorization: Bearer jx_…`），带上 A 的 hub_id、名字、版本、指纹、TLS 端口、https 候选和第 1 步的凭据；
-  3. B 在一个事务里用掉这个码、给 A 签凭据、撤销以前给 A 签过的、存下 A（`RedeemPeerCode`），回 B 自己的同样几项、给 A 的凭据，
-     **和 B 所在组的中心、任期**；
-  4. A 核对回来的 hub_id 就是码里的那台，**加入 B 的组**（下面「中心」），存下 B。失败时撤销第 1 步的凭据。
-  结果是双向钉扎、双向凭据：两边都存对方的指纹、地址、对方签给自己的凭据（用 `~/.persona/secret.key` AES-GCM 加密后进 `peers.token`），
-  以及自己签给对方的那个的 id（`peers.credential_id`）。
-- `peer` 凭据只能开 `GET /api/v1/peer`，`jx_` 码只能 `POST /api/v1/peer/pair`，别的接口一律 403；码错 / 过期 / 用过回 401，公网来源按
-  `security` 现有规矩限流。
-- **断开**（`DELETE /api/v1/admin/peers/{hub_id}`、`personad hub peer remove`）：先在链路上告诉对方（`unpair`），再删自己这边、撤销自己签出的凭据、
-  关链路（4012）。对方收到后做同样的事；当时连不上的，它下次拨号被拒（401），管理界面显示「对方不认这台的凭据」。断开后一个对端都没有的 hub
-  自己当中心（见下）。在「设备」里直接撤销一个互联凭据，等于断开那台。
+- **Linking code**: generated on hub B (admin UI **Advanced › Linked hubs › Generate linking code**, or `personad hub pair --peer`), single-use, 10 minutes:
+  `jarvis://peer?hub=<hub_id>&name=<name>&fp=<public-key fingerprint>&tls=<TLS port>&url=<https candidate>…&code=jx_<64 hex digits>`.
+  Only the hash is stored (`peer_codes`). A hub without TLS can neither generate a code nor use another hub's (409, with instructions to enable TLS).
+- **Redeem** (A receives B's code, `POST /api/v1/admin/peers {"code"}` or `personad hub peer add`):
+  1. A signs a linking credential for B (device credential, kind / role both `peer`, `machine_id` stores B's hub_id);
+  2. A pins to the code's `fp` and races candidate addresses (LAN → public IPv6 → domain → public IPv4, starting one every 300 ms),
+     `POST /api/v1/peer/pair` (`Authorization: Bearer jx_…`), carrying A's hub_id, name, version, fingerprint, TLS port, https candidates, and the credential from step 1;
+  3. In one transaction, B consumes the code, signs a credential for A, revokes previous credentials signed for A, and stores A (`RedeemPeerCode`). It returns its own matching fields and A's credential,
+     **plus B's group's primary and term**;
+  4. A verifies that the returned hub_id matches the hub in the code, **joins B's group** ("Primary" below), and stores B. Failure revokes the step 1 credential.
+  The result is mutual pinning and mutual credentials: each side stores the other's fingerprint, addresses, and credential signed for itself (AES-GCM encrypted with `~/.persona/secret.key` in `peers.token`),
+  plus the id of the credential it signed for the other (`peers.credential_id`).
+- `peer` credentials can only open `GET /api/v1/peer`; `jx_` codes can only call `POST /api/v1/peer/pair`; all other APIs return 403. Invalid / expired / used codes return 401, and public sources are rate-limited under
+  existing `security` rules.
+- **Disconnect** (`DELETE /api/v1/admin/peers/{hub_id}`, `personad hub peer remove`): first send the other side `unpair` on the link, then delete the local record, revoke locally signed credentials,
+  and close the link (4012). The other side does the same on receipt; if unreachable then, its next dial is rejected (401), and the admin UI shows "The other hub does not recognize this hub's credential". A hub with no peers after disconnecting
+  becomes its own primary (see below). Directly revoking a linking credential under "Devices" is equivalent to disconnecting that hub.
 
-## 互联链路
+## Mesh links
 
-- `GET /api/v1/peer`：WebSocket，只走 TLS 端口（明文一律 403 `tls_required`，回环也不例外；`mesh.plaintext.allow` 里的地址例外，见「明文链路」），按 `fp` 钉扎；`Authorization: Bearer <对方签给我的 peer 凭据>`；
-  permessage-deflate。只有配过对的 hub 能开。
-- 链路上跑 node 协议那套 JSON 行 RPC（`internal/rpc`）和流（`internal/streams`）：
-  - 单向：`rec`（记录）、`stream.data` / `stream.ack` / `stream.close`（流）；
-  - 调用：`hello {hub_id,name,version,epoch}`（两边各调一次，核对 hub_id）、`stream.open {id}`、`unpair`、
-    `relay {to,from,ttl,method,params}`（转给组里某一台的调用：`creds.import`、`creds.revoked`、`pair.code`，见下）。
-  - 流上跑 HTTP/1.1：成员转给中心的 App 请求、中心经成员开的 node 流（`peer_http.go`、`peer_node.go`）。对端有一个只收这些流的 `http.Server`
-    （没有监听 socket），所以这些请求只可能来自已鉴权的链路。
-- **一对 hub 一条链路**：两边都拨。hub_id 小的一方立刻拨，大的一方每次先等 0.5–2 秒；同时连上两条时保留 hub_id 小的一方拨出的那条，另一条以 4011 关闭。
-- 心跳、重连照 jarvis-link：两边每 10 秒 ping、5 秒没 pong 断开；退避 1 秒起翻倍、最长 1 分钟，随机一半到全部；对方不认凭据（401 / 403 / 4012）等 5 分钟。
-  都是配置值，没实测。ping 的往返时间就是这条链路的 RTT（管理界面、选路用）。
-- 关闭码：4011 重复的链路、4012 断开了互联、4013 发不过来（发送队列满，8192 条）、1001 hub 停机。
+- `GET /api/v1/peer`: WebSocket, TLS port only (plaintext always returns 403 `tls_required`, even on loopback; addresses in `mesh.plaintext.allow` are exempt, see "Plaintext links"), pinned by `fp`; `Authorization: Bearer <peer credential signed for me by the other hub>`;
+  permessage-deflate. Only paired hubs can open it.
+- The link runs the node protocol's JSON-line RPC (`internal/rpc`) and streams (`internal/streams`):
+  - One-way: `rec` (record), `stream.data` / `stream.ack` / `stream.close` (streams);
+  - Calls: `hello {hub_id,name,version,epoch}` (each side calls once and verifies hub_id), `stream.open {id}`, `unpair`,
+    `relay {to,from,ttl,method,params}` (a call forwarded to a particular group member: `creds.import`, `creds.revoked`, `pair.code`, see below).
+  - HTTP/1.1 runs on streams: App requests forwarded by members to the primary, and node streams opened by the primary via members (`peer_http.go`, `peer_node.go`). The peer has an `http.Server` accepting only these streams
+    (no listening socket), so these requests can only come from authenticated links.
+- **One link per pair of hubs**: both dial. The lower hub_id dials immediately; the higher waits 0.5–2 seconds each time. If both connect, keep the one dialed by the lower hub_id and close the other with 4011.
+- Heartbeat and reconnect follow jarvis-link: both sides ping every 10 seconds, disconnect after 5 seconds without pong; exponential backoff from 1 second to at most 1 minute, randomized from half to the full delay; credentials rejected (401 / 403 / 4012) wait 5 minutes.
+  These are configured values, not measured. Ping round-trip time is the link RTT (used in admin UI and path selection).
+- Close codes: 4011 duplicate link, 4012 unpaired, 4013 cannot send (send queue full, 8192 messages), 1001 hub shutdown.
 
-## 记录和路由
+## Records and routing
 
-每台 hub 把自己的情况做成一条**记录**（`hubRecord`，`mesh_view.go`）在组里泛洪：hub_id、名字、版本、启动时刻（epoch）和序号（rev）、
-TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT）、**它认的中心和任期**、hub.json 里的每台电脑（本机 id、给中心用的配置——
-启动器、Claude / Codex 的设置，不带 ssh 主机、tailcat 地址、连接器地址和凭据——、它的路现在能不能用 `avail`、它那一段的 RTT）。
+Each hub floods a **record** of itself (`hubRecord`, `mesh_view.go`) through the group: hub_id, name, version, start time (epoch), sequence (rev),
+TLS port, fingerprint, https candidates, **connected links** (peer hub_id and RTT), **its recognized primary and term**, and each computer in hub.json (local id, config for the primary:
+launchers, Claude / Codex settings, but no ssh host, tailcat address, connector address or credentials; path availability `avail`, and RTT for its segment).
 
-- 新的（epoch、rev 更大）替换旧的，收到新的就转给别的链路；链路一上来就把手里所有的记录发给对方。自己的记录在机器、链路、地址、中心变了时
-  150 ms 内重建，内容不变就不发；另外每 30 秒重建一次。
-- **路由**：两边记录里都列了对方才算一条边；从自己出发按「跳数少 → RTT 和小 → 下一跳 hub_id 小」求最短路（`meshView.routes`）。不要求两两互联：
-  A–B、B–C 时 A 经 B 到 C（成员转给中心、中心经成员开流、`relay` 调用都按这个走，TTL 8，到 0 回 508）。
-- 记录存在 `settings` 的 `mesh.records`（最多一分钟一次，停机时也存），7 天没见过的不再用。
+- Newer (higher epoch, rev) replaces older; a new record is forwarded to other links. When a link opens, send all records held locally. Own records are rebuilt within 150 ms of machine, link, address, or primary changes;
+  unchanged contents are not sent. Also rebuilt every 30 seconds.
+- **Routing**: an edge exists only when both hubs' records list each other; from self, shortest paths prioritize "fewest hops → lowest total RTT → lowest next-hop hub_id" (`meshView.routes`). Full pairwise connectivity is unnecessary:
+  with A–B and B–C, A reaches C through B (member-to-primary forwarding, primary-to-member stream opening, and `relay` calls all use this route; TTL 8, returns 508 at 0).
+- Records are stored under `mesh.records` in `settings` (at most once per minute, and at shutdown); unseen for 7 days means no longer used.
 
-## 中心
+## Primary
 
-（`mesh_group.go`，状态在 Postgres 的 `mesh_group` 表，迁移 0191；按本 hub 的 hub_id 存，同一个库被别的 hub 用上（恢复备份、共用测试库）时不会把那台当成成员。）
+(`mesh_group.go`, state in Postgres `mesh_group`, migration 0191; stored by this hub's hub_id, so another hub using the same database (restored backup, shared test DB) is not mistaken for a member.)
 
-- 每台 hub 记**中心的 hub_id 和任期号**。一台 hub 从没配过对时自己是中心，任期 0。记录里带这两项，**任期大的说了算**，同一任期中心 hub_id 小的说了算
-  （只在两边同时改时才会遇到）；收到更大的就采纳并存库。
-- **加入组 = 贴对方的互联码**：A 贴 B 的码，A 把中心改成 B 所在组的中心（B 回包里说的），任期取两边见过的最大值再加一。A 的组里别的 hub
-  从 A 的记录里看到更大的任期，跟着并入。所以「贴码的一方连同它的组并入发码方的组」。
-- **设为中心**（管理界面「高级 › 互联 › 组里的 hub › 设为中心」、`POST /api/v1/admin/peers/{hub_id}/center`、`personad hub peer center [<hub_id>] [--confirm]`）：
-  任期加一、中心改成那台。只能设一台现在连得上的 hub（或自己）。原中心在线：它从记录里看到更大的任期，变成成员，把凭据交给新中心（下面「凭据」）。
-  **原中心连不上**：要确认（`{"confirm": true}`，否则 409 `confirm_required`），提示原中心回来后会变成成员。
-- **中心连不上时不自动换**：自动换会在网络分区时出现两台中心、状态各写一份。成员对 App 回 `503 {"code":"center_unreachable","center":{"hub_id","name"}}`，
-  管理界面顶部提示可以手动设为中心。
-- **旧中心回来**：它的任期小，链路一上来就从对方的记录里看到更大的任期，变成成员。重启的 hub 有对端时，启动后先等 10 秒或等到第一条链路上来
-  （`meshSettling`）才去连自己的电脑，免得一个已经被换下来的旧中心在知道之前抢一下。
-- **退出组**：断开后一个对端都不剩的 hub 自己当中心（任期加一）。组被断成两半、又都还有对端时，不含中心的那一半保持「中心连不上」，到管理界面手动设中心。
-- 角色变化时：变成员——停止驱动自己的电脑（run 循环停在那里，`parkReason`），断开自己服务着的 App 连接（它们重连后被转给中心），停用自己的服务（下面）；
-  变中心——断开正在转给旧中心的请求，开始连所有电脑。
+- Each hub records **the primary's hub_id and term number**. A never-paired hub is its own primary, term 0. Records carry both; **the higher term wins**, and at equal terms the lower primary hub_id wins
+  (only encountered with simultaneous changes); a higher value received is adopted and stored.
+- **Join a group = paste the other hub's linking code**: A pastes B's code, changes its primary to B's group's primary (reported in B's response), and takes the largest term seen by either side plus one. Other hubs in A's group
+  see the higher term in A's record and join too. Thus "the side pasting the code and its group join the code issuer's group".
+- **Set as primary** (admin UI **Advanced › Linked hubs › Hubs in the group › Set as primary**, `POST /api/v1/admin/peers/{hub_id}/center`, `personad hub peer center [<hub_id>] [--confirm]`):
+  increment the term and make that hub primary. Only a currently reachable hub (or self) can be selected. If the former primary is online, it sees the higher term in records, becomes a member, and hands credentials to the new primary ("Credentials" below).
+  **Former primary unreachable**: confirmation required (`{"confirm": true}`, otherwise 409 `confirm_required`), explaining that the old primary becomes a member when it returns.
+- **No automatic switch when the primary is unreachable**: automatic switching could create two primaries during a network partition, each writing separate state. Members return `503 {"code":"center_unreachable","center":{"hub_id","name"}}` to Apps;
+  the admin UI's top banner offers a manual switch.
+- **Old primary returns**: its term is lower; when a link opens it sees the higher term in the peer's records and becomes a member. A restarting hub with peers waits 10 seconds or until the first link opens after startup
+  (`meshSettling`) before connecting its own computers, so an already-replaced old primary does not briefly grab them before learning the change.
+- **Leave the group**: a hub with no peers after disconnecting becomes its own primary (term incremented). If the group splits in two and both halves still have peers, the half without the primary stays "Primary unreachable" until a primary is manually selected in the admin UI.
+- On role changes: becoming a member stops driving its own computers (the run loop parks, `parkReason`), disconnects App connections it was serving (reconnects are forwarded to the primary), and disables its services (below);
+  becoming primary disconnects requests being forwarded to the old primary and begins connecting all computers.
 
-## 成员转发 App
+## Members forward Apps
 
-（`peer_http.go`。）
+(`peer_http.go`.)
 
-- 成员收到的 `/api/` 请求（含 WebSocket）除了它自己回答的，**原样**（`Authorization` 也在）经链路转给中心（多跳就一跳一跳转）。
-  成员自己回答的：`/api/v1/health`、jarvis-link 的 `/api/v1/link`、`/api/v1/link/stream`、hub 之间的 `/api/v1/peer`、`/api/v1/peer/pair`、
-  管理界面 `/api/v1/admin/…`、`/api/v1/auth/pair-codes`（`personad hub pair`），以及**它自己的 link 电脑**拿配对码换凭据的 `/api/v1/auth/tokens`
-  （码是它发的、带机器 id）。网页静态文件和 `/admin` 页面不转。
-- **来源判断在成员这一端做完**：明文从公网来的已经在成员的 gate 里拒掉；成员把结论放进 `X-Jarvis-Peer-Source: <lan|public> <客户端地址> <tls|plain>`，
-  中心照单全收（链路两端是配过对的，这个头只能从链路上来，外面带来的同名头和 `X-Forwarded-For` 在转发前去掉）。中心拿这个地址当 `RemoteAddr`，
-  所以日志、来源相关的判断都按真实客户端走；回环在成员那边算局域网（主 token 只认中心自己机器上的回环）。
-- **限流在成员**：被封的来源成员直接 429；中心回 401 时成员给这个来源记一次失败（`codeWriter`）。中心对转来的请求不再计数，避免两边重复计。
-- 中心换了：成员断开正在转的请求（WebSocket 也断），App 重连后到新的中心。
-- **App 配对**：成员上的 `personad hub pair` 经链路请中心生成配对码（`pair.code`），二维码里是中心的地址，App 直接配对到中心。
-  成员管理界面的「设备」页回 409 `member_hub`，指向中心的管理界面。
+- `/api/` requests received by a member (including WebSocket), except those it answers itself, are forwarded **unchanged** (including `Authorization`) over the link to the primary (hop by hop for multi-hop routes).
+  Answered locally: `/api/v1/health`, jarvis-link's `/api/v1/link`, `/api/v1/link/stream`, hub-to-hub `/api/v1/peer`, `/api/v1/peer/pair`,
+  admin `/api/v1/admin/…`, `/api/v1/auth/pair-codes` (`personad hub pair`), and `/api/v1/auth/tokens` for **its own link computers** exchanging pairing codes for credentials
+  (codes it issued, carrying a machine id). Web static files and `/admin` pages are not forwarded.
+- **Source classification finishes at the member**: public plaintext requests are already rejected by its gate; the member puts the result in `X-Jarvis-Peer-Source: <lan|public> <client address> <tls|plain>`,
+  trusted by the primary (the link endpoints are paired, and the header can only arrive over the link; same-name incoming headers and `X-Forwarded-For` are stripped before forwarding). The primary uses this address as `RemoteAddr`,
+  so logs and source-dependent checks use the real client. Loopback at the member counts as LAN (the main token accepts only loopback on the primary's own machine).
+- **Rate limiting is at the member**: blocked sources receive 429 directly; when the primary returns 401, the member records one failure for that source (`codeWriter`). The primary does not count forwarded requests again, avoiding double counting.
+- Primary changes: members disconnect requests being forwarded (including WebSocket), and Apps reconnect to the new primary.
+- **App pairing**: `personad hub pair` on a member asks the primary for a pairing code over the link (`pair.code`); the QR code carries the primary's address, and the App pairs directly to it.
+  The member admin UI's "Devices" page returns 409 `member_hub`, pointing to the primary's admin UI.
 
-## 凭据和推送
+## Credentials and push
 
-- **凭据交给中心**：成员一旦能到中心（每个中心、任期一次，失败 30 秒后再试），把自己所有有效的 App 凭据（role `full` / `answer`：id、名字、
-  kind、role、hash、创建时间，不含凭据本身）交给中心（`creds.import`），中心按 id / hash 去重后存进自己的 `device_tokens`。之后只有中心认凭据；
-  已经配对在成员上的手机不用重新配对。jarvis-link 和互联的凭据留在各自的 hub（它们只开那台 hub 的链路）。
-- 换中心时旧中心同样把它的凭据（包括当初成员交给它的）交给新中心。
-- **撤销跟到每一份副本**：每台 hub 的库里各有一份凭据，撤销只改一台的话，它成为中心或退出组后那份副本还能用。所以 hub 把已撤销的 App 凭据
-  （`creds.revoked`，整份列表）发给组里能连上的每台 hub：撤销时发，一台 hub 变得能连上时发，每 5 分钟再发一遍（补上丢了的消息）。
-  没见过的凭据也记一条已撤销的（`kind: tombstone`，不进设备列表），之后别的 hub 交接过来的旧副本（`creds.import`，按 id / hash 去重）带不活它。
-  只有 `full` / `answer` 会被这样撤销。在任何一台撤销就是整组撤销：成员退出组期间撤销的凭据，重新加入后在中心也失效。
-- **推送只有中心发**：设备的推送注册经成员转到中心，推送 payload 的 `hub_id` 是中心的。成员的实时活动（Live Activity）不再推。
+- **Credentials handed to the primary**: once a member can reach the primary (once per primary and term; failures retry after 30 seconds), it hands over all its valid App credentials (role `full` / `answer`: id, name,
+  kind, role, hash, creation time, not the credential itself) via `creds.import`. The primary deduplicates by id / hash and stores them in its `device_tokens`. Afterwards only the primary authenticates credentials;
+  phones already paired to a member need not re-pair. jarvis-link and mesh credentials remain on their respective hubs (they open only that hub's links).
+- On primary changes, the former primary likewise hands its credentials (including those members originally handed it) to the new primary.
+- **Revocations reach every copy**: each hub database has a credential copy; revoking only on one would leave another copy usable when that hub becomes primary or leaves the group. So the hub sends revoked App credentials
+  (`creds.revoked`, the entire list) to every reachable hub in the group: on revocation, when a hub becomes reachable, and every 5 minutes (to fill in lost messages).
+  Previously unseen credentials also get a revoked record (`kind: tombstone`, excluded from the device list), so an old copy handed over later (`creds.import`, deduplicated by id / hash) cannot revive it.
+  Only `full` / `answer` are revoked this way. Revocation on any hub applies group-wide: credentials revoked while a member was outside the group also become invalid on the primary when it rejoins.
+- **Only the primary sends push**: device push registration is forwarded by members to the primary, and push payload `hub_id` is the primary's. Members stop pushing Live Activities.
 
-## 成员停用的服务
+## Services disabled on members
 
-成员的数据都留着，退出组（自己当中心）后恢复：定时任务（`scheduleLoop` 不跑到期的任务）、收件箱的收集、飞书事件和 `/agent`、知识库的归档 / 压缩 /
-项目刷新、公司圈抓取、实时活动的推送。成员的助手主对话、知识库这些 hub 级的数据不合并进中心（App 看到的是中心的）。
+Members retain their data and resume after leaving the group (becoming their own primary): scheduled tasks (`scheduleLoop` does not run due tasks), Inbox collection, Lark events and `/agent`, knowledge base archiving / compression /
+project refresh, Moments fetching, and Live Activity push. Member hub-level data such as the assistant's main chat and knowledge base are not merged into the primary (the App sees the primary's data).
 
-## 经成员的路（node 流）
+## Paths via members (node streams)
 
-（`peer_node.go`。2026-11-04 起两头的电脑都是各自管理者的（[machines.md](machines.md)「谁连电脑」）：中心的管理者经中心 hub 要这条流
-（`GET /api/v1/bus/relay?hub=<成员>&machine=<id>`），成员 hub 收到后交给自己的管理者去开（`devices.accept` kind `node`），下面「hub」打开 node 的都是那台的管理者。）
-中心连一台只在成员 hub.json 里的电脑（或者自己也有、但这时成员那条更好）：经链路发一个 HTTP 升级请求
-`GET /api/v1/peer/node`，头 `Upgrade: jarvis-node`、`X-Jarvis-Peer-Node: <成员 hub_id>/<它的机器 id>`、`X-Jarvis-Peer-From: <中心>`，一跳一跳转到那台成员；
-成员核对请求来自它的中心、自己是成员、hub.json 里有这台，按 hub.json 的方式打开 node（本机 node、ssh、tailcat、这台的 jarvis-link、连接器），
-打开了才回 `101 Switching Protocols`，从此两边原样拷字节；打不开回 502，`error` 是原因（中心在那台机器上显示它）。中心在这条字节流上跑 node 协议，和别的路一样。成员自己不驱动这台电脑。
+(`peer_node.go`. Since 2026-11-04, the computers at each end belong to their respective managers ([machines.md](machines.md) ("Who connects computers")): the primary's manager asks the primary hub for this stream
+(`GET /api/v1/bus/relay?hub=<member>&machine=<id>`); the member hub hands it to its own manager to open (`devices.accept` kind `node`). References below to a "hub" opening a node mean that hub's manager.)
+When the primary connects a computer listed only in a member's hub.json (or also listed locally, but the member's path is currently better), it sends an HTTP upgrade request over the link:
+`GET /api/v1/peer/node`, headers `Upgrade: jarvis-node`, `X-Jarvis-Peer-Node: <member hub_id>/<its machine id>`, `X-Jarvis-Peer-From: <primary>`, forwarded hop by hop to that member.
+The member checks that the request comes from its primary, it is a member, and its hub.json lists the machine, then opens the node using hub.json's method (local node, ssh, tailcat, that machine's jarvis-link, connector).
+Only after opening does it return `101 Switching Protocols`; bytes are then copied unchanged in both directions. Failure returns 502, with `error` holding the reason (displayed by the primary on that machine). The primary runs the node protocol on this byte stream, just as on other paths. The member does not drive the computer itself.
 
-## 一台电脑多条路
+## Multiple paths to one computer
 
-（2026-11-04 起在连电脑的管理者里：`server/internal/devices/paths.go`、`conn.go`；hub 在 `devices.config` 的 `mesh` 里给它组里的样子——这台是不是成员、
-别的 hub 到不到得了和多远、成员记录里的电脑——它去重、选路、换路，报回每台的路（`devices.state`），hub 的记录里自己的电脑能不能到也用它报的。）
+(Since 2026-11-04, in the manager connecting computers: `server/internal/devices/paths.go`, `conn.go`. The hub supplies the group's view in `mesh` of `devices.config`: whether this hub is a member,
+which other hubs are reachable and how far away, and computers in member records. The manager deduplicates, selects, and switches paths, reports each machine's paths (`devices.state`), and the hub also uses its report for local-computer availability in records.)
 
-- **路**：中心 hub.json 里的每一项是一条路（`local` / `service` / `link` / `ssh` / `tailcat`，`ssh` 加 `tailcat_addr` 时先 ssh 再 tailcat 还是一条路），
-  每台成员记录里的每台电脑是一条「经成员」的路（`hub`）。
-- **去重**：一条路连上后 `node.info` 说了它到的是哪台（`machine_uid`），记在 `settings` 的 `mesh.path_uids`（路 → uid）。uid 相同的路合成**一台机器**；
-  uid 还不知道的路自己算一台（第一次连上前没法知道：两条都去连会互相顶一次，之后就知道了）。旧 node 没有 uid：不合并。
-  连上后发现 uid 变了（成员把这个 id 改指另一台电脑了）就重新分组，那条路换到它真正到的那台。
-- **机器 id**：有中心 hub.json 里的路的，用中心的配置 id（几条都在中心时用 hub.json 里靠前的那条，后面那条的 id 也能用，指向同一台）；
-  只在成员上配的，用成员的配置 id，和已有的撞名时加 `@<成员名字的 slug>`（再撞加成员 hub_id 前 6 位、再加数字）。给成员电脑起的 id 存在
-  `settings` 的 `mesh.machine_ids`，重启不变。
-- **选路**：本机 > 直接（service / link / ssh / tailcat）> 经成员；同类里有 RTT 的先、RTT 小的先。能不能用：link 要它的链路在、service 要连接器最近
-  一次 info 回答了（或还没问过）、经成员要那台成员连得上而且它说这条能用、ssh / tailcat 只有试了才知道。失败的路按次数退避（2 秒起翻倍、最长 1 分钟），
-  连满 1 分钟的断了以后只等 2 秒。
-- **粘性**：在用的路健康就不换。断了立刻选下一条能用的。别的路**明显更好**（类更好，或者同类 RTT 小三成以上而且至少小 5 ms）并且一直保持
-  `mesh.path_switch_seconds`（默认 60 秒）才换：先经新路连上、node 回了 `node.info`，再放掉旧的（常驻 node 新的 attach 顶掉旧的，旧连接自己结束），
-  中间 App 看不到离线（交互、终端按重连处理：可恢复的交互由 hook 接回来，终端提示重新订阅）。换不成功就给那条路记一次失败，接着用原来的。
-- **RTT**：在用的路每 30 秒对 node `ping` 一次；没在用的：service 是连接器 info 的往返，link 是 jarvis-link 链路的 ping，经成员是到那台成员的链路 RTT
-  加上成员报的它那一段。都是测得的单次值、没取分位，只用来比大小，没在别处引用。
-- **给 App 的字段**（[protocol.md](protocol.md)「数据类型」）：`hub_id` / `hub_name` 是这台电脑现在经过的 hub（直接连的是中心自己，经成员的是那台成员）；
-  `route {via: local|service|link|ssh|tailcat|hub, hops: 0|1, rtt_ms}`；不止一条路（或只能经成员）时多 `paths`：每条路
-  `{via, hub_id, ok, rtt_ms, active}`。
-- 管理界面「电脑」每台列出它的路；`GET /api/v1/admin/routes` 是调试用的全貌（每台 hub 怎么到、每台电脑的每条路）。
+- **Path**: each entry in the primary's hub.json is a path (`local` / `service` / `link` / `ssh` / `tailcat`; `ssh` with `tailcat_addr` remains one path, trying ssh then tailcat).
+  Each computer in each member record is a "via member" path (`hub`).
+- **Deduplication**: after a path connects, `node.info` identifies the computer reached (`machine_uid`), remembered in `mesh.path_uids` in `settings` (path → uid). Paths with the same uid form **one machine**;
+  paths with unknown uid count separately (unknown until first connection: both connect and bump each other once, then it is known). Older nodes without uid are not merged.
+  If the uid changes on connection (a member changed this id to another computer), regroup and assign the path to the computer it actually reaches.
+- **Machine id**: if a path is listed in the primary's hub.json, use its config id (with several there, use the first entry; later entries' ids also work and point to the same machine);
+  if configured only on a member, use that member's config id, appending `@<slug of member name>` on collision (then the member hub_id's first 6 characters, then a number). Member-computer ids live in
+  `mesh.machine_ids` in `settings` and survive restart.
+- **Path selection**: local > direct (service / link / ssh / tailcat) > via member; within a class, paths with RTT first, then lower RTT. Availability: link needs its connection; service needs the connector's latest
+  info response (or no probe yet); via member needs a reachable member reporting the path available; ssh / tailcat are known only after trying. Failed paths back off by failure count (doubling from 2 seconds to 1 minute),
+  but a connection lasting a full minute waits only 2 seconds after it drops.
+- **Stickiness**: keep a healthy active path. On failure, select the next usable path immediately. Switch only if another path is **clearly better** (better class, or same class with RTT over 30% lower and at least 5 ms lower) and stays so for
+  `mesh.path_switch_seconds` (default 60 seconds): connect via the new path, receive `node.info`, then release the old one (the resident node's new attach displaces the old, which ends itself).
+  The App never sees offline in between (interactions and terminals follow reconnect behavior: resumable interactions are reclaimed by hooks, terminals prompt to resubscribe). If switching fails, count a failure for that path and retain the original.
+- **RTT**: ping the node on the active path every 30 seconds. Inactive paths: service uses connector-info round-trip time; link uses jarvis-link connection ping; via member uses link RTT to that member
+  plus the member's reported segment. These are measured single values, not percentiles, used only for comparison and not cited elsewhere.
+- **Fields for Apps** ([protocol.md](protocol.md) ("Data types")): `hub_id` / `hub_name` identify the hub currently used to reach this computer (the primary for direct connections, that member for member routes);
+  `route {via: local|service|link|ssh|tailcat|hub, hops: 0|1, rtt_ms}`; with more than one path (or only via member), add `paths`: each path is
+  `{via, hub_id, ok, rtt_ms, active}`.
+- The admin UI's "Computers" lists each machine's paths; `GET /api/v1/admin/routes` gives the full debug view (routes to every hub and every path to every computer).
 
-## kind service：hub 来连
+## kind service: Hub connects
 
-（`service.go`；连接器那一侧见 [link.md](link.md)「被动模式」。）
+(`service.go`; connector side in [link.md](link.md) ("Passive mode").)
 
-- hub.json：`{"id":"example-workstation","name":"开发机","kind":"service","address":"<主机>:18663","proxy":"socks5://<主机>:1080"}`，`proxy` 可选。
-  连接器的指纹和凭据不在 hub.json，在 Postgres 的 `connector_credentials`（迁移 0191）：凭据用 `~/.persona/secret.key` AES-GCM 封好再存，和模型供应商的 key、
-  邮箱凭据同一套做法。
-- **配对**：电脑上 `jarvis-link pair --listen`（或安装器 `--node --listen`、菜单栏「让 hub 来连」）打印 `jarvis://connector?addr=…&fp=…&code=…`；
-  管理界面「电脑 › 添加电脑 › hub 来连」粘贴（可以改地址、填代理）。hub 用 `link.ParseConnectorLink` 解析，按 `fp` 钉扎（TLS 1.2+、ALPN http/1.1、
-  只比 SPKI 指纹不验名字），按链接里的地址顺序试，`POST /api/v1/connector/pair {code, token, machine, hub_id, hub_name}`：凭据是 hub 生成的
-  `jc_` + 64 位十六进制，连接器只存 hash。成功才写 hub.json，机器马上开始连，不用重启。码错 / 过期 401：「配对码不对…」；钉扎不符：报错，什么都不发。
-- **连**：`GET /api/v1/connector/stream`（WebSocket，`Authorization: Bearer`，permessage-deflate），流上就是 node 的字节；hub 每 10 秒 ping、5 秒没 pong 断开（hub.json 的 `link` 可改，开流时经 `X-Persona-Ping` 告诉连接器，[link.md](link.md)「心跳」）。
-  503 `node_unavailable`：把连接器给的原因显示成这台的错误，照常退避。
-- **探测**：每 30 秒 `GET /api/v1/connector/info`（不 attach，不影响在用的连接），回答了而且 `machine` 是这台就算能用，往返时间就是这条路的 RTT；
-  每台 hub 都探自己 hub.json 里的连接器，成员把结果放进记录。探测或拨号在路上时流被 4002 关了、或者这台重新配对了，这次的结果作废
-  （#2960：晚到的 200 不能清掉「重新配对」，旧凭据晚到的 401 不能丢掉新凭据、让新配对等 5 分钟）。
-- **退避**：401（连接器不认凭据）5 分钟内不再拨也不再探——连接器按来源计失败，一分钟 10 次封 15 分钟，hub 不能把自己的地址封掉；
-  429 按 `Retry-After` 等；流被 **4002** 关（连接器被配给了别的 hub）：标成「连接器已经配对给了别的 hub…重新配对」，**不再试**，直到在管理界面重新配对
-  （`POST /api/v1/admin/machines/{id}/connector`）；**1001**（连接器停了或改回主动模式）照常退避重连。
-  连接器每次配对都用 4002 关掉旧凭据的流，在这台 hub 上重新配对也一样：只有当前这次配对的流收到 4002 才算；旧配对的流的 4002 在重新配对之后才读到，
-  不清新凭据、不标「重新配对」（#3172）。
-- **代理**：`proxy` 是 `socks5://[user:pass@]host:port`（`golang.org/x/net/proxy`），拨号、配对、探测都经它；管理界面显示时去掉密码。
+- hub.json: `{"id":"example-workstation","name":"Dev machine","kind":"service","address":"<host>:18663","proxy":"socks5://<host>:1080"}`, with optional `proxy`.
+  Connector fingerprints and credentials are in Postgres `connector_credentials` (migration 0191), not hub.json: credentials are sealed with `~/.persona/secret.key` AES-GCM before storage, like model-provider keys
+  and mail credentials.
+- **Pairing**: on the computer, `jarvis-link pair --listen` (or installer `--node --listen`, menu bar "Let hub connect") prints `jarvis://connector?addr=…&fp=…&code=…`;
+  paste under **Computers › Add computer › Hub connects** in the admin UI (address editable, proxy optional). The hub parses with `link.ParseConnectorLink`, pins by `fp` (TLS 1.2+, ALPN http/1.1,
+  SPKI fingerprint only, no name verification), tries addresses in link order, and sends `POST /api/v1/connector/pair {code, token, machine, hub_id, hub_name}`. The hub generates the credential:
+  `jc_` + 64 hex digits; the connector stores only its hash. Write hub.json only on success; the machine connects immediately without restart. Wrong / expired code, 401: "Invalid pairing code…"; pin mismatch: error, nothing sent.
+- **Connect**: `GET /api/v1/connector/stream` (WebSocket, `Authorization: Bearer`, permessage-deflate); the stream carries node bytes. The hub pings every 10 seconds, disconnects after 5 seconds without pong (configurable with hub.json `link`, passed to the connector at stream open in `X-Persona-Ping`, [link.md](link.md) ("Heartbeat")).
+  503 `node_unavailable`: show the connector's reason as the machine error and back off normally.
+- **Probe**: every 30 seconds, `GET /api/v1/connector/info` (no attach, no effect on the active connection); a response whose `machine` matches means available, and the round-trip time is that path's RTT.
+  Each hub probes connectors in its own hub.json; members put results in records. If a stream is closed with 4002 while a probe or dial is in flight, or the computer is re-paired, discard that result
+  (#2960: a late 200 must not clear "Re-pair", and a late 401 for old credentials must not discard new credentials and make a fresh pairing wait 5 minutes).
+- **Backoff**: 401 (connector rejects credentials) suppresses dials and probes for 5 minutes: the connector counts failures by source and blocks for 15 minutes after 10 in a minute, so the hub must not get its own address blocked;
+  429 follows `Retry-After`; stream closed with **4002** (connector paired to another hub): mark "Connector already paired to another hub… re-pair" and **stop trying** until re-paired in the admin UI
+  (`POST /api/v1/admin/machines/{id}/connector`); **1001** (connector stopped or switched back to active mode) uses normal reconnect backoff.
+  Every connector pairing closes old-credential streams with 4002, including re-pairing to this hub: only 4002 on the current pairing's stream counts; if an old pairing's 4002 is read after re-pairing,
+  do not clear the new credential or mark "Re-pair" (#3172).
+- **Proxy**: `proxy` is `socks5://[user:pass@]host:port` (`golang.org/x/net/proxy`); dialing, pairing, and probing all use it. The admin UI strips the password for display.
 
-## SSH / tailcat：兼容
+## SSH / tailcat: compatibility
 
-- hub.json 里已有的 kind `ssh` / `tailcat` 照常能用；管理界面不再提供添加（`POST /api/v1/admin/machines` 对 ssh / tailcat 回 400 `ssh_unsupported`），
-  电脑列表标「ssh 已不推荐」。以后再删。
-- link / service / 经成员的电脑，「重新部署」改成提示到那台电脑上更新 node 服务（经连接器推更新是 #284）。
-- **从 ssh 迁到 service（id 不变）**：
-  1. 在那台电脑上装 node 服务、让 hub 来连：`install.sh --node --listen`（Linux）或 Persona Link 菜单栏 App，`jarvis-link pair --listen` 拿到链接；
-  2. 把 hub.json 里这台的 `kind` 改成 `service`，`ssh_host` 换成 `"address": "<主机>:18663"`，重启 hub；
-  3. 管理界面这台显示「连接器还没配对…重新配对」，点「重新配对」粘贴链接。
-  不在乎 id 变的话更简单：管理界面「添加电脑 › hub 来连」用一个新 id 加上，两条路到的是同一台电脑会自动合成一台（id 用 hub.json 里靠前的那条），
-  确认能连后删掉 ssh 那条、重启。
-- **迁到 link**（电脑来连）：「添加电脑 › 电脑来连」用新 id 加，或把 kind 改成 `link`、删掉 `ssh_host` 后用 `personad hub pair --machine <id>` 配对。
+- Existing kind `ssh` / `tailcat` entries in hub.json still work; the admin UI no longer adds them (`POST /api/v1/admin/machines` returns 400 `ssh_unsupported` for ssh / tailcat),
+  and the computer list marks them "ssh is no longer recommended". Removal comes later.
+- For link / service / via-member computers, "Redeploy" now instructs you to update the node service on that computer (pushing updates through the connector is #284).
+- **Migrate ssh to service (same id)**:
+  1. Install the node service there and let the hub connect: `install.sh --node --listen` (Linux) or the Persona Link menu bar App; get a link from `jarvis-link pair --listen`;
+  2. change this machine's `kind` in hub.json to `service`, replace `ssh_host` with `"address": "<host>:18663"`, restart the hub;
+  3. the admin UI shows "Connector not paired… re-pair"; tap "Re-pair" and paste the link.
+  If changing the id is fine, it is simpler: add a new id under **Add computer › Hub connects**. Two paths to the same computer merge automatically (using the first id in hub.json);
+  once connected, delete the ssh entry and restart.
+- **Migrate to link** (Computer connects): add a new id under **Add computer › Computer connects**, or change kind to `link`, remove `ssh_host`, and pair with `personad hub pair --machine <id>`.
 
-## 发现（mDNS）
+## Discovery (mDNS)
 
-- 有 TLS 的 hub 用 mDNS 广播 `_jarvis-hub._tcp`（实例名是 hub_id），TXT 里只有 `hub_id`、`name`、`tls`（TLS 端口）、`fp`、`v`（版本），没有任何凭据；
-  同时浏览同一类型，管理界面「发现的 hub」列出没配过对的（10 分钟内听到过的）。发现只是列出来，不自动互联。
-- `internal/mdns`：只用标准库和 `golang.org/x/net`，和系统的 mDNSResponder / avahi 共用 5353；只实现了 RFC 6762 / 6763 的一个子集。不在点对点接口上收发。
-- Docker 的桥接网络里组播出不去，只能「添加 hub」填地址（`network_mode: host` 时可以）。关掉：hub.json `mesh.discovery: false`。
-- TLS 只监听回环（`127.0.0.1` / `::1` / `localhost`）的 hub 不广播，只收听：局域网里没人连得到它，广播出去的只会是连不上的地址。
-- 手动添加先核对：`POST /api/v1/admin/peers/probe {"address"}` 只请求对方的 `GET /api/v1/health`（不跟随重定向、5 秒、响应最多 64 KB）。
+- TLS-enabled hubs advertise `_jarvis-hub._tcp` over mDNS (instance name hub_id); TXT contains only `hub_id`, `name`, `tls` (TLS port), `fp`, `v` (version), never credentials.
+  They also browse that type; the admin UI's "Discovered hubs" lists unpaired hubs heard within 10 minutes. Discovery only lists them, never links automatically.
+- `internal/mdns`: only the standard library and `golang.org/x/net`, sharing 5353 with system mDNSResponder / avahi; implements only a subset of RFC 6762 / 6763. No sending or receiving on point-to-point interfaces.
+- Docker bridge networks cannot send multicast out, so use "Add hub" and enter an address (`network_mode: host` works). Disable with hub.json `mesh.discovery: false`.
+- Hubs whose TLS listener is loopback-only (`127.0.0.1` / `::1` / `localhost`) listen but do not advertise: nobody on the LAN can reach them, so advertised addresses would be unusable.
+- Probe before manual addition: `POST /api/v1/admin/peers/probe {"address"}` only requests the peer's `GET /api/v1/health` (no redirects, 5 seconds, response at most 64 KB).
 
-## 管理接口和命令行
+## Admin APIs and CLI
 
-管理界面（[admin.md](admin.md)）：
+Admin UI ([admin.md](admin.md)):
 
-| 接口 | 作用 |
+| API | Purpose |
 | --- | --- |
-| `GET /api/v1/admin/mesh` | `{"role":"center"\|"member","center":{"hub_id","name","online"},"term":3,"hubs":[{"hub_id","name","role","online","self","paired"}]}`：`hubs` 是组里每台（含自己） |
-| `GET /api/v1/admin/peers` | 配过对的 hub（每项 `role`、`state`、`rtt_ms`、`machines`…）和局域网里发现的 |
-| `POST /api/v1/admin/peers/{hub_id}/center` | 设为中心（hub_id 可以是自己）；`{"confirm":true}`：原中心连不上时；409 `confirm_required` / `unreachable`，404 `not_in_group` |
-| `POST /api/v1/admin/peers/code`、`POST /api/v1/admin/peers`、`POST …/probe`、`DELETE …/{hub_id}` | 生成互联码、用对方的码加入、核对地址、断开 |
-| `GET /api/v1/admin/routes` | 调试：每台 hub 怎么到，每台电脑的每条路 |
-| `GET /api/v1/admin/machines` | 每台多 `hub_id`、`paths`、`address`、`proxy`；kind `hub` 是只在成员上配的电脑（不能删） |
-| `POST /api/v1/admin/machines` | kind `link`（电脑来连）或 `service`（`pair_link`、可选 `address`、`proxy`）；加完立刻开始连 |
-| `POST /api/v1/admin/machines/{id}/connector` | service 电脑重新配对：`{"pair_link","address"?}` |
+| `GET /api/v1/admin/mesh` | `{"role":"center"\|"member","center":{"hub_id","name","online"},"term":3,"hubs":[{"hub_id","name","role","online","self","paired"}]}`: `hubs` contains every hub in the group, including self |
+| `GET /api/v1/admin/peers` | Paired hubs (each with `role`, `state`, `rtt_ms`, `machines`…) and LAN discoveries |
+| `POST /api/v1/admin/peers/{hub_id}/center` | Set as primary (hub_id may be self); `{"confirm":true}` when the former primary is unreachable; 409 `confirm_required` / `unreachable`, 404 `not_in_group` |
+| `POST /api/v1/admin/peers/code`, `POST /api/v1/admin/peers`, `POST …/probe`, `DELETE …/{hub_id}` | Generate a linking code, join using a peer's code, probe an address, disconnect |
+| `GET /api/v1/admin/routes` | Debug: route to every hub and every path to every computer |
+| `GET /api/v1/admin/machines` | Adds `hub_id`, `paths`, `address`, `proxy` per machine; kind `hub` means a computer configured only on a member (cannot delete) |
+| `POST /api/v1/admin/machines` | kind `link` (Computer connects) or `service` (`pair_link`, optional `address`, `proxy`); starts connecting immediately after adding |
+| `POST /api/v1/admin/machines/{id}/connector` | Re-pair a service computer: `{"pair_link","address"?}` |
 
-命令行在 hub 机器上走同一套接口（前缀 `/api/v1/admin/cli/`，只收回环 + 主 token）：`personad hub pair --peer`、`personad hub peer add '<互联码>'|-`、
-`personad hub peer list`（先说这台是中心还是成员）、`personad hub peer remove <hub_id>`、`personad hub peer center [<hub_id>] [--confirm]`。
-NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub …`。
+The CLI on the hub machine uses the same APIs (prefix `/api/v1/admin/cli/`, accepts only loopback + main token): `personad hub pair --peer`, `personad hub peer add '<linking code>'|-`,
+`personad hub peer list` (first reports whether this hub is primary or member), `personad hub peer remove <hub_id>`, `personad hub peer center [<hub_id>] [--confirm]`.
+Docker deployment on NAS: `sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub …`.
 
-## 明文链路（可选，#4514）
+## Plaintext links (optional, #4514)
 
-两台 hub 在可信的内网 / 专线里，或者中间有设备截断 TLS 时，可以让它们不走 TLS：在 hub.json 里列出允许明文互联的地址。默认关闭，
-没配 `mesh.plaintext.allow` 时和上面完全一样。代码在 `server/internal/hub/peer_plain.go`。
+For hubs on a trusted private network / dedicated line, or with a device terminating TLS between them, links can run without TLS: list allowed plaintext-link addresses in hub.json. Off by default;
+without `mesh.plaintext.allow`, behavior is exactly as above. Code in `server/internal/hub/peer_plain.go`.
 
 ```json
-{"mesh": {"plaintext": {"allow": ["192.0.2.0/24", "198.51.100.7"], "advertise": ["http://<这台 hub 的地址>:18660"]}}}
+{"mesh": {"plaintext": {"allow": ["192.0.2.0/24", "198.51.100.7"], "advertise": ["http://<this hub's address>:18660"]}}}
 ```
 
-- `allow`：每一项是下面一种（大小写不论）：
+- `allow`: each entry is one of the following (case-insensitive):
 
-  | 写法 | 意思 | 收（对方来连） | 拨（这台去连） |
+  | Syntax | Meaning | Inbound (peer connects) | Outbound (this hub connects) |
   | --- | --- | --- | --- |
-  | `*` | 所有地址，公网也算（启动时 WARNING） | ✓ | ✓ |
-  | `192.0.2.0/24`、`2001:db8::/32`、`192.0.2.7` | 网段、单个地址 | ✓ | ✓ |
-  | `192.0.2.*`、`198.51.*.*` | IPv4 通配，`*` 只能在末尾几段，等于对应网段 | ✓ | ✓ |
-  | `hub.example.com`、`*.example.com` | 主机名、域名通配（`*.` 匹配下面任意层的名字，不含它自己；`*.com` 这种不认） | ✗ | ✓ |
+  | `*` | All addresses, including public (WARNING at startup) | ✓ | ✓ |
+  | `192.0.2.0/24`, `2001:db8::/32`, `192.0.2.7` | Network, single address | ✓ | ✓ |
+  | `192.0.2.*`, `198.51.*.*` | IPv4 wildcard; `*` only in trailing segments, equivalent to the corresponding network | ✓ | ✓ |
+  | `hub.example.com`, `*.example.com` | Host name, domain wildcard (`*.` matches names at any depth below it, not the domain itself; forms such as `*.com` are rejected) | ✗ | ✓ |
 
-  名字只管拨号：连进来的连接只有地址没有名字，反查 DNS 对方想填什么都行。拨一个匹配名字规则的地址时，解析出来是哪就连哪
-  （等于信任了这个名字和 DNS 的回答）；不匹配名字规则的名字，解析出来的地址本身要在地址规则里。
+  Names control only outbound dialing: inbound connections have addresses, not names, and peers can put whatever they want in reverse DNS. Dialing an address matching a name rule uses whatever address DNS resolves
+  (trusting both the name and the DNS answer); for names not matching a name rule, the resolved address itself must match an address rule.
 
-  **只有这些地址之间**能用 `http://` / `ws://` 配对、建链路，两个方向都按它判断：
-  - 收：`POST /api/v1/peer/pair`、`GET /api/v1/peer` 的明文请求，来源地址在 `allow` 里才放行（gate 里公网明文的 403 对这两个路径也按它开口），
-    不在的照旧 403 `tls_required`——内网来的明文也一样，配对接口以前对内网明文不拦，现在一并收紧。容器网关（替所有人转发的地址）永远不算，
-    Docker 桥接网络里要收明文得开 `security.proxy_protocol` 拿到真实地址，或者只让对方拨这台、这台拨对方（一对 hub 有一个方向通就够了）。
-  - 拨：对端的 `http://` 候选只在目标在 `allow` 里时才拨（见上表）。`http://` 排在所有 `https://` 后面，
-    两种都通时用 TLS。
-  - 任何一项写错（`192.*.2.*`、`192.0.2` 这种），整个明文互联关掉，启动日志里说明。打开时启动日志打一条 WARNING。
-- `advertise`：别的 hub 明文连这台用的地址（`http://主机:端口`，不带路径），进互联码（最多 3 个，旧 hub 不认、自动跳过）和组里的记录
-  （`plain_endpoints`，单独一个字段）。**从不给 App**：hello 里的 `mesh` 只有 `https://`。没开 TLS 的 hub 会把自己的明文地址也带上。
-- **没开 TLS 的 hub** 配了 `allow` 也能互联：互联码里没有 `fp`、只有 `http://` 地址，双方只走明文。有 `https://` 地址却没有 `fp` 的码仍然算不完整。
-  管理界面的「互联」页现在还按「必须开 TLS」显示，没开 TLS 的 hub 用命令行 `personad hub pair --peer` / `personad hub peer add`。
-- 风险：明文链路上没有加密也没有指纹校验，互联凭据、成员转给中心的 App 请求（带 App 的凭据）、node 流都能被路径上的人看到和改掉，
-  拿到互联凭据就能冒充这台 hub 开链路。只用在你信得过路径上每一台设备的网络里；跨公网请用 TLS。
+  **Only between these addresses** can pairing and links use `http://` / `ws://`; both directions check it:
+  - Inbound: plaintext `POST /api/v1/peer/pair` and `GET /api/v1/peer` requests are allowed only when the source address is in `allow` (the gate's public-plaintext 403 also makes this exception for these two paths).
+    Otherwise 403 `tls_required`, including private-network plaintext: pairing previously allowed private-network plaintext, now tightened too. Container gateways (forwarding for everyone) never count;
+    receiving plaintext in Docker bridge mode requires `security.proxy_protocol` for the real address, or use only peer-to-self or self-to-peer dialing (one working direction is enough for a pair of hubs).
+  - Outbound: peer `http://` candidates are dialed only if the target is in `allow` (table above). All `http://` candidates rank after `https://`;
+    when both work, use TLS.
+  - Any invalid entry (such as `192.*.2.*`, `192.0.2`) disables plaintext linking entirely, with an explanation in startup logs. Enabling it logs a WARNING at startup.
+- `advertise`: addresses other hubs use to reach this one in plaintext (`http://host:port`, no path), included in linking codes (at most 3, skipped by old hubs that do not recognize them) and group records
+  (`plain_endpoints`, a separate field). **Never sent to Apps**: `mesh` in hello contains only `https://`. A hub without TLS also includes its plaintext addresses.
+- **A hub without TLS** can link with `allow` configured: its linking code has no `fp`, only `http://` addresses, and both sides use plaintext only. A code with `https://` addresses but no `fp` is still incomplete.
+  The admin UI's "Linked hubs" page still displays "TLS required"; without TLS, use CLI `personad hub pair --peer` / `personad hub peer add`.
+- Risk: plaintext links have neither encryption nor fingerprint checks; linking credentials, App requests forwarded by members to the primary (including App credentials), and node streams can all be viewed and changed by anyone on the path.
+  Possessing a linking credential allows impersonating this hub and opening a link. Use only on networks where you trust every device on the path; use TLS across the public internet.
 
-## 配置（hub.json）
+## Config (hub.json)
 
 ```json
 {"mesh": {"discovery": true, "path_switch_seconds": 60, "plaintext": {"allow": [], "advertise": []}}}
 ```
 
-都可以不写；`plaintext` 见「明文链路」。互联关系、中心和任期、连接器的凭据在 Postgres，不在 hub.json。第一版的 `mesh.takeover_seconds` 不再用（写着也无害）。
+All optional; `plaintext` is covered in "Plaintext links". Peer relationships, the primary and term, and connector credentials live in Postgres, not hub.json. The first version's `mesh.takeover_seconds` is unused (harmless if still present).
 
-## 安全边界
+## Security boundaries
 
-- 互联的信任是对等的：配过对的 hub 能经链路把任何 App 请求（带它说的来源）交给中心，能请成员开它电脑的 node 流（成员只认自己的中心）。
-  所以只和自己的 hub 互联；一台 hub 被拿下等于整组被拿下。
-- 链路只走 TLS 且按指纹钉扎（`mesh.plaintext.allow` 里的地址例外，那部分没有加密和钉扎，见「明文链路」），互联码一次性、10 分钟；凭据只存 hash（签出的）或加密（收到的）。
-- 转发用的 HTTP 服务器没有监听，只从已鉴权的链路上收流，所以 `X-Jarvis-Peer-*` 头不能从外面伪造；客户端带来的同名头在成员转发前被删掉或覆盖（`X-Jarvis-Peer-Node` 和 `-From` 删掉，`-Source` 和 `-Ttl` 覆盖）。
-  没升级的旧成员不删这两个头，所以组里每台 hub 都要升级：中心不开 `-From` 是自己的 node 流（合法的流只从中心发出，只有路由变化的瞬间才会弹回来，发起方退避后重试），但旧成员的下一跳不是中心时拦不住。
-- 成员不认凭据：中心是唯一的鉴权方，撤销在中心立刻生效（撤销时清查询缓存，和撤销同时进行的查询可能让它再用最多 30 秒），并同步到组里其他 hub（见「凭据和推送」）。
-- 连接器：hub 按配对时的指纹钉扎，凭据加密存库；连接器只开到常驻 node 的流。
-- mDNS 只广播公开的东西（这些本来就在不鉴权的 `/api/v1/health` 里）。
+- Linking trust is mutual: paired hubs can send any App request over the link to the primary (with their claimed source) and ask members to open node streams to their computers (members recognize only their own primary).
+  Link only your own hubs; compromising one compromises the whole group.
+- Links use TLS and fingerprint pinning (except addresses in `mesh.plaintext.allow`, which have neither encryption nor pinning, see "Plaintext links"); linking codes are single-use, 10 minutes; credentials are stored only as hashes (issued) or encrypted (received).
+- The forwarding HTTP server has no listener and accepts streams only from authenticated links, so `X-Jarvis-Peer-*` headers cannot be forged from outside; incoming same-name client headers are removed or overwritten before member forwarding (`X-Jarvis-Peer-Node` and `-From` removed, `-Source` and `-Ttl` overwritten).
+  Older members do not strip these two headers, so upgrade every hub: the primary refuses node streams with `-From` set to itself (valid streams originate only at the primary and can bounce back only during a route change; the origin retries after backoff), but an old member cannot block this when its next hop is not the primary.
+- Members do not authenticate credentials: the primary is the sole authority; revocations take effect there immediately (revocation clears the lookup cache; a concurrent lookup may allow up to 30 more seconds), and propagate to the other group hubs ("Credentials and push").
+- Connectors: the hub pins to the pairing fingerprint and stores credentials encrypted in the database; connectors open only streams to the resident node.
+- mDNS advertises only public information (already in unauthenticated `/api/v1/health`).
 
-## 怎么验证
+## Verification
 
-- 进程内端到端（`server/internal/hub/mesh_center_test.go`，两三台 hub：127.0.0.1、临时目录、TLS、进程内的假 node、内存里的 Store、
-  一个按 link.md「被动模式」行为的假连接器），不需要数据库：
-  - `TestCenterMemberForwardsEverything`：加入后只有一台中心；成员不驱动自己的电脑，中心经它连；App 连成员（用成员签的、已交给中心的凭据）
-    看到两台、订阅 items（补历史 + 实时）、发消息、读目录、成员电脑上的交互（推送到 App、经成员回答到 node）、终端接管；hello 是中心的、
-    `mesh.hubs` 标出中心；未知凭据经成员也是 401；管理接口的角色。
-  - `TestCenterUnreachable`：中心停了，成员回 503 `center_unreachable`（带中心名字），不自己当中心。
-  - `TestCenterSetAndOldCenterReturns`：两边都在时设为中心（任期加一）；中心停了，不确认不能换、确认后换；旧中心带着旧任期重启，变成员。
-  - `TestCenterOneComputerTwoPaths`：同一台常驻 node，中心直连一条、经成员一条：只出现一次、用直连；直连断了马上经成员（订阅照常）；
-    直连回来后过 `path_switch_seconds` 换回去一次，之后 3 秒内没有再连。
-  - `TestCenterTwoEntriesOneComputer`：中心 hub.json 里两项到同一台：一台机器、两条路，第二项的 id 指向同一台。
-  - `TestCenterServiceConnector`：没配对时说要配对；配对码错 / 指纹不对被拒；配对后凭据加密存库、经连接器在线、订阅；连接器配给别的 hub（4002）后
-    标成重新配对、不再探；库里的凭据不对时说连接器不认。
-  - 还有 `TestMeshDuplicateLink`、`TestMeshPairingCode`；`internal/db` 的 `TestPeersAndPeerCodes`、`TestMeshGroupAndConnectors`、
-    `TestAppTokensMoveToTheCenter`（要数据库）；`internal/mdns` 的单元测试。
-  - 跑：`cd server && go test -count=1 -p 1 -run 'TestCenter|TestMesh|TestPeer' ./internal/hub/`；`JARVIS_MESH_LOG=1` 打印各台 hub 的日志。
-- 本机两台真 hub 冒烟（2026-11-02，不碰真实的 `~/.persona`）：各自一个临时 HOME，hub.json 用不同的端口、`public.tls_listen` 和测试库里各自的 schema
-  （`database_url` 加 `&search_path=<schema>`），`public.advertise` 写 `https://localhost:<TLS 端口>`，`JARVIS_LOCAL_NODE=0`，`env -i` 起；
-  第三个临时 HOME 里跑真的 `personad node --attach` 和 `jarvis-link pair --listen 127.0.0.1:<端口>` + `jarvis-link run`。验证了：
-  管理接口粘贴连接器链接 → 配对、立刻经 service 在线；App 凭据列出这台、经它读目录；`personad hub pair --peer | personad hub peer add -` 后
-  `peer list` 一台中心一台成员；成员签的凭据交给中心后经成员、在中心都能用；成员上 `personad hub pair` 出的是中心的码；中心停了成员回 503；
-  `peer center --confirm` 换中心；旧中心重启后变成员，新中心经它（它的连接器）连那台电脑。无头 Chrome 看了中心的「电脑」「互联」、成员的「概览」「电脑」（深浅色）。
-  没在这台电脑上起 herdr / claude（会碰到真实环境），所以真连接器那条没测发消息和终端（进程内测试测了）。
+- In-process end to end (`server/internal/hub/mesh_center_test.go`, two or three hubs: 127.0.0.1, temp directories, TLS, in-process fake nodes, in-memory Store,
+  and a fake connector following link.md's "Passive mode" behavior), no database needed:
+  - `TestCenterMemberForwardsEverything`: exactly one primary after joining; members do not drive their computers, and the primary connects through them. An App connected to a member (using a member-issued credential already handed to the primary)
+    sees both machines, subscribes to items (history + live), sends messages, reads directories, handles interactions on the member's computer (pushed to the App, answered through the member to the node), and takes over the terminal; hello belongs to the primary,
+    `mesh.hubs` identifies it; unknown credentials still return 401 through a member; admin API roles.
+  - `TestCenterUnreachable`: primary stops, member returns 503 `center_unreachable` (with primary name), does not promote itself.
+  - `TestCenterSetAndOldCenterReturns`: set primary while both are online (term incremented); primary stops, switching requires confirmation; old primary restarts with an old term and becomes a member.
+  - `TestCenterOneComputerTwoPaths`: one resident node, one direct primary path and one via member: listed once, direct path used; direct fails, switches immediately to member (subscriptions continue);
+    once direct returns, switches back once after `path_switch_seconds`, with no further connection in the next 3 seconds.
+  - `TestCenterTwoEntriesOneComputer`: two primary hub.json entries reach the same computer: one machine, two paths, second id points to the same machine.
+  - `TestCenterServiceConnector`: unpaired prompts to pair; wrong code / fingerprint rejected; after pairing, credentials encrypted in DB, online through connector, subscriptions; connector paired to another hub (4002)
+    marks re-pair and stops probing; wrong database credentials show connector rejection.
+  - Also `TestMeshDuplicateLink`, `TestMeshPairingCode`; `internal/db`'s `TestPeersAndPeerCodes`, `TestMeshGroupAndConnectors`,
+    `TestAppTokensMoveToTheCenter` (require database); `internal/mdns` unit tests.
+  - Run: `cd server && go test -count=1 -p 1 -run 'TestCenter|TestMesh|TestPeer' ./internal/hub/`; `JARVIS_MESH_LOG=1` prints each hub's logs.
+- Local smoke test with two real hubs (2026-11-02, no real `~/.persona` touched): separate temporary HOMEs, different ports and `public.tls_listen` in hub.json, separate schemas in the test database
+  (`database_url` adds `&search_path=<schema>`), `public.advertise` set to `https://localhost:<TLS port>`, `JARVIS_LOCAL_NODE=0`, started with `env -i`.
+  A third temporary HOME runs real `personad node --attach` and `jarvis-link pair --listen 127.0.0.1:<port>` + `jarvis-link run`. Verified:
+  paste connector link in admin API → paired, immediately online via service; App credential lists the machine and reads its directories; after `personad hub pair --peer | personad hub peer add -`,
+  `peer list` shows one primary and one member; member-issued credentials handed to the primary work through the member and directly at the primary; `personad hub pair` on the member produces the primary's code; primary stops, member returns 503;
+  `peer center --confirm` switches primary; old primary restarts as a member, and the new primary reaches the computer through it (its connector). Headless Chrome inspected the primary's "Computers" and "Linked hubs", and the member's "Overview" and "Computers" (light and dark).
+  No herdr / claude started on this computer (would touch the real environment), so sending and terminals were not tested through the real connector (covered by in-process tests).
 
-## 没做的 / 已知限制
+## Not implemented / known limitations
 
-- 中心自动故障转移；经连接器推送 node 更新（#284）；删除 SSH 支持——都不在这一轮（plan 第 8 节）。
-- 换中心不迁移中心的数据：助手、收件箱、知识库、定时任务、推送注册、交互历史都留在原来那台；新中心从它自己的数据开始（设备凭据会交接）。
-  App 重新注册推送后新中心才推得到。
-- 撤销靠链路同步，没有多数派：一台 hub 撤销时连不上，之后又没和知道这次撤销的 hub 连上过，它那份副本就还能用。比如中心坏了回不来，又把一直离线的成员设为中心；
-  旧中心回来后才生效。成员断开互联、退出组之后也不再同步。
-- 第一次见到一条新路时不知道它到哪台电脑，两条路都去连会互相顶一次（之后记住了）。
-- 管理界面删电脑要重启才生效（加是立刻生效的）；改 service 电脑的地址也要重启。
-- `/api/v1/usage`、手机工具（`phone_*`）只算中心自己的。
-- 成员的「概览」里电脑数按它自己的 hub.json 算，显示「由中心连着」的电脑为不在线。
+- Automatic primary failover; pushing node updates through the connector (#284); removing SSH support: all outside this round (plan section 8).
+- Switching primary does not migrate primary data: assistant, Inbox, knowledge base, scheduled tasks, push registrations, and interaction history stay on the old hub; the new primary starts with its own data (device credentials are handed over).
+  Push works only after Apps re-register with the new primary.
+- Revocation synchronizes through links, without a quorum: if a hub is unreachable at revocation and never subsequently connects to a hub that knows it, its copy remains usable. For example, the primary fails permanently and a member that has always been offline is made primary;
+  revocation applies only when the old primary returns. Members also stop synchronizing once disconnected and outside the group.
+- A new path's destination computer is unknown at first; two paths both connecting bump each other once (remembered afterwards).
+- Deleting a computer in the admin UI requires restart to take effect (adding is immediate); changing a service computer's address also requires restart.
+- `/api/v1/usage` and phone tools (`phone_*`) count only the primary's own.
+- The member's "Overview" computer count uses its own hub.json; computers "Connected by primary" appear offline.
 
-## 第一版（已换掉）
+## First version (replaced)
 
-#394 做的是对等互联：每台 hub 都服务 App，组里的电脑由「归属 hub」连着，别的 hub 经它转发；事件、会话列表、交互在组里泛洪；App 的订阅在归属 hub 上
-建替身；凭据组内通用（按 hash 问签发方）；推送落在签发凭据的 hub。用户看过后改成单中心（plan-hub-center.md），这些都删掉了：
-`mesh_events.go`、`peer_clients.go`、`mesh_owner.go`、`mesh_push.go`、`mesh_metrics.go`、`mesh_ids.go`。保留了机器身份、配对、链路、记录和路由、发现、管理接口。
+#394 built a peer-to-peer mesh: every hub served Apps, computers were connected by an "owning hub" and other hubs forwarded through it; events, session lists, and interactions flooded through the group; App subscriptions had proxies
+on the owning hub; credentials worked group-wide (asking the issuer by hash); pushes went through the credential-issuing hub. After seeing it, the user switched to a single primary (plan-hub-center.md), and these were all removed:
+`mesh_events.go`, `peer_clients.go`, `mesh_owner.go`, `mesh_push.go`, `mesh_metrics.go`, `mesh_ids.go`. Machine identity, pairing, links, records and routing, discovery, and admin APIs remain.

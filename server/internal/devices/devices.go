@@ -300,10 +300,13 @@ func (d *Devices) startMachines(ctx context.Context) {
 	for _, m := range gone {
 		d.logf("[%s] no longer in hub.json: let go", m.cfg.ID)
 		m.stop()
+		m.closeLink("no longer in hub.json") // acceptLink refuses it when it comes back
+		d.forgetMachine(m.cfg.ID)
 	}
 	for _, m := range replaced {
 		d.logf("[%s] its entry in hub.json changed: connected again with it", m.cfg.ID)
 		m.stop()
+		m.closeLink("its entry in hub.json changed") // Persona Link comes back to the new machine
 	}
 	if len(started) > 0 || len(gone) > 0 {
 		d.fleetRegroup()

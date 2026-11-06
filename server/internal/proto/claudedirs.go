@@ -9,20 +9,32 @@ import (
 // keeps out of Jarvis — the node neither looks in nor reports a matching directory, the hub does not remember it, and
 // its sessions are not listed. Both the hub and the node match with ClaudeDirBlocked.
 
-// CleanClaudeDirPatterns trims, drops empty ones and duplicates, and keeps the order.
+// CleanClaudeDirPatterns trims spaces and trailing slashes, drops empty ones, ones that would block everything and
+// duplicates, and keeps the order.
 func CleanClaudeDirPatterns(in []string) []string {
 	var out []string
 	for _, p := range in {
 		p = strings.TrimSpace(p)
-		if p == "" || p == "~" || p == "/" {
-			continue // would block everything
+		if blocksEverything(p) {
+			continue
 		}
-		p = strings.TrimSuffix(p, "/")
+		p = strings.TrimRight(p, "/")
 		if !containsString(out, p) {
 			out = append(out, p)
 		}
 	}
 	return out
+}
+
+// blocksEverything: p is empty, or names home, the root or a directory above home however it is spelled ("~/", "~//",
+// "//", "/./", "~/..").
+func blocksEverything(p string) bool {
+	switch c := filepath.Clean(p); {
+	case p == "", c == ".", c == "~", c == "/":
+		return true
+	default:
+		return c == ".." || strings.HasPrefix(c, "../")
+	}
 }
 
 // ValidClaudeDirPattern: a pattern filepath.Match understands, rooted at /, ~/, or starting with *.

@@ -312,6 +312,14 @@ func (m *Machine) setLink(l *mgrLink) *mgrLink {
 	return old
 }
 
+// closeLink ends the machine's live link, if it has one, with 1001: for a machine let go or replaced (startMachines),
+// whose link nothing else would end, so Persona Link dials again and finds the entry as it is now.
+func (m *Machine) closeLink(why string) {
+	if l := m.currentLink(); l != nil {
+		l.close(websocket.StatusGoingAway, why)
+	}
+}
+
 // dropLink forgets l if it is still the machine's link. A connection on it ends by itself (its stream goes with
 // l.ctx); a machine that was not connected shows why the link went away.
 func (m *Machine) dropLink(l *mgrLink, cause error) {

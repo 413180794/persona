@@ -1,194 +1,194 @@
-# 计划：ego lite 浏览器插件（#1304）
+# Plan: ego lite browser plugin (#1304)
 
-让 Persona 的助手和电脑上的 Agent 用 [ego lite](https://lite.ego.app/) 操作浏览器：打开网页、点按、填表、截图，
-在手机上看它在干什么、必要时接管，并把登录状态（cookies）导进去。照 Cua 插件的模式做（[computer-use.md](computer-use.md)），
-复用它的机器多选开关（#1285）和实时画面（#1184）。**本文是方案，等用户拍板**（文末「要拍板的」）。
+Let Persona's assistant and the Agents on your computers drive a browser through [ego lite](https://lite.ego.app/): open pages, click, fill forms, take screenshots,
+watch what it is doing from the phone and take over when needed, and import login state (cookies) into it. Built the same way as the Cua plugin ([computer-use.md](computer-use.md)),
+reusing its per-machine multi-select switch (#1285) and live view (#1184). **This document is a proposal awaiting the user's decision** ("To decide" at the end).
 
-ego lite：Chromium 内核的「agent 浏览器」，Citro Labs 出品；App 免费下载，`ego-browser` CLI 和 skill 在
-github.com/citrolabs/ego-lite（MIT，外部代码只读，不进仓库）。以下事实来自它的仓库、官网文档和本机装好的 0.6.2（第 7 版构建）（2026-11-04 调研）。
+ego lite: a Chromium-based "agent browser" from Citro Labs. The App is a free download; the `ego-browser` CLI and skill live in
+github.com/citrolabs/ego-lite (MIT; external code, read only, not vendored into the repo). The facts below come from its repo, the official docs, and the 0.6.2 (build 7) installed on this machine (researched 2026-11-04).
 
-## ego 是什么样的
+## What ego looks like
 
-- **安装**：
-  - 官方 DMG 在 `https://cdn.ego.app/setup/macos/{arm64|x64}/egolite-<推广码>.dmg`。URL 里没有版本号，永远是最新版；也没有公布校验和。
-  - App 由 Developer ID「CITRO LABS PTE. LIMITED」（Team `JGQLC6YQYJ`）签名并公证。本机实测：
-    - `spctl -a -vv -t exec` 结果是「accepted, Notarized Developer ID」；
-    - `stapler validate` 通过；
-    - `codesign --verify --deep` 通过，但加 `--strict` 会因为一个 FinderInfo 属性失败。
-  - 官方安装脚本会去掉 quarantine，我们不照做。
-- **首次设置（onboarding）**：第一次打开时问要不要从 Chrome 等浏览器导入数据（登录状态、cookies、书签、密码、扩展），macOS 可能要钥匙串密码。
-  - 做完后注册 `~/.local/bin/ego-browser`，并把 skill 写进 `~/.agents/skills/ego-browser`、`~/.claude/skills`。
-  - **只能在那台 Mac 的图形界面里做**，没有无人值守的方式。没做完就调 CLI，它会弹出设置窗口，不会执行。
-  - 不要辅助功能、屏幕录制权限。
-- **`ego-browser`**：不是一条条命令，而是在 ego 里**跑一段 JS**：`ego-browser nodejs`，脚本从 stdin 或 `-e` 给。脚本里能用的：
-  - 任务空间：`taskSpace(name)` 按名字建或接着用一个（是浏览器里的工作区，**不是 macOS 的桌面空间**）；
-  - 标签：`task.page("p1")`；
-  - 快照：`page.snapshot()`，可访问性树文本，节点带 `[ref=N]`；
-  - 操作：`click(@21)`、`fill`、`press`；
-  - 等待：`waitFor…`；
-  - 截图：`page.screenshot({path})`，PNG。
-- **跨调用**：每次调用是一个新的 Node 进程，但任务空间、标签、ref 都留着（`~/.ego-browser/state/space-<id>.json`），上一次快照的 ref 下一次还能用。输出就是脚本 `console.log` 的内容；脚本抛错时之前的输出会丢。
-- **CDP**：只能在脚本里用：`page.cdp(method, params)`（Page、Network、Input…），以及 `task.cdp()`（Target、Browser）。没有对外的远程调试端口。
-- **从别的浏览器导入**：`ego-browser import --browser chrome [--profile Default] --no-default`，不经图形界面（可能弹钥匙串密码）。
-- **数据目录**：`~/Library/Application Support/Citro Labs/ego lite`。同一个 profile 的 cookie 是共用的：用户自己的标签和所有任务空间一起用。
-- **隐私**：带 Sentry、PostHog 等统计。隐私政策说可选的「使用分析」可能包含访问过的网址、任务输入和页面内容；默认开不开没写。
-- 支持 macOS 13 及以上，Apple 芯片和 Intel 各一个 DMG。
+- **Installation**:
+  - The official DMG is at `https://cdn.ego.app/setup/macos/{arm64|x64}/egolite-<referral code>.dmg`. The URL has no version number and always serves the latest; no checksums are published.
+  - The App is signed with the Developer ID "CITRO LABS PTE. LIMITED" (Team `JGQLC6YQYJ`) and notarized. Tested locally:
+    - `spctl -a -vv -t exec` reports "accepted, Notarized Developer ID";
+    - `stapler validate` passes;
+    - `codesign --verify --deep` passes, but with `--strict` it fails because of a FinderInfo attribute.
+  - The official install script removes quarantine; we don't do that.
+- **First-run setup (onboarding)**: on first launch it asks whether to import data from Chrome and other browsers (login state, cookies, bookmarks, passwords, extensions); macOS may ask for the keychain password.
+  - When done, it registers `~/.local/bin/ego-browser` and writes the skill into `~/.agents/skills/ego-browser` and `~/.claude/skills`.
+  - **It can only be done in that Mac's GUI**; there is no unattended way. Calling the CLI before it is done pops up the setup window instead of running.
+  - It does not need Accessibility or Screen Recording permission.
+- **`ego-browser`**: not a set of individual commands; it **runs a piece of JS** inside ego: `ego-browser nodejs`, with the script from stdin or `-e`. Available in the script:
+  - Task spaces: `taskSpace(name)` creates or reuses one by name (a workspace inside the browser, **not a macOS desktop Space**);
+  - Tabs: `task.page("p1")`;
+  - Snapshots: `page.snapshot()`, accessibility-tree text with nodes tagged `[ref=N]`;
+  - Actions: `click(@21)`, `fill`, `press`;
+  - Waiting: `waitFor…`;
+  - Screenshots: `page.screenshot({path})`, PNG.
+- **Across calls**: every call is a new Node process, but task spaces, tabs, and refs persist (`~/.ego-browser/state/space-<id>.json`), so refs from the previous snapshot still work in the next call. The output is whatever the script `console.log`s; if the script throws, earlier output is lost.
+- **CDP**: only from inside a script: `page.cdp(method, params)` (Page, Network, Input…) and `task.cdp()` (Target, Browser). There is no external remote debugging port.
+- **Import from other browsers**: `ego-browser import --browser chrome [--profile Default] --no-default`, without the GUI (it may prompt for the keychain password).
+- **Data directory**: `~/Library/Application Support/Citro Labs/ego lite`. Cookies within one profile are shared: the user's own tabs and every task space use them together.
+- **Privacy**: ships Sentry, PostHog, and other analytics. The privacy policy says the optional "usage analytics" may include visited URLs, task input, and page content; it doesn't say whether it is on by default.
+- Supports macOS 13 and later, with separate DMGs for Apple silicon and Intel.
 
-## 1. 插件、发现、安装
+## 1. Plugin, discovery, installation
 
-- **插件**：内置插件 `ego`，纯声明，贡献新的扩展点 `browser`，**默认关**。配置：
-  - `machines`：`format: machine`、`x-os: ["darwin"]`，每台 Mac 一个开关；
-  - `confirm`：操作前在手机上确认。
-- **node 探测**（`browser.status`，只问打开了的机器），机器页显示每一项：
+- **Plugin**: built-in plugin `ego`, purely declarative, contributing a new extension point `browser`, **off by default**. Config:
+  - `machines`: `format: machine`, `x-os: ["darwin"]`, one switch per Mac;
+  - `confirm`: confirm on the phone before acting.
+- **node probe** (`browser.status`, only asked of enabled machines); the machine page shows each item:
 
-  | 看什么 | 怎么看 |
+  | What | How |
   | --- | --- |
-  | 装了没有 | `/Applications/ego lite.app`（bundle id `com.citrolabs.ego.lite`）及版本 |
-  | 签名对不对 | `codesign` 的 Team 是 `JGQLC6YQYJ` |
-  | 首次设置做没做 | `~/.local/bin/ego-browser` 在不在，以及数据目录在不在。**不去调 CLI 试**：没做完时调它会在那台 Mac 上弹窗。这个判断要在本机做完首次设置后实测确认 |
-  | 版本 | `ego-browser --version` |
+  | Installed or not | `/Applications/ego lite.app` (bundle id `com.citrolabs.ego.lite`) and its version |
+  | Signature correct | `codesign` Team is `JGQLC6YQYJ` |
+  | First-run setup done | Whether `~/.local/bin/ego-browser` exists, and whether the data directory exists. **Don't probe by calling the CLI**: before setup is done, calling it pops up a window on that Mac. This check needs to be confirmed by testing after completing first-run setup locally |
+  | Version | `ego-browser --version` |
 
-- **「安装 ego lite」**（`browser.install`，和 Cua 的安装一样是后台任务，回报进度）：
-  1. 按芯片下载 DMG 到临时目录，用 `hdiutil attach -readonly -nobrowse` 挂载。
-  2. **校验**：`codesign --verify --deep`（不加 `--strict`）、Team ID 必须是 `JGQLC6YQYJ`、`spctl -a -t exec` 必须是公证过的。不满足就不装。
-  3. 用 `ditto` 装进 `/Applications`，装好后再校验一遍。node 自己下载的文件没有 quarantine 属性（和 `curl` 下的一样），所以不靠系统首次打开时再查：上面的 `spctl` 就是 Gatekeeper 的同一项检查，装前装后各做一次。
-  4. 卸载挂载的盘，删掉临时文件。
-  - 链接用官方 README 给的那个（里面的推广码是 README 公开的，不是谁的账号），第一步写在 node 里（`egoDMG`）；以后要换再挪进 hub 的配置。
-  - 做不到的：**第一次打开**时，macOS 的「从互联网下载的 App」确认和 ego 的首次设置，都要人在那台 Mac 上点。所以装完给「去完成首次设置」：
-    - node 执行 `open -a "ego lite"`，在那台 Mac 上打开设置窗口；
-    - 机器页显示分步说明；屏幕共享开着时，可以经「VNC」（#1184）远程点完。
-- **统计**：首次设置里能关的就关，并在引导里提示用户关掉「使用分析」。能不能用命令关，要等做完首次设置后实测。
+- **"Install ego lite"** (`browser.install`, a background task reporting progress, like the Cua install):
+  1. Download the DMG for the chip into a temp directory and mount it with `hdiutil attach -readonly -nobrowse`.
+  2. **Verify**: `codesign --verify --deep` (without `--strict`), Team ID must be `JGQLC6YQYJ`, `spctl -a -t exec` must report notarized. Otherwise don't install.
+  3. Install into `/Applications` with `ditto` and verify again afterwards. Files the node downloads itself carry no quarantine attribute (same as with `curl`), so we don't rely on the system checking at first launch: the `spctl` above is the same Gatekeeper check, done once before and once after installing.
+  4. Unmount the disk and delete the temp files.
+  - Use the link from the official README (its referral code is public in the README, not anyone's account); in the first step it lives in the node (`egoDMG`); move it into the hub's config if it ever needs to change.
+  - What we can't do: on **first launch**, both macOS's "App downloaded from the internet" confirmation and ego's first-run setup need a person to click on that Mac. So after installing, offer "Finish first-run setup":
+    - the node runs `open -a "ego lite"` to open the setup window on that Mac;
+    - the machine page shows step-by-step instructions; with screen sharing on, you can click through remotely via "VNC" (#1184).
+- **Analytics**: turn off whatever can be turned off during first-run setup, and remind the user in the guide to turn off "usage analytics". Whether it can be turned off by command needs testing after first-run setup.
 
-## 2. 助手的工具；和 Agent 的分工
+## 2. The assistant's tools; division of work with Agents
 
-**助手**（经 hub）的工具，描述放在 `prompts/mcp/browser/`：
-- `browser_run {machine, script, timeout_ms?}`：在那台 Mac 上跑一段 ego 的 JS。
-  - node 把脚本包一层再交给 `ego-browser nodejs`（经 stdin）：
-    - 先 `taskSpace("persona-<对话 id 前 8 位>")`，所以同一对话总在同一个任务空间里，ref 跨调用有效；
-    - 再执行用户的脚本，最后输出一段 JSON 结果；
-    - 抛错时也把已输出的内容和错误一起交回，不会因为 ego「抛错就丢输出」而丢掉。
-- `browser_look {machine, page?, full?}`：当前标签的快照文本，加截图（`page.screenshot` 写进临时文件，node 读回，转 JPEG）。图片的处理和 Cua 一样：作为图片块交给模型，App 在工具详情里画。
-- **写操作**（`browser_run`）：默认放行，hub 日志只记脚本字节数和耗时；插件的「操作前在手机上确认」打开后先弹授权卡片。
-- **cookies 不做成工具**：模型拿不到 cookie 原文，也不能导入或导出。
+Tools for the **assistant** (via the hub); descriptions live in `prompts/mcp/browser/`:
+- `browser_run {machine, script, timeout_ms?}`: run a piece of ego JS on that Mac.
+  - The node wraps the script before handing it to `ego-browser nodejs` (via stdin):
+    - first `taskSpace("persona-<first 8 chars of the chat id>")`, so the same chat always lands in the same task space and refs stay valid across calls;
+    - then the user's script, and finally a JSON result;
+    - on a throw, the output so far is returned together with the error, so nothing is lost to ego's "throw and lose the output" behavior.
+- `browser_look {machine, page?, full?}`: snapshot text of the current tab, plus a screenshot (`page.screenshot` writes a temp file, the node reads it back and converts to JPEG). Images are handled as with Cua: passed to the model as an image block, and the App draws it in the tool details.
+- **Write operations** (`browser_run`): allowed by default; the hub log only records the script's byte count and duration. With the plugin's "confirm on the phone before acting" on, an approval card pops up first.
+- **Cookies are not exposed as a tool**: the model never sees raw cookies and cannot import or export them.
 
-**机器上的 Agent**（Claude Code、Codex）：直接用 ego 首次设置时装好的 skill（`~/.claude/skills/ego-browser`），不经过 hub，也不受插件开关管。插件只管助手这一路。
+**Agents on the machine** (Claude Code, Codex): use the skill installed by ego's first-run setup (`~/.claude/skills/ego-browser`) directly, without the hub, and unaffected by the plugin switch. The plugin only governs the assistant's path.
 
-## 3. 看浏览器
+## 3. Watching the browser
 
-| | 做法 | 能看到什么 | 接管 | 状态 |
+| | Approach | What you can see | Take over | Status |
 | --- | --- | --- | --- | --- |
-| a) 实时画面（#1184） | macOS 屏幕共享，整屏 | ego 窗口在前台时看得到；**agent 的任务空间在后台时看不到**（它在浏览器里另一个工作区） | 现成 | 已有，不用新做 |
-| b) 定时截图 | node 每秒用 `page.screenshot` 截 agent 那个标签，经 hub 推给手机（像实时画面那样一页） | agent 的那个标签，不管 ego 在不在前台 | 点一下：手机上的坐标换成页面坐标，执行 `Input.dispatchMouseEvent`；或者先 `takeOverTaskSpace` 再操作 | ego 的接口都有，**要实测** |
-| c) CDP 投屏 | 在一个常驻的 `ego-browser nodejs` 里跑 `Page.startScreencast`，帧流经 hub 推给手机 | 同 b，帧率更高 | 同 b | 文档没提，**要实测**能不能用 |
+| a) Live view (#1184) | macOS screen sharing, full screen | Visible when the ego window is in front; **not visible when the agent's task space is in the background** (it is in another workspace inside the browser) | Already there | Exists, nothing new to build |
+| b) Periodic screenshots | The node screenshots the agent's tab with `page.screenshot` every second and pushes it to the phone via the hub (a page like the live view) | The agent's tab, whether or not ego is in front | Tap: phone coordinates become page coordinates and run `Input.dispatchMouseEvent`; or `takeOverTaskSpace` first and then act | ego has all the APIs, **needs testing** |
+| c) CDP screencast | Run `Page.startScreencast` in a long-lived `ego-browser nodejs`, streaming frames to the phone via the hub | Same as b, higher frame rate | Same as b | Not mentioned in the docs, **needs testing** whether it works |
 
-**建议**：
-- 先做 b：一定能做，开销小，1–2 帧每秒够看 agent 在干什么。
-- c 实测能用再换。
-- a 照常可用，适合要看整个桌面或点系统窗口的时候。
-- 入口和 Cua 一样：机器页和对话里的工具详情都给「看浏览器」。
+**Recommendation**:
+- Do b first: it is sure to work, cheap, and 1–2 frames per second is enough to see what the agent is doing.
+- Switch to c if testing shows it works.
+- a stays available, for when you need the whole desktop or to click system windows.
+- Entry points as with Cua: both the machine page and the tool details in the chat offer "Watch browser".
 
-## 4. 导入 cookies（重点）
+## 4. Importing cookies (the key part)
 
-cookies 就是登录凭据：拿到就等于登录了。下面每一步都按「凭据」来处理。
+Cookies are login credentials: having them means being logged in. Every step below treats them as credentials.
 
-### 来源
+### Sources
 
-| 来源 | 怎么做 | 适合 |
+| Source | How | Good for |
 | --- | --- | --- |
-| a) 那台 Mac 上已有的浏览器 | ego 首次设置时从 Chrome 导入；或之后由机器页「从 Chrome 导入」触发 `ego-browser import --browser chrome --profile <选的> --no-default`（可能在那台 Mac 上弹钥匙串密码）。cookie 不经过 hub 和手机 | 最省事：用户在这台 Mac 的 Chrome 里已经登录过的网站 |
-| b) 手机或网页上传 | 选一个文件：Netscape `cookies.txt`，或浏览器扩展导出的 JSON（Cookie-Editor / EditThisCookie 的数组格式），可只勾选部分域名 | 登录状态在别的电脑或手机上的时候 |
-| c) 另一台电脑的浏览器 | 那台也装了 ego：在它的任务空间里用 CDP 的 `Network.getAllCookies` 导出指定域名，经 hub 转到目标 Mac。没装 ego 的，就在那台导出 b 的文件 | 多台电脑之间同步某个网站的登录 |
-| d) 只导指定域名 | a、b、c 都先列出域名和数量，用户勾选（默认一个不勾），只导勾了的 | 都适用 |
+| a) A browser already on that Mac | Imported from Chrome during ego's first-run setup; or later triggered from the machine page's "Import from Chrome" as `ego-browser import --browser chrome --profile <chosen> --no-default` (may prompt for the keychain password on that Mac). Cookies never pass through the hub or the phone | Least effort: sites the user is already logged into in Chrome on this Mac |
+| b) Upload from the phone or the web | Pick a file: Netscape `cookies.txt`, or JSON exported by a browser extension (the array format of Cookie-Editor / EditThisCookie); you can tick only some domains | When the login is on another computer or the phone |
+| c) A browser on another computer | If that one has ego too: export the chosen domains from its task space with CDP `Network.getAllCookies` and relay them via the hub to the target Mac. Without ego, export a file for b on that machine | Syncing a site's login across computers |
+| d) Only selected domains | a, b, and c all list domains and counts first; the user ticks them (none ticked by default) and only the ticked ones are imported | Applies to all |
 
-### 存储与安全
+### Storage and security
 
-- **落点**：只落在目标 Mac 的 ego profile 里。
-- **经过 hub 时**（b、c）：
-  - 解析后用 hub 的密钥 AES-GCM 加密，暂存在内存或数据库，**写入成功或 10 分钟后就删**，不长期保存；
-  - 不写日志（只记「哪台、哪些域名、几条」）、不进仓库、不进助手的上下文，App 推送里也不带原文；
-  - 文件内容不在手机上缓存。
-- **谁能导**：只有用户本人完全权限的设备（不是只读设备），在 App 或网页里明确操作。助手、Agent、插件进程都不能发起；hub 不提供给模型的接口。
-- **查看和撤销**：
-  - 机器页「浏览器登录」列出 ego 里有 cookie 的域名（条数、最晚过期时间，**不显示值**），数据来自 node 用 `Network.getAllCookies` 汇总；
-  - 每个域名可以「清除」（`Network.deleteCookies`），也可以全部清除；
-  - 清除和导入都记进审计（谁、哪台、哪些域名、几条）。
-- **同一个 profile**：ego 的 cookie 是整个 profile 共用的，导进去的登录用户自己在 ego 里浏览时也会用到。另一种做法见「要拍板的」第 3 条。
+- **Destination**: only the ego profile on the target Mac.
+- **When passing through the hub** (b, c):
+  - after parsing, encrypted with AES-GCM using the hub's key and held in memory or the database, **deleted once written or after 10 minutes**, never kept long term;
+  - not logged (only "which machine, which domains, how many"), not in the repo, not in the assistant's context, and the App's pushes never carry the raw values;
+  - the file content is not cached on the phone.
+- **Who can import**: only the user's own full-permission devices (not read-only devices), through an explicit action in the App or on the web. The assistant, Agents, and plugin processes cannot start it; the hub exposes no interface for it to the model.
+- **Viewing and revoking**:
+  - the machine page's "Browser logins" lists domains with cookies in ego (count, latest expiry, **no values**), aggregated by the node with `Network.getAllCookies`;
+  - each domain can be "cleared" (`Network.deleteCookies`), or everything at once;
+  - both clearing and importing go into the audit log (who, which machine, which domains, how many).
+- **One shared profile**: ego's cookies are shared across the whole profile, so imported logins are also used when the user browses in ego themselves. For the alternative see item 3 of "To decide".
 
-### 写入方式
+### How cookies are written
 
-1. 优先 CDP：
-   - node 用一段 `ego-browser nodejs` 脚本，在 Persona 的任务空间里调 `page.cdp("Network.setCookies", {cookies})`。cookie 数据放在一个 0600 的临时文件里，脚本读完就删，不进命令行参数；
-   - 按字段换成 CDP 的格式：`name`、`value`、`domain`（hostOnly 去掉开头的点）、`path`、`expires`（秒）、`secure`、`httpOnly`、`sameSite`；过期的跳过；
-   - 写完再用 `Network.getCookies` 核对条数；
-   - 文档的例子用过 `Network.getAllCookies` 和 `deleteCookies`，`setCookies` 应该也行，**要在做完首次设置后实测**；`Storage.setCookies` 是否可用不清楚。
-2. 来源 a 不用这条路：ego 自己的 `import` 直接读 Chrome。
-3. 用户正在接管那个任务空间时，ego 不让脚本用 CDP（`EGO_TASK_SPACE_USER_IN_CONTROL`）：提示用户先交还，再导入。
+1. CDP first:
+   - The node runs an `ego-browser nodejs` script that calls `page.cdp("Network.setCookies", {cookies})` inside Persona's task space. The cookie data sits in a 0600 temp file that the script deletes after reading; it never appears in command-line arguments;
+   - fields are mapped to the CDP format: `name`, `value`, `domain` (leading dot removed for hostOnly), `path`, `expires` (seconds), `secure`, `httpOnly`, `sameSite`; expired ones are skipped;
+   - after writing, `Network.getCookies` checks the count;
+   - the docs' examples use `Network.getAllCookies` and `deleteCookies`, so `setCookies` should work too; **this needs testing after first-run setup**. Whether `Storage.setCookies` is available is unclear.
+2. Source a doesn't use this path: ego's own `import` reads Chrome directly.
+3. While the user has taken over that task space, ego doesn't let scripts use CDP (`EGO_TASK_SPACE_USER_IN_CONTROL`): ask the user to hand it back first, then import.
 
-## 第一步做了什么（#1304，2026-11-04）
+## What step one did (#1304, 2026-11-04)
 
-用户拍板：分步、先定时截图、cookies 导进默认 profile、上传的 cookies 手机解析后经 hub 直转（hub 不落盘）、另一台电脑先不做、统计能关就自动关。第一步做了插件、发现、安装、首次设置引导、就绪和两个助手工具；看浏览器和 cookies 是后面几步。
+The user decided: go step by step, periodic screenshots first, cookies go into the default profile, uploaded cookies are parsed on the phone and relayed straight through the hub (nothing written to disk on the hub), skip other computers for now, and turn analytics off automatically where possible. Step one built the plugin, discovery, installation, the first-run setup guide, readiness, and two assistant tools; watching the browser and cookies come in later steps.
 
-- **插件 `ego`**：内置、纯声明、默认关，贡献扩展点 `browser`。配置 `machines`（`format: machine`、`x-os: ["darwin"]`，插件页每台 Mac 一个开关）和 `confirm`。机器页的「允许助手用这台的浏览器」是同一个值。
-- **node `browser.status`**（插件开着时 hub 问所有在线的 Mac）：
-  - 装没装：`/Applications/ego lite.app`，版本取自 Info.plist。
-  - 首次设置：`Local State` 的 `ego.welcome_page_shown`，加上 `~/.local/bin/ego-browser` 在不在。导没导入数据：`ego.onboarding_imported_browser_data`。
-  - 统计：Chromium 的 `Consent To Send Stats` 文件在，就是开着。
-  - 就绪：设置做完后跑一次只读探测（`listTaskSpaces()`，不碰任何页面），结果留一分钟。
-  - 最后打 `checked`（hub 按它排先后，见 #1387）。
-- **安装**（`browser.install`）：下载 README 给的官方 DMG，只读挂载后校验（`fetchEgo`），装进「应用程序」后再校验一遍。node 下载的文件没有 quarantine 属性，Gatekeeper 的检查由 `spctl` 在装前装后各做一次。
-  - 校验：`codesign --verify --deep`；`codesign -dv` 的 TeamIdentifier 是 `JGQLC6YQYJ`；`spctl` 是 accepted 并且 Notarized。不加 `--strict`，会因为一个 FinderInfo 失败。
-  - 实测：这台 Mac 上装好的 0.6.2 通过这三项。
-- **打开**（`browser.open`）：`open` 那个 App，在那台 Mac 上开始首次设置。机器页每 2 秒问一次，做完就变成就绪。
-- **首次设置引导**（机器页）：
-  1. 点「打开 ego lite」，或者「VNC」在手机上操作；
-  2. 选从 Chrome（或别的浏览器）导入数据，macOS 会多次要钥匙串密码，每次都输；可以跳过；
-  3. 做完首次设置（会装上 ego-browser）；
-  4. 「再检查一次」。
+- **Plugin `ego`**: built in, purely declarative, off by default, contributes the extension point `browser`. Config `machines` (`format: machine`, `x-os: ["darwin"]`, one switch per Mac on the plugin page) and `confirm`. The machine page's "Allow the assistant to use this machine's browser" is the same value.
+- **node `browser.status`** (the hub asks every online Mac while the plugin is on):
+  - Installed: `/Applications/ego lite.app`, version from Info.plist.
+  - First-run setup: `ego.welcome_page_shown` in `Local State`, plus whether `~/.local/bin/ego-browser` exists. Whether data was imported: `ego.onboarding_imported_browser_data`.
+  - Analytics: if Chromium's `Consent To Send Stats` file exists, it is on.
+  - Ready: once setup is done, run one read-only probe (`listTaskSpaces()`, touching no page) and keep the result for a minute.
+  - Finally stamp `checked` (the hub orders by it, see #1387).
+- **Install** (`browser.install`): download the official DMG from the README, mount it read-only and verify (`fetchEgo`), install into Applications and verify again. Files the node downloads carry no quarantine attribute, so the Gatekeeper check is done by `spctl` once before and once after installing.
+  - Verification: `codesign --verify --deep`; `codesign -dv` TeamIdentifier is `JGQLC6YQYJ`; `spctl` is accepted and Notarized. No `--strict`, which fails because of a FinderInfo attribute.
+  - Tested: the 0.6.2 installed on this Mac passes all three.
+- **Open** (`browser.open`): `open` the App to start first-run setup on that Mac. The machine page polls every 2 seconds and switches to ready once done.
+- **First-run setup guide** (machine page):
+  1. Tap "Open ego lite", or use "VNC" to operate it from the phone;
+  2. choose to import data from Chrome (or another browser); macOS asks for the keychain password several times, enter it each time; this can be skipped;
+  3. finish first-run setup (it installs ego-browser);
+  4. "Check again".
 
-  实测：除了钥匙串，首次设置不要别的授权（不要辅助功能、屏幕录制）。
-- **就绪**是绿色。下面打勾列出：首次设置、导没导入数据、使用统计。
-  - 统计开着时提示去关：在 ego 的「设置 › 同步和服务」里关掉「Automatically sends usage statistics and crash reports to Citro Labs」。
-  - **没做成自动关**：这一项在设置页里藏在收起的分组里，不是标准的开关组件，用脚本点它不稳；ego 运行时改它的偏好文件又会被覆盖。所以退回到引导里提示。
-- **助手的工具**（`prompts/mcp/browser/`）：
-  - `browser_run {machine, script}`：在对话自己的任务空间（`persona-<对话 id 前 8 位>`）里跑一段 JS，手边有 `task` 和 `page`（标签 p1）；返回值、地址、标题、截图一起回来。
-  - `browser_look {machine, full?}`：快照（带 `[ref=N]`）加截图。
-  - 写操作默认放行，hub 日志只记字节数；打开「操作前在手机上确认」后先弹卡片。
-- **实测**（`TestEgoEndToEnd`，`PERSONA_EGO_E2E=1`，只碰 example.com）：
-  - 状态就绪；
-  - 打开 example.com，「看浏览器」拿回快照和 1920×849 的截图；
-  - 测试结束关掉任务空间。
-  - 打开页面约 0.3 秒，快照加截图约 0.1 秒。
-- **踩到的坑**：脚本打印的内容里只要有一个 NUL 字符，ego 就把那次的输出整段丢掉。结果行改用可见的标记 `@@persona-browser@@`。
+  Tested: apart from the keychain, first-run setup needs no other authorization (no Accessibility, no Screen Recording).
+- **Ready** is green. Below it, checkmarks list: first-run setup, whether data was imported, usage analytics.
+  - When analytics are on, it suggests turning them off: in ego's **Settings › Sync and services**, turn off "Automatically sends usage statistics and crash reports to Citro Labs".
+  - **Not automated**: on the settings page this item is hidden inside a collapsed group and is not a standard toggle component, so clicking it from a script is unreliable; editing its preferences file while ego runs gets overwritten. So we fell back to a hint in the guide.
+- **Assistant tools** (`prompts/mcp/browser/`):
+  - `browser_run {machine, script}`: run a piece of JS in the chat's own task space (`persona-<first 8 chars of the chat id>`), with `task` and `page` (tab p1) at hand; the return value, URL, title, and screenshot come back together.
+  - `browser_look {machine, full?}`: snapshot (with `[ref=N]`) plus screenshot.
+  - Write operations are allowed by default and the hub log only records byte counts; with "confirm on the phone before acting" on, a card pops up first.
+- **Tested** (`TestEgoEndToEnd`, `PERSONA_EGO_E2E=1`, only touching example.com):
+  - status ready;
+  - open example.com; "Watch browser" returns the snapshot and a 1920×849 screenshot;
+  - the task space is closed at the end of the test.
+  - Opening the page takes about 0.3 s, snapshot plus screenshot about 0.1 s.
+- **Gotcha**: if the script's printed output contains even one NUL character, ego drops that call's entire output. The result line now uses a visible marker, `@@persona-browser@@`.
 
-## 分步
+## Steps
 
-1. **插件和发现**：插件 `ego`，`browser.status`，机器页状态，「去完成首次设置」引导。
-2. **安装**：下载、校验、装进「应用程序」，装后再校验。
-3. **助手工具**：`browser_run`、`browser_look`，确认开关，日志。
-4. **看浏览器**：b 定时截图加点一下接管；入口在机器页和工具详情。
-5. **cookies**：列出和清除、从 Chrome 导入（a）、上传文件（b）、指定域名（d）；另一台电脑（c）放最后。
+1. **Plugin and discovery**: plugin `ego`, `browser.status`, machine page status, the "Finish first-run setup" guide.
+2. **Install**: download, verify, install into Applications, verify again afterwards.
+3. **Assistant tools**: `browser_run`, `browser_look`, the confirm switch, logging.
+4. **Watching the browser**: b, periodic screenshots plus tap to take over; entry points on the machine page and in tool details.
+5. **Cookies**: list and clear, import from Chrome (a), upload a file (b), selected domains (d); another computer (c) last.
 
-每步一个 PR，动界面的先截图。第 3 步起要那台 Mac 做完首次设置才能实测。
+One PR per step; screenshot anything that touches the UI first. From step 3 on, testing needs that Mac to have finished first-run setup.
 
-## 要拍板的
+## To decide
 
-1. 照上面的分步做，先做 1–3？
-2. 看浏览器先做 b（定时截图），c（CDP 投屏）实测能用再换？
-3. cookies 导进哪里：
-   - **(i) ego 的默认 profile**：和用户自己的 ego 浏览共用，首次设置从 Chrome 导入的登录 agent 直接能用；
-   - **(ii) 单独给 Persona 建一个 profile**：互不影响，但 agent 只有导进来的登录。
+1. Follow the steps above, starting with 1–3?
+2. For watching the browser, do b (periodic screenshots) first and switch to c (CDP screencast) once testing shows it works?
+3. Where cookies go:
+   - **(i) ego's default profile**: shared with the user's own ego browsing; logins imported from Chrome during first-run setup are usable by the agent right away;
+   - **(ii) a separate profile just for Persona**: no interference either way, but the agent only has the logins imported into it.
 
-   建议 (i)，省事，也符合「方便操作」。
-4. 上传的 cookies 在 hub 上最多暂存 10 分钟，写入成功即删，可以吗？还是要求只在手机上解析、经 hub 直接转给 node，不落 hub 的数据库？
-5. 从另一台电脑导（c）要不要做，还是先只做 a、b、d？
-6. ego 的「使用分析」：引导里提示关掉就行，还是能关就由 node 自动关（要实测有没有开关）？
-7. **需要用户在这台 Mac 上完成一次 ego 的首次设置**（导入那一步可以先跳过）：之后我才能实测完成标记、CLI、截图、`Network.setCookies` 和投屏。
+   Recommend (i): less hassle, and it fits "easy to operate".
+4. Uploaded cookies held on the hub for at most 10 minutes and deleted once written: OK? Or require parsing only on the phone and relaying straight through the hub to the node, never touching the hub's database?
+5. Build import from another computer (c), or start with only a, b, d?
+6. ego's "usage analytics": just a hint in the guide to turn it off, or have the node turn it off automatically where possible (needs testing whether there is a switch)?
+7. **The user needs to complete ego's first-run setup once on this Mac** (the import step can be skipped for now): only then can I test the completion marker, CLI, screenshots, `Network.setCookies`, and screencasting.
 
-## 导入 cookies 做了什么（#1304，2026-11-04）
+## What cookie import did (#1304, 2026-11-04)
 
-- **实测**（这台开发 Mac 的 ego lite，只碰 example.com，测完即删）：任务空间页面上的 `page.cdp("Network.setCookies", {cookies})` 能写（域 cookie 和 host-only 都行），`Network.getCookies` 读回 flags 正确，`Network.deleteCookies` 能删，`Network.getAllCookies` 能列整个 profile。`Storage.*` 不行：`task.cdp` 只放 `Target.` / `Browser.`，所以全走 Network 域。
-- **node**（`node/browser_cookies.go`）：`browser.cookies.list` / `.import` / `.clear`。每次在 Persona 自己的任务空间「persona cookies」里跑一段脚本，结束时 `task.finish`。cookie 经脚本的 stdin 给 `ego-browser nodejs`，不进命令行、不落文件；回给 hub 的只有网站、条数、最晚过期时间和导入 / 跳过 / 删除的条数，ego 出错时也不把它的输出带回（可能回显脚本）。按 CDP 的格式换：host-only 去掉开头的点、域 cookie 补上；SameSite=None 补 Secure；过期的和格式不对的跳过。网站按公共后缀表归并（`www.example.com`、`.example.com` 都算 example.com）。用户正在接管任务空间时提示先交还。
-- **hub**（`extmgr/browser_cookies.go`）：`GET / POST / DELETE /api/v1/machines/{mid}/browser/cookies`。只认用户自己登录的 App / 网页（`byOwnDevice`）：hub.json 的配对 token（CLI、助手的进程）、手表、机器、别的 hub 都是 403，助手没有对应的工具。导入的内容直接转给 node，不进数据库、不写盘、不进日志；日志只记「哪台、谁、几条、哪些网站」。目标 Mac 离线时 409。插件 ego 打开、这台是 Mac 才有。
-- **网页**（机器页「浏览器登录」，`views/machines/BrowserLogins.tsx`、`lib/cookies.ts`）：列网站（条数、最晚过期，不显示内容），每个网站「清除」、「全部清除」（都先确认）；「导入 cookie 文件」：Netscape `cookies.txt`（含 `#HttpOnly_` 行）或 Cookie-Editor / EditThisCookie / `{cookies: [...]}` 的 JSON，在页面里解析，按网站列出（默认一个不勾，过期的不导），只把勾选的发给 hub；发出后页面里不再留着文件内容。
-- **iOS**（机器页「浏览器登录」，`Views/Machines/BrowserLoginsSection.swift`、`Shared/BrowserCookies.swift`）：和网页同一套：列网站、清除（确认）、「导入」用系统的文件选择器选 cookies.txt / JSON，在手机上解析（`CookieFile`，`BrowserCookiesTests` 和网页的测试是同一组例子），弹出按网站勾选的表单，只发勾选的。
-- 还没做：来源 a「从 Chrome 导入」按钮、来源 c 另一台电脑。
+- **Tested** (ego lite on this dev Mac, only touching example.com, deleted after testing): `page.cdp("Network.setCookies", {cookies})` on a task-space page writes (both domain cookies and host-only), `Network.getCookies` reads back the right flags, `Network.deleteCookies` deletes, and `Network.getAllCookies` lists the whole profile. `Storage.*` doesn't work: `task.cdp` only allows `Target.` / `Browser.`, so everything goes through the Network domain.
+- **node** (`node/browser_cookies.go`): `browser.cookies.list` / `.import` / `.clear`. Each call runs a script in Persona's own task space "persona cookies" and calls `task.finish` at the end. Cookies reach `ego-browser nodejs` via the script's stdin, never on the command line or in a file; only the site, count, latest expiry, and imported / skipped / deleted counts go back to the hub, and when ego errors its output is not passed back either (it may echo the script). Mapping to the CDP format: host-only drops the leading dot, domain cookies get one added; SameSite=None gets Secure added; expired and malformed ones are skipped. Sites are grouped by the public suffix list (`www.example.com` and `.example.com` both count as example.com). While the user has taken over the task space, it asks them to hand it back first.
+- **hub** (`extmgr/browser_cookies.go`): `GET / POST / DELETE /api/v1/machines/{mid}/browser/cookies`. Only accepts the App / web the user is signed into (`byOwnDevice`): the pairing token from hub.json (CLI, the assistant's process), watches, machines, and other hubs all get 403, and the assistant has no matching tool. Imported content goes straight to the node, never into the database, onto disk, or into logs; the log only records "which machine, who, how many, which sites". 409 when the target Mac is offline. Only available when the ego plugin is on and the machine is a Mac.
+- **Web** (machine page "Browser logins", `views/machines/BrowserLogins.tsx`, `lib/cookies.ts`): lists sites (count, latest expiry, no content), with "Clear" per site and "Clear all" (both confirm first); "Import cookie file": Netscape `cookies.txt` (including `#HttpOnly_` lines) or JSON from Cookie-Editor / EditThisCookie / `{cookies: [...]}`, parsed in the page, listed by site (none ticked by default, expired ones not imported), and only the ticked ones are sent to the hub; after sending, the page no longer holds the file content.
+- **iOS** (machine page "Browser logins", `Views/Machines/BrowserLoginsSection.swift`, `Shared/BrowserCookies.swift`): same as the web: list sites, clear (with confirmation), "Import" picks cookies.txt / JSON with the system file picker, parses it on the phone (`CookieFile`; `BrowserCookiesTests` shares the same examples as the web tests), shows a sheet to tick sites, and sends only the ticked ones.
+- Not done yet: the "Import from Chrome" button for source a, and source c (another computer).

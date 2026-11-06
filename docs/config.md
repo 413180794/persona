@@ -1,60 +1,62 @@
-# 配置（让别人也能用这个仓库）
+# Configuration (so others can use this repo too)
 
-仓库里不写死任何一个人的机器、账号、域名或偏好。个人的东西都在两份配置里，代码和脚本只读配置：
+The repo hard-codes nobody's machines, accounts, domains, or preferences. Everything personal lives in two configs, and code and scripts only read the configs:
 
-| 配置 | 位置 | 谁读 | 管什么 |
+| Config | Location | Read by | Covers |
 | --- | --- | --- | --- |
-| 构建 / 部署配置 | 开发机上的 `~/.config/persona/config.json`（可用 `PERSONA_CONFIG` 指到别处，旧 `JARVIS_CONFIG` 兼容），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/persona_config.py`）、XcodeGen（经生成的 `apple/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
-| hub 运行配置 | hub 所在机器的 `~/.persona/hub.json`（0600，含 token、数据库密码，第一次运行 `personad hub` 自动生成） | `personad hub` | 监听地址、对外地址、接入哪些机器、助手是谁的助手和它该知道什么、Gmail 代理、AI 网关、lark-cli、手写的扩展 |
+| Build / deploy config | `~/.config/persona/config.json` on the dev machine (point elsewhere with `PERSONA_CONFIG`; the old `JARVIS_CONFIG` still works), template `config.example.json` at the repo root | `scripts/*` (via `scripts/persona_config.py`), XcodeGen (via the generated `apple/Config.xcconfig`) | The App's bundle id and team, the App Store Connect account, TestFlight testers, which machine / address the hub is on, machines to deploy to, simulators |
+| hub runtime config | `~/.persona/hub.json` on the hub machine (0600, contains the token and database password; generated automatically the first time `personad hub` runs) | `personad hub` | Listen address, public address, which machines to connect, whose assistant it is and what it should know, the Gmail proxy, the AI gateway, lark-cli, hand-written extensions |
 
-配置放在仓库外面：发布在干净的 worktree 里跑（`docs/release.md`），worktree 里没有仓库外的东西就会缺；也避免误提交。
-`apple/Config.xcconfig` 和 `CLAUDE.local.md` 在 `.gitignore` 里。
+The configs live outside the repo: releases run in a clean worktree (`docs/release.md`), where anything outside the repo would be missing; it also avoids committing them by accident.
+`apple/Config.xcconfig` and `CLAUDE.local.md` are in `.gitignore`.
 
-## 命名与兼容
+<a id="命名与兼容"></a>
 
-产品名统一为 **Persona**（原 Jarvis），仓库为 `nwverse/persona`。本文的新默认名称适用于 #277 的迁移版本；仅更新文档不会改变已经安装的二进制或脚本，旧版本仍使用旧入口。
+## Naming and compatibility
 
-| 用途 | 新名称（优先） | 兼容名称 |
+The product name is **Persona** (formerly Jarvis), and the repo is `nwverse/persona`. The new default names in this document apply to the #277 migration release; updating the docs alone doesn't change installed binaries or scripts, and older versions keep using the old entry points.
+
+| Purpose | New name (preferred) | Compatible name |
 | --- | --- | --- |
-| 服务端二进制 | `personad` | `jarvisd`；现有子命令语义不变 |
-| 默认运行目录 | `~/.persona` | `~/.jarvis`；升级时保留原配置、密钥、知识库和配对身份 |
-| 默认构建 / 部署配置 | `~/.config/persona/config.json` | `~/.config/jarvis/config.json` |
-| 配置文件覆盖 | `PERSONA_CONFIG` | `JARVIS_CONFIG` |
-| 已迁移的环境变量 | 对应的 `PERSONA_*` | `JARVIS_*`；新旧同时提供时新名优先，包括显式空值 |
-| 配置脚本 | `scripts/persona_config.py` | `scripts/jarvis_config.py` 软链到同一实现 |
-| 服务运行根解析器 | `scripts/persona_identity.py --service hub\|node\|link` | 恢复该角色已安装服务的根，不读构建配置；环境文件只提取 HOME，旧无 HOME 的服务继续原默认存储 |
-| DEBUG App 命令工具 | `scripts/app/personactl.py` | `scripts/app/jarvisctl.py` 同一实现，原命令与缓存位置保留 |
+| Server binary | `personad` | `jarvisd`; existing subcommands mean the same |
+| Default runtime directory | `~/.persona` | `~/.jarvis`; upgrades keep the existing config, keys, knowledge base, and pairing identity |
+| Default build / deploy config | `~/.config/persona/config.json` | `~/.config/jarvis/config.json` |
+| Config file override | `PERSONA_CONFIG` | `JARVIS_CONFIG` |
+| Migrated environment variables | The corresponding `PERSONA_*` | `JARVIS_*`; when both are set the new name wins, including an explicit empty value |
+| Config script | `scripts/persona_config.py` | `scripts/jarvis_config.py`, a symlink to the same implementation |
+| Service runtime root resolver | `scripts/persona_identity.py --service hub\|node\|link` | Recovers the root of the installed service for that role without reading the build config; only HOME is extracted from environment files, and old services without HOME keep their original default storage |
+| DEBUG App command tool | `scripts/app/personactl.py` | `scripts/app/jarvisctl.py`, same implementation; the old command and cache location are kept |
 
-源码路径、Xcode 工程 / scheme 与系统身份的完整清单见 [兼容迁移](rename.md#源码位置构建入口与兼容名字)。#773 的 [按服务恢复运行目录](rename.md#部署脚本按服务恢复运行目录) 说明 role、reset / drop-in / XDG、SameFile 和外部 EnvironmentFile / UnsetEnvironment 的边界；后两者只处理 HOME 字段与移除规则，不执行或返回其他环境字段；必需文件缺失或根字段无法解析时停止，也可显式指定实际根。新旧 URL scheme 的接收与旧格式生成分别验证，不以文档改名代替客户端验收。
+For the full list of source paths, Xcode project / schemes, and system identities, see [compatibility migration](rename.md#源码位置构建入口与兼容名字). #773's [recovering the runtime directory per service](rename.md#部署脚本按服务恢复运行目录) explains the boundaries of role, reset / drop-in / XDG, SameFile, and external EnvironmentFile / UnsetEnvironment; the latter two only handle the HOME field and removal rules, and never execute or return other environment fields; it stops when a required file is missing or the root field can't be parsed, and the actual root can also be given explicitly. Accepting new and old URL schemes and generating the old format are verified separately; renaming in the docs is no substitute for client acceptance testing.
 
-旧目录的兼容和迁移由运行时 / 安装器负责。升级前备份实际使用的数据目录与 Postgres；不要仅为改名手动删除旧目录、合并两份目录或重新生成密钥。两套目录已经同时存在、或者使用自定义路径时，先确认实际加载的是哪一份，避免启动一个空 hub。文档中的历史测量、签名 profile、源码路径、包 ID、协议字段、缓存键以及 systemd / launchd 名称仍可能保留 Jarvis；它们不是新的对外产品名，也不应靠全文替换迁移。
+Compatibility with and migration from the old directories are handled by the runtime / installer. Before upgrading, back up the data directory and Postgres actually in use; don't manually delete the old directory, merge the two, or regenerate keys just because of the rename. If both directories already exist, or you use custom paths, first confirm which one is actually loaded, so you don't start an empty hub. Historical measurements, signing profiles, source paths, package IDs, protocol fields, cache keys, and systemd / launchd names in the docs may still say Jarvis; they are not the new public product name and should not be migrated by find-and-replace.
 
-Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数据库角色 / 库 / 容器 / 数据卷、公开域名、安装 / 中继地址均保留已有身份。形象（`persona`）还是名字 / 头像 / 状态圆点的概念，不随产品改名重命名。
+Bundle IDs, App Groups, keychain groups, signing profiles, App Store records, database roles / databases / containers / volumes, public domains, and install / relay addresses all keep their existing identities. The avatar (`persona`) is still the concept of name / picture / status dot and is not renamed along with the product.
 
-下文仍列出旧 `JARVIS_*`、xcconfig / Gradle 标识符和协议名供兼容配置及查源码；这不表示每一个代码标识符都能机械换成 `PERSONA_*`。具体入口以迁移版本实现为准。
+The old `JARVIS_*`, xcconfig / Gradle identifiers, and protocol names are still listed below for compatible configs and for reading the source; that doesn't mean every code identifier can be mechanically swapped for `PERSONA_*`. The migration release's implementation is authoritative for the actual entry points.
 
-## 快速开始：接入多台机器
+## Quick start: connecting several machines
 
-一台常开的 Linux 机器跑 hub，其他电脑都由 hub 通过 SSH 接入。其他电脑上不用常驻服务：hub 连上时执行
-`ssh <主机> ~/.persona/bin/personad node --stdio`，在 SSH 的标准输入输出上跑 node 协议，断了自动重连（`server/internal/hub/machine.go`）。
+An always-on Linux machine runs the hub, and every other computer is connected by the hub over SSH. The other computers need no resident service: when the hub connects it runs
+`ssh <host> ~/.persona/bin/personad node --stdio` and speaks the node protocol over SSH's stdin/stdout, reconnecting automatically when it drops (`server/internal/hub/machine.go`).
 
-### 准备
+### Prerequisites
 
-| 机器 | 要有 |
+| Machine | Needs |
 | --- | --- |
-| hub 机器（Linux） | docker（Postgres 容器；不想装 Docker 就用系统自带的 Postgres，见 `docs/server.md`「数据库」）、systemd 用户服务、herdr；手机能访问 hub：同一网络、用户自配 VPN，或公网直连（优先 IPv6，放行 TLS 端口）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
-| 每台要接入的电脑 | Claude Code（或 Codex）；`~/.persona/bin/personad` 和 herdr（第 2 步部署脚本会拷过去；herdr 没有的话用它的官方安装器装到 `~/.local/bin`，用别的引擎不想装就 `JARVIS_SKIP_HERDR=1`） |
-| SSH | hub 机器能**免密码**登录每台电脑（hub 用 `BatchMode=yes`，只能用密钥），在 hub 机器的 `~/.ssh/config` 里给每台起个别名；开发机也要能 SSH 到每台（部署用） |
+| hub machine (Linux) | docker (the Postgres container; without Docker, use the system's Postgres, see `docs/server.md` ("Database")), systemd user services, herdr; the phone must be able to reach the hub: same network, a VPN you set up yourself, or direct public access (IPv6 preferred, with the TLS port open). On a NAS, or when it only serves as a hub without running Agents, it can also run entirely in Docker (`docs/docker.md`); steps 1 and 2 below are then only for installing `jarvisd` on each computer |
+| Each computer to connect | Claude Code (or Codex); `~/.persona/bin/personad` and herdr (the deploy script in step 2 copies them over; if herdr is missing, install it into `~/.local/bin` with its official installer, or set `JARVIS_SKIP_HERDR=1` if you use another engine and don't want it) |
+| SSH | The hub machine can log in to every computer **without a password** (the hub uses `BatchMode=yes`, so keys only), with an alias for each in the hub machine's `~/.ssh/config`; the dev machine also needs SSH to each one (for deploying) |
 
-在 NAT 后面、hub 连不进去的电脑（比如家里的 Mac、另一个内网里的机器），用 **tailcat**（`docs/server.md`「tailcat 打洞」）：
-那台电脑上装常驻 node、跑一次 `personad node tailcat init`，把打印的地址填进 hub.json 那台的 `tailcat_addr`。两边都不需要公网 IP、
-开端口或 Tailscale 账号；hub 先试 ssh，连不上再走 tailcat。也可以照旧从那台电脑建一条到 hub 机器的反向隧道
-（`ssh -R 2222:localhost:22 hub机器`，用 launchd / autossh 保活），hub 机器的 `~/.ssh/config` 里把别名指到 `localhost:2222`。
+For computers behind NAT that the hub can't reach (e.g. a Mac at home, a machine on another private network), use **tailcat** (`docs/server.md` ("tailcat hole punching")):
+install the resident node on that computer, run `personad node tailcat init` once, and put the printed address into that machine's `tailcat_addr` in hub.json. Neither side needs a public IP,
+open ports, or a Tailscale account; the hub tries ssh first and falls back to tailcat. You can also, as before, open a reverse tunnel from that computer to the hub machine
+(`ssh -R 2222:localhost:22 <hub machine>`, kept alive with launchd / autossh) and point the alias at `localhost:2222` in the hub machine's `~/.ssh/config`.
 
-### 步骤
+### Steps
 
-1. **开发机：写构建 / 部署配置** `~/.config/persona/config.json`（从 `config.example.json` 复制，字段见下一节）。
-   和接入机器有关的是这两段：
+1. **Dev machine: write the build / deploy config** `~/.config/persona/config.json` (copy from `config.example.json`; fields in the next section).
+   The two sections relevant to connecting machines:
 
    ```json
    "hub": { "machine": "server", "url": "http://server.example.com:18660" },
@@ -64,53 +66,53 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
    ]
    ```
 
-   `ssh` 是**开发机** SSH 到这台的主机名；`os`（`linux` / `darwin`）和可选的 `arch`（`amd64` / `arm64`）决定装哪个二进制，两个都不写或只写一个时，部署脚本直接问那台机器（`uname -s` / `uname -m`），所以漏写也不会装错（Intel 的 Mac 拿到 `darwin/amd64`、ARM 的 Linux 拿到 `linux/arm64`）；问不到（关机、连不上）的机器按连不上跳过，不算平台写错，只有写出来或答出来的平台没有对应构建才报错、整次部署以非零退出；`hostnames` 是这台自己的主机名（`hostname -s`，macOS 上也可以写 LocalHostName），部署脚本跑在这台上时据此直接本地拷贝、不走 SSH。
-   **在哪台上跑部署，就给哪台写上 `hostnames`**：没写的机器一律当成远端经 SSH 安装（跑部署的这台没写，就 SSH 连自己）。
-   开发机连不上、只有另一台（通常是 hub 机器）连得上的电脑（密钥只在那台上、路由不通）写 `"via": "<那台的 id>"`：
-   部署时先拷到那台、再从那台装过去，这时 `ssh` 是**那台**上的主机名。
+   `ssh` is the host name the **dev machine** uses to SSH to this one. `os` (`linux` / `darwin`) and the optional `arch` (`amd64` / `arm64`) decide which binary to install; when one or both are omitted, the deploy script asks that machine (`uname -s` / `uname -m`), so leaving them out won't install the wrong one (an Intel Mac gets `darwin/amd64`, ARM Linux gets `linux/arm64`). A machine that can't be asked (powered off, unreachable) is skipped as unreachable, not treated as a wrong platform; only a written or reported platform with no matching build is an error, and the whole deploy exits non-zero. `hostnames` are this machine's own host names (`hostname -s`; on macOS the LocalHostName works too); when the deploy script runs on this machine, it copies locally instead of using SSH.
+   **Add `hostnames` for whichever machine you run the deploy on**: any machine without them is treated as remote and installed over SSH (if the machine running the deploy lacks them, it SSHes to itself).
+   For a computer the dev machine can't reach but another machine (usually the hub machine) can (the key only lives there, no route), write `"via": "<that machine's id>"`:
+   the deploy copies to that machine first and installs from there, and `ssh` is then the host name **on that machine**.
 
-2. **部署**：`./scripts/deploy/deploy.sh`。编译四个平台（`linux` / `darwin` × `amd64` / `arm64`，和发布、Docker 镜像一样）的 `personad`，每台电脑拿到它自己跑的那个（装完在那台机器上跑一次 `version` 自检，跑不起来就报错、不打印 installed）；在 hub 机器上
-   起 Postgres 容器、把 `personad hub` 装成 systemd 用户服务并启动。
+2. **Deploy**: `./scripts/deploy/deploy.sh`. It builds `personad` for four platforms (`linux` / `darwin` × `amd64` / `arm64`, same as releases and the Docker image), and each computer gets the one it runs (after installing, it runs `version` once on that machine as a self-check; if that fails it reports an error and doesn't print installed). On the hub machine it
+   starts the Postgres container and installs `personad hub` as a systemd user service and starts it.
 
-3. **hub 机器：告诉 hub 接入哪些电脑**。第一次启动会生成 `~/.persona/hub.json`（0600），里面只有它自己。补上其他电脑和手机访问的地址：
+3. **hub machine: tell the hub which computers to connect**. The first start generates `~/.persona/hub.json` (0600), containing only itself. Add the other computers and the address the phone uses:
 
    ```json
    "public_url": "http://server.example.com:18660",
    "machines": [
-     { "id": "server", "name": "服务器", "kind": "local", "icon": "server" },
-     { "id": "laptop", "name": "笔记本", "kind": "ssh", "ssh_host": "laptop", "icon": "laptop" }
+     { "id": "server", "name": "Server", "kind": "local", "icon": "server" },
+     { "id": "laptop", "name": "Laptop", "kind": "ssh", "ssh_host": "laptop", "icon": "laptop" }
    ]
    ```
 
-   `ssh_host` 是 **hub 机器** SSH 到这台的主机名（两边各自的 `~/.ssh/config`，可以和第 1 步的 `ssh` 不同）；`id` 最好和第 1 步一致；
-   `name` 是 App 里显示的名字；`icon` 取 `server` / `laptop` / `desktop`。`remote_bin` 是那台电脑上 `personad` 的路径，不写时 hub 用 `~/.jarvis/bin/jarvisd`（部署脚本装的 `jarvisd`，`personad` 是它的软链）；装在别处时写上。
-   顺便可以填 `assistant`（见下文 hub.json 一节）。公网直连另加 `public.tls_listen`、`public.advertise`，按 [网络文档](network.md) 放行 TLS 端口；`public_url` 保留旧 App 能用的地址。
+   `ssh_host` is the host name the **hub machine** uses to SSH to this one (each side has its own `~/.ssh/config`, so it can differ from `ssh` in step 1); `id` should match step 1;
+   `name` is the name shown in the App; `icon` is `server` / `laptop` / `desktop`. `remote_bin` is the path of `personad` on that computer; when omitted the hub uses `~/.jarvis/bin/jarvisd` (the `jarvisd` the deploy script installs, with `personad` as a symlink to it); set it if installed elsewhere.
+   You can fill in `assistant` while you're at it (see the hub.json section below). For direct public access add `public.tls_listen` and `public.advertise` and open the TLS port per the [network doc](network.md); keep `public_url` as an address old Apps can use.
 
-4. **重启 hub 让它读到新配置**：`./scripts/deploy/deploy.sh <hub 机器 id>`（或在 hub 机器上 `systemctl --user restart jarvisd`）。
+4. **Restart the hub so it reads the new config**: `./scripts/deploy/deploy.sh <hub machine id>` (or `systemctl --user restart jarvisd` on the hub machine).
 
-5. **配对手机**：在 hub 机器上跑 `~/.persona/bin/personad hub pair`，用 App 扫二维码。命令通过本机运行中的 hub 生成临时 token；有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟供配对中的请求使用。`--legacy` 才会打印主 token。
+5. **Pair the phone**: run `~/.persona/bin/personad hub pair` on the hub machine and scan the QR code with the App. The command gets a temporary token from the hub running locally; it is valid for 10 minutes, can be redeemed for a device token only once, and after redemption has at most a 2-minute grace period for requests still in the middle of pairing. Only `--legacy` prints the main token.
 
-6. **检查**：App「设置 › 机器」每台显示在线；「Agents」tab 里能看到每台电脑上 herdr 里的会话。某台不在线时先在 hub 机器上手动跑
-   `ssh -o BatchMode=yes <ssh_host> '~/.persona/bin/personad node --stdio'`，看是 SSH 不通还是二进制不在。
+6. **Check**: in the App, **Settings › Machines** shows every machine online; the "Agents" tab shows the sessions in herdr on each computer. If one is offline, run
+   `ssh -o BatchMode=yes <ssh_host> '~/.persona/bin/personad node --stdio'` by hand on the hub machine to see whether SSH fails or the binary is missing.
 
-之后加一台电脑：两份配置的 `machines` 各加一行，跑 `./scripts/deploy/deploy.sh <新机器 id> <hub 机器 id>`。
+To add a computer later: add a line to `machines` in both configs and run `./scripts/deploy/deploy.sh <new machine id> <hub machine id>`.
 
-**推荐：其他电脑装 node 服务**（2026-11-02，[plan-hub-center.md](plan-hub-center.md) 第 0 节）：全家只装一台 hub，其他电脑不走 SSH，
-装常驻 node 加连接器 jarvis-link，一条命令或一个 App 装好，见 [link.md](link.md)「装 node 服务」：
+**Recommended: install the node service on the other computers** (2026-11-02, [plan-hub-center.md](plan-hub-center.md) section 0): install only one hub for the whole household; the other computers skip SSH and
+install a resident node plus the connector jarvis-link, with one command or one App, see [link.md](link.md) ("Installing the node service"):
 
-- Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<personad hub pair --machine <id> 给的链接>'`（这台去连 hub，`machines` 里是
-  `{"id":"laptop","name":"笔记本","kind":"link","icon":"laptop"}`，hub 要开 `public.tls_listen`），或者 `… --node --listen`（让 hub 来连，
-  打印的链接粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」，`machines` 里是 kind `service`）。
-- Mac：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`），它带着 personad，第一次运行就装好常驻 node；配对在它的菜单里。
+- Linux: `curl -fsSL <site>/install.sh | sh -s -- --node --pair '<link from personad hub pair --machine <id>>'` (this computer connects to the hub; in `machines` it is
+  `{"id":"laptop","name":"Laptop","kind":"link","icon":"laptop"}`, and the hub needs `public.tls_listen`), or `… --node --listen` (the hub connects to it;
+  paste the printed link into the hub admin UI under **Computers › Add computer › Hub connects**, and in `machines` it is kind `service`).
+- Mac: install the menu bar App "Persona Link" (`./scripts/app/mac-link.sh install`); it bundles personad and installs the resident node on first run; pairing is in its menu.
 
-不写 `ssh_host`，也不用给 hub 配 SSH。上面 1–6 步的 SSH 接入还能用，以后只当兼容。
+No `ssh_host`, and no SSH setup on the hub. The SSH setup in steps 1–6 above still works, and is kept only for compatibility from now on.
 
-### 目前的限制
+### Current limitations
 
-- 部署脚本只会把 hub 装在 Linux 上（systemd + docker），hub 暂时不能放在 Mac 上。
-- 机器列表要写两处：开发机的 `config.json` 管「部署到哪」，hub 的 `hub.json` 管「hub 接入哪些」。
+- The deploy script only installs the hub on Linux (systemd + docker); the hub can't live on a Mac for now.
+- The machine list has to be written in two places: the dev machine's `config.json` covers "where to deploy", the hub's `hub.json` covers "which machines the hub connects".
 
-## 构建 / 部署配置（config.json）
+## Build / deploy config (config.json)
 
 ```json
 {
@@ -133,50 +135,50 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
 }
 ```
 
-| 字段 | 用途 |
+| Field | Purpose |
 | --- | --- |
-| `app.bundle_id` | iPhone App 的 bundle id；手表是 `<id>.watchkitapp`，测试是 `<id>.tests`。写进 `apple/Config.xcconfig` 的 `JARVIS_BUNDLE_ID` |
-| `app.team_id` | 开发者团队，写进 `Config.xcconfig` 的 `DEVELOPMENT_TEAM`；导出时的 ExportOptions 也用它 |
-| `app.app_group` | App 和灵动岛扩展共享文件的 App Group（形象和形象包的图，`docs/live-activity.md`「形象」），写进 `Config.xcconfig` 的 `JARVIS_APP_GROUP`。不写就是 `group.<app.bundle_id>`；要先在开发者网站上注册（`docs/release.md`「App Group」） |
-| `app.push_relay` | 推送中继的地址（比如 `https://<中继域名>/relay`），写进 `Config.xcconfig` 的 `JARVIS_PUSH_RELAY`、Info.plist 的 `JarvisPushRelay`：App 向它登记，没有 APNs key 的 hub 经它推送（`docs/push-relay.md`）。不写就不登记，只有带 `apns.json` 的 hub 能推 |
-| `app.carplay_voice` | 布尔，默认 `false`：打开后签名带上 CarPlay 语音对话的 entitlement（`com.apple.developer.carplay-voice-based-conversation`），车里才能看到 Persona。这个 entitlement 要先向 Apple 申请、批准后在 App ID 上打开，没批准前别开，否则签名失败。`scripts/persona_config.py xcconfig` 会生成 `apple/PersonaCarPlay.entitlements` 并写 `PERSONA_APP_ENTITLEMENTS`（见 `docs/carplay.md`） |
-| `app.meta_wearables` | Meta 眼镜（`docs/meta-glasses.md`）：`enabled` 为 true 时 `persona_config.py env` 导出 `PERSONA_META_WEARABLES=YES`，xcodegen 才把 `apple/meta-wearables.yml`（Meta 的 DAT SDK 和它要的 Info.plist 键）并进工程；`app_id`、`client_token` 是 Wearables Developer Center 里应用的 ID 和 Client Token，写进 `Config.xcconfig` 的 `PERSONA_META_APP_ID`、`PERSONA_META_CLIENT_TOKEN`，眼镜开着 Developer Mode 时可以不填（`app_id` 为 0）。默认关：要 Xcode 26.4 以上，而且外部 TestFlight / App Store 审核有风险 |
-| `app.tunnel_core` | App 内隧道的核心所在的目录（`libpersonatunnel.a`、`module.modulemap` 和头文件，[network.md](network.md)「经 App 内隧道连 hub」）。设了才写进 `Config.xcconfig` 的 `PERSONA_TUNNEL_INCLUDE`、`PERSONA_TUNNEL_LDFLAGS`，只有真机构建链接它；目录里缺文件时 `xcconfig` 直接报错。不写就没有 App 内隧道 |
-| `app_store.*` | `release.sh` / `asc*.py`（`asc_cli.py` 把它们交给 App Store Connect CLI，`docs/release.md`「用 asc 发版」）：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限（`public_link_limit`，0 为不限）、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖（key 文件路径 `ASC_KEY_PATH` 或 `ASC_PRIVATE_KEY_PATH`） |
-| `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |
-| `hub.url` | `sim.sh` 配对模拟器用的地址；示例中的 HTTP 仅用于内网 / VPN，公网入口另配 `hub.json` 的 `public` |
-| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os`（`linux` / `darwin`）和 `arch`（`amd64` / `arm64`，可选）决定装哪个二进制，缺的那个问机器自己（`uname`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh；跑部署的那台要写上，没写的一律走 ssh）；`via` 是另一台的 id：开发机连不上这台时，经那台再 ssh 一次把二进制传过去（那台上不留文件），这时 `ssh` 是那台上的主机名 |
-| `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
-| `publish.site_url` | `publish.sh` 把 `personad` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 personad」）；不写就不发布 |
-| `publish.getting_started_url` | iOS / Mac 首屏「还没有 hub？」打开的公开页面（`docs/getting-started.md` 发布出来的地址），写进 Info.plist 的 `PersonaGettingStartedURL`；不写这一行就不显示（#4195） |
-| `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
-| `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`persona_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
-| `android.application_id` | Android App 的 application id（`scripts/app/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
-| `android.google_oauth_scheme` | Android App 接 Gmail 的 Google 登录回调用的 scheme：hub `google.client_id` 的反向 client ID（`docs/mail.md`「Android」）；不写就只能用应用专用密码加 Gmail |
-| `mac.link_bundle_id` | Mac 菜单栏 App「Persona Link」的 bundle id（`scripts/app/mac-link.sh`，`docs/link.md`）；环境变量 `PERSONA_LINK_BUNDLE_ID`（旧 `JARVIS_LINK_BUNDLE_ID`）优先，不写用占位的 `com.example.jarvis.link` |
+| `app.bundle_id` | The iPhone App's bundle id; the watch is `<id>.watchkitapp`, tests are `<id>.tests`. Written to `JARVIS_BUNDLE_ID` in `apple/Config.xcconfig` |
+| `app.team_id` | Developer team, written to `DEVELOPMENT_TEAM` in `Config.xcconfig`; the ExportOptions used for export also use it |
+| `app.app_group` | The App Group through which the App and the Dynamic Island extension share files (avatar and avatar pack images, `docs/live-activity.md` ("Avatar")), written to `JARVIS_APP_GROUP` in `Config.xcconfig`. Defaults to `group.<app.bundle_id>`; it must be registered on the developer site first (`docs/release.md` ("App Group")) |
+| `app.push_relay` | Push relay address (e.g. `https://<relay domain>/relay`), written to `JARVIS_PUSH_RELAY` in `Config.xcconfig` and `JarvisPushRelay` in Info.plist: the App registers with it, and hubs without an APNs key push through it (`docs/push-relay.md`). Without it the App doesn't register, and only hubs with `apns.json` can push |
+| `app.carplay_voice` | Boolean, default `false`: enabling adds the CarPlay voice-conversation entitlement (`com.apple.developer.carplay-voice-based-conversation`) to signing, making Persona visible in the car. Apply to Apple first and enable it on the App ID after approval; do not enable before approval or signing fails. `scripts/persona_config.py xcconfig` generates `apple/PersonaCarPlay.entitlements` and writes `PERSONA_APP_ENTITLEMENTS` (see `docs/carplay.md`) |
+| `app.meta_wearables` | Meta glasses (`docs/meta-glasses.md`): when `enabled` is true, `persona_config.py env` exports `PERSONA_META_WEARABLES=YES`, and only then does xcodegen merge `apple/meta-wearables.yml` (Meta's DAT SDK and the Info.plist keys it needs) into the project; `app_id` and `client_token` are the app's ID and Client Token from the Wearables Developer Center, written to `PERSONA_META_APP_ID` and `PERSONA_META_CLIENT_TOKEN` in `Config.xcconfig`; they can be left empty while the glasses are in Developer Mode (`app_id` 0). Off by default: it needs Xcode 26.4 or later, and carries risk in external TestFlight / App Store review |
+| `app.tunnel_core` | Directory containing the in-App tunnel core (`libpersonatunnel.a`, `module.modulemap`, headers; [network.md](network.md) ("Connecting to the hub through an in-App tunnel")). Only when set does it write `PERSONA_TUNNEL_INCLUDE` and `PERSONA_TUNNEL_LDFLAGS` into `Config.xcconfig`; only hardware builds link it. Missing files cause `xcconfig` to fail immediately. Omitted means no in-App tunnel |
+| `app_store.*` | For `release.sh` / `asc*.py` (`asc_cli.py` hands them to the App Store Connect CLI, `docs/release.md` ("Releasing with asc")): the API key (`key_id`, `issuer_id`, `key_path`), the App record's numeric ID, internal testers, the TestFlight feedback email; `external` is external testing (group name, public link switch and tester limit (`public_link_limit`, 0 means unlimited), privacy policy URL, extra testers invited by email, Beta App Review contact and notes, `docs/release.md`). Env vars such as `ASC_KEY_ID` can still override (key file path `ASC_KEY_PATH` or `ASC_PRIVATE_KEY_PATH`) |
+| `hub.machine` | Which machine the hub runs on (an id in `machines`): `deploy.sh` starts Postgres and the systemd service on it, `test-server.sh` runs tests on it, `sim.sh` reads the token from it |
+| `hub.url` | The address `sim.sh` uses to pair the simulator; the HTTP in the example is only for a private network / VPN; configure the public entry separately in `public` of `hub.json` |
+| `machines[]` | Machines where `deploy.sh` installs `personad`: `ssh` is the ssh host name; `os` (`linux` / `darwin`) and `arch` (`amd64` / `arm64`, optional) decide which binary to install, and whichever is missing is asked from the machine itself (`uname`); `hostnames` are the machine's own host names (when the deploy runs on it, it copies directly without ssh; the machine running the deploy must list them, and any machine without them goes through ssh); `via` is another machine's id: when the dev machine can't reach this one, it ssh-es once more through that machine to transfer the binary (leaving no files there), and `ssh` is then the host name on that machine |
+| `simulator` | Default simulator UDID for `sim.sh` (override with `SIM=<udid>`) |
+| `publish.site_url` | Where `publish.sh` publishes `personad` and `install.sh` (the domain of the `site/` worker, `docs/release.md` ("Publishing personad")); without it nothing is published |
+| `publish.getting_started_url` | Public page opened by "No hub yet?" on the iOS / Mac welcome screen (the published address of `docs/getting-started.md`), written to Info.plist `PersonaGettingStartedURL`; without it, this row is hidden (#4195) |
+| `publish.wrangler` | The wrangler command used to deploy that worker (e.g. a script that wraps authentication); defaults to `npx wrangler` |
+| `xcode` | Optional: which Xcode to build and release with (path to the `.app`); `persona_config.py env` exports `DEVELOPER_DIR` from it (a value already in the environment wins). Supporting iPhone Duo needs Xcode 27 or later; Apps built with older versions don't extend under the status bar and camera on Duo |
+| `android.application_id` | The Android App's application id (`scripts/app/android.sh`, `docs/android.md`); defaults to `app.bundle_id` |
+| `android.google_oauth_scheme` | The scheme the Android App uses for the Google sign-in callback for Gmail: the reversed client ID of the hub's `google.client_id` (`docs/mail.md` ("Android")); without it Gmail can only be added with an app-specific password |
+| `mac.link_bundle_id` | Bundle id of the Mac menu bar App "Persona Link" (`scripts/app/mac-link.sh`, `docs/link.md`); the env var `PERSONA_LINK_BUNDLE_ID` (old `JARVIS_LINK_BUNDLE_ID`) wins; defaults to the placeholder `com.example.jarvis.link` |
 
-`python3 scripts/persona_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `apple/Config.xcconfig`；
-`sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/persona_config.py xcconfig`。
-仓库里提交的 `project.yml` 和 `Info.plist` 只写 `$(JARVIS_BUNDLE_ID)` / `$(PRODUCT_BUNDLE_IDENTIFIER)`，钥匙串的 service 用运行时的 bundle id。
+`python3 scripts/persona_config.py env` prints shell variables (scripts `eval` it at the top), and `xcconfig` generates `apple/Config.xcconfig`;
+`sim.sh` / `release.sh` generate it automatically. Before running `xcodegen` directly or opening Xcode, run `python3 scripts/persona_config.py xcconfig` once.
+The committed `project.yml` and `Info.plist` only reference `$(JARVIS_BUNDLE_ID)` / `$(PRODUCT_BUNDLE_IDENTIFIER)`, and the keychain service uses the bundle id at runtime.
 
-## Codex app-server 多实例
+## Multiple Codex app-server instances
 
-`hub.json` 的每台机器可以配置 `codex_homes`（目录数组）、`codex_servers`（`id`、`name`、`home`、`endpoint`）和可选的 `codex_discovery`（默认自动发现，设 false 只使用登记的来源）。例如：
+Each machine in `hub.json` can configure `codex_homes` (an array of directories), `codex_servers` (`id`, `name`, `home`, `endpoint`), and optionally `codex_discovery` (automatic discovery by default; false uses only registered sources). For example:
 
 ```json
 {
   "codex_homes": ["~/.codex-profile"],
   "codex_servers": [
-    {"id": "desktop", "name": "桌面实例", "home": "~/.codex-profile", "endpoint": "unix://<socket 的绝对路径>"}
+    {"id": "desktop", "name": "Desktop instance", "home": "~/.codex-profile", "endpoint": "unix://<absolute socket path>"}
   ]
 }
 ```
 
-无需硬编码应用名：node 每 30 秒发现当前用户的 Codex/app-server 进程、`CODEX_HOME` 和已开启的 listen 入口，已知 home 下存在的官方 control socket 也可发现。已发现目录和命名实例由 hub 的 Postgres settings 记忆；进程/连接代际不持久化。私有路径只放运行配置，不提交配置实值。
+No application name needs hard-coding: every 30 seconds the node discovers the current user's Codex/app-server processes, `CODEX_HOME`, and enabled listen endpoints; existing official control sockets under known homes can also be discovered. Discovered directories and named instances are remembered in the hub's Postgres settings; process/connection generations are not persisted. Private paths belong only in runtime config; do not commit actual config values.
 
-Unix socket 与直接父目录必须属于当前用户且不对组/其他用户开放；里面走 WebSocket。TCP 入口只允许字面回环 IP，禁止外部主机、用户信息和查询凭据，也不使用系统 HTTP 代理。没有入口的 stdio 只读；不会启动 daemon、替换桌面应用或放宽文件权限。更多限制见 `codex-app-server.md`。
+The Unix socket and its immediate parent directory must belong to the current user and be inaccessible to groups/other users; WebSocket runs inside. TCP endpoints allow only literal loopback IPs, disallow external hosts, userinfo, and query credentials, and do not use the system HTTP proxy. Stdio without an endpoint is read-only; no daemon is started, no desktop app replaced, and no file permissions loosened. More limitations in `codex-app-server.md`.
 
-## hub 运行配置（hub.json）
+## hub runtime config (hub.json)
 
 ```json
 {
@@ -189,17 +191,17 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
     "advertise_lan": true
   },
   "security": { "allow_public_plaintext": false, "trusted_cidrs": [] },
-  "name": "家里",
+  "name": "Home",
   "admin": { "access": "lan" },
   "token": "…",
   "database_url": "…",
   "machines": [
-    { "id": "server", "name": "服务器", "kind": "local", "icon": "server" },
-    { "id": "laptop", "name": "笔记本", "kind": "ssh", "ssh_host": "laptop", "icon": "laptop" }
+    { "id": "server", "name": "Server", "kind": "local", "icon": "server" },
+    { "id": "laptop", "name": "Laptop", "kind": "ssh", "ssh_host": "laptop", "icon": "laptop" }
   ],
   "assistant": {
-    "owner": "你的名字",
-    "notes": "- 代码在 `~/code`。\n- 工作数据用 `xxx-*` skills。",
+    "owner": "Your name",
+    "notes": "- Code is in `~/code`.\n- Use `xxx-*` skills for work data.",
     "machine": "server",
     "launcher": "claude"
   },
@@ -209,224 +211,226 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 }
 ```
 
-- 第一次运行只写本机一台（`kind: local`，id 是主机名），生成的 `public_url` 是本机主机名对应的 HTTP 地址；这只是内网兼容入口。TLS 默认不开启，上例显式开启 `:18662`（示例端口，可改），其他机器和域名自己配置。
-- `listen` 是保留的 HTTP 监听，默认 `:18660`；`public_url` 会进入二维码的 `url`，也会进入候选列表。现有 iOS / Watch 仍需它指向可访问的内网 / VPN 地址。
-- `public` 和 `security` 的逐项说明、默认值及放行方法见 [网络配置](network.md#hubjson-网络配置)。候选地址只在鉴权后下发。
-- `security.proxy_protocol`（可选，默认不写）：hub 前面是同机的端口转发、内网穿透或 nginx `stream` 透传时，公网连接在 hub 看来都来自回环。
-  写上 `{"from": ["127.0.0.1/32"]}`，这些上游的连接必须带 PROXY 头（v1 / v2），hub 按头里的真实来源判断；`listeners` 默认只有 `tls`。
-  写法、规则和自查见 [network.md](network.md#proxy-protocol)。
-- `name`（可选）：这台 hub 给人看的名字（比如「家里」），电脑的 jarvis-link（Mac 菜单栏）和以后的互联、多 hub 客户端都显示它。
-  不写时用 hub 机器主机名的短名；主机名是 Docker 容器 id 或者 `JARVIS_LOCAL_NODE=0` 时用 `hub-<hub_id 前 6 位>`。手改文件要重启 hub；
-  在管理界面「概览」里改的立刻生效（[admin.md](admin.md)）。
-- `admin`（可选）：hub 管理界面（`<hub 地址>/admin`，[admin.md](admin.md)）。`access` 是谁能打开：`loopback` / `lan`（默认）/ `cidrs` / `any`
-  （必须 TLS）；`cidrs` 是 `access: cidrs` 时放进来的网段；`session_hours` 是登录多久过期（默认 12）；`first_setup: "code"`（`personad hub setup` 新装时写）让局域网来源设第一个密码也要设置码，不写时只有回环要。放宽只能在 hub 机器上
-  `personad hub admin access <范围>`（或部署脚本），网页里只能收窄；环境变量 `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` 优先于它。
-  管理界面改 hub.json 时原子写、保留不认识的字段（[admin.md](admin.md)「改 hub.json」）。
-- `mesh`（可选，hub 互联，[mesh.md](mesh.md)）：`discovery`（默认 true：在局域网里用 mDNS 广播自己、列出发现的 hub；Docker 桥接网络里收不到）、
-  `path_switch_seconds`（默认 60：一台电脑有更好的路时，要一直更好这么久中心才换过去；断了的路马上换，不等）、
-  `plaintext`（默认关：`allow` 列出可以不走 TLS 配对和互联的 `*`、网段 / 地址、`192.0.2.*`，以及只管拨号的主机名 / `*.example.com`，`advertise` 列出别的 hub 明文连这台用的 `http://` 地址；不加密、不钉扎，见 [mesh.md](mesh.md)「明文链路」）。互联的对端、组的中心和任期存在
-  Postgres，不在这里。第一版的 `takeover_seconds` 不再用。
-- `link`（可选，电脑链路的心跳，[link.md](link.md)「心跳」）：`ping_seconds`（多久 ping 一次，默认 10）、`ping_timeout_seconds`（多久没有 pong 就断开，默认 5）。
-  不写或写 0 用默认值，只写一项时另一项用默认值；范围 1–600 秒，超过 600 按 600。管的是 hub 在 Persona Link 的链路和流上的 ping、管理者在连接器（kind service）的流上的 ping，
-  写了的时候管理者还把它告诉 Persona Link（主动模式在 `endpoints` 里、被动模式在开流的请求头里），电脑那边照着 ping；hub 之间的互联链路不受影响，仍是 10 秒 / 5 秒。
-  慢链路（hub 到电脑只有几十 KB/s）上 ping 要排在正在写的数据后面（一块 1 MiB 的数据 30 KB/s 要写 30 多秒），超时比写完一块的时间短就一定误判断开，这时把
-  `ping_timeout_seconds` 调到比它长（比如 `{"ping_seconds": 30, "ping_timeout_seconds": 90}`）；死链路要等约「间隔 + 超时」才发现。网络库发 ping、回 pong
-  本身最多等 5 秒，转发一条消息最多写 1 分钟，这两个调不了（link.md「心跳」）。
-  旧版的 Persona Link 不认这两个值，仍按自己的 10 秒 / 5 秒 ping（主动模式只 ping 链路本身，被动模式还 ping 每条流），要一起升级。手改文件要重启 hub。
-- `machines`：2026-11-04 起是 hub 在握手时交给管理者（助手的进程）的默认值，**由管理者去连**（[machines.md](machines.md)「谁连电脑」）；下面说「hub 拨」「hub 连过去」的，
-  实际拨号的是管理者（hub 机器上它是 hub 的子进程，用同一个 HOME：ssh 配置、tailcat key、`~/.persona/secret.key` 都是这台的）。管理界面运行中加的电脑也交给它，马上连。
-- `machines[].kind`：`local`（hub 自己这台）、`service`（hub 拨这台连接器的被动端口，「hub 来连」，见下一条）、`link`（这台的 jarvis-link
-  主动连 hub，「电脑来连」，[link.md](link.md)）；`ssh`（hub 经 `ssh_host` 连过去）、`tailcat`（只走 tailcat，见下下一条）只为已有的配置保留，
-  管理界面不再添加，迁移步骤见 [mesh.md](mesh.md)「SSH / tailcat：兼容」。同一台电脑可以配几项（比如 service 和 link 各一项），hub 按
-  machine_uid 认出是同一台，只列一次、用最好的那条（[mesh.md](mesh.md)「一台电脑多条路」）。
-- `machines[].address`、`machines[].proxy`（kind `service`）：连接器的 `主机:端口`（`jarvis-link pair --listen` 的链接里带着，管理界面「添加电脑 ›
-  hub 来连」粘贴链接就填好）；`proxy` 可选，`socks5://[用户:密码@]主机:端口`，hub 经这个 SOCKS 代理去连（这台只能从某台机器后面到达时）。
-  连接器的公钥指纹和 hub 给它的凭据不在 hub.json：配对时存进 Postgres（凭据用 `~/.persona/secret.key` 加密）。
-- `machines[].tailcat_addr`（可选）：那台电脑 `personad node tailcat init` 打印的 `tc…` 地址，hub ssh 不过去时经 tailcat 连
-  （`docs/server.md`「tailcat 打洞」）。地址是密钥（带 WireGuard 的预共享密钥），和 token 一样只放 hub.json。`kind: "tailcat"` 表示
-  只走 tailcat、不试 ssh（没有 `ssh_host`）；`kind: "ssh"` 加 `tailcat_addr` 是先 ssh、不行再 tailcat。
-- 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN`、`JARVIS_ADMIN_ACCESS` 覆盖同名的设置（新名 `PERSONA_*` 优先，不写回文件），Docker 部署靠它们；`JARVIS_ADMIN_ACCESS` 有值时连同 `JARVIS_ADMIN_CIDRS` 一起换掉整个 `admin` 的访问范围，只设 `JARVIS_ADMIN_CIDRS` 不生效
-  （`docs/docker.md`「环境变量」）；`JARVIS_LOCAL_NODE=0` 时第一次运行不写本机那台。
-- `tailcat.derp_map_url`（可选）：用自建的 DERP 中继（derper，做法见 `docs/server.md`「自建中继」）代替 Tailscale 的公共中继时，它的 DERP map 地址；各台电脑
-  `init` 时要带同一个 `--derp-map-url`。
-- `machines[].claude_config_dirs`（可选）：这台机器上除 `~/.claude` 以外的 Claude Code 配置目录（启动器设的 `CLAUDE_CONFIG_DIR`，
-  比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
-  这里只需要写「平时不开、但想在列表里看到它的历史会话」的目录。反过来，不想看到的目录（自动化脚本自己的 `CLAUDE_CONFIG_DIR`）
-  在 App 的设置 › Claude Code ›「屏蔽的配置目录」里屏蔽，存在数据库，不写 hub.json（`docs/claude-integration.md`「屏蔽配置目录」）。
-- `machines[].claude_start_dir`（可选）：Persona 用 `claude` 启动器在这台机器上开 Agent（新建 Agent、待办派发、助手的 agent_start、助手对话）时带的
-  `CLAUDE_CONFIG_DIR`，比如 `"~/.config/claude-code/profiles/work"`（`~/` 是那台机器的 home）。给「claude 登录在某个 profile 目录、不在 `~/.claude`」的电脑用：
-  不写的话 Persona 开的 claude 用默认目录，那里没登录，一开口就回 `Not logged in · Please run /login`（#1459）。只管 `claude` 这一个启动器，
-  `~/.zshrc` 的 alias / 函数和 Persona 管理的启动器照旧用它们自己的设置；这个目录也会自动加进上面找会话的目录。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
-- `machines[].botmux`（可选）：写 `false` 时那台电脑的 node 不列 botmux 的会话，也不跑 botmux（不跑 `botmux observe`、`botmux dashboard current`）；
-  不写就和以前一样，装了 botmux 就列（`docs/engines.md`「botmux」）。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
-  现在它只是默认值：机器详情「引擎」下的「同时显示 botmux 会话」按机器存在 settings（`botmux/<机器 id>`），设过就以它为准（#2575）。
-- `machines[].herdr_autostart`（可选）：写 `false` 时那台电脑的 node 不在 herdr 没运行时自己拉起它的 server；不写是开
-  （`docs/engines.md`「herdr 没在运行时」）。**只是默认值**：用户在「设置 › 机器 › 引擎」里按机器选过之后，以那次选择为准
-  （存在 hub 的 settings，`herdr_autostart/<机器 id>`），再改这里不影响已经选过的机器。
-- `machines[].herdr_autoinstall`（可选，默认关）：写 `true` 时那台电脑没装 herdr，node 自己拉起 herdr 之前（启动时、新建 / 继续会话前）先装上固定版本；
-  不写时只有用户点 Agents 列表的「启动」才装（`docs/engines.md`「没装 herdr 时」）。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
-- `machines[].claude_global_hooks`（可选，默认关）：写 `true` 时那台电脑的 node 往默认 Claude 配置目录的 `settings.json` 里加**只报告**的 hooks（异步、短超时、不回答审批），
-  让不是 Persona 启动的会话也把回合和提问事件报给 Persona；写 `false` 或删掉这个键，下次连上时把 Persona 加的条目拿掉（没有就什么都不写）。
-  不会加会阻塞的 hook：用户全局配置里常有别的工具的同步 PermissionRequest hook，叠加会拖住终端对话框（`docs/claude-integration.md`「全局只报告的 hooks」）。
-  node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
-- `machines[].usage_windows`（可选，默认开）：写 `false` 时那台电脑的 node 不读 Codex / Claude 的订阅额度窗口（不读 rollout 里的 `rate_limits`，
-  不读 `~/.persona/usage/claude*.json`），管理者也不问它；不写就读，只读本机文件、不碰任何登录凭据，每 5 分钟一次（`docs/usage-windows.md`）。
-  node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
-- `machines[].launchers`（可选）：给这台电脑另加 node 列不出来的启动器（比如 shell 包装函数），或改 node 报上来的同名启动器的 `agent_type`、`base_url`、`model`（没写的字段照旧），
-  比如 `[{"name":"example_wrapper","agent_type":"codex"}]`：包装函数实际跑的是 Codex（`agent_type` 是 `claude` / `codex` / `traex` 或 runtime 的 agent；`docs/protocol.md`、`docs/model-config.md`）。
-- `usage`（可选）：账号池网关（中转 relay 之类）的订阅额度来源，合并进侧边栏的用量条（`docs/usage-windows.md`「账号池网关」，#2595）。
-  `usage.sources[]`（最多 8 个）：`id`、`name`（侧边栏上的来源名）、`type`（`relay` / `generic`；旧版本写的类型名照样能读，当成 `relay`，下次在管理界面改这个来源时写成新名字）、`url`、`key`（网关的管理 Key，**密钥：只存在 `hub.json`（0600）**，管理界面和接口读不回来，日志里没有）、`enabled`（写 `false` 停用这一个）。
-  `usage.enabled`（写 `false` 是总开关）、`usage.poll_minutes`（每个来源多久读一次，默认 5，1 到 1440）。这一节是**管理者**的（`personad assistant`，它自己读写同一个 `hub.json`，hub 不读）：它只读网关缓存的数字（`refresh=false`），请求从管理者发出，节点不碰网关。
-  管理界面 `/admin/usage` 里改（hub 转给管理者），立刻生效；手改要重启 hub（管理者跟着重启），或打开管理界面的这一页（管理者会采用磁盘上的版本）。
-- `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
-  （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
-  `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。
-- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token`（老写法，**不再生效**）：#1571 起经飞书网关接飞书由扩展提供
-  （`docs/feishu.md` 开头、`docs/extensions.md`），hub 还会读到这几个键，但不拿它们连飞书网关，也不交给助手；写了 `token` 或 `container` 时
-  hub 启动时在日志里提示一行。Agent token、容器、地址和加密消息的独立授权（`native_olk_token`）改在接飞书扩展的设置里填，hub.json 里的可以删掉。
-- `lark.account`（可选整数，仍生效）：默认的飞书网关账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号，允许范围 1–999999999，
-  例如 `"lark": {"account": 2}`。账号编号来自飞书网关 `/accounts` 的 `id`，不是飞书用户 ID。收件箱里来自默认账号的飞书条目操作时不带 `ol_account`，
-  来自其他账号的带上它们自己的编号；收件箱 Agent 处理飞书条目时也用这个默认账号（`docs/feishu.md`「多账号」）。默认账号以接飞书扩展的为准（它的消息来源 `GET accounts` 的 `default`，#5098）：
-  扩展取不到时用上次取到的，管理者启动后一次都没取到才用这个字段。修改后重启 hub（`systemctl --user restart jarvisd`）。
-  不同账号的服务端收件箱记录隔离并保留，切回后可继续查看。
-- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为接飞书扩展（飞书网关）之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
-  `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`。`bin` 是命令名或绝对路径，默认 `lark-cli`，不是绝对路径时在登录 shell 里找
-  （npm 全局装的常在 nvm 这类目录下，systemd 的 PATH 里没有）；`profile` 是 lark-cli 的 `--profile`，空的用它的默认档。
-  应用和用户的登录都留在 lark-cli 自己那里（`~/.lark-cli`），不进 `hub.json`：在助手所在的机器上自己跑一次
-  `lark-cli auth login --domain all`（全部领域的用户权限；没有浏览器加 `--no-wait --json`，在手机上点链接授权），一周内没用过要重新登录。
-  现在（L1）只给助手用：它的 PATH 上有 `lark-cli`（带上配置的 `profile`），写操作过闸门（`docs/assistant.md`「飞书：lark-cli」）。
-- `lark.prefer`（可选）：接飞书的扩展（经飞书网关）和 lark-cli 都有时谁是主来源：不写（默认，扩展这一路优先）或 `cli`；其他值是提供飞书的扩展自己的来源名，原样交给它、由它校验；现在只影响助手的提示词怎么分工。
-- `lark_gate`（可选，老写法，照样生效；新规则写进下面的 `connector_gate`，`connector` 写 `lark`）：助手写飞书时的闸门规则（接飞书扩展的命令闸门，以及 lark-cli），排在 `connector_gate` 的 `lark` 规则之后、内置规则前面，第一条匹配的说了算：
-  `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]`（`action` 是 `allow` / `confirm` / `deny`，可加 `body` 按顶层字段匹配；
-  `docs/assistant.md`「飞书：接飞书的扩展带的 skill」）。lark-cli 的命令写成 `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
-  （`path` 是命令的词用 `/` 连起来，`*` / `**` 通配同上），匹配上就不再看 lark-cli 自报的风险等级。
-- `connector_gate`（可选）：连接器写操作（`github_comment` 这类）的闸门规则，第一条匹配的说了算，没有匹配的就在手机上逐次确认：
+- First run writes only the local machine (`kind: local`, id is the host name); the generated `public_url` is the HTTP address for that host name, only a private-network compatibility endpoint. TLS is off by default; the example explicitly enables `:18662` (an example port, changeable). Configure other machines and domains yourself.
+- `listen` is the retained HTTP listener, default `:18660`; `public_url` goes into the QR code's `url` and the candidate list. Existing iOS / Watch clients still need it to point to a reachable private-network / VPN address.
+- For each `public` and `security` setting, its defaults, and how to allow traffic, see [network configuration](network.md#hubjson-网络配置). Candidate addresses are sent only after authentication.
+- `security.proxy_protocol` (optional, omitted by default): with same-machine port forwarding, a reverse tunnel, or nginx `stream` passthrough in front of the hub, public connections all look like loopback to the hub.
+  Set `{"from": ["127.0.0.1/32"]}`: connections from these upstreams must carry a PROXY header (v1 / v2), and the hub checks the real source in the header; `listeners` defaults to only `tls`.
+  Syntax, rules, and self-checks in [network.md](network.md#proxy-protocol).
+- `name` (optional): the hub's display name (e.g. "Home"), shown by jarvis-link on computers (Mac menu bar) and by future linked-hub and multi-hub clients.
+  Defaults to the short host name of the hub machine; if the host name is a Docker container id or `JARVIS_LOCAL_NODE=0`, it uses `hub-<first 6 chars of hub_id>`. Manual file edits require a hub restart;
+  edits in the admin UI's "Overview" take effect immediately ([admin.md](admin.md)).
+- `admin` (optional): hub admin UI (`<hub address>/admin`, [admin.md](admin.md)). `access` controls who can open it: `loopback` / `lan` (default) / `cidrs` / `any`
+  (requires TLS); `cidrs` lists networks allowed with `access: cidrs`; `session_hours` is the login expiry (default 12); `first_setup: "code"` (written by a fresh `personad hub setup` install) requires a setup code even from LAN sources to set the first password; without it only loopback requires one. Access can only be broadened on the hub machine with
+  `personad hub admin access <scope>` (or the deploy script); the web UI can only narrow it. Env vars `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` take precedence.
+  The admin UI writes hub.json atomically and preserves unknown fields ([admin.md](admin.md) ("Editing hub.json")).
+- `mesh` (optional, linked hubs, [mesh.md](mesh.md)): `discovery` (default true: advertise itself with mDNS on the LAN and list discovered hubs; unavailable inside a Docker bridge network),
+  `path_switch_seconds` (default 60: when a computer has a better path, it must stay better this long before the primary switches; broken paths switch immediately),
+  `plaintext` (off by default: `allow` lists `*`, networks / addresses, `192.0.2.*`, and host names / `*.example.com` used only for dialing that may pair and link without TLS; `advertise` lists `http://` addresses other hubs use to connect to this one in plaintext; no encryption or pinning, see [mesh.md](mesh.md) ("Plaintext links")). Peers, the group's primary, and its term live in
+  Postgres, not here. The first version's `takeover_seconds` is no longer used.
+- `link` (optional, computer-link heartbeat, [link.md](link.md) ("Heartbeat")): `ping_seconds` (ping interval, default 10), `ping_timeout_seconds` (time without pong before disconnecting, default 5).
+  Omitted or 0 uses the default; setting only one leaves the other at its default. Range 1–600 seconds, capped at 600. Controls the hub's pings on Persona Link connections and streams, and the manager's pings on connector (kind service) streams.
+  When set, the manager also tells Persona Link (in `endpoints` for active mode, in stream-opening request headers for passive mode), and the computer pings accordingly; hub-to-hub links are unaffected and remain 10 seconds / 5 seconds.
+  On slow links (only tens of KB/s between hub and computer), pings queue behind data being written (a 1 MiB chunk at 30 KB/s takes over 30 seconds); a timeout shorter than writing one chunk always causes a false disconnect. Set
+  `ping_timeout_seconds` longer (e.g. `{"ping_seconds": 30, "ping_timeout_seconds": 90}`); a dead link then takes roughly "interval + timeout" to detect. The network library's ping send and pong reply
+  themselves wait at most 5 seconds, and forwarding a message writes for at most 1 minute; neither is configurable (link.md ("Heartbeat")).
+  Older Persona Link versions do not recognize these settings and still ping at their own 10 seconds / 5 seconds (active mode only pings the connection itself; passive mode also pings every stream); upgrade both together. Manual file edits require a hub restart.
+- `machines`: since 2026-11-04 these are defaults handed by the hub to the manager (the assistant process) at handshake, and **the manager connects them** ([machines.md](machines.md) ("Who connects computers")). Where the text below says "the hub dials" or "the hub connects",
+  the manager actually dials (on the hub machine it is the hub's child process using the same HOME: ssh config, tailcat key, and `~/.persona/secret.key` are all this machine's). Computers added in the admin UI at runtime are also handed to it and connected immediately.
+- `machines[].kind`: `local` (the hub's own machine), `service` (the hub dials this connector's passive port, "Hub connects", see the next item), `link` (this machine's jarvis-link
+  actively connects to the hub, "Computer connects", [link.md](link.md)); `ssh` (the hub connects via `ssh_host`) and `tailcat` (tailcat only, see the item after next) are retained only for existing configs,
+  no longer added through the admin UI; migration steps in [mesh.md](mesh.md) ("SSH / tailcat: compatibility"). One computer may have several entries (e.g. a service and a link); the hub recognizes
+  the same computer by machine_uid, lists it once, and uses the best path ([mesh.md](mesh.md) ("Multiple paths to one computer")).
+- `machines[].address`, `machines[].proxy` (kind `service`): the connector's `host:port` (included in the link from `jarvis-link pair --listen`; paste it under **Add computer ›
+  Hub connects** in the admin UI to fill it in); optional `proxy`, `socks5://[user:password@]host:port`, lets the hub connect through this SOCKS proxy (when the computer is only reachable through another machine).
+  The connector's public-key fingerprint and the credentials the hub gives it are not in hub.json: pairing stores them in Postgres (credentials encrypted with `~/.persona/secret.key`).
+- `machines[].tailcat_addr` (optional): the `tc…` address printed by `personad node tailcat init` on that computer; the hub connects through tailcat when ssh fails
+  (`docs/server.md` ("tailcat hole punching")). The address is a secret (includes the WireGuard preshared key); keep it only in hub.json, like the token. `kind: "tailcat"` means
+  tailcat only, no ssh attempt (no `ssh_host`); `kind: "ssh"` plus `tailcat_addr` means ssh first, tailcat on failure.
+- Env vars `JARVIS_DATABASE_URL`, `JARVIS_PUBLIC_URL`, `JARVIS_LISTEN`, `JARVIS_ADMIN_ACCESS` override the corresponding settings (new `PERSONA_*` names win, not written back to the file); Docker deployments use them. A nonempty `JARVIS_ADMIN_ACCESS` replaces the whole `admin` access scope together with `JARVIS_ADMIN_CIDRS`; setting only `JARVIS_ADMIN_CIDRS` has no effect
+  (`docs/docker.md` ("Environment variables")); with `JARVIS_LOCAL_NODE=0`, first run does not write the local machine.
+- `tailcat.derp_map_url` (optional): the DERP map URL when using a self-hosted DERP relay (derper, see `docs/server.md` ("Self-hosted relay")) instead of Tailscale's public relays; each computer's
+  `init` must use the same `--derp-map-url`.
+- `machines[].claude_config_dirs` (optional): Claude Code config directories on this machine besides `~/.claude` (`CLAUDE_CONFIG_DIR` set by launchers,
+  e.g. `["~/.config/claude-code/profiles/work"]`; `~/` is that machine's home). The node finds directories used by running claude processes itself and remembers them in the database;
+  only list directories "not usually running, but whose historical sessions you want in the list" here. Conversely, hide unwanted directories (automation scripts' own `CLAUDE_CONFIG_DIR`)
+  in **Settings › Claude Code › Blocked Config Folders** in the App; stored in the database, not hub.json (`docs/claude-integration.md` ("Blocking config directories")).
+- `machines[].claude_start_dir` (optional): the `CLAUDE_CONFIG_DIR` passed when Persona starts an Agent with the `claude` launcher on this machine
+  (new Agent, to-do dispatch, assistant's agent_start, assistant chats), e.g. `"~/.config/claude-code/profiles/work"` (`~/` is that machine's home). For computers where "claude is signed into a profile directory, not `~/.claude`":
+  without it, Persona's claude uses the default directory, which is not logged in and immediately replies `Not logged in · Please run /login` (#1459). Only controls the `claude` launcher;
+  aliases / functions in `~/.zshrc` and Persona-managed launchers keep their own settings. This directory is also added automatically to the session-search directories above. The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
+- `machines[].botmux` (optional): false means this computer's node neither lists botmux sessions nor runs botmux (no `botmux observe`, `botmux dashboard current`);
+  omitted means the old behavior, listing sessions if botmux is installed (`docs/engines.md` ("botmux")). The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
+  It is now only a default: "Also Show botmux Sessions" under "Engine" in machine details is stored per machine in settings (`botmux/<machine id>`) and wins once set (#2575).
+- `machines[].herdr_autostart` (optional): false means this computer's node does not start herdr's server itself when herdr is not running; omitted means on
+  (`docs/engines.md` ("When herdr is not running")). **Only a default**: once the user chooses per machine under **Settings › Machines › Engine**, that choice wins
+  (stored in the hub's settings, `herdr_autostart/<machine id>`); later edits here do not affect machines already configured.
+- `machines[].herdr_autoinstall` (optional, off by default): true means when herdr is missing on this computer, the node installs a pinned version before starting herdr itself
+  (at startup, before creating / continuing sessions). Without it, installation happens only when the user taps "Start" in the Agents list (`docs/engines.md` ("When herdr is not installed")). The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
+- `machines[].claude_global_hooks` (optional, off by default): true means this computer's node adds **report-only** hooks to `settings.json` in the default Claude config directory (asynchronous, short timeout, never answer approvals),
+  so sessions not started by Persona also report turns and question events to Persona; false or removing the key removes Persona's entries on the next connection (if none exist, nothing is written).
+  No blocking hooks are added: users' global configs often have other tools' synchronous PermissionRequest hooks; stacking them delays terminal dialogs (`docs/claude-integration.md` ("Global report-only hooks")).
+  The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
+- `machines[].usage_windows` (optional, on by default): false means this computer's node does not read Codex / Claude subscription usage windows (no `rate_limits` in rollouts,
+  no `~/.persona/usage/claude*.json`), and the manager does not ask it either. Omitted means read, local files only, no login credentials touched, every 5 minutes (`docs/usage-windows.md`).
+  The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
+- `machines[].launchers` (optional): add launchers the node cannot list on this computer (e.g. shell wrapper functions), or override `agent_type`, `base_url`, `model` for same-name launchers the node reports (omitted fields stay unchanged),
+  e.g. `[{"name":"example_wrapper","agent_type":"codex"}]`: the wrapper actually runs Codex (`agent_type` is `claude` / `codex` / `traex` or a runtime's agent; `docs/protocol.md`, `docs/model-config.md`).
+- `usage` (optional): subscription usage sources from an account-pool gateway (such as a relay), merged into the sidebar's usage bar (`docs/usage-windows.md` ("Account-pool gateways"), #2595).
+  `usage.sources[]` (at most 8): `id`, `name` (source name in the sidebar), `type` (`relay` / `generic`; old type names are still read as `relay` and rewritten to the new name the next time this source is edited in the admin UI), `url`, `key` (the gateway's admin Key, **a secret: only in `hub.json` (0600)**, unreadable from the admin UI and APIs, absent from logs), `enabled` (false disables this source).
+  `usage.enabled` (false is the master switch), `usage.poll_minutes` (poll interval per source, default 5, 1 to 1440). This section belongs to **the manager** (`personad assistant`, which reads and writes the same `hub.json` itself; the hub does not read it): it only reads the gateway's cached numbers (`refresh=false`), requests come from the manager, and nodes never touch the gateway.
+  Edit in the admin UI at `/admin/usage` (the hub forwards to the manager) for immediate effect; manual edits require a hub restart (which restarts the manager too), or opening this admin page (the manager adopts the version on disk).
+- `microsoft` (optional): Outlook's "Sign In with Microsoft" (`docs/mail.md` ("Outlook integration")). `client_id` is the default client ID
+  (usually unnecessary: the user enters their own Microsoft Entra-registered one in the App, encrypted in the hub and preferred over this); `redirect_uri` defaults to
+  `jarvis-mail-oauth://outlook`, and changes must match the registration in Entra.
+- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token` (old syntax, **no longer effective**): since #1571, integration through the Lark gateway is provided by an extension
+  (start of `docs/feishu.md`, `docs/extensions.md`). The hub still reads these keys, but neither connects to the Lark gateway with them nor hands them to the assistant; if `token` or `container` is set,
+  the hub logs one warning at startup. Set the Agent token, container, address, and separate encrypted-message authorization (`native_olk_token`) in the Lark extension's settings instead; these keys can be removed from hub.json.
+- `lark.account` (optional integer, still effective): the default Lark gateway account number, `1` for the main account, `2` for the second; omitted or `0` uses the main account, valid range 1–999999999,
+  e.g. `"lark": {"account": 2}`. The number comes from the `id` in the Lark gateway's `/accounts`, not the Lark user ID. Operations on Inbox Lark items from the default account omit `ol_account`,
+  while other accounts pass their own number; the Inbox Agent also uses this default when handling Lark items (`docs/feishu.md` ("Multiple accounts")). The Lark extension's default account is authoritative (`default` in its messaging source's `GET accounts`, #5098):
+  if the extension cannot be queried, use the last retrieved value; only if none has been retrieved since the manager started is this field used. Restart the hub after changing (`systemctl --user restart jarvisd`).
+  Server-side Inbox records are isolated and retained per account, available again when switching back.
+- `lark.cli` (optional): Lark's official open-platform CLI, lark-cli, as a second Lark source besides the Lark extension (gateway) (`docs/plan-lark-cli.md`):
+  `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`. `bin` is a command name or absolute path, default `lark-cli`; non-absolute paths are found in a login shell
+  (global npm installs often live under nvm-like directories absent from systemd's PATH); `profile` is lark-cli's `--profile`, empty uses its default.
+  Application and user logins stay with lark-cli (`~/.lark-cli`), never in `hub.json`: run
+  `lark-cli auth login --domain all` yourself on the assistant's machine (user permissions for all domains; without a browser add `--no-wait --json` and authorize via the link on the phone); after a week unused, sign in again.
+  Currently (L1) only for the assistant: its PATH contains `lark-cli` (with the configured `profile`), and write operations go through the gate (`docs/assistant.md` ("Lark: lark-cli")).
+- `lark.prefer` (optional): which source is primary when both the Lark extension (gateway) and lark-cli are available: omitted (default, extension path preferred) or `cli`; other values are the Lark extension's own source names, passed through and validated by it. Currently only affects how the assistant prompt divides the work.
+- `lark_gate` (optional, old syntax, still effective; put new rules in `connector_gate` below with `connector: lark`): gate rules for the assistant's Lark writes (the Lark extension's command gate, and lark-cli), after `connector_gate`'s `lark` rules and before built-in rules; first match wins:
+  `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]` (`action` is `allow` / `confirm` / `deny`, optional `body` matches top-level fields;
+  `docs/assistant.md` ("Lark: the skill shipped with the Lark extension")). lark-cli commands use `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
+  (`path` joins command words with `/`, `*` / `**` wildcards as above); a match skips lark-cli's self-reported risk level.
+- `connector_gate` (optional): gate rules for connector writes (such as `github_comment`); first match wins, no match means confirm each operation on the phone:
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
-  （`connector`、`action` 可用 `*` 通配；`match` 按工具参数的顶层字段匹配，字符串也可以通配；`decision` 是 `allow` / `confirm` / `deny`，
-  写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。扩展清单里 `confirm_always` 命中的写操作，`allow` 规则也会被钳成 `confirm`（`docs/extensions.md`）。
-  助手写飞书的规则也写这里：`connector` 写 `lark`，`action` 写「方法 路径」，如 `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`、
-  lark-cli 的 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（路径里 `*` 一段、`**` 剩下的全部，`"*"` 是任何调用；`match` 按 body 的顶层字段）。
-  它们排在老的 `lark_gate` 前面，再往后是内置规则（`docs/assistant.md`「飞书：接飞书的扩展带的 skill」）。
-- `github`（可选）：GitHub 连接器。`{"auth": {"from_machine": "<机器 id>"}}`：用那台机器上 `gh` 的登录（hub 经 node 跑 `gh auth token`，
-  token 只在 hub 内存里，不落库、不写日志、不给 App 和助手）。那台机器要保持 `gh` 登录，而且登录存在 `~/.config/gh/hosts.yml`
-  （钥匙串里的经 ssh 读不到：`gh auth login --insecure-storage`）。`auth.host` 默认 `github.com`，GitHub Enterprise 的主机名写这里（还没做）。
-  状态看 设置 › 连接器 › GitHub。这里的 `from_machine` 只是默认值：每个 hub 都有 GitHub，在 设置 › 连接器 › GitHub 的「从哪里登录」里
-  可以换一台电脑的 gh 登录，或者用设备码登录（用内置的 GitHub CLI Client ID，用户不用注册 OAuth App，授权页上显示的是「GitHub CLI」，见 `docs/connectors.md`「二 · 7」）；
-  App 里选过以后以 App 的为准（存在 hub 的设置里）。连接器要 `repo` 权限：gh 的默认登录就有，少了时页面会提示 `gh auth refresh -s repo`。
-  `github.proxy`（可选）：发往 GitHub 的全部请求（设备码登录的取码和轮询在 `github.com`，API 在 `api.github.com`，还有 CI 日志）走的 HTTP 代理，
-  `http://[用户名:密码@]主机:端口`，和 `google.proxy` 同一格式；不填就直连（不读进程的 `HTTPS_PROXY`）。有的网络只通 `api.github.com`、不通 `github.com`，
-  这时设备码登录拿不到验证码，就要配它。填错了不会退回直连：GitHub 的每个请求都失败，设置页写明「hub.json 的 github.proxy 不对」。具体地址只写在 hub 自己的 hub.json 里。
-  扩展市场读 GitHub 上的市场、下载 Release 里的扩展包也走它（`github.com`、`*.github.com`、`*.githubusercontent.com`；没配时按进程的 `HTTPS_PROXY`，#3277）。
-  `github.inbox`（可选）是收件箱的默认规则（App 里改过以 App 为准，`docs/inbox.md`「降噪」）：`ci`（`off` / `default_branch` / `mine`（默认）/ `all`）、
-  `muted_repos`（`["owner/name"]`）、`ignore_branches`（不提醒的分支，`path.Match` 模式，默认 `["train/*"]`）。
-- `personas.github_login`（可选）：分级形象（奶蛙）按谁在 NWVERSE 看板上的等级显示。不写就用 GitHub 连接器登录的账号；
-  两个都没有时显示默认档「未孵化」（`docs/persona.md`「分级形象」）。
-- `imessage`（可选，**旧写法，保留一个版本，只读**）：现在在 App 的 设置 › 扩展 › 信息 选读哪台 Mac（#1830）。这里写了的话，hub 启动时会迁过去一次，
-  扩展没开或没选 Mac 时照旧读这里。信息连接器。`{"machine": "<机器 id>"}`：App 里能看哪台 Mac 的「信息」（经那台 Mac 的 node 只读 `~/Library/Messages/chat.db`，
-  要给它完全磁盘访问权限，App 的 设置 › 连接器 › 信息 会说怎么开）。只写一台（同一个 Apple ID 的几台 Mac 消息是同一份）。
-  App 里能看所有会话。开关「交给 Persona」（设置 › 连接器 › 信息，默认开，存在 hub）开着时，真正的会话（成员里有通讯录里的人、或者你说过话的）
-  按 ROWID 增量进知识库和收件箱（和飞书一样分拣），助手有 `imessage_chats` / `imessage_read` / `imessage_search`；验证码打码。关掉就都停，
-  hub 上已经存下的另外可以删。日志里没有号码和正文（`docs/plan-connectors.md`「五」）。
-- `assistant.owner`：「对话」tab 的助手称呼你什么；`assistant.notes`：附在助手说明（`~/.persona/assistant/CLAUDE.md`）最后的
-  Markdown，写只有你这套环境才有的东西：代码在哪、用哪些 skills / CLI 访问工作数据、哪些目录不能碰。
-- 模型设置的日常入口是 **设置 › 模型供应商 / 模型配置**（`docs/model-config.md`）：前者管理连接和凭据，后者管理对话、分类、翻译、知识处理、`/agent`、定时任务等用途。旧 `ai`、`inbox.*_ai`、`kb.ai`、各启动器默认作为兼容基线保留；统一用途覆盖存 Postgres，不写回 `hub.json`。没有覆盖时保持原模型，不会因为打开设置而迁移成其他供应商。
-- `assistant.machine` / `assistant.launcher`：助手默认跑在哪台机器、用哪个启动器（默认 hub 自己那台、`claude`）；App 设置里改过以后以 App 为准。
-  `owner`、`notes`、`machine`、`launcher` 都是 hub 在握手时交给助手的默认值：改过的设置是助手自己的（settings `assistant`，只有它读写，`docs/assistant.md`「和 hub 的边界」）。
-- `assistant.external`（默认 `false`）：助手的进程（`personad assistant`，`docs/assistant.md`「进程」）由别人起。默认 hub 自己把它当子进程起起来、退出了再起，
-  每次启动给它一个新的总线 token（经 stdin）；设成 `true` 后 hub 不起它，在要跑它的机器上先用 `personad hub assistant-token` 生成一个 token（打印一次；再生成一次就换掉旧的），再
-  `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub 地址> personad assistant`。它读的 hub.json 和环境变量同 hub：数据库是 `database_url`（`PERSONA_DATABASE_URL` 优先），
-  不给 `PERSONA_ASSISTANT_HUB` 时连本机 `listen` 的端口。助手没连着时它的接口回 `503 assistant_offline`。
-  助手同时带着全部电脑（[machines.md](machines.md)「谁连电脑」）：跑在别的机器上时，`machines` 里的电脑由那台去连（ssh 主机名、tailcat key、
-  hub 机器自己那台的 `node --stdio` 都在那台上）；它没连着时机器显示离线、机器的接口回 `503 assistant_offline`。
-  App 里新建的别的管理者不读 hub.json 的这一节：它的配置是自己目录里的 `manager.json`（[managers.md](managers.md)（"A second manager"））；在 hub 机器上它借 hub.json 的 `database_url` 找到同一个 Postgres，另建自己的库。
-- `assistant.persona_view`（默认 `false`）：助手回答里的卡片写成 ```` ```persona-view ````（扩展的组件，`docs/extensions.md`「UI 版本 3」），不再写 `persona-card`。
-  各端（iOS / Mac、安卓、网页）都画得了 UI 版本 3 以后再打开；`persona-card` 在所有端都照样能画。
-- `assistant.html_views`（默认开，不写即开；写 `false` 关）：卡片的 `html` 组件可以经 `persona.reply` / `persona.open` 调用 hub（`…/views/{key}/html-actions`）。
-  只在 `assistant.persona_view` 打开时生效；关掉后 HTML 一律显示 fallback。各端还要自己通过 HTML 执行的安全验收才运行，见 `docs/assistant-views.md`。
-- `ai`（2026-10-31 起没有默认值）：App 里几个直接调模型 API（不经过 Claude Code）的小功能用的模型：收件箱分拣、代写回复、粘贴文字识别邮箱配置。
-  不写时这些用途自动用 hub 上能直接调用的接入（「设置 › 模型供应商」里带 Key 的，见 `docs/model-config.md`「编辑与继承」）；一个都没有才报「还没有能直接调用的模型」。
-  `api` 取 `messages`（Anthropic Messages，默认）或 `responses`（OpenAI Responses，总是流式请求，兼容只接受 `stream: true` 的转发服务）；
-  `base_url` 拼上 `/v1/messages` 或 `/v1/responses`；`api_key_file` 是 hub 机器上的 key 文件（0600，调用时才读）；`model`；
-  `reasoning_effort` 只对 `responses` 生效（比如 `low`）；`bearer`（默认 `false`）写 `true` 时 Messages API 的 key 用 `Authorization: Bearer` 发，不用 `x-api-key`，给只认 Bearer 的网关用（`responses` 总是 Bearer）。
-- `agents.triage`：一轮停下后的分诊（[agent-work.md](agent-work.md)「开关」）。开关在 App 的「设置 › 会话分诊」里（存 hub 的 settings，默认全关），
-  这里只放上限：`max_retries`（自动继续最多几次，默认 3）、`max_wakes`（叫醒最多几次，默认 6）、`settle_seconds`（停下多久才分诊，默认 15）；
-  `enabled` / `auto_continue` / `wake` / `decide` 只是 App 里从没保存过时的初始值（不写就是关）。分诊是管理者（助手进程）做的，这一节经握手交给它，改了重启 hub 后生效。
-- `agents.launcher_health`：启动器健康检查和自动修复（[launcher-health.md](launcher-health.md)）：`enabled`（默认关，写 `true` 才定期检查和自动修）、`interval_minutes`（默认 30）、
-  `repair`（修复 Agent：`skill` 不写就没有修复 Agent，只做升级 CLI；`machine` 默认助手所在的电脑、`cwd` 默认 home、`launcher` 默认一个能用的、`permission` 权限模式，默认 `bypassPermissions`）。
-- `agents.delegate`（#3029）：Agent 的提问先由助手代答（[assistant.md](assistant.md)「提问先由助手代答」）。**默认关**，`enabled: true` 才打开；
-  `timeout_seconds` 是 hub 等助手多久（默认 180），到点没结果就照原样推给用户；`rules` 是用户自己的代答规则（一段话，和内置规则一起给模型看；红线上的事规则也放不开）。
-  改了重启 hub 生效。打开的例子（`~/.persona/hub.json` 里和别的键并列）：
+  (`connector`, `action` allow `*` wildcards; `match` matches top-level tool arguments, strings may also use wildcards; `decision` is `allow` / `confirm` / `deny`,
+  invalid rules prevent hub startup; `server/internal/connector/gate.go`, `docs/plan-connectors.md`). Writes matching `confirm_always` in an extension manifest clamp even an `allow` rule to `confirm` (`docs/extensions.md`).
+  The assistant's Lark write rules also go here: `connector` is `lark`, `action` is "method path", e.g. `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`,
+  or lark-cli's `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}` (`*` matches one path segment, `**` the rest, `"*"` any call; `match` matches top-level body fields).
+  These precede the old `lark_gate`, followed by built-in rules (`docs/assistant.md` ("Lark: the skill shipped with the Lark extension")).
+- `github` (optional): GitHub connector. `{"auth": {"from_machine": "<machine id>"}}`: use `gh`'s login on that machine (the hub runs `gh auth token` via the node,
+  keeping the token only in hub memory, never in the database or logs, or exposing it to the App or assistant). Keep `gh` signed in there, with the login in `~/.config/gh/hosts.yml`
+  (keychain credentials cannot be read via ssh: `gh auth login --insecure-storage`). `auth.host` defaults to `github.com`; put a GitHub Enterprise host name here (not implemented yet).
+  Check status under **Settings › Connectors › GitHub**. `from_machine` is only a default: every hub has GitHub, and under "Sign In From" in **Settings › Connectors › GitHub**
+  you can switch to another computer's gh login, or use device-code login (the built-in GitHub CLI Client ID, no OAuth App registration needed; the authorization page shows "GitHub CLI", see `docs/connectors.md` ("II · 7"));
+  once chosen in the App, that wins (stored in hub settings). The connector needs `repo` scope: gh's default login has it; otherwise the page suggests `gh auth refresh -s repo`.
+  `github.proxy` (optional): HTTP proxy for all requests to GitHub (device-code creation and polling at `github.com`, API at `api.github.com`, plus CI logs),
+  `http://[user:password@]host:port`, same format as `google.proxy`; omitted means direct (does not read process `HTTPS_PROXY`). Some networks reach only `api.github.com`, not `github.com`,
+  so device-code login cannot obtain a code and needs this proxy. An invalid value does not fall back to direct: every GitHub request fails, and the settings page states "github.proxy in hub.json is invalid". Actual addresses belong only in the hub's own hub.json.
+  The extension market also uses it to read markets on GitHub and download extension packages from Releases (`github.com`, `*.github.com`, `*.githubusercontent.com`; when unset, uses process `HTTPS_PROXY`, #3277).
+  `github.inbox` (optional) supplies default Inbox rules (App changes take priority, `docs/inbox.md` ("Noise reduction")): `ci` (`off` / `default_branch` / `mine` (default) / `all`),
+  `muted_repos` (`["owner/name"]`), `ignore_branches` (branches not to notify for, `path.Match` patterns, default `["train/*"]`).
+- `personas.github_login` (optional): whose level on the NWVERSE board determines the tiered avatar (Milk Frog). Defaults to the GitHub connector's logged-in account;
+  with neither, shows the default "Unhatched" tier (`docs/persona.md` ("Tiered avatars")).
+- `imessage` (optional, **old syntax, retained for one version, read-only**): now choose the Mac to read in **Settings › Extensions › Messages** in the App (#1830). If configured here, the hub migrates it once at startup;
+  when the extension is off or no Mac is selected, it still reads here. Messages connector. `{"machine": "<machine id>"}`: which Mac's "Messages" appear in the App (that Mac's node reads `~/Library/Messages/chat.db` read-only,
+  requiring Full Disk Access; **Settings › Connectors › Messages** explains how). Configure one machine only (Macs on the same Apple ID share the same messages).
+  The App can show all chats. With "Hand to Persona" on (**Settings › Connectors › Messages**, on by default, stored in the hub), real chats (members include someone in Contacts or you have spoken there)
+  incrementally enter the knowledge base and Inbox by ROWID (triaged like Lark); the assistant gets `imessage_chats` / `imessage_read` / `imessage_search`; verification codes are masked. Turning it off stops everything,
+  and existing data on the hub can be deleted separately. Logs contain neither numbers nor bodies (`docs/plan-connectors.md` ("V")).
+- `assistant.owner`: how the assistant in the "Chat" tab addresses you; `assistant.notes`: Markdown appended to the assistant instructions (`~/.persona/assistant/CLAUDE.md`),
+  describing things specific to your environment: code locations, skills / CLIs for work data, directories it must not touch.
+- The everyday entry for model settings is **Settings › Model Providers / Model Configuration** (`docs/model-config.md`): the former manages connections and credentials; the latter manages uses such as chat, classification, translation, knowledge processing, `/agent`, and scheduled tasks. Old `ai`, `inbox.*_ai`, `kb.ai`, and launcher defaults remain as a compatibility baseline; unified-use overrides live in Postgres, not written back to `hub.json`. Without an override the original model is kept; opening settings does not migrate it to another provider.
+- `assistant.machine` / `assistant.launcher`: default machine and launcher for the assistant (the hub's own machine, `claude`); App settings take priority once changed.
+  `owner`, `notes`, `machine`, `launcher` are all defaults handed by the hub to the assistant at handshake: changed settings belong to the assistant itself (settings `assistant`, only it reads/writes them, `docs/assistant.md` ("Boundary with the hub")).
+- `assistant.external` (default `false`): the assistant process (`personad assistant`, `docs/assistant.md` ("Process")) is started externally. By default the hub starts it as a child process and restarts it on exit,
+  giving it a fresh bus token at every start (via stdin); with `true` the hub does not start it. On the machine that will run it, first generate a token with `personad hub assistant-token` (printed once; generating again replaces the old one), then
+  `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub address> personad assistant`. It reads hub.json and env vars just like the hub: database from `database_url` (`PERSONA_DATABASE_URL` takes priority),
+  and without `PERSONA_ASSISTANT_HUB`, connects to the local `listen` port. While the assistant is disconnected, its APIs return `503 assistant_offline`.
+  The assistant also carries all computers ([machines.md](machines.md) ("Who connects computers")): when running elsewhere, that machine connects the computers in `machines` (ssh host names, tailcat key,
+  and even the hub machine's own `node --stdio` are on that machine); while disconnected, machines show offline and machine APIs return `503 assistant_offline`.
+  Other managers created in the App do not read this hub.json section: their configuration is `manager.json` in their own directory ([managers.md](managers.md) ("A second manager")); on the hub machine they use hub.json `database_url` to locate the same Postgres and create their own database.
+- `assistant.persona_view` (default `false`): cards in assistant replies use ```` ```persona-view ```` (extension components, `docs/extensions.md` ("UI version 3")) instead of `persona-card`.
+  Enable only after all clients (iOS / Mac, Android, web) can render UI version 3; `persona-card` still renders on every client.
+- `assistant.html_views` (on by default when omitted; false disables): a card's `html` component can call the hub via `persona.reply` / `persona.open` (`…/views/{key}/html-actions`).
+  Only effective with `assistant.persona_view` enabled; when disabled, HTML always shows fallback. Each client must also pass its own HTML execution security acceptance before running it; see `docs/assistant-views.md`.
+- `ai` (no default since 2026-10-31): model for small App features calling model APIs directly (not through Claude Code): Inbox triage, drafting replies, recognizing email config from pasted text.
+  When omitted, these uses automatically select a directly callable connection on the hub (with a Key in **Settings › Model Providers**, see `docs/model-config.md` ("Editing and inheritance")); only if none exist do they report "No directly callable model yet".
+  `api` is `messages` (Anthropic Messages, default) or `responses` (OpenAI Responses, always streamed, compatible with relays accepting only `stream: true`);
+  `base_url` gets `/v1/messages` or `/v1/responses` appended; `api_key_file` is the key file on the hub machine (0600, read only at call time); `model`;
+  `reasoning_effort` applies only to `responses` (e.g. `low`); `bearer` (default `false`) true sends the Messages API key as `Authorization: Bearer` instead of `x-api-key`, for gateways accepting only Bearer (`responses` always uses Bearer).
+- `agents.triage`: triage after a round stops ([agent-work.md](agent-work.md) ("Switches")). Switches are under **Settings › Session Triage** in the App (stored in hub settings, all off by default),
+  and only limits live here: `max_retries` (maximum automatic continuations, default 3), `max_wakes` (maximum wakes, default 6), `settle_seconds` (delay after stopping before triage, default 15);
+  `enabled` / `auto_continue` / `wake` / `decide` are merely initial values if never saved in the App (omitted means off). Triage is done by the manager (assistant process); this section is handed over at handshake, and changes take effect after restarting the hub.
+- `agents.launcher_health`: launcher health checks and automatic repair ([launcher-health.md](launcher-health.md)): `enabled` (off by default; true enables periodic checks and automatic repair), `interval_minutes` (default 30),
+  `repair` (repair Agent: no `skill` means no repair Agent, only CLI upgrades; `machine` defaults to the assistant's computer, `cwd` to home, `launcher` to an available one, `permission` is the permission mode, default `bypassPermissions`).
+- `agents.delegate` (#3029): the assistant answers Agent questions first ([assistant.md](assistant.md) ("The assistant answers questions first")). **Off by default**, enabled only with `enabled: true`;
+  `timeout_seconds` is how long the hub waits for the assistant (default 180); if no result arrives, the question is pushed to the user unchanged. `rules` are the user's own delegation rules (prose shown to the model with built-in rules; they cannot relax red lines).
+  Restart the hub after changes. Example enabling it (alongside other keys in `~/.persona/hub.json`):
 
   ```json
   "agents": {
     "delegate": {
       "enabled": true,
       "timeout_seconds": 180,
-      "rules": "缺测试就补上，不用问我"
+      "rules": "If tests are missing, add them without asking me"
     }
   }
   ```
 
-  用哪个模型不在这里：「设置 › 模型配置 › 提问代答」（用途 `agent.delegate`）。没选过时用「信息筛选」的接入、模型是 Opus 5.5（`claude-opus-5-5`）；
-  在那一页换供应商或模型，或者 `PATCH /api/v1/model-config/purposes/agent.delegate`（`{"revision": <当前>, "model": "claude-sonnet-5-5"}`），「恢复默认」回到 Opus。
-- `notify`：「做完了」推送的时机（`hub/notify.go`，不写就用默认值）：`done_delay_seconds`（做完后等多久没人看才推，默认 60）、
-  `long_turn_seconds`（多长的一轮算「长任务」，默认 60）、`background_hold_minutes`（等后台任务结束最多等多久，默认 120）、
-  `live_metrics_seconds`（实时活动只有数字变了时，给一台设备推送的最短间隔，默认 60；`docs/live-activity.md`「推送预算」）。
-  每台设备要哪些推送是 App 里各自设置的（设置 › 通知，存在 hub 的 `devices.prefs`），不在这里。
-- `inbox.triage_ai` / `inbox.judge_ai`（可选，字段同 `ai`，没写的字段取 `ai` 的）：AI 分身的模型 1（分拣）和模型 2（要不要交给 Agent）；
-  不写就都用 `ai`。`inbox.agent`：模型 3，`enabled`、`launcher`（Claude Code 启动器，默认助手的）、`machine`（默认助手的机器）、
-  `concurrency`（1）、`timeout_minutes`（15）、`max_age_hours`（24）、`rules`（给模型 2 的个人规则）。见 `docs/inbox.md`「AI 分身」。
+  Model selection is elsewhere: **Settings › Model Configuration › Question Delegation** (purpose `agent.delegate`). If never selected, it uses the "Information Filtering" connection with Opus 5.5 (`claude-opus-5-5`);
+  change provider or model there, or use `PATCH /api/v1/model-config/purposes/agent.delegate` (`{"revision": <current>, "model": "claude-sonnet-5-5"}`); "Restore Defaults" returns to Opus.
+- `notify`: timing for "Done" pushes (`hub/notify.go`, omitted uses defaults): `done_delay_seconds` (how long after completion to wait for someone to look before pushing, default 60),
+  `long_turn_seconds` (how long a round must be to count as a "long task", default 60), `background_hold_minutes` (maximum wait for background tasks to finish, default 120),
+  `live_metrics_seconds` (minimum interval between pushes to one device when only Live Activity numbers change, default 60; `docs/live-activity.md` ("Push budget")).
+  Each device's push preferences are set separately in the App (**Settings › Notifications**, stored in hub `devices.prefs`), not here.
+- `inbox.triage_ai` / `inbox.judge_ai` (optional, same fields as `ai`, omitted fields inherit from `ai`): AI twin model 1 (triage) and model 2 (whether to hand to an Agent);
+  omitted means both use `ai`. `inbox.agent`: model 3, `enabled`, `launcher` (Claude Code launcher, default the assistant's), `machine` (default the assistant's machine),
+  `concurrency` (1), `timeout_minutes` (15), `max_age_hours` (24), `rules` (personal rules for model 2). See `docs/inbox.md` ("AI twin").
 
   ```json
   "inbox": {
-    "triage_ai": { "base_url": "<网关地址>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<模型>" },
-    "judge_ai":  { "base_url": "<网关地址>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<模型>" },
-    "agent": { "enabled": true, "launcher": "<启动器>" }
+    "triage_ai": { "base_url": "<gateway address>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<model>" },
+    "judge_ai":  { "base_url": "<gateway address>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<model>" },
+    "agent": { "enabled": true, "launcher": "<launcher>" }
   }
   ```
-- `kb`：知识库（`docs/knowledge.md`）：`enabled`（默认开）、`text_days`（文字保留天数，365）、`attachment_days`（附件，30）、
-  `ai`（压缩和打标的模型，字段同 `ai`；不写用 `inbox.triage_ai`，再没有用 `ai`）、`extra_dirs`（hub 机器上你自己维护的笔记目录，
-  比如一个记事实 / 经验的 git 仓库：`kb_search` 也搜这些目录里的 Markdown（只读，跳过 `.git` 这类点开头的目录），助手的 CLAUDE.md 会提到它们；`~/` 是那台的家目录）。
-  知识库是助手（管理者）的，hub 在握手时把这一节交给它（`ai` 除外：那是 hub 的模型配置读的），助手跑在别处也以 hub 这份为准；
-  `assistant.external` 时 `extra_dirs` 是助手那台机器上的路径（`docs/knowledge.md`「谁管什么」）。
-- `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
-  连接器的条目带了自己的规则（`rules`，如扩展设置的 `triage_rules`）时用那一份，不用这里的。
-- `bots.feishu`（可选）：在飞书里和 Persona 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），
-  给不想在 App 里填的人用；App 里（设置 › 连接器 › 飞书机器人）存过的优先，开关、配对、各项功能都在 App 里（`docs/bots.md`）。
-- `extensions`（旧键 `plugins` 照样读）：手写在 hub.json 里、hub 跑起来、转发给 App 的扩展（语音对话等）：`id`、`name`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的扩展）、
-  `dir`（工作目录）、`env`（另加的环境变量）、`disabled`（`true` 停用但保留配置）、`config`（扩展自己的设置），见 `docs/extensions.md`「hub.json 里的扩展」；
-  用 `personad extension install` 装的扩展不写这里，登记在数据库。personad 自带的语音扩展（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，
-  上游放 `config.providers`（`docs/extensions.md`「内置语音扩展」）。改了要重启 hub。
-- `trusted_extension_markets`（可选）：另外信任的扩展市场的签名公钥（key id，或 `market.pub` 里的 `ed25519:…`），从这些市场装的扩展和官方市场的一样默认不进沙箱（`docs/extensions.md`「沙箱」）。
-- `hook_timeout_minutes`（默认 30，写 0 或负数也按 30）：Claude Code 的 hook 等手机回答（提问、审批）最多等多久，超时就交回终端处理（`docs/claude-integration.md`）。
-- `shutdown_timeout_seconds`（默认 8）：hub 关停的总预算，包括关数据库连接池；外部的 `docker stop -t` 要比它长（`docs/server.md`「关停」）。
+- `kb`: knowledge base (`docs/knowledge.md`): `enabled` (on by default), `text_days` (text retention days, 365), `attachment_days` (attachments, 30),
+  `ai` (model for compression and tagging, same fields as `ai`; defaults to `inbox.triage_ai`, then `ai`), `extra_dirs` (note directories you maintain on the hub machine,
+  e.g. a git repo of facts / lessons: `kb_search` also searches Markdown in these directories (read-only, skips dot directories such as `.git`), and the assistant's CLAUDE.md mentions them; `~/` is that machine's home).
+  The knowledge base belongs to the assistant (manager); the hub hands this section over at handshake (except `ai`, read by the hub's model config), and even an assistant running elsewhere follows the hub's copy;
+  with `assistant.external`, `extra_dirs` are paths on the assistant's machine (`docs/knowledge.md` ("Who owns what")).
+- `inbox.rules`: personal rules for Inbox AI triage (natural language, e.g. "anything from this person needs me", "this alert group is only noise"), appended to the triage prompt and preferred over default judgments (`docs/inbox.md`).
+  When a connector item carries its own rules (`rules`, e.g. an extension's `triage_rules` setting), those are used instead of this setting.
+- `bots.feishu` (optional): application credentials for the bot used to chat with Persona in Lark: `app_id`, `app_secret`, `domain` (`feishu` / `lark` / open-platform address),
+  for people who do not want to enter them in the App. Values saved in the App (**Settings › Connectors › Lark Bot**) win; switches, pairing, and all features are in the App (`docs/bots.md`).
+- `extensions` (old `plugins` key still read): extensions hand-written in hub.json, launched by the hub and forwarded to the App (voice chat, etc.): `id`, `name`, `kind`, `command` + `args` (or only `socket` for an extension running elsewhere),
+  `dir` (working directory), `env` (extra environment variables), `disabled` (`true` disables while keeping the config), `config` (the extension's own settings), see `docs/extensions.md` ("Extensions in hub.json");
+  extensions installed with `personad extension install` are registered in the database, not here. For personad's built-in voice extension (GPT-Live), use `"command": "jarvisd", "args": ["voice"]`,
+  with upstreams in `config.providers` (`docs/extensions.md` ("Built-in voice extension")). Restart the hub after changes.
+- `trusted_extension_markets` (optional): signing public keys of additional trusted extension markets (key id, or `ed25519:…` from `market.pub`); extensions installed from these markets default to no sandbox, just like the official market (`docs/extensions.md` ("Sandbox")).
+- `hook_timeout_minutes` (default 30, 0 or negative also means 30): maximum time Claude Code hooks wait for phone answers (questions, approvals); timeout hands control back to the terminal (`docs/claude-integration.md`).
+- `shutdown_timeout_seconds` (default 8): total hub shutdown budget, including closing the database connection pool; external `docker stop -t` must be longer (`docs/server.md` ("Shutdown")).
 
-## DDNS（public.ddns）
+<a id="ddnspublicddns"></a>
 
-拨号重连换了 IPv6 前缀后，用一个固定域名找回 hub（`docs/network.md`）。不写 `public.ddns` 就不开启。
+## DDNS (public.ddns)
+
+Use a fixed domain to find the hub after reconnecting changes its IPv6 prefix (`docs/network.md`). Omit `public.ddns` to leave it disabled.
 
 ```json
 "public": {
   "tls_listen": ":18662",
   "advertise": ["https://hub.example.com:18662"],
-  "ddns": {"provider": "cloudflare", "record": "hub.example.com", "zone_id": "<zone id>", "token_file": "<hub 机器上的 token 文件>"}
+  "ddns": {"provider": "cloudflare", "record": "hub.example.com", "zone_id": "<zone id>", "token_file": "<token file on the hub machine>"}
 }
 ```
 
-- `provider`：
-  - `cloudflare`：更新 AAAA / A 记录，必须有 `zone_id` 和 `token_file`；`ttl` 是 1（自动，默认）或 30–86400。
-  - `webhook`：向 `webhook_url` POST `{"record","ipv6","ipv4"}`；有 `token_file` 时作为 `Authorization: Bearer` 发送。
-  - 阿里云 DNS、DNSPod 还没做。
-- `record`：完整域名。
-- `token_file`：只放 token 的文件，必须是普通文件、权限 0600。token 不写进 hub.json。
-- **发布什么地址**：
-  - IPv6 和候选列表用同一套规则：只发本机稳定的全局 IPv6，已经发布的地址只要还稳定就不换。
-  - IPv4 只在 `public.advertise` 里显式写了公网 IPv4 时才发：本机看到的 IPv4 证明不了公网能连进来。
-- **什么时候更新**：启动时更新一次，之后地址变化时再更新。失败从 1 秒开始翻倍退避，最长 5 分钟。日志只写失败原因，不写 token、URL 和响应内容。
-- **它只更新 DNS**：不开监听、不放行防火墙。要让 App 用上这个域名，还要把带 TLS 端口的 HTTPS URL 写进 `public.advertise`，候选列表和二维码的 `alt` 里才有它。
+- `provider`:
+  - `cloudflare`: updates AAAA / A records, requires `zone_id` and `token_file`; `ttl` is 1 (automatic, default) or 30–86400.
+  - `webhook`: POSTs `{"record","ipv6","ipv4"}` to `webhook_url`; with `token_file`, sends it as `Authorization: Bearer`.
+  - Alibaba Cloud DNS and DNSPod are not implemented yet.
+- `record`: full domain name.
+- `token_file`: a file containing only the token, must be a regular file with 0600 permissions. The token does not go into hub.json.
+- **Which addresses are published**:
+  - IPv6 follows the same rules as the candidate list: only stable local global IPv6 addresses; an already published address is kept as long as it remains stable.
+  - IPv4 is published only if a public IPv4 was explicitly entered in `public.advertise`: a locally visible IPv4 does not prove public inbound reachability.
+- **When it updates**: once at startup, then whenever addresses change. Failures back off exponentially from 1 second, capped at 5 minutes. Logs record only the failure reason, not the token, URL, or response content.
+- **It only updates DNS**: it neither opens a listener nor allows firewall traffic. To make the App use the domain, also put the HTTPS URL including its TLS port in `public.advertise`; only then does it appear in the candidate list and the QR code's `alt`.
 
-## 给写代码的人
+## For developers
 
-- 新功能里出现「某个人才有」的值（机器名、域名、账号、邮箱、路径、启动器、公司内部工具），加到上面两份配置之一，不要写进代码、
-  文案或测试；界面文案说「hub 所在的机器」「你的各台电脑」，不说具体机器。
-- 这台开发机的具体情况（有哪些机器、hub 地址、账号在哪）写在仓库根目录的 `CLAUDE.local.md`（不提交），不写进 `CLAUDE.md`。
+- When a new feature needs a value "specific to one person" (machine name, domain, account, email, path, launcher, internal company tool), add it to one of the two configs above, never to code,
+  UI text, or tests. UI text says "the hub machine" and "your computers", not specific machines.
+- Details of this dev machine (available machines, hub address, where accounts live) belong in `CLAUDE.local.md` at the repo root (uncommitted), not `CLAUDE.md`.
