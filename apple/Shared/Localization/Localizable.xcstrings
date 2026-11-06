@@ -30551,6 +30551,28 @@
         }
       }
     },
+    "撤回编辑、拷贝或删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit, copy or delete"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編集に戻す・コピー・削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤回编辑、拷贝或删除"
+          }
+        }
+      }
+    },
     "是我的电脑": {
       "localizations": {
         "en": {
@@ -80822,6 +80844,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "第 %lld 张"
+          }
+        }
+      }
+    },
+    "第 %lld 条：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Item %lld: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件目：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 条：%@"
           }
         }
       }

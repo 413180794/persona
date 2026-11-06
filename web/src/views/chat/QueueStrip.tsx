@@ -1,7 +1,7 @@
 // Messages typed while the agent works and not yet taken (Session.queued), above the composer instead of in the
 // chat (iOS QueueStrip). 撤回到输入框 pulls them back out of Claude (like ↑ in the terminal), puts that one in the
 // composer and re-queues the others in order; 删除 drops it the same way.
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api, errorText, sessionPath } from "../../lib/api";
 import { sendDraft } from "../../lib/drafts";
 import { agentLabel } from "../../lib/mentions";
@@ -11,11 +11,12 @@ import { Collapse, copyText, cx, Menu, Spinner, toast, useMenu, type MenuItem } 
 import { Icon } from "../../ui/icons";
 import { t } from "../../i18n";
 
-/** `compact` (a phone on its side): one line, 排队中 N 条, that opens the messages. */
+/** One line, 排队中 N 条, that opens the messages; `compact` (a phone on its side) is the tighter size. */
 export function QueueStrip({ session, draftKey, canEdit, compact }: { session: Session; draftKey: string; canEdit: boolean; compact?: boolean }) {
   const queued = session.queued ?? [];
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const listId = useId();
 
   const act = async (index: number, del: boolean) => {
     if (busy) return;
@@ -48,22 +49,24 @@ export function QueueStrip({ session, draftKey, canEdit, compact }: { session: S
       {busy && <Spinner />}
     </>
   );
-  if (compact)
-    return (
-      <div data-queue-strip className="flex flex-col rounded-[12px] bg-surface p-1 shadow-card" style={{ animation: "fade-up 200ms ease-out both" }}>
-        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex h-7 items-center gap-1.5 rounded-[8px] px-1.5 text-left text-[11.5px] font-medium text-ink-3 transition-colors hover:bg-hover">
-          {head}
-          <Icon name="chevron" size={12} stroke={2.2} className={cx("shrink-0 transition-transform duration-200", open && "rotate-180")} />
-        </button>
-        <Collapse open={open}>
-          <div className="flex flex-col gap-1.5 px-1 pt-1 pb-0.5">{rows}</div>
-        </Collapse>
-      </div>
-    );
+  // Folded to the one-line summary by default; opened, about three rows show and the rest scroll.
   return (
-    <div data-queue-strip className="flex flex-col gap-1.5 rounded-[12px] bg-surface p-2 shadow-card" style={{ animation: "fade-up 200ms ease-out both" }}>
-      <div className="flex h-5 items-center gap-1.5 px-1 text-[11.5px] font-medium text-ink-3">{head}</div>
-      {rows}
+    <div data-queue-strip className={cx("flex flex-col rounded-[12px] bg-surface shadow-card", compact ? "p-1" : "p-1.5")} style={{ animation: "fade-up 200ms ease-out both" }}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((o) => !o)}
+        className={cx("flex items-center gap-1.5 rounded-[8px] px-1.5 text-left text-[11.5px] font-medium text-ink-3 transition-colors hover:bg-hover", compact ? "h-7" : "h-8")}
+      >
+        {head}
+        <Icon name="chevron" size={12} stroke={2.2} className={cx("shrink-0 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+      <Collapse open={open}>
+        <div id={listId} className="flex max-h-[120px] flex-col gap-1.5 overflow-y-auto overscroll-contain px-1 pt-1 pb-0.5">
+          {rows}
+        </div>
+      </Collapse>
     </div>
   );
 }

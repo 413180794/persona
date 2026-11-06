@@ -4212,23 +4212,46 @@ struct TerminalCover: View {
 }
 
 /// Input typed while Claude works and not yet taken, shown above the composer instead of in the chat.
+/// Folded to its one-line summary by default; opened, it shows about three rows and scrolls past them.
 /// Editing pulls it back (like ↑ in the terminal); the other queued messages are re-queued in order.
 struct QueueStrip: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
     var queued: [String]
     @State private var busy = false
+    @State private var expanded = false
+    /// One row's height with its spacing, as drawn (it follows the text size and the rows' line counts).
+    @State private var rowHeight: CGFloat = 0
+    private static let visibleRows: CGFloat = 3
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+        DisclosureGroup(isExpanded: $expanded) {
+            ScrollView {
+                rows
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: rowHeight > 0 ? rowHeight * min(CGFloat(queued.count), Self.visibleRows) : nil)
+            .padding(.top, Theme.Space.sm)
+        } label: {
             HStack(spacing: Theme.Space.sm) {
-                Image(systemName: "tray.and.arrow.down")
+                Image(systemName: "tray.and.arrow.down").accessibilityHidden(true)
                 Text("排队中 \(queued.count) 条 · Claude 忙完会依次处理").lineLimit(1)
                 Spacer(minLength: 0)
                 if busy { ProgressView().controlSize(.mini) }
             }
             .font(Theme.Font.labelStrong)
             .foregroundStyle(.secondary)
+            .contentShape(.rect)
+        }
+        .tint(.secondary)
+        .padding(Theme.Space.m)
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityIdentifier("queue-strip")
+    }
+
+    private var rows: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             ForEach(Array(queued.enumerated()), id: \.offset) { i, q in
                 Menu {
                     Button { act(i, delete: false) } label: { Label("撤回编辑", systemImage: Theme.Icon.edit) }
@@ -4250,11 +4273,13 @@ struct QueueStrip: View {
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 }
                 .disabled(busy)
+                .accessibilityLabel(Text("第 \(i + 1) 条：\(q)"))
+                .accessibilityHint(Text("撤回编辑、拷贝或删除"))
             }
         }
-        .padding(Theme.Space.m)
-        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            if !queued.isEmpty { rowHeight = h / CGFloat(queued.count) }
+        }
     }
 
     private func act(_ i: Int, delete: Bool) {

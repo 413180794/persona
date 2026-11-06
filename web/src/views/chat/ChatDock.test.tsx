@@ -263,9 +263,11 @@ describe("QueueStrip", () => {
     expect(html).toMatch(/<div class="grid [^"]*"[^>]*inert/);
   });
 
-  it("lists them as before otherwise", () => {
+  it("starts folded everywhere, the opened list capped and scrolling", () => {
     const html = renderToStaticMarkup(<QueueStrip session={queued} draftKey="t" canEdit />);
-    expect(html).not.toContain("aria-expanded");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toMatch(/<div class="grid [^"]*"[^>]*inert/);
+    expect(html).toMatch(/max-h-\[120px\][^"]*overflow-y-auto/);
     expect(html).toContain("跑一遍 UI 测试");
   });
 });
