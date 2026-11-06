@@ -1,6 +1,7 @@
 package extwire
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
@@ -83,11 +84,22 @@ var RouteScopes = map[string]string{
 }
 
 // ExtensionCallScope is the scope a request to an extension's own HTTP needs (extensions.call:<id>); "" for the hub's
-// routes under /api/v1/extensions/<id>/-/, which are no extension's to open.
+// routes under /api/v1/extensions/<id>/-/, which are no extension's to open. path is the escaped path, the one the
+// manager's mux routes the request by: its segments are read as the mux reads them (each one unescaped on its own), so
+// an escaped "-" is the hub's "-" and an escaped "/" stays inside the id.
 func ExtensionCallScope(path string) string {
-	rest, _ := strings.CutPrefix(path, "/api/v1/extensions/")
-	id, after, _ := strings.Cut(rest, "/")
-	if id == "" || id == "-" || after == "-" || strings.HasPrefix(after, "-/") {
+	rest, ok := strings.CutPrefix(path, "/api/v1/extensions/")
+	if !ok {
+		return ""
+	}
+	rawID, after, _ := strings.Cut(rest, "/")
+	rawNext, _, _ := strings.Cut(after, "/")
+	id, err := url.PathUnescape(rawID)
+	if err != nil {
+		return ""
+	}
+	next, err := url.PathUnescape(rawNext)
+	if err != nil || id == "" || id == "-" || next == "-" {
 		return ""
 	}
 	return extension.ScopeCallPrefix + id

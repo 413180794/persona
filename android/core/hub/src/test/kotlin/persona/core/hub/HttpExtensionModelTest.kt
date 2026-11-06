@@ -42,6 +42,12 @@ class HttpExtensionModelTest {
             api.setContribution("example", "example-export.notes", "new", true)
             assertEquals("/api/v1/$root/example/-/contributions/example-export.notes/new", (server.takeRequest().path).zhAny())
             try { api.setContribution("example", "../notes", "new", false); fail() } catch (_: IllegalArgumentException) { }
+            // The hub lets an extension id start with a digit (1password), so its exported points do too (#5193).
+            server.enqueue(MockResponse().setBody("""{"id":"x"}"""))
+            api.setContribution("x", "1password.vault", "c", true)
+            assertEquals("/api/v1/$root/x/-/contributions/1password.vault/c", (server.takeRequest().path).zhAny())
+            for (bad in listOf("_ext.vault", "1password.2vault", "1password.va-ult", "1password.", "a.b.c"))
+                try { api.setContribution("x", bad, "c", true); fail(bad) } catch (_: IllegalArgumentException) { }
         }
     }
 

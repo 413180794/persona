@@ -31,6 +31,9 @@ type fakeExt struct {
 	emitted []extwire.Emit
 	// apps answer the assistant's app.calls that are the manager's (onApp).
 	apps map[string]func(json.RawMessage) (any, error)
+	// asked are the extensions.authorize the hub sent; served the escaped paths of the requests it relayed here.
+	asked  []extwire.Authorize
+	served []string
 }
 
 var fakeExts sync.Map // *Hub → *fakeExt
@@ -78,6 +81,7 @@ func (f *fakeExt) Request(_ context.Context, method string, params json.RawMessa
 			return nil, true, err
 		}
 		f.mu.Lock()
+		f.asked = append(f.asked, a)
 		out, ok := f.tokens[a.Hash]
 		f.mu.Unlock()
 		if !ok {
@@ -195,7 +199,10 @@ func (f *fakeExt) AppCall(_ context.Context, p assistantwire.AppCall) (json.RawM
 
 func (f *fakeExt) AssistantSaid(string, json.RawMessage) bool { return false }
 
-func (f *fakeExt) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+func (f *fakeExt) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	f.served = append(f.served, r.URL.EscapedPath())
+	f.mu.Unlock()
 	writeErr(w, http.StatusNotFound, errors.New("no such route"))
 }
 

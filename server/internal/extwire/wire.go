@@ -102,7 +102,8 @@ const (
 )
 
 // Authorize is MethodAuthorize's params: the token's hash, and the route the request is for (its pattern on the
-// hub's mux, its method and path).
+// hub's mux, its method and its escaped path: the one the hub relays, so the check is made on the route the request
+// reaches).
 type Authorize struct {
 	Hash    string `json:"hash"`
 	Pattern string `json:"pattern"`

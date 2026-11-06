@@ -466,7 +466,9 @@ func (h *Hub) authorizeExtension(ctx context.Context, tok string, r *http.Reques
 	pattern, method, path := "", "", ""
 	if h.apiMux != nil && r != nil {
 		_, pattern = h.apiMux.Handler(r)
-		method, path = r.Method, r.URL.Path
+		// The escaped path: the one relayHTTP passes on and the manager serves. Decoded, an escaped dot segment would
+		// be cleaned away and the check made on another route than the one the request reaches (#5182).
+		method, path = r.Method, r.URL.EscapedPath()
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

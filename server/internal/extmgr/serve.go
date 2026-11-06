@@ -338,15 +338,30 @@ func (h *Manager) authorize(a extwire.Authorize) extwire.Authorized {
 		return extwire.Authorized{}
 	}
 	out := extwire.Authorized{Extension: p.Extension, Name: p.Name, Scopes: p.Scopes}
+	if dotSegment(a.Path) {
+		// A "." or ".." segment, escaped or not, is no route's: a decoded path (an older hub) would be cleaned onto
+		// another route than the one the escaped path is served on (#5182).
+		return out
+	}
 	pattern := a.Pattern
 	if slices.Contains(extwire.Routes, pattern) && h.apiMux != nil {
-		// one of the routes the hub relays here: which of the manager's own it is
+		// one of the routes the hub relays here: which of the manager's own it is, matched on the path it is served on
 		if req, err := http.NewRequest(a.Method, a.Path, nil); err == nil {
 			_, pattern = h.apiMux.Handler(req)
 		}
 	}
 	out.OK, out.Scope = scopeOpens(p.Scopes, pattern, a.Path)
 	return out
+}
+
+// dotSegment says whether path has a "." or ".." segment, each segment unescaped on its own as the mux reads it.
+func dotSegment(path string) bool {
+	for _, seg := range strings.Split(path, "/") {
+		if s, err := url.PathUnescape(seg); err != nil || s == "." || s == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // hubCall answers what the hub's own features ask of this code.

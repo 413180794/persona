@@ -349,7 +349,8 @@ class HttpExtensionManagement internal constructor(
 
         private val json = "application/json; charset=utf-8".toMediaType()
         private val ExtensionId = Regex("[A-Za-z0-9_-]{1,64}")
-        private val ContributionPoint = Regex("[a-z][a-z0-9_-]{0,63}(?:\\.[a-z][a-z0-9_-]{0,63})?")
+        // A hub point, or another extension's exported one as the hub checks it: <extension id>.<point> (#5193).
+        private val ContributionPoint = Regex("[a-z][a-z0-9_-]{0,63}|[a-z0-9][a-z0-9_-]{0,31}\\.[a-z][a-z0-9_]{0,31}")
         private val OperationId = Regex("[A-Za-z0-9_.-]{1,128}")
         private val SecretName = Regex("[A-Za-z][A-Za-z0-9_]{0,63}")
     }

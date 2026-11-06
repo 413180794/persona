@@ -347,7 +347,7 @@ func (h *Manager) routes() http.Handler {
 			if _, pt := h.apiMux.Handler(r); pt != "" {
 				pattern = pt
 			}
-			if ok, scope := scopeOpens(p.Scopes, pattern, r.URL.Path); !ok {
+			if ok, scope := scopeOpens(p.Scopes, pattern, r.URL.EscapedPath()); !ok {
 				body := map[string]any{"error": "this extension was not granted this part of the hub's API", "code": "permission_denied"}
 				if scope != "" {
 					body["scope"] = scope

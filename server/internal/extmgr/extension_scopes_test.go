@@ -223,3 +223,44 @@ func TestScopeOpens(t *testing.T) {
 		t.Fatalf("an unknown token: %+v", a)
 	}
 }
+
+// An extension's token is checked on the route its request is served on. The hub asks with the escaped path it relays
+// (an older one with the decoded path): an escaped dot segment cleaned away in one and kept in the other would check
+// one route and serve another, and an escaped "-" is the hub's own segment (#5182).
+func TestAuthorizeEscapedPaths(t *testing.T) {
+	h := newTestManager(t)
+	h.routes()
+	tok := h.extTokens.issue("example-x", "X", []string{extension.ScopeAgentsRead, extension.ScopeCallPrefix + "other"})
+	for _, c := range []struct {
+		path string
+		ok   bool
+	}{
+		{"/api/v1/extensions/other/page", true},
+		{"/api/v1/extensions/other/a%2Fb", true},
+		{"/api/v1/extensions/third/%2E%2E/%2E%2E/agents", false},
+		{"/api/v1/extensions/third/../../agents", false}, // as an older hub asks
+		{"/api/v1/extensions/third/x%2F..%2F..%2F..%2Fagents", false},
+		{"/api/v1/extensions/other/%2E%2E/third/page", false},
+		{"/api/v1/extensions/other/%2D/config", false},
+		{"/api/v1/extensions/other/%2d", false},
+		{"/api/v1/extensions/%2D/install", false},
+	} {
+		a := h.authorize(extwire.Authorize{Hash: hashToken(tok), Pattern: "/api/v1/extensions/", Method: "GET", Path: c.path})
+		if a.OK != c.ok || a.Extension != "example-x" {
+			t.Errorf("%s: %+v, want ok %v", c.path, a, c.ok)
+		}
+	}
+	for path, want := range map[string]string{
+		"/api/v1/extensions/other/x":        extension.ScopeCallPrefix + "other",
+		"/api/v1/extensions/ot%68er/x":      extension.ScopeCallPrefix + "other",
+		"/api/v1/extensions/a%2Fb/x":        extension.ScopeCallPrefix + "a/b",
+		"/api/v1/extensions/other/%2D/conf": "",
+		"/api/v1/extensions/other/-":        "",
+		"/api/v1/extensions/%2D/x":          "",
+		"/api/v1/extensions/other%zz/x":     "",
+	} {
+		if got := extwire.ExtensionCallScope(path); got != want {
+			t.Errorf("ExtensionCallScope(%s) = %q, want %q", path, got, want)
+		}
+	}
+}
