@@ -748,3 +748,14 @@ func (m *Machine) settleFollow(session string, on bool, err error) {
 	}
 	m.unsettled[session] = true
 }
+
+// wrapped preserves a catalog message and its cause, including node RPC codes used for retries.
+type wrapped struct {
+	message error
+	err     error
+}
+
+func (w *wrapped) Error() string   { return w.message.Error() }
+func (w *wrapped) Unwrap() []error { return []error{w.message, w.err} }
+
+func explain(message, err error) error { return &wrapped{message: message, err: err} }

@@ -65,6 +65,7 @@ func (h *Hub) onClientHello(c *client, data []byte) {
 		return
 	}
 	wasElicitation := c.has("elicitation")
+	wasLang := c.lang()
 	c.mu.Lock()
 	hb := c.meta.heartbeat
 	if hb.Interval == 0 {
@@ -96,6 +97,9 @@ func (h *Hub) onClientHello(c *client, data []byte) {
 	go h.fleetClientsChanged() // its features (elicitation) count now (fleet_link.go)
 	if c.role == roleFull && c.hub != nil {
 		c.hub.setUserLang(i18n.Lang(msg.Locale)) // only a valid one, and only a change, is saved
+	}
+	if c.role == roleFull && wasLang != c.lang() {
+		c.sendJSON(map[string]any{"type": "machines", "machines": localizedMachines(c.lang(), h.machineList())})
 	}
 	if !wasElicitation && c.has("elicitation") {
 		defer h.sendPendingInteractions(c, true)

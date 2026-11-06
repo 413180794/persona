@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // loginShells are the shells on this machine an ssh target's login shell could be: sshd hands the remote command to
@@ -227,7 +229,7 @@ func TestDeployThatDoesNotComeBackHidesItsOwnReconnect(t *testing.T) {
 
 func TestWaitText(t *testing.T) {
 	for d, want := range map[time.Duration]string{2 * time.Minute: "2 分钟", 90 * time.Second: "90 秒", 50 * time.Millisecond: "0 秒"} {
-		if got := waitText(d); got != want {
+		if got := waitText(i18n.ZhHans, d); got != want {
 			t.Errorf("waitText(%v) = %q, want %q", d, got, want)
 		}
 	}

@@ -1,0 +1,69 @@
+package hub
+
+import (
+	"bytes"
+	"encoding/json"
+
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The manager's deployment reports (and saved errors) are canonical, not tied to the language at job start.
+// Translate copies at the last boundary, including an old event replayed to a connection in a different language.
+func localizedMachines(l i18n.Lang, machines []proto.Machine) []proto.Machine {
+	out := append([]proto.Machine{}, machines...)
+	for i := range out {
+		out[i].DeployError = i18n.DeploymentText(l, out[i].DeployError)
+		out[i].DeployReason = i18n.DeploymentText(l, out[i].DeployReason)
+	}
+	return out
+}
+
+func localizedMachineEvent(l i18n.Lang, raw []byte) []byte {
+	if !bytes.Contains(raw, []byte(`"machines"`)) {
+		return raw
+	}
+	var body map[string]json.RawMessage
+	if json.Unmarshal(raw, &body) != nil || string(body["type"]) != `"machines"` {
+		return raw
+	}
+	var machines []proto.Machine
+	if json.Unmarshal(body["machines"], &machines) != nil {
+		return raw
+	}
+	translated := localizedMachines(l, machines)
+	changed := false
+	for i := range machines {
+		changed = changed || machines[i].DeployError != translated[i].DeployError || machines[i].DeployReason != translated[i].DeployReason
+	}
+	if !changed {
+		return raw
+	}
+	body["machines"], _ = json.Marshal(translated)
+	result, err := json.Marshal(body)
+	if err != nil {
+		return raw
+	}
+	return result
+}
+
+func localizedDeploymentError(l i18n.Lang, raw []byte) []byte {
+	var body map[string]json.RawMessage
+	if json.Unmarshal(raw, &body) != nil {
+		return raw
+	}
+	var text string
+	if json.Unmarshal(body["error"], &text) != nil {
+		return raw
+	}
+	translated := i18n.DeploymentText(l, text)
+	if translated == text {
+		return raw
+	}
+	body["error"], _ = json.Marshal(translated)
+	result, err := json.Marshal(body)
+	if err != nil {
+		return raw
+	}
+	return result
+}

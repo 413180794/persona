@@ -1,0 +1,126 @@
+package hub
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+func TestDeploymentMachineResponsesAndReplay(t *testing.T) {
+	h := newTestHub(t)
+	rawError := i18n.T(i18n.Default, "devices-deploy.hub_changed")
+	m := newMachine(h, MachineConfig{ID: "example-deploy", Name: "Example", Kind: kindLink})
+	m.snap = &proto.Machine{ID: m.cfg.ID, Name: m.cfg.Name, DeployError: rawError, DeployReason: i18n.T(i18n.Default, "devices-deploy.node_temporary")}
+	h.machines = []*Machine{m}
+	h.byID = map[string]*Machine{m.cfg.ID: m}
+	en := &client{hub: h, role: roleFull, out: make(chan []byte, 32), acceptLang: i18n.En}
+	ja := &client{hub: h, out: make(chan []byte, 32), acceptLang: i18n.Ja}
+	h.clients = map[*client]struct{}{en: {}, ja: {}}
+	h.broadcastMachines()
+	read := func(c *client, l i18n.Lang) {
+		t.Helper()
+		select {
+		case raw := <-c.out:
+			var event struct {
+				Type     string          `json:"type"`
+				Machines []proto.Machine `json:"machines"`
+				Seq      int64           `json:"event_seq"`
+			}
+			if err := json.Unmarshal(raw, &event); err != nil {
+				t.Fatal(err)
+			}
+			if event.Type != "machines" || len(event.Machines) != 1 || event.Machines[0].DeployError != i18n.T(l, "devices-deploy.hub_changed") || event.Machines[0].DeployReason != i18n.T(l, "devices-deploy.node_temporary") {
+				t.Fatalf("%s: %s", l, raw)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("no machines event")
+		}
+	}
+	read(en, i18n.En)
+	read(ja, i18n.Ja)
+	if m.snap.DeployError != rawError {
+		t.Fatal("sending translated text mutated canonical report")
+	}
+	// An event recorded in Chinese is localized again during resume, without changing event_seq.
+	resumed := &client{hub: h, out: make(chan []byte, 8), acceptLang: i18n.Ja}
+	h.mu.Lock()
+	h.helloLocked(resumed, map[string]any{"type": "hello"}, h.events.stream, 0, true)
+	h.mu.Unlock()
+	<-resumed.out // hello
+	read(resumed, i18n.Ja)
+	// Changing this connection's language updates existing status without another manager report.
+	h.onClientHello(en, []byte(`{"locale":"ja"}`))
+	read(en, i18n.Ja)
+	h.userLocale.Store(i18n.En)
+	for _, l := range []i18n.Lang{i18n.ZhHans, i18n.En, i18n.Ja} {
+		r := httptest.NewRequest("GET", "/api/v1/machines", nil)
+		r.RemoteAddr = "127.0.0.1:12345"
+		r.Header.Set("Accept-Language", string(l))
+		r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+		w := httptest.NewRecorder()
+		h.routes().ServeHTTP(w, r)
+		var response struct {
+			Machines []proto.Machine `json:"machines"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != http.StatusOK || len(response.Machines) != 1 || response.Machines[0].DeployError != i18n.T(l, "devices-deploy.hub_changed") {
+			t.Fatalf("HTTP %s: %d %s", l, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestUnknownMachineErrorsInRequestLanguage(t *testing.T) {
+	h := newTestHub(t)
+	h.userLocale.Store(i18n.Ja)
+	handler := h.routes()
+	for _, path := range []string{"/api/v1/machines/example-missing/claude-dirs", "/api/v1/machines/example-missing/dirs", "/api/v1/machines/example-missing/deploy"} {
+		for _, l := range []i18n.Lang{i18n.ZhHans, i18n.En, i18n.Ja} {
+			method := "GET"
+			if strings.HasSuffix(path, "/deploy") {
+				method = "POST"
+			}
+			r := httptest.NewRequest(method, path, nil)
+			r.RemoteAddr = "127.0.0.1:12345"
+			r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+			r.Header.Set("Accept-Language", string(l))
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			var body struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if w.Code != http.StatusNotFound || body.Error != i18n.T(l, "devices-api.unknown_machine") {
+				t.Fatalf("%s %s: %d %s", l, path, w.Code, w.Body.String())
+			}
+		}
+	}
+}
+
+func TestDeploymentErrorBodyKeepsCodesAndUnknownFields(t *testing.T) {
+	raw := []byte(`{"error":"当前连接使用临时 node，请先安装常驻 node 服务","code":"node_outdated","retryable":false,"future":{"x":1}}`)
+	got := localizedDeploymentError(i18n.En, raw)
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(got, &body); err != nil {
+		t.Fatal(err)
+	}
+	var text string
+	_ = json.Unmarshal(body["error"], &text)
+	if text != i18n.T(i18n.En, "devices-deploy.node_temporary") || string(body["code"]) != `"node_outdated"` || string(body["retryable"]) != "false" || string(body["future"]) != `{"x":1}` {
+		t.Fatalf("changed envelope: %s", got)
+	}
+	for _, raw := range []string{"not JSON", `{"error":"unknown node failure","code":"node_outdated"}`} {
+		if got := string(localizedDeploymentError(i18n.Ja, []byte(raw))); got != raw {
+			t.Fatalf("changed unknown response: %s", got)
+		}
+	}
+}

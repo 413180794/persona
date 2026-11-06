@@ -3,9 +3,10 @@ package devices
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -30,7 +31,7 @@ func (m *Machine) herdrAutostart(ctx context.Context) bool {
 // setHerdrAutostart stores the machine's choice and hands it to the node, as configureNode does when it connects.
 func (m *Machine) setHerdrAutostart(ctx context.Context, on bool) error {
 	if m.d.opts.Store == nil {
-		return fmt.Errorf("没有可保存设置的存储")
+		return i18n.Err("devices-api.no_store")
 	}
 	if err := m.d.opts.Store.PutSetting(ctx, herdrAutostartKey(m.cfg.ID), on); err != nil {
 		return err
@@ -119,11 +120,11 @@ func (d *Devices) putHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
 		Autostart *bool `json:"autostart"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Autostart == nil {
-		writeErr(w, http.StatusBadRequest, fmt.Errorf("需要 autostart"))
+		writeErr(w, http.StatusBadRequest, i18n.Err("devices-api.need_autostart"))
 		return
 	}
 	if e := d.engineOf(m.cfg.ID); e != proto.EngineHerdr && e != proto.EngineHerdrBoth {
-		writeErr(w, http.StatusNotFound, fmt.Errorf("这台电脑的引擎不是 herdr"))
+		writeErr(w, http.StatusNotFound, i18n.Err("devices-api.not_herdr"))
 		return
 	}
 	if err := m.setHerdrAutostart(r.Context(), *in.Autostart); err != nil {

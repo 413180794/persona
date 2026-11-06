@@ -34,7 +34,7 @@ func (h *Hub) routes() http.Handler {
 		h.upd.routes(api)
 	}
 	api.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"machines": h.machineList()})
+		writeJSON(w, map[string]any{"machines": localizedMachines(h.requestLang(r), h.machineList())})
 	})
 	// Confirm / reject a computer (machine_trust.go).
 	h.machineTrustRoutes(api)
@@ -365,7 +365,7 @@ func (h *Hub) withMachine(fn func(http.ResponseWriter, *http.Request, *Machine))
 	return func(w http.ResponseWriter, r *http.Request) {
 		m := h.localMachine(r.PathValue("mid"))
 		if m == nil {
-			writeErr(w, http.StatusNotFound, errors.New("unknown machine"))
+			writeErr(w, http.StatusNotFound, i18n.Err("devices-api.unknown_machine"))
 			return
 		}
 		fn(w, r, m)
@@ -580,7 +580,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	m := h.localMachine(p.MachineID)
 	if m == nil {
-		writeErr(w, http.StatusNotFound, errors.New("unknown machine"))
+		writeErr(w, http.StatusNotFound, i18n.Err("devices-api.unknown_machine"))
 		return
 	}
 	if h.machineUntrusted(m.cfg.ID) { // not confirmed yet (machine_trust.go)
@@ -794,7 +794,11 @@ func (h *Hub) broadcastTo(typ string, b []byte, elicitation bool) {
 		if elicitation && !c.has("elicitation") {
 			continue
 		}
-		c.queue(b)
+		if typ == "machines" {
+			c.queue(localizedMachineEvent(c.lang(), b))
+		} else {
+			c.queue(b)
+		}
 	}
 }
 
@@ -998,7 +1002,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		}))
 	}()
 
-	c.sendJSON(map[string]any{"type": "machines", "machines": h.machineList()})
+	c.sendJSON(map[string]any{"type": "machines", "machines": localizedMachines(c.lang(), h.machineList())})
 	for _, m := range h.machinesNow() {
 		if c.delta {
 			h.snapshotSessions(c, m)

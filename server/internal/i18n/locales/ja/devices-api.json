@@ -1,0 +1,7 @@
+{
+  "unknown_machine": "このコンピューターはありません",
+  "no_store": "設定を保存するストレージがありません",
+  "need_on": "onが必要です",
+  "need_autostart": "autostartが必要です",
+  "not_herdr": "このコンピューターのエンジンはherdrではありません"
+}

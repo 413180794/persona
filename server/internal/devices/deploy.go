@@ -3,15 +3,15 @@ package devices
 import (
 	"compress/gzip"
 	"context"
-	"errors"
-	"fmt"
-	"github.com/nwverse/persona/server/internal/devicewire"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Redeploying a node from the hub (POST /api/v1/machines/{id}/deploy, the button where a machine is not the hub's
@@ -25,11 +25,11 @@ func nodeBinaryDir() string { return devicewire.NodeBinaryDir() }
 // nodeBinary is the hub's build for a machine's OS and architecture.
 func nodeBinary(goos, arch string) (string, error) {
 	if goos == "" || arch == "" {
-		return "", errors.New("还不知道这台电脑的系统，连上以后再试")
+		return "", i18n.Err("devices-deploy.os_unknown")
 	}
 	p := filepath.Join(nodeBinaryDir(), "jarvisd-"+goos+"-"+arch)
 	if _, err := os.Stat(p); err != nil {
-		return "", fmt.Errorf("hub 上没有 %s/%s 的 jarvisd：在开发机上跑一次 scripts/deploy/deploy.sh（Docker 部署的 hub 用镜像里带的）", goos, arch)
+		return "", i18n.Err("devices-deploy.no_binary", i18n.Args{"os": goos, "arch": arch})
 	}
 	return p, nil
 }
@@ -41,11 +41,11 @@ func (m *Machine) startDeploy() error {
 		m.mu.Unlock()
 		return nil
 	}
-	allowed, reason := m.canDeployLocked()
+	blocked := m.canDeployLocked()
 	goos, arch, linked := m.info.OS, m.info.Arch, m.rpcDeploymentLocked()
 	m.mu.Unlock()
-	if !allowed {
-		return errors.New(reason)
+	if blocked != nil {
+		return blocked
 	}
 	bin, err := nodeBinary(goos, arch)
 	if err != nil {
@@ -118,7 +118,7 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 	m.mu.Unlock()
 	if via == "tailcat" { // no ssh to it now: the node takes the binary over tailcat itself
 		if err := m.deployTailcat(ctx, bin); err != nil {
-			return fmt.Errorf("装不上：%v", err)
+			return explain(i18n.Err("devices-deploy.install_failed", i18n.Args{"err": err.Error()}), err)
 		}
 		// The node exits about a second after answering: reconnecting before that would land on the old one.
 		select {
@@ -161,7 +161,7 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return fmt.Errorf("装不上：%s", msg)
+		return i18n.Err("devices-deploy.install_failed", i18n.Args{"err": msg})
 	}
 	return m.waitDeployed(ctx)
 }
@@ -172,11 +172,11 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 var deployWait, deployPoll = 2 * time.Minute, 2 * time.Second
 
 // waitText is how long a wait was, in the owner's words.
-func waitText(d time.Duration) string {
+func waitText(l i18n.Lang, d time.Duration) string {
 	if d >= time.Minute && d%time.Minute == 0 {
-		return fmt.Sprintf("%d 分钟", int(d/time.Minute))
+		return i18n.T(l, "devices-deploy.minutes", i18n.Args{"count": int(d / time.Minute)})
 	}
-	return fmt.Sprintf("%d 秒", int(d.Round(time.Second)/time.Second))
+	return i18n.T(l, "devices-deploy.seconds", i18n.Args{"count": int(d.Round(time.Second) / time.Second)})
 }
 
 // waitDeployed reconnects and waits for the machine to come back on the hub's build.
@@ -209,13 +209,13 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 	if !online {
 		// Not connected: what it runs is not known (m.info is still the node from before the deploy), so saying it
 		// "still runs" that build sent the owner to restart a node that may not start at all (#3393).
-		msg := fmt.Sprintf("装好了，但这台电脑 %s内没有重新连上 hub", waitText(deployWait))
+		l := i18n.Default // Keep stored errors canonical; the hub translates at response time.
 		if why != "" {
-			msg += "：" + why
+			return i18n.Err("devices-deploy.not_back_why", i18n.Args{"wait": waitText(l, deployWait), "why": why})
 		}
-		return errors.New(msg)
+		return i18n.Err("devices-deploy.not_back", i18n.Args{"wait": waitText(l, deployWait)})
 	}
-	return fmt.Errorf("装好了，但这台电脑上跑的还是 %s：在那台电脑上重启一下 jarvisd", version)
+	return i18n.Err("devices-deploy.still_old", i18n.Args{"version": version})
 }
 
 // updateNodes redeploys each connected machine whose node is not the hub's build, one at a time, and queues the

@@ -18,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -173,7 +174,11 @@ func (m *Machine) snapshot() proto.Machine {
 	if icon == "" {
 		icon = "laptop"
 	}
-	canDeploy, deployReason := m.canDeployLocked()
+	blocked := m.canDeployLocked()
+	canDeploy, deployReason := blocked == nil, ""
+	if blocked != nil {
+		deployReason = blocked.Error()
+	}
 	// A failed update is moot once the node runs the hub's own build (it was updated by hand, or the try that failed
 	// was made while the machine was away): the card would keep "Last deploy failed" until another deploy (#2868).
 	deployErr := m.deployErr
@@ -360,7 +365,7 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 		}
 		_ = json.Unmarshal(raw, &fields)
 		if fields.Model != "" || fields.Fingerprint != "" {
-			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: "这台电脑的 node 还不支持统一模型配置，请更新 node"}
+			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(i18n.From(ctx), "hub-machine.node_no_model_config")}
 		}
 	}
 	if p == nil && (m.waitWarm(ctx) || m.waitFirst(ctx)) { // the manager just started: its node is on its way (warm.go)

@@ -1,0 +1,7 @@
+{
+  "unknown_machine": "This computer does not exist.",
+  "no_store": "No storage is available to save settings.",
+  "need_on": "on is required.",
+  "need_autostart": "autostart is required.",
+  "not_herdr": "This computer does not use the herdr engine."
+}

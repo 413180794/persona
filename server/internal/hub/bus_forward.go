@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -107,6 +108,9 @@ func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send,
 	}
 	if res.Status == 0 {
 		res.Status = http.StatusOK
+	}
+	if res.Status >= http.StatusBadRequest && strings.HasPrefix(r.URL.Path, "/api/v1/machines/") && strings.HasSuffix(r.URL.Path, "/deploy") {
+		res.Body = localizedDeploymentError(h.requestLang(r), res.Body)
 	}
 	w.WriteHeader(res.Status)
 	_, _ = w.Write(res.Body)

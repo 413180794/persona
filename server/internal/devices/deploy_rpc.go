@@ -5,11 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -38,20 +38,22 @@ func (m *Machine) rpcDeploymentLocked() bool {
 	return m.cfg.Kind == kindLink || m.cfg.Kind == kindService || m.derived || m.via == viaHub
 }
 
-func (m *Machine) canDeployLocked() (bool, string) {
+// canDeployLocked: nil when the machine's node can be updated from here, else why not (an i18n.Message, but for
+// the node's own reason, which comes in its words).
+func (m *Machine) canDeployLocked() error {
 	if m.cfg.Kind == "local" {
-		return false, "hub 所在的机器跟着 hub 一起更新"
+		return i18n.Err("hub-machine.deploy_local")
 	}
 	if m.rpcDeploymentLocked() && !m.info.NodeUpdate {
 		if m.info.NodeUpdateReason != "" {
-			return false, m.info.NodeUpdateReason
+			return errors.New(m.info.NodeUpdateReason)
 		}
-		return false, "请先在这台电脑上升级一次 node 服务，之后即可在这里远程更新"
+		return i18n.Err("hub-machine.deploy_upgrade_first")
 	}
 	if !m.online {
-		return false, "这台电脑不在线，连上以后再更新"
+		return i18n.Err("hub-machine.deploy_offline")
 	}
-	return true, ""
+	return nil
 }
 
 func (m *Machine) deployRecordKey() string { return "node.deploy." + m.cfg.ID }
@@ -68,7 +70,7 @@ func (m *Machine) saveDeployRecord(ctx context.Context, record nodeDeployRecord)
 func (m *Machine) deploymentPhase(ctx context.Context, record *nodeDeployRecord, phase string) error {
 	record.Phase, record.At = phase, time.Now().UTC()
 	if err := m.saveDeployRecord(ctx, *record); err != nil {
-		return fmt.Errorf("保存更新进度失败：%w", err)
+		return explain(i18n.Err("devices-deploy.save_progress_failed", i18n.Args{"err": err.Error()}), err)
 	}
 	m.mu.Lock()
 	m.deployPhase = phase
@@ -83,10 +85,9 @@ func (m *Machine) startRPCDeployment(bin string, saved *nodeDeployRecord) error 
 		m.mu.Unlock()
 		return nil
 	}
-	allowed, reason := m.canDeployLocked()
-	if !allowed {
+	if err := m.canDeployLocked(); err != nil {
 		m.mu.Unlock()
-		return errors.New(reason)
+		return err
 	}
 	m.deploying, m.deployErr, m.deployPhase = true, "", "waiting_idle"
 	m.mu.Unlock()
@@ -99,7 +100,7 @@ func (m *Machine) startRPCDeployment(bin string, saved *nodeDeployRecord) error 
 		m.mu.Lock()
 		m.deploying, m.deployPhase = false, ""
 		m.mu.Unlock()
-		return fmt.Errorf("保存更新任务失败：%w", err)
+		return explain(i18n.Err("devices-deploy.save_task_failed", i18n.Args{"err": err.Error()}), err)
 	}
 	m.d.changed()
 	go m.runRPCDeployment(ctx, bin, record)
@@ -116,7 +117,7 @@ func (m *Machine) runRPCDeployment(ctx context.Context, bin string, record nodeD
 		if saveErr := m.saveDeployRecord(ctx, record); saveErr != nil {
 			m.d.logf("[%s] save node deployment: %v", m.cfg.ID, saveErr)
 			if err == nil {
-				err = fmt.Errorf("更新已确认，但保存结果失败：%w", saveErr)
+				err = explain(i18n.Err("devices-deploy.save_result_failed", i18n.Args{"err": saveErr.Error()}), saveErr)
 			}
 		}
 	}
@@ -175,7 +176,7 @@ func (m *Machine) waitNodeIdle(ctx context.Context) error {
 		err := m.call(check, "sessions.list", map[string]any{}, &list)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("检查电脑是否空闲失败：%w", err)
+			return explain(i18n.Err("devices-deploy.idle_check_failed", i18n.Args{"err": err.Error()}), err)
 		}
 		m.setSessions(list.Sessions)
 		busy := m.machinePending() // a question of its agents waits on the phone
@@ -205,7 +206,7 @@ func (m *Machine) waitNodeIdle(ctx context.Context) error {
 func (m *Machine) sendNodeUpdate(ctx context.Context, bin string, record *nodeDeployRecord) error {
 	f, err := os.Open(bin)
 	if err != nil {
-		return fmt.Errorf("打开 node 更新包失败：%w", err)
+		return explain(i18n.Err("devices-deploy.open_package_failed", i18n.Args{"err": err.Error()}), err)
 	}
 	defer f.Close()
 	stat, err := f.Stat()
@@ -232,10 +233,10 @@ func (m *Machine) sendNodeUpdate(ctx context.Context, bin string, record *nodeDe
 	if err := peer.Call(ctx, "node.update.begin", map[string]any{
 		"size": stat.Size(), "sha256": hex.EncodeToString(hash.Sum(nil)), "version": record.Target,
 	}, &begin); err != nil {
-		return fmt.Errorf("准备 node 更新失败：%w", err)
+		return explain(i18n.Err("devices-deploy.prepare_failed", i18n.Args{"err": err.Error()}), err)
 	}
 	if begin.ID == "" {
-		return errors.New("node 返回了无效的更新事务")
+		return i18n.Err("devices-deploy.bad_transaction")
 	}
 	committed := false
 	defer func() {
@@ -246,7 +247,7 @@ func (m *Machine) sendNodeUpdate(ctx context.Context, bin string, record *nodeDe
 		}
 	}()
 	if begin.Offset < 0 || begin.Offset > stat.Size() {
-		return errors.New("node 返回了无效的更新传输位置")
+		return i18n.Err("devices-deploy.bad_offset")
 	}
 	if _, err := f.Seek(begin.Offset, io.SeekStart); err != nil {
 		return err
@@ -255,17 +256,17 @@ func (m *Machine) sendNodeUpdate(ctx context.Context, bin string, record *nodeDe
 	for offset := begin.Offset; offset < stat.Size(); {
 		n, err := io.ReadFull(f, buf[:min(int64(len(buf)), stat.Size()-offset)])
 		if err != nil {
-			return fmt.Errorf("读取 node 更新包失败：%w", err)
+			return explain(i18n.Err("devices-deploy.read_package_failed", i18n.Args{"err": err.Error()}), err)
 		}
 		var chunk struct {
 			Offset int64 `json:"offset"`
 		}
 		if err := peer.Call(ctx, "node.update.chunk", map[string]any{"id": begin.ID, "offset": offset, "data": buf[:n]}, &chunk); err != nil {
-			return fmt.Errorf("传输 node 更新失败：%w", err)
+			return explain(i18n.Err("devices-deploy.transfer_failed", i18n.Args{"err": err.Error()}), err)
 		}
 		offset += int64(n)
 		if chunk.Offset != offset {
-			return errors.New("node 确认的更新传输位置不正确")
+			return i18n.Err("devices-deploy.wrong_offset")
 		}
 	}
 	if err := m.deploymentPhase(ctx, record, "restarting"); err != nil {
@@ -277,7 +278,7 @@ func (m *Machine) sendNodeUpdate(ctx context.Context, bin string, record *nodeDe
 	if err != nil {
 		var remote *rpc.Error
 		if errors.As(err, &remote) {
-			return fmt.Errorf("安装 node 更新失败：%w", err)
+			return explain(i18n.Err("devices-deploy.install_update_failed", i18n.Args{"err": err.Error()}), err)
 		}
 		// A lost commit response is ambiguous: the node may already have
 		// replaced itself. Never report success until it reconnects and confirms.
@@ -310,7 +311,7 @@ func (m *Machine) confirmNodeDeployment(ctx context.Context, record *nodeDeployR
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return errors.New("新 node 未在两分钟内重新上线并确认版本；本机恢复机制会在确认超时后回滚，请查看电脑状态后重试")
+			return i18n.Err("devices-deploy.not_confirmed")
 		case <-time.After(time.Second):
 		}
 	}
@@ -356,11 +357,11 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 		return
 	}
 	if record.Target != m.d.hubVersion() {
-		err = errors.New("hub 版本已变化，之前的 node 更新任务已停止；请重新更新")
+		err = i18n.Err("devices-deploy.hub_changed")
 	} else if info.Version != record.Target && (record.Phase == "restarting" || record.Phase == "confirming") {
 		// An accepted install may have rolled back while the hub was down.
 		// Do not automatically reinstall a build that just failed to start.
-		err = errors.New("node 更新后仍运行旧版，可能已回滚；请检查电脑状态后手动重试")
+		err = i18n.Err("devices-deploy.rolled_back")
 	} else {
 		var bin string
 		if info.Version != record.Target {

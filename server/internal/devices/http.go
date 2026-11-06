@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-var errUnknownMachine = errors.New("unknown machine")
+var errUnknownMachine = i18n.Err("devices-api.unknown_machine")
 
 func writeJSON(w http.ResponseWriter, v any) { apierr.WriteJSON(w, v) }
 

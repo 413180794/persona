@@ -170,7 +170,7 @@ func (h *Hub) helloLocked(c *client, hello map[string]any, stream string, after 
 	c.queue(b)
 	for _, e := range missed {
 		if !e.Elicitation { // only for apps that said they answer forms: it has not said so yet; pending ones follow
-			c.queue(e.Body)
+			c.queue(localizedMachineEvent(c.lang(), e.Body))
 		}
 	}
 }

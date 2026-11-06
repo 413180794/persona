@@ -3,9 +3,10 @@ package devices
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // botmuxKey is where a machine's own choice is kept. hub.json's machines[].botmux is only the default now: the switch
@@ -27,7 +28,7 @@ func (m *Machine) botmux(ctx context.Context) bool {
 // setBotmux stores the machine's choice and hands it to the node, as configureNode does when it connects.
 func (m *Machine) setBotmux(ctx context.Context, on bool) error {
 	if m.d.opts.Store == nil {
-		return fmt.Errorf("没有可保存设置的存储")
+		return i18n.Err("devices-api.no_store")
 	}
 	if err := m.d.opts.Store.PutSetting(ctx, botmuxKey(m.cfg.ID), on); err != nil {
 		return err
@@ -58,7 +59,7 @@ func (d *Devices) putBotmux(w http.ResponseWriter, r *http.Request, m *Machine) 
 		On *bool `json:"on"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.On == nil {
-		writeErr(w, http.StatusBadRequest, fmt.Errorf("需要 on"))
+		writeErr(w, http.StatusBadRequest, i18n.Err("devices-api.need_on"))
 		return
 	}
 	if err := m.setBotmux(r.Context(), *in.On); err != nil {

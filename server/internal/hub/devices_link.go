@@ -1095,7 +1095,7 @@ func (h *Hub) deviceRoutesRelayed(api *http.ServeMux) {
 	for _, pattern := range devicewire.Routes {
 		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			if h.localMachine(r.PathValue("mid")) == nil {
-				writeErr(w, http.StatusNotFound, errors.New("unknown machine"))
+				writeErr(w, http.StatusNotFound, i18n.Err("devices-api.unknown_machine"))
 				return
 			}
 			_ = h.waitDevices(r.Context()) // the hub just started: the manager is on its way (bounded); else 503 at once
