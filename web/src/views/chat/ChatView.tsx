@@ -50,6 +50,7 @@ import { PaneTabs } from "./PaneTabs";
 import { RunningStatusBar } from "./RunningStatusBar";
 import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
 import { ChatContext, FreshWords, LiveClockContext, type ChatContextValue } from "./chat-context";
+import { seekCall } from "./jump";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
 import { CloseAgentDialog, DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
@@ -300,6 +301,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // older pages landing above keep the view still ──
   const scroller = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
+  // the jump's smooth scroll running: its first frames, a few px off the end, do not start following again
+  const jumping = useRef(0);
   const [away, setAway] = useState(false);
   // something came in since the reader left the end: the pill says "New messages"
   const [newSince, setNewSince] = useState(false);
@@ -460,7 +463,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     lastTop.current = el.scrollTop;
     if (atEnd.current) {
       if (leavesOnScrollbarDrag({ dragging: dragging.current, delta })) follow(false);
-    } else if (!anchor.current && followsAgain({ gap, delta })) follow(true);
+    } else if (!anchor.current && !jumping.current && followsAgain({ gap, delta })) follow(true);
     if (el.scrollTop < 300 && tr.hasMore && !tr.loadingEarlier && !first.current) {
       before.current = { h: el.scrollHeight, top: el.scrollTop };
       void tr.loadEarlier().finally(() => {
@@ -613,9 +616,42 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // while a message of yours is on its way the live line steps aside (lastLive needs !outgoing): the time stays where it was
   const barClock = useRef(true);
   if (!outgoing) barClock.current = clocks === 0;
+  // "Jump to the step that started it" (#2719): open the groups the call is folded in, stop following the end, bring its row to the middle
+  // and light it a moment; a call in a folded run of work is fetched first (jump.ts seekCall).
+  const expandFold = tr.expandFold;
+  const jumpToCall = useCallback(
+    async (call: string) => {
+      const scope = `${mid}/${sid}:`;
+      const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+      const found = await seekCall(scope, call, items.current, expandFold, frame);
+      if (!found) return void toast(t("chat-chatview.call_not_loaded"));
+      follow(false);
+      // the groups just opened grow over the next frames (Collapse): move once the row holds still, the chat's own
+      // scroller only (scrollIntoView would also scroll the opening group's clipped box)
+      let row: HTMLElement | null = null;
+      let last = NaN;
+      for (let still = 0, n = 0; n < 40 && still < 3; n++) {
+        await frame();
+        row = scroller.current?.querySelector<HTMLElement>(`[data-tool-use="${CSS.escape(call)}"]`) ?? null;
+        const top = row?.getBoundingClientRect().top ?? NaN;
+        still = row && Math.abs(top - last) < 0.5 ? still + 1 : 0;
+        last = top;
+      }
+      const sc = scroller.current;
+      if (!row || !sc) return void toast(t("chat-chatview.call_not_loaded"));
+      const s = sc.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      clearTimeout(jumping.current);
+      jumping.current = window.setTimeout(() => (jumping.current = 0), 1200);
+      sc.scrollTo({ top: sc.scrollTop + (r.top - s.top) - (sc.clientHeight - r.height) / 2, behavior: "smooth" });
+      row.animate?.([{ backgroundColor: "var(--accent-tint)" }, { backgroundColor: "transparent" }], { duration: 1800, easing: "ease-out" });
+    },
+    [mid, sid, follow, expandFold],
+  );
+  const jump = useCallback((call: string) => void jumpToCall(call), [jumpToCall]);
   const ctx = useMemo<ChatContextValue>(
-    () => ({ tasks, subagents: assistant ? NO_SUBAGENTS : (subagents ?? NO_SUBAGENTS), scope: `${mid}/${sid}:` }),
-    [tasks, subagents, assistant, mid, sid],
+    () => ({ tasks, subagents: assistant ? NO_SUBAGENTS : (subagents ?? NO_SUBAGENTS), scope: `${mid}/${sid}:`, jumpToCall: jump }),
+    [tasks, subagents, assistant, mid, sid, jump],
   );
   // ── "Search in chat" (ChatSearch.tsx, Android ChatSearchState): where the reader was when it opened, going to a hit (the
   // rows that hold it open, search-reveal.ts), lit for HIT_MS, and "Back to where you were" ──

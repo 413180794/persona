@@ -1,8 +1,18 @@
 // Which work groups, cards and thoughts the reader opened (cindy's useExpandedBlockMemory), kept for the page's life:
 // a group that goes from live to done, or remounts when a page of history lands above it, stays as the reader left it.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const opened = new Map<string, boolean>();
+/** The drawn groups, told when something outside them opened theirs (`openExpanded`). */
+const openListeners = new Set<(keys: ReadonlySet<string>) => void>();
+
+/** Opens these keys from outside their groups ("Jump to the step that started it"): the ones on screen redraw open. */
+export function openExpanded(keys: string[]) {
+  if (!keys.length) return;
+  for (const k of keys) opened.set(k, true);
+  const set = new Set(keys);
+  openListeners.forEach((l) => l(set));
+}
 /** Folded ranges (seq … through_seq) the reader opened, by chat: the groups their steps land in start open, whatever
  *  key they get once the range is unfolded (a plan card taken out of it moves the first step). */
 const foldRanges = new Map<string, [number, number][]>();
@@ -18,6 +28,11 @@ export function inOpenedFold(scope: string, seq?: number): boolean {
 export function useExpanded(key: string, initial = false): [boolean, (next: boolean | ((v: boolean) => boolean)) => void] {
   const [, bump] = useState(0);
   const value = opened.get(key) ?? initial;
+  useEffect(() => {
+    const listen = (keys: ReadonlySet<string>) => keys.has(key) && bump((n) => n + 1);
+    openListeners.add(listen);
+    return () => void openListeners.delete(listen);
+  }, [key]);
   const set = useCallback(
     (next: boolean | ((v: boolean) => boolean)) => {
       const v = typeof next === "function" ? next(opened.get(key) ?? initial) : next;

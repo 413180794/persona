@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { exchangeSteps, segments } from "./turns";
 import type { Item } from "./types";
 import {
+  groupsHolding,
   explorationSummary,
   groupOpens,
   groupTitle,
@@ -262,5 +263,47 @@ describe("planProgress", () => {
   it("names the one in progress, else the last when all are done", () => {
     expect(planProgress([{ content: "A", status: "completed" }, { content: "B", status: "in_progress" }]).current).toBe("B");
     expect(planProgress([{ content: "A", status: "completed" }, { content: "B", status: "completed" }])).toMatchObject({ current: "B", step: 2, allDone: true });
+  });
+});
+
+describe("groupsHolding (#2719: a background task's notice → the call that started it)", () => {
+  const items = () => [
+    user("u1", 0),
+    think("th", 1000),
+    ...tool("grep", "Grep", 2000, 2500, { pattern: "x" }),
+    ...tool("bg", "Bash", 3000, 3500, { command: "npm test", run_in_background: true }, "Command running in background with ID: b1"),
+    ...tool("read", "Read", 4000, 4500, { file_path: "/a.ts" }),
+    say("a", "测试在后台跑，跑完我再看。", 5000),
+  ];
+
+  it("names the groups to open, outer first, down to the call", () => {
+    const b = blocks(items());
+    const path = groupsHolding(b, "tu-bg");
+    expect(path).not.toBeNull();
+    expect(path!.length).toBeGreaterThan(0);
+    // every id on the path is a group, each one inside the one before it
+    let level: WorkNode[] = b;
+    for (const id of path!) {
+      const g = groups(level).find((x) => x.id === id);
+      expect(g, id).toBeTruthy();
+      level = g!.children;
+    }
+    expect(level.some((n) => n.kind === "step" && n.step.kind === "tool" && n.step.use.tool_use_id === "tu-bg")).toBe(true);
+  });
+
+  it("is empty for a call left in the open, null for one not there", () => {
+    const b = blocks([user("u1", 0), ...tool("bg", "Bash", 1000, 1500, { command: "npm test" }), say("a", "好了", 2000)], true);
+    const open = b.find((n) => n.kind === "step" && n.step.kind === "tool");
+    if (open) expect(groupsHolding(b, "tu-bg")).toEqual([]);
+    expect(groupsHolding(blocks(items()), "tu-nope")).toBeNull();
+    expect(groupsHolding([], "tu-bg")).toBeNull();
+  });
+
+  it("looks in the open timeline's inner groups too", () => {
+    const g = (id: string, children: WorkNode[]): WorkGroupNode => ({ kind: "group", id, children, live: false });
+    const step = blocks(items()).flatMap(function all(n): WorkNode[] { return n.kind === "group" ? n.children.flatMap(all) : [n]; })
+      .find((n) => n.kind === "step" && n.step.kind === "tool" && n.step.use.tool_use_id === "tu-bg")!;
+    const tree = [g("outer", [g("inner-1", []), g("inner-2", [step])])];
+    expect(groupsHolding(tree, "tu-bg")).toEqual(["outer", "inner-2"]);
   });
 });

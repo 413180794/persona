@@ -156,7 +156,7 @@ export function CompactDivider({ item }: { item: Item }) {
 }
 
 export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: string }) {
-  const { tasks } = useChatContext();
+  const { tasks, jumpToCall } = useChatContext();
   if (item.compact) return <CompactDivider item={item} />;
   const task = item.task;
   if (task) {
@@ -183,6 +183,17 @@ export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: st
             {t("chat-steps.view_output")}
           </button>
         )}
+        {call && jumpToCall && (
+          <button
+            type="button"
+            onClick={() => jumpToCall(call)}
+            className="flex w-fit items-center gap-1.5 rounded-[6px] px-0.5 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
+            data-jump-to-call
+          >
+            <Icon name="up" size={12} />
+            {t("chat-steps.jump_to_call")}
+          </button>
+        )}
       </div>
     );
     return (
@@ -192,7 +203,7 @@ export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: st
         chip={taskSubject(task, call ? tasks.descriptions.get(call) : undefined) || firstLine(item.text)}
         mono={task.kind === "shell"}
         status={pill ? <span className={cx("rounded-[4px] px-1 text-[10.5px] font-medium whitespace-nowrap", TONE[pill.tone])}>{pill.text}</span> : null}
-        detail={task.detail || task.title || out ? detail : undefined}
+        detail={task.detail || task.title || out || (call && jumpToCall) ? detail : undefined}
         items={item.id}
       />
     );

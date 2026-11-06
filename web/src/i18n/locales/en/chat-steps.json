@@ -1,5 +1,6 @@
 {
   "copy": "Copy",
   "view_output": "View output",
+  "jump_to_call": "Jump to the step that started it",
   "view_image": "View image"
 }

@@ -373,6 +373,21 @@ export function previewSteps(g: WorkGroupNode, limit = LIVE_PREVIEW): Step[] {
   return out.reverse();
 }
 
+/** The groups holding the tool call `call` (its tool_use_id), outer first, down to the one it sits in: what opens to
+ *  bring it into view (a background task's "Jump to the step that started it", iOS ChatView.jumpToCall). Empty: it is in the open; null:
+ *  not among these nodes. */
+export function groupsHolding(nodes: WorkNode[], call: string): string[] | null {
+  for (const n of nodes) {
+    if (n.kind === "step") {
+      if (n.step.kind === "tool" && n.step.use.tool_use_id === call) return [];
+      continue;
+    }
+    const inner = groupsHolding(n.children, call);
+    if (inner) return [n.id, ...inner];
+  }
+  return null;
+}
+
 /** Whether a live group opens: it holds more than its preview shows. A finished one always does. */
 export function groupOpens(g: WorkGroupNode): boolean {
   if (!g.live) return true;

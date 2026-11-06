@@ -11,6 +11,9 @@ export interface ChatContextValue {
   subagents: Subagent[];
   /** Prefixes the keys of what the reader opened (expanded.ts): one chat's groups do not open another's. */
   scope: string;
+  /** Brings the call with this tool_use_id into view, opening the groups it is folded in (a background task's
+   *  "Jump to the step that started it"). */
+  jumpToCall?: (call: string) => void;
 }
 
 export const ChatContext = createContext<ChatContextValue>({ tasks: emptyTaskIndex(), subagents: [], scope: "" });

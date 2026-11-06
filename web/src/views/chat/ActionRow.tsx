@@ -187,7 +187,7 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
   const full = useFullText(result, mid, sid);
   const output = result && showsResult(name, result) ? full.text : "";
   return (
-    <div className="flex min-w-0 flex-col" data-action-row={name} data-items={ids.join(" ")}>
+    <div className="flex min-w-0 flex-col" data-action-row={name} data-tool-use={call} data-items={ids.join(" ")}>
       <button type="button" onClick={activate} aria-expanded={inPlace ? open : undefined} aria-label={label || name} title={p.param?.title} className={ROW}>
         <span role="img" aria-label={running ? t("chat-actionrow.status_running") : error ? t("chat-actionrow.status_error") : t("chat-actionrow.status_done")} className={cx(STATUS_SLOT, error && "text-red")}>
           {running ? <Spinner size={12} /> : <Icon name={error ? "x" : "check"} size={13} />}

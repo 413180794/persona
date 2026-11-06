@@ -27,6 +27,7 @@ import { useFoldScroll } from "./fold-scroll";
 import { useChatContext } from "./chat-context";
 import { Icon } from "../../ui/icons";
 import { WorkGroup, WorkNodes, type WorkProps } from "./WorkGroup";
+import { useCallSeeker } from "./jump";
 import { t } from "../../i18n";
 
 /** A message longer than this many lines folds to ten of them (FOLDED), with "Expand" under it (the reference client's UserMessage). */
@@ -204,6 +205,7 @@ export const SegmentView = memo(function SegmentView({
     return { mid, sid, scope, expandFold, agentStatus: agent, thinking };
   }, [mid, sid, scope, expandFold, subagents, live, thinking]);
   const nodes = useMemo(() => workBlocks(steps, { live, turnStart, agentStatus: p.agentStatus }), [steps, live, turnStart, p.agentStatus]);
+  useCallSeeker(scope, nodes);
   // the pictures the agent looked at this turn, between its work and its last words
   const images = useMemo(() => turnImages(seg, getState().machines.find((m) => m.id === mid)?.name), [seg, mid]);
   // a finished exchange's last words (the run of them at its end) come after those pictures

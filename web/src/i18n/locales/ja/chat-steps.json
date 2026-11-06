@@ -1,5 +1,6 @@
 {
   "copy": "コピー",
   "view_output": "出力を表示",
+  "jump_to_call": "起動したステップへ移動",
   "view_image": "画像を表示"
 }
