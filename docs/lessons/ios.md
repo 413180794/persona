@@ -1172,3 +1172,15 @@ but UIKit still had a page with only Agents Back and empty content.
 - SwiftUI's `ScrollGeometry` there: `containerSize` 416 (insets left out), `contentOffset.x` from −372 to −37. `contentOffset.x + containerSize.width` never reaches the content's width, so the table's "more to the right" fade never went away at the end. `visibleRect.maxX` does (−37…751).
 - XCUITest frames of a flipped chat list differ between an iPhone and an iPad, and between rows: mirror a frame against a text drawn just above it in the same block, not against the first and last messages.
 
+## 图片分页的终态与验证（#5678）
+
+旧 page-style `TabView` 在快速滑动后出现过 3.6667 pt 的整页偏移，截图可见邻图条带；这只证明偏移存在，不能据此断定手机每次都是同一种解码或取消事件触发。`ImagePager.swift` 让 UIKit 保持分页容器和每页的身份，SwiftUI 只向现有页交付图片；终态、减速和动画结束时对齐整页，不用计时器修补偏移。
+
+取消测试必须让真实 `UIScrollView.panGestureRecognizer` 先经过 `.began`、`.changed`，再由 UIKit 的 `isEnabled = false` 触发 `.cancelled`；不能手写 state 或直接调用终态方法。回调入口先保存原始 state，再运行 DEBUG hook，否则 hook 在 changed 回调中改变 state 后，会提前走取消收尾，造成假阳性。测试要求实际取消回调、收尾请求、整页结果严格依次发生。
+
+解码测试在真实 changed/panning 事件上放行解码器，记录解码完成和 UIKit 页更新仍为 `changed / isDragging=true`，再观察整页终态。固定延迟本身不能证明时序。
+
+DEBUG 的代码可能在 `Persona.debug.dylib` 中，40 KiB 的 `Persona` 只是启动壳。二进制检查的正向对照要看实际加载的 Debug image；Release 不仅查主可执行文件，也查打包的所有 Mach-O。新增 `showViewer…` 启动参数必须登记到 release 字符串检查。
+
+下拉关闭的闸门不能用 `isTracking` 表示「已开始拖动」：手指按下即 tracking，方向尚未确定。用 `isDragging`、`isDecelerating` 判断；外层分页 pan 拒绝以向下为主的起手，避免抢走下拉关闭。
+

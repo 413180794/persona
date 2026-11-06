@@ -48,6 +48,9 @@ Chat page:
   - Background follows light/dark (`Theme.Viewer.canvas`); single tap hides bars and turns black (`immersive`); Mac single tap does not hide (Close and Esc are in the bars).
   - Gestures: pinch / double-tap zoom, pan when zoomed, swipe to switch, drag down at fitted size to dismiss: image shrinks with finger, background fades, release closes or springs back by distance / velocity (`ZoomMath.pullProgress` / `pullCloses`);
     system zoom-transition drag dismissal disabled via `.interactiveDismissDisabled()` to avoid competing gestures. Thumbnail entry points use zoom transitions.
+  - Paging on iOS is a UIKit paging scroll view (`ImagePager.swift`, `ImagePagerView` / `PagerScrollView`), not a page-style `TabView`: SwiftUI updates only hand pictures to existing pages,
+    `index` changes once a swipe has come to rest, and the pages move to the nearest whole page whenever they come to rest off one (`PagerMath`, #5678). A page that leaves the screen goes back to fitted.
+    `-showViewerDecodeDelay 0.35` makes pictures arrive late (UI test `ImageViewerTests.testSwipesAlwaysEndOnAWholePage`).
   - Annotation (`ImageEditor.swift`): rectangle / brush, 6 colors, undo / clear, then Add to input as next-message attachment (`AppModel.composerInbox`),
     ready to send with a note; only available when opened from a chat. Pending input images can also be tapped to edit before sending.
   - Screenshots: `-openFirstImage YES` / `-openViewedImage N`, `-showViewerChromeHidden YES` hides bars, `-showViewerInfo YES` opens info.

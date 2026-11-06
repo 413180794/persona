@@ -43,6 +43,8 @@ struct ImageViewer: View {
     @State private var saving = false
     @State private var editing: UIImage?
     @State private var showInfo = false
+    /// The pictures being decoded; not observed (nothing draws from it).
+    @State private var loading = Loading()
 
     /// Opens at `tapped` within the whole conversation when it is there, else within `local`.
     init(images local: [ImagePayload], index: Int, conversation: [ImagePayload] = [], attach: ((UIImage) -> Void)? = nil) {
@@ -114,38 +116,47 @@ struct ImageViewer: View {
 
     @ViewBuilder private var pager: some View {
         #if os(iOS) || os(visionOS)
-        TabView(selection: $index) {
-            ForEach(images.indices, id: \.self) { i in
-                page(i).tag(i)
+        // UIKit pages the pictures: a page-style TabView stopped between two pages now and then (#5678, ImagePager.swift).
+        ImagePagerView(count: images.count, images: decoded, index: $index,
+                       onTap: toggleChrome,
+                       onPull: { pull = $0 },
+                       onPullEnd: { close in
+                           if close { dismiss() } else { withAnimation(Theme.Motion.state) { pull = 0 } }
+                       },
+                       onNeed: { i in Task { await load(i) } })
+            .ignoresSafeArea()
+            // The one it opens on and the ones either side, before a swipe brings them on.
+            .task(id: index) {
+                for i in [index, index + 1, index - 1] { await load(i) }
             }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        .ignoresSafeArea()
         #else
         // No page-style TabView on the Mac: one image at a time, ← / → and the pager's arrows move (ImagePager).
         ImagePager(count: images.count, index: $index) { i in page(i) }
         #endif
     }
 
+    #if os(macOS)
     private func page(_ i: Int) -> some View {
         Group {
             if let img = decoded[i] {
-                ZoomableImage(image: img,
-                              onTap: toggleChrome,
-                              onPull: { pull = $0 },
-                              onPullEnd: { close in
-                                  if close { dismiss() } else { withAnimation(Theme.Motion.state) { pull = 0 } }
-                              })
+                ZoomableImage(image: img, onTap: toggleChrome)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: i) {
-            await decode(i)
-            #if DEBUG // `-openEditor YES`: straight into the editor (screenshots)
-            if i == index, attach != nil, UserDefaults.standard.bool(forKey: "openEditor") { editing = decoded[i] }
-            #endif
-        }
+        .task(id: i) { await load(i) }
+    }
+    #endif
+
+    /// Decodes picture `i` once (a page asking again while it loads waits for nothing).
+    private func load(_ i: Int) async {
+        guard images.indices.contains(i), decoded[i] == nil, !loading.ids.contains(i) else { return }
+        loading.ids.insert(i)
+        defer { loading.ids.remove(i) }
+        await decode(i)
+        #if DEBUG // `-openEditor YES`: straight into the editor (screenshots)
+        if i == index, attach != nil, UserDefaults.standard.bool(forKey: "openEditor") { editing = decoded[i] }
+        #endif
     }
 
     private func toggleChrome() {
@@ -309,7 +320,18 @@ struct ImageViewer: View {
 
     private func decode(_ i: Int) async {
         guard decoded[i] == nil, images.indices.contains(i) else { return }
-        decoded[i] = await ViewerLoader.image(images[i], side: nil)
+        #if DEBUG // `-showViewerDecodeDelay`: legacy stress; `-showViewerDecodeDuringPan`: an event-driven gate.
+        let delay = UserDefaults.standard.double(forKey: "showViewerDecodeDelay")
+        if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+        #if os(iOS) || os(visionOS)
+        await ImagePagingProbe.shared.beforeDecode(i)
+        #endif
+        #endif
+        let image = await ViewerLoader.image(images[i], side: nil)
+        #if DEBUG && (os(iOS) || os(visionOS))
+        ImagePagingProbe.shared.decoded(i, image: image)
+        #endif
+        decoded[i] = image
     }
 
     private func save() async {
@@ -436,137 +458,9 @@ private struct ViewerThumb: View {
     }
 }
 
-#if os(iOS) || os(visionOS)
-/// UIScrollView-backed zooming: native pinch, pan, bounce; double tap zooms to the tapped point (or back); a single
-/// tap calls `onTap`. At the fitted size a downward drag pulls the picture away: it follows the finger and shrinks,
-/// `onPull` reports how far (0…1), and `onPullEnd` says whether to close.
-struct ZoomableImage: UIViewRepresentable {
-    var image: UIImage
-    var onTap: () -> Void
-    var onPull: (CGFloat) -> Void = { _ in }
-    var onPullEnd: (Bool) -> Void = { _ in }
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    func makeUIView(context: Context) -> ZoomScrollView {
-        let v = ZoomScrollView(image: image)
-        v.delegate = context.coordinator
-        let double = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTap(_:)))
-        double.numberOfTapsRequired = 2
-        let single = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.singleTap))
-        single.require(toFail: double)
-        let pull = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pulled(_:)))
-        pull.delegate = context.coordinator
-        v.addGestureRecognizer(double)
-        v.addGestureRecognizer(single)
-        v.addGestureRecognizer(pull)
-        return v
-    }
-
-    func updateUIView(_ v: ZoomScrollView, context: Context) {
-        context.coordinator.parent = self
-        if v.imageView.image !== image { v.imageView.image = image; v.relayout() }
-    }
-
-    final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
-        var parent: ZoomableImage
-        init(_ parent: ZoomableImage) { self.parent = parent }
-
-        func viewForZooming(in scrollView: UIScrollView) -> UIView? { (scrollView as? ZoomScrollView)?.imageView }
-
-        func scrollViewDidZoom(_ scrollView: UIScrollView) { (scrollView as? ZoomScrollView)?.centerImage() }
-
-        @objc func singleTap() { parent.onTap() }
-
-        @objc func doubleTap(_ g: UITapGestureRecognizer) {
-            guard let v = g.view as? ZoomScrollView else { return }
-            if v.zoomScale > v.minimumZoomScale + 0.01 {
-                v.setZoomScale(v.minimumZoomScale, animated: true)
-            } else {
-                let p = g.location(in: v.imageView)
-                let scale = min(v.maximumZoomScale, 2.5)
-                let size = CGSize(width: v.bounds.width / scale, height: v.bounds.height / scale)
-                v.zoom(to: CGRect(x: p.x - size.width / 2, y: p.y - size.height / 2, width: size.width, height: size.height), animated: true)
-            }
-            Haptics.tap()
-        }
-
-        /// Only a downward drag at the fitted size pulls; sideways goes to the pager, a zoomed picture pans.
-        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard let pan = g as? UIPanGestureRecognizer, let v = pan.view as? ZoomScrollView else { return true }
-            guard v.zoomScale <= v.minimumZoomScale + 0.01 else { return false }
-            let speed = pan.velocity(in: v)
-            return speed.y > 0 && speed.y > abs(speed.x) * 1.2
-        }
-
-        @objc func pulled(_ g: UIPanGestureRecognizer) {
-            guard let v = g.view as? ZoomScrollView else { return }
-            let t = g.translation(in: v)
-            let progress = ZoomMath.pullProgress(translation: t.y, height: v.bounds.height)
-            switch g.state {
-            case .changed:
-                let scale = 1 - 0.3 * progress
-                v.imageView.transform = CGAffineTransform(translationX: t.x, y: t.y).scaledBy(x: scale, y: scale)
-                parent.onPull(progress)
-            case .ended, .cancelled, .failed:
-                if g.state == .ended, ZoomMath.pullCloses(translation: t.y, velocity: g.velocity(in: v).y) {
-                    parent.onPullEnd(true)
-                } else {
-                    UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
-                        v.imageView.transform = .identity
-                    }
-                    parent.onPullEnd(false)
-                }
-            default: break
-            }
-        }
-    }
+private final class Loading {
+    var ids: Set<Int> = []
 }
-
-final class ZoomScrollView: UIScrollView {
-    let imageView = UIImageView()
-    private var lastBounds: CGSize = .zero
-
-    init(image: UIImage) {
-        super.init(frame: .zero)
-        imageView.image = image
-        imageView.contentMode = .scaleAspectFit
-        addSubview(imageView)
-        showsVerticalScrollIndicator = false
-        showsHorizontalScrollIndicator = false
-        contentInsetAdjustmentBehavior = .never
-        decelerationRate = .fast
-        backgroundColor = .clear
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    func relayout() {
-        lastBounds = .zero
-        setNeedsLayout()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard bounds.size != lastBounds, let img = imageView.image, img.size.width > 0, img.size.height > 0 else { return }
-        lastBounds = bounds.size
-        // Fit the image at 1x, allow up to 5x of its pixel size (at least 3x of the fitted size).
-        let fit = ZoomMath.fittedSize(image: img.size, in: bounds.size)
-        zoomScale = 1
-        imageView.transform = .identity
-        imageView.frame = CGRect(origin: .zero, size: fit)
-        contentSize = fit
-        minimumZoomScale = 1
-        maximumZoomScale = ZoomMath.maxScale(image: img.size, fitted: fit, screenScale: traitCollection.displayScale) // this view's display (iPhone Duo has two)
-        centerImage()
-    }
-
-    func centerImage() {
-        let inset = ZoomMath.centeringInset(content: imageView.frame.size, bounds: bounds.size)
-        contentInset = UIEdgeInsets(top: inset.height, left: inset.width, bottom: inset.height, right: inset.width)
-    }
-}
-#endif
 
 private struct EditTarget: Identifiable {
     var image: UIImage
