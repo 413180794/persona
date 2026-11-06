@@ -31,7 +31,7 @@ internal fun RequestCard(
     /** False when the session's source does not let the phone approve (a Codex thread not joined live). */
     approvable: Boolean = true,
 ) {
-    val enabled = online && !readOnly && approvable && !request.expired(now) && delivery == null
+    val enabled = online && !readOnly && approvable && !request.expired(now) && !RequestDeliveries.locks(delivery)
     val question = request.quickQuestion()
     val source = listOfNotNull(machine, space ?: request.cwd?.trimEnd('/')?.substringAfterLast('/')?.takeIf { it.isNotBlank() }).joinToString(" / ")
     val answer: (AnswerAction) -> Unit = { onAnswer(request, it, AnswerDraft(), false) }
@@ -167,7 +167,7 @@ internal fun RequestDetail(
                     delivery?.let { RequestDeliveryStatus(it, live = false) }
                     if (!online && !readOnly) Text(stringResource(R.string.agents_request_offline), style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText)
                     Box(Modifier.weight(1f)) {
-                        persona.feature.chat.RequestEditor(request, machine, busy = delivery != null, uncertain = delivery == RequestDelivery.Unknown,
+                        persona.feature.chat.RequestEditor(request, machine, busy = RequestDeliveries.locks(delivery), uncertain = delivery == RequestDelivery.Unknown,
                             online = online, readOnly = readOnly, onTerminal = onTerminal, linkVisible = linkVisible,
                             blockedReason = blockedReason, terminalHelp = terminalHelp,
                             onAnswer = { action, draft, read -> if (!readOnly) onAnswer(request, action, draft, read) })
@@ -191,6 +191,7 @@ private fun RequestDeliveryStatus(delivery: RequestDelivery, live: Boolean = tru
             RequestDelivery.Sending -> PendingBadge(PendingStatus.Sending)
             RequestDelivery.Unknown -> PendingBadge(PendingStatus.Unconfirmed)
             RequestDelivery.Sent -> JTag(stringResource(R.string.agents_request_sent), status = Status.Unread)
+            RequestDelivery.Retry -> JTag(stringResource(R.string.agents_request_retry), tone = Tone.Caution)
         }
     }
 }

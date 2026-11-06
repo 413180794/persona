@@ -30,8 +30,11 @@ internal data class AgentsPageState(
     val botmuxCount: Int = 0,
 )
 
-/** Where an answer to a request stands; the screen says it (AgentRequests.kt). */
-internal enum class RequestDelivery { Sending, Sent, Unknown }
+/**
+ * Where an answer to a request stands; the screen says it (AgentRequests.kt). [Unknown] is checked against the hub
+ * and then either ends or becomes [Retry], which lets the request be answered again (RequestDeliveries.kt, #3791).
+ */
+internal enum class RequestDelivery { Sending, Sent, Unknown, Retry }
 
 internal class AgentsViewModel(
     private val repository: SessionsRepository,
@@ -202,6 +205,7 @@ internal class AgentsViewModel(
                         .filter { old -> pending.none { it.id == old.id && it.sessionKey == old.sessionKey } }.take(50)
                 }
                 previous = pending
+                _delivery.update { RequestDeliveries.prune(it, pending) }
             }
         }
         if (operations != null) {
@@ -483,7 +487,7 @@ internal class AgentsViewModel(
     }
     fun answer(interaction: Interaction, action: AnswerAction, draft: AnswerDraft = AnswerDraft(), fullPlanRead: Boolean = false) {
         val latest = interactions.pending.value.firstOrNull { it.id == interaction.id } ?: return
-        if (latest != interaction || latest.expired(Instant.now()) || interaction.id in _delivery.value) return
+        if (latest != interaction || latest.expired(Instant.now()) || RequestDeliveries.locks(_delivery.value[interaction.id])) return
         // A session whose source does not approve (a Codex thread not joined live) is answered on the computer.
         if (page.value.sessions.firstOrNull { it.key == latest.sessionKey }?.canApprove == false) {
             _notice.value = AgentText(R.string.agents_notice_approve_blocked); return
@@ -507,7 +511,22 @@ internal class AgentsViewModel(
                 // A lost acknowledgement must never cause an automatic duplicate approval.
                 _delivery.update { it + (interaction.id to RequestDelivery.Unknown) }
                 answerFailureHaptic(e)?.let(_haptics::tryEmit)
+                checkUnconfirmed(interaction.id, latest.machineId)
             }
+        }
+    }
+    /**
+     * Checks an unconfirmed answer against the hub's pending list once it is reachable. If the request is gone it
+     * ends. Otherwise the buttons work again: answering twice is safe because resolve is idempotent (#3791).
+     */
+    private fun checkUnconfirmed(id: String, machineId: String) {
+        // The request's own group's connection, as answer() checks it.
+        val reachable = combine(hubGroups.groups, connection.state) { groups, state -> groups.stateFor(machineId, state) }
+        viewModelScope.launch {
+            val check = checkDelivery(id, reachable) { interactions.refresh(); interactions.pending.value }
+            val before = _delivery.value[id]
+            _delivery.update { RequestDeliveries.checked(it, id, check) }
+            if (before == RequestDelivery.Unknown && check == DeliveryCheck.Gone) _notice.value = AgentText(R.string.agents_request_checked_gone)
         }
     }
     private fun localChange(block: suspend () -> Unit) {

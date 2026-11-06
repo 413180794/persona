@@ -173,6 +173,8 @@
     <string name="agents_request_offline">连上 hub 后才能回传选择</string>
     <string name="agents_request_open_terminal">打开终端</string>
     <string name="agents_request_sent">已回传你的选择</string>
+    <string name="agents_request_retry">上次没确认，可以再点一次</string>
+    <string name="agents_request_checked_gone">已核对：这个请求已经处理了</string>
     <string name="agents_notice_save_failed">保存失败：%1$s</string>
     <string name="agents_notice_update_failed">没能开始更新：%1$s</string>
     <string name="agents_machine_pending">机器信息待更新</string>

@@ -188,6 +188,8 @@
     <string name="agents_request_offline">Connect to the hub to send your choice</string>
     <string name="agents_request_open_terminal">Open terminal</string>
     <string name="agents_request_sent">Your choice was sent</string>
+    <string name="agents_request_retry">Not confirmed last time. Tap again</string>
+    <string name="agents_request_checked_gone">Checked: this request was already handled</string>
     <string name="agents_notice_save_failed">Couldn\'t save: %1$s</string>
     <string name="agents_notice_update_failed">Couldn\'t start the update: %1$s</string>
     <string name="agents_machine_pending">Machine info not updated yet</string>

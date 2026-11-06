@@ -173,6 +173,8 @@
     <string name="agents_request_offline">選択を送信するにはハブに接続してください</string>
     <string name="agents_request_open_terminal">ターミナルを開く</string>
     <string name="agents_request_sent">選択を送信しました</string>
+    <string name="agents_request_retry">前回は未確認です。もう一度押せます</string>
+    <string name="agents_request_checked_gone">確認しました：このリクエストは処理済みです</string>
     <string name="agents_notice_save_failed">保存できませんでした：%1$s</string>
     <string name="agents_notice_update_failed">更新を開始できませんでした：%1$s</string>
     <string name="agents_machine_pending">マシン情報は更新待ちです</string>
