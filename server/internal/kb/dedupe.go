@@ -151,6 +151,11 @@ func (e *Engine) DedupeProjects(ctx context.Context, max int) int {
 		if gone[c.a.Slug] || gone[c.b.Slug] {
 			continue
 		}
+		// One side named in the shown form of the other (「X（a、b）」 and X) is a copied listing, not a second project
+		// to judge: the model kept the copy and merged the real one into it (#5824).
+		if isShownFormOf(c.a.Name, c.b.Name) || isShownFormOf(c.b.Name, c.a.Name) {
+			continue
+		}
 		key := pairKey(c.a.Slug, c.b.Slug)
 		if v, ok := verdicts[key]; ok && (v.Same || time.Since(v.At) < dedupeRecheck) {
 			continue

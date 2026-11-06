@@ -209,6 +209,10 @@ The same work often has different names in different groups. Previously the mode
 
 - **At the source**: "known projects" during compression includes each project's one-line description (`kb/known_projects`); prompts require recognizing the same work by that description, using its original name,
   and adding this group's name to aliases.
+- **The shown form is not a name** (#5824): known projects are listed as 「名字（别名、…）：一句话」 and models sometimes copied the whole line as the name, so lookups
+  found nothing and a new project 「X（a、b）」 appeared; dedupe then merged the real X into it, and the copy's name was shown and copied again (2026-11-06: about 15 such projects in a day).
+  The compression prompt now says the name is only the name; `FindProject` retries without the one line and trailing bracket groups (not when what is left is too generic, like 「无」);
+  a new project drops bracket groups that list aliases; dedupe never asks about a project and one named in its shown form.
 - **Periodic merging**: every 30 minutes, find pairs among active projects: shared people are at least 30% of the smaller side and at least 3, shared chats / documents,
   or at least two matching non-generic name terms. Rank by score, ask the model about at most 4 pairs per round (`kb/dedupe`: both names, aliases, one-line descriptions, goals, profiles and source groups),
   "when unsure, treat as different". Even if the model says they are the same, merge only with `sure: true` and no uncertainty words such as `存疑` / `不确定` ("doubtful" / "uncertain") in the reason; otherwise record them as different.

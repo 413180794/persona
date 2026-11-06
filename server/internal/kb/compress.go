@@ -268,7 +268,80 @@ func normName(s string) string { return strings.ReplaceAll(Slug(s), "-", "") }
 // FindProject matches a name against project names and aliases; a merged project's name leads to the one it went into.
 // When several live projects match, a name (or slug) beats an alias, and among equals the most recently updated wins
 // (then the smaller slug), so the answer does not depend on directory order.
+//
+// A name in the form known_projects.md shows a project in (「名字（别名、…）：一句话」, which models copy whole) that
+// matches nothing is looked up again without its one line and trailing bracket groups (#5824).
 func (e *Engine) FindProject(name string) *Project {
+	if p := e.findProject(name); p != nil {
+		return p
+	}
+	for _, base := range displayBases(name) {
+		if tooGenericAlias(normName(base)) { // 「无（某某群）」 is not the project named 无
+			break
+		}
+		if p := e.findProject(base); p != nil {
+			return p
+		}
+	}
+	return nil
+}
+
+// trailingGroupRe is one bracket group at the end of a name: 「（…）」 or 「(...)」.
+var trailingGroupRe = regexp.MustCompile(`\s*[（(][^（()）]*[)）]\s*$`)
+
+// displayBases are the shorter names a project name in the shown form may stand for, longest first: without the
+// one line after 「：」, then without one trailing bracket group at a time. 2026-11-06 a knowledge base got projects
+// named 「X（a、b）」 and 「X（a、b）（c、d…）」; dedupe then merged the real X into them.
+func displayBases(name string) []string {
+	var out []string
+	s := strings.TrimSpace(name)
+	if i := strings.Index(s, "："); i > 0 {
+		s = strings.TrimSpace(s[:i])
+		out = append(out, s)
+	}
+	for {
+		t := strings.TrimSpace(trailingGroupRe.ReplaceAllString(s, ""))
+		if t == s || t == "" {
+			return out
+		}
+		s = t
+		out = append(out, s)
+	}
+}
+
+// shownName is the name a new project gets from a model's: without the one line and without trailing bracket groups
+// that list aliases (「、」 inside, or more than one group). A single group without 「、」 can be part of a real name
+// (「分身（内置版）」) and stays.
+func shownName(name string) string {
+	s := strings.TrimSpace(name)
+	if i := strings.Index(s, "："); i > 0 {
+		s = strings.TrimSpace(s[:i])
+	}
+	for {
+		loc := trailingGroupRe.FindStringIndex(s)
+		if loc == nil {
+			return s
+		}
+		group, rest := s[loc[0]:], strings.TrimSpace(s[:loc[0]])
+		if rest == "" || tooGenericAlias(normName(rest)) || (!strings.Contains(group, "、") && !trailingGroupRe.MatchString(rest)) {
+			return s
+		}
+		s = rest
+	}
+}
+
+// isShownFormOf says whether name is base in the shown form: base followed by bracket groups or a one line.
+func isShownFormOf(name, base string) bool {
+	n := normName(base)
+	for _, b := range displayBases(name) {
+		if normName(b) == n {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Engine) findProject(name string) *Project {
 	n := normName(name)
 	if n == "" {
 		return nil
@@ -400,6 +473,7 @@ func (e *Engine) evolveProject(name, kind string, aliases []string, myRole strin
 		return ""
 	}
 	if p == nil {
+		name = shownName(name) // not 「X（a、b）」 as a new project's name (#5824)
 		slug := Slug(name)
 		if slug == "" {
 			return ""
