@@ -78,7 +78,8 @@ func (f agentFixture) plan() AgentPlan {
 }
 
 // The profile names each data directory once by its real path (the alias only as a name not to be replaced), escapes
-// it in the regexes, closes the folders above it to renames, and opens only this start's launcher settings.
+// it in the regexes, closes the folders above it and above a closed folder in it to renames, and opens only this
+// start's launcher settings.
 func TestDarwinAgentProfile(t *testing.T) {
 	f := newAgentFixture(t)
 	got, err := DarwinAgent(f.plan())
@@ -90,7 +91,7 @@ func TestDarwinAgentProfile(t *testing.T) {
 	for p := D; p != "/"; p = filepath.Dir(p) {
 		lits = append(lits, `(literal "`+p+`")`)
 	}
-	lits = append(lits, `(literal "`+D+`/agent-sandbox.on")`, `(literal "`+f.alias+`")`)
+	lits = append(lits, `(literal "`+D+`/agent-sandbox.on")`, `(literal "`+D+`/extensions")`, `(literal "`+f.alias+`")`)
 	re := reQuote(D)
 	want := strings.Join([]string{
 		`(version 1)`,
@@ -270,6 +271,7 @@ func TestDarwinAgentSandboxForReal(t *testing.T) {
 		"cat managers/m1/manager.json":      "cat " + q(D+"/managers/m1/manager.json"),
 		"cat extensions/data":               "cat " + q(D+"/extensions/data/notes/token"),
 		"cat another launcher's settings":   "cat " + q(f.theirs),
+		"mv extensions/ and read its data":  "mv " + q(D+"/extensions") + " " + q(D+"/ext2") + " && cat " + q(D+"/ext2/data/notes/token") + " && mv " + q(D+"/ext2") + " " + q(D+"/extensions"),
 		"cp secret.key":                     "cp " + q(D+"/secret.key") + " " + q(work+"/k"),
 		"mv the data directory":             "mv " + q(D) + " " + q(D+"2") + " && mv " + q(D+"2") + " " + q(D),
 		"mv the folder above it":            "mv " + q(f.home) + " " + q(f.home+"2") + " && mv " + q(f.home+"2") + " " + q(f.home),

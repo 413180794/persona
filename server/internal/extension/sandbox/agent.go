@@ -140,8 +140,8 @@ var agentWorkspaces = []string{"assistant", identity.SpaceHealth, "guest"}
 //   - deny the folders only Persona's own processes use, whole: managers/ (a manager's manager.json and key),
 //     extensions/data/ (the extensions' sign-ins), extensions/run/ and run/ (their sockets and the hub's edge), and
 //     connecting to the sockets in the last two;
-//   - deny writing the data directory itself, every folder above it and its other names (renaming one would move the
-//     secrets out from under the rules), and the switch file;
+//   - deny writing the data directory itself, every folder above it and its other names, and the folders in it that
+//     hold a closed one (extensions/): renaming one would move the secrets out from under the rules; and the switch file;
 //   - allow reading this start's own launcher settings.
 //
 // Every path is the real one (the rules match what the kernel resolves; /tmp is /private/tmp). It refuses (an error
@@ -214,6 +214,13 @@ func DarwinAgent(plan AgentPlan) (string, error) {
 			}
 		}
 		noWrite = append(noWrite, `(literal `+q(d+"/"+AgentOnFile)+`)`)
+		for _, sub := range whole {
+			for up := filepath.Dir(sub); up != "."; up = filepath.Dir(up) {
+				if lit := `(literal ` + q(d+"/"+up) + `)`; !slices.Contains(noWrite, lit) {
+					noWrite = append(noWrite, lit)
+				}
+			}
+		}
 	}
 	for _, n := range names {
 		noWrite = append(noWrite, `(literal `+q(n)+`)`)

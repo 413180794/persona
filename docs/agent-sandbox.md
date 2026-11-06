@@ -18,7 +18,7 @@ Every row below fails inside the sandbox and works outside it (`TestDarwinAgentS
 | Read a manager's folder (`managers/`) or an extension's sign-in data (`extensions/data/`) | Refused |
 | Read another launcher's merged settings in `launcher-settings/` | Refused; the files this start passes to its own agent stay readable |
 | Connect to an extension's proxy socket or the hub's edge socket (`extensions/run/`, `run/`) | Refused |
-| Rename the data directory or a folder above it, or replace the `~/.persona` link | Refused, so the secrets cannot be moved out from under the rules |
+| Rename the data directory, a folder above it, or `extensions/` (which holds `extensions/data/` and `extensions/run/`), or replace the `~/.persona` link | Refused, so the secrets cannot be moved out from under the rules (#6117) |
 | Remove the switch file `agent-sandbox.on` | Refused |
 | Read `launch.key`, which `personad launch` needs before the node hands out a managed launcher's settings (`launcher.env` on `node.sock`, #5588) | Refused, so the node refuses an agent any launcher's settings |
 
@@ -112,7 +112,7 @@ data directory goes by is resolved and written once.
 | Read and write, key files with their backups | `identity.DataKeyPattern` at the top: `\.(key|p8|pem|crt)([.~-][^/]*)?$` |
 | Read and write, whole folders | `identity.DataSecretDirs` (`launcher-settings/`, `tls/`, `link-tls/`), and `managers/`, `extensions/data/`, `extensions/run/`, `run/` |
 | Connect | Unix sockets under `extensions/run/` and `run/` |
-| Write | The data directory itself, every folder above it, its other names (the `~/.persona` link), `agent-sandbox.on` |
+| Write | The data directory itself, every folder above it, its other names (the `~/.persona` link), every folder in it that holds a closed folder (`extensions/`), `agent-sandbox.on` |
 | Allow read | This start's own files in `launcher-settings/` (what it passes with `--settings`) |
 
 The node's path guard (`server/internal/node/pathguard.go`, which decides what a phone or web client may read by path)
