@@ -95,6 +95,8 @@ func TestCodexInventoryArchiveOverridesLoadedCache(t *testing.T) {
 func TestCodexArchivedChildDoesNotRemoveParent(t *testing.T) {
 	n := remoteTestNode(t)
 	home := n.codexHome()
+	// Exercise source-scoped identities on every OS, including symlinked macOS temporary homes.
+	n.configureCodex(proto.CodexConfig{LegacyHome: filepath.Join(n.home, "other-codex")})
 	writeRollout(t, n.home, remoteRaw, "/work/project", time.Now(), time.Now())
 	p := filepath.Join(home, "archived_sessions", "rollout-test-"+remoteOther+".jsonl")
 	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
@@ -109,6 +111,7 @@ func TestCodexArchivedChildDoesNotRemoveParent(t *testing.T) {
 	if len(rows) != 1 || rows[0].SourceThreadID != remoteRaw {
 		t.Fatalf("valid parent lost: %+v", rows)
 	}
+	parentID := rows[0].SessionID
 	activeChild := filepath.Join(filepath.Dir(rolloutPath(home, remoteRaw)), filepath.Base(p))
 	if err := os.Rename(p, activeChild); err != nil {
 		t.Fatal(err)
@@ -118,7 +121,7 @@ func TestCodexArchivedChildDoesNotRemoveParent(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows = n.codexSessions(map[string]bool{})
-	if len(rows) != 1 || rows[0].SourceThreadID != remoteOther || rows[0].ParentSessionID != remoteRaw {
+	if len(rows) != 1 || rows[0].SourceThreadID != remoteOther || rows[0].ParentSessionID != parentID {
 		t.Fatalf("valid child of archived parent lost: %+v", rows)
 	}
 }
