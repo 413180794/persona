@@ -24,9 +24,9 @@ struct SyncEventTests {
     }
 
     @Test func decodesAgents() throws {
-        let data = Data(#"{"type":"agents","session_ids":["removedbridge:agent:grok_bot:a:b/"]}"#.utf8)
+        let data = Data(#"{"type":"agents","session_ids":["lark-bridge:agent:grok_bot:a:b/"]}"#.utf8)
         guard case .agents(let ids) = try #require(ServerEvent.decode(data)) else { Issue.record("not agents"); return }
-        #expect(ids == ["removedbridge:agent:grok_bot:a:b/"])
+        #expect(ids == ["lark-bridge:agent:grok_bot:a:b/"])
     }
 
     /// A tiered look moved to another tier (docs/persona.md): the app lists the personas again.
@@ -37,7 +37,7 @@ struct SyncEventTests {
     }
 
     @Test func personalAgentPathEncodesSlashAndColon() {
-        #expect(APIClient.agentPath("removedbridge:agent:x:y/") == "/api/v1/agents/sessions/removedbridge%3Aagent%3Ax%3Ay%2F")
+        #expect(APIClient.agentPath("lark-bridge:agent:x:y/") == "/api/v1/agents/sessions/lark-bridge%3Aagent%3Ax%3Ay%2F")
     }
 
     @Test func personalAgentMessageKeepsUnknownBlocks() throws {

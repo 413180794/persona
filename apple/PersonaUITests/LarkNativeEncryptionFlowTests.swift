@@ -54,7 +54,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
             XCTAssertTrue(notice.waitForExistence(timeout: 10))
             XCTAssertTrue(notice.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists)
             XCTAssertFalse(app.staticTexts["not found"].exists)
-            shot(app, "native-removedunavailable-" + kind)
+            shot(app, "native-encryption-unavailable-" + kind)
             try await resetMock()
             notice.buttons["重新检查"].tapCenter()
             XCTAssertTrue(notice.waitForNonExistence(timeout: 10))
@@ -63,7 +63,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         }
         app.buttons["lark.encryption.cover"].tapCenter()
         XCTAssertTrue(app.buttons["下周再聊"].waitForExistence(timeout: 10))
-        shot(app, "native-removedupgrade-recovered")
+        shot(app, "native-encryption-upgrade-recovered")
         app.buttons["取消"].tapCenter()
         XCTAssertEqual(field.value as? String, "Keep this private draft")
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.8)).tap()
@@ -78,13 +78,13 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         let mode = app.buttons["lark.encryption.mode"]
         XCTAssertTrue(mode.waitForExistence(timeout: 8))
         mode.tapCenter(); app.buttons["lark.encryption.plain"].tapCenter()
-        shot(app, "native-removedordinary")
+        shot(app, "native-encryption-ordinary")
         mode.tapCenter(); app.buttons["lark.encryption.encrypted"].tapCenter()
         XCTAssertFalse(app.buttons["添加附件"].isEnabled)
         app.buttons["lark.encryption.cover"].tapCenter()
         let cover = app.buttons["下周再聊"].firstMatch
         XCTAssertTrue(cover.waitForExistence(timeout: 8))
-        shot(app, "native-removedcovers")
+        shot(app, "native-encryption-covers")
         cover.tapCenter()
         let field = app.textFields["lark.box"]
         field.tapCenter()
@@ -93,7 +93,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         app.buttons["lark.send"].tapCenter()
         let password = app.secureTextFields["lark.encryption.password"]
         XCTAssertTrue(password.waitForExistence(timeout: 10))
-        shot(app, "native-removedunlock")
+        shot(app, "native-encryption-unlock")
         password.tapCenter(); password.typeText("wrong-synthetic")
         app.buttons["lark.encryption.unlock"].tapCenter()
         XCTAssertTrue(app.staticTexts["密码不正确，请重试"].waitForExistence(timeout: 10))
@@ -107,7 +107,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["lark.send"].waitForNonExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Encrypted UI fixture"].firstMatch.waitForExistence(timeout: 15))
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch.waitForNonExistence(timeout: 15))
-        shot(app, "native-removedsent")
+        shot(app, "native-encryption-sent")
         app.terminate()
     }
 
@@ -122,7 +122,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         app.buttons["lark.send"].tapCenter()
         let failed = app.buttons["lark.outgoing.failed"]
         XCTAssertTrue(failed.waitForExistence(timeout: 15))
-        shot(app, "native-removedretry")
+        shot(app, "native-encryption-retry")
         failed.tapCenter(); app.buttons["重发"].tapCenter()
         XCTAssertTrue(failed.waitForNonExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Encrypted retry fixture"].firstMatch.waitForExistence(timeout: 15))
@@ -144,7 +144,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         XCTAssertTrue(inbox.buttons["前往消息，继续编辑加密草稿"].waitForExistence(timeout: 10))
         XCTAssertFalse(inbox.buttons["lark.encryption.mode"].exists)
         XCTAssertFalse(inbox.buttons["lark.send"].isEnabled)
-        shot(inbox, "native-removedinbox-protected")
+        shot(inbox, "native-encryption-inbox-protected")
         inbox.buttons["前往消息，继续编辑加密草稿"].tapCenter()
         let chat = inbox.buttons["feishu-chat-f2"]
         XCTAssertTrue(chat.waitForExistence(timeout: 10)); chat.tapCenter()
@@ -153,7 +153,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         let restoredField = try XCTUnwrap(restored.textFields.matching(identifier: "lark.box").allElementsBoundByIndex.first(where: \.isHittable))
         XCTAssertEqual(restoredField.value as? String, "Private draft fixture")
         XCTAssertTrue(restored.buttons["lark.encryption.cover"].exists)
-        shot(restored, "native-removeddraft-restored")
+        shot(restored, "native-encryption-draft-restored")
         restoredField.tapCenter()
         restoredField.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Private draft fixture".count))
         restored.buttons["lark.encryption.mode"].tapCenter(); restored.buttons["lark.encryption.plain"].tapCenter()
@@ -163,7 +163,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         XCTAssertFalse(plainInbox.buttons["lark.encryption.mode"].exists)
         XCTAssertFalse(plainInbox.buttons["前往消息，继续编辑加密草稿"].exists)
         XCTAssertTrue(plainInbox.buttons["添加附件"].isEnabled)
-        shot(plainInbox, "native-removedinbox-unchanged")
+        shot(plainInbox, "native-encryption-inbox-unchanged")
         plainInbox.terminate()
     }
 }

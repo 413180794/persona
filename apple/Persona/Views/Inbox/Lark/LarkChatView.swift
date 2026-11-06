@@ -1181,7 +1181,8 @@ struct LarkChatView: View {
                     batch[0].encrypted = payload
                     batch[0].mentions = []
                 } catch {
-                    if (error as? APIError)?.code == "OLK_VAULT_LOCKED" { showEncryptionUnlock = true }
+                    // Gateways name the locked vault VAULT_LOCKED; older ones put a vendor prefix in front, so match the suffix.
+                    if (error as? APIError)?.code?.hasSuffix("VAULT_LOCKED") == true { showEncryptionUnlock = true }
                     else { model.toast = Toast(error.shown ?? String(localized: "Couldn't encrypt. The message stays in the input field."), style: .error) }
                     return
                 }

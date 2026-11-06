@@ -38,7 +38,7 @@ import Testing
         #expect(FeishuBotModel.summary(unpaired) == "待配对")
         unpaired.enabled = false
         #expect(FeishuBotModel.summary(unpaired) == "未打开")
-        #expect(FeishuBotModel.domainChoice("https://lark-connectorsuite.com") == "lark")
+        #expect(FeishuBotModel.domainChoice("https://larksuite.com") == "lark")
     }
 
     /// A switch sends every feature (the hub replaces them as a whole); "all cards" brings "cards" along, and turning

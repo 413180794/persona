@@ -6,7 +6,7 @@ import Testing
 @MainActor struct PersonalAgentPrefsTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func s(_ id: String, _ provider: String, hoursAgo: Double, unread: Int = 0, title: String? = nil, canSend: Bool = true) -> PersonalAgentSession {
-        PersonalAgentSession(id: id, source: "removedbridge", sessionKey: id, provider: provider, title: title ?? id, canSend: canSend,
+        PersonalAgentSession(id: id, source: "lark-bridge", sessionKey: id, provider: provider, title: title ?? id, canSend: canSend,
                              unreadCount: unread, rankTimeMs: Int64((now.timeIntervalSince1970 - hoursAgo * 3600) * 1000))
     }
     private var list: [PersonalAgentSession] {
