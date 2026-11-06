@@ -1,0 +1,4 @@
+{
+  "agent_runtimes_title": "Connect to this machine's Persona node as an agent runtime",
+  "agent_runtimes_detail": "Its program registers its own agents with the node on the hub machine, so they show up in Agents; in a sandbox it gets only one extra way out, to the node's runtime.sock, and sees no other files"
+}

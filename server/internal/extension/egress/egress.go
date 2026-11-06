@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -84,6 +85,7 @@ type Proxy struct {
 	creds  map[string]string // credential → extension
 	credOf map[string]string // extension → its credential
 	unix   map[string]net.Listener
+	relay  map[string]net.Listener // ext → its socket that leads to one fixed unix socket (RelayUnix)
 	counts map[string]*Counts
 }
 
@@ -126,7 +128,10 @@ func (p *Proxy) Close() {
 	for _, l := range p.unix {
 		_ = l.Close()
 	}
-	p.unix = nil
+	for _, l := range p.relay {
+		_ = l.Close()
+	}
+	p.unix, p.relay = nil, nil
 }
 
 // Register sets ext's rule and gives it a new credential (each start of its program): the URL of the loopback
@@ -188,6 +193,66 @@ func (p *Proxy) Unregister(ext string) {
 	if l := p.unix[ext]; l != nil {
 		_ = l.Close()
 		delete(p.unix, ext)
+	}
+	if l := p.relay[ext]; l != nil {
+		_ = l.Close()
+		delete(p.relay, ext)
+	}
+}
+
+// RelayUnix serves ext on a unix socket at path (made anew; only this user may connect) whose every connection is
+// joined to the unix socket at target, dialed then (so a target made anew, a restarted node's, is still reached):
+// a sandboxed agent runtime's way to this machine's node (#5413), and to nothing else. Unregister closes it.
+func (p *Proxy) RelayUnix(ext, path, target string) error {
+	p.mu.Lock()
+	if old := p.relay[ext]; old != nil {
+		_ = old.Close()
+		delete(p.relay, ext)
+	}
+	p.mu.Unlock()
+	_ = os.Remove(path)
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return err
+	}
+	_ = os.Chmod(path, 0o600)
+	p.mu.Lock()
+	if p.relay == nil {
+		p.relay = map[string]net.Listener{}
+	}
+	p.relay[ext] = ln
+	p.mu.Unlock()
+	go p.serveRelay(ln, ext, target)
+	return nil
+}
+
+func (p *Proxy) serveRelay(ln net.Listener, ext, target string) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go func() {
+			defer c.Close()
+			var d net.Dialer
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			up, err := d.DialContext(ctx, "unix", target)
+			cancel()
+			if err != nil {
+				p.logf("egress: %s: %s: %v", ext, filepath.Base(target), err)
+				return
+			}
+			defer up.Close()
+			// Either end gone ends both: the protocol on it has no half-closed state.
+			done := make(chan struct{}, 2)
+			pipe := func(dst, src net.Conn) {
+				_, _ = io.Copy(dst, src)
+				done <- struct{}{}
+			}
+			go pipe(up, c)
+			go pipe(c, up)
+			<-done
+		}()
 	}
 }
 

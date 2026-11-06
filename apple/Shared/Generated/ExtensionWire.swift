@@ -615,14 +615,18 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
     /// It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
     /// accounts, status and quota windows, never a key.
     var usageGateways: Bool?
+    /// Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run
+    /// directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
+    var agentRuntimes: Bool?
 
-    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil) {
+    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil, agentRuntimes: Bool? = nil) {
         self.network = network
         self.hubApi = hubApi
         self.hub = hub
         self.launcherKeys = launcherKeys
         self.ghLogin = ghLogin
         self.usageGateways = usageGateways
+        self.agentRuntimes = agentRuntimes
     }
 
     enum CodingKeys: String, CodingKey {
@@ -632,6 +636,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         case launcherKeys = "launcher_keys"
         case ghLogin = "gh_login"
         case usageGateways = "usage_gateways"
+        case agentRuntimes = "agent_runtimes"
     }
 
     init(from decoder: Decoder) throws {
@@ -642,6 +647,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         self.launcherKeys = try? c.decodeIfPresent(Bool.self, forKey: .launcherKeys)
         self.ghLogin = try? c.decodeIfPresent(Bool.self, forKey: .ghLogin)
         self.usageGateways = try? c.decodeIfPresent(Bool.self, forKey: .usageGateways)
+        self.agentRuntimes = try? c.decodeIfPresent(Bool.self, forKey: .agentRuntimes)
     }
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // An installed extension's program runs in a sandbox, reaching out only through the hub's egress proxy and only to the
@@ -314,6 +315,13 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 		hp.socket, s.Socket = sock, sock
 		s.Env = setEnv(s.Env, "PERSONA_PLUGIN_SOCKET", sock)
 	}
+	// An agent runtime (permissions.agent_runtimes) reaches this machine's node through a socket of its own that leads
+	// to the node's runtime.sock and nowhere else (#5413): the node's is in the home directory, which the sandbox hides.
+	runtimeSock := ""
+	if g.AgentRuntimes {
+		runtimeSock = filepath.Join(run, "runtime.sock")
+		s.Env = append(slices.Clone(s.Env), "PERSONA_RUNTIME_SOCKET="+runtimeSock, "JARVIS_RUNTIME_SOCKET="+runtimeSock)
+	}
 	hubURL := "http://" + egress.HubHost
 	s.Env = setEnv(s.Env, "JARVIS_HUB_URL", hubURL)
 	if start := s.StartEnv; start != nil {
@@ -337,6 +345,11 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 	}
 	s.Wrap = func(command string, args []string) (string, []string, []string, error) {
 		proxyURL := px.Register(id, rule)
+		if runtimeSock != "" {
+			if err := px.RelayUnix(id, runtimeSock, nodeRuntimeSocket()); err != nil {
+				return "", nil, nil, err
+			}
+		}
 		plan := sandbox.Plan{ID: id, Command: command, Args: args, Pkg: pkg, Data: data, Run: run, Tools: tools,
 			MemoryMB: limits.MemoryMB, CPUPercent: limits.CPUPercent, Scope: sup.Scope, Env: os.Environ()}
 		if runtime.GOOS == "darwin" {
@@ -352,6 +365,12 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 		return name, a, env, nil
 	}
 	return nil
+}
+
+// nodeRuntimeSocket is where agent runtimes reach this machine's node (node.RuntimeSocketPath); tests replace it.
+var nodeRuntimeSocket = func() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(identity.SocketDir(home), "runtime.sock")
 }
 
 // setEnv is env with name set to value where it is there (and its PERSONA_ / JARVIS_ twin).

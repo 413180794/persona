@@ -240,6 +240,11 @@ export interface Permissions {
    * accounts, status and quota windows, never a key.
    */
   usage_gateways?: boolean;
+  /**
+   * Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run
+   * directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
+   */
+  agent_runtimes?: boolean;
 }
 
 /**

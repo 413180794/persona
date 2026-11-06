@@ -1,6 +1,7 @@
 package extmgr
 
 import (
+	"bufio"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -60,6 +61,13 @@ func serveBoxedExtensionForTest() {
 			c.Close()
 		}
 		out["dial"] = err == nil
+		// An agent runtime's way to the node (permissions.agent_runtimes): its socket, and the node's own path.
+		if sock := os.Getenv("PERSONA_RUNTIME_SOCKET"); sock != "" {
+			out["runtime"] = askLine(sock)
+		}
+		if p := r.URL.Query().Get("node"); p != "" {
+			out["node_direct"] = askLine(p)
+		}
 		_ = json.NewEncoder(w).Encode(out)
 	}))
 	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "boxed", Version: "1.0.0",
@@ -71,8 +79,31 @@ func serveBoxedExtensionForTest() {
 		}})
 }
 
+// askLine sends a line on the unix socket at path and is the line answered, or "error".
+func askLine(path string) string {
+	c, err := net.DialTimeout("unix", path, 2*time.Second)
+	if err != nil {
+		return "error"
+	}
+	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := c.Write([]byte("ping\n")); err != nil {
+		return "error"
+	}
+	line, err := bufio.NewReader(c).ReadString('\n')
+	if err != nil {
+		return "error"
+	}
+	return strings.TrimSpace(line)
+}
+
 // boxedPackage is a package with this test binary in it (a sandbox sees its package only).
 func boxedPackage(t *testing.T) string {
+	return boxedPackageWith(t, `"hub": ["kb.read"], "network": ["allowed.example.org"]`)
+}
+
+// boxedPackageWith is boxedPackage with these permissions (the inside of the manifest's "permissions").
+func boxedPackageWith(t *testing.T, permissions string) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	b, err := os.ReadFile(self)
@@ -85,7 +116,7 @@ func boxedPackage(t *testing.T) string {
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "boxed", "name": "Boxed", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/boxed"}, "http": true, "resources": {"memory_mb": 256}},
 		"activation_events": ["on_startup"], "contributes": {"api": [{"id": "x", "prefix": "boxedx"}]},
-		"permissions": {"hub": ["kb.read"], "network": ["allowed.example.org"]}}`, runtime.GOOS+"-"+runtime.GOARCH)
+		"permissions": {%s}}`, runtime.GOOS+"-"+runtime.GOARCH, permissions)
 	_ = os.WriteFile(filepath.Join(dir, extension.ManifestFile), []byte(manifest), 0o644)
 	return dir
 }
@@ -210,6 +241,109 @@ func TestExtensionSandbox(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(h.extensions.root, "run", "boxed")); !os.IsNotExist(err) {
 		t.Fatalf("an uninstalled extension's run directory stays: %v", err)
+	}
+}
+
+// An agent runtime in a sandbox (permissions.agent_runtimes, #5413) reaches this machine's node through its own
+// socket, which leads to the node's runtime.sock and nowhere else: the node's own path stays out of sight, a node
+// that made its socket anew is still reached, and an extension without the permission has no such socket.
+func TestExtensionSandboxAgentRuntime(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the sandbox for real is Linux's here")
+	}
+	if sup := sandbox.Probe(); !sup.Available() {
+		t.Skip("no sandbox here: " + sup.Why)
+	}
+	// The node: answers each line with "node <n>", n its listener's (so a socket made anew shows).
+	nodeSock := filepath.Join(t.TempDir(), "runtime.sock")
+	listen := func(n int) net.Listener {
+		_ = os.Remove(nodeSock)
+		ln, err := net.Listen("unix", nodeSock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go func() {
+					defer c.Close()
+					if _, err := bufio.NewReader(c).ReadString('\n'); err == nil {
+						fmt.Fprintf(c, "node %d\n", n)
+					}
+				}()
+			}
+		}()
+		return ln
+	}
+	ln := listen(1)
+	old := nodeRuntimeSocket
+	nodeRuntimeSocket = func() string { return nodeSock }
+	t.Cleanup(func() { nodeRuntimeSocket = old })
+
+	h, _ := extensionTestHub(t)
+	h.extensions.sandboxes.noDefault = false
+	mux := h.routes()
+	master := h.cfg.Token
+	install := func(perms string) {
+		t.Helper()
+		code, pv := call(t, mux, "POST", "/api/v1/extensions/-/preview", master, `{"source": "dir:`+boxedPackageWith(t, perms)+`"}`)
+		if code != 200 {
+			t.Fatalf("preview: %d %v", code, pv)
+		}
+		code, d := call(t, mux, "POST", "/api/v1/extensions/-/install", master,
+			fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"]))
+		if code != 200 {
+			t.Fatalf("install: %d %v", code, d)
+		}
+	}
+	probe := func() map[string]any {
+		t.Helper()
+		var out map[string]any
+		waitLong(t, "the extension answering", func() bool {
+			hp := h.extensions.get("boxed")
+			if hp == nil || hp.proc == nil || !hp.proc.Ready() {
+				return false
+			}
+			var code int
+			code, out = call(t, mux, "GET", "/api/v1/extensions/boxed/probe?node="+nodeSock, master, "")
+			return code == 200 && out["dial"] != nil
+		})
+		return out
+	}
+
+	install(`"agent_runtimes": true`)
+	got := probe()
+	sock := filepath.Join(h.extensions.root, "run", "boxed", "runtime.sock")
+	if got["runtime"] != "node 1" {
+		t.Fatalf("the node through its socket: %v", got)
+	}
+	if got["node_direct"] != "error" {
+		t.Fatalf("the node's own path is seen from the sandbox: %v", got)
+	}
+	if fi, err := os.Stat(sock); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("its socket in its run directory, this user's only: %v %v", fi, err)
+	}
+	// The node made its socket anew (it restarted): the next connection reaches the new one.
+	_ = ln.Close()
+	ln = listen(2)
+	defer ln.Close()
+	if got := probe(); got["runtime"] != "node 2" {
+		t.Fatalf("after the node restarted: %v", got)
+	}
+
+	// Without the permission: no socket, nothing set.
+	if code, out := call(t, mux, "DELETE", "/api/v1/extensions/boxed/-/", master, ""); code != 200 {
+		t.Fatalf("%d %v", code, out)
+	}
+	install(`"network": ["allowed.example.org"]`)
+	if got := probe(); got["runtime"] != nil {
+		t.Fatalf("a runtime socket without the permission: %v", got)
+	}
+	if _, err := os.Stat(sock); !os.IsNotExist(err) {
+		t.Fatalf("its socket without the permission: %v", err)
 	}
 }
 

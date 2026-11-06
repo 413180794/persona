@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Permissions are what a plugin asks for (docs/plan-extensions.md "Permissions"). The vocabulary is closed: a manifest naming
@@ -34,6 +35,9 @@ type Permissions struct {
 	// (usage.gateway_accounts: accounts, their status and quota windows, from the hub's last read), never a key
 	// (docs/extensions.md "Quota", docs/usage-windows.md "The gateway's account list").
 	UsageGateways bool `json:"usage_gateways,omitempty"`
+	// AgentRuntimes: its program is an agent runtime that connects to this machine's node (docs/runtimes.md); in a
+	// sandbox it gets a socket in its run directory that leads to the node's runtime.sock and nowhere else (#5413).
+	AgentRuntimes bool `json:"agent_runtimes,omitempty"`
 }
 
 var hostPattern = regexp.MustCompile(`^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -69,7 +73,7 @@ func (p Permissions) FullHub() bool { return p.HubAPI && len(p.Hub) == 0 }
 // covers every scope; scopes never cover the full token.
 func (p Permissions) Covers(q Permissions) bool {
 	if q.FullHub() && !p.FullHub() || q.LauncherKeys && !p.LauncherKeys || q.GhLogin && !p.GhLogin ||
-		q.UsageGateways && !p.UsageGateways {
+		q.UsageGateways && !p.UsageGateways || q.AgentRuntimes && !p.AgentRuntimes {
 		return false
 	}
 	for _, s := range q.Hub {
@@ -157,9 +161,11 @@ type PermissionLine struct {
 }
 
 var (
-	runsCode     = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行；默认在沙箱里，只能读写自己的包和数据目录（受信任市场来的、主人关了沙箱的，能读写这个用户能读写的文件）"}
-	launcherKeys = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 访问它的网关", Detail: "查额度、画启动器页上的面板和它自己的页面（比如侧边栏里的额度）；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
-	ghLogin      = PermissionLine{Key: "gh_login", Title: "用你电脑上 gh 的 GitHub 登录", Detail: "从你选的那台电脑上读 gh 登录的 token，只放在它的内存里，用来访问 GitHub"}
+	runsCode      = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行；默认在沙箱里，只能读写自己的包和数据目录（受信任市场来的、主人关了沙箱的，能读写这个用户能读写的文件）"}
+	launcherKeys  = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 访问它的网关", Detail: "查额度、画启动器页上的面板和它自己的页面（比如侧边栏里的额度）；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
+	ghLogin       = PermissionLine{Key: "gh_login", Title: "用你电脑上 gh 的 GitHub 登录", Detail: "从你选的那台电脑上读 gh 登录的 token，只放在它的内存里，用来访问 GitHub"}
+	agentRuntimes = PermissionLine{Key: "agent_runtimes", Title: i18n.T(i18n.Default, "extension-permissions.agent_runtimes_title"),
+		Detail: i18n.T(i18n.Default, "extension-permissions.agent_runtimes_detail")}
 	usageGateway = PermissionLine{Key: "usage_gateways", Title: "读取额度来源里网关的账号清单（不含 Key）", Detail: "hub 管理 › 额度来源里接的账号池网关有哪些账号、状态和额度，用的是 hub 上次读到的；拿不到管理 Key"}
 	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整权限（旧写法）", Detail: "拿到 hub 的完整 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……；新的扩展只要用得到的那几项（permissions.hub）"}
 	nodeFiles    = PermissionLine{Key: "node_files", Title: "读写这些电脑上的文件", Detail: "不只是它自己的数据目录"}
@@ -253,6 +259,9 @@ func Explain(m *Manifest) []PermissionLine {
 	if m.Permissions.UsageGateways {
 		out = append(out, usageGateway)
 	}
+	if m.Permissions.AgentRuntimes {
+		out = append(out, agentRuntimes)
+	}
 	if to := m.ContributesTo(); len(to) > 0 {
 		out = append(out, PermissionLine{Key: "contributes_to", Title: "给别的扩展提供内容",
 			Detail: "它在清单里写的贡献交给这些扩展：" + strings.Join(to, "、")})
@@ -339,6 +348,9 @@ func Added(old, m *Manifest) []PermissionLine {
 	}
 	if m.Permissions.UsageGateways && !old.Permissions.UsageGateways {
 		out = append(out, usageGateway)
+	}
+	if m.Permissions.AgentRuntimes && !old.Permissions.AgentRuntimes {
+		out = append(out, agentRuntimes)
 	}
 	var to []string
 	for _, owner := range m.ContributesTo() {

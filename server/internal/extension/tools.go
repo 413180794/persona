@@ -207,12 +207,16 @@ func checkHTTPS(at, raw string) error {
 	return nil
 }
 
-// validateTools checks manifest.tools and manifest.auth.
+// validateTools checks manifest.tools and manifest.auth, and the agent_runtimes permission that, like tools, needs
+// a program on the hub.
 func (m *Manifest) validateTools() []error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 	if len(m.Tools) > 0 && m.Runtime == nil {
 		bad("tools without a runtime: nothing would run them")
+	}
+	if m.Permissions.AgentRuntimes && m.Runtime == nil {
+		bad("permissions.agent_runtimes without a runtime: no program on the hub would connect to its node")
 	}
 	if len(m.Tools) > ToolsMost {
 		bad("tools: at most %d", ToolsMost)

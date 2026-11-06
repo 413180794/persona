@@ -209,6 +209,9 @@ type Permissions struct {
 	// It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
 	// accounts, status and quota windows, never a key.
 	UsageGateways bool `json:"usage_gateways,omitempty"`
+	// Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run
+	// directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
+	AgentRuntimes bool `json:"agent_runtimes,omitempty"`
 }
 
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking

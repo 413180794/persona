@@ -1,0 +1,4 @@
+{
+  "agent_runtimes_title": "エージェントランタイムとしてこのマシンの Persona ノードに接続",
+  "agent_runtimes_detail": "プログラムが自分のエージェントを hub マシンのノードに登録し、Agents に表示されます。サンドボックスではノードの runtime.sock への出口が 1 つ増えるだけで、ほかのファイルは見えません"
+}

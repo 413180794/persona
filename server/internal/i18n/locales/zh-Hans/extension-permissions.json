@@ -1,0 +1,4 @@
+{
+  "agent_runtimes_title": "作为 Agent 运行时接入这台机器的 Persona 节点",
+  "agent_runtimes_detail": "它的程序把自己的 Agent 登记到 hub 机器上的节点，出现在 Agents 里；在沙箱里只多一个通到节点 runtime.sock 的口子，看不到别的文件"
+}

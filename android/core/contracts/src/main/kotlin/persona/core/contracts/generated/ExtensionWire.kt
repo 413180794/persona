@@ -306,6 +306,11 @@ data class ExtensionPermissions(
      * accounts, status and quota windows, never a key.
      */
     @SerialName("usage_gateways") val usageGateways: Boolean? = null,
+    /**
+     * Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run
+     * directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
+     */
+    @SerialName("agent_runtimes") val agentRuntimes: Boolean? = null,
 )
 
 /**
