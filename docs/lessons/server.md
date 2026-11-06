@@ -693,9 +693,11 @@ Whenever an existing method gains a "write somewhere else" / "do it differently"
 - Build database URLs with `postgres://persona:${PERSONA_DB_PASSWORD:-}@…`, not `${X:+…}`: old docker-compose v1 doesn't support `:+`.
 - Generate random passwords only before a database exists: Postgres reads `POSTGRES_PASSWORD` only during data-directory initialization; if DB exists (restored only `postgres/`, deleted `data/`), generating a new one mismatches its stored password.
 
-## Response bytes do not establish a successful read (#6063)
+## Response bytes do not establish a successful read (#6063, #6158)
 
 `io.ReadAll` can return valid JSON bytes together with a transport error. Check the error before decoding or publishing successful output, including raw logs and calls that discard the body. Keep existing HTTP-status classification, scrub diagnostics and close the body. A failed response after a write does not establish whether the remote action happened, so do not add an automatic retry.
+
+The AI gate's `answered` records HTTP 200, including later read or decode failures. Preserve that meaning while returning the read error and no model output.
 
 ## Don't let `http.Server` read `websocket.NetConn` directly (2026-11-06, #3498)
 

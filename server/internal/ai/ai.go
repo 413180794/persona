@@ -187,9 +187,12 @@ func (c *Client) messages(ctx context.Context, hc *http.Client, key string, r Re
 		return reply, false, fmt.Errorf("ai: %w", err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode != 200 {
 		return reply, false, newHTTPError(resp, raw)
+	}
+	if readErr != nil {
+		return reply, true, fmt.Errorf("ai: read response: %w", readErr)
 	}
 	var out struct {
 		Model   string `json:"model"`
