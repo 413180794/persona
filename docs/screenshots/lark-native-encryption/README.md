@@ -1,20 +1,20 @@
-# 原生加密文字发送回归（#689）
+# Native encrypted text sending regression (#689)
 
-2026-11-03，iPhone 18 Pro / iOS 27 模拟器。全部账号、文字、密码和发送结果来自独立 mock Hub；没有操作真实会话。以下 16 张截图已逐张检查。
+2026-11-03, iPhone 18 Pro / iOS 27 simulator. All accounts, text, passwords and send results come from a standalone mock hub; no real chat was touched. Each of the 16 screenshots below was checked one by one.
 
-| 场景 | 浅色 | 深色 |
+| Scenario | Light | Dark |
 | --- | --- | --- |
-| 普通消息输入区 | [查看](light/native-removedordinary.png) | [查看](dark/native-removedordinary.png) |
-| 选择历史对外展示 | [查看](light/native-removedcovers.png) | [查看](dark/native-removedcovers.png) |
-| 手机解锁 | [查看](light/native-removedunlock.png) | [查看](dark/native-removedunlock.png) |
-| 加密发送回显 | [查看](light/native-removedsent.png) | [查看](dark/native-removedsent.png) |
-| 失败重试 | [查看](light/native-removedretry.png) | [查看](dark/native-removedretry.png) |
-| 收件箱保护加密草稿 | [查看](light/native-removedinbox-protected.png) | [查看](dark/native-removedinbox-protected.png) |
-| 回到消息恢复草稿 | [查看](light/native-removeddraft-restored.png) | [查看](dark/native-removeddraft-restored.png) |
-| 清空后普通收件箱 | [查看](light/native-removedinbox-unchanged.png) | [查看](dark/native-removedinbox-unchanged.png) |
+| Normal message input area | [View](light/native-removedordinary.png) | [View](dark/native-removedordinary.png) |
+| Pick a previous public text | [View](light/native-removedcovers.png) | [View](dark/native-removedcovers.png) |
+| Unlock on the phone | [View](light/native-removedunlock.png) | [View](dark/native-removedunlock.png) |
+| Encrypted message echoed after sending | [View](light/native-removedsent.png) | [View](dark/native-removedsent.png) |
+| Retry after failure | [View](light/native-removedretry.png) | [View](dark/native-removedretry.png) |
+| Inbox protects the encrypted draft | [View](light/native-removedinbox-protected.png) | [View](dark/native-removedinbox-protected.png) |
+| Draft restored on returning to Messages | [View](light/native-removeddraft-restored.png) | [View](dark/native-removeddraft-restored.png) |
+| Plain Inbox after clearing | [View](light/native-removedinbox-unchanged.png) | [View](dark/native-removedinbox-unchanged.png) |
 
-`LarkNativeEncryptionFlowTests` 的 3 个流程在浅色、深色各通过一次；此前一轮相同流程也通过，随后视觉检查发现模式栏背景透字，修复后重新跑完并更新此处截图。错误密码留在解锁页，正确密码继续发送；明确拒绝后重试使用原密文；切到收件箱不能将加密草稿作为普通消息发送，返回消息及重启后草稿仍在，清空草稿后普通收件箱不显示新模式栏。
+The 3 flows in `LarkNativeEncryptionFlowTests` passed once in light and once in dark mode. An earlier run of the same flows also passed, but the visual check then found text showing through the mode bar background; after the fix the flows were rerun in full and the screenshots here updated. A wrong password stays on the unlock page and the right one continues the send. A retry after an explicit rejection reuses the original ciphertext. Switching to the Inbox cannot send the encrypted draft as a normal message; the draft is still there after returning to Messages and after a restart; once the draft is cleared, the plain Inbox no longer shows the new mode bar.
 
-模式栏只占输入框上方一行，选中加密时同排显示对外展示。模式栏和聊天内容之间的背景隔离已检查，键盘展开时无文字重叠。发送气泡的圆环沿用原有已读状态，不是再次提交消息的加载指示；本机发件箱发送标记已由 UI 测试断言消失。
+The mode bar takes only one line above the input field; when encryption is selected, the public text shows on the same row. The background separation between the mode bar and the chat content was checked, and no text overlaps with the keyboard up. The ring on the sent bubble is the existing read status, not a loading indicator for resubmitting the message; a UI test asserts that the local outbox's sending marker disappears.
 
-截图不表示真实飞书网关 / Hub 已部署，也不覆盖加密附件、话题和线程输入区。
+The screenshots do not mean the real Lark gateway / hub is deployed, and they do not cover encrypted attachments, topics or thread input areas.

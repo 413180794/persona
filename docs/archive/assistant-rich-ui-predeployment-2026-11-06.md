@@ -1,73 +1,73 @@
-# 主对话富 UI 预部署验收
+# Main chat rich UI: pre-deployment acceptance
 
-记录日期：2026-11-06。关联总任务 #2017，网页恢复修复 #2938 / PR #2945。
+Recorded: 2026-11-06. Parent task #2017; web restore fix #2938 / PR #2945.
 
-这是固定源码的验收快照，不是实时进度表，也不是生产启用记录。
+This is an acceptance snapshot of a pinned source revision. It is not a live progress table, and not a record of enabling it in production.
 
-## 固定源码和范围
+## Pinned source and scope
 
-- 正式源码：`806e84dc518ec000e8b8e1ad68d388b7ed22ee1c`。
-- 构建版本：`v0.1.11-167-g806e84dc5-202611051613`。
-- 服务端二进制、网页和验收配置都对应这份源码；二进制与网页树的 SHA-256 留在本机私有证据中。
-- 复用 Extension 的 View schema、生成类型和渲染组件，没有另建助手 UI 协议。
-- 本轮真实模型使用 Claude Code runtime，不能据此声称 SDK runtime、Codex 或各端真机已完成同样的验收。
+- Official source: `806e84dc518ec000e8b8e1ad68d388b7ed22ee1c`.
+- Build version: `v0.1.11-167-g806e84dc5-202611051613`.
+- The server binary, the web app and the acceptance config all correspond to this source; the SHA-256 of the binary and of the web tree are kept in private local evidence.
+- Reuses the extension View schema, generated types and rendering components; no separate assistant UI protocol was built.
+- The real model in this round ran on the Claude Code runtime. This does not support claiming that the SDK runtime, Codex, or real devices on each platform have passed the same acceptance.
 
-## 真实模型闭环通过
+## Real model end-to-end loop passed
 
-测试使用独立 Postgres、HOME 和 PID namespace，只挂载测试数据和只读构建产物，没有挂载生产状态。创建的是 `main: false` 临时对话，所有会议纪要和项目都是虚构的。
+The test used its own Postgres, HOME and PID namespace, mounting only test data and read-only build artifacts; no production state was mounted. It created a temporary `main: false` chat; all meeting notes and projects were fictional.
 
-请求只说明两种整理方式和“从选择到完成保留同一个界面”，没有提供 schema、工具名或预制 View。
+The request only described two ways to organize the material and "keep the same interface from choosing to finishing". It gave no schema, tool names or prebuilt View.
 
-91.1 秒的实际结果：
+Actual results, in 91.1 seconds:
 
-- 模型自主调用 `view_show`，创建版本 1 的 live View。
-- 浏览器真正点击模型提供的选择项，仅发送一次动作请求，带 `expected_version: 1` 和 `client_msg_id`，不提供客户端伪造的回复文字。
-- hub 返回成功并持久化答案，模型通过 `view_get` / `view_update` 更新同一张卡片。
-- DOM 节点身份保持不变，版本从 1 更新到 2，随后在版本 5 达到 `progress.ratio == 1`。
-- 已答状态在更新和完成后仍显示，没有重复发送动作。
-- 页面重载后恢复版本 5 和已答状态，旧选择已移除或禁用，不能再次提交。
-- 测试数据库只读核对一张 live View、一条动作 / 发件箱和一条已送达回复；对话中回复只出现一次，feed 引用仍只有一个。
-- 模型只调用三项卡片工具；guard 记录一次实际受限启动，没有被拒绝或未知的启动。
-- 浅色、深色截图均实际检查。截图、原始对话、临时标识、认证配置和日志不提交到仓库。
+- The model called `view_show` on its own and created a live View at version 1.
+- The browser actually clicked a choice the model provided and sent exactly one action request, with `expected_version: 1` and `client_msg_id`, and no reply text forged by the client.
+- The hub returned success and persisted the answer; the model updated the same card through `view_get` / `view_update`.
+- The DOM node identity stayed the same; the version went from 1 to 2, then reached `progress.ratio == 1` at version 5.
+- The answered state still showed after updates and after completion; the action was not sent twice.
+- After a page reload, version 5 and the answered state were restored; the old choices were removed or disabled and could not be submitted again.
+- A read-only check of the test database found one live View, one action / outbox entry and one delivered reply; the reply appeared only once in the chat, and there was still only one feed reference.
+- The model called only the three card tools; the guard recorded one real restricted launch, with no rejected or unknown launches.
+- Light and dark screenshots were both actually checked. Screenshots, the raw chat, temporary identifiers, auth config and logs are not committed to the repository.
 
-结果标为 **预部署隔离验收 PASS**，不等同生产升级后的验收。测试开关只在独立 hub 开启。
+The result is marked **pre-deployment isolated acceptance PASS**. It is not the same as acceptance after a production upgrade. The test switch was enabled only on the standalone hub.
 
-## 构建和测试结果
+## Build and test results
 
-| 固定源码检查 | 实际结果 |
+| Check on the pinned source | Actual result |
 | --- | --- |
-| 服务端普通全套测试，真实隔离 Postgres | PASS，含 78 个包条目；其中部分包没有测试 |
-| 富 UI、权限、诊断的定向 race 回归 | PASS，DB / assistant / node / hub 各三轮；不是全服务端 race |
-| 网页完整测试 | PASS，292 个文件、2879 项测试 |
-| 网页生产构建和隐私扫描 | PASS |
-| Linux hub、Darwin node 缓存、Linux 微信插件统一构建 | PASS |
-| schema 生成器一致性 | PASS，7 项测试 |
-| 文档路径检查 | PASS，11 项测试 |
-| Go SDK 全套 | FAIL，`wire.TestCheckLooks`；不能称整体发布全绿 |
+| Full regular server test suite, real isolated Postgres | PASS, 78 package entries; some packages have no tests |
+| Targeted race regressions for rich UI, permissions, diagnostics | PASS, three rounds each for DB / assistant / node / hub; not a full server race run |
+| Full web test suite | PASS, 292 files, 2879 tests |
+| Web production build and privacy scan | PASS |
+| Unified build of Linux hub, Darwin node cache, Linux WeChat plugin | PASS |
+| Schema generator consistency | PASS, 7 tests |
+| Doc path check | PASS, 11 tests |
+| Full Go SDK suite | FAIL, `wire.TestCheckLooks`; the release as a whole cannot be called all green |
 
-SDK 的失败来自新增 looks 校验：同一图片被两个尺寸引用时，文件键的 map 覆盖了其中一个尺寸约束。固定源码上重复十轮失败九轮，已向 #3200 原车道补充复现，未接管其文件。文件读取可以去重，尺寸约束必须逐引用检查。此快照不包含后续修复。
+The SDK failure comes from the new looks validation: when the same image is referenced at two sizes, the map keyed by file overwrites one of the size constraints. On the pinned source it failed nine of ten repeated runs. The repro was added to the original lane for #3200; its files were not taken over. Reading files can be deduplicated, but size constraints must be checked per reference. This snapshot does not include the later fix.
 
-## 先前失败没有改写
+## Earlier failures are not rewritten
 
-- 较早的部署快照有 `TestRouteScopes` 和 `TestLauncherRepair` 失败，分别由 #3116 和 #3130 修复后重新验证。
-- 首次自然请求只要求进度保持同一位置，模型先输出正文选择卡并计划选后创建进度卡；驱动却要求第一张选择卡已是 live，未点击正文卡。这一轮保留 FAIL，之后澄清全过程同一界面的需求。
-- 下一轮已真实创建 live View，但 `python -I` 排除了已有的 Playwright 依赖，整轮仍为 FAIL；续跑只允许尚未提交动作的同版本临时对话。
-- 续跑已真实提交一次动作，随后驱动把 `view_actions` 当数组而报错；没有重新点击这个已答会话。
-- 修正驱动为真实 map 后，发现网页也有同样的问题：更新时事件能显示已答，重载时快照不能恢复。实际整轮保留 TIMEOUT，并复用原负责人提交的 #2945，没有另写相同补丁。
-- 原网页在真实 map 的浏览器夹具中失败；修复后 20 个正向、负向、拒绝和超时场景全部得到预期结果。夹具结果不冒充真实模型结果。
-- 额外双源码候选验收也通过，但服务端和网页来自不同提交，明确标为候选；最终才用本文件的统一正式源码完成预部署验收。
+- An earlier deployment snapshot had `TestRouteScopes` and `TestLauncherRepair` failures, fixed by #3116 and #3130 respectively and then re-verified.
+- The first natural request only asked for progress to stay in the same place. The model first output a choice card in the message body and planned to create a progress card after the choice; the driver, however, required the first choice card to already be live and did not click the body card. That round stays FAIL; afterwards the requirement was clarified to one interface for the whole process.
+- The next round really created a live View, but `python -I` excluded the already installed Playwright dependency, so the whole round was still FAIL. Resuming was allowed only on a temporary chat at the same version with no action submitted yet.
+- The resumed run really submitted one action; then the driver treated `view_actions` as an array and errored. This already answered session was not clicked again.
+- After fixing the driver to use the real map, the web app turned out to have the same problem: during updates the event could show the answered state, but on reload the snapshot could not restore it. That full round stays TIMEOUT, and #2945, submitted by the original owner, was reused instead of writing an identical patch.
+- The original web app failed in a browser fixture with the real map; after the fix, all 20 positive, negative, rejection and timeout scenarios gave the expected results. Fixture results do not stand in for real model results.
+- An extra two-source candidate acceptance also passed, but the server and the web app came from different commits, so it is explicitly marked as a candidate. Only at the end was the pre-deployment acceptance completed with the single official source in this file.
 
-## 生产与剩余边界
+## Production and remaining boundaries
 
-此前生产已按授权前向更新到 `2586ec90`，安装产物、运行中 hub / node、网页和回滚备份均核验，配置未改，`persona_view` 保持关闭。网页恢复修复虽然已合并，但不在这份较早的生产部署里。
+Production had earlier been updated forward to `2586ec90` as authorized. The installed artifacts, the running hub / node, the web app and the rollback backup were all verified; config was unchanged and `persona_view` stayed off. The web restore fix has been merged, but it is not in that earlier production deployment.
 
-本轮后续共享 hub 更新因发布窗口协调暂停，`806e84dc` 没有再次生产 apply。没有向真实主对话发测试消息，没有新建或压缩真实主对话，没有删用户数据，也没有发 TestFlight。
+The follow-up shared hub update in this round was paused to coordinate the release window, so `806e84dc` was not applied to production again. No test messages were sent to a real main chat, no real main chat was created or compacted, no user data was deleted, and no TestFlight build was released.
 
-仍须单列：
+Still to be listed separately:
 
-- 解决固定源码上记录的 SDK looks 漏检，并验证实际修复源码。
-- 确认共享生产发布窗口，再按实际生产祖先、产物来源、配置与 hash 校验、CAS 和可回滚流程前向升级；不能把未部署的主线更新或旧源码证据说成新源码已通过。
-- 共享发布窗口确认并升级后，再按原任务执行最终隔离验收；生产 `persona_view` 启用须单独等待原用户明确确认，不能用协作消息或测试通知代替。
-- Apple #2024 / #2025 留在原车道，本记录不宣称其完成。
-- HTML bridge API 已有，不代表 Web / Android / WK 的 JS 执行安全已验收；网页运行时标记仍关闭，HTML 保持文字兜底。
-- 新共享 schema 已包含 `diff`、`code`、`file_tree` 等，不能再笼统称这些不存在；本轮未逐项做四端实机验收，其余组件覆盖按实际实现另行核对。
+- Fix the SDK looks check gap recorded on the pinned source, and verify the actual fixed source.
+- Confirm the shared production release window, then upgrade forward following the actual production ancestor, artifact provenance, config and hash checks, CAS and a rollback-capable process. Do not present an undeployed mainline update or evidence from old source as the new source having passed.
+- After the shared release window is confirmed and the upgrade done, run the final isolated acceptance as the original task requires. Enabling `persona_view` in production must separately wait for explicit confirmation from the original user; collaboration messages or test notifications do not count.
+- Apple #2024 / #2025 stay in their original lane; this record does not claim they are done.
+- The HTML bridge API exists, but that does not mean JS execution safety on Web / Android / WK has been accepted. The web runtime flag is still off, and HTML keeps the text fallback.
+- The new shared schema already includes `diff`, `code`, `file_tree` and others, so they can no longer be described as nonexistent. This round did not do per-item real-device acceptance on all four platforms; coverage of the other components is to be checked separately against the actual implementation.
