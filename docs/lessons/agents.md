@@ -18,6 +18,10 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   background-task wakeups) didn't reproduce it. Rather than guess when herdr misses updates, node checks two fallback signals (`claudeStatus`): the title's spinner glyphs (in 2.1.3xx, working uses
   ◐◓◑◒, awaiting input uses ✳), and an unfinished transcript turn (`turn_duration` / interruption ends it; 913 of 955 local turns ended with `turn_duration`).
   Only correct done / idle / unknown, not blocked. If the transcript says the turn has ended, trust herdr (the title may have been read just before completion).
+- Idle Claude sessions showed as working for hours after Claude Code compacted on its own while idle (#5967, 2.1.31x: "Compacted while idle, before the prompt cache expired"). Two things together:
+  the node's quick tail read skips user lines over 8 KB that are not tool results and takes each for a long prompt, and the compaction summary is a 17 KB user line (`isCompactSummary`), so a turn "started" at the compaction and never ended;
+  and "written within 45 seconds" was the file's mtime, which Claude Code's in-place rewrites of its trailing metadata (`last-prompt`, `ai-title`, `mode`, `permission-mode`, `atis-latch`; no timestamps, same size) kept moving with no turn at all.
+  On one machine the session's `state_since` matched the transcript's mtime to the second while herdr said `done` and the title showed ✳. A shortcut that guesses what a skipped line is must leave out the lines it cannot be (summaries, meta lines), and a "recently written" check should read the content's time, not the file's.
   When reproducing, note that a new herdr pane's shell lacks the current session's `CLAUDE_CONFIG_DIR`; claude reports `Not logged in` (can't read login from the default directory).
 - Claude Code `--settings` honors only the last occurrence, without merging (measured 2026-11-02: with `--settings A --settings B`, all of A's `env` disappeared). If a launcher alias supplies
   `--settings` with credentials in that file's `env`, appending another `--settings` in Persona overrides it. Phone-started sessions and every assistant message then return

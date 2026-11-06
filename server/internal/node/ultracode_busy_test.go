@@ -13,11 +13,13 @@ import (
 
 // Synthetic transcripts exercise the same corrected status used by the list.
 func TestUltracodeBusyUsesClaudeStatus(t *testing.T) {
-	const (
-		id     = "aaaaaaaa-0000-4000-8000-000000000099"
-		prompt = `{"type":"user","uuid":"u1","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"check the example"}}`
-		done   = `{"type":"system","subtype":"turn_duration","uuid":"d1","timestamp":"2026-01-01T00:00:02Z","durationMs":2000}`
-	)
+	const id = "aaaaaaaa-0000-4000-8000-000000000099"
+	// written just now: a fresh turn is one whose lines are recent, not only its file (#5967)
+	at := time.Now().UTC().Format(time.RFC3339Nano)
+	prompt := `{"type":"user","uuid":"u1","timestamp":"` + at + `","message":{"role":"user","content":"check the example"}}`
+	done := `{"type":"system","subtype":"turn_duration","uuid":"d1","timestamp":"` + at + `","durationMs":2000}`
+	// the turn that ended long before the hook's prompt
+	doneLongAgo := `{"type":"system","subtype":"turn_duration","uuid":"d1","timestamp":"2026-01-01T00:00:02Z","durationMs":2000}`
 	for _, tc := range []struct {
 		name, status, title, body string
 		hookOpen, want            bool
@@ -29,7 +31,7 @@ func TestUltracodeBusyUsesClaudeStatus(t *testing.T) {
 		{"resting after a closed turn", proto.StatusIdle, "✳ example", prompt + "\n" + done, false, false},
 		{"blocked remains queued", proto.StatusBlocked, "✳ example", done, false, true},
 		{"host working remains queued", proto.StatusWorking, "✳ example", done, false, true},
-		{"hook prompt precedes transcript", proto.StatusDone, "", done, true, true},
+		{"hook prompt precedes transcript", proto.StatusDone, "", doneLongAgo, true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), id+".jsonl")

@@ -270,6 +270,10 @@ type quickMeta struct {
 	turnClosed bool
 	// claudeTurn: a Claude transcript whose tail has a turn started and not finished (transcript.Meta.TurnOpen)
 	claudeTurn bool
+	// contentAt: the newest line in the tail that has a time, when the transcript last said something. Not the file's
+	// mtime: Claude Code rewrites its trailing metadata (last-prompt, ai-title, mode…, no timestamps) in place while
+	// idle, and that is no sign of work (#5967).
+	contentAt time.Time
 	// turnOpen: a Codex rollout whose tail is inside a turn: the last turn it starts has not finished, or one turn
 	// fills the whole tail (a finished turn's task_complete is within a few KB of the end; real turns write MBs)
 	turnOpen bool
@@ -380,9 +384,14 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 			if len(line) == 0 {
 				continue
 			}
+			if ts := lineTime(line); ts.After(m.contentAt) {
+				m.contentAt = ts
+			}
 			// Skip parsing big tool results; they still count as activity (a turn that ended on one would otherwise
-			// look finished earlier, and a look at it in the app in between would count as having seen the end).
-			if bytes.Contains(line, []byte(`"type":"user"`)) && len(line) > 8<<10 {
+			// look finished earlier, and a look at it in the app in between would count as having seen the end). Not a
+			// compaction summary or a meta line: no prompt (Claude Code compacts on its own while idle, and its 17 KB
+			// summary read as one left the session working for hours, #5967); the parser reads them as what they are.
+			if bytes.Contains(line, []byte(`"type":"user"`)) && len(line) > 8<<10 && !notAPrompt(line) {
 				if ts := lineTime(line); ts.After(tm.LastActivity) {
 					tm.LastActivity = ts
 				}
@@ -493,6 +502,11 @@ func (n *Node) codexTurnOver(id string, now time.Time) bool {
 
 // lineTime reads a transcript line's own "timestamp" without decoding it (Claude Code writes it after the message, so
 // the last one; quotes inside the message are escaped and do not match).
+// notAPrompt: a user line that is not a message to the agent whatever its size: a compaction's summary or a meta line.
+func notAPrompt(line []byte) bool {
+	return bytes.Contains(line, []byte(`"isCompactSummary":true`)) || bytes.Contains(line, []byte(`"isMeta":true`))
+}
+
 func lineTime(line []byte) time.Time {
 	key := []byte(`"timestamp":"`)
 	i := bytes.LastIndex(line, key)
@@ -1838,6 +1852,11 @@ func (n *Node) claudeStatus(id string, a host.Agent, now time.Time) string {
 		if st, err := os.Stat(p); err == nil {
 			m, mod, hasFile = n.meta(p, st), st.ModTime(), true
 		}
+	}
+	// When the transcript last said something: its newest timed line, not its mtime (#5967); the mtime when the tail has
+	// no time at all.
+	if !m.contentAt.IsZero() {
+		mod = m.contentAt
 	}
 	fresh := hasFile && now.Sub(mod) < claudeFresh
 	spinner := claudeSpinnerTitle(a.RawTitle)

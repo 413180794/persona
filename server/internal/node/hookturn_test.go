@@ -270,11 +270,11 @@ func TestOpenElsewhereIgnoresReusedPid(t *testing.T) {
 func TestClaudeStatusFromHooks(t *testing.T) {
 	dir := t.TempDir()
 	const (
-		prompt    = `{"type":"user","message":{"role":"user","content":"look for the bug"},"uuid":"u1","timestamp":"2026-01-01T00:00:00Z"}`
-		toolUse   = `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Grep","input":{"pattern":"x"}}]},"uuid":"a1","parentUuid":"u1","timestamp":"2026-01-01T00:00:01Z"}`
-		reply     = `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"found it"}]},"uuid":"a2","parentUuid":"a1","timestamp":"2026-01-01T00:00:02Z"}`
-		duration  = `{"type":"system","subtype":"turn_duration","uuid":"d1","parentUuid":"a2","durationMs":2000,"timestamp":"2026-01-01T00:00:03Z"}`
-		interrupt = `{"type":"user","message":{"role":"user","content":"[Request interrupted by user]"},"uuid":"u2","timestamp":"2026-01-01T00:00:04Z"}`
+		prompt    = `{"type":"user","message":{"role":"user","content":"look for the bug"},"uuid":"u1","timestamp":"{{T}}"}`
+		toolUse   = `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Grep","input":{"pattern":"x"}}]},"uuid":"a1","parentUuid":"u1","timestamp":"{{T}}"}`
+		reply     = `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"found it"}]},"uuid":"a2","parentUuid":"a1","timestamp":"{{T}}"}`
+		duration  = `{"type":"system","subtype":"turn_duration","uuid":"d1","parentUuid":"a2","durationMs":2000,"timestamp":"{{T}}"}`
+		interrupt = `{"type":"user","message":{"role":"user","content":"[Request interrupted by user]"},"uuid":"u2","timestamp":"{{T}}"}`
 	)
 	now := time.Now()
 	oldAlive := processAlive
@@ -317,7 +317,9 @@ func TestClaudeStatusFromHooks(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			id := fmt.Sprintf("%08d-0000-4000-8000-000000000000", i)
 			p := filepath.Join(dir, id+".jsonl")
-			if err := os.WriteFile(p, []byte(strings.Join(tc.lines, "\n")+"\n"), 0o644); err != nil {
+			// the lines were written age ago: freshness is their time, not the file's (#5967)
+			body := strings.ReplaceAll(strings.Join(tc.lines, "\n")+"\n", "{{T}}", now.Add(-tc.age).UTC().Format(time.RFC3339Nano))
+			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.Chtimes(p, now.Add(-tc.age), now.Add(-tc.age)); err != nil {
