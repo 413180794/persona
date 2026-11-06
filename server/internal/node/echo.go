@@ -89,6 +89,25 @@ func (l *echoLog) expect(r echoRecord) bool {
 	return true
 }
 
+// record is the session's record of clientMsgID as it is now.
+func (l *echoLog) record(id, clientMsgID string) (echoRecord, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, r := range l.recs[id] {
+		if r.ClientMsgID == clientMsgID {
+			return *r, true
+		}
+	}
+	return echoRecord{}, false
+}
+
+// forget drops the record of a send that did not reach the pane.
+func (l *echoLog) forget(id, clientMsgID string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.recs[id] = slices.DeleteFunc(l.recs[id], func(r *echoRecord) bool { return r.ClientMsgID == clientMsgID })
+}
+
 // waitingFrom is the seq after which the session's expected records look for their lines; false when none is
 // expected.
 func (l *echoLog) waitingFrom(id string) (int, bool) {
@@ -326,13 +345,30 @@ func (n *Node) echoBase(id string) int {
 	return f.LastSeq()
 }
 
-// expectEcho records a send that reached the pane, or may have, and tells the hub (which hands it back after a
-// restart).
-func (n *Node) expectEcho(id, clientMsgID, text string, images int, at time.Time, after int) {
-	r := echoRecord{SessionID: id, ClientMsgID: clientMsgID, Text: text, Images: images, SentAt: at, AfterSeq: after}
-	if n.echoes.expect(r) {
-		n.notifyEcho(r)
+// sendEchoed runs send and records it to tie; once it reached the pane, or may have, the hub is told (it hands the
+// record back after a restart), and a send that surely did not is forgotten.
+//
+// The record is expected before the words are typed: Claude Code writes the line as soon as it takes the message, and
+// a watch that pushed it before the send returned sent it without its client_msg_id, never to carry it in a push
+// again (the app's bubble then waited for a page).
+func (n *Node) sendEchoed(id, clientMsgID, text string, images int, after int, send func() error) error {
+	if clientMsgID == "" {
+		return send()
 	}
+	r := echoRecord{SessionID: id, ClientMsgID: clientMsgID, Text: text, Images: images, SentAt: time.Now(), AfterSeq: after}
+	fresh := n.echoes.expect(r)
+	err := send()
+	if !fresh {
+		return err
+	}
+	if err == nil || maybeDelivered(err) {
+		if cur, ok := n.echoes.record(id, clientMsgID); ok {
+			n.notifyEcho(cur) // found already (a push ran meanwhile): the hub hears the line too
+		}
+	} else {
+		n.echoes.forget(id, clientMsgID)
+	}
+	return err
 }
 
 func (n *Node) notifyEcho(r echoRecord) {

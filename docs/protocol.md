@@ -1265,8 +1265,10 @@ A message the App sends shows as a pending bubble until it appears in the transc
 `client_msg_id`, so all three clients used to match by text alone (when the text was rewritten, the same words were sent twice, or `/compact` turned into a notice, the only fallback was "collapse 60 seconds after delivery").
 Now the node recognizes that line and tags each of its items with `client_msg_id` (`server/internal/node/echo.go`), in both pushes (`items` events) and pages (`/items`):
 
-- **When it's recorded**: when `session.send` carries `client_msg_id` and was delivered (or `delivered: "unknown"`, possibly delivered), the node records the send:
+- **When it's recorded**: when `session.send` carries `client_msg_id`, the node records the send **before** typing it:
   the session, the last transcript line before sending (new lines are read once before typing), the first 200 characters of the text (with `<jarvis-context>`, image captions and other additions stripped), the image count, and the time.
+  Claude Code writes the line as soon as it takes the message, and the watch may push it before the send returns; recorded first, that push carries the field (it used to be recorded only after delivery, so the line's one push went without it, #4855).
+  The hub is told (`session.echo`) once the send was delivered (or `delivered: "unknown"`, possibly delivered); a send that surely wasn't is forgotten.
   Runtime sessions have no local transcript, so the "last line" is the seq the node had pushed up to, or only the time if there isn't one.
 - **How it matches**: in send order, each takes the first not-yet-claimed **user line** after its send whose text matches: text under 12 characters (whitespace removed) must be identical,
   otherwise the first 12 characters are compared (pages truncate long text, and Claude turns images into `[Image #1]`); an image-only message matches a line with no text; a bare command (`/model`) matches

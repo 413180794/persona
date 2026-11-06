@@ -1208,19 +1208,17 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 		_ = json.Unmarshal(params, &opts)
 		err := n.sends.once(opts.ClientMsgID, func() error {
 			var after int
-			at := time.Now()
 			if opts.ClientMsgID != "" {
 				after = n.runtimes.lastPushed(p.SessionID)
 				if n.runtimeTranscript(p.SessionID) != "" { // its items are the transcript's: its copy comes after its end
 					after = n.echoBase(p.SessionID)
 				}
 			}
-			_, err := call("session.send", map[string]any{"session_id": p.SessionID, "text": p.Text, "images": p.Images,
-				"client_msg_id": opts.ClientMsgID})
-			if opts.ClientMsgID != "" && (err == nil || maybeDelivered(err)) { // echo.go
-				n.expectEcho(p.SessionID, opts.ClientMsgID, p.Text, len(p.Images), at, after)
-			}
-			return err
+			return n.sendEchoed(p.SessionID, opts.ClientMsgID, p.Text, len(p.Images), after, func() error { // echo.go
+				_, err := call("session.send", map[string]any{"session_id": p.SessionID, "text": p.Text, "images": p.Images,
+					"client_msg_id": opts.ClientMsgID})
+				return err
+			})
 		})
 		if rpcCode(err) == runtimeHandover && ctx.Value(handingOver{}) == nil {
 			res, err := n.handOver(ctx, h, p.SessionID, params)

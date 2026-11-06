@@ -630,3 +630,9 @@ For any download/build list derived from current runtime state, consider objects
 Unmatched API routes and method mismatches run outside matched handlers' request logging middleware. Passing the underlying writer to `apierr` therefore loses the locale even when `Accept-Language` is present. Wrap only the fallback writer with the request's resolved locale, preserving status, `Allow`, and the JSON error code; leave matched handlers and streams unchanged.
 
 Translate only an exact standard HTTP status phrase at this boundary. Custom node/server diagnostics must not be guessed from a status code. A request without a locale retains the old English status phrase. Cover 404 and 405 through the real router, not only by calling the formatter directly.
+
+## Record what a push reads before the action that triggers it (#4855)
+
+The node recorded which transcript line to tie a send to only **after** the send returned, but Claude Code writes the line as soon as it takes the message and the watch reads every 250 ms, so the line was often pushed before the send returned.
+That line is pushed once, so the push never carried `client_msg_id`; only a later page did, and the app's "sending" bubble waited for that page.
+Any mark a push reads (an echo, an owner, a session id) is recorded before typing, starting or writing; undo it on failure instead of recording it on success.

@@ -353,3 +353,68 @@ func TestEchoKeepsARuntimesOwnTie(t *testing.T) {
 	}
 	sameTags(t, l.tag("s", items), map[string]string{"r1": "B", "r2": "A"})
 }
+
+// A watch pushes the line Claude writes as soon as it takes a message, before the send has returned: that push must
+// already carry the client_msg_id. It used to be expected only after the send, so the one push of the line went out
+// without it and the app's "sending" bubble waited for a page (#4855).
+func TestEchoTagsThePushOfALineWrittenWhileTyping(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := mkdir(t, home+"/proj")
+	t0 := time.Now()
+	path := writeTranscript(t, home, cwd, sidA, t0, assistantLine("a0", t0.Add(-time.Minute), "上一轮的回答"))
+	seedAgents(t, n, f, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", cwd, ""))
+	f.setScreens("w1:p1", screenFixture(t, "claude-2.1.312-empty-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.ansi"))
+	withSubmitGrace(t, 10*time.Millisecond)
+	hub := withHub(t, n)
+	if err := n.watch(sidA, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { n.unwatch(sidA) })
+	f.after(func(c herdrCall) {
+		if c.Method != "agent.prompt" {
+			return
+		}
+		fh, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		_, _ = fh.WriteString(userLine("u-typed", time.Now(), "把发送流程梳理一遍") + "\n")
+		fh.Close()
+		// the send is still on its way when the watch reads the line (it ticks every 250 ms)
+		deadline := time.Now().Add(3 * time.Second)
+		for !hasText(hub, "把发送流程梳理一遍") && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
+		}
+	})
+	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "把发送流程梳理一遍", "client_msg_id": "m-1"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range hub.got() {
+		if it.Text == "把发送流程梳理一遍" {
+			if it.ClientMsgID != "m-1" {
+				t.Fatalf("the line was pushed with client_msg_id %q, want m-1", it.ClientMsgID)
+			}
+			return
+		}
+	}
+	t.Fatal("the line written while typing was never pushed")
+}
+
+// A send that surely did not reach the pane leaves no record: a later line with the same words is not tied to it.
+func TestEchoForgetsASendThatFailed(t *testing.T) {
+	n := &Node{}
+	err := n.sendEchoed(sidA, "m-x", "继续", 0, 0, func() error { return fmt.Errorf("pane gone") })
+	if err == nil {
+		t.Fatal("the send's error was lost")
+	}
+	if _, ok := n.echoes.record(sidA, "m-x"); ok {
+		t.Fatal("a failed send is still expected")
+	}
+	if err := n.sendEchoed(sidA, "m-y", "继续", 0, 0, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := n.echoes.record(sidA, "m-y"); !ok {
+		t.Fatal("a send that went out is not expected")
+	}
+}

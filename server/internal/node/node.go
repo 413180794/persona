@@ -748,20 +748,16 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		_ = json.Unmarshal(params, &opts)
 		return ok(n.sends.once(opts.ClientMsgID, func() error {
 			var after int
-			at := time.Now()
 			if opts.ClientMsgID != "" {
 				after = n.echoBase(p.SessionID)
 			}
-			var err error
-			if n.isAssistantSession(p.SessionID) {
-				_, err = n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Runtime: n.sessionRuntime(p.SessionID, p.Runtime, p.ModelFingerprint != "")})
-			} else {
-				err = n.send(ctx, p.SessionID, p.Text, p.Images, opts)
-			}
-			if opts.ClientMsgID != "" && (err == nil || maybeDelivered(err)) { // echo.go
-				n.expectEcho(p.SessionID, opts.ClientMsgID, p.Text, len(p.Images), at, after)
-			}
-			return err
+			return n.sendEchoed(p.SessionID, opts.ClientMsgID, p.Text, len(p.Images), after, func() error { // echo.go
+				if n.isAssistantSession(p.SessionID) {
+					_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Runtime: n.sessionRuntime(p.SessionID, p.Runtime, p.ModelFingerprint != "")})
+					return err
+				}
+				return n.send(ctx, p.SessionID, p.Text, p.Images, opts)
+			})
 		}))
 	case "session.echoes": // what the hub kept of earlier sends (echo.go), after this node started
 		var a struct {
