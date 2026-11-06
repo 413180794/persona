@@ -1,6 +1,6 @@
 // Messages typed while the agent works and not yet taken (Session.queued), above the composer instead of in the
-// chat (iOS QueueStrip). 撤回到输入框 pulls them back out of Claude (like ↑ in the terminal), puts that one in the
-// composer and re-queues the others in order; 删除 drops it the same way.
+// chat (iOS QueueStrip). "Pull back to edit" pulls them back out of Claude (like ↑ in the terminal), puts that one in the
+// composer and re-queues the others in order; "Delete" drops it the same way.
 import { useId, useState } from "react";
 import { api, errorText, sessionPath } from "../../lib/api";
 import { sendDraft } from "../../lib/drafts";
@@ -11,7 +11,7 @@ import { Collapse, copyText, cx, Menu, Spinner, toast, useMenu, type MenuItem } 
 import { Icon } from "../../ui/icons";
 import { t } from "../../i18n";
 
-/** One line, 排队中 N 条, that opens the messages; `compact` (a phone on its side) is the tighter size. */
+/** One line, "N queued", that opens the messages; `compact` (a phone on its side) is the tighter size. */
 export function QueueStrip({ session, draftKey, canEdit, compact }: { session: Session; draftKey: string; canEdit: boolean; compact?: boolean }) {
   const queued = session.queued ?? [];
   const [busy, setBusy] = useState(false);

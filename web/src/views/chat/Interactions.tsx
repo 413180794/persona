@@ -62,7 +62,7 @@ function Card({ title, kicker, onDismiss, children, footer }: { title: string; k
   );
 }
 
-/** A terminal dialog's option: its words without the "(Recommended)" suffix, the 推荐 tag instead. */
+/** A terminal dialog's option: its words without the "(Recommended)" suffix, the "Recommended" tag instead. */
 function OptionLabel({ label }: { label: string }) {
   const shown = optionDisplay(label);
   return (
@@ -286,7 +286,7 @@ function PermissionCard({ ix }: { ix: Interaction }) {
             {t("chat-interactions.deny")}
           </Button>
           <span className="flex gap-1.5">
-            {/* Claude's 总是允许; another agent's card (Codex, an agent runtime) only when it says what always allows. */}
+            {/* Claude's "Always allow"; another agent's card (Codex, an agent runtime) only when it says what always allows. */}
             {(!ix.agent || ix.agent === "claude" || ix.always_label) && (
               <Button tone="secondary" onClick={() => go({ allow: true, always: true })}>
                 {t("chat-interactions.always_allow")}
@@ -311,7 +311,7 @@ const CODE_BOX = "max-h-48 overflow-auto rounded-[8px] bg-inset px-2.5 py-2 font
  *  input stays one click away, open from the start only when nothing else says what the tool does. */
 const FROM_MAX = 48;
 
-/** 「来自子 Agent · <type>」 for a subagent's card, its type on one line and cut to FROM_MAX; empty otherwise. */
+/** "From subagent · <type>" for a subagent's card, its type on one line and cut to FROM_MAX; empty otherwise. */
 export function permissionFrom(ix: Pick<Interaction, "agent_id" | "agent_type">): string {
   if (!ix.agent_id?.trim()) return "";
   const type = (ix.agent_type ?? "").replace(/\s+/g, " ").trim();
@@ -525,9 +525,9 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
 }
 
 /**
- * An MCP server's form or link (docs/protocol.md「MCP elicitation」), as Android's ElicitationFields: a form in the
+ * An MCP server's form or link (docs/protocol.md "MCP elicitation"), as Android's ElicitationFields: a form in the
  * schema subset lib/elicitation.ts checks (anything else goes to the terminal), or a link that has to be opened from
- * here before 已打开，继续. 提交 accepts, 拒绝 declines, 取消 cancels; × hands it back to the computer as on every card.
+ * here before "Opened, continue". "Submit" accepts, "Deny" declines, "Cancel" cancels; × hands it back to the computer as on every card.
  */
 function ElicitationCard({ ix }: { ix: Interaction }) {
   const form = ix.elicitation;
@@ -624,7 +624,7 @@ function ElicitationCard({ ix }: { ix: Interaction }) {
 const inputType = (f: Field) =>
   f.secret ? "password" : f.type !== "string" ? "text" : ({ email: "email", uri: "url", date: "date" } as Record<string, string>)[String(f.schema.format)] ?? "text";
 
-/** One field of an MCP form: its title (必填 / 选填), what it is for, the control, and what is wrong with it. */
+/** One field of an MCP form: its title ("Required" / "Optional"), what it is for, the control, and what is wrong with it. */
 function ElicitationField({ field: f, value, error, onChange }: { field: Field; value: unknown; error?: string; onChange: (v: unknown) => void }) {
   const id = useId();
   const text = f.type !== "boolean" && f.choices.length === 0;
@@ -678,7 +678,7 @@ function ElicitationField({ field: f, value, error, onChange }: { field: Field; 
 }
 
 /** What an answered card was about, in one line of plain text: what it asked (interactionAsk), a plan's first line;
- *  empty when it says nothing of its own (never its kind's title, 计划等你审批, which would read as still waiting). */
+ *  empty when it says nothing of its own (never its kind's title, "Plan awaits your approval", which would read as still waiting). */
 export function receiptAbout(ix: Interaction): string {
   const raw = ix.kind === "plan" ? ((ix.plan ?? "").split("\n").find((l) => l.trim()) ?? "").replace(/^\s*#+\s*/, "") || ix.summary || "" : interactionAsk(ix);
   return plainMarkdown(raw).replace(/\s+/g, " ").trim();
@@ -687,7 +687,7 @@ export function receiptAbout(ix: Interaction): string {
 /** A card this page answered: what was asked and the picks, read-only, for a moment (lib/store.ts endInteraction). */
 export function AnsweredCard({ card }: { card: Answered }) {
   const lines = answerLines(card.ix, card.resolution);
-  // a card with one unlabeled answer (允许, 批准, a terminal option) says what it was about (#4353): which command was
+  // a card with one unlabeled answer ("Allow", "Approve", a terminal option) says what it was about (#4353): which command was
   // allowed, not only that something was
   const about = lines.length === 1 && !lines[0].label && card.resolution.dismiss !== true ? receiptAbout(card.ix) : "";
   return (
@@ -733,13 +733,13 @@ export function InteractionCard({ ix }: { ix: Interaction }) {
 
 /**
  * The cards waiting on you, and the ones just answered, above the composer. Wide screens show them all, as always.
- * Narrow ones (#1996) keep them in a box that scrolls on its own: the first in full and 还有 N 件 for the others until
+ * Narrow ones (#1996) keep them in a box that scrolls on its own: the first in full and "N more" for the others until
  * that is tapped; while the keyboard is up, one line for all of them (tapping it puts the keyboard away).
  */
 export function PendingCards({ interactions, answered, offerNext, narrow, short = false, keyboard, onDismissKeyboard }: {
   interactions: Interaction[];
   answered: Answered[];
-  /** This chat: offer what other chats wait on you with (#4091), one line under 已回答 once it has no card left. */
+  /** This chat: offer what other chats wait on you with (#4091), one line under "Answered" once it has no card left. */
   offerNext?: { mid: string; sid: string };
   narrow: boolean;
   /** A phone on its side: all of them in one line until tapped. */
@@ -756,7 +756,7 @@ export function PendingCards({ interactions, answered, offerNext, narrow, short 
   if (!count && !answered.length) return null;
   const done = showsAnswered({ narrow, keyboard, open, short }) ? answered.map((a) => <AnsweredCard key={a.ix.id} card={a} />) : [];
   const cards = interactions.map((ix) => <InteractionCard key={ix.id} ix={ix} />);
-  // only right after answering here (the 已回答 receipt shows), never while this chat still has a card: no jump, no nag
+  // only right after answering here (the "Answered" receipt shows), never while this chat still has a card: no jump, no nag
   const onward = !count && done.length > 0 && offerNext ? <NextWaitingRow {...offerNext} /> : null;
   if (!narrow) return <>{done}{cards}{onward}</>;
   const more = summary?.kind === "more";
@@ -814,14 +814,14 @@ function FoldRow({ label, detail, onClick }: { label: string; detail: string; on
   );
 }
 
-/** 还有 N 件等你 · 下一件：<agent> · <what it asks> ›, opening that chat with that card first (lib/card-focus.ts).
+/** "N more need you · Next: <agent> · <what it asks> ›", opening that chat with that card first (lib/card-focus.ts).
  *  Mounted only right after an answer here: the cards of other chats coming and going redraw this, not the chat. */
 function NextWaitingRow({ mid, sid }: { mid: string; sid: string }) {
   const next = useStore((s) => nextWaiting(s.interactions, mid, sid));
   const session = useStore((s) => (next ? (s.sessions[next.ix.machine_id] ?? []).find((x) => x.session_id === next.ix.session_id) : undefined));
   if (!next) return null;
   const { ix, count } = next;
-  // named as 总览's 需要你处理 row names it, worded as the folded cards' line (cardLine)
+  // named as "Overview"'s "Needs you" row names it, worded as the folded cards' line (cardLine)
   const title = ix.session_title?.trim() || (session ? sessionTitle(session) : ix.cwd || t("home.session"));
   const ask = plainMarkdown(cardLine(ix)).replace(/\s+/g, " ").trim();
   const to: Route = { name: "session", mid: ix.machine_id, sid: ix.session_id };

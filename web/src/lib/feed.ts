@@ -101,10 +101,10 @@ export function answeredItems(it: FeedItem): AnsweredItem[] {
 interface FeedState {
   feeds: Record<string, FeedItem[]>;
   plans: Record<string, TaskPlan>;
-  /** Conversation → the task the next message goes to (「对「xx」说」). */
+  /** Conversation → the task the next message goes to ("Tell "xx""). */
   routes: Record<string, string>;
   busy: Record<string, boolean>;
-  /** Message cards put off with 稍后. */
+  /** Message cards put off with "Later". */
   later: Record<string, boolean>;
 }
 
@@ -155,7 +155,7 @@ export function cardFiled(it: FeedItem): { at: string } | undefined {
   return at && !field(it, "sent_at") ? { at } : undefined;
 }
 
-/** A blank a draft leaves to fill in (【预计几点前】, {{链接}}): it would go out as it is. */
+/** A blank a draft leaves to fill in (a phrase in full-width lenticular brackets, {{link}}): it would go out as it is. */
 export function draftPlaceholder(text: string): string | undefined {
   return /【[^】\n]*】|\{\{[^}\n]*\}\}/.exec(text)?.[0];
 }
@@ -202,7 +202,7 @@ export async function loadFeed(conversation: string) {
   }
 }
 
-/** The main conversation's 今天 card, once a day (the hub makes it on the first ask). */
+/** The main conversation's "Today" card, once a day (the hub makes it on the first ask). */
 export async function loadToday(conversation: string) {
   const day = new Date().toLocaleDateString("sv");
   if (todayAsked.get(conversation) === day) return;
@@ -231,23 +231,23 @@ onHubEvent("task_plan", (m) => {
 
 // ── actions ──
 
-/** The fields of a plan's task 改一下 lets the user change before it starts (iOS PlanEditSheet). */
+/** The fields of a plan's task "Edit" lets the user change before it starts (iOS PlanEditSheet). */
 export type PlanTaskEdit = Pick<PlanTask, "title" | "machine" | "cwd" | "model" | "permission" | "prompt">;
 
 export const PLAN_PERMISSIONS = ["default", "acceptEdits", "plan", "bypassPermissions"] as const;
 
-/** A plan's tasks as 改一下 starts them: every editable field filled in (an unset permission is 每步都问). */
+/** A plan's tasks as "Edit" starts them: every editable field filled in (an unset permission is "Ask every step"). */
 export function planEditsOf(plan: TaskPlan): PlanTaskEdit[] {
   return plan.tasks.map((t) => ({ title: t.title, machine: t.machine, cwd: t.cwd, model: t.model ?? "", permission: t.permission || "default", prompt: t.prompt }));
 }
 
-/** Whether 改一下 changed anything (closing it then asks before throwing the changes away). */
+/** Whether "Edit" changed anything (closing it then asks before throwing the changes away). */
 export function planEditsChanged(plan: TaskPlan, edits: PlanTaskEdit[]): boolean {
   const before = planEditsOf(plan);
   return edits.some((e, i) => (Object.keys(e) as (keyof PlanTaskEdit)[]).some((k) => (e[k] ?? "") !== (before[i]?.[k] ?? "")));
 }
 
-/** What 开始 sends from 改一下: the edited tasks, leaving out a 每步都问 the plan never set (the agent's own default). */
+/** What "Start" sends from "Edit": the edited tasks, leaving out an "Ask every step" the plan never set (the agent's own default). */
 export function planEditsToSend(plan: TaskPlan, edits: PlanTaskEdit[]): Partial<PlanTask>[] {
   return edits.map((e, i) => {
     const out: Partial<PlanTask> = { ...e };
@@ -279,14 +279,14 @@ export async function dismissPlan(plan: TaskPlan) {
   }
 }
 
-/** The busy key of a task's 重试 (busy is keyed by plan id otherwise). */
+/** The busy key of a task's "Retry" (busy is keyed by plan id otherwise). */
 export const retryKey = (todoId: string) => `retry:${todoId}`;
 
 /**
- * 重试 on a task whose agent did not start (#1396): the hub starts the same task again (its plan's machine, directory,
+ * "Retry" on a task whose agent did not start (#1396): the hub starts the same task again (its plan's machine, directory,
  * prompt, launcher, model and permission) in the same todo, which it reopens at once — the card shows it starting
  * where it was. Taps while one is on its way do nothing; the hub starts one agent however many arrive. On a task the
- * model service cut off (#1516) it is 继续: the hub tells its agent to go on, once.
+ * model service cut off (#1516) it is "Continue": the hub tells its agent to go on, once.
  */
 export async function retryTask(todo: Todo) {
   const key = retryKey(todo.id);
@@ -352,7 +352,7 @@ export async function sendRouted(conversation: string, text: string): Promise<bo
 }
 
 /**
- * 发送 on a message card: the (edited) draft goes out through the inbox, which files the item as done and records it
+ * "Send" on a message card: the (edited) draft goes out through the inbox, which files the item as done and records it
  * on the card (the hub sends once per card, however many taps or devices). The card shows it sent once the hub says
  * so; taps while it is on its way do nothing. A draft with a blank to fill in is not sent.
  */
@@ -482,7 +482,7 @@ export function withDays(lines: DisplayLine[], now = Date.now()): DisplayLine[] 
   return out;
 }
 
-/** 今天 · 11月3日 周二, 昨天 · …, or the date. */
+/** "Today · Tue, Nov 3", "Yesterday · …", or the date. */
 export function dayLabel(date: Date, now = new Date()): string {
   const day = formatDate(date, { month: "long", day: "numeric", weekday: "short" });
   const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();

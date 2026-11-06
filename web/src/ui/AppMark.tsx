@@ -1,5 +1,5 @@
-// Persona's mark on the page (the sidebar's header, the sign-in page): the chosen look's (形象, #3200, lib/look-icon.ts).
-// With 团子, the default, it is the iOS app icon itself (apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset
+// Persona's mark on the page (the sidebar's header, the sign-in page): the chosen look's (avatar, #3200, lib/look-icon.ts).
+// With Mochi, the default, it is the iOS app icon itself (apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset
 // icon.png / icon-dark.png, scaled into public/), not a redrawing; another look shows its avatar or face. The page's
 // theme picks the light or the dark picture (it can differ from the system's, so not a <picture>).
 import { BASE } from "../lib/base";

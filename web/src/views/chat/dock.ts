@@ -21,13 +21,13 @@ export const PLAN_MAX = visibleShare(0.4);
 export interface CardFold {
   /** Shown in full: the first `full` cards. */
   full: number;
-  /** The one line in their place, or nothing: 还有 N 件 under the first (`more`), or N 件待处理 for all of them while
+  /** The one line in their place, or nothing: "N more" under the first (`more`), or "N pending" for all of them while
    *  typing (`typing`: tapping it puts the keyboard away) or on a phone on its side (`short`: tapping it opens them). */
   summary: { kind: "more" | "typing" | "short"; count: number } | null;
 }
 
 /**
- * Which of the cards waiting on you show in full. Wide screens: all of them. Narrow ones: the first, and 还有 N 件 for
+ * Which of the cards waiting on you show in full. Wide screens: all of them. Narrow ones: the first, and "N more" for
  * the others until that is tapped (`open`); while the keyboard is up, or on a phone on its side (`short`) until tapped,
  * none: one line in their place.
  */
@@ -52,19 +52,19 @@ export function cardLine(ix: Interaction): string {
 }
 
 export interface NextWaiting {
-  /** The first of them in 总览's 需要你处理 order (the store's). */
+  /** The first of them in "Overview"'s "Needs you" order (the store's). */
   ix: Interaction;
   /** How many cards wait on you outside this chat. */
   count: number;
 }
 
-/** The cards other chats wait on you with (#4091): the same list 总览's 需要你处理 shows, this chat's taken out. */
+/** The cards other chats wait on you with (#4091): the same list "Overview"'s "Needs you" shows, this chat's taken out. */
 export function nextWaiting(all: Interaction[], mid: string, sid: string): NextWaiting | null {
   const others = all.filter((ix) => ix.machine_id !== mid || ix.session_id !== sid);
   return others.length ? { ix: others[0], count: others.length } : null;
 }
 
-/** When the turn going on started: its message, else its first item (SegmentView's 正在工作… counts from the same). */
+/** When the turn going on started: its message, else its first item (SegmentView's "Working…" counts from the same). */
 export function turnStart(seg: Pick<Segment, "user" | "start"> | undefined): string | undefined {
   return seg?.user?.ts ?? seg?.start;
 }

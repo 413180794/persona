@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Todos and the assistant's tasks against the iPhone (#2975): the todos page's loading and empty states, a todo's
-// detail on a narrow screen, the list's time, unlinking an agent; the task board and the plan card's 改一下.
+// detail on a narrow screen, the list's time, unlinking an agent; the task board and the plan card's "Edit".
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getState } from "../lib/store";

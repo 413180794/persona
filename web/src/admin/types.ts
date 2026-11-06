@@ -1,4 +1,4 @@
-// Shapes of the hub's admin API (docs/admin.md「接口」, docs/plan-hub-mesh.md 2.7 for peers).
+// Shapes of the hub's admin API (docs/admin.md "API", docs/plan-hub-mesh.md 2.7 for peers).
 
 export type Access = "loopback" | "lan" | "cidrs" | "any";
 
@@ -74,7 +74,7 @@ export type MachineState = "active" | "pending_add" | "pending_remove";
 // the computer's jarvis-link dials the hub; hub: through a member hub of the group (configured on that member only).
 export type Via = "local" | "service" | "link" | "ssh" | "tailcat" | "hub";
 
-// One way to a computer (plan 5「paths」): which hub it goes through, the hub.json entry there, whether it works now.
+// One way to a computer (plan 5 "paths"): which hub it goes through, the hub.json entry there, whether it works now.
 export interface MachinePath {
   via: Via | string;
   hub_id: string;
@@ -229,7 +229,7 @@ export interface PeerProbe {
   version?: string;
 }
 
-// ── extensions (docs/extensions.md「hub 的接口」, docs/admin.md「扩展」) ──
+// ── extensions (docs/extensions.md "The hub's API", docs/admin.md "Extensions") ──
 
 export interface PermissionLine {
   key: string; // runs_code | network | hub_api | launcher_keys | secrets
@@ -279,11 +279,11 @@ export interface ExtensionPreview {
   from?: string;
   more_permissions?: boolean;
   added_permissions?: PermissionLine[];
-  /** The market it comes from, when previewed from one (docs/extensions.md「扩展市场」). */
+  /** The market it comes from, when previewed from one (docs/extensions.md "Extension markets"). */
   market?: string;
 }
 
-// ── how the extensions run (docs/extensions.md「运行情况」) ──
+// ── how the extensions run (docs/extensions.md "Activity") ──
 
 export type MetricsWindow = "1h" | "24h" | "7d";
 
@@ -354,12 +354,12 @@ export interface LogsPage {
   kept: number;
 }
 
-/** GET/PUT /api/v1/admin/assistant: hub.json's assistant.persona_view (docs/admin.md「助手卡片」). */
+/** GET/PUT /api/v1/admin/assistant: hub.json's assistant.persona_view (docs/admin.md "Assistant cards"). */
 export interface AssistantCards {
   persona_view: boolean;
 }
 
-// ── usage sources (docs/usage-windows.md「账号池网关」, docs/admin.md): account-pool gateways feeding the sidebar's usage bars ──
+// ── usage sources (docs/usage-windows.md "Account-pool gateways", docs/admin.md): account-pool gateways feeding the sidebar's usage bars ──
 
 export type UsageSourceType = "relay" | "generic";
 

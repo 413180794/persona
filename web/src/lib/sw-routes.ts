@@ -1,4 +1,4 @@
-// What the service worker (src/sw.ts, docs/web.md「安装成 App」) does with each request, kept apart so it can be tested.
+// What the service worker (src/sw.ts, docs/web.md "Install as an app") does with each request, kept apart so it can be tested.
 // Only the client's own files: the API, its WebSocket and images (/api/) and the admin page (/admin) always go to the
 // hub untouched, so nothing live is ever served from a cache.
 

@@ -1,4 +1,4 @@
-// 上传体检报告 (docs/health.md「体检报告」): the picked files go to the assistant's machine, into the health space's
+// "Upload a checkup report" (docs/health.md "Checkup reports"): the picked files go to the assistant's machine, into the health space's
 // reports/, and the words that start the conversation name them.
 import { enc } from "../../lib/api";
 import { MAX_FILE, quotePath, sendFile } from "../../lib/attachments";

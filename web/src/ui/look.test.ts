@@ -43,7 +43,7 @@ describe("主题色", () => {
   it("keeps the app's accents as they are where they already meet the floor", () => {
     expect(accentTokens(PRESET_COLORS.lavender.accent).light["--accent"]).toBe("#7a5af8");
     expect(accentTokens(PRESET_COLORS.teal.accent).dark["--accent"]).toBe("#2a9798");
-    // 珊瑚橙 is a hair short of 3:1 on the hover background in light: one step darker
+    // "Coral" is a hair short of 3:1 on the hover background in light: one step darker
     expect(accentTokens(PRESET_COLORS.coral.accent).light["--accent"]).toBe("#d2673e");
   });
 

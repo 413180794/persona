@@ -1,7 +1,7 @@
-// 机器详情 (/machines/<id>, docs/machines.md「App」, iOS MachineDetailView): one page, the most used on top — how the
+// Machine details (/machines/<id>, docs/machines.md "App", iOS MachineDetailView): one page, the most used on top — how the
 // computer is (online, system, which hub when there are several), its agents by herdr space (a row opens the chat),
 // its values now, CPU / memory / network / load over 1, 6 or 24 hours (hover a chart to read a moment, all follow) and
-// each core now (Linux), the system, the launchers. Its engine (which one the agents come from) follows the agents. A Mac the hub's extension cua is on for gets 操控电脑 after that, and 浏览器 (ego lite, its sign-ins once set up) while ego is on. The metrics refresh only while the page is visible.
+// each core now (Linux), the system, the launchers. Its engine (which one the agents come from) follows the agents. A Mac the hub's extension cua is on for gets "Computer control" after that, and "Browser" (ego lite, it
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, isAbort } from "../../lib/api";
 import { ago } from "../../lib/format";
@@ -275,7 +275,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
       {/* which engine the sessions above come from (iOS engineRow) */}
       <EngineSection machine={m} heading={<Heading title={t("machines-machinedetail.engine")} />} />
 
-      {/* what this computer can do for Persona, from the node's self-check (docs/machines.md「自检」) */}
+      {/* what this computer can do for Persona, from the node's self-check (docs/machines.md "Self-check") */}
       <NodeHealth machine={m} heading={<Heading title={t("node-health.title")} />} />
 
       {m.computer && <ComputerSection mid={mid} computer={m.computer} online={online} />}
@@ -370,7 +370,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         </div>
       </section>
 
-      {/* the extensions' sections (docs/extensions.md「UI 插槽」 machine_section), after the machine's own */}
+      {/* the extensions' sections (docs/extensions.md "UI slots" machine_section), after the machine's own */}
       <MachineExtensionSections mid={mid} heading={(title, right) => <Heading title={title} right={right} />} />
     </Page>
   );

@@ -1,5 +1,5 @@
 // The command palette's view of the node the user is on (#2329, lib/palette.ts registerContextCommands): in `>` command
-// mode its menu items are listed as commands, under 「Workspace · <the pane's title>」 and 「Workspace · <its workspace>」
+// mode its menu items are listed as commands, under "Workspace · <the pane's title>" and "Workspace · <its workspace>"
 // like Moshi's. They are the same items the node's context menu has (lib/node-actions.ts): a rename asks for the name in
 // a small dialog, a close asks once more, a failure is a toast. Registered when this module is first imported.
 import { t } from "../i18n";
@@ -17,17 +17,17 @@ import type { MenuItem } from "../ui/menu-model";
 const trees = new Map<string, readonly TermSpace[]>();
 const treeListeners = new Set<() => void>();
 
-/** The 终端 page tells which panes a machine has, so its route can be resolved to a node here. */
+/** The "Terminal" page tells which panes a machine has, so its route can be resolved to a node here. */
 export function setKnownTree(mid: string, spaces: readonly TermSpace[]) {
   trees.set(mid, spaces);
 }
-/** The node's menu changed the tree on a computer: the 终端 page reads it again. */
+/** The node's menu changed the tree on a computer: the "Terminal" page reads it again. */
 export const onNodeChanged = (f: () => void) => {
   treeListeners.add(f);
   return () => void treeListeners.delete(f);
 };
 
-/** The rows of a submenu that is loaded when it opens (the launchers for 在这里运行 Agent…), kept per node so the palette
+/** The rows of a submenu that is loaded when it opens (the launchers for "Run agent here…"), kept per node so the palette
  *  can list them: asked for the first time it starts the load, and the next listing has them. */
 const loadedChildren = new Map<string, MenuItem[] | "loading">();
 function childrenOf(key: string, load: () => Promise<MenuItem[]>): MenuItem[] {
@@ -77,7 +77,7 @@ function findPane(spaces: readonly TermSpace[], id: string) {
   return undefined;
 }
 
-/** Whether the 终端 page's list says this workspace's host can make worktrees (an agent session's workspace has no flag of its own). */
+/** Whether the "Terminal" page's list says this workspace's host can make worktrees (an agent session's workspace has no flag of its own). */
 function canWorktreeIn(mid: string, host: string | undefined, workspace: string | undefined): boolean {
   return (trees.get(mid) ?? []).some((sp) => sp.id === workspace && sp.host === (host || "herdr") && sp.canWorktree === true);
 }

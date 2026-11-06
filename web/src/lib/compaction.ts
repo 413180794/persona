@@ -27,7 +27,7 @@ export function newMainBody(carry: boolean, expect: string): { carry: "summary" 
   return { carry: carry ? "summary" : "none", expect };
 }
 
-/** The title the hub gives the archived main conversation: 旧主对话 · 至 11月4日. */
+/** The title the hub gives the archived main conversation: "old main chat · until Nov 4" (in Chinese). */
 export function archivedMainTitle(now: Date = new Date()): string {
   return t("lib-compaction.archived_title", { date: formatDate(now, { month: "short", day: "numeric" }) });
 }
@@ -154,15 +154,15 @@ export function foldCompactions(items: Item[]): Item[] {
 
 const TRIGGERS: Record<string, string> = { manual: t("lib-compaction.trigger_manual"), auto: t("lib-compaction.trigger_auto"), idle: t("lib-compaction.trigger_idle") };
 
-/** 18.1 万, 8,500 */
+/** 18.1 with the Chinese ten-thousand unit, 8,500 */
 export function formatTokens(n: number): string {
-  // Chinese keeps its 万 with a space (Intl's compact zh output has none); other languages use Intl's compact form
+  // Chinese keeps its ten-thousand unit with a space (Intl's compact zh output has none); other languages use Intl's compact form
   if (currentLanguage() !== "zh-Hans") return formatNumber(n, n >= 10_000 ? { notation: "compact", maximumFractionDigits: 1 } : {});
   if (n >= 10_000) return t("lib-compaction.tokens_wan", { n: (n / 10_000).toFixed(1).replace(/\.0$/, "") });
   return n.toLocaleString("en-US");
 }
 
-/** The divider's words: 以上内容已压缩 · 手动 · 压缩前 18.1 万 token (the parts that are known). */
+/** The divider's words: "the above was compacted · manual · 181K tokens before" (the parts that are known). */
 export function compactionLabel(c: Item["compact"]): string {
   const parts = [t("lib-compaction.compacted_above")];
   const trigger = c?.trigger ? TRIGGERS[c.trigger] : undefined;

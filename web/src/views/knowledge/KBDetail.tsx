@@ -1,6 +1,6 @@
-// One knowledge entry (/kb/<kind>/<id>): its tile, name, badges, one line and tags, 问 Persona; then the places a
-// search found, the Agents on a project, the timeline, the profile, 公司圈, related entries by kind, code directories,
-// a chat's last 7 days and the folder (docs/ios.md 信息架构 知识库). 打标 in the header.
+// One knowledge entry (/kb/<kind>/<id>): its tile, name, badges, one line and tags, "Ask Persona"; then the places a
+// search found, the Agents on a project, the timeline, the profile, Moments, related entries by kind, code directories,
+// a chat's last 7 days and the folder (docs/ios.md "Information architecture", knowledge base). "Tag" in the header.
 import { useEffect, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
 import { ago, sessionPreview, sessionTitle, shortPath, stateOf, tabLabel } from "../../lib/format";
@@ -47,11 +47,11 @@ import { ErrorBox } from "./KBList";
 import { Badges, Card, importanceLabel, KBIcon, Marked, MoreRow, onPlainClick, SectionTitle, Tile, TonePill } from "./KBParts";
 import { t } from "../../i18n";
 
-/** Timeline lines shown before 显示全部. */
+/** Timeline lines shown before "Show all". */
 const LOG_SHOWN = 6;
-/** Related entries of one kind (and 公司圈 posts) shown before 全部. */
+/** Related entries of one kind (and Moments posts) shown before "All". */
 const LINKS_SHOWN = 4;
-/** Search matches shown before 显示全部. */
+/** Search matches shown before "Show all". */
 const MATCHES_SHOWN = 5;
 
 export function EmptyDetail() {

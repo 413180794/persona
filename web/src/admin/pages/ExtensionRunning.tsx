@@ -1,4 +1,4 @@
-// How an extension runs (docs/extensions.md「运行情况」, #1857): the error rate and p95 on its row, and in its details the
+// How an extension runs (docs/extensions.md "Activity", #1857): the error rate and p95 on its row, and in its details the
 // calls and errors, the latency, why it exited, and its log (search, follow it live, copy). A hub from before #1857 has
 // none of it (404): the rows and details show nothing of it then.
 import { formatNumber, t } from "../../i18n";
@@ -43,7 +43,7 @@ function Column({ label, className, children }: { label: string; className?: str
   );
 }
 
-/** 运行情况 and 日志, in an extension's details. */
+/** "Activity" and "Logs", in an extension's details. */
 export function ExtensionRunning({ id }: { id: string }) {
   const [win, setWin] = useState<MetricsWindow>("24h");
   // Each answer is kept with the extension and window it is for, so a switch never shows the last one's figures as this one's.

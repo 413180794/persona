@@ -1,4 +1,4 @@
-// An HTML file previewed in the file viewer (docs/web.md「HTML 预览」, #1413; iOS / Mac: #1297): the page goes into a
+// An HTML file previewed in the file viewer (docs/web.md "HTML preview", #1413; iOS / Mac: #1297): the page goes into a
 // srcdoc frame that never gets allow-same-origin (it cannot reach this page or its token), with scripts and the
 // network off until the user turns them on for this file. Pure; html-preview.test.ts.
 

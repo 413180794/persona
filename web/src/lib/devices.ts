@@ -1,6 +1,6 @@
-// 设置 › 设备's two lists, as on iOS (DeviceCredentials.swift): GET /auth/tokens returns the revoked credentials too,
-// with revoked_at. The ones in use come first (this browser, then by last use); the revoked ones go under 已撤销, the
-// latest first, and are not counted as devices or offered 撤销 again (#1764).
+// Settings › Devices' two lists, as on iOS (DeviceCredentials.swift): GET /auth/tokens returns the revoked credentials too,
+// with revoked_at. The ones in use come first (this browser, then by last use); the revoked ones go under "Revoked", the
+// latest first, and are not counted as devices or offered "Revoke" again (#1764).
 import { byTime } from "./times";
 
 export interface DeviceTimes {

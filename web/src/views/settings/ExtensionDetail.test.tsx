@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// An extension's page in 设置 › 扩展 (Android ExtensionModelParts): 运行隔离 in its three states with the egress counts,
-// and, for an extension that contributes a channel, the link to that channel's page in 设置 › 渠道.
+// An extension's page in Settings › Extensions (Android ExtensionModelParts): "Isolation" in its three states with the egress counts,
+// and, for an extension that contributes a channel, the link to that channel's page in Settings › Channels.
 import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";

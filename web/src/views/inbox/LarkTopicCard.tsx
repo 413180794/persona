@@ -1,8 +1,8 @@
 // A Feishu topic group drawn the way the Lark gateway draws one (#2903, iOS LarkTopicCard.swift): a card per topic with the
-// poster's avatar, name and time on top and the topic under them, folded behind 展开 past 320 px, then its newest
+// poster's avatar, name and time on top and the topic under them, folded behind "Expand" past 320 px, then its newest
 // replies (lib/lark-topic-replies.ts). A tap on the replies opens the topic's thread in a dialog. Topics are never run
 // together like a chat's messages: where a bot posts a topic a minute, each one still has its own card, name and time.
-// Reactions (表情回复) are not drawn (不做第二个飞书).
+// Reactions (emoji replies) are not drawn (not a second Lark).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { clock } from "../../lib/format";
@@ -161,7 +161,7 @@ function HoverButton({ icon, label, title, onClick }: { icon: "quote" | "pin" | 
   );
 }
 
-/** A topic taller than the fold shows its top under a fade with 展开 over it; open, 收起 under it. It is laid out no
+/** A topic taller than the fold shows its top under a fade with "Expand" over it; open, "Show less" under it. It is laid out no
  * taller than the fold from the start, so a long topic never shows whole first and then jumps shut. */
 function Fold({ children }: { children: React.ReactNode }) {
   const inner = useRef<HTMLDivElement>(null);
@@ -202,7 +202,7 @@ function Fold({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The newest two replies, a line each, under 查看更早 N 条回复 when there are more. Until they are read, the lines
+/** The newest two replies, a line each, under "View N earlier replies" when there are more. Until they are read, the lines
  * they will take are there already as placeholders: a card does not grow when its replies come in. */
 function ReplyPreview({ topic, count, replies, open }: { topic: LarkMessage; count: number; replies: LarkTopicReplies; open?: () => void }) {
   const preview = usePreview(replies, topic.id);

@@ -63,7 +63,7 @@ const answer = async (a: Asked | undefined, view: unknown) => {
   await act(async () => a!.answer(view));
   await settle();
 };
-/** The texts of the view on screen ("正文 …"). */
+/** The texts of the view on screen (the body lines). */
 const shown = () => {
   const out: string[] = [];
   const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);

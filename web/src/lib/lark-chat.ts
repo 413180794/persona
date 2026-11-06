@@ -163,7 +163,7 @@ export async function chatMembers(feed: string, query: string, ol: number | unde
   return (r.members ?? []).filter((m) => m.user_id && m.name);
 }
 
-/** 所有人 (`user_id` "all"), offered first in a group when nothing or a part of its name is typed. */
+/** "Everyone" (`user_id` "all"), offered first in a group when nothing or a part of its name is typed. */
 export function withEveryone(people: LarkPerson[], query: string, everyone: string): LarkPerson[] {
   const q = query.trim().toLowerCase();
   if (q && !everyone.toLowerCase().includes(q) && !"all".startsWith(q)) return people;
@@ -178,7 +178,7 @@ export interface ReadState {
   unread_count: number;
 }
 
-/** What sits beside my message: 已读 / 未读 in a one-to-one chat; in a group a ring filling as people read, a tick once
+/** What sits beside my message: "Read" / "Unread" in a one-to-one chat; in a group a ring filling as people read, a tick once
  * all have. Nothing without a receipt or with nobody to read it. */
 export type ReadMark = { kind: "read" } | { kind: "unread" } | { kind: "all" } | { kind: "progress"; read: number; total: number };
 

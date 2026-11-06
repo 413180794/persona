@@ -5,7 +5,7 @@ import { stateOf } from "./format";
 import { buildTodoAgentGroups, interruptedAgent, todoStatus, type SessionLookup, type Todo, type TodoStatus } from "./todos";
 import type { Machine, Session } from "./types";
 
-/** The one-word state every node of the tree shows (#2526): 等你 before 在做 before 做完. */
+/** The one-word state every node of the tree shows (#2526): "Needs you" before "Working" before "Done". */
 export type TreeState = "needs_you" | "working" | "done";
 
 const TREE_RANK: Record<TreeState, number> = { needs_you: 0, working: 1, done: 2 };
@@ -58,8 +58,8 @@ export interface LooseGroup {
 
 export interface TodoTree {
   projects: TreeProject[];
-  /** Agents on no todo, by project (one TreeTodo per project, no todoId): 手动开的 (opened by hand in herdr, #2623,
-   *  open) then 未归属 (last, folded unless one needs you). */
+  /** Agents on no todo, by project (one TreeTodo per project, no todoId): "Opened by hand" (opened by hand in herdr, #2623,
+   *  open) then "Unassigned" (last, folded unless one needs you). */
   loose: LooseGroup[];
 }
 
@@ -91,7 +91,7 @@ function stale(state: TreeState, sessions: Session[], now: number): boolean {
   return state === "done" && now - latest(sessions) > STALE_MS;
 }
 
-/** The project a set of working directories belongs to: the repository most of them sit in (按仓库's rule, merged across computers). */
+/** The project a set of working directories belongs to: the repository most of them sit in ("By repository"'s rule, merged across computers). */
 export function projectOf(cwds: string[]): string {
   const count = new Map<string, number>();
   for (const cwd of cwds) {
@@ -158,8 +158,8 @@ function projectName(name: string) {
 }
 
 /**
- * Agents 「按待办」 as a tree (#2526): 项目 › 待办 › Agent, a spawned agent under the one that spawned it, agents on no
- * todo last under 未归属 (by project). Each node says 等你 / 在做 / 做完 from what is under it; a done or day-quiet
+ * Agents "By to-do" as a tree (#2526): project › to-do › agent, a spawned agent under the one that spawned it, agents on no
+ * todo last under "Unassigned" (by project). Each node says "Needs you" / "Working" / "Done" from what is under it; a done or day-quiet
  * branch starts folded. The todo groups and their order come from buildTodoAgentGroups; projects keep the order of
  * their first todo (the most urgent first), the project without a repository last.
  */
@@ -223,12 +223,12 @@ function looseTree(g: AgentGroup, now: number): LooseGroup {
   });
   projects.sort((a, b) => Number(a.key.endsWith("\u0000")) - Number(b.key.endsWith("\u0000")) || TREE_RANK[a.state] - TREE_RANK[b.state] || a.name.localeCompare(b.name));
   const state = worst(projects.map((p) => p.state));
-  // folded below the todos (buildTodoAgentGroups), unless it says 等你: an interrupted agent counts here too
+  // folded below the todos (buildTodoAgentGroups), unless it says "Needs you": an interrupted agent counts here too
   return { key: g.key, name: g.name, hint: g.hint, state, projects, sessions: g.sessions, folded: Boolean(g.folded) && state !== "needs_you" };
 }
 
 /** The todos page's list by project (#2526): open todos under the project their agents work in, the ones with no agent
- *  in one group last. Each group says 等你 / 在做 / 做完 and starts folded when every todo in it is done-state and quiet
+ *  in one group last. Each group says "Needs you" / "Working" / "Done" and starts folded when every todo in it is done-state and quiet
  *  for a day. Todos keep the order they come in (sortTodos). */
 export interface TodoProjectGroup {
   key: string;

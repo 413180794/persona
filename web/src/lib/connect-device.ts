@@ -1,5 +1,5 @@
-// 设置 › 设备 › 连接新设备 (#2731): a one-time pairing code from the hub (POST /api/v1/auth/pair-codes,
-// docs/protocol.md「临时配对」), the page address its browser sign-in link opens, and the device that used it.
+// Settings › Devices › Connect a new device (#2731): a one-time pairing code from the hub (POST /api/v1/auth/pair-codes,
+// docs/protocol.md "Temporary pairing"), the page address its browser sign-in link opens, and the device that used it.
 
 export interface QRImage {
   size: number;

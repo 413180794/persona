@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The markup editor and the image viewer are modal: the focus moves in when they open, Tab and Shift+Tab stay among
-// their controls, and Esc puts it back on the button that opened them (the composer's, the viewer's 编辑, a thumbnail).
+// their controls, and Esc puts it back on the button that opened them (the composer's, the viewer's "Edit", a thumbnail).
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -130,7 +130,7 @@ describe("the image viewer", () => {
     await flush();
     expect(document.activeElement).toBe(dialog(t("chat-imageeditor.title")));
 
-    // Esc closes only the editor; the viewer stays and its 编辑 button has the focus again
+    // Esc closes only the editor; the viewer stays and its "Edit" button has the focus again
     press("Escape");
     await flush();
     expect(document.querySelector(`[role="dialog"][aria-label^="${t("chat-imageeditor.title")}"]`)).toBeNull();

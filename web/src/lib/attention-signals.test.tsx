@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The system notifications of useAttentionSignals (#2971): 需要你 at once, 做完 after the settle time and only for a
-// long turn (设置 › 通知 只推长任务), and only while the page is not in front.
+// The system notifications of useAttentionSignals (#2971): "Needs you" at once, "Done" after the settle time and only for a
+// long turn (Settings › Notifications "Long tasks only"), and only while the page is not in front.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

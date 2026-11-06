@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /// <reference types="node" />
-// 主题色「跟随形象」(ui/look.ts): the persona store keeps the chosen persona's accent (views/assistant/Persona.tsx setPS),
-// and the picker offers 跟随形象 only while that accent is there or it is already the choice.
+// Theme color "Match avatar" (ui/look.ts): the persona store keeps the chosen persona's accent (views/assistant/Persona.tsx setPS),
+// and the picker offers "Match avatar" only while that accent is there or it is already the choice.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

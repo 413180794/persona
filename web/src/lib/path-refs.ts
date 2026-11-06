@@ -1,11 +1,11 @@
-// Paths a message names (docs/web.md「消息里的文件路径」): what looks like a file on the agent's machine, so the page
+// Paths a message names (docs/web.md "File paths in messages"): what looks like a file on the agent's machine, so the page
 // can ask the machine which are there (lib/path-presence.ts) and link only those. The same rules as iOS's FilePaths,
 // plus a line: path:12, path:12:5, path:12-20, path#L12.
 //
 // - ~/x, /x/y (two parts at least: /tmp alone is a word), or relative with a folder and an extension (src/a.ts; a
 //   letter-led extension, so deepseek/v4.1 is not a file).
-// - Outside backticks a path is ASCII: Chinese text or full-width punctuation right after it ends it (/tmp/a.md里).
-//   A path in backticks is whole, whatever it is written in: `~/报告/第四季度.docx`.
+// - Outside backticks a path is ASCII: Chinese text or full-width punctuation right after it ends it (/tmp/a.md followed by a Chinese character).
+//   A path in backticks is whole, whatever it is written in: a home path whose folder and file names are Chinese.
 // - Not inside a URL or a longer word; a sentence's full stop after it is not part of it.
 
 export type PathRef = {
@@ -31,7 +31,7 @@ const WHOLE = new RegExp(String.raw`^(~?/[^\s\`]+?(?: [^\s\`]+?)*?)${LINE}$`);
 
 /**
  * The paths in plain text, in order, at most `limit`. A code span is a candidate whole and also for the ASCII paths
- * in it (`/a.md 和 /b.md`): `splitAtRefs` takes the first that is there, the longer one at the same place.
+ * in it (`/a.md`, the Chinese word for "and", `/b.md`): `splitAtRefs` takes the first that is there, the longer one at the same place.
  */
 export function findPathRefs(text: string, limit = 40): PathRef[] {
   const out: PathRef[] = [];
@@ -48,7 +48,7 @@ export function findPathRefs(text: string, limit = 40): PathRef[] {
   return out.slice(0, limit);
 }
 
-/** The path a whole code span is (`/tmp/a.md`, `src/a.ts:12`, `~/报告/第四季度.docx`), or undefined. */
+/** The path a whole code span is (`/tmp/a.md`, `src/a.ts:12`, a home path with Chinese folder and file names), or undefined. */
 export function codePathRef(code: string): PathRef | undefined {
   const lead = code.length - code.trimStart().length;
   const t = code.trim();

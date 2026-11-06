@@ -1,6 +1,6 @@
 // The admin sections, in order. A new section (hub updates #284, settings #287) is one more entry here plus its page.
 // advanced: what most people never need (docs/plan-hub-center.md 0: one hub, the node service on every other
-// computer); the navigation shows these under「高级」.
+// computer); the navigation shows these under "Advanced".
 import { t } from "../i18n";
 import type { AdminIconName } from "./icons";
 

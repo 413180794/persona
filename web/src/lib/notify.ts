@@ -1,4 +1,4 @@
-// 设置 › 通知 of this browser (#2971, the app's NotificationSettingsView): what the hub keeps per device (GET / PUT
+// Settings › Notifications of this browser (#2971, the app's NotificationSettingsView): what the hub keeps per device (GET / PUT
 // /devices/{id}/prefs, hub/notify.go NotifyPrefs), and the browser's system notifications that follow it. The hub does
 // not push to a browser: while the page is open it watches its own session list (lib/attention-signals.ts) and posts a
 // notification when it is not in front, as the Mac app does (MacAttention.swift). The prefs also decide the sounds.
@@ -18,7 +18,7 @@ export type DonePref = "off" | "long" | "always";
 export interface NotifyPrefs {
   input: boolean;
   done: DonePref;
-  /** What 长任务 means, from the hub (notify.go longTurn). */
+  /** What a long task means, from the hub (notify.go longTurn). */
   long_turn_seconds?: number;
   /** How long a finished turn waits before the phone's push (notify.go doneDelay). */
   done_delay_seconds?: number;
@@ -31,8 +31,8 @@ export const DEFAULT_LONG_TURN_SECONDS = 60;
 // ── which events speak ───────────────────────────────────
 
 /**
- * Does this browser want a signal (sound, notification) for the event? 需要你: the 需要你处理时 switch. 做完: 不推送 never,
- * 每次都推 always, 只推长任务 for a turn of at least long_turn_seconds (`ranMs`; unknown is not long, as on the Mac).
+ * Does this browser want a signal (sound, notification) for the event? "Needs you": the "When something needs you" switch. "Done": "Don't notify" never,
+ * "Every time" always, "Long tasks only" for a turn of at least long_turn_seconds (`ranMs`; unknown is not long, as on the Mac).
  */
 export function wants(kind: "needs" | "finished", prefs: NotifyPrefs, ranMs?: number): boolean {
   if (kind === "needs") return prefs.input;
@@ -61,7 +61,7 @@ const randomId = () => crypto.randomUUID?.() ?? Math.random().toString(36).slice
 
 /**
  * The id this browser's prefs go by on the hub: made once, kept in this browser (`kept`). The hub ties the row to the
- * device token that wrote it, so revoking this browser in 设置 › 设备 removes it. Without storage the id would be new
+ * device token that wrote it, so revoking this browser in Settings › Devices removes it. Without storage the id would be new
  * on every load: it is this page's own and nothing is sent (`kept: false`), so no browser leaves rows behind or shares
  * one id with another.
  */
@@ -89,7 +89,7 @@ function readCached(): NotifyPrefs {
   }
 }
 
-/** The hub's answer, defaults filled in and an unknown 做完 taken as 只推长任务 (as the hub does). */
+/** The hub's answer, defaults filled in and an unknown "Done" taken as "Long tasks only" (as the hub does). */
 export function normalize(raw: Partial<NotifyPrefs> | null | undefined): NotifyPrefs {
   const done: DonePref = raw?.done === "off" || raw?.done === "always" ? raw.done : "long";
   return {
@@ -313,7 +313,7 @@ export interface NotificationWords {
   asks?: (kind: Interaction["kind"], title: string) => string;
 }
 
-/** What a session waits for you on, for its 需要你 notification: its oldest pending card, else its host's reason. */
+/** What a session waits for you on, for its "Needs you" notification: its oldest pending card, else its host's reason. */
 export interface Waiting {
   ix?: Interaction;
   reason?: string;
@@ -336,7 +336,7 @@ function cardLine(ix: Interaction): string {
 const oneLine = (text: string | undefined) => text?.replace(/\s+/g, " ").trim() ?? "";
 
 /**
- * What a notification says (MacAttention.text): the agent and what happened. A 需要你 one about a card says what kind
+ * What a notification says (MacAttention.text): the agent and what happened. A "Needs you" one about a card says what kind
  * of card it is and what it asks (as the phone's push does), else why the host says it waits; otherwise, and for a
  * finished turn, its last words are the body.
  */
@@ -350,7 +350,7 @@ export function notificationText(s: Pick<Session, "title" | "cwd" | "last_text">
 
 /** The browser draws buttons on a notification (Chrome, Edge, Firefox 152+; not Safari) and a service worker controls
  *  this page to show one with them: only the worker's notifications have buttons. Not on a phone or tablet: its lock
- *  screen runs a button without unlocking, and the apps ask to unlock before 允许 (NotificationActions), a page can't. */
+ *  screen runs a button without unlocking, and the apps ask to unlock before Allow (NotificationActions), a page can't. */
 function buttonsOnNotifications(): boolean {
   if (typeof matchMedia === "undefined" || !matchMedia("(pointer: fine)").matches) return false;
   return ((Notification as { maxActions?: number }).maxActions ?? 0) >= 2 && !!navigator.serviceWorker?.controller;
@@ -360,7 +360,7 @@ function buttonsOnNotifications(): boolean {
  * Posts one notification; a later one for the same agent and kind replaces it (`tag`). Clicking it brings the page
  * forward and runs `open`. Where the page can't make one itself (Chrome on Android wants the service worker's), the
  * service worker shows it and opens `url` when clicked (sw.ts notificationclick). One about a permission card (`ix`)
- * gets 允许 / 拒绝 where the browser can draw them (#4464): the worker shows it and an open page answers a button
+ * gets Allow / Deny where the browser can draw them (#4464): the worker shows it and an open page answers a button
  * (lib/notification-answer.ts); elsewhere it is the plain one.
  */
 export function postNotification(n: { title: string; body: string; tag: string; url: string; icon?: string; ix?: string }, open: () => void): void {

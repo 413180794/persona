@@ -75,7 +75,7 @@ export function TonePill({ tone = "neutral", strong, children, title }: { tone?:
   );
 }
 
-/** P0–P3 with a word saying how important that is; any other level as 「重要级 X」. */
+/** P0–P3 with a word saying how important that is; any other level as "Importance X". */
 export function importanceLabel(level: string): string {
   switch (level) {
     case "P0":
@@ -144,7 +144,7 @@ export function Card({ children, className }: { children: React.ReactNode; class
   return <div className={cx("divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card", className)}>{children}</div>;
 }
 
-/** 显示全部 N 条 / 收起, the last row of a card. */
+/** "Show all N" / "Show less", the last row of a card. */
 export function MoreRow({ open, label, onClick }: { open: boolean; label: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="flex h-9 w-full items-center gap-1.5 whitespace-nowrap px-4 text-left text-[12.5px] font-medium text-accent-ink transition-colors hover:bg-hover">

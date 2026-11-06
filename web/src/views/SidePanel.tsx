@@ -1,4 +1,4 @@
-// The right-hand panel next to the page (docs/web.md「侧边面板」): one at a time, chosen in lib/panel.ts. (A session's
+// The right-hand panel next to the page (docs/web.md "Side panel"): one at a time, chosen in lib/panel.ts. (A session's
 // terminal is not one: it is the agent page's own view, lib/session-view.ts.)
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
@@ -162,7 +162,7 @@ function body(p: Panel) {
     case "task":
       return <TaskPanel key={p.todo} todoId={p.todo} onClose={closePanel} />;
     case "agent":
-      // a subagent's conversation ("<parent>@<agent>", its card's 查看完整过程), read-only
+      // a subagent's conversation ("<parent>@<agent>", its card's "View full run"), read-only
       if (subagentParent(p.sid) !== p.sid) return <SubagentPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
       return <AgentPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
   }

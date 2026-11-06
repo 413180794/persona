@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The main conversation's first screen against the hub's readiness (docs/onboarding.md 4.4): in `setup` a card with the
 // first missing step, the send button saying what to do first and sending nothing (the draft stays), the hub's example
-// questions with the local ones opening help; a refused start becomes a card with the original under 详情; an older
+// questions with the local ones opening help; a refused start becomes a card with the original under "Details"; an older
 // hub (no `assistant_readiness`) keeps the page as it was.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

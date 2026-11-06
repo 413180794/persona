@@ -1,4 +1,4 @@
-// The hub's connectors (docs/connectors.md, docs/protocol.md「连接器 API」): GitHub, Telegram, an extension's, as
+// The hub's connectors (docs/connectors.md, docs/protocol.md "Connector API"): GitHub, Telegram, an extension's, as
 // GET /api/v1/connectors lists them, their sign-in a step at a time, their switches, and the threads their inbox items
 // open as (GET /api/v1/connectors/{id}/thread). Mail and Feishu keep their own pages (settings/Connectors.tsx).
 // iOS: ConnectorsViews.swift, ConnectorSignInViews.swift, GitHubAuthViews.swift, GitHubInboxSettings.swift,
@@ -27,7 +27,7 @@ export interface HubConnector {
   hosts?: string[];
   /** Switched on (absent: a hub from before the switch, always on). */
   enabled?: boolean;
-  /** 进知识库 / 进收件箱: only there when it has an archive, an inbox. */
+  /** "Add to knowledge base" / "Add to Inbox": only there when it has an archive, an inbox. */
   archive?: boolean;
   inbox?: boolean;
   /** Its own settings (GitHub's: GitHubInboxOptions). */
@@ -103,7 +103,7 @@ export interface GitHubInboxOptions {
 
 // ── one connector ────────────────────────────────────────
 
-/** Its state in a word or two. A state this page does not know (a newer hub's) is not 出错了. */
+/** Its state in a word or two. A state this page does not know (a newer hub's) is not "Error". */
 export function connectorState(c: HubConnector): string {
   switch (c.status) {
     case "ok":
@@ -170,7 +170,7 @@ export function storesData(c: HubConnector): boolean {
   return caps.includes("archive") || caps.includes("inbox");
 }
 
-/** The connector's switch: 同步 X for one that brings data in, 启用 X for one that does not. */
+/** The connector's switch: "Sync X" for one that brings data in, "Enable X" for one that does not. */
 export function switchLabel(c: HubConnector): string {
   return storesData(c) ? t("lib-connectors.switch_sync", { name: c.name }) : t("lib-connectors.switch_enable", { name: c.name });
 }
@@ -184,7 +184,7 @@ export function isStarting(c?: HubConnector | null): boolean {
   return !!c && isEnabled(c) && undescribed(c);
 }
 
-/** The connectors that get rows of their own after 邮箱 and 飞书 (those two keep their own groups; 飞书's only shows on a
+/** The connectors that get rows of their own after "Mail" and Lark (those two keep their own groups; Lark's only shows on a
  * hub with feature `lark`, `larkGroup`, so without it a connector named lark is listed like any other). */
 export function otherConnectors(list: HubConnector[], larkGroup = true): HubConnector[] {
   return list.filter((c) => c.id !== "mail" && !(larkGroup && c.id === "lark"));
@@ -200,9 +200,9 @@ export type BrandId = "github" | "telegram" | "lark";
  * wording in its manifest is a protocol question, not settled here. */
 interface ConnectorProfile {
   brand?: BrandId;
-  /** The inbox button for an item answered in the app itself ("在 Telegram 里回复"). */
+  /** The inbox button for an item answered in the app itself ("Reply in Telegram"). */
   openTitle?: string;
-  /** What switching it on brings in, in the switch's footer; the default is 它的内容. */
+  /** What switching it on brings in, in the switch's footer; the default is "its content". */
   reads?: string;
   /** The sign-in step's footer: where the credentials live and what is shown of them. */
   signInFooter?: string;
@@ -282,7 +282,7 @@ export function isDeviceCode(p?: ConnectorPrompt | null): boolean {
 
 /** How the page draws a sign-in step: fields to fill in, a device code, a QR code (or, without its modules, the
  * link it encodes), or a step this page cannot draw (a kind it does not know, a QR code with nothing to show, a form
- * with no fields) — said so, with what to do instead, rather than an empty form whose 下一步 never lights up. */
+ * with no fields) — said so, with what to do instead, rather than an empty form whose "Next" never lights up. */
 export type StepView = "fields" | "device_code" | "qr" | "qr_link" | "unsupported";
 
 export function stepView(p: ConnectorPrompt): StepView {
@@ -401,7 +401,7 @@ export function connectorLogout(id: string): Promise<unknown> {
   return api(`/connectors/${enc(id)}/logout`, { method: "POST" });
 }
 
-/** The switch (`enabled`), 进知识库 (`archive`), 进收件箱 (`inbox`) or its own settings (`options`). */
+/** The switch (`enabled`), "Add to knowledge base" (`archive`), "Add to Inbox" (`inbox`) or its own settings (`options`). */
 export function setConnector(id: string, body: { enabled?: boolean; archive?: boolean; inbox?: boolean; options?: unknown }): Promise<HubConnector> {
   return api<HubConnector>(`/connectors/${enc(id)}/settings`, { method: "PUT", json: body });
 }
@@ -414,9 +414,9 @@ export function deleteConnectorArchive(id: string): Promise<ConnectorDeleted> {
   return api<ConnectorDeleted>(`/connectors/${enc(id)}/archive`, { method: "DELETE" });
 }
 
-// ── 信息 (iMessage): 交给 Persona and deleting what the hub kept (iOS MessagesConnectorView) ──
+// ── Messages (iMessage): "Hand to Persona" and deleting what the hub kept (iOS MessagesConnectorView) ──
 
-/** GET /api/v1/imessage: the Mac's status; `ai` is 交给 Persona (absent from a hub before it). */
+/** GET /api/v1/imessage: the Mac's status; `ai` is "Hand to Persona" (absent from a hub before it). */
 export interface IMessageStatus {
   machine: string;
   status: string;
@@ -430,17 +430,17 @@ export function imessageStatus(): Promise<IMessageStatus> {
   return api<IMessageStatus>("/imessage");
 }
 
-/** 交给 Persona on or off: off stops at once, what the hub kept stays until deleteIMessageData. */
+/** "Hand to Persona" on or off: off stops at once, what the hub kept stays until deleteIMessageData. */
 export function setIMessageAI(on: boolean): Promise<IMessageStatus> {
   return api<IMessageStatus>("/imessage/settings", { method: "PUT", json: { ai: on } });
 }
 
-/** What the hub kept of iMessage (knowledge base chats and people, inbox items); the hub refuses while 交给 Persona is on. */
+/** What the hub kept of iMessage (knowledge base chats and people, inbox items); the hub refuses while "Hand to Persona" is on. */
 export function deleteIMessageData(): Promise<ConnectorDeleted> {
   return api<ConnectorDeleted>("/imessage/data", { method: "DELETE" });
 }
 
-/** The words under the 交给 Persona switch, as iOS says them. */
+/** The words under the "Hand to Persona" switch, as iOS says them. */
 export function imessageAIFooter(on: boolean): string {
   return on ? t("lib-connectors.imessage_ai_on") : t("lib-connectors.imessage_ai_off");
 }
@@ -563,7 +563,7 @@ export function startsGroup(m: ThreadMessage, prev?: ThreadMessage): boolean {
   return Date.parse(m.at) - Date.parse(prev.at) > 5 * 60_000;
 }
 
-/** A file / voice message described: 示例.pdf · 278 KB, 语音 0:12. */
+/** A file / voice message described: example.pdf · 278 KB, voice 0:12. */
 export function mediaLine(m: ThreadMedia): string {
   const dur = m.duration ? `${Math.floor(m.duration / 60)}:${String(m.duration % 60).padStart(2, "0")}` : "";
   if (m.kind === "voice") return [t("lib-connectors.media_voice"), dur].filter(Boolean).join(" ");
@@ -628,7 +628,7 @@ export const QUOTE_JUMP_PAGES = 3;
 
 /**
  * The line over a group's or channel's conversation, as iOS ThreadLayout.subtitle: the kind of chat and, when the hub
- * knows (`chat.members`, first page only), how many are in it — 群聊 · 128 位成员. Nothing for a direct chat.
+ * knows (`chat.members`, first page only), how many are in it — "Group chat · 128 members". Nothing for a direct chat.
  */
 export function chatHeadline(chat?: ThreadChat): string | undefined {
   const n = chat?.members && chat.members > 0 ? chat.members : 0;

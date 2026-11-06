@@ -1,8 +1,8 @@
-// The session header's model name and thin context bar (#2430): `opus 5.5 ▬▬ 61%`, the tooltip 「还剩 61% 上下文」
-// (「已用 39%」 with 设置 › 外观 › 上下文显示为已用). Always shown in a wide header, like Moshi's session header (the user asked to follow
-// Moshi); 「Agent 行显示详情」 only gates the sidebar rows' second line. Where the header is narrower than 800px (a phone, a side panel
+// The session header's model name and thin context bar (#2430): `opus 5.5 ▬▬ 61%`, the tooltip "61% context left"
+// ("39% used" with Settings › Appearance › Show context as used). Always shown in a wide header, like Moshi's session header (the user asked to follow
+// Moshi); "Show details in Agent rows" only gates the sidebar rows' second line. Where the header is narrower than 800px (a phone, a side panel
 // open beside the chat) the header hides it so the title fits (#3532, #3670). Where the header is 1000px or wider the number
-// says what it is (「上下文剩 61%」, #3668); between 800 and 1000px it stays the bare share so the title keeps its room. The tooltip
+// says what it is ("Context 61% left", #3668); between 800 and 1000px it stays the bare share so the title keeps its room. The tooltip
 // adds what happens when the window fills and, once close, what to do about it. A tablet has no hover, so a click (a tap)
 // opens the same words as a popover, with the token count (#4054). Where the header is 680–800px wide (an iPad in landscape
 // with the sidebar open, #4443) it is `compact`: the bare share alone, coloured as it fills, opening the same popover.
@@ -45,8 +45,8 @@ export function ContextMeter({ session, compact = false }: { session: Session; c
         onClick={info.open}
         aria-haspopup="dialog"
         aria-expanded={Boolean(info.anchor)}
-        // the visible words are in the name (「上下文剩 61%」, or the bare 「61%」 in a narrower header; the compact one says
-        // 「上下文剩 61%」 around its bare share) and the explanation
+        // the visible words are in the name ("Context 61% left", or the bare "61%" in a narrower header; the compact one says
+        // "Context 61% left" around its bare share) and the explanation
         // is the description, open or not; the tooltip goes while the popover shows the same words
         aria-label={[compact ? "" : model, contextHeaderLabel(usage, asUsed)].filter(Boolean).join(" · ")}
         aria-description={contextHint(usage)}

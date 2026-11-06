@@ -1,5 +1,5 @@
-// 设置 › 终端界面 (docs/terminal.md「完整 herdr 界面」): which surface a terminal opens in. Shown only where the hub can run
-// herdr's own client; 完整界面 is the default, and nothing is written until another is chosen.
+// Settings › Terminal view (docs/terminal.md "The full herdr UI"): which surface a terminal opens in. Shown only where the hub can run
+// herdr's own client; "Full view" is the default, and nothing is written until another is chosen.
 import { useState } from "react";
 import { t } from "../../i18n";
 import { useStore } from "../../lib/store";
@@ -23,7 +23,7 @@ export function TerminalModeRow() {
       if (next === "full") localStorage.removeItem(PREFERENCE_KEY);
       else localStorage.setItem(PREFERENCE_KEY, next);
     } catch {
-      // not kept: the next page starts with 单窗格
+      // not kept: the next page starts with "Single pane"
     }
   };
   return (

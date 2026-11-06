@@ -65,7 +65,7 @@ export function MermaidBlock({ code }: { code: string }) {
         </pre>
       ) : (
         <div
-          // on a touch screen (no hover to find 放大 by) a tap on the diagram opens it big
+          // on a touch screen (no hover to find "Enlarge" by) a tap on the diagram opens it big
           onClick={() => isNoHover() && setBig(true)}
           data-mermaid-diagram=""
           className="overflow-x-auto rounded-[10px] border border-line bg-surface p-3 [@media(hover:none)]:cursor-zoom-in [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-h-[460px] [&_svg]:max-w-full"
@@ -100,7 +100,7 @@ export function MermaidBlock({ code }: { code: string }) {
 }
 
 /** The diagram over the whole page at its own size (scroll for a big one); click outside it or Esc closes. A modal:
- *  the focus moves in, Tab stays in, and closing gives it back to 放大. */
+ *  the focus moves in, Tab stays in, and closing gives it back to "Enlarge". */
 function Zoomed({ svg, onClose }: { svg: string; onClose: () => void }) {
   const dialog = useRef<HTMLDivElement>(null);
   useModalFocus(dialog);

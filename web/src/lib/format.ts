@@ -43,7 +43,7 @@ export function sessionMenuActions(s: Session): string[] {
   ];
 }
 
-// 删除对话 only takes a conversation out of the list (the hub notes it; the transcript stays): offline ones, not the
+// "Delete chat" only takes a conversation out of the list (the hub notes it; the transcript stays): offline ones, not the
 // assistant's (they archive) and not one still starting (issue #801).
 export function sessionDeletable(s: Session): boolean {
   return !s.assistant && s.status === "offline" && !s.starting;
@@ -122,7 +122,7 @@ export function failureReason(s: Session | undefined): string | undefined {
   return failureText(s.failure_reason) || undefined;
 }
 
-/** 在飞书打开: the session's place outside Persona, a web (https) link only (iOS externalLink). */
+/** "Open in Lark": the session's place outside Persona, a web (https) link only (iOS externalLink). */
 export function externalLink(s?: Pick<Session, "external_url">): string | undefined {
   const raw = s?.external_url?.trim();
   if (!raw) return undefined;
@@ -159,7 +159,7 @@ export function ago(iso?: string, now = Date.now()): string {
   const ts = Date.parse(iso);
   if (!Number.isFinite(ts) || ts < 86400_000) return "";
   const s = Math.round((now - ts) / 1000);
-  // 「刚刚」 rather than Intl's 「现在」 for under a minute
+  // "Just now" rather than Intl's "now" for under a minute
   if (s < 45) return t("lib-format.just_now");
   if (s < 3600) return formatRelative(-Math.round(s / 60), "minute");
   if (s < 86400) return formatRelative(-Math.round(s / 3600), "hour");

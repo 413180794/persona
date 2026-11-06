@@ -1,5 +1,5 @@
 // Older pages of a Feishu chat, loaded as the list nears its top (iOS LarkHistoryPaging, #1033), and where the list
-// stands against its newest end for 回到最新 (iOS LarkFollow / LarkPager.latest, #1034). Pure logic; LarkThread wires it.
+// stands against its newest end for "Back to latest" (iOS LarkFollow / LarkPager.latest, #1034). Pure logic; LarkThread wires it.
 import type { LarkMessage, LarkPage } from "./inbox";
 
 /** Why older paging stopped: it waits for a click on the header line. */
@@ -76,12 +76,12 @@ export function screensFromEnd(el: { scrollTop: number; clientHeight: number; sc
   return Math.max(0, el.scrollHeight - el.clientHeight - el.scrollTop) / el.clientHeight;
 }
 
-/** 回到最新 shows when the window is not at the newest messages, or the list is more than a screen up from them. */
+/** "Back to latest" shows when the window is not at the newest messages, or the list is more than a screen up from them. */
 export function showsJumpToLatest(hasNewer: boolean | undefined, el: { scrollTop: number; clientHeight: number; scrollHeight: number }): boolean {
   return Boolean(hasNewer) || screensFromEnd(el) > 1;
 }
 
-/** How many of the newest messages are kept for an instant 回到最新 (iOS keeps 80). */
+/** How many of the newest messages are kept for an instant "Back to latest" (iOS keeps 80). */
 export const LATEST_KEPT = 80;
 
 /** The newest messages of a window that reaches the newest end, kept to go back to without waiting. */

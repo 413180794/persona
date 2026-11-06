@@ -69,7 +69,7 @@ describe("待办状态计算 (todoStatus)", () => {
     };
     expect(todoStatus(todoNoAgents)).toBe("not_started");
 
-    // 只有已 released 的 Agent 也算未开始
+    // an agent that is only released also counts as not started
     const todoReleased: Todo = {
       ...todoNoAgents,
       agents: [{ machine_id: "mac-1", session_id: "s1", linked_at: "2026-11-02T09:00:00Z", released_at: "2026-11-02T09:30:00Z" }],
@@ -127,7 +127,7 @@ describe("待办状态计算 (todoStatus)", () => {
     };
     expect(todoStatus(todo, lookup)).toBe("working");
 
-    // starting 会话也算工作/启动中
+    // a starting session also counts as working / starting
     const sStarting = mockSession("mac-1", "s3", "idle", { starting: true });
     const lookupStarting = makeSessionLookup([sStarting]);
     const todoStarting: Todo = {
@@ -264,7 +264,7 @@ describe("待办列表排序 (sortTodos)", () => {
   });
 
   it("同一秒内、小数位数不同的两个时间按真实时间戳解析正确排序 (R5)", () => {
-    // 500ms (1位小数) 晚于 450ms (3位小数)，同为未开始状态
+    // 500ms (1 decimal) is later than 450ms (3 decimals), both not started
     const tOlder: Todo = { id: "older-subsecond", title: "较早", created_at: "2026-11-02T10:00:00.450Z", updated_at: "", agents: [] };
     const tNewer: Todo = { id: "newer-subsecond", title: "较晚", created_at: "2026-11-02T10:00:00.5Z", updated_at: "", agents: [] };
 
@@ -304,7 +304,7 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     const sWeatherTests = mockSession("mac-1", "weather-tests", "needs_you", { todo: { id: "todo-weather", title: "天气 App" } });
     const sWeatherWidget = mockSession("mac-1", "weather-widget", "working", { todo: { id: "todo-weather", title: "天气 App" } });
     const sBlog = mockSession("mac-1", "blog-migrate", "unread", { todo: { id: "todo-blog", title: "博客迁移" } });
-    const sSolo = mockSession("server-1", "solo-task", "idle"); // 未关联待办
+    const sSolo = mockSession("server-1", "solo-task", "idle"); // not linked to a todo
 
     const all = [sWeatherTests, sWeatherWidget, sBlog, sSolo];
 
@@ -358,7 +358,7 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     expect(groups[1].sessions.map((s) => s.session_id)).toEqual(["manual-herdr"]);
     expect(groups[2].sessions.map((s) => s.session_id).sort()).toEqual(["botmux-chat", "persona-herdr"]);
 
-    // no todo above: 手动开的 alone does not fold 未归属
+    // no todo above: "Opened by hand" alone does not fold "Unassigned"
     const noTodo = buildTodoAgentGroups([sManual, sBotmux], machines, [], mutes);
     expect(noTodo.map((g) => g.key)).toEqual(["todo:manual", "todo:none"]);
     expect(noTodo[1].folded).toBe(false);
@@ -414,7 +414,7 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     ];
 
     const groups = buildTodoAgentGroups([sDoneTask], machines, todos, mutes);
-    // 因为 todo-done 已完成，不作为未完成待办生成段，该 session 归入「未归属」
+    // todo-done is done, so it makes no segment as an unfinished todo; that session goes under "Unassigned"
     expect(groups.map((g) => g.name)).toEqual(["没挂待办的"]);
     // nothing above it: the whole list, open
     expect(groups[0].folded).toBe(false);
@@ -754,7 +754,7 @@ describe("模型服务出错中断的任务 (#1516)", () => {
     expect(todoStatus(todo, makeSessionLookup([s]))).toBe("interrupted");
     expect(TODO_STATUS_INFO.interrupted).toEqual({ label: "中断了", tone: "red" });
     expect(isRemovable("interrupted")).toBe(true);
-    // 用户看过了也还是中断（没做完）
+    // still interrupted (not finished) after the user has seen it
     expect(todoStatus(todo, makeSessionLookup([mockSession("mac-1", "s1", "idle", { turn_error: cut })]))).toBe("interrupted");
   });
 

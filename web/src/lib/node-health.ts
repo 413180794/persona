@@ -1,4 +1,4 @@
-// 这台电脑能做什么 (docs/machines.md「自检」, Moshi's Doctor tab): what `personad node doctor` finds on a computer,
+// "What this computer can do" (docs/machines.md "Self-check", Moshi's Doctor tab): what `personad node doctor` finds on a computer,
 // read as features. The node reports individual checks (server/internal/node/doctor.go, DoctorReport as it is); a person
 // wants to know whether phone approvals work, so each feature below is a set of those checks and takes the worst
 // state among them. The raw list stays one click away. Also what the machine card says about a connection that failed.
@@ -45,9 +45,9 @@ interface FeatureSpec {
   detail: string;
   /** The checks it stands on (DoctorCheck.name). */
   checks: string[];
-  /** Something a computer may well not use (an engine other than herdr, no runtimes): a warning alone means 未启用. */
+  /** Something a computer may well not use (an engine other than herdr, no runtimes): a warning alone means "Off". */
   optional?: boolean;
-  /** For an optional one: whether this computer needs it, which turns the warning into 有问题. */
+  /** For an optional one: whether this computer needs it, which turns the warning into "Problem". */
   needed?: (ctx: HealthContext) => boolean;
 }
 
@@ -100,7 +100,7 @@ function worst(checks: DoctorCheck[]): DoctorCheck | undefined {
   return w;
 }
 
-/** What to tell about a check that is not fine. A stale or missing generated file has a fix here (修复), so the node's
+/** What to tell about a check that is not fine. A stale or missing generated file has a fix here ("Fix"), so the node's
  * hint, which names the command line, is not repeated. */
 function noteOf(c: DoctorCheck | undefined): string {
   if (!c) return "";
@@ -110,7 +110,7 @@ function noteOf(c: DoctorCheck | undefined): string {
 }
 
 /** The report as features, in a fixed order. A feature none of whose checks the report has (an older node reports
- * fewer) is left out; a check no feature covers and that is not fine makes 其他检查 so nothing hides. */
+ * fewer) is left out; a check no feature covers and that is not fine makes "Other checks" so nothing hides. */
 export function deriveFeatures(report: DoctorReport, ctx: HealthContext = {}): FeatureView[] {
   const byName = new Map(report.checks.map((c) => [c.name, c]));
   const out: FeatureView[] = [];
@@ -134,7 +134,7 @@ export interface HealthSummary {
   /** Features that are broken or partial. */
   attention: number;
   title: string;
-  /** 没有设置：… ("" when every feature is in use). */
+  /** "Not set up: …" ("" when every feature is in use). */
   off: string;
 }
 
@@ -149,7 +149,7 @@ export function summarize(features: FeatureView[]): HealthSummary {
   };
 }
 
-/** The checks 修复 would put right: Persona's own generated files that are stale or missing. */
+/** The checks "Fix" would put right: Persona's own generated files that are stale or missing. */
 export function fixableChecks(report: DoctorReport): DoctorCheck[] {
   return report.checks.filter((c) => c.state === "stale" || c.state === "missing");
 }
@@ -159,7 +159,7 @@ export function infoChecks(report: DoctorReport): DoctorCheck[] {
   return report.checks.filter((c) => INFO_CHECKS.includes(c.name) && c.status !== "ok");
 }
 
-/** What the toast says after 修复: the node re-checks after writing, so the report is already the new one. */
+/** What the toast says after "Fix": the node re-checks after writing, so the report is already the new one. */
 export function fixResult(report: DoctorReport): { text: string; tone: "ok" | "error" } {
   const failed = report.checks.find((c) => c.name === "fix" && c.status === "fail");
   if (failed) return { text: failed.detail, tone: "error" };

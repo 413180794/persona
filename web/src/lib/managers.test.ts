@@ -1,4 +1,4 @@
-// 设置 › 管理者' words (docs/managers.md): where one runs, its status line, why 删除 is off, and the hub's refusals.
+// Settings › Managers' words (docs/managers.md): where one runs, its status line, why Delete is off, and the hub's refusals.
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./api";
 import { deleteBlocked, deployText, managerError, minutesLeft, statusLine, unsupported, validName, whereText, type Manager } from "./managers";

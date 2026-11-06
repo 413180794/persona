@@ -1,4 +1,4 @@
-// 设置 › 模型供应商 › 新增供应商 (docs/onboarding.md 4.3 / 5.4, docs/extensions.md「模型供应商」, iOS LauncherPresetModel):
+// Settings › Model providers › Add provider (docs/onboarding.md 4.3 / 5.4, docs/extensions.md "Model providers", iOS LauncherPresetModel):
 // the providers the hub offers (GET /api/v1/launchers/presets): its built-in ones (plugin "builtin", in the request
 // language's order) and the extensions'. A launcher added from one sends only the key, the preset and maybe a name or
 // another of its models; the hub fills in the name, the address, the kind and the rest.
@@ -27,7 +27,7 @@ export interface LauncherPreset {
   auth?: "api_key" | "bearer";
   /** Where to open an account or get a key (built-in presets). */
   signup_url?: string;
-  /** The name in the request's language (「智谱 GLM」); `name` stays the plain one. */
+  /** The name in the request's language ("Zhipu GLM"); `name` stays the plain one. */
   display_name?: string;
 }
 
@@ -37,7 +37,7 @@ export const BUILTIN_PLUGIN = "builtin";
 /** What a preset is called in the list. */
 export const presetTitle = (p: LauncherPreset) => p.display_name?.trim() || p.name;
 
-/** 「Key 从哪拿」's link: the preset's signup page when it is a web address, else "". */
+/** "Where do I get a key?"'s link: the preset's signup page when it is a web address, else "". */
 export function signupHref(p: LauncherPreset): string {
   const raw = p.signup_url?.trim();
   if (!raw) return "";
@@ -80,7 +80,7 @@ export function presetHost(p: LauncherPreset): string {
   }
 }
 
-/** "直接 API · api.example.com", "Claude Code 启动器 · gateway.example.com". */
+/** "Direct API · api.example.com", "Claude Code launcher · gateway.example.com" (in Chinese). */
 export function presetSubtitle(p: LauncherPreset): string {
   const kind = p.kind === "api" ? t("lib-launcher-presets.kind_api") : t("lib-launcher-presets.kind_launcher");
   try {

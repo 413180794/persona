@@ -1,4 +1,4 @@
-// 「助手 | Agents」 in the middle of a phone's top bar (#1996), like the iOS app's new shell (docs/ios.md「新外壳」): the
+// "Assistant | Agents" in the middle of a phone's top bar (#1996), like the iOS app's new shell (docs/ios.md "New shell"): the
 // main conversation and the Agents page, side by side. Agents carries how many agents are waiting for you (quiet ones
 // are told about in the main conversation, not counted here). Narrow screens only; wide ones have the sidebar.
 import { href, onLinkClick, type Route } from "../lib/router";
@@ -18,7 +18,7 @@ export function ShellSwitch({ page }: { page: ShellPage }) {
   return <ShellSwitchView page={page} waiting={useCounts().badge} />;
 }
 
-/** A phone's top bar around the switch, in ChatView's header slots (chat/header.ts): 侧边栏 on the left, `end` on the
+/** A phone's top bar around the switch, in ChatView's header slots (chat/header.ts): sidebar on the left, `end` on the
  *  right, so both pages have their buttons in the same places. Narrow only, unless `endWide` keeps `end` on a wide screen. */
 export function ShellHeaderSlots({ page, onToggleSidebar, end, endWide }: { page: ShellPage; onToggleSidebar: () => void; end: React.ReactNode; endWide?: boolean }) {
   return (

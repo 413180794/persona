@@ -1,5 +1,5 @@
-// Cookies the user picked in a file, for importing into ego lite on a Mac (#1304, docs/plan-ego-browser.md「导入
-// cookies」): parsed here in the page, grouped by site for the user to tick, and sent straight to the hub, which passes
+// Cookies the user picked in a file, for importing into ego lite on a Mac (#1304, docs/plan-ego-browser.md "Importing
+// cookies"): parsed here in the page, grouped by site for the user to tick, and sent straight to the hub, which passes
 // them to the Mac and keeps nothing. Nothing here stores, logs or shows a value. Pure; tested in cookies.test.ts.
 import { t } from "../i18n";
 

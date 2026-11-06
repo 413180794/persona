@@ -1,6 +1,6 @@
-// 编辑历史 of a Feishu message (iOS LarkEditHistoryView, docs/lark-migration.md「风灵月影消息显示」): the earlier
+// "Edit history" of a Feishu message (iOS LarkEditHistoryView, docs/lark-migration.md "Message display"): the earlier
 // versions the Lark gateway kept, oldest first, each with when it was replaced. An encrypted version shows the public face
-// the hub sent (never the version's text); with 编辑历史 turned off meanwhile the list says it is hidden.
+// the hub sent (never the version's text); with "Edit history" turned off meanwhile the list says it is hidden.
 import type { ReactNode } from "react";
 import { shortTime, type LarkMessage, type LarkPart } from "../../lib/inbox";
 import { shownParts, showsHistory, versionParts, type LarkMessageDisplay } from "../../lib/lark-display";

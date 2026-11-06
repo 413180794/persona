@@ -151,7 +151,7 @@ describe("市场的接口", () => {
   });
 });
 
-// #5017: the official market reads 官方扩展 whatever its index calls itself; the others keep their own names.
+// #5017: the official market reads Official extensions whatever its index calls itself; the others keep their own names.
 describe("官方市场的名字", () => {
   const official = { id: "o1", spec: "github:example/official", name: "Example 扩展", has_token: false, extensions: 1, warnings: [], official: true } as Market;
   const own = { ...official, id: "m2", spec: "https://extensions.example.com", name: "团队扩展", official: undefined } as Market;

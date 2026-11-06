@@ -1,6 +1,6 @@
-// 设置 › 通知 (#2971, the app's NotificationSettingsView): this browser's system notifications, and what it is told
-// about: 需要你处理时 and Agent 做完时 (不推送 / 只推长任务 / 每次都推). The two choices are kept by the hub per device
-// (GET / PUT /devices/{id}/prefs, lib/notify.ts), as the phone's are. The 提示音 switch sits here too, under the system
+// Settings › Notifications (#2971, the app's NotificationSettingsView): this browser's system notifications, and what it is told
+// about: "When something needs you" and "When an agent finishes" ("Don't notify" / "Long tasks only" / "Every time"). The two choices are kept by the hub per device
+// (GET / PUT /devices/{id}/prefs, lib/notify.ts), as the phone's are. The "Alert sound" switch sits here too, under the system
 // one (#4057): it is this browser's alone (lib/attention.ts), so it shows while the hub's prefs load, and it follows them.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";

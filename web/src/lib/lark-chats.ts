@@ -1,15 +1,15 @@
-// 消息 (docs/lark-migration.md「入口」, the narrow exception of #392): every Feishu private and group chat in one
-// list, shown only when this browser turned on 设置 › 连接器 › 飞书 › 首页显示消息 (off by default, kept per browser like
+// "Messages" (docs/lark-migration.md "Entry point", the narrow exception of #392): every Feishu private and group chat in one
+// list, shown only when this browser turned on Settings › Connectors › Lark › "Show messages on home" (off by default, kept per browser like
 // the app keeps it per device). The list reads the hub's account-bound snapshots (`account_bound=1`): conversations a
 // page at a time and the pinned conversations on top. A chat opens in the inbox's Feishu chat view (LarkThread).
-// Each Feishu account has its own list (docs/feishu.md「多账号」, lark-accounts.ts); rows carry the account they are in.
+// Each Feishu account has its own list (docs/feishu.md "Multiple accounts", lark-accounts.ts); rows carry the account they are in.
 // Nothing is written to disk: the last list lives in memory for this tab only.
 import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { api, ApiError, enc, errorText } from "./api";
 import { larkPath } from "./lark-accounts";
 
-// ── 首页显示消息 ─────────────────────────────────────────
+// ── Show messages on home ──────────────────────────────────────
 
 const HOME_KEY = "lark.homeMessages";
 const homeListeners = new Set<() => void>();
@@ -41,7 +41,7 @@ const subscribeHome = (l: () => void) => {
   };
 };
 
-/** Whether this browser shows the 消息 page (off unless turned on). */
+/** Whether this browser shows the "Messages" page (off unless turned on). */
 export function useLarkHome(): boolean {
   return useSyncExternalStore(subscribeHome, getLarkHome, () => false);
 }
@@ -99,7 +99,7 @@ export function filterConversations(list: readonly LarkConversation[], query: st
   return list.filter((c) => [c.name, c.preview, c.preview_sender].some((s) => s?.toLowerCase().includes(q)));
 }
 
-/** The second line of a row: who wrote the last message in a group, or 我 for mine. */
+/** The second line of a row: who wrote the last message in a group, or "Me" for mine. */
 export function conversationPreview(c: Pick<LarkConversation, "preview" | "preview_sender" | "is_mine" | "is_group">): string {
   const text = c.preview?.trim() ?? "";
   if (!text) return "";
@@ -108,7 +108,7 @@ export function conversationPreview(c: Pick<LarkConversation, "preview" | "previ
   return text;
 }
 
-/** The badge of a row: unread count, or a dot for 标为未读 without a count. */
+/** The badge of a row: unread count, or a dot for "Mark as unread" without a count. */
 export function unreadBadge(c: Pick<LarkConversation, "unread" | "marked_unread" | "muted">): { count?: number; dot?: boolean; muted: boolean } {
   if (c.unread > 0) return { count: c.unread, muted: c.muted };
   if (c.marked_unread) return { dot: true, muted: c.muted };
@@ -285,7 +285,7 @@ export class LarkChatsStore {
   }
 }
 
-/** The tab's list of the hub's own account: opening 消息 again shows the last copy at once, then reads it again. */
+/** The tab's list of the hub's own account: opening "Messages" again shows the last copy at once, then reads it again. */
 export const larkChats = new LarkChatsStore();
 const otherAccounts = new Map<number, LarkChatsStore>();
 

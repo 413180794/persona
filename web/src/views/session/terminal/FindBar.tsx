@@ -1,5 +1,5 @@
-// The terminal's find bar (docs/terminal.md「搜索」): a small bar over the top of the panel with the field, how many
-// matches there are, previous / next, 区分大小写 and close. Enter steps to the next match, Shift+Enter to the previous,
+// The terminal's find bar (docs/terminal.md "Search"): a small bar over the top of the panel with the field, how many
+// matches there are, previous / next, "Match case" and close. Enter steps to the next match, Shift+Enter to the previous,
 // Esc closes. The state is lib/terminal-search.ts's reducer; what is searched is the feed's.
 import { useEffect, useRef } from "react";
 import { findLabel, type FindState } from "../../../lib/terminal-search";

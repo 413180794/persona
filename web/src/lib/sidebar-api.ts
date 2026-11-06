@@ -1,4 +1,4 @@
-// What the sidebar offers the keyboard shortcuts (docs/web.md「快捷键」): fold or open every group, switch how Agents are
+// What the sidebar offers the keyboard shortcuts (docs/web.md "Keyboard shortcuts"): fold or open every group, switch how Agents are
 // grouped, walk the rows. Sidebar.tsx subscribes (`onFoldAll`, `onGrouping`) and marks its list `data-sidebar-rows`; the
 // shortcuts call the rest. Kept out of Sidebar.tsx so that file only gains the few lines that listen.
 import { AGENT_GROUPINGS, agentGrouping, type AgentGrouping } from "./agent-groups";
@@ -23,7 +23,7 @@ export function setAllFolded(folded: boolean, scope?: string) {
   foldListeners.forEach((s, f) => (scope === undefined || s === scope) && f(folded));
 }
 
-/** The Agents list menu's 全部折叠 / 全部展开 (#3027, the app's foldAll): every group of the Agents block. Opening also
+/** The Agents list menu's "Collapse all" / "Expand all" (#3027, the app's foldAll): every group of the Agents block. Opening also
  *  opens the spaces and tab groups folded by hand that are not drawn now (another grouping, inside a folded group), so
  *  switching to them later finds them open too (Android #2792). */
 export function setAgentsFolded(folded: boolean, store: Pick<Storage, "length" | "key" | "getItem" | "setItem"> = localStorage) {
@@ -47,7 +47,7 @@ export function onGrouping(listener: (g: AgentGrouping) => void): () => void {
   return () => void groupingListeners.delete(listener);
 }
 
-/** The grouping after `current`, among those offered (a hub without todos has no 按待办). */
+/** The grouping after `current`, among those offered (a hub without todos has no "By to-do"). */
 export function nextGrouping(current: AgentGrouping, offered: readonly AgentGrouping[] = AGENT_GROUPINGS.map((g) => g.key)): AgentGrouping {
   // a choice the hub cannot offer is shown as the first one (the sidebar does the same)
   const i = Math.max(0, offered.indexOf(current));

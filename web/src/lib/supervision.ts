@@ -1,7 +1,7 @@
 import { t } from "../i18n";
 import type { Todo } from "./todos";
 
-// A task the main conversation supervises (#3124, docs/unified-entry.md「督办」): what done means, where its review
+// A task the main conversation supervises (#3124, docs/unified-entry.md "Supervision"): what done means, where its review
 // stands, and the reviews so far. Only such tasks carry `supervision`; an older hub sends none.
 
 export type ReviewState = "" | "pending_review" | "rework" | "needs_user" | "accepted" | "cancelled";

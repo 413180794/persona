@@ -265,7 +265,7 @@ export function Collapse({ open, children, className = "", lazy = false }: { ope
 
 export type { MenuItem };
 
-/** How long a row's 「确认关闭」 waits for the second choice before it asks no more. */
+/** How long a row's "Close" confirmation waits for the second choice before it asks no more. */
 const CONFIRM_MS = 4000;
 
 const errMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -869,7 +869,7 @@ export function Dialog({
 
 // ── toasts ──────────────────────────────────────────────
 
-/** A button on a toast (撤销): it runs, and the toast goes. */
+/** A button on a toast ("Undo"): it runs, and the toast goes. */
 export type ToastAction = { label: string; run: () => void };
 /** `leaving`: timed out or closed, playing its exit before it is gone (the stack removes it when that ends). */
 type Toast = { id: number; text: string; tone: "info" | "error" | "ok"; action?: ToastAction; leaving?: boolean };

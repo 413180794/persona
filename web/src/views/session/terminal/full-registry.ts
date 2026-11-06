@@ -1,5 +1,5 @@
-// One full herdr feed per machine (docs/terminal.md「焦点联动」). herdr's focus is a single state shared by all its clients,
-// so one client per machine can show any pane of it: going from one session (or the 终端 page) of a machine to another
+// One full herdr feed per machine (docs/terminal.md "Focus sync"). herdr's focus is a single state shared by all its clients,
+// so one client per machine can show any pane of it: going from one session (or the "Terminal" page) of a machine to another
 // moves herdr's focus instead of closing a client and opening the next. The surfaces that come and go with the pages
 // (FullTerminal, one per session page or kept terminal) take the machine's feed in turn: the one in front claims it
 // (xterm moves into its box), the others only hold a place. A feed with no surface left lingers for a moment before it is

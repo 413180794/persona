@@ -1,5 +1,5 @@
-// 终端: every computer's terminal panes — agents and plain shells — as machine → workspace → tab → pane, and any of them
-// opened as a terminal (docs/terminal.md「独立终端」, docs/web.md). The list is on the left (a page of its own on a
+// "Terminal": every computer's terminal panes — agents and plain shells — as machine → workspace → tab → pane, and any of them
+// opened as a terminal (docs/terminal.md "Standalone terminal", docs/web.md). The list is on the left (a page of its own on a
 // phone), the terminal on the right: the session terminal's own panel, kept for the last two panes of each machine so
 // going back is instant, and let go when the page goes to the background or is left.
 import { useEffect, useMemo, useRef, useState } from "react";

@@ -1,4 +1,4 @@
-// The popover of the composer's 思考 chip on a Claude Code session (issue #2434, after Moshi's model pill): effort tabs on
+// The popover of the composer's "Thinking" chip on a Claude Code session (issue #2434, after Moshi's model pill): effort tabs on
 // top, the agent's model list below. ↑↓ choose a model, ←→ an effort, Enter applies, Esc cancels, a click outside
 // closes. The models are what the launcher's agent lists in its own /model menu (lib/launcher-models.ts); applying
 // goes through the chip's `apply` (the model first, then the effort), each its own POST …/modes.
@@ -110,7 +110,7 @@ export function ModelEffortPopover({
     };
     const key = (e: KeyboardEvent) => {
       const l = live.current;
-      // Enter on the footer's own buttons is theirs (取消 must cancel)
+      // Enter on the footer's own buttons is theirs ("Cancel" must cancel)
       if ((e.key === "Enter" || e.key === " ") && (e.target as Element | null)?.closest?.("[data-popover-footer]")) return;
       const r = pickerKey({ model: l.pick, effort: l.tabs.indexOf(l.effort) }, { models: l.models.length, efforts: l.tabs.length }, e);
       if (!r.handled) return;

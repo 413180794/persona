@@ -27,15 +27,15 @@ export interface MenuItem {
   onSelect: () => void | Promise<unknown>;
   /** A single letter that chooses the row while the menu is open; shown at the row's end. */
   accel?: string;
-  /** Asks again before running: the first choice turns the row into this label (「确认关闭」), the second runs it. */
+  /** Asks again before running: the first choice turns the row into this label ("Close"), the second runs it. */
   confirm?: string;
   /** The row ⌫ / Delete chooses (the menu's close action). */
   closes?: boolean;
-  /** A submenu (→ opens it, ← goes back). A function loads the rows when it opens (「读取中…」 meanwhile). */
+  /** A submenu (→ opens it, ← goes back). A function loads the rows when it opens ("Loading…" meanwhile). */
   children?: MenuItem[] | (() => Promise<MenuItem[]>);
   /** The row turns into an input when chosen: Enter commits, Esc cancels. */
   rename?: MenuRename;
-  /** Awaits `onSelect` inside the menu: the row says 处理中…, an error shows under the rows and the menu stays, and
+  /** Awaits `onSelect` inside the menu: the row says "Working…", an error shows under the rows and the menu stays, and
    *  the menu closes once it succeeds. Without it the menu closes at once, as it always did. */
   inline?: boolean;
   /** The label wraps (breaking anywhere) instead of ending in …: a value that must be read in full, like a path. */

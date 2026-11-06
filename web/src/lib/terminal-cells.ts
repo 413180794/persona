@@ -1,5 +1,5 @@
 // Terminal rows the page draws itself (not xterm): pages of herdr's history above the screen, and the screen folded at
-// the panel's width (换行) while watching. A row is runs of characters with one style each, from the ANSI text herdr
+// the panel's width ("Wrap long lines") while watching. A row is runs of characters with one style each, from the ANSI text herdr
 // reads or from xterm's grid; how a long row folds follows iOS TerminalWrap (hanging indent, what only pads a row).
 
 /** A color: an index into the 256-color palette, or "#rrggbb". */

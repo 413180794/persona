@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 添加邮箱 › Outlook (iOS OutlookSignInSection): GET the hub's Microsoft config, then the form; a malformed client ID
-// is caught before any PUT, a good one is sent trimmed and the card turns to 已有; 更换 / 不换了 go back and forth.
+// "Add mail account" › Outlook (iOS OutlookSignInSection): GET the hub's Microsoft config, then the form; a malformed client ID
+// is caught before any PUT, a good one is sent trimmed and the card turns to "already set"; "Change" / "Keep current" go back and forth.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

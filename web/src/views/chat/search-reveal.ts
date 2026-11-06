@@ -1,6 +1,6 @@
 // Going to an in-conversation search hit (lib/chat-search.ts): the chat names the item, and the work groups, tool rows
 // and thoughts that hold it open themselves (Android ChatSearchNavigation expands the rows on the way). What opened for
-// a hit closes again with 返回搜索前位置.
+// a hit closes again with "Back to where you were".
 import { useEffect, useSyncExternalStore } from "react";
 
 interface Target {

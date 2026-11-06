@@ -1,4 +1,4 @@
-// 知识库 (docs/knowledge.md): what Persona knows from the hub's ~/.jarvis/data — projects first, then chats, people,
+// Knowledge base (docs/knowledge.md): what Persona knows from the hub's ~/.jarvis/data — projects first, then chats, people,
 // docs, meetings and events, most important and most relevant first. Not a browser of Feishu: every row is Persona'
 // own digest, and the way out is handing it to Persona. The iOS app is the reference (KnowledgeView.swift).
 //
@@ -22,7 +22,7 @@ export function Knowledge({ kind, id, onToggleSidebar }: { kind?: string; id?: s
   const [reloadKey, setReloadKey] = useState(0);
   // The search an entry was opened from: its page starts with the places found.
   const [from, setFrom] = useState<{ key: string; q: string } | null>(null);
-  // Something was opened from this page, so 返回 is the browser's back (to the list or the entry before).
+  // Something was opened from this page, so "Back" is the browser's back (to the list or the entry before).
   const opened = useRef(false);
 
   const open = (e: KBEntry, q?: string) => {

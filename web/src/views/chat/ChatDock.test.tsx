@@ -49,7 +49,7 @@ describe("Header", () => {
   it("leaves the title room on a phone: no state pill, 同空间 only from ⋯ (#3576)", () => {
     const html = header();
     expect(html).toMatch(/<span class="hidden @min-\[800px\]:contents"><span[^>]*>.*?需要你/);
-    // the 同空间 button is there from sm up, gone below
+    // the "Same space" button is there from sm up, gone below
     expect(html).toMatch(/<button[^>]*aria-label="同空间 1"[^>]*class="[^"]*\bmax-sm:hidden\b/);
     expect(html).toContain("<span>同空间</span>");
   });
@@ -86,7 +86,7 @@ describe("Header, the 终端 | 对话 switch (#2419)", () => {
   });
   it("is not there without a terminal to switch to, and the old terminal button is gone", () => {
     expect(header()).not.toContain("终端或对话");
-    // the only 终端 button is the phone's one-button switch below
+    // the only "Terminal" button is the phone's one-button switch below
     expect(header({ view: "chat", onView: () => {} }).match(/aria-label="终端"/g)).toHaveLength(1);
     expect(header()).not.toContain('aria-label="终端"');
   });
@@ -121,13 +121,13 @@ describe("PendingCards", () => {
     // a question's lines already carry what was asked
     const q = ix("q", "question", { questions: [{ question: "用哪个框架？", options: [{ label: "A" }] }] as Interaction["questions"] });
     expect(cards({ narrow: false, interactions: [], answered: [{ ix: q, resolution: { answers: { "用哪个框架？": "A" } } }] })).not.toContain("data-answered-about");
-    // a plan says its first line, not 计划等你审批; a bare one says nothing extra
+    // a plan says its first line, not "Plan awaits your approval"; a bare one says nothing extra
     const plan = ix("l", "plan", { plan: "\n## 改用 **vitest**\n1. 换配置" });
     const planHtml = cards({ narrow: false, interactions: [], answered: [{ ix: plan, resolution: { approve: true } }] });
     expect(planHtml).toContain("改用 vitest");
     expect(planHtml).not.toContain("计划等你审批");
     expect(cards({ narrow: false, interactions: [], answered: [{ ix: ix("l2", "plan"), resolution: { approve: true } }] })).not.toContain("data-answered-about");
-    // a terminal dialog with nothing to say: no 终端等你处理 above its Yes
+    // a terminal dialog with nothing to say: no "Terminal needs you" above its Yes
     const dialog = ix("d", "screen", { dialog: { options: [{ key: "1", label: "Yes" }] } as Interaction["dialog"] });
     const dialogHtml = cards({ narrow: false, interactions: [], answered: [{ ix: dialog, resolution: { option: "1" } }] });
     expect(dialogHtml).not.toContain("data-answered-about");

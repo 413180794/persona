@@ -1,5 +1,5 @@
-// 设置 › 模型供应商 (#2455, docs/launchers.md): the add / edit wizard's form for a compatible gateway typed by hand
-// (cindy's AddProviderWizard: connect → models, the rest folded under 高级; the hub's presets are lib/launcher-presets.ts), its checks, the POST / PUT body, and 从 ~/.zshrc 导入's preview. Pure: the views
+// Settings › Model providers (#2455, docs/launchers.md): the add / edit wizard's form for a compatible gateway typed by hand
+// (cindy's AddProviderWizard: connect → models, the rest folded under "Advanced"; the hub's presets are lib/launcher-presets.ts), its checks, the POST / PUT body, and the "Import from ~/.zshrc" preview. Pure: the views
 // in views/settings/Provider*.tsx only render it.
 import { ApiError, errorText } from "./api";
 import { hostOf as urlHost } from "./hubs";
@@ -345,10 +345,10 @@ export interface TestResult {
 
 export const testText = (r: TestResult) => (r.ok ? t("lib-providers.test_ok", { ms: r.ms }) : r.error || t("lib-providers.test_failed"));
 
-/** The model 测试连接 asks with: the default, else the first checked, else the first listed. */
+/** The model "Test connection" asks with: the default, else the first checked, else the first listed. */
 export const testModel = (f: ProviderForm) => f.model.trim() || f.models.find((m) => m.checked)?.id || f.models[0]?.id || "";
 
-// ── 从 ~/.zshrc 导入 ────────────────────────────────────
+// ── Import from ~/.zshrc ────────────────────────────────────
 
 /** GET /api/v1/launchers/import's provider (no key, no headers). */
 export interface ImportedProvider extends Omit<ProviderView, "origin"> {
@@ -362,7 +362,7 @@ export interface ImportRow {
   host: string;
   models: string;
   aliases: string;
-  /** 「合并到 xx」 or 「新建」. */
+  /** "Merge into xx" or "New". */
   action: string;
   merge: boolean;
 }

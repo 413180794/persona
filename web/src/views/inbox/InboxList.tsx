@@ -1,5 +1,5 @@
-// The inbox list (docs/inbox.md「App」): filters by source and kind, search, then 需要你 (agents waiting on you first),
-// 知悉即可, 已折叠 and 已处理, each a section that opens / closes from its title.
+// The inbox list (docs/inbox.md"App"): filters by source and kind, search, then Needs you (agents waiting on you first),
+// FYI, Collapsed and Done, each a section that opens / closes from its title.
 import { memo, useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
@@ -57,7 +57,7 @@ export function InboxList({ selected }: { selected?: string }) {
   const accounts = useMailAccounts();
   const more = useMenu();
   const [mutesOpen, setMutesOpen] = useState(false);
-  // 全部清理 over many items asks first; the items are the ones shown when it was asked.
+  // Clean up all over many items asks first; the items are the ones shown when it was asked.
   const [confirm, setConfirm] = useState<{ items: InboxItem[]; scope: string } | null>(null);
 
   // The opened item stays in sight in the list (a link straight to it, a click in the detail).
@@ -71,17 +71,17 @@ export function InboxList({ selected }: { selected?: string }) {
   const connectors = useMemo(() => connectorSources(items), [items]);
   const failed = Boolean(error) && !items.length;
   const empty = !s.tiers.action.length && !s.tiers.working.length && !s.tiers.fyi.length && !s.tiers.noise.length && !agents.length;
-  // nothing ever came in, nothing filtered: is anything connected at all? (still unknown: the plain 都处理完了)
+  // nothing ever came in, nothing filtered: is anything connected at all? (still unknown: the plain "All caught up")
   const sources = useInboxSources(ready && empty && !failed && !items.length && !query && !source && !kind);
   const unconnected = sources && !sources.connected ? sources : null;
-  // 全部清理: the open items the list shows (its filters and search); the agents waiting are not items.
+  // Clean up all: the open items the list shows (its filters and search); the agents waiting are not items.
   const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.working, ...s.tiers.fyi, ...s.tiers.noise];
   const filterNames = [
     source === "feishu" ? t("inbox-inboxlist.source_lark") : connectors.find((c) => c.id === source)?.name ?? mailShort(chips.find((a) => a.id === source)?.email ?? ""),
     KIND_FILTERS.find((k) => k.key === kind)?.label ?? "",
   ];
   const scope = bulkScope(filterNames, query, openInView.length);
-  // 全部清理 files them as 忽略 (dismiss): the user set them aside, they did not handle them.
+  // Clean up all files them as Dismiss (dismiss): the user set them aside, they did not handle them.
   const runBulk = () => {
     if (!openInView.length) return;
     if (openInView.length >= BULK_CONFIRM_AT) setConfirm({ items: openInView, scope: bulkScopeName(filterNames, query) });
@@ -111,7 +111,7 @@ export function InboxList({ selected }: { selected?: string }) {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("inbox-inboxlist.search_placeholder")} aria-label={t("inbox-inboxlist.search_label")} className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
           {query && <IconButton icon="x" label={t("inbox-inboxlist.clear")} size={20} iconSize={11} onClick={() => setQuery("")} />}
         </label>
-        {/* A phone: the chips in one row that scrolls sideways, 全部清理 in the ⋯ menu at its end. */}
+        {/* A phone: the chips in one row that scrolls sideways, Clean up all in the ⋯ menu at its end. */}
         <div className="mt-2.5 flex items-center gap-1.5">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 max-sm:-my-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:py-1 max-sm:scrollbar-none max-sm:[&>*]:shrink-0" role="toolbar" aria-label={t("inbox-inboxlist.filters")}>
           <Chip on={!source && !kind} onClick={() => { setSource(""); setKind(""); }}>{t("inbox-inboxlist.all")}</Chip>
@@ -151,7 +151,7 @@ export function InboxList({ selected }: { selected?: string }) {
         <BulkConfirm confirm={confirm} onClose={() => setConfirm(null)} />
 
         <TriageBanner triage={triage} />
-        {/* never loaded (an error and no items): its own empty state with 重试, not 都处理完了 under the error (#2970);
+        {/* never loaded (an error and no items): its own empty state with "Retry", not "All caught up" under the error (#2970);
             with agents waiting the list is not empty, so the reason stays a line over it */}
         {ready && failed && !empty && <p className="mt-4 text-[12.5px] text-red">{error}</p>}
         {!ready && <div className="mt-6 px-1"><Loading /></div>}
@@ -220,8 +220,8 @@ export function InboxList({ selected }: { selected?: string }) {
 }
 
 /**
- * A section title's count, saying what it counts (#3288): the sidebar's 收件箱 badge counts messages only, while 需要你
- * also lists the agents waiting on you (those are 总览's count), so the two are written apart: 「4 条 · 7 个 Agent」, each
+ * A section title's count, saying what it counts (#3288): the sidebar's "Inbox" badge counts messages only, while "Needs you"
+ * also lists the agents waiting on you (those are "Overview"'s count), so the two are written apart: "4 messages · 7 agents", each
  * with its unit, which a phone has no hover to show (#4146).
  */
 export function sectionCount(items: number, agents: number): { text: string; label: string } {
@@ -232,7 +232,7 @@ export function sectionCount(items: number, agents: number): { text: string; lab
   };
 }
 
-/** A section of the list; without `onToggle` it is always open (进行中: what the AI is on never hides). */
+/** A section of the list; without `onToggle` it is always open (In progress: what the AI is on never hides). */
 function Section({ k, title, count, open, onToggle, action, children }: { k: SectionKey | "done"; title: string; count: { text: string; label: string }; open: boolean; onToggle?: () => void; action?: { label: string; run: () => void }; children: React.ReactNode }) {
   const head = (
     <>
@@ -264,12 +264,12 @@ function Section({ k, title, count, open, onToggle, action, children }: { k: Sec
   );
 }
 
-/** Room for the row's 已处理 check, always shown on a touch screen (#4141), right of the time. */
+/** Room for the row's "Done" check, always shown on a touch screen (#4141), right of the time. */
 const TOUCH_DONE_ROOM = "[@media(hover:none)]:mr-8";
 
-/** The row's 已处理 / 移回: on a touch screen marking done says so with 撤销, since a tap there can be a slip. */
+/** The row's "Done" / "Move back": on a touch screen marking done says so with "Undo", since a tap there can be a slip. */
 export async function markFromRow(it: InboxItem, done: boolean, touch = isNoHover()): Promise<void> {
-  // after the request: 撤销 cannot race it, and a failure shows its own error instead of this
+  // after the request: "Undo" cannot race it, and a failure shows its own error instead of this
   const ok = await setDone(it, done);
   if (ok && done && touch) toast(t("inbox-inboxlist.marked_done"), "ok", { label: t("lib-inbox.undo"), run: () => void setDone(it, false) });
 }
@@ -279,7 +279,7 @@ const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { i
   const to = { name: "inbox", id: it.id } as const;
   const done = isDone(it);
   const label = kindLabel(it);
-  // a suggestion takes the AI 分身's draft's place, and the event's handling the AI 分身's 正在处理
+  // a suggestion takes the AI twin's draft's place, and the event's handling the AI twin's "working on it"
   const draft = !done && !it.suggestion && agentDraft(it);
   const working = !done && !it.handling && agentWorking(it);
   const mark = done ? (it.done_by === "manager" ? <EventMark it={it} /> : null) : it.suggestion || it.handling ? <EventMark it={it} /> : null;
@@ -287,7 +287,7 @@ const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { i
   const first = rows[0];
   const translated = hubTranslation(it, useTranslatePrefs());
   const from = fromLine(it, translated?.preview);
-  // a right click: 已处理 / 移回, then what it can be muted by (iOS: the row's long press)
+  // a right click: "Done" / "Move back", then what it can be muted by (iOS: the row's long press)
   // (the menu key / Shift+F10 open it next to the row, see ui/context-menu.ts)
   const [menu, setMenu] = useState<MenuAt | null>(null);
   return (
@@ -335,7 +335,7 @@ const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { i
         </div>
       )}
       {/* Shown on hover with a mouse; on a touch screen (no hover, #4141) always there as a check beside the time, so an
-          item is marked without opening it, with 撤销 in the toast in case the tap was a slip. */}
+          item is marked without opening it, with "Undo" in the toast in case the tap was a slip. */}
       <button
         type="button"
         onClick={() => void markFromRow(it, !done)}
@@ -351,19 +351,19 @@ const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { i
   );
 });
 
-/** A row's menu: 已处理 (or 移回), then 静音这个仓库 / 会话 / 发件人 with the name under it (iOS InboxView.rowMenu). */
+/** A row's menu: "Done" (or "Move back"), then "Mute this repository / chat / sender" with the name under it (iOS InboxView.rowMenu). */
 export function rowMenu(it: InboxItem, done: boolean): MenuItem[] {
   const items: MenuItem[] = [
     done
       ? { key: "undone", label: t("inbox-inboxlist.move_back"), icon: "inbox", onSelect: () => void setDone(it, false) }
-      : { key: "done", label: t("inbox-inboxlist.done"), icon: "check", onSelect: () => void markFromRow(it, true, true) }, // a menu pick: 撤销 on any screen (#4162)
+      : { key: "done", label: t("inbox-inboxlist.done"), icon: "check", onSelect: () => void markFromRow(it, true, true) }, // a menu pick: "Undo" on any screen (#4162)
   ];
   (it.mutes ?? []).forEach((m, i) => items.push({ key: `mute:${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", divider: i === 0, onSelect: () => void muteItem(it, m) }));
   return items;
 }
 
-/** 已静音 (the ⋯ menu; iOS InboxMutesView): every source's muted repositories, chats and senders, newest first, each
- *  with 取消静音. Only what comes in later comes back. */
+/** "Muted" (the ⋯ menu; iOS InboxMutesView): every source's muted repositories, chats and senders, newest first, each
+ *  with "Unmute". Only what comes in later comes back. */
 function MutesDialog({ onClose }: { onClose: () => void }) {
   const [list, setList] = useState<InboxMute[] | null>(null);
   const [failed, setFailed] = useState("");
@@ -468,7 +468,7 @@ const AgentRow = memo(function AgentRow({ ix }: { ix: Interaction }) {
   );
 });
 
-/** 「将清理 N 件」: asked before 全部清理 over BULK_CONFIRM_AT items or more. */
+/** "Will clean up N items": asked before Clean up all over BULK_CONFIRM_AT items or more. */
 function BulkConfirm({ confirm, onClose }: { confirm: { items: InboxItem[]; scope: string } | null; onClose: () => void }) {
   const n = confirm?.items.length ?? 0;
   return (

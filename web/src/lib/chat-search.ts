@@ -1,4 +1,4 @@
-// In-conversation search (docs/web.md「会话内搜索」, Android ChatSearch.kt, parity N26): literal, case-insensitive
+// In-conversation search (docs/web.md "In-conversation search", Android ChatSearch.kt, parity N26): literal, case-insensitive
 // matching over what is loaded of a chat (words, thoughts, tool names, tool input and output, system events), newest
 // first, at most SEARCH_LIMIT hits; and where a hit sits in the chat's lines, for going to it.
 import type { Item } from "./types";
@@ -168,10 +168,10 @@ export function lineOfItem(lines: ChatLine[], items: Item[], itemId: string): st
   return undefined;
 }
 
-/** How many pages one 加载更早的记录并继续搜 loads (Android: 20). */
+/** How many pages one "Load earlier and keep searching" loads (Android: 20). */
 export const SEARCH_PAGES = 20;
 
-/** How a run of 加载更早的记录 ended: `start` reached the start of the chat; the others say why it stopped. */
+/** How a run of loading earlier history ended: `start` reached the start of the chat; the others say why it stopped. */
 export type SearchLoadOutcome = "start" | "stopped" | "busy" | "load_failed" | "no_progress" | "page_cap";
 
 /** What of the transcript the run looks at between pages. */

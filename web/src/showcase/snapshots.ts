@@ -1,4 +1,4 @@
-// The 组件展示 extension's pages (schema/extension/examples/showcase, copied from the extension's snapshots/, #1852):
+// The component showcase extension's pages (schema/extension/examples/showcase, copied from the extension's snapshots/, #1852):
 // the views every app draws for its screenshots, so the four apps can be compared page by page.
 import type { UIView } from "../lib/extension-ui";
 import { readView } from "../lib/extension-ui";
@@ -12,7 +12,7 @@ export const SHOWCASE: Record<string, UIView> = Object.fromEntries(
     .sort(([a], [b]) => a.localeCompare(b)),
 );
 
-/** How the page is drawn: a card on 总览, a widget (small as a card), or a full page. */
+/** How the page is drawn: a card on "Overview", a widget (small as a card), or a full page. */
 export function showcaseKind(name: string): "card" | "widget" | "page" {
   if (name === "card") return "card";
   if (name.startsWith("widget-") || name.startsWith("shortcut-")) return "widget";

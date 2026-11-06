@@ -1,4 +1,4 @@
-// What the main conversation still needs (docs/onboarding.md 4.4, 5.1; docs/protocol.md「主对话就绪度」): the hub works
+// What the main conversation still needs (docs/onboarding.md 4.4, 5.1; docs/protocol.md "Main chat readiness"): the hub works
 // it out (GET /api/v1/assistant/readiness) and every client draws the same thing from it: in `setup` a card above the
 // composer with the first missing step, the send button saying what to do first, and example questions that open local
 // help. A coded refusal of a start or a send (5.2) becomes a card too, not a toast. On a hub without the feature
@@ -57,13 +57,13 @@ export interface Readiness {
 
 // ── the steps ───────────────────────────────────────────
 
-/** The steps that decide the mode, in order; 试一句 never blocks (5.1). */
+/** The steps that decide the mode, in order; "Try it" never blocks (5.1). */
 const BLOCKING: string[] = ["computer", "claude", "model"];
 
 /**
  * The step the card shows: in `setup`, the first of computer / claude / model that is todo or a problem. A rate limit
  * passes by itself and never turns the send button (the hub keeps `full` for it too); a step in a state this page does
- * not know counts as 「还差一步」 with its title (5 总规矩).
+ * not know counts as "One more step" with its title (5, general rules).
  */
 export function blockingStep(r: Readiness | null | undefined): ReadinessStep | null {
   if (!r || r.mode !== "setup") return null;
@@ -79,7 +79,7 @@ export function blockingStep(r: Readiness | null | undefined): ReadinessStep | n
   return next && next.state !== "ok" && next.state !== "skipped" ? next : null;
 }
 
-/** What the send button says while the main conversation cannot answer (4.4: 先接上模型 / 先添加电脑). */
+/** What the send button says while the main conversation cannot answer (4.4: "Connect a model first" / "Add a computer first"). */
 export function sendLabel(step: ReadinessStep): string {
   if (step.id === "computer") {
     if (step.code === "node_unreachable") return t("lib-readiness.send_wake_computer");
@@ -102,7 +102,7 @@ export function helpTopic(id: string): HelpTopic {
   return (HELP_TOPICS.includes(id) ? id : "what_can_you_do") as HelpTopic;
 }
 
-/** The action ids a card can draw a button for (5.1); an id this page does not know is text only (5 总规矩). */
+/** The action ids a card can draw a button for (5.1); an id this page does not know is text only (5, general rules). */
 const ACTIONS = new Set(["add_computer", "confirm_computer", "wake_computer", "install_claude", "login_claude", "connect_model", "edit_provider", "test_assistant", "enable_tls", "open_admin"]);
 
 export function knownAction(id: string | undefined): boolean {
@@ -138,14 +138,14 @@ export function actionLabel(id: string): string {
  *  signed-in device cannot add one itself (no `machines_add`, 5.3). */
 export const ADMIN_MACHINES = "/admin/machines";
 
-/** 设置 › 模型供应商 with the wizard open (`add=1`), or one provider's details (`launcher=`). */
+/** Settings › Model providers with the wizard open (`add=1`), or one provider's details (`launcher=`). */
 export function providersPath(launcher?: string): string {
   return launcher ? `/settings?tab=models&launcher=${encodeURIComponent(launcher)}` : "/settings?tab=models&add=1";
 }
 
 /**
  * What a button does: a help topic to open in place (add_computer too: the page that owns `onHelp` opens the add flow
- * instead where the hub has it), or done here (a page opened, a check run). `launcher` is the step's, for 改 Key;
+ * instead where the hub has it), or done here (a page opened, a check run). `launcher` is the step's, for "Change the key";
  * `onConfirm` opens the confirm screen of a computer waiting to be confirmed (without it: the machines page).
  */
 export function runAction(id: string, o: { launcher?: string; onHelp: (topic: HelpTopic) => void; onConfirm?: () => void }): void {
@@ -178,7 +178,7 @@ export interface CodedFailure {
   code: string;
   /** The hub's words, in the page's language. */
   error: string;
-  /** The original text (a shell's error…): only under 详情. */
+  /** The original text (a shell's error…): only under "Details". */
   detail?: string;
   action?: string;
   machine?: string;
@@ -201,14 +201,14 @@ export function codedFailure(e: unknown): CodedFailure {
   return { code, error: e.message, detail: str("detail"), action, machine: str("machine_name"), launcher: str("launcher"), requestId: str("request_id") ?? e.requestId };
 }
 
-/** The assistant restarting answers 503 assistant_offline for a few seconds: tried again quietly (4.6 原则 4). */
+/** The assistant restarting answers 503 assistant_offline for a few seconds: tried again quietly (4.6, principle 4). */
 export function passesBySelf(e: unknown): boolean {
   return e instanceof ApiError && e.code === "assistant_offline";
 }
 
 // ── turn errors (turn_error_code) ───────────────────────
 
-/** A turn that ended on a model error the user must fix: the card's title and its button (4.4「模型出错」). */
+/** A turn that ended on a model error the user must fix: the card's title and its button (4.4 "Model error"). */
 export function turnErrorFix(code: string | undefined): { title: string; detail: string; action: string } | null {
   switch (code) {
     case "not_logged_in":
@@ -250,7 +250,7 @@ function set(patch: Partial<ReadinessState>) {
 const FRESH_MS = 5_000;
 
 /**
- * Asks the hub again (a visit, a machine coming or going, after a failure, 试一句's probe). `force` asks even with a
+ * Asks the hub again (a visit, a machine coming or going, after a failure, "Try it"'s probe). `force` asks even with a
  * fresh answer; `changed` also asks with an answer in flight: that one may have been worked out before the change made
  * here. The rest share the one in flight (each can hold a node self-check for seconds).
  */
@@ -259,7 +259,7 @@ export function refreshReadiness(o: { force?: boolean; probe?: boolean; changed?
   if (inflight && !o.probe && !o.changed) return inflight;
   if (o.probe) set({ probing: true });
   const mine = ++asked;
-  // a probe always lands: it is the only answer that carries 试一句's result, however long it took
+  // a probe always lands: it is the only answer that carries "Try it"'s result, however long it took
   const lands = () => (o.probe || mine > answered) && ((answered = Math.max(answered, mine)), true);
   const p = api<Readiness>(o.probe ? `${READINESS_PATH}?probe=1` : READINESS_PATH)
     .then((r) => {
@@ -287,7 +287,7 @@ function subscribe(l: () => void) {
 
 /**
  * Something the readiness depends on changed here (a computer added, confirmed or removed, a provider saved or given to
- * the main conversation): ask again now so the card follows without a reload (5.1「客户端什么时候重拉」). Nothing on a
+ * the main conversation): ask again now so the card follows without a reload (5.1 "When the client refetches"). Nothing on a
  * hub without readiness.
  */
 export function readinessChanged(): Promise<void> {

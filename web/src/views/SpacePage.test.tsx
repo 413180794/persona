@@ -1,4 +1,4 @@
-// The space page (/space/<机器>/<空间>) rendered statically: its agents, the todos it hangs on, and a space that is gone.
+// The space page (/space/<machine>/<space>) rendered statically: its agents, the todos it hangs on, and a space that is gone.
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Machine, Session } from "../lib/types";

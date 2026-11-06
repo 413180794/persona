@@ -38,15 +38,15 @@ export const CODEX_EFFORTS: ModeOption[] = [
   { id: "ultra", title: t("lib-session-actions.codex_effort_ultra"), detail: t("lib-session-actions.codex_effort_ultra_detail") },
 ];
 
-/** Modes a running session can switch to: 全部放行 is chosen only when it starts. */
+/** Modes a running session can switch to: "Allow all" is chosen only when it starts. */
 export const SWITCHABLE_MODES = PERMISSION_MODES.filter((m) => m.id !== "bypassPermissions");
 
 export const BYPASS_MODE = "bypassPermissions";
 
-/** What 全部放行 means, said in red where it is on (iOS's warning). */
+/** What "Allow all" means, said in red where it is on (iOS's warning). */
 export const BYPASS_WARNING = t("lib-session-actions.bypass_warning");
 
-/** An assistant conversation (the main one too) switches to any mode, 全部放行 included: the hub restarts its
+/** An assistant conversation (the main one too) switches to any mode, "Allow all" included: the hub restarts its
  * Claude with the new mode (#2416). Other agents keep SWITCHABLE_MODES. */
 const ASSISTANT_MODES = PERMISSION_MODES.map((m) => (m.id === BYPASS_MODE ? { ...m, detail: t("lib-session-actions.mode_bypass_permissions_assistant_detail") } : m));
 

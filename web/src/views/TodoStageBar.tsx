@@ -1,4 +1,4 @@
-// The todo detail's stage bar (#2776): 方案 → 开发 → 审查 → 合入 → 部署 → 已验证 with the current step marked, drawn
+// The todo detail's stage bar (#2776): Plan → Develop → Review → Merge → Deploy → Verified with the current step marked, drawn
 // in Beautiful UI's language rather than the Feishu report's emoji: passed steps are green with a check, the current
 // one is the accent color, the ones ahead are hollow. Labels take the page's ink tokens, so both themes read the same.
 import { t } from "../i18n";

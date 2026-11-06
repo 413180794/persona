@@ -3,7 +3,7 @@ import { formatDate, formatLocale, t } from "../i18n";
 import type { UIItem } from "../lib/extension-ui";
 import type { Access, AdminMachine, AdminExtension, Device, DoctorItem, ExtensionMetrics, LogLine, MeshHub, MeshView, MetricsWindow, Peer, PeerProbe, Restart } from "./types";
 
-// ── access scope (docs/admin.md「访问范围」) ──────────────
+// ── access scope (docs/admin.md "Access scope") ──────────────
 
 export const ACCESS_INFO: Record<Access, { label: string; detail: string; risk: string }> = {
   loopback: { label: t("admin-logic.access_loopback"), detail: t("admin-logic.access_loopback_detail"), risk: t("admin-logic.access_loopback_risk") },
@@ -214,7 +214,7 @@ export function hubLabel(mesh: MeshView | null | undefined, hubId: string | unde
 export interface PathRow {
   key: string;
   via: string;
-  label: string; // 本机 / hub 来连 / 电脑来连 / ssh / tailcat / 经成员 hub
+  label: string; // "This machine" / "Hub connects" / "Computer connects" / ssh / tailcat / "Via member hub"
   hub: string; // which hub it goes through, by name
   self: boolean; // through this hub itself
   ok: boolean;
@@ -298,7 +298,7 @@ export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-// linuxInstallCommand pairs, installs and starts jarvis-link on a Linux computer in one go (docs/link.md「Linux」).
+// linuxInstallCommand pairs, installs and starts jarvis-link on a Linux computer in one go (docs/link.md "Linux").
 export function linuxInstallCommand(pairUrl: string): string {
   return `jarvis-link install --pair - <<< ${shellQuote(pairUrl)}`;
 }
@@ -329,7 +329,7 @@ export function memberNotice(mesh: MeshView | null | undefined): { title: string
 
 // ── extensions ──
 
-// extensionStatus: the state's words (as the app's 设置 › 扩展 says them) and tone.
+// extensionStatus: the state's words (as the app's Settings › Extensions says them) and tone.
 export function extensionStatus(p: Pick<AdminExtension, "status">): { tone: "green" | "red" | "orange" | "gray"; label: string } {
   switch (p.status) {
     // Running or idle until something needs it (stopped): both are on, as the switch says.
@@ -393,7 +393,7 @@ export function uploadProblem(file: { name: string; size: number }, most: number
   return "";
 }
 
-// ── how the extensions run (docs/extensions.md「运行情况」) ──
+// ── how the extensions run (docs/extensions.md "Activity") ──
 
 /** An error rate as people read it: 0%, 0.4%, 12%; "—" without calls. */
 export function rateText(rate: number, calls: number): string {
@@ -426,7 +426,7 @@ export function stepLabel(iso: string, window: MetricsWindow): string {
   return window === "7d" ? t("admin-logic.step_day_hour", { month: two(d.getMonth() + 1), day: two(d.getDate()), hour: two(d.getHours()) }) : hm;
 }
 
-/** The two charts of an extension's 运行情况: calls (answered and failed, stacked) and the p95 latency. */
+/** The two charts of an extension's "Activity": calls (answered and failed, stacked) and the p95 latency. */
 export function metricsCharts(m: Pick<ExtensionMetrics, "series" | "window">): { calls: UIItem; latency: UIItem | null } {
   const label = (at: string) => stepLabel(at, m.window);
   const calls: UIItem = {

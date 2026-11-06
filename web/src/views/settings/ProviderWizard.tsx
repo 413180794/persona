@@ -1,10 +1,10 @@
-// 设置 › 模型供应商 › 新增 / 编辑 (#2455, docs/onboarding.md 4.3「三条路」B): ① 选择供应商 lists what the hub offers
+// Settings › Model providers › Add / Edit (#2455, docs/onboarding.md 4.3 "Three paths" B): (1) "Choose a provider" lists what the hub offers
 // (GET /api/v1/launchers/presets: its built-in providers, then the extensions'), a compatible gateway typed by hand last.
 // A preset needs only ② the key: it is tested on its own (POST /launchers/test with the preset) and saved with
-// assign, and ③ says what now runs on it. The gateway goes ② 连接 (address, auth, key; 测试连接 and 获取模型列表) ③ 选择模型
-// (context window, thinking levels, the default), the rest under 高级. Editing opens at 连接 with the same form. The logic
+// assign, and (3) says what now runs on it. The gateway goes (2) "Connect" (address, auth, key; "Test connection" and "Fetch models") (3) "Choose models"
+// (context window, thinking levels, the default), the rest under "Advanced". Editing opens at "Connect" with the same form. The logic
 // is lib/providers.ts and lib/launcher-presets.ts. It reads the main conversation's readiness (4.3 B.3 / B.4): with a
-// Claude Code that already answers, 主对话和新开的 Agent 都用它 starts off; a key saved for a computer with no Claude Code
+// Claude Code that already answers, "Use it for the main conversation and new Agents" starts off; a key saved for a computer with no Claude Code
 // says so (the main conversation still starts claude there) with how to install it.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
@@ -58,7 +58,7 @@ import { t } from "../../i18n";
 
 type Step = "pick" | "key" | "done" | "connect" | "models";
 const CUSTOM = "custom";
-/** The hub's hello feature for built-in presets, a name it makes up and assign (docs/launchers.md「内置预设」). */
+/** The hub's hello feature for built-in presets, a name it makes up and assign (docs/launchers.md "Built-in presets"). */
 const BUILTIN_PRESETS_FEATURE = "builtin_presets";
 const stepTitle = (s: Step) =>
   ({
@@ -100,7 +100,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
   const [keyTest, setKeyTest] = useState<KeyTest | null>(null);
   const testSeq = useRef(0);
   const [added, setAdded] = useState<Added | null>(null);
-  // pending: the first readiness answer has not come (it can take seconds): the switch waits for it, and so does 保存
+  // pending: the first readiness answer has not come (it can take seconds): the switch waits for it, and so does "Save"
   const { readiness, pending } = useReadiness(isNew);
   const works = claudeWorks(readiness);
   const assign = assignSet ?? !works;
@@ -445,7 +445,7 @@ function PickStep({ presets, error, choice, onPick }: { presets: LauncherPreset[
 
 type PresetForm = { name: string; api_key: string; model: string };
 
-/** ② for a preset: only the key; it is tested by itself. The name and another model wait under 更多选项. */
+/** (2) for a preset: only the key; it is tested by itself. The name and another model wait under "More options". */
 function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, checking, works, more, setMore }: {
   preset: LauncherPreset;
   pf: PresetForm;

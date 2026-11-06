@@ -209,7 +209,7 @@ describe("blocked claude dirs", () => {
     expect(toggledPatterns(state, state.dirs[2])).toEqual(["~/.automation/*", "/opt/x", "~/.config/cc/work"]);
     expect(toggledPatterns(state, state.dirs[1])).toEqual(["/opt/x"]);
     expect(looseRules(state)).toEqual(["/opt/x"]); // the glob is lifted from the row it blocks
-    // A directory blocked by its own path, written with ~: one row, no separate rule, no "由规则".
+    // A directory blocked by its own path, written with ~: one row, no separate rule, no "blocked by rule".
     const own: ClaudeDirsState = { ...state, blocked: ["~/.automation/a"], dirs: [{ ...state.dirs[1], blocked_by: "~/.automation/a" }] };
     expect(looseRules(own)).toEqual([]);
     expect(dirMeta(own.dirs[0], own.home)).toBe("自动发现 · 120 个会话 · 1 个正在运行");

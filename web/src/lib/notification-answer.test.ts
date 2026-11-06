@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 允许 / 拒绝 on a permission card's system notification (#4464): which card a click from the service worker is about,
+// Allow / Deny on a permission card's system notification (#4464): which card a click from the service worker is about,
 // what it sends (the card's own body, through the card's own answer), and when the page leaves it to the worker.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CardAnswer } from "./card-answer";

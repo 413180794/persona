@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// UI version 5's code review drawn from the 组件展示 page code-review-v5: words that changed, a range of lines picked
+// UI version 5's code review drawn from the component showcase page code-review-v5: words that changed, a range of lines picked
 // for a comment, drafts and suggestions, hidden lines asked for as lines, viewed marks, generated files folded, the
 // pending review's bar — and what each sends.
 import { act as flush } from "react";

@@ -28,10 +28,10 @@ export function sidebarActiveKey(route: Route, main?: string): string {
   }
 }
 
-/** An extension page's sidebar row (docs/extensions.md「UI 插槽」 nav_page). */
+/** An extension page's sidebar row (docs/extensions.md "UI slots" nav_page). */
 export const extensionNavKey = (extension: string, ui: string) => `p:${extension}/${ui}`;
 
-/** The conversations listed under「Persona 对话」: the most recent ones, without the main one (it has its own row), and
+/** The conversations listed under "Persona chats": the most recent ones, without the main one (it has its own row), and
  *  the open one (`current`) after them when it is older, so the sidebar always has its row (#2283). */
 export function otherConversations(conversations: readonly Session[], main: string | undefined, limit = 5, current?: string): Session[] {
   const sorted = conversations.filter((c) => c.session_id !== main).sort((a, b) => byTime(b.updated_at, a.updated_at));
@@ -45,6 +45,6 @@ export function firstAndCurrent<T>(list: readonly T[], n: number, isCurrent: (x:
   return current ? [...first, current] : first;
 }
 
-/** The page entries under Persona, in the sidebar's order (the app's 助手 first, then the rest of its drawer). 消息 shows
- * only in a browser that turned on 首页显示消息 (lark-chats.ts), on a hub with feature `lark`. The extensions' pages (nav_page) go right before 设置. */
+/** The page entries under Persona, in the sidebar's order (the app's "Assistant" first, then the rest of its drawer). "Messages" shows
+ * only in a browser that turned on "Show messages on home" (lark-chats.ts), on a hub with feature `lark`. The extensions' pages (nav_page) go right before "Settings". */
 export const NAV_PAGES = ["home", "inbox", "health", "messages", "workspace-board", "todos", "routines", "kb", "machines", "terminal", "settings"] as const;

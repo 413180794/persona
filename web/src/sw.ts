@@ -1,4 +1,4 @@
-// The web client's service worker (docs/web.md「安装成 App」): built on its own to /sw.js (vite.config.ts) and
+// The web client's service worker (docs/web.md "Install as an app"): built on its own to /sw.js (vite.config.ts) and
 // registered by lib/pwa.ts. It makes the installed app start fast and still open when the hub can't be reached: the
 // shell (index.html) comes from the hub when it answers in time, else from the cache; hashed assets from the cache.
 // The API is never touched (lib/sw-routes.ts).
@@ -124,7 +124,7 @@ async function fresh(req: Request): Promise<Response> {
 }
 
 // A notification the page had the worker show (lib/notify.ts postNotification: where the page can't make one itself, or
-// a permission card's, with 允许 / 拒绝): clicking it brings an open window of the app forward on the agent's
+// a permission card's, with Allow / Deny): clicking it brings an open window of the app forward on the agent's
 // conversation, or opens one; a button is answered by an open window without bringing it forward (lib/sw-click.ts).
 worker.addEventListener("notificationclick", (e) => {
   e.notification.close();

@@ -1,5 +1,5 @@
 // The Agents list's menus (iOS AgentRowMenu / SpaceMenuItems): a row's ⋯ or right click, a space's ⋯ on its header,
-// and the confirmation of 全部标为已读. What they do is in lib/agent-actions.ts.
+// and the confirmation of "Mark all as seen". What they do is in lib/agent-actions.ts.
 import { attachLive, flipMute, flipPin, flipSpaceMute, flipSpacePin, handToPersona } from "../lib/agent-actions";
 import { isSpaceMuted, unreadOf, type SpaceLike } from "../lib/agent-filter";
 import { errorText } from "../lib/api";
@@ -17,12 +17,12 @@ import type { MenuAt } from "../ui/menu-model";
 import { NodeMenu } from "./NodeMenu";
 import { t } from "../i18n";
 
-/** What a row's ⋯ (and its right click) offers. `onLinkTodo`: the row can hang on a todo (关联到待办…; 改挂到其他待办… and
- *  解除关联 when it does). Everything a row offers is here, so a touch screen (no right click; iOS Safari sends no contextmenu on a
+/** What a row's ⋯ (and its right click) offers. `onLinkTodo`: the row can hang on a todo ("Link to to-do…"; "Move to another to-do…" and
+ *  "Unlink" when it does). Everything a row offers is here, so a touch screen (no right click; iOS Safari sends no contextmenu on a
  *  long press) reaches it from the ⋯ (#1996). */
 export function agentRowMenuItems(s: Session, o: { pinned: boolean; muted: boolean; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void; onCloseAgent?: (s: Session) => void }): MenuItem[] {
   const { onRename, onDelete, onLinkTodo, onCloseAgent } = o;
-  // 实时接入 and 关闭 Agent show when the chat's ⋯ shows them (sessionMenuActions), and do the same (#3405)
+  // "Live link" and "Close agent" show when the chat's ⋯ shows them (sessionMenuActions), and do the same (#3405)
   const allowed = sessionMenuActions(s);
   return [
     ...(allowed.includes("attach") ? [{ key: "attach", label: t("chat-chatview.attach"), icon: "link" as const, onSelect: () => void attachLive(s) }] : []),
@@ -81,7 +81,7 @@ export function SpaceMenu({
   onRename: (s: Session) => void;
   onMarkSeen: (list: Session[]) => void;
   onLinkTodo?: (sp: SpaceLike) => void;
-  /** 打开空间页 (/space/…) leads the menu; the space's own page leaves it out. */
+  /** "Open space page" (/space/…) leads the menu; the space's own page leaves it out. */
   openPage?: boolean;
 }) {
   const pins = useStore((st) => st.pins);
@@ -149,7 +149,7 @@ export function SpaceMenu({
   return <NodeMenu node={node} at={at ?? { anchor }} onClose={onClose} header={t("agentmenus.space_header", { name: sp.name })} before={items} omit={["node-rename"]} />;
 }
 
-/** 全部标为已读, asked first: it changes what the other devices show too. */
+/** "Mark all as seen", asked first: it changes what the other devices show too. */
 export function MarkSeenDialog({ list, onClose, onDone }: { list: Session[] | null; onClose: () => void; onDone?: () => void }) {
   const n = list?.length ?? 0;
   return (

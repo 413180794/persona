@@ -1,6 +1,6 @@
-// A search box: the magnifier, the field and 清除 in one rounded control that lights its edge in the accent while it has
-// focus, like every search field of the pages (收件箱, 知识库, 历史…). Pages that wrote their own forgot that ring and
-// showed only a caret (待办, 终端, Agents), so a new search box takes this one.
+// A search box: the magnifier, the field and "Clear" in one rounded control that lights its edge in the accent while it has
+// focus, like every search field of the pages (inbox, knowledge base, history…). Pages that wrote their own forgot that ring and
+// showed only a caret (to-dos, Terminal, Agents), so a new search box takes this one.
 import type { KeyboardEvent } from "react";
 import { t } from "../i18n";
 import { cx, IconButton } from "./atoms";

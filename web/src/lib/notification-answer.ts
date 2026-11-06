@@ -1,4 +1,4 @@
-// 允许 / 拒绝 on a permission card's system notification (#4464, the app's NotificationActions): the service worker
+// Allow / Deny on a permission card's system notification (#4464, the app's NotificationActions): the service worker
 // hands the click to an open page of the app (lib/sw-click.ts clickNotification), which answers the card as the card's
 // own buttons do (lib/card-answer.ts), with its own token, and stays where it is. The worker never sees the token.
 import { t } from "../i18n";
@@ -21,7 +21,7 @@ export type ClickPlan = { open: string } | { ix: Interaction; allow: boolean; bo
 
 /** Cards being answered from a notification now: a second click on one is not sent again. */
 const answering = new Set<string>();
-/** Cards whose 没能允许 / 没能拒绝 notification is up while the card still waits: it goes when the card does (#5070). */
+/** Cards whose Could not allow / Could not deny notification is up while the card still waits: it goes when the card does (#5070). */
 const failed = new Set<string>();
 const failedTag = (id: string) => `answer-failed#${id}`;
 
@@ -39,7 +39,7 @@ const isNote = (m: unknown): m is NoteMessage => {
 };
 
 /**
- * What this page does with a click the worker hands it: answer the card (the body the card's own 允许 / 拒绝 send), or
+ * What this page does with a click the worker hands it: answer the card (the body the card's own Allow / Deny send), or
  * open the conversation (a plain click). Nothing (the worker opens the conversation itself) for a message too late for
  * the worker to still be waiting, a card this page does not have (answered already, or not loaded yet), one that is
  * no permission card, or one already being answered from a notification.

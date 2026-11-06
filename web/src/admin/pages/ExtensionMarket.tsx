@@ -1,4 +1,4 @@
-// 扩展 › 扩展市场 (docs/admin.md「扩展」, docs/extensions.md「扩展市场」): the markets this hub reads (add with an optional
+// Extensions › Extension markets (docs/admin.md "Extensions", docs/extensions.md "Extension markets"): the markets this hub reads (add with an optional
 // write-only token, read again, change the token, remove) and their catalog (search, a market at a time). Installing
 // or upgrading from it previews first (POST extensions/-/catalog/preview) and goes through the page's own install /
 // upgrade with that preview's id and permissions digest: nothing installs before the user agreed to exactly that.
@@ -115,7 +115,7 @@ export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
                 <div className="mt-0.5 text-[11.5px] text-ink-3">{marketLine(m, (iso) => ago(iso))}</div>
                 {m.error &&
                   // the official market out of reach is the network's (rate limits, no route), not this hub's fault: grey,
-                  // like 设置 › 扩展 (docs/onboarding.md 4.5); the reason stays on hover
+                  // like Settings › Extensions (docs/onboarding.md 4.5); the reason stays on hover
                   (m.official ? (
                     <p title={m.error} className="mt-1 text-[12px] leading-relaxed text-ink-3">{t("admin-pages-extensionmarket.official_unreachable")}</p>
                   ) : (

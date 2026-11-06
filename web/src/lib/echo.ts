@@ -9,7 +9,7 @@ import type { Item } from "./types";
 /** The computer's clock may be behind this one by this much. */
 export const CLOCK_SLACK_MS = 120_000;
 
-/** The words the hub adds where it cut a long text for the page (`…（已截断，共 N 字节）`). */
+/** The words the hub adds where it cut a long text for the page (an ellipsis, then "truncated, N bytes in all" in Chinese, in full-width parentheses). */
 // i18n-ignore: matches the words the hub writes into the text it cut
 const CUT_MARK = "\n…（已截断";
 
@@ -23,7 +23,7 @@ export function normalizeWords(s: string): string {
 }
 
 /** The transcript's copy of a message: equal once normalized, or one containing the other when both are long enough
- *  (a pending 好 must not be taken for any message with 好 in it). */
+ *  (a pending "OK" must not be taken for any message with "OK" in it). */
 export function sameWords(a: string, b: string): boolean {
   const x = normalizeWords(a),
     y = normalizeWords(b);
@@ -56,7 +56,7 @@ export interface Seen {
 
 /** `user` is the copy of `sent`. Tied to a message by the hub: that message's copy and no other's. Otherwise written
  *  after it (with slack for the computer's clock), with at least its images, and its words — when the page cut a long
- *  one, its start. An older message with the same words (a second 继续) is not it. */
+ *  one, its start. An older message with the same words (a second "Continue") is not it. */
 export function isEcho(sent: Sent, user: Seen): boolean {
   if (user.client_msg_id && sent.id) return user.client_msg_id === sent.id;
   const at = user.ts ? Date.parse(user.ts) : NaN;

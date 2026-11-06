@@ -29,7 +29,7 @@ import { Icon } from "../../ui/icons";
 import { WorkGroup, WorkNodes, type WorkProps } from "./WorkGroup";
 import { t } from "../../i18n";
 
-/** A message longer than this many lines folds to ten of them (FOLDED), with 展开 under it (cindy's UserMessage). */
+/** A message longer than this many lines folds to ten of them (FOLDED), with "Expand" under it (the reference client's UserMessage). */
 export const BUBBLE_MAX_LINES = 14;
 /** Before it is measured: about this many characters to a line of the 488 px bubble. */
 const CHARS_PER_LINE = 30;
@@ -71,10 +71,10 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
 
 /** The bubble's words, folded to ten lines past fourteen; the fold scrolls (the wheel, a trackpad, a finger), with a
  *  fade at its bottom while there is more (fold-scroll.ts). `pending` (still being sent): dimmed, the same fold. A
- *  leading `> ` block (引用) is a folded quote card at its top instead of `>` lines (Quote.tsx). */
+ *  leading `> ` block ("Quote") is a folded quote card at its top instead of `>` lines (Quote.tsx). */
 function BubbleText({ text: full, ts, mid, sid, own, pending }: { text: string; ts?: string; mid: string; sid: string; own: boolean; pending?: boolean }) {
   const fill = own ? "bg-user-bubble" : "bg-neutral-bubble";
-  // a reply sent from a card (in an assistant conversation): its words, without the hub's tag, marked 来自卡片
+  // a reply sent from a card (in an assistant conversation): its words, without the hub's tag, marked "From a card"
   const fromCard = useContext(CardConversation) ? cardReply(full) : undefined;
   const whole = fromCard ? fromCard.text : full;
   const split = useMemo(() => splitQuotes(whole), [whole]);
@@ -128,7 +128,7 @@ function BubbleText({ text: full, ts, mid, sid, own, pending }: { text: string; 
   );
 }
 
-/** 「来自 微信」 under a message that came from a channel (its client_msg_id is `<channel>-…`, docs/channels.md). */
+/** "From WeChat" under a message that came from a channel (its client_msg_id is `<channel>-…`, docs/channels.md). */
 function ChannelSource({ clientMsgId }: { clientMsgId?: string }) {
   const via = channelOf(clientMsgId, useChannels());
   if (!via) return null;
@@ -149,7 +149,7 @@ const ANSWER = "[&_.prose-j]:text-[length:var(--chat-body)]! [&_.prose-j]:leadin
  *  Memo'd: the chat context changes with every streamed item, so each SegmentView re-renders; a finished answer's
  *  props stay the same and it is skipped (#3024). */
 export const Answer = memo(function Answer({ item, streaming, mid, sid, fade }: { item?: Item; streaming?: string; mid?: string; sid?: string; fade?: boolean }) {
-  // a long answer the hub cut for the page: its start, and 看全文 under it
+  // a long answer the hub cut for the page: its start, and "View full text" under it
   const full = useFullText(streaming === undefined ? item : undefined, mid, sid);
   const text = streaming ?? full.text;
   if (!text) return null;

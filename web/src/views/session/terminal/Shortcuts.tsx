@@ -83,7 +83,7 @@ export function ShortcutsPopover({ onPick, onEdit, onClose }: { onPick: (text: s
   );
 }
 
-/** 编辑快捷命令: add, move up / down, remove (iOS 终端设置 › 快捷命令). */
+/** "Edit shortcuts": add, move up / down, remove (iOS Terminal settings › Shortcuts). */
 export function ShortcutsEditor({ open, onClose }: { open: boolean; onClose: () => void }) {
   const list = useShortcuts();
   const [draft, setDraft] = useState("");

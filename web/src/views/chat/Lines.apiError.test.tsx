@@ -1,5 +1,5 @@
-// A model error's text-derived fix (去修, Persona's model settings) belongs to Persona's own conversations only: an
-// agent session's Claude Code error keeps the plain card (and 重试 when it can help).
+// A model error's text-derived fix ("Fix it", Persona's model settings) belongs to Persona's own conversations only: an
+// agent session's Claude Code error keeps the plain card (and "Retry" when it can help).
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { parseAPIError } from "../../lib/api-errors";

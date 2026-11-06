@@ -34,7 +34,7 @@ interface SessionInfo {
 
 const count = (n?: number) => (n === undefined ? "" : n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}K` : String(n));
 
-// 会话信息 (iOS SessionInfoSheet): how it runs, how much it used, where it lives; ids and the resume command copy.
+// "Session info" (iOS SessionInfoSheet): how it runs, how much it used, where it lives; ids and the resume command copy.
 export function SessionInfoDialog({ session, machineName, open, onClose }: { session: Session; machineName: string; open: boolean; onClose: () => void }) {
   const [info, setInfo] = useState<SessionInfo | null>(null);
   const [error, setError] = useState("");
@@ -114,7 +114,7 @@ export function SessionInfoDialog({ session, machineName, open, onClose }: { ses
   );
 }
 
-// 重命名: the herdr tab and the session's name (Claude's /rename), each only when changed (iOS RenameSessionAlert).
+// "Rename": the herdr tab and the session's name (Claude's /rename), each only when changed (iOS RenameSessionAlert).
 export function RenameDialog({ session, open, onClose }: { session: Session; open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState("");
   const [title, setTitle] = useState("");
@@ -176,7 +176,7 @@ export function RenameDialog({ session, open, onClose }: { session: Session; ope
   );
 }
 
-// 重命名空间: herdr's workspace (and the pins / mutes that name it).
+// "Rename space": herdr's workspace (and the pins / mutes that name it).
 export function RenameSpaceDialog({ session, open, onClose }: { session: Session; open: boolean; onClose: () => void }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -246,7 +246,7 @@ function Field({ label, value, onChange, autoFocus }: { label: string; value: st
 
 // The two chips under the composer, like Claude Code's bottom bar: permission mode and effort (POST …/modes). A Codex
 // thread on its app-server gets the effort alone, among its own levels (effortOnly; `Session.efforts`). An assistant
-// conversation may also switch to 全部放行 (#2416). On a Claude Code session the effort chip opens the model and effort
+// conversation may also switch to "Allow everything" (#2416). On a Claude Code session the effort chip opens the model and effort
 // popover instead of the effort menu (issue #2434; the chip itself reads as before), and `/model` Enter in the composer
 // opens it too.
 export function ModeChips({ session, effortOnly, assistant, withInfo }: { session: Session; effortOnly?: boolean; assistant?: boolean; withInfo?: boolean }) {
@@ -360,7 +360,7 @@ export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIc
   );
 }
 
-// 删除对话 (issue #801): the hub takes it out of every app's list; the transcript stays on the computer and the
+// "Delete chat" (issue #801): the hub takes it out of every app's list; the transcript stays on the computer and the
 // conversation comes back once it is used again (claude --resume).
 export function DeleteSessionDialog({ session, machineName, open, onClose }: { session: Session; machineName: string; open: boolean; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -401,7 +401,7 @@ export function DeleteSessionDialog({ session, machineName, open, onClose }: { s
   );
 }
 
-// 关闭 Agent: quits the agent and closes its tab. The chat's ⋯ and the Agents list's row menu both ask here (#3405).
+// "Close Agent": quits the agent and closes its tab. The chat's ⋯ and the Agents list's row menu both ask here (#3405).
 // `onClosed`: what to do once it is closed; without it, the page leaves the agent's chat only when that chat is open.
 export function CloseAgentDialog({ open, onClose, onClosed, session, machineName }: { open: boolean; onClose: () => void; onClosed?: () => void; session: Session; machineName: string }) {
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,4 @@
-// Dragging an entry of the Files panel into a terminal or the chat composer (docs/web.md「侧边面板」): the row carries
+// Dragging an entry of the Files panel into a terminal or the chat composer (docs/web.md "Side panel"): the row carries
 // its machine, absolute path and kind under a custom type; the target types `@path ` (the agents read that as the
 // file). The pure parts — what a row carries, the path as the target sees it, whether the drop goes through. The
 // terminal's side is in views/session/terminal/feed.ts, the composer's in views/chat/Composer.tsx.

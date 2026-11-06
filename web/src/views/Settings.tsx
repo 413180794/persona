@@ -1,5 +1,5 @@
-// 设置 (docs/web.md): appearance, where the assistant runs, 模型 (every launcher: ~/.zshrc ones synced, Persona ones
-// kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
+// Settings (docs/web.md): appearance, where the assistant runs, "Models" (every launcher: ~/.zshrc ones synced, Persona ones
+// kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's Settings.
 import { BASE, stripBase } from "../lib/base";
 import { href } from "../lib/router";
 import { useScrollMemory } from "../lib/scroll-memory";
@@ -120,7 +120,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       box.style.removeProperty("--page-header");
     };
   }, []);
-  // The category (null: none named, the phone's list) and the purpose (模型配置) or extension (扩展) it has open.
+  // The category (null: none named, the phone's list) and the purpose (model configuration) or extension ("Extensions") it has open.
   const [at, setAt] = useState(() => settingsAt(location.search));
   // Back from a category opened from the list: the URL went back, the page follows it.
   useEffect(() => {
@@ -138,7 +138,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   useScrollMemory(scroller, listed ? "settings" : `settings/${at.tab ?? "general"}/${at.sub ?? ""}`);
   const tab: Tab = at.tab ?? "general";
   const { sub } = at;
-  // 扩展 only on a hub with the extension base (docs/extensions.md「hub 的接口」); a link to it still opens it.
+  // "Extensions" only on a hub with the extension base (docs/extensions.md "The hub's API"); a link to it still opens it.
   const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
   const hasChannels = useStore((s) => s.features.includes("channels"));
   const shown = (k: Tab) => (k !== "extensions" || hasExtensions || tab === "extensions") && (k !== "channels" || hasChannels || tab === "channels");
@@ -226,7 +226,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   );
 }
 
-/** The phone's first page of 设置: the categories in grouped cards, each opening its page (as on iOS). */
+/** The phone's first page of Settings: the categories in grouped cards, each opening its page (as on iOS). */
 function SettingsList({ shown, onPick }: { shown: (k: Tab) => boolean; onPick: (k: Tab) => void }) {
   return (
     <nav aria-label={t("settings.categories")}>
@@ -247,7 +247,7 @@ function SettingsList({ shown, onPick }: { shown: (k: Tab) => boolean; onPick: (
 
 const host = hostOf;
 
-// ── 通用 ────────────────────────────────────────────────
+// ── General ─────────────────────────────────────────────
 
 interface AssistantState {
   machine_id?: string;
@@ -320,7 +320,7 @@ function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; o
         <PersonaPicker onExtensions={onExtensions} />
       </Group>
 
-      {/* where it runs by the computer's name only: its folder is a path a newcomer has no use for (设置 › 助手 shows it);
+      {/* where it runs by the computer's name only: its folder is a path a newcomer has no use for (Settings › Assistant shows it);
           no computer yet ("" from the hub) says so instead of a sentence with gaps */}
       <Group title={t("settings.assistant")} footer={assistantFooter(machineName, !!assistant)}>
         <Row label={t("settings.runs_on")}>{machineName || (assistant ? t("settings-assistantsettings.machine_none") : "—")}</Row>
@@ -334,7 +334,7 @@ function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; o
   );
 }
 
-/** 设置 › 通用's line under 运行在: the computer by name; none yet ("" from the hub) says so; nothing before it is read. */
+/** Settings › General's line under "Runs on": the computer by name; none yet ("" from the hub) says so; nothing before it is read. */
 export function assistantFooter(machine: string | undefined, loaded: boolean): string | undefined {
   if (machine) return t("settings.assistant_footer", { machine });
   return loaded ? t("settings.assistant_footer_none") : undefined;
@@ -407,7 +407,7 @@ function InstallRow() {
   );
 }
 
-// ── 模型 ────────────────────────────────────────────────
+// ── Models ──────────────────────────────────────────────
 
 /** Forgets `add` / `launcher` once what they opened is closed, so going back or reloading does not open it again. */
 function dropLinkParams() {
@@ -423,7 +423,7 @@ function Models() {
   const [list, setList] = useState<LauncherView[] | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  // `?add=1` opens the wizard, `?launcher=<name>` one provider: where 接上模型 / 换 Key lead (lib/readiness.ts)
+  // `?add=1` opens the wizard, `?launcher=<name>` one provider: where "Connect a model" / "Change the key" lead (lib/readiness.ts)
   const [open, setOpen] = useState<string | null>(() => new URLSearchParams(location.search).get("launcher"));
   const [editing, setEditing] = useState<LauncherView | "new" | null>(() => (new URLSearchParams(location.search).get("add") === "1" ? "new" : null));
   const [importing, setImporting] = useState(false);
@@ -495,7 +495,7 @@ function Models() {
         </Group>
       )}
       {list && !query && (
-        // 从 ~/.zshrc 导入 reads a computer's ~/.zshrc, so it is for people who already run claude there, and needs a computer
+        // "Import from ~/.zshrc" reads a computer's ~/.zshrc, so it is for people who already run claude there, and needs a computer
         <Group title={t("settings.providers_advanced")} footer={machines.length ? t("settings.zshrc_import_hint") : t("settings.zshrc_import_no_machines")}>
           <Row label={t("settings-providerimport.title")} icon="terminal">
             <Button tone="secondary" icon="download" disabled={machines.length === 0} onClick={() => setImporting(true)}>
@@ -527,7 +527,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
   const [confirm, setConfirm] = useState(false);
   const [showDef, setShowDef] = useState(false);
   const mname = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
-  // extensions draw a section here (docs/extensions.md「声明式 UI」 launcher_section)
+  // extensions draw a section here (docs/extensions.md "Declarative UI" launcher_section)
   const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
 
   useEffect(() => {
@@ -791,7 +791,7 @@ function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
   );
 }
 
-// ── 设备 ────────────────────────────────────────────────
+// ── Devices ─────────────────────────────────────────────
 
 function Devices() {
   const [data, setData] = useState<{ tokens: DeviceToken[]; current?: string } | null>(null);
@@ -817,7 +817,7 @@ function Devices() {
   const kind: Record<string, string> = { phone: t("settings.kind_phone"), watch: t("settings.kind_watch"), other: t("settings.kind_cli"), web: t("settings.kind_web") };
   const { active, revoked } = splitDevices(data?.tokens ?? [], data?.current);
 
-  // A revoked credential is shown greyed, with when it was revoked and no 撤销 (iOS DeviceCredentials.swift).
+  // A revoked credential is shown greyed, with when it was revoked and no "Revoke" (iOS DeviceCredentials.swift).
   const row = (tok: DeviceToken, gone: boolean) => (
     <div key={tok.id} className="flex items-center gap-3 px-4 py-2.5">
       <Icon name={tok.kind === "phone" ? "phone" : tok.kind === "watch" ? "watch" : "web"} size={15} className="shrink-0 text-ink-3" />

@@ -1,10 +1,10 @@
-// 设置 › 连接器's hub connectors (iOS ConnectorsSection's rows, HubConnectorView, ConnectorSignInSections,
+// Settings › Connectors' hub connectors (iOS ConnectorsSection's rows, HubConnectorView, ConnectorSignInSections,
 // GitHubConnectorSections, GitHubInboxSettings; docs/connectors.md): GitHub, Telegram and any extension's connector, as
 // GET /api/v1/connectors lists them. A page shows how one is doing, as whom, where its sign-in comes from and what is
 // wrong (with the steps to fix it); one the user signs in to here (`login`) also gets its switch, the sign-in a step
-// at a time (fields the hub asks for, GitHub's device code, or a QR code to scan), 进知识库 / 进收件箱, sign-out and delete. GitHub adds
+// at a time (fields the hub asks for, GitHub's device code, or a QR code to scan), "Add to knowledge base" / "Add to Inbox", sign-out and delete. GitHub adds
 // where its token comes from (a computer's gh, or the device flow), the scopes it lacks, and its inbox options.
-// 信息 (iMessage) adds 交给 Persona and deleting what the hub kept (iOS MessagesConnectorView, /api/v1/imessage…).
+// Messages (iMessage) adds "Hand to Persona" and deleting what the hub kept (iOS MessagesConnectorView, /api/v1/imessage…).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import {
@@ -45,7 +45,7 @@ function Mark({ id, size }: { id: string; size: number }) {
   );
 }
 
-// ── the rows on 设置 › 连接器 ────────────────────────────
+// ── the rows on Settings › Connectors ────────────────────
 
 export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
   const [all, setAll] = useState<HubConnector[] | null>(null);
@@ -266,7 +266,7 @@ function FeedsGroup({ c, a }: { c: HubConnector; a: Actions }) {
 }
 
 /**
- * An extension's page (设置 › 扩展 › …) for the connectors it contributes: each one's 进收件箱 switch, the hub's own
+ * An extension's page (Settings › Extensions › …) for the connectors it contributes: each one's "Add to Inbox" switch, the hub's own
  * (the same as on the connector's page), and the way to the connector's page for the rest (persona#3178).
  */
 export function ExtensionConnectorInbox({ ids, onOpen }: { ids: string[]; onOpen?: (id: string) => void }) {
@@ -370,9 +370,9 @@ function Confirm({ open, title, message, action, busy, onClose, onConfirm }: {
   );
 }
 
-// ── 信息 (iMessage) ──────────────────────────────────────
+// ── Messages (iMessage) ──────────────────────────────────
 
-/** 信息's 交给 Persona switch and deleting what the hub kept (iOS MessagesConnectorView); a hub without the switch
+/** Messages' "Hand to Persona" switch and deleting what the hub kept (iOS MessagesConnectorView); a hub without the switch
  *  (no `ai` in GET /imessage, or no Mac chosen yet) shows only the read-only line. */
 export function IMessageSections() {
   const [st, setSt] = useState<IMessageStatus | null>(null);
@@ -505,7 +505,7 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
     live.current = true; // again after StrictMode's extra unmount in development
     return () => void (live.current = false);
   }, []);
-  // Also a channel (WeChat): a step this page cannot draw can be done in 设置 › 渠道 instead.
+  // Also a channel (WeChat): a step this page cannot draw can be done in Settings › Channels instead.
   const isChannel = useChannels().some((x) => x.id === c.id);
 
   /** True when signing in is done. */
@@ -724,7 +724,7 @@ function GitHubSections({ c, reload }: { c: HubConnector; reload: () => Promise<
   );
 }
 
-/** GitHub's 收件箱: which CI failures come in, and repositories that bring nothing in (PUT …/github/settings {options}). */
+/** GitHub's "Inbox": which CI failures come in, and repositories that bring nothing in (PUT …/github/settings {options}). */
 function GitHubInbox({ options, onSaved }: { options: GitHubInboxOptions; onSaved: (c: HubConnector) => void }) {
   const [o, setO] = useState(options);
   const [repo, setRepo] = useState("");

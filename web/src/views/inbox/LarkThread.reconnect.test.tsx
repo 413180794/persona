@@ -142,7 +142,7 @@ describe("飞书的列表在重连后", () => {
 
   it("hub 没能续传时会话列表、账号未读和消息显示设置重读，续传时不读", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    setLarkHome(true); // the 消息 page is on in this browser; a hub that names no features has Feishu
+    setLarkHome(true); // the "Messages" page is on in this browser; a hub that names no features has Feishu
     await act(async () => root.render(<Messages onToggleSidebar={() => {}} />));
     await flush();
     const chats = count("/lark/conversations?");
@@ -159,7 +159,7 @@ describe("飞书的列表在重连后", () => {
     await wait(1000);
     expect(count("/lark/conversations?")).toBe(chats + 1);
     expect(count("/lark/accounts")).toBe(accounts + 1);
-    // the message display settings (防撤回, 编辑历史) too: a push saying they changed is not replayed either
+    // the message display settings ("Keep recalled messages", "Edit history") too: a push saying they changed is not replayed either
     expect(count("/lark/message-display")).toBe(display + 1);
   });
 });

@@ -1,4 +1,4 @@
-// 电脑: every computer the hub drives and every way it reaches each one (paths), adding computers, jarvis-link pairing,
+// "Computers": every computer the hub drives and every way it reaches each one (paths), adding computers, jarvis-link pairing,
 // re-pairing a connector, reconnect, remove. New computers come through the node service (docs/plan-hub-center.md 0,
 // 4): the computer dials the hub (kind link, a jarvis-link pairing link) or the hub dials the computer's connector
 // (kind service, the jarvis://connector link it prints). Both connect at once; removing waits for a restart.

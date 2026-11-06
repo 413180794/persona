@@ -33,7 +33,7 @@ export interface LarkComposerProps {
   onSend: (text: string, attachments: LarkAttachment[], replyTo?: LarkReplyTarget, mentions?: LarkPerson[]) => Promise<boolean | void>;
   /** The chat's draft key (lib/lark-chat.ts draftKey): the text, the quote and the @-ed are kept under it. */
   draft?: string;
-  /** A group's chat: typing @ offers its members (所有人 first). */
+  /** A group's chat: typing @ offers its members ("Everyone" first). */
   group?: boolean;
   feed?: string;
   account?: number;
@@ -42,7 +42,7 @@ export interface LarkComposerProps {
   placeholder?: string;
   /** Smaller, under a thread. */
   compact?: boolean;
-  /** The [removed] mode may be picked (LarkBraveClimb.tsx): the switch is on and the chat takes plain text. */
+  /** The Brave Climb mode may be picked (LarkBraveClimb.tsx): the switch is on and the chat takes plain text. */
   canClimb?: boolean;
 }
 
@@ -164,7 +164,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
       toast(t("inbox-larkbraveclimb.text_only"), "error");
       return;
     }
-    // [removed] words go encoded, as the Lark gateway's web sends them; refused here keeps the text in the box
+    // Brave Climb words go encoded, as the Lark gateway's web sends them; refused here keeps the text in the box
     const trimmed = text.trim() && climb.prepare(text.trim());
     if (trimmed === undefined) return;
     setSending(true);

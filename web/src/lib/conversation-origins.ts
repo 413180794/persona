@@ -1,6 +1,6 @@
-// Where an assistant conversation comes from (docs/protocol.md「助手对话的来源」, #3264): the user's own (the app, a
-// channel's /new) stay in the sidebar's 最近; the ones the hub opened by itself (the inbox's AI 分身, a scheduled task,
-// conversation_new, a plugin's /agent…) fold into one 自动对话 row, split by origin. Pure functions, tested without a DOM.
+// Where an assistant conversation comes from (docs/protocol.md "Where assistant conversations come from", #3264): the user's own (the app, a
+// channel's /new) stay in the sidebar's "Recent"; the ones the hub opened by itself (the inbox's AI twin, a scheduled task,
+// conversation_new, a plugin's /agent…) fold into one "Automatic" row, split by origin. Pure functions, tested without a DOM.
 import { t } from "../i18n";
 import type { Session } from "./types";
 
@@ -8,7 +8,7 @@ import type { Session } from "./types";
 export const AUTO_ORIGINS = ["inbox", "task", "lark_agent", "spawned", "extension", "other"] as const;
 export type AutoOrigin = (typeof AUTO_ORIGINS)[number];
 
-/** What「全部对话」can be filtered to: everything, the user's own, or one group of automatic ones. */
+/** What "All chats" can be filtered to: everything, the user's own, or one group of automatic ones. */
 export type OriginFilter = "all" | "mine" | AutoOrigin;
 
 const USER_ORIGINS = new Set(["", "user", "channel"]);

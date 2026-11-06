@@ -1,5 +1,5 @@
-// 设置 › Claude Code › 屏蔽的配置目录 (iOS ClaudeDirsSection; docs/claude-integration.md「屏蔽配置目录」): the
-// computer's Claude Code config directories (CLAUDE_CONFIG_DIR), each with 屏蔽 / 取消屏蔽, and rules typed by hand
+// Settings › Claude Code › Blocked config directories (iOS ClaudeDirsSection; docs/claude-integration.md "Blocking config directories"): the
+// computer's Claude Code config directories (CLAUDE_CONFIG_DIR), each with "Block" / "Unblock", and rules typed by hand
 // (a path or a glob such as ~/.automation/*). A blocked directory is not scanned or remembered and its sessions leave
 // Agents; the files are not touched. Each change is one PUT of the whole list; the answer is the new state.
 import { useEffect, useState } from "react";

@@ -35,7 +35,7 @@ export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string
   const id = sid ?? assistant?.main;
   if (id) {
     if (!assistant) return <Centered><Loading /></Centered>;
-    // the main conversation is the phone's 助手 page: 「助手 | Agents」 in its top bar (ChatView's `topCenter`, narrow only)
+    // the main conversation is the phone's assistant page: "Assistant | Agents" in its top bar (ChatView's `topCenter`, narrow only)
     const topCenter = id === assistant.main ? <ShellSwitch page="assistant" /> : undefined;
     return <ChatView key={id} mid={assistant.machine_id} sid={id} assistant starting={starting.has(id)} onToggleSidebar={onToggleSidebar} topCenter={topCenter} />;
   }
@@ -104,7 +104,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
-        {/* a phone's 助手 page: 「助手 | Agents」 between the same side slots as ChatView's and the Agents page's */}
+        {/* a phone's assistant page: "Assistant | Agents" between the same side slots as ChatView's and the Agents page's */}
         {main ? (
           <ShellHeaderSlots page="assistant" onToggleSidebar={onToggleSidebar} end={<IconButton icon="info" label={t("personaassistant.profile")} onClick={() => navigate({ name: "profile" })} />} />
         ) : (

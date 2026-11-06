@@ -1,6 +1,6 @@
-// Going between hubs (#1014, lib/hubs.ts): the list in 设置 › 通用, the other hubs in the account menu and on the sign-in
+// Going between hubs (#1014, lib/hubs.ts): the list in Settings › General, the other hubs in the account menu and on the sign-in
 // page. Switching opens the other hub's own page; with no other hub in the list, the menu and the sign-in page look as
-// before (only 设置 shows the list, to add one from).
+// before (only Settings shows the list, to add one from).
 import { useEffect, useState } from "react";
 import { addHub, here, hostOf, hubTitle, loadHubs, normalizeHubURL, onHubsChange, removeHub, renameHub, switchURL, type SavedHub } from "../lib/hubs";
 import { Button, Dialog, IconButton, toast, type MenuItem } from "../ui/atoms";
@@ -38,7 +38,7 @@ export function hubMenuItems(list: SavedHub[]): MenuItem[] {
     .map((h, i) => ({ key: `hub:${h.url}`, label: hubTitle(h), hint: t("hubs.switch"), icon: "hub" as const, divider: i === 0, onSelect: () => goToHub(h) }));
 }
 
-// ── 设置 › 通用 ─────────────────────────────────────────
+// ── Settings › General ─────────────────────────────────────
 
 export function HubList() {
   const list = useHubs();
@@ -205,7 +205,7 @@ function RenameHub({ hub, onClose }: { hub: SavedHub | null; onClose: () => void
   );
 }
 
-// ── 登录页 ──────────────────────────────────────────────
+// ── Sign-in page ───────────────────────────────────────────
 
 /** On the sign-in page: the other hubs, so a hub not signed in on yet is not a dead end. */
 export function OtherHubs() {

@@ -1,4 +1,4 @@
-// 设置 › 管理者 (docs/managers.md, docs/protocol.md「管理者」): the hub's roster of managers (each a whole assistant),
+// Settings › Managers (docs/managers.md, docs/protocol.md"Managers"): the hub's roster of managers (each a whole assistant),
 // making one (a one-time install code, and the install commands when the hub gives them), renaming, the default,
 // installing one elsewhere and removing one. The hub pushes {"type":"managers"} when the roster changes to a page
 // that declared the feature `managers` (CLIENT_FEATURES).
@@ -21,7 +21,7 @@ export interface Manager {
   version?: string;
   /** Connected since (online only). */
   since?: string;
-  /** Last connected (offline: 「最后同步于…」). */
+  /** Last connected (offline: "Last synced at..."). */
   last_seen?: string;
   /** Not installed yet: when its install code runs out. */
   installing?: string;
@@ -107,7 +107,7 @@ export function statusLine(m: Manager, now = Date.now()): { text: string; tone: 
   return { text: when ? t("settings-managers.offline_since", { time: when }) : t("settings-managers.offline"), tone: "grey" };
 }
 
-/** Why 删除 is off for it, or "" when it can be removed. */
+/** Why Delete is off for it, or "" when it can be removed. */
 export function deleteBlocked(m: Manager): string {
   if (m.builtin) return t("settings-managers.delete_builtin");
   if (m.default) return t("settings-managers.delete_default");

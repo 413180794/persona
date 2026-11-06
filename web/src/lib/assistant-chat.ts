@@ -1,5 +1,5 @@
-// A Persona conversation's own controls (the app's AssistantTopBar): what 拷贝信息 copies, and switching its launcher
-// (the model) from the conversation itself (the 启动器 menu). A pick holds for that conversation's next messages, sent
+// A Persona conversation's own controls (the app's AssistantTopBar): what "Copy info" copies, and switching its launcher
+// (the model) from the conversation itself (the "Launcher" menu). A pick holds for that conversation's next messages, sent
 // as `launcher` with each (POST …/messages), and the hub resumes the conversation on it. It lasts for this page's life,
 // like the app's `assistantLaunchers`: after a reload the conversation's own launcher (the one the hub ran it on) shows.
 // The new-conversation page has its own pick under NEW_CONVERSATION, sent with POST /assistant/conversations.
@@ -24,7 +24,7 @@ export function runsAssistant(l: AssistantLauncher): boolean {
 }
 
 /**
- * The launcher a conversation's next message uses (AssistantTopBar.launcher): the main conversation follows 设置 › 助手
+ * The launcher a conversation's next message uses (AssistantTopBar.launcher): the main conversation follows Settings › Assistant
  * (the hub resumes it there) unless picked here; a side one keeps its own; the new-conversation page the default.
  */
 export function effectiveLauncher(o: { isNew?: boolean; isMain?: boolean; picked?: string; session?: string; config?: string }): string {
@@ -38,7 +38,7 @@ export function shortModel(model?: string): string {
   return modelName({ id: model ? model.split("/").pop() ?? model : "" });
 }
 
-/** What 拷贝信息 copies (AssistantCopyText.info): enough for another agent, or a terminal, to find the conversation. */
+/** What "Copy info" copies (AssistantCopyText.info): enough for another agent, or a terminal, to find the conversation. */
 export function assistantInfoText(o: { title?: string; isMain: boolean; sessionId: string; machine: string; machineId: string; cwd: string; launcher: string; model?: string }): string {
   const name = [o.isMain ? t("lib-assistant-chat.main_chat") : "", o.title ? t("lib-assistant-chat.quoted_title", { title: o.title }) : ""].filter(Boolean).join(" ");
   const machine = o.machine && o.machine !== o.machineId ? t("lib-assistant-chat.machine_with_id", { machine: o.machine, id: o.machineId }) : o.machineId;

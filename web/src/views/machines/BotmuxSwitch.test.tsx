@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 同时显示 botmux 会话 (#2575): shows the hub's value, a flip PUTs it, a failed save flips back, and an older hub
+// "Also show botmux sessions" (#2575): shows the hub's value, a flip PUTs it, a failed save flips back, and an older hub
 // without the route shows no switch.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

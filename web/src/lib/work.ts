@@ -9,7 +9,7 @@ export function hubWaits(w?: WorkState): boolean {
   return Boolean(w.wake_at) || (w.on === "external" && !w.wait && !w.agent);
 }
 
-/** The row's line for a stopped session the hub triaged: 「✓ 结论」 when done, what it waits for when blocked (with
+/** The row's line for a stopped session the hub triaged: "✓ conclusion" when done, what it waits for when blocked (with
  *  when the hub acts next); undefined while it works or before the hub triaged its turn. */
 export function workLine(s: Pick<Session, "work" | "state" | "status">, now = Date.now()): string | undefined {
   const w = s.work;
@@ -25,7 +25,7 @@ export function workLine(s: Pick<Session, "work" | "state" | "status">, now = Da
   return t("lib-work.line_when", { line: w.line, when });
 }
 
-// 「12 分钟」「1 小时 5 分」: when the hub acts next, minutes are enough (format.ts shortDuration, which imports this).
+// "12 min", "1 h 5 min": when the hub acts next, minutes are enough (format.ts shortDuration, which imports this).
 function inMinutes(ms: number): string {
   const m = Math.round(ms / 60_000);
   if (m < 60) return t("lib-work.minutes", { count: m });

@@ -1,4 +1,4 @@
-// The file viewer (docs/ios.md「文件查看器」): one file or folder on a machine, read through the hub. Markdown
+// The file viewer (docs/ios.md "File viewer"): one file or folder on a machine, read through the hub. Markdown
 // rendered (or its source), code with line numbers and a little coloring, JSON indented, images, PDFs, folders.
 // Text files come a page (2 MB) at a time; only the lines on screen are rendered, so big files stay smooth.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -59,7 +59,7 @@ const MAX_NOTEBOOK = 64 << 20; // a notebook is read whole up to this (its outpu
 const MAX_HTML = 16 << 20; // an HTML page is read whole up to this to preview
 const MAX_TABLE_BYTES = 200 << 20; // a workbook bigger than this is not opened in the browser
 
-// stream=1: a binary file comes described, its bytes from file/download by Range (docs/protocol.md「文件预览」); an
+// stream=1: a binary file comes described, its bytes from file/download by Range (docs/protocol.md "File preview"); an
 // older hub ignores it and sends base64 as before.
 export function fileURL(mid: string, path: string, cwd?: string, offset = 0) {
   return `/machines/${enc(mid)}/file?path=${enc(path)}&cwd=${enc(cwd ?? "")}${offset > 0 ? `&offset=${offset}` : ""}&stream=1`;
@@ -731,7 +731,7 @@ export function ImageView({ file, src: original, fallback }: { file: FileContent
 }
 
 /**
- * What the viewer shows for an image file. On the fallback the picture is the PNG the machine drew (file/thumb), so 下载
+ * What the viewer shows for an image file. On the fallback the picture is the PNG the machine drew (file/thumb), so "Download"
  * saves it as a .png with that type; the caption on top stays the file's own name.
  */
 export function viewerImage(file: FileContent, src: string, fallback: boolean): ViewerImage {

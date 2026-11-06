@@ -1,6 +1,6 @@
 // ⌘K: Beautiful UI's Search, over every agent and Persona conversation — and the terminal panes of the computers
 // (lib/terminals.ts, the /terminal page's data). `>` first (or ⌘⇧P) is command mode: the registered commands with their
-// shortcuts, and whatever other modules add through registerContextCommands (lib/palette.ts). docs/web.md「快捷键」.
+// shortcuts, and whatever other modules add through registerContextCommands (lib/palette.ts). docs/web.md"Keyboard shortcuts".
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { enc, api } from "../lib/api";
 import { machineWithHub } from "../lib/mesh";
@@ -32,7 +32,7 @@ interface Hit {
   score: number;
 }
 
-/** One selectable row of the list: a conversation, a terminal pane, an inbox item, a page (前往), a file
+/** One selectable row of the list: a conversation, a terminal pane, an inbox item, a page ("Go to"), a file
  *  (views/palette/FilesSection.tsx), or (command mode) a command. */
 type Row =
   | { kind: "session"; key: string; hit: Hit }
@@ -79,7 +79,7 @@ export function placeWords(key: string): string {
   return [PLACE_WORDS[key], own[key]].filter(Boolean).join(" ");
 }
 
-/** A group's heading above its first row (收件箱, 前往). */
+/** A group's heading above its first row ("Inbox", "Go to"). */
 function GroupHeading({ children }: { children: React.ReactNode }) {
   return <div className="px-2.5 pt-2 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{children}</div>;
 }
@@ -136,7 +136,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
   const bySession = useStore((s) => s.sessions);
   const panesOn = useStore((s) => s.features.includes("terminal_panes"));
   const bindings = useBindings();
-  // 收件箱 and 前往 (the Mac's quick open): the open inbox items, and the sidebar's pages with Persona and 全部对话
+  // "Inbox" and "Go to" (the Mac's quick open): the open inbox items, and the sidebar's pages with Persona and "All chats"
   const inboxItems = useInbox((s) => s.items);
   const { pages } = useNavPages();
   // the pages come anew each render: kept by what they are, so the list (and the highlight under it) stays put
@@ -363,7 +363,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 ),
               };
             }
-            // the conversations and panes have a heading only after another group (收件箱 or 前往 matched better)
+            // the conversations and panes have a heading only after another group ("Inbox" or "Go to" matched better)
             const prev = (shown[i - 1] as Row | undefined)?.kind;
             const sessionsHeading = i > 0 && prev !== "session" && prev !== "pane" ? <GroupHeading>{t("palette.group_sessions")}</GroupHeading> : null;
             if (r.kind === "pane") {

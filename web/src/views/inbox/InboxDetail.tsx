@@ -1,8 +1,9 @@
-// One item opened: what it is and where from, 已处理 on the right; the AI's summary, its 线索 (InboxLine), AI 草拟回复 / 交给 AI; then
-// the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the 公司圈 post — or,
+// One item opened: what it is and where from, "Done" on the right; the AI's summary, its "Trail" (InboxLine), "AI draft reply" / "Hand to AI"; then
+// the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the Moments post — or,
 // when the extension whose connector brought the item in draws its page (inbox_item), the extension's View.
 // An event (a hub that sends this phase's fields, lib/inbox-events.ts) opens on its event body instead (InboxEvent.tsx:
-// 摘要, 总结, the suggestion, 处理链条); 「看原文」 and the chain's source entries open the thing itself, 「看处理」 goes back.
+// summary, recap, the suggestion, the handling chain); "Original" and the chain's source entries open the thing itself,
+// "Handling" goes back.
 import { useEffect, useState } from "react";
 import { hasEvent, itemAtUid } from "../../lib/inbox-events";
 import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
@@ -26,7 +27,7 @@ import { chatOfItem, LarkThread } from "./LarkThread";
 export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
   const [dialog, setDialog] = useState<"" | "draft" | "handoff">("");
   const [pins, setPins] = useState(false);
-  // an event's own page (the chat, the mail) when 看原文 or a source entry opened it; null: the event body
+  // an event's own page (the chat, the mail) when "Original" or a source entry opened it; null: the event body
   const [source, setSource] = useState<SourceAt | null>(null);
   useEffect(() => {
     setPins(false);
@@ -50,7 +51,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   const label = kindLabel(item);
   const event = hasEvent(item);
   const showEvent = event && !source;
-  // a suggestion takes the AI 分身's draft's place (the hub mirrors a reply suggestion into the draft for older apps)
+  // a suggestion takes the AI twin's draft's place (the hub mirrors a reply suggestion into the draft for older apps)
   const draft = item.suggestion ? undefined : agentDraft(item);
   const translated = hubTranslation(item, prefs);
   const time = shortTime(item.updated_at);
@@ -106,7 +107,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
                 tone="secondary"
                 icon="check"
                 onClick={() => {
-                  // the page leaves the item at once, so say so with 撤销 on any screen (#4162), as a row does on touch
+                  // the page leaves the item at once, so say so with "Undo" on any screen (#4162), as a row does on touch
                   void markFromRow(item, true, true);
                   navigate({ name: "inbox" });
                 }}
@@ -127,7 +128,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
             {canDraft(item) ? (
               <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? t("inbox-inboxdetail.view_draft") : t("inbox-inboxdetail.ai_draft")}</Button>
             ) : (
-              // Answered in the source's own app (a CI run has nothing to answer: only 交给 AI).
+              // Answered in the source's own app (a CI run has nothing to answer: only "Hand to AI").
               openURL(item) && <Button tone="accent" icon="external" onClick={() => openSystem(openURL(item)!)}>{openTitle(item)}</Button>
             )}
             <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>{t("inbox-inboxdetail.hand_to_ai")}</Button>

@@ -1,10 +1,10 @@
-// A link opened in the side panel (CLAUDE.md「链接在 App 内打开」, docs/web.md「链接」): Feishu documents in a reader
-// (the phone's FeishuDocReader), 公司圈 posts as the post, while the hub reads Feishu (feature `lark`); any other page belongs in a browser tab (lib/links.ts says
+// A link opened in the side panel (CLAUDE.md "Links open inside the app", docs/web.md "Links"): Feishu documents in a reader
+// (the phone's FeishuDocReader), Moments posts as the post, while the hub reads Feishu (feature `lark`); any other page belongs in a browser tab (lib/links.ts says
 // why), so one that lands here says so and opens the tab. Text selected in the reader can go to the agent:
-// 「作为上下文」 rides along with the next message, 「AI 修改」 asks for a change at once (<jarvis-context>). A document's
-// comments open over it (DocComments.tsx, #1290); with the plugin's `lark_doc_comments` the selection bar's 「评论」
+// "Add as context" rides along with the next message, "AI edit" asks for a change at once (<jarvis-context>). A document's
+// comments open over it (DocComments.tsx, #1290); with the plugin's `lark_doc_comments` the selection bar's "Comment"
 // comments on the passage. Like the phone's reader, a document shows Feishu's cached AI summary (folded to a few lines)
-// and an outline of its headings (目录 in the header) that scrolls to the one picked.
+// and an outline of its headings ("Contents" in the header) that scrolls to the one picked.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, enc, getToken } from "../../lib/api";
 import { ago } from "../../lib/format";
@@ -77,7 +77,7 @@ function ContextButton({ onClick, label = t("link-linkpanel.context_whole") }: {
   );
 }
 
-/** 评论 in the header, with how many threads are open. */
+/** "Comment" in the header, with how many threads are open. */
 function CommentsButton({ count, active, onClick }: { count: number; active: boolean; onClick: () => void }) {
   const label = count ? t("link-linkpanel.comments_open", { count }) : t("link-linkpanel.comments");
   return (
@@ -115,7 +115,7 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
   const comments = useDocComments(url, content !== null && content.kind !== "unsupported");
   const [showComments, setShowComments] = useState(false);
   const [resolvedTab, setResolvedTab] = useState(false);
-  // bumped to put the caret in the comment box (评论 on the selection bar, 写评论)
+  // bumped to put the caret in the comment box ("Comment" on the selection bar, "Write a comment")
   const [focus, setFocus] = useState(0);
   const [of, setOf] = useState(url);
   if (of !== url) {
@@ -259,7 +259,7 @@ function headingsIn(el: HTMLElement): HTMLElement[] {
   return [...el.querySelectorAll<HTMLElement>("[data-doc-body] :is(h1, h2, h3, h4, h5, h6)")];
 }
 
-/** Feishu's AI summary over the document: a few lines, 展开 for the rest (FeishuDocReader.summaryCard). */
+/** Feishu's AI summary over the document: a few lines, "Expand" for the rest (FeishuDocReader.summaryCard). */
 function SummaryCard({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(true);
@@ -418,7 +418,7 @@ function Skeleton({ title }: { title?: string }) {
   );
 }
 
-// ── 公司圈 posts ──
+// ── Moments posts ──
 
 interface MomentsPost {
   userName?: string;
@@ -588,8 +588,8 @@ function blockOf(range: Range): string | undefined {
 }
 
 /**
- * Content whose selected text can be handed on: a small bar over the selection with 「作为上下文」 and 「AI 修改」, and
- * 「评论」 where the document takes comments (mouse, keyboard and touch selections alike; it shows once the pointer is
+ * Content whose selected text can be handed on: a small bar over the selection with "Add as context" and "AI edit", and
+ * "Comment" where the document takes comments (mouse, keyboard and touch selections alike; it shows once the pointer is
  * up, not while dragging).
  */
 function Pickable({ enabled, onPick, onComment, children }: { enabled: boolean; onPick: (text: string, kind: ContextRef["kind"]) => void; onComment?: (quote: string, blockId?: string) => void; children: React.ReactNode }) {
@@ -695,7 +695,7 @@ function PickButton({ onClick, label, title, children }: { onClick: () => void; 
   );
 }
 
-// 「AI 修改」: what to change, then it goes at once.
+// "AI edit": what to change, then it goes at once.
 function EditDialog({ editing, onClose }: { editing: ContextRef | null; onClose: () => void }) {
   const [ask, setAsk] = useState("");
   useEffect(() => setAsk(""), [editing]);

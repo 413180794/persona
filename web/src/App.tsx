@@ -42,7 +42,7 @@ import { useExtensionPlace } from "./lib/extension-slots";
 import { AttentionSignals } from "./lib/attention-signals";
 
 // The pages a first screen doesn't need load when they are opened (#1996), or once the browser is idle after start
-// (lib/lazy-page.ts); 对话, Persona and 总览 stay in the main bundle (the extensions' page too: the sidebar already has
+// (lib/lazy-page.ts); "Chat", Persona and "Overview" stay in the main bundle (the extensions' page too: the sidebar already has
 // ExtensionSlots for its icons).
 const AgentsView = lazyPage(() => import("./views/agents/AgentsView").then((m) => m.AgentsView));
 const WorkspaceBoard = lazyPage(() => import("./views/WorkspaceBoard").then((m) => m.WorkspaceBoard));
@@ -365,7 +365,7 @@ function Shell() {
         onClick={close}
       />
       <main ref={mainBox} inert={a11y.modal || undefined} className="relative min-w-0 flex-1">
-        {/* dropped after loading: which phase, and a click explains with 立即重试 (views/ConnectionPill.tsx); under the page's
+        {/* dropped after loading: which phase, and a click explains with "Retry now" (views/ConnectionPill.tsx); under the page's
             header, which a page taller than 56px reports as --page-header (Settings, #3594) */}
         {conn !== "online" && loaded && !offline && (
           <div className="pointer-events-none absolute inset-x-0 top-[var(--page-header,3.5rem)] z-10 flex justify-center px-4 pt-2" style={{ animation: `slide-up 220ms ${EASE} both` }}>
@@ -382,7 +382,7 @@ function Shell() {
         setPreset(null);
       }} />
       <NewWorktreeHost />
-      {/* tab title with the 需要你 count, favicon badge, optional sounds (#2332): a leaf, so a sessions push re-renders
+      {/* tab title with the "Needs you" count, favicon badge, optional sounds (#2332): a leaf, so a sessions push re-renders
           only it, not the whole shell */}
       <AttentionSignals label={title} pane={pane} />
     </div>

@@ -1,8 +1,8 @@
-// How a View's sections look (docs/extensions.md「声明式 UI」「UI 插槽」), with the web's design system: every kind of
+// How a View's sections look (docs/extensions.md "Declarative UI" "UI slots"), with the web's design system: every kind of
 // item — text, metric, progress, row (with an icon, a picture or a thumbnail), button, link, field, divider, chart,
 // stat_grid, segmented, UI version 3's markdown, table, empty and loading, and UI version 4's code hosting components
 // (CodeViews.tsx: header, breadcrumb, file_tree, code, diff, comment_thread, composer) and split layout — and a
-// section's 加载更多. An unknown item is left out. Shared by an extension's pages (settings/ExtensionView.tsx, which loads them and carries out what a
+// section's "Load more". An unknown item is left out. Shared by an extension's pages (settings/ExtensionView.tsx, which loads them and carries out what a
 // press answers) and the assistant's cards (ui/AssistantCard.tsx, which says which actions may be pressed now, which
 // one was answered, and when the fields are locked). A tone becomes a role color.
 import { useEffect, useRef, useState } from "react";
@@ -37,7 +37,7 @@ export interface ViewHandlers {
   busy: string;
   onPress: (a: UIAction, destructive?: boolean) => void;
   onChoose: (item: UIItem, value: string) => void;
-  /** A section's 加载更多 (by scrolling to it or pressing it). */
+  /** A section's "Load more" (by scrolling to it or pressing it). */
   onMore?: (more: UIMore) => void;
   /** Whether an action may be pressed now (all of them when absent). */
   canPress?: (a: UIAction) => boolean;
@@ -196,7 +196,7 @@ function Run({ items, embedded, compact, bare, onPicked, more, ...rest }: Omit<S
 }
 
 /**
- * 加载更多 at a section's end: asked for once when it scrolls into view (the extension answers with the longer view), or
+ * "Load more" at a section's end: asked for once when it scrolls into view (the extension answers with the longer view), or
  * when pressed. The line is a new one each time the view changes, so the next page is asked for when it shows again.
  */
 function MoreLine({ more, busy, onMore, divided }: { more: UIMore; busy: string; onMore: (m: UIMore) => void; divided: boolean }) {
@@ -204,7 +204,7 @@ function MoreLine({ more, busy, onMore, divided }: { more: UIMore; busy: string;
   const asked = useRef(false);
   const pending = busy === more.action.id;
   useEffect(() => {
-    asked.current = false; // a new view: its 加载更多 may ask once
+    asked.current = false; // a new view: its "Load more" may ask once
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver((entries) => {

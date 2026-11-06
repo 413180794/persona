@@ -1,6 +1,6 @@
-// A Persona conversation's menu in the sidebar (the iOS sidebar's long press, Android's drawer): 置顶 / 取消置顶,
-// 重命名…, 归档, 拷贝会话 ID, then 结束… while it runs. The main conversation is never pinned, renamed or archived.
-// Pins are this browser's (lib/conversation-pins.ts); the rest is the hub's (the same calls as 全部对话).
+// A Persona conversation's menu in the sidebar (the iOS sidebar's long press, Android's drawer): "Pin" / "Unpin",
+// "Rename…", "Archive", "Copy session ID", then "End…" while it runs. The main conversation is never pinned, renamed or archived.
+// Pins are this browser's (lib/conversation-pins.ts); the rest is the hub's (the same calls as "All chats").
 import { api, enc, errorText, sessionPath } from "../lib/api";
 import { togglePinnedConversation, unpinAllConversations } from "../lib/conversation-pins";
 import { sessionTitle } from "../lib/format";
@@ -115,7 +115,7 @@ export function ConversationRowMenu({ s, main, pinned, anchor, at, onClose }: { 
   return <Menu anchor={p.anchor ?? null} point={p.point} onClose={onClose} align="right" width={200} items={conversationMenuItems(s, { main, pinned })} />;
 }
 
-/** The section title's menu: 全部取消置顶 when something is pinned. */
+/** The section title's menu: "Unpin all" when something is pinned. */
 export function pinnedSectionItems(count: number): MenuItem[] {
   return count ? [{ key: "unpin-all", label: t("conversation-menu.unpin_all"), icon: "pin", onSelect: () => unpinAllConversations() }] : [];
 }

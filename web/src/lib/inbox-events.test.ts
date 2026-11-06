@@ -1,4 +1,4 @@
-// Inbox events (docs/inbox.md「事件、处理链条、建议」), driven by the fake hub's fixture (scripts/mock/inbox_events.json):
+// Inbox events (docs/inbox.md "Events, handling chain, suggestions"), driven by the fake hub's fixture (scripts/mock/inbox_events.json):
 // one item per state. An item without this phase's fields stays where the tier put it.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -43,7 +43,7 @@ describe("收件箱事件：分区", () => {
     expect(ids(s.tiers.fyi)).toEqual([conclusion.id]);
     expect(ids(s.tiers.noise)).toEqual([noise.id]);
     expect(s.done).toHaveLength(2);
-    // the badge counts 需要你 only (urgent included, it is status action): 进行中 is the AI's
+    // the badge counts Needs you only (urgent included, it is status action): In progress is the AI's
     expect(badgeCount(fixture.items)).toBe(4);
     expect(badgeCount([urgent])).toBe(1);
     expect(badgeCount([waiting, agentWorking])).toBe(0);

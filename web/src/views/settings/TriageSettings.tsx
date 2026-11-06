@@ -1,11 +1,11 @@
-// 设置 › 会话分诊 (docs/agent-work.md「开关」): when an agent stops, the hub can read its last reply and say whether it is
+// Settings › Session triage (docs/agent-work.md "Switches"): when an agent stops, the hub can read its last reply and say whether it is
 // done or what it waits for, and act on it. All off until turned on here: the triage calls a model on every stopped
-// turn, and 自动继续 / 到点叫醒 run a turn of the agent on its own model. Saved on the hub (PUT /agents/triage), so it is
+// turn, and "Auto-continue" / "Wake on schedule" run a turn of the agent on its own model. Saved on the hub (PUT /agents/triage), so it is
 // the same on every device.
 // A read that fails is not "all off" (#4491): the switches are PUT as a whole set, so drawing them off and letting one be
 // flipped would write off over every other switch the hub has on. Until the hub answers there are no switches, only
-// 加载中 or why it could not read them and 重试. A hub with no such route (404) is older than the triage: it says so,
-// without a 重试 that could not help (iOS / Android do the same).
+// "Loading" or why it could not read them and "Retry". A hub with no such route (404) is older than the triage: it says so,
+// without a "Retry" that could not help (iOS / Android do the same).
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";

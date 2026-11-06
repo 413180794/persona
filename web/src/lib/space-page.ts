@@ -1,4 +1,4 @@
-// The page of one space (`/space/<机器>/<空间名>`, docs/web.md「空间页」, iOS SpaceView): what is computed from the
+// The page of one space (`/space/<machine>/<space name>`, docs/web.md "Space page", iOS SpaceView): what is computed from the
 // store, kept apart so it can be tested. A space is found by its name on the machine, like the pins, mutes and the
 // todos it hangs on: herdr gives a workspace a new id when it restarts, the name stays.
 import { byAttention, stateOf } from "./format";
@@ -45,7 +45,7 @@ export function spaceView(sessions: readonly Session[], mid: string, space: stri
 export interface SpaceTodo {
   id: string;
   title: string;
-  /** "space": the space itself hangs on it (关联到待办); "agent": one of its agents does. */
+  /** "space": the space itself hangs on it ("Link to to-do"); "agent": one of its agents does. */
   via: "space" | "agent";
   todo?: Todo;
 }

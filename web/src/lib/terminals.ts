@@ -1,4 +1,4 @@
-// The terminal browser's tree (docs/terminal.md「独立终端」): what a machine's node lists (`GET /machines/{mid}/panes`:
+// The terminal browser's tree (docs/terminal.md "Standalone terminals"): what a machine's node lists (`GET /machines/{mid}/panes`:
 // workspaces, tabs and panes of its terminal host, agent or plain shell) turned into the rows the page shows, plus the
 // Jump-To filter and which terminals the page keeps alive. Pure, so it is tested without a DOM.
 import { t } from "../i18n";
@@ -79,14 +79,14 @@ export interface TermTab {
 }
 export interface TermSpace {
   id: string;
-  /** The host kind the workspace belongs to: 新建终端 says which one. */
+  /** The host kind the workspace belongs to: "New terminal" says which one. */
   host: string;
   label: string;
   branch: string;
   cwd: string;
   /** A shell can be opened here. */
   canOpen: boolean;
-  /** 新建 worktree… can be offered on this workspace (#2431). */
+  /** "New worktree…" can be offered on this workspace (#2431). */
   canWorktree?: boolean;
   tabs: TermTab[];
 }
@@ -188,7 +188,7 @@ export function paneIds(spaces: readonly TermSpace[]): string[] {
   return spaces.flatMap((sp) => sp.tabs.flatMap((t) => t.panes.map((p) => p.id)));
 }
 
-/** The pane's place for a header: 工作区 › 标签页 · title. */
+/** The pane's place for a header: workspace › tab · title. */
 export function paneTrail(spaces: readonly TermSpace[], id: string): string {
   for (const sp of spaces)
     for (const t of sp.tabs) {

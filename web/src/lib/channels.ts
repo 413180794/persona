@@ -1,4 +1,4 @@
-// 设置 › 扩展 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
+// Settings › Extensions › Channels (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
 // Feishu, voice, and the chat app bots extensions contribute — as GET /api/v1/channels lists them; one channel's page
 // (its switch, binding a step at a time, where its messages go, what it does, a test message), and the source mark on
 // a message that came from one (its client_msg_id is `<channel>-<message id>`).
@@ -147,7 +147,7 @@ export function channelSections(list: Channel[]): { title: string; footer?: stri
   ].filter((s) => s.channels.length > 0);
 }
 
-/** 「3 个已连接」, with the ones that went wrong. */
+/** "3 connected", with the ones that went wrong. */
 export function channelsSummary(list: Channel[]): string {
   const on = list.filter((c) => c.kind !== "app" && c.state === "connected").length;
   const bad = list.filter((c) => c.state === "error").length;

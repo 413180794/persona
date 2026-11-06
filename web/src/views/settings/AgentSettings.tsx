@@ -1,6 +1,6 @@
-// 设置 › Claude Code / Codex (iOS ClaudeSettingsView): the node's whitelist of each agent's own settings file on one
+// Settings › Claude Code / Codex (iOS ClaudeSettingsView): the node's whitelist of each agent's own settings file on one
 // computer, picked at the top (online ones; the choice is remembered). A change is sent at once (PUT {key, value},
-// null = back to the default) and rolled back if that computer refuses; 「同时改所有在线机器」 sends it to every online
+// null = back to the default) and rolled back if that computer refuses; "Change all online machines" sends it to every online
 // computer, and a row's ⋯ pushes its value to all of them. The footer says which file changes and when it applies.
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -76,7 +76,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
   const put = (id: string, key: string, value: SettingValue) =>
     api<{ settings?: AgentSetting[] }>(`/machines/${enc(id)}/${text.path}`, { method: "PUT", json: { key, value } });
 
-  // Sends one value to the shown computer (and, with 同时改, every other online one); rolls the row back if the
+  // Sends one value to the shown computer (and, with "Change all", every other online one); rolls the row back if the
   // shown computer refuses, and says what happened.
   const change = async (s: AgentSetting, value: SettingValue) => {
     const before = s.value ?? null;
@@ -101,7 +101,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
     toast(sum.ok ? t("settings-agentsettings.toast_value", { title: settingTitle(s), value: valueText(value, s.key), summary: sum.text }) : t("settings-agentsettings.toast_failed", { title: settingTitle(s), summary: sum.text }), sum.ok ? "ok" : "error");
   };
 
-  // ⋯ › 应用到所有在线机器: this computer's value (unset = the default) on every other online one.
+  // ⋯ › "Apply to all online machines": this computer's value (unset = the default) on every other online one.
   const pushToAll = async (s: AgentSetting) => {
     const others = online.filter((m) => m.id !== shown);
     if (!others.length) return toast(t("settings-agentsettings.no_other_online"), "info");

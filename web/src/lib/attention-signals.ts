@@ -35,7 +35,7 @@ function load(src: string): Promise<HTMLImageElement> {
   return p;
 }
 
-/** The icon with the 需要你 badge at its top right: a red disc (the sidebar's --status-needs) with the count. */
+/** The icon with the "Needs you" badge at its top right: a red disc (the sidebar's --status-needs) with the count. */
 async function badged(src: string, text: string): Promise<string> {
   const key = `${src}|${text}`;
   const hit = drawn.get(key);
@@ -126,9 +126,9 @@ export function armAudio(): void {
 
 // [frequency Hz, start s, length s, peak gain]
 type Note = [number, number, number, number];
-/** 需要你: two rising notes, clear. */
+/** "Needs you": two rising notes, clear. */
 const CHIME: Note[] = [[784, 0, 0.22, 0.16], [1175, 0.14, 0.34, 0.16]];
-/** 完成: one low, soft note. */
+/** "Done": one low, soft note. */
 const DONE: Note[] = [[523, 0, 0.4, 0.07]];
 
 export function play(kind: "needs" | "finished"): void {
@@ -163,15 +163,15 @@ const ASK_TITLE = {
   elicitation: "notify.elicitation_title",
 } as const;
 
-/** A system notification for the event (设置 › 通知): only while no tab of the app is in front (that one's title, badge
+/** A system notification for the event (Settings › Notifications): only while no tab of the app is in front (that one's title, badge
  *  and sounds cover it), and once for all the open tabs. Clicking it opens the agent's conversation. `card` is the new
- *  card of a session that was already 需要你 (#4058): it replaces the agent's earlier 需要你 one (same tag), and the tabs
- *  share it by the card, so a transition just posted does not keep it back. Returns the card a 需要你 one is about. */
+ *  card of a session that was already "Needs you" (#4058): it replaces the agent's earlier "Needs you" one (same tag), and the tabs
+ *  share it by the card, so a transition just posted does not keep it back. Returns the card a "Needs you" one is about. */
 function notify(s: Session, kind: "needs" | "finished", card?: Interaction): string | undefined {
   if (inFront() || otherTabInFront() || !systemNotifyActive()) return;
   const tag = `${agentKey(s)}#${kind}`;
   if (!claimNotification(card ? `${tag}@${card.id}` : tag)) return;
-  // 需要你: what the card asks, not the agent's last words (#4056); the hub tells the card before the session's state
+  // "Needs you": what the card asks, not the agent's last words (#4056); the hub tells the card before the session's state
   const waiting = kind === "needs" ? { ix: card ?? waitingCard(getState().interactions, s), reason: attentionReason(s) } : {};
   const { title, body } = notificationText(
     s,
@@ -187,7 +187,7 @@ function notify(s: Session, kind: "needs" | "finished", card?: Interaction): str
   );
   const route = { name: "session", mid: s.machine_id, sid: s.session_id } as const;
   const icon = document.querySelector<HTMLLinkElement>(ICONS)?.dataset.original ?? document.querySelector<HTMLLinkElement>(ICONS)?.href;
-  // a permission card's gets 允许 / 拒绝 (#4464), when the session can be answered from here and nothing has to be
+  // a permission card's gets Allow / Deny (#4464), when the session can be answered from here and nothing has to be
   // filled in first (fields: as the hub's push and the overview's quick answers); the rest need the conversation
   const ix = waiting.ix?.kind === "permission" && !waiting.ix.fields?.length && sessionCan(s, "approve") ? waiting.ix.id : undefined;
   postNotification({ title, body, tag, url: href(route), icon, ix }, () => navigate(route));
@@ -197,7 +197,7 @@ function notify(s: Session, kind: "needs" | "finished", card?: Interaction): str
 /**
  * The tab title (`label` is the page's label, as App works it out), the favicon badge, the sounds and the system
  * notifications. `pane` is the agent conversation on the page, if any: it is not announced while the window is focused.
- * Sounds and notifications follow this browser's 设置 › 通知 (lib/notify.ts): 需要你 by its switch, 做完 by its three
+ * Sounds and notifications follow this browser's Settings › Notifications (lib/notify.ts): "Needs you" by its switch, "Done" by its three
  * choices, a turn's length as the page saw it (trackTurns).
  */
 export function useAttentionSignals(label: string, pane: { mid: string; sid: string } | undefined): void {
@@ -208,7 +208,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
   useEffect(() => setFaviconBadge(needs), [needs]);
 
   useEffect(armAudio, []);
-  // 允许 / 拒绝 clicked on a permission card's notification: the service worker hands it to this page (#4464)
+  // Allow / Deny clicked on a permission card's notification: the service worker hands it to this page (#4464)
   useEffect(listenForNotificationClicks, []);
 
   // Tells the other tabs whether this one is in front (notify: none of them posts then).
@@ -247,8 +247,8 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
   const latest = useRef(sessions);
   latest.current = sessions;
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
-  // the card ids seen pending (undefined before the first run), the card each 需要你 notification is about, and the
-  // sessions whose 需要你 came before any card (its first card is the same wait, CardEvent.follows)
+  // the card ids seen pending (undefined before the first run), the card each "Needs you" notification is about, and the
+  // sessions whose "Needs you" came before any card (its first card is the same wait, CardEvent.follows)
   const cards = useRef<ReadonlyMap<string, number> | undefined>(undefined);
   const announced = useRef(new Map<string, string>());
   const bare = useRef(new Set<string>());
@@ -257,14 +257,14 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     if (!loaded) return;
     const now = Date.now();
     const { next, events } = detectTransitions(prev.current, sessions, getState().mutes);
-    // a session already 需要你 that gets another card speaks again (#4058)
+    // a session already "Needs you" that gets another card speaks again (#4058)
     const fresh = detectNewCards(cards.current, interactions, prev.current, next, sessions, bare.current, now);
     cards.current = fresh.ids;
     for (const k of bare.current) if (next.get(k) !== "needs_you") bare.current.delete(k);
     for (const e of fresh.events) bare.current.delete(e.key);
     for (const e of events) if (e.kind === "needs" && !interactions.some((ix) => agentKey(ix) === e.key)) bare.current.add(e.key);
     // answered or seen, here or elsewhere: its system notification goes too (#3458); and one about a card that is gone,
-    // while the session waits on another; and a 没能允许 one about a card that is gone
+    // while the session waits on another; and a Could not allow one about a card that is gone
     const settled = new Set([...settledTags(prev.current, next), ...answeredTags(announced.current, interactions), ...failedTagsOver(interactions)]);
     settled.forEach(closeNotification);
     for (const tag of settled) if (tag.endsWith("#needs")) announced.current.delete(tag.slice(0, -"#needs".length));
@@ -283,10 +283,10 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     };
     const find = (k: string) => latest.current.find((x) => agentKey(x) === k);
     const urgent = wanted.filter((e) => e.kind === "needs");
-    // a card that follows its session's 需要你 rewrites that notification without a second sound
+    // a card that follows its session's "Needs you" rewrites that notification without a second sound
     const first = pickEvent(urgent.filter((e) => !e.follows));
     if (first) speak(first.kind, first.key);
-    // The sound of 需要你 does not look at mutes (detectTransitions); the notification does, as the phone's push and
+    // The sound of "Needs you" does not look at mutes (detectTransitions); the notification does, as the phone's push and
     // the Mac's do (hub announce, MacAttention.transitions).
     for (const e of urgent) {
       const s = find(e.key);
@@ -295,7 +295,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
       if (about) announced.current.set(e.key, about);
     }
     // A finished turn speaks once it has stayed finished (the status flaps working → done → working around a turn).
-    // No sound when a 需要你 one is going out with it: that one is the more urgent.
+    // No sound when a "Needs you" one is going out with it: that one is the more urgent.
     for (const done of wanted.filter((e) => e.kind === "finished")) {
       const t = setTimeout(() => {
         timers.current.delete(t);
@@ -315,7 +315,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
 }
 
 /**
- * `useAttentionSignals` as a component that draws nothing. It reads every session push (the 需要你 count, the
+ * `useAttentionSignals` as a component that draws nothing. It reads every session push (the "Needs you" count, the
  * transitions): rendered as a leaf, a push re-renders only it, not the shell with the sidebar and the page around it.
  */
 export function AttentionSignals({ label, pane }: { label: string; pane: { mid: string; sid: string } | undefined }): null {

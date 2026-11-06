@@ -1,4 +1,4 @@
-// The model picker merged into the composer's 思考 chip (issue #2434, after Moshi's `model · effort` pill): one popover
+// The model picker merged into the composer's "Thinking" chip (issue #2434, after Moshi's `model · effort` pill): one popover
 // with the effort tabs on top and the model list below. The list is what Persona already asks the launcher's agent for
 // (lib/launcher-models.ts); applying sends POST …/modes {model} and then {effort}, and the node types `/model <id>`
 // into Claude Code through the same guards as a message (server/internal/node/model_switch.go). Pure helpers and the

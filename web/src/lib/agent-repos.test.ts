@@ -46,7 +46,7 @@ describe("从 cwd 推断仓库与工作树", () => {
     expect(repoOf("/code/app", "/code/app/")).toEqual({ repo: "/code/app", name: "app", worktree: "/code/app", main: true });
     expect(repoOf("/code/app/server", "/code/app")).toEqual({ repo: "/code/app", name: "app", worktree: "/code/app", main: true });
     expect(repoOf("/code/app-2", "/code/app").main).toBe(false);
-    expect(repoOf(wt, "")).toEqual(repoOf(wt)); // 空的 repo_root 和没有一样
+    expect(repoOf(wt, "")).toEqual(repoOf(wt)); // an empty repo_root is the same as none
   });
 });
 

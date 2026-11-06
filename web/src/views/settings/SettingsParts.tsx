@@ -18,7 +18,7 @@ export function Group({ title, footer, children, right }: { title?: React.ReactN
   );
 }
 
-// A row's destructive action, confirmed in the row itself: the trigger gives way to 取消 and the confirm button. A
+// A row's destructive action, confirmed in the row itself: the trigger gives way to "Cancel" and the confirm button. A
 // popover under the trigger would be clipped by the card (Group's overflow-hidden) on the card's last row (#1504).
 export function RowConfirm({ open, trigger, confirm, busy, onCancel, onConfirm }: {
   open: boolean;
@@ -40,7 +40,7 @@ export function RowConfirm({ open, trigger, confirm, busy, onCancel, onConfirm }
     const el = box.current;
     if (!el) return;
     const list = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)];
-    // open: the trigger that had the focus is gone, so it goes to 取消 rather than dropping to <body>
+    // open: the trigger that had the focus is gone, so it goes to "Cancel" rather than dropping to <body>
     if (open) return list[0]?.focus({ preventScroll: true });
     // closed: back to the trigger, unless the focus has already moved somewhere else on purpose
     const active = document.activeElement;

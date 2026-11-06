@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// On a phone-width screen the detail's title comes first (#4144): Pin 消息 and 静音 fold into one ⋯ menu when both are there, and the
+// On a phone-width screen the detail's title comes first (#4144): "Pinned messages" and "Mute" fold into one ⋯ menu when both are there, and the
 // time in the source line keeps its own span so it is not the part that gets cut.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

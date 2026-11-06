@@ -1,5 +1,5 @@
 // Each online machine's terminal panes (`GET /machines/{mid}/panes`): read when the consumer mounts, every few seconds
-// while the page is in front, and on demand. The 终端 page and the sidebar's terminal tree (when turned on) read them.
+// while the page is in front, and on demand. The "Terminal" page and the sidebar's terminal tree (when turned on) read them.
 import { useCallback, useEffect, useState } from "react";
 import { api, enc, errorText } from "./api";
 import type { PanesResponse } from "./terminals";

@@ -1,4 +1,4 @@
-// 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
+// Overview: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
 import { useMemo, useRef, useState } from "react";
 import { ago, sessionCan, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
 import { cardState } from "../lib/card-focus";
@@ -41,7 +41,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   const machines = useStore((s) => s.machines);
   const interactions = useStore((s) => s.interactions);
   const answered = useStore((s) => s.answered);
-  // a card answered here moves its agent out of 卡住了 at once, not at the hub's next push (#4286)
+  // a card answered here moves its agent out of "Stuck" at once, not at the hub's next push (#4286)
   const agentSessions = useAgentSessions();
   const sessions = useMemo(() => answeredSessions(agentSessions, interactions, answered), [agentSessions, interactions, answered]);
   const loaded = useStore((s) => s.loaded);
@@ -49,7 +49,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   const now = useNow(5000, counts.working > 0);
 
   // the agents of one herdr tab are one row (#2320), filed under the most urgent of them; a card waiting counts as
-  // something to do, and 「全部标为已读」 marks every unread agent, wherever its tab is filed
+  // something to do, and "Mark all as seen" marks every unread agent, wherever its tab is filed
   const { groups, unread, markAllAt, quiet } = useMemo(() => homeOverview(sessions, interactions), [sessions, interactions]);
   const name = (mid: string) => machineWithHub(mid, machines);
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
@@ -92,11 +92,11 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </div>
           </div>
 
-          {/* the extensions' cards (docs/extensions.md「UI 插槽」 overview_card), under the agents' summary */}
+          {/* the extensions' cards (docs/extensions.md"UI slots" overview_card), under the agents' summary */}
           <OverviewCards />
 
           {/* Before the first snapshot the socket streams the machines' agents and cards in one by one, each moving the
-              groups already painted, and 加载中 then went from over them: until it is in only 加载中, then all at once. */}
+              groups already painted, and "Loading" then went from over them: until it is in only "Loading", then all at once. */}
           {!loaded && <Loading label={t("common.loading")} />}
 
           {/* the headline counts agents, this counts cards: say so when one agent has several cards waiting */}
@@ -105,9 +105,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
               {withHeld(interactions, held).map(({ ix, held: h }, i, rows) => {
                 const s = sessions.find((x) => x.machine_id === ix.machine_id && x.session_id === ix.session_id);
                 const title = ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"));
-                // what the row answers in one tap, as iOS's 需要你 cards; the rest (plans, forms, typing) opens the chat
+                // what the row answers in one tap, as iOS's "Needs you" cards; the rest (plans, forms, typing) opens the chat
                 const quick = sessionCan(s ?? getSession(ix.machine_id, ix.session_id), "approve") ? quickAnswers(ix) : null;
-                // allowed in one tap, a permission says the tool and what it runs or touches (iOS:「Bash：swift test」),
+                // allowed in one tap, a permission says the tool and what it runs or touches (iOS: "Bash: swift test"),
                 // not the agent's description of it
                 const tool = quick && ix.kind === "permission" ? toolDisplayName(ix.tool_name) : "";
                 // and a terminal dialog what it is about (the command under its question), as iOS's card does. Both
@@ -117,7 +117,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                 const ask = (ix.kind === "plan" ? t("home.plan_ready") : raw || plainMarkdown(interactionAsk(ix))).replace(/\s+/g, " ").trim();
                 const done = h !== undefined && h.phase !== "sending";
                 // every row in a Collapse, so an answered one folds away where it is; answered, it keeps its words
-                // and its height (已回答 in the buttons' place) until then
+                // and its height ("Answered" in the buttons' place) until then
                 return (
                   // the room around the row (-m-2 / p-2) is its shadow's: the collapse clips what is outside it
                   <Collapse key={ix.id} open={h?.phase !== "leaving"} className="-m-2">
@@ -251,7 +251,7 @@ function SessionTask({ s, i, machine, pill }: { s: Session; i: number; machine: 
   return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={sessionTitle(s)} meta={[sourceSubtitle(s), machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")} detail={s.source_kind ? [sourceSubtitle(s), sessionPreview(s)].filter(Boolean).join(" · ") : sessionPreview(s)} pill={pill} />;
 }
 
-// One tab's agents as one row (#2320): the 发起者's title (the first pane's when the panes are peers), the most urgent
+// One tab's agents as one row (#2320): the "Lead"'s title (the first pane's when the panes are peers), the most urgent
 // one's latest words and state, and how many there are; it opens the tab on that most urgent pane.
 function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: string; pill: React.ReactNode }) {
   if (g.sessions.length === 1) return <SessionTask s={g.lead} i={i} machine={machine} pill={pill} />;
@@ -300,7 +300,7 @@ function QuickAnswers({ choices, sending, onPick }: { choices: QuickChoice[]; se
   );
 }
 
-/** In an answered row the buttons' place: 已回答 and the answer, a button's height, for a moment before it folds. */
+/** In an answered row the buttons' place: "Answered" and the answer, a button's height, for a moment before it folds. */
 function AnsweredLine({ ix, body }: { ix: Interaction; body: Resolution }) {
   // the hub may say it was answered already, elsewhere: what took effect, as the chat's answered card shows it
   const done = useStore((s) => s.answered[ix.id]);
@@ -390,7 +390,7 @@ function Badge({ state }: { state: AgentState }) {
 
 /** An offline computer's line on the overview, read in the machines page's order (#4038): waiting to be confirmed, the
  * hub's error_code in our words, a planned restart, then the plain reason from the error text (#3633); else the raw
- * error or 离线. */
+ * error or "Offline". */
 export function offlineLine(m: Machine): string {
   if (isPending(m)) return t("machines.never_connected");
   const coded = machineErrorText(m.error_code);

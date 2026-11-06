@@ -1,4 +1,4 @@
-// A thought in a work group (cindy's ThinkingCard): 「思考 Ns」, opening to its words (14 px italic on a rail) when it
+// A thought in a work group (the reference client's ThinkingCard): "Thought for Ns", opening to its words (14 px italic on a rail) when it
 // has any. Claude Code mostly writes thoughts without words: those only say how long they took. While the agent is
 // thinking right now (the screen's status line, `live.thinking`) the card at the end of the live group says
 // Thinking with three dots and a clock.

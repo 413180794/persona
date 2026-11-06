@@ -1,4 +1,4 @@
-// The 个人 Agent list is pulled again on every {"type":"agents"} event: one that arrives while a pull is on the way
+// The "Personal agents" list is pulled again on every {"type":"agents"} event: one that arrives while a pull is on the way
 // may announce a change that pull was answered before, so it must still lead to another pull.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents, togglePin, updateAgentPrefs, useAgentList, useAgentPrefs, type AgentPrefs, type AgentSession } from "./agents";

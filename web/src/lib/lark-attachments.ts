@@ -39,7 +39,7 @@ export interface LarkAttachmentRoute {
   threadRoot?: string;
 }
 
-/** Still pictures go as pictures; moving ones (GIF) and drawings (SVG) keep what they are as files, like iOS's 原图. */
+/** Still pictures go as pictures; moving ones (GIF) and drawings (SVG) keep what they are as files, like iOS's "Original". */
 export function sendsAsImage(mime: string): boolean {
   return /^image\//i.test(mime) && !/^image\/(gif|svg\+xml|x-icon|vnd\.)/i.test(mime);
 }
@@ -148,7 +148,7 @@ export class LarkReceiptMissing extends Error {
 
 /**
  * Sends one attachment. A picture needs its message id back; a file may come back without one (it was taken, so it
- * must not be sent again: docs/lark-attachments.md「成功的文件回执可以省略 message_id」).
+ * must not be sent again: docs/lark-attachments.md "A successful file receipt may leave out message_id").
  */
 export async function sendLarkAttachment(feed: string, a: LarkAttachment, clientID: string, route: LarkAttachmentRoute = {}, ol?: number):
   Promise<{ message_id?: string }> {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 浏览器（ego lite） on a Mac's page (G107): the switch PUTs /browser and says so when that fails, the install / cancel /
+// "Browser (ego lite)" on a Mac's page (G107): the switch PUTs /browser and says so when that fails, the install / cancel /
 // open buttons POST their action, the hub is asked again every 2 s while the setup is under way, and the sign-ins
 // (BrowserLogins) only follow once the first-run setup is done.
 import { act } from "react";

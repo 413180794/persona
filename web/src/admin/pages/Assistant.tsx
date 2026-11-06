@@ -1,4 +1,4 @@
-// 助手卡片 (docs/admin.md「助手卡片」, docs/assistant-views.md「提示词与开关」, #2023): the switch for the main conversation's
+// "Assistant cards" (docs/admin.md "Assistant cards", docs/assistant-views.md "Prompts and switch", #2023): the switch for the main conversation's
 // rich UI (hub.json's assistant.persona_view), what each app does with it today, and a preview of the example cards.
 // The preview is local only: it draws the synthetic examples with the extensions' components, a press or a form only
 // changes this page's state, and an html card shows its text fallback (no model page runs here). It never calls the hub.

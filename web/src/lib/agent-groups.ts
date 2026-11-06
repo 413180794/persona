@@ -5,7 +5,7 @@ import type { AgentState, Machine, Session } from "./types";
 import { byTime } from "./times";
 
 export type AgentGrouping = "repo" | "space" | "state" | "machine" | "todo";
-// 按机器 is herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts) and the default for a browser that never
+// "By machine" is herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts) and the default for a browser that never
 // picked one; a grouping picked before stays.
 export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
   { key: "machine", label: t("lib-agent-groups.by_machine") },
@@ -123,8 +123,8 @@ function byDate(a: Session, b: Session): number {
   return byTime(date(b), date(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
 }
 
-// iOS AgentListOrder: needs you always wins, even when a session or its project is muted. 按状态 is the only grouping
-// built here (按机器 is lib/herdr-tree.ts); the argument stays for the callers that name it.
+// iOS AgentListOrder: needs you always wins, even when a session or its project is muted. "By status" is the only grouping
+// built here ("By machine" is lib/herdr-tree.ts); the argument stays for the callers that name it.
 export function buildAgentGroups(all: Session[], machines: Machine[], _grouping: "state", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
   const { live } = splitAgentSessions(all, machines);
   const groups: AgentGroup[] = [

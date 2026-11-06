@@ -1,5 +1,5 @@
-// 用量来源: the account-pool gateways (relays…) whose subscription windows join the sidebar's usage bars
-// (docs/usage-windows.md「账号池网关」, #2595). Add, edit, switch and remove them, try one with a single read-only read.
+// Usage sources: the account-pool gateways (relays…) whose subscription windows join the sidebar's usage bars
+// (docs/usage-windows.md"Account-pool gateways", #2595). Add, edit, switch and remove them, try one with a single read-only read.
 // The hub keeps the keys in hub.json and never sends one back: a source only says whether it has one.
 import { t } from "../../i18n";
 import { useEffect, useState } from "react";

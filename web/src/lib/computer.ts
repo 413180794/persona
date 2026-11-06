@@ -1,4 +1,4 @@
-// 操控电脑 on a Mac's page (docs/computer-use.md, iOS ComputerSection): what the hub says the Mac has of Cua Driver
+// "Computer control" on a Mac's page (docs/computer-use.md, iOS ComputerSection): what the hub says the Mac has of Cua Driver
 // (GET/PUT /api/v1/machines/{mid}/computer, POST …/computer/{install|grant|cancel}), and what the section shows for it.
 import { BASE } from "./base";
 import { formatList, t } from "../i18n";

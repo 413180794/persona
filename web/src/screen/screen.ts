@@ -1,4 +1,4 @@
-// The live screen's page, /screen/<machine id> (docs/computer-use.md「实时画面」): which machine, and which token.
+// The live screen's page, /screen/<machine id> (docs/computer-use.md "Live view"): which machine, and which token.
 // The app opens it in its web view with its own device token in the fragment (#token=…&embed=1): that one stays in
 // this page's memory, is never stored and never traded for a browser token (the web's sign-in link would mint one per
 // open). A signed-in browser uses its own.
@@ -32,7 +32,7 @@ export function screenTarget(href: string, stored: () => string = getToken): { t
   hash.delete("embed");
   hash.delete("name");
   hash.delete("keep");
-  const unlock = keep !== "" && hash.get("unlock") === "1"; // 一键解锁 (#1507 a-2): only where the app keeps the sign-in
+  const unlock = keep !== "" && hash.get("unlock") === "1"; // one-tap unlock (#1507 a-2): only where the app keeps the sign-in
   hash.delete("unlock");
   const rest = u.pathname + u.search + (hash.toString() ? "#" + hash.toString() : "");
   if (!mid) return { target: null, rest };
@@ -51,7 +51,7 @@ export function accountOf(home: string | undefined): string {
   return m ? m[1] : "";
 }
 
-/** The sign-in's 记住 box: where the app keeps the account and password. */
+/** The sign-in's "Remember" box: where the app keeps the account and password. */
 export function keepLabel(keep: ScreenTarget["keep"]): string {
   return keep === "mac" ? t("screen-screen.keep_mac") : t("screen-screen.keep_phone");
 }
@@ -62,7 +62,7 @@ export function toApp(message: Record<string, unknown>): void {
   w.webkit?.messageHandlers?.screen?.postMessage(message);
 }
 
-/** The keysyms that type text on a Mac's lock screen (一键解锁): printable Latin-1 as itself, anything else as X11's
+/** The keysyms that type text on a Mac's lock screen (one-tap unlock): printable Latin-1 as itself, anything else as X11's
  * Unicode keysym (0x01000000 + its code point), then Return. */
 export function keysymsOf(text: string): number[] {
   const out: number[] = [];

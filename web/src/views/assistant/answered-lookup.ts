@@ -1,9 +1,9 @@
 // A card answered here goes at once (store endInteraction), while the agent's own state says needs_you until the
-// node's next sessions push: rows built from the session (the dock's pill, a task card's status, a 待办 row, a manual
-// agent's pill and its 全部 row) kept saying 等你 for that while (#4186). Until the hub catches up, an agent that needs
+// node's next sessions push: rows built from the session (the dock's pill, a task card's status, a to-dos row, a manual
+// agent's pill and its "All" row) kept saying "Needs you" for that while (#4186). Until the hub catches up, an agent that needs
 // you, has no card waiting and has a card just answered here counts as at work; a new card for it makes it wait again
 // at once, and so does a needs_you the hub sent after the answer (a second card still on its way, a TUI dialog).
-// A deny shows 工作中 too until the next push: the agent goes on either way. A card handed back to the computer is not
+// A deny shows "Working" too until the next push: the agent goes on either way. A card handed back to the computer is not
 // an answer (the agent waits there), and a needs_you pushed before the hub withdrew the card is the old one (#4877).
 import { stateOf } from "../../lib/format";
 import { makeSessionLookup, type SessionLookup } from "../../lib/todos";
@@ -70,7 +70,7 @@ export function answeredLookup(sessions: Session[] | Record<string, Session[]>, 
   };
 }
 
-/** The sessions with that applied, for lists that take them whole (the dock's and 全部's manual agents). Same array
+/** The sessions with that applied, for lists that take them whole (the dock's and "All"'s manual agents). Same array
  *  when nothing changes. */
 export function answeredSessions(sessions: Session[], interactions: Interaction[], answered: Record<string, AnsweredCard>): Session[] {
   const done = answeredBy(answered);

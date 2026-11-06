@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 运行情况 in an extension's details: the figures on screen always belong to the chosen window and extension, a failed
+// "Activity" in an extension's details: the figures on screen always belong to the chosen window and extension, a failed
 // refresh is shown rather than passing the old figures off as current, and one hub 404 does not hide the next extension.
 // Its log: the lines on screen always answer the current search, and a failed search is shown.
 import { act } from "react";

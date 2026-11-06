@@ -1,4 +1,4 @@
-// UI version 5's code review (docs/extensions.md「UI 版本 5」, #3136), the logic without the looks: which words of a
+// UI version 5's code review (docs/extensions.md "UI version 5", #3136), the logic without the looks: which words of a
 // changed line changed, a change that is only whitespace drawn as unchanged, generated files and lockfiles, the lines
 // hidden between hunks and those shown of them, viewed marks kept in this browser, ```suggestion blocks in a comment,
 // a range of lines picked for a comment, and the keys of a page of diffs. Drawn by views/extensions/DiffReview.tsx.
@@ -380,7 +380,7 @@ export function splitSuggestions(body: string): BodyPart[] {
   return out;
 }
 
-/** The block a 建议修改 inserts: the lines picked, to edit into what they should be. */
+/** The block a "Suggest a change" inserts: the lines picked, to edit into what they should be. */
 export function suggestionBlock(lines: readonly string[]): string {
   return "```suggestion\n" + lines.join("\n") + "\n```\n";
 }

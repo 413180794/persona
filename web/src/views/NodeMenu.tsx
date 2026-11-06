@@ -19,7 +19,7 @@ export function NodeMenu({
   at: MenuAt;
   onClose: () => void;
   header?: string;
-  /** Rows of the node's own menu that come first (an agent's 置顶, 重命名…), the node's items after a hairline. */
+  /** Rows of the node's own menu that come first (an agent's "Pin", "Rename…"), the node's items after a hairline. */
   before?: MenuItem[];
   omit?: NodeActionOptions["omit"];
   /** The tree changed on the computer: read it again (the sessions are, by default). */

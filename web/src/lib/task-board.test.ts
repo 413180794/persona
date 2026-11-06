@@ -14,7 +14,7 @@ const supervised = (id: string, state: ReviewState, extra: Partial<Todo> = {}): 
 });
 
 describe("the task board (iOS TaskBoardSheet)", () => {
-  // Every status, unsupervised and awaiting review, and the review states that are not 待验收 (#4896).
+  // Every status, unsupervised and awaiting review, and the review states that are not Awaiting review (#4896).
   const cases: [TodoStatus, ReviewState | null, BoardSectionKey][] = [
     ["needs_you", null, "waiting"],
     ["interrupted", null, "waiting"],

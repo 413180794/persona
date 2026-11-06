@@ -1,4 +1,4 @@
-// Where a page's own scroller was, by page (#5133): 总览 and 设置's first page unmount or swap their content when a row
+// Where a page's own scroller was, by page (#5133): Overview and Settings's first page unmount or swap their content when a row
 // opens something, so Back used to land at the top. The inbox keeps its list mounted under the item and needs none.
 import { useLayoutEffect, useRef, type RefObject } from "react";
 import { takeReturn } from "./router";

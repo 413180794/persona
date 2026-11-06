@@ -237,7 +237,7 @@ export function readMarkLabel(m: ReadMark): string {
   }
 }
 
-/** Beside my message: 已读 / 未读 in a one-to-one chat; a ring that fills as a group reads it, a tick once all have. */
+/** Beside my message: "Read" / "Unread" in a one-to-one chat; a ring that fills as a group reads it, a tick once all have. */
 export function ReadMarkView({ mark }: { mark: ReadMark }) {
   const label = readMarkLabel(mark);
   if (mark.kind === "read" || mark.kind === "unread") {
@@ -315,7 +315,7 @@ export function Reactions({ reactions, onToggle }: { reactions: LarkReaction[]; 
   );
 }
 
-/** 表情回复: the quick row on top, then every group of the catalogue; the ones I put on are tinted. */
+/** "Reactions": the quick row on top, then every group of the catalogue; the ones I put on are tinted. */
 export function ReactionPicker({ mine, onPick, onClose }: { mine: Set<string>; onPick: (key: string) => void; onClose: () => void }) {
   const catalog = useCatalog();
   const [keys, setKeys] = useState<string[] | null>(null);
@@ -378,7 +378,7 @@ const FIELD_LABELS = () => ({
   mobile: t("inbox-larkthread.field_mobile"),
 });
 
-/** Someone's card (iOS LarkProfileSheet): picture, names, status, signature, the fields Feishu shows; 发消息 opens the
+/** Someone's card (iOS LarkProfileSheet): picture, names, status, signature, the fields Feishu shows; "Message" opens the
  * one-to-one chat. */
 export function ProfileDialog({
   who,

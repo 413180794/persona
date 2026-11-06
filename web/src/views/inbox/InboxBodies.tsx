@@ -1,5 +1,5 @@
 // The bodies of an opened item besides a Feishu chat: a mail (its HTML in a sandboxed frame), a Feishu document's
-// rows about you (status menus write into the document), a 公司圈 post with its comments.
+// rows about you (status menus write into the document), a Moments post with its comments.
 import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { bytes, clock } from "../../lib/format";
@@ -17,14 +17,14 @@ import { openMedia } from "./LarkThread";
 // ── mail ─────────────────────────────────────────────────
 
 /** A mail: who, the body (its HTML in a sandboxed frame), attachments. Opening it marks it read in the mailbox; with
- * 设置 › 翻译 on for mail, a foreign one is shown translated (原文 one click away). 回复 writes the answer by hand. */
+ * Settings › Translation on for mail, a foreign one is shown translated ("Original" one click away). "Reply" writes the answer by hand. */
 export function MailBody({ item }: { item: InboxItem }) {
   const m = item.mail!;
   const uid = m.uids[m.uids.length - 1];
   const mailbox = m.mailbox || "INBOX";
   const [msg, setMsg] = useState<MailMessage | null>(null);
   const [error, setError] = useState("");
-  // 回复 open: its template as it opened, so the dialog stays over a new mail of the thread read under it (#4563)
+  // "Reply" open: its template as it opened, so the dialog stays over a new mail of the thread read under it (#4563)
   const [replying, setReplying] = useState<{ key: string; initial: ComposeDraft } | null>(null);
   const accounts = useMailAccounts();
   const prefs = useTranslatePrefs();
@@ -52,7 +52,7 @@ export function MailBody({ item }: { item: InboxItem }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, mailbox]);
 
-  // 设置 › 翻译: a mail in another language than the target is asked of the hub once it is here.
+  // Settings › Translation: a mail in another language than the target is asked of the hub once it is here.
   const wants = translatesMail(prefs);
   useEffect(() => {
     setTranslation(null);
@@ -244,7 +244,7 @@ export function DocBody({ item }: { item: InboxItem }) {
   );
 }
 
-// ── 公司圈 ───────────────────────────────────────────────
+// ── Moments ─────────────────────────────────────────────
 
 export function MomentBody({ item }: { item: InboxItem }) {
   const id = item.moment!.post_id;

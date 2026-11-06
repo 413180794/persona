@@ -1,4 +1,4 @@
-// Files pasted into or dropped on a terminal (docs/terminal.md「粘贴图片 / 文件」, 二十六): uploaded to the computer the
+// Files pasted into or dropped on a terminal (docs/terminal.md "Pasting images / files", item 26): uploaded to the computer the
 // pane is on, their escaped paths typed in as one paste (Claude Code and Codex take a path to an image as the image), and
 // a Files panel entry dropped on it typed as `@path `. Both surfaces use this: the single pane's feed (feed.ts) and the
 // full herdr surface (full.ts). What differs is only how a paste reaches the program and what the status line says.
@@ -13,7 +13,7 @@ export interface TransferHost {
   readonly mid: string;
   /** The folder a Files panel entry is named relative to; "" names it by its absolute path. */
   readonly cwd: string;
-  /** The keys go in (接管 active, or the herdr client live). */
+  /** The keys go in ("Take control" active, or the herdr client live). */
   readonly driving: boolean;
   /** The surface is gone (another session opened, the panel closed). */
   readonly disposed: boolean;
@@ -43,7 +43,7 @@ export class FileTransfer {
 
   /**
    * Sends the files to the computer the pane is on, then types their escaped paths into it as one paste. Only while the
-   * terminal is driven — before, and again when the uploads end (taken over, 只看, disconnected or another terminal
+   * terminal is driven — before, and again when the uploads end (taken over, "View only", disconnected or another terminal
    * meanwhile: nothing is pasted).
    */
   async uploadFiles(files: File[]) {

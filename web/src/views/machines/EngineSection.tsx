@@ -1,6 +1,6 @@
-// 引擎 on a machine's page (docs/engines.md, iOS EngineSelectionView): which terminal engine this computer's sessions
-// come from. The engines its node found (可用 with the version / 没检测到, and why one cannot be used), or every known
-// engine while it is offline; a choice stays here until 保存 (PUT …/engine), which the hub takes offline too. Pushes
+// "Engine" on a machine's page (docs/engines.md, iOS EngineSelectionView): which terminal engine this computer's sessions
+// come from. The engines its node found ("Available" with the version / "Not detected", and why one cannot be used), or every known
+// engine while it is offline; a choice stays here until "Save" (PUT …/engine), which the hub takes offline too. Pushes
 // of the machine refresh the choice until the user starts changing it; a failed save keeps it for another try.
 import { useEffect, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";

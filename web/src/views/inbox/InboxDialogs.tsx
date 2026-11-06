@@ -1,5 +1,5 @@
-// What can be done with one item besides reading it (docs/inbox.md「对一件事能做什么」): AI 草拟回复 (a reply in the
-// user's voice, edited and sent from here) and 交给 AI (the item as <jarvis-context> to Persona or a running agent).
+// What can be done with one item besides reading it (docs/inbox.md "What you can do with one item"): "AI draft reply" (a reply in the
+// user's voice, edited and sent from here) and "Hand to AI" (the item as <jarvis-context> to Persona or a running agent).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText } from "../../lib/api";
 import { noteSent, sendToSession } from "../../lib/outbox";
@@ -25,14 +25,14 @@ export function draftTitle(it: InboxItem): string {
   if (it.moment) return t("inbox-inboxdialogs.title_moment");
   if (it.doc) return t("inbox-inboxdialogs.title_comment", { title: it.title });
   if (it.connector) {
-    // A pull request / issue is commented on (评论 #12); a chat is answered.
+    // A pull request / issue is commented on ("Comment #12"); a chat is answered.
     const ref = connectorReference(it);
     return ref ? t("inbox-inboxdialogs.title_comment", { title: ref.split("/").pop() ?? "" }) : t("inbox-inboxdialogs.title_reply_to", { title: it.title });
   }
   return isLark(it) ? t("inbox-inboxdialogs.title_reply_to", { title: it.title }) : t("inbox-inboxdialogs.title_reply_mail");
 }
 
-/** The drafted reply, editable; 重写 asks again with an instruction; 发送 replies and files the item as done. */
+/** The drafted reply, editable; "Rewrite" asks again with an instruction; "Send" replies and files the item as done. */
 export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () => void }) {
   const sessions = useStore((s) => s.sessions);
   const assistant = useStore((s) => s.assistant);
@@ -98,7 +98,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
               type="button"
               onClick={() => {
                 onClose();
-                // The AI 分身 runs as the assistant (docs/inbox.md): its conversation is one of Persona's.
+                // The AI twin runs as the assistant (docs/inbox.md): its conversation is one of Persona's.
                 navigate(agent.machine_id === assistant?.machine_id ? { name: "jarvis", sid: agent.session_id! } : conversationRoute(agent.machine_id!, agent.session_id!, sessions, assistant));
               }}
               className="mt-1.5 flex items-center gap-1 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
@@ -197,7 +197,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
       const full = await api<InboxItem>(itemPath(item.id));
       const text = handOffMessage({ ...item, ...full }, ask);
       if (target) {
-        // the conversation opens at once with the message on its way; a failure shows there with 重试
+        // the conversation opens at once with the message on its way; a failure shows there with "Retry"
         onClose();
         navigate({ name: "session", mid: target.machine_id, sid: target.session_id });
         void sendToSession(target.machine_id, target.session_id, { text }).then((ok) => {

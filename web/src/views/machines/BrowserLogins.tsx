@@ -1,4 +1,4 @@
-// 浏览器登录 on a Mac's page (#1304, docs/plan-ego-browser.md「导入 cookies」; iOS BrowserLoginsSection): the sites
+// "Browser sign-ins" on a Mac's page (#1304, docs/plan-ego-browser.md "Importing cookies"; iOS BrowserLoginsSection): the sites
 // whose sign-ins ego lite keeps (how many cookies, until when, never what), clearing a site's or all, and importing a
 // cookie file (cookies.txt, or an extension's JSON). The file is read here, its sites ticked by the user (none at first),
 // and only the ticked ones go to the hub, which passes them to the Mac and keeps nothing. The Mac must be online.
@@ -25,7 +25,7 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
   const [file, setFile] = useState<{ name: string; sites: CookieSite[]; bad: number } | null>(null);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [clearing, setClearing] = useState<string | "all" | null>(null);
-  const [tries, setTries] = useState(0); // 再试一次 reads the sites again
+  const [tries, setTries] = useState(0); // "Try again" reads the sites again
   const input = useRef<HTMLInputElement>(null);
   const path = `/machines/${enc(mid)}/browser/cookies`;
 

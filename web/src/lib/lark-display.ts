@@ -1,6 +1,6 @@
-// Feishu message display settings (风灵月影, docs/lark-migration.md「风灵月影消息显示」, iOS LarkMessageDisplay.swift):
-// the Lark gateway's per-account switches for showing a recalled message's retained content (防撤回) and a message's earlier
-// versions (编辑历史). They only decide what is shown: the hub sends retained content whatever they say, so anything
+// Feishu message display settings (display tweaks, docs/lark-migration.md "Message display tweaks", iOS LarkMessageDisplay.swift):
+// the Lark gateway's per-account switches for showing a recalled message's retained content ("Keep recalled messages") and a message's earlier
+// versions ("Edit history"). They only decide what is shown: the hub sends retained content whatever they say, so anything
 // unknown (not read yet, a failed read, an account that changed) hides it. A write carries the account and the old value;
 // a conflict or an unknown result is never retried, the settings are read again.
 import { useEffect, useSyncExternalStore } from "react";
@@ -16,7 +16,7 @@ export interface LarkMessageDisplay {
   account_id: string;
   anti_recall: boolean;
   show_edit_history: boolean;
-  /** The Lark gateway's [removed] switch; absent from a Feishu extension that has no such setting. */
+  /** The Lark gateway's brave-climb switch; absent from a Feishu extension that has no such setting. */
   brave_climb_codec?: boolean;
 }
 
@@ -32,7 +32,22 @@ function isSystem(m: LarkMessage) {
   return m.type === "SYSTEM" || (m.parts ?? []).some((p) => p.kind === "text" && p.metadata?.system);
 }
 
-/** The message''s parts as the chat shows them, and whether [removed] words in them were decoded (the switch is on). */
+/** The message's content is shown: it was not recalled, or "Keep recalled messages" is on and the Lark gateway kept what it said. */
+export function showsBody(d: LarkMessageDisplay, m: LarkMessage): boolean {
+  if (!m.recalled) return true;
+  const kept = (m.parts ?? []).some((p) => p.kind !== "text" || (p.text ?? "").trim() !== "") || (m.text ?? "").trim() !== "";
+  return d.anti_recall && m.retained === true && !isSystem(m) && kept;
+}
+
+/** "Edited" opens the earlier versions: "Edit history" is on, the content shows, and versions were kept. */
+export function showsHistory(d: LarkMessageDisplay, m: LarkMessage): boolean {
+  return d.show_edit_history && showsBody(d, m) && (m.edit_history ?? []).length > 0;
+}
+
+/** Brave-climb words are read and written: the switch is there and on. */
+export const climbs = (d: LarkMessageDisplay) => d.brave_climb_codec === true;
+
+/** A message's parts as the chat shows them, and whether brave-climb words in them were decoded (the switch is on). */
 export function shownParts(d: LarkMessageDisplay, parts: LarkPart[]): { parts: LarkPart[]; decoded: boolean } {
   const decoded = climbs(d) ? decodeBraveClimbParts(parts) : undefined;
   return decoded ? { parts: decoded, decoded: true } : { parts, decoded: false };
@@ -41,7 +56,7 @@ export function shownParts(d: LarkMessageDisplay, parts: LarkPart[]): { parts: L
 /** A one-line summary of a message's text (a quote, a Pin, the chat list): see `braveClimbSummary`. */
 export const summaryText = (d: LarkMessageDisplay, text: string) => braveClimbSummary(text, climbs(d));
 
-/** A quoted message in one line: what it said (marked 已撤回 when recalled and kept), or that it was recalled. */
+/** A quoted message in one line: what it said (marked "Recalled" when recalled and kept), or that it was recalled. */
 export function quoteSummary(d: LarkMessageDisplay, q: NonNullable<LarkMessage["reply_to"]>): string {
   if (!q.recalled) return summaryText(d, q.text ?? "");
   const text = summaryText(d, (q.text ?? "").trim());

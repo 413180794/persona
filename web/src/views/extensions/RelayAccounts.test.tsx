@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// quota-relay's sidebar page 「中转账号」 (nwverse/persona#4576) drawn by the real ExtensionUI from the views the
+// quota-relay's sidebar page "Relay accounts" (nwverse/persona#4576) drawn by the real ExtensionUI from the views the
 // extension exports (testdata/relay-accounts-view.json, made-up accounts; the extension repo's
 // the extension's TestExportFixture writes it). The hub is faked: drawing answers the default
 // view, or an account's page when the state names one; the type, the status and the search answer what the extension
@@ -104,7 +104,7 @@ describe("中转账号 (quota-relay's sidebar page)", () => {
     const filter = page.querySelector("select")!;
     expect(filter.value).toBe("all");
     expect(texts(filter, "option")).toEqual(views.default.filter!.choices.map((c) => c.title));
-    // the type segmented in the first section, 全部 chosen, every count in its title
+    // the type segmented in the first section, "All" chosen, every count in its title
     const first = page.querySelector("section")!;
     const types = [...first.querySelectorAll('[role="radio"]')];
     expect(types.map((b) => b.textContent)).toEqual(["全部 73", "Claude 4", "Kiro 61", "其他 8"]);

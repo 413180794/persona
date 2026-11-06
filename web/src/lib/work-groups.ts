@@ -1,9 +1,9 @@
-// How one exchange's work reads in the chat (cindy's workRunGrouping + messageWorkGroups, docs/web.md「对话」): the
-// agent's steps fold into 「已工作 Xs」 groups and only what it delivered stays in the open.
+// How one exchange's work reads in the chat (cindy's workRunGrouping + messageWorkGroups, docs/web.md "Chat"): the
+// agent's steps fold into "Worked Xs" groups and only what it delivered stays in the open.
 //
 // - While the agent works, each run of tools and thoughts at the end is one live group (its newest five steps peek
 //   out); its words in between stay visible.
-// - Once the exchange is done, the last words are the answer; everything before them folds into one 「已工作 Xs」
+// - Once the exchange is done, the last words are the answer; everything before them folds into one "Worked Xs"
 //   whose inside is a timeline: the intermediate words, and each run of steps between them as its own inner group.
 // - Delivered prose (600 characters or more, a heading, a table, a list of three or more, an image) never folds, nor
 //   does a subagent still running, nor a plan card, nor a compaction divider.
@@ -330,7 +330,7 @@ function explorationOf(s: ToolStep): { kind: ExplorationKind; key?: string } | u
 
 const directTools = (g: WorkGroupNode): ToolStep[] => g.children.flatMap((c) => (c.kind === "step" && isRowStep(c.step) ? [c.step] : []));
 
-/** 「读取 3 个文件 · 搜索 2 次」 when a group did nothing but read and search (a file read twice counts once). */
+/** "Read 3 files · searched 2 times" when a group did nothing but read and search (a file read twice counts once). */
 export function explorationSummary(g: WorkGroupNode): string {
   const tools = directTools(g);
   if (!tools.length) return "";
@@ -393,10 +393,10 @@ export function thinkingDurations(steps: Step[], turnStart?: string): Map<string
   return out;
 }
 
-/** cindy's formatDuration in the page's language: 「6 秒」「1 分 5 秒」「2 分钟」「1 小时 05 分」, 6s, 1m 5s in English (at least a second). */
+/** cindy's formatDuration in the page's language: Chinese "6 s", "1 min 5 s", "2 min", "1 h 05 min", 6s, 1m 5s in English (at least a second). */
 export function workDuration(msValue: number): string {
   const total = Math.max(1, Math.round((Number.isFinite(msValue) ? msValue : 0) / 1000));
-  // Units come from the catalog (#3592): 「1 分 5 秒」 in Chinese, 1m 5s in English.
+  // Units come from the catalog (#3592): "1 min 5 s" in Chinese, 1m 5s in English.
   if (total < 60) return t("lib-work-groups.dur_seconds", { s: total });
   if (total >= 3600) {
     const d = Math.floor(total / 86_400);
@@ -411,7 +411,7 @@ export function workDuration(msValue: number): string {
   return s ? t("lib-work-groups.dur_minutes_seconds", { m, s }) : t("lib-work-groups.dur_minutes", { m });
 }
 
-/** A finished group's title: 「已工作 1 分 5 秒」, and what it read when that is all it did. */
+/** A finished group's title: "Worked 1m 5s", and what it read when that is all it did. */
 export function groupTitle(g: WorkGroupNode): string {
   if (g.live) return t("lib-work-groups.working");
   const base = g.durationMs !== undefined ? t("lib-work-groups.worked_for", { duration: workDuration(g.durationMs) }) : t("lib-work-groups.work");

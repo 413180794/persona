@@ -1,4 +1,4 @@
-// An HTML file shown as a page (docs/web.md「HTML 预览」, #1413): in a sandboxed frame with scripts and the network
+// An HTML file shown as a page (docs/web.md "HTML preview", #1413): in a sandboxed frame with scripts and the network
 // off; each can be turned on for this file while it is open. lib/html-preview.ts has the policy.
 import { useEffect, useMemo, useState } from "react";
 import { fileDownloadURL, READ_TIMEOUT_MS } from "../../../lib/api";

@@ -1,5 +1,5 @@
 // The image markup editor's geometry (iOS ImageEditor.swift): marks are kept in image pixels, drawn scaled to the
-// fitted image on screen, and burned into the bitmap at its own resolution on 完成. No DOM here.
+// fitted image on screen, and burned into the bitmap at its own resolution on "Done". No DOM here.
 
 export type MarkTool = "box" | "pen";
 

@@ -1,4 +1,4 @@
-// 新建 Agent's model picker (#794): the models a launcher's agent lists in its own /model menu
+// "New agent"'s model picker (#794): the models a launcher's agent lists in its own /model menu
 // (GET /machines/{mid}/launchers/{name}/models, node/launcher_models.go), which launcher the picker asks, searching the
 // list, the thinking efforts a pick allows, and what a start sends. A pick is for one start only: nothing is saved.
 import { t } from "../i18n";
@@ -30,13 +30,13 @@ export interface LauncherModels {
   locked?: string;
 }
 
-/** What 模型配置 runs when a launcher picker is left alone (GET /machines/{mid}/launchers's `default`, #2455):
+/** What "Model configuration" runs when a launcher picker is left alone (GET /machines/{mid}/launchers's `default`, #2455):
  *  `provider` is the launcher's name. */
 export interface LauncherDefault {
   provider?: string;
   model?: string;
   effort?: string;
-  /** 主对话 only: cli or agentsdk. */
+  /** Main chat only: cli or agentsdk. */
   runtime?: string;
 }
 
@@ -46,13 +46,13 @@ export interface MachineLaunchers {
   default?: LauncherDefault | null;
 }
 
-/** The launchers on `mid` with the default of `purpose` (the hub's own when absent: 新建 Agent). */
+/** The launchers on `mid` with the default of `purpose` (the hub's own when absent: "New agent"). */
 export function machineLaunchers(mid: string, opts: { purpose?: string; signal?: AbortSignal } = {}): Promise<MachineLaunchers> {
   const q = opts.purpose ? `?purpose=${enc(opts.purpose)}` : "";
   return api<MachineLaunchers>(`/machines/${enc(mid)}/launchers${q}`, { signal: opts.signal });
 }
 
-/** A picker's first entry: 「默认：<供应商> · <模型>」 from the hub's default, `fallback` naming the launcher when the hub
+/** A picker's first entry: "Default: <provider> · <model>" from the hub's default, `fallback` naming the launcher when the hub
  *  says nothing (an older hub). */
 export function defaultLabel(d: LauncherDefault | null | undefined, fallback = ""): string {
   const parts = [d?.provider || fallback, d?.model && modelName({ id: d.model.split("/").pop() || d.model })].filter(Boolean);
@@ -76,10 +76,10 @@ export async function launcherModels(mid: string, launcher: string, opts: { refr
   }
 }
 
-/** 模型配置's list for a launcher provider (`launcher.<name>`, GET /model-config/providers/{id}/models, #943): asked on a
+/** "Model configuration"'s list for a launcher provider (`launcher.<name>`, GET /model-config/providers/{id}/models, #943): asked on a
  *  machine that has the launcher, which `machine` names. null: an older hub or a provider without a list (no picker). */
 export async function providerModels(provider: string, opts: { refresh?: boolean; machine?: string; signal?: AbortSignal } = {}): Promise<(LauncherModels & { machine?: string }) | null> {
-  // machine: the purpose's own (a task, 飞书 /agent run there), so the list is that machine's launcher.
+  // machine: the purpose's own (a task, Lark /agent run there), so the list is that machine's launcher.
   const query = new URLSearchParams();
   if (opts.refresh) query.set("refresh", "1");
   if (opts.machine) query.set("machine", opts.machine);
@@ -92,20 +92,20 @@ export async function providerModels(provider: string, opts: { refresh?: boolean
   }
 }
 
-/** What is typed in the search, as an id to save when no model has exactly that id (模型配置 takes ids the list lacks). */
+/** What is typed in the search, as an id to save when no model has exactly that id ("Model configuration" takes ids the list lacks). */
 export function customModel(models: AgentModel[], query: string): string {
   const id = query.trim();
   return id && !/\s/.test(id) && !models.some((m) => m.id === id) ? id : "";
 }
 
-/** The 模型配置 binding of 新建 Agent that still applies with the chosen launcher: the hub keeps its model and effort
- *  unless another launcher is picked (hub applyModel). Not following 模型配置: nothing. */
+/** The "Model configuration" binding of "New agent" that still applies with the chosen launcher: the hub keeps its model and effort
+ *  unless another launcher is picked (hub applyModel). Not following "Model configuration": nothing. */
 export function followedBinding(chosen: string, effective: ModelBinding | null | undefined): ModelBinding {
   if (!effective?.provider || (chosen && `launcher.${chosen}` !== effective.provider)) return {};
   return effective;
 }
 
-/** The launcher whose list the picker shows: the chosen one, else the one 模型配置 runs (`launcher.<name>`); "": none. */
+/** The launcher whose list the picker shows: the chosen one, else the one "Model configuration" runs (`launcher.<name>`); "": none. */
 export function pickerLauncher(chosen: string, followed: ModelBinding): string {
   if (chosen) return chosen;
   const p = followed.provider ?? "";
@@ -135,7 +135,7 @@ export function modelName(m: { id: string; name?: string }): string {
   return gpt[1].split("-").map((part, i) => i ? part[0].toUpperCase() + part.slice(1) : part).join(" ");
 }
 
-/** 「默认」's second line: what 模型配置 sets, else the concrete model the default entry stands for. */
+/** "Default"'s second line: what "Model configuration" sets, else the concrete model the default entry stands for. */
 export function defaultDetail(models: AgentModel[], followed: ModelBinding): string {
   if (followed.model) return followed.model;
   const d = defaultModel(models);
@@ -154,7 +154,7 @@ function matches(fields: (string | undefined)[], query: string): boolean {
   return query.toLocaleLowerCase().split(/\s+/).filter(Boolean).every((word) => text.includes(word));
 }
 
-/** What the open list shows for `query` (name, id, resolved model, description; every word): 「默认」 first when it
+/** What the open list shows for `query` (name, id, resolved model, description; every word): "Default" first when it
  *  matches, then the rest in the agent's order. */
 export function modelRows(models: AgentModel[], query: string, followed: ModelBinding = {}): { showDefault: boolean; rows: AgentModel[] } {
   const d = defaultModel(models);
@@ -165,8 +165,8 @@ export function modelRows(models: AgentModel[], query: string, followed: ModelBi
 
 const ALL_EFFORTS = EFFORTS.map((e) => e.id);
 
-/** The efforts the control offers: the picked model's, with none picked the one that runs (模型配置's, else the
- *  default entry's). No list to go by (loading, failed, older hub), or 模型配置's model not in it under that id: all
+/** The efforts the control offers: the picked model's, with none picked the one that runs ("Model configuration"'s, else the
+ *  default entry's). No list to go by (loading, failed, older hub), or "Model configuration"'s model not in it under that id: all
  *  of them. */
 export function effortChoices(list: LauncherModels | null | undefined, model: string, followed: ModelBinding = {}): string[] {
   if (!list?.models.length) return ALL_EFFORTS;
@@ -175,7 +175,7 @@ export function effortChoices(list: LauncherModels | null | undefined, model: st
   return m ? (m.efforts ?? []) : ALL_EFFORTS;
 }
 
-/** The effort kept when the choices change: one they no longer offer goes back to 「跟随启动器」. */
+/** The effort kept when the choices change: one they no longer offer goes back to "Launcher default". */
 export function fitEffort(effort: string, choices: string[]): string {
   return choices.includes(effort) ? effort : "";
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// Back to 总览 and to 设置's first page lands where the reader had scrolled (#5133); a fresh visit starts at the top.
-// Two shapes of page: one that unmounts when a row opens another page (总览 → a conversation), and one scroller whose
-// content swaps under it (设置's list → a category).
+// Back to Overview and to Settings's first page lands where the reader had scrolled (#5133); a fresh visit starts at the top.
+// Two shapes of page: one that unmounts when a row opens another page (Overview → a conversation), and one scroller whose
+// content swaps under it (Settings's list → a category).
 import { act, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -21,7 +21,7 @@ function Shell() {
   return route.name === "home" ? <Overview /> : <p>conversation</p>;
 }
 
-// 设置: one scroller; the list and each category are keys of it
+// Settings: one scroller; the list and each category are keys of it
 function Swapping({ page }: { page: string }) {
   const box = useRef<HTMLDivElement>(null);
   useScrollMemory(box, page);

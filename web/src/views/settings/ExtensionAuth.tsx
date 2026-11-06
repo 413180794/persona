@@ -1,5 +1,5 @@
-// An extension's sign-in (#4507, docs/protocol.md「扩展的登录」): the 「登录」 group on its detail (state, 登录 / 重新登录,
-// 退出登录) and the dialog of steps the extension's program asks for: fields to fill in, a device code (a link to open,
+// An extension's sign-in (#4507, docs/protocol.md "Extension sign-in"): the "Sign in" group on its detail (state, "Sign in" / "Sign in again",
+// "Sign out") and the dialog of steps the extension's program asks for: fields to fill in, a device code (a link to open,
 // the code to enter, and the link's QR code for another phone), or a QR code to scan. A device code / QR step is asked
 // again every interval (lib/extension-auth.ts pollAuth) until it is done or another step comes. The rules and words are
 // in lib/extension-auth.ts; the QR code is the one the connectors' sign-in draws (LoginSteps.tsx).
@@ -21,7 +21,7 @@ const TEXT: Record<ReturnType<typeof authTone>, string> = { red: "text-red", ora
 const fieldClass = "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
 /**
- * The 「登录」 group: the state, 登录 (重新登录 once signed in to) and 退出登录. `enabled` false: a switched-off extension
+ * The "Sign in" group: the state, "Sign in" ("Sign in again" once signed in to) and "Sign out". `enabled` false: a switched-off extension
  * cannot sign in. `start` opens the dialog once (an install whose next step is to sign in). `onChange` takes the new state.
  */
 export function AuthGroup({ id, auth, enabled, start, onChange }: {

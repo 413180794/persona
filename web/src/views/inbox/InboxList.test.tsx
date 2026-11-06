@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The inbox that could not load the first time (#2970, after Android's failure empty state): its own empty state with
-// 重试, never 都处理完了 under a red error; 重试 loads again and the ordinary empty state comes back.
+// "Retry", never "All caught up" under a red error; "Retry" loads again and the ordinary empty state comes back.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ vi.hoisted(() => {
 });
 
 let fail = true;
-// the hub's mail accounts: one by default (a source is connected, an empty inbox is 都处理完了); [] for none
+// the hub's mail accounts: one by default (a source is connected, an empty inbox is "All caught up"); [] for none
 let mailAccounts: { id: string; email: string }[] = [{ id: "a1", email: "me@example.com" }];
 const calls: string[] = [];
 vi.mock("../../lib/api", async (orig) => ({
@@ -113,7 +113,7 @@ describe("收件箱：首屏一次画好", () => {
     try {
       act(() => root.render(<InboxList />));
       await flush();
-      // the inbox answered, the store has not: only 加载中, no rows and no empty state yet
+      // the inbox answered, the store has not: only "Loading", no rows and no empty state yet
       expect(calls.some((c) => c.startsWith("/inbox"))).toBe(true);
       expect(host.textContent).toContain("加载中");
       expect(host.textContent).not.toContain("改登录页");

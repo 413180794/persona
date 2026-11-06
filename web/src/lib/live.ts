@@ -1,5 +1,5 @@
 // What a working Claude's status line says right now (the hub's `live` push, feature session_live; docs/protocol.md
-// 「实时状态」). The hub keeps nothing and replays nothing: the page has what arrived while it was subscribed.
+// "Live state"). The hub keeps nothing and replays nothing: the page has what arrived while it was subscribed.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { stateOf } from "./format";
 import { isResumed } from "./reconnect";

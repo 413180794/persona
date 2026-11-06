@@ -1,4 +1,4 @@
-// Feishu read state from what was really seen (docs/inbox.md: 看过的飞书消息按可见即读上报; docs/redesign/ux.md 3.5 / 3.6;
+// Feishu read state from what was really seen (docs/inbox.md: Lark messages count as read once they are on screen; docs/redesign/ux.md 3.5 / 3.6;
 // the app's LarkPager.readReport). The page notes the messages that reached the screen; a moment after the last one
 // it reports everything up to the newest seen past the read cursor, with the ids of others' unread messages up to
 // there, and moves the cursor: only forward, never twice.

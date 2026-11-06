@@ -1,7 +1,7 @@
 // Full-screen viewer for a conversation's images (iOS ImageViewer.swift): ← / → (or a swipe) through all of them,
 // n / m on top; the wheel, a trackpad pinch or two fingers zoom 1–6× at the pointer, a drag moves a zoomed picture,
-// a double click / tap zooms in there and back, + / - / 0 from the keyboard; 编辑 (box + pen, then into the composer
-// for the next message), 拷贝 where the browser allows it, 下载, 在新标签页打开. Esc or a click beside the picture
+// a double click / tap zooms in there and back, + / - / 0 from the keyboard; "Edit" (box + pen, then into the composer
+// for the next message), "Copy" where the browser allows it, "Download", "Open in new tab". Esc or a click beside the picture
 // closes it (not while zoomed).
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -23,13 +23,13 @@ export interface ViewerImage {
   id: string;
   src: string;
   mime?: string;
-  /** What it is (a file's name, 截图 · MacBook): on top, beside n / m. */
+  /** What it is (a file's name, "Screenshot · MacBook"): on top, beside n / m. */
   label?: string;
-  /** The name 下载 saves it under. */
+  /** The name "Download" saves it under. */
   name?: string;
 }
 
-/** A button of the viewer's bottom bar for the picture shown (拷贝路径, 在文件页打开). */
+/** A button of the viewer's bottom bar for the picture shown ("Copy path", "Open in Files"). */
 export interface ViewerAction {
   key: string;
   icon: IconName;
@@ -75,9 +75,9 @@ export function ImageViewer({
   images: ViewerImage[];
   start: number;
   onClose: () => void;
-  /** Where an edited picture goes (the chat's composer); none hides 编辑. True when it was taken. */
+  /** Where an edited picture goes (the chat's composer); none hides "Edit". True when it was taken. */
   attach?: (img: DraftImage) => boolean;
-  /** More buttons for the picture at `index`, after 下载. */
+  /** More buttons for the picture at `index`, after "Download". */
   actions?: (index: number) => ViewerAction[];
 }) {
   const [index, setIndex] = useState(() => Math.min(Math.max(start, 0), images.length - 1));

@@ -1,4 +1,4 @@
-// The pointer on a terminal the page drives (#2441, docs/terminal.md「鼠标」): which events go to herdr (and so to a
+// The pointer on a terminal the page drives (#2441, docs/terminal.md "Mouse"): which events go to herdr (and so to a
 // program that takes the mouse) and which stay with the page (xterm's selection, Persona's right-click menu), the
 // button and modifier bits herdr takes, and how motion is thinned to one event per cell. Pure, so the decisions are
 // tested without a browser; lib/terminal.ts keeps the older wheel / click geometry.
@@ -17,7 +17,7 @@ export interface MouseMsg {
 }
 
 /**
- * Who gets the mouse, a choice the user keeps (终端设置 › 鼠标). herdr does not say whether the program in the pane takes
+ * Who gets the mouse, a choice the user keeps (terminal settings › Mouse). herdr does not say whether the program in the pane takes
  * the mouse (nothing in its control stream, API or pane info shows it), so the page cannot pick per program:
  *  - program (the default): clicks, drags and buttons go to herdr, which hands them to a program that takes the mouse
  *    and drops them for one that does not; Shift makes the pointer the page's (a selection in xterm, the Persona menu).
@@ -39,7 +39,7 @@ export function mouseButton(button: number): MouseButton | null {
   return button === 0 ? "left" : button === 1 ? "middle" : button === 2 ? "right" : null;
 }
 
-/** herdr's modifier bits on a mouse event: shift 1, ctrl 2, alt 4 (measured, docs/terminal.md「鼠标」). */
+/** herdr's modifier bits on a mouse event: shift 1, ctrl 2, alt 4 (measured, docs/terminal.md "Mouse"). */
 export const MOD_SHIFT = 1;
 export const MOD_CTRL = 2;
 export const MOD_ALT = 4;
@@ -70,7 +70,7 @@ export function mouseModifiers(e: PointerKeys): number {
  * What a right click (the contextmenu event) does. Not forwarding the mouse (watching, or an older hub): as before, a plain
  * right click opens Persona's menu and Shift leaves the browser's own. Forwarding: the same routing as every other
  * pointer event, so what goes to the program is not also a menu, and the menu stays one chord away (Shift in the default
- * mode, the plain right click in 本地选择). A touch long press is left alone (it selects text on a phone).
+ * mode, the plain right click in "Select locally"). A touch long press is left alone (it selects text on a phone).
  */
 export function contextAction(e: PointerKeys, forwarding: boolean, mode: MouseMode, pointerType = "mouse"): "menu" | "program" | "browser" {
   if (pointerType === "touch") return "browser";

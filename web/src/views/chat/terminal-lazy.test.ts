@@ -1,6 +1,6 @@
 /// <reference types="node" />
 // The session page keeps the terminal view out of its chunk (#2677): ChatView only reaches TerminalPanel through a
-// dynamic import, so a visit that never switches to 终端 does not download or parse it.
+// dynamic import, so a visit that never switches to "Terminal" does not download or parse it.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 

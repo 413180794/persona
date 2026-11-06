@@ -1,4 +1,4 @@
-// A card answered here stops its agent's 等你 at once (#4186), and a new card makes it wait again.
+// A card answered here stops its agent's "Needs you" at once (#4186), and a new card makes it wait again.
 import { describe, expect, it } from "vitest";
 import { stateOf } from "../../lib/format";
 import { todoStatus, type Todo } from "../../lib/todos";

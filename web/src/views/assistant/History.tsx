@@ -1,4 +1,4 @@
-// 全部对话 (docs/assistant.md「管理自己的对话」, the iOS app's sidebar + ArchivedConversationsView): every conversation
+// "All chats" (docs/assistant.md "Managing its own conversations", the iOS app's sidebar + ArchivedConversationsView): every conversation
 // Persona has, the main one first, the rest newest first by day; search on the title and the last message; a row's menu
 // renames it, copies its id, archives it (the main one can't be). The archived ones are folded at the end.
 import { conversationChannel, useChannels } from "../../lib/channels";
@@ -72,7 +72,7 @@ export function History({ origin, onToggleSidebar }: { origin?: string; onToggle
     [fetched, assistant?.conversations, live, titles, marked],
   );
   const hits = useMemo(() => filterConversations(all.filter((s) => matchesOrigin(s, filter)), query), [all, query, filter]);
-  // the sources there are (#3264): 全部 · 我的 · one per kind of automatic conversation, when there are any
+  // the sources there are (#3264): "All" · "Mine" · one per kind of automatic conversation, when there are any
   const sources = useMemo(() => autoConversations(all, assistant?.main).groups, [all, assistant?.main]);
   const { main, days, archived } = useMemo(() => arrange(hits, assistant?.main, new Date(nowMs)), [hits, assistant?.main, nowMs]);
   const total = all.filter((s) => !s.archived).length;

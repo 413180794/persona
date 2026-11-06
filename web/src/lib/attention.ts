@@ -1,7 +1,7 @@
 // Attention signals of the web client (#2332): the tab title's count, the favicon's badge and the optional sounds. This
 // file is the logic without a DOM (tested in attention.test.ts); lib/attention-signals.ts draws and plays.
 //
-// The count is the sidebar's own red 需要你 count (stateCounts().badge in lib/sessions.ts: quiet tasks' agents are told
+// The count is the sidebar's own red "Needs you" count (stateCounts().badge in lib/sessions.ts: quiet tasks' agents are told
 // about in the main conversation, not counted), so the tab and the sidebar never disagree.
 import { useSyncExternalStore } from "react";
 import { stateOf } from "./format";
@@ -25,15 +25,15 @@ export function badgeText(needs: number): string {
   return needs > 9 ? "9+" : String(needs);
 }
 
-/** `card`: a 需要你 one about a new card of a session that was already 需要你 (detectNewCards). */
+/** `card`: a "Needs you" one about a new card of a session that was already "Needs you" (detectNewCards). */
 export type AttentionEvent = { kind: "needs" | "finished"; key: string; card?: Interaction; follows?: boolean };
 
 /**
  * What changed between two snapshots of the sessions' states (`prev`: the states of the last one, by agentKey).
- * - needs: a session became 需要你 (not a quiet task's: the sidebar does not count it either).
- * - finished: a session went 工作中 → 完成未看. This mirrors the hub's "finished" push (hub/machine.go notifyFinished,
+ * - needs: a session became "Needs you" (not a quiet task's: the sidebar does not count it either).
+ * - finished: a session went "Working" → finished unread. This mirrors the hub's "finished" push (hub/machine.go notifyFinished,
  *   notify.go settle): the push is for a turn that ended and has not been seen (unread, not idle), is dropped for a
- *   muted or quiet session, and a session with background work still running stays 工作中 (backgroundState), so it
+ *   muted or quiet session, and a session with background work still running stays "Working" (backgroundState), so it
  *   never ends here. Differences: the hub waits `done_delay` and re-checks; here the caller re-checks after its own
  *   short wait (SETTLE_MS). The hub also drops a turn started by a background task's report (`WokeByTask`) and one
  *   the assistant already pushed about; the web client does not see those and chimes for them.
@@ -56,7 +56,7 @@ export function detectTransitions(prev: ReadonlyMap<string, AgentState>, session
 
 /**
  * The notification tags (`<agentKey>#needs` / `#finished`, as attention-signals posts them) whose event is over between
- * two snapshots: a session no longer 需要你, or no longer 完成未看 (seen here or elsewhere), or gone from the list. Their
+ * two snapshots: a session no longer "Needs you", or no longer finished unread (seen here or elsewhere), or gone from the list. Their
  * system notifications are taken back, so one answered on the phone does not wait in the notification centre (#3458).
  */
 export function settledTags(prev: ReadonlyMap<string, AgentState>, next: ReadonlyMap<string, AgentState>): string[] {
@@ -70,7 +70,7 @@ export function settledTags(prev: ReadonlyMap<string, AgentState>, next: Readonl
   return out;
 }
 
-/** A new card for a session that was already 需要你 (#4058). `follows`: the session's 需要你 came before any card
+/** A new card for a session that was already "Needs you" (#4058). `follows`: the session's "Needs you" came before any card
  *  (a Codex approval is read off the screen after the pane blocks), so this card is that same wait: its notification
  *  is written again from the card, without a sound. */
 export type CardEvent = { kind: "needs"; key: string; card: Interaction; follows?: boolean };
@@ -80,8 +80,8 @@ export type CardEvent = { kind: "needs"; key: string; card: Interaction; follows
 export const FORGET_CARD_MS = 10 * 60_000;
 
 /**
- * The cards that arrived between two snapshots for a session that stayed 需要你 (`was` the states of the last snapshot,
- * `next` this one's, as detectTransitions works them out). A session that only now becomes 需要你 is detectTransitions'
+ * The cards that arrived between two snapshots for a session that stayed "Needs you" (`was` the states of the last snapshot,
+ * `next` this one's, as detectTransitions works them out). A session that only now becomes "Needs you" is detectTransitions'
  * (its notification is about its oldest card), so a card is announced once: by the transition or here; `bare` is the
  * sessions whose transition had no card yet, whose first card follows it (CardEvent.follows). `known` is the card ids
  * seen pending, with when they last were, undefined before the first snapshot (opening the page announces nothing).
@@ -105,8 +105,8 @@ export function detectNewCards(known: ReadonlyMap<string, number> | undefined, i
 }
 
 /**
- * The 需要你 tags whose notification was about a card that is no longer pending (answered here or elsewhere, withdrawn),
- * while the session may still be 需要你 for another one: taken back as settledTags does for a state change (#3610).
+ * The "Needs you" tags whose notification was about a card that is no longer pending (answered here or elsewhere, withdrawn),
+ * while the session may still be "Needs you" for another one: taken back as settledTags does for a state change (#3610).
  * `announced` is the card each session's notification is about, by agentKey.
  */
 export function answeredTags(announced: ReadonlyMap<string, string>, pending: readonly Interaction[]): string[] {
@@ -121,7 +121,7 @@ export interface Turn {
 }
 
 /**
- * Follows each session's turns between snapshots, for 只推长任务 (hub/notify.go turnTracker): a turn starts when the
+ * Follows each session's turns between snapshots, for "Long tasks only" (hub/notify.go turnTracker): a turn starts when the
  * session starts working (the hub's state_since, else now), and one that resumes within SETTLE_MS of stopping is the
  * same turn (the status flaps around a turn), so its start is kept. A session not working keeps its last turn, so the
  * length of the turn that just finished can be read.
@@ -158,7 +158,7 @@ export function suppressed(key: string, viewing: Viewing): boolean {
   return viewing.focused && viewing.key === key;
 }
 
-/** Of a batch the more urgent one speaks: 需要你 over finished. */
+/** Of a batch the more urgent one speaks: "Needs you" over finished. */
 export function pickEvent(events: AttentionEvent[]): AttentionEvent | undefined {
   return events.find((e) => e.kind === "needs") ?? events[0];
 }
@@ -175,7 +175,7 @@ export function rateLimiter(gap = MIN_GAP_MS) {
   };
 }
 
-// ── 提示音 setting (设置 › 通知), kept in this browser, off by default ──────────────
+// ── "Alert sound" setting (Settings › Notifications), kept in this browser, off by default ──────────────
 
 const KEY = "persona.attentionSound";
 const listeners = new Set<() => void>();

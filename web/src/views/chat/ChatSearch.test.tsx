@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 会话内搜索 (ChatSearch.tsx, search-reveal.ts): the panel's states and picking a hit; a hit inside a folded tool row or
-// thought opens it, and 返回搜索前位置 closes it again.
+// "Search in chat" (ChatSearch.tsx, search-reveal.ts): the panel's states and picking a hit; a hit inside a folded tool row or
+// thought opens it, and "Back to where you were" closes it again.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

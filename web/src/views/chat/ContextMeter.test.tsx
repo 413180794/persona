@@ -1,4 +1,4 @@
-// The session header's model name and context bar (#2430): always shown, whatever 「Agent 行显示详情」 says.
+// The session header's model name and context bar (#2430): always shown, whatever "Show details in Agent rows" says.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { setAgentDetails, setContextAsUsed } from "../../lib/context-usage";

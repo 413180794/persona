@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 机器: every card draws its own CPU sparkline. Each one must own its gradient id (no duplicate ids on a page with
+// Machines: every card draws its own CPU sparkline. Each one must own its gradient id (no duplicate ids on a page with
 // several computers, and no fill borrowed from another card) and be announced as one image with its label.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";

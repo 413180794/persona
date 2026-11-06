@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// ConfirmButton keeps keyboard focus: the trash icon hands focus to「取消」 when it asks, and the trigger gets it back
+// ConfirmButton keeps keyboard focus: the trash icon hands focus to "Cancel" when it asks, and the trigger gets it back
 // when the pair goes away (Cancel, Escape, the 6 s timeout, after confirming), unless the user has moved on.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

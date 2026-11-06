@@ -1,6 +1,6 @@
-// Several Feishu accounts on the hub's Lark gateway (docs/feishu.md「多账号」, iOS LarkAccounts.swift). A request about
+// Several Feishu accounts on the hub's Lark gateway (docs/feishu.md "Multiple accounts", iOS LarkAccounts.swift). A request about
 // another account than the hub's own (lark.account) names it with `ol_account`; the media URLs the hub hands out for
-// such an account already carry it. The 消息 page shows one account's chats at a time: the choice is kept per browser.
+// such an account already carry it. The "Messages" page shows one account's chats at a time: the choice is kept per browser.
 import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { api, ApiError } from "./api";
@@ -46,11 +46,11 @@ export interface LarkAccountsState {
   /** Signed-in accounts in the Lark gateway's order; empty from a hub that has no account list (one account). */
   accounts: LarkAccount[];
   default?: number;
-  /** The account the 消息 page shows: the chosen one while it is signed in, else the hub's own. */
+  /** The account the "Messages" page shows: the chosen one while it is signed in, else the hub's own. */
   selected?: number;
-  /** What the 消息 page names as `ol_account`: undefined for the hub's own account. */
+  /** What the "Messages" page names as `ol_account`: undefined for the hub's own account. */
   request?: number;
-  /** Whose chats they are, shown beside 飞书 while more than one account is signed in. */
+  /** Whose chats they are, shown beside Lark while more than one account is signed in. */
   selectedName?: string;
 }
 

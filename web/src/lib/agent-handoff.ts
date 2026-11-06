@@ -1,4 +1,4 @@
-// 交给 Persona (the Agents list's row menu, iOS AgentHandoff): what goes to Persona's main conversation about one agent —
+// "Hand to Persona" (the Agents list's row menu, iOS AgentHandoff): what goes to Persona's main conversation about one agent —
 // where it runs and what it last said as a context card, then the ask.
 import { t } from "../i18n";
 import { baseName, stateOf } from "./format";

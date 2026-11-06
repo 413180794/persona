@@ -1,12 +1,12 @@
 // The sidebar's agent rows say under their title what they need from you or what they did (#3195), so the owner
-// does not have to hover or open each one: the same words as the 待办 page's agent rows (todos.json kicker_*).
+// does not have to hover or open each one: the same words as the to-dos page's agent rows (todos.json kicker_*).
 import { t } from "../i18n";
 import { sessionPreview, stateOf } from "./format";
 import { interactionAsk } from "./inbox";
 import { plainMarkdown } from "./plain-markdown";
 import type { Interaction, Session } from "./types";
 
-/** What kind of card waits, in a word: 在问你 / 计划待批准 / 需要授权 / 终端对话框 / MCP 请求. */
+/** What kind of card waits, in a word: "Asking you" / "Plan to approve" / "Needs permission" / "Terminal dialog" / "MCP request". */
 export function interactionKicker(ix: Pick<Interaction, "kind"> | undefined): string {
   switch (ix?.kind) {
     case "plan":
@@ -27,8 +27,8 @@ const MAX = 160;
 
 /**
  * The second line of an agent's sidebar row: for one that needs you, its card's kind and what it asks
- * (「在问你：用哪个测试框架？」), else why it waits (sessionPreview: the host's reason, the error, the hub's triage, its
- * last words); for one that finished unseen, what it did (「✓ 结论」 or its last words, as plain text). Undefined for
+ * ("Asking you: which test framework?"), else why it waits (sessionPreview: the host's reason, the error, the hub's triage, its
+ * last words); for one that finished unseen, what it did ("✓ conclusion" or its last words, as plain text). Undefined for
  * every other state, and when there is nothing to say. `lead` is the red part, colon included when text follows.
  */
 export function rowLine(s: Session, ix?: Interaction): { lead?: string; text: string } | undefined {

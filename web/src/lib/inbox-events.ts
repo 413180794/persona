@@ -1,6 +1,6 @@
-// Inbox events (docs/inbox.md「事件、处理链条、建议」): what a hub of this phase adds on an inbox item — the section it
-// is in (`status`, with 进行中 between 需要你 and 知悉即可), 急事, the manager's 总结, the processing conversation
-// (`handling`), at most one suggestion with its version, and the 处理链条. Every field is optional: an item from an
+// Inbox events (docs/inbox.md "Events, handling chain, suggestions"): what a hub of this phase adds on an inbox item — the section it
+// is in (`status`, with "In progress" between "Needs you" and "FYI"), urgent, the manager's summary, the processing conversation
+// (`handling`), at most one suggestion with its version, and the handling chain. Every field is optional: an item from an
 // older hub has none of them and the inbox draws exactly what it drew before.
 //
 // The pure parts are plain functions so the tests run them without a DOM; `actOnSuggestion` is the one request.
@@ -79,7 +79,7 @@ export function hasEvent(it: InboxItem): boolean {
   return Boolean(it.chain?.length || it.suggestion || it.recap || it.handling);
 }
 
-/** The section of an open item: the hub's `status` when it sends one, else the triage tier as before (empty = 需要你). */
+/** The section of an open item: the hub's `status` when it sends one, else the triage tier as before (empty = "Needs you"). */
 export function statusOf(it: InboxItem): InboxStatus {
   switch (it.status) {
     case "action":
@@ -91,7 +91,7 @@ export function statusOf(it: InboxItem): InboxStatus {
   return it.tier === "fyi" || it.tier === "noise" ? it.tier : "action";
 }
 
-/** The word a 进行中 row shows for what is going on; undefined when nothing is. */
+/** The word an "In progress" row shows for what is going on; undefined when nothing is. */
 export function handlingWord(it: InboxItem): string | undefined {
   switch (it.handling?.state) {
     case "looking":
@@ -105,7 +105,7 @@ export function handlingWord(it: InboxItem): string | undefined {
   }
 }
 
-/** 急事 in 需要你 while the manager still works on it: the card says 「AI 正在准备建议」. */
+/** Urgent in "Needs you" while the manager still works on it: the card says "AI is preparing a suggestion". */
 export function preparing(it: InboxItem): boolean {
   return Boolean(it.urgent) && it.handling?.state === "looking" && !it.suggestion;
 }
@@ -114,7 +114,7 @@ export function handlingFailed(it: InboxItem): boolean {
   return it.handling?.state === "failed";
 }
 
-/** The suggestion's name: 建议回复 / 建议派 Agent / 结论 (an unknown kind: 建议). */
+/** The suggestion's name: "Suggested reply" / "Suggested Agent" / "Conclusion" (an unknown kind: "Suggestion"). */
 export function suggestionTitle(s: InboxSuggestion): string {
   switch (s.kind) {
     case "reply":
@@ -133,7 +133,7 @@ export function firstLine(text: string): string {
   return text.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? "";
 }
 
-/** What the card's buttons are: its confirm label, and whether 修改 is offered (a conclusion is only read). */
+/** What the card's buttons are: its confirm label, and whether "Edit" is offered (a conclusion is only read). */
 export function suggestionButtons(s: InboxSuggestion): { confirm: string; edit: boolean } {
   if (s.handback) return { confirm: t("lib-inbox-events.confirm"), edit: true };
   switch (s.kind) {
@@ -178,7 +178,7 @@ export function canExpand(e: ChainEntry): boolean {
   return Boolean(e.detail || e.messages?.length);
 }
 
-/** The time of an entry: 10:03 today, else the day and the time (10月28日 10:03). */
+/** The time of an entry: 10:03 today, else the day and the time (Oct 28 10:03). */
 export function chainTime(iso?: string, now = new Date()): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -204,7 +204,7 @@ export type SuggestionResult =
   | { ok: false; stale: false; error: string; code?: string };
 
 /**
- * POST /api/v1/inbox/{id}/suggestion: 确认 (with the edited text when 修改 changed it), 驳回, or 说一句话 (instruct).
+ * POST /api/v1/inbox/{id}/suggestion: "Confirm" (with the edited text when "Edit" changed it), "Reject", or "Say something" (instruct).
  * The version shown goes with it, so a suggestion that changed since is not run: the hub answers 409 suggestion_stale
  * with the item as it is now.
  */

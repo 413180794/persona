@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The hub replays the broadcasts a page missed only when it resumes the stream (hello `resumed`, docs/hub-restart.md
-// 「事件续传」). After a hello it could not resume, what these pages follow by a push is read again: 定时任务
-// (assistant_schedule), the looks and the chosen one (personas, look), 设置 › hub (hub_update), and 设置 › 扩展's list and
+// "Event resume"). After a hello it could not resume, what these pages follow by a push is read again: "Scheduled tasks"
+// (assistant_schedule), the looks and the chosen one (personas, look), Settings › hub (hub_update), and Settings › Extensions' list and
 // an extension's sign-in (extension_auth). A resumed hello reads nothing again.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

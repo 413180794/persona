@@ -1,4 +1,4 @@
-// Items → what the chat shows (docs/ios.md「展示逻辑」): every user message opens a segment; the segment shows
+// Items → what the chat shows (docs/ios.md "Display logic"): every user message opens a segment; the segment shows
 // the message, one work row folding the tools / thoughts / notices / intermediate replies, and the agent's last
 // words before the next message as the answer.
 
@@ -37,7 +37,7 @@ export interface UserMessage {
   injected?: Injected;
 }
 
-/** A <jarvis-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol.md「发送视频」). */
+/** A <jarvis-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol.md "Sending video"). */
 export interface AttachedFile {
   kind: string; // video | audio | file
   path: string; // on the session's machine
@@ -237,7 +237,7 @@ export function segments(items: Item[]): Segment[] {
         break;
       }
       case "thinking":
-        // an empty thought (Claude Code mostly writes them without words) still shows as 「思考 Ns」
+        // an empty thought (Claude Code mostly writes them without words) still shows as "Thinking Ns"
         cur.steps.push({ kind: "thinking", id: it.id, item: it });
         if (it.text?.trim()) cur.thoughts++;
         break;
@@ -362,7 +362,7 @@ export function mcpServer(name?: string): string | null {
   return i > 0 ? rest.slice(0, i) : rest || null;
 }
 
-/** A tool's name for a sentence (a permission card): an MCP tool as 「Persona · mail send」, others as written. */
+/** A tool's name for a sentence (a permission card): an MCP tool as "Persona · mail send", others as written. */
 export function toolDisplayName(name?: string): string {
   const server = mcpServer(name);
   if (server === null) return name || toolLabel();
@@ -381,7 +381,7 @@ export function isPersonaTool(name?: string): boolean {
 
 /** Persona's tools with a verb of their own, by their bare name (iOS PersonaToolNames + ToolPresentation.verb). */
 const PERSONA_VERB_KEY: Record<string, string> = {
-  // Agents on the user's computers (docs/assistant.md「Agents 与飞书工具」)
+  // Agents on the user's computers (docs/assistant.md "Agents and Lark tools")
   agent_read: "persona_agent_read",
   agent_send: "persona_agent_send",
   send_to_agent: "persona_agent_send",
@@ -411,7 +411,7 @@ const PERSONA_VERB_KEY: Record<string, string> = {
   view_show: "persona_view_show",
   view_get: "persona_view_get",
   view_update: "persona_view_update",
-  // its own conversations (docs/assistant.md「管理自己的对话」)
+  // its own conversations (docs/assistant.md "Managing its own conversations")
   conversations_list: "persona_conversations_list",
   conversation_read: "persona_conversation_read",
   conversation_rename: "persona_conversation_rename",
@@ -426,9 +426,9 @@ const PERSONA_VERB_KEY: Record<string, string> = {
   browser_look: "persona_browser_look",
 };
 
-/** How one of Persona's own tools reads in a step: a verb ("读 Agent 对话"), or for the phone and mail families the
+/** How one of Persona's own tools reads in a step: a verb ("Read agent chat"), or for the phone and mail families the
  *  family and what it did ("iPhone" + "contacts search"); null for every other tool and the Persona tools without one
- *  (they keep 「Persona · agent read」). Display only: the server stays `jarvis` on the wire. */
+ *  (they keep "Persona · agent read"). Display only: the server stays `jarvis` on the wire. */
 export function personaToolVerb(name?: string): { verb: string; what?: string } | null {
   if (!isPersonaTool(name)) return null;
   const base = name!.slice(name!.lastIndexOf("__") + 2);
@@ -451,11 +451,11 @@ export interface Turn {
   /** Everything the agent did (no input of yours), the answer included. */
   process: Item[];
   answer?: Item;
-  /** Notices that close the exchange visibly ("已中断"). */
+  /** Notices that close the exchange visibly ("Interrupted"). */
   trailing: Item[];
   /** Background tasks that woke the agent during this exchange (their notices). */
   wakes: Item[];
-  /** Everything from the first wake on, for the 后台任务完成 drawer. */
+  /** Everything from the first wake on, for the "Background task done" drawer. */
   afterWake: Item[];
   /** What came after the answer (a follow-up once a background task reported back): only in the drawer. */
   tail: Item[];
@@ -606,7 +606,7 @@ export function buildBlocks(items: Item[]): Block[] {
 export type ChatLine =
   /** A message (or none), one work row for what the agent did after it, the agent's last words. */
   | { kind: "segment"; id: string; seg: Segment; live: boolean }
-  /** A notice of its own line: a wake that opens new work, "已中断" after an exchange. */
+  /** A notice of its own line: a wake that opens new work, "Interrupted" after an exchange. */
   | { kind: "notice"; id: string; item: Item }
   /** Under an answer: background tasks reported back; what the agent did next opens in a drawer. */
   | { kind: "wakes"; id: string; turn: Turn; live: boolean }
@@ -693,7 +693,7 @@ function lineError(l: ChatLine): { item: Item; info: APIErrorInfo; rest: ChatLin
   return { item: l.seg.answer, info, rest: empty ? null : { ...l, seg } };
 }
 
-/** A line that only asked to try again: "继续" with nothing else. */
+/** A line that only asked to try again: "continue" with nothing else. */
 function isRetryLine(l: ChatLine): boolean {
   return l.kind === "segment" && !l.live && !l.seg.steps.length && !l.seg.answer && Boolean(l.seg.user) && !l.seg.user!.images.length && isRetryText(l.seg.user!.text);
 }

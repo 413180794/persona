@@ -1,7 +1,7 @@
-// 设置 › 通用 › 外观's 主题色 and 字号 (the app's 设置 › 外观 › 主题色 and 界面风格 › 字号, apple/Shared/Design/ColorSpec.swift and
-// TextSize.swift; docs/web.md「外观」). Both live in this browser only. The defaults add nothing to the page: no attribute,
+// Settings › General › Appearance's "Theme color" and "Text size" (the app's Settings › Appearance › Theme color and Interface style › Text size, apple/Shared/Design/ColorSpec.swift and
+// TextSize.swift; docs/web.md "Appearance"). Both live in this browser only. The defaults add nothing to the page: no attribute,
 // no style element, so the page is what it was before these existed. An extension theme (ExtensionThemePicker) still
-// lays its colors over whichever 主题色 is chosen: its tokens are inline on <html>, above any stylesheet.
+// lays its colors over whichever theme color is chosen: its tokens are inline on <html>, above any stylesheet.
 import { useSyncExternalStore } from "react";
 import { meetContrast, MIN_ROLE_CONTRAST, MIN_TEXT_CONTRAST } from "./extension-theme";
 
@@ -11,11 +11,11 @@ export interface Pair { light: string; dark: string }
 /** The fixed colors, in the app's order; each is the accent of the style it came from (ColorSpec.blue, .coral …). */
 export const ACCENT_PRESETS = ["blue", "coral", "lavender", "teal", "lark"] as const;
 export type AccentPreset = (typeof ACCENT_PRESETS)[number];
-/** 默认 is the page's own blue (the web has one style, so the app's 跟随界面风格 is this); 跟随形象 the persona's accent. */
+/** "Default" is the page's own blue (the web has one style, so the app's "Follow interface style" is this); "Match avatar" the persona's accent. */
 export type AccentChoice = "default" | "persona" | AccentPreset;
 
 /**
- * The app's values. Only the light-text bubbles keep their own (系统蓝's is the page's default bubble, 飞书蓝's 飞书's):
+ * The app's values. Only the light-text bubbles keep their own ("System blue"'s is the page's default bubble, "Lark blue"'s Lark's):
  * the page's own bubble has dark words, so the others get a pale bubble of their accent instead of the app's colored one.
  */
 export const PRESET_COLORS: Record<AccentPreset, { accent: Pair; bubble?: Pair }> = {
@@ -48,7 +48,7 @@ export function accentTokens(accent: Pair, bubble?: Pair): Record<Scheme, Record
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
-/** A persona package's accent (manifest.colors, docs/persona.md「色系」), a scheme it leaves out taken from the other; null without one. */
+/** A persona package's accent (manifest.colors, docs/persona.md "Color scheme"), a scheme it leaves out taken from the other; null without one. */
 export function personaAccent(colors: { light?: Record<string, string>; dark?: Record<string, string> } | undefined): Pair | null {
   const light = colors?.light?.accent, dark = colors?.dark?.accent;
   const l = light && HEX.test(light) ? light : undefined, d = dark && HEX.test(dark) ? dark : undefined;
@@ -57,9 +57,9 @@ export function personaAccent(colors: { light?: Record<string, string>; dark?: R
 }
 
 /**
- * The stylesheet for a choice; empty for 默认, and for 跟随形象 while the persona brings no colors (then it is 默认).
+ * The stylesheet for a choice; empty for "Default", and for "Match avatar" while the persona brings no colors (then it is "Default").
  * Under an extension theme (`extension`) my bubble is left out: the extension owns the accent, so the bubble must not
- * carry the 主题色's tint (on the app the extension theme is a 主题色 of its own, ColorSpec(extensionTheme:over:)).
+ * carry the theme color's tint (on the app the extension theme is a theme color of its own, ColorSpec(extensionTheme:over:)).
  */
 export function accentCSS(choice: AccentChoice, persona: Pair | null, extension = false): string {
   const pair = choice === "persona" ? persona : choice === "default" ? null : PRESET_COLORS[choice]?.accent;
@@ -70,9 +70,9 @@ export function accentCSS(choice: AccentChoice, persona: Pair | null, extension 
   return `${block(":root[data-accent]", t.light)}\n${block(":root.dark[data-accent]", t.dark)}`;
 }
 
-// ── 字号 ──────────────────────────────────────────────────
+// ── Text size ─────────────────────────────────────────────
 
-/** 小 / 标准 / 大: every font size in the page times --text-scale (styles.css, vite.config.ts's textScale). */
+/** "Small" / "Standard" / "Large": every font size in the page times --text-scale (styles.css, vite.config.ts's textScale). */
 export const TEXT_SIZES = ["small", "standard", "large"] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 
@@ -111,7 +111,7 @@ export function accentChoice(): AccentChoice {
   return v === "persona" || (ACCENT_PRESETS as readonly string[]).includes(v ?? "") ? (v as AccentChoice) : "default";
 }
 
-/** The chosen persona's accent as last seen, so 跟随形象 paints before the hub's list comes. */
+/** The chosen persona's accent as last seen, so "Match avatar" paints before the hub's list comes. */
 export function savedPersonaAccent(): Pair | null {
   try {
     const v = JSON.parse(read(PERSONA_ACCENT_KEY) ?? "null") as Pair | null;
@@ -129,7 +129,7 @@ export function textSize(): TextSize {
 const STYLE_ID = "persona-accent";
 let extensionActive = false;
 
-/** ExtensionThemeProvider says when an extension theme paints over the page (then 主题色 leaves my bubble alone). */
+/** ExtensionThemeProvider says when an extension theme paints over the page (then the theme color leaves my bubble alone). */
 export function setExtensionThemeActive(on: boolean) {
   if (extensionActive === on) return;
   extensionActive = on;

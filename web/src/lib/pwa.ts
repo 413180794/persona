@@ -1,13 +1,13 @@
-// Installing the web client as an app (PWA, docs/web.md「安装成 App」): registers the service worker (src/sw.ts) and
-// tracks what 设置 › 通用 can offer — the browser's own install prompt, a hint where there is none, or 已安装.
+// Installing the web client as an app (PWA, docs/web.md "Install as an app"): registers the service worker (src/sw.ts) and
+// tracks what Settings › General can offer — the browser's own install prompt, a hint where there is none, or "Installed".
 import { useSyncExternalStore } from "react";
 import { BASE } from "./base";
 
 export type InstallState =
   | "installed" // running as the installed app
   | "prompt" // the browser offered its install prompt (Chrome, Edge): one click
-  | "ios" // iPhone / iPad: Safari's share menu › 添加到主屏幕
-  | "safari" // Safari on a Mac: 文件 › 添加到程序坞
+  | "ios" // iPhone / iPad: Safari's share menu › Add to Home Screen
+  | "safari" // Safari on a Mac: File › Add to Dock
   | "insecure" // other browsers install only from https (or localhost)
   | "menu"; // the browser's own menu, if it can
 
@@ -35,7 +35,7 @@ const standalone = () => matchMedia("(display-mode: standalone)").matches || (na
 /** From main.tsx, before the first render: the install prompt comes early and only once per page load. */
 export function startPWA() {
   addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault(); // offered in 设置, not as the browser's own banner
+    e.preventDefault(); // offered in Settings, not as the browser's own banner
     deferred = e as InstallPrompt;
     changed();
   });
@@ -47,7 +47,7 @@ export function startPWA() {
   matchMedia("(display-mode: standalone)").addEventListener("change", changed);
   // Service workers need a secure context; over the LAN's plain http the page stays a plain page. Not in dev: Vite's
   // modules aren't the build's.
-  // Not under a sub-path (lib/base.ts): the worker's routes and caches are the root's (docs/web.md「子路径」).
+  // Not under a sub-path (lib/base.ts): the worker's routes and caches are the root's (docs/web.md "Sub-path").
   if (import.meta.env.PROD && !BASE && isSecureContext && "serviceWorker" in navigator) {
     afterLoad(() => void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {}));
   }

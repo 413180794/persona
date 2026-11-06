@@ -1,6 +1,6 @@
-// Whether a line-clamped text is cut, for a 展开全文 under it (#4715, #4742). Measured after every render (the text may
+// Whether a line-clamped text is cut, for a "Show all" under it (#4715, #4742). Measured after every render (the text may
 // change), whenever the element's box changes (a side panel opens, the window narrows, a hidden container shows), and
-// once the web fonts are in, as LarkTopicCard's Fold does. While `open` the last answer stays, so 收起 stays under the text.
+// once the web fonts are in, as LarkTopicCard's Fold does. While `open` the last answer stays, so "Hide" stays under the text.
 import { useCallback, useLayoutEffect, useState } from "react";
 
 export function useClamped<T extends HTMLElement>(open: boolean): { ref: (el: T | null) => void; cut: boolean } {

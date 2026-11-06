@@ -1,4 +1,4 @@
-// A channel's mark (docs/channels.md「界面」): Feishu's own for the Feishu bot and /agent, else an icon of its kind —
+// A channel's mark (docs/channels.md "UI"): Feishu's own for the Feishu bot and /agent, else an icon of its kind —
 // WeChat's mark and its terms of use are undecided (lib/connectors.ts), so it draws the generic chat icon until they are.
 import type { Channel } from "../lib/channels";
 import { cx } from "./atoms";

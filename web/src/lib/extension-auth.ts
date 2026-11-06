@@ -1,6 +1,6 @@
-// An extension's sign-in and its command-line tools (#4507, docs/protocol.md「扩展的登录」): the hub asks the extension's
-// program (auth.status / auth.step / auth.logout) and keeps its state; the page draws a 「登录」 group on the extension's
-// detail, a sign-in dialog of steps (fields, a device code, a QR code), and lists the tools in 「关于」. Only with a hub
+// An extension's sign-in and its command-line tools (#4507, docs/protocol.md "Extension sign-in"): the hub asks the extension's
+// program (auth.status / auth.step / auth.logout) and keeps its state; the page draws a "Sign in" group on the extension's
+// detail, a sign-in dialog of steps (fields, a device code, a QR code), and lists the tools in "About". Only with a hub
 // that has `extension_auth`; the hub pushes `extension_auth` whenever a sign-in state changes.
 import { api, enc } from "./api";
 import type { PromptQR } from "./connectors";
@@ -70,7 +70,7 @@ export const takeSignIn = (id: string) => asked.delete(id);
 
 // ── words and rules ─────────────────────────────────────
 
-/** The state in words: 未登录, 等待确认, 已登录：<account>, 已过期, 出错：<message>; unknown is its program not running. */
+/** The state in words: "Not signed in", "Waiting for confirmation", "Signed in: <account>", "Expired", "Error: <message>"; unknown is its program not running. */
 export function authStateText(a: ExtensionAuth): string {
   switch (a.state) {
     case "signed_out":
@@ -109,14 +109,14 @@ export function authTone(a: ExtensionAuth): "green" | "orange" | "red" | "idle" 
 /** Not signed in (or no longer): the list says so, and an install's next step is to. */
 export const needsSignIn = (a?: ExtensionAuth) => a?.state === "signed_out" || a?.state === "expired";
 
-/** The sign-in button's word: 重新登录 once it has been signed in to. */
+/** The sign-in button's word: "Sign in again" once it has been signed in to. */
 export const signInLabel = (a: ExtensionAuth) =>
   a.state === "signed_in" || a.state === "expired" ? t("lib-extension-auth.sign_in_again") : t("lib-extension-auth.sign_in");
 
 /** Whether there is a sign-in to sign out of. */
 export const canSignOut = (a: ExtensionAuth) => a.state === "signed_in";
 
-/** What the list adds after an extension's state: 「 · 未登录」 when it has to be signed in to, else "". */
+/** What the list adds after an extension's state: " · Not signed in" when it has to be signed in to, else "". */
 export const listAuthNote = (a?: ExtensionAuth) => (needsSignIn(a) ? t("lib-extension-auth.list_signed_out") : "");
 
 /** The pages to list: an older app's sign-in page (auth.page) is left out, its sign-in is the group above. */
@@ -124,7 +124,7 @@ export function shownPages<T extends { id: string }>(pages: T[] | undefined, aut
   return (pages ?? []).filter((u) => !auth?.page || u.id !== auth.page);
 }
 
-/** A tool's row in 「关于」: its version, and 机器上已有 when it is the machine's own copy. */
+/** A tool's row in "About": its version, and "already on the machine" when it is the machine's own copy. */
 export function toolText(x: ExtensionTool): string {
   return x.reused ? t("lib-extension-auth.tool_reused", { version: x.version }) : x.version;
 }

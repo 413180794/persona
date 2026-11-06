@@ -1,9 +1,9 @@
-// The sidebar's 按机器 tree, laid out the way herdr arranges agents: machine → workspace (a herdr space) → tab (a
+// The sidebar's "By machine" tree, laid out the way herdr arranges agents: machine → workspace (a herdr space) → tab (a
 // slot) → panes. A Session is one agent pane; the sessions of one slot are that tab's panes, which the chat shows as
 // tabs of their own (PaneTabs). Hosts without tabs (Paseo, botmux, runtimes) list their sessions right under the
-// space; sessions outside any space go to the machine's「其他」. Shell panes never reach the hub, so they are not here.
+// space; sessions outside any space go to the machine's "Other". Shell panes never reach the hub, so they are not here.
 // A space the host nests under another (Orca's child worktrees, `parent_space_id`) is listed inside its parent, as
-// Orca's sidebar does with「N 个子项」; when the parent has no live agent the child stays at the top (#2073).
+// Orca's sidebar does with "N children"; when the parent has no live agent the child stays at the top (#2073).
 import { splitAgentSessions } from "./agent-groups";
 import { stateOf, tabLabel } from "./format";
 import { isSpacePinned, type AgentPins } from "./pins";
@@ -11,7 +11,7 @@ import type { Route, SessionView } from "./router";
 import type { AgentState, Machine, Session } from "./types";
 import { byTime } from "./times";
 
-// docs/agent-states.md「排序优先级」: what a folded row shows for everything under it, and which pane a tab opens on.
+// docs/agent-states.md "Sort priority": what a folded row shows for everything under it, and which pane a tab opens on.
 const URGENCY: AgentState[] = ["needs_you", "working", "unread", "idle", "unknown", "offline"];
 
 const urgency = (s: Session) => URGENCY.indexOf(stateOf(s));
@@ -47,13 +47,13 @@ export function paneOrder(a: Session, b: Session): number {
   return placeOf(a) - placeOf(b) || paneNumber(a) - paneNumber(b) || a.session_id.localeCompare(b.session_id);
 }
 
-/** The tab's 发起者 (#2320): the agent in the tab's first pane (`pane_index` 0, top left, the one the others were split
+/** The tab's "Lead" (#2320): the agent in the tab's first pane (`pane_index` 0, top left, the one the others were split
  *  from). None when the tab has one agent, or that pane is a shell or not placed: the agents are then peers. */
 export function launcherOf(panes: readonly Session[]): Session | undefined {
   return panes.length > 1 ? panes.find((s) => s.pane_index === 0) : undefined;
 }
 
-/** A tab's agents as one entry (the overview's task list): the panes in order, the 发起者 if any, the most urgent. */
+/** A tab's agents as one entry (the overview's task list): the panes in order, the "Lead" if any, the most urgent. */
 export interface TabGroup {
   key: string;
   sessions: Session[];
@@ -117,9 +117,9 @@ export function homeTaskGroups(sessions: readonly Session[], interactions: reado
   return out;
 }
 
-/** What the overview shows (Home): the task rows (homeTaskGroups); every unread agent, which 「全部标为已读」 marks —
+/** What the overview shows (Home): the task rows (homeTaskGroups); every unread agent, which "Mark all as read" marks —
  *  all of them, as before tabs were rows, though some sit in tabs filed under needs-you or working — and where that
- *  action goes: 做完了，还没看's header, beside the summary when that section is empty, nowhere when none is unread;
+ *  action goes: "Done, not seen yet"'s header, beside the summary when that section is empty, nowhere when none is unread;
  *  and whether there is nothing to do (no card waiting either). */
 export function homeOverview(sessions: readonly Session[], interactions: readonly { machine_id: string; session_id: string }[]) {
   const groups = homeTaskGroups(sessions, interactions);
@@ -176,7 +176,7 @@ export interface HerdrTab {
   slotId: string;
   /** `#N` or the tab's name (format.ts tabLabel); empty when the host gives neither. */
   label: string;
-  /** Whether the tab's row is opened up to its agents, kept by 机器/空间名/tab 的编号/tab 名 like the space's fold. */
+  /** Whether the tab's row is opened up to its agents, kept by machine/space name/tab number/tab name like the space's fold. */
   foldKey: string;
   /** In pane order (paneOrder). */
   sessions: Session[];
@@ -191,7 +191,7 @@ export interface HerdrSpace {
   key: string;
   machineId: string;
   name: string;
-  /** Folds are kept by 机器/空间名, like pins: herdr's workspace ids change when it restarts. */
+  /** Folds are kept by machine/space name, like pins: herdr's workspace ids change when it restarts. */
   foldKey: string;
   sessions: Session[];
   tabs: HerdrTab[];
@@ -218,7 +218,7 @@ export interface HerdrMachine {
   machine: Machine;
   foldKey: string;
   spaces: HerdrSpace[];
-  /** Sessions outside any space (「其他」), folded by `otherFoldKey`. */
+  /** Sessions outside any space ("Other"), folded by `otherFoldKey`. */
   other: Session[];
   otherFoldKey: string;
   sessions: Session[];

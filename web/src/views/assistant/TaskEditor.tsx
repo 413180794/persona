@@ -1,7 +1,7 @@
 // One scheduled task in a dialog (the iOS app's AssistantTaskEditor): when (once / every day / every N minutes), the
-// prompt, permission mode, which conversation runs go into, 立即运行, the last result and the task's own runs.
-// A new one has 取消 / 添加, so trying a template and backing out creates nothing; an existing one is saved with
-// 保存 and deleted after an inline confirmation.
+// prompt, permission mode, which conversation runs go into, "Run now", the last result and the task's own runs.
+// A new one has "Cancel" / "Add", so trying a template and backing out creates nothing; an existing one is saved with
+// "Save" and deleted after an inline confirmation.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import { navigate } from "../../lib/router";
@@ -43,9 +43,9 @@ export function TaskEditor({
   const [runs, setRuns] = useState<Run[]>([]);
   const nowMs = useNow(30_000);
   const now = useMemo(() => new Date(nowMs), [nowMs]);
-  /** The conversation it was scheduled from: 接着原来的对话 can be switched off (and back on before saving). */
+  /** The conversation it was scheduled from: "Continue the original chat" can be switched off (and back on before saving). */
   const origin = task.session_id;
-  /** 跑完推送 shows when the hub takes it (task_push), or the task already has it. */
+  /** "Push when done" shows when the hub takes it (task_push), or the task already has it. */
   const hasPush = useStore((s) => hubHas(s.features, TASK_PUSH_FEATURE)) || task.push === "asked";
 
   useEffect(() => {

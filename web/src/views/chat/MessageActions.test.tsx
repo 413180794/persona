@@ -15,7 +15,7 @@ function render(actions: ChatActions, itemId?: string) {
   );
 }
 
-// 分支到新聊天 (#2137): a reply's bar ends in ⋯ only when the session can fork.
+// "Branch to new chat" (#2137): a reply's bar ends in ⋯ only when the session can fork.
 describe("MessageActions ⋯", () => {
   it("shows ⋯ on a reply of a session that can fork", () => {
     expect(render({ ...base, fork: () => {} }, "u1#0")).toContain('aria-label="更多"');
@@ -41,7 +41,7 @@ describe("moreActions", () => {
   });
 });
 
-// 回退到这里 (#2436): on your messages, 只回退对话 / 回退代码和对话, the second asking again.
+// "Rewind to here" (#2436): on your messages, "Conversation only" / "Code and conversation", the second asking again.
 describe("rewindActions", () => {
   const run = async () => {};
   it("has the two choices, the second a danger that asks again", () => {

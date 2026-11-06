@@ -5,7 +5,7 @@ import { timeMs } from "./times";
 
 // Messages Persona types into a conversation for the model (a task's notice, a scheduled run, a wake-up, the
 // background tasks a node restart stopped): one line instead of a user bubble, never the instructions inside
-// (docs/protocol.md「Persona 注入的消息」). The hub marks them (`injected`); an older hub does not, so the text is read
+// (docs/protocol.md "Messages Persona injects"). The hub marks them (`injected`); an older hub does not, so the text is read
 // the same way it does (prompts.ParseInjected; spec/fixtures/injected is shared with it).
 
 const NOTICE_HEAD = /^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$/u; // i18n-ignore: matches the hub's injected text

@@ -1,7 +1,7 @@
-// Changes to a composer's draft from outside it: the message menu's 引用 / 编辑, a queued message pulled back, an
+// Changes to a composer's draft from outside it: the message menu's "Quote" / "Edit", a queued message pulled back, an
 // edited image put in for the next message (iOS: ChatView.bindMenu, AppModel.editQueued, ImageViewer's attach).
 // The composer for that draft key listens; with none mounted, text goes to the stored draft (it is read on mount).
-// 引用 waits as a bar above the input (not as `> ` lines in it) and goes out as the same `> ` block in front of the
+// "Quote" waits as a bar above the input (not as `> ` lines in it) and goes out as the same `> ` block in front of the
 // message, so what the agent reads is unchanged; a bubble draws a leading `> ` block folded (splitQuote). A comment on
 // picked words or on lines of code (lib/comments.ts, #2437) is one more entry of that list: the message quote is
 // at most one (a new one replaces it), comments pile up, each its own block after it.
@@ -15,7 +15,7 @@ export interface DraftImage {
   data: string; // base64
 }
 
-/** What 引用 holds above the input: the quoted words, who said them, when; for a task's card, which task. */
+/** What "Quote" holds above the input: the quoted words, who said them, when; for a task's card, which task. */
 export interface DraftQuote {
   text: string;
   from?: string;
@@ -33,7 +33,7 @@ export interface QuotedTask {
   id?: string;
 }
 
-/** `任务「<title>」（todo id: <id>）`: the first line of a task's quote. */
+/** The first line of a task's quote: "task", the title in corner brackets, then "(todo id: <id>)" in full-width parentheses (TASK_LINE). */
 export function taskQuoteLine(t: QuotedTask): string {
   // i18n-ignore: written into the message and read back by TASK_LINE (and by the apps); not interface text
   return `任务「${t.title}」${t.id ? `（todo id: ${t.id}）` : ""}`;
@@ -86,7 +86,7 @@ export function withQuoteBlock(quotes: DraftQuote | readonly DraftQuote[] | null
   return text.trim() ? `${lead}\n\n${text}` : lead;
 }
 
-/** A message that starts with a `> ` block (sent with 引用, or typed): the quoted words and what follows. */
+/** A message that starts with a `> ` block (sent with "Quote", or typed): the quoted words and what follows. */
 export function splitQuote(text: string): { quote: string; rest: string } | null {
   const lines = text.replace(/^\s*\n/, "").split("\n");
   let n = 0;
@@ -207,7 +207,7 @@ export function setNote(key: string, id: string, body: string, done = false) {
   putQuotes(key, done ? { list, editing: null, fresh: false } : { ...st, list });
 }
 
-/** Opens a card's note for writing again (a click on 评论). */
+/** Opens a card's note for writing again (a click on "Comment"). */
 export function editNote(key: string, id: string) {
   const st = getQuotes(key);
   if (st.editing !== id) putQuotes(key, { ...st, editing: id, fresh: false });
@@ -246,7 +246,7 @@ export function applyDraft(draft: string, e: DraftEvent): string {
   }
 }
 
-/** Replacing asks first only when something else is typed (编辑 must not silently drop a draft). */
+/** Replacing asks first only when something else is typed ("Edit" must not silently drop a draft). */
 export function replaceNeedsConfirm(draft: string, text: string): boolean {
   return draft.trim() !== "" && draft.trim() !== text.trim();
 }
@@ -275,7 +275,7 @@ export function sendDraft(key: string, e: DraftEvent): boolean {
     addQuote(key, { text: e.text, from: e.from, ts: e.ts, task: e.task }, false);
     return true;
   }
-  // 编辑 / 回退 a message sent with a quote while its box is away: as the composer would, the quotes go back to the bar
+  // "Edit" / "Rewind" a message sent with a quote while its box is away: as the composer would, the quotes go back to the bar
   // above the input (any it had are replaced) and only the words into the draft.
   const split = e.type === "replace" ? splitQuotes(e.text) : null;
   if (e.type === "replace") setQuotes(key, split ? parseQuotes(split.quotes) : []);

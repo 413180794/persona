@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The sidebar folds (#2524): to a rail of icons with its button or ⌘⌥B / Ctrl+Alt+B (kept across reloads), and each of
-// its blocks under its title: 页面, Agents, and the groups inside Agents, each fold kept in this browser.
+// its blocks under its title: Pages, Agents, and the groups inside Agents, each fold kept in this browser.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -225,7 +225,7 @@ describe("the main conversation: the column's first row, Persona with the app's 
     expect(host.querySelectorAll('a[title="Persona 的主对话"]')).toHaveLength(1);
     expect(host.querySelectorAll("[data-persona-divider]")).toHaveLength(1);
     expect(host.querySelector('a[href="/j/main"]')).toBeNull();
-    // 「Persona 对话」starts with the other conversations, the main one not in it
+    // "Persona chats"starts with the other conversations, the main one not in it
     expect(block("Persona 对话").querySelector('a[title="Persona 的主对话"]')).toBeNull();
     expect(block("Persona 对话").textContent).toContain("整理周报");
     // its ⋯ opens the conversation's menu

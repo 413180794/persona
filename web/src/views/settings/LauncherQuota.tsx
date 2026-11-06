@@ -1,4 +1,4 @@
-// 额度 in a launcher's detail (docs/launchers.md「额度」, iOS LauncherQuotaSection): what its key may still spend at its
+// "Quota" in a launcher's detail (docs/launchers.md "Quota", iOS LauncherQuotaSection): what its key may still spend at its
 // gateway, titled with the gateway's name the hub sends — a budget on the key, each account / provider with its
 // windows, the key's own use. Read once when the dialog opens (the hub keeps an answer a minute); ↻ reads again.
 import { useEffect, useState } from "react";

@@ -1,6 +1,6 @@
 // Persona's profile (/assistant, the app's AssistantProfileView), opened from the Persona page and a conversation's menu:
-// who it is and where it runs, what it will do on its own next, its persona, then what shapes it (设置 › 助手's
-// groups: 主动做事, 了解你, 运行在) and what it can reach.
+// who it is and where it runs, what it will do on its own next, its persona, then what shapes it (Settings › Assistant's
+// groups: "On its own", "About you", "Runs on") and what it can reach.
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { navigate } from "../../lib/router";
@@ -35,7 +35,7 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   }, []);
 
   const machine = machines.find((m) => m.id === assistant?.machine_id);
-  // "" (no computer yet) is not a name: 运行在 then says there is none rather than leaving a gap
+  // "" (no computer yet) is not a name: "Runs on" then says there is none rather than leaving a gap
   const machineName = machine?.name || assistant?.machine_id || (assistant ? "" : t("assistant-profile.hub_machine"));
   const next = tasks ? upcoming(tasks, 3) : [];
   const reach = [{ text: machines.length ? t("assistant-profile.reach_machines", { machines: machines.map((m) => m.name).join(t("assistant-profile.list_separator")) }) : t("assistant-profile.reach_hub_computers"), icon: "machine" as IconName }, ...REACH];

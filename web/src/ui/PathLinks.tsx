@@ -1,4 +1,4 @@
-// Paths in messages as links (docs/web.md「消息里的文件路径」): those there on the agent's machine open in the file
+// Paths in messages as links (docs/web.md "File paths in messages"): those there on the agent's machine open in the file
 // panel, at their line. Plain text (a user's message) through PathText; Markdown (an answer) through
 // rehypePathLinks, which also links a code span that is a whole path (`src/a.ts:12`).
 import { memo, useMemo } from "react";

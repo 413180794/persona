@@ -6,16 +6,16 @@ import type { Item } from "../../lib/types";
 
 export interface ChatActions {
   draftKey: string;
-  /** The composer can send here (a read-only source cannot): 引用 / 编辑 / 编辑图片 are offered only then. */
+  /** The composer can send here (a read-only source cannot): "Quote" / "Edit" / "Edit image" are offered only then. */
   canCompose: boolean;
-  /** Who the replies are from, for 引用's 「引用 Persona · 16:45」 (the assistant's name, or the agent). */
+  /** Who the replies are from, for "Quote"'s "Quote Persona · 16:45" (the assistant's name, or the agent). */
   speaker: string;
   /** Every image of the loaded conversation, oldest first. A function: read when the viewer opens, not on every push. */
   images: () => Item[];
-  /** 分支到新聊天 from a reply (its item id): set only when the session can be forked. */
+  /** "Branch to new chat" from a reply (its item id): set only when the session can be forked. */
   fork?: (itemId: string) => void;
-  /** 回退到这里 (#2436) on a message of yours: set for a session in a terminal that takes messages. `block` is why it is
-   *  off for now ("" = on: 仅 Claude, 工作中…); `run` goes back to before the message (its UserMessage.id) and puts it
+  /** "Rewind to here" (#2436) on a message of yours: set for a session in a terminal that takes messages. `block` is why it is
+   *  off for now ("" = on: Claude only, working…); `run` goes back to before the message (its UserMessage.id) and puts it
    *  in the composer, rejecting with the reason in the message. */
   rewind?: { block: string; run: (messageId: string, text: string, restore: RewindRestore) => Promise<void> };
 }

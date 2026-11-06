@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The zoomed Mermaid diagram is a modal: the focus moves into it, and closing it (Esc or a click) gives it back to 放大.
+// The zoomed Mermaid diagram is a modal: the focus moves into it, and closing it (Esc or a click) gives it back to "Enlarge".
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +39,7 @@ const dialog = () => host.querySelector<HTMLElement>('[role="dialog"]');
 function open() {
   zoomButton().focus();
   act(() => zoomButton().click());
-  expect(document.activeElement).toBe(dialog()); // it left 放大, so getting back there is the close's doing
+  expect(document.activeElement).toBe(dialog()); // it left "Enlarge", so getting back there is the close's doing
 }
 
 describe("Mermaid zoom", () => {

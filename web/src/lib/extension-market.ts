@@ -1,4 +1,4 @@
-// 扩展市场 (docs/extensions.md「扩展市场」): markets the hub reads (an index persona-extensions.json on a site or a GitHub
+// Extension markets (docs/extensions.md "Extension markets"): markets the hub reads (an index persona-extensions.json on a site or a GitHub
 // repository), their catalog, and installing, upgrading and removing from it. A full-rights device may: the package is
 // pinned by the index's sha256 and nothing installs before the user has seen what it may do (the preview's
 // permissions digest). The admin UI has the same routes under /api/v1/admin/extensions/-/ (its api.ts), the same words
@@ -93,7 +93,7 @@ export const marketView = (m: Market & { plugins?: number }): Market => {
   return { ...rest, ...(m.official ? { name: officialMarketName() } : {}), extensions: m.extensions ?? plugins ?? 0 };
 };
 
-/** The official market is 官方扩展 in the page's language (#5017), whatever its index (or an older hub) calls it. */
+/** The official market is Official extensions in the page's language (#5017), whatever its index (or an older hub) calls it. */
 export const officialMarketName = () => t("lib-extension-market.official_name");
 
 export const listMarkets = () => api<{ markets?: Market[] }>(`${M()}/markets`).then((r) => (r.markets ?? []).map(marketView));

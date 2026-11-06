@@ -1,10 +1,10 @@
-// A session's terminal in the side panel (docs/terminal.md, docs/web.md「侧边面板」), as iOS's terminal: the pane live
-// over the hub's stream (polling the screen where it cannot stream), driven at the panel's size (接管) or watched at the
-// pane's (只看). Watching, scrolling up reads herdr's history above the screen and 换行 folds long rows at the panel's
+// A session's terminal in the side panel (docs/terminal.md, docs/web.md "Side panel"), as iOS's terminal: the pane live
+// over the hub's stream (polling the screen where it cannot stream), driven at the panel's size ("Take control") or watched at the
+// pane's ("View only"). Watching, scrolling up reads herdr's history above the screen and "Wrap" folds long rows at the panel's
 // width; driving, the key bar has the keys a phone's keyboard lacks. The logic is in terminal/feed.ts; xterm loads only
 // when a terminal opens.
 //
-// Beside that single-pane surface the panel has a second, 完整界面 (docs/terminal.md「完整 herdr 界面」): herdr's own
+// Beside that single-pane surface the panel has a second, "Full view" (docs/terminal.md "The full herdr UI"): herdr's own
 // client with its sidebar, tabs and splits (terminal/FullTerminal.tsx). The header's switch chooses, and the two give
 // way to each other with a short slide and fade. Each surface draws its own controls into the header's slot.
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
@@ -151,7 +151,7 @@ function PaneTerminal({
     return () => removeEventListener("focus", refocus);
   }, [refocus]);
 
-  // ── find (lib/terminal-search.ts): ⌘F / Ctrl+Shift+F in the panel, or 搜索… in the right-click menu ──
+  // ── find (lib/terminal-search.ts): ⌘F / Ctrl+Shift+F in the panel, or "Find…" in the right-click menu ──
   const openFind = () => {
     const picked = feed?.selectedText() || (viewport.current && selectionInside(viewport.current) ? (window.getSelection()?.toString() ?? "") : "");
     dispatchFind({ type: "open", query: queryFromSelection(picked) ?? undefined });
@@ -401,7 +401,7 @@ function PaneTerminal({
   );
 }
 
-/** Terminals whose mode was chosen with the switch in this page's life (the last choice and 设置 decide for the others). */
+/** Terminals whose mode was chosen with the switch in this page's life (the last choice and Settings decide for the others). */
 const chosen = new Map<string, TerminalMode>();
 
 function modeFor(key: string, mid: string, supported: boolean): TerminalMode {
@@ -443,7 +443,7 @@ export function TerminalPanel({
   const [surfaces, dispatch] = useReducer(surfacesReducer, undefined, () => ({ shown: modeFor(key, mid, supported), leaving: null, from: null }));
   const unseen = useUnseen(root);
 
-  // The hub's features can arrive after the panel does: a terminal nobody chose a mode for takes the one 设置 says then.
+  // The hub's features can arrive after the panel does: a terminal nobody chose a mode for takes the one Settings says then.
   useEffect(() => {
     const want = modeFor(key, mid, supported);
     if (surfaces.leaving === null && want !== surfaces.shown && (!supported || !chosen.has(key))) dispatch({ type: "adopt", mode: want });
@@ -457,7 +457,7 @@ export function TerminalPanel({
       try {
         localStorage.setItem(LAST_MODE_KEY, mode);
       } catch {
-        // not kept: the next terminal starts as 设置 says
+        // not kept: the next terminal starts as Settings says
       }
       dispatch({ type: "choose", mode });
     },
@@ -499,7 +499,7 @@ export function TerminalPanel({
   return (
     <div ref={root} className="@container flex min-h-0 flex-1 flex-col">
       {embedded ? (
-        // the page has its header (title, 终端 | 对话, close): this is a toolbar of the terminal's own controls under it
+        // the page has its header (title, "Terminal" | "Chat", close): this is a toolbar of the terminal's own controls under it
         <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
           {supported && <ModeToggle mode={surfaces.shown} onChange={choose} />}
           <span className="flex-1" />
@@ -573,14 +573,14 @@ function HistoryStatus({ v, onLoad }: { v: FeedView; onLoad: () => void }) {
 }
 
 /**
- * What the terminal is doing when the 接管 / 只看 switch does not say it (#3667): 接管中… while taking it, 只看 when
- * it can only be watched or 接管 was asked for but the keys do not go in (declined, taken, lost). Otherwise nothing:
+ * What the terminal is doing when the "Take control" / "View only" switch does not say it (#3667): "Taking control…" while taking it, "View only" when
+ * it can only be watched or "Take control" was asked for but the keys do not go in (declined, taken, lost). Otherwise nothing:
  * the switch's own words say it, and the grid is in its hint.
  */
 function SizeLabel({ v, switching }: { v: FeedView; switching: boolean }) {
   if (!v.ready || !v.loaded) return null;
   if (v.control === "starting") return <span className="hidden shrink-0 whitespace-nowrap text-[11.5px] text-ink-3 @md:inline">{t("session-terminalpanel.size_starting")}</span>;
-  // The switch is the truth only when it shows what happens: 接管 while the keys go in, or 只看 chosen.
+  // The switch is the truth only when it shows what happens: "Take control" while the keys go in, or "View only" chosen.
   if (switching && (v.control === "active" || !v.wants)) return null;
   const title = v.mode === "poll" ? t("session-terminalpanel.size_poll_hint") : t("session-terminalpanel.size_watch_hint");
   return (
@@ -591,7 +591,7 @@ function SizeLabel({ v, switching }: { v: FeedView; switching: boolean }) {
 }
 
 /**
- * 接管（可打字）: the pane takes the panel's size and keys go in; 只看: the pane as the computer has it. The words say
+ * "Take control (can type)": the pane takes the panel's size and keys go in; "View only": the pane as the computer has it. The words say
  * the difference; the hint adds the grid in plain columns and rows (#3667).
  */
 function ModeSwitch({ v, onChange }: { v: FeedView; onChange: (drive: boolean) => void }) {

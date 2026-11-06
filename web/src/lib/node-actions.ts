@@ -1,5 +1,5 @@
 // The context-menu items of a node in a tree of machines (#2329): a machine, a workspace, a tab or a pane, in the
-// sidebar's Agents tree and on the 终端 page. One builder for all of them, so a menu offers the same things wherever the
+// sidebar's Agents tree and on the "Terminal" page. One builder for all of them, so a menu offers the same things wherever the
 // node is listed (and the command palette can ask it later). What changes a computer goes through routes only a full
 // device may call (server/internal/hub/panes.go); copying and folding are local.
 import { t } from "../i18n";
@@ -20,7 +20,7 @@ export interface MenuNode {
   online?: boolean;
   /** The kind of terminal host the node is on ("herdr"); "" or unset: herdr, the one most machines have. */
   host?: string;
-  /** What the node is called: a workspace's or tab's name is what 重命名 starts from. */
+  /** What the node is called: a workspace's or tab's name is what "Rename" starts from. */
   label?: string;
   workspaceId?: string;
   tabId?: string;
@@ -30,15 +30,15 @@ export interface MenuNode {
   sessionId?: string;
   /** The agent running in the pane ("claude", "codex"…); "" a plain shell; unset when the tree does not say. */
   agent?: string;
-  /** An agent session in the tab: a tab with one is renamed through it (what 重命名… already does). */
+  /** An agent session in the tab: a tab with one is renamed through it (what "Rename…" already does). */
   tabSessionId?: string;
   cwd?: string;
   branch?: string;
-  /** The workspace's terminal host can make a Git worktree of its repository (新建 worktree…, #2431). */
+  /** The workspace's terminal host can make a Git worktree of its repository ("New worktree…", #2431). */
   canWorktree?: boolean;
   /** The node's fold: the row it hangs under folds and opens (the sidebar's and the terminal page's `fold:` keys). */
   fold?: { folded: boolean; toggle: () => void };
-  /** 新建终端 in this workspace (the terminal page). */
+  /** "New terminal" in this workspace (the terminal page). */
   onOpenShell?: () => void;
   /** Read the list again (the terminal page). */
   onRefresh?: () => void;
@@ -51,9 +51,9 @@ export interface NodeActionDeps {
   renameWorkspace: (node: MenuNode, name: string) => Promise<unknown>;
   renameTab: (node: MenuNode, name: string) => Promise<unknown>;
   launchers: (mid: string) => Promise<Launcher[]>;
-  /** 新建 Agent… in a folder of this machine (the 新建 Agent dialog, filled in). */
+  /** "New agent…" in a folder of this machine (the "New agent" dialog, filled in). */
   newAgent: (mid: string, cwd: string) => void;
-  /** 新建 worktree… for this workspace (the dialog, #2431); a deps without it leaves the item out. */
+  /** "New worktree…" for this workspace (the dialog, #2431); a deps without it leaves the item out. */
   newWorktree?: (node: MenuNode) => void;
   copy: (text: string) => void;
   notify: (text: string, tone: "ok" | "error" | "info") => void;
@@ -79,14 +79,14 @@ export function defaultNodeDeps(changed: () => void = () => {}): NodeActionDeps 
 }
 
 export interface NodeActionOptions {
-  /** Items to leave out, by key (a row whose own menu already has them: AgentRowMenu's 拷贝目录 is the path). */
+  /** Items to leave out, by key (a row whose own menu already has them: AgentRowMenu's "Copy folder path" is the path). */
   omit?: readonly string[];
 }
 
 /** Closing, splitting, renaming and git are herdr's: another host (Orca, herdr-core, botmux) is not asked to do them. */
 export const canChangeHost = (host: string | undefined) => !host || host === "herdr";
 
-/** Only the agents a launcher starts the way 新建 Agent does without a first message: Claude Code. */
+/** Only the agents a launcher starts the way "New agent" does without a first message: Claude Code. */
 export const launchableHere = (l: Launcher) => (l.agent_type || l.agent || "claude") === "claude";
 
 export const GIT_OPS = [
@@ -306,12 +306,12 @@ export function sessionNode(s: Session, online: boolean, extra: Partial<MenuNode
   };
 }
 
-/** A workspace of the 终端 page. */
+/** A workspace of the "Terminal" page. */
 export function termSpaceNode(mid: string, sp: TermSpace, online: boolean, extra: Partial<MenuNode> = {}): MenuNode {
   return { kind: "workspace", mid, online, host: sp.host, label: sp.label, workspaceId: sp.id, cwd: sp.cwd, branch: sp.branch, canWorktree: sp.canWorktree, ...extra };
 }
 
-/** A tab of the 终端 page; a tab with one pane is that pane too (its agent or shell, its session). */
+/** A tab of the "Terminal" page; a tab with one pane is that pane too (its agent or shell, its session). */
 export function termTabNode(mid: string, sp: TermSpace, tab: TermTab, online: boolean, extra: Partial<MenuNode> = {}): MenuNode {
   const lone = tab.panes.length === 1 ? tab.panes[0] : undefined;
   const first = tab.panes[0];
@@ -331,7 +331,7 @@ export function termTabNode(mid: string, sp: TermSpace, tab: TermTab, online: bo
   };
 }
 
-/** One pane of a tab with several, on the 终端 page. */
+/** One pane of a tab with several, on the "Terminal" page. */
 export function termPaneNode(mid: string, sp: TermSpace, tab: TermTab, pane: TermPane, online: boolean, extra: Partial<MenuNode> = {}): MenuNode {
   return {
     kind: "pane",

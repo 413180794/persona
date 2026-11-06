@@ -39,7 +39,7 @@ describe("连接器的状态", () => {
   it("leaves mail and Feishu to their own groups", () => {
     const list = [conn("ok", { id: "lark" }), conn("ok", { id: "mail" }), conn("ok"), conn("ok", { id: "telegram" })];
     expect(otherConnectors(list).map((c) => c.id)).toEqual(["github", "telegram"]);
-    // no 飞书 group (a hub without lark): a connector named lark is listed with the rest
+    // no Lark group (a hub without lark): a connector named lark is listed with the rest
     expect(otherConnectors(list, false).map((c) => c.id)).toEqual(["lark", "github", "telegram"]);
   });
 
@@ -127,7 +127,7 @@ describe("分步登录", () => {
     expect(stepView({ kind: "qr", url: "weixin-only-content" })).toBe("unsupported");
     expect(stepView({ kind: "open_url", url: "https://example.com/auth" })).toBe("unsupported");
     expect(stepView({ kind: "device_code" })).toBe("unsupported");
-    expect(stepView({ step: "wait", hint: "等一下" })).toBe("unsupported"); // no fields: 下一步 could never light up
+    expect(stepView({ step: "wait", hint: "等一下" })).toBe("unsupported"); // no fields: "Next" could never light up
   });
 
   it("asks a code or a QR code again by itself, not a form or a step it can't draw", () => {

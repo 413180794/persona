@@ -1,5 +1,5 @@
-// The Git panel's two kinds of saved-away changes keep apart in Chinese (#3671): git stash is 贮藏, what `git add`
-// recorded is 已暂存, so 「暂存 1」 on the branch card no longer reads like one staged file.
+// The Git panel's two kinds of saved-away changes keep apart in Chinese (#3671): git stash and what `git add`
+// recorded get different words, so the stash count on the branch card no longer reads like one staged file.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";

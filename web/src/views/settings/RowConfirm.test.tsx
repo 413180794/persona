@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// RowConfirm (#4768): opening the in-row confirm moves the focus to 取消 instead of dropping it to <body> with the
+// RowConfirm (#4768): opening the in-row confirm moves the focus to "Cancel" instead of dropping it to <body> with the
 // unmounted trigger, closing hands it back to the trigger, and Escape cancels.
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";

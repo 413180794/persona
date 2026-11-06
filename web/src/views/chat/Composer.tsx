@@ -27,7 +27,7 @@ import { isModelCommand, requestModelPicker } from "../../lib/model-switch";
 import { MAX_IMAGES } from "../../lib/composer-commands";
 import { t } from "../../i18n";
 
-/** How long「还没发出去」stays under the box after Enter was pressed while blocked. */
+/** How long "Not sent yet" stays under the box after Enter was pressed while blocked. */
 const NUDGE_MS = 4000;
 
 export interface Attachment {
@@ -93,7 +93,7 @@ export function Composer({
   draftKey: string;
   placeholder: string;
   machineId?: string;
-  /** Where a file sent to machineId lands: "health" keeps it in the health space's reports/ (docs/health.md「体检报告」). */
+  /** Where a file sent to machineId lands: "health" keeps it in the health space's reports/ (docs/health.md "Checkup reports"). */
   uploadDest?: "health";
   working?: boolean;
   /** Waits on a question, plan or approval card: no suggestion pill then (iOS status.isActive). */
@@ -113,14 +113,14 @@ export function Composer({
   /** The main conversation cannot answer yet (docs/onboarding.md 4.4): the send button says what to do first and opens
    *  it; the box still takes typing and keeps the draft, nothing is sent or queued. */
   blocked?: { label: string; onClick?: () => void; onNudge?: () => void };
-  /** Set to this box's send (what is in it now): a failed send's 重新发送 sends the words that were put back (#4270). */
+  /** Set to this box's send (what is in it now): a failed send's "Send again" sends the words that were put back (#4270). */
   resendRef?: React.MutableRefObject<(() => void) | null>;
   /** You typed in the box (not a send putting words back). */
   onEdit?: () => void;
 }) {
   const [draft, setDraft] = useState(() => localStorage.getItem(`draft:${draftKey}`) ?? "");
   const [atts, setAtts] = useState<Attachment[]>([]);
-  // 引用 and comments (lib/comments.ts): bars above the input, sent as `> ` blocks in front of the message (lib/drafts.ts)
+  // "Quote" and comments (lib/comments.ts): bars above the input, sent as `> ` blocks in front of the message (lib/drafts.ts)
   const quotes = useQuotes(draftKey).list;
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(0);
@@ -142,7 +142,7 @@ export function Composer({
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  // text picked in the link panel waits here (lib/links.ts), and 「AI 修改」 sends through this composer
+  // text picked in the link panel waits here (lib/links.ts), and "AI edit" sends through this composer
   const contexts = useContexts(draftKey);
   const sendNow = useRef<(text: string) => Promise<boolean>>(async () => false);
   sendNow.current = async (text) => (disabled || blocked ? false : onSend({ text, images: [] }));
@@ -192,7 +192,7 @@ export function Composer({
     if (autoFocus && hasFinePointer()) setTimeout(() => input.current?.focus({ preventScroll: true }), 0);
   }, [draftKey, autoFocus]);
 
-  // 引用 / 编辑 / a queued message pulled back / an edited picture, from the chat (lib/drafts.ts)
+  // "Quote" / "Edit" / a queued message pulled back / an edited picture, from the chat (lib/drafts.ts)
   const draftNow = useRef(draft);
   draftNow.current = draft;
   useEffect(
@@ -220,7 +220,7 @@ export function Composer({
           return;
         }
         if (e.type === "replace" && replaceNeedsConfirm(draftNow.current, e.text) && !confirm(t("chat-composer.replace_confirm"))) return;
-        // 编辑 a message sent with a quote: the quote goes back to the bar, the words to the input
+        // "Edit" a message sent with a quote: the quote goes back to the bar, the words to the input
         const split = e.type === "replace" ? splitQuotes(e.text) : null;
         if (e.type === "replace") setQuotes(draftKey, split ? parseQuotes(split.quotes) : []);
         const next = split ? split.rest : applyDraft(draftNow.current, e);
@@ -400,7 +400,7 @@ export function Composer({
     if (refused) refuseImages();
   };
 
-  // a file goes to the session's machine; its path lands in the input (docs/protocol.md「发送文件」)
+  // a file goes to the session's machine; its path lands in the input (docs/protocol.md "Sending files")
   const upload = async (f: File) => {
     setUploading((n) => n + 1);
     try {
@@ -424,7 +424,7 @@ export function Composer({
   const canSend = (draft.trim().length > 0 || atts.length > 0 || contexts.length > 0 || quote) && !sending && !disabled;
   // Claude's suggested next message (iOS SuggestionPill): while the box is empty and the agent waits for a message
   // (not working, not on a card); a tap fills it
-  // in, 直接发送 sends it as it is (the node drops it once the agent works again)
+  // in, "Send now" sends it as it is (the node drops it once the agent works again)
   const pill = suggestion && !blocked && !draft && !atts.length && !contexts.length && !quote && !working && !needsYou && !disabled ? suggestion : null;
   const fillSuggestion = (text: string) => {
     setDraft(text);
@@ -454,7 +454,7 @@ export function Composer({
     setAtts([]);
     refs.forEach((r) => removeContext(draftKey, r.id));
     setQuotes(draftKey, []);
-    // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md「消息里的标签」), the quote as `> ` lines
+    // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md "Tags in messages"), the quote as `> ` lines
     const ok = await onSend({ text: withContexts(refs, withQuoteBlock(q, text), sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) }, true);
     setSending(false);
     if (ok) {

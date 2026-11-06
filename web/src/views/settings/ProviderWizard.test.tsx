@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 设置 › 模型供应商 › 新增供应商 starts from the hub's presets (docs/onboarding.md 4.3「三条路」B): the built-in ones listed
+// Settings › Model providers › Add provider starts from the hub's presets (docs/onboarding.md 4.3 "Three paths" B): the built-in ones listed
 // first, the gateway typed by hand last; a preset takes only the key, tests it by itself with the preset, saves it with
 // assign and says what was assigned and what was kept.
 import { act } from "react";

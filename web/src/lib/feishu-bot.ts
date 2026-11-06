@@ -1,4 +1,4 @@
-// 设置 › 连接器 › 飞书机器人 (docs/bots.md, the app's FeishuBotModel): GET / PUT /api/v1/bots/feishu, pairing with a
+// Settings › Connectors › Lark bot (docs/bots.md, the app's FeishuBotModel): GET / PUT /api/v1/bots/feishu, pairing with a
 // code sent to the bot from Feishu, and what the bot may do. Pure helpers here; the page is views/settings/FeishuBot.tsx.
 import { t } from "../i18n";
 import { api } from "./api";
@@ -74,13 +74,13 @@ export function credentialsChanged(st: FeishuBotStatus | null, c: BotCredentials
   return c.appID.trim() !== st.app_id || c.appSecret.trim() !== "" || c.domain !== domainChoice(st.domain);
 }
 
-/** The PUT for 验证并保存: an empty secret keeps the saved one. */
+/** The PUT for "Verify and save": an empty secret keeps the saved one. */
 export function credentialsUpdate(c: BotCredentials): FeishuBotUpdate {
   const secret = c.appSecret.trim();
   return { app_id: c.appID.trim(), domain: c.domain, ...(secret ? { app_secret: secret } : {}) };
 }
 
-/** The switches after turning one: 所有 Agent 的提问 needs 提问和批准. */
+/** The switches after turning one: "Questions from all agents" needs "Questions and approvals". */
 export function withFeature(f: BotFeatures, key: keyof BotFeatures, on: boolean): BotFeatures {
   const next = { ...f, [key]: on };
   if (key === "cards" && !on) next.all_cards = false;
@@ -118,7 +118,7 @@ export function livePairing(st: FeishuBotStatus | null, now = Date.now()) {
   return p && p.expires_at * 1000 > now ? p : null;
 }
 
-/** 「9 分 3 秒内有效」. */
+/** "Valid for 9 min 3 s". */
 export function pairingLeft(expiresAt: number, now = Date.now()): string {
   const left = Math.max(0, Math.floor(expiresAt - now / 1000));
   return t("lib-feishu-bot.pairing_left", { minutes: Math.floor(left / 60), seconds: left % 60 });

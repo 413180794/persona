@@ -1,5 +1,5 @@
-// A launcher's /model list to pick from (#794, #943): 新建 Agent's 模型 and 模型配置's 具体模型. A trigger showing the pick,
-// a searchable list under it with 默认 first; 模型配置 also takes an id the list does not have (`custom`).
+// A launcher's /model list to pick from (#794, #943): "New agent"'s "Model" and "Models"' "Model". A trigger showing the pick,
+// a searchable list under it with "Default" first; "Models" also takes an id the list does not have (`custom`).
 import type { ModelBinding } from "../lib/model-config";
 import { customModel, defaultDetail, defaultModel, modelDetail, modelName, modelRows, type LauncherModels } from "../lib/launcher-models";
 import { Collapse, cx, IconButton, Spinner } from "./atoms";
@@ -15,9 +15,9 @@ export interface ModelList {
 
 export function ModelPicker({ models, model, followed = {}, ownModel, open, onToggle, query, onQuery, search, onPick, onReload, custom, failedNote }: {
   models: ModelList;
-  /** The pick's id; "": 默认. */
+  /** The pick's id; "": "Default". */
   model: string;
-  /** 模型配置's binding when it is what runs with no pick (新建 Agent following it). */
+  /** "Models"' binding when it is what runs with no pick ("New agent" following it). */
   followed?: ModelBinding;
   /** What the launcher passes as its own --model (shown when it is locked). */
   ownModel?: string;
@@ -37,7 +37,7 @@ export function ModelPicker({ models, model, followed = {}, ownModel, open, onTo
   const locked = models.list?.locked;
   const loading = models.status === "loading";
   const picked = all.find((m) => m.id === model);
-  const unlisted = !picked && model ? model : ""; // 模型配置's id from before, or one typed in
+  const unlisted = !picked && model ? model : ""; // "Models"' id from before, or one typed in
   const { showDefault, rows } = modelRows(all, query, followed);
   const typed = custom ? customModel(all, query) : "";
   const pickFirst = () => {

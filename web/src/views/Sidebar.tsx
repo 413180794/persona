@@ -1,5 +1,5 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, sections, one gliding highlight. Persona's main conversation
-// is the first entry (the app opens on 助手); a new conversation and a new agent are the「+」of their sections (#1239).
+// is the first entry (the app opens on the assistant); a new conversation and a new agent are the "+" of their sections (#1239).
 import { BASE } from "../lib/base";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n";
@@ -225,14 +225,14 @@ function useGo(onNavigate?: () => void): GoFn {
   );
 }
 
-/** One entry of the pages under Persona (总览, 收件箱 … 设置, and the extensions' pages). */
+/** One entry of the pages under Persona ("Overview", "Inbox" … "Settings", and the extensions' pages). */
 export type NavPage = { k: string; to: Route; icon: IconName; label: string; short?: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string };
 
-/** The sidebar's pages (总览 … 设置, the extensions' pages) and the connection, shared by the sidebar and its rail. */
+/** The sidebar's pages ("Overview" … "Settings", the extensions' pages) and the connection, shared by the sidebar and its rail. */
 export function useNavPages() {
   const phase = connPhase(useStore((s) => s.conn), useStore((s) => s.link));
   const machines = useStore((s) => s.machines);
-  // 终端 (docs/terminal.md「独立终端」) is there where the hub can list panes
+  // "Terminal" (docs/terminal.md "Standalone terminals") is there where the hub can list panes
   const terminalPanes = useStore((s) => s.features.includes("terminal_panes"));
   const assistant = useStore((s) => s.assistant);
   const todos = useStore((s) => s.todos);
@@ -243,10 +243,10 @@ export function useNavPages() {
   const inbox = useInboxBadge();
   const larkSwitch = useLarkHome();
   const lark = useLarkOn();
-  // 消息 needs the hub to read Feishu (feature `lark`) as well as this browser's switch
+  // "Messages" needs the hub to read Feishu (feature `lark`) as well as this browser's switch
   const larkHome = larkSwitch && lark;
   const extensionPages = useExtensionSlot("nav_page");
-  // off unless turned on in 设置 › 通用 › Agent (#2475)
+  // off unless turned on in Settings › General › Agent (#2475)
   const boardOn = useWorkspaceBoardSetting().enabled === true;
 
   const online = machines.filter((m) => m.online).length;
@@ -265,7 +265,7 @@ export function useNavPages() {
     settings: { k: "settings", to: { name: "settings" }, icon: "gear", label: t("sidebar.nav_settings") },
   };
   const pages = NAV_PAGES.flatMap((k): NavPage[] => [
-    // the extensions' pages (docs/extensions.md「UI 插槽」 nav_page): one entry each, right before 设置
+    // the extensions' pages (docs/extensions.md "UI slots" nav_page): one entry each, right before "Settings"
     ...(k === "settings"
       ? extensionPages.map((u) => {
           const key = extensionNavKey(u.extension, u.id);
@@ -289,9 +289,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const pinnedIds = usePinnedConversations();
   const { pinned: pinnedConvs, recent } = sidebarConversations(assistant?.conversations ?? [], assistant?.main, pinnedIds, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
   const convs = [...pinnedConvs, ...recent];
-  // the main row sits above the pages, so「Persona 对话」waits for the assistant (a hub without it has none)
+  // the main row sits above the pages, so"Persona chats"waits for the assistant (a hub without it has none)
   const chats = !!assistant;
-  // a conversation row's ⋯ / right click (iOS: its long press), and the section title's 全部取消置顶
+  // a conversation row's ⋯ / right click (iOS: its long press), and the section title's Unpin all
   const [convMenu, setConvMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
   const onConvMenu: RowMenuFn = (s, anchor, at) => setConvMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
   const [chatsMenu, setChatsMenu] = useState<MenuAt | null>(null);
@@ -361,7 +361,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   );
 }
 
-/** The phone's「Agents」page (#1996): the sidebar's Agents block, the same components, filling the page. */
+/** The phone's "Agents" page (#1996): the sidebar's Agents block, the same components, filling the page. */
 export function AgentsList({ route, onNewAgent }: { route: Route; onNewAgent: () => void }) {
   const activeKey = useActiveKey(route);
   const { nav, reg, hover, highlight } = useGlide(activeKey);
@@ -416,8 +416,8 @@ export function NavGrid({ pages, activeKey, go }: { pages: NavPage[]; activeKey:
   );
 }
 
-/** The sidebar's「Agents」: grouping, the quick filter, 置顶, 正在启动, the groups (spaces, machines, repositories,
- *  states or todos) and 最近. The drawer and the phone's Agents page both show it. `add`: the title row's「+」. */
+/** The sidebar's "Agents": grouping, the quick filter, "Pinned", "Starting", the groups (spaces, machines, repositories,
+ *  states or todos) and "Recent". The drawer and the phone's Agents page both show it. `add`: the title row's "+". */
 function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true, foldable = false }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean; foldable?: boolean }) {
   const machines = useStore((s) => s.machines);
   const all = useAgentSessions();
@@ -438,13 +438,13 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   // a hub without todos shows by machine, a by-todo choice kept for when it has them
   const shownGrouping = todosSupported === false && grouping === "todo" ? "machine" : grouping;
   const groupingLabel = (availableGroupings.find((g) => g.key === shownGrouping) ?? availableGroupings[0]).label;
-  // 状态优先 / 最近更新 (iOS AgentSort, G099): not under 按状态, whose sections are the states already
+  // "State first" / "Recently updated" (iOS AgentSort, G099): not under "By status", whose sections are the states already
   const [sortChoice, setSortChoice] = useState<AgentSort>(() => agentSort(localStorage.getItem(AGENT_SORT_KEY)));
   const byUpdate = sortChoice === "updated" && shownGrouping !== "state";
-  // the quick filter (全部 / 需要你 / 未读 / 工作中), stacked on any grouping; what it showed when chosen stays (`kept`)
+  // the quick filter ("All" / "Needs you" / "Unread" / "Working"), stacked on any grouping; what it showed when chosen stays (`kept`)
   const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("jarvis.agentFilter")));
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
-  // 「botmux」 beside the filters (#2786): botmux sessions shown or hidden in this browser
+  // "botmux" beside the filters (#2786): botmux sessions shown or hidden in this browser
   const [botmuxHidden, setBotmuxHidden] = useState(() => botmuxAndFilter(filter, localStorage.getItem(BOTMUX_HIDDEN_KEY) === "1", "filter").hidden);
   const botmuxCount = useMemo(() => all.filter(isBotmux).length, [all]);
   const saveBotmuxHidden = (next: boolean) => {
@@ -469,7 +469,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const filtered = filter !== "all";
   const filterTotals = useMemo(() => filterCounts(live, mutes), [live, mutes]);
   const shown = useMemo(() => applyFilter(live, filter, mutes, kept), [live, filter, mutes, kept]);
-  // a pinned agent shows once, under 置顶 (an offline one too, unless a filter is on); the groups below are the rest
+  // a pinned agent shows once, under "Pinned" (an offline one too, unless a filter is on); the groups below are the rest
   const pinnedAgents = useMemo(() => pinnedSessions(filtered ? shown : [...shown, ...offline], pins), [filtered, shown, offline, pins]);
   const unpinned = useMemo(() => {
     const keys = new Set(pinnedAgents.map(agentKey));
@@ -510,7 +510,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
     setKept(matchingKeys(live, f, mutes));
     hover(null);
   };
-  // 设置 › 外观 › 侧边栏显示终端 (off): the plain shells of each machine's terminal host, under its agents in 按机器
+  // Settings › Appearance › Show terminals in sidebar (off): the plain shells of each machine's terminal host, under its agents in "By machine"
   const showTerminals = useSidebarTerminals() && shownGrouping === "machine";
   const { listing: panes, refresh: refreshPanes } = usePanes(machines, showTerminals);
   const shellTrees = useMemo(() => {
@@ -541,10 +541,10 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
   const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
 
-  // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
+  // a space with nothing to look at (every agent seen and waiting) goes to "Idle spaces", like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
   const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
-  // pinned spaces lead; under a quick filter nothing folds into 「空闲的空间」
+  // pinned spaces lead; under a quick filter nothing folds into "Idle spaces"
   const { active, idle } = arrangeSpaces(spaces, { pins, mutes, filtered, busy });
   const tree = { machines, reg, hover, activeKey, go, mutes, onSpaceMenu, onRowMenu, onNodeMenu, onNavigate };
 
@@ -575,7 +575,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
           key: `sort:${o.key}`, label: o.label, icon: o.key === "updated" ? "clock" : "layers", checked: sortChoice === o.key, divider: i === 0,
           onSelect: () => { localStorage.setItem(AGENT_SORT_KEY, o.key); setSortChoice(o.key); hover(null); },
         }))),
-          // every group of the list, like the app's list settings (#3027); 全部展开 also opens the spaces and tab groups
+          // every group of the list, like the app's list settings (#3027); "Expand all" also opens the spaces and tab groups
           // folded by hand that are not drawn now
           { key: "fold-all", label: t("sidebar.fold_all"), icon: "up", checked: false, divider: true, onSelect: () => { setAgentsFolded(true); hover(null); } },
           { key: "open-all", label: t("sidebar.open_all"), icon: "chevron", checked: false, onSelect: () => { setAgentsFolded(false); hover(null); } },
@@ -585,7 +585,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       <Collapse open={!folded}>
       <div inert={folded || undefined}>
       <FilterBar selection={filter} counts={filterTotals} onChoose={choose} botmux={botmuxCount > 0 || botmuxHidden ? { hidden: botmuxHidden, onToggle: toggleBotmux } : undefined} />
-      {/* 「<电脑> 的 herdr 没在运行」with 启动 (#1916): before a message to an agent there fails */}
+      {/* "herdr is not running on <computer>" with "Start" (#1916): before a message to an agent there fails */}
       {/* the one line about the hub (#2897): updating, rolled back, a newer version or image */}
       {!folded && <HubNoticeLine />}
       {!folded && <HerdrNotices />}
@@ -690,8 +690,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   );
 }
 
-/** 全部 / 需要你 / 未读 / 工作中 with their counts (iOS QuickFilterBar): 全部 and the states that have agents now; the
- * chosen one stays while it empties, so it can be left. Then「botmux」(#2786), when there are botmux sessions: a
+/** "All" / "Needs you" / "Unread" / "Working" with their counts (iOS QuickFilterBar): "All" and the states that have agents now; the
+ * chosen one stays while it empties, so it can be left. Then "botmux" (#2786), when there are botmux sessions: a
  * show / hide switch that stacks on any filter. Hidden when there is nothing to pick. */
 function FilterBar({ selection, counts, onChoose, botmux }: { selection: AgentFilter; counts: FilterCounts; onChoose: (f: AgentFilter) => void; botmux?: { hidden: boolean; onToggle: () => void } }) {
   const keys = shownFilters(selection, counts);
@@ -822,8 +822,8 @@ function TallyMark({ tally }: { tally: OriginTally }) {
   return null;
 }
 
-/** 自动对话 (#3264): the conversations the hub opened by itself, out of 最近, as one row folded by default (per browser);
- *  open, a row per origin that has any, each opening 全部对话 filtered to it. Folded, the row still shows what runs and
+/** "Automatic" (#3264): the conversations the hub opened by itself, out of "Recent", as one row folded by default (per browser);
+ *  open, a row per origin that has any, each opening "All chats" filtered to it. Folded, the row still shows what runs and
  *  what waits for the user. Nothing on a hub that doesn't tell origins. */
 function AutoConversations({ conversations, main, shown, activeKey, holds, reg, hover, go }: { conversations: readonly Session[]; main?: string; shown: readonly Session[]; activeKey: string; holds: boolean; reg: RegFn; hover: (k: string | null) => void; go: GoFn }) {
   const { total, groups } = autoConversations(conversations, main);
@@ -874,7 +874,7 @@ function Section({ title, children, folded, onToggle, right, onMenu, first, hint
         </button>
         {right}
       </div>
-      {/* a group whose name does not say why its agents are here (没挂待办的, 在终端里开的) says it in one line, folded too */}
+      {/* a group whose name does not say why its agents are here ("Not on a to-do", "Opened in the terminal") says it in one line, folded too */}
       {hint && <p className="px-2 pb-1 text-[11px] leading-[1.45] text-ink-3">{hint}</p>}
       <Collapse open={!folded}>
         <div className="flex flex-col gap-px" inert={folded || undefined}>{children}</div>
@@ -933,13 +933,13 @@ type TreeRowProps = { machines: Machine[]; showHost?: boolean; reg: RegFn; hover
 
 const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", done: "text-ink-3" };
 
-/** 等你 / 在做 / 做完 at the end of a tree node's line. */
+/** "Needs you" / "Working" / "Done" at the end of a tree node's line. */
 function TreeStateText({ state }: { state: TreeState }) {
   return <span className={cx("shrink-0 text-[11px] font-semibold whitespace-nowrap", TREE_TONE[state])}>{treeStateLabel(state)}</span>;
 }
 
-/** Agents 「按待办」 as 项目 › 待办 › Agent (#2526): projects with their todos, a spawned agent under the one that
- *  spawned it, 未归属 last (by project). */
+/** Agents "By to-do" as project › to-do › agent (#2526): projects with their todos, a spawned agent under the one that
+ *  spawned it, "Unassigned" last (by project). */
 function TodoTreeView({ tree, ...p }: { tree: TodoTree } & TreeRowProps) {
   return (
     <>
@@ -968,7 +968,7 @@ function TreeProjectSection({ k, name, state, folded: initial, sessions, todos, 
   );
 }
 
-/** One todo (or, under 未归属, one project) and its agents under its own folding line. */
+/** One todo (or, under "Unassigned", one project) and its agents under its own folding line. */
 function TreeTodoRows({ td, ...p }: { td: TreeTodo } & TreeRowProps) {
   const [folded, toggle] = useFolded(td.key, td.folded, { follow: true, holds: holdsRow(td.sessions, p.activeKey) });
   return (
@@ -1059,7 +1059,7 @@ function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRo
   );
 }
 
-/** One repository on one machine (按仓库): its working trees under it, the main checkout marked and first. */
+/** One repository on one machine ("By repo"): its working trees under it, the main checkout marked and first. */
 function RepoSection({ tree, reg, hover, activeKey, go, onRowMenu }: { tree: RepoTree; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
   const [folded, toggle] = useFolded(tree.key, false, { holds: tree.worktrees.some((w) => holdsRow(w.sessions, activeKey)) });
   const row = (s: Session, hint: string) => {
@@ -1198,8 +1198,8 @@ function SpaceMenuButton({ sp, onMenu }: { sp: Space; onMenu: (sp: Space, anchor
 type SpaceMenuFn = (sp: Space, anchor: HTMLElement, at?: MenuAt, fold?: MenuNode["fold"]) => void;
 type TreeProps = { machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; mutes: AgentMutes; onSpaceMenu: SpaceMenuFn; onRowMenu: RowMenuFn; onNodeMenu: NodeMenuFn; onNavigate?: () => void };
 
-// 按机器 (lib/herdr-tree.ts): one machine as herdr lays it out, its workspaces, their tabs, then「其他」. A machine that
-// is away starts folded; its agents are under「最近（未运行）」.
+// "By machine" (lib/herdr-tree.ts): one machine as herdr lays it out, its workspaces, their tabs, then "Other". A machine that
+// is away starts folded; its agents are under "Recent (not running)".
 function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpace[] } & TreeProps) {
   const online = m.machine.online;
   const [folded, toggle] = useFolded(m.foldKey, !online, { holds: holdsRow(m.sessions, p.activeKey) });
@@ -1228,7 +1228,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
           {m.spaces.map((sp) => <WorkspaceBlock key={sp.key} sp={sp} {...p} />)}
           {shells && shells.length > 0 && <ShellTree mid={m.machine.id} online={online} spaces={shells} {...p} />}
           {m.other.length > 0 && (
-            // 「其他」: the machine's agents outside any workspace (Codex threads, runtimes without spaces)
+            // "Other": the machine's agents outside any workspace (Codex threads, runtimes without spaces)
             <TreeBlock foldKey={m.otherFoldKey} sessions={m.other} activeKey={p.activeKey} title={<span className="min-w-0 truncate font-medium">{t("sidebar.other")}</span>} right={(folded) => <SessionTally sessions={m.other} folded={folded} />}>
               {m.other.map((s) => <TreeSessionRow key={s.session_id} s={s} {...p} />)}
             </TreeBlock>
@@ -1240,7 +1240,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
   );
 }
 
-// A workspace or「其他」in the tree: its title row folds what is under it, the fold kept by 机器/空间名.
+// A workspace or "Other" in the tree: its title row folds what is under it, the fold kept by machine/space name.
 function TreeBlock({ foldKey, sessions, activeKey, state, title, right, children, onMenu }: { foldKey: string; sessions: Session[]; activeKey: string; state?: AgentState; title: React.ReactNode; right: (folded: boolean) => React.ReactNode; children: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement, fold: { folded: boolean; toggle: () => void }) => void }) {
   const [folded, toggle] = useFolded(foldKey, sessions.every(isQuiet) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
   return (
@@ -1293,8 +1293,8 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
   );
 }
 
-// A space's child spaces (Orca's「N 个子项」), folded at first like Orca's sidebar: the parent's row already sums up
-// what they are doing (ChildSummary), and the fold is kept by 机器/空间名 like the space's own.
+// A space's child spaces (Orca's "N child spaces"), folded at first like Orca's sidebar: the parent's row already sums up
+// what they are doing (ChildSummary), and the fold is kept by machine/space name like the space's own.
 function ChildSpaces({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
   // i18n-ignore: a stored fold key, not interface text
   const [folded, toggle] = useFolded(`${sp.foldKey}/子项`, true, { holds: holdsRow(sp.tree.slice(sp.sessions.length), p.activeKey) });
@@ -1356,7 +1356,7 @@ function tabNode(t: HerdrTab, machines: Machine[]): MenuNode {
 
 // One herdr tab: `#N` (or its name) and what its most urgent pane is doing; it opens on that pane, the others are the
 // chat's pane tabs (PaneTabs). A tab with one pane has that agent's ⋯, one with several the tab's own. A tab with several
-// agents (#2320) opens up to them, in pane order: the 发起者 (the first pane, the others split from it) on top, its
+// agents (#2320) opens up to them, in pane order: the "Lead" (the first pane, the others split from it) on top, its
 // branches under it; the choice is kept per tab like the sidebar's other folds, and folded it is the one row it always was.
 function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
   const { reg, hover, activeKey, go, onRowMenu, onNodeMenu, machines } = p;
@@ -1380,7 +1380,7 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
       active={Boolean(open) && shut}
       to={to}
       go={go}
-      // a long tab name gives way: it would run under the 「N 个 Agent」 button (endRoom) and hide the agent's title;
+      // a long tab name gives way: it would run under the "N agents" button (endRoom) and hide the agent's title;
       // squeezed, it shrinks (truncated) before the title goes under its minimum (SessionRow)
       prefix={tab.label}
       prefixClass="min-w-0 max-w-[50%] shrink truncate text-[11.5px] text-ink-3 tabular-nums"
@@ -1432,7 +1432,7 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
                 onMenu={onRowMenu}
               />
             );
-            // the branches hang off the 发起者 on a thin line
+            // the branches hang off the "Lead" on a thin line
             return branch ? <div key={s.session_id} className="ml-[13px] border-l border-line pl-1">{pane}</div> : pane;
           })}
         </div>
@@ -1441,8 +1441,8 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
   );
 }
 
-// 终端 under a machine (设置 › 外观 › 侧边栏显示终端): its terminal host's workspaces and the plain shells in them, each
-// opening the 终端 page on that pane. Folds are kept by 机器/工作区名 like the Agents' above.
+// "Terminal" under a machine (Settings › Appearance › Show terminals in sidebar): its terminal host's workspaces and the plain shells in them, each
+// opening the "Terminal" page on that pane. Folds are kept by machine/workspace name like the Agents' above.
 function ShellTree({ mid, online, spaces, reg, hover, go, activeKey, onNodeMenu }: { mid: string; online: boolean; spaces: TermSpace[] } & TreeProps) {
   const route = useRoute();
   const shown = route.name === "terminal" && route.mid === mid ? route.id : undefined;
@@ -1534,7 +1534,7 @@ type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean
 
 // Persona's main conversation: the column's first and strongest entry (the app's mark, always in ink, #2004), with the
 // conversation's state when it is working or wants you. A line under it parts it from the pages.
-// Its menu (拷贝会话 ID, 结束…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
+// Its menu (Copy session ID, End…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
 export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
   const to: Route = { name: "jarvis" };
   const st = main ? stateOf(main) : undefined;
@@ -1586,8 +1586,8 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegF
   );
 }
 
-// The 置顶 heading above the pinned conversations (iOS's heading("置顶"), Android's pinned section): its ⋯ and a right
-// click on it give 全部取消置顶, which a touch screen reaches through the ⋯.
+// The "Pinned" heading above the pinned conversations (iOS's pinned heading, Android's pinned section): its ⋯ and a right
+// click on it give "Unpin all", which a touch screen reaches through the ⋯.
 export function PinnedHeading({ onMenu }: { onMenu: (at: MenuAt) => void }) {
   return (
     <div className="flex items-center gap-1 px-2 pt-0.5 pb-0.5" {...contextMenuProps((at) => onMenu(at))}>
@@ -1609,7 +1609,7 @@ export function PinnedHeading({ onMenu }: { onMenu: (at: MenuAt) => void }) {
   );
 }
 
-// A section's「+」(a new conversation, a new agent): quiet, next to the section's title.
+// A section's "+" (a new conversation, a new agent): quiet, next to the section's title.
 function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?: GoFn; onClick?: () => void }) {
   const cls = "touch-hit relative z-10 flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2";
   const icon = <Icon name="plus" size={12} stroke={2} />;
@@ -1619,7 +1619,7 @@ function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?
 
 const BADGE_CLASS = { red: "bg-red-tint text-red", orange: "bg-orange-tint text-orange", green: "bg-green-tint text-green", accent: "bg-accent-tint text-accent-ink" } as const;
 
-function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title, onMenu, menuLabel, dot }: { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string; /** A state shown as a dot before the hint (自动对话's rows: some run). */ dot?: AgentState }) {
+function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title, onMenu, menuLabel, dot }: { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string; /** A state shown as a dot before the hint ("Automatic"'s rows: some run). */ dot?: AgentState }) {
   const row = useRef<HTMLAnchorElement | null>(null);
   const link = (
     <a
@@ -1670,7 +1670,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-/** Where the agent was opened (#2526): 飞书群 (botmux; a click opens its Feishu topic) or 终端 (herdr), each on its
+/** Where the agent was opened (#2526): "Lark group" (botmux; a click opens its Feishu topic) or "Terminal" (herdr), each on its
  *  own tint. Nothing for other hosts. At the row's end, so the title starts where an untagged one does (#3043). */
 export function SourceTag({ s, className }: { s: Session; className?: string }) {
   const source = sessionSource(s);
@@ -1708,7 +1708,7 @@ function sameRow(a: SessionRowProps, b: SessionRowProps): boolean {
 export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, active, to, go, tab, label, prefix, prefixClass, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom, icon = "chat" }: SessionRowProps) {
   // what it asks you, or what it did, under its title (#3195): no hover or click needed to see why it is red or green
   const ix = useStore((st) => st.interactions.find((i) => i.machine_id === given.machine_id && i.session_id === given.session_id));
-  // a card answered here takes its red dot and 在问你 line away at once, not at the hub's next push (#4286)
+  // a card answered here takes its red dot and "Asking you" line away at once, not at the hub's next push (#4286)
   const justAnswered = useStore((st) => lastAnsweredAt(st.answered, given.machine_id, given.session_id));
   const pending = useStore((st) => answerPending(st.answered, given.machine_id, given.session_id));
   const s = answeredSession(given, Boolean(ix), justAnswered, pending);
@@ -1716,7 +1716,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   const tail = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
   const row = useRef<HTMLAnchorElement | null>(null);
-  // 设置 › 外观 › Agent 行显示详情 (#2430): a second line under an agent's title — folder · model · context · age
+  // Settings › Appearance › show details on agent rows (#2430): a second line under an agent's title — folder · model · context · age
   const details = useAgentDetails();
   const contextUsed = useContextAsUsed();
   const withDetail = details && showState && !s.assistant;
@@ -1753,7 +1753,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n${t("sidebar.todo_tag", { title: s.todo.title })}` : ""}${preview ? `\n${preview}` : ""}`}
       // a touch screen: rows a finger can hit (44), and room at the end for the ⋯ that is always there; the open row
       // keeps its ⋯ too, so it has room for it
-      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for 「N 个 Agent」 and the ⋯ beside it (instead of the ⋯'s own)
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for "N agents" and the ⋯ beside it (instead of the ⋯'s own)
         endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusMark state={st} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
@@ -1801,7 +1801,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
           <Icon name="todo" size={10} stroke={2} />
         </span>
       )}
-      {/* not on a tab with several panes (endRoom): a herdr tab is 终端 by definition, each pane's row under it says so,
+      {/* not on a tab with several panes (endRoom): a herdr tab is "Terminal" by definition, each pane's row under it says so,
           and the tag's room is the title's */}
       {showState && !s.assistant && !endRoom && <SourceTag s={s} className={aside} />}
       {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
@@ -1831,7 +1831,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   );
 }, sameRow);
 
-// 个人 Agent: the Lark gateway's personal agents with a view menu (分组 / 排序 / 显示), a search field, pins and custom
+// Personal agents: the Lark gateway's personal agents with a view menu (group / sort / show), a search field, pins and custom
 // sections — the prefs live on the hub so iOS sees the same pins.
 type MenuPage = "root" | "group" | "sort" | "show";
 function agentViewItems(page: MenuPage, setPage: (p: MenuPage) => void, p: AgentPrefs, providers: string[]): MenuItem[] {
@@ -2029,7 +2029,7 @@ export function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: Age
       >
         <Icon name="pin" size={11} />
       </button>
-      {/* a touch screen has no hover pin and no right click: the row's menu (置顶 is in it) behind a ⋯ that stays */}
+      {/* a touch screen has no hover pin and no right click: the row's menu ("Pin" is in it) behind a ⋯ that stays */}
       <button
         type="button"
         aria-label={t("sidebar.personal_actions")}
@@ -2066,7 +2066,7 @@ export function CollapseButton({ collapsed, chord }: { collapsed: boolean; chord
   );
 }
 
-/** The folded 页面 title's right side: a dot when a page in it has a badge, so folding hides nothing to look at. */
+/** The folded "Pages" title's right side: a dot when a page in it has a badge, so folding hides nothing to look at. */
 function PagesTally({ pages }: { pages: NavPage[] }) {
   const counted = pages.filter((p) => p.badge !== undefined);
   const tones = [...new Set(counted.map((p) => p.badgeTone ?? "accent"))];

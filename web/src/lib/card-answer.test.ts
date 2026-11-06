@@ -1,4 +1,4 @@
-// answerCard (#4464): the one answer for a card, from its own buttons and from a notification's 允许 / 拒绝. The approve
+// answerCard (#4464): the one answer for a card, from its own buttons and from a notification's Allow / Deny. The approve
 // check, what it sends, and how each hub answer comes back.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";

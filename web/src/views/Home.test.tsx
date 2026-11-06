@@ -1,5 +1,5 @@
-// The overview (总览) rendered statically (#2320): a waiting card is something to do, and 「全部标为已读」 is there whenever
-// an agent is unread, though its tab is filed under 卡住了，要你去看 or 正在工作.
+// The overview ("Overview") rendered statically (#2320): a waiting card is something to do, and "Mark all as seen" is there whenever
+// an agent is unread, though its tab is filed under "Stuck, take a look" or "Working".
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Interaction, Machine, Session } from "../lib/types";
@@ -77,7 +77,7 @@ describe("the overview", () => {
       { id: "q", kind: "question", machine_id: "mac", session_id: a.session_id, questions: [{ question: "哪种格式？", options: [{ label: "JPEG" }, { label: "PNG" }] }] } as Interaction,
     ]);
     expect(buttons(html)).toEqual(expect.arrayContaining(["允许", "拒绝", "JPEG", "PNG"]));
-    // what 允许 allows, by tool and command, not the agent's description of it
+    // what "Allow" allows, by tool and command, not the agent's description of it
     expect(html).toContain("Bash：swift test");
     const plan = render([a], [{ id: "l", kind: "plan", machine_id: "mac", session_id: a.session_id, plan: "# 计划" } as Interaction]);
     expect(buttons(plan)).not.toContain("允许");

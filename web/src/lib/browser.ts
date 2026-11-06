@@ -1,4 +1,4 @@
-// 浏览器（ego lite） on a Mac's page (docs/plan-ego-browser.md, iOS BrowserSection; G107): what the hub says the Mac has
+// "Browser" (ego lite) on a Mac's page (docs/plan-ego-browser.md, iOS BrowserSection; G107): what the hub says the Mac has
 // of ego lite (GET/PUT /api/v1/machines/{mid}/browser, POST …/browser/{install|open|cancel}) and what the section
 // shows for it.
 import { t } from "../i18n";

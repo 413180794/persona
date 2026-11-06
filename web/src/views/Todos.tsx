@@ -64,7 +64,7 @@ export function TodosView({
   const interactions = useStore((s) => s.interactions);
   const allSessions = useAgentSessions();
   const answered = useStore((s) => s.answered);
-  // a card answered here stops its agent's 等你 at once, not at the hub's next push (#4186)
+  // a card answered here stops its agent's "Needs you" at once, not at the hub's next push (#4186)
   const lookup = useMemo(() => answeredLookup(allSessions, interactions, answered), [allSessions, interactions, answered]);
 
   const [activeId, setActiveId] = useState<string | undefined>(selectedId);
@@ -420,7 +420,7 @@ function steadyViews(prev: ReadonlyMap<string, TodoRowView>, next: ReadonlyMap<s
 
 const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", done: "text-ink-3" };
 
-/** One project's open todos under a folding title with its 等你 / 在做 / 做完 (#2526). */
+/** One project's open todos under a folding title with its Needs you / Working / Done (#2526). */
 const TodoProjectSection = memo(function TodoProjectSection({
   group,
   views,
@@ -471,13 +471,13 @@ const TodoProjectSection = memo(function TodoProjectSection({
 export type TodoRowView = {
   status: TodoStatus;
   dotState: AgentState;
-  /** How long since it changed (「3 分钟前」): here so a push that moves the text still redraws it, as before. */
+  /** How long since it changed ("3 minutes ago"): here so a push that moves the text still redraws it, as before. */
   age: string;
   /** Its agents not released. */
   activeCount: number;
   /** Whether the most urgent agent's line shows (open, with a session, something to say). */
   urgentLine: boolean;
-  /** That line's red lead (「<agent> 等你<kicker>」), empty unless the agent waits on you. */
+  /** That line's red lead ("<agent> Needs you<kicker>"), empty unless the agent waits on you. */
   urgentLead: string;
   /** What the agent asks (its card) or does / last said. */
   urgentText: string;
@@ -725,7 +725,7 @@ function TodoDetail({
     }
   };
 
-  // 移除 for an agent that did not start, 解除关联 for the others (iOS: the row's swipe; Android: its ×).
+  // "Remove" for an agent that did not start, "Unlink" for the others (iOS: the row's swipe; Android: its ×).
   const unlinkAgent = async (agent: TodoAgent) => {
     const failed = Boolean(agent.start_error);
     try {
@@ -893,7 +893,7 @@ function TodoDetail({
               const isExpired = !session && !agent.start_error;
               const displayTitle = session?.title || agent.title || t("lib-format.untitled_session");
 
-              // 电脑 · 空间 › tab（电脑名用 machines 里的显示名）
+              // computer · space › tab (the computer's name is its display name in machines)
               const mName = machines.find((m) => m.id === agent.machine_id)?.name || agent.machine_id;
               const spaceTab = session ? [session.space_name, tabLabel(session)].filter(Boolean).join(" › ") : "";
               const displaySub = spaceTab
@@ -922,7 +922,7 @@ function TodoDetail({
                   </div>
                   <div className="min-w-0 flex-1">
                     {/* The source tag leads the title line (as on iOS, #3150) and is never squeezed; a long one
-                        (「由 … 派出」) stops at 45% of the line, so the title keeps the rest and truncates (#3577). */}
+                        ("Spawned by …") stops at 45% of the line, so the title keeps the rest and truncates (#3577). */}
                     <div className="flex min-w-0 items-center gap-2">
                       {sourceLabel && (
                         <span
@@ -1044,7 +1044,7 @@ function TodoDetail({
 // ── Decisions (#1618) ────────────────────────────────────────
 
 /**
- * 决策：the calls made on this todo, in effect first-to-last; 改判 writes a new one that replaces it, 看全历史 shows
+ * Decisions: the calls made on this todo, in effect first-to-last; "Revise" writes a new one that replaces it, "full history" shows
  * the replaced ones struck through. Refetched whenever the todo changes (the hub bumps it when a decision is written,
  * also from an answered card). Hidden on a hub without decisions (404 on the route).
  */

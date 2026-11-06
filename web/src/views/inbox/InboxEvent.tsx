@@ -1,6 +1,7 @@
-// An inbox item as an event (docs/inbox.md「事件、处理链条、建议」, docs/web.md「收件箱」): the row's mark (进行中's state
-// word, 「AI 正在准备建议」, the suggestion's kind and first line) and the detail's body — ✦ 摘要, 总结, the suggestion card
-// with its buttons right under it, then the 处理链条 folded to its newest entry, each entry going where its link says.
+// An inbox item as an event (docs/inbox.md "Events, handling chain, suggestions", docs/web.md "Inbox"): the row's mark ("In progress"'s state
+// word, "AI is preparing a suggestion", the suggestion's kind and first line) and the detail's body — ✦ summary, recap, the
+// suggestion card
+// with its buttons right under it, then the handling chain folded to its newest entry, each entry going where its link says.
 // Drawn only for an item that carries this phase's fields (lib/inbox-events.ts `hasEvent`).
 import { useEffect, useState } from "react";
 import {
@@ -17,7 +18,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { InboxLine } from "./InboxLine";
 import { Glyph, Spark } from "./InboxParts";
 
-/** Where a tapped `source` entry (or 看原文) opens the item's own page: at a Feishu position, a mail's uid, or a URL. */
+/** Where a tapped `source` entry (or "Original") opens the item's own page: at a Feishu position, a mail's uid, or a URL. */
 export type SourceAt = { position?: string; uid?: number; url?: string };
 
 /** The processing conversation's route: the assistant's conversations open in Persona, the rest as agents. */
@@ -29,7 +30,7 @@ function useConversation(): (mid: string, sid: string) => Route {
 
 // ── the row ──────────────────────────────────────────────
 
-/** Under a row: what the AI is doing (进行中), 「AI 正在准备建议」 (急事), 处理失败, or the suggestion's kind + first line. */
+/** Under a row: what the AI is doing ("In progress"), "AI is preparing a suggestion" (urgent), a failed handling, or the suggestion's kind + first line. */
 export function EventMark({ it }: { it: InboxItem }) {
   if (isDone(it)) {
     // filed by the manager after it looked (done_by manager): say who
@@ -79,7 +80,7 @@ export function EventMark({ it }: { it: InboxItem }) {
 
 // ── the detail ───────────────────────────────────────────
 
-/** The detail's body for an event: 摘要, 总结, how the handling goes, the suggestion, 处理链条, 有关 and 线索. */
+/** The detail's body for an event: summary, recap, how the handling goes, the suggestion, handling chain, "Related" and "Trail". */
 export function EventBody({ item, onSource }: { item: InboxItem; onSource: (at: SourceAt) => void }) {
   const done = isDone(item);
   return (
@@ -117,7 +118,7 @@ export function EventBody({ item, onSource }: { item: InboxItem; onSource: (at: 
   );
 }
 
-/** 进行中's state with a way into the processing conversation, or why the AI did not get through it. */
+/** "In progress"'s state with a way into the processing conversation, or why the AI did not get through it. */
 function HandlingLine({ item }: { item: InboxItem }) {
   const conversation = useConversation();
   const h = item.handling;
@@ -130,7 +131,7 @@ function HandlingLine({ item }: { item: InboxItem }) {
       <Icon name="chevronRight" size={11} stroke={2.4} />
     </button>
   );
-  // 急事 still being looked at: where the suggestion will be, 「AI 正在准备建议」
+  // urgent item still being looked at: where the suggestion will be, "AI is preparing a suggestion"
   if (preparing(item)) {
     return (
       <div className="flex min-w-0 items-center gap-2 rounded-[10px] bg-inset p-3 text-[12.5px] shadow-hairline" data-event-preparing>
@@ -149,7 +150,7 @@ function HandlingLine({ item }: { item: InboxItem }) {
       </div>
     );
   }
-  if (!word) return null; // done: the chain's 管理者处理 entry opens the conversation
+  if (!word) return null; // done: the chain's manager-handling entry opens the conversation
   return (
     <div className="flex min-w-0 items-center gap-2 text-[12.5px] text-ink-2" data-event-handling={h.state}>
       {h.state === "waiting" ? <Icon name="clock" size={13} className="shrink-0 text-ink-3" /> : <Spinner size={12} />}
@@ -161,8 +162,9 @@ function HandlingLine({ item }: { item: InboxItem }) {
 }
 
 /**
- * The suggestion and its buttons: reply 发送 · 修改 · 驳回; agent 开始 · 修改 · 驳回; conclusion 知道了 · 驳回; one that needs
- * judgment (handback) 确认 · 修改 · 驳回. 修改 opens the text to edit (确认 runs the edited one) and 「说一句话」, which goes
+ * The suggestion and its buttons: reply "Send" · "Edit" · "Reject"; agent "Start" · "Edit" · "Reject"; conclusion
+ * "Got it" · "Reject"; one that needs judgment (handback) "Confirm" · "Edit" · "Reject". "Edit" opens the text to edit
+ * ("Confirm" runs the edited one) and "Say something", which goes
  * back to the processing conversation for a new suggestion instead.
  */
 export function SuggestionCard({ item, suggestion: s }: { item: InboxItem; suggestion: InboxSuggestion }) {
@@ -268,7 +270,7 @@ function ChainIcon({ kind }: { kind: string }) {
   );
 }
 
-/** 处理链条: folded to the newest entry, 「展开全部（N）」 shows them all, oldest first. */
+/** The handling chain: folded to the newest entry, "Show all (N)" shows them all, oldest first. */
 export function Chain({ item, onSource }: { item: InboxItem; onSource: (at: SourceAt) => void }) {
   const [open, setOpen] = useState(false);
   const conversation = useConversation();
@@ -345,7 +347,7 @@ function ChainRow({ e, tap, onTap }: { e: ChainEntry; tap: ChainTap; onTap: (x: 
   );
 }
 
-/** 有关: other items this one touches; each goes its own way, a tap opens it. */
+/** "Related": other items this one touches; each goes its own way, a tap opens it. */
 function Related({ item }: { item: InboxItem }) {
   const list = item.related ?? [];
   if (!list.length) return null;

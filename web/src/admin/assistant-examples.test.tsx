@@ -1,4 +1,4 @@
-// The 助手卡片 page's preview (#2023): every example reads, a press says what it would send, an html card is its text
+// The "Assistant cards" page's preview (#2023): every example reads, a press says what it would send, an html card is its text
 // only, and the page has no way to reach a conversation.
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";

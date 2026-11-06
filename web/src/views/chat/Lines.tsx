@@ -24,11 +24,11 @@ export interface LineProps {
   sid: string;
   streaming?: string;
   expandFold: (f: Item) => Promise<void>;
-  /** 重试 on an API error card (only on the last line, while the agent is not working). */
+  /** "Retry" on an API error card (only on the last line, while the agent is not working). */
   onRetry?: () => void;
   /** The hub's word on what to fix for this line's model error (the session's turn_error_code, last line only). */
   fix?: { title: string; detail: string; action: string } | null;
-  /** A Persona conversation: a model error's text may name a fix in Persona's settings. Agent sessions keep 重试. */
+  /** A Persona conversation: a model error's text may name a fix in Persona's settings. Agent sessions keep "Retry". */
   assistant?: boolean;
 }
 
@@ -71,7 +71,7 @@ function LineBody({ line, status, mid, sid, streaming, expandFold, onRetry, fix,
   }
 }
 
-/** A notice on a line of its own: a wake opening new work (a centered capsule), "已中断", a long local command's output. */
+/** A notice on a line of its own: a wake opening new work (a centered capsule), "Interrupted", a long local command's output. */
 function LineNotice({ item }: { item: Item }) {
   const [open, setOpen] = useState(false);
   if (item.wake) {
@@ -256,8 +256,8 @@ export function closeRecap(key: string, id: string) {
 
 // ── model API errors ──
 
-/** A model API error: why, whether it passes by itself, the original under the fold, 重试. One the user must fix (not
- *  signed in, a wrong key, a model that is not there) says so instead, with 去修 (docs/onboarding.md 4.4). */
+/** A model API error: why, whether it passes by itself, the original under the fold, "Retry". One the user must fix (not
+ *  signed in, a wrong key, a model that is not there) says so instead, with "Fix it" (docs/onboarding.md 4.4). */
 function APIErrorCard({ info, count, at, onRetry, fix }: { info: APIErrorInfo; count: number; at?: string; onRetry?: () => void; fix?: { title: string; detail: string; action: string } | null }) {
   const [open, setOpen] = useState(false);
   const sub = fix ? fix.detail : info.transient === true ? t("chat-lines.api_transient") : info.transient === false ? t("chat-lines.api_permanent") : "";

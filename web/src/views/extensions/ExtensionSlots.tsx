@@ -1,5 +1,5 @@
-// The extensions' places among the web's own pages (docs/extensions.md「UI 插槽」): a nav_page's full page (/extension/<id>/<ui>,
-// its entry is on the sidebar), the cards on 总览 (overview_card) and the sections on a machine's page
+// The extensions' places among the web's own pages (docs/extensions.md "UI slots"): a nav_page's full page (/extension/<id>/<ui>,
+// its entry is on the sidebar), the cards on "Overview" (overview_card) and the sections on a machine's page
 // (machine_section). Each draws the extension's declarative View with ExtensionUI; the list comes from lib/extension-slots.ts.
 import { useMemo, useState } from "react";
 import { uiIcon, type UIIcon, type UIPlace, type UITone } from "../../lib/extension-ui";
@@ -28,7 +28,7 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
   // a page a card or a section pushed opens here with the state it was pushed with (?state=)
   const state = useMemo(() => new URLSearchParams(location.search).get("state") ?? undefined, [extension, ui]);
   const title = place?.title || ui;
-  // the extension's name after the title, unless it only says the title again (「示例 示例」, #3115)
+  // the extension's name after the title, unless it only says the title again ("Example Example", #3115)
   const name = place?.extension_name;
   const showName = !!name && name.trim().toLowerCase() !== title.trim().toLowerCase();
   // a code review or a file browser (UI version 4) takes the page's whole width; everything else stays a column
@@ -54,7 +54,7 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
   );
 }
 
-/** The cards on 总览 (overview_card), one row under the agents' summary: one card full width, more two a row. */
+/** The cards on "Overview" (overview_card), one row under the agents' summary: one card full width, more two a row. */
 export function OverviewCards() {
   const cards = useExtensionSlot("overview_card");
   if (!cards.length) return null;

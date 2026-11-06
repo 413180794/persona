@@ -1,4 +1,4 @@
-// The full herdr surface's feed (docs/terminal.md「完整 herdr 界面」): herdr's own client, run in a PTY on the computer,
+// The full herdr surface's feed (docs/terminal.md "The full herdr UI"): herdr's own client, run in a PTY on the computer,
 // drawn by a plain xterm. Not TerminalFeed's job — that one mirrors a pane's grid frame by frame — so this is a feed of
 // its own with the same face for what the page shares (the key bar, the find bar, the right-click menu): the hub relays
 // bytes both ways over the app WebSocket (herdr_open / herdr_data / herdr_input / herdr_resize / herdr_ack / herdr_close,
@@ -411,7 +411,7 @@ export class FullFeed {
     }
   };
 
-  /** The page goes where herdr's focus is (a change made in this view, or the 焦点在别处 chip tapped). */
+  /** The page goes where herdr's focus is (a change made in this view, or the "Focus moved" chip tapped). */
   followTo(ev: HerdrFocus) {
     const sessions = getState().sessions[this.mid] ?? [];
     focusGuard.noteFollow(focusAddress(ev));
@@ -446,7 +446,7 @@ export class FullFeed {
     this.patch({ status: "closed", note: "", control: "off", elsewhere: null });
   }
 
-  /** Opens a view again after `release`, or after it ended (重新连接): a clean screen, the client draws it all. `delay`: wait this long first. */
+  /** Opens a view again after `release`, or after it ended ("Reconnect"): a clean screen, the client draws it all. `delay`: wait this long first. */
   reconnect(delay = 0) {
     if (this.disposed) return;
     clearTimeout(this.yieldTimer);
@@ -774,7 +774,7 @@ export class FullFeed {
     this.term?.clearSelection();
   }
 
-  /** herdr copied something (OSC 52): onto the clipboard at once where the browser allows it, else the user taps 复制 (it wants a gesture). */
+  /** herdr copied something (OSC 52): onto the clipboard at once where the browser allows it, else the user taps "Copy" (it wants a gesture). */
   private programCopied(text: string) {
     const t = osc52Text(text);
     if (!t) return;
@@ -813,7 +813,7 @@ export class FullFeed {
     try {
       if (fresh) {
         this.term.clearSelection();
-        search.clearDecorations(); // also forgets the last term: the addon does not notice a changed 区分大小写 on its own
+        search.clearDecorations(); // also forgets the last term: the addon does not notice a changed "Match case" on its own
         search.findPrevious(query, this.searchOptions());
       } else if (dir === -1) search.findPrevious(query, this.searchOptions());
       else search.findNext(query, this.searchOptions());

@@ -1,4 +1,4 @@
-// A background workflow run (#2935, docs/agent-states.md「后台 workflow、Monitor」), in the chat's background dialog:
+// A background workflow run (#2935, docs/agent-states.md "Background workflow, Monitor"), in the chat's background dialog:
 // its name, status and time, where it is among its phases, how many of its agents are done, and — open — each agent
 // with its last words; an agent's whole conversation opens read-only in the side panel, as a subagent's does.
 import { useState } from "react";

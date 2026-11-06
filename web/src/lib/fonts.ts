@@ -6,7 +6,7 @@ export const SANS = `-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","
 export const SERIF = `"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC",SimSun,serif`;
 
 /**
- * A font list from the document with fallbacks after it: a font this machine lacks (Calibri, 等线 on a Mac) would
+ * A font list from the document with fallbacks after it: a font this machine lacks (Calibri, DengXian on a Mac) would
  * otherwise fall to the browser's default, a heavy serif Song for Chinese. Serif only when the document names a serif.
  */
 export function withFallback(family: string): string {

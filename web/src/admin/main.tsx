@@ -6,7 +6,7 @@ import "../styles.css";
 import { adminCatalog } from "./catalog";
 
 // The catalog (the client's plus the admin UI's own) loads before the pages: they call t() as their modules load
-// (docs/web.md「国际化」).
+// (docs/web.md "Internationalization").
 await initI18n(undefined, adminCatalog);
 const { AdminApp } = await import("./App");
 

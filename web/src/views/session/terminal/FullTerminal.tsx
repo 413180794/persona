@@ -1,4 +1,4 @@
-// The full surface of a terminal panel (docs/terminal.md「完整 herdr 界面」): herdr's own client, in a PTY on the
+// The full surface of a terminal panel (docs/terminal.md "The full herdr UI"): herdr's own client, in a PTY on the
 // computer, drawn by xterm — its sidebar, tabs and splits, driven from here. The feed is full.ts; what the page shares
 // with the single-pane surface (the key bar, the find bar, the right-click menu, the saved commands) is the same
 // components. The header's controls for this surface are drawn into the panel's header through `slot`.
@@ -70,9 +70,9 @@ export function FullTerminal({
   live: boolean;
   /** Wait this long (ms) before opening the client: the surface before it is still on screen, driving its own pane. */
   delay: number;
-  /** Asks the panel to go back to 单窗格 (the hub or computer cannot do this one). */
+  /** Asks the panel to go back to "Single pane" (the hub or computer cannot do this one). */
   onFallback: () => void;
-  /** The client did not start on this machine (why, in words): the panel falls back to 单窗格 by itself. */
+  /** The client did not start on this machine (why, in words): the panel falls back to "Single pane" by itself. */
   onFailed: (why: string) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);

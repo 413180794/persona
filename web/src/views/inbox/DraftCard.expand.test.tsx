@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The AI 分身's draft cut at four lines opens the rest in place (#4742), so the owner reads it before 发送.
+// The AI twin's draft cut at four lines opens the rest in place (#4742), so the owner reads it before "Send".
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

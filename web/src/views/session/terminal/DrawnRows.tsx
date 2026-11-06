@@ -1,4 +1,4 @@
-// Terminal rows the page draws itself: pages of herdr's history above the screen, and — 换行 while watching — the screen
+// Terminal rows the page draws itself: pages of herdr's history above the screen, and — "Wrap" while watching — the screen
 // folded at the panel's width (iOS TerminalWrap: continuation lines hang under the row's text, what only pads a row to
 // the pane's width ends at the panel's edge). Same font, size and colors as xterm, so Chinese takes its two cells here too.
 import { memo, useMemo } from "react";

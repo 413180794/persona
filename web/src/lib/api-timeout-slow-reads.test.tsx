@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Reads the hub itself gives READ_TIMEOUT_MS or longer (#5035): a launcher's model list (70 s, the node starts its CLI),
-// 模型配置's list (70 s), a launcher's quota (45 s), a computer's self-check (45 s), a Mac's browser (45 s) and its sign-ins (2 min 15 s), a document's
+// Model configuration's list (70 s), a launcher's quota (45 s), a computer's self-check (45 s), a Mac's browser (45 s) and its sign-ins (2 min 15 s), a document's
 // conversion to PDF (2 min) and the extension catalog's refresh (a git market, 3 min). The page waits past the hub's
-// own limit, so the hub's error (which computer, which launcher) is what shows, not 「hub 太久没有回应」; and a list the
+// own limit, so the hub's error (which computer, which launcher) is what shows, not "The hub took too long to respond"; and a list the
 // hub answers after 45 s still shows. They still give up once the hub's limit is well past.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

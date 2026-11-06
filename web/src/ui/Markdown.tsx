@@ -213,7 +213,7 @@ const dollarsInMath = (tex: string) => tex.replace(/\\([\s\S])/g, (m, c: string)
 
 // Pandoc's rule for single dollars, plus no letter or digit right outside: $…$ is math only when the opening $
 // follows no letter/digit and is followed by a non-space, and the closing $ follows a non-space and is followed by no
-// letter/digit. Any other $ is escaped, so "$5 和 $10", "US$5" and "$HOME/$USER" stay text and an unclosed $ doesn't
+// letter/digit. Any other $ is escaped, so "$5 and $10", "US$5" and "$HOME/$USER" stay text and an unclosed $ doesn't
 // pair with the next formula's $.
 const DISPLAY = /(\$\$[\s\S]*?\$\$)/g;
 const ALNUM = /[A-Za-z0-9]/;
@@ -427,7 +427,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 // `streaming`: the text is still being written (the assistant's delta): rendered at most every 100 ms or so, in chunks
 // (only the last is parsed again), what the growing end leaves open closed for the moment, its words fading in.
 // `fade`: a block that just arrived whole: its words fade in once, then it is rendered plain. Neither fades with
-// 「回复动效」 off or reduced motion; once streaming ends it is plain Markdown again, without the fade's spans.
+// "Reply animation" off or reduced motion; once streaming ends it is plain Markdown again, without the fade's spans.
 export const Markdown = memo(function Markdown({ text: raw, small, compact, mid, cwd, streaming, fade }: { text: string; small?: boolean; compact?: boolean; mid?: string; cwd?: string; streaming?: boolean; fade?: boolean }) {
   const components = useMemo<Components>(() => mid ? {
     ...markdownComponents,
@@ -468,7 +468,7 @@ export const Markdown = memo(function Markdown({ text: raw, small, compact, mid,
   );
 });
 
-// remark-cjk-friendly: **强调**「这样」 next to CJK punctuation is still emphasis (CommonMark's flanking rules miss it).
+// remark-cjk-friendly: **bold** right next to full-width CJK punctuation is still emphasis (CommonMark's flanking rules miss it).
 const REMARK: PluggableList = [remarkGfm, remarkMath, remarkCjkFriendly];
 
 /**

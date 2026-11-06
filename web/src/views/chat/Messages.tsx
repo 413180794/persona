@@ -46,7 +46,7 @@ export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string;
   );
 }
 
-/** One of the merged messages; one sent with 引用 starts with its quote card (Quote.tsx). */
+/** One of the merged messages; one sent with "Quote" starts with its quote card (Quote.tsx). */
 function MergedPart({ text, mid, sid }: { text: string; mid: string; sid: string }) {
   const split = splitQuotes(text);
   const words = split ? split.rest : text;
@@ -106,7 +106,7 @@ function injectedIcon(n: Injected): { name: IconName; tone: string } {
 }
 
 /** A message Persona typed in for the model (a task's notice, a scheduled run…): one centered line, never its words.
- *  A task's opens the task; a scheduled run's shows what the task asks. docs/protocol.md「Persona 注入的消息」. */
+ *  A task's opens the task; a scheduled run's shows what the task asks. docs/protocol.md "Messages Persona injects". */
 export function InjectedHint({ msg, sid }: { msg: UserMessage; sid: string }) {
   const n = msg.injected!;
   const todos = useStore((s) => s.todos);

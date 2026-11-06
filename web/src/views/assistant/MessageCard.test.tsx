@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { FeedItem } from "../../lib/feed";
 import { FeedLineView } from "./Tasks";
 
-// The card 「按任务进度起草的回复」 (#1519): drawn from what the hub records on it, so a reload keeps it sent.
+// The card "Reply drafted from the task's progress" (#1519): drawn from what the hub records on it, so a reload keeps it sent.
 describe("a message card", () => {
   const card = (body: Record<string, unknown> = {}): FeedItem => ({
     id: "m1", conversation: "c1", at: new Date().toISOString(), kind: "message", ref: "example:1",

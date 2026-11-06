@@ -98,10 +98,10 @@ export function typedAnswer(q: ToolQuestion, answer: string | undefined): string
   return answer;
 }
 
-/** The note the hub appends where it cut a long text for the page (`\n…（已截断，…共 N 字节）`). */
+/** The note the hub appends where it cut a long text for the page (`\n…` then the hub's Chinese "truncated, … N bytes in all"). */
 const CUT_MARK = "\n…（已截断"; // i18n-ignore: matches the hub's text
 
-/** A cut text without the hub's note (the 看全文 button says it instead). */
+/** A cut text without the hub's note (the "Show all" button says it instead). */
 export function withoutCutMark(text: string): string {
   const at = text.lastIndexOf(CUT_MARK);
   return at >= 0 ? text.slice(0, at) : text;

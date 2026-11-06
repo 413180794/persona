@@ -1,4 +1,4 @@
-// A row's right-click menu (iOS InboxView.rowMenu): 已处理 or 移回 first, then what the item can be muted by.
+// A row's right-click menu (iOS InboxView.rowMenu): "Done" or "Move back" first, then what the item can be muted by.
 import { describe, expect, it, vi } from "vitest";
 import type { InboxItem } from "../../lib/inbox";
 

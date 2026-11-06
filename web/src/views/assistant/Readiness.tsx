@@ -1,6 +1,6 @@
 // What the main conversation still needs, above its composer (docs/onboarding.md 4.4): the first missing step as a card
-// (a title, one line why, one button), 「只能聊天」's note, a refused start or send as a card with the original text under
-// 详情 (4.6), and the help those buttons and the local example questions open in place. 添加电脑 and 确认电脑 open the
+// (a title, one line why, one button), the "chat only" note, a refused start or send as a card with the original text under
+// "Details" (4.6), and the help those buttons and the local example questions open in place. "Add computer" and "Confirm computer" open the
 // machines page's own flow (views/machines/AddComputer.tsx) in place where the hub has it (machines_add, machine_trust).
 import { useState } from "react";
 import { canAddComputer, canConfirmComputer, pendingToConfirm } from "../../lib/add-computer";
@@ -27,9 +27,9 @@ export interface ReadinessGate {
   /** How many times a send was tried while blocked: the card replays its nudge on each. */
   nudged: number;
   help: (topic: HelpTopic) => void;
-  /** 确认电脑: the confirm screen of the computer waiting to be confirmed (the machines page on an older hub). */
+  /** "Confirm computer": the confirm screen of the computer waiting to be confirmed (the machines page on an older hub). */
   confirm: () => void;
-  /** 试一句 is running (the hub's probe takes up to ~30 s). */
+  /** "Try it" is running (the hub's probe takes up to ~30 s). */
   probing: boolean;
   /** The help dialog and the add / confirm computer flow, to render once beside the card. */
   dialog: React.ReactNode;
@@ -48,7 +48,7 @@ export function useReadinessGate(on = true): ReadinessGate {
   const r = on ? readiness : null;
   const step = blockingStep(r);
   const machine = r?.machine?.name ?? "";
-  // 添加电脑 is the in-app flow where a signed-in device can add one; the how-to pointing at /admin on an older hub
+  // "Add computer" is the in-app flow where a signed-in device can add one; the how-to pointing at /admin on an older hub
   const help = (h: HelpTopic) => (h === "add_computer" && canAdd ? setComputer({}) : setTopic(h));
   const confirm = () => {
     const m = canConfirm ? pendingToConfirm(machines, step?.machine) : undefined;
@@ -148,7 +148,7 @@ export function ReadinessCard({ gate }: { gate: ReadinessGate }) {
   );
 }
 
-/** 「只能聊天」 (P1, 4.4): the hub answers by itself without a computer; sending stays as it is. */
+/** "Chat only" (P1, 4.4): the hub answers by itself without a computer; sending stays as it is. */
 export function ChatOnlyNote({ gate }: { gate: ReadinessGate }) {
   if (gate.readiness?.mode !== "chat_only") return null;
   return (
@@ -164,8 +164,8 @@ export function ChatOnlyNote({ gate }: { gate: ReadinessGate }) {
 
 // ── a refused start or send ─────────────────────────────
 
-/** A start or a send that did not go: the hub's words, a button for its code, the original under 详情 (4.6). */
-/** `onRetry`: a send that did not go and is back in the box (#4270): a 重新发送 button that sends the box again. */
+/** A start or a send that did not go: the hub's words, a button for its code, the original under "Details" (4.6). */
+/** `onRetry`: a send that did not go and is back in the box (#4270): a "Send again" button that sends the box again. */
 export function FailureCard({ failure, onClose, onHelp, onConfirm, onRetry }: { failure: CodedFailure; onClose: () => void; onHelp: (topic: HelpTopic) => void; onConfirm?: () => void; onRetry?: () => void }) {
   const [open, setOpen] = useState(false);
   const action = failure.action && knownAction(failure.action) ? failure.action : undefined;
@@ -240,7 +240,7 @@ export function InstallClaudeHelp({ machine }: { machine: string }) {
 
 /** The help a card's button or a local example question opens (wake, install, sign in, add a computer, what Persona
  *  does, how to connect a model): local words, nothing sent to the model. */
-/** Without `onAction` the help is only words (no 改用 API Key). */
+/** Without `onAction` the help is only words (no "Use an API key instead"). */
 export function HelpDialog({ topic, machine, step, onClose, onAction }: { topic: HelpTopic; machine: string; step: ReadinessStep | null; onClose: () => void; onAction?: (id: string) => void }) {
   const where = machine || t("assistant-readiness.that_computer");
   const then = (id: string) => {

@@ -1,4 +1,4 @@
-// Focus sync between herdr's own client (the full surface) and the page (docs/terminal.md「焦点联动」). herdr's focus is
+// Focus sync between herdr's own client (the full surface) and the page (docs/terminal.md "Focus sync"). herdr's focus is
 // one state shared by all its clients, and it does not say who moved it, so the node attributes each change and the hub
 // tells every view whether the change is its own (server/internal/hub/herdrclient.go). Pure logic here, tested without
 // a DOM: what to do with a change (follow it, ignore its echo, only note it) and the guard that keeps the two
@@ -121,7 +121,7 @@ export class FocusGuard {
 
 export const focusGuard = new FocusGuard();
 
-/** Where the page goes to follow a change: an agent's pane to its page in the terminal view, any other pane to the 终端 page. */
+/** Where the page goes to follow a change: an agent's pane to its page in the terminal view, any other pane to the "Terminal" page. */
 export function followRoute(mid: string, e: Pick<HerdrFocus, "pane_id" | "session_id">, sessions: readonly Session[]): Route {
   if (e.session_id) {
     const s = sessions.find((x) => x.session_id === e.session_id);
@@ -130,7 +130,7 @@ export function followRoute(mid: string, e: Pick<HerdrFocus, "pane_id" | "sessio
   return { name: "terminal", mid, id: `pane:${e.pane_id}` };
 }
 
-/** The address a route shows a terminal for (the session page's agent, the 终端 page's terminal); undefined for other pages. */
+/** The address a route shows a terminal for (the session page's agent, the "Terminal" page's terminal); undefined for other pages. */
 export function routeAddress(r: Route, sidOfTab?: string): { mid: string; address: string } | undefined {
   if (r.name === "session") return { mid: r.mid, address: r.sid };
   if (r.name === "tab" && (sidOfTab || r.sid)) return { mid: r.mid, address: sidOfTab || r.sid! };

@@ -1,5 +1,5 @@
-// Where 设置 is (#1996): which category the URL opens, and the list of them a phone shows first. Wide, the
-// categories are tabs in the bar and /settings is 通用; phone width, /settings is the list (as on iOS), a category is
+// Where Settings is (#1996): which category the URL opens, and the list of them a phone shows first. Wide, the
+// categories are tabs in the bar and /settings is "General"; phone width, /settings is the list (as on iOS), a category is
 // /settings?tab=… pushed over it, and Back goes back to the list.
 import { t } from "../../i18n";
 import { settingsTab } from "../../lib/channels";
@@ -49,7 +49,7 @@ export function settingsAt(search: string): { tab: Tab | null; sub: string | nul
   return { tab: t, sub };
 }
 
-/** The URL of a category (and its open item). 通用 is plain /settings on a wide screen, where that opens it; on a
+/** The URL of a category (and its open item). "General" is plain /settings on a wide screen, where that opens it; on a
  *  phone /settings is the list, so it is named. */
 export function settingsHref(tab: Tab, id: string | null, phone: boolean): string {
   if (tab === "general" && !phone) return "/settings";

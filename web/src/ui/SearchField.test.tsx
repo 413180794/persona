@@ -1,5 +1,5 @@
-// The shared search box: whatever its tone and size, the control lights its edge while it has focus (待办, 终端 and
-// Agents had their own boxes that showed only a caret), names its field, and 清除 empties it.
+// The shared search box: whatever its tone and size, the control lights its edge while it has focus (to-dos, Terminal and
+// Agents had their own boxes that showed only a caret), names its field, and "Clear" empties it.
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

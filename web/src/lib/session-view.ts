@@ -1,5 +1,5 @@
-// An agent's page switches its middle in place between its conversation and its terminal (docs/web.md「终端 ⇄ 对话」),
-// as Moshi's session page does: a 终端 | 对话 switch in the header and ⌘J. Which one shows is the address's
+// An agent's page switches its middle in place between its conversation and its terminal (docs/web.md "Terminal ⇄ chat"),
+// as Moshi's session page does: a "Terminal | Chat" switch in the header and ⌘J. Which one shows is the address's
 // `?view=chat|term`; an address without it shows what that agent's page showed last (kept per browser), else the
 // conversation. Pure helpers here, so they are tested without a DOM; the hook is the page's side of it.
 import { useEffect, useState } from "react";
@@ -59,8 +59,8 @@ export function rememberView(mid: string, sid: string, view: SessionView, store:
 }
 
 /**
- * Where a terminal opened from a list of panes (the 终端 page's tree, the sidebar's, ⌘K) goes: an agent's pane to its
- * page in the terminal view, a plain shell (it has no conversation) to the 终端 page.
+ * Where a terminal opened from a list of panes (the "Terminal" page's tree, the sidebar's, ⌘K) goes: an agent's pane to its
+ * page in the terminal view, a plain shell (it has no conversation) to the "Terminal" page.
  */
 export function terminalTarget(mid: string, id: string, sessions: readonly Session[]): Route {
   if (!isPaneAddress(id)) {

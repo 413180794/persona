@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// 设置 › 管理者 (docs/managers.md): the roster with where each runs and its status, a hub without the roster, the
-// `managers` push reloading the list, 新建管理者 → the install code (with the commands when the hub gives them), and
-// 删除 off for the default with why, confirmed for the rest, and the hub's refusals in plain words.
+// Settings › Managers (docs/managers.md): the roster with where each runs and its status, a hub without the roster, the
+// `managers` push reloading the list, New manager → the install code (with the commands when the hub gives them), and
+// Delete off for the default with why, confirmed for the rest, and the hub's refusals in plain words.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

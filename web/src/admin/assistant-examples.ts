@@ -1,5 +1,5 @@
 // The assistant's example cards (schema/extension/examples/assistant/, the synthetic data every app's tests draw), read
-// for the 助手卡片 page's preview. Nothing here talks to a hub: a press only says what the card would have sent.
+// for the "Assistant cards" page's preview. Nothing here talks to a hub: a press only says what the card would have sent.
 import { t } from "../i18n";
 import { readView, submitValues, type UIView } from "../lib/extension-ui";
 
@@ -82,7 +82,7 @@ export function previewAction(raw: Record<string, unknown>, actionId: string): {
   return null;
 }
 
-/** A submitted form as people read it: "label：value" per field, a choice by its title, a toggle as 是 / 否. */
+/** A submitted form as people read it: "label: value" per field (full-width colon), a choice by its title, a toggle as "Yes" / "No". */
 export function submitSummary(view: UIView, values: Record<string, string>): string[] {
   const sent = submitValues(view, values);
   const out: string[] = [];

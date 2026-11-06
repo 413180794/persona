@@ -74,7 +74,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
   const [launcherList, setLauncherList] = useState<ModelList & { machine?: string; provider?: string }>({ status: "idle" });
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
-  // 重试 / 重新读取: the next load asks the CLI again (refresh) and keeps showing the list meanwhile, once.
+  // "Retry" / "Reload": the next load asks the CLI again (refresh) and keeps showing the list meanwhile, once.
   const [reload, setReload] = useState(0);
   const refreshNext = useRef(false);
   const search = useRef<HTMLInputElement>(null);
@@ -123,7 +123,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
   // The picker while there is a list (or one coming); the plain field without one: an older hub, a failure.
   const picker = launcherList.status === "loading" || (launcherList.status === "ready" && !!launcherList.list?.models.length);
   // Left empty, the model is inherited while the provider is too (what runs now when nothing here is set); with a
-  // provider picked here it is that provider's default (the list's 默认).
+  // provider picked here it is that provider's default (the list's "Default").
   const inherited: ModelBinding = !draft.provider && !p?.override?.model && p?.effective?.model ? { model: p.effective.model } : {};
   const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
     ? effortChoices(launcherList.list, draft.model, inherited) : ["low", "medium", "high", "xhigh", "max"];

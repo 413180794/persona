@@ -1,4 +1,4 @@
-// A session's files (docs/ios.md「文件」, iOS FilesPane): from the session's folder (or `path`) folder by folder, a
+// A session's files (docs/ios.md "Files", iOS FilesPane): from the session's folder (or `path`) folder by folder, a
 // breadcrumb back to any level; folders first with size, time and Git marks; hidden files off unless asked for. A
 // file opens in the viewer inside the panel (back returns to the list where it was). On a wide screen the folders
 // open in place as a tree instead (files/FilesTree.tsx, Moshi's form; the menu switches back); either view refreshes

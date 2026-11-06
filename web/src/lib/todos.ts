@@ -42,12 +42,12 @@ export interface Todo {
   /** The assistant conversation that opened it as a task, and the plan (docs/unified-entry.md); unset for a todo made by hand. */
   origin?: string;
   plan_id?: string;
-  /** "auto" when the hub marked the task done because its work was judged finished, with why (docs/todos.md「自动完成」). */
+  /** "auto" when the hub marked the task done because its work was judged finished, with why (docs/todos.md "Auto-complete"). */
   done_by?: string;
   done_reason?: string;
   /** When the user last reopened it after it was done. */
   reopened_at?: string | null;
-  /** Opened from the main conversation while 主对话派的任务只在主对话里通知 was on (#1731). */
+  /** Opened from the main conversation while "notify tasks the main chat dispatched only in the main chat" was on (#1731). */
   quiet?: boolean;
   /** The task's agent did not start, and why: the hub ended it there (done_at is set too, #1077). */
   start_error?: string;
@@ -58,7 +58,7 @@ export interface Todo {
   stage?: string;
   /** The pull request the work is in, when the hub knows one (#2776). */
   pr_url?: string;
-  /** How far its finished work went out; short of live, where it is held and who can unhold it (docs/todos.md「交付」). */
+  /** How far its finished work went out; short of live, where it is held and who can unhold it (docs/todos.md "Delivery"). */
   delivery?: TodoDelivery;
 }
 
@@ -79,7 +79,7 @@ export function heldDelivery(todo: Todo): TodoDelivery | null {
 export type TodoStatus = "done" | "needs_you" | "interrupted" | "unread" | "working" | "follow_up" | "not_started" | "failed";
 
 /** Where a status sorts, as the task board orders its sections (lib/task-board.ts): what the user must act on first —
- *  等你, 待验收 (rank 2, see todoRank), 没开起来 — then 在做, 做完了, 停着, 已完成 (#4896). */
+ *  Needs you, Awaiting review (rank 2, see todoRank), Failed to start — then Working, Finished, Stopped, Done (#4896). */
 export const TODO_STATUS_RANK: Record<TodoStatus, number> = {
   needs_you: 0,
   interrupted: 1,
@@ -97,7 +97,7 @@ export function awaitsReview(todo: Todo, status: TodoStatus): boolean {
   return reviewState(todo) === "pending_review" && (status === "follow_up" || status === "unread" || status === "not_started");
 }
 
-/** A task's place in the order: its status's rank, 待验收 right after 等你. */
+/** A task's place in the order: its status's rank, Awaiting review right after Needs you. */
 export function todoRank(todo: Todo, status: TodoStatus): number {
   return awaitsReview(todo, status) ? 2 : TODO_STATUS_RANK[status];
 }
@@ -120,7 +120,7 @@ export function isRemovable(status: TodoStatus): boolean {
 
 export type SessionLookup = (mid: string, sid: string) => Session | undefined;
 
-/** The hub closed it because its task's work was judged finished; reopening undoes it (docs/todos.md「自动完成」). */
+/** The hub closed it because its task's work was judged finished; reopening undoes it (docs/todos.md "Auto-complete"). */
 export function isAutoDone(todo: Todo): boolean {
   return Boolean(todo.done_at) && todo.done_by === "auto";
 }
@@ -130,7 +130,7 @@ export function isReviewDone(todo: Todo): boolean {
   return Boolean(todo.done_at) && todo.done_by === "review";
 }
 
-/** The status's label for this todo: 「自动完成」 for one the hub closed, 「已验收」 for one its supervisor did. */
+/** The status's label for this todo: "Auto-completed" for one the hub closed, "Accepted" for one its supervisor did. */
 export function todoStatusLabel(todo: Todo, status: TodoStatus): string {
   if (status === "done" && isReviewDone(todo)) return todo.supervision?.state === "cancelled" ? t("lib-todos.review_cancelled") : t("lib-todos.review_done");
   return status === "done" && isAutoDone(todo) ? t("lib-todos.auto_done") : TODO_STATUS_INFO[status].label;
@@ -146,15 +146,15 @@ export function makeSessionLookup(sessions: Session[] | Record<string, Session[]
 }
 
 /**
- * 待办状态判定规则（取第一个成立的）：
- * 0. 没开起来：从对话开的任务 Agent 没启动起来，hub 把它结束了（start_error，#1077）
- * 1. 已完成：用户点了完成（done_at != null）
- * 2. 等你：有挂着的 Agent 需要你（提问、审批）
- * 2.5 中断了：有挂着的 Agent 这一轮以模型 API 错误结束（turn_error，#1516），没做完，等你让它继续
- * 3. 待查看：有挂着的 Agent 完成了你还没看
- * 4. 进行中：有挂着的 Agent 在工作或正在启动
- * 5. 待跟进：挂着的 Agent 都停着（已看、未运行、启动失败）
- * 6. 未开始：没有挂着的 Agent
+ * Todo status rules (the first that holds wins):
+ * 0. Didn't start: a task agent opened from a conversation never started and the hub ended it (start_error, #1077)
+ * 1. Done: the user marked it done (done_at != null)
+ * 2. Needs you: an attached agent needs you (a question, an approval)
+ * 2.5 Interrupted: an attached agent's turn ended on a model API error (turn_error, #1516), unfinished, waiting for you to continue it
+ * 3. Unread: an attached agent finished and you have not seen it
+ * 4. Working: an attached agent is working or starting
+ * 5. Follow-up: every attached agent is stopped (seen, not running, failed to start)
+ * 6. Not started: no attached agent
  */
 export function todoStatus(todo: Todo, lookup?: SessionLookup): TodoStatus {
   if (todo.start_error) return "failed";
@@ -169,7 +169,7 @@ export function todoStatus(todo: Todo, lookup?: SessionLookup): TodoStatus {
 
   for (const a of active) {
     if (a.start_error) {
-      // 启动失败视为停着
+      // a failed start counts as stopped
       continue;
     }
     const s = lookup?.(a.machine_id, a.session_id);
@@ -197,7 +197,7 @@ export function interruptedAgent(s?: Session): boolean {
   return st === "unread" || st === "idle";
 }
 
-/** Why the model service cut the agent off (#1516), in words, and whether 继续 can help (a login or a bad request is
+/** Why the model service cut the agent off (#1516), in words, and whether "Continue" can help (a login or a bad request is
  *  not fixed by going on); undefined when it was not cut off. */
 export function interruption(s?: Session): { reason: string; canContinue: boolean } | undefined {
   if (!interruptedAgent(s)) return undefined;
@@ -206,8 +206,8 @@ export function interruption(s?: Session): { reason: string; canContinue: boolea
 }
 
 /**
- * The todo list's order, the task board's (#4896): by todoRank — 等你, 断了, 待验收, 没开起来, 在做, 未开始, 做完了,
- * 停着, 已完成 — then newest first. A task that did not start has done_at too, but it is the user's to retry or remove,
+ * The todo list's order, the task board's (#4896): by todoRank — Needs you, Interrupted, Awaiting review, Failed to start, Working, Not started, Finished,
+ * Stopped, Done — then newest first. A task that did not start has done_at too, but it is the user's to retry or remove,
  * so it does not sink with the done ones.
  */
 export function sortTodos(todos: Todo[], lookup?: SessionLookup): Todo[] {
@@ -224,7 +224,7 @@ export function sortTodos(todos: Todo[], lookup?: SessionLookup): Todo[] {
 }
 
 /**
- * 查找待办中状态最要紧的一个 Agent 及其摘要信息
+ * Finds the most pressing agent of a todo and its summary
  */
 export function mostUrgentAgent(
   todo: Todo,
@@ -293,11 +293,11 @@ function isManualHerdr(s: Session) {
 }
 
 /**
- * Agents 侧边栏「按待办」分组纯函数：
- * - 每个有挂着 Agent 的未完成待办一段，段头是待办标题和状态，点段头进待办
- * - 没挂待办、在 herdr 里手动开的 Agent 一段「手动开的」（#2608）
- * - 其余没挂待办的 Agent 放最后「未归属」一段，默认折叠（#1836）
- * - 置顶、屏蔽、「最近（未运行）」的规则和「按状态」一致
+ * Pure function for the Agents sidebar's "By to-do" grouping:
+ * - one segment per unfinished todo with attached agents; the header is the todo's title and status, clicking it opens the todo
+ * - agents on no todo opened by hand in herdr get one "Opened by hand" segment (#2608)
+ * - the other agents on no todo go last in one "Unassigned" segment, folded by default (#1836)
+ * - pin, mute and "Recent (not running)" follow the same rules as "By status"
  */
 export function buildTodoAgentGroups(
   all: Session[],
@@ -308,10 +308,10 @@ export function buildTodoAgentGroups(
   const { live } = splitAgentSessions(all, machines);
   const lookup = makeSessionLookup(live);
 
-  // 未完成待办排序
+  // order of unfinished todos
   const openTodos = sortTodos(todos.filter((t) => !t.done_at), lookup);
 
-  // 映射各个待办与其 live sessions
+  // map each todo to its live sessions
   const liveByKey = new Map<string, Session>();
   for (const s of live) {
     liveByKey.set(`${s.machine_id}/${s.session_id}`, s);
@@ -338,7 +338,7 @@ export function buildTodoAgentGroups(
     const todoSessions = keys.map((key) => liveByKey.get(key)!);
 
     if (todoSessions.length > 0) {
-      // 组内排序：按状态优先级（置顶/需要你排前面，屏蔽降级），同优先级按时间降序
+      // order within a group: by status priority (pinned / needs you first, muted down), same priority by time, newest first
       todoSessions.sort((a, b) => {
         const rA = sessionRank(a, mutes);
         const rB = sessionRank(b, mutes);
@@ -365,15 +365,15 @@ export function buildTodoAgentGroups(
   };
   const rest = live.filter((s) => !assignedSessionKeys.has(`${s.machine_id}/${s.session_id}`));
 
-  // 在 herdr 里手动开的、没挂待办的单独一段「手动开的」，在「未归属」前面，展开（#2608）：
-  // 没有哪条自动挂的规则认得它们（不是派生的，空间也没挂待办）
+  // agents opened by hand in herdr and on no todo get their own "Opened by hand" segment, before "Unassigned", open (#2608):
+  // no auto-attach rule recognizes them (not spawned, their space is on no todo either)
   const manual = rest.filter(isManualHerdr);
   if (manual.length > 0) {
     manual.sort(byRank);
     groups.push({ key: "todo:manual", name: t("lib-todos.manual"), hint: t("lib-todos.manual_hint"), sessions: manual });
   }
 
-  // 没挂待办的放最后「未归属」一段，默认折叠
+  // agents on no todo go last in one "Unassigned" segment, folded by default
   const unassigned = rest.filter((s) => !isManualHerdr(s));
   if (unassigned.length > 0) {
     unassigned.sort(byRank);
@@ -392,8 +392,8 @@ export function buildTodoAgentGroups(
 }
 
 /**
- * 拼装交给 Agent 时的格式（与收件箱一致）
- * `<jarvis-context kind="context" title="待办 · <标题>" url="">说明</jarvis-context>`
+ * The format when handing it to an agent (the same as the inbox's)
+ * `<jarvis-context kind="context" title="To-do · <title>" url="">notes</jarvis-context>`
  */
 export function formatTodoContext(title: string, notes?: string): string {
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -402,7 +402,7 @@ export function formatTodoContext(title: string, notes?: string): string {
   return `<jarvis-context kind="context" title="${escape(t("lib-todos.context_title", { title }))}" url="">${body}</jarvis-context>`;
 }
 
-// ── 决策记录（#1618, docs/todos.md「决策记录」） ───────────────
+// ── Decision log (#1618, docs/todos.md "Decision log") ───────────────
 
 /** One call the user made on a todo: written by hand, or their answer to a question card of an agent on it. */
 export interface TodoDecision {
@@ -517,8 +517,8 @@ export async function unlinkSpaceFromTodo(todoId: string, mid: string, space: st
 }
 
 /**
- * 查某个项目挂在哪个待办上：
- * 返回包含该项目 (machineId, spaceName) 且未完成的 Todo。
+ * Which todo a project hangs on:
+ * returns the unfinished Todo that holds the project (machineId, spaceName).
  */
 export function findTodoForSpace(todos: Todo[], machineId: string, spaceName: string): Todo | undefined {
   if (!machineId || !spaceName) return undefined;
@@ -547,7 +547,7 @@ export function openTodoFromTag(
  * Check if an error from the spaces (or decisions, #1618) endpoints is a legacy hub 404 (route does not exist).
  * In Persona hub, jsonRouteErrors produces code === "not_found" and error === "Not Found"
  * for unregistered routes. Handlers themselves return specific messages like "todo not found"
- * or "待办不存在". Only a route-level 404 (code === "not_found" and error === "Not Found", or non-JSON 404)
+ * or a localized "todo does not exist". Only a route-level 404 (code === "not_found" and error === "Not Found", or non-JSON 404)
  * marks the hub as legacy; other 404s are ordinary business failures (#881 review).
  */
 export function isLegacySpacesRouteError(e: unknown): boolean {
@@ -585,10 +585,10 @@ export function resolveLinkCurrentTodoId(
 
 /**
  * Format agent source label:
- * - Spawned from project: "随项目 <space>" (resolved from via, or agent's own session lookup as fallback);
- *   "随项目" if neither is available;
- * - Spawned from parent agent: "由 <parent title> 派出"; "派生" if parent is not in session list;
- * - Same Feishu chat as most of the todo's botmux agents: "同群";
+ * - Spawned from project: "With project <space>" (resolved from via, or agent's own session lookup as fallback);
+ *   "With project" if neither is available;
+ * - Spawned from parent agent: "Spawned by <parent title>"; "Spawned" if parent is not in session list;
+ * - Same Feishu chat as most of the todo's botmux agents: "Same chat";
  * - Manual: undefined (not labeled).
  */
 export function formatAgentSource(
@@ -636,14 +636,14 @@ export function formatAgentSource(
 }
 
 
-/** An agent going on (等你 / 在做) that the main conversation's dock shows after its tasks (#1113, iOS DockAgent). */
+/** An agent going on ("Needs you" / "Working") that the main conversation's dock shows after its tasks (#1113, iOS DockAgent). */
 export interface DockAgent {
   session: Session;
   state: "needs_you" | "working";
 }
 
 /**
- * What a conversation's dock shows after its tasks (docs/unified-entry.md「主对话的任务坞里的手动 Agent」): in the main
+ * What a conversation's dock shows after its tasks (docs/unified-entry.md "Manual agents in the main chat's task dock"): in the main
  * conversation, every agent going on that no task stands for — the ones opened by hand on the Agents page — waiting
  * for the user first, then the newest in its state; elsewhere nothing. Persona's own conversations are not agents. A
  * task's agents (a task not done, from any conversation) are its pill already; an agent the hub tags with a todo shows
@@ -680,7 +680,7 @@ export type TaskNow = { kind: "words"; text: string } | { kind: "step"; text: st
 /**
  * A working agent's step (its latest tool call, which the hub only sends when it is newer than its words) comes
  * before its words; once it stopped, its words do (a turn cut short on a tool call), and the step only stands in for
- * words it never said. Null when it has said and done nothing yet (docs/unified-entry.md「任务卡片的进度」, #1583).
+ * words it never said. Null when it has said and done nothing yet (docs/unified-entry.md "Task card progress", #1583).
  */
 export function taskNow(lead: Session | undefined, working: boolean): TaskNow | null {
   const words = lead?.last_text?.trim() ?? "";

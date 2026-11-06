@@ -1,6 +1,6 @@
-// 浏览器（ego lite） on a Mac's page while the hub's extension ego is on (docs/plan-ego-browser.md, iOS BrowserSection;
-// G107): the switch that lets the assistant drive its ego lite, and how far that is: 安装 ego lite when it is not there;
-// its first-run setup as steps (open it on the Mac or over VNC, import a browser's data, finish, check again); 就绪 with
+// "Browser (ego lite)" on a Mac's page while the hub's extension ego is on (docs/plan-ego-browser.md, iOS BrowserSection;
+// G107): the switch that lets the assistant drive its ego lite, and how far that is: "Install ego lite" when it is not there;
+// its first-run setup as steps (open it on the Mac or over VNC, import a browser's data, finish, check again); "Ready" with
 // what is left (its usage statistics) ticked or not. Once its setup is done, its sign-ins (BrowserLogins) follow. The
 // hub is asked again when the page opens, and every 2 s while a job runs or the setup is under way and the tab is shown.
 // Only the latest answer for the Mac shown now lands: one for a Mac opened before, or an older one, is dropped.

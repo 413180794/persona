@@ -1,4 +1,4 @@
-// A task's detail beside the assistant's conversation (docs/unified-entry.md「任务详情」; iOS TaskDetailSheet): its
+// A task's detail beside the assistant's conversation (docs/unified-entry.md "Task detail"; iOS TaskDetailSheet): its
 // agent's own chat — everything the Agents page does works here — and, with several agents, a switch between them.
 import { useState } from "react";
 import { isRemovable, TODO_STATUS_INFO } from "../../lib/todos";
@@ -11,7 +11,7 @@ import { stateOf } from "../../lib/format";
 import { href, type Route } from "../../lib/router";
 import { t } from "../../i18n";
 
-/** ⋯'s 在新窗口打开: the page the panel shows, as its own tab (⌘-click on the link does the same). */
+/** ⋯'s "Open in new window": the page the panel shows, as its own tab (⌘-click on the link does the same). */
 function openInWindow(to: Route): MenuItem {
   return { key: "open-window", label: t("common.open_in_new_window"), icon: "external", onSelect: () => void window.open(href(to), "_blank", "noopener") };
 }

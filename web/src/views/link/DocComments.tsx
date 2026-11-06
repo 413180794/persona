@@ -1,6 +1,6 @@
-// A Feishu document's comments in the reader panel (#1290; the phone's FeishuDocsComments): 未解决 / 已解决, each thread
-// with its quote and replies. With the plugin's `lark_doc_comments` the user writes too: 回复 a thread, 解决 / 重新打开,
-// a comment on the whole document from the box at the bottom, or on a passage picked in the document (评论 on the
+// A Feishu document's comments in the reader panel (#1290; the phone's FeishuDocsComments): "Open" / "Resolved", each thread
+// with its quote and replies. With the plugin's `lark_doc_comments` the user writes too: "Reply" to a thread, "Resolve" / "Reopen",
+// a comment on the whole document from the box at the bottom, or on a passage picked in the document ("Comment" on the
 // selection bar), @ someone. Only comments: the document's text is not edited here. lib/doc-comments.ts has the rest.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ApiError } from "../../lib/api";
@@ -146,7 +146,7 @@ export function DocCommentsView({ url, model, writes, resolved, onResolved, onBa
   };
 
   return (
-    // Esc steps back here (the @ menu, then 回复 / 评论这段, then the document) and never reaches the chat's 中断.
+    // Esc steps back here (the @ menu, then "Reply" / "Comment on this passage", then the document) and never reaches the chat's "Interrupt".
     // The surface is there at once (the document must not show through it); what is on it fades in.
     <div
       className="flex h-full flex-col bg-surface"
@@ -273,7 +273,7 @@ function targetLine(tg: CommentTarget): { label: string; text: string } | null {
   return null;
 }
 
-/** The box at the bottom: where it goes (over the box, × back to the whole document), the words, @, 发送. */
+/** The box at the bottom: where it goes (over the box, × back to the whole document), the words, @, "Send". */
 function CommentBox({ url, model, box, focus }: { url: string; model: DocComments; box: React.RefObject<HTMLTextAreaElement | null>; focus: number }) {
   const [caret, setCaret] = useState(0);
   const [focused, setFocused] = useState(false);
@@ -302,7 +302,7 @@ function CommentBox({ url, model, box, focus }: { url: string; model: DocComment
     },
   });
 
-  // 评论 on the selection bar (or 回复) puts the caret here
+  // "Comment" on the selection bar (or "Reply") puts the caret here
   useEffect(() => {
     if (focus) box.current?.focus();
   }, [focus, box]);

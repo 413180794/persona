@@ -14,10 +14,10 @@ export interface AgentLaunch {
   machineId: string;
   cwd: string;
   launcher: string;
-  /** Picked in 新建 Agent for this start only (launcher-models.ts startPicks); none: the launcher's own. */
+  /** Picked in "New agent" for this start only (launcher-models.ts startPicks); none: the launcher's own. */
   model?: string;
   effort?: string;
-  /** Claude Code's permission mode for this start (新建 Agent's 权限模式); none: the launcher's own. */
+  /** Claude Code's permission mode for this start ("New agent"'s "Permission mode"); none: the launcher's own. */
   permissionMode?: string;
   text: string;
   attachments: LocalAttachment[];
@@ -141,9 +141,9 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
   }
 }
 
-// ── opening 新建 Agent from another page ────────────────
+// ── opening "New agent" from another page ──────────────
 
-/** What 新建 Agent opens with when another page opens it (知识库's 开 Agent): the first message, and where if known. */
+/** What "New agent" opens with when another page opens it ("Knowledge"'s "Start agent"): the first message, and where if known. */
 export interface NewAgentPreset {
   prompt?: string;
   machineId?: string;
@@ -152,7 +152,7 @@ export interface NewAgentPreset {
 
 const openers = new Set<(preset: NewAgentPreset) => void>();
 
-/** Opens 新建 Agent (the app shell listens) with `preset` filled in. */
+/** Opens "New agent" (the app shell listens) with `preset` filled in. */
 export function openNewAgent(preset: NewAgentPreset = {}) {
   openers.forEach((l) => l(preset));
 }
@@ -165,7 +165,7 @@ export function onOpenNewAgent(l: (preset: NewAgentPreset) => void) {
 }
 
 /**
- * The keys that start 新建 Agent from the first-message box, for its placeholder: Mod ↵ (⌘ on Apple, Ctrl elsewhere, as
+ * The keys that start "New agent" from the first-message box, for its placeholder: Mod ↵ (⌘ on Apple, Ctrl elsewhere, as
  * the shortcuts name it), and none on a touch-only device (a phone has no ⌘ key, so the hint would only take up room).
  */
 export function startKeys(platform: Platform, touchOnly: boolean): string | null {

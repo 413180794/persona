@@ -1,6 +1,6 @@
-// 「看全文（12 KB）」 under a text the hub cut for the page (Item.full_size; Android FullTextButton, iOS ResultBlock's
-// cut): a click fetches the whole item (GET …/items/{id}/full) and it takes the cut one's place; 「加载中…」 meanwhile,
-// 「加载失败，点一下重试」 when it fails. The hub's own note at the end of the cut text goes: the button says it.
+// "View full text (12 KB)" under a text the hub cut for the page (Item.full_size; Android FullTextButton, iOS ResultBlock's
+// cut): a click fetches the whole item (GET …/items/{id}/full) and it takes the cut one's place; "Loading…" meanwhile,
+// "Failed to load, tap to retry" when it fails. The hub's own note at the end of the cut text goes: the button says it.
 import { useState, type ReactNode } from "react";
 import { fullItem } from "../../lib/api";
 import { bytes } from "../../lib/format";

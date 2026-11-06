@@ -1,7 +1,7 @@
-// 空间页 (`/space/<机器>/<空间名>`, docs/web.md「空间页」, iOS SpaceView, Android #89): one space of one machine — its
+// Space page (`/space/<machine>/<space name>`, docs/web.md "Space page", iOS SpaceView, Android #89): one space of one machine — its
 // running agents (a row opens the chat), the todos it and its agents hang on, and what the space's ⋯ in the sidebar
-// offers (mark all seen, rename, link to a todo, pin, mute, then 新建 Agent / Git / copy the path). Reached from a space's
-// name on the machine page and from 打开空间页 in a space's menu of the Agents list.
+// offers (mark all seen, rename, link to a todo, pin, mute, then "New agent" / Git / copy the path). Reached from a space's
+// name on the machine page and from "Open space page" in a space's menu of the Agents list.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSpaceMuted, unreadOf } from "../lib/agent-filter";
 import { machineWithHub } from "../lib/mesh";

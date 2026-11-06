@@ -3,7 +3,7 @@ import { MODE_LABEL, MODE_TITLE, type TerminalMode } from "../../../lib/terminal
 import { cx } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 
-/** 单窗格 or 完整界面: icons where the panel is narrow, words where it is not. */
+/** "Single pane" or "Full view": icons where the panel is narrow, words where it is not. */
 export function ModeToggle({ mode, onChange }: { mode: TerminalMode; onChange: (mode: TerminalMode) => void }) {
   const options: { mode: TerminalMode; icon: "terminal" | "sidebar" }[] = [
     { mode: "pane", icon: "terminal" },

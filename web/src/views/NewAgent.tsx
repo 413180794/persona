@@ -30,10 +30,10 @@ interface Dirs {
   recent?: { path: string; name: string; last_used?: string }[];
 }
 
-export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: () => void; /** Filled in when another page opens it (知识库's 开 Agent). */ preset?: NewAgentPreset | null }) {
+export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: () => void; /** Filled in when another page opens it (the knowledge base's "Open agent"). */ preset?: NewAgentPreset | null }) {
   const machines = useStore((s) => s.machines);
   const online = useMemo(() => machines.filter((m) => m.online), [machines]);
-  // no computer at all (docs/onboarding.md 4.5): the 电脑 field says why it is empty and adds one, nothing else to fill in
+  // no computer at all (docs/onboarding.md 4.5): the "Computer" field says why it is empty and adds one, nothing else to fill in
   const loaded = useStore((s) => s.loaded);
   const none = loaded && machines.length === 0;
   const adding = useAddComputer();
@@ -43,9 +43,9 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   const [launchers, setLaunchers] = useState<Launcher[]>([]);
   const [unified, setUnified] = useState(true);
   const [modelDefault, setModelDefault] = useState("");
-  // the hub's 「默认：…」 for 新建 Agent (#2455); undefined from an older hub
+  // the hub's "Default: …" for "New agent" (#2455); undefined from an older hub
   const [hubDefault, setHubDefault] = useState<LauncherDefault | null | undefined>(undefined);
-  // 模型配置's 新建 Agent as it applies now (provider, model, effort); null: the hub has no 模型配置
+  // "Models"' "New agent" as it applies now (provider, model, effort); null: the hub has no model configuration
   const [configured, setConfigured] = useState<ModelBinding | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
   const [launchersOf, setLaunchersOf] = useState(""); // the machine `launchers` and `configured` are for
@@ -165,7 +165,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     return () => controller.abort();
   }, [open, mid, browse]);
 
-  // The model list of the launcher that will run (the chosen one, or 模型配置's); a new machine or launcher starts over
+  // The model list of the launcher that will run (the chosen one, or the model configuration's); a new machine or launcher starts over
   // from the default. Starting never waits for it.
   const followed = followedBinding(launcher, unified ? configured : null);
   const listLauncher = launchersOf === mid ? pickerLauncher(launcher, followed) : "";

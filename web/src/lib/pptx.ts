@@ -1,4 +1,4 @@
-// A small PowerPoint reader and renderer for the web's file viewer (docs/web.md「Office」, #1345): slides with their
+// A small PowerPoint reader and renderer for the web's file viewer (docs/web.md "Office", #1345): slides with their
 // text (sizes, bold / italic / underline, colors, alignment, bullets), shapes (fill, outline, rectangle / rounded /
 // ellipse / line), pictures, tables, groups, backgrounds, placeholders that take their place and type size from the
 // layout and master, and speaker notes. Charts and SmartArt show as a labeled box (LibreOffice's PDF draws them).

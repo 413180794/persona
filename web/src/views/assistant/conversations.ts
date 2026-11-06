@@ -1,4 +1,4 @@
-// 全部对话 (docs/assistant.md「管理自己的对话」): the assistant's conversations, the main one first, the rest newest first
+// "All chats" (docs/assistant.md "Managing its own conversations"): the assistant's conversations, the main one first, the rest newest first
 // by day; search on the title and the last message; the archived ones apart. Pure functions, tested without a DOM.
 import type { Session } from "../../lib/types";
 import { t } from "../../i18n";
@@ -6,13 +6,13 @@ import { t } from "../../i18n";
 /** A conversation as `GET /api/v1/assistant?archived=1` lists it. */
 export type Conversation = Session & { archived?: boolean };
 
-/** "1101 | 修复 | 搜索框和顶栏重叠" (docs/assistant.md「对话标题」) → head "1101 | 修复 | " and topic; null for other titles. */
+/** "1101 | fix | search box overlaps the top bar" (docs/assistant.md "Conversation titles") → head "1101 | fix | " and topic; null for other titles. */
 export function splitTitle(title: string): { head: string; topic: string } | null {
   const m = /^(\d{4}\s*\|\s*[^|]+?\s*\|\s*)(.+)$/.exec(title.trim());
   return m ? { head: m[1], topic: m[2] } : null;
 }
 
-/** What a row calls it: an untitled one (empty, or Claude Code's placeholder) is 新对话. */
+/** What a row calls it: an untitled one (empty, or Claude Code's placeholder) is "New chat". */
 /** The main conversation's title: it has none of its own (the hub refuses renaming it), whatever its first message was (#1313). */
 export const MAIN_TITLE = "Persona";
 
@@ -41,7 +41,7 @@ export function newestFirst<T extends Session>(list: T[]): T[] {
   return list.slice().sort((a, b) => time(b) - time(a) || a.session_id.localeCompare(b.session_id));
 }
 
-/** 今天 / 昨天 / 最近 7 天 / 更早 (and those without a time), newest first. */
+/** "Today" / "Yesterday" / "Last 7 days" / "Earlier" (and those without a time), newest first. */
 export function groupByDay<T extends Session>(list: T[], now: Date): { title: string; items: T[] }[] {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();

@@ -1,14 +1,14 @@
-// The answers a card in 总览's 需要你处理 offers on its row (#4090), as iOS's InteractionPreviewCard.quickActions: a
-// permission's 拒绝 / 允许 (not one that has fields to fill in), one single-choice question's options (four at most),
+// The answers a card in "Overview"'s "Needs you" offers on its row (#4090), as iOS's InteractionPreviewCard.quickActions: a
+// permission's "Deny" / "Allow" (not one that has fields to fill in), one single-choice question's options (four at most),
 // a terminal dialog's plain options (one to four, read by the hub too). Every other card opens its chat. The bodies
 // are the chat card's (views/chat/Interactions.tsx sends them through the same resolve).
 import { t } from "../i18n";
 import type { Resolution } from "./answered";
 import type { Interaction } from "./types";
 
-/** What a permission card's 允许 sends. */
+/** What a permission card's "Allow" sends. */
 export const allowBody = (): Resolution => ({ allow: true });
-/** What a permission card's 拒绝 sends: the agent reads the message. */
+/** What a permission card's "Deny" sends: the agent reads the message. */
 export const denyBody = (): Resolution => ({ allow: false, message: t("chat-interactions.denied_message") });
 
 export interface QuickChoice {
@@ -61,7 +61,7 @@ export interface HeldRow {
   body: Resolution;
 }
 
-/** The rows of 需要你处理: the cards waiting, in their order, with each held one back in its slot. The last held first:
+/** The rows of "Needs you": the cards waiting, in their order, with each held one back in its slot. The last held first:
  *  a row answered right after the one above it is that one's `before`, already in place when it goes in. */
 export function withHeld(waiting: Interaction[], held: HeldRow[]): { ix: Interaction; held?: HeldRow }[] {
   const ids = new Set(held.map((h) => h.ix.id));

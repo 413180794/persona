@@ -1,4 +1,4 @@
-// Messages typed while the agent works and not yet taken (Session.queued): 撤回到输入框 pulls them all back out of
+// Messages typed while the agent works and not yet taken (Session.queued): "Pull back to edit" pulls them all back out of
 // Claude and re-queues the others, in order (POST …/queue {keep}, node editQueue; iOS QueueStrip / editQueued).
 
 /** The indexes to re-queue when message `index` is taken out: every other one, in their order. */
@@ -11,7 +11,7 @@ function normalize(s: string): string {
 }
 
 /** Two texts are the same message once normalized, or one contains the other when both are long enough
- *  (Claude adds placeholders, the phone adds notes; a short 好 must not match anything with 好 in it). */
+ *  (Claude adds placeholders, the phone adds notes; a short "ok" must not match anything with "ok" in it). */
 export function sameMessage(a: string, b: string): boolean {
   const x = normalize(a),
     y = normalize(b);

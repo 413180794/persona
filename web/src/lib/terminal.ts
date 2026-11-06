@@ -1,4 +1,4 @@
-// The web terminal's pure logic (docs/terminal.md, docs/protocol.md「终端流」): which frames to apply in what order,
+// The web terminal's pure logic (docs/terminal.md, docs/protocol.md "Terminal stream"): which frames to apply in what order,
 // base64 → VT bytes, the link status wording and its backoff, the wheel and click geometry, paste bytes, and the xterm
 // palette from the page's color tokens. The panel (views/session/terminal/) owns the DOM and the socket.
 import { formatDate, t } from "../i18n";
@@ -121,7 +121,7 @@ export function isStale(lastOK: number | null, failure: string | null, now: numb
   return ref !== null && now - ref > STALE_AFTER_MS;
 }
 
-/** "上次更新 12 秒前" / "还没有拿到终端". */
+/** "Updated 12 seconds ago" / "No terminal yet". */
 export function linkHeadline(lastOK: number | null, now: number): string {
   if (lastOK === null) return t("lib-terminal.no_screen_yet");
   const s = Math.max(0, Math.floor((now - lastOK) / 1000));
@@ -130,7 +130,7 @@ export function linkHeadline(lastOK: number | null, now: number): string {
   return t("lib-terminal.updated_at", { time: formatDate(lastOK, { hour: "2-digit", minute: "2-digit", hour12: false }) });
 }
 
-/** When it tries again, then why: "4 秒后重试 · 连不上 hub", or "等待电脑回应…" while nothing failed yet. */
+/** When it tries again, then why: "Retrying in 4s · can't reach the hub", or "Waiting for the computer…" while nothing failed yet. */
 export function linkDetail(failure: string | null, nextTry: number, now: number): string {
   if (!failure) return t("lib-terminal.waiting");
   const s = Math.ceil((nextTry - now) / 1000);

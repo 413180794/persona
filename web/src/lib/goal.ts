@@ -21,7 +21,7 @@ export function goalHeadline(g: GoalInfo): string {
 
 const compact = (n: number) => formatNumber(n, { notation: "compact", maximumFractionDigits: 1 });
 
-/** What it has spent ("18.2万 / 50万 tokens · 42 分钟"), "" when nothing is known. */
+/** What it has spent ("182K / 500K tokens · 42 min", with Chinese units), "" when nothing is known. */
 export function goalUsage(g: GoalInfo): string {
   const parts: string[] = [];
   if (g.tokens_used && g.tokens_used > 0) {

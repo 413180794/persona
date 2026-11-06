@@ -162,7 +162,7 @@ describe("思考强度", () => {
     expect(effortChoices(claude, "haiku")).toEqual([]);
     expect(effortChoices(claude, "", { model: "haiku" })).toEqual([]);
     expect(effortChoices(claude, "", { model: "elsewhere" })).toEqual(all);
-    // 模型配置's model listed only under another id (an alias): not known, so not the default entry's (none here).
+    // "Model configuration"'s model listed only under another id (an alias): not known, so not the default entry's (none here).
     const plainDefault = { agent: "claude", models: [{ id: "default", name: "Default", default: true }, { id: "sonnet", name: "Sonnet", resolved: "claude-sonnet-5-5", efforts: ["low", "high"] }] };
     expect(effortChoices(plainDefault, "", { model: "claude-sonnet-5-5" })).toEqual(all);
     expect(effortChoices(plainDefault, "")).toEqual([]);

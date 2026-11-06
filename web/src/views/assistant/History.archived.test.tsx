@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 全部对话's 已归档 follows the archive mark the hub pushes on the live sessions, both ways: a conversation brought back
-// on another device (or by a message sent to it, or by Persona) leaves 已归档 without the page being opened again, and
+// "All chats"' "Archived" follows the archive mark the hub pushes on the live sessions, both ways: a conversation brought back
+// on another device (or by a message sent to it, or by Persona) leaves "Archived" without the page being opened again, and
 // one archived here shows there at once, before the hub has pushed the sessions again.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

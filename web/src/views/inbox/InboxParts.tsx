@@ -1,5 +1,5 @@
-// Small pieces the inbox pages share: avatars (chat, mail, document, 公司圈) with their source mark, tags, counts,
-// the AI 分身's draft card, a document row's status menu, and the few glyphs the shared icon set does not have.
+// Small pieces the inbox pages share: avatars (chat, mail, document, Moments) with their source mark, tags, counts,
+// the AI twin's draft card, a document row's status menu, and the few glyphs the shared icon set does not have.
 import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   agentDraft, docChangeLine, isDone, isLark, movingKey, setDocStatus, useInbox, withToken,
@@ -35,7 +35,7 @@ export function Glyph({ name, size = 15, stroke = 1.9, className, style }: { nam
   );
 }
 
-/** ✦ before an AI line (the summary, the AI 分身's note). */
+/** ✦ before an AI line (the summary, the AI twin's note). */
 export function Spark({ size = 11 }: { size?: number }) {
   return <Icon name="spark" size={size} className="mr-1 inline-block shrink-0 align-[-1px] text-accent" />;
 }
@@ -50,7 +50,7 @@ function docTone(type?: string): CSSProperties {
   return { color: c, background: tint(c) };
 }
 
-// Chat avatars without a picture: never red or orange, so nothing looks like 需要你.
+// Chat avatars without a picture: never red or orange, so nothing looks like "Needs you".
 const MONO: CSSProperties[] = [
   { color: "var(--accent-ink)", background: "var(--accent-tint)" },
   { color: "var(--green)", background: "var(--green-tint)" },
@@ -75,8 +75,8 @@ export function Monogram({ name, size = 40, square, neutral, src }: { name: stri
   );
 }
 
-/** The 40px avatar of a row: chat / sender, or a tinted square for a document or a 公司圈 post; a small mark of
- * where it came from in the corner (飞书's own, mail a neutral gray). */
+/** The 40px avatar of a row: chat / sender, or a tinted square for a document or a Moments post; a small mark of
+ * where it came from in the corner (Feishu's own, mail a neutral gray). */
 export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) {
   const icon = Math.round(size * 0.45);
   let face: ReactNode;
@@ -136,7 +136,7 @@ export function Tag({ children, urgent }: { children: ReactNode; urgent?: boolea
   );
 }
 
-/** A filter or choice that turns on and off: the inbox's sources and kinds, the 消息 page's Feishu accounts. */
+/** A filter or choice that turns on and off: the inbox's sources and kinds, the "Messages" page's Feishu accounts. */
 export function Chip({ on, onClick, children, title }: { on: boolean; onClick: () => void; children: ReactNode; title?: string }) {
   return (
     <button
@@ -159,11 +159,11 @@ export function Count({ n, accent }: { n: number; accent?: boolean }) {
   );
 }
 
-/** The AI 分身's reply under a row: 发送 sends it as it is, 修改 opens it in the draft dialog. */
+/** The AI twin's reply under a row: "Send" sends it as it is, "Edit" opens it in the draft dialog. */
 export function DraftCard({ it, onEdit, onSend }: { it: InboxItem; onEdit: () => void; onSend: () => void }) {
   const draft = agentDraft(it);
   const sending = useInbox((s) => s.sending.includes(it.id));
-  // the four lines may cut it: 展开全文 shows the rest in place, so it is read before 发送 (#4742)
+  // the four lines may cut it: "Show all" shows the rest in place, so it is read before "Send" (#4742)
   const [open, setOpen] = useState(false);
   const { ref: textRef, cut: long } = useClamped<HTMLParagraphElement>(open);
   if (!draft) return null;

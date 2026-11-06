@@ -1,7 +1,7 @@
-// 定时任务 (docs/assistant.md「定时任务」, the iOS app's AssistantRoutinesView): everything Persona does on its own on
+// Scheduled tasks (docs/assistant.md "Scheduled tasks", the iOS app's AssistantRoutinesView): everything Persona does on its own on
 // one page — what repeats (every day at a time, every N minutes) and the one-offs it scheduled from a conversation, each
 // with its rule in words, next and last run, what it runs with and an on/off switch; what comes next and the history
-// of runs beside them. A row opens the editor; 新建 starts from a template or blank.
+// of runs beside them. A row opens the editor; "New" starts from a template or blank.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import { href, navigate, onLinkClick } from "../../lib/router";
@@ -105,7 +105,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     void load();
   };
 
-  // A row's right click (iOS / Mac contextMenu): 立即运行 opens the run's conversation, as the editor's does.
+  // A row's right click (iOS / Mac contextMenu): "Run now" opens the run's conversation, as the editor's does.
   const runNow = async (task: Task) => {
     if (task.repeat === "once") setTasks((list) => list?.filter((x) => x.id !== task.id) ?? list); // a one-off runs once
     try {
@@ -139,7 +139,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   ];
 
   const { repeating, oneOff } = splitTasks(tasks ?? []);
-  // each task's conversations (#2824): the sidebar folds them into 自动对话, here they are under their task
+  // each task's conversations (#2824): the sidebar folds them into "Automatic", here they are under their task
   const titles = useMemo(() => new Map((assistant?.conversations ?? []).map((c) => [c.session_id, c.title])), [assistant?.conversations]);
   // the user's own (the main one, one the hub says the user opened) are never a task's, even if a run went into them
   const mine = useMemo(() => {
@@ -317,7 +317,7 @@ function TaskRow({ task, now, chats, onOpen, onMenu, onToggle }: { task: Task; n
         </div>
         <div className="mt-0.5 truncate text-[12px] text-ink-2">
           {ruleText(task)}
-          {/* 跑完推送 on the rule's line, not as a pill: two pills squeezed the title away on a phone */}
+          {/* "Push when done" on the rule's line, not as a pill: two pills squeezed the title away on a phone */}
           {task.push === "asked" && ` · ${t("assistant-routines.push_asked")}`}
         </div>
         {next && <div className="mt-0.5 truncate text-[11.5px] text-ink-3 tabular-nums">{next}</div>}

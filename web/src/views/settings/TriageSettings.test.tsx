@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 设置 › 会话分诊 (#4491): while the hub has not answered there are no switches to flip; a read that fails says why and
-// 重试 reads again, and is never drawn as "all off" (a flip would PUT off over the switches the hub has on); a hub
+// Settings › Session triage (#4491): while the hub has not answered there are no switches to flip; a read that fails says why and
+// "Retry" reads again, and is never drawn as "all off" (a flip would PUT off over the switches the hub has on); a hub
 // without the route says it does not support it.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

@@ -20,7 +20,7 @@ export function hubOf(machineId: string, machines: Machine[]): string {
   return hubLabel(machines.find((m) => m.id === machineId), machines);
 }
 
-/** "家里 · MacBook" when hubs are worth naming, else just the machine's name. */
+/** "Home · MacBook" when hubs are worth naming, else just the machine's name. */
 export function machineWithHub(machineId: string, machines: Machine[]): string {
   const m = machines.find((x) => x.id === machineId);
   const name = m?.name ?? machineId;
@@ -30,7 +30,7 @@ export function machineWithHub(machineId: string, machines: Machine[]): string {
 
 const VIA: Record<string, string> = { local: t("lib-mesh.via_local"), ssh: "SSH", tailcat: "Tailcat", link: t("lib-mesh.via_link"), peer: t("lib-mesh.via_peer") };
 
-/** How the hub reaches a computer: "经互联 · 1 跳 · 24 ms" (only when hubs are worth naming). */
+/** How the hub reaches a computer: "via link · 1 hop · 24 ms" (only when hubs are worth naming). */
 export function routeText(machine: Machine | undefined, machines: Machine[]): string {
   if (!machine?.route || hubCount(machines) < 2) return "";
   const r = machine.route;

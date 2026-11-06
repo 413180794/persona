@@ -1,9 +1,9 @@
-// An extension's View (docs/extensions.md「声明式 UI」「UI 插槽」「页面跳转」), loaded and carried out: an extension page in
-// 设置 › 扩展 or from the sidebar, a section on a launcher's or a machine's page, a card on 总览, an inbox item's body.
+// An extension's View (docs/extensions.md "Declarative UI" "UI slots" "Navigation"), loaded and carried out: an extension page in
+// Settings › Extensions or from the sidebar, a section on a launcher's or a machine's page, a card on "Overview", an inbox item's body.
 // How the items look is views/extensions/ViewBody.tsx. Here: a button's confirm asks first, submit sends the fields'
 // values, a segmented acts when chosen, and what the press answers (a new view, a word, a link, a page pushed or popped)
 // is carried out. UI version 3: a page can push another one (list → detail → edit), kept on a stack here (8 deep, the
-// browser's back pops it on a full page); the view's search box and filter and a section's 加载更多 go to the
+// browser's back pops it on a full page); the view's search box and filter and a section's "Load more" go to the
 // extension; extension_ui {invalidate} draws the view on screen again (one off screen when it comes back). A view with
 // refresh_after is drawn again while it is on screen. Logic in lib/extension-ui.ts.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,7 +29,7 @@ const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
 /**
- * Draws again while the view is on screen (docs/extensions.md「刷新」): `delay` ms after it was last drawn, never while the
+ * Draws again while the view is on screen (docs/extensions.md "Refresh"): `delay` ms after it was last drawn, never while the
  * page is hidden; coming back after the delay draws at once.
  */
 function useRefresh(delay: number, drawnAt: number, draw: () => void) {
@@ -109,7 +109,7 @@ export function pageHref(extension: string, ui: string, state?: string): string 
 
 /**
  * Loads and draws one of an extension's views. `embedded`: inside another page (a launcher's), lighter, and gone when the
- * extension says the launcher is not its (404 unsupported) instead of showing an error. `compact`: a card (总览), no
+ * extension says the launcher is not its (404 unsupported) instead of showing an error. `compact`: a card ("Overview"), no
  * chrome of its own, small charts. `bare`: no heading of its own (the page around it has one). `onFailed`: the first
  * draw failed (no view yet), and the page around it shows something else instead of the error. `revision`: what it is
  * drawn for changed (an inbox item took new messages): drawn again, the fields typed into kept. `onOpenSource`: a press
@@ -314,7 +314,7 @@ export function ExtensionUI({
     setValues((x) => ({ ...x, [item.name!]: value }));
     void run(item.action, { [item.name]: value });
   };
-  // the search box, the filter and 加载更多 send what the list is narrowed to: the text typed and the filter's choice
+  // the search box, the filter and "Load more" send what the list is narrowed to: the text typed and the filter's choice
   const listValues = (): Record<string, string> => ({
     ...(view?.search ? { q: query } : {}),
     ...(view?.tabs ? { [view.tabs.name]: values[view.tabs.name] ?? view.tabs.value } : {}),

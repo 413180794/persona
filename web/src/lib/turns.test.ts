@@ -341,7 +341,7 @@ it("personaToolVerb names Persona's own tools by what they do, and nothing else"
   expect(personaToolVerb("mcp__jarvis__computer_run")).toEqual({ verb: "操控电脑" });
   expect(personaToolVerb("mcp__jarvis__phone_contacts_search")).toEqual({ verb: "iPhone", what: "contacts search" });
   expect(personaToolVerb("mcp__jarvis__mail_send")).toEqual({ verb: "邮件", what: "send" });
-  // no verb of its own: keeps 「调用 Persona · …」
+  // no verb of its own: keeps "Called Persona · …"
   expect(personaToolVerb("mcp__jarvis__something_new")).toBeNull();
   // other servers, and the bare server
   expect(personaToolVerb("mcp__github__agent_read")).toBeNull();

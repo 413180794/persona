@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Inbox events on the page (docs/web.md「收件箱」): the 进行中 section and the rows' marks, the detail's 摘要 → 总结 →
-// suggestion card → 处理链条, 修改 / 说一句话, 看原文; and an older hub's items (none of the fields) exactly as before.
+// Inbox events on the page (docs/web.md "Inbox"): the "In progress" section and the rows' marks, the detail's summary → recap →
+// suggestion card → handling chain, "Edit" / "Say something", "Original"; and an older hub's items (none of the fields) exactly as before.
 // Driven by the fake hub's fixture (scripts/mock/inbox_events.json).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -54,7 +54,7 @@ const legacy = (it: InboxItem): InboxItem => {
   // an older hub never files as the manager
   return rest.done_by === "manager" ? { ...rest, done_by: "user" } : rest;
 };
-/** An item with no source page of its own (no chat, no mail): its body is the preview, so 看原文 needs no reads. */
+/** An item with no source page of its own (no chat, no mail): its body is the preview, so "Original" needs no reads. */
 const plain = (it: InboxItem): InboxItem => ({ ...it, lark: undefined, mail: undefined });
 
 let host: HTMLDivElement;
@@ -206,7 +206,7 @@ describe("收件箱事件：列表", () => {
     expect(row(failed.id).querySelector('[data-event-mark="failed"]')).not.toBeNull();
     expect(row(managerDone.id).querySelector('[data-event-mark="manager-done"]')?.textContent).toBe("管理者处理了");
     expect(row(conclusion.id).closest("[data-section]")?.getAttribute("data-section")).toBe("fyi");
-    // 进行中 never folds: no toggle on its title, its rows always shown
+    // In progress never folds: no toggle on its title, its rows always shown
     const working = host.querySelector('[data-section="working"]')!;
     expect(working.querySelector("[aria-expanded]")).toBeNull();
     expect(working.querySelector(`[data-item="${waiting.id}"]`)).not.toBeNull();

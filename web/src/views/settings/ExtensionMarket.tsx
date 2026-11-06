@@ -1,4 +1,4 @@
-// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the catalog of the markets this hub reads (search, a market at a
+// Settings › Extensions › Extension marketplace (docs/extensions.md "Extension marketplace"): the catalog of the markets this hub reads (search, a market at a
 // time), one extension of it (what it may do; preview → install / upgrade; uninstall when this market installed it), and
 // the markets themselves (add with an optional write-only token, remove, read again, change the token). Logic in
 // lib/extension-market.ts.
@@ -88,8 +88,8 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
 
   const markets = data?.markets ?? [];
   const broken = markets.filter((m) => m.error);
-  // nothing listed because the market(s) shown could not be read: not 这个市场还没有扩展 under 暂时读不到 (#4480)
-  // with several markets and none picked there is no single 这个市场: say what was read is empty (some may be unreadable)
+  // nothing listed because the market(s) shown could not be read: not "This marketplace has no extensions yet" under "can't read right now" (#4480)
+  // with several markets and none picked there is no single "this marketplace": say what was read is empty (some may be unreadable)
   const unread = market ? !!markets.find((m) => m.id === market)?.error : markets.length > 0 && broken.length === markets.length;
   return (
     <>
@@ -661,7 +661,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
   const [tokenFor, setTokenFor] = useState<Market | null>(null);
   const [busy, setBusy] = useState<Record<string, "refresh" | "remove">>({});
   const [confirm, setConfirm] = useState("");
-  // The switch for all market extensions (docs/extensions.md「自动升级」); null: a hub without it.
+  // The switch for all market extensions (docs/extensions.md "Auto-upgrade"); null: a hub without it.
   const [auto, setAuto] = useState<boolean | null>(null);
   const [savingAuto, setSavingAuto] = useState(false);
   useEffect(() => void extensionUpgrades().then(setAuto), []);

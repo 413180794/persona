@@ -1,4 +1,4 @@
-// 设置 › 助手 › Skills (the app's SkillsPage, docs/hub-update.md「skill 从二进制里拿出来」): the assistant's skills on
+// Settings › Assistant › Skills (the app's SkillsPage, docs/hub-update.md "Taking skills out of the binary"): the assistant's skills on
 // the computer that runs it (GET /api/v1/skills), read only.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";

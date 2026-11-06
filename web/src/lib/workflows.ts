@@ -1,4 +1,4 @@
-// Background workflows (#2935, docs/agent-states.md「后台 workflow、Monitor」): a Claude Code agent whose turn ended to
+// Background workflows (#2935, docs/agent-states.md "Background workflows, Monitor"): a Claude Code agent whose turn ended to
 // wait for its Workflow run is still at work. What the rows, the chat's header and the task cards say about them.
 // Newer hubs send Session.workflows; an older one only lists the run in background (kind "workflow").
 import { t } from "../i18n";
@@ -45,7 +45,7 @@ export function workflowPhase(w: Workflow): string {
   return w.phase_index && n ? `${w.phase} ${w.phase_index}/${n}` : w.phase;
 }
 
-/** How long it has run (or ran): "14 分". */
+/** How long it has run (or ran): "14 min". */
 export function workflowElapsed(w: Workflow, now: number): string {
   const start = Date.parse(w.started_at ?? "");
   if (!Number.isFinite(start)) return "";
@@ -67,7 +67,7 @@ export function workflowShortLine(s: Session | undefined): string {
   return runs.length > 1 ? `${line} +${runs.length - 1}` : line;
 }
 
-/** One line for a row or a card: 后台 workflow「parity-audit」· Verify 2/2 · 169/185 · 14 分（等 2 个）. */
+/** One line for a row or a card: Background workflow "parity-audit" · Verify 2/2 · 169/185 · 14 min (waiting on 2). */
 export function workflowLine(s: Session | undefined, now: number): string {
   const runs = runningWorkflows(s);
   if (!runs.length) {

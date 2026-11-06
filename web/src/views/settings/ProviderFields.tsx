@@ -1,5 +1,5 @@
 // The provider wizard's form pieces (#2455): a labelled input, a secret one (keys, headers: never offered to the
-// browser's password manager, shown only on request), and the 高级 disclosure.
+// browser's password manager, shown only on request), and the "Advanced" disclosure.
 import { useId, useState } from "react";
 import { Collapse, cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -44,7 +44,7 @@ export function TextField({ label, value, onChange, hint, error, placeholder, mo
   );
 }
 
-/** A key or other secret: masked, with 显示 / 隐藏; `multiline` for request headers (masked as discs until shown). */
+/** A key or other secret: masked, with "Show" / "Hide"; `multiline` for request headers (masked as discs until shown). */
 export function SecretField({ label, value, onChange, hint, placeholder, multiline }: {
   label: React.ReactNode;
   value: string;
@@ -80,7 +80,7 @@ export function SecretField({ label, value, onChange, hint, placeholder, multili
   );
 }
 
-/** 高级: folded by default. */
+/** "Advanced": folded by default. */
 export function Disclosure({ title, open, onToggle, children, badge }: { title: string; open: boolean; onToggle: () => void; children: React.ReactNode; badge?: string }) {
   return (
     <div className="rounded-card bg-inset shadow-hairline">

@@ -1,5 +1,5 @@
-// 收件箱 (docs/inbox.md): Feishu messages, mail, Feishu documents and 公司圈 in one list, sorted by the AI's triage,
-// with the agents waiting on you at the head of 需要你. Wide: the list (380px) and the opened item side by side;
+// Inbox (docs/inbox.md): Feishu messages, mail, Feishu documents and Moments in one list, sorted by the AI's triage,
+// with the agents waiting on you at the head of "Needs you". Wide: the list (380px) and the opened item side by side;
 // narrow: the opened item takes the list's place, with a way back.
 import { useState } from "react";
 import { useInbox, refreshInbox } from "../../lib/inbox";

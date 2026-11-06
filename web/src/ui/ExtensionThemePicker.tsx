@@ -55,7 +55,7 @@ export function ExtensionThemePicker() {
   </div>;
 }
 
-/** The extension theme painting over the page now, if any (主题色 says so: its colors are under it, ui/look.ts). */
+/** The extension theme painting over the page now, if any ("Theme color" says so: its colors are under it, ui/look.ts). */
 export function useActiveExtensionTheme(): ExtensionTheme | undefined {
   const { available, selected } = useContext(PaletteContext);
   return selected ? available.find((th) => themeKey(th) === selected) : undefined;

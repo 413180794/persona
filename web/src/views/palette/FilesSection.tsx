@@ -1,4 +1,4 @@
-// The files section of ⌘K (docs/web.md「命令面板」): the files under the conversation's (or the open terminal pane's)
+// The files section of ⌘K (docs/web.md "Command palette"): the files under the conversation's (or the open terminal pane's)
 // directory, found as you type. Palette.tsx lists the rows this hook returns after its own and draws them with
 // FileResultRow; the matching and the loading are in lib/file-find.ts.
 import { forwardRef, useEffect, useMemo, useState } from "react";
@@ -78,7 +78,7 @@ export function openFileHit(row: FileRow) {
 
 /** Puts `@path` on the clipboard, the way a file is named in a message. */
 export async function copyFileMention(row: FileRow) {
-  await copyText(mentionOf(row.hit)); // says 已拷贝 itself
+  await copyText(mentionOf(row.hit)); // says "Copied" itself
 }
 
 function Marked({ text, offset, hit, className }: { text: string; offset: number; hit: FileHit; className: string }) {

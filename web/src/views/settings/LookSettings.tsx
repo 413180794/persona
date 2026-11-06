@@ -1,4 +1,4 @@
-// 设置 › 通用 › 外观's 主题色 and 字号 (ui/look.ts; the app's ThemeColorPicker and StyleSettingsPage's 字号).
+// Settings › General › Appearance's "Theme color" and "Text size" (ui/look.ts; the app's ThemeColorPicker and StyleSettingsPage's "Text size").
 import { useSyncExternalStore } from "react";
 import { t } from "../../i18n";
 import { cx } from "../../ui/atoms";
@@ -21,7 +21,7 @@ function subscribeScheme(l: () => void) {
 const darkNow = () => document.documentElement.classList.contains("dark");
 
 /**
- * 主题色: 默认 (the page's own blue), 跟随形象 when the persona brings colors (or it is the choice already, so it stays in
+ * "Theme color": "Default" (the page's own blue), "Match avatar" when the persona brings colors (or it is the choice already, so it stays in
  * sight), then the five fixed colors, each a disc of its accent with where it comes from under its name.
  */
 export function ThemeColorPicker() {
@@ -31,7 +31,7 @@ export function ThemeColorPicker() {
   const extension = useActiveExtensionTheme();
   const scheme = useSyncExternalStore(subscribeScheme, darkNow) ? "dark" : "light";
   const options: AccentChoice[] = ["default", ...(personaAccent || choice === "persona" ? (["persona"] as const) : []), ...ACCENT_PRESETS];
-  // The disc is the color the page gets: the same contrast floor as accentTokens; 默认's is styles.css's own.
+  // The disc is the color the page gets: the same contrast floor as accentTokens; "Default"'s is styles.css's own.
   const disc = (c: AccentChoice): string => {
     if (c === "default") return pageToken("accent", scheme);
     const pair = c === "persona" ? personaAccent : PRESET_COLORS[c].accent;
@@ -76,7 +76,7 @@ export function ThemeColorPicker() {
   );
 }
 
-/** 字号: 小 / 标准 / 大, the whole page's text (src/lib/text-scale.ts). */
+/** "Text size": "Small" / "Standard" / "Large", the whole page's text (src/lib/text-scale.ts). */
 export function TextSizeRow() {
   const size = useTextSize();
   return (

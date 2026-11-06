@@ -1,5 +1,5 @@
 // Messages another page sent for this conversation (lib/outbox.ts): sending ones like the composer's own bubbles,
-// sent ones as plain bubbles until the transcript has them, failed ones with why and 重试 / 删除 (清空并发送 when the
+// sent ones as plain bubbles until the transcript has them, failed ones with why and "Retry" / "Delete" ("Clear and send" when the
 // computer's input box holds text it can clear).
 import { discardOutbox, outboxMessage, retryOutbox, type OutboxEntry } from "../../lib/outbox";
 import { UserBubble } from "./SegmentView";

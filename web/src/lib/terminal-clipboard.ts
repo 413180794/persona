@@ -1,4 +1,4 @@
-// The web terminal's clipboard, the pure parts (docs/terminal.md 第十八节). Pasting or dropping a file: which files a
+// The web terminal's clipboard, the pure parts (docs/terminal.md section 18). Pasting or dropping a file: which files a
 // clipboard / drop carries, the name they are uploaded under, whether the pane they were meant for is still the one
 // that is driven when the upload ends, and the line of escaped paths that is then typed into the pane. Copying: what
 // to say after a copy and what a program's OSC 52 write may put on the clipboard. The browser's side (the upload
@@ -77,21 +77,21 @@ export function uploadTimeoutMs(size: number): number {
 /** What the page holds when an upload ends. A feed belongs to one pane: leaving it (another session, the panel closed) disposes it. */
 export interface PasteState {
   disposed: boolean;
-  /** Whether the keys still go into the pane (接管 active, not watching). */
+  /** Whether the keys still go into the pane ("Take control" active, not watching). */
   driving: boolean;
 }
 
 /**
  * Whether the paths may still be typed when an upload ends: only into the pane the files were meant for ("changed"
  * once its feed is gone: nothing is pasted into whatever is open now), and only while this browser still drives it
- * ("watching": taken over, or switched to 只看, meanwhile).
+ * ("watching": taken over, or switched to "View only", meanwhile).
  */
 export function pasteVerdict(now: PasteState): "ok" | "changed" | "watching" {
   if (now.disposed) return "changed";
   return now.driving ? "ok" : "watching";
 }
 
-/** "正在上传 shot.png" / "正在上传 shot.png 等 3 个文件". */
+/** "Uploading shot.png" / "Uploading shot.png and 3 more files". */
 export function uploadingText(names: string[]): string {
   if (names.length <= 1) return t("lib-terminal-clipboard.uploading_single", { name: names[0] ?? t("lib-terminal-clipboard.file") });
   return t("lib-terminal-clipboard.uploading_many", { name: names[0], count: names.length });

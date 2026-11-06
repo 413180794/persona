@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// UI version 4's code hosting components drawn from the 组件展示 pages (code-review, code-browse, code-overview), and
+// UI version 4's code hosting components drawn from the component showcase pages (code-review, code-browse, code-overview), and
 // what pressing them sends: the action with the values it carries and the component's own.
 import { act as flush } from "react";
 import { createRoot, type Root } from "react-dom/client";

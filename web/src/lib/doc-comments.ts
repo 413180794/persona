@@ -1,7 +1,7 @@
 // Comments on a Feishu document in the reader (#1290; the phone's FeishuDocsComments / FeishuDocsCommentsModel):
 // the threads from the hub's read-only Lark gateway window, and, when the plugin says `lark_doc_comments`, the user's own
 // writes from this browser: a comment on the whole document or on a passage, a reply to a thread, resolve and reopen.
-// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol.md 飞书 API.
+// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol.md "Lark API".
 // No DOM here.
 
 import { ApiError, api, enc, getToken } from "./api";
@@ -34,7 +34,7 @@ export interface DocThread {
   replies: DocReply[];
 }
 
-/** Where 发送 goes: a new comment on the whole document, a reply to a thread, or a new comment on a passage. */
+/** Where "Send" goes: a new comment on the whole document, a reply to a thread, or a new comment on a passage. */
 export type CommentTarget =
   | { kind: "document" }
   | { kind: "thread"; id: string; name: string; text: string }
@@ -101,7 +101,7 @@ function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** The hub's words for a failed write (the plugin's: 「飞书网关未登录飞书」…), else what went wrong. */
+/** The hub's words for a failed write (the plugin's, such as "the Lark gateway is not signed in to Lark"…), else what went wrong. */
 export function writeErrorText(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.code === "comment_unsupported") return t("lib-doc-comments.comment_unsupported");

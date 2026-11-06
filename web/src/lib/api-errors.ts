@@ -1,5 +1,5 @@
 // A model API error in a chat (iOS APIErrorInfo): read from the text Claude Code writes when it gives up
-// ("API Error: 502 …", an answer) or from the hub's notice ("API 错误：Overloaded（重试 10 次后放弃）"). What a person
+// ("API Error: 502 …", an answer) or from the hub's notice ("API error: Overloaded (gave up after 10 retries)", in Chinese). What a person
 // needs first is in front: why, in words, the status code, and whether it is likely to pass by itself.
 
 import { t } from "../i18n";
@@ -80,7 +80,7 @@ function explain(s: string, status?: number): [string, boolean | undefined] {
   return [t("lib-api-errors.failed"), temporary ? true : undefined];
 }
 
-/** Whether the card's 重试 can help: a login or a bad request is not fixed by trying again. */
+/** Whether the card's "Retry" can help: a login or a bad request is not fixed by trying again. */
 export function retryable(e: APIErrorInfo): boolean {
   return e.transient !== false;
 }
@@ -88,7 +88,7 @@ export function retryable(e: APIErrorInfo): boolean {
 // i18n-ignore: what a person types to ask for a retry, in any language
 const RETRIES = new Set(["继续", "重试", "再试一次", "continue", "retry", "go on"]);
 
-/** A message that only asks to try again ("继续"): between two of the same error it folds into the card. */
+/** A message that only asks to try again ("Continue"): between two of the same error it folds into the card. */
 export function isRetryText(text: string): boolean {
   return RETRIES.has(text.trim().toLowerCase());
 }

@@ -99,14 +99,14 @@ const classicWorker: Plugin = {
 
 export default defineConfig({
   plugins: [i18nCatalogs, react(), tailwindcss(), adminFallback, startupPreload, classicWorker],
-  // 字号 (src/lib/text-scale.ts): font sizes become calc(size * var(--text-scale, 1)), after Tailwind wrote them.
+  // Text size (src/lib/text-scale.ts): font sizes become calc(size * var(--text-scale, 1)), after Tailwind wrote them.
   css: { postcss: { plugins: [textScale()] } },
   server: {
     host: "127.0.0.1",
     proxy: { "/api": { target: hub, changeOrigin: true, ws: true } },
   },
   // The bundle's files are relative to the page's <base>, which the hub points at the sub-path a reverse proxy serves
-  // it under (docs/web.md「子路径」); at the root that is "/", as before.
+  // it under (docs/web.md "Subpath"); at the root that is "/", as before.
   base: "./",
   // The terminal loads xterm only when opened: pre-bundle it, or the first open in dev re-optimizes and reloads the page.
   optimizeDeps: { include: ["@xterm/xterm", "@xterm/addon-fit", "@xterm/addon-clipboard", "@xterm/addon-web-links", "@xterm/addon-search", "@xterm/addon-webgl"] },

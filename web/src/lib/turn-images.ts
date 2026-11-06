@@ -12,7 +12,7 @@ export interface TurnImage {
   item?: Item;
   /** On the machine, when it came from a file. */
   path?: string;
-  /** What it is, for its label: the file's name, or 截图 / 网页截图 / the MCP server. */
+  /** What it is, for its label: the file's name, or "Screenshot" / "Web screenshot" / the MCP server. */
   label: string;
   /** What brought it: read | screenshot | browser | mcp | tool. */
   source: "read" | "screenshot" | "browser" | "mcp" | "tool";

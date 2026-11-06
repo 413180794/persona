@@ -1,5 +1,5 @@
 // The knowledge list: search, the six kinds as chips with a tag filter, the kind's entries grouped the way the app
-// groups them (docs/knowledge.md「各页面」), and search results merged by entry.
+// groups them (docs/knowledge.md "Pages"), and search results merged by entry.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, enc, errorText, isAbort } from "../../lib/api";
@@ -26,7 +26,7 @@ import { lists, listKey, remember, searches } from "./cache";
 import { Badges, Card, KBIcon, KIND_ICON, Marked, onPlainClick, SectionTitle, Tile } from "./KBParts";
 import { t } from "../../i18n";
 
-/** Rows drawn at once in a section; more on 再显示 (people run to thousands). */
+/** Rows drawn at once in a section; more on "Show more" (people run to thousands). */
 const PAGE = 150;
 
 export function ListPane({

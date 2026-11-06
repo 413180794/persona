@@ -1,4 +1,4 @@
-// 机器 › 添加电脑 (docs/onboarding.md 4.2「你的电脑 ↔ hub」, docs/protocol.md「电脑的配对码」): a signed-in device adds a
+// Machines › Add a computer (docs/onboarding.md 4.2 "Your computer ↔ hub", docs/protocol.md "Computer pairing codes"): a signed-in device adds a
 // computer with POST /api/v1/auth/pair-codes {"add"}, hands its Persona Link the pairing link the hub returns, waits for
 // it to come online and then says whether it is the user's (POST /api/v1/machines/{id}/confirm | reject).
 import { t } from "../i18n";
@@ -8,7 +8,7 @@ import type { Machine } from "./types";
 
 export const MACHINES_ADD_FEATURE = "machines_add";
 
-/** Machines carry `trust` and take POST /machines/{id}/confirm | reject (docs/protocol.md「电脑的信任」). */
+/** Machines carry `trust` and take POST /machines/{id}/confirm | reject (docs/protocol.md "Computer trust"). */
 export const MACHINE_TRUST_FEATURE = "machine_trust";
 
 /** The systems the dialog has instructions for; the hub takes the same words (`add.os`). */
@@ -16,10 +16,10 @@ export type ComputerOS = "mac" | "linux" | "windows";
 
 export const COMPUTER_OSES: readonly ComputerOS[] = ["mac", "linux", "windows"];
 
-/** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md 拍板 1). */
+/** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md decision 1). */
 export const PERSONA_LINK_INSTALL_DOC = "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md";
 
-/** How to install jarvis-link on a headless Linux when the hub has no install script (docs/link.md「Linux（headless）」). */
+/** How to install jarvis-link on a headless Linux when the hub has no install script (docs/link.md "Linux (headless)"). */
 export const LINK_LINUX_DOC = "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless";
 
 // The hub does not keep the system a computer was added as (only its node reports one, once it connects), so the
@@ -73,7 +73,7 @@ export function canAddComputer(features: string[]): boolean {
   return hubHas(features, MACHINES_ADD_FEATURE, false);
 }
 
-/** Whether this hub says which computers wait to be confirmed and takes 是我的电脑 / 不是我的. */
+/** Whether this hub says which computers wait to be confirmed and takes "It's mine" / "Not mine". */
 export function canConfirmComputer(features: string[]): boolean {
   return hubHas(features, MACHINE_TRUST_FEATURE, false);
 }
@@ -108,7 +108,7 @@ export function isPending(m: Pick<Machine, "trust"> | undefined): boolean {
 }
 
 /** A computer added here that has not come online once (the hub's error_code never_connected, or one waiting to be
- *  confirmed that the hub has never seen): it is not 离线, it was never there. */
+ *  confirmed that the hub has never seen): it is not "Offline", it was never there. */
 export function neverConnected(m: Pick<Machine, "online" | "trust" | "error_code" | "last_seen">): boolean {
   if (m.online) return false;
   return m.error_code === "never_connected" || (isPending(m) && !m.last_seen);
@@ -134,7 +134,7 @@ export function confirmStage(m: Machine | undefined): AddStage {
 }
 
 /**
- * The computer 确认电脑 opens: `preferred` (the step's machine) while it waits to be confirmed, else the first one waiting
+ * The computer "Confirm computer" opens: `preferred` (the step's machine) while it waits to be confirmed, else the first one waiting
  * that is online (it can be asked about now), else the first one waiting; undefined when none waits.
  */
 export function pendingToConfirm(machines: Machine[], preferred?: string): Machine | undefined {

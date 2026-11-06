@@ -1,6 +1,6 @@
-// 会话内搜索 (the chat's ⋯ menu, Android ChatSearchScreen, parity N26): searches what is loaded of the chat (words,
+// "Search in chat" (the chat's ⋯ menu, Android ChatSearchScreen, parity N26): searches what is loaded of the chat (words,
 // thoughts, tool names, tool input and output, system events), the hits by category with the match marked; picking one
-// closes the panel and goes to it (ChatView). 加载更早的记录并继续搜 pages back through the history, up to 20 pages a go.
+// closes the panel and goes to it (ChatView). "Load earlier and keep searching" pages back through the history, up to 20 pages a go.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { groupHits, searchChat, snippetParts, type ChatSearchHit, type ChatSearchResults, type SearchCategory } from "../../lib/chat-search";
 import type { Item } from "../../lib/types";
@@ -24,7 +24,7 @@ const CATEGORY: Record<SearchCategory, string> = {
 
 const NO_RESULTS: ChatSearchResults = { hits: [], truncated: false };
 
-/** How a run of 加载更早的记录 ended: null reached the start; a string says why it stopped. */
+/** How a run of "Load earlier" ended: null reached the start; a string says why it stopped. */
 export type LoadOutcome = string | null;
 
 export function ChatSearch({

@@ -1,4 +1,4 @@
-// Where the navigation shortcuts go (docs/web.md「快捷键」): which panel ⌘B opens or closes, what ⌘J switches to, the
+// Where the navigation shortcuts go (docs/web.md "Keyboard shortcuts"): which panel ⌘B opens or closes, what ⌘J switches to, the
 // tab next to this one. Pure, so it is tested without a DOM.
 import { buildMachineTree, paneRoute, type HerdrMachine, type HerdrSpace } from "./herdr-tree";
 import type { Panel } from "./panel";
@@ -30,7 +30,7 @@ export function panelToggle(current: Panel | null, last: Panel | null, pane: Pan
 }
 
 /**
- * ⌘J, 终端 ⇄ 对话. On an agent's page the middle switches in place to the other view (`view`: the one showing; null
+ * ⌘J, terminal ⇄ chat. On an agent's page the middle switches in place to the other view (`view`: the one showing; null
  * when the agent has no terminal to show). On the terminal page: the agent's conversation, when the terminal is an
  * agent's (a plain shell has no chat). null: not here.
  */
@@ -42,7 +42,7 @@ export function terminalChat(route: Route, view: SessionView, canTerminal: boole
   return null;
 }
 
-/** The pages of a machine's tabs in the sidebar's order: each tab, then what has no tab (loose agents, 其他). */
+/** The pages of a machine's tabs in the sidebar's order: each tab, then what has no tab (loose agents, "Other"). */
 export function machineStops(tree: HerdrMachine): { sids: string[]; to: Route }[] {
   const walk = (sp: HerdrSpace): { sids: string[]; to: Route }[] => [
     ...sp.tabs.map((t) => ({ sids: t.sessions.map((s) => s.session_id), to: { name: "tab", mid: t.lead.machine_id, space: t.spaceId, slot: t.slotId } as Route })),

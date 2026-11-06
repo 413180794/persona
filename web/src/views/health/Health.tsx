@@ -1,4 +1,4 @@
-// 健康 (docs/health.md, #2691): the health space, apart from Persona's other conversations like ChatGPT's Health. `/health`
+// "Health" (docs/health.md, #2691): the health space, apart from Persona's other conversations like ChatGPT's Health. `/health`
 // is its home (what it is, where its data comes from, suggested questions, its past conversations, its memory);
 // `/health/<id>` one of its conversations. Its conversations run in a directory of their own on the assistant's machine,
 // so the assistant's other conversations don't see them and its memory is its own (`?space=health`).
@@ -85,7 +85,7 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       return false;
     }
   };
-  // 上传体检报告: picked files go to reports/ and their conversation starts by itself
+  // "Upload a checkup report": picked files go to reports/ and their conversation starts by itself
   const picker = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const upload = async (files: File[]) => {

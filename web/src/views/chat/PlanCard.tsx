@@ -1,6 +1,6 @@
 // The agent's plan (TodoWrite) as a card in the chat (cindy's InlinePlanCard), open by default: done / total and the
 // step it is on in its header, a 2 px progress bar under it when folded. While the card is out of view, a small
-// 「Step N / M」 pill above the composer (PlanPill) brings it back.
+// "Step N / M" pill above the composer (PlanPill) brings it back.
 import { useEffect, useState, type RefObject } from "react";
 import type { Segment } from "../../lib/turns";
 import { isPlanStep, planProgress, planSteps, planTodos, type Todo } from "../../lib/work-groups";

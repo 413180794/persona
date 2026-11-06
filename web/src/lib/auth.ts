@@ -13,7 +13,7 @@ function browserName() {
 export const TOKEN_ID_KEY = "jarvis.tokenId";
 
 /** The name this browser's device token goes by on the hub, with the day it signed in: two browsers of the same kind
- *  (or one browser on two days) can be told apart in 设置 › 设备. */
+ *  (or one browser on two days) can be told apart in Settings › Devices. */
 export function deviceName(now: Date = new Date()) {
   return t("lib-auth.device_name_dated", { browser: browserName(), date: formatDate(now, { month: "short", day: "numeric" }) });
 }
@@ -38,7 +38,7 @@ export function pairToken(input: string): string {
 
 // Pair with the hub's token (`personad hub pair --legacy` prints it), the app's pairing link, or a device token
 // (pairToken). The pairing token is checked, then traded for this browser's own one right away (docs/protocol.md
-// 「鉴权」), so it can be revoked on its own and the hub's token is not kept here. The credential this browser had
+// "Authentication"), so it can be revoked on its own and the hub's token is not kept here. The credential this browser had
 // before (its id is kept when the hub turned the token down) goes in "replaces", and the hub takes it off: signing in
 // again keeps one device for this browser. Throws what the hub said (ApiError) when the token is wrong.
 export async function pair(input: string): Promise<void> {

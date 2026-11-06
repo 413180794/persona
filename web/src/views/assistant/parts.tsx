@@ -1,4 +1,4 @@
-// Small controls the assistant pages share (定时任务, 全部对话, 设置 › 助手). Tokens only (src/styles.css).
+// Small controls the assistant pages share ("Scheduled tasks", "All chats", Settings › Assistant). Tokens only (src/styles.css).
 import { cx, EASE } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { SegmentedTrack } from "../../ui/Segmented";
@@ -38,7 +38,7 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
   );
 }
 
-/** A row of mutually exclusive choices (一次 / 每天 / 每隔). `compact`: tighter segments for a crowded bar; `dot` on an option: something there wants a look. */
+/** A row of mutually exclusive choices ("Once" / "Every day" / "Interval"). `compact`: tighter segments for a crowded bar; `dot` on an option: something there wants a look. */
 export function Segmented<T extends string>({ value, options, onChange, label, compact }: { value: T; options: { v: T; label: string; dot?: boolean }[]; onChange: (v: T) => void; label: string; compact?: boolean }) {
   return (
     <SegmentedTrack role="radiogroup" label={label} className="flex gap-0.5 rounded-control p-0.5" thumbClassName="rounded-[7px]">

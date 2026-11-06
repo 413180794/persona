@@ -2,8 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { NoOtherLooks } from "./Persona";
 
-// 形象 with no looks beyond the built-in ones (#3597): it says where to get one in words a user can follow, with
-// 设置 › 扩展 as a link, never a file in the repository nor a path on the hub machine (docs/onboarding.md 4.5).
+// The avatar picker with no looks beyond the built-in ones (#3597): it says where to get one in words a user can follow, with
+// Settings › Extensions as a link, never a file in the repository nor a path on the hub machine (docs/onboarding.md 4.5).
 describe("the picker with no other looks", () => {
   const html = renderToStaticMarkup(<NoOtherLooks />);
 

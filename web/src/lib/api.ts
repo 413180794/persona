@@ -41,12 +41,12 @@ export function handleUnauthorized(fn: () => void) {
 /**
  * Who this page is to the hub: the platform and version its socket's client_hello names, and every request's
  * X-Jarvis-Client. The hub answers a request with what this page's socket declared (MCP forms and links: only to a
- * request whose platform and version match a connection that declared them, docs/protocol.md「MCP elicitation」).
+ * request whose platform and version match a connection that declared them, docs/protocol.md "MCP elicitation").
  */
 export const CLIENT_PLATFORM = "web";
 export const CLIENT_VERSION = "1";
 /** What this page can render beyond the basics (client_hello `features`). */
-/** `managers`: the hub pushes {"type":"managers"} when its roster changes (设置 › 管理者, lib/managers.ts). */
+/** `managers`: the hub pushes {"type":"managers"} when its roster changes (Settings › Managers, lib/managers.ts). */
 export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth", "managers"];
 
 // A read the hub has not answered by then fails instead of loading forever (#4492): a restarting hub, a stuck node or a
@@ -95,7 +95,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown;
 async function request<T>(path: string, init: RequestInit & { json?: unknown; token?: string }): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${init.token ?? getToken()}`);
-  // the hub writes its error and status text in the interface language (docs/i18n.md「协议」)
+  // the hub writes its error and status text in the interface language (docs/i18n.md "Protocol")
   if (!headers.has("Accept-Language")) headers.set("Accept-Language", currentLanguage());
   headers.set("X-Jarvis-Client", `${CLIENT_PLATFORM}/${CLIENT_VERSION}`);
   let body = init.body;
@@ -142,7 +142,7 @@ export function fullItem(mid: string, sid: string, itemID: string): Promise<Item
   return api<Item>(`${sessionPath(mid, sid)}/items/${enc(itemID)}/full`);
 }
 
-/** A machine file's bytes by Range (docs/protocol.md「文件预览」): `<video>` / `<audio>` seek through it, a viewer
+/** A machine file's bytes by Range (docs/protocol.md "File preview"): `<video>` / `<audio>` seek through it, a viewer
  * fetches it whole. `inline` lets the browser show it in place (images, media, PDF only; anything else downloads). */
 export function fileDownloadURL(mid: string, path: string, cwd?: string, opts: { inline?: boolean } = {}) {
   return `${BASE}/api/v1/machines/${enc(mid)}/file/download?path=${enc(path)}&cwd=${enc(cwd ?? "")}${opts.inline ? "&inline=1" : ""}&token=${enc(getToken())}`;

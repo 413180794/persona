@@ -51,7 +51,7 @@ describe("which mode a terminal opens in", () => {
     expect(pickMode({ ...base, pref: "pane", own: "full" })).toBe("full");
     expect(pickMode({ ...base, noFull: true })).toBe("pane");
     expect(pickMode({ ...base, noFull: true, own: "full" })).toBe("full"); // asked for by hand
-    expect(pickMode({ ...base, supported: false, own: "full" })).toBe("pane"); // an old hub has no 完整界面 to open
+    expect(pickMode({ ...base, supported: false, own: "full" })).toBe("pane"); // an old hub has no "Full view" to open
     expect(otherMode("pane")).toBe("full");
     expect(otherMode("full")).toBe("pane");
   });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// #4678: the 交给 Agent dialog keeps what is typed and the agent picked while sessions are pushed; it starts over only
+// #4678: the "Hand to agent" dialog keeps what is typed and the agent picked while sessions are pushed; it starts over only
 // when it opens again, and moves the pick only once the picked agent is gone. The hub is faked; the data made up.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

@@ -2,7 +2,7 @@
 import { useEffect, type RefObject } from "react";
 import { NARROW, PHONE, useMedia } from "../lib/viewport";
 
-/** A phone-width screen: Dialog is a bottom sheet, 设置 a list of categories (Tailwind's max-sm). */
+/** A phone-width screen: Dialog is a bottom sheet, Settings a list of categories (Tailwind's max-sm). */
 export const SHEET_QUERY = PHONE;
 /** Narrower than the sidebar's breakpoint (lg): a menu keeps to the visible viewport above the keyboard. */
 export const NARROW_QUERY = NARROW;

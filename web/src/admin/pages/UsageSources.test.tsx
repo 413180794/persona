@@ -34,7 +34,7 @@ const typeInto = async (el: HTMLInputElement | HTMLTextAreaElement, value: strin
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
-// the buttons of the nth source's row: its 编辑 button and the box that also holds its switch and 删除
+// the buttons of the nth source's row: its "Edit" button and the box that also holds its switch and "Delete"
 const rowActions = (n: number) => {
   const edit = [...host.querySelectorAll<HTMLElement>("button")].filter((b) => b.textContent?.trim() === "编辑")[n];
   return { edit, box: edit.parentElement! };

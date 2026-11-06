@@ -1,7 +1,7 @@
-// 设置 › 助手 (docs/assistant.md「资料页和头像」, the iOS app's AssistantProfileView / AssistantNotesView /
-// AssistantMemoryView, Android's 助手设置): what Persona does on its own (a line into 定时任务), what it knows about you
-// (关于我 = `notes`, saved on 保存 or when leaving; 记忆 = its memory files: read, edit the whole file, delete), and where
-// it runs (read-only here). Its model is 设置 › 模型配置 › 主对话, not here (#1291).
+// Settings › Assistant (docs/assistant.md "Profile page and avatar", the iOS app's AssistantProfileView / AssistantNotesView /
+// AssistantMemoryView, Android's assistant settings): what Persona does on its own (a line into "Scheduled tasks"), what it knows about you
+// ("About me" = `notes`, saved on "Save" or when leaving; "Memory" = its memory files: read, edit the whole file, delete), and where
+// it runs (read-only here). Its model is Settings › Models › Main chat, not here (#1291).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
@@ -26,9 +26,9 @@ interface AssistantState {
   /** Only once saved here (or in the app); `notes_effective` is what Persona is told (hub.json's otherwise). */
   notes?: string;
   notes_effective?: string;
-  /** 主对话派的任务只在主对话里通知 (#1731): on by default; tasks opened from now on follow it. */
+  /** "Notify main chat tasks in the main chat only" (#1731): on by default; tasks opened from now on follow it. */
   main_tasks_quiet?: boolean;
-  /** 我在对话里说过的，直接开始 (#2559): on by default; tasks the user asked for start without the plan card's 开始. */
+  /** "Start what I asked for in the chat right away" (#2559): on by default; tasks the user asked for start without the plan card's "Start". */
   start_requested_tasks?: boolean;
 }
 
@@ -195,8 +195,8 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
   );
 }
 
-/** 关于我: what Persona is told about you. Until saved here it shows hub.json's text; saving (even empty) makes this the
- *  one. Saved with 保存, and when leaving the page with changes. */
+/** "About me": what Persona is told about you. Until saved here it shows hub.json's text; saving (even empty) makes this the
+ *  one. Saved with "Save", and when leaving the page with changes. */
 function AboutMe({ info, onSaved }: { info: AssistantState; onSaved: (notes: string) => void }) {
   const original = info.notes ?? info.notes_effective ?? "";
   const [text, setText] = useState(original);
@@ -278,7 +278,7 @@ function MemoryRow({ e, onOpen }: { e: MemoryEntry; onOpen: () => void }) {
   );
 }
 
-/** One memory rendered; 编辑 opens the whole file (frontmatter included) as text, 删除 asks first. The index is read-only. */
+/** One memory rendered; "Edit" opens the whole file (frontmatter included) as text, "Delete" asks first. The index is read-only. */
 function MemoryDialog({ file, title, readOnly, onClose, onChanged }: { file: MemoryFile; title: string; readOnly?: boolean; onClose: () => void; onChanged: () => void }) {
   const [content, setContent] = useState(file.content);
   const [updated, setUpdated] = useState(file.updated_at);

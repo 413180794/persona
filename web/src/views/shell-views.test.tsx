@@ -1,4 +1,4 @@
-// The phone shell's views (#1996), rendered statically: 「助手 | Agents」, the drawer's page grid, the pane tabs, the ⋯ of
+// The phone shell's views (#1996), rendered statically: "Assistant | Agents", the drawer's page grid, the pane tabs, the ⋯ of
 // a sidebar row and the search's key hints.
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";

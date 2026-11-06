@@ -1,6 +1,6 @@
-// The knowledge base (docs/knowledge.md「App 接口」): the hub's wire types and the pure logic of the 知识库 page —
+// The knowledge base (docs/knowledge.md "App API"): the hub's wire types and the pure logic of the "Knowledge" page —
 // list grouping and ranking, search results merged by entry with the words marked, which tags a row has room for,
-// the timeline, the profile without what the header shows, and the message 问 Persona sends. The iOS app is the
+// the timeline, the profile without what the header shows, and the message "Ask Persona" sends. The iOS app is the
 // reference (apple/Persona/Views/Knowledge/KnowledgeView.swift, apple/Shared/Knowledge.swift).
 import { formatDate, t } from "../i18n";
 import { contextBody } from "./context-body";
@@ -51,11 +51,11 @@ export interface KBMomentRef {
   at?: string;
   comments: number;
   note?: string;
-  /** The name of the feed the post came from (whoever archived it says); none: 公司圈. */
+  /** The name of the feed the post came from (whoever archived it says); none: Moments. */
   feed?: string;
 }
 
-/** What to call a post's feed: its archived name, else 公司圈. */
+/** What to call a post's feed: its archived name, else Moments. */
 export function momentFeed(m: Pick<KBMomentRef, "feed">): string {
   return m.feed?.trim() || t("lib-kb.moments");
 }
@@ -70,7 +70,7 @@ export interface KBDetail {
   recent?: string;
   links?: KBEntry[] | null;
   moments?: KBMomentRef[] | null;
-  /** recordings: the transcript, seconds from the start (docs/protocol.md「录音同步」). */
+  /** recordings: the transcript, seconds from the start (docs/protocol.md "Recording sync"). */
   segments?: KBSegment[] | null;
 }
 
@@ -153,7 +153,7 @@ export function projectInfo(e: Pick<KBEntry, "kind" | "extra">): ProjectInfo | n
   return { kind: k?.trim() === "long" ? "long" : "short", status: st?.trim() || "active" };
 }
 
-/** 短期 / 长期, only when the hub said which. */
+/** "Short-term" / "Long-term", only when the hub said which. */
 export function projectKindLabel(e: Pick<KBEntry, "kind" | "extra">): string | null {
   if (e.kind !== "projects" || !e.extra) return null;
   return e.extra.startsWith("long") ? t("lib-kb.project_long") : t("lib-kb.project_short");
@@ -161,7 +161,7 @@ export function projectKindLabel(e: Pick<KBEntry, "kind" | "extra">): string | n
 
 const STATUS_LABEL: Record<string, string> = { paused: t("lib-kb.status_paused"), done: t("lib-kb.status_done"), ignored: t("lib-kb.status_ignored"), merged: t("lib-kb.status_merged") };
 
-/** A project's status when it is not the usual 进行中. */
+/** A project's status when it is not the usual "In progress". */
 export function statusLabel(status?: string): string | null {
   return (status && STATUS_LABEL[status]) || null;
 }
@@ -191,14 +191,14 @@ export interface EntrySection {
   key: string;
   title: string;
   items: KBEntry[];
-  /** Folded until opened (不是项目, the people nobody tagged yet). */
+  /** Folded until opened ("Not a project", the people nobody tagged yet). */
   fold?: boolean;
   footer?: string;
 }
 
 /**
- * A kind's list as the app shows it. Projects: 重点 (P0 / P1), 其他进行中, 已完成, then 不是项目 folded. Other kinds:
- * the ranked ones, then the rest (only a name in a group, no tagging yet) folded under 还没整理的; with a tag, one
+ * A kind's list as the app shows it. Projects: "Focus" (P0 / P1), "Other active", "Done", then "Not a project" folded. Other kinds:
+ * the ranked ones, then the rest (only a name in a group, no tagging yet) folded under "Not sorted yet"; with a tag, one
  * section of everything carrying it.
  */
 export function groupEntries(kind: KBKind, items: KBEntry[], tag?: string): EntrySection[] {
@@ -240,7 +240,7 @@ export function groupEntries(kind: KBKind, items: KBEntry[], tag?: string): Entr
   return out.filter((s) => s.items.length);
 }
 
-/** 1985 → "1985" (no grouping comma, the chip is narrow), past 9999 → "1万+". */
+/** 1985 → "1985" (no grouping comma, the chip is narrow), past 9999 → "10K+" (in Chinese units). */
 export function countLabel(n: number): string {
   return n > 9999 ? t("lib-kb.count_over") : String(n);
 }
@@ -359,7 +359,7 @@ export interface MessageLine {
   text: string;
 }
 
-/** An archived message, `- 14:03 张三: text` (continuation lines after a newline): when, who, what. */
+/** An archived message, `- 14:03 <name>: text` (continuation lines after a newline): when, who, what. */
 export function parseMessageLine(raw: string): MessageLine {
   const t = raw.startsWith("- ") ? raw.slice(2) : raw;
   const m = /^(\d\d:\d\d) ([\s\S]*)$/.exec(t);
@@ -374,7 +374,7 @@ function tidy(s: string) {
   return s.replace(/\n[ \t]+/g, "\n").trim();
 }
 
-/** A found line said plainly: where it is (档案, 时间线, 聊天记录 · day and time) and what it says. */
+/** A found line said plainly: where it is ("Profile", "Timeline", "Chat history" · day and time) and what it says. */
 export function hitView(f: Pick<KBFound, "path" | "line">, now = new Date()): { source: string; text: string; day: string | null } {
   const day = hitDay(f.path);
   if (day) {
@@ -394,7 +394,7 @@ export interface LogLine {
   text: string;
 }
 
-/** A timeline line, `- 2026-10-30 23:16 · Agent · 标题 · 机器 · 说了什么`: when, from where, what. */
+/** A timeline line, `- 2026-10-30 23:16 · Agent · <title> · <machine> · <what was said>`: when, from where, what. */
 export function parseLogLine(raw: string): LogLine {
   let t = raw.trim();
   if (t.startsWith("- ")) t = t.slice(2);
@@ -424,7 +424,7 @@ export function dropTitle(md: string): string {
 
 /**
  * The profile without what the header already shows: its title, a heading that is just the name, the one line, a
- * person's generated tagging line (「重要级 P0 · 与我相关性 95 · …」). Empty means there is nothing more to show.
+ * person's generated tagging line ("importance P0 · relevance to me 95 · …"). Empty means there is nothing more to show.
  */
 export function profile(md: string | undefined, oneLine?: string, name?: string): string {
   if (!md) return "";
@@ -508,7 +508,7 @@ export function factsOf(kind: string, meta?: Record<string, unknown> | null): Fa
 
 export interface RecordingView {
   startedAt?: string;
-  /** "1 小时 2 分", "3 分 20 秒" */
+  /** "1 h 2 min", "3 min 20 s" (in Chinese) */
   duration?: string;
   device: string;
   language?: string;
@@ -552,7 +552,7 @@ export function recordingView(kind: string, meta?: Record<string, unknown> | nul
   };
 }
 
-/** 3733 → "1 小时 2 分"; 200 → "3 分 20 秒"; 42 → "42 秒". */
+/** 3733 → "1 h 2 min"; 200 → "3 min 20 s"; 42 → "42 s" (in Chinese). */
 export function durationLabel(secs: number): string {
   const s = Math.round(secs);
   const h = Math.floor(s / 3600);
@@ -574,7 +574,7 @@ const monthDay = (d: Date) => formatDate(d, { month: "short", day: "numeric" });
 const yearMonthDay = (d: Date) => formatDate(d, { year: "numeric", month: "short", day: "numeric" });
 const weekday = (d: Date) => formatDate(d, { weekday: "short" });
 
-/** "10月30日 周五 14:00" (24-hour), with the year instead of the weekday when it is not this one. */
+/** "Fri, Oct 30 14:00" (24-hour), with the year instead of the weekday when it is not this one. */
 export function formatAt(iso: string, now = new Date()): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -584,7 +584,7 @@ export function formatAt(iso: string, now = new Date()): string {
     : t("lib-kb.at_other_year", { date: yearMonthDay(d), time: hm });
 }
 
-/** "2026-10-30" → "10月30日 周五", with the year when it is not this one. */
+/** "2026-10-30" → "Fri, Oct 30", with the year when it is not this one. */
 export function dayTitle(day: string, now = new Date()): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
   if (!m) return day;
@@ -598,7 +598,7 @@ export interface RecentDay {
   messages: MessageLine[];
 }
 
-/** A chat's last 7 days (`recent`: "## 2026-10-30" then "- 10:15 名字: …" lines, continuations indented) by day. */
+/** A chat's last 7 days (`recent`: "## 2026-10-30" then "- 10:15 <name>: …" lines, continuations indented) by day. */
 export function parseRecent(text?: string): RecentDay[] {
   const out: RecentDay[] = [];
   let raw: string[] = [];
@@ -629,7 +629,7 @@ export function parseRecent(text?: string): RecentDay[] {
   return out.filter((d) => d.messages.length);
 }
 
-// ── 问 Persona ───────────────────────────────────────────
+// ── Ask Persona ────────────────────────────────────────
 
 /**
  * `<jarvis-context kind="…" title="…" url="…">text</jarvis-context>`, attributes in this order: the app's parser
@@ -648,13 +648,13 @@ function entryText(e: Pick<KBEntry, "one_line">, d?: Pick<KBDetail, "summary" | 
   return text.trim();
 }
 
-/** What 问 Persona sends to the main conversation: the entry's profile, recent timeline and folder, then the ask. */
+/** What "Ask Persona" sends to the main conversation: the entry's profile, recent timeline and folder, then the ask. */
 export function askPersonaText(e: Pick<KBEntry, "name" | "one_line">, d?: Pick<KBDetail, "summary" | "log" | "path"> | null): string {
   return `${contextXml({ kind: "context", title: t("lib-kb.context_title", { name: e.name }), url: "", text: entryText(e, d) })}\n\n${t("lib-kb.ask_persona", { name: e.name })}`;
 }
 
 /**
- * What 开 Agent starts a new agent with (KBEntryView.agentPrompt): the entry as context, the ask left to write; and the
+ * What "Start agent" starts a new agent with (KBEntryView.agentPrompt): the entry as context, the ask left to write; and the
  * entry's first code folder on a computer that is online, if it has one.
  */
 export function agentPreset(
@@ -668,7 +668,7 @@ export function agentPreset(
   return dir ? { prompt, machineId: dir.machine, cwd: dir.path } : { prompt };
 }
 
-// ── 打标 ────────────────────────────────────────────────
+// ── Tagging ──────────────────────────────────────────────
 
 export const IMPORTANCE = ["P0", "P1", "P2", "P3"] as const;
 export const PROJECT_KINDS = [

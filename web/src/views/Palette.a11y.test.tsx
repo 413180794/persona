@@ -41,7 +41,7 @@ function show(open: boolean) {
   act(() => root.render(<Palette open={open} onClose={() => {}} onNewAgent={() => {}} />));
 }
 
-/** Opens it in command mode: the app's own commands (新建 Agent, 新建对话) are always listed. */
+/** Opens it in command mode: the app's own commands (New agent, New chat) are always listed. */
 function openCommands() {
   act(() => openPalette("command"));
   show(true);

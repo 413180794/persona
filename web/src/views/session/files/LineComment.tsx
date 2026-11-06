@@ -1,6 +1,6 @@
 // Comments on lines of a file or a diff (#2437, Moshi's code comments): the line number turns into a + when the pointer
 // is over the row, a click (or a drag, or shift-click, over several) picks the lines, and a box under the code takes
-// the note: ⌘↵ / 添加 puts it above the message box as a comment card with the location and the code, Esc cancels. The
+// the note: ⌘↵ / "Add" puts it above the message box as a comment card with the location and the code, Esc cancels. The
 // box is pinned under the list rather than set between its rows: the lists only draw the rows on screen, at a fixed height.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { lineRange, MAX_COMMENT_CHARS } from "../../../lib/comments";

@@ -1,5 +1,5 @@
-// 设置 › Claude Code / Codex 设置 (the node's whitelist of ~/.claude/settings.json and ~/.codex/config.toml keys,
-// iOS ClaudeSettingsView) and 设置 › 连接器 › 邮箱's add form (iOS MailAccountForm, docs/mail.md): the pure part.
+// Settings › Claude Code / Codex settings (the node's whitelist of ~/.claude/settings.json and ~/.codex/config.toml keys,
+// iOS ClaudeSettingsView) and Settings › Connectors › Mail's add form (iOS MailAccountForm, docs/mail.md): the pure part.
 import { hasKey, t } from "../i18n";
 import type { Machine } from "./types";
 
@@ -108,7 +108,7 @@ export interface ApplyResult {
   error?: string;
 }
 
-/** One line for a change sent to several machines: "已应用到 3 台机器", or which failed and why. */
+/** One line for a change sent to several machines: "applied to 3 machines", or which failed and why. */
 export function applySummary(results: ApplyResult[]): { ok: boolean; text: string } {
   const failed = results.filter((r) => r.error);
   if (!failed.length) return { ok: true, text: results.length > 1 ? t("lib-agent-settings.applied_to", { count: results.length }) : t("lib-agent-settings.saved") };
@@ -117,14 +117,14 @@ export function applySummary(results: ApplyResult[]): { ok: boolean; text: strin
   return { ok: false, text: done ? t("lib-agent-settings.partly_applied", { done, failed: failed.length, why }) : t("lib-agent-settings.not_applied", { why }) };
 }
 
-/** How a value reads in a message: 开 / 关, the option's name (given the setting's key), or 默认. */
+/** How a value reads in a message: on / off, the option's name (given the setting's key), or "default". */
 export function valueText(v: SettingValue, key?: string): string {
   if (v === null || v === undefined || v === "") return t("lib-agent-settings.value_default");
   if (typeof v === "boolean") return v ? t("lib-agent-settings.value_on") : t("lib-agent-settings.value_off");
   return key ? optionText(key, v) : v;
 }
 
-// ── Claude Code › 屏蔽的配置目录 (GET /machines/{mid}/claude-dirs, docs/claude-integration.md「屏蔽配置目录」) ──
+// ── Claude Code › blocked config directories (GET /machines/{mid}/claude-dirs, docs/claude-integration.md "Blocking config directories") ──
 
 /** One config directory of a computer (CLAUDE_CONFIG_DIR), as the hub lists it. */
 export interface ClaudeDir {
@@ -162,7 +162,7 @@ export function dirMeta(d: ClaudeDir, home?: string): string {
   return parts.join(" · ");
 }
 
-/** The patterns after a row's 屏蔽 / 取消屏蔽: blocking adds the directory's own path; unblocking lifts the rule that
+/** The patterns after a row's "Block" / "Unblock": blocking adds the directory's own path; unblocking lifts the rule that
  *  blocks it (a glob lifts every directory it covers — the row says which rule). */
 export function toggledPatterns(state: ClaudeDirsState, d: ClaudeDir): string[] {
   if (!d.blocked) return state.blocked.includes(d.path) ? state.blocked : [...state.blocked, shortPath(d.path, state.home)];
@@ -196,7 +196,7 @@ function samePath(pattern: string, path: string, home?: string): boolean {
   return pattern === path || pattern === shortPath(path, home);
 }
 
-// ── 连接器 › 邮箱 › 添加 ──
+// ── Connectors › Mail › Add ──
 
 export type MailKind = "gmail" | "outlook" | "feishu" | "imap";
 
@@ -220,7 +220,7 @@ export interface MailForm {
 
 export const EMPTY_MAIL_FORM: MailForm = { kind: "imap", email: "", password: "", imapHost: "", imapPort: "993", smtpHost: "", smtpPort: "465" };
 
-/** POST /api/v1/mail/accounts's body (docs/protocol.md「邮件 API」). */
+/** POST /api/v1/mail/accounts's body (docs/protocol.md "Mail API"). */
 export interface AddMailAccount {
   name: string;
   email: string;
@@ -263,7 +263,7 @@ export function mailErrors(f: MailForm): Partial<Record<keyof MailForm, string>>
 }
 
 /** The request for a password account; null for Gmail and Outlook (Google / Microsoft sign-in, on the phone). Servers left empty are guessed
- * by the hub from the domain; 飞书's are fixed by the hub. SMTP on 587 is STARTTLS, anything else TLS. */
+ * by the hub from the domain; Lark's are fixed by the hub. SMTP on 587 is STARTTLS, anything else TLS. */
 export function mailRequest(f: MailForm): AddMailAccount | null {
   if (signsInOnPhone(f.kind)) return null;
   const email = f.email.trim();
@@ -339,7 +339,7 @@ export function mailProviderBadge(a: MailAccount): string | null {
   return null;
 }
 
-/** GET / PUT /api/v1/mail/oauth/microsoft/config (docs/mail.md「Outlook 接入方式」): whether Outlook sign-in can start,
+/** GET / PUT /api/v1/mail/oauth/microsoft/config (docs/mail.md "Connecting Outlook"): whether Outlook sign-in can start,
  *  with which client ID (not a secret) from where (app | config), and the redirect URI to register in Microsoft Entra. */
 export interface MicrosoftConfig {
   configured: boolean;
@@ -357,7 +357,7 @@ export function clientIDError(id: string): string {
   return CLIENT_ID.test(v) ? "" : t("lib-agent-settings.mail_client_id_invalid");
 }
 
-/** 连接器's summary of the accounts: "2 个账户", "2 个 · 有错误", "未添加". */
+/** "Connectors"' summary of the accounts: "2 accounts", "2 · with errors", "not added". */
 export function mailSummary(accounts: MailAccount[] | null): string {
   if (!accounts) return "";
   if (!accounts.length) return t("lib-agent-settings.mail_none");

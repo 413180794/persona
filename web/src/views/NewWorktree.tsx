@@ -1,4 +1,4 @@
-// 新建 worktree… (#2431, lib/worktree.ts): a Git worktree of a workspace's repository, opened as a workspace. The
+// "New worktree…" (#2431, lib/worktree.ts): a Git worktree of a workspace's repository, opened as a workspace. The
 // repository is read when the dialog opens; the checkout path follows the branch until it is edited.
 import { useEffect, useId, useRef, useState } from "react";
 import { t } from "../i18n";

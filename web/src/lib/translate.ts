@@ -1,4 +1,4 @@
-// 设置 › 翻译 (docs/ios.md「翻译」, the app's Translator.swift): when it is on, content not in the target language is
+// Settings › Translation (docs/ios.md "Translation", the app's Translator.swift): when it is on, content not in the target language is
 // translated by the hub (its translation model): mail (on by default) and the Feishu chats picked in settings (none
 // by default: there are too many messages). The settings live in this browser; the phone's are its own.
 //

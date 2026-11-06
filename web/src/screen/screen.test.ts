@@ -35,7 +35,7 @@ describe("the live screen's page", () => {
     expect(keepLabel("mac")).toBe("在这台 Mac 上记住");
   });
 
-  // #1507 a-2: 一键解锁 only from the app that keeps the sign-in; the password typed as keysyms, then Return.
+  // #1507 a-2: one-tap unlock only from the app that keeps the sign-in; the password typed as keysyms, then Return.
   it("unlocks only where the app keeps the sign-in, and types the password as keysyms", () => {
     expect(screenTarget("http://h/screen/m#token=t&keep=phone&unlock=1&embed=1").target?.unlock).toBe(true);
     expect(screenTarget("http://h/screen/m#token=t&unlock=1&embed=1").target?.unlock).toBe(false);

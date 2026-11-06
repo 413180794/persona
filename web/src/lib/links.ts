@@ -1,6 +1,6 @@
-// Where a link opens (CLAUDE.md「链接在 App 内打开」, docs/web.md「链接」). In a browser the browser is the app:
+// Where a link opens (CLAUDE.md "Links open inside the app", docs/web.md "Links"). In a browser the browser is the app:
 // ordinary pages open in a new tab (most sites refuse to be framed and the page cannot tell it was refused, so a
-// framed panel would just be blank), Feishu documents and 公司圈 posts open in the side panel's reader (the same links
+// framed panel would just be blank), Feishu documents and Moments posts open in the side panel's reader (the same links
 // the phone reads natively, FeishuLinks.route) when the hub reads Feishu (feature `lark`; otherwise they are ordinary
 // pages), and jarvis://session links move to that conversation. This hub's own agent and task pages (/s/<machine>/
 // <session>, /todos?id=…, the links the assistant writes) open in the side panel next to where they were clicked, or
@@ -9,7 +9,7 @@
 // public_url first: the address the assistant writes, which may not be the one this page was opened at).
 //
 // Also the hand-off between the reader and the composers: text picked in the panel goes to the composer the user is
-// writing in, as <jarvis-context> tags in the next message (docs/protocol.md「消息里的标签」).
+// writing in, as <jarvis-context> tags in the next message (docs/protocol.md "Tags in messages").
 import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { uuid } from "./format";
@@ -25,7 +25,7 @@ export type DocKind = "doc" | "sheet" | "bitable" | "mindnote" | "file" | "slide
 
 export type LinkRoute =
   | { kind: "doc"; doc: DocKind } // a Feishu cloud document: the panel's reader
-  | { kind: "moments"; id: string } // a 公司圈 post: the panel
+  | { kind: "moments"; id: string } // a Moments post: the panel
   | { kind: "session"; mid: string; sid: string } // jarvis://session/<machine>/<session>: that conversation
   | { kind: "agent"; mid: string; sid: string } // this hub's /s/<machine>/<session>: that agent's chat in the panel
   | { kind: "task"; id: string } // this hub's /todos?id=<todo>: that task in the panel
@@ -96,7 +96,7 @@ export const DOC_LABEL: Record<DocKind, string> = {
   other: t("lib-links.doc"),
 };
 
-/** A 公司圈 share link's post id (LarkMoments.postID). */
+/** A Moments share link's post id (LarkMoments.postID). */
 function momentsPostID(u: URL): string | null {
   if (!u.pathname.endsWith("/moments/detail")) return null;
   const id = u.searchParams.get("postId") ?? "";
@@ -252,7 +252,7 @@ export function prefetchLink(url: string | undefined) {
 
 // ── <jarvis-context> ─────────────────────────────────────
 
-/** A piece of a page the user picked (LinkSheet.swift ContextRef). `text` is "（整篇）" for a whole document. */
+/** A piece of a page the user picked (LinkSheet.swift ContextRef). `text` is "(whole document)" in Chinese for a whole document. */
 export interface ContextRef {
   id: string;
   kind: "context" | "edit";
@@ -282,7 +282,7 @@ export function withContexts(refs: Pick<ContextRef, "kind" | "title" | "url" | "
   return `${refs.map(contextXML).join("\n")}\n\n${body}`;
 }
 
-/** 「AI 修改」: the picked text and what to do with it, sent at once (LinkSheet.swift sendEdit). */
+/** "AI edit": the picked text and what to do with it, sent at once (LinkSheet.swift sendEdit). */
 export function editMessage(r: Pick<ContextRef, "title" | "url" | "text">, ask: string): string {
   const a = ask.trim();
   return `${contextXML({ ...r, kind: "edit" })}\n\n${a ? t("lib-links.edit_with_ask", { ask: a }) : t("lib-links.edit_plain")}`;
@@ -338,7 +338,7 @@ export function useContexts(key: string): ContextRef[] {
 
 // ── the composer being written in ────────────────────────
 
-/** What a mounted composer lets the panel do: its draft key, and sending a message now (「AI 修改」). */
+/** What a mounted composer lets the panel do: its draft key, and sending a message now ("AI edit"). */
 export interface ComposerHandle {
   key: string;
   send: (text: string) => Promise<boolean>;

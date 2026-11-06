@@ -92,7 +92,7 @@ export function presentAction(use: Item): ActionPresentation {
   if (name === "WebSearch") return { verb: VERB[name], param: { text: truncateParam(str(inp.query)) } };
   if (name === "LS") return { verb: VERB[name], param: { text: truncateParam(str(inp.path)) } };
   if (name.startsWith("mcp__")) {
-    // Persona's own tools read as what they do (「读 Agent 对话」), then what they were given
+    // Persona's own tools read as what they do ("Read Agent chat"), then what they were given
     const own = personaToolVerb(name);
     if (own) {
       const what = [own.what, toolChip(use)].filter(Boolean).join(" · ");
@@ -249,7 +249,7 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
   );
 });
 
-/** How many lines of a diff the phone's full-screen view shows before 展开. */
+/** How many lines of a diff the phone's full-screen view shows before "Expand". */
 export const DIFF_FOLD_LINES = 40;
 
 /** The first `max` lines of an edit's changes (cut inside the change they end in), and how many lines that leaves out. */
@@ -326,7 +326,7 @@ function DiffDialog({ onClose, path, diffs, mid, sid }: { onClose: () => void; p
 }
 
 /** The diff on a phone: the whole visible screen (above the keyboard), Back or ✕ to close; long lines scroll sideways
- *  under a fade at the right edge while there is more, and a long diff shows its first 40 lines until 展开. */
+ *  under a fade at the right edge while there is more, and a long diff shows its first 40 lines until "Expand". */
 function DiffScreen({ onClose, path, diffs, onOpenFile }: { onClose: () => void; path: string; diffs: Op[][]; onOpenFile?: () => void }) {
   useCloseOnBack(true, onClose);
   const [all, setAll] = useState(false);

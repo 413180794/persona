@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// An MCP form or link card (docs/protocol.md「MCP elicitation」) driven through the UI: a link is accepted only after it
+// An MCP form or link card (docs/protocol.md "MCP elicitation") driven through the UI: a link is accepted only after it
 // was opened from the card, and opens with noopener / noreferrer; a form sends what was typed (numbers as numbers),
 // says what is missing, notes that a secret is not kept, and keeps a draft when the card is drawn anew; a schema outside
 // the subset has no Submit; a session that can't approve can't open, submit or decline. The hub is faked (apiOp).

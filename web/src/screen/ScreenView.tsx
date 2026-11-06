@@ -1,5 +1,5 @@
-// The live screen of a Mac (docs/computer-use.md「实时画面」): macOS's Screen Sharing on its 127.0.0.1:5900, through the
-// hub's port relay, drawn by noVNC. View only until 接管; Screen Sharing asks for the Mac account's name and password
+// The live screen of a Mac (docs/computer-use.md "Live view"): macOS's Screen Sharing on its 127.0.0.1:5900, through the
+// hub's port relay, drawn by noVNC. View only until "Take control"; Screen Sharing asks for the Mac account's name and password
 // (Apple's ARD sign-in), which go to the Mac only and are not kept. The app shows this page in its web view.
 import { BASE } from "../lib/base";
 import RFB from "@novnc/novnc";
@@ -33,16 +33,16 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
   const controlRef = useRef(false);
   controlRef.current = control;
   const [attempt, setAttempt] = useState(0);
-  // The app keeps the Mac's sign-in (#1322): 「在这台手机上记住」, on unless unticked.
+  // The app keeps the Mac's sign-in (#1322): "Remember on this phone", on unless unticked.
   const canKeep = target.embedded && target.keep !== "";
   const [remember, setRemember] = useState(true);
   const queued = useRef<Credentials | null>(null); // typed while there was no connection waiting: sent on the next
   const sent = useRef<Credentials | null>(null); // sent on this connection, until the Mac says yes or no
   const waiting = useRef(false); // this connection asked for a sign-in and has none yet
   const answer = useRef<((c: Credentials) => void) | null>(null);
-  const unlockAsked = useRef(false); // 一键解锁 asked for its password once per page
+  const unlockAsked = useRef(false); // one-tap unlock asked for its password once per page
   // Set once the hub says there is a screen to connect to: the connection lives from then on, whatever the page
-  // shows (asking to sign in is part of it), until 重新连接 or the page goes.
+  // shows (asking to sign in is part of it), until "Reconnect" or the page goes.
   const [go, setGo] = useState(false);
   const screen = useRef<HTMLDivElement>(null);
   const rfb = useRef<RFB | null>(null);
@@ -92,7 +92,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     };
   }, [target]);
 
-  // The connection, once there is something to connect to; again on 重新连接.
+  // The connection, once there is something to connect to; again on "Reconnect".
   useEffect(() => {
     if (!go || !screen.current) return;
     ensureSubtleAES(); // an http page has no crypto.subtle, and the ARD sign-in needs AES
@@ -118,14 +118,14 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     };
     r.addEventListener("connect", () => {
       setPhase({ kind: "live" });
-      // 一键解锁 (#1507 a-2): in, so the app hands over the kept password for the lock screen (personaScreen.unlock).
+      // One-tap unlock (#1507 a-2): in, so the app hands over the kept password for the lock screen (personaScreen.unlock).
       if (target.unlock && !unlockAsked.current) {
         unlockAsked.current = true;
         toApp({ credentials: "unlock" });
       }
       const c = sent.current;
       sent.current = null;
-      // What worked goes to the app's keychain when 记住 was on; off, what it kept goes.
+      // What worked goes to the app's keychain when "Remember" was on; off, what it kept goes.
       if (c && canKeep && !c.saved) toApp(c.remember ? { credentials: "worked", account: c.account, password: c.password } : { credentials: "forget" });
     });
     r.addEventListener("credentialsrequired", () => {
@@ -168,8 +168,8 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     if (rfb.current) rfb.current.viewOnly = !control;
   }, [control, phase.kind]);
 
-  // In the app (#1343) the app draws the name, the state and 只看 / 接管 around the page: it hears the phase, and
-  // says 接管 through window.personaScreen.
+  // In the app (#1343) the app draws the name, the state and "View only" / "Take control" around the page: it hears the phase, and
+  // says "Take control" through window.personaScreen.
   useEffect(() => {
     if (!target.embedded) return;
     toApp({ phase: phase.kind });
@@ -179,7 +179,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     (window as unknown as { personaScreen?: unknown }).personaScreen = {
       setControl: (on: boolean) => setControl(on),
       // The app's answer to { credentials: "unlock" }: a key wakes the lock screen and puts the cursor in its password
-      // field, then the password and Return; 只看 again after.
+      // field, then the password and Return; "View only" again after.
       unlock: (kept: { password?: string } | null) => {
         const r = rfb.current;
         if (!r || !kept?.password) return;

@@ -1,4 +1,4 @@
-// Pure logic of the table viewer (CSV / TSV / xlsx / xls / ods / numbers; docs/web.md「表格」, iOS / Mac: #1294):
+// Pure logic of the table viewer (CSV / TSV / xlsx / xls / ods / numbers; docs/web.md "Sheets", iOS / Mac: #1294):
 // parsing into sheets of display text, column letters and widths, and what a selection copies. No DOM: the worker
 // (sheets.worker.ts) runs the parsing, SheetView.tsx draws; tested in sheets.test.ts.
 import type { WorkBook } from "xlsx";

@@ -1,6 +1,6 @@
-// The pill over the page once the socket has dropped (after the app's ConnectionTitle): which phase (没有网络 /
-// 连接中… / hub 正在更新… / 连不上 hub，正在重试…), and on a click the details (why, the next try, since when) with
-// 立即重试. The page that never reached the hub has its own empty state (App.tsx Offline) instead.
+// The pill over the page once the socket has dropped (after the app's ConnectionTitle): which phase ("No network" /
+// "Connecting…" / "Hub is updating…" / "Can't reach the hub, retrying…"), and on a click the details (why, the next try, since when) with
+// "Retry now". The page that never reached the hub has its own empty state (App.tsx Offline) instead.
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { BREATHING, connFacts, connPhase, phaseExplanation, phaseTitle, phaseTone, type ConnLink, type ConnPhase } from "../lib/connection";
@@ -55,7 +55,7 @@ export function ConnectionPill() {
   );
 }
 
-/** Why the pill says what it says, the next try and since when, and 立即重试. `now` fixed: tests and screenshots. */
+/** Why the pill says what it says, the next try and since when, and "Retry now". `now` fixed: tests and screenshots. */
 export function ConnectionDetails({ conn, link, now: fixed }: { conn: Conn; link: ConnLink; now?: number }) {
   const tick = useNow(1000, fixed === undefined);
   const now = fixed ?? tick;

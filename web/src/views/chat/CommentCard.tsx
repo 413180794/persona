@@ -1,4 +1,4 @@
-// A comment on picked words or on lines of code (#2437, Moshi's 「Comment」), as a card in the quote list above the
+// A comment on picked words or on lines of code (#2437, Moshi's "Comment"), as a card in the quote list above the
 // composer (CommentCard: a numbered header, the words or the code, the note to write, a click goes back to the spot) and
 // as a card in a sent bubble (CommentBlock). Same family as the quote bar next to it (Quote.tsx): one accent rule, the
 // same fill; the number is the one the spot carries in the transcript (CommentMarks.tsx) and the one the agent reads.

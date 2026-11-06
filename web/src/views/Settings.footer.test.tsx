@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 设置 › 通用's assistant line with no computer (#4480): not「每段对话在 的 里后台运行。」, and no folder path.
+// Settings › General's assistant line with no computer (#4480): not the sentence with an empty computer and folder ("every chat runs in the background in  of  ."), and no folder path.
 import { describe, expect, it, vi } from "vitest";
 vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;

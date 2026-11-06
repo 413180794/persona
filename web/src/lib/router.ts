@@ -4,10 +4,10 @@ import { takeOverlayEntry } from "./back-close";
 import { BASE, stripBase } from "./base";
 import { decodeURIComponentSafe } from "./uri";
 
-// Persona's main conversation is the front door (like the app, which opens on 助手): `/` and `/j` open it, `/j/<id>` is
-// one conversation, `/j/new` starts a one-off one, and 总览 lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
-// (docs/extensions.md「UI 插槽」 nav_page).
-/** What the middle of an agent's page shows (docs/web.md「终端 ⇄ 对话」): its conversation, or its terminal in place. */
+// Persona's main conversation is the front door (like the app, which opens on the assistant): `/` and `/j` open it, `/j/<id>` is
+// one conversation, `/j/new` starts a one-off one, and "Overview" lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
+// (docs/extensions.md "UI slots" nav_page).
+/** What the middle of an agent's page shows (docs/web.md "Terminal ⇄ chat"): its conversation, or its terminal in place. */
 export type SessionView = "chat" | "term";
 
 export type Route =
@@ -19,7 +19,7 @@ export type Route =
   // one herdr tab (a slot) of a workspace; `sid` picks its pane (lib/herdr-tree.ts resolveTab)
   | { name: "tab"; mid: string; space: string; slot: string; sid?: string; view?: SessionView }
   | { name: "jarvis"; sid?: string }
-  // 全部对话; `origin` filters it (lib/conversation-origins.ts): the sidebar's 自动对话 rows open it so
+  // "All chats"; `origin` filters it (lib/conversation-origins.ts): the sidebar's "Automatic" rows open it so
   | { name: "history"; origin?: string }
   // the health space (docs/health.md): its home, or one of its conversations
   | { name: "health"; sid?: string }
@@ -32,12 +32,12 @@ export type Route =
   | { name: "machine"; mid: string }
   // one space of a machine by its name (lib/space-page.ts): its agents, the todos it hangs on, what can be done to it
   | { name: "space"; mid: string; space: string }
-  // the terminal browser (docs/terminal.md「独立终端」): every pane of every machine; `id` is the terminal opened (an agent
+  // the terminal browser (docs/terminal.md "Standalone terminals"): every pane of every machine; `id` is the terminal opened (an agent
   // session's id, or "pane:<pane>" for a plain shell)
   | { name: "terminal"; mid?: string; id?: string }
   | { name: "settings" }
   | { name: "agents"; id?: string }
-  // the phone's「Agents」page (#1996): the sidebar's Agents block on a page of its own, next to 助手
+  // the phone's "Agents" page (#1996): the sidebar's Agents block on a page of its own, next to the assistant
   | { name: "agent-list" }
   | { name: "todos"; id?: string }
   | { name: "extension"; extension: string; ui: string };

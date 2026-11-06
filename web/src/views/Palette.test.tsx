@@ -94,7 +94,7 @@ describe("设置 › 快捷键", () => {
     expect(html).toContain("全部恢复默认");
     expect(html).toContain("跳转到会话或终端窗格");
     expect(html).toContain("切到第 1–9 台电脑");
-    // nothing is rebound: no per-row 恢复默认
+    // nothing is rebound: no per-row "Reset to default"
     expect(html).not.toContain("的默认快捷键");
   });
 });

@@ -1,4 +1,4 @@
-// 机器: every computer's CPU / memory / disk now and over the last hour (docs/machines.md), as Insight Cards. 添加电脑
+// Machines: every computer's CPU / memory / disk now and over the last hour (docs/machines.md), as Insight Cards. "Add computer"
 // (feature machines_add) adds one from here, and a computer waiting to be confirmed (trust pending) says so on its card.
 import { memo, useCallback, useEffect, useId, useState } from "react";
 import { t as tr } from "../i18n";
@@ -55,7 +55,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     }
   }, []);
 
-  // 是我的电脑 / 不是我的 for a computer waiting to be confirmed; the hub's next machines push shows the result.
+  // It is mine / Not mine for a computer waiting to be confirmed; the hub's next machines push shows the result.
   const answer = useCallback(async (m: { id: string; name: string }, what: "confirm" | "reject") => {
     setAnswering(m.id);
     try {
@@ -265,10 +265,10 @@ function agentCounts(list: Session[] | undefined): readonly [number, number] {
   return [count, working];
 }
 
-// Elements that keep their own click inside a card (the links, 重新连接, 部署 …).
+// Elements that keep their own click inside a card (the links, Reconnect, Deploy …).
 const INTERACTIVE = "a,button,input,select,textarea,label,summary,[role=button],[tabindex]";
 
-// A tap anywhere else on a machine's card opens its page (#3578): on a phone the 详情 link alone is a 48 × 17 target.
+// A tap anywhere else on a machine's card opens its page (#3578): on a phone the "Details" link alone is a 48 × 17 target.
 // The card stays a plain section; the title link is what keyboards and screen readers use, so no control nests in another.
 function openFromCard(e: React.MouseEvent<HTMLElement>, to: Route) {
   const own = e.target instanceof Element ? e.target.closest(INTERACTIVE) : null;

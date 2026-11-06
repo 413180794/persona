@@ -1,7 +1,7 @@
 // A session's context usage (#2430): how much of the model's window the latest reply used, read by the node off the
 // transcript (Session.context_tokens / context_window, omitted while unknown) and shown as a second line in the sidebar's
 // agent rows and as a thin bar in the session header. Two settings, both kept by this browser and off by default
-// (設置 › 外观): 「Agent 行显示详情」 turns the extra line and the header bar on, 「上下文显示为已用」 flips remaining → used.
+// (Settings › Appearance): "Show agent details" turns the extra line and the header bar on, "Show context as used" flips remaining → used.
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
 import type { MenuItem } from "../ui/menu-model";
@@ -54,7 +54,7 @@ export function contextLabel(u: ContextUsage, asUsed: boolean): string {
   return `${contextShown(u, asUsed)}%`;
 }
 
-/** The session header's label, which says what the share is (#3668): 「上下文剩 61%」 or 「上下文已用 39%」. */
+/** The session header's label, which says what the share is (#3668): "61% context left" or "39% context used". */
 export function contextHeaderLabel(u: ContextUsage, asUsed: boolean): string {
   return asUsed ? t("context.header_used", { percent: u.used }) : t("context.header_left", { percent: u.left });
 }
@@ -74,7 +74,7 @@ export function contextNotes(u: ContextUsage, asUsed: boolean): MenuItem[] {
   ];
 }
 
-/** The tooltip: 「还剩 61% 上下文」 or 「已用 39%」. */
+/** The tooltip: "61% of context left" or "39% used". */
 export function contextTooltip(u: ContextUsage, asUsed: boolean): string {
   return asUsed ? t("context.used", { percent: u.used }) : t("context.left", { percent: u.left });
 }
@@ -153,12 +153,12 @@ function flag(key: string) {
 const details = flag("agent.details");
 const asUsed = flag("agent.contextUsed");
 
-/** 设置 › 外观 › Agent 行显示详情: the sidebar rows' second line and the session header's model + context bar. */
+/** Settings › Appearance › "Show agent details": the sidebar rows' second line and the session header's model + context bar. */
 export const getAgentDetails = details.get;
 export const setAgentDetails = details.set;
 export const useAgentDetails = details.use;
 
-/** 设置 › 外观 › 上下文显示为已用: the context shown as what is used instead of what is left (rows and header). */
+/** Settings › Appearance › "Show context as used": the context shown as what is used instead of what is left (rows and header). */
 export const getContextAsUsed = asUsed.get;
 export const setContextAsUsed = asUsed.set;
 export const useContextAsUsed = asUsed.use;

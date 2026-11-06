@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The failure notice above the composer (iOS FailureNote): when it shows, what 重试 does, 在飞书打开.
+// The failure notice above the composer (iOS FailureNote): when it shows, what "Retry" does, "Open in Lark".
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,8 +1,8 @@
 // The bar above the composer while an Agent works (cindy's RunningStatusBar, #1963): what its status line says (the
-// spinner's verb, or 思考中), how long the turn has run and the tokens it has written so far. It breathes once each
+// spinner's verb, or "Thinking"), how long the turn has run and the tokens it has written so far. It breathes once each
 // time the count moves (output, not just time passing); when the turn ends it stays a second, then fades out. Without
-// a status line (another agent, an older hub) it says 运行中 and counts from when the turn started. While the chat's live
-// work line (正在工作…) ticks, the bar leaves the time to it (#3534: the same clock twice; iOS shows it there only).
+// a status line (another agent, an older hub) it says "Running" and counts from when the turn started. While the chat's live
+// work line ("Working…") ticks, the bar leaves the time to it (#3534: the same clock twice; iOS shows it there only).
 import { useEffect, useRef, useState } from "react";
 import { duration } from "../../lib/format";
 import { useSessionLive } from "../../lib/live";
@@ -17,7 +17,7 @@ const LINGER_MS = 1000;
 const FADE_OUT_MS = 400;
 const TWEEN_MS = 400;
 
-/** 22.8k, 1.2k, 950: thousands with one decimal (cindy's formatRunningTokenCount; not lib/compaction's 万 units). */
+/** 22.8k, 1.2k, 950: thousands with one decimal (the reference client's formatRunningTokenCount; not lib/compaction's ten-thousand units). */
 export function tokenCount(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`;
 }

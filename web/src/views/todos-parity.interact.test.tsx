@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// Pressing through the #2975 parity pieces: a routine row's right-click menu and the footer that names it, 全部 on the
-// task dock and the 今天 card opening the task board, the plan card's 改一下 dialog starting with its edits, and the
-// todos page's 待办 back on a narrow screen popping the entry a row click pushed. The hub is faked; the data made up.
+// Pressing through the #2975 parity pieces: a routine row's right-click menu and the footer that names it, "All" on the
+// task dock and the "Today" card opening the task board, the plan card's "Edit" dialog starting with its edits, and the
+// todos page's "To-dos" back on a narrow screen popping the entry a row click pushed. The hub is faked; the data made up.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The 需要你 section's count writes messages and waiting agents apart (#3288): the sidebar's 收件箱 badge counts messages only.
+// The "Needs you" section's count writes messages and waiting agents apart (#3288): the sidebar's "Inbox" badge counts messages only.
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.hoisted(() => {
   window.matchMedia ??= ((query: string) => ({ matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as typeof window.matchMedia;

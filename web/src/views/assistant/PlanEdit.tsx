@@ -1,5 +1,5 @@
-// 改一下 on an open plan card (iOS PlanEditSheet): change each task's title, machine, directory, model, permission and
-// first message before it starts; 开始 starts the plan with them.
+// "Edit" on an open plan card (iOS PlanEditSheet): change each task's title, machine, directory, model, permission and
+// first message before it starts; "Start" starts the plan with them.
 import { useState } from "react";
 import { PLAN_PERMISSIONS, planEditsChanged, planEditsOf, type PlanTaskEdit, type TaskPlan } from "../../lib/feed";
 import { useStore } from "../../lib/store";
@@ -19,7 +19,7 @@ export function permissionLabel(mode: string): string {
         : t("assistant-tasks.perm_default");
 }
 
-/** The hub keeps the plan's model when the field is sent empty (applyPlanEdit): say so rather than 「用默认」. */
+/** The hub keeps the plan's model when the field is sent empty (applyPlanEdit): say so rather than "use the default". */
 export function modelPlaceholder(planned?: string): string {
   const m = planned?.trim();
   return m ? t("assistant-tasks.plan_edit_model_placeholder_kept", { model: m }) : t("assistant-tasks.plan_edit_model_placeholder");

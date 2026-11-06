@@ -1,4 +1,4 @@
-// 同时显示 botmux 会话 under 引擎 on a machine's page (#2575, iOS BotmuxSwitchModel): whether this computer's botmux
+// "Also show botmux sessions" under "Engine" on a machine's page (#2575, iOS BotmuxSwitchModel): whether this computer's botmux
 // sessions are listed beside its engine's. GET / PUT /api/v1/machines/{mid}/botmux {"on"}; the hub keeps it per
 // machine (hub.json's machines[].botmux is the default, on when unset) and tells the node at once.
 import { useEffect, useState } from "react";

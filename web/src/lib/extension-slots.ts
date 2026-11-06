@@ -1,5 +1,5 @@
-// The extensions' places outside their settings (docs/extensions.md「UI 插槽」): entries on the sidebar (nav_page), cards on
-// 总览 (overview_card), sections on a machine's page (machine_section), inbox items' pages (inbox_item: the list is
+// The extensions' places outside their settings (docs/extensions.md "UI slots"): entries on the sidebar (nav_page), cards on
+// "Overview" (overview_card), sections on a machine's page (machine_section), inbox items' pages (inbox_item: the list is
 // cached here, so opening an item asks nothing). One list for the whole web, asked for once
 // (GET /api/v1/extensions/-/ui without a placement) and again on reconnect, when an extension changes here, and when the tab
 // comes back after a while; a nav_page's badge changes in place on the extension_ui event (plugin_ui from an older

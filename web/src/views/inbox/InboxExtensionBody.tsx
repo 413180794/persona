@@ -1,10 +1,10 @@
-// An inbox item's body drawn by the extension whose connector brought it in (docs/extensions.md「收件箱条目」, placement
-// inbox_item): its View in place of the item's own body, under the detail's own header (title, 已处理, the summary,
-// AI 草拟回复 / 交给 AI), which stays the web's. The hub is told which item (context.item) and looks it up itself;
+// An inbox item's body drawn by the extension whose connector brought it in (docs/extensions.md "Inbox items", placement
+// inbox_item): its View in place of the item's own body, under the detail's own header (title, "Done", the summary,
+// "AI draft reply" / "Hand to AI"), which stays the web's. The hub is told which item (context.item) and looks it up itself;
 // the extension draws it again when the item changes. When it cannot draw it — a device that may only read, the item
 // gone, the connector not the extension's now (403 / 404) — the item's own body is drawn as if there were no extension; when
 // the extension fails, the own body too, with a line saying so and a retry. A press that opens the item's source
-// (persona://inbox/<item>/source, 在会话里看) shows the own body — the chat at the item's first message — with a way
+// (persona://inbox/<item>/source, "View in chat") shows the own body — the chat at the item's first message — with a way
 // back to the extension's page, which stays as it was.
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, errorText } from "../../lib/api";

@@ -246,7 +246,7 @@ describe("小工具", () => {
     expect(withToken("/api/v1/lark/media/k?size=48", "jd_x")).toBe("/api/v1/lark/media/k?size=48&token=jd_x");
     expect(withToken("https://example.com/a.png", "jd_x")).toBe("https://example.com/a.png");
     expect(withToken(undefined, "jd_x")).toBeUndefined();
-    // under a reverse proxy's sub-path (docs/web.md「子路径」)
+    // under a reverse proxy's sub-path (docs/web.md "Sub-path")
     expect(withToken("/api/v1/lark/media/k", "jd_x", "/persona")).toBe("/persona/api/v1/lark/media/k?token=jd_x");
     expect(withToken("https://example.com/a.png", "jd_x", "/persona")).toBe("https://example.com/a.png");
   });
@@ -462,7 +462,7 @@ describe("列表状态", () => {
     expect([message, tone]).toEqual(["已将 1 件标为已处理，1 件有新消息，留在收件箱", "ok"]);
     expect(action?.label).toBe("撤销");
 
-    // 撤销 sends back only what was filed.
+    // "Undo" sends back only what was filed.
     vi.mocked(toast).mockClear();
     fetcher.mockReset().mockResolvedValueOnce(ok({ changed: [a], unchanged: [], skipped: [] }));
     action!.run();
@@ -506,7 +506,7 @@ describe("列表状态", () => {
     expect(getInbox().items[0].done_by).toBe("user");
 
     const [, b] = getInbox().items;
-    // 全部清理 on an old hub: it has no 忽略, so the items are filed as done there.
+    // Clean up all on an old hub: it has no Dismiss, so the items are filed as done there.
     fetcher.mockResolvedValueOnce(fail(404, "not found")).mockResolvedValueOnce(ok({ changed: [{ ...b, done_at: at(0), done_by: "user" }], unchanged: [], skipped: [] }));
     await setAllDone([b], "dismiss");
     expect(fetcher.mock.calls[4][0]).toBe("/api/v1/inbox/done");
@@ -564,7 +564,7 @@ describe("列表状态", () => {
     expect(fetcher.mock.calls[2][0]).toBe("/api/v1/lark/messages/root-msg/replies");
     expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({ text: "收到", thread: false, client_id: "client-2" });
 
-    // Another Feishu account's chat names it (docs/feishu.md「多账号」).
+    // Another Feishu account's chat names it (docs/feishu.md "Multiple accounts").
     fetcher.mockResolvedValueOnce(ok({ message_id: "m_other" }));
     await sendLarkMessage("feed-xyz", "你好", "client-3", 2);
     expect(fetcher.mock.calls[3][0]).toBe("/api/v1/lark/conversations/feed-xyz/messages?ol_account=2");

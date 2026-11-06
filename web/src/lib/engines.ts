@@ -1,4 +1,4 @@
-// 引擎 on a machine's page (docs/engines.md, iOS EngineSelectionModel / EngineSelectionView): which terminal engine the
+// "Engine" on a machine's page (docs/engines.md, iOS EngineSelectionModel / EngineSelectionView): which terminal engine the
 // computer's sessions come from. The hub keeps one per machine (herdr when never chosen) and takes a new one with
 // PUT /api/v1/machines/{mid}/engine, also while the machine is offline (applied when it connects).
 import { t } from "../i18n";
@@ -45,7 +45,7 @@ export function canSelectEngine(id: string, m: Pick<Machine, "engines">): boolea
   return !!known(id) || !!m.engines?.some((e) => e.id === id && e.available);
 }
 
-/** What the node found of the engine: 检测到可用 (with its version) / 没检测到; nothing to say while offline. */
+/** What the node found of the engine: "Available" (with its version) / "Not detected"; nothing to say while offline. */
 export function detectionText(id: string, m: EngineMachine): string {
   if (!m.online) return t("lib-engines.detection_offline");
   const found = m.engines?.find((e) => e.id === id);
@@ -61,7 +61,7 @@ export function engineFooter(selected: string, online: boolean): string {
   return online ? t("lib-engines.footer_single") : t("lib-engines.footer_one_offline");
 }
 
-/** Whether 保存 is offered: a change the hub can take. */
+/** Whether "Save" is offered: a change the hub can take. */
 export function canSaveEngine(selected: string, m: Pick<Machine, "engine" | "engines">): boolean {
   return selected !== currentEngine(m) && canSelectEngine(selected, m);
 }

@@ -49,7 +49,7 @@ function folded(ns: WorkNode[], id: string): boolean {
   return groups(ns).some((g) => g.children.some(has));
 }
 
-/** 「正文 → 收尾副作用动作 → 一句话收尾」: the shape that folded a 3250-character brief (cindy, 2026-07-31). */
+/** "body → side-effect actions to wrap up → a one-line wrap-up": the shape that folded a 3250-character brief (cindy, 2026-07-31). */
 const briefThenNotify = (body: string): Item[] => [
   user("u1"),
   think("th1"),

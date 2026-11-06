@@ -1,6 +1,6 @@
 // The task board (iOS TaskBoardSheet): one conversation's tasks and the agents its dock shows, by where they are —
-// 等你 / 待验收 / 没开起来 / 在做 / 做完了 / 停着 / 已完成, what the user must act on first (#4896). Pure, so the dock's
-// 全部 N and the board count the same things.
+// Needs you / Awaiting review / Failed to start / Working / Finished / Stopped / Done, what the user must act on first (#4896). Pure, so the dock's
+// All N and the board count the same things.
 import { awaitsReview, type DockAgent, type Todo, type TodoStatus } from "./todos";
 import { byTime } from "./times";
 
@@ -17,8 +17,8 @@ export interface BoardSection {
   agents: DockAgent[];
 }
 
-/** Which section a task is in: by its status, but a supervised one awaiting the user's review in 待验收, not with the
- *  stopped or finished-unseen ones (#4896). The web keeps 断了 (interrupted) apart; it waits for the user like 等你. */
+/** Which section a task is in: by its status, but a supervised one awaiting the user's review in Awaiting review, not with the
+ *  stopped or finished-unseen ones (#4896). The web keeps Interrupted (interrupted) apart; it waits for the user like Needs you. */
 export function boardSectionOf({ todo, status }: BoardRow): BoardSectionKey {
   if (awaitsReview(todo, status)) return "review";
   switch (status) {
@@ -41,8 +41,8 @@ export function boardSectionOf({ todo, status }: BoardRow): BoardSectionKey {
 
 export const BOARD_ORDER: BoardSectionKey[] = ["waiting", "review", "failed", "working", "unread", "stopped", "done"];
 
-/** The board's sections that have something, in order; tasks newest first, agents waiting ones under 等你, the rest
- *  under 在做 (as the dock orders them). */
+/** The board's sections that have something, in order; tasks newest first, agents waiting ones under "Needs you", the rest
+ *  under "Working" (as the dock orders them). */
 export function boardSections(rows: BoardRow[], agents: DockAgent[]): BoardSection[] {
   const by = new Map<BoardSectionKey, BoardSection>(BOARD_ORDER.map((key) => [key, { key, rows: [], agents: [] }]));
   const newest = [...rows].sort((a, b) => byTime(b.todo.created_at, a.todo.created_at));

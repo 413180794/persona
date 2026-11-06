@@ -1,4 +1,4 @@
-// 设置 › 扩展 (docs/extensions.md「hub 的接口」「App：设置 › 扩展」, iOS ExtensionsModel): the hub's extensions, each one's
+// Settings › Extensions (docs/extensions.md "The hub's API" and "App: Settings › Extensions", iOS ExtensionsModel): the hub's extensions, each one's
 // switch, its configuration as a form drawn from its schema (`form.fields`), and its secrets, write-only. Installing,
 // upgrading and removing happen on the hub's machine (`personad extension`), never here.
 import { api, ApiError, enc } from "./api";
@@ -33,7 +33,7 @@ export interface HubExtension {
   needs_setup?: string[];
   warnings?: string[];
   /** An extension from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
-   *  happened last with an upgrade (docs/extensions.md「自动升级」). */
+   *  happened last with an upgrade (docs/extensions.md "Automatic upgrades"). */
   auto_upgrade?: boolean;
   upgrade?: ExtensionUpgrade;
   upgrade_note?: ExtensionUpgradeNote;
@@ -65,7 +65,7 @@ export function sandboxState(s: ExtensionSandbox): string {
   return t(s.enabled ? "lib-extensions.sandbox_inactive" : "lib-extensions.sandbox_off");
 }
 
-/** What it reached through the egress proxy: 「经出网代理：N 次放行 · M 次拒绝」, null without counts. */
+/** What it reached through the egress proxy: "through the egress proxy: N allowed · M refused", null without counts. */
 export function sandboxEgress(s: ExtensionSandbox): string | null {
   const e = s.egress;
   if (!e) return null;
@@ -80,7 +80,7 @@ export function channelOf(p: Pick<HubExtension, "contributes">): string | null {
   return p.contributes?.channel?.find((id) => id.trim() !== "") ?? null;
 }
 
-/** An extension's program on one machine (docs/extensions.md「在电脑上运行的程序」). */
+/** An extension's program on one machine (docs/extensions.md "Programs that run on computers"). */
 export interface ExtensionNodeState {
   machine_id: string;
   version?: string;
@@ -140,7 +140,7 @@ export interface ExtensionField {
   unique_items?: boolean;
   /** An object's fields (a group of the form). */
   fields?: ExtensionField[];
-  /** x-confirm: what to ask before a switch of it is turned on (the extension cua's 「扩展开着时不自动锁屏」). */
+  /** x-confirm: what to ask before a switch of it is turned on (the extension cua's "no automatic screen lock while the extension is on"). */
   confirm?: string;
 }
 
@@ -172,7 +172,7 @@ export interface HubExtensionDetail extends HubExtension {
   config?: JsonObject;
   secrets?: ExtensionSecret[];
   permissions?: ExtensionPermission[];
-  /** The pages it draws in its settings (placement plugin_page, docs/extensions.md「声明式 UI」). */
+  /** The pages it draws in its settings (placement plugin_page, docs/extensions.md "Declarative UI"). */
   ui?: UIPlace[];
   /** The field (format machine) that picks the computers its program runs on; their rows say how it is there. */
   node_machines?: string;
@@ -188,7 +188,7 @@ const base = (id: string) => `${extRoot()}/${enc(id)}/-`;
 type ListAnswer = { extensions?: HubExtension[]; plugins?: HubExtension[]; can_install?: boolean; markets?: boolean };
 
 export const listExtensions = () => api<ListAnswer>(extRoot()).then((r) => listOf(r));
-/** The list with what this hub allows: installing at all (a database), and markets (docs/extensions.md「扩展市场」). */
+/** The list with what this hub allows: installing at all (a database), and markets (docs/extensions.md "Extension markets"). */
 export const listExtensionsInfo = () =>
   api<ListAnswer>(extRoot()).then((r) => ({
     extensions: listOf(r),
@@ -266,7 +266,7 @@ export function pointText(name: string): string {
 }
 
 /** The detail's line under the name: state · version · source. */
-/** The 升级 group's line for a newer version: what happens to it (the App's ExtensionText.upgradeDetail). */
+/** The "Upgrade" group's line for a newer version: what happens to it (the App's ExtensionText.upgradeDetail). */
 export function upgradeDetail(u: ExtensionUpgrade): string {
   switch (u.state) {
     case "needs_permission": return morePermissions(u.added_permissions ?? []);
@@ -289,7 +289,7 @@ export function upgradeAction(u: ExtensionUpgrade): string | null {
 /** What a newer version asks for more, as the hub says it in its notice. */
 export function morePermissions(added: ExtensionPermission[]): string {
   if (!added.length) return t("lib-extensions.permissions_changed");
-  // small counts in words where the language writes them so (两项, not 2 项)
+  // small counts in words where the language writes them so (Chinese "two items" in words, not with the digit 2)
   const words = t("lib-extensions.small_counts").split(",");
   const list = added.map((p) => (p.detail ? t("lib-extensions.permission_detail", { title: p.title, detail: p.detail }) : p.title)).join(t("lib-extensions.list_separator"));
   const count = added.length;
@@ -315,12 +315,12 @@ export function listSummary(list?: HubExtension[] | null): string {
 
 export const fieldLabel = (f: ExtensionField) => f.title || f.name;
 
-/** The title with 「（必填）」 when it has to be filled in and has no default to fall back to. */
+/** The title with "(required)" when it has to be filled in and has no default to fall back to. */
 export const fieldTitle = (f: ExtensionField) => (f.required && f.default === undefined ? t("lib-extensions.field_required", { label: fieldLabel(f) }) : fieldLabel(f));
 
 export const choiceLabel = (c: ExtensionChoice) => c.title || (typeof c.value === "string" ? c.value : JSON.stringify(c.value));
 
-/** What shows when a field is empty: the default it falls back to, or 未设置. */
+/** What shows when a field is empty: the default it falls back to, or "Not set". */
 export function placeholder(f: ExtensionField): string {
   if (f.default !== undefined && f.default !== null) {
     const choice = f.enum?.find((c) => same(c.value, f.default!));
@@ -452,13 +452,13 @@ export function nodeProgramStatus(s: ExtensionNodeState | undefined): string {
   }
 }
 
-/** Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → 退出码 3. */
+/** Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → "exit code 3". */
 export function exitText(error: string): string {
   return error.replace(/\bexit status (-?\d+)/g, t("lib-extensions.exit_code", { code: "$1" })).replace(/\bsignal: ([a-z ]+)/g, t("lib-extensions.killed_by_signal", { signal: "$1" }));
 }
 
-/** Under the form: which switches take effect at once (lists of machines) and that the rest waits for 保存. Nothing
- *  when there is only such switches: the fields say so themselves, nothing waits for 保存. */
+/** Under the form: which switches take effect at once (lists of machines) and that the rest waits for "Save". Nothing
+ *  when there is only such switches: the fields say so themselves, nothing waits for "Save". */
 export function saveFooter(fields: ExtensionField[]): string | undefined {
   const all = fields.flatMap((f) => (f.type === "object" ? (f.fields ?? []) : [f]));
   const now = all.filter((f) => f.items?.format === "machine").map((f) => t("lib-extensions.quoted", { name: f.title || f.name }));

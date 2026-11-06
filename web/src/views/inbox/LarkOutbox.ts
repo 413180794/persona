@@ -1,4 +1,4 @@
-// What the Feishu chat page has sent and not yet seen come back (docs/lark-attachments.md「发送和确认」): text, pictures
+// What the Feishu chat page has sent and not yet seen come back (docs/lark-attachments.md "Sending and confirming"): text, pictures
 // and files go one after another, each with a client_id of its own, drawn at once as a local message that the hub's
 // copy replaces. A failed one can be sent again with the same client_id; a file whose upload broke off halfway is not
 // sent again on its own: it is checked against the newest page, or its local copy removed.
@@ -57,7 +57,7 @@ type Update = (fn: (messages: LarkMessage[]) => LarkMessage[]) => void;
 
 /**
  * The sends of one list (the chat, or one thread under it): `update` changes the list's messages. `newest` reads the
- * list's newest messages again for 检查发送结果.
+ * list's newest messages again for "Check result".
  */
 export function useLarkOutbox(feed: string, ol: number | undefined, update: Update, current: () => LarkMessage[],
   newest?: () => Promise<LarkMessage[]>) {
@@ -138,7 +138,7 @@ export function useLarkOutbox(feed: string, ol: number | undefined, update: Upda
     updateRef.current((list) => list.filter((x) => x.id !== m.id));
   }, []);
 
-  /** 检查发送结果: the hub's copy (same client_id) replaces the local one; not there, it stays to be removed by hand. */
+  /** "Check result": the hub's copy (same client_id) replaces the local one; not there, it stays to be removed by hand. */
   const check = useCallback(async (m: LarkMessage) => {
     const read = newestRef.current;
     if (!read) return;

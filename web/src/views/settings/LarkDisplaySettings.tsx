@@ -1,6 +1,6 @@
-// 设置 › 连接器 › 飞书 › 风灵月影 (iOS LarkMessageDisplaySettingsView): the Lark gateway's display switches of the hub's Feishu
+// Settings › Connectors › Lark › Message display (iOS LarkMessageDisplaySettingsView): the Lark gateway's display switches of the hub's Feishu
 // account, shared with the Lark gateway's own web page. A switch writes only itself, with the account and the old value;
-// a conflict or an unknown result is not retried, 重新读取 reads them again (lark-display.ts).
+// a conflict or an unknown result is not retried, "Reload" reads them again (lark-display.ts).
 import { larkDisplayModel, useLarkDisplayState, type LarkDisplayKey } from "../../lib/lark-display";
 import { t } from "../../i18n";
 import { Button, Spinner } from "../../ui/atoms";

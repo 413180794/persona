@@ -63,7 +63,7 @@ export function taskFailed(n: TaskNote): boolean {
   return n.status === "failed" || (n.exit_code ?? 0) !== 0;
 }
 
-/** "后台命令" / "Monitor 事件" / "Monitor 结束" / "子 Agent". */
+/** "Background command" / "Monitor event" / "Monitor ended" / "Subagent". */
 export function taskLabel(n: TaskNote): string {
   switch (n.kind) {
     case "shell":
@@ -85,7 +85,7 @@ export function taskSubject(n: TaskNote, description?: string): string {
   return description || n.title || "";
 }
 
-/** How long it ran, short: "40 秒", "5 分", "2 小时 5 分". */
+/** How long it ran, short: "40s", "5m", "2h 5m". */
 export function took(s: number): string {
   if (s < 60) return t("lib-tasks.took_seconds", { count: s });
   if (s < 3600) return t("lib-tasks.took_minutes", { count: Math.floor(s / 60) });
@@ -119,7 +119,7 @@ export function taskPill(n: TaskNote, startedAt?: string, at?: string): { text: 
   return null;
 }
 
-/** The badge on the call that started background work: "后台 · 运行中" / "后台 · 已完成" / "后台 · 3 个事件". */
+/** The badge on the call that started background work: "Background · running" / "Background · done" / "Background · 3 events". */
 export function taskBadge(notes: TaskNote[]): { text: string; failed: boolean } {
   const events = notes.filter((n) => n.status === "event").length;
   const last = [...notes].reverse().find((n) => n.status !== "event");
@@ -129,7 +129,7 @@ export function taskBadge(notes: TaskNote[]): { text: string; failed: boolean } 
 }
 
 /** A wake notice in one line: the hub's text when it read the notification (`task`), else worked out from an older
- *  hub's summary: `Background command "Release" completed (exit code 0)` → "后台命令完成 · Release". */
+ *  hub's summary: `Background command "Release" completed (exit code 0)` → "Background command done · Release". */
 export function wakeSummary(item: Item): { text: string; failed: boolean } {
   if (item.task) return { text: item.text || item.task.title || "", failed: taskFailed(item.task) };
   const s = item.text ?? "";
@@ -155,7 +155,7 @@ export function loopTask(loop: LoopInfo): string {
   return p.startsWith("/loop") ? p.slice(5).trim() : p;
 }
 
-/** "每 30 分钟" / "按计划 33 17 * * *". */
+/** "Every 30 minutes" / "On schedule 33 17 * * *". */
 export function loopCadence(loop: LoopInfo): string {
   if (loop.kind === "cron" && loop.cron) return t("lib-tasks.cadence_cron", { cron: loop.cron });
   const s = loop.interval_seconds ?? 0;
@@ -169,14 +169,14 @@ function hhmm(ms: number): string {
   return formatDate(ms, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-/** The loop beside its arrows, short: "下次 11:57", or that it is running. */
+/** The loop beside its arrows, short: "Next 11:57", or that it is running. */
 export function loopShortLabel(loop: LoopInfo, now: number): string {
   const next = Date.parse(loop.next_at ?? "");
   if (Number.isFinite(next) && next > now) return t("lib-tasks.loop_next", { time: hhmm(next) });
   return loop.next_at ? t("lib-tasks.loop_running_short") : t("lib-tasks.loop_short");
 }
 
-/** "下次 11:57" / "循环执行中" / "每 30 分钟". */
+/** "Next 11:57" / "Loop running" / "Every 30 minutes". */
 export function loopLabel(loop: LoopInfo, now: number): string {
   const next = Date.parse(loop.next_at ?? "");
   if (Number.isFinite(next) && next > now) return t("lib-tasks.loop_next", { time: hhmm(next) });
@@ -184,7 +184,7 @@ export function loopLabel(loop: LoopInfo, now: number): string {
   return loopCadence(loop) || t("lib-tasks.loop_looping");
 }
 
-/** "下次唤醒 11:57（还有 4 分钟）" / "正在执行这一轮". */
+/** "Next wake-up 11:57 (in 4 minutes)" / "Running this round". */
 export function loopNext(loop: LoopInfo, now: number): string {
   const next = Date.parse(loop.next_at ?? "");
   if (!Number.isFinite(next)) return "";
@@ -210,7 +210,7 @@ export function backgroundTitle(task: BackgroundTask): string {
   return task.command?.split("\n")[0] || (task.kind === "agent" ? t("lib-tasks.background_agent") : t("lib-tasks.kind_shell"));
 }
 
-/** "40 秒" / "5 分 12 秒" / "1 时 5 分". */
+/** "40s" / "5m 12s" / "1h 5m". */
 export function elapsed(fromIso: string | undefined, now: number): string {
   const start = Date.parse(fromIso ?? "");
   if (!Number.isFinite(start)) return "";

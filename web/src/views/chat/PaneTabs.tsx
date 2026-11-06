@@ -1,5 +1,5 @@
 // The agent panes of one herdr tab, as tabs over the chat (lib/herdr-tree.ts tabSessions): which agent, what it is
-// doing, its state, in the order they sit in the tab; the 发起者 (the first pane, the others split from it, #2320) wears
+// doing, its state, in the order they sit in the tab; the "Lead" (the first pane, the others split from it, #2320) wears
 // a small mark. Arrow keys move between them like any tab list; a tab with one pane has none.
 import { useEffect, useRef } from "react";
 import { sessionTitle, stateOf, STATE_LABEL } from "../../lib/format";
@@ -81,7 +81,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
             )}
           >
             <StatusMark state={st} size="sm" />
-            {/* a phone's three tabs share its width: the 发起者's mark stands in for its agent's name (the title says it) */}
+            {/* a phone's three tabs share its width: the "Lead"'s mark stands in for its agent's name (the title says it) */}
             <span className={cx("shrink-0", on ? "text-ink-2" : "text-ink-3", first && fit === "fill" && "max-sm:hidden")}>{agentLabel(s)}</span>
             {first && (
               <span className={cx("shrink-0 rounded px-1 text-[10px] leading-4 text-ink-3", on ? "bg-hover" : "bg-hover-2")}>

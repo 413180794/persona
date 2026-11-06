@@ -1,4 +1,4 @@
-// 设置 › 通用 › Agent (#2475): the hub-wide switches about agents. 工作流看板 is off unless turned on here; the switch
+// Settings › General › Agent (#2475): the hub-wide switches about agents. "Workflow board" is off unless turned on here; the switch
 // is the hub's, so every browser shows the same (lib/workspace-board-setting.ts).
 import { t } from "../../i18n";
 import { errorText } from "../../lib/api";

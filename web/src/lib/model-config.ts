@@ -5,7 +5,7 @@ export interface ModelBinding {
   provider?: string;
   model?: string;
   effort?: string;
-  /** 主对话 only (#2455): how it runs Claude, "cli" or "agentsdk"; absent is the CLI. */
+  /** Main chat only (#2455): how it runs Claude, "cli" or "agentsdk"; absent is the CLI. */
   runtime?: string;
 }
 
@@ -34,7 +34,7 @@ export interface ModelPurpose {
   status?: string;
   fields?: string[];
   provider_ids?: string[];
-  /** 主对话 only: the runtimes it can run on (an older hub: none, no 运行方式 row). */
+  /** Main chat only: the runtimes it can run on (an older hub: none, no "Runtime" row). */
   runtimes?: string[];
 }
 
@@ -54,7 +54,7 @@ export interface ModelDraft {
   runtime: string;
 }
 
-/** The runtimes this client can name, in the order 运行方式 offers them. */
+/** The runtimes this client can name, in the order "Runtime" offers them. */
 export const RUNTIMES: { id: string; label: string }[] = [
   { id: "cli", label: "Claude Code CLI" },
   { id: "agentsdk", label: "Agent SDK" },
@@ -65,7 +65,7 @@ export function runtimeLabel(id: string | undefined): string {
   return RUNTIMES.find((r) => r.id === (id || "cli"))?.label ?? id!;
 }
 
-/** 运行方式's options: only the ones the hub offers for this purpose (and this client knows). */
+/** "Runtime"'s options: only the ones the hub offers for this purpose (and this client knows). */
 export function runtimeChoices(p: ModelPurpose): { id: string; label: string }[] {
   return RUNTIMES.filter((r) => p.runtimes?.includes(r.id));
 }
@@ -122,7 +122,7 @@ export function modelSummary(p: ModelPurpose, providers: ModelProvider[] = []): 
   return [name, p.effective?.model, p.effective?.effort && t("lib-model-config.effort", { effort: p.effective.effort }), runtime].filter(Boolean).join(" · ") || t("lib-model-config.not_configured");
 }
 
-/** 主对话's note when it asked for the Agent SDK and runs on the CLI (the session's `runtime_fallback`). */
+/** The main chat's note when it asked for the Agent SDK and runs on the CLI (the session's `runtime_fallback`). */
 export function runtimeFallbackText(reason: string): string {
   return t("lib-model-config.runtime_fallback", { reason: reason.trim() });
 }

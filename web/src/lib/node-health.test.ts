@@ -59,7 +59,7 @@ describe("deriveFeatures", () => {
     expect(state(r, "status")).toBe("broken");
     expect(state(r, "mcp")).toBe("broken");
     expect(deriveFeatures(r).find((f) => f.id === "approvals")?.note).toBe("确认 hub 已连上这台电脑");
-    // a generated file that is stale or missing points at 修复, not at a command line
+    // a generated file that is stale or missing points at "Fix", not at a command line
     const stale = report({ "mcp.json": { status: "warn", state: "stale", hint: "重启 node 会重写；或运行 personad node doctor --fix" } });
     expect(deriveFeatures(stale).find((f) => f.id === "mcp")?.note).toContain("修复");
     expect(state(r, "skills")).toBe("ready");

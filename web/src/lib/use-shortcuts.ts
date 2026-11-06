@@ -1,4 +1,4 @@
-// The shell's side of the keyboard shortcuts (lib/shortcuts.ts, docs/web.md「快捷键」): what each command does here,
+// The shell's side of the keyboard shortcuts (lib/shortcuts.ts, docs/web.md "Keyboard shortcuts"): what each command does here,
 // and the one keydown listener that dispatches them. Mounted once, by the shell.
 import { t } from "../i18n";
 import { useEffect, useRef } from "react";

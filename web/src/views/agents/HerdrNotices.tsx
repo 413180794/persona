@@ -1,6 +1,6 @@
-// 「<电脑> 的 herdr 没在运行」with 启动, at the top of the Agents list (#1916, lib/herdr-notice.ts): one row per online
+// "herdr is not running on <computer>" with "Start", at the top of the Agents list (#1916, lib/herdr-notice.ts): one row per online
 // machine on classic herdr whose server does not answer. Asked while the page is visible; a failed start says why in
-// words, and the hub's own text with its request id is behind 复制详情 (right click / the copy button), not in the row.
+// words, and the hub's own text with its request id is behind "Copy details" (right click / the copy button), not in the row.
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { HERDR_POLL_MS, HerdrWatch, herdrWatched, type HerdrFailure } from "../../lib/herdr-notice";

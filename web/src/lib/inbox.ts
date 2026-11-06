@@ -1,9 +1,9 @@
-// The unified inbox (docs/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, 公司圈 posts, and
+// The unified inbox (docs/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, Moments (company feed) posts, and
 // the connectors' threads: GitHub, Telegram…, drawn from their generic `connector` block),
 // kept in one module-level list so the sidebar's badge and the page share it. Pulled on first use, again on `inbox`
 // pushes and on (re)connect. Marking done applies at once and is sent in the background; a failure puts it back.
 //
-// The pure parts (filters, sections, labels, the 交给 AI message, Feishu message parts) are plain functions so the
+// The pure parts (filters, sections, labels, the "Hand to AI" message, Feishu message parts) are plain functions so the
 // tests can run them without a DOM.
 
 import { formatDate, t } from "../i18n";
@@ -23,7 +23,7 @@ import { toast } from "../ui/atoms";
 import { byTime } from "./times";
 import { actedText, actOnSuggestion, statusOf, type ChainEntry, type InboxHandling, type InboxRelated, type InboxStatus, type InboxSuggestion, type SuggestionAction } from "./inbox-events";
 
-// ── wire types (docs/protocol.md「收件箱 API」) ─────────
+// ── wire types (docs/protocol.md "Inbox API") ─────────
 
 export interface DocOption {
   name: string;
@@ -93,11 +93,11 @@ export interface InboxItem {
   read?: boolean;
   done_at?: string | null;
   done_by?: string | null;
-  /** What it holds now, as listed: a bulk 已处理 sends it back (an item with new messages since stays open). */
+  /** What it holds now, as listed: a bulk "Done" sends it back (an item with new messages since stays open). */
   version?: string;
   lark?: {
     feed_id: string; is_group: boolean; is_topic?: boolean; start_position?: string; mention_position?: string; at_all?: boolean;
-    /** The Lark gateway account the chat is in; `ol_account` only when that is not the hub's own (docs/feishu.md「多账号」). */
+    /** The Lark gateway account the chat is in; `ol_account` only when that is not the hub's own (docs/feishu.md "Multiple accounts"). */
     account_id?: number; ol_account?: number;
   };
   mail?: { account_id: string; mailbox: string; uids: number[]; message_id?: string; from?: { name?: string; email?: string }; direct?: boolean; thread?: string };
@@ -108,22 +108,22 @@ export interface InboxItem {
   /** Only in GET /inbox/{id}: the conversation as text. */
   context?: string;
   agent?: InboxAgent;
-  /** New foreign mail translated by the hub as it came in (for a device whose 设置 › 翻译 asks), by target language. */
+  /** New foreign mail translated by the hub as it came in (for a device whose Settings › Translation asks), by target language. */
   translations?: Record<string, { subject: string; preview: string }>;
-  /** What it grew out of (docs/inbox.md「线索」): another item, a todo or an agent session ("<machine>/<session>"). */
+  /** What it grew out of (docs/inbox.md "Threads of origin"): another item, a todo or an agent session ("<machine>/<session>"). */
   parent?: InboxParent;
-  /** What it can be muted by (docs/inbox.md「静音」): its repository, chat or sender in its source. */
+  /** What it can be muted by (docs/inbox.md "Muting"): its repository, chat or sender in its source. */
   mutes?: InboxMuteOption[];
-  // ── events (docs/inbox.md「事件、处理链条、建议」; lib/inbox-events.ts): absent from an older hub ──
+  // ── events (docs/inbox.md "Events, handling chain, suggestions"; lib/inbox-events.ts): absent from an older hub ──
   /** The section of an open item; absent: by `tier` as before. */
   status?: InboxStatus;
-  /** 急事: stays in 需要你 while the AI prepares a suggestion. */
+  /** Urgent: stays in "Needs you" while the AI prepares a suggestion. */
   urgent?: boolean;
-  /** 总结 by the manager: background, progress, where it is stuck. */
+  /** Summary by the manager: background, progress, where it is stuck. */
   recap?: string;
   handling?: InboxHandling;
   suggestion?: InboxSuggestion;
-  /** 处理链条, oldest first. */
+  /** Handling chain, oldest first. */
   chain?: ChainEntry[];
   related?: InboxRelated[];
 }
@@ -153,12 +153,12 @@ export function muteShortName(o: InboxMuteOption): string {
   return o.tag === "repo" ? o.name.split("/").pop() || o.name : o.name;
 }
 
-/** What kind of thing a mute is, for people: 仓库 / 会话 / 发件人. */
+/** What kind of thing a mute is, for people: "Repository" / "Chat" / "Sender". */
 export function muteTagName(tag: string): string {
   return t(tag === "repo" ? "lib-inbox.mute_tag_repo" : tag === "chat" ? "lib-inbox.mute_tag_chat" : "lib-inbox.mute_tag_sender");
 }
 
-/** The 已静音 list's second line: the source's name, then 仓库 / 会话 / 发件人. */
+/** The "Muted" list's second line: the source's name, then "Repository" / "Chat" / "Sender". */
 export function muteLine(m: InboxMute): string {
   return [m.source_name || m.source, muteTagName(m.tag)].join(" · ");
 }
@@ -197,7 +197,7 @@ export function parentRoute(p: InboxParent): Route | undefined {
 
 export interface InboxConnector {
   thread: string;
-  /** The row's tag: 请你 review. */
+  /** The row's tag: "review requested". */
   label?: string;
   /** The thread on the web. */
   url?: string;
@@ -218,7 +218,7 @@ export interface MailAccount {
 // ── one item ─────────────────────────────────────────────
 
 export type Tier = "action" | "fyi" | "noise";
-/** A section of open items: the tiers, and 进行中 (an event the AI or an Agent works on, or waiting for the other side). */
+/** A section of open items: the tiers, and "In progress" (an event the AI or an Agent works on, or waiting for the other side). */
 export type SectionKey = Tier | "working";
 export const TIERS: { key: SectionKey; title: string }[] = [
   { key: "action", title: t("lib-inbox.tier_action") },
@@ -227,7 +227,7 @@ export const TIERS: { key: SectionKey; title: string }[] = [
   { key: "noise", title: t("lib-inbox.tier_noise") },
 ];
 
-/** Items not triaged yet count as 需要你 until the AI says otherwise. */
+/** Items not triaged yet count as "Needs you" until the AI says otherwise. */
 export function triage(it: InboxItem): Tier {
   return it.tier === "fyi" || it.tier === "noise" ? it.tier : "action";
 }
@@ -246,7 +246,7 @@ export function connectorReference(it: InboxItem): string | undefined {
   return t && t.includes("#") ? t : undefined;
 }
 
-/** Whether 「AI 草拟回复」 applies: a connector's thread only when the hub can answer it (a CI run cannot). */
+/** Whether "AI draft reply" applies: a connector's thread only when the hub can answer it (a CI run cannot). */
 export function canDraft(it: InboxItem): boolean {
   return !it.connector || !!it.connector.can_reply;
 }
@@ -258,7 +258,7 @@ export function openTitle(it: InboxItem): string {
   return connectorOpenTitle(it.source) ?? (url ? t("lib-inbox.open_in", { name: it.account_name || it.source }) : t("lib-inbox.open"));
 }
 
-/** A connector item's `open_url` as the browser opens it; an sms: one carries the AI 分身's draft as its body. */
+/** A connector item's `open_url` as the browser opens it; an sms: one carries the AI twin's draft as its body. */
 export function openURL(it: InboxItem): string | undefined {
   const raw = it.connector?.open_url;
   if (!raw) return undefined;
@@ -287,7 +287,7 @@ export function kindLabel(it: InboxItem): string | undefined {
   }
 }
 
-/** @我 is red (it is about you); every other tag is neutral. */
+/** @me is red (it is about you); every other tag is neutral. */
 export function labelIsUrgent(it: InboxItem): boolean {
   return it.kind === "mention" || kindLabel(it) === AT_ME;
 }
@@ -309,10 +309,10 @@ export function docTypeName(type?: string): string {
 /** Who wrote what: the row's line under the summary (or its second line before triage); `preview` is the hub's
  * translation of a foreign mail's when it is shown. */
 export function fromLine(it: InboxItem, preview?: string): string {
-  if (it.doc) return `${docTypeName(it.doc.type)} · ${it.preview}`; // the preview names who: 李雷提及了你
+  if (it.doc) return `${docTypeName(it.doc.type)} · ${it.preview}`; // the preview names who: "<name> mentioned you"
   if (it.moment) return t("lib-inbox.sender_line", { sender: it.sender ?? "", text: it.preview });
   if (it.connector) {
-    // example-org/example-repo#12 · bob：请看一下
+    // example-org/example-repo#12 · bob: please take a look (full-width colon)
     const who = [it.sender ?? "", it.preview].filter(Boolean).join(t("lib-inbox.sender_separator"));
     return [connectorReference(it) ?? "", who].filter(Boolean).join(" · ");
   }
@@ -327,8 +327,8 @@ export function sourceLine(it: InboxItem): string {
   if (it.doc) return [docTypeName(it.doc.type), it.preview].filter(Boolean).join(" · ");
   if (it.moment) return it.moment.my_post ? t("lib-inbox.moments_my_post") : t("lib-inbox.moments");
   if (it.connector) return [it.account_name || it.source, connectorReference(it)].filter(Boolean).join(" · ");
-  // 飞书 · <name> while the hub reads more than one Feishu account
-  // i18n-ignore: the hub names its Lark accounts 「飞书 · <name>」
+  // Lark · <name> while the hub reads more than one Feishu account
+  // i18n-ignore: the hub names its Lark accounts "Lark · <name>" in Chinese
   if (isLark(it)) return [it.account_name?.startsWith("飞书 · ") ? it.account_name : t("lib-inbox.lark"), it.lark?.is_group ? t("lib-inbox.kind_group") : it.kind === "bot" ? t("lib-inbox.kind_bot") : t("lib-inbox.kind_dm")].join(" · ");
   const from = it.mail?.from;
   return [it.account_name, from?.name && from.email ? `${from.name} <${from.email}>` : from?.email || it.sender].filter(Boolean).join(" · ");
@@ -342,7 +342,7 @@ export function agentWorking(it: InboxItem): boolean {
   return it.agent?.state === "queued" || it.agent?.state === "running";
 }
 
-/** The AI 分身's proposed status move as a line ("状态：进行中 → 已完成 · 写文档"). */
+/** The AI twin's proposed status move as a line ("Status: In progress → Done · write the doc", in Chinese). */
 export function docChangeLine(change: DocChange, doc?: InboxDoc): string {
   const row = doc?.rows?.find((r) => r.ref === change.ref);
   const st = row?.status?.find((s) => s.field === change.field);
@@ -369,7 +369,7 @@ export function withToken(url: string | undefined, token = getToken(), base = BA
   return `${base}${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
 }
 
-/** 18:20 today, 昨天, 周三 within the week, 10月28日 this year, else 2025-10-28 (LarkTime.short). */
+/** 18:20 today, "Yesterday", "Wed" within the week, "Oct 28" this year, else 2025-10-28 (LarkTime.short). */
 export function shortTime(iso?: string, now = new Date()): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -458,7 +458,7 @@ export function mailAccounts(accounts: MailAccount[], items: InboxItem[]): MailA
   return [...seen.values()];
 }
 
-// ── agents waiting on the user (they head 需要你) ────────
+// ── agents waiting on the user (they head "Needs you") ────────
 
 /** Muted: the agent itself, or its space unless the agent was turned back on there (the hub's rule). */
 export function interactionMuted(ix: Interaction, sessions: Record<string, Session[]>, mutes: AgentMutes): boolean {
@@ -469,7 +469,7 @@ export function interactionMuted(ix: Interaction, sessions: Record<string, Sessi
   return Boolean(space && mutes.spaces.includes(`${ix.machine_id}/${space}`));
 }
 
-/** What it waits for: 「Claude 在问你」, 「计划等你审批」…; Persona's ask_user and other agents by name. */
+/** What it waits for: "Claude is asking you", "Plan waiting for your approval"…; Persona's ask_user and other agents by name. */
 export function interactionTitle(ix: Interaction): string {
   if (ix.tool_name === "ask_user") return t("lib-inbox.ix_persona_asks");
   const name = ix.agent === "codex" ? "Codex" : ix.agent === "traex" ? "TRAEX" : ix.agent && ix.agent !== "claude" ? ix.agent : "";
@@ -515,7 +515,7 @@ export function conversationRoute(mid: string, sid: string, sessions: Record<str
   return isAssistant ? { name: "jarvis", sid } : { name: "session", mid, sid };
 }
 
-// ── 交给 AI ──────────────────────────────────────────────
+// ── Hand to AI ───────────────────────────────────────────
 
 export const HANDOFF_PRESETS = [t("lib-inbox.handoff_summarize"), t("lib-inbox.handoff_research"), t("lib-inbox.handoff_handle")];
 
@@ -543,7 +543,7 @@ export function handOffMessage(it: InboxItem, ask: string): string {
   return `${contextXML("context", title, "", text)}\n\n${ask.trim() || HANDOFF_PRESETS[0]}`;
 }
 
-// ── Feishu messages (docs/protocol.md「飞书 API」) ──────
+// ── Feishu messages (docs/protocol.md "Lark API") ──────
 
 export interface LarkPart {
   kind: string;
@@ -565,10 +565,10 @@ export interface LarkMessage {
   text?: string;
   created_at?: string;
   recalled?: boolean;
-  /** The Lark gateway kept a recalled message's content (lark-display.ts): shown only with 防撤回 on, still marked 已撤回. */
+  /** The Lark gateway kept a recalled message's content (lark-display.ts): shown only with "Keep recalled messages" on, still marked "Recalled". */
   retained?: boolean;
   edited?: boolean;
-  /** An edited message's earlier versions, oldest first (lark-display.ts, shown with 编辑历史 on). */
+  /** An edited message's earlier versions, oldest first (lark-display.ts, shown with "Edit history" on). */
   edit_history?: { edited_at: string; text: string; parts?: LarkPart[]; olk?: unknown }[];
   reply_count?: number;
   thread_reply_count?: number;
@@ -649,7 +649,7 @@ export function partRuns(parts: LarkPart[]): { inline: boolean; parts: LarkPart[
   return out;
 }
 
-/** `[微笑]`-style text for an emoji key without its picture. */
+/** Bracketed-name-style text (like `[Smile]` in Chinese) for an emoji key without its picture. */
 export function emojiLabel(key: string, text?: string): string {
   if (text) return text;
   let k = key.replace(/^Lark_Emoji_/, "");
@@ -680,7 +680,7 @@ export function cardText(meta: Record<string, unknown> | undefined): { title: st
   return { title, lines: lines.filter((l, i) => l !== title && l !== lines[i - 1]) };
 }
 
-// ── 公司圈 ───────────────────────────────────────────────
+// ── Moments ──────────────────────────────────────────────
 
 export interface MomentContent {
   text?: string;
@@ -748,13 +748,13 @@ export const TRIAGE_REASONS: Record<string, string> = {
   behind: t("lib-inbox.triage_behind"),
 };
 
-/** The model settings 去配置 opens: 信息筛选, the purpose that sorts the inbox. */
+/** The model settings "Set up" opens: inbox triage, the purpose that sorts the inbox. */
 export const TRIAGE_SETTINGS = "/settings?tab=model-config&purpose=inbox.triage";
 
 /**
  * The banner over the list while new items wait for triage; null when none wait, triage is ok, or the hub is older.
- * One source waiting names it (「有 3 条飞书消息在等分拣：…」), several do not; the reason is the hub's, else the
- * state's words (an unknown state without a reason says only how many wait). `configure`: 去配置, only for a model
+ * One source waiting names it ("3 Lark messages waiting to be sorted: …"), several do not; the reason is the hub's, else the
+ * state's words (an unknown state without a reason says only how many wait). `configure`: "Set up", only for a model
  * not set up.
  */
 export function triageBanner(tr: InboxTriage | null | undefined): { text: string; configure: boolean } | null {
@@ -842,7 +842,7 @@ export function reloadInbox(): Promise<void> {
   return inFlight;
 }
 
-/** 刷新: the hub collects Feishu and mail now, then lists. */
+/** "Refresh": the hub collects Feishu and mail now, then lists. */
 export async function refreshInbox(): Promise<void> {
   set({ loading: true });
   try {
@@ -855,7 +855,7 @@ export async function refreshInbox(): Promise<void> {
   }
 }
 
-/** 已处理 / 移回: shown at once, sent in the background; a failure puts the item back. */
+/** "Done" / "Move back": shown at once, sent in the background; a failure puts the item back. */
 /** Marks an item done or open; resolves to whether the hub took it. */
 export async function setDone(item: InboxItem, done: boolean): Promise<boolean> {
   const before = state.items.find((x) => x.id === item.id);
@@ -877,8 +877,8 @@ export function muteCovers(source: string, o: InboxMuteOption, it: InboxItem): b
 }
 
 /**
- * 静音这个仓库 / 会话 / 发件人 (iOS InboxStore.mute): the item and the open ones of its source the mute covers go to 已处理
- * at once (「已静音：<名字>」), the hub keeps the mute and files them too; a failure puts them back.
+ * Mute this repository / chat / sender (iOS InboxStore.mute): the item and the open ones of its source the mute covers go to "Done"
+ * at once ("Muted: <name>"), the hub keeps the mute and files them too; a failure puts them back.
  */
 export async function muteItem(item: InboxItem, o: InboxMuteOption): Promise<void> {
   // Only the covered items are put back: a reload during the request (every hub inbox event reloads) keeps its items.
@@ -900,20 +900,20 @@ export async function listInboxMutes(): Promise<InboxMute[]> {
   return sortMutes(r.mutes ?? []);
 }
 
-/** 取消静音: only what comes in later comes back. */
+/** "Unmute": only what comes in later comes back. */
 export function unmuteInbox(id: string): Promise<unknown> {
   return api(`/inbox/mutes/${enc(id)}`, { method: "DELETE" });
 }
 
-/** What a bulk action does (POST /api/v1/inbox/bulk): `dismiss` is 全部清理 (done_by=dismissed), `done` files a section
- * (全部看过 / 全部清除), `reopen` is 移回 (their 撤销). */
+/** What a bulk action does (POST /api/v1/inbox/bulk): `dismiss` is Clean up all (done_by=dismissed), `done` files a section
+ * (Mark all as seen / Clear all), `reopen` is Move back (their Undo). */
 export type BulkAction = "done" | "dismiss" | "reopen";
 
 /** What a bulk request did: the items it moved as the hub has them now, the ones already so, and the ones it left
  * (`changed`: new messages since the list; `missing`: gone from the hub). */
 export type BulkResult = { changed: InboxItem[]; unchanged: string[]; skipped: { id: string; reason: string }[] };
 
-/** From this many items on, 全部清理 asks first (「将清理 N 件」); fewer go at once, with 撤销 on the toast. */
+/** From this many items on, Clean up all asks first ("Will clean up N items"); fewer go at once, with Undo on the toast. */
 export const BULK_CONFIRM_AT = 10;
 
 /** The toast after a bulk request. */
@@ -927,12 +927,12 @@ export function bulkMessage(action: BulkAction | boolean, r: BulkResult): string
   return fresh ? t("lib-inbox.bulk_fresh", { head, count: fresh }) : head;
 }
 
-/** What 全部清理 covers, for its label: the filters' names and the search, or 全部. */
+/** What Clean up all covers, for its label: the filters' names and the search, or All. */
 export function bulkScope(filters: string[], query: string, count: number): string {
   return count ? t("lib-inbox.scope_count", { scope: bulkScopeName(filters, query), count }) : t("lib-inbox.scope_none");
 }
 
-/** The filters' names and the search, or 全部: what a bulk action covers, without the count. */
+/** The filters' names and the search, or "All": what a bulk action covers, without the count. */
 export function bulkScopeName(filters: string[], query: string): string {
   const parts = filters.filter(Boolean);
   if (query.trim()) parts.push(t("lib-inbox.scope_search", { query: query.trim() }));
@@ -940,7 +940,7 @@ export function bulkScopeName(filters: string[], query: string): string {
 }
 
 /** One bulk request. A hub from before /api/v1/inbox/bulk (404 / 405) gets it the old way (POST /api/v1/inbox/done):
- * it has no 忽略, so 全部清理 there files the items as done (done_by=user), which still clears them out of the list. */
+ * it has no Dismiss, so Clean up all there files the items as done (done_by=user), which still clears them out of the list. */
 async function bulkRequest(action: BulkAction, targets: InboxItem[]): Promise<BulkResult> {
   const items = targets.map((it) => ({ id: it.id, version: it.version }));
   try {
@@ -951,9 +951,9 @@ async function bulkRequest(action: BulkAction, targets: InboxItem[]): Promise<Bu
   }
 }
 
-/** 全部清理 (the view's open items), 全部看过 / 全部清除 (a section), and their 撤销: one request for
+/** Clean up all (the view's open items), Mark all as seen / Clear all (a section), and their Undo: one request for
  * them all, each with the version it was listed at, so the hub leaves one that took new messages since open (it goes
- * back here too, and the list is pulled again). Shown at once; a failure puts them all back. Filing ends with 撤销 on
+ * back here too, and the list is pulled again). Shown at once; a failure puts them all back. Filing ends with "Undo" on
  * the toast. `action` true / false is done / reopen. */
 export async function setAllDone(items: InboxItem[], action: BulkAction | boolean, undoable = true): Promise<void> {
   const a: BulkAction = action === true ? "done" : action === false ? "reopen" : action;
@@ -981,7 +981,7 @@ export async function setAllDone(items: InboxItem[], action: BulkAction | boolea
   }
 }
 
-/** 发送: the hub replies in the chat / by mail / in the document (moving the rows' status in `changes` first) and
+/** "Send": the hub replies in the chat / by mail / in the document (moving the rows' status in `changes` first) and
  * files the item as done. Filed at once; a failure puts the item back and keeps the text for the draft dialog. */
 export async function sendReply(item: InboxItem, text: string, changes: DocChange[] = []): Promise<boolean> {
   if (state.sending.includes(item.id)) return false;
@@ -1004,8 +1004,8 @@ export async function sendReply(item: InboxItem, text: string, changes: DocChang
   }
 }
 
-/** 发送 / 开始 / 知道了 / 确认, 驳回, 说一句话 on the item's suggestion: the hub's item replaces ours. A suggestion that
- * changed meanwhile is not run: 「建议已更新」 and the item as it is now. Resolves to whether it went through. */
+/** "Send" / "Start" / "Got it" / "Confirm", "Reject", "Say something" on the item's suggestion: the hub's item replaces ours. A suggestion that
+ * changed meanwhile is not run: "Suggestion updated" and the item as it is now. Resolves to whether it went through. */
 export async function suggestionAct(item: InboxItem, action: SuggestionAction, text?: string): Promise<boolean> {
   const s = item.suggestion;
   if (!s || state.sending.includes(item.id)) return false;
@@ -1088,7 +1088,7 @@ export function useInbox<T>(select: (s: InboxState) => T): T {
   return useSyncExternalStore(subscribe, read, read);
 }
 
-/** How many unhandled「需要你」items the inbox has (the sidebar's badge). */
+/** How many unhandled "Needs you" items the inbox has (the sidebar's badge). */
 export function useInboxBadge(): number {
   return useInbox((s) => badgeCount(s.items));
 }
@@ -1102,7 +1102,7 @@ export function resetInboxForTests() {
   unsentReplies.clear();
 }
 
-/** Someone a sent message @s: Feishu notifies them; the text holds their `@name` (所有人 is `user_id` "all"). */
+/** Someone a sent message @s: Feishu notifies them; the text holds their `@name` ("Everyone" is `user_id` "all"). */
 export interface LarkMention {
   user_id: string;
   name: string;

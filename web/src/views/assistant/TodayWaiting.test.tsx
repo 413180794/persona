@@ -1,5 +1,5 @@
-// The 今天 card's 等你 row says what each waiting task waits on (#4478), not only how many wait: one task's ask under
-// its title, several as 「<title>：<ask>」 lines; a task the store has no card for keeps its title.
+// The "Today" card's "Needs you" row says what each waiting task waits on (#4478), not only how many wait: one task's ask under
+// its title, several as "<title>: <ask>" lines; a task the store has no card for keeps its title.
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 import type { FeedItem, TodayBody } from "../../lib/feed";

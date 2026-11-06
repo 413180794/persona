@@ -1,11 +1,11 @@
-// The assistant's scheduled tasks (docs/assistant.md「定时任务」, docs/protocol.md `/assistant/tasks`): the wire types,
+// The assistant's scheduled tasks (docs/assistant.md "Scheduled tasks", docs/protocol.md `/assistant/tasks`): the wire types,
 // how a task is said in words (the iOS app's AssistantScheduleText), what the editor checks, and the body it saves.
 // Pure functions of their arguments (`now` passed in), so they are tested without a DOM.
 import { currentLanguage, formatDate, t } from "../i18n";
 
 export type Repeat = "once" | "daily" | "interval";
 
-/** 跑完推送: "" every run's answer is pushed, "asked" only what a run sends itself. */
+/** "Push when done": "" every run's answer is pushed, "asked" only what a run sends itself. */
 export type Push = "" | "asked";
 
 /** The hub feature that says it takes Task.push; without it the editor leaves the setting out. */
@@ -25,13 +25,13 @@ export interface Task {
   every_minutes?: number;
   enabled: boolean;
   machine_id?: string;
-  /** A conversation runs go into (接着原来的对话); empty = the task's own one. */
+  /** A conversation runs go into ("Continue the original chat"); empty = the task's own one. */
   session_id?: string;
   launcher?: string;
   permission_mode?: string;
   effort?: string;
-  /** 跑完推送 (hubs with the task_push feature): "" every run's answer, "asked" only what a run sends with notify_user.
-   *  An "asked" task always runs in its own conversation (docs/assistant.md「跑完推送」). */
+  /** "Push when done" (hubs with the task_push feature): "" every run's answer, "asked" only what a run sends with notify_user.
+   *  An "asked" task always runs in its own conversation (docs/assistant.md "Push when done"). */
   push?: Push;
   created_by?: string;
   created_at?: string;
@@ -59,7 +59,7 @@ export interface Run {
   session_id?: string;
 }
 
-/** Monday … Sunday, short (the editor's day buttons, 「每周一、三」). */
+/** Monday … Sunday, short (the editor's day buttons, "every Mon, Wed"). */
 export const DAY_NAMES = t("lib-routines.day_names").split(",");
 /** Monday … Sunday in full (the day buttons' labels): 2024-01-01 was a Monday. */
 export const DAY_LONG_NAMES = DAY_NAMES.map((_, i) => formatDate(new Date(2024, 0, 1 + i), { weekday: "long" }));
@@ -68,7 +68,7 @@ export const WEEKEND = [6, 7];
 export const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const MIN_EVERY = 5;
 export const MAX_EVERY = 7 * 24 * 60;
-/** Quick picks for 每隔. */
+/** Quick picks for "Interval". */
 export const INTERVALS = [15, 30, 60, 120, 360, 1440];
 
 /** A time the hub sent, or null: empty, unparsable, or Go's zero time ("0001-01-01T00:00:00Z"). */
@@ -100,7 +100,7 @@ export function normalizeDays(days?: number[] | null): number[] {
   return s.length === 7 ? [] : s;
 }
 
-/** "每天" / "工作日" / "周末" / "每周一、三、五". */
+/** "Every day" / "Weekdays" / "Weekends" / "Every Mon, Wed, Fri". */
 export function repeatsLabel(days?: number[] | null): string {
   const d = normalizeDays(days);
   if (d.length === 0) return t("lib-routines.every_day");
@@ -109,18 +109,18 @@ export function repeatsLabel(days?: number[] | null): string {
   return t("lib-routines.weekly", { days: d.map((x) => DAY_NAMES[x - 1]).join(t("lib-routines.day_separator")) });
 }
 
-/** "09:00" → "上午 9:00", "21:30" → "晚上 9:30", "00:15" → "凌晨 12:15". */
+/** "09:00" → "9:00 AM", "21:30" → "9:30 PM", "00:15" → "12:15 AM" (Chinese names the part of the day). */
 export function clockLabel(hhmm?: string): string {
   if (!hhmm || !HHMM.test(hhmm)) return hhmm ?? "";
   const [h, m] = hhmm.split(":").map(Number);
-  // Chinese says the part of the day (凌晨 / 早上 / 上午…), finer than Intl's; the others read the clock their own way
+  // Chinese says the part of the day (small hours / early morning / morning…), finer than Intl's; the others read the clock their own way
   if (currentLanguage() !== "zh-Hans") return formatDate(new Date(2000, 0, 1, h, m), { hour: "numeric", minute: "2-digit" });
   const part = h < 5 ? t("lib-routines.part_small_hours") : h < 9 ? t("lib-routines.part_early_morning") : h < 12 ? t("lib-routines.part_morning") : h < 13 ? t("lib-routines.part_noon") : h < 18 ? t("lib-routines.part_afternoon") : t("lib-routines.part_evening");
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return t("lib-routines.clock", { part, time: `${h12}:${String(m).padStart(2, "0")}` });
 }
 
-/** "每 30 分钟" / "每 2 小时" / "每 1 小时 30 分钟" / "每天" / "每 2 天". */
+/** "Every 30 minutes" / "Every 2 hours" / "Every 1 hour 30 minutes" / "Every day" / "Every 2 days". */
 export function everyLabel(minutes: number): string {
   if (minutes < 60) return t("lib-routines.every_minutes", { count: minutes });
   if (minutes % 1440 === 0) return minutes === 1440 ? t("lib-routines.every_day") : t("lib-routines.every_days", { count: minutes / 1440 });
@@ -133,7 +133,7 @@ export function hm(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-/** The day part of a moment: "今天" / "明天" / "昨天" / "周三" (within a week) / "11月2日". */
+/** The day part of a moment: "Today" / "Tomorrow" / "Yesterday" / "Wed" (within a week) / "Nov 2". */
 export function dayLabel(d: Date, now: Date): string {
   const n = daysBetween(now, d);
   if (n === 0) return t("lib-routines.today");
@@ -143,12 +143,12 @@ export function dayLabel(d: Date, now: Date): string {
   return formatDate(d, { month: "short", day: "numeric" });
 }
 
-/** "今天 15:30" / "明天 09:00" / "周三 09:00" / "11月2日 09:00". */
+/** "Today 15:30" / "Tomorrow 09:00" / "Wed 09:00" / "Nov 2 09:00". */
 export function momentLabel(d: Date, now: Date): string {
   return `${dayLabel(d, now)} ${hm(d)}`;
 }
 
-/** A future moment, roughly: "马上" / "25 分钟后" / "2 小时后" / "1 小时 30 分钟后" / "3 天后"; "已过时间" in the past. */
+/** A future moment, roughly: "Right away" / "in 25 minutes" / "in 2 hours" / "in 1 hour 30 minutes" / "in 3 days"; "Past due" in the past. */
 export function untilLabel(d: Date, now: Date): string {
   const s = (d.getTime() - now.getTime()) / 1000;
   if (s < 60) return s < -60 ? t("lib-routines.past_due") : t("lib-routines.right_away");
@@ -167,7 +167,7 @@ export function taskTitle(task: Pick<Task, "title" | "prompt">): string {
   return first.trim() || t("lib-routines.scheduled_follow_up");
 }
 
-/** The rule in words: "每个工作日 上午 9:00" / "每 30 分钟" / "一次 · 新对话". */
+/** The rule in words: "Every weekday 9:00 AM" / "Every 30 minutes" / "Once · New chat". */
 export function ruleText(task: Task): string {
   if (task.repeat === "interval") return everyLabel(task.every_minutes ?? 0);
   if (task.repeat === "once") return task.session_id ? t("lib-routines.once_same_chat") : t("lib-routines.once_new_chat");
@@ -181,14 +181,14 @@ export function nextRun(t: Task): Date | null {
   return t.enabled ? parseTime(t.next_run) ?? parseTime(t.at) : null;
 }
 
-/** "下次 今天 09:00 · 2 小时后" / "已关闭" / "". */
+/** "Next Today 09:00 · in 2 hours" / "Off" / "". */
 export function nextText(task: Task, now: Date): string {
   if (!task.enabled) return t("lib-routines.off");
   const n = nextRun(task);
   return n ? t("lib-routines.next", { moment: momentLabel(n, now), until: untilLabel(n, now) }) : "";
 }
 
-/** The last run in a few words, null when it never ran: "上次 今天 09:03 · 已运行". */
+/** The last run in a few words, null when it never ran: "Last Today 09:03 · Ran". */
 export function lastRunText(task: Task, now: Date): { text: string; failed: boolean } | null {
   const at = parseTime(task.last_run);
   if (!at) return null;
@@ -204,7 +204,7 @@ export interface ModeOption {
   detail: string;
 }
 
-/** Besides 默认 (""): the hub's permission modes (proto.PermissionModes). */
+/** Besides "Default" (""): the hub's permission modes (proto.PermissionModes). */
 export const PERMISSION_MODES: ModeOption[] = [
   // the same names as the chat's ⋯ menu (session-actions.ts)
   { id: "acceptEdits", title: t("lib-session-actions.mode_accept_edits"), detail: t("lib-session-actions.mode_accept_edits_detail") },
@@ -219,7 +219,7 @@ export const EFFORTS: ModeOption[] = [
 
 export const BYPASS = "bypassPermissions";
 
-/** "自动改文件" for a known mode, the raw value otherwise; "" for the default. */
+/** "Auto-edit" for a known mode, the raw value otherwise; "" for the default. */
 export function modeLabel(id?: string): string {
   if (!id || id === "default") return "";
   return PERMISSION_MODES.find((m) => m.id === id)?.title ?? id;
@@ -230,7 +230,7 @@ export function effortLabel(id?: string): string {
   return EFFORTS.find((e) => e.id === id)?.title ?? id;
 }
 
-/** What it runs with when that isn't the default, in a few words: "claude-fast · 自动 · 思考低"; `danger` for 全部放行. */
+/** What it runs with when that isn't the default, in a few words: "claude-fast · Auto · Low thinking"; `danger` for "Allow all". */
 export function runsWith(task: Pick<Task, "launcher" | "permission_mode" | "effort">): { text: string; danger: boolean } | null {
   const parts = [task.launcher, modeLabel(task.permission_mode), task.effort ? t("lib-routines.effort", { effort: effortLabel(task.effort) }) : ""].filter(Boolean);
   return parts.length ? { text: parts.join(" · "), danger: task.permission_mode === BYPASS } : null;
@@ -279,7 +279,7 @@ export function sameTask(a: Task, b: Task): boolean {
   }
 }
 
-/** The JSON for POST (no `saved`) or PUT. Models follow 模型配置 › 主对话; tasks only configure permissions.
+/** The JSON for POST (no `saved`) or PUT. Models follow Models › Main chat; tasks only configure permissions.
  *  `push` goes only when changed from `saved`. `session_id` "" makes runs use the task's own conversation; `at` is left out when there is none (Go can't read ""). */
 export function taskBody(d: Task, saved?: Task | null): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -300,7 +300,7 @@ export function taskBody(d: Task, saved?: Task | null): Record<string, unknown> 
   return body;
 }
 
-/** The draft with 跑完推送 set. "asked" runs in the task's own conversation: 接着原来的对话 goes (the hub clears it too). */
+/** The draft with "Push when done" set. "asked" runs in the task's own conversation: "Continue the original chat" goes (the hub clears it too). */
 export function withPush(d: Task, push: Push): Task {
   return push === "asked" ? { ...d, push, session_id: undefined } : { ...d, push };
 }
@@ -327,8 +327,8 @@ export function fromLocalInput(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Switching the rule keeps the editor valid: 一次 gets the next whole hour when it has no future time, 每隔 30 minutes
- *  when it has none, 每天 09:00 when it has no time. */
+/** Switching the rule keeps the editor valid: "Once" gets the next whole hour when it has no future time, "Interval" 30 minutes
+ *  when it has none, "Every day" 09:00 when it has no time. */
 export function withRepeat(d: Task, r: Repeat, now: Date): Task {
   const t: Task = { ...d, repeat: r };
   if (r === "once" && (parseTime(t.at)?.getTime() ?? 0) < now.getTime()) t.at = nextHour(now).toISOString();
@@ -349,7 +349,7 @@ export interface Template {
   every_minutes?: number;
 }
 
-/** The ＋ menu's starting points (the iOS app's AssistantRoutineTemplate). */
+/** The + menu's starting points (the iOS app's AssistantRoutineTemplate). */
 export const TEMPLATES: Template[] = [
   {
     key: "meeting",
@@ -429,7 +429,7 @@ export function runStatusWord(r: Pick<Run, "status">): string {
   return r.status === "ok" ? t("lib-routines.status_ran") : r.status === "skipped" ? t("lib-routines.status_skipped") : t("lib-routines.status_failed");
 }
 
-/** "手动运行" / the error / "准时" / "晚了 21 秒" / "晚了 3 分钟" / "晚了 2 小时". */
+/** "Run manually" / the error / "On time" / "21 seconds late" / "3 minutes late" / "2 hours late". */
 export function runDetail(r: Run): string {
   if (r.manual) return t("lib-routines.run_manual");
   if (r.status !== "ok") return r.error || runStatusWord(r);
@@ -442,7 +442,7 @@ export function runDetail(r: Run): string {
   return t("lib-routines.late_hours", { count: Math.floor(late / 3600) });
 }
 
-/** Newest first, one group per day ("今天", "昨天", "周三", "11月2日"). */
+/** Newest first, one group per day ("Today", "Yesterday", "Wed", "Nov 2"). */
 export function runDays(runs: Run[], now: Date): { day: string; runs: Run[] }[] {
   const out: { day: string; runs: Run[] }[] = [];
   const sorted = runs
@@ -458,7 +458,7 @@ export function runDays(runs: Run[], now: Date): { day: string; runs: Run[] }[] 
 
 /** The conversations a task's runs went into (#2824), one entry each, at most `n`, with when a run last went into
  *  it: its own conversation first when it has one, then the runs' (newest first, as the hub lists them). The
- *  conversation it came from (接着原来的对话) is the user's own and stays out, and so is any the caller knows is the
+ *  conversation it came from ("Continue the original chat") is the user's own and stays out, and so is any the caller knows is the
  *  user's (`mine`: the main one, one the hub says the user opened), since `session_id` may have been cleared since
  *  runs went into it. */
 export function taskConversations(task: Task, runs: readonly Run[], n = 3, mine: (sid: string) => boolean = () => false): { sid: string; at?: string }[] {

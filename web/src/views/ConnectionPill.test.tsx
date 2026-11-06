@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The pill over the page once the socket dropped (#2970): its words follow the phase, a click opens the details (why,
-// the next try, since when), 立即重试 tries now, and Escape or a click elsewhere closes them.
+// the next try, since when), "Retry now" tries now, and Escape or a click elsewhere closes them.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

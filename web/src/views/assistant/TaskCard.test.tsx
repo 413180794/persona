@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // A task card (#2670): Enter or Space on the card opens the task, as a click does; Enter on one of its own buttons
-// (发消息, 重试, 移除…) does only that button's thing and leaves the task's detail closed.
+// ("Message", "Retry", "Remove"…) does only that button's thing and leaves the task's detail closed.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

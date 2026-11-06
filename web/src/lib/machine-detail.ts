@@ -1,4 +1,4 @@
-// 机器详情 (docs/machines.md「App」): the pure part of the page — ranges, the metric charts' scales, gaps, ticks and
+// Machine details (docs/machines.md "App"): the pure part of the page — ranges, the metric charts' scales, gaps, ticks and
 // the hover read-out, the number formats, the agents by space and the system facts. MachineDetail.tsx only draws.
 import { formatDate, t } from "../i18n";
 import { stateOf, tabLabel } from "./format";
@@ -36,7 +36,7 @@ export interface DetailSample {
   disk_total?: number;
 }
 
-/** Machine.system (docs/machines.md「系统信息」). */
+/** Machine.system (docs/machines.md "System information"). */
 export interface SystemInfo {
   os?: string;
   distro?: string;
@@ -241,7 +241,7 @@ export function coresNow(latest: DetailSample | null | undefined, online: boolea
   return cores.map((c) => (Number.isFinite(c) ? Math.min(100, Math.max(0, c)) : 0));
 }
 
-/** "3 天 4 小时", "5 小时 12 分钟", "8 分钟". */
+/** "3 d 4 h", "5 h 12 min", "8 min" (in Chinese). */
 export function uptime(bootSec: number, nowSec: number): string {
   const s = Math.max(0, Math.floor(nowSec - bootSec));
   const d = Math.floor(s / 86400),
@@ -265,7 +265,7 @@ export function localOffset(at = Date.now()): number {
 
 export type Level = "normal" | "warning" | "critical";
 
-/** docs/machines.md「异常」: CPU ≥ 75 / 90 %, memory and disk ≥ 80 / 90 %, load ≥ 1 / 2 × cores. */
+/** docs/machines.md "Anomalies": CPU ≥ 75 / 90 %, memory and disk ≥ 80 / 90 %, load ≥ 1 / 2 × cores. */
 export function level(v: number | undefined, warn: number, crit: number): Level {
   if (v === undefined) return "normal";
   return v >= crit ? "critical" : v >= warn ? "warning" : "normal";
@@ -301,7 +301,7 @@ export function agentsBySpace(sessions: Session[]): SpaceGroup[] {
     .map(({ index: _index, ...g }) => ({ ...g, sessions: g.sessions.sort(bySlot) }));
 }
 
-/** "1 个需要你 · 2 个工作中" for a space's header; "" when all are quiet. */
+/** "1 needs you · 2 working" for a space's header; "" when all are quiet. */
 export function countsText(c: SpaceGroup["counts"]): string {
   return [c.needs && t("lib-machine-detail.count_needs", { count: c.needs }), c.working && t("lib-machine-detail.count_working", { count: c.working }), c.unread && t("lib-machine-detail.count_unread", { count: c.unread })].filter(Boolean).join(" · ");
 }
@@ -319,7 +319,7 @@ export function loudState(st: AgentState): boolean {
 
 // ── system ──
 
-/** One line under the name: "macOS 26.1 · MacBook Pro · Apple M4 Pro · 14 核 · 48 GB". */
+/** One line under the name: "macOS 26.1 · MacBook Pro · Apple M4 Pro · 14 cores · 48 GB". */
 export function systemLine(system: SystemInfo | undefined, m?: DetailMachine): string {
   if (!system) return [m?.os, m?.arch].filter(Boolean).join(" · ") || m?.hostname || "";
   return [system.name || m?.os, system.model, system.cpu, system.cores ? t("lib-machine-detail.cores", { count: system.cores }) : "", system.memory ? bytesBin(system.memory).replace(/\.00 /, " ") : ""].filter(Boolean).join(" · ");
@@ -333,7 +333,7 @@ export function connectionText(m: DetailMachine): string {
   return m.kind ? t("lib-machine-detail.conn_kind", { kind: m.kind }) : "";
 }
 
-/** 系统: what it is, what it runs on, since when, and the versions (label, value, mono?). */
+/** "System": what it is, what it runs on, since when, and the versions (label, value, mono?). */
 export function systemFacts(system: SystemInfo | undefined, m: DetailMachine | undefined, nowSec: number, tz = 0): [string, string, boolean?][] {
   const out: [string, string, boolean?][] = [];
   if (system?.name) out.push([t("lib-machine-detail.fact_system"), system.build ? t("lib-machine-detail.fact_system_build", { name: system.name, build: system.build }) : system.name]);

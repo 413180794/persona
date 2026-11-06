@@ -1,4 +1,4 @@
-// 回退到这里 (#2436, Moshi's "Rewind to here"): go back in a Claude session to before one of your messages. The node drives
+// "Rewind to here" (#2436, Moshi's "Rewind to here"): go back in a Claude session to before one of your messages. The node drives
 // Claude Code's own /rewind in the session's terminal (node/rewind.go), so what the app has to say is which message:
 // its text, which of the messages with that text counted from the end, and how many messages came after it. Both the
 // list in Claude's TUI and the app's transcript are read from the end, so a page of older messages not loaded yet changes
@@ -68,7 +68,7 @@ export function rewindTarget(items: Item[], messageId: string): RewindTarget | n
   };
 }
 
-/** Why 回退到这里 is off for this session ("" when it is on). Short: it is the hint on the menu row. */
+/** Why "Rewind to here" is off for this session ("" when it is on). Short: it is the hint on the menu row. */
 export function rewindBlock(session: Session | undefined, busy: boolean): string {
   if (!session || session.assistant || session.source_kind || (session.agent && session.agent !== "claude")) return t("rewind.block_claude_only");
   const state = stateOf(session);

@@ -26,7 +26,7 @@ const until = async (ok: () => boolean) => {
 };
 const close = () => host.querySelector<HTMLButtonElement>('aside [aria-label="关闭面板"]');
 
-// the header's 文件 button, pressed from the keyboard (focused, then clicked, as Enter does)
+// the header's Files button, pressed from the keyboard (focused, then clicked, as Enter does)
 async function openFromButton() {
   trigger.focus();
   act(() => trigger.click());

@@ -211,7 +211,7 @@ describe("tabPagePane", () => {
   });
 });
 
-// #2320: several agents in one herdr tab are one group, in the order their panes sit, the first pane's the 发起者.
+// #2320: several agents in one herdr tab are one group, in the order their panes sit, the first pane's the "Lead".
 describe("panes of one tab", () => {
   const at = (id: string, o: Partial<Session> & { st?: AgentState } = {}) => pane({ space: "w4R", slot: 1, ...o, pane_id: `w4R:${id}` });
 
@@ -345,7 +345,7 @@ describe("panes of one tab", () => {
     expect(o.groups.needs.map((g) => g.lead)).toEqual([asking]);
     expect(o.unread).toEqual([doneA, doneB]);
     expect(o.markAllAt).toBe("summary");
-    // with a 做完了 section: in its header, still every unread agent
+    // with a "Finished" section: in its header, still every unread agent
     const solo = pane({ space: "w1", slot: 3, p: 1, st: "unread" });
     const withSection = homeOverview([working, doneA, solo], []);
     expect(withSection.groups.unread.map((g) => g.lead)).toEqual([solo]);

@@ -1,5 +1,5 @@
-// A waiting task says what it waits on (#3301): its card's kind and what it asks, in the 待办 page's words, so the owner
-// does not have to open the task to see it; without a card it says 有事等你回答 as before.
+// A waiting task says what it waits on (#3301): its card's kind and what it asks, in the to-dos page's words, so the owner
+// does not have to open the task to see it; without a card it says "Waiting for your answer" as before.
 import { describe, expect, it } from "vitest";
 import type { Interaction, Session } from "../../lib/types";
 import type { Todo } from "../../lib/todos";

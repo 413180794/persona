@@ -1,4 +1,4 @@
-// 添加电脑 from a page that is not 机器 (docs/onboarding.md 4.5「空状态改写」): the Agents page and 新建 Agent with no
+// "Add computer" from a page that is not "Machines" (docs/onboarding.md 4.5 "Rewriting empty states"): the Agents page and "New agent" with no
 // computer open the machines page's own flow (AddComputer) where the hub has it (feature machines_add), else the plain
 // how-to, like the machines page's empty state; and the empty state those pages show.
 import { useState } from "react";
@@ -33,7 +33,7 @@ export function useAddComputer(): { open: () => void; dialog: React.ReactNode } 
   };
 }
 
-/** 还没有电脑 + 添加电脑, the machines page's empty state, for a page that needs a computer to show anything. */
+/** "No computers yet" + "Add computer", the machines page's empty state, for a page that needs a computer to show anything. */
 export function NoComputers({ body, onAdd }: { body: string; onAdd: () => void }) {
   return (
     <div data-testid="no-computers">

@@ -1,4 +1,4 @@
-// A subagent's whole conversation in the side panel (its card's 查看完整过程), read-only: the chat it was launched
+// A subagent's whole conversation in the side panel (its card's "View full run"), read-only: the chat it was launched
 // from stays as it was.
 import { useStore } from "../../lib/store";
 import { subagentParent, subagentTitle } from "../../lib/tasks";

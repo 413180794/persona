@@ -1,4 +1,4 @@
-// UI version 4's code hosting components (docs/extensions.md「UI 版本 4」, #2951), in the web's design system: a detail
+// UI version 4's code hosting components (docs/extensions.md "UI version 4", #2951), in the web's design system: a detail
 // page's header, a breadcrumb, a file tree, a file's code, a file's diff (one column or side by side, inline threads, a
 // comment box at any line, hidden lines to show: DiffReview.tsx), a discussion and a comment box with its buttons. What they send goes
 // through `act` (ViewBody's onAct): the action with the values it carries and the component's own (a path, a line, the

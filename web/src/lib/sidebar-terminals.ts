@@ -1,4 +1,4 @@
-// 设置 › 外观 › 侧边栏显示终端: under each machine of the sidebar's 按机器 grouping, the plain shells of its terminal
+// Settings › Appearance › Show terminals in sidebar: under each machine of the sidebar's "By machine" grouping, the plain shells of its terminal
 // host (the agents are listed there already). Off unless turned on; kept by this browser.
 import { useSyncExternalStore } from "react";
 

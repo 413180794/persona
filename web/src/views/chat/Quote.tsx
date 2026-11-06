@@ -1,4 +1,4 @@
-// 引用, drawn instead of `> ` lines (WeChat / Slack's reply quote): above the input, a bar with who said it and a
+// "Quote", drawn instead of `> ` lines (WeChat / Slack's reply quote): above the input, a bar with who said it and a
 // two-line plain summary, × to drop it; in a sent bubble, the leading `> ` block as a three-line card that opens to
 // the whole passage. The message itself still carries the `> ` block (lib/drafts.ts withQuoteBlock / splitQuote). A
 // task's card quotes as its title (and todo id, on the block's first line) and what its agent said last.
@@ -14,7 +14,7 @@ import { Markdown } from "../../ui/Markdown";
 import { CommentBlock, CommentCard } from "./CommentCard";
 import { t } from "../../i18n";
 
-/** 「引用 Persona · 16:45」 / 「引用任务「…」 · 16:45」: who said it, or which task, and when, as far as is known. */
+/** "Quoting Persona · 16:45" / "Quoting task "…" · 16:45": who said it, or which task, and when, as far as is known. */
 export function quoteSource(q: DraftQuote): string {
   if (q.task) return [t("chat-quote.quoting_task", { title: q.task.title }), clock(q.ts)].filter(Boolean).join(" · ");
   return [q.from ? t("chat-quote.quoting_from", { name: q.from }) : t("chat-quote.quoting"), clock(q.ts)].filter(Boolean).join(" · ");

@@ -1,5 +1,5 @@
 // Answering a card (POST /interactions/{id}/resolve): the card's own buttons (views/chat/Interactions.tsx) and a system
-// notification's 允许 / 拒绝 (lib/notification-answer.ts) go through here, so both check the same and send the same.
+// notification's Allow / Deny (lib/notification-answer.ts) go through here, so both check the same and send the same.
 import { t } from "../i18n";
 import { ApiError, enc, errorText } from "./api";
 import { endedText, type Resolution, type ResolveResult } from "./answered";

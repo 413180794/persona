@@ -1,16 +1,16 @@
-// Persona's look (形象, docs/persona.md, docs/extensions.md「形象」): its name, its face and the animated dot, from a
-// package on the hub or an extension (GET /looks, files under /personas/{id}/{file}), or one the page draws: 团子 (the
-// default, MochiFace), 面罩 and 汇流 (BuiltinFaces). The choice is the user's, kept on the hub (PUT /looks/current) so
+// Persona's look (avatar, docs/persona.md, docs/extensions.md "Avatar"): its name, its face and the animated dot, from a
+// package on the hub or an extension (GET /looks, files under /personas/{id}/{file}), or one the page draws: Mochi (the
+// default, MochiFace), Visor and Circuit (BuiltinFaces). The choice is the user's, kept on the hub (PUT /looks/current) so
 // every device shows the same one; localStorage keeps the last one for the first paint and for older hubs.
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
 import { BASE } from "./base";
 import { t } from "../i18n";
 
-/** The default, 团子 (nothing saved means it). */
+/** The default, Mochi (nothing saved means it). */
 export const BUILTIN_PERSONA = "persona";
-/** 面罩, the apps' default until 2026-11-03 (the page showed its own mark for this id until #3200). */
+/** Visor, the apps' default until 2026-11-03 (the page showed its own mark for this id until #3200). */
 export const MARK_PERSONA = "jarvis";
-/** 汇流. */
+/** Circuit. */
 export const CIRCUIT_PERSONA = "jarvis-circuit";
 /** The built-ins every app draws: a package may not take their ids. */
 const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA, "jarvis-pixel", "jarvis-facet", "jarvis-blob"];
@@ -37,9 +37,9 @@ export interface PersonaManifest {
   id: string;
   name: string;
   subtitle?: string;
-  /** A few words for the look's card in the picker, in place of its colors (奶蛙: where its level comes from). */
+  /** A few words for the look's card in the picker, in place of its colors (the milk frog: where its level comes from). */
   about?: string;
-  /** Names in the other languages (an extension's look, docs/extensions.md「形象」). */
+  /** Names in the other languages (an extension's look, docs/extensions.md "Avatar"). */
   names?: Record<string, string>;
   subtitles?: Record<string, string>;
   /** sizes: PNGs by side; svg (an extension's look, cleaned by the hub); dark: the same for dark mode. */
@@ -161,9 +161,9 @@ export function usablePersonas(list: PersonaInfo[] | null | undefined): PersonaI
 }
 
 /**
- * What the face shows for a Persona conversation (AppModel.personaState, docs/persona.md「状态」): 离线 while the hub or
- * Persona's computer is out of reach, 等你处理 when it waits on you, 思考中 / 工作中 while a turn runs (thinking until it
- * writes or calls a tool), else 空闲.
+ * What the face shows for a Persona conversation (AppModel.personaState, docs/persona.md "State"): "Offline" while the hub or
+ * Persona's computer is out of reach, "Needs you" when it waits on you, "Thinking" / "Working" while a turn runs (thinking until it
+ * writes or calls a tool), else "Idle".
  */
 export function personaState(o: {
   online: boolean;

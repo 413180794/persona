@@ -1,4 +1,4 @@
-// An extension's chart (docs/extensions.md「UI 插槽」「新条目」 chart): bars (side by side or stacked) or lines, drawn with the
+// An extension's chart (docs/extensions.md "UI slots" "New items" chart): bars (side by side or stacked) or lines, drawn with the
 // web's own colors (a tone is a role color, no tone the series palette in order). Thin marks with a rounded free end,
 // a 2px surface gap between touching bars, hairline grid, short numbers on the right; labels thinned so they never
 // overlap. Hovering (or the arrow keys) shows the label and every series' value. A compact chart (a card) draws no

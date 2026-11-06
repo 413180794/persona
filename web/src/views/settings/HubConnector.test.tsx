@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { ConnectorPrompt, HubConnector } from "../../lib/connectors";
 import { ExtensionConnectorGroup, IMessageGroups, SignInStep } from "./HubConnector";
 
-// 设置 › 连接器's login card (#1693): a QR code step is drawn and a step the page can't draw says so, never an empty
-// form whose 下一步 stays grey forever.
+// Settings › Connectors' login card (#1693): a QR code step is drawn and a step the page can't draw says so, never an empty
+// form whose "Next" stays grey forever.
 const draw = (prompt: ConnectorPrompt, isChannel = false) =>
   renderToStaticMarkup(
     <SignInStep
@@ -63,7 +63,7 @@ describe("a sign-in step", () => {
   });
 });
 
-// 设置 › 连接器 › 信息 (#2898): 交给 Persona and deleting what the hub kept, as on iOS.
+// Settings › Connectors › Messages (#2898): "Hand to Persona" and deleting what the hub kept, as on iOS.
 const imessage = (ai: boolean | undefined, extra: Partial<Parameters<typeof IMessageGroups>[0]> = {}) =>
   renderToStaticMarkup(
     <IMessageGroups ai={ai} busy="" deleted="" error="" confirm={false} onAI={() => {}} onDelete={() => {}} onCancel={() => {}} onConfirm={() => {}} {...extra} />,
@@ -100,7 +100,7 @@ describe("信息's page", () => {
   });
 });
 
-// 设置 › 扩展 › GitHub (persona#3178): the connector's own 进收件箱 switch, and the way to its page.
+// Settings › Extensions › GitHub (persona#3178): the connector's own "Add to Inbox" switch, and the way to its page.
 describe("an extension's connector group", () => {
   const github = (inbox: boolean) => ({ id: "github", name: "GitHub", inbox }) as HubConnector;
   const draw = (c: HubConnector, onOpen?: (id: string) => void) =>

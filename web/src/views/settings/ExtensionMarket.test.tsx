@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The catalog's empty line (#4480): with several markets and none picked, one unreadable and the others empty, it does
-// not say 这个市场还没有扩展 under the unreadable banner. A GitHub market without a token that failed to read offers
+// not say "This marketplace has no extensions yet" under the unreadable banner. A GitHub market without a token that failed to read offers
 // the token dialog here, where the user sees the error.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

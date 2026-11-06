@@ -1,12 +1,12 @@
 // Above the composer while the host stopped the session's turn on an error it will not retry by itself (a botmux
-// notice, iOS FailureNote): the reason, 重试 (sends 继续 alone, not what is in the box) and 在飞书打开.
+// notice, iOS FailureNote): the reason, "Retry" (sends "Continue" alone, not what is in the box) and "Open in Lark".
 import { attentionReason, externalLink, failureReason, sessionCan, stateOf } from "../../lib/format";
 import type { Session } from "../../lib/types";
 import { Icon } from "../../ui/icons";
 import { t } from "../../i18n";
 
 /** Whether the note shows: a notice the session can be retried from (not working, not on a card, not view-only),
- *  and not the one 重试 was already pressed on (`retried`: the chat keeps it while the hub catches up). */
+ *  and not the one "Retry" was already pressed on (`retried`: the chat keeps it while the hub catches up). */
 export function showsFailureNote(session: Session, o: { readOnly?: boolean; retried?: string } = {}): boolean {
   const reason = failureReason(session);
   if (!reason || reason === o.retried) return false;

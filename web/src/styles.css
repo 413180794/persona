@@ -201,10 +201,10 @@ body {
 @media (prefers-reduced-motion: reduce) { [data-search-hit] { animation: none; outline-color: var(--accent); } }
 
 html, body, #root { height: 100%; }
-/* 字号 (ui/look.ts, src/lib/text-scale.ts): 小 / 大 as the Mac app's 12 / 14 pt against its 13; 标准 sets nothing. */
+/* Text size (ui/look.ts, src/lib/text-scale.ts): "Small" / "Large" as the Mac app's 12 / 14 pt against its 13; "Standard" sets nothing. */
 :root[data-text-size="small"] { --text-scale: calc(12 / 13); }
 :root[data-text-size="large"] { --text-scale: calc(14 / 13); }
-/* Installed on a phone (PWA, docs/web.md「安装成 App」): the page runs under the home indicator and, in landscape, the
+/* Installed on a phone (PWA, docs/web.md "Install as an app"): the page runs under the home indicator and, in landscape, the
    notch (viewport-fit=cover); the status bar keeps its own strip (apple-mobile-web-app-status-bar-style: default). */
 #root { padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 @media (display-mode: standalone) { #root { padding-bottom: env(safe-area-inset-bottom); } }
@@ -268,7 +268,7 @@ button:disabled { cursor: default; }
 .prose-j .card-ui :is(p, h1, h2, h3, h4, h5, ul, ol, li, a, code, pre, table, thead, tbody, tr, th, td, img):not(.card-ui .prose-j *) { all: revert-layer; }
 .prose-compact pre { padding: 6px 10px; font-size: 12px; line-height: 1.5; }
 
-/* 团子, the default persona (views/assistant/MochiFace.tsx): the app icon's colors, not the page's accent. */
+/* Mochi, the default persona (views/assistant/MochiFace.tsx): the app icon's colors, not the page's accent. */
 :root {
   --mochi-disc-top: #f4eadf; --mochi-disc-bottom: #e7d7c4; --mochi-body-top: #fff; --mochi-body-bottom: #e9e3de;
   --mochi-ink: #1d1816; --mochi-outline: #1d1816; --mochi-motion: #1d1816; --mochi-cheek: #f2703c; --mochi-shadow: rgb(0 0 0 / .14);
@@ -280,7 +280,7 @@ button:disabled { cursor: default; }
    a layout, five faces in the persona picker kept /settings busy while idle. Here only where they turn from. */
 .mochi-blink { transform-box: fill-box; transform-origin: center; }
 .mochi-spin { transform-origin: 512px 512px; }
-/* Extensions' charts (docs/extensions.md「UI 插槽」 chart): the series colors, in order, for series without a tone. The first
+/* Extensions' charts (docs/extensions.md "UI slots" chart): the series colors, in order, for series without a tone. The first
  * is the accent; the others keep clear of the role colors (green / orange / red say positive / caution / danger).
  * Checked as a set (adjacent pairs, light and dark) with the dataviz palette validator. */
 :root { --series-1: #0285ff; --series-2: #1baf7a; --series-3: #6250d6; --series-4: #e87ba4; }

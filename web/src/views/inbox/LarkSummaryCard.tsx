@@ -47,7 +47,7 @@ export function LarkSummaryCard({
   }
 }
 
-/** 聊天记录: a few previews; a click opens every forwarded message. */
+/** "Chat history": a few previews; a click opens every forwarded message. */
 function MergeForwardCard({ meta, title, renderParts }: { meta: Meta; title: string; renderParts: (parts: LarkPart[]) => React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const name = title || t("inbox-larksummarycard.chat_history");
@@ -82,7 +82,7 @@ function previewText(p: Meta): string {
   return p.isRecalled === true ? t("inbox-larksummarycard.recalled_kept", { text }) : text;
 }
 
-/** A forwarded message without text said by what it holds: [图片], [文件] …. */
+/** A forwarded message without text said by what it holds: [Image], [File] …. */
 function partsLabel(parts: unknown): string {
   if (!Array.isArray(parts)) return "";
   const labels: Record<string, string> = {

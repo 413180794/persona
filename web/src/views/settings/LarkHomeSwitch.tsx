@@ -1,4 +1,4 @@
-// 设置 › 连接器 › 飞书 › 首页显示消息 (iOS FeishuConnectorView's switch): off by default, kept by this browser.
+// Settings › Connectors › Lark › Show messages on home (iOS FeishuConnectorView's switch): off by default, kept by this browser.
 import { t } from "../../i18n";
 import { setLarkHome, useLarkHome } from "../../lib/lark-chats";
 import { Switch } from "./SettingsParts";

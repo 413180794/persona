@@ -1,4 +1,4 @@
-// Comments on content (#2437, Moshi's 「Comment」): the words picked in the transcript, or lines of a file or a diff,
+// Comments on content (#2437, Moshi's "Comment"): the words picked in the transcript, or lines of a file or a diff,
 // each with a note of the reader's. A comment is one more entry in the composer's quote list (lib/drafts.ts DraftQuote
 // with `comment`), not a second mechanism: it waits as a card above the input and goes out in the same `> ` block in
 // front of the message, so the agent gets the location, the code and the note in one message. The pure parts live

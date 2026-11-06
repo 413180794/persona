@@ -1,5 +1,5 @@
-// Whether anything feeds the inbox yet (docs/onboarding.md 4.5「空状态改写」): an empty inbox with no source connected says
-// 还没接入消息来源 and lists the sources a few taps connect, not 都处理完了. A source is connected when the hub has a mail
+// Whether anything feeds the inbox yet (docs/onboarding.md 4.5 "Rewriting the empty states"): an empty inbox with no source connected says
+// "No message sources yet" and lists the sources a few taps connect, not "All caught up". A source is connected when the hub has a mail
 // account, Feishu set up (feature lark), or a connector that brings items in and is signed in.
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
@@ -31,7 +31,7 @@ function feeds(c: HubConnector): boolean {
   return isEnabled(c) && isSignedIn(c) && storesData(c) && c.inbox !== false;
 }
 
-/** Whether a source is connected, and the few-tap ones to offer: 邮箱 first, 飞书 where the hub has it, then the
+/** Whether a source is connected, and the few-tap ones to offer: "Mail" first, Lark where the hub has it, then the
  *  connectors that sign in here (a QR code, a device code) and bring items in. */
 export function inboxSources(input: SourcesInput): { connected: boolean; offers: SourceOffer[] } {
   const others = otherConnectors(input.connectors, input.lark !== undefined);
@@ -44,7 +44,7 @@ export function inboxSources(input: SourcesInput): { connected: boolean; offers:
 }
 
 /** The sources, read once `on` (an empty inbox); null while unknown or when the hub could not say (the inbox then
- *  keeps its plain 都处理完了). */
+ *  keeps its plain "All caught up"). */
 export function useInboxSources(on: boolean): { connected: boolean; offers: SourceOffer[] } | null {
   const lark = useStore(larkOn);
   const hasConnectors = useStore((s) => s.features.includes("connectors"));

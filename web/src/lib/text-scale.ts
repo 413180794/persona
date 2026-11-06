@@ -1,5 +1,5 @@
-// 字号 (ui/look.ts): every font size, and every line height given in pixels (leading-[Npx], and Tailwind's leading-4 / leading-5 as calc(var(--spacing) * N)), in the page's CSS becomes itself times
-// --text-scale, set only for 小 and 大 (styles.css). Unset, calc(12.5px * 1) is 12.5px: the page at 标准 is what it was.
+// Text size (ui/look.ts): every font size, and every line height given in pixels (leading-[Npx], and Tailwind's leading-4 / leading-5 as calc(var(--spacing) * N)), in
+// --text-scale, set only for "Small" and "Large" (styles.css). Unset, calc(12.5px * 1) is 12.5px: the page at "Standard" is what it was.
 // Sizes in em / % and keywords follow their parent already and stay as they are. The page's sizes are pixels written
 // into Tailwind classes (text-[12.5px]) all over, so the build rewrites the CSS (vite.config.ts) rather than each view.
 // Scaling the whole page with CSS zoom was the other way: it moves every popover placed from getBoundingClientRect.

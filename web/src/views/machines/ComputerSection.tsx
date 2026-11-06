@@ -1,6 +1,6 @@
-// 操控电脑 on a Mac's page while the hub's extension cua is on (docs/computer-use.md, iOS ComputerSection): the switch that
+// "Computer control" on a Mac's page while the hub's extension cua is on (docs/computer-use.md, iOS ComputerSection): the switch that
 // lets the assistant operate it through Cua Driver, and whether it can now. What is missing comes with what to do:
-// 安装 Cua Driver (after a confirmation) when it is not there, 去授权 when a permission is missing (macOS asks on the
+// "Install Cua Driver" (after a confirmation) when it is not there, "Grant access" when a permission is missing (macOS asks on the
 // Mac's own screen), the node's progress while it works, and VNC (the web's live screen, /screen/<mid>) when
 // Screen Sharing is on. The hub is asked again when the page opens, and every 2 s while a job runs.
 import { useEffect, useState } from "react";

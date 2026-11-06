@@ -1,4 +1,4 @@
-// A session's Git, read-only (docs/ios.md「Git」, iOS GitPane): branch, upstream ↑↓ and stashes; the changes with
+// A session's Git, read-only (docs/ios.md "Git", iOS GitPane): branch, upstream ↑↓ and stashes; the changes with
 // their diffs (staged / unstaged when a file has both); the history, older pages on demand, each commit's message and
 // per-file diffs.
 import { useCallback, useEffect, useRef, useState } from "react";

@@ -1,4 +1,4 @@
-// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md「额度」), as a quota extension
+// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md "Quota"), as a quota extension
 // read it, and how its numbers read (iOS LauncherQuotaSection / QuotaText).
 import { currentLanguage, formatDate, formatNumber, t } from "../i18n";
 
@@ -70,11 +70,11 @@ export function quotaTone(ratio: number, exhausted?: boolean): QuotaTone {
   return "accent";
 }
 
-/** 1.2 万, 3.4 亿. */
+/** 12K, 340M (Chinese counts in units of ten thousand and a hundred million). */
 export function quotaCount(v: number): string {
   const short = (x: number) => x.toFixed(1).replace(/\.0$/, "");
   const a = Math.abs(v);
-  // English has no 万 / 亿: it reads 12K, 210.6M
+  // English has no units of ten thousand / a hundred million: it reads 12K, 210.6M
   if (a >= 1e4 && currentLanguage() === "en") return formatNumber(v, { notation: "compact", maximumFractionDigits: 1 });
   if (a >= 1e8) return t("lib-quota.count_1e8", { n: short(v / 1e8) });
   if (a >= 1e4) return t("lib-quota.count_1e4", { n: short(v / 1e4) });
@@ -85,7 +85,7 @@ export function quotaMoney(v: number): string {
   return v >= 100 ? v.toFixed(0) : v.toFixed(2);
 }
 
-/** "已用 64%", "6401 / 1 万", "$496 / $800", "已用完". */
+/** "64% used", "6401 / 10K", "$496 / $800", "Used up". */
 export function quotaAmount(w: QuotaWindow): string {
   if (w.exhausted && (w.used_ratio ?? 1) >= 1) return t("lib-quota.used_up");
   if (w.used !== undefined && w.limit !== undefined) {
@@ -110,7 +110,7 @@ export function quotaUsage(u: QuotaUsage): string {
   return s;
 }
 
-/** "11月6日 15:00 重置", or "已重置" once it is past. */
+/** "Resets Nov 6 15:00", or "Reset" once it is past. */
 export function quotaReset(iso: string, now = Date.now()): string {
   const at = Date.parse(iso);
   if (!Number.isFinite(at)) return "";

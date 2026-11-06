@@ -1,7 +1,7 @@
 // What a Persona conversation adds to the chat page (the app's AssistantTopBar): the persona's dot in the header,
-// moving with the conversation's state; the header menu's 详细信息 / 知识库 / 回到主对话 / 拷贝信息; and the
-// launcher chip under the composer that switches the model for the next messages (AssistantTopBar's 启动器 menu); the
-// main conversation's 压缩上下文 / 新建主对话 and the strip above the composer while it compacts (#1727).
+// moving with the conversation's state; the header menu's "Details" / "Knowledge" / "Back to main chat" / "Copy info"; and the
+// launcher chip under the composer that switches the model for the next messages (AssistantTopBar's "Launcher" menu); the
+// main conversation's "Compact context" / "New main chat" and the strip above the composer while it compacts (#1727).
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, errorText } from "../../lib/api";
 import {
@@ -29,7 +29,7 @@ import { t } from "../../i18n";
 const cache = new Map<string, { at: number; list: AssistantLauncher[]; def?: LauncherDefault | null }>();
 
 /** The launchers the assistant's computer can run it with (Claude Code or Codex), fetched when a menu opens, and
- *  主对话's 「默认：…」 from 模型配置 (`?purpose=assistant`, #2455; absent from an older hub). */
+ *  the main chat's "Default: …" from the model configuration (`?purpose=assistant`, #2455; absent from an older hub). */
 function useAssistantLaunchers(mid: string | undefined, wanted: boolean): { list: AssistantLauncher[] | null; def?: LauncherDefault | null; error: string } {
   const hit = mid ? cache.get(mid) : undefined;
   const [list, setList] = useState<AssistantLauncher[] | null>(hit?.list ?? null);
@@ -62,7 +62,7 @@ function useAssistantLaunchers(mid: string | undefined, wanted: boolean): { list
   return { list, def, error };
 }
 
-/** The launchers after the menu's 「默认：…」; `picked`, the one chosen over the default, is checked and marked 「仅这一次」. */
+/** The launchers after the menu's "Default: …"; `picked`, the one chosen over the default, is checked and marked "This time only". */
 function launcherItems(list: AssistantLauncher[] | null, error: string, picked: string | undefined, onPick: (name: string) => void): MenuItem[] {
   if (!list) return [{ key: "loading", label: error ? t("assistant-assistantchat.launchers_failed", { error }) : t("assistant-assistantchat.launchers_loading"), disabled: true, onSelect: () => {} }];
   if (!list.length) return [{ key: "none", label: t("assistant-assistantchat.launchers_none"), disabled: true, onSelect: () => {} }];
@@ -72,7 +72,7 @@ function launcherItems(list: AssistantLauncher[] | null, error: string, picked: 
   }));
 }
 
-/** The composer's 启动器 chip in a Persona conversation: the next message (and the ones after it) uses the pick.
+/** The composer's "Launcher" chip in a Persona conversation: the next message (and the ones after it) uses the pick.
  *  Picking a launcher opens its model submenu in the same menu. */
 export function AssistantLauncherChip({ session }: { session: Session }) {
   const menu = useMenu();
@@ -85,7 +85,7 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
   const isMain = assistant?.main === session.session_id;
   const current = effectiveLauncher({ isMain, picked, session: session.launcher, config: assistant?.launcher });
   const { list, def, error } = useAssistantLaunchers(session.machine_id, Boolean(menu.anchor));
-  // With no pick 主对话 runs 模型配置's default; another conversation keeps the launcher it started with.
+  // With no pick the main chat runs the model configuration's default; another conversation keeps the launcher it started with.
   const fallback = isMain ? def ?? { provider: assistant?.launcher } : { provider: session.launcher || assistant?.launcher, model: session.launcher ? session.model : undefined };
   const modelId = pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : session.model);
   const named = knownModels?.machine === session.machine_id && knownModels.name === current ? knownModels.options.find((m) => m.id === modelId) : undefined;
@@ -190,8 +190,8 @@ export function AssistantFace({ session, last }: { session?: Session; last?: Ite
   return <PersonaDot size={30} state={state} fallback={null} className="-my-1" />;
 }
 
-/** The header menu's Persona part: 详细信息 (the profile), 知识库, 回到主对话, the main conversation's 压缩上下文 and
- *  新建主对话 (when the hub can), 拷贝信息; `dialogs` goes with them. Empty for an agent. */
+/** The header menu's Persona part: "Details" (the profile), "Knowledge", "Back to main chat", the main conversation's "Compact context" and
+ *  "New main chat" (when the hub can), "Copy info"; `dialogs` goes with them. Empty for an agent. */
 export function useAssistantMenu(session: Session | undefined): { items: MenuItem[]; dialogs: React.ReactNode } {
   const assistant = useStore((s) => s.assistant);
   const machine = useStore((s) => (session ? s.machines.find((m) => m.id === session.machine_id)?.name ?? "" : ""));
@@ -224,7 +224,7 @@ export function useAssistantMenu(session: Session | undefined): { items: MenuIte
   return { items, dialogs };
 }
 
-// ── 压缩上下文 ──────────────────────────────────────────
+// ── Compact context ─────────────────────────────────────
 
 const COMPACT_REQUESTED = "persona:compact-requested";
 
@@ -234,7 +234,7 @@ async function startCompaction(session: Session) {
     await api(compactPath(session.session_id), { method: "POST", json: compactBody(session.machine_id) });
     window.dispatchEvent(new CustomEvent(COMPACT_REQUESTED, { detail: { mid: session.machine_id, sid: session.session_id } }));
   } catch (e) {
-    // 409: busy (正在回答), compacting, gone, unsupported — the hub's words say which
+    // 409: busy (answering), compacting, gone, unsupported — the hub's words say which
     toast(t("assistant-assistantchat.compact_start_failed", { error: errorText(e) }), "error");
   }
 }
@@ -242,7 +242,7 @@ async function startCompaction(session: Session) {
 const dismissedKey = (mid: string, sid: string) => `compact-dismissed:${mid}/${sid}`;
 /** How long a done compaction's notice stays. */
 const DONE_SHOWN_MS = 4000;
-/** How long the strip says 正在压缩 after asking, before the hub's word on it arrives. */
+/** How long the strip says "Compacting" after asking, before the hub's word on it arrives. */
 const REQUEST_GRACE_MS = 15_000;
 
 /** Above the composer of an assistant conversation: its runtime fallback (#2455), then the compaction strip. */
@@ -266,7 +266,7 @@ export function RuntimeFallbackNote({ reason }: { reason: string }) {
   );
 }
 
-/** Above the composer while the conversation compacts (正在压缩上下文…), briefly once it is done (已压缩上下文), and a
+/** Above the composer while the conversation compacts ("Compacting context…"), briefly once it is done ("Context compacted"), and a
  *  failure until it is closed (lib/compaction.ts compactionView: only what this page saw change, or just now). */
 function Compaction({ session }: { session: Session }) {
   const mid = session.machine_id;
@@ -337,9 +337,9 @@ function Compaction({ session }: { session: Session }) {
   );
 }
 
-// ── 新建主对话 ──────────────────────────────────────────
+// ── New main chat ───────────────────────────────────────
 
-/** Archives the main conversation (renamed 旧主对话 · 至 M月D日) and leaves none: the next message starts the new one. */
+/** Archives the main conversation (renamed "Old main chat · until <date>") and leaves none: the next message starts the new one. */
 function NewMainDialog({ open, onClose, session }: { open: boolean; onClose: () => void; session: Session }) {
   const [carry, setCarry] = useState(true);
   const [busy, setBusy] = useState(false);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The detail's 静音 button (iOS InboxDetailView's menu): hidden with nothing to mute by; its menu lists what the item
+// The detail's "Mute" button (iOS InboxDetailView's menu): hidden with nothing to mute by; its menu lists what the item
 // can be muted by, and choosing one sends POST /api/v1/inbox/mutes with the item and the tag.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

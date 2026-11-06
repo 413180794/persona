@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A group's fold follows 全部折叠 / 全部展开 of its own block only (#3027): the Agents list menu leaves the other blocks.
+// A group's fold follows "Collapse all" / "Expand all" of its own block only (#3027): the Agents list menu leaves the other blocks.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

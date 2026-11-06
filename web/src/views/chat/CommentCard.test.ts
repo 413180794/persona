@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The diff's name a person reads (#4078): the comment card and the box under a Git diff show 未暂存 / 已暂存 / 提交 …,
+// The diff's name a person reads (#4078): the comment card and the box under a Git diff show "Unstaged" / "Staged" / "Commit" …,
 // never the English words written into the message for the agent.
 import { describe, expect, it } from "vitest";
 import { diffLabel } from "../../lib/comments";

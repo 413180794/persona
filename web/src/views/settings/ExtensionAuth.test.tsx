@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The 「登录」 group of an extension's detail (#4507): its state, 登录 / 重新登录, and 退出登录 only when signed in.
+// The "Sign in" group of an extension's detail (#4507): its state, "Sign in" / "Sign in again", and "Sign out" only when signed in.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ExtensionAuth } from "../../lib/extension-auth";

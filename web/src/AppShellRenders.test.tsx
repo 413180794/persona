@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // A sessions push does not re-render the shell (and the sidebar, palette, new-agent dialog and page it draws): the
-// attention signals that read every push are a leaf of their own (AttentionSignals), which still puts the 需要你
+// attention signals that read every push are a leaf of their own (AttentionSignals), which still puts the "Needs you"
 // count in the tab title.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

@@ -636,7 +636,7 @@ describe("clearing, turning off and the switch for all", () => {
     expect(getBindings()).toEqual(bindingsOf({}));
   });
   it("finds the command a default would clash with before it is restored", () => {
-    // 跳转 cleared, and its ⌘K given to 帮助: restoring 跳转 would take 帮助's chord
+    // "Go to" cleared, and its ⌘K given to "Help": restoring "Go to" would take "Help"'s chord
     const b = bindingsOf({ jump: "", help: "Mod+K" });
     expect(conflictOf("jump", "Mod+K", b)?.id).toBe("help");
     expect(conflictOf("jump", "Mod+K", bindingsOf({}))).toBeUndefined();
@@ -648,7 +648,7 @@ describe("clearing, turning off and the switch for all", () => {
     expect(sanitizePrefs({ off: "yes" })).toEqual(EMPTY_PREFS);
   });
   it("leaves a command with nothing when a stored chord took its default too", () => {
-    // 跳转 (first in the registry) was given 帮助's ⌘/ and 帮助's own override lost: 帮助's default is taken, so it gets none
+    // "Go to" (first in the registry) was given "Help"'s ⌘/ and "Help"'s own override lost: "Help"'s default is taken, so it gets none
     expect(sanitizeOverrides({ jump: "Mod+/" }, "other")).toEqual({ jump: "Mod+/", help: "" });
     expect(activeBindings({ overrides: {}, disabled: ["jump"], off: false }).jump).toBe("");
   });

@@ -1,6 +1,6 @@
-// How the Agents list orders its agents (iOS / Mac AgentSort, `dev.sort`; G099): 状态优先 (the default) keeps every
-// grouping's own order, 最近更新 orders the rows by time only and each grouping's sections (machines, spaces, repositories,
-// tabs) by their latest agent, except that 按仓库 keeps its machines in order. Under 按状态 the sections are the states, so the choice is not offered there.
+// How the Agents list orders its agents (iOS / Mac AgentSort, `dev.sort`; G099): "State first" (the default) keeps every
+// grouping's own order, "Recently updated" orders the rows by time only and each grouping's sections (machines, spaces, repositories,
+// tabs) by their latest agent, except that "By repo" keeps its machines in order. Under "By status" the sections are the states, so the choice is not offered there.
 import { t } from "../i18n";
 import type { Space } from "./agent-groups";
 import type { RepoMachine } from "./agent-repos";
@@ -19,7 +19,7 @@ export const AGENT_SORTS: { key: AgentSort; label: string }[] = [
   { key: "updated", label: t("lib-agent-sort.updated") },
 ];
 
-/** The order this browser chose last; 状态优先 until it chooses. */
+/** The order this browser chose last; "State first" until it chooses. */
 export function agentSort(value: string | null): AgentSort {
   return value === "updated" ? "updated" : "state";
 }
@@ -51,13 +51,13 @@ export function latestFirst<T>(list: readonly T[], date: (x: T) => string, id: (
     .map(({ x }) => x);
 }
 
-/** 按项目 under 最近更新: the spaces by their latest agent, the agents inside by time. `arrangeSpaces` still puts the
+/** "By project" under "Recently updated": the spaces by their latest agent, the agents inside by time. `arrangeSpaces` still puts the
  *  pinned ones first and folds the quiet ones. */
 export function spacesByUpdate(spaces: readonly Space[]): Space[] {
   return latestFirst(spaces.map((sp) => ({ ...sp, sessions: [...sp.sessions].sort(byUpdated) })), (sp) => latestOf(sp.sessions), (sp) => sp.key);
 }
 
-/** 按项目 under 最近更新, both halves: the spaces as `spacesByUpdate`, and 其他 Agent (`loose`) by time too, as 按机器's
+/** "By project" under "Recently updated", both halves: the spaces as `spacesByUpdate`, and "Other agents" (`loose`) by time too, as "By machine"'s
  *  `other` is. */
 export function projectsByUpdate<T extends { spaces: readonly Space[]; loose: readonly Session[] }>(built: T): T {
   return { ...built, spaces: spacesByUpdate(built.spaces), loose: [...built.loose].sort(byUpdated) };
@@ -69,7 +69,7 @@ function spaceByUpdate(sp: HerdrSpace): HerdrSpace {
   return { ...sp, tabs, children, loose: [...sp.loose].sort(byUpdated) };
 }
 
-/** 按机器 under 最近更新: the machines, their spaces, nested spaces and tabs by their latest agent (pinned spaces still
+/** "By machine" under "Recently updated": the machines, their spaces, nested spaces and tabs by their latest agent (pinned spaces still
  *  lead their machine); a tab's panes keep their layout order. */
 export function machineTreeByUpdate(tree: readonly HerdrMachine[]): HerdrMachine[] {
   const machines = tree.map((m) => {
@@ -82,7 +82,7 @@ export function machineTreeByUpdate(tree: readonly HerdrMachine[]): HerdrMachine
   return latestFirst(machines, (m) => latestOf(m.sessions), (m) => m.key);
 }
 
-/** 按仓库 under 最近更新: each machine's repositories by their latest agent, the machines keep their order (as on iOS,
+/** "By repo" under "Recently updated": each machine's repositories by their latest agent, the machines keep their order (as on iOS,
  *  so a section does not jump when another computer's agent updates); a repository's main checkout still comes first,
  *  the agents in a working tree by time. */
 export function repoMachinesByUpdate(list: readonly RepoMachine[]): RepoMachine[] {
@@ -100,7 +100,7 @@ function agentsByUpdate(agents: readonly TreeAgent[]): TreeAgent[] {
   return agents.map((a) => ({ ...a, children: agentsByUpdate(a.children) })).sort((a, b) => byUpdated(a.session, b.session));
 }
 
-/** 按待办 under 最近更新: the todos keep their order (they are ranked by their own status), the agents under each by time. */
+/** "By to-do" under "Recently updated": the todos keep their order (they are ranked by their own status), the agents under each by time. */
 export function todoTreeByUpdate(tree: TodoTree): TodoTree {
   return {
     projects: tree.projects.map((p) => ({ ...p, todos: p.todos.map((td) => ({ ...td, agents: agentsByUpdate(td.agents) })) })),

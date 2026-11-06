@@ -156,12 +156,12 @@ function deltaOn(): boolean {
 }
 
 /**
- * Feishu through the Lark gateway (feature `lark`, which an extension brings): /api/v1/lark/…, the 消息 page, the 飞书 settings,
- * the side panel's readers for Feishu documents and 公司圈 posts. Without it those links are ordinary links.
+ * Feishu through the Lark gateway (feature `lark`, which an extension brings): /api/v1/lark/…, the "Messages" page, the Lark settings,
+ * the side panel's readers for Feishu documents and Moments posts. Without it those links are ordinary links.
  */
 export const LARK_FEATURE = "lark";
 
-/** The web reads working Claudes' status lines (`live` pushes, lib/live.ts; docs/protocol.md「实时状态」). */
+/** The web reads working Claudes' status lines (`live` pushes, lib/live.ts; docs/protocol.md "Live status"). */
 export const SESSION_LIVE_FEATURE = "session_live";
 
 export function larkOn(s: Pick<State, "features"> = state): boolean {
@@ -321,7 +321,7 @@ function back() {
   clearTimeout(graceTimer);
 }
 
-/** 立即重试 (the pill's details): try now instead of waiting for the backoff. */
+/** "Retry now" (the pill's details): try now instead of waiting for the backoff. */
 export function reconnectNow() {
   if (stopped) return;
   connect();
@@ -469,7 +469,7 @@ async function save<K extends "mutes" | "pins">(key: K, path: string, next: Stat
   }
 }
 
-/** 屏蔽通知 (optimistic): PUT /mutes; throws when the hub refuses, with the mutes put back. */
+/** "Mute" (optimistic): PUT /mutes; throws when the hub refuses, with the mutes put back. */
 export function saveMutes(mutes: AgentMutes): Promise<void> {
   return save("mutes", "/mutes", mutes, mutesSaves);
 }
@@ -482,12 +482,12 @@ export function applyMachine(m: Machine) {
   set({ machines: state.machines.map((x) => (x.id === m.id ? { ...x, ...m } : x)) });
 }
 
-/** 置顶 (optimistic): PUT /pins; throws when the hub refuses, with the pins put back. */
+/** "Pin" (optimistic): PUT /pins; throws when the hub refuses, with the pins put back. */
 export function savePins(pins: AgentPins): Promise<void> {
   return save("pins", "/pins", pins, pinsSaves);
 }
 
-/** 全部标为已读: every finished-unread one of these is seen now, in one update of the list (iOS AppModel.markSeen). The
+/** "Mark all as seen": every finished-unread one of these is seen now, in one update of the list (iOS AppModel.markSeen). The
  * hub pushes the sessions back as seen; the list does not wait for it. */
 export function markSeen(list: Pick<Session, "machine_id" | "session_id">[]) {
   const keys = new Set(list.map((s) => `${s.machine_id}/${s.session_id}`));

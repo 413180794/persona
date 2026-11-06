@@ -1,4 +1,4 @@
-// What the web knows about the assistant's cards in a conversation (docs/assistant-views.md「持久化提交」「活卡片」):
+// What the web knows about the assistant's cards in a conversation (docs/assistant-views.md "Persisted submits" and "Live cards"):
 // the live cards (view_show / view_update, by version), the answers given from any card on any device (by revision),
 // and which text blocks the hub has registered (only those take an answer). It comes from the feed's snapshot (views,
 // view_actions, view_blocks) and the events assistant_view, assistant_view_action and assistant_view_block, each kept
@@ -32,7 +32,7 @@ export interface CardDraft {
   values: Record<string, string>;
   /** Named pages pushed, the top last (empty: the root). */
   stack: string[];
-  /** A submit under way or failed, kept for 重试 with the same client_msg_id. */
+  /** A submit under way or failed, kept for "Retry" with the same client_msg_id. */
   sending?: Sending;
   /** The last thing that went wrong, shown on the card. */
   error?: string;
@@ -49,7 +49,7 @@ export interface Sending {
   expectedVersion: number;
   confirmed: boolean;
   clientMsgId: string;
-  /** In flight now (a failed one waits for 重试). */
+  /** In flight now (a failed one waits for "Retry"). */
   inFlight: boolean;
 }
 
@@ -186,7 +186,7 @@ export type SubmitOutcome = "sent" | "answered_elsewhere" | "changed" | "failed"
 export const actionsPath = (conversation: string, key: CardKey) => `/assistant/conversations/${enc(conversation)}/views/${enc(key)}/actions`;
 
 /**
- * Submits a reply action at the version the user saw. The same request again (重试 after a failure) keeps its
+ * Submits a reply action at the version the user saw. The same request again ("Retry" after a failure) keeps its
  * client_msg_id, so the hub answers with the record it has instead of a second message.
  */
 export async function submitAction(conversation: string, key: CardKey, req: Omit<Sending, "clientMsgId" | "inFlight">): Promise<SubmitOutcome> {

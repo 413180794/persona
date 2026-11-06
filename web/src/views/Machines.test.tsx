@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 机器: a refresh that fails after a good one keeps the last cards up and says so in red; a hub with no
+// Machines: a refresh that fails after a good one keeps the last cards up and says so in red; a hub with no
 // machines shows the empty state, and one that cannot be reached at all says it cannot see them.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -95,7 +95,7 @@ describe("Machines", () => {
     expect(labels).not.toContain("重连");
   });
 
-  // #3578: on a phone the card's 详情 link alone was a 48 × 17 target; a tap anywhere on the card opens the machine.
+  // #3578: on a phone the card's "Details" link alone was a 48 × 17 target; a tap anywhere on the card opens the machine.
   const click = (el: Element) => act(() => void el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
   const card = () => host.querySelector("section")!;
 

@@ -1,9 +1,9 @@
-// 机器 › 添加电脑 (docs/onboarding.md 4.2「你的电脑 ↔ hub」, 7.2 #11): pick the system, name it, and the hub adds the
+// Machines › Add computer (docs/onboarding.md 4.2 "Your computers ↔ hub", 7.2 #11): pick the system, name it, and the hub adds the
 // computer and gives its Persona Link a pairing link (POST /api/v1/auth/pair-codes {"add"}, feature machines_add). The
 // dialog then says how to use the link on that system, waits for the computer to come online (the countdown and the
-// polling of 设置 › 设备 › 连接新设备) and asks, on the same screen, whether it is yours (…/confirm | …/reject). With
+// polling of Settings › Devices › Connect a new device) and asks, on the same screen, whether it is yours (…/confirm | …/reject). With
 // `confirm` it opens straight at that question for a computer already waiting to be confirmed (the main conversation's
-// 确认电脑), and offers a new link if that computer is not online.
+// "Confirm computer"), and offers a new link if that computer is not online.
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
 import {
@@ -34,7 +34,7 @@ import { Icon } from "../../ui/icons";
 import { Field, inputClass, Segmented } from "../assistant/parts";
 
 const POLL_MS = 3000;
-const NAME_MAX = 40; // the hub's limit (docs/protocol.md「电脑的配对码」)
+const NAME_MAX = 40; // the hub's limit (docs/protocol.md "Pair codes for computers")
 
 /** A computer to give a new code to (one added before that has not connected), instead of adding one. */
 export interface PendingComputer {
@@ -54,7 +54,7 @@ export function AddComputer({ open, onClose, again, confirm }: { open: boolean; 
   const [polled, setPolled] = useState<Machine[] | null>(null);
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [answering, setAnswering] = useState<"confirm" | "reject" | null>(null);
-  // the hub refused a new one (too_many_pending): the computers in the way are listed with 删掉
+  // the hub refused a new one (too_many_pending): the computers in the way are listed with "Remove"
   const [tooMany, setTooMany] = useState(false);
   const [removing, setRemoving] = useState("");
   const seen = useRef(false);
@@ -142,12 +142,12 @@ export function AddComputer({ open, onClose, again, confirm }: { open: boolean; 
     }
   };
 
-  // 删掉 one of the computers that keep a new one from being added; the list follows the hub's next machines push
+  // "Remove" one of the computers that keep a new one from being added; the list follows the hub's next machines push
   const remove = async (m: Machine) => {
     setRemoving(m.id);
     try {
       await api(`/machines/${enc(m.id)}/reject`, { method: "POST" });
-      // room for the new one now: back to the plain form, 下一步 tries again
+      // room for the new one now: back to the plain form, "Next" tries again
       setTooMany(false);
       setError("");
       void readinessChanged();
@@ -405,7 +405,7 @@ function Command({ line, label }: { line: string; label: string }) {
 }
 
 /** The computers waiting that keep a new one from being added (the hub takes 3): those that never connected say so,
- *  not 等你确认 (there is nothing to confirm yet), and each can be removed here. */
+ *  not "Waiting for you" (there is nothing to confirm yet), and each can be removed here. */
 function TooMany({ machines, removing, onRemove }: { machines: Machine[]; removing: string; onRemove: (m: Machine) => void }) {
   const never = machines.every(neverConnected);
   return (

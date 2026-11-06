@@ -1,7 +1,7 @@
-// 设置 › 快捷键: the switch for all, then every shortcut with its chord; click one and press the new chord (Esc cancels),
-// a chord another command has offers 替换 (that one is cleared) or 取消. Each row can be cleared (its key does nothing,
-// no default either), turned off (keeps its chord), and put back to its default; 全部恢复默认 for the page. Stored in
-// this browser (lib/shortcuts.ts). docs/web.md「快捷键」.
+// Settings › Shortcuts: the switch for all, then every shortcut with its chord; click one and press the new chord (Esc cancels),
+// a chord another command has offers "Replace" (that one is cleared) or "Cancel". Each row can be cleared (its key does nothing,
+// no default either), turned off (keeps its chord), and put back to its default; "Reset all" for the page. Stored in
+// this browser (lib/shortcuts.ts). docs/web.md "Keyboard shortcuts".
 import { useEffect, useState } from "react";
 import {
   checkBinding,
@@ -36,12 +36,12 @@ import { composing } from "../../lib/send-history";
 
 const SCOPES: ShortcutScope[] = ["global", "session", "sidebar"];
 
-/** A chord that another command has: 替换 gives it to `id` and clears `with`. */
+/** A chord that another command has: "Replace" gives it to `id` and clears `with`. */
 interface Pending {
   id: string;
   chord: string;
   with: string;
-  /** It is 恢复默认 that found the default taken. */
+  /** It is "Reset to default" that found the default taken. */
   reset?: boolean;
 }
 
@@ -87,7 +87,7 @@ export function ShortcutSettings() {
     stop();
   };
 
-  // 恢复默认 for one: its default chord may have been given to another command since
+  // "Reset to default" for one: its default chord may have been given to another command since
   const reset = (def: ShortcutDef) => {
     stop();
     const other = configured[def.id] === def.chord ? undefined : conflictOf(def.id, def.chord, configured);

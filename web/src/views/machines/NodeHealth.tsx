@@ -1,6 +1,6 @@
-// 这台电脑能做什么 on a machine's page (docs/machines.md「自检」, Moshi's Doctor tab): what `personad node doctor` finds on
-// the computer, first as features (手机审批卡片, 状态与通知, 终端与引擎, …) with 就绪 / 部分可用 / 有问题 / 未启用, then all
-// the individual checks behind 查看全部检查. It checks when the page opens and on 重新检查; 修复 (after one confirmation)
+// "What this computer can do" on a machine's page (docs/machines.md "Self-check", Moshi's Doctor tab): what `personad node doctor` finds on
+// the computer, first as features ("Approval cards on your phone", "Status and notifications", "Terminal and engine", …) with "Ready" / "Partly working" / "Problem" / "Off", then all
+// the individual checks behind "Show all checks". It checks when the page opens and on "Check again"; "Fix" (after one confirmation)
 // has the node write its own generated files again and re-check. A node too old for the self-check says so, with the
 // same update action the deployment strip has. Reading and fixing are for a full device (the hub refuses the rest).
 import { useCallback, useEffect, useRef, useState } from "react";

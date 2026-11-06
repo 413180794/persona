@@ -1,5 +1,5 @@
 // A small markup editor (iOS ImageEditor.swift): a box or a freehand pen in a few colors, undo, clear. The marks
-// are kept in image pixels and burned into the bitmap at its own resolution on 完成.
+// are kept in image pixels and burned into the bitmap at its own resolution on "Done".
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { imagePayload, MAX_IMAGE } from "../../lib/attachments";
@@ -50,7 +50,7 @@ export function ImageEditor({ src, doneTitle = t("chat-imageeditor.done"), onDon
   const area = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const root = useRef<HTMLDivElement>(null);
-  // focus in, Tab kept in, back to the button that opened it (the viewer's 编辑, the composer's) on close
+  // focus in, Tab kept in, back to the button that opened it (the viewer's "Edit", the composer's) on close
   useModalFocus(root);
 
   useEffect(() => {

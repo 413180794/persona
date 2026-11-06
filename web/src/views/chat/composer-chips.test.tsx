@@ -1,4 +1,4 @@
-// The chips under the composer on a phone (#3575): at 390 px the main conversation's row (+, @, 手动确认, 思考 高,
+// The chips under the composer on a phone (#3575): at 390 px the main conversation's row (+, @, "Ask first", "Thinking High",
 // claude · opus) is wider than the box, and the model chip ran under the send button with its chevron past the box's
 // edge. The chips give way instead: a chip may shrink (its label truncates, the chevron stays), and a Persona
 // conversation's mode chips leave the launcher chip 5rem of the row, so it truncates first and they only past that. A unit test has no
@@ -32,7 +32,7 @@ describe("composer chips on a narrow row", () => {
     expect(wrapper(false)).not.toContain("min-w-0");
   });
 
-  // #4142: at 360 px the launcher chip at 5rem still left 手动确认 / 思考 高 a letter each; on a phone it is an icon
+  // #4142: at 360 px the launcher chip at 5rem still left "Ask first" / "Thinking High" a letter each; on a phone it is an icon
   it("at phone width a chip with a phone icon shows the icon, keeps its label for screen readers, and frees the row", () => {
     const [, icon, label, chevron] = tags(<Chip label="claude · opus" phoneIcon="agent" title="launcher" onClick={() => {}} />);
     expect(icon.tag).toBe("svg");
@@ -47,7 +47,7 @@ describe("composer chips on a narrow row", () => {
     expect(tags(<ModeChips session={session} assistant withInfo />)[0].cls).toContain("max-sm:max-w-[calc(100%-5rem)]");
   });
 
-  // #4316: at 320 px even 手动确认 / 思考 高 alone did not fit; below 340 px they are an icon and a short word
+  // #4316: at 320 px even "Ask first" / "Thinking High" alone did not fit; below 340 px they are an icon and a short word
   it("below 340 px the mode chips show an icon and a short word, keep the full label for screen readers", () => {
     const [, icon, short, label, chevron] = tags(<Chip label="手动确认" narrow={{ icon: "shield", label: "先问" }} title="mode" onClick={() => {}} />);
     expect(icon.tag).toBe("svg");

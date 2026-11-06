@@ -1,6 +1,6 @@
-// Messages other pages send for a conversation (问 Persona from 知识库, 交给 AI from 收件箱, a new Persona conversation):
+// Messages other pages send for a conversation ("Ask Persona" from "Knowledge", "Hand to AI" from the inbox, a new Persona conversation):
 // the page moves to the conversation at once and the message shows there as a sending bubble until the transcript has
-// it, as the app's outbox does (AppModel.sendNow / askPersona). A failed one stays with the reason, 重试 and 删除.
+// it, as the app's outbox does (AppModel.sendNow / askPersona). A failed one stays with the reason, "Retry" and "Delete".
 // The conversation's own composer keeps its local sending bubbles (ChatView); both look the same.
 import { t } from "../i18n";
 import { api, ApiError, errorText, sessionPath } from "./api";
@@ -29,7 +29,7 @@ export interface OutboxEntry {
   /** sent: the hub has it (or it started the conversation); the bubble waits for the transcript. */
   state: "sending" | "sent" | "failed";
   error?: string;
-  /** The computer's input box holds text (input_draft): what 清空并发送 clears, when it can. */
+  /** The computer's input box holds text (input_draft): what "Clear and send" clears, when it can. */
   clearable?: string;
   /** The hub could not tell whether it went in: a retry is a new message. */
   newId?: boolean;
@@ -155,7 +155,7 @@ export function discardOutbox(mid: string, sid: string, id: string) {
 }
 
 /**
- * 问 Persona: the text goes to Persona's main conversation (AppModel.askPersona), which opens at once with the message
+ * "Ask Persona": the text goes to Persona's main conversation (AppModel.askPersona), which opens at once with the message
  * on its way; with no main conversation yet, this one starts it (and becomes it). Throws only when starting fails.
  */
 export async function askPersona(text: string): Promise<void> {

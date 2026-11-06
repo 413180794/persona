@@ -1,4 +1,4 @@
-// 设置 › 渠道 (docs/channels.md「界面」, iOS ChannelsView): every way of talking to Persona, connected or not, and
+// Settings › Channels (docs/channels.md "UI", iOS ChannelsView): every way of talking to Persona, connected or not, and
 // each one's page — its switch, binding a step at a time (a QR code to scan in the chat app, a pairing code to send the
 // bot, credentials), where its messages go, what it does, a test message to the owner — and, for a market's, the way
 // to install it. Read-only ones (the apps, /agent, voice) say where they are set up.
@@ -32,9 +32,9 @@ function StateLabel({ c }: { c: Channel }) {
   );
 }
 
-// ── the links from 设置 › 连接器 ─────────────────────────
+// ── the links from Settings › Connectors ─────────────────
 
-/** On a connector's page (WeChat's, the Feishu bot's): it is a way of talking to Persona, set up under 渠道. Only for a
+/** On a connector's page (WeChat's, the Feishu bot's): it is a way of talking to Persona, set up under "Channels". Only for a
  * channel there is, on a hub that has them. */
 export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) => void }) {
   const has = useStore((s) => s.features.includes("channels"));
@@ -327,7 +327,7 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
   );
 }
 
-/** 消息发到: the main conversation, a new one, or one of the assistant's conversations. */
+/** "Send messages to": the main conversation, a new one, or one of the assistant's conversations. */
 function TargetPicker({ open, current, onClose, onPick }: { open: boolean; current?: ChannelTarget; onClose: () => void; onPick: (t: ChannelTarget) => void }) {
   const sessions = useStore((s) => s.sessions);
   const conversations = useMemo(

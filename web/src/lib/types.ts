@@ -47,7 +47,7 @@ export interface Machine {
   };
   /** ego lite (the hub's extension ego, docs/plan-ego-browser.md): only while the extension is on and it is a Mac. */
   browser?: import("./browser").MachineBrowser;
-  /** feature machine_trust (docs/protocol.md「电脑的信任」): "pending" while the user has not said it is theirs; omitted = confirmed. */
+  /** feature machine_trust (docs/protocol.md "Computer trust"): "pending" while the user has not said it is theirs; omitted = confirmed. */
   trust?: "pending";
   /** What `error` is about, for words of our own: node_service_down / link_offline / never_connected / node_outdated. */
   error_code?: string;
@@ -97,7 +97,7 @@ export interface WorkState {
   line?: string;
   wait?: string;
   then?: string;
-  /** When the hub acts next on its own: 继续 (transient) or a wake (external, agent). */
+  /** When the hub acts next on its own: "Continue" (transient) or a wake (external, agent). */
   wake_at?: string;
   attempts?: number;
   max?: number;
@@ -107,7 +107,7 @@ export interface WorkState {
   interaction_id?: string;
 }
 
-/** 设置 › 会话分诊 (GET / PUT /agents/triage): all off until the user turns them on. */
+/** Settings › Session triage (GET / PUT /agents/triage): all off until the user turns them on. */
 export interface TriageSwitches {
   enabled: boolean;
   auto_continue: boolean;
@@ -118,7 +118,7 @@ export interface TriageSwitches {
 export interface Session {
   /** Node-verified physical working directory; the original cwd stays available for existing session flows. */
   workspace_cwd?: string;
-  /** The main checkout of the repository cwd belongs to, when the host knows it (#2840: Paseo's worktrees); 按仓库 groups by it. */
+  /** The main checkout of the repository cwd belongs to, when the host knows it (#2840: Paseo's worktrees); "By repo" groups by it. */
   repo_root?: string;
   machine_id: string;
   session_id: string;
@@ -138,7 +138,7 @@ export interface Session {
   read_only_reason?: string;
   capabilities?: SessionCapabilities;
   attached?: boolean;
-  /** 分支到新聊天 works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
+  /** "Branch to new chat" works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
   can_fork?: boolean;
   /** What to call an agent the app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
   agent_label?: string;
@@ -164,10 +164,10 @@ export interface Session {
   slot_name?: string;
   slot_index?: number;
   /** The pane's 0-based place in its tab by layout, top left first (#2320): 0 is the pane the others were split from,
-   *  the tab's 发起者 when an agent runs there. Absent when the host does not say (older nodes, hosts without layouts). */
+   *  the tab's "Lead" when an agent runs there. Absent when the host does not say (older nodes, hosts without layouts). */
   pane_index?: number;
   /** The host's pane, tab and workspace ids (herdr: bare "w9:p1"; other hosts "<kind>:<id>"). Workspace ids change
-   *  across a herdr restart: never key anything stored by them (pins and folds go by 机器/空间名). */
+   *  across a herdr restart: never key anything stored by them (pins and folds go by machine/space name). */
   pane_id?: string;
   tab_id?: string;
   workspace_id?: string;
@@ -176,12 +176,12 @@ export interface Session {
   updated_at?: string;
   seen_at?: string;
   last_text?: string;
-  /** Its latest step when that is a tool call no text came after (「在跑测试」「在读 tasks.go」), and when it started. */
+  /** Its latest step when that is a tool call no text came after ("running tests", "reading tasks.go"), and when it started. */
   activity?: string;
   activity_at?: string;
   /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
   turn_error?: string;
-  /** What the agent's record says of turn_error: "transient" (worth a 继续) or "user" (the user must act). */
+  /** What the agent's record says of turn_error: "transient" (worth a "Continue") or "user" (the user must act). */
   turn_error_kind?: string;
   /** What is wrong, when the hub can tell from turn_error (docs/onboarding.md 5.2): not_logged_in / auth_failed /
    *  model_route / rate_limited. */
@@ -199,24 +199,24 @@ export interface Session {
   workflows?: Workflow[];
   rev?: number;
   suggestion?: string;
-  /** An assistant conversation moved out of the list (docs/assistant.md「管理自己的对话」). */
+  /** An assistant conversation moved out of the list (docs/assistant.md "Managing its own conversations"). */
   archived?: boolean;
-  /** Who opened an assistant conversation (docs/protocol.md「助手对话的来源」): user, channel, inbox, task, spawned,
+  /** Who opened an assistant conversation (docs/protocol.md "Assistant conversation origins"): user, channel, inbox, task, spawned,
    *  lark_agent, extension, or one this page doesn't know; none is the user's (older hubs never say). */
   origin?: string;
   /** What it was opened for: the inbox item, the task, the conversation, the channel, the extension. */
   origin_ref?: string;
-  /** The channels messages came into it from, newest first (docs/channels.md「来源标记」). */
+  /** The channels messages came into it from, newest first (docs/channels.md "Origin marks"). */
   channels?: string[];
   todo?: { id: string; title: string };
   /** Works (or worked) for a quiet task (#1731): not in the global badge; the main conversation tells about it. */
   quiet?: boolean;
-  /** Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you (docs/engines.md「botmux」). */
+  /** Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you (docs/engines.md "botmux"). */
   attention_reason?: string;
   /** The host stopped its turn on an error it will not retry by itself (a botmux notice), until a message goes to it:
-   *  shown over the composer with 重试 (iOS FailureNote). */
+   *  shown over the composer with "Retry" (iOS FailureNote). */
   failure_reason?: string;
-  /** Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开. */
+  /** Where it lives outside Persona (a botmux session's Feishu topic): "Open in Lark". */
   external_url?: string;
   /** An assistant conversation's runtime as it runs ("agentsdk"; absent: the CLI, #2455). */
   runtime?: string;
@@ -280,7 +280,7 @@ export interface BackgroundTask {
   run_id?: string;
 }
 
-/** A Claude Code workflow run (the Workflow tool, proto.Workflow; docs/protocol.md「workflows」). */
+/** A Claude Code workflow run (the Workflow tool, proto.Workflow; docs/protocol.md "workflows"). */
 export interface Workflow {
   task_id: string;
   run_id?: string;
@@ -370,7 +370,7 @@ export interface Item {
   injected?: Injected;
 }
 
-/** What a message Persona wrote for the model is (docs/protocol.md「Persona 注入的消息」). */
+/** What a message Persona wrote for the model is (docs/protocol.md "Messages Persona injects"). */
 export interface Injected {
   kind: "task_notice" | "followup" | "system" | (string & {});
   /** task_notice: done | needs | interrupted | failed; followup: once | daily | interval | wake; system: lost_tasks */
@@ -458,7 +458,7 @@ export interface Interaction {
   always_label?: string;
   /** Why another agent asks for the permission, in its own words (a Codex / TRAEX approval read off the terminal). */
   reason?: string;
-  /** An MCP form or link (kind elicitation, docs/protocol.md「MCP elicitation」): the server, where it is configured, and
+  /** An MCP form or link (kind elicitation, docs/protocol.md "MCP elicitation"): the server, where it is configured, and
    *  the subagent that asks, when the hook says. */
   mcp_server_name?: string;
   mcp_config_source?: string;
@@ -505,7 +505,7 @@ export interface MachineMetrics {
 }
 
 /** What a working Claude's status line says right now (hub `live` push, feature `session_live`; docs/protocol.md
- *  「实时状态」): read off its pane about once a second while someone watches. Absent fields: the line did not say. */
+ *  "Live status"): read off its pane about once a second while someone watches. Absent fields: the line did not say. */
 export interface SessionLive {
   /** The spinner's verb without the ellipsis ("Frosting"). */
   verb?: string;

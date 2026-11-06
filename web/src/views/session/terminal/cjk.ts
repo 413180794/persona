@@ -1,4 +1,4 @@
-// Chinese in the terminal without gaps (docs/lessons/web.md「xterm.js」). xterm gives a wide character two cells and
+// Chinese in the terminal without gaps (docs/lessons/web.md "xterm.js"). xterm gives a wide character two cells and
 // pads what its glyph leaves over with letter-spacing: a system Chinese font is 1em wide, two cells of a monospaced font
 // are about 1.2em, so every character had a gap after it. As iOS (which enlarges such a glyph to fill its cells), the
 // Chinese fallback here is a local system font under its own name, scaled with `size-adjust` so its characters are

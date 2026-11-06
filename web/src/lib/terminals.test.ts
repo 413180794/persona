@@ -46,7 +46,7 @@ const session = (over: Partial<Session> = {}) => ({ machine_id: "m1", session_id
 describe("the terminal browser's tree", () => {
   it("lays workspaces, tabs and panes out in herdr's order, shells and agents alike", () => {
     const tree = buildTerminalTree(res, [session({ state: "unread" })]);
-    // w2 has no tab with a pane, but a host that opens tabs still offers it (新建终端)
+    // w2 has no tab with a pane, but a host that opens tabs still offers it ("New terminal")
     expect(tree.map((s) => s.id)).toEqual(["w1", "w2"]);
     const w1 = tree[0];
     expect(w1).toMatchObject({ label: "proj", branch: "main", host: "herdr", canOpen: true });

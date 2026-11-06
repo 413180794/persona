@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The terminal shortcuts dialog's 新建 field has a name a screen reader reads, not only a placeholder.
+// The terminal shortcuts dialog's "New" field has a name a screen reader reads, not only a placeholder.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

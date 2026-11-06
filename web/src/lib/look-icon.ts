@@ -1,5 +1,5 @@
-// The look's icon (#3200, docs/extensions.md「形象」): the picture the page's mark (AppMark: the sidebar's header, the
-// sign-in page) and the tab's favicon show for the chosen look. 团子, the default, is the app icon itself (the files
+// The look's icon (#3200, docs/extensions.md "Looks"): the picture the page's mark (AppMark: the sidebar's header, the
+// sign-in page) and the tab's favicon show for the chosen look. Mochi, the default, is the app icon itself (the files
 // in public/); another look is its avatar (a package's PNG or SVG, light and dark) or the built-in face drawn, made
 // into a 128 px PNG. The last one is kept in localStorage, so the sign-in page and the first paint show it before the
 // hub answers. The installed app's icon (the PWA's manifest) stays the app icon: it is fixed when the app is installed.
@@ -84,7 +84,7 @@ async function builtinSVG(id: string, dark: boolean): Promise<string> {
 }
 
 /**
- * The icon for the look on screen: a package (`info`), else the built-in one (`builtin`). 团子 is the app icon's files:
+ * The icon for the look on screen: a package (`info`), else the built-in one (`builtin`). Mochi is the app icon's files:
  * nothing to draw. A picture that does not load leaves the last icon as it is.
  */
 export function setLookIcon(info: PersonaInfo | null, builtin: string): void {

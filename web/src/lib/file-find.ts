@@ -1,4 +1,4 @@
-// ⌘K's file search (docs/web.md「命令面板」, views/palette/FilesSection.tsx): the files under a conversation's (or a
+// ⌘K's file search (docs/web.md "Command palette", views/palette/FilesSection.tsx): the files under a conversation's (or a
 // terminal pane's) directory, listed by the node (`/machines/{mid}/fs/find`, one request) and matched here as the
 // user types. No DOM: the matcher, the loader and the walk for an older node are tested in file-find.test.ts.
 import { api, ApiError, enc } from "./api";

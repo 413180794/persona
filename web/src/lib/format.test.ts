@@ -4,7 +4,7 @@ import type { Session } from "./types";
 
 const session = (o: Partial<Session>): Session => ({ machine_id: "m", session_id: "s", cwd: "/x", status: "idle", ...o }) as Session;
 
-// A botmux session's reason for waiting and its Feishu topic (attention_reason, external_url; docs/engines.md「botmux」).
+// A botmux session's reason for waiting and its Feishu topic (attention_reason, external_url; docs/engines.md "botmux").
 describe("sessionPreview", () => {
   it("shows why it waits while it needs you", () => {
     expect(sessionPreview(session({ status: "blocked", state: "needs_you", last_text: "正在跑全量", attention_reason: "本轮执行失败，再发一条消息继续" }))).toBe("本轮执行失败，再发一条消息继续");

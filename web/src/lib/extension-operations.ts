@@ -1,4 +1,4 @@
-// Installing, upgrading and removing an extension in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277): the
+// Installing, upgrading and removing an extension in steps (docs/protocol.md "Extension install, upgrade and uninstall progress", #3277): the
 // hub runs each as an operation and pushes `extension_operation` as it goes; a page that opens again lists the ones
 // in progress. Only with a hub that has `extension_operations`: an older one keeps the synchronous calls.
 import { api, enc } from "./api";

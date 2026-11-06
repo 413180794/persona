@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 工作流看板 is off unless turned on (#2475): no sidebar entry and no discovery polling while off, the entry back once
-// 设置 › 通用 › Agent turns it on, and a hub that says the board is on (one used before the switch) shows it.
+// "Workflow board" is off unless turned on (#2475): no sidebar entry and no discovery polling while off, the entry back once
+// Settings › General › Agent turns it on, and a hub that says the board is on (one used before the switch) shows it.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

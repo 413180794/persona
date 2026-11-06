@@ -9,7 +9,7 @@
 import { t } from "../i18n";
 
 export interface ScrollAnchor {
-  /** Which edge of the element is held: a header's top, or a work row's bottom when it folds from its 收起 button. */
+  /** Which edge of the element is held: a header's top, or a work row's bottom when it folds from its "Collapse" button. */
   edge: "top" | "bottom";
   /** Where that edge was on screen (px from the viewport top) when it was clicked. */
   at: number;
@@ -112,7 +112,7 @@ export function followsAgain(m: { gap: number; delta: number }): boolean {
   return m.gap < REPIN_NEAR && m.delta > 0;
 }
 
-/** The pill while away from the end: 有新消息 when something came in since leaving it, else 跳到底部. */
+/** The pill while away from the end: "New messages" when something came in since leaving it, else "Jump to bottom". */
 export function jumpLabel(newSince: boolean): string {
   return newSince ? t("lib-disclosure.new_messages") : t("lib-disclosure.jump_to_bottom");
 }

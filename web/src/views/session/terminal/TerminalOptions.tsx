@@ -1,4 +1,4 @@
-// 终端设置 (iOS TerminalSettingsView, the parts a browser needs): long rows fold or scroll while watching, the key bar,
+// "Terminal settings" (iOS TerminalSettingsView, the parts a browser needs): long rows fold or scroll while watching, the key bar,
 // the font size (pinching on iOS; ⌘+ / ⌘− stay the browser's zoom), the cursor (shape, blinking), the WebGL renderer,
 // and the saved commands. Kept in this browser.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";

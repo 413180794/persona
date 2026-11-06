@@ -1,4 +1,4 @@
-// Feishu chat Pins (docs/lark-migration.md「聊天内 Pin 消息」, iOS LarkChatPins.swift): the list of a chat's pinned
+// Feishu chat Pins (docs/lark-migration.md "Pinned messages in a chat", iOS LarkChatPins.swift): the list of a chat's pinned
 // messages, jumping to one in the chat, adding and removing. The Lark gateway marks Pins read when the list is read, so it is
 // read only when the list is opened or a Pin was changed, never ahead of time. The list lives in memory while it is
 // open (the hub answers no-store). An unknown write result is never retried: the list is read again to see.
@@ -89,7 +89,7 @@ export const canRemovePin = (p: ChatPin) => p.message?.can_unpin === true;
 export const canOpenPin = (p: ChatPin) => Boolean(p.message) && !p.message?.deleted;
 
 /** One line of what was pinned (the hub sends only what may be shown: the public face of an encrypted message). A
- * recalled one says what it said only with 防撤回 on and its content kept (lark-display.ts), marked 已撤回. */
+ * recalled one says what it said only with "Keep recalled messages" on and its content kept (lark-display.ts), marked "Recalled". */
 export function pinSummary(p: ChatPin, display: LarkMessageDisplay = HIDDEN_DISPLAY): string {
   const m = p.message;
   if (!m || m.deleted) return t("lib-lark-pins.message_unavailable");

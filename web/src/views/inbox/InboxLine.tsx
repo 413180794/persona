@@ -1,4 +1,4 @@
-// 线索 (#2128, docs/inbox.md「线索」): under an item's summary, what it grew out of (its parent's chain, up to a todo or
+// "Trail" (#2128, docs/inbox.md "Trail"): under an item's summary, what it grew out of (its parent's chain, up to a todo or
 // an agent session) and what grew out of it (the items right under it). Each row opens where it lives. Nothing is
 // drawn when the item has neither.
 import { useEffect, useState } from "react";

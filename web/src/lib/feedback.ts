@@ -24,7 +24,7 @@ export function offlineNow(): Offline {
 
 /**
  * Whether an error's text says the request never reached the hub: errorText's line for a failed fetch (TypeError,
- * often inside "发送失败：…"), or a proxy's bare 502 / 503 / 504 in front of a hub that is down. The app folds only
+ * often inside "send failed: …" in Chinese), or a proxy's bare 502 / 503 / 504 in front of a hub that is down. The app folds only
  * `error.isOffline` the same way.
  */
 export function isOfflineError(text: string): boolean {

@@ -17,8 +17,8 @@ export interface ConnLink {
   networkUp: boolean;
 }
 
-/** How long a restart is told as one (hub 正在更新…): after it the hub is just out of reach (the app's
- *  hubRestartTimeout), so a crash loop or a hub that never comes back does not promise 好了自动连上 forever. */
+/** How long a restart is told as one ("Hub is updating…"): after it the hub is just out of reach (the app's
+ *  hubRestartTimeout), so a crash loop or a hub that never comes back does not promise "reconnects when done" forever. */
 export const RESTARTING_MS = 300_000;
 
 export const NO_LINK: ConnLink = { lastOnline: 0, nextTry: 0, restarting: false, networkUp: true };
@@ -61,7 +61,7 @@ export function phaseTitle(p: ConnPhase): string {
   }
 }
 
-/** The sidebar's footer and rail: the computers online, or why not (没有网络 / hub 正在更新… as the pill says). */
+/** The sidebar's footer and rail: the computers online, or why not ("No network" / "Hub is updating…" as the pill says). */
 export function connStatus(p: ConnPhase, online: number, total: number): string {
   switch (p) {
     case "online":
@@ -103,7 +103,7 @@ export function connFacts(p: ConnPhase, link: ConnLink, now: number): string[] {
   return out;
 }
 
-/** "12 秒前", "3 分钟前", then the time of day, with the date once it was another day (a laptop shut overnight). */
+/** "12 s ago", "3 min ago", then the time of day, with the date once it was another day (a laptop shut overnight). */
 export function ago(at: number, now: number): string {
   const s = Math.max(0, Math.floor((now - at) / 1000));
   if (s < 60) return t("lib-connection.seconds_ago", { count: s });

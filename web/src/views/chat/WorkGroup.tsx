@@ -1,5 +1,5 @@
-// An exchange's work as lib/work-groups.ts groups it (cindy's WorkGroupBlock): 「正在工作…」 with a clock and its
-// newest steps peeking out while it runs, 「已工作 Xs」 once done; open, every step on a 2 px rail. A finished
+// An exchange's work as lib/work-groups.ts groups it (cindy's WorkGroupBlock): "Working…" with a clock and its
+// newest steps peeking out while it runs, "Worked for Xs" once done; open, every step on a 2 px rail. A finished
 // exchange's outer group is a timeline: the agent's words between inner groups that stay folded.
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Item, SessionLive } from "../../lib/types";
@@ -51,7 +51,7 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
     setOpen(next);
     if (next) for (const f of foldsOf(g)) if (f.fold) openFoldRange(p.scope, f.seq, f.fold.through_seq);
   };
-  // a search hit inside it (search-reveal.ts): it opens, and 返回搜索前位置 closes it again
+  // a search hit inside it (search-reveal.ts): it opens, and "Back to where you were" closes it again
   const ids = useMemo(() => nodeItemIds(g.children), [g.children]);
   useReveal(p.scope, ids, () => {
     if (open || !opens) return;
@@ -59,12 +59,12 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
     return () => setOpen(false);
   });
   // an open group's folded steps are fetched: opened just now, or remembered open when the chat comes back (#1996: it
-  // stayed at 正在取 N 条 then); once in, the folds are gone and this has nothing left to do. The outer group fetches
+  // stayed at "Loading N steps" then); once in, the folds are gone and this has nothing left to do. The outer group fetches
   // its nested groups' folds too.
   const folds = useMemo(() => (open && !p.nested ? foldsOf(g) : []), [open, p.nested, g]);
   const foldKey = folds.map((f) => f.id).join(" ");
   const expandFold = p.expandFold;
-  // a fetch that failed (the hub restarting, the network): the group says so, and 重试 runs it again
+  // a fetch that failed (the hub restarting, the network): the group says so, and "Retry" runs it again
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {

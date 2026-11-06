@@ -1,6 +1,6 @@
-// A Feishu chat, opened at the item's first new message (docs/inbox.md: 「点开：飞书会话停在这件事的第一条新消息」).
+// A Feishu chat, opened at the item's first new message (docs/inbox.md: "Opening it: the Feishu chat stops at the item's first new message").
 // Supports native Feishu messaging interactions: direct replies, quoting messages, copying, asking Persona for summary,
-// and reporting seen messages to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts). The chat's Pins
+// and reporting seen messages to Feishu (docs/inbox.md "Seen Feishu messages are reported read when visible", lark-read.ts). The chat's Pins
 // (lark-pins.ts) open over it; a Pin found in the chat replaces the window around it, a reply opens its thread.
 // Like the phone's chat (lib/lark-chat.ts, LarkExtras.tsx): pictures open in the viewer, files download, voice and video
 // play here, a card's buttons press, my messages show who read them, reactions can be put on, an avatar opens the
@@ -72,14 +72,14 @@ function refuseAttachments() {
   toast(t("inbox-larkcomposer.quote_unsupported"), "error");
 }
 
-/** The chat a LarkThread shows: from an inbox item, or a row of 消息. */
+/** The chat a LarkThread shows: from an inbox item, or a row of "Messages". */
 export interface LarkChatRef {
   feed: string;
   title: string;
   topic?: boolean;
   /** Open at this position (the first new message) instead of the newest. */
   focus?: string;
-  /** The Feishu account the chat is in (`ol_account`, docs/feishu.md「多账号」); undefined: the hub's own. */
+  /** The Feishu account the chat is in (`ol_account`, docs/feishu.md "Multiple accounts"); undefined: the hub's own. */
   account?: number;
   /** A group: its box can @ people, my messages show how many read them. */
   group?: boolean;
@@ -151,7 +151,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const [adding, setAdding] = useState<LarkMessage | null>(null);
   const [changingPin, setChangingPin] = useState(false);
   const [pinRecheck, setPinRecheck] = useState(false);
-  // Older pages as the list nears its top (lark-history.ts); 回到最新 from the newest messages this window kept.
+  // Older pages as the list nears its top (lark-history.ts); "Back to latest" from the newest messages this window kept.
   const paging = useRef(new OlderPaging());
   const [, setPagingTick] = useState(0);
   const latest = useRef<LarkPage | null>(null);
@@ -164,7 +164,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   // A topic group: a card per topic, its newest replies on it, its thread in a dialog (LarkTopicCard.tsx).
   const topicReplies = useTopicReplies(feed, ol);
   const [openTopic, setOpenTopic] = useState<LarkMessage | null>(null);
-  // 防撤回 / 编辑历史 / [removed] (lark-display.ts): read while the chat shows
+  // "Keep recalled messages" / "Edit history" / Brave Climb (lark-display.ts): read while the chat shows
   const display = useLarkDisplayState(ol).snapshot ?? HIDDEN_DISPLAY;
 
   useEffect(() => {
@@ -327,12 +327,12 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     checkScroll();
   }, [page, checkScroll]);
 
-  // The newest messages, kept while the window reaches them, so 回到最新 goes back without waiting for the hub.
+  // The newest messages, kept while the window reaches them, so "Back to latest" goes back without waiting for the hub.
   useEffect(() => {
     if (page && !page.has_newer && page.messages.length) latest.current = latestOf(page);
   }, [page]);
 
-  // 回到最新 (iOS #1034): a window that reaches the newest messages scrolls to them; one moved away (the first unread,
+  // "Back to latest" (iOS #1034): a window that reaches the newest messages scrolls to them; one moved away (the first unread,
   // a Pin) goes back to the newest ones it kept at once, then reads the newest page quietly and joins it on when it
   // follows on; across a gap it takes the newest page only while the list is still at its end.
   const jumpToLatest = useCallback(async () => {
@@ -423,7 +423,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   }, [onPinsOpen]);
 
   const handleAskPersona = useCallback(async () => {
-    // i18n-ignore: the request to the assistant is a prompt, written in one language (docs/i18n.md「提示词」)
+    // i18n-ignore: the request to the assistant is a prompt, written in one language (docs/i18n.md "Prompts")
     const chatTitle = chat.title || "飞书会话"; // i18n-ignore
     const where = ol ? `，在飞书账号 ${ol}：lark_messages 传 account=${ol}` : ""; // i18n-ignore: prompt
     const prompt = `读取我飞书会话「${chatTitle}」（飞书网关 feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`; // i18n-ignore: prompt
@@ -784,7 +784,7 @@ function useReadReports(
     root.querySelectorAll<HTMLElement>("[data-seen-pos]").forEach((el) => io.observe(el));
     const onVisibility = () => (document.visibilityState === "visible" ? look() : flush());
     document.addEventListener("visibilitychange", onVisibility);
-    // A dialog over the page (AI 草拟回复, 交给 AI) is portaled into <body>: look again once it is gone.
+    // A dialog over the page ("AI draft reply", "Hand to AI") is portaled into <body>: look again once it is gone.
     const dialogs = new MutationObserver(look);
     dialogs.observe(document.body, { childList: true });
     const seen = inView.current;
@@ -906,7 +906,7 @@ function isSystem(m: LarkMessage) {
   return m.type === "SYSTEM" || (m.parts ?? []).some((p) => p.kind === "text" && p.metadata?.system);
 }
 
-/** 设置 › 翻译 for this chat: the translation of someone else's message in another language, asked for when it shows. */
+/** Settings › Translation for this chat: the translation of someone else's message in another language, asked for when it shows. */
 function TranslationLine({ m, target }: { m: LarkMessage; target: string }) {
   const text = m.text?.trim() ?? "";
   const applies = !m.is_mine && !m.recalled && text !== "" && isForeignCached(text, target);
@@ -968,14 +968,14 @@ function Message({
   onAskPersona?: () => void;
   onCopy?: (m: LarkMessage) => void;
   onRetry?: (m: LarkMessage) => void;
-  /** A file whose upload broke off: 检查发送结果, or remove the local copy. */
+  /** A file whose upload broke off: "Check result", or remove the local copy. */
   onCheck?: (m: LarkMessage) => void;
   onDiscard?: (m: LarkMessage) => void;
   /** The thread's reply box can send pictures and files too. */
   threadAttachments?: boolean;
-  /** 添加 Pin, offered when the hub says the message may be pinned. */
+  /** "Add Pin", offered when the hub says the message may be pinned. */
   onPin?: (m: LarkMessage) => void;
-  /** 表情回复: the picker for this message. */
+  /** "Reactions": the picker for this message. */
   onReact?: (m: LarkMessage) => void;
   /** A reaction under it clicked: mine on or off. */
   onToggleReaction?: (m: LarkMessage, key: string) => void;

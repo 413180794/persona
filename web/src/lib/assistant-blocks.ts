@@ -1,4 +1,4 @@
-// The assistant's cards in a reply's text (docs/assistant-views.md「卡片身份」): where the ```persona-view blocks are and
+// The assistant's cards in a reply's text (docs/assistant-views.md "Card identity"): where the ```persona-view blocks are and
 // what each one's key is, by the same rules as the hub (sdk/go/wire/assistantblocks.go, the shared vectors in
 // schema/extension/examples/assistant-text/fences.json): standalone CommonMark fences only (backticks or tildes, a
 // longer outer fence, any case of the language, LF / CRLF / CR), an example inside another code block does not count,

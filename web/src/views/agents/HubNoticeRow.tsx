@@ -1,6 +1,6 @@
-// The one quiet line about the hub at the top of the Agents list (#2897, docs/hub-update.md「App 里」, the app's
+// The one quiet line about the hub at the top of the Agents list (#2897, docs/hub-update.md "In the app", the app's
 // HubNoticeRow): an update under way, one that went back, auto-update turned on (once), a newer version or Docker image.
-// Clicking the line opens 设置 › hub; its buttons each do their own thing. Follows the hub's `hub_update` pushes and
+// Clicking the line opens Settings › hub; its buttons each do their own thing. Follows the hub's `hub_update` pushes and
 // reads again on every hello (a hub that just restarted into a new version).
 import { useCallback, useEffect, useState } from "react";
 import { errorText } from "../../lib/api";

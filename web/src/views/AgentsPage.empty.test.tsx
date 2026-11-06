@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The Agents page with no computer (docs/onboarding.md 4.5, #4485): the machines page's 还没有电脑 + 添加电脑, not a
-// bare「Agents 按机器」title over nothing; with a computer the list is as before.
+// The Agents page with no computer (docs/onboarding.md 4.5, #4485): the machines page's "No computers yet" + "Add computer", not a
+// bare "Agents by machine" title over nothing; with a computer the list is as before.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

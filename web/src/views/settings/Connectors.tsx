@@ -1,7 +1,7 @@
-// 设置 › 连接器 (iOS ConnectorsSection, docs/mail.md): where Persona's data comes from — the mail accounts (list, add
-// one with a password or 授权码, delete), 飞书 (the Lark gateway through the hub, feature `lark`: read-only status), and the hub's other connectors
+// Settings › Connectors (iOS ConnectorsSection, docs/mail.md): where Persona's data comes from — the mail accounts (list, add
+// one with a password or app password, delete), Lark (the Lark gateway through the hub, feature `lark`: read-only status), and the hub's other connectors
 // (GitHub, Telegram, an extension's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
-// 这台 iPhone (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
+// "This iPhone" (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
 // phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone;
 // Outlook too (Microsoft calls back to a custom scheme only the app catches), though its client ID can be set up here.
 import { useEffect, useId, useState } from "react";
@@ -31,7 +31,7 @@ interface LarkStatus {
 export function Connectors({ open, onOpen, onChannel }: { open: string | null; onOpen: (id: string | null) => void; onChannel?: (id: string) => void }) {
   // An older hub has no connectors API (feature "connectors"): only mail and Feishu, as before.
   const hasConnectors = useStore((s) => s.features.includes("connectors"));
-  // 飞书 (the Lark gateway through /api/v1/lark/…) only on a hub that has it (feature `lark`); 飞书机器人 is the hub's own.
+  // Lark (the Lark gateway through /api/v1/lark/…) only on a hub that has it (feature `lark`); "Lark bot" is the hub's own.
   const lark = useLarkOn();
   // "feishu-bot" is not a hub connector: FeishuBot reads it and opens its own dialog.
   if (open && open !== "feishu-bot") return <ConnectorDetail key={open} id={open} onBack={() => onOpen(null)} onChannel={onChannel} />;
@@ -48,7 +48,7 @@ export function Connectors({ open, onOpen, onChannel }: { open: string | null; o
   );
 }
 
-// ── 邮箱 ────────────────────────────────────────────────
+// ── Mail ────────────────────────────────────────────────
 
 function Mail() {
   const [accounts, setAccounts] = useState<MailAccount[] | null>(null);
@@ -141,7 +141,7 @@ function Mail() {
 
 const fieldClass = "h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
-// 添加邮箱 (iOS AddMailAccountView): 飞书 or any IMAP server with a password / 授权码; the hub logs in to IMAP and SMTP
+// "Add mail account" (iOS AddMailAccountView): Lark or any IMAP server with a password / app password; the hub logs in to IMAP and SMTP
 // before it saves, so a wrong password comes back as an error here and nothing is stored.
 function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (email: string) => void }) {
   const [f, setF] = useState<MailForm>(EMPTY_MAIL_FORM);
@@ -289,7 +289,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
   );
 }
 
-/** Gmail's and Outlook's note in 添加邮箱: they sign in on the provider's page, which returns to the phone app. */
+/** Gmail's and Outlook's note in "Add mail account": they sign in on the provider's page, which returns to the phone app. */
 function PhoneOnly({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex gap-3 rounded-[10px] bg-inset px-3.5 py-3 shadow-hairline">
@@ -306,7 +306,7 @@ const OUTLOOK_STEPS = [1, 2, 3, 4, 5, 6].map((n) => `settings-connectors.outlook
 
 /**
  * Outlook's client ID (iOS OutlookSignInSection's registration): the app registered in Microsoft Entra that this hub
- * signs in with. Once the hub has one this says so (and where it came from) with 更换; else the steps, the callback to
+ * signs in with. Once the hub has one this says so (and where it came from) with "Change"; else the steps, the callback to
  * register and the field. The sign-in itself stays on the phone.
  */
 export function OutlookClient() {
@@ -412,7 +412,7 @@ export function OutlookClient() {
   );
 }
 
-// ── 飞书 ────────────────────────────────────────────────
+// ── Lark ────────────────────────────────────────────────
 
 const USES: { icon: IconName; title: string; detail: string }[] = [
   { icon: "inbox", title: t("settings-connectors.use_inbox"), detail: t("settings-connectors.use_inbox_detail") },
@@ -443,7 +443,7 @@ function Feishu() {
   const [loading, setLoading] = useState(true);
   const load = () => {
     setLoading(true);
-    // the Feishu accounts on the hub's Lark gateway (docs/feishu.md「多账号」); a hub from before them has none to list
+    // the Feishu accounts on the hub's Lark gateway (docs/feishu.md "Multiple accounts"); a hub from before them has none to list
     api<LarkAccountList>("/lark/accounts").then(setAccounts).catch(() => setAccounts(null));
     api<LarkStatus>("/lark/status")
       .then((r) => (setSt(r), setError("")))

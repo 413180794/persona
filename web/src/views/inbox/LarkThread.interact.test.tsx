@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The Feishu chat page's interactions against a fake hub (fetch): a reaction the hub turns down goes back, a card
 // button's failure says why and a success reads the window around the pressed message again, the draft and its quote
-// come back with the chat and are gone once sent, and a group's @ list offers 所有人 first.
+// come back with the chat and are gone once sent, and a group's @ list offers "Everyone" first.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

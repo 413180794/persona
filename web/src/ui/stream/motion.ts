@@ -1,4 +1,4 @@
-// 「回复动效」(settings, on by default, kept in the browser) and the system's reduced motion: replies fade in word by
+// "Reply animation" (settings, on by default, kept in the browser) and the system's reduced motion: replies fade in word by
 // word only when both allow it.
 import { useSyncExternalStore } from "react";
 
@@ -6,7 +6,7 @@ const KEY = "persona.replyMotion";
 const listeners = new Set<() => void>();
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
-/** Whether 「回复动效」 is on (the setting alone; see useReplyMotion for what applies). */
+/** Whether "Reply animation" is on (the setting alone; see useReplyMotion for what applies). */
 export function replyMotionEnabled(): boolean {
   try {
     return localStorage.getItem(KEY) !== "0";
@@ -42,12 +42,12 @@ function subscribe(l: () => void) {
   };
 }
 
-/** Whether replies fade in: 「回复动效」 is on and the system doesn't ask for reduced motion. */
+/** Whether replies fade in: "Reply animation" is on and the system doesn't ask for reduced motion. */
 export function replyMotion(): boolean {
   return replyMotionEnabled() && !prefersReducedMotion();
 }
 
-/** The 「回复动效」 setting for the settings page's switch. */
+/** The "Reply animation" setting for the settings page's switch. */
 export function useReplyMotionSetting(): boolean {
   return useSyncExternalStore(subscribe, replyMotionEnabled, () => true);
 }

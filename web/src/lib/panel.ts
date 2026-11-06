@@ -1,4 +1,4 @@
-// The page's right-hand panel: a session's files / Git, or a link opened in the page (docs/web.md「侧边面板」). A
+// The page's right-hand panel: a session's files / Git, or a link opened in the page (docs/web.md "Side panel"). A
 // session's terminal is the page's own view now (lib/session-view.ts), not a panel.
 // One panel at a time; opening another replaces it. Session panels close when the page moves to another conversation;
 // a link stays until closed (it is not tied to the conversation it came from).

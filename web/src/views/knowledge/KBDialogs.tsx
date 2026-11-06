@@ -1,5 +1,5 @@
-// The knowledge page's dialogs: 打标 (importance, relevance, tags, a project's kind and status), one day of a chat's
-// archive opened at a found message, and one archived 公司圈 post.
+// The knowledge page's dialogs: "Tag" (importance, relevance, tags, a project's kind and status), one day of a chat's
+// archive opened at a found message, and one archived Moments post.
 import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
 import {
@@ -234,7 +234,7 @@ export function DayDialog({ chat, chatName, day, focus, query, onClose }: { chat
   );
 }
 
-/** One archived post (公司圈, or the feed it names): its text and every comment as they were archived. */
+/** One archived post (Moments, or the feed it names): its text and every comment as they were archived. */
 export function MomentDialog({ moment, onClose }: { moment: KBMomentRef | null; onClose: () => void }) {
   const [md, setMd] = useState<string | null>(null);
   const [error, setError] = useState("");

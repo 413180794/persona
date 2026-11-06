@@ -24,7 +24,7 @@ describe("drafts", () => {
     const task = { title: "补齐网络层的单元测试", id: "todo_7f3a" };
     const sent = withQuoteBlock({ text: "测试补好了，覆盖率 92%。\n\n还差离线的用例。", task }, "离线的什么时候补？");
     expect(sent).toBe("> 任务「补齐网络层的单元测试」（todo id: todo_7f3a）\n> \n> 测试补好了，覆盖率 92%。\n> \n> 还差离线的用例。\n\n离线的什么时候补？");
-    // and back: the bubble and 编辑 see the task again
+    // and back: the bubble and "Edit" see the task again
     expect(parseQuote(splitQuote(sent)!.quote)).toEqual({ text: "测试补好了，覆盖率 92%。\n\n还差离线的用例。", task });
     // a card with nothing said under it, or no todo id: the title alone
     expect(withQuoteBlock({ text: "", task: { title: "整理发布说明" } }, "")).toBe("> 任务「整理发布说明」");
@@ -97,7 +97,7 @@ describe("drafts", () => {
     });
     // a quote left on the bar from before: the message coming back has its own
     sendDraft("m/q", { type: "quote", text: "旧的引用" });
-    // 回退到这里 finishes after the reader went to another chat: the message, sent with a quote, comes back
+    // "Rewind to here" finishes after the reader went to another chat: the message, sent with a quote, comes back
     sendDraft("m/q", { type: "replace", text: withQuoteBlock({ text: "上周的结论" }, "照这个改") });
     expect(store.get("draft:m/q")).toBe("照这个改");
     expect(storedQuotes("m/q").map((q) => q.text)).toEqual(["上周的结论"]);

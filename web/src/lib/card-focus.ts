@@ -1,5 +1,5 @@
-// The card a row in 总览's 需要你处理 was opened for (#4089): the chat puts it first, so on a phone it is the one shown in
-// full and not folded into 还有 N 件 under another card of the same agent. It rides on that history entry only: the
+// The card a row in "Overview"'s "Needs you" was opened for (#4089): the chat puts it first, so on a phone it is the one shown in
+// full and not folded into "N more" under another card of the same agent. It rides on that history entry only: the
 // sidebar, a notification or a new tab open the chat without it.
 import type { Interaction } from "./types";
 

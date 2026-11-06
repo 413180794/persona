@@ -1,5 +1,5 @@
 // An extension's sign-in (#4507): its state in words, the buttons' words, what the list adds, the pages left out, the
-// tools in 「关于」, how a step is drawn, and the polling of a device code / QR step until it is done or another step.
+// tools in "About", how a step is drawn, and the polling of a device code / QR step until it is done or another step.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hub = vi.hoisted(() => ({ listeners: new Map<string, (msg: Record<string, unknown>) => void>(), features: ["extensions", "extension_auth"] }));

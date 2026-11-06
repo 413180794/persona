@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 浏览器（ego lite） reads on a Mac's page: an answer for another machine, or an older answer, never lands on the page that
+// "Browser (ego lite)" reads on a Mac's page: an answer for another machine, or an older answer, never lands on the page that
 // is shown now, and the 2 s watch pauses while the tab is hidden and asks right away once it is shown again.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

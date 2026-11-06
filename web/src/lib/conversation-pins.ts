@@ -1,4 +1,4 @@
-// Pinned Persona conversations (the iOS sidebar's 置顶, `assistant.pinned`; Android's drawer): kept per browser, as the
+// Pinned Persona conversations (the iOS sidebar's "Pinned", `assistant.pinned`; Android's drawer): kept per browser, as the
 // app keeps them per device. The main conversation is always first and is never in the list. The newest pin comes first.
 import { useSyncExternalStore } from "react";
 import { isAutoConversation } from "./conversation-origins";
@@ -68,9 +68,9 @@ export function usePinnedConversations(): string[] {
   return useSyncExternalStore(subscribe, getPinnedConversations, () => cached.ids);
 }
 
-/** The sidebar's「Persona 对话」apart from the main one: the pinned ones in pin order (all of them), then the newest
+/** The sidebar's "Persona chats" apart from the main one: the pinned ones in pin order (all of them), then the newest
  *  `limit` others, plus the open one when it is further down (#2283). An id pinned for a conversation that is gone is skipped.
- *  最近 has the user's own only: the ones the hub opened by itself are under 自动对话 (#3264), unless pinned. */
+ *  "Recent" has the user's own only: the ones the hub opened by itself are under "Automatic" (#3264), unless pinned. */
 export function sidebarConversations(conversations: readonly Session[], main: string | undefined, pins: readonly string[], limit = 5, current?: string): { pinned: Session[]; recent: Session[] } {
   const others = conversations.filter((c) => c.session_id !== main);
   const order = new Map(pins.map((id, i) => [id, i]));

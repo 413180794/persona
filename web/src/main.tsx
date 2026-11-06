@@ -4,10 +4,10 @@ import { initI18n } from "./i18n";
 import "./styles.css";
 import { applyLook } from "./ui/look";
 
-// 主题色 and 字号 (docs/web.md「外观」) before anything draws.
+// Theme color and text size (docs/web.md "Appearance") before anything draws.
 applyLook();
 
-// The language's catalog loads before the rest of the app: their modules call t() as they load (docs/web.md「国际化」).
+// The language's catalog loads before the rest of the app: their modules call t() as they load (docs/web.md "Internationalization").
 // React and the PWA helper say no t(), so they load alongside it rather than after it.
 // An overlay's history entry a reload left behind goes before the app reads the address (lib/back-close.ts, #5134).
 const [, { StrictMode, createElement }, { createRoot }, { startPWA }] = await Promise.all([

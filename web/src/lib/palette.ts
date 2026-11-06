@@ -1,4 +1,4 @@
-// The palette's logic (views/Palette.tsx, docs/web.md「快捷键」): its state (open, what is typed), the two modes — ⌘K
+// The palette's logic (views/Palette.tsx, docs/web.md "Keyboard shortcuts"): its state (open, what is typed), the two modes — ⌘K
 // jumps to a conversation or a terminal pane, `>` (or ⌘⇧P) lists commands — the commands and their filter, and the hook
 // other modules add commands through (`registerContextCommands`). Pure apart from the small store.
 import { t } from "../i18n";
@@ -85,7 +85,7 @@ export interface PaletteCommand {
  * user is on. A provider is called each time the palette lists commands, with where the user is, and returns that
  * moment's commands (none is fine); one that throws is skipped. Returns the way to take the provider back:
  *
- *   useEffect(() => registerContextCommands((ctx) => ctx.pane ? [{ id: "agent:rename", section: "Agent", title: "重命名…", run: … }] : []), []);
+ *   useEffect(() => registerContextCommands((ctx) => ctx.pane ? [{ id: "agent:rename", section: "Agent", title: "Rename…", run: … }] : []), []);
  */
 export type ContextCommandProvider = (ctx: PaletteContext) => PaletteCommand[];
 
@@ -123,7 +123,7 @@ export interface AppCommandInput {
   run: (id: string, digit?: number) => void;
   /** The machines, in the order ⌘1–9 counts them. */
   machines: { id: string; name: string }[];
-  /** Commands that have no shortcut (新建 Agent…). */
+  /** Commands that have no shortcut ("New agent…"). */
   extra?: PaletteCommand[];
   platform?: Platform;
 }
@@ -186,7 +186,7 @@ export interface TerminalHit {
   /** The id the terminal opens by (an agent session's id, or "pane:<pane>"). */
   id: string;
   title: string;
-  /** The place and what runs: 机器 › 工作区 › 标签页. */
+  /** The place and what runs: machine › workspace › tab. */
   trail: string;
   detail: string;
   /** The agent in the pane ("" for a plain shell). */
@@ -238,7 +238,7 @@ export function terminalHits(machines: readonly MachinePanes[], query: string): 
   return words.length ? out : out.slice(0, IDLE_PANES);
 }
 
-// ── 收件箱 and 前往 (the Mac's quick open, MacQuickOpen) ──────────
+// ── Inbox and "Go to" (the Mac's quick open, MacQuickOpen) ──────────
 
 /** Mac's match: the title starting with what is typed, then holding it, then every word somewhere; 1 with nothing typed. */
 export function textScore(title: string, hay: readonly (string | undefined)[], text: string): number {
@@ -258,7 +258,7 @@ export interface PlaceInput {
   title: string;
   icon: IconName;
   to: Route;
-  /** More words that find it, space-separated (inbox mail 飞书…). */
+  /** More words that find it, space-separated (inbox mail lark…). */
   words?: string;
 }
 
@@ -306,7 +306,7 @@ export function inboxHits<T extends InboxLike>(items: readonly T[], text: string
     .slice(0, limit);
 }
 
-/** The groups in their order, empty ones dropped, unless a later group has a better kind of match (typing 设置 puts 前往
+/** The groups in their order, empty ones dropped, unless a later group has a better kind of match (typing "Settings" puts "Go to"
  *  above a conversation that merely mentions it): by the best score's tier (score / 20), ties in the order given. */
 export function orderGroups<T extends { score: number }>(groups: readonly (readonly T[])[]): T[][] {
   const tier = (g: readonly T[]) => Math.floor(Math.max(...g.map((x) => x.score)) / 20);

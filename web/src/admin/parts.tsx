@@ -194,7 +194,7 @@ export function Stat({ icon, label, value, hint, onClick }: { icon: AdminIconNam
   );
 }
 
-// ConfirmButton asks again in place: the first click turns it into「确认」/「取消」. Focus moves to「取消」 when it asks and
+// ConfirmButton asks again in place: the first click turns it into "Confirm" / "Cancel". Focus moves to "Cancel" when it asks and
 // back to the trigger when it stops asking (unless the user has moved on), so a keyboard user keeps their place; Escape backs out.
 export function ConfirmButton({ label, confirm, onConfirm, icon = "trash", busy }: { label: string; confirm: string; onConfirm: () => void | Promise<void>; icon?: AdminIconName; busy?: boolean }) {
   const [asking, setAsking] = useState(false);

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// An image in the file panel (#2982): 查看大图 opens the chat's ImageViewer with the file's name on top and 下载 / 拷贝,
-// and once a HEIC is shown as the machine's PNG preview, 下载 saves that PNG under a .png name.
+// An image in the file panel (#2982): "View larger" opens the chat's ImageViewer with the file's name on top and "Download" / "Copy",
+// and once a HEIC is shown as the machine's PNG preview, "Download" saves that PNG under a .png name.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

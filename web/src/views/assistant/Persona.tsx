@@ -1,8 +1,8 @@
-// Persona's look in the page (形象, docs/persona.md, docs/extensions.md「形象」; the app's PersonaStore / PersonaViews /
+// Persona's look in the page (avatar, docs/persona.md, docs/extensions.md "Avatar"; the app's PersonaStore / PersonaViews /
 // PersonaPicker): the looks the hub offers (GET /looks: the built-in ones, its packages and the extensions'), the one
 // chosen — the user's, kept on the hub so every device shows it — and its face (a still avatar) and dot (the state's
-// APNG, which the browser animates by itself). The built-in ones the page draws: 团子 (the default, MochiFace), 面罩 and
-// 汇流 (BuiltinFaces); the default shows too while a chosen package is not there. An older hub without /looks gets the
+// APNG, which the browser animates by itself). The built-in ones the page draws: Mochi (the default, MochiFace), Visor and
+// Circuit (BuiltinFaces); the default shows too while a chosen package is not there. An older hub without /looks gets the
 // packages from /personas and the choice stays this browser's.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, errorText, getToken } from "../../lib/api";
@@ -74,7 +74,7 @@ function saveChosen(id: string) {
 
 function setPS(patch: Partial<PersonaStoreState>) {
   ps = { ...ps, ...patch };
-  // 主题色「跟随形象」(ui/look.ts) keeps the chosen persona's accent, from the last list the hub gave; while there is no
+  // Theme color "Match avatar" (ui/look.ts) keeps the chosen persona's accent, from the last list the hub gave; while there is no
   // list yet (or the last load failed) and the chosen one is not in it, the saved accent stays.
   const shown = ps.list.find((p) => p.id === ps.chosen);
   if (isBuiltinPersona(ps.chosen)) setPersonaAccent(null);
@@ -205,7 +205,7 @@ export interface CurrentPersona {
   info: PersonaInfo | null;
   /** The built-in look on screen (the chosen one, or the default while a chosen package is not there); null with a package. */
   builtin: string | null;
-  /** 团子 is on screen. */
+  /** Mochi is on screen. */
   mochi: boolean;
   name: string;
   chosen: string;
@@ -338,14 +338,14 @@ function Swatches({ p }: { p: PersonaInfo }) {
 }
 
 /**
- * 形象 (设置 › 通用 and the profile page; the app's 设置 › 外观 › 形象): the one setting for Persona's face, name, the
- * page's mark and icon (#3200): the built-in looks (团子 the default, 面罩, 汇流), then the hub's packages and the
+ * Avatar (Settings › General and the profile page; the app's Settings › Appearance › Avatar): the one setting for Persona's face, name, the
+ * page's mark and icon (#3200): the built-in looks (Mochi the default, Visor, Circuit), then the hub's packages and the
  * extensions' looks, and the chosen one's dot in each state. On a hub that keeps the choice every device follows it; the
- * page's colors follow it only with 主题色「跟随形象」 (ui/look.ts).
+ * page's colors follow it only with theme color "Match avatar" (ui/look.ts).
  */
 /**
- * What the picker says when the hub has no looks beyond the built-in ones: where to get one, with 设置 › 扩展 as a link
- * (#3597). onExtensions opens it in place (设置 keeps its own tab state); without it the link goes to the page.
+ * What the picker says when the hub has no looks beyond the built-in ones: where to get one, with Settings › Extensions as a link
+ * (#3597). onExtensions opens it in place (Settings keeps its own tab state); without it the link goes to the page.
  */
 export function NoOtherLooks({ onExtensions }: { onExtensions?: () => void }) {
   const to = settingsHref("extensions", null, false);

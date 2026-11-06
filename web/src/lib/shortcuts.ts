@@ -1,4 +1,4 @@
-// The keyboard shortcuts of the web client (docs/web.md「快捷键」): the registry of commands (id, label, default chord,
+// The keyboard shortcuts of the web client (docs/web.md "Keyboard shortcuts"): the registry of commands (id, label, default chord,
 // scope), chord parsing / formatting per platform, the user's rebindings (localStorage), the reserved chords, and the
 // dispatcher that App.tsx's keydown listener and the terminal's key handler call.
 //
@@ -25,7 +25,7 @@ export function currentPlatform(): Platform {
   return detected;
 }
 
-/** What the modifier is called on this platform, for messages: 需要带 Ctrl / 需要带 ⌘. */
+/** What the modifier is called on this platform, for messages: "needs Ctrl" / "needs ⌘". */
 export const modName = (p: Platform) => (p === "mac" ? "⌘" : "Ctrl");
 
 // ── chords ───────────────────────────────────────────────
@@ -228,10 +228,10 @@ export interface ShortcutDef {
 }
 
 /**
- * Moshi's keymap, each mapped to the closest Persona action (docs/web.md「快捷键」):
- *   Mod+K 跳转 · Mod+Shift+P 命令面板 · Mod+J 终端 ⇄ 对话 · Mod+B 右侧面板 · Mod+Alt+B 侧边栏 · Mod+E 侧边栏分组 ·
- *   Mod+Shift+Enter 最大化中间区域 · Mod+I 输入框 · Mod+Alt+Shift+↑/↓ 折叠 / 展开 · Mod+Alt+↑/↓ 上 / 下一行 · Mod+, 设置 ·
- *   Mod+1–9 电脑 · Mod+Alt+←/→ 本机上 / 下一个标签页.
+ * Moshi's keymap, each mapped to the closest Persona action (docs/web.md "Keyboard shortcuts"):
+ *   Mod+K go to · Mod+Shift+P command palette · Mod+J terminal ⇄ chat · Mod+B right panel · Mod+Alt+B sidebar · Mod+E sidebar groups ·
+ *   Mod+Shift+Enter maximize the center area · Mod+I input · Mod+Alt+Shift+↑/↓ collapse / expand · Mod+Alt+↑/↓ previous / next row · Mod+, settings ·
+ *   Mod+1–9 computers · Mod+Alt+←/→ previous / next tab on this machine.
  * Not taken over: Moshi's Mod+Alt+1–3 (choose the right panel's tab), which Persona has no single place for.
  */
 export const SHORTCUTS: readonly ShortcutDef[] = [
@@ -314,13 +314,13 @@ export function conflictOf(id: string, chord: string, bindings: Bindings): Short
   return SHORTCUTS.find((other) => other.id !== id && expandChord(bindings[other.id] ?? other.chord).some((c) => mine.has(c)));
 }
 
-/** On a conflict, `with` is the command that has the chord and `chord` the chord pressed (the settings offer 替换). */
+/** On a conflict, `with` is the command that has the chord and `chord` the chord pressed (the settings offer "Replace"). */
 export type Check = { ok: true; chord: string } | { ok: false; reason: "mod" | "key" | "reserved" | "conflict" | "digits"; message: string; with?: string; chord?: string };
 
 /**
  * Whether `pressed` can be the chord of command `id`. `pressed` is what the user pressed (a Chord with `mod`); the
- * answer is the canonical chord, or why not: no Mod ("需要带 Ctrl"), a key chords do not use, a reserved chord, or
- * another command's ("已被「X」占用"). `bindings` are the chords as set (getConfigured): a command turned off keeps its chord.
+ * answer is the canonical chord, or why not: no Mod ("needs Ctrl"), a key chords do not use, a reserved chord, or
+ * another command's ("already used by "X""). `bindings` are the chords as set (getConfigured): a command turned off keeps its chord.
  */
 export function checkBinding(id: string, pressed: (Chord & { mod: boolean }) | null, bindings: Bindings, platform: Platform = currentPlatform()): Check {
   if (!pressed) return { ok: false, reason: "key", message: t("lib-shortcuts.check_key") };
@@ -435,7 +435,7 @@ export function setBinding(id: string, chord: string) {
 /** Clears a command's chord: its key does nothing, and it does not fall back to its default. */
 export const clearBinding = (id: string) => setBinding(id, "");
 
-/** Binds `id` to `chord` and clears the command that had it (the settings' 替换). */
+/** Binds `id` to `chord` and clears the command that had it (the settings' "Replace"). */
 export function replaceBinding(id: string, chord: string, other: string) {
   const def = shortcutDef(id);
   const canon = canonChord(chord);
@@ -496,7 +496,7 @@ export function useShortcutPrefs(): ShortcutPrefs {
   return useSyncExternalStore(subscribe, getShortcutPrefs, getShortcutPrefs);
 }
 
-/** The hint on the sidebar's search box: the ⌘K it has always shown while 跳转 has its default chord, else the chord it has now. */
+/** The hint on the sidebar's search box: the ⌘K it has always shown while "Go to" has its default chord, else the chord it has now. */
 export function jumpHint(bindings: Bindings, platform: Platform = currentPlatform()): string {
   const def = shortcutDef("jump")!;
   if (!bindings.jump) return "";

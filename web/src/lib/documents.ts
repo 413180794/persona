@@ -27,7 +27,7 @@ export function isDocument(path: string): boolean {
   return ext(path) in KINDS;
 }
 
-/** What a document is, as the Files app says it (Word 文档, PDF 文档…). */
+/** What a document is, as the Files app says it (Word document, PDF document…). */
 export function documentKind(path: string): string {
   const k = KINDS[ext(path)];
   return t(k ? `lib-documents.${k}` : "lib-documents.other");

@@ -1,5 +1,5 @@
-// Where text picked in the link panel goes (「作为上下文」/「AI 修改」): the composer the user is writing in — the
-// conversation on screen, or the one last typed in. With none on the page (总览, 机器, 设置…), or one that can't send
+// Where text picked in the link panel goes ("Add as context" / "AI edit"): the composer the user is writing in — the
+// conversation on screen, or the one last typed in. With none on the page ("Overview", "Machines", "Settings"…), or one that can't send
 // (a read-only source), it goes to Persona's main conversation (a new one when there is none): the page moves there and
 // the panel stays open, as on the Mac.
 import { addContext, editMessage, usableComposer, whenComposer, type ContextRef } from "../../lib/links";
@@ -15,7 +15,7 @@ function jarvisTarget(): { key: string; go: () => void } {
   return { key: "jarvis-new", go: () => navigate({ name: "jarvis" }) };
 }
 
-/** Who gets it: "当前对话" when a composer is on the page, else Persona. */
+/** Who gets it: "the current chat" when a composer is on the page, else Persona. */
 export function handoffLabel(): string {
   return usableComposer() ? t("link-handoff.current_chat") : "Persona";
 }
@@ -33,7 +33,7 @@ export function giveContext(ref: ContextRef) {
   toast(t("link-handoff.added_persona"), "ok");
 }
 
-/** 「AI 修改」: sent at once. If it can't go (the conversation can't take messages now), it waits as a context instead. */
+/** "AI edit": sent at once. If it can't go (the conversation can't take messages now), it waits as a context instead. */
 export function giveEdit(ref: ContextRef, ask: string) {
   const text = editMessage(ref, ask);
   const keep = (key: string) => {

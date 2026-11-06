@@ -34,7 +34,7 @@ const SOURCE: Record<TurnImage["source"], string> = {
 };
 
 function meta(img: TurnImage): string {
-  // a screenshot's label already says what it is (截图 · MacBook): only the size then
+  // a screenshot's label already says what it is ("Screenshot · MacBook"): only the size then
   const what = img.label.startsWith(SOURCE[img.source]) ? "" : SOURCE[img.source];
   return [what, img.width && img.height ? `${img.width} × ${img.height}` : ""].filter(Boolean).join(" · ");
 }

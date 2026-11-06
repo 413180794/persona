@@ -1,4 +1,4 @@
-// Comparing two versions of a document in the Git panel (docs/web.md「对比」, #1437; iOS / Mac: #1299): each side's text
+// Comparing two versions of a document in the Git panel (docs/web.md "Compare", #1437; iOS / Mac: #1299): each side's text
 // by page / paragraph / slide / sheet, then a line diff like code. Pure apart from the readers' parsers, which are
 // passed in or imported lazily by the caller; tested in compare.test.ts.
 import type JSZip from "jszip";

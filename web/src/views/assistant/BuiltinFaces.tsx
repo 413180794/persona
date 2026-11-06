@@ -1,4 +1,4 @@
-// 面罩 (jarvis) and 汇流 (jarvis-circuit), the built-in looks besides 团子 (docs/persona.md「内置形象」): the same drawings as
+// Visor (jarvis) and Circuit (jarvis-circuit), the built-in looks besides Mochi (docs/persona.md "Built-in avatars"): the same drawings as
 // the apps' PersonaFace (Android PersonaFace.kt visor / circuit, iOS Shared/Design/PersonaFace.swift), in shares of a
 // 100-unit side, painted in the page's accent (gray when offline). Each state reads from its first frame alone; the
 // blink and the needs-you ring are the mochi-* loops (face-motion.ts) and stop with reduced motion.
@@ -25,7 +25,7 @@ function Thought({ x, y, color }: { x: number; y: number; color: string }) {
   );
 }
 
-/** 面罩: an accent disc with a dark visor, two glowing eyes and a sparkle at the top right. */
+/** Visor: an accent disc with a dark visor, two glowing eyes and a sparkle at the top right. */
 export function VisorFace({ size, state = "idle", className }: { size: number; state?: PersonaState; className?: string }) {
   const id = useId().replace(/:/g, "");
   const offline = state === "offline";
@@ -82,7 +82,7 @@ const TRACES = ROWS.map((row) => {
   return turn < CORE[0] ? [[PAD_X, row], [turn, row], CORE] : [[PAD_X, row], CORE];
 });
 
-/** 汇流: three traces running into a core with two dark eyes, on a dark disc of the accent. */
+/** Circuit: three traces running into a core with two dark eyes, on a dark disc of the accent. */
 export function CircuitFace({ size, state = "idle", className }: { size: number; state?: PersonaState; className?: string }) {
   const id = useId().replace(/:/g, "");
   const offline = state === "offline";

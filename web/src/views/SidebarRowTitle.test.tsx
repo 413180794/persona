@@ -1,5 +1,5 @@
 // An agent row behind a prefix keeps room for its title: the prefix gives way first, and a tab with several panes
-// (endRoom) leaves its 终端 tag to its pane rows.
+// (endRoom) leaves its "Terminal" tag to its pane rows.
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Session } from "../lib/types";
@@ -14,7 +14,7 @@ vi.hoisted(() => {
 
 const { SessionRow } = await import("./Sidebar");
 
-// a herdr pane: its source is 终端
+// a herdr pane: its source is "Terminal"
 const s: Session = { machine_id: "mac", session_id: "s1", title: "整理发布说明", cwd: "/code", status: "idle", state: "idle", pane_id: "p1" };
 const props = { s, k: "s:mac/s1", reg: () => () => {}, hover: () => {}, active: false, to: { name: "session", mid: "mac", sid: "s1" } as const, go: () => () => {} };
 const titleOf = (html: string) => html.match(/<span class="([^"]*)">整理发布说明<\/span>/)?.[1] ?? "";

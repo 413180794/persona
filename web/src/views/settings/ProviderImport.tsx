@@ -1,4 +1,4 @@
-// 设置 › 模型供应商 › 从 ~/.zshrc 导入 (#2455): pick a computer, preview the providers its claude aliases add up to
+// Settings › Model providers › Import from ~/.zshrc (#2455): pick a computer, preview the providers its claude aliases add up to
 // (GET /api/v1/launchers/import), tick some, import them (POST). The keys never come to the browser: the hub reads them
 // again from that computer and keeps them sealed.
 import { useEffect, useState } from "react";

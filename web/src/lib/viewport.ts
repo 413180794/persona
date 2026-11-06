@@ -91,7 +91,7 @@ export function enterSends(e: { key: string; shiftKey: boolean }, fine: boolean)
 export const NARROW = "(max-width: 1023px)";
 /** A phone on its side: little height for anything above the composer. */
 export const SHORT = "(max-height: 500px)";
-/** A phone-width screen (Tailwind's max-sm): Dialog is a bottom sheet, 设置 a list of categories. */
+/** A phone-width screen (Tailwind's max-sm): Dialog is a bottom sheet, Settings a list of categories. */
 export const PHONE = "(max-width: 639px)";
 /** No hover (a touch screen): what shows on hover elsewhere stays shown. */
 export const NO_HOVER = "(hover: none)";

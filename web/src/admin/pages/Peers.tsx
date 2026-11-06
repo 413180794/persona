@@ -1,4 +1,4 @@
-// 互联 (under「高级」): other hubs this one links with (docs/plan-hub-mesh.md 2.7) and which of the group is the center
+// "Linked hubs" (under "Advanced"): other hubs this one links with (docs/plan-hub-mesh.md 2.7) and which of the group is the center
 // (docs/plan-hub-center.md 2). Most people never need it: one hub, the node service on every other computer. A hub
 // without the API answers 501 not_implemented and this page says so.
 import { useEffect, useState } from "react";
@@ -177,7 +177,7 @@ function PeerRow({ p, onGone }: { p: Peer; onGone: () => void }) {
   );
 }
 
-// Group: every hub of the group, which one is the center, and「设为中心」for the others (this hub included).
+// Group: every hub of the group, which one is the center, and "Make primary" for the others (this hub included).
 function Group({ mesh, onChanged }: { mesh: MeshView; onChanged: () => void }) {
   const [target, setTarget] = useState<MeshHub | null>(null);
   return (

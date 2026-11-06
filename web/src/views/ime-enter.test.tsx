@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The Enter that picks an input-method candidate belongs to the input method, not the box (#2733): creating a todo
-// in 关联待办 and adding a blocked Claude config directory wait for the composition to end. Safari sends that Enter with
-// isComposing false and keyCode 229 (#4667): 会话内搜索, a question card's own answer, a plan's 打回 reason and the
+// in "Link to-do" and adding a blocked Claude config directory wait for the composition to end. Safari sends that Enter with
+// isComposing false and keyCode 229 (#4667): "Search in chat", a question card's own answer, a plan's "Send back" reason and the
 // Agents page composer ignore it too, and so do the code views' find-in-file and composer and the provider wizard's
 // model ID (#4937).
 import { act } from "react";

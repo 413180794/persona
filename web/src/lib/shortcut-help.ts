@@ -25,7 +25,7 @@ export function useHelpOpen(): boolean {
   );
 }
 
-/** 设置 › 快捷键 (also when 设置 is the page already: its category follows the address). */
+/** Settings › Keyboard shortcuts (also when Settings is the page already: its category follows the address). */
 export function openShortcutSettings(go: (to: string) => void) {
   go("/settings?tab=shortcuts");
   dispatchEvent(new PopStateEvent("popstate"));

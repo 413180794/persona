@@ -2,7 +2,7 @@
 // (GET /api/v1/connectors/{id}/thread) — a chat app's conversation as bubbles (Telegram), a GitHub pull request or
 // issue as GitHub's own timeline — with a box to answer in when the thread names its reply action (POST …/thread/reply).
 // A thread that cannot be read (a CI run, a rate limit, a connector without threads) shows what the hub collected
-// about the item instead, with 在 X 打开. Read-only otherwise: no pages for browsing the source (CLAUDE.md).
+// about the item instead, with "Open in X". Read-only otherwise: no pages for browsing the source (CLAUDE.md).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, ApiError, errorText } from "../../lib/api";
 import {

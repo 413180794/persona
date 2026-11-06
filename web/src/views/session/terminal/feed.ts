@@ -1,4 +1,4 @@
-// A session's terminal in the side panel, as the iOS TerminalFeed (docs/terminal.md, docs/protocol.md「终端流」): the
+// A session's terminal in the side panel, as the iOS TerminalFeed (docs/terminal.md, docs/protocol.md "Terminal stream"): the
 // hub's live stream of the pane written into xterm and continued after a reconnect, or — with a hub, node or herdr
 // that cannot stream — the colored screen read once a second.
 //
@@ -84,7 +84,7 @@ export interface FeedView {
   control: Control;
   why: Why;
   note: string;
-  /** The user wants to drive it (接管) rather than watch (只看); remembered across terminals. */
+  /** The user wants to drive it ("Take control") rather than watch ("View only"); remembered across terminals. */
   wants: boolean;
   /** xterm is the pane's size (watching): the panel scrolls over it instead of fitting it. */
   pinned: boolean;
@@ -96,9 +96,9 @@ export interface FeedView {
   /** What is shown may be old: the status bar is up and the screen dimmed. */
   stale: boolean;
   failure: string | null;
-  /** A paste of several lines waiting for 粘贴. */
+  /** A paste of several lines waiting for "Paste". */
   pasting: string | null;
-  /** Files being sent to the computer to be pasted by path ("正在上传 …"), null when none are. */
+  /** Files being sent to the computer to be pasted by path ("Uploading …"), null when none are. */
   uploading: string | null;
   /** Files are being dragged over the panel. */
   dropping: boolean;
@@ -110,22 +110,22 @@ export interface FeedView {
   mouse: MouseMode;
   /** Pages of herdr's history above the screen, oldest first (watching only, iOS TerminalFeed.older). */
   older: CellRow[];
-  /** Reading history: the screen stays as it was until 回到最新. */
+  /** Reading history: the screen stays as it was until "Back to latest". */
   paused: boolean;
   loadingOlder: boolean;
   hasOlder: boolean;
   /** The page reached the start of what herdr keeps (about 1000 lines). */
   atLimit: boolean;
-  /** 换行: long rows fold at the panel's width while watching (remembered). */
+  /** "Wrap": long rows fold at the panel's width while watching (remembered). */
   wrap: boolean;
   fontSize: number;
   /** The terminal's font stack (with Chinese scaled to two cells once that font loads). */
   fontFamily: string;
-  /** The screen as rows the page draws (换行 while watching); null while xterm draws it. */
+  /** The screen as rows the page draws ("Wrap" while watching); null while xterm draws it. */
   screen: ScreenRows | null;
   /** xterm's colors, for the rows the page draws (follows light / dark). */
   palette: TerminalPalette | null;
-  /** 光标样式 / 光标闪烁 / WebGL 渲染: the options in 终端设置 (remembered). */
+  /** "Cursor style" / "Blinking cursor" / "WebGL rendering": the options in "Terminal settings" (remembered). */
   cursorStyle: CursorStyle;
   cursorBlink: boolean;
   webgl: boolean;
@@ -202,7 +202,7 @@ export class TerminalFeed {
   private pollText = "";
   /** The plain lines of `older` (what the next page is located by). */
   private olderPlain: string[] = [];
-  /** Frames that arrived while history is read, applied on 回到最新. */
+  /** Frames that arrived while history is read, applied on "Back to latest". */
   private held: { frame: TerminalFrame; bytes: Uint8Array }[] = [];
   private heldBytes = 0;
   /** Too much arrived meanwhile: start over from a whole frame. */
@@ -546,7 +546,7 @@ export class TerminalFeed {
     t.write(bytes);
   }
 
-  /** Reading history: the frame waits for 回到最新 (a whole one makes the ones before it moot). */
+  /** Reading history: the frame waits for "Back to latest" (a whole one makes the ones before it moot). */
   private hold(frame: TerminalFrame, bytes: Uint8Array) {
     if (frame.full) {
       this.held = [];
@@ -822,7 +822,7 @@ export class TerminalFeed {
     });
   }
 
-  /** A program asked for the clipboard (OSC 52): written at once where the browser allows it, else the user taps 复制 (it wants a gesture). */
+  /** A program asked for the clipboard (OSC 52): written at once where the browser allows it, else the user taps "Copy" (it wants a gesture). */
   private programCopied(text: string) {
     const copied = osc52Text(text);
     if (!copied) return;
@@ -929,7 +929,7 @@ export class TerminalFeed {
     send({ type: "terminal_input", ...this.ids(), click: cellAt(x, y, b.width, b.height, b.cols, b.rows) });
   };
 
-  // ── the mouse (#2441, lib/terminal-mouse.ts; docs/terminal.md「鼠标」) ──
+  // ── the mouse (#2441, lib/terminal-mouse.ts; docs/terminal.md "Mouse") ──
   //
   // Driving, press / drag / release with the button and modifiers go to herdr as `terminal_input.mouse`, a cell at a
   // time; herdr hands them to a program that takes the mouse and drops them for one that does not. What the page keeps
@@ -1063,7 +1063,7 @@ export class TerminalFeed {
     return contextAction(e, this.mouseOn(), this.view.mouse, pointerType) === "menu";
   }
 
-  /** 鼠标 in 终端设置 (remembered): who gets the pointer while driving. */
+  /** "Mouse" in "Terminal settings" (remembered): who gets the pointer while driving. */
   setMouse(mode: MouseMode) {
     if (mode === "program") localStorage.removeItem(MOUSE_KEY);
     else localStorage.setItem(MOUSE_KEY, mode);
@@ -1072,7 +1072,7 @@ export class TerminalFeed {
 
   // ── what the user chose ───────────────────────────────
 
-  /** 接管 / 只看 (remembered): subscribe again the other way. */
+  /** "Take control" / "View only" (remembered): subscribe again the other way. */
   setWants(on: boolean) {
     if (on === this.view.wants) return;
     if (on) localStorage.removeItem(WATCH_KEY);
@@ -1100,7 +1100,7 @@ export class TerminalFeed {
     this.term?.focus();
   }
 
-  /** 重新连接: a fresh subscription (a whole screen to start from), or a read now. */
+  /** "Reconnect": a fresh subscription (a whole screen to start from), or a read now. */
   retry() {
     this.nextTry = 0;
     if (this.view.mode === "stream") {
@@ -1113,7 +1113,7 @@ export class TerminalFeed {
     }
   }
 
-  // ── the options in 终端设置 ──────────────────────────────
+  // ── the options in "Terminal settings" ───────────────────
 
   setCursorStyle(style: CursorStyle) {
     if (style === DEFAULT_CURSOR) localStorage.removeItem(CURSOR_KEY);
@@ -1215,7 +1215,7 @@ export class TerminalFeed {
         f.base = this.olderPlain.length;
         f.screen = { index: -1, count: 0 };
         t.clearSelection();
-        search.clearDecorations(); // also forgets the last term: the addon does not notice a changed 区分大小写 on its own
+        search.clearDecorations(); // also forgets the last term: the addon does not notice a changed "Match case" on its own
         if (!f.drawn) search.findPrevious(query, this.searchOptions()); // selects the last match on screen and reports how many there are
         f.pos = stepFind(null, -1, f.rows.length, this.screenCount());
         if (f.pos?.seg === "rows") {
@@ -1285,7 +1285,7 @@ export class TerminalFeed {
     });
   }
 
-  /** The page's rows changed (a page of history above, the drawn screen, 换行 switched): the same match, new numbers. */
+  /** The page's rows changed (a page of history above, the drawn screen, "Wrap" switched): the same match, new numbers. */
   private recount() {
     const f = this.found;
     if (!f.query) return;
@@ -1299,7 +1299,7 @@ export class TerminalFeed {
     f.base = this.olderPlain.length;
     if (old) {
       const i = rows.findIndex((m) => m.row === old.row + shift && m.start === old.start);
-      f.pos = i >= 0 ? { seg: "rows", i } : null; // the match is gone (回到最新): the next step starts afresh
+      f.pos = i >= 0 ? { seg: "rows", i } : null; // the match is gone ("Back to latest"): the next step starts afresh
     }
     this.publishFind();
   }
@@ -1363,7 +1363,7 @@ export class TerminalFeed {
     }
   }
 
-  /** 回到最新: history goes, the screen follows the pane again (what arrived meanwhile is drawn now). */
+  /** "Back to latest": history goes, the screen follows the pane again (what arrived meanwhile is drawn now). */
   resume() {
     this.olderPlain = [];
     this.recount();
@@ -1392,7 +1392,7 @@ export class TerminalFeed {
     if (this.view.paused || this.view.older.length) this.resume();
   }
 
-  // ── 换行 and the font size ──────────────────────────────
+  // ── "Wrap" and the font size ─────────────────────────────
 
   setWrap(on: boolean) {
     if (on) localStorage.setItem(WRAP_KEY, "1");
@@ -1415,9 +1415,9 @@ export class TerminalFeed {
     }
   }
 
-  // ── the screen the page draws (换行 while watching) ─────
+  // ── the screen the page draws ("Wrap" while watching) ────
 
-  /** The page draws the screen (rather than xterm): 换行 is on and the user only watches. */
+  /** The page draws the screen (rather than xterm): "Wrap" is on and the user only watches. */
   private drawn() {
     const c = this.view.control;
     return this.view.wrap && c !== "active" && c !== "starting";

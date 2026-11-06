@@ -1,5 +1,5 @@
-// 设置 › 管理者 (docs/managers.md, docs/web.md「设置」): the hub's managers (each a whole assistant) — where each runs,
-// online or when it last synced, the default; one's details with 改名 / 设为默认 / 换个地方装 / 删除; 新建管理者 gives a
+// Settings › Managers (docs/managers.md, docs/web.md"Settings"): the hub's managers (each a whole assistant) — where each runs,
+// online or when it last synced, the default; one's details with Rename / Set as default / Install elsewhere / Delete; New manager gives a
 // one-time install code (and the install commands when the hub has them). The list follows the hub's `managers` pushes.
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n";
@@ -323,7 +323,7 @@ function NewManager({ open, onClose, onMade }: { open: boolean; onClose: () => v
   );
 }
 
-/** The install code (and commands), its countdown, and once it ran out 新的安装码. */
+/** The install code (and commands), its countdown, and once it ran out New installation code. */
 function CodeDialog({ shown, onClose, onCode }: { shown: Shown | null; onClose: () => void; onCode: (c: InstallCode) => void }) {
   const now = useNow(1000);
   const [busy, setBusy] = useState(false);

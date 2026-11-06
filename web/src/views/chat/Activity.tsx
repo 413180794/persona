@@ -12,7 +12,7 @@ import { WorkflowCard } from "./WorkflowCard";
 import { Button, copyText, cx, Dialog, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
-/** "⟳ 11:57" and "后台 2" in the chat's header (on a phone one icon: ⟳, or ⚙ 2); a click opens them. */
+/** "⟳ 11:57" and "Background 2" in the chat's header (on a phone one icon: ⟳, or ⚙ 2); a click opens them. */
 export function ActivityChips({ session, onStopLoop }: { session: Session; onStopLoop: () => void }) {
   const [open, setOpen] = useState(false);
   const loop = session.loop;

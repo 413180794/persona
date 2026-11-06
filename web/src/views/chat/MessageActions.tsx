@@ -1,8 +1,8 @@
-// What you can do with a message (iOS MessageMenu.swift: 复制 / 选择 / 引用 / 编辑): with a mouse, a small bar under it
-// on hover and the same items on right-click; on a touch screen, a long press opens them (and 选择 shows the text to
-// select, since the press no longer selects). 引用 puts it as a quote in front of the draft, 编辑 (your own messages)
+// What you can do with a message (iOS MessageMenu.swift: "Copy" / "Select" / "Quote" / "Edit"): with a mouse, a small bar under it
+// on hover and the same items on right-click; on a touch screen, a long press opens them (and "Select" shows the text to
+// select, since the press no longer selects). "Quote" puts it as a quote in front of the draft, "Edit" (your own messages)
 // puts it back in the composer to change and send again. Sharing as a card is the phone's. A reply's bar ends in a ⋯
-// whose menu has 分支到新聊天 (#2137: a new conversation with what was said up to this reply) when the session can.
+// whose menu has "Branch to new chat" (#2137: a new conversation with what was said up to this reply) when the session can.
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
 import { clock } from "../../lib/format";
@@ -41,15 +41,15 @@ function useActions(text: string, isUser: boolean, ts: string | undefined, task:
   return out;
 }
 
-/** What the reply's ⋯ holds (also at the end of its right-click menu): 分支到新聊天 when the session can fork and the
+/** What the reply's ⋯ holds (also at the end of its right-click menu): "Branch to new chat" when the session can fork and the
  *  reply is a transcript line of its own (`<uuid>#<n>`; lines without a uuid are `line<seq>`, which the node cannot find). */
 export function moreActions(itemId: string | undefined, fork: ((itemId: string) => void) | undefined): Action[] {
   if (!itemId || !fork || itemId.startsWith("line") || !itemId.includes("#")) return [];
   return [{ key: "fork", label: t("chat-messageactions.fork"), icon: "fork", onSelect: () => fork(itemId) }];
 }
 
-/** 回退到这里 (#2436) on a message of yours: 只回退对话 / 回退代码和对话, the second asking again (it puts files back too). Off
- *  with the reason as its hint while the session cannot (仅 Claude, 工作中…). Each choice waits for the node inside the
+/** "Rewind to here" (#2436) on a message of yours: "Conversation only" / "Code and conversation", the second asking again (it puts files back too). Off
+ *  with the reason as its hint while the session cannot ("Claude only", "Working"…). Each choice waits for the node inside the
  *  menu (it drives Claude's own /rewind, up to a minute) and shows the failure there. */
 export function rewindActions(messageId: string | undefined, text: string, rewind: ChatActions["rewind"]): Action[] {
   if (!messageId || !rewind || !text.trim()) return [];
@@ -72,7 +72,7 @@ export function rewindActions(messageId: string | undefined, text: string, rewin
 
 /** Wraps a message: right-click / long press opens its menu. The hover bar goes under it (with the time), or beside it
  *  (`side`, your own bubbles: they had no row under them, so the layout does not move; the time stays the tooltip), or
- *  over its top right corner (`corner`, a task's card: no row under it either). `task`: 引用 quotes it as that task. */
+ *  over its top right corner (`corner`, a task's card: no row under it either). `task`: "Quote" quotes it as that task. */
 export function MessageActions({
   text,
   isUser,
@@ -91,9 +91,9 @@ export function MessageActions({
   side?: boolean;
   corner?: boolean;
   task?: QuotedTask;
-  /** The reply's transcript item: where 分支到新聊天 branches off. */
+  /** The reply's transcript item: where "Branch to new chat" branches off. */
   itemId?: string;
-  /** Your message (UserMessage.id): where 回退到这里 goes back to. */
+  /** Your message (UserMessage.id): where "Rewind to here" goes back to. */
   messageId?: string;
   children: React.ReactNode;
   className?: string;

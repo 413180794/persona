@@ -1,4 +1,4 @@
-// 网络与访问: how the hub is reached (public URL, TLS, advertised addresses — restart to apply), the security settings
+// "Network & access": how the hub is reached (public URL, TLS, advertised addresses — restart to apply), the security settings
 // (read only), who may open this admin UI (narrow only: widening is the hub machine's call), the admin password.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";

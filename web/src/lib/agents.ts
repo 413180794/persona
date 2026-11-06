@@ -1,4 +1,4 @@
-// 个人 Agent: the Lark gateway's paired personal agents through the hub's /api/v1/agents (docs/protocol.md). A session id is
+// "Personal agents": the Lark gateway's paired personal agents through the hub's /api/v1/agents (docs/protocol.md). A session id is
 // "<source>:<sessionKey>" and bridge keys contain "/", so the whole id is percent-encoded in paths.
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
@@ -311,7 +311,7 @@ function sorter(sort: SortBy) {
 
 const mk = (key: string, label: string, sessions: AgentSession[]): SessionGroup => ({ key, label, sessions, unread: sessions.reduce((n, s) => n + (s.unreadCount || 0), 0) });
 
-// Filters (query, show, providers), then 已置顶 (pin order) first, custom sections next, then the chosen grouping,
+// Filters (query, show, providers), then "Pinned" (pin order) first, custom sections next, then the chosen grouping,
 // each sorted by the chosen order. Empty groups are dropped.
 export function arrangeSessions(list: AgentSession[], prefs: AgentPrefs, q = "", now = Date.now()): SessionGroup[] {
   const v = viewOf(prefs);
@@ -362,7 +362,7 @@ export function addSection(p: AgentPrefs, name: string, id = `s${Date.now().toSt
 export function removeSection(p: AgentPrefs, id: string): AgentPrefs {
   return { ...p, sections: p.sections.filter((s) => s.id !== id), assign: Object.fromEntries(Object.entries(p.assign).filter(([, v]) => v !== id)) };
 }
-// 重置为默认 resets the view only; pins and sections stay.
+// "Reset to default" resets the view only; pins and sections stay.
 export const resetView = (p: AgentPrefs): AgentPrefs => ({ ...p, view: {} });
 export function setView(p: AgentPrefs, patch: AgentView): AgentPrefs {
   return { ...p, view: { ...p.view, ...patch } };

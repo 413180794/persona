@@ -1,4 +1,4 @@
-// Comments in the transcript (#2437, Moshi's 「Comment」): selecting words shows a small 「评论」 pill under the
+// Comments in the transcript (#2437, Moshi's "Comment"): selecting words shows a small "Comment" pill under the
 // selection (the C key does the same), which puts the words above the input as a comment card to write the note in;
 // while the comment waits there, its words stay lit in the transcript with the card's number beside them. The marks
 // are drawn in the scroller's own content, so they scroll with it; they are measured again when the transcript

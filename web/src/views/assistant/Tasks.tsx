@@ -1,5 +1,5 @@
 // The unified entry in the assistant's conversation (docs/unified-entry.md; iOS Views/Assistant/Tasks): the plan card,
-// task cards that follow their agents, the hub's lines (answered, receipt, routed), the 今天 card, message cards about
+// task cards that follow their agents, the hub's lines (answered, receipt, routed), the "Today" card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
 import { memo, useId, useMemo, useRef, useState, type ReactNode } from "react";
@@ -125,7 +125,7 @@ export function removeTaskNow(todo: Todo) {
   );
 }
 
-/** Right-click on a task's card, line or pill: 移除任务 when nothing of it runs (iOS: the long press). */
+/** Right-click on a task's card, line or pill: "Remove task" when nothing of it runs (iOS: the long press). */
 function useTaskMenu(todo: Todo | undefined, status: TodoStatus | undefined) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const can = Boolean(todo && status && isRemovable(status));
@@ -207,8 +207,8 @@ export function taskInteraction(todo: Todo, interactions: Interaction[], lead?: 
   return (lead && interactions.find((ix) => ix.machine_id === lead.machine_id && ix.session_id === lead.session_id)) ?? interactions.find(mine);
 }
 
-/** What a waiting task needs, in a line (#3301): 「在问你：用哪个框架？」「需要授权：swift test」「计划待批准」, the words
- *  the 待办 page's agent rows use; undefined without a card. */
+/** What a waiting task needs, in a line (#3301): "Asking you: which framework?", "Needs permission: swift test", "Plan to approve", the words
+ *  the to-dos page's agent rows use; undefined without a card. */
 export function taskAsk(ix: Interaction | undefined): string | undefined {
   if (!ix) return undefined;
   const kicker =
@@ -228,7 +228,7 @@ if (import.meta.env.DEV && typeof location !== "undefined") {
   if (id) setTimeout(() => openTask(id), 0);
 }
 
-/** 重试 on a task that did not start, or 继续 on one the model service cut off (lib/feed retryTask), saying why when the
+/** "Retry" on a task that did not start, or "Continue" on one the model service cut off (lib/feed retryTask), saying why when the
  *  hub refused (the machine offline…). */
 export function retryTaskNow(todo: Todo, verb: "retry" | "continue" = "retry") {
   retryTask(todo).catch((e) => toast(verb === "continue" ? t("assistant-tasks.continue_failed", { error: String(e instanceof Error ? e.message : e) }) : t("assistant-tasks.retry_failed", { error: String(e instanceof Error ? e.message : e) }), "error"));
@@ -236,7 +236,7 @@ export function retryTaskNow(todo: Todo, verb: "retry" | "continue" = "retry") {
 
 
 /** Whether a conversation draws a task's full card (FeedLineView: a task line from today; older ones are a TaskLine with
- *  no reason or 重试). With its todo known, that card is the one place a failed start says why and offers 重试 / 移除
+ *  no reason or "Retry"). With its todo known, that card is the one place a failed start says why and offers "Retry" / "Remove"
  *  (#4145), so the plan and the receipt do not say it again. */
 export function taskCardDrawn(feed: FeedItem[] | undefined, todoId: string | undefined, now = new Date()): boolean {
   return Boolean(todoId) && (feed ?? []).some((i) => i.kind === "task" && i.ref === todoId && isToday(i.at, now));
@@ -248,7 +248,7 @@ function useTaskCardShown(conversation: string, todoId: string | undefined): boo
   return drawn && known;
 }
 
-/** A task's 重试 is on its way to the hub. */
+/** A task's "Retry" is on its way to the hub. */
 export function useRetrying(todoId: string | undefined): boolean {
   return useFeed((s) => (todoId ? Boolean(s.busy[retryKey(todoId)]) : false));
 }
@@ -475,7 +475,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
           ) : (
             <span className="flex items-center gap-4">
               {cut?.canContinue && (
-                // The model service cut its turn off: 继续 tells its agent to go on, as the chat's 重试 does (#1516).
+                // The model service cut its turn off: "Continue" tells its agent to go on, as the chat's "Retry" does (#1516).
                 <button
                   type="button"
                   disabled={retrying}
@@ -532,7 +532,7 @@ export function TaskLine({ todoId }: { todoId: string }) {
 // ── the hub's lines ──
 
 // Memoized: the chat re-renders on every streamed item and session push, while an item keeps its identity until its body
-// changes (mergeInto); the plan, todo and 稍后 it shows come through its own selectors.
+// changes (mergeInto); the plan, todo and "Later" it shows come through its own selectors.
 export const FeedLineView = memo(function FeedLineView({ item }: { item: FeedItem }) {
   const plan = useFeed((s) => (item.kind === "plan" && item.ref ? s.plans[item.ref] : undefined));
   const isLater = useFeed((s) => (item.ref ? s.later[item.ref] : false));
@@ -571,7 +571,7 @@ export const FeedLineView = memo(function FeedLineView({ item }: { item: FeedIte
   }
 });
 
-/** A card of a task's agent the user dealt with, kept as a line「✓ 任务 · 回答」. Click it for every question with its
+/** A card of a task's agent the user dealt with, kept as a line "✓ task · answer". Click it for every question with its
  *  answer in full (#1231), selectable, and again to fold it; the task's name opens the task. */
 export function AnsweredLine({ item, title, onOpenTask }: { item: FeedItem; title: string; onOpenTask?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -621,7 +621,7 @@ function ReceiptCard({ item }: { item: FeedItem }) {
   return <OutcomeReceipt item={item} failed={state === "failed"} />;
 }
 
-/** A task the model service cut off (#1516): red, why in words, 继续 while it is still cut off; once its agent went on,
+/** A task the model service cut off (#1516): red, why in words, "Continue" while it is still cut off; once its agent went on,
  *  a quiet line that opens the task (a later receipt says how it ended). */
 function InterruptedReceipt({ item }: { item: FeedItem }) {
   const todo = useTodo(item.ref);
@@ -661,7 +661,7 @@ function InterruptedReceipt({ item }: { item: FeedItem }) {
 }
 
 function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
-  // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
+  // A failed start's banner follows its task: "Retry" while it is still failed (with its latest error), a quiet line once
   // it was started again, so no stale error stays in the conversation (#1396).
   const todo = useTodo(failed ? item.ref : undefined);
   const plans = useFeed((s) => s.plans);
@@ -680,8 +680,8 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
       </button>
     );
   }
-  // Still failed with its task card drawn above: that card says why and has 重试 / 移除, so this is one line pointing
-  // there, not the same error and a second 重试 again (#4145). No 复制 / 引用 on it: the card is what to quote.
+  // Still failed with its task card drawn above: that card says why and has "Retry" / "Remove", so this is one line pointing
+  // there, not the same error and a second "Retry" again (#4145). No "Copy" / "Quote" on it: the card is what to quote.
   if (failed && todo && status === "failed" && cardShown) {
     return (
       <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-1.5 self-start text-left text-[13px] text-red hover:underline">
@@ -693,7 +693,7 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   const failure = failed && todo ? startFailure(todo, plans) : undefined;
   const summary = failure ? t("assistant-tasks.start_failed", { error: failure }) : field(item, "summary");
   const heading = failed ? t("assistant-tasks.outcome_failed", { title }) : t("assistant-tasks.outcome_done", { title });
-  // 复制 / 引用 like a reply's (#2462): the quote names the task and its todo id for the assistant
+  // "Copy" / "Quote" like a reply's (#2462): the quote names the task and its todo id for the assistant
   return (
     <MessageActions text={summary?.trim() ? summary : heading} ts={item.at} task={{ title, ...(item.ref ? { id: item.ref } : {}) }} corner>
       <div className={cx("flex gap-3 rounded-card p-4", failed ? "bg-red-tint" : "bg-green-tint")} data-receipt>
@@ -720,7 +720,7 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   );
 }
 
-/** What the task's agent said last, as Markdown (a start error is plain text), in about four lines (#1508); 展开全文
+/** What the task's agent said last, as Markdown (a start error is plain text), in about four lines (#1508); "Show all"
  *  shows the rest in place when it is cut (#4715). */
 export function ReceiptSummary({ text, plain }: { text: string; plain?: boolean }) {
   if (plain) return <Clamped className="text-[13px] text-ink-2">{text}</Clamped>;
@@ -731,7 +731,7 @@ export function ReceiptSummary({ text, plain }: { text: string; plain?: boolean 
   );
 }
 
-/** Four lines of a card's text; when they cut it, a 展开全文 / 收起 under them opens the rest in place (#4715). */
+/** Four lines of a card's text; when they cut it, a "Show all" / "Hide" under them opens the rest in place (#4715). */
 function Clamped({ className, children }: { className: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { ref, cut: long } = useClamped<HTMLDivElement>(open);
@@ -770,11 +770,11 @@ export function QuickResultCard({ result }: { result: QuickResult }) {
   );
 }
 
-// ── 今天 ──
+// ── Today ──
 
-/** The 今天 card's 等你 row's lines under its title (#4478), one per task, each truncated on its own: what its task
- *  waits on (「在问你：…」), or for several, up to three 「<title>：<what it waits on>」 (the title alone when the store
- *  has no card) and 「还有 N 件」 past them. A card just answered here is not one it waits on (answeredLookup). */
+/** The "Today" card's "Needs you" row's lines under its title (#4478), one per task, each truncated on its own: what its task
+ *  waits on ("Asking you: …"), or for several, up to three "<title>: <what it waits on>" (the title alone when the store
+ *  has no card) and "N more" past them. A card just answered here is not one it waits on (answeredLookup). */
 const TODAY_WAITING_MAX = 3;
 function todayWaitingLines(s: State, waiting: { id: string; title: string }[]): string[] {
   const lookup = answeredLookup(s.sessions, s.interactions, s.answered);
@@ -847,7 +847,7 @@ function TodayCard({ body, conversation }: { body: TodayBody; conversation: stri
   );
 }
 
-/** Says something to Persona in this conversation (the 今天 card's actions). */
+/** Says something to Persona in this conversation (the "Today" card's actions). */
 function useSayToPersona(conversation: string) {
   const assistant = useStore((s) => s.assistant);
   return (text: string) => {
@@ -932,7 +932,7 @@ function MessageCard({ item }: { item: FeedItem }) {
 
 // ── above the composer ──
 
-/** The oldest question the conversation's tasks' agents ask, under its task's name (还有 N 件). */
+/** The oldest question the conversation's tasks' agents ask, under its task's name ("N more"). */
 function questionsIn(s: State, conversation: string) {
   const out: { todo: Todo; ix: Interaction }[] = [];
   const keys = new Set<string>();
@@ -973,7 +973,7 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
   );
 }
 
-/** The dock: 全部 N held at its left edge (it does not scroll), then a pill for each task going on (waiting first) and,
+/** The dock: "All N" held at its left edge (it does not scroll), then a pill for each task going on (waiting first) and,
  * in the main conversation, each agent going on that no task stands for (#1113), scrolling on their own (iOS TaskDock). */
 // Failed, done and stopped tasks are not in the dock.
 const DOCK_RANK: Partial<Record<TodoStatus, number>> = { needs_you: 0, interrupted: 0, working: 1, not_started: 1, unread: 2 };
@@ -998,11 +998,11 @@ export function TaskDock({ conversation }: { conversation: string }) {
   const going = useStoreRows((s) => dockTasksIn(s, conversation, plans));
   const mine = useStore((s) => s.todos.filter((t) => t.origin === conversation).length);
   if (mine === 0 && agents.length === 0) return null;
-  // 全部 and the pills share one capsule (height, radius, padding, size), like iOS DockPillLabel.
+  // "All" and the pills share one capsule (height, radius, padding, size), like iOS DockPillLabel.
   const capsule = "inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[12.5px]";
   const pill = cx(capsule, "max-w-[240px] gap-2 font-semibold");
   return (
-    // Top-aligned, so a scrollbar an engine still draws under the pills cannot push 全部 down from them (#1381).
+    // Top-aligned, so a scrollbar an engine still draws under the pills cannot push "All" down from them (#1381).
     <div className="flex min-w-0 items-start gap-2" data-testid="task-dock">
       <button
         type="button"
@@ -1070,7 +1070,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
   );
 }
 
-/** 「对「xx」说」 while the next message goes straight to a task; × gives it back to Persona. */
+/** "Talking to "xx"" while the next message goes straight to a task; × gives it back to Persona. */
 export function RouteChip({ conversation }: { conversation: string }) {
   const todoId = useFeed((s) => s.routes[conversation]);
   const todo = useTodo(todoId);
@@ -1100,7 +1100,7 @@ export function useTaskState(todo?: Todo): { status: TodoStatus; lead?: Session;
   return { ...now, failure: now.status === "failed" ? startFailure(todo, plans) : undefined };
 }
 
-// ── 全部: the task board ──
+// ── "All": the task board ──
 
 const BOARD_TITLE: Record<BoardSectionKey, string> = {
   waiting: t("assistant-tasks.board_waiting"),
@@ -1121,11 +1121,11 @@ function agentLine(s: Session): string {
 }
 
 /**
- * 全部 on the dock and on the 今天 card (iOS TaskBoardSheet): this conversation's tasks, and the agents its dock shows,
+ * "All" on the dock and on the "Today" card (iOS TaskBoardSheet): this conversation's tasks, and the agents its dock shows,
  * by where they are. A row opens the task (or the agent) beside the conversation; one nothing of runs can be removed.
  */
 // Mounted only while open (TodayCard / TaskDock render it conditionally), so the store subscriptions and the
-// session lookup below don't run for every 今天 card in the history on each session update.
+// session lookup below don't run for every "Today" card in the history on each session update.
 export function TaskBoard({ open, conversation, onClose }: { open: boolean; conversation: string; onClose: () => void }) {
   const todos = useStore((s) => s.todos);
   const sessions = useStore((s) => s.sessions);

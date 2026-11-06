@@ -60,7 +60,7 @@ export function installMock(scenario: string) {
   };
   let restart = { required: scenario === "app", reasons: scenario === "app" ? ["添加电脑「studio」", "TLS 监听改成 :18662"] : [] };
   const startedAt = iso(60 * 26 + 17);
-  // Usage sources (docs/usage-windows.md「账号池网关」): one Relay that works, one generic that does not answer. Any key
+  // Usage sources (docs/usage-windows.md"Account-pool gateways"): one Relay that works, one generic that does not answer. Any key
   // other than "wrong" tests fine; an address containing "dead" does not connect. The key is never given back.
   const usage: UsageSources = {
     enabled: true,
@@ -218,7 +218,7 @@ export function installMock(scenario: string) {
   };
   let pending: ExtensionPreview | null = null;
 
-  // Markets (docs/extensions.md「扩展市场」): a public site and a private GitHub repository (token set, one warning); the
+  // Markets (docs/extensions.md "Extension markets"): a public site and a private GitHub repository (token set, one warning); the
   // catalog has an extension to install, two installed ones with an upgrade, a built-in one, and one this hub cannot install.
   // A spec containing "fail" is not read; "private" without a token asks for one.
   const MA = "3f2a9c1d0b";
@@ -533,7 +533,7 @@ export function installMock(scenario: string) {
       markets = markets.map((x) => (x.id === m.id ? read : x));
       return json(read);
     }
-    // How they run (docs/extensions.md「运行情况」).
+    // How they run (docs/extensions.md "Activity").
     const query = new URLSearchParams(path.split("?")[1] ?? "");
     const win = (query.get("window") || "24h") as MetricsWindow;
     if (key === "GET /extensions/-/metrics") return json(mockOverview(extensions.map((x) => x.id), win));
@@ -594,7 +594,7 @@ export function installMock(scenario: string) {
 
   installMockFollower();
   // A page from before #1845 asks /api/v1/admin/plugins…: the same answers under the keys it reads (docs/extensions.md
-  // 「命名和兼容」).
+  // "Naming and compatibility").
   setTransport(async (url, init) => {
     const legacy = /^\/api\/v1\/admin\/plugins(?=[/?]|$)/.test(url);
     const res = await answer(legacy ? url.replace("/api/v1/admin/plugins", "/api/v1/admin/extensions") : url, init);

@@ -1,4 +1,4 @@
-// The Agents list's「<电脑> 的 herdr 没在运行」rows with 启动 (#1916, docs/engines.md「herdr 没在运行时」), as on iOS
+// The Agents list's "herdr isn't running on <computer>" rows with "Start" (#1916, docs/engines.md "When herdr isn't running"), as on iOS
 // (HerdrNotice.swift) and Android (#2066): told before a message to an agent there fails, not after. Only classic herdr
 // (engines herdr and herdr-both): Herdr App's herdr-core has no server for the node to start.
 
@@ -15,7 +15,7 @@ export interface HerdrState {
   known: boolean;
 }
 
-/** Why a 启动 did not work: what the row says, in words, and what 复制详情 copies (the hub's own text, its status and
+/** Why a "Start" did not work: what the row says, in words, and what "Copy details" copies (the hub's own text, its status and
  *  request id), kept out of the row. */
 export interface HerdrFailure {
   text: string;
@@ -80,9 +80,9 @@ export const herdrApi: HerdrApi = {
 export interface HerdrSnapshot {
   /** The machines whose herdr is known not to run, as last read. */
   stopped: ReadonlySet<string>;
-  /** 启动 pressed and not answered yet. */
+  /** "Start" pressed and not answered yet. */
   starting: ReadonlySet<string>;
-  /** Why the last 启动 did not work (shown under the row until it is pressed again). */
+  /** Why the last "Start" did not work (shown under the row until it is pressed again). */
   failures: ReadonlyMap<string, HerdrFailure>;
 }
 
@@ -135,7 +135,7 @@ export class HerdrWatch {
     if (!sameSet(next, this.snap.stopped)) this.set({ stopped: next });
   }
 
-  /** The row's 启动: the node starts herdr's server whatever 需要时自动启动 says. */
+  /** The row's "Start": the node starts herdr's server whatever "start automatically when needed" says. */
   async start(id: string): Promise<void> {
     if (this.snap.starting.has(id)) return;
     const failures = new Map(this.snap.failures);

@@ -1,5 +1,5 @@
-// The Agents list's quick filters (iOS AgentFilter / QuickFilterBar): 全部 / 需要你 / 未读 / 工作中, stacked on any
-// grouping. Under a filter the agents it showed when it was chosen stay (`kept`): one opened from 未读 is seen now but
+// The Agents list's quick filters (iOS AgentFilter / QuickFilterBar): "All" / "Needs you" / "Unread" / "Working", stacked on any
+// grouping. Under a filter the agents it showed when it was chosen stay (`kept`): one opened from "Unread" is seen now but
 // keeps its place, so the next one is still right below it.
 import { t } from "../i18n";
 import { sessionHost, sessionSource, type AgentMutes } from "./agent-groups";
@@ -27,14 +27,14 @@ export function agentFilter(value: string | null): AgentFilter {
   return AGENT_FILTERS.find((f) => f.key === value)?.key ?? "all";
 }
 
-// 「botmux」 beside the filters (#2786): a show / hide switch for botmux sessions, kept in this browser. It only hides
-// them from this list; the hub's per-machine switch (machine page › 引擎) still decides whether they are listed at all.
+// "botmux" beside the filters (#2786): a show / hide switch for botmux sessions, kept in this browser. It only hides
+// them from this list; the hub's per-machine switch (machine page › "Engine") still decides whether they are listed at all.
 export const BOTMUX_HIDDEN_KEY = "jarvis.agentHideBotmux";
 
 export const isBotmux = (s: Session) => sessionHost(s) === "botmux";
 
-/** 飞书群 only matches botmux sessions, so it and a hidden botmux cannot both hold: hiding botmux under 飞书群 goes back to
- * 全部, and choosing 飞书群 shows botmux again. Returns the filter and the switch after `change`. */
+/** "Lark group" only matches botmux sessions, so it and a hidden botmux cannot both hold: hiding botmux under it goes back to
+ * "All", and choosing "Lark group" shows botmux again. Returns the filter and the switch after `change`. */
 export function botmuxAndFilter(filter: AgentFilter, hidden: boolean, change: "filter" | "botmux"): { filter: AgentFilter; hidden: boolean } {
   if (filter !== "feishu" || !hidden) return { filter, hidden };
   return change === "botmux" ? { filter: "all", hidden } : { filter, hidden: false };
@@ -49,7 +49,7 @@ export function filterState(f: AgentFilter): AgentState | undefined {
   return AGENT_FILTERS.find((x) => x.key === f)?.state;
 }
 
-/** A muted agent that is working or finished unread is not counted or listed under 未读 / 工作中 (it sits under 已屏蔽);
+/** A muted agent that is working or finished unread is not counted or listed under "Unread" / "Working" (it sits under "Muted");
  * one that needs you still is, the same as the list's order. */
 export function matchesFilter(s: Session, f: AgentFilter, mutes: AgentMutes): boolean {
   if (f === "feishu" || f === "terminal") return sessionSource(s) === SOURCE_FILTERS[f];
@@ -66,7 +66,7 @@ export function filterCounts(sessions: Session[], mutes: AgentMutes): FilterCoun
   return out;
 }
 
-/** 全部, and the states that have agents right now; the chosen one stays while it empties, so it can be left. */
+/** "All", and the states that have agents right now; the chosen one stays while it empties, so it can be left. */
 export function shownFilters(selection: AgentFilter, counts: FilterCounts): AgentFilter[] {
   return AGENT_FILTERS.map((f) => f.key).filter((k) => k === "all" || k === selection || counts[k] > 0);
 }
@@ -82,7 +82,7 @@ export function matchingKeys(sessions: Session[], f: AgentFilter, mutes: AgentMu
   return new Set(f === "all" ? [] : sessions.filter((s) => matchesFilter(s, f, mutes)).map(agentKey));
 }
 
-/** The finished-unread ones among these (what 全部标为已读 marks). */
+/** The finished-unread ones among these (what "Mark all as read" marks). */
 export function unreadOf(sessions: Session[]): Session[] {
   return sessions.filter((s) => stateOf(s) === "unread");
 }
@@ -107,7 +107,7 @@ export function isSpaceMuted(sp: SpaceLike, mutes: AgentMutes): boolean {
   return mutes.spaces.includes(`${sp.machineId}/${sp.name}`);
 }
 
-/** Which spaces lead and which fold into 「空闲的空间」. Pinned spaces (not muted) lead; then the busy ones, the muted
+/** Which spaces lead and which fold into "Idle spaces". Pinned spaces (not muted) lead; then the busy ones, the muted
  * busy ones after them, each in the order given (herdr's); quiet ones fold. Under a quick filter every space it leaves is listed, the most
  * recent first, and none folds. */
 export function arrangeSpaces<T extends SpaceLike>(spaces: T[], o: { pins: AgentPins; mutes: AgentMutes; filtered: boolean; busy: (sp: T) => boolean }): { active: T[]; idle: T[] } {

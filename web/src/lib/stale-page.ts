@@ -2,7 +2,7 @@
 // (a socket that looks open but is not, a queue the hub had to drop) it used to stay behind until a reload. The session
 // list keeps coming over the same socket and says when the transcript last grew (`updated_at`): when that is newer than
 // the newest item the page holds and no items have come for a while, the page asks for what it is missing once
-// (`items?after_seq=`), applies it silently, and only says 「不是实时的」 when that keeps being needed.
+// (`items?after_seq=`), applies it silently, and only says "Not live" when that keeps being needed.
 
 /** No items for this long before a page that looks behind asks. */
 export const STALE_QUIET_MS = 4000;

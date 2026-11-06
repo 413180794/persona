@@ -1,5 +1,5 @@
-// The phone's「Agents」page (`/agents`, #1996): the sidebar's Agents block filling the page, next to 助手 in the top bar's
-// switch. Its top bar has ChatView's side slots (侧边栏 on the left, 新建 Agent on the right), so switching pages leaves
+// The phone's "Agents" page (`/agents`, #1996): the sidebar's Agents block filling the page, next to the assistant in the top bar's
+// switch. Its top bar has ChatView's side slots (sidebar on the left, "New agent" on the right), so switching pages leaves
 // the buttons in place. A wide screen opens it too, as a page titled Agents (no switch there).
 import type { Route } from "../lib/router";
 import { IconButton } from "../ui/atoms";

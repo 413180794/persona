@@ -1,6 +1,6 @@
-// Searching the web terminal's text (docs/terminal.md「搜索」). What can be searched depends on who holds the text:
+// Searching the web terminal's text (docs/terminal.md "Search"). What can be searched depends on who holds the text:
 // xterm holds only the screen (scrollback 0: herdr redraws the grid in place), and while watching, the page holds the
-// pages of herdr's history it loaded above it — and the whole screen too once 换行 draws it. So there are two lists of
+// pages of herdr's history it loaded above it — and the whole screen too once "Wrap long lines" draws it. So there are two lists of
 // matches: "rows" (the lines the page holds, found here) and "screen" (xterm's grid, found by its search addon, which also
 // selects the current one). This file is the part that needs neither: the line matcher, the order of the two lists, and
 // the find bar's state.
@@ -68,7 +68,7 @@ export function findIndex(pos: FindPos, rows: number): number {
   return pos.seg === "rows" ? pos.i : rows + pos.i;
 }
 
-/** What the bar says next to the field: nothing before a query, 无结果, or "3/12" (999+ past the limit). */
+/** What the bar says next to the field: nothing before a query, "No results", or "3/12" (999+ past the limit). */
 export function findLabel(query: string, found: { index: number; count: number } | null): string {
   if (!query) return "";
   if (!found || found.count <= 0) return t("lib-terminal-search.no_results");

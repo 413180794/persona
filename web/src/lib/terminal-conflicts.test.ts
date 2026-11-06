@@ -49,7 +49,7 @@ describe("herdr's own keys", () => {
     expect(herdrOwnsKey(key("B", { ctrlKey: true }))).toBe(true);
     expect(herdrOwnsKey(key("b"))).toBe(false);
     expect(herdrOwnsKey(key("b", { metaKey: true }))).toBe(false); // ⌘B on a Mac is Persona's
-    expect(herdrOwnsKey(key("b", { ctrlKey: true, altKey: true }))).toBe(false); // Ctrl+Alt+B is 侧边栏
+    expect(herdrOwnsKey(key("b", { ctrlKey: true, altKey: true }))).toBe(false); // Ctrl+Alt+B is the sidebar
     expect(herdrOwnsKey(key("b", { ctrlKey: true, shiftKey: true }))).toBe(false);
     expect(herdrOwnsKey(key("k", { ctrlKey: true }))).toBe(false);
   });

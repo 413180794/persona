@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Opened steps and user bubbles the web drew short of the apps (#2990): a Codex patch's diff (G001), 看全文 for a text
+// Opened steps and user bubbles the web drew short of the apps (#2990): a Codex patch's diff (G001), "Show full text" for a text
 // the hub cut (G002), plans and questions instead of raw JSON (G017), and the photos sent with a message (G026).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

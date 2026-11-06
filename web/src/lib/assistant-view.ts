@@ -1,8 +1,8 @@
-// The assistant's cards drawn with the extensions' components (docs/extensions.md「声明式 UI」, #1850): a ```persona-view
+// The assistant's cards drawn with the extensions' components (docs/extensions.md "Declarative UI", #1850): a ```persona-view
 // block is a View (or one component) as an extension would send it; the older ```persona-card block (#886: stat, bar,
 // line, stacked_bar) is turned into a View first, by the rules of sdk/go/wire/personacard.go (the reference; the cases in
 // schema/extension/examples/persona-card/ hold every app to the same), so both look the same here as on every other app.
-// In the assistant nothing acts: buttons, fields and segmented are left out, the search box and 加载更多 never show; links
+// In the assistant nothing acts: buttons, fields and segmented are left out, the search box and "Load more" never show; links
 // still open.
 import { t } from "../i18n";
 import { readView, type ChartSeries, type UIItem, type UISection, type UIView } from "./extension-ui";

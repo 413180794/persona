@@ -1,5 +1,5 @@
-// The terminal's two surfaces (docs/terminal.md「完整 herdr 界面」): 单窗格, one pane streamed from herdr (the terminal
-// as it has always been here), and 完整界面, herdr's own client in a PTY on the computer with its sidebar, tabs and
+// The terminal's two surfaces (docs/terminal.md "The full herdr view"): "Single pane", one pane streamed from herdr (the terminal
+// as it has always been here), and "Full view", herdr's own client in a PTY on the computer with its sidebar, tabs and
 // splits. Which one a terminal opens in, how the switch between them is staged, and the small protocol pieces of the
 // full one that need no browser: the acknowledgements, the answers to a TUI's colour queries and how a view ends.
 // Pure, so it is tested without a DOM.
@@ -8,7 +8,7 @@ import { decodeBase64 } from "./terminal";
 
 export type TerminalMode = "pane" | "full";
 
-/** What 设置 can choose: one of the two, or whichever was used last. */
+/** What Settings can choose: one of the two, or whichever was used last. */
 export type ModePreference = TerminalMode | "last";
 
 export const MODE_LABEL: Record<TerminalMode, string> = { pane: t("terminal-full.mode_pane"), full: t("terminal-full.mode_full") };
@@ -17,7 +17,7 @@ export const MODE_TITLE: Record<TerminalMode, string> = {
   full: t("terminal-full.mode_full_title"),
 };
 
-/** The last choice made with the switch, and the default in 设置; neither is written until it is chosen. */
+/** The last choice made with the switch, and the default in Settings; neither is written until it is chosen. */
 export const LAST_MODE_KEY = "jarvis.terminal.mode";
 export const PREFERENCE_KEY = "jarvis.terminal.defaultMode";
 /** Set once the note about the shared layout has been shown. */
@@ -27,12 +27,12 @@ export function parseMode(raw: string | null | undefined): TerminalMode | null {
   return raw === "pane" || raw === "full" ? raw : null;
 }
 
-/** The default in 设置: 完整界面 until another is chosen (2026-11-05, the user's decision: a terminal opens as herdr itself looks, as Moshi's does). */
+/** The default in Settings: "Full view" until another is chosen (2026-11-05, the user's decision: a terminal opens as herdr itself looks, as Moshi's does). */
 export function parsePreference(raw: string | null | undefined): ModePreference {
   return raw === "pane" || raw === "last" ? raw : "full";
 }
 
-/** The mode a terminal opens in: what 设置 says (or the last choice); 单窗格 where the hub cannot do 完整界面 or it did not open on this machine. */
+/** The mode a terminal opens in: what Settings says (or the last choice); "Single pane" where the hub cannot do "Full view" or it did not open on this machine. */
 export function startMode(pref: ModePreference, last: TerminalMode | null, supported: boolean): TerminalMode {
   if (!supported) return "pane";
   if (pref === "last") return last ?? "full";
@@ -40,8 +40,8 @@ export function startMode(pref: ModePreference, last: TerminalMode | null, suppo
 }
 
 /**
- * The mode of a terminal: the one chosen on its own switch in this page's life; else 单窗格 where the hub has no full
- * client or 完整界面 did not open on this machine (it is not tried again for every terminal); else 设置 and the last choice.
+ * The mode of a terminal: the one chosen on its own switch in this page's life; else "Single pane" where the hub has no full
+ * client or "Full view" did not open on this machine (it is not tried again for every terminal); else Settings and the last choice.
  */
 export function pickMode(a: { own?: TerminalMode; supported: boolean; noFull: boolean; pref: ModePreference; last: TerminalMode | null }): TerminalMode {
   if (!a.supported) return "pane";
@@ -84,7 +84,7 @@ export function surfacesReducer(s: Surfaces, a: SurfaceAction): Surfaces {
   }
 }
 
-/** Which way the shown surface slides in from: 完整界面 comes from the right, 单窗格 from the left. */
+/** Which way the shown surface slides in from: "Full view" comes from the right, "Single pane" from the left. */
 export const slideFrom = (m: TerminalMode): 1 | -1 => (m === "full" ? 1 : -1);
 
 // ── acknowledgements (flow control) ─────────────────────
@@ -161,7 +161,7 @@ export function colourReports(foreground: string, background: string): string {
 
 export type FullStatus = "connecting" | "live" | "closed" | "error" | "unsupported" | "forbidden";
 
-/** Machines where 完整界面 did not open in this page's life (an old node, no herdr, Windows…): their terminals start as 单窗格 until the switch is used. */
+/** Machines where "Full view" did not open in this page's life (an old node, no herdr, Windows…): their terminals start as "Single pane" until the switch is used. */
 export const noFullClient = new Set<string>();
 
 export interface FullEnd {
@@ -203,7 +203,7 @@ export const STATUS_LABEL: Record<FullStatus, string> = {
   forbidden: t("terminal-full.status_forbidden"),
 };
 
-/** A view can be opened again from here (the badge offers 重新连接). */
+/** A view can be opened again from here (the badge offers "Reconnect"). */
 export const canReconnect = (s: FullStatus) => s === "closed" || s === "error";
 
 // ── the grid ────────────────────────────────────────────

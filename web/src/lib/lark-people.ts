@@ -18,7 +18,7 @@ export interface PersonToken {
 }
 
 /**
- * The `@name` being typed just before the caret. Chinese runs straight up to an @ (「请@李雷看看」), so anything but
+ * The `@name` being typed just before the caret. Chinese runs straight up to an @ (no space before it in Chinese text), so anything but
  * the characters of an e-mail address may stand before it; the name runs to the caret without spaces.
  */
 export function personAt(text: string, caret: number): PersonToken | null {
@@ -38,7 +38,7 @@ export function insertPerson(text: string, token: PersonToken, p: Pick<LarkPerso
 
 /**
  * The people a message @s: of those picked, the ones whose `@name` the text still holds, each `@name` standing for one
- * (LarkMentions.mentions). Longer names are counted first, so `@李雷` is not also an `@李`.
+ * (LarkMentions.mentions). Longer names are counted first, so a two-character name is not also matched as its one-character prefix.
  */
 export function mentionsIn(text: string, picked: LarkPerson[]): LarkPerson[] {
   const seen = new Set<string>();

@@ -35,7 +35,7 @@ export const CardConversation = createContext<string>("");
 /** The text item a block is drawn from (none while it streams: drawn, nothing acts). */
 export const CardItem = createContext<{ id: string; text: string } | null>(null);
 
-/** How deep push goes (docs/assistant-views.md「动作与多页」). */
+/** How deep push goes (docs/assistant-views.md "Actions and multiple pages"). */
 const STACK_MOST = 4;
 
 export function AssistantCard({ lang, code, fallback }: { lang: string; code: string; fallback: React.ReactNode }) {

@@ -1,4 +1,4 @@
-// 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」, iOS ExtensionsView / ExtensionDetailView): the hub's extensions (built in,
+// Settings › Extensions (docs/extensions.md "App: Settings › Extensions", iOS ExtensionsView / ExtensionDetailView): the hub's extensions (built in,
 // from hub.json, installed on the hub's machine) and their states; an extension's page has its switch, its settings as a
 // form drawn from its schema (`form.fields`, saved as a whole), its secrets (typed in, never shown again), what it
 // contributes, what it may do and where it came from. An extension written in hub.json is only looked at here. Installing,
@@ -89,7 +89,7 @@ function ExtensionPage({ id, ui, onBack }: { id: string; ui: string; onBack: () 
   );
 }
 
-// A plain list (「a、b、c」, "a, b, c"): what these rows always showed in Chinese.
+// A plain list (joined with the Chinese enumeration comma, "a, b, c"): what these rows always showed in Chinese.
 const NARROW_LIST: Intl.ListFormatOptions = { type: "conjunction", style: "narrow" };
 
 const DOT: Record<ReturnType<typeof extensionTone>, string> = { red: "bg-red", orange: "bg-orange", green: "bg-green", idle: "bg-line-strong" };
@@ -129,7 +129,7 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
         {t("settings-extensions.intro")}
       </p>
-      {/* 扩展市场 first, above the installed list (#5017): where a phone or a browser gets another extension. */}
+      {/* Extension market first, above the installed list (#5017): where a phone or a browser gets another extension. */}
       {markets && (
         <Group title={t("settings-extensions.market_title")} footer={t("settings-extensions.market_footer")}>
           <Row
@@ -226,8 +226,8 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
 type Typed = Record<string, { text: string; integer: boolean }>;
 
 /**
- * A market extension's upgrades (docs/extensions.md「自动升级」): its own switch, its newer version (opening the market's
- * upgrade when it waits for the user) or what happened last. The App's 升级 section.
+ * A market extension's upgrades (docs/extensions.md "Auto-upgrade"): its own switch, its newer version (opening the market's
+ * upgrade when it waits for the user) or what happened last. The App's "Upgrades" section.
  */
 function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubExtension; busy: boolean; onToggle: (on: boolean) => void; onUpgrade: (market: string, id: string) => void }) {
   const u = p.upgrade;
@@ -629,7 +629,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
   );
 }
 
-/** 运行隔离 (Android ExtensionModelParts sandbox()): whether the sandbox is in effect and why, what went through the
+/** "Isolation" (Android ExtensionModelParts sandbox()): whether the sandbox is in effect and why, what went through the
  *  egress proxy and the last thing it refused. Only looked at here; it is changed on the hub's side. */
 export function SandboxGroup({ s }: { s: ExtensionSandbox }) {
   const egress = sandboxEgress(s);

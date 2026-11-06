@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 机器 › 添加电脑 (docs/onboarding.md 7.2 #11): the name and system go to pair-codes' add, the system's instructions show,
+// Machines › Add computer (docs/onboarding.md 7.2 #11): the name and system go to pair-codes' add, the system's instructions show,
 // the dialog waits for the computer and then asks whether it is yours on the same screen.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -198,7 +198,7 @@ describe("AddComputer", () => {
       await act(async () => remove.click());
       await flush();
       expect(posts.at(-1)?.path).toBe("/machines/a/reject");
-      expect(document.querySelector("[data-too-many]")).toBeNull(); // back to the form, 下一步 tries again
+      expect(document.querySelector("[data-too-many]")).toBeNull(); // back to the form, "Next" tries again
       expect(document.querySelector('[role="alert"]')).toBeNull();
       expect(button("下一步")).toBeTruthy();
     } finally {

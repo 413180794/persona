@@ -1,5 +1,5 @@
-// 消息 (docs/lark-migration.md「入口」, #392's narrow exception): every Feishu private and group chat, for a browser
-// that turned on 设置 › 连接器 › 飞书 › 首页显示消息, on a hub that reads Feishu (feature `lark`). Not a second Feishu: one list and the inbox's own chat view
+// "Messages" (docs/lark-migration.md "Entry", #392's narrow exception): every Feishu private and group chat, for a browser
+// that turned on Settings › Connectors › Lark › Show messages on home, on a hub that reads Feishu (feature `lark`). Not a second Feishu: one list and the inbox's own chat view
 // (LarkThread: reading, sending, Pins), no contacts or workbench. Wide: the list (380px) and the chat side by side;
 // narrow: the chat takes the list's place, with a way back. The pinned chats sit on top as a row of faces.
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -26,7 +26,7 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
   const larkSwitch = useLarkHome();
   const on = lark && larkSwitch;
   const accounts = useLarkAccounts();
-  // The chosen Feishu account's list (docs/feishu.md「多账号」): each account keeps its own.
+  // The chosen Feishu account's list (docs/feishu.md "Multiple accounts"): each account keeps its own.
   const larkChats = larkChatsFor(accounts.request);
   const s = useLarkChats(larkChats);
   const [pins, setPins] = useState(false);
@@ -152,7 +152,7 @@ function ChatHeader({ chat, account }: { chat?: LarkConversation; account?: stri
 }
 
 function ChatList({ selected, store: larkChats, accounts }: { selected?: string; store: LarkChatsStore; accounts: LarkAccountsState }) {
-  // [removed] words in a row read decoded while the account's switch is on (lib/lark-display.ts).
+  // "Brave climb" encoded words in a row read decoded while the account's switch is on (lib/lark-display.ts).
   const display = useLarkDisplayState(accounts.request).snapshot ?? HIDDEN_DISPLAY;
   const s = useLarkChats(larkChats);
   const [query, setQuery] = useState("");
@@ -236,7 +236,7 @@ function ChatList({ selected, store: larkChats, accounts }: { selected?: string;
   );
 }
 
-/** 置顶: the pinned chats, a row of faces with their names and unread counts (the Lark gateway's order). */
+/** "Pinned": the pinned chats, a row of faces with their names and unread counts (the Lark gateway's order). */
 function PinnedShelf({ chats, selected }: { chats: LarkConversation[]; selected?: string }) {
   return (
     <section aria-label={t("messages-messages.pinned_label")} className="mt-3">

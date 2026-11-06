@@ -22,7 +22,7 @@ function render(actions: ChatActions | null, item = receipt) {
   );
 }
 
-// a task's card offers 复制 / 引用 like a reply (#2462)
+// a task's card offers "Copy" / "Quote" like a reply (#2462)
 describe("a task's receipt card", () => {
   it("has 复制 and 引用 in its corner bar, the card as it was", () => {
     const html = render(chat);

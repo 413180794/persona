@@ -1,4 +1,4 @@
-// First visit (set the admin password) and sign-in (docs/admin.md「管理员密码和会话」).
+// First visit (set the admin password) and sign-in (docs/admin.md "Admin password and sessions").
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
 import { useEffect, useState } from "react";

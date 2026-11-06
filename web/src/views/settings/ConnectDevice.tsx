@@ -1,5 +1,5 @@
-// 设置 › 设备 › 连接新设备 (#2731, docs/web.md「设置」): a one-time pairing code from the hub, for an app (its QR code;
-// 拷贝配对链接 for the Mac and Android, which pair by pasting) or for a browser (the sign-in link and its QR code, which
+// Settings › Devices › Connect a new device (#2731, docs/web.md "Settings"): a one-time pairing code from the hub, for an app (its QR code;
+// "Copy pairing link" for the Mac and Android, which pair by pasting) or for a browser (the sign-in link and its QR code, which
 // a phone's camera opens). The code lasts ten minutes and is traded once; the dialog says which device took it.
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";

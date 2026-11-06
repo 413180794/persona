@@ -106,7 +106,7 @@ interface Pending {
   at: number;
 }
 
-/** 分支到新聊天 (#2137): the node copies the conversation up to this reply's turn into a new one, which opens here. */
+/** "Branch to new chat" (#2137): the node copies the conversation up to this reply's turn into a new one, which opens here. */
 async function forkAt(mid: string, sid: string, itemId: string, assistant: boolean, space?: string) {
   try {
     const r = await api<{ session_id: string }>(`${sessionPath(mid, sid)}/fork`, { method: "POST", json: { at_item_id: itemId } });
@@ -119,7 +119,7 @@ async function forkAt(mid: string, sid: string, itemId: string, assistant: boole
   }
 }
 
-/** 回退到这里 (#2436): the node drives Claude's /rewind to before the message; the message then goes back into the composer. */
+/** "Rewind to here" (#2436): the node drives Claude's /rewind to before the message; the message then goes back into the composer. */
 async function rewindTo(mid: string, sid: string, draftKey: string, items: Item[], messageId: string, text: string, restore: RewindRestore) {
   const target = rewindTarget(items, messageId);
   if (!target) throw new Error(tr("rewind.no_text"));
@@ -150,10 +150,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   starting?: boolean;
   onToggleSidebar?: () => void;
   readOnly?: boolean;
-  /** On a narrow screen, in the header's middle in place of the title (the shell's 助手 | Agents switch). */
+  /** On a narrow screen, in the header's middle in place of the title (the shell's "Assistant" | "Agents" switch). */
   topCenter?: React.ReactNode;
   /** The agent's own page (`/s/…`, `/t/…`): its terminal is a view of the middle, switched in place with the header's
-   *  终端 | 对话 and ⌘J (docs/web.md「终端 ⇄ 对话」). Elsewhere (a task's panel) the chat is all there is. */
+   *  "Terminal" | "Chat" and ⌘J (docs/web.md "Terminal ⇄ chat"). Elsewhere (a task's panel) the chat is all there is. */
   inPage?: boolean;
   panel?: PanelChrome;
 }) {
@@ -172,7 +172,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const status = useSessionLive(mid, sid);
   // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/onboarding.md 4.4)
   const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure; fromBox?: boolean } | null>(null);
-  // the composer's own send, for the failure card's 重新发送: the words are back in the box, so the box is what goes
+  // the composer's own send, for the failure card's "Send again": the words are back in the box, so the box is what goes
   const resend = useRef<(() => void) | null>(null);
   // the main conversation's setup gate, for deliver (defined before the gate is)
   const blockedRef = useRef<ReadinessGate["blocked"]>(undefined);
@@ -184,7 +184,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     return [{ id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${id}#${i}`, seq: 0, role: "user", kind: "image", image })) } }];
   });
   const [draftRefusal, setDraftRefusal] = useState<{ out: Outgoing; id: string; draft: string; clearable?: string } | null>(null);
-  // what other pages sent here (问 Persona, 交给 AI…): shown like this page's own sending bubbles (lib/outbox.ts)
+  // what other pages sent here ("Ask Persona", "Hand to AI"…): shown like this page's own sending bubbles (lib/outbox.ts)
   const outbox = useStore((s) => s.outbox[outboxKey(mid, sid)] ?? []);
   // a message Claude queued shows in the queue strip, not as a sending bubble too (ChatView.swift chatScroll)
   const queued = session?.queued ?? [];
@@ -243,7 +243,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const draftKey = `${mid}/${sid}`;
   const canCompose = sessionCan(session, "send");
   const canFork = Boolean(session?.can_fork) && !readOnly;
-  // 回退到这里 (#2436): offered on your messages of a session in a terminal; off with a reason while it cannot
+  // "Rewind to here" (#2436): offered on your messages of a session in a terminal; off with a reason while it cannot
   const rewindOff = rewindBlock(session, working);
   const canRewind = canCompose && !readOnly && !assistant;
   const actions = useMemo<ChatActions>(
@@ -297,12 +297,12 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     });
   }, [mid, sid]);
 
-  // ── scrolling (lib/disclosure.ts「following the end」): the end stays in view until the reader scrolls away from it;
+  // ── scrolling (lib/disclosure.ts "following the end"): the end stays in view until the reader scrolls away from it;
   // older pages landing above keep the view still ──
   const scroller = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
   const [away, setAway] = useState(false);
-  // something came in since the reader left the end: the pill says 有新消息
+  // something came in since the reader left the end: the pill says "New messages"
   const [newSince, setNewSince] = useState(false);
   const follow = useCallback((on: boolean) => {
     atEnd.current = on;
@@ -514,7 +514,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           setSendFailure({ chat: `${mid}/${sid}`, failure: codedFailure(e), fromBox });
           void refreshReadiness({ force: true });
         } else if (fromBox) {
-          // a card that stays until 重新发送 or an edit of the box (#4270): a 5 s toast is gone by the time you are back
+          // a card that stays until "Send again" or an edit of the box (#4270): a 5 s toast is gone by the time you are back
           const why = e instanceof ApiError && e.code === "dialog_open" ? t("chat-chatview.dialog_open") : errorText(e);
           setSendFailure({ chat: `${mid}/${sid}`, failure: { code: "", error: t("chat-chatview.unsent", { error: why }) }, fromBox });
         } else if (e instanceof ApiError && e.code === "dialog_open") {
@@ -529,7 +529,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   );
 
   const onSend = async (out: Outgoing, fromBox?: boolean): Promise<boolean> => {
-    // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+    // Routed to a task ("Tell "xx""): straight to its agent, not to Persona (docs/unified-entry.md "Who it points at").
     if (assistant && out.images.length && getFeedState().routes[sid]) {
       toast(t("chat-chatview.route_no_images"), "error");
       return false;
@@ -544,7 +544,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     }
     return deliver(out, uuid(), undefined, fromBox);
   };
-  // The assistant's tasks (docs/unified-entry.md): the conversation's feed, and the main one's 今天 card.
+  // The assistant's tasks (docs/unified-entry.md): the conversation's feed, and the main one's "Today" card.
   const mainConversation = useStore((s) => s.assistant?.main);
   const feed = useFeed((s) => (assistant ? (s.feeds[sid] ?? NO_FEED) : NO_FEED));
   useEffect(() => {
@@ -552,7 +552,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     void loadFeed(sid);
     if (sid === mainConversation) void loadToday(sid);
   }, [assistant, sid, mainConversation]);
-  // The 今天 card's actions say something to Persona here.
+  // The "Today" card's actions say something to Persona here.
   useEffect(() => {
     if (!assistant) return;
     const say = (e: Event) => {
@@ -618,8 +618,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     () => ({ tasks, subagents: assistant ? NO_SUBAGENTS : (subagents ?? NO_SUBAGENTS), scope: `${mid}/${sid}:` }),
     [tasks, subagents, assistant, mid, sid],
   );
-  // ── 会话内搜索 (ChatSearch.tsx, Android ChatSearchState): where the reader was when it opened, going to a hit (the
-  // rows that hold it open, search-reveal.ts), lit for HIT_MS, and 返回搜索前位置 ──
+  // ── "Search in chat" (ChatSearch.tsx, Android ChatSearchState): where the reader was when it opened, going to a hit (the
+  // rows that hold it open, search-reveal.ts), lit for HIT_MS, and "Back to where you were" ──
   const [search, setSearch] = useState<{ open: boolean; query: string }>({ open: false, query: "" });
   const origin = useRef<{ atEnd: boolean; line?: string; offset: number } | null>(null);
   const [picked, setPicked] = useState(false);
@@ -717,7 +717,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     }).then((r) => r === "missing" && toast(t("chat-chatsearch.origin_changed")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unlight]);
-  // 加载更早的记录并继续搜 (lib/chat-search.ts loadEarlierForSearch): the history's own pages, one after another, the
+  // "Load earlier and keep searching" (lib/chat-search.ts loadEarlierForSearch): the history's own pages, one after another, the
   // view kept still as each lands above it
   const loadForSearch = useCallback(async (onPage: (n: number) => void, stopped: () => boolean): Promise<LoadOutcome> => {
     const outcome = await loadEarlierForSearch({
@@ -745,9 +745,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const plan = useMemo(() => latestPlan(segs), [segs]);
   const planOut = usePlanOutOfView(scroller, plan?.id);
   const lastLine = lines[lines.length - 1];
-  // 重试 on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
+  // "Retry" on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
   const retry = useCallback(() => void deliver({ text: t("chat-chatview.continue_text"), images: [] }, uuid()), [deliver]);
-  // the failure notice 重试 was pressed on: kept here, not in the note, so it stays gone while the session goes through
+  // the failure notice "Retry" was pressed on: kept here, not in the note, so it stays gone while the session goes through
   // needs-you and back before the hub clears it (iOS ChatView @State retried)
   const [retriedOn, setRetried] = useState<{ chat: string; reason?: string }>();
   const retried = retriedOn?.chat === `${mid}/${sid}` ? retriedOn.reason : undefined;
@@ -790,7 +790,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     });
     return () => cancelAnimationFrame(frame);
   }, [view, fine]);
-  // the run's time counts from the turn's start, as its 正在工作… does (not from the session's last state change)
+  // the run's time counts from the turn's start, as its "Working…" does (not from the session's last state change)
   const stateSince = session?.state_since;
   const runStart = useMemo(() => {
     const live = lines.findLast((l) => l.kind === "segment" && l.live);
@@ -802,7 +802,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // Persona's own chats too (#3654), and from the moment the message is in, not from the hub's next push
   const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} clock={barClock.current} /> : null;
   const queue = session && queued.length > 0 ? <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} compact={short} /> : null;
-  // with the plan's pill showing, 跳到底部 goes beside it (over the chat, they hid each other)
+  // with the plan's pill showing, "Jump to bottom" goes beside it (over the chat, they hid each other)
   const jumpInDock = Boolean(planPill) && !readOnly;
   const pills = jumpInDock && away ? (
     <div className="flex shrink-0 items-center justify-center gap-2">
@@ -1014,7 +1014,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       </ViewLayer>
       {switchable && termKept && (
         <ViewLayer on={view === "term"} from="end" enter layerRef={termLayer}>
-          {/* Files opens beside it (the Files panel, as on the 终端 page); the page's header is the panel's, so the panel keeps a toolbar of its own controls (单窗格 / 完整界面…) */}
+          {/* Files opens beside it (the Files panel, as on the "Terminal" page); the page's header is the panel's, so the panel keeps a toolbar of its own controls ("Single pane" / "Full view"…) */}
           <PageBoundary page={`term:${mid}/${sid}`}>
             <Suspense fallback={<div className="flex h-full items-center justify-center"><Loading /></div>}>
               <TerminalPanel mid={mid} sid={sid} onFiles={session?.cwd ? openFiles : undefined} onClose={() => setView("chat")} embedded />
@@ -1099,7 +1099,7 @@ function ReturnPill({ onClick }: { onClick: () => void }) {
   );
 }
 
-/** Away from the end: 有新消息 / 跳到底部 over the chat's bottom edge (cindy's JumpToBottomChip). */
+/** Away from the end: "New messages" / "Jump to bottom" over the chat's bottom edge (the reference client's JumpToBottomChip). */
 function JumpPill({ label, onClick, inline }: { label: string; onClick: () => void; /** In a row (beside the plan's pill), not over the chat. */ inline?: boolean }) {
   return (
     <div aria-live="polite" className={inline ? "shrink-0" : "absolute bottom-3 left-1/2 z-10 -translate-x-1/2"} style={{ animation: "fade-up 150ms ease-out both" }}>
@@ -1151,7 +1151,7 @@ export function footerRows(session: Session, assistant?: boolean): MenuItem[] {
 }
 
 /** Above the composer while a session needs you and its host says why (a botmux attention, iOS AttentionNote):
- *  the reason and 在飞书打开 its topic. */
+ *  the reason and "Open in Lark" its topic. */
 function AttentionNote({ session }: { session: Session }) {
   const reason = attentionReason(session);
   if (!reason) return null;
@@ -1192,17 +1192,17 @@ export function Header({
   title: string;
   machineName: string;
   assistant?: boolean;
-  /** The assistant's main conversation: no subtitle (iOS's AssistantTopBar has none) and no 重命名. */
+  /** The assistant's main conversation: no subtitle (iOS's AssistantTopBar has none) and no "Rename". */
   main?: boolean;
   siblings: Session[];
   onToggleSidebar?: () => void;
   onInterrupt: () => void;
   onStopLoop: () => void;
   last?: Item;
-  /** 会话内搜索 (ChatSearch.tsx). */
+  /** "Search in chat" (ChatSearch.tsx). */
   onSearch?: () => void;
   topCenter?: React.ReactNode;
-  /** On an agent's page with a terminal to show: the view in the middle, and how to change it (the 终端 | 对话 switch). */
+  /** On an agent's page with a terminal to show: the view in the middle, and how to change it (the "Terminal" | "Chat" switch). */
   view?: SessionView;
   onView?: (view: SessionView) => void;
   /** The conversation has something that wants an answer while the terminal is shown. */
@@ -1218,7 +1218,7 @@ export function Header({
   const [dialog, setDialog] = useState<"info" | "rename" | "space" | "delete" | null>(null);
   const muted = Boolean(session && !assistant && isMuted(session, mutes));
   const pinned = useStore((s) => Boolean(session && isPinned(session, s.pins)));
-  // 屏蔽通知: the hub stops pushing this agent's 需要你 / 做完了 (an agent's switch sits on top of its space's)
+  // "Mute": the hub stops pushing this agent's "Needs you" / "Finished" (an agent's switch sits on top of its space's)
   const flipMute = async () => {
     if (!session) return;
     const next = toggleMute(session, getState().mutes);
@@ -1243,7 +1243,7 @@ export function Header({
   const others = chrome ? [] : siblings.filter((s) => s.session_id !== session?.session_id);
   // a task's panel stands for the task: its title above, and the agent's own todo line would only repeat it
   const todoLine = Boolean(session?.todo && !assistant && !chrome?.title);
-  // the session's files and Git open in the side panel (docs/web.md「侧边面板」); the assistant has none. Its terminal is
+  // the session's files and Git open in the side panel (docs/web.md "Side panel"); the assistant has none. Its terminal is
   // the page's other view, switched in place (view / onView)
   const here = (p: typeof panel, kind: string) => Boolean(p && p.kind === kind && "sid" in p && session && p.mid === session.machine_id && p.sid === session.session_id);
   const showTerminal = Boolean(view && onView);
@@ -1268,7 +1268,7 @@ export function Header({
 
   const own: MenuItem[] = session
     ? [
-        // phone width: 同空间 leaves the header row to the title (#3576) and opens from ⋯ instead
+        // phone width: "Same space" leaves the header row to the title (#3576) and opens from ⋯ instead
         ...(phone && others.length > 0 ? [spaceAgentsItem(others, () => tabs.openAt(menu.anchor))] : []),
         ...assistantItems,
         ...(session.todo
@@ -1349,7 +1349,7 @@ export function Header({
           )}
           {/* a panel is a phone's width: the dot says the state there too */}
           {session && !assistant && !chrome && state !== "idle" && <span className="hidden @min-[800px]:contents"><StatePill state={state} /></span>}
-          {/* narrow: the context bar gives way to the title too (#3532); 会话信息 still has the token count. The header's own
+          {/* narrow: the context bar gives way to the title too (#3532); "Session info" still has the token count. The header's own
               width decides (a container), so a side panel beside the chat narrows it as a phone does; the pill and the
               bar go below 800px, the chips' words below 640px, so the title keeps room in between (#3670) */}
           {session && !assistant && <span className="hidden @min-[800px]:contents"><ContextMeter session={session} /></span>}
@@ -1357,7 +1357,7 @@ export function Header({
           {session && !assistant && <span className="hidden @min-[680px]:contents @min-[800px]:hidden"><ContextMeter session={session} compact /></span>}
         </div>
         {sub && !todoLine && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
-        {/* the todo it works for, up top (#1836): opens the todo, 换个待办… picks another */}
+        {/* the todo it works for, up top (#1836): opens the todo, "Change to-do…" picks another */}
         {todoLine && session?.todo && (
           <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
             <button type="button" onClick={() => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`)} title={t("chat-chatview.todo_label", { title: session.todo.title })}
@@ -1440,7 +1440,7 @@ export function Header({
   );
 }
 
-/** The ⋯ row for the space's other agents on a phone, where the header has no 同空间 button: it opens the same menu
+/** The ⋯ row for the space's other agents on a phone, where the header has no "Same space" button: it opens the same menu
  *  the button does (`open`, at ⋯), red when one of them needs you. */
 export function spaceAgentsItem(others: Session[], open: () => void): MenuItem {
   return {

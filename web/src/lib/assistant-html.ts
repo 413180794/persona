@@ -1,4 +1,4 @@
-// The assistant's html component on the web (docs/assistant-views.md「HTML 自由绘制」「各端必须验证的安全边界」).
+// The assistant's html component on the web (docs/assistant-views.md "Free-form HTML" and "Security boundaries every client must verify").
 //
 // The web does not run it. A plain `iframe sandbox="allow-scripts"` with a CSP is not a network-denying sandbox (the
 // frame's own navigation, meta refresh and the like are not all stopped by default-src), and a ready timeout cannot

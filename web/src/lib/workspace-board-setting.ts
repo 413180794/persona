@@ -1,4 +1,4 @@
-// 设置 › 通用 › Agent › 工作流看板 (#2475): the board is off unless turned on. The switch is the hub's
+// Settings › General › Agent › Workflow board (#2475): the board is off unless turned on. The switch is the hub's
 // (GET/PUT /workspace-board/settings), so every browser agrees; a hub that has never stored it answers whether the board
 // was already in use. Off only hides the board: its columns and cards stay on the hub.
 import { useSyncExternalStore } from "react";

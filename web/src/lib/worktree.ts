@@ -1,4 +1,4 @@
-// 新建 worktree… (#2431): the dialog's logic. A workspace's repository is read on the computer (worktree/prepare), the
+// "New worktree…" (#2431): the dialog's logic. A workspace's repository is read on the computer (worktree/prepare), the
 // branch and the checkout path are typed, and the computer makes the worktree and opens it as a workspace
 // (worktree/create). The path follows the branch until it is edited by hand, the way Moshi's dialog does. Both routes
 // are for a full device only (server/internal/hub/panes.go).
@@ -121,7 +121,7 @@ export function createWorktree(t: WorktreeTarget, form: WorktreeForm): Promise<W
   });
 }
 
-/** Opens the new workspace on the 终端 page (its first pane, else the machine's list). */
+/** Opens the new workspace on the "Terminal" page (its first pane, else the machine's list). */
 export function openCreated(mid: string, created: WorktreeCreated) {
   navigate(created.terminal ? { name: "terminal", mid, id: created.terminal } : { name: "terminal", mid });
 }
@@ -136,7 +136,7 @@ export interface WorktreeRequest {
 
 const openers = new Set<(r: WorktreeRequest) => void>();
 
-/** Opens 新建 worktree… (the app shell listens) for a workspace node. */
+/** Opens "New worktree…" (the app shell listens) for a workspace node. */
 export function openNewWorktree(node: Pick<MenuNode, "mid" | "workspaceId" | "host" | "label">, changed: () => void = () => {}) {
   if (!node.workspaceId) return;
   const request = { target: { mid: node.mid, workspaceId: node.workspaceId, host: node.host, label: node.label }, changed };

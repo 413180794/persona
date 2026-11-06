@@ -1,4 +1,4 @@
-// Dev only (showcase.html, not built): every page of the 组件展示 extension drawn by the real ExtensionUI from its
+// Dev only (showcase.html, not built): every page of the component showcase extension drawn by the real ExtensionUI from its
 // snapshots, for screenshots next to the other apps' (#1852). The hub is faked: drawing the extension's page "showcase"
 // with state <page> answers that page's view; a press answers the same view again (nothing is stored).
 import { StrictMode } from "react";
@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import { initI18n } from "../i18n";
 import "../styles.css";
 
-// The catalog loads before the modules that call t() as they load (docs/web.md「国际化」), as in main.tsx.
+// The catalog loads before the modules that call t() as they load (docs/web.md "Internationalization"), as in main.tsx.
 await initI18n();
 const [{ ExtensionUI }, { SHOWCASE, showcaseKind }, { Toasts }] = await Promise.all([import("../views/settings/ExtensionView"), import("./snapshots"), import("../ui/atoms")]);
 

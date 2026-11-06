@@ -1,4 +1,4 @@
-// The 组件展示 extension's pages (#1852) through the web's view: every page reads and draws, and every component the
+// The component showcase extension's pages (#1852) through the web's view: every page reads and draws, and every component the
 // schema has is drawn by some page (none is left out as unknown).
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";

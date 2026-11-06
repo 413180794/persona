@@ -1,5 +1,5 @@
 // The assistant's memory (docs/assistant.md, docs/protocol.md `/assistant/memory`): one Markdown file per memory with a
-// frontmatter (name, description, type), plus the index MEMORY.md whose lines "- [标题](file.md) — 说明" give friendlier
+// frontmatter (name, description, type), plus the index MEMORY.md whose lines "- [title](file.md) — note" give friendlier
 // titles than the slugs. The iOS app's AssistantMemoryEntry / AssistantMemoryView, as pure functions.
 
 import { t } from "../i18n";
@@ -40,7 +40,7 @@ export function parseMemory(content: string): ParsedMemory {
   return out;
 }
 
-/** The index's lines by file: "- [早报格式](morning-format.md) — 一屏以内" → { "morning-format.md": { title, hook } }. */
+/** The index's lines by file: "- [Morning brief format](morning-format.md) — one screen at most" → { "morning-format.md": { title, hook } }. */
 export function indexTitles(index: string): Record<string, { title: string; hook?: string }> {
   const out: Record<string, { title: string; hook?: string }> = {};
   for (const line of index.split("\n")) {
@@ -77,7 +77,7 @@ export function memoryEntries(files: MemoryFile[]): MemoryEntry[] {
 
 export type MemoryTone = "accent" | "orange" | "green" | "neutral";
 
-/** 用户 / 反馈 / 项目 / 参考, or the raw type. */
+/** "User" / "Feedback" / "Project" / "Reference", or the raw type. */
 export function memoryTypeLabel(type?: string): string | undefined {
   switch (type) {
     case "user":

@@ -1,4 +1,4 @@
-// The web client's i18n (docs/i18n.md, docs/web.md「国际化」). The page runs in one language for its whole life: the
+// The web client's i18n (docs/i18n.md, docs/web.md"Internationalization"). The page runs in one language for its whole life: the
 // catalog loads before any other module (main.tsx), so t() works anywhere, module scope included, and picking another
 // language reloads the page.
 //
@@ -174,7 +174,7 @@ export function hasKey(key: string): boolean {
   return [lang, FALLBACK_LANG, SOURCE_LANG].some((l) => key in (catalogs[l] ?? {}) || `${key}_other` in (catalogs[l] ?? {}));
 }
 
-// Formatting: always Intl with formatLocale(), never hand-built 月 / 日 strings.
+// Formatting: always Intl with formatLocale(), never hand-built month / day strings.
 
 export function formatNumber(n: number, opts?: Intl.NumberFormatOptions): string {
   return new Intl.NumberFormat(formatLocale(), opts).format(n);
@@ -190,7 +190,7 @@ export function formatRelative(value: number, unit: Intl.RelativeTimeFormatUnit,
   return new Intl.RelativeTimeFormat(formatLocale(), opts).format(value, unit);
 }
 
-/** A list joined the way the language does it: 「A、B 和 C」, "A, B, and C", 「A、B、C」. */
+/** A list joined the way the language does it: Chinese with an ideographic comma and "and", "A, B, and C", Japanese with ideographic commas only. */
 export function formatList(items: string[], opts: Intl.ListFormatOptions = { type: "conjunction" }): string {
   return new Intl.ListFormat(formatLocale(), opts).format(items);
 }

@@ -89,7 +89,7 @@ export function answeringWindows(wins: ClickWindow[]): ClickWindow[] {
     } catch {
       return false;
     }
-    // the admin UI is at the root only (docs/web.md「子路径」), and the worker is registered only there: an app page
+    // the admin UI is at the root only (docs/web.md"Subpaths"), and the worker is registered only there: an app page
     // with "admin" further down its path (a session or machine called admin) is still asked
     return !/^\/admin(\/|$)/.test(p);
   });
@@ -97,7 +97,7 @@ export function answeringWindows(wins: ClickWindow[]): ClickWindow[] {
 }
 
 /**
- * A click on a notification the worker showed. One about a permission card (`data.ix`, with the 允许 / 拒绝 buttons):
+ * A click on a notification the worker showed. One about a permission card (`data.ix`, with the Allow / Deny buttons):
  * a button goes to an open window of the app, which answers with its own token (the worker has none) and is neither
  * opened nor brought forward; a plain click brings that window forward and the page opens the conversation itself.
  * The windows are asked one at a time, front first, each for its share of the wait, so a frozen tab in front doesn't

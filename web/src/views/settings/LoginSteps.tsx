@@ -1,5 +1,5 @@
-// Pieces the two step-by-step sign-ins share (设置 › 连接器's login card in HubConnector.tsx, 设置 › 渠道's
-// binding in Channels.tsx; docs/connectors.md「登录」): the QR code drawn from the hub's modules, saving it as a picture,
+// Pieces the two step-by-step sign-ins share (Settings › Connectors' login card in HubConnector.tsx, Settings › Channels'
+// binding in Channels.tsx; docs/connectors.md "Sign-in"): the QR code drawn from the hub's modules, saving it as a picture,
 // asking a step again every interval until it is scanned / entered, and the note for a step this page cannot draw.
 import { useEffect } from "react";
 import type { ConnectorPrompt } from "../../lib/connectors";
@@ -63,7 +63,7 @@ export function useStepPolling(polled: ConnectorPrompt | null, send: (step: stri
   }, [polled?.step, polled?.user_code, polled?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/** A QR code to scan in `app`, asked again by the page; 保存二维码 for scanning it from the same phone's photos. */
+/** A QR code to scan in `app`, asked again by the page; "Save QR code" for scanning it from the same phone's photos. */
 export function QRStep({ rows, app, label, onCancel }: { rows: string[]; app: string; label?: string; onCancel: () => void }) {
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-4">
@@ -100,7 +100,7 @@ export function QRLinkStep({ url, app, onCancel }: { url: string; app: string; o
 
 /**
  * A step this page cannot draw (a kind it does not know, a QR code without its modules or link, a form with no
- * fields): says so and what to do next, with a way to start over — never a 下一步 that can never light up.
+ * fields): says so and what to do next, with a way to start over — never a "Next" that can never light up.
  */
 export function UnsupportedStep({ elsewhere, onRestart, onCancel }: { elsewhere?: string; onRestart: () => void; onCancel: () => void }) {
   return (

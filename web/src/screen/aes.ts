@@ -1,6 +1,6 @@
 // AES-CBC encryption for noVNC where the browser has no crypto.subtle: a page opened over plain HTTP (the hub's LAN
 // address, the app's web view) is not a secure context, and macOS's Screen Sharing signs in with Apple's ARD
-// authentication, whose credentials noVNC encrypts with AES (docs/computer-use.md「实时画面」). Only what noVNC calls:
+// authentication, whose credentials noVNC encrypts with AES (docs/computer-use.md "Live view"). Only what noVNC calls:
 // importKey("raw", …, {name: "AES-CBC"}) and encrypt({name: "AES-CBC", iv}, key, data), with PKCS#7 padding like the
 // real one. Installed only when crypto.subtle is missing.
 

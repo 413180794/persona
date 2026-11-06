@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 设置 › 通知 (#2971): loading, a load that fails and 重试, a save the hub refuses (the control goes back, a toast says
-// why), the system switch when the browser has said no or has no notifications at all, and 提示音 on this page (#4057).
+// Settings › Notifications (#2971): loading, a load that fails and "Retry", a save the hub refuses (the control goes back, a toast says
+// why), the system switch when the browser has said no or has no notifications at all, and "Alert sound" on this page (#4057).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
