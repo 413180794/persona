@@ -111,7 +111,7 @@ final class TableFileModel {
             (0xF900...0xFAFF).contains(v) || (0xFE30...0xFE4F).contains(v) || (0xFF00...0xFF60).contains(v) || (0xFFE0...0xFFE6).contains(v)
     }
 
-    /// The tab-separated row, for 拷贝整行 (pastes into a spreadsheet as cells).
+    /// The tab-separated row, for Copy Row (pastes into a spreadsheet as cells).
     func rowText(_ row: Int) -> String { (current?.rows[safe: row] ?? []).joined(separator: "\t") }
 }
 

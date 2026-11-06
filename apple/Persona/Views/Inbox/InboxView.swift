@@ -5,11 +5,11 @@ import SwiftUI
     @Published var accounts = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
 }
 
-// MARK: - 收件箱
+// MARK: - Inbox
 
 /// The unified inbox (docs/inbox.md): Feishu messages and mail in one list, one row per thing (the new messages in a
 /// chat, a mail thread), newest first. No per-chat browsing: what is here is what came in. Filters narrow it by source
-/// (飞书, one mail account) and kind (私聊, @我, 群聊); a row swipes away as 已处理, and the done ones stay at the bottom
+/// (Lark, one mail account) and kind (DMs, @Me, Group chat); a row swipes away as Done, and the done ones stay at the bottom
 /// for a few days in case of a slip.
 struct InboxView: View {
     @State private var path = NavigationPath()
@@ -34,7 +34,7 @@ extension InboxView {
     static func short(_ email: String) -> String { InboxPage.short(email) }
 }
 
-/// The inbox's page itself, in whatever stack shows it: 收件箱's own (InboxView), or the shell's 助手 page (pushed from
+/// The inbox's page itself, in whatever stack shows it: Inbox's own (InboxView), or the shell's Assistant page (pushed from
 /// the drawer, docs/ios.md「新外壳」), which passes `embedded` so the page brings its destinations and link handling.
 struct InboxPage: View {
     @Environment(AppModel.self) private var model
@@ -48,12 +48,12 @@ struct InboxPage: View {
         get { accountState.accounts }
         nonmutating set { accountState.accounts = newValue }
     }
-    /// Sections shown open: tiers (action, fyi, noise) and "done". 已折叠 and 已处理 start closed.
+    /// Sections shown open: tiers (action, fyi, noise) and "done". Collapsed and Done start closed.
     @State private var expanded: Set<String> = ["action", "fyi"]
     @State private var composing: ComposeDraft?
-    @State private var editingDraft: InboxItem? // 修改 on the AI 分身's draft
-    @State private var showingMutes = false     // 已静音
-    @State private var confirming = false // 全部清理 over many items asks first
+    @State private var editingDraft: InboxItem? // Edit on the AI Twin's draft
+    @State private var showingMutes = false     // Muted
+    @State private var confirming = false // Clear All over many items asks first
     private var store: InboxStore { .shared }
 
     /// The kind filters, by key.
@@ -78,7 +78,7 @@ struct InboxPage: View {
     }
 
     /// Agents (and the assistant) waiting for an answer, an approval or a plan review: they need the user too, so they
-    /// head 需要你. Opening one goes to its chat; the Agents tab stays as it is.
+    /// head Needs You. Opening one goes to its chat; the Agents tab stays as it is.
     private var waitingAgents: [Interaction] {
         guard source.isEmpty, kind.isEmpty || kind == "agent" else { return [] }
         return model.pendingInteractions.filter { ix in
@@ -109,7 +109,7 @@ struct InboxPage: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
 
-                        // Mail accounts are managed in 设置 › 连接器 › 邮箱 (2026-11-01, with this device's data and 飞书).
+                        // Mail accounts are managed in Settings › Connectors › Mail (2026-11-01, with this device's data and Lark).
                         Menu {
                             cleanButton
                             Divider()
@@ -137,14 +137,14 @@ struct InboxPage: View {
                     store.reload()
                     await loadAccounts()
                     #if DEBUG
-                    // `-showInboxMutes YES`: the 已静音 list (screenshots).
+                    // `-showInboxMutes YES`: the Muted list (screenshots).
                     if UserDefaults.standard.bool(forKey: "showInboxMutes") { showingMutes = true }
                     // `-openInboxFirst YES`: open the first open item (detail screenshots).
                     if UserDefaults.standard.bool(forKey: "openInboxFirst") {
                         for _ in 0..<20 where store.open.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
                         if let first = openItems.first { path = NavigationPath([first]) }
                     }
-                    // `-openInboxItem <id>`: open that item (a kind's detail, e.g. a 公司圈 one).
+                    // `-openInboxItem <id>`: open that item (a kind's detail, e.g. a Moments one).
                     if let id = UserDefaults.standard.string(forKey: "openInboxItem") {
                         for _ in 0..<20 where !store.items.contains(where: { $0.id == id }) { try? await Task.sleep(for: .milliseconds(500)) }
                         if let it = store.items.first(where: { $0.id == id }) { path = NavigationPath([it]) }
@@ -153,9 +153,9 @@ struct InboxPage: View {
                 }
     }
 
-    // MARK: 全部清理
+    // MARK: Clear All
 
-    /// The names of the filters on now (飞书, a mailbox, a connector; @我, 私聊…), for what 全部清理 covers.
+    /// The names of the filters on now (Lark, a mailbox, a connector; @Me, DMs…), for what Clear All covers.
     private var filterNames: [String] {
         var names: [String] = []
         if source == "feishu" {
@@ -169,12 +169,12 @@ struct InboxPage: View {
         return names
     }
 
-    /// What 全部清理 covers: the open items the list shows now (its filters and search). The Agents
+    /// What Clear All covers: the open items the list shows now (its filters and search). The Agents
     /// waiting at the top are not inbox items: they wait for an answer, not to be filed.
     private var cleanScope: [InboxItem] { kind == "agent" ? [] : openItems }
 
-    /// 全部清理, with what it covers and how many under the name: files every open item in view as dismissed; from
-    /// `InboxBulk.confirmFrom` items on it asks first. One request, 撤销 after (docs/inbox.md「全部清理」).
+    /// Clear All, with what it covers and how many under the name: files every open item in view as dismissed; from
+    /// `InboxBulk.confirmFrom` items on it asks first. One request, Undo after (docs/inbox.md「全部清理」).
     private var cleanButton: some View {
         let scope = cleanScope
         return Button { clean(confirmed: false) } label: {
@@ -224,7 +224,7 @@ struct InboxPage: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            // The AI's triage: 需要你 (and what it has not looked at yet), 知悉即可, 已折叠 (noise).
+            // The AI's triage: Needs You (and what it has not looked at yet), FYI, Collapsed (noise).
             ForEach(InboxItem.Tier.allCases, id: \.self) { tier in
                 let items = kind == "agent" ? [] : byTier[tier] ?? []
                 let agents = tier == .action ? waitingAgents : []
@@ -291,7 +291,7 @@ struct InboxPage: View {
         .accessibilityIdentifier("inbox.agentRow")
     }
 
-    /// The agent's chat (the assistant's in 对话), where the question / plan / approval waits.
+    /// The agent's chat (the assistant's in Chat), where the question / plan / approval waits.
     private func open(_ ix: Interaction) {
         model.open(ix.sessionKey) // in its own group (another group's Persona: that group's)
     }
@@ -311,7 +311,7 @@ struct InboxPage: View {
             .modifier(InboxRowLook())
     }
 
-    /// A row's long-press menu: 已处理 (or 移回), then what the item can be muted by — its repository, chat or sender,
+    /// A row's long-press menu: Done (or Move Back), then what the item can be muted by — its repository, chat or sender,
     /// the name under each (docs/inbox.md「静音」).
     @ViewBuilder private func rowMenu(_ it: InboxItem) -> some View {
         if it.isDone {
@@ -333,7 +333,7 @@ struct InboxPage: View {
 
     // MARK: Filters
 
-    /// Sources (all, 飞书, each mail account) then kinds, as one row of chips; in the BeautifulUI style its filter chips,
+    /// Sources (all, Lark, each mail account) then kinds, as one row of chips; in the BeautifulUI style its filter chips,
     /// wrapping to a second row (no sideways scrolling at the top of a page, like the Agents list).
     @ViewBuilder private var filters: some View {
         if AppStyle.current.usesBeautifulUI {
@@ -422,14 +422,14 @@ struct InboxRow: View {
     var item: InboxItem
     var showAccount = false
     var sending = false
-    /// 发送 / 修改 on the AI 分身's draft (the list only).
+    /// Send / Edit on the AI twin's draft (the list only).
     var send: ((String) -> Void)?
     var edit: (() -> Void)?
 
     @StoredValue(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
     @StoredValue(TranslationPrefs.enabledKey) private var translating = false
 
-    /// 设置 › 翻译: the hub's translation of foreign mail, done as it came in (subject and preview).
+    /// Settings › Translation: the hub's translation of foreign mail, done as it came in (subject and preview).
     private var translated: InboxItem.Translated? { translating && TranslationPrefs.mail ? item.translated(translateTarget) : nil }
 
     /// Where the text column starts inside the row (40 avatar + 12): the separator lines up with it.
@@ -466,7 +466,7 @@ struct InboxRow: View {
                     }
                     Spacer(minLength: 0)
                     if item.count > 1 && !item.isDone {
-                        // @我 is the accent (it is about you); any other count is neutral.
+                        // @Me is the accent (it is about you); any other count is neutral.
                         CountBadge(count: item.count, look: .solid(item.kind == "mention" ? Theme.accent : Theme.countBadge))
                     }
                 }
@@ -498,9 +498,9 @@ struct InboxRow: View {
 
     /// Who wrote what (under the AI's summary once it has one).
     private var from: String {
-        if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: 李雷提及了你
+        if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: Li Lei mentioned you
         if item.moment != nil { return String(localized: "\(item.sender ?? "")：\(item.preview)", comment: "Who wrote it: what they wrote") } // who commented, on the post in the title
-        if let c = item.connector { // example-org/example-repo#12 · bob：请看一下
+        if let c = item.connector { // example-org/example-repo#12 · bob: please take a look
             let who = [item.sender ?? "", item.preview].filter { !$0.isEmpty }.joined(separator: String(localized: "：", comment: "Separator between a label and its value"))
             return [c.reference ?? "", who].filter { !$0.isEmpty }.joined(separator: " · ")
         }
@@ -526,7 +526,7 @@ struct InboxRow: View {
             }
             }
             .opacity(item.isDone ? 0.6 : 1)
-            // The source: 飞书's (or a connector's: GitHub's, a template image, in black) own mark on white; mail, or a
+            // The source: Lark's (or a connector's: GitHub's, a template image, in black) own mark on white; mail, or a
             // connector without a mark, a neutral gray, not the accent.
             Group {
                 if let brand = item.isLark ? Theme.Brand.lark : item.connector != nil ? ConnectorText.brand(item.source) : nil {
@@ -547,7 +547,7 @@ struct InboxRow: View {
     }
 }
 
-/// The AI 分身's reply under an inbox row: one tap sends it as it is, 修改 opens it in the draft sheet.
+/// The AI twin's reply under an inbox row: one tap sends it as it is, Edit opens it in the draft sheet.
 struct InboxDraftCard: View {
     var draft: String
     /// Status moves made with it (document items), one line each.
@@ -577,7 +577,7 @@ struct InboxDraftCard: View {
         .modifier(DraftSurface())
     }
 
-    /// BeautifulUI's RecommendationCard actions: 修改 secondary, 发送 the accent.
+    /// BeautifulUI's RecommendationCard actions: Edit secondary, Send the accent.
     private var beautifulActions: some View {
         HStack(spacing: Theme.Space.s) {
             Spacer(minLength: 0)
@@ -639,7 +639,7 @@ private struct DraftSurface: ViewModifier {
 }
 
 /// An agent waiting on the user, among the inbox rows: which agent, what it asks, then what it waits for (red, as
-/// 需要你 is everywhere) and on which machine. The label sits under the title so the title keeps the width.
+/// Needs You is everywhere) and on which machine. The label sits under the title so the title keeps the width.
 struct InboxAgentRow: View {
     var interaction: Interaction
     var machine: Machine?
@@ -679,7 +679,7 @@ struct InboxAgentRow: View {
 // MARK: - Detail
 
 /// One inbox item opened: the Feishu chat at its first new message, or the mail, or what a plugin draws for its source
-/// (placement inbox_item, `InboxItemSlotContent`); the AI's summary with AI 草拟回复 / 交给 AI on top, 已处理 in the
+/// (placement inbox_item, `InboxItemSlotContent`); the AI's summary with AI Draft Reply / Hand to AI on top, Done in the
 /// toolbar, whoever draws the body.
 struct InboxDetailView: View {
     var item: InboxItem
@@ -736,7 +736,7 @@ struct InboxDetailView: View {
         } else if current.connector != nil {
             InboxConnectorDetailView(item: current)
         } else if let m = current.moment {
-            LarkMomentsPostView(postID: m.postID, pushed: true) // the post and its comments, as a shared 公司圈 card opens
+            LarkMomentsPostView(postID: m.postID, pushed: true) // the post and its comments, as a shared Moments card opens
         } else if let c = item.larkConversation {
             LarkChatView(conversation: c)
         } else if let m = item.mailSummary {

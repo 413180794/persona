@@ -1,8 +1,8 @@
 import XCTest
 
-/// 删除对话 (issue #1749) against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): 菜谱网站加搜索 on macbook is not running.
+/// Delete Chat (issue #1749) against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): 「菜谱网站加搜索」 on macbook is not running.
 /// The chat's confirmation (`-showDeleteSession YES` opens it, as 「…」›「删除对话…」 does) says what deleting does;
-/// 取消 leaves it, 删除 sends DELETE /api/v1/sessions/{mid}/{sid}, the chat goes and the list no longer has it.
+/// Cancel leaves it, Delete sends DELETE /api/v1/sessions/{mid}/{sid}, the chat goes and the list no longer has it.
 /// `TEST_RUNNER_JARVIS_SHOTS=<dir>` also writes the screenshots there.
 final class DeleteSessionUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -75,9 +75,9 @@ final class DeleteSessionUITests: XCTestCase {
     }
 
     /// The Agents list offers it on a row's long press too, for one that is not running only: the list shows running
-    /// and finished ones (整理发布说明 is done), not offline ones.
+    /// and finished ones (「整理发布说明」 is done), not offline ones.
     @MainActor func testTheRowMenuOffersItOnlyWhenNotRunning() throws {
-        // Straight to the list: no chat (an empty remembered chat), no confirmation. Not 返回 from the chat: #1868.
+        // Straight to the list: no chat (an empty remembered chat), no confirmation. Not Back from the chat: #1868.
         app.terminate()
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-dev.openChat", "", "-holdChromeOpen", "YES"]
         app.launchPinned()

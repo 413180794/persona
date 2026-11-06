@@ -42,7 +42,7 @@ nonisolated struct ContextUsage: Equatable, Sendable {
     }
 }
 
-/// 会话信息's context row, under the tokens: the share left in words and a thin bar; the warning colour from 80% used.
+/// Session Info's context row, under the tokens: the share left in words and a thin bar; the warning colour from 80% used.
 struct ContextUsageRow: View {
     let usage: ContextUsage
 

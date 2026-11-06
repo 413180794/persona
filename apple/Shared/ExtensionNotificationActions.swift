@@ -1,7 +1,7 @@
 import Foundation
 import UserNotifications
 
-/// 通知服务扩展与 App 共用的按钮定义，只解码与注册，不读取凭据或执行动作。
+/// Button definitions shared by the notification service extension and the app: decoded and registered only, no credentials read, no actions run.
 nonisolated enum ExtensionNotificationActions {
     static func payload(_ info: [AnyHashable: Any]) -> ExtensionNotification? {
         guard let raw = info["extension_notification"] as? [String: Any],
@@ -50,7 +50,7 @@ nonisolated enum ExtensionNotificationActions {
         return payload.actions?.first { $0.id == id }
     }
 
-    /// 生成类型对新增字段采用宽容解码；通知的执行标志必须严格验类型，不能把错误的 foreground 当作 false。
+    /// Generated types decode new fields leniently; a notification's run flags are type-checked strictly, so a malformed foreground is never taken as false.
     private struct Shape: Decodable {
         var `extension`: String
         var ui: String?
@@ -73,7 +73,7 @@ nonisolated enum ExtensionNotificationActions {
     }
 }
 
-/// 合并操作在单个进程内串行；保留系统已注册的静态类别和其他扩展的类别。
+/// Merges run one at a time within the process; the system's registered static categories and other extensions' categories are kept.
 private actor ExtensionNotificationCategoryRegistry {
     static let shared = ExtensionNotificationCategoryRegistry()
     private var known: Set<UNNotificationCategory>?
@@ -88,12 +88,12 @@ private actor ExtensionNotificationCategoryRegistry {
     }
 
     private func merge(_ additions: Set<UNNotificationCategory>) async {
-        // SDK 对象只在 actor 内取得和创建，不把通知中心或类别从调用方转移进来。
+        // SDK objects are fetched and created only inside the actor; the notification center and categories are never passed in from the caller.
         let center = UNUserNotificationCenter.current()
         let existing = await center.notificationCategories()
         var categories: [String: UNNotificationCategory] = [:]
         for category in known ?? [] { categories[category.identifier] = category }
-        // 再读系统集合，接住通知服务扩展刚注册的类别；同名项以本次定义为准。
+        // Read the system's set again to pick up categories the notification service extension just registered; on a name clash this definition wins.
         for category in existing { categories[category.identifier] = category }
         for category in additions { categories[category.identifier] = category }
         let merged = Set(categories.values)

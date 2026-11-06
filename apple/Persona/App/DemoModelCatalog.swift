@@ -1,7 +1,7 @@
 // i18n-ignore-file: demo mode's made-up hub data (model settings)
 import Foundation
 
-/// Made-up model settings for 体验模式; they never reach a provider or a computer.
+/// Made-up model settings for Demo Mode; they never reach a provider or a computer.
 enum DemoModelCatalog {
     static func configuration(tasks: [JSONValue], overrides: [String: JSONValue]) -> JSONValue {
         let providers: [JSONValue] = [
@@ -55,7 +55,7 @@ enum DemoModelCatalog {
             } else {
                 purpose["category_id"] = .string(Self.category(id))
             }
-            // 主对话 alone picks its 运行方式 (#2455).
+            // Main Chat alone picks its How It Runs (#2455).
             if id == "assistant" {
                 purpose["fields"] = ["provider", "model", "effort", "runtime"]
                 purpose["runtimes"] = ["cli", "agentsdk"]

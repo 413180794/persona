@@ -14,7 +14,7 @@ struct HubUpdateDeps {
     }
 }
 
-/// 设置 › hub (docs/hub-update.md「App 里」): the hub's version and channel, checking for and installing a release,
+/// Settings › hub (docs/hub-update.md「App 里」): the hub's version and channel, checking for and installing a release,
 /// what an update waits for, turning auto-update on and off, and the history.
 @Observable final class HubUpdateModel {
     private(set) var status: HubUpdateStatus?
@@ -76,7 +76,7 @@ struct HubUpdateDeps {
         do { apply(try await api.checkHubUpdate()) } catch { deps.report(error) }
     }
 
-    /// Starts the update; `now` is the second confirmation's 现在就更新 (it does not wait for idle).
+    /// Starts the update; `now` is the second confirmation's Update Now (it does not wait for idle).
     func update(now: Bool) async {
         guard let api = deps.api() else { return }
         do { apply(try await api.startHubUpdate(now: now)) } catch { deps.report(error) }
@@ -332,7 +332,7 @@ struct HubSettingsPage: View {
 }
 
 /// The one quiet line about the hub over the Agents list, like 「Mac 上的 Persona 已登录」 (docs/hub-update.md「App 里」):
-/// 自动更新已开启 (once), a newer version when auto-update is off, an update under way, one that went back, or that the
+/// Auto-update is on (once), a newer version when auto-update is off, an update under way, one that went back, or that the
 /// hub or the app is too old. No dialog; a tap opens the hub page.
 struct HubNoticeRow: View {
     @Environment(AppModel.self) private var model
@@ -415,7 +415,7 @@ struct HubNoticeRow: View {
     }
 }
 
-/// 设置 › 助手 › Skills: the assistant's skills on its machine (GET /api/v1/skills), read only for now.
+/// Settings › Assistant › Skills: the assistant's skills on its machine (GET /api/v1/skills), read only for now.
 @Observable final class SkillsModel {
     private(set) var skills: [AgentSkill] = []
     private(set) var machine: String?

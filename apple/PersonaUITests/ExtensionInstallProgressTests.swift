@@ -1,10 +1,10 @@
 import XCTest
 
-/// 扩展市场 › an extension installed and removed step by step (#3307): the steps and the one going on, the step it
-/// failed at with why, 重试 from there, the failure still there after leaving the page (and on the list's row), and a
+/// Extension Market › an extension installed and removed step by step (#3307): the steps and the one going on, the step it
+/// failed at with why, Retry from there, the failure still there after leaving the page (and on the list's row), and a
 /// removal that failed done again. Against scripts/mock/mock_hub.py with
-/// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=fail`: `TEST_RUNNER_JARVIS_PLUGINS_OPS_HUB=http://127.0.0.1:<端口>` (restart the mock
-/// before each run: it fails each thing once). `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named by
+/// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=fail`: `TEST_RUNNER_JARVIS_PLUGINS_OPS_HUB=http://127.0.0.1:<port>` (restart the mock
+/// before each run: it fails each thing once). `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by
 /// `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark) and the style.
 final class ExtensionInstallProgressTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -87,7 +87,7 @@ final class ExtensionInstallProgressTests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(confirm.waitForNonExistence(timeout: 5), "the preview sheet stays up while it installs")
 
-        // It stops at 启动: the step, why, 重试.
+        // It stops at Start: the step, why, Retry.
         let retry = app.buttons["extension-operation-retry"]
         XCTAssertTrue(retry.waitForExistence(timeout: 20), "no failure:\n\(app.debugDescription)")
         XCTAssertEqual(value(step("start", in: app)), "failed")
@@ -105,7 +105,7 @@ final class ExtensionInstallProgressTests: XCTestCase {
         calendar.tap()
         XCTAssertTrue(retry.waitForExistence(timeout: 10), "the failure is gone after coming back:\n\(app.debugDescription)")
 
-        // 重试: a new operation, the package from the hub's cache and the permissions already agreed to, so it finishes.
+        // Retry: a new operation, the package from the hub's cache and the permissions already agreed to, so it finishes.
         retry.tap()
         XCTAssertTrue(waitFor(operation, value: "running", timeout: 5) || app.buttons["market-uninstall"].exists, "retry did not start")
         let remove = app.buttons["market-uninstall"]
@@ -113,7 +113,7 @@ final class ExtensionInstallProgressTests: XCTestCase {
         XCTAssertTrue(operation.waitForNonExistence(timeout: 5), "the card stays after it went through")
         shot(app, "installed")
 
-        // A removal that fails: where and why, and 重试 removes it.
+        // A removal that fails: where and why, and Retry removes it.
         scrollTo(remove, in: app)
         remove.tap()
         let removeConfirm = app.buttons["market-uninstall-confirm"].firstMatch

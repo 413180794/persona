@@ -12,7 +12,7 @@ struct APIErrorTests {
         #expect(ServerConfig(pairURL: "https://pair?url=https%3A%2F%2Fhub.example.com&token=fixture") == nil)
         #expect(ServerConfig(pairURL: "persona://pair?url=https%3A%2F%2Fhub.example.com&token=") == nil)
     }
-    /// An id the caller escaped (a 知识库 project slug with Chinese in it) reaches the hub once escaped, not twice (404).
+    /// An id the caller escaped (a Knowledge project slug with Chinese in it) reaches the hub once escaped, not twice (404).
     @MainActor @Test func escapedIdsAreNotEscapedAgain() throws {
         let cfg = try #require(ServerConfig(pairURL: "jarvis://pair?url=http%3A%2F%2Fhub.example.com%3A18660&token=t"))
         let api = APIClient(config: cfg)

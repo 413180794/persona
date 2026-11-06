@@ -1,6 +1,6 @@
 import XCTest
 
-/// Long-press a message: the 复制 / 选择文本 / 引用 / 分享 bar must stay up after the finger lifts, whatever the press
+/// Long-press a message: the Copy / Select Text / Quote / Share bar must stay up after the finger lifts, whatever the press
 /// length; a tap on the list or a scroll still closes it. Runs against scripts/mock/mock_hub.py:
 ///   TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests
 final class MessageMenuTests: XCTestCase {
@@ -74,7 +74,7 @@ final class MessageMenuTests: XCTestCase {
         XCTAssertTrue(bar.minX <= x && x <= bar.maxX, "the bar (\(bar.minX)–\(bar.maxX)) is not over the press at x \(x)")
     }
 
-    /// 分支到新聊天 (#2137): ⋯ at the end of a reply's bar opens a menu that stays (the list's tap-to-close must not take
+    /// Branch to New Chat (#2137): ⋯ at the end of a reply's bar opens a menu that stays (the list's tap-to-close must not take
     /// it away), and its item opens the new conversation. `TEST_RUNNER_JARVIS_SHOTS=<dir>` also saves the two screens.
     @MainActor func testForkFromAReply() throws {
         let app = try launch()

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 体检报告 (docs/health.md「体检报告」, #4998): what was uploaded to the health space's reports/. A report opens as the
+// Health Reports (docs/health.md「体检报告」, #4998): what was uploaded to the health space's reports/. A report opens as the
 // record the health conversation wrote or as the original, and deleting takes both. The web's HealthReports.
 
 /// The reports' state and what it asks the hub (MVVM, docs/ios.md「逻辑层的选型」).

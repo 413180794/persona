@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 设置 › 模型 › a launcher › 额度 (docs/launchers.md「额度」): what its key may still spend at its gateway, as a quota plugin
+/// Settings › Model › a launcher › Quota (docs/launchers.md「额度」): what its key may still spend at its gateway, as a quota plugin
 /// read it (titled with the gateway name the hub sends) —
-/// a budget on the key, each account / provider it draws on with its windows (5 小时, 每周, 每月…), and the key's own use.
+/// a budget on the key, each account / provider it draws on with its windows (5 hr, weekly, monthly…), and the key's own use.
 /// Read by the hub (a Persona launcher) or by a machine that has the launcher (a ~/.zshrc one: the key stays there).
 struct LauncherQuotaSection: View {
     @Environment(AppModel.self) private var model
@@ -155,7 +155,7 @@ enum QuotaText {
         return Theme.accent
     }
 
-    /// "已用 64%", "6401 / 10000", "$2,100 / $3,000", "已用完".
+    /// "64% used", "6401 / 10000", "$2,100 / $3,000", "Used up".
     static func amount(_ w: LauncherQuota.Window) -> String {
         if w.exhausted == true && (w.usedRatio ?? 1) >= 1 { return String(localized: "已用完") }
         switch w.unit {
@@ -183,13 +183,13 @@ enum QuotaText {
         d.timeIntervalSinceNow <= 0 ? String(localized: "已重置") : String(localized: "\(d.formatted(.dateTime.month().day().hour().minute())) 重置")
     }
 
-    /// 1.2 万, 3.4 亿.
+    /// 「1.2 万」, 「3.4 亿」 (Chinese); other languages: 12K, 340M.
     static func count(_ v: Double) -> String {
         func short(_ x: Double) -> String {
             let s = String(format: "%.1f", x)
             return s.hasSuffix(".0") ? String(s.dropLast(2)) : s
         }
-        // 万 / 亿 grouping is Chinese; other UI languages use the locale's compact notation (12K, 1.2万).
+        // 「万」 / 「亿」 grouping is Chinese; other UI languages use the locale's compact notation (12K, 「1.2万」).
         if Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == false, abs(v) >= 1e4 {
             return v.formatted(.number.precision(.fractionLength(0...1)).notation(.compactName))
         }

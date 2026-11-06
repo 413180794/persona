@@ -54,7 +54,7 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
             .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.82)))
     }
 
-    /// #2823: a search reads on into pages not loaded yet (the fixture has 83 chats, 60 a page: 会话 75 is on the
+    /// #2823: a search reads on into pages not loaded yet (the fixture has 83 chats, 60 a page: 「会话 75」 is on the
     /// second), and one that matches nothing says so instead of leaving the page blank.
     @MainActor func testSearchReadsOnIntoLaterPagesAndSaysWhenNothingMatches() async throws {
         let app = try await open()

@@ -1,7 +1,7 @@
 import Testing
 @testable import Jarvis
 
-/// 设置 › Claude Code / Codex options read in words, not their raw values (#3835).
+/// Settings › Claude Code / Codex options read in words, not their raw values (#3835).
 struct AgentSettingOptionsTests {
     // Every enum option the node lists (claudeconfig.go, codexconfig.go, codex_effort.go).
     private let options: [String: [String]] = [

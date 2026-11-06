@@ -4,7 +4,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// Whether the clipboard holds pictures the composer has not offered yet (#4573): asked with
-/// `hasImages`, which reads no content and so shows no 允许粘贴 prompt. A copy made while the app is in the background
+/// `hasImages`, which reads no content and so shows no Allow Paste prompt. A copy made while the app is in the background
 /// is seen when it comes back.
 @MainActor @Observable final class PasteboardImages {
     static let shared = PasteboardImages()
@@ -42,8 +42,8 @@ import UniformTypeIdentifiers
     }
 }
 
-/// 粘贴 over a focused composer while the clipboard holds a picture (copied in Safari, Photos, 飞书, or a screenshot's
-/// 拷贝): one tap attaches it, as Signal and Telegram offer. The text field itself only pastes text.
+/// Paste over a focused composer while the clipboard holds a picture (copied in Safari, Photos, Lark, or a screenshot's
+/// Copy): one tap attaches it, as Signal and Telegram offer. The text field itself only pastes text.
 struct PasteImageChip: View {
     var focused: Bool
     var attach: (UIImage) -> Void
@@ -52,7 +52,7 @@ struct PasteImageChip: View {
     var body: some View {
         if focused && board.offered {
             HStack(spacing: Theme.Space.s) {
-                // The system's paste button: a tap is the consent, so iOS shows no 允许粘贴 prompt.
+                // The system's paste button: a tap is the consent, so iOS shows no Allow Paste prompt.
                 PasteButton(supportedContentTypes: [.image]) { providers in
                     Task { @MainActor in
                         board.dismiss()

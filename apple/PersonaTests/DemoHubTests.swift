@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 体验模式's made-up hub (DemoHub, Resources/Demo.json): every page's request decodes into the app's models, so a
+/// Demo Mode's made-up hub (DemoHub, Resources/Demo.json): every page's request decodes into the app's models, so a
 /// model that changes shape breaks here instead of in front of App Review. DemoModeTests walks the screens.
 @MainActor struct DemoHubTests {
     private let api = APIClient(config: .demo)
@@ -78,7 +78,7 @@ import Testing
         #expect(newest.map { abs($0.timeIntervalSinceNow) < 120 } == true)
     }
 
-    /// What would reach a computer is refused with 体验模式下不会真的发送 (shown as a note, not an error).
+    /// What would reach a computer is refused with "Nothing is actually sent in demo mode" (shown as a note, not an error).
     @Test func sideEffectsAreRefused() async throws {
         let k = try #require(try await api.sessions().first { $0.assistant != true }).key
         do {

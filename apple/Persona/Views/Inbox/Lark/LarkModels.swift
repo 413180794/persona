@@ -28,7 +28,7 @@ nonisolated struct LarkConversation: Codable, Identifiable, Hashable, Sendable {
     /// Client only: the Feishu account the chat is in, sent as `ol_account` (docs/feishu.md「多账号」); nil: the hub's
     /// own. Kept in the caches.
     var account: Int?
-    /// Client only: whose account it is, shown beside 飞书 while more than one is signed in.
+    /// Client only: whose account it is, shown beside Lark while more than one is signed in.
     var accountName: String?
 
     enum CodingKeys: String, CodingKey {
@@ -89,7 +89,7 @@ nonisolated struct LarkAccount: Codable, Identifiable, Hashable, Sendable {
     var title: String { name?.isEmpty == false ? name! : String(localized: "账号 \(String(id))") }
 }
 
-/// A flagged message in 标记, with the chat it belongs to.
+/// A flagged message in Flagged, with the chat it belongs to.
 nonisolated struct LarkFlaggedMessage: Codable, Identifiable, Hashable, Sendable {
     var feedID: String
     var chatName: String
@@ -263,7 +263,7 @@ extension APIClient {
         var labels: [LarkLabel]
         enum CodingKeys: String, CodingKey { case labels; case labelIDs = "label_ids" }
     }
-    /// What to change on a chat: 已完成, 置顶, 标记, 免打扰, labels. Nil fields stay as they are.
+    /// What to change on a chat: Done, Pin, Flag, Mute, labels. Nil fields stay as they are.
     struct LarkSettings: Encodable {
         var done: Bool?
         var pinned: Bool?
@@ -287,7 +287,7 @@ extension APIClient {
     /// The accounts on the hub's Lark gateway; a hub from before there were several answers 404.
     func larkAccounts() async throws -> LarkAccounts { try await get("/api/v1/lark/accounts") }
 
-    /// One page of a feed scope: `chats` (消息), `unread`, `done` (已完成), `label:<id>`.
+    /// One page of a feed scope: `chats` (Messages), `unread`, `done` (Done), `label:<id>`.
     func larkConversations(scope: String = "chats", cursor: String? = nil) async throws -> LarkConversations {
         try await get("/api/v1/lark/conversations", query: ["scope": scope, "cursor": cursor ?? "", "limit": "60"])
     }
@@ -378,7 +378,7 @@ extension APIClient {
         try await post("/api/v1/lark/messages/\(message)/card-actions/\(action)")
     }
 
-    // MARK: People, reactions, link previews, 公司圈
+    // MARK: People, reactions, link previews, Moments
 
     func larkProfile(_ userID: String, feedID: String? = nil) async throws -> LarkProfile {
         try await get("/api/v1/lark/users/\(userID)", query: ["feed_id": feedID ?? ""])
@@ -445,7 +445,7 @@ nonisolated struct LarkProfile: Decodable, Sendable {
     var actions: [Action]?
 }
 
-/// The card Feishu shows under a link (a 公司圈 post: author, excerpt, counts).
+/// The card Feishu shows under a link (a Moments post: author, excerpt, counts).
 nonisolated struct LarkURLPreview: Decodable, Sendable {
     struct Card: Decodable, Sendable {
         var author: String?
@@ -460,7 +460,7 @@ nonisolated struct LarkURLPreview: Decodable, Sendable {
     var card: Card?
 }
 
-/// One 公司圈 post.
+/// One Moments post.
 nonisolated struct LarkMomentsPost: Decodable, Sendable {
     struct Segment: Decodable, Sendable { var kind: String?; var text: String?; var key: String?; var emojiKey: String? }
     struct Content: Decodable, Sendable { var text: String?; var segments: [Segment]? }

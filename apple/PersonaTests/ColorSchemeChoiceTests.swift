@@ -3,7 +3,7 @@ import Testing
 import UIKit
 @testable import Jarvis
 
-/// 设置 › 外观 › 深浅色 (ColorSchemeChoice, docs/ios.md「设计语言」): what it reads, and what it does to the windows.
+/// Settings › Appearance › Light & Dark (ColorSchemeChoice, docs/ios.md「设计语言」): what it reads, and what it does to the windows.
 @MainActor struct ColorSchemeChoiceTests {
     @Test func followsTheSystemUnlessPicked() {
         let d = UserDefaults.standard
@@ -25,7 +25,7 @@ import UIKit
         #expect(Set(all.map(\.title)).count == all.count && Set(all.map(\.symbol)).count == all.count)
     }
 
-    /// Every window of the scene takes it (a sheet or an alert inherits its window's), and 跟随系统 hands them back.
+    /// Every window of the scene takes it (a sheet or an alert inherits its window's), and Match System hands them back.
     @Test func setsTheWindowsAndHandsThemBack() throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)

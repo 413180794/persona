@@ -3,7 +3,7 @@ import Testing
 @testable import Jarvis
 
 /// Files dragged onto a chat's composer (docs/mac.md「细节」): pictures go into the message as images, everything else
-/// is uploaded to the session's machine and its path typed in, as the + menu's 照片 / 文件 do.
+/// is uploaded to the session's machine and its path typed in, as the + menu's Photos / Files do.
 struct MacDropTests {
     @Test func picturesBecomeImagesTheRestUploads() {
         let urls = ["/a/shot.png", "/a/photo.JPG", "/a/live.heic", "/a/scan.tiff", "/a/notes.md", "/a/data.zip", "/a/dir"]

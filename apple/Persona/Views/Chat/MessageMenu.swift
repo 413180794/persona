@@ -4,7 +4,7 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 #endif
 
-/// WeChat-style message actions: long-press a message and a dark bar with 复制 / 选择文本 / 引用 / 分享 (and 编辑 for your
+/// WeChat-style message actions: long-press a message and a dark bar with Copy / Select Text / Quote / Share (and Edit for your
 /// own messages) appears right where you pressed — no lifted preview first. Tapping anywhere or scrolling closes it.
 @Observable
 final class MessageMenu {
@@ -20,21 +20,21 @@ final class MessageMenu {
     @ObservationIgnored var source: () -> String = { "" }
     /// Who answers in this chat ("Claude" / "Codex" / "TRAEX"), for share cards.
     @ObservationIgnored var agent: () -> String = { "Claude" }
-    /// 引用: the message's text, its id, and whether it is the user's own.
+    /// Quote: the message's text, its id, and whether it is the user's own.
     @ObservationIgnored var quote: ((String, String, Bool) -> Void)?
     /// A message dragged to the left is quoted (Telegram's reply, #1058): Agents chats. The assistant's pages sit in
     /// the shell's pager, whose own sideways swipe this would take. Observed: the chat turns it on as it appears, after
     /// its first rows may have been drawn without it (they never got the drag, now and then).
     var swipeQuotes = false
     @ObservationIgnored var edit: ((String) -> Void)?
-    /// 分支到新聊天 (#2137): a new conversation from the reply with this item id. canFork: the chat's session can.
+    /// Branch to New Chat (#2137): a new conversation from the reply with this item id. canFork: the chat's session can.
     @ObservationIgnored var fork: ((String) -> Void)?
     @ObservationIgnored var canFork: () -> Bool = { false }
-    /// 回退到这里 (#2915) on your own message: (item id, its text, what to restore). rewindBlock: nil when the chat's
+    /// Rewind to Here (#2915) on your own message: (item id, its text, what to restore). rewindBlock: nil when the chat's
     /// session never offers it, else why it is off now ("" when on).
     @ObservationIgnored var rewind: ((String, String, Rewind.Restore) -> Void)?
     @ObservationIgnored var rewindBlock: () -> String? = { nil }
-    /// The message of yours whose 回退 was tapped: the chat asks what to restore (a dialog of the page, like `more`).
+    /// The message of yours whose Rewind was tapped: the chat asks what to restore (a dialog of the page, like `more`).
     var rewinding: RewindAsk?
     /// The reply whose ⋯ was tapped: the chat shows its menu (a dialog of the page, not of the bar, which the list's
     /// tap-to-close takes away with the same tap).
@@ -354,12 +354,12 @@ struct MessageActionBar: View {
     static func count(id: String, isUser: Bool, menu: MessageMenu) -> Int {
         (isUser ? 5 : 4) + (forks(id: id, isUser: isUser, menu: menu) ? 1 : 0) + (rewinds(id: id, isUser: isUser, menu: menu) ? 1 : 0)
     }
-    /// Your own message ends in 回退 when the chat's session is a Claude agent's and the message is a transcript line
+    /// Your own message ends in Rewind when the chat's session is a Claude agent's and the message is a transcript line
     /// of its own (`<uuid>#<n>`); while the session cannot, the dialog says why.
     static func rewinds(id: String, isUser: Bool, menu: MessageMenu) -> Bool {
         isUser && menu.rewind != nil && menu.rewindBlock() != nil && Rewind.entry(of: id) != nil
     }
-    /// A reply ends in ⋯ with 分支到新聊天 when the session can fork and the reply is a Claude transcript line of its
+    /// A reply ends in ⋯ with Branch to New Chat when the session can fork and the reply is a Claude transcript line of its
     /// own (`<uuid>#<n>`).
     static func forks(id: String, isUser: Bool, menu: MessageMenu) -> Bool {
         guard !isUser, menu.fork != nil, menu.canFork(), let line = id.split(separator: "#").first, id.contains("#") else { return false }
@@ -372,7 +372,7 @@ struct MessageActionBar: View {
                 UIPasteboard.general.string = text
                 Haptics.success()
             }
-            // 「选择文本」, not「选择」: next to 复制 a bare 选择 reads as picking messages (WeChat's 多选).
+            // "Select Text", not "Select": next to Copy a bare Select reads as picking messages (WeChat's multi-select).
             action(String(localized: "选择文本"), Theme.Icon.select) { menu.selecting = SelectableText(text: text, plain: isUser) }
             action(String(localized: "引用"), "quote.opening") { menu.quote?(text, id, isUser) }
             action(String(localized: "分享"), "square.and.arrow.up") {
@@ -407,7 +407,7 @@ struct MessageActionBar: View {
         VStack(spacing: Theme.Space.xs) {
             // Symbols differ in height: a fixed box keeps every label on one line.
             Image(systemName: symbol).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(height: Theme.Size.iconS)
-            Text(title).font(Theme.Font.label).lineLimit(1).minimumScaleFactor(0.8) // 选择文本 on a narrow bar
+            Text(title).font(Theme.Font.label).lineLimit(1).minimumScaleFactor(0.8) // Select Text on a narrow bar
         }
         .foregroundStyle(.white)
         .frame(width: itemWidth, height: Self.height)
@@ -417,7 +417,7 @@ struct MessageActionBar: View {
 
 /// The message in a text view where any part of it can be selected and copied (「选择文本」). On iOS a reply reads as in
 /// the chat, without the Markdown marks (`SelectableMarkdown`); your own message stays as you wrote it, as its bubble
-/// shows it (`plain`). 全部拷贝 copies the message as 复制 does.
+/// shows it (`plain`). Copy All copies the message as Copy does.
 struct SelectableTextSheet: View {
     @Environment(\.dismiss) private var dismiss
     var text: String

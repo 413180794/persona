@@ -117,7 +117,7 @@ final class DrawerSwipeTests: XCTestCase {
     }
 
     /// The tab bar fades away while the sidebar is out (it is not hidden: that would lay the page out again) and is
-    /// back, tappable, once it is in — also when the sidebar's own 设置 switched tabs.
+    /// back, tappable, once it is in — also when the sidebar's own Settings switched tabs.
     @MainActor func testTabBarFadesAndComesBack() throws {
         let app = launch(main)
         let agents = app.tabBars.buttons["Agents"]
@@ -125,9 +125,9 @@ final class DrawerSwipeTests: XCTestCase {
         drag(app, from: point(app, 0.3, 0.5), dx: 220, dy: 20)
         XCTAssertTrue(isOpen(app))
         XCTAssertFalse(agents.isHittable, "the tab bar is still there over the sidebar")
-        // The sidebar's 设置, at the right of its foot (the tab bar's 设置 under it is faded away).
+        // The sidebar's Settings, at the right of its foot (the tab bar's Settings under it is faded away).
         // (Its own identifier is the sidebar's: the container's wins.) Inside the sidebar's width, not the tab bar's.
-        let edge = app.windows.firstMatch.frame.width * 0.85 // the sidebar is most of the width; the tab bar's 设置 is at its far right
+        let edge = app.windows.firstMatch.frame.width * 0.85 // the sidebar is most of the width; the tab bar's Settings is at its far right
         let settings = app.buttons.matching(NSPredicate(format: "label == '设置'")).allElementsBoundByIndex
             .first { $0.frame.maxX <= edge + 1 && $0.isHittable }
         XCTAssertNotNil(settings, "the sidebar's 设置 is covered:\n\(app.debugDescription)")

@@ -54,7 +54,7 @@ nonisolated enum ScreenCredentials {
     static func forgetAll() { SecItemDelete(query(nil) as CFDictionary) }
 }
 
-/// 一键解锁 for a Mac on this device (#1507 a-2): off unless turned on here, and only while its sign-in is kept, which
+/// One-Tap Unlock for a Mac on this device (#1507 a-2): off unless turned on here, and only while its sign-in is kept, which
 /// is the Mac account's password the live screen types on its lock screen after Face ID (or the device passcode).
 nonisolated enum ScreenUnlock {
     private static let key = "screen.oneTapUnlock"
@@ -82,7 +82,7 @@ nonisolated enum ScreenUnlock {
     }
 }
 
-/// 忘记屏幕共享密码, next to VNC while this device remembers the Mac's sign-in: the live screen asks for it again.
+/// Forget Screen Sharing Password, next to VNC while this device remembers the Mac's sign-in: the live screen asks for it again.
 struct ScreenForgetButton: View {
     let ref: MachineRef
     @Binding var kept: Bool

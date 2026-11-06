@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import Jarvis
 
-/// 编辑 › 查找… ⌘F: the window's search field (a page's `.searchable`, which AppKit shows as a toolbar search item or a
+/// Edit › Find… ⌘F: the window's search field (a page's `.searchable`, which AppKit shows as a toolbar search item or a
 /// field in the page) takes the keyboard. The pages are not touched one by one.
 @MainActor
 struct MacFindTests {
@@ -36,7 +36,7 @@ struct MacFindTests {
         #expect(!MacFind.focusSearch(in: w))
     }
 
-    // A view with its own find (the code viewer, `MacFindable`) is wired into the same 查找… ⌘F.
+    // A view with its own find (the code viewer, `MacFindable`) is wired into the same Find… ⌘F.
 
     @Test func aFindableWithTheKeyboardOpensItsFind() {
         let w = window()
@@ -88,7 +88,7 @@ struct MacFindTests {
         #expect(code.steps.isEmpty)
     }
 
-    // 查找下一个 ⌘G / 查找上一个 ⇧⌘G go to the same view 查找… would open.
+    // Find Next ⌘G / Find Previous ⇧⌘G go to the same view Find… would open.
 
     @Test func findNextGoesToTheFindableWithTheKeyboard() {
         let w = window()

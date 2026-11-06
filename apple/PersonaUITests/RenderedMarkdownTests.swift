@@ -31,7 +31,7 @@ final class RenderedMarkdownTests: XCTestCase {
     }
 
     @MainActor func testChatDrawsFormulasAndDiagram() {
-        launch([], session: "a1f3c2d4-0000-4000-8000-000000000008") // 整理发布说明: its last turn
+        launch([], session: "a1f3c2d4-0000-4000-8000-000000000008") // 「整理发布说明」: its last turn
         let diagram = app.descendants(matching: .any)["rendered-mermaid"]
         let drawn = diagram.waitForExistence(timeout: 30)
         shot("chat-first")

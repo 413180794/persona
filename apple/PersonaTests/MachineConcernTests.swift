@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The order of 机器 (docs/machines.md「App」): what needs a look first, otherwise the hub's order.
+/// The order of Machines (docs/machines.md「App」): what needs a look first, otherwise the hub's order.
 @MainActor struct MachineConcernTests {
     private func machine(_ id: String, online: Bool = true, mismatch: Bool? = nil) -> Machine {
         Machine(id: id, name: id, kind: "ssh", online: online, nodeMismatch: mismatch)

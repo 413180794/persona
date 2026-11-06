@@ -53,7 +53,7 @@ import UIKit
         await settle()
         #expect(seen.scheme == .light, "a light window, the page's environment still dark: the sidebar drew \(String(describing: seen.scheme))")
 
-        // The window changes look (the system's, or 设置 › 外观 › 深浅色): the sidebar follows without any page update.
+        // The window changes look (the system's, or Settings › Appearance › Light & Dark): the sidebar follows without any page update.
         window.overrideUserInterfaceStyle = .dark
         window.layoutIfNeeded()
         await settle()

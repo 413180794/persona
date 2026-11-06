@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A thread: its first message, then the replies. Opens on the latest page; older pages come with 加载更早的回复
-/// (like the chat's 加载更早的消息), and a change in the chat while it is open brings the newest replies in.
+/// A thread: its first message, then the replies. Opens on the latest page; older pages come with Load earlier replies
+/// (like the chat's Load Earlier Messages), and a change in the chat while it is open brings the newest replies in.
 /// The box at the bottom replies in the thread: the reply shows at once, goes out in the background, can be sent
 /// again when it fails, and the newest page comes in once it is sent.
 struct LarkThreadView: View {
@@ -11,12 +11,12 @@ struct LarkThreadView: View {
     var root: LarkMessage
     var isGroup = true
     var feedID: String? = nil
-    /// Opened by 回复 on a topic group's thread: the box is focused.
+    /// Opened by Reply on a topic group's thread: the box is focused.
     var focusBox = false
     var pinTarget: LarkChatPinTarget? = nil
     var pinAPI: APIClient? = nil
     private var api: APIClient? { pinAPI ?? model.api?.lark(account) }
-    /// Opened from a topic group's card: 话题详情, 来自 <the group> (the Lark gateway's topic page).
+    /// Opened from a topic group's card: Topic Details, From <the group> (the Lark gateway's topic page).
     var chatName: String? = nil
     @State private var person: LarkPersonRef?
     /// The replies loaded so far (never the root) and where paging stands (LarkPager).
@@ -94,7 +94,7 @@ struct LarkThreadView: View {
                                                  copies: copies, adopted: adopted)
                     ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                         let m = row.message
-                        // The first loaded reply's time counts from the root's (under the 条回复 line); it does not
+                        // The first loaded reply's time counts from the root's (under the "N replies" line); it does not
                         // join the root, one of mine on its way can.
                         let prev = i > 0 ? rows[i - 1].message : root
                         let grouped = (i > 0 || row.outgoing != nil) && LarkChatLayout.continues(m, after: prev)
@@ -208,7 +208,7 @@ struct LarkThreadView: View {
     /// This thread's pictures and files on their way (in the chat's queue).
     private var queued: [LarkOutgoing] { chatOutbox?.items.filter { $0.thread && $0.threadRoot == root.id } ?? [] }
 
-    /// Under the 条回复 line while there are no replies to show: loading, none yet, or what went wrong with 重试
+    /// Under the "N replies" line while there are no replies to show: loading, none yet, or what went wrong with Retry
     /// (the chat page's states; BeautifulUI draws its own).
     @ViewBuilder private func placeholder(_ state: LarkChatPlaceholder) -> some View {
         switch state {
@@ -297,7 +297,7 @@ struct LarkThreadView: View {
         }
     }
 
-    /// 重发 a queued picture or file: the thread's newest replies first, so one that went out is not sent twice.
+    /// Resend a queued picture or file: the thread's newest replies first, so one that went out is not sent twice.
     private func resendQueued(_ id: UUID) {
         guard !checkingQueued.contains(id), let queue = chatOutbox, let api, let feed = feedID else { return }
         checkingQueued.insert(id)
@@ -323,7 +323,7 @@ struct LarkThreadView: View {
         }
     }
 
-    /// 放回输入框: the picture or file back among the picked ones, out of the queue.
+    /// Back to Composer: the picture or file back among the picked ones, out of the queue.
     private func putBack(_ o: LarkOutgoing) {
         guard let attachment = o.attachment, attachments.count < LarkAttachment.selectionLimit else { return }
         Task {
@@ -396,7 +396,7 @@ struct LarkThreadView: View {
     }
 }
 
-/// 话题 for a thread in a chat; a topic group's topic is 话题详情 with the group it is from under it.
+/// Topic for a thread in a chat; a topic group's topic is Topic Details with the group it is from under it.
 private struct LarkThreadTitle: ViewModifier {
     var chatName: String?
 

@@ -1,7 +1,7 @@
 import Testing
 @testable import Jarvis
 
-/// The chat page's 终端 | 对话 on the Mac (#3183): the terminal mounts the first time it shows and stays mounted while
+/// The chat page's Terminal | Chat on the Mac (#3183): the terminal mounts the first time it shows and stays mounted while
 /// the chat shows, so coming back to it does not connect again.
 struct TerminalChatSwitchTests {
     @Test func theTerminalMountsWhenFirstShownAndStaysUnderTheChat() {

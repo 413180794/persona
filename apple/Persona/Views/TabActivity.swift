@@ -4,7 +4,7 @@ import SwiftUI
 // reports (docs/ios.md「只在前台做的事」).
 //
 // The system TabView takes a tab out of the window when another is picked: its onDisappear runs and its tasks are
-// cancelled. The shell's two pages (助手, Agents) are both kept in the window and only made transparent, so nothing
+// cancelled. The shell's two pages (Assistant, Agents) are both kept in the window and only made transparent, so nothing
 // stops a hidden page's polling or its read reports. They key off `tabIsActive` as well: they run while the view is in
 // the window *and* its page is in front. Under the system TabView this is what happens already (the two change
 // together), and a hidden tab that the system briefly puts back in the window no longer restarts its work.

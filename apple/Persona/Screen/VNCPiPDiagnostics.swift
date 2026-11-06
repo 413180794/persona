@@ -2,7 +2,7 @@
 import AVKit
 import SwiftUI
 
-/// 小窗诊断 (#1839; VNC page › …): whether this device can show the small window and what it did, step by step, so a
+/// Picture in Picture Diagnostics (#1839; VNC page › …): whether this device can show the small window and what it did, step by step, so a
 /// phone whose small window does not come up says where it stopped. 「复制全部」 is what to send.
 struct VNCPiPDiagnostics: View {
     @Environment(AppModel.self) private var model

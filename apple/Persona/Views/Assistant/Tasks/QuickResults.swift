@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Things the assistant did on the phone in a second (docs/unified-entry.md「派发」, 秒办): a reminder or an event it added
-// is drawn as its result under the turn's work line, with 撤销, instead of hiding in 「工具 N」.
+// Things the assistant did on the phone in a second (docs/unified-entry.md「派发」, done in a second): a reminder or an event it added
+// is drawn as its result under the turn's work line, with Undo, instead of hiding in "Tools N".
 
 /// A reminder or an event a tool call added, read from the call's result.
 nonisolated struct QuickResult: Hashable, Sendable {
@@ -69,7 +69,7 @@ extension ChatLines {
     }
 }
 
-/// 已加提醒 / 已加到日历, what and when, and 撤销 (it is taken off the phone; the line says so).
+/// Added Reminder / Added to Calendar, what and when, and Undo (it is taken off the phone; the line says so).
 struct QuickResultCard: View {
     var result: QuickResult
     private var store: TasksStore { .shared }
@@ -113,7 +113,7 @@ struct QuickResultCard: View {
         return parts.joined(separator: " · ")
     }
 
-    /// "今天 18:00", "明天 9:30", "周六 10:00", "11月12日 14:00".
+    /// "Today 18:00", "Tomorrow 9:30", "Sat 10:00", "Nov 12 14:00".
     static func when(_ date: Date, allDayish: Bool = false, now: Date = .now) -> String {
         let cal = Calendar.current
         let time = date.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
@@ -128,7 +128,7 @@ struct QuickResultCard: View {
 
 // MARK: - Kinds that start without asking
 
-/// 直接开的任务: the kinds remembered with 这类以后直接开, each removable (it asks again next time).
+/// Auto-Start Tasks: the kinds remembered with Start These Directly, each removable (it asks again next time).
 struct TaskTrustView: View {
     @State private var kinds: [APIClient.TrustKind]?
     @State private var error: String?

@@ -34,7 +34,7 @@ final class WatchModel {
     var groups: [String] { configs.keys.sorted { ($0.isEmpty ? 0 : 1, $0) < ($1.isEmpty ? 0 : 1, $1) } }
     var sessions: [Session] = []
     var interactions: [Interaction] = []
-    /// The inbox's 需要你 (Feishu messages, mail and connectors' items the AI says need the user), newest first.
+    /// The inbox's Needs You (Feishu messages, mail and connectors' items the AI says need the user), newest first.
     var inbox: [InboxItem] = []
     var machines: [Machine] = []
     var error: String?
@@ -63,7 +63,7 @@ final class WatchModel {
         }
         #if DEBUG
         if let s = UserDefaults.standard.string(forKey: "pairURL"), let c = ServerConfig(pairURL: s) { configs = ["": c] }
-        // `-showWatchMissing 公司,家里`: those groups have no credential for the watch (#1185); `""`: the default group,
+        // `-showWatchMissing Office,Home`: those groups have no credential for the watch (#1185); `""`: the default group,
         // none at all without -pairURL.
         if let s = UserDefaults.standard.string(forKey: "showWatchMissing") {
             missing = s.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
@@ -272,9 +272,9 @@ struct WatchRootView: View {
     #if DEBUG
     @State private var openedInteraction: Interaction?
     @State private var openedSession: Session?
-    /// `-openWatchItem running`: the list without 需要你, so the running sessions are on screen (screenshots).
+    /// `-openWatchItem running`: the list without Needs You, so the running sessions are on screen (screenshots).
     private static let runningFirst = UserDefaults.standard.string(forKey: "openWatchItem") == "running"
-    /// `-openWatchItem inbox`: 需要你 without the agents' requests, so the inbox rows are on screen (screenshots).
+    /// `-openWatchItem inbox`: Needs You without the agents' requests, so the inbox rows are on screen (screenshots).
     private static let inboxFirst = UserDefaults.standard.string(forKey: "openWatchItem") == "inbox"
     #else
     private static let runningFirst = false
@@ -492,7 +492,7 @@ struct WatchInteractionView: View {
                                     if (interaction.questions ?? []).count == 1 { submit() }
                                 }
                             } label: {
-                                // One line, like every button: "(Recommended)" becomes the 推荐 tag the phone shows.
+                                // One line, like every button: "(Recommended)" becomes the Recommended tag the phone shows.
                                 let (text, recommended) = QuestionOption.display(opt.label)
                                 HStack(spacing: Theme.Space.sm) {
                                     Text(text).font(.footnote).lineLimit(1).minimumScaleFactor(0.8)
@@ -742,7 +742,7 @@ struct WatchPairView: View {
     }
 }
 
-/// 从 iPhone 同步: asks the phone for the watch's credentials (it tries the hub again for the ones it has not got).
+/// Sync from iPhone: asks the phone for the watch's credentials (it tries the hub again for the ones it has not got).
 struct WatchSyncButton: View {
     @Environment(WatchModel.self) private var model
     @State private var syncing = false
@@ -774,9 +774,9 @@ struct WatchSyncButton: View {
     }
 }
 
-// MARK: - 收件箱
+// MARK: - Inbox
 
-/// One inbox item in 需要你: where it came from, the title, the AI's summary. A connector's item says its source and
+/// One inbox item in Needs You: where it came from, the title, the AI's summary. A connector's item says its source and
 /// the label its connector gave it (the hub's words, not the watch's), with the inbox's own symbol: no source's logo.
 struct WatchInboxRow: View {
     var item: InboxItem
@@ -804,8 +804,8 @@ struct WatchInboxRow: View {
     }
 }
 
-/// An inbox item on the wrist: the summary and the latest message; AI 回复 drafts a reply to read and send,
-/// 已处理 files it. A connector's item is read-only here (its reply goes through its own thread on the phone).
+/// An inbox item on the wrist: the summary and the latest message; AI Reply drafts a reply to read and send,
+/// Done files it. A connector's item is read-only here (its reply goes through its own thread on the phone).
 struct WatchInboxItemView: View {
     @Environment(WatchModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -864,12 +864,12 @@ struct WatchInboxItemView: View {
             }
         }
         .navigationTitle(item.title)
-        .onAppear { if draft == nil { draft = item.agentDraft } } // the AI 分身's, ready to send
+        .onAppear { if draft == nil { draft = item.agentDraft } } // the AI twin's, ready to send
     }
 }
 
 private extension Error {
-    /// The watch has no connection title (the phone's 等待网络 / 连接中…): no network is still worth a line here.
+    /// The watch has no connection title (the phone's Waiting for Network / Connecting…): no network is still worth a line here.
     var watchShown: String? { isOffline ? localizedDescription : shown }
 }
 

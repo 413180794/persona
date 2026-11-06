@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 手表录音独立于 hub 连接：没有网络也可以先保存，回到手机旁再回传。
+/// Watch recording does not depend on the hub connection: it saves without a network and sends back once near the phone.
 struct WatchRecordingView: View {
     @State private var capture = RecordingCapture.shared
     @State private var library = RecordingLibrary.shared

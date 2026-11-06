@@ -117,7 +117,7 @@ struct MailDetailView: View {
     @State private var reply: ComposeDraft?
     @State private var askClaude = false
     @State private var webHeight: CGFloat = 300
-    /// 设置 › 翻译: the mail in the target language (shown instead of the original until 显示原文).
+    /// Settings › Translation: the mail in the target language (shown instead of the original until Show Original).
     @State private var translation: MailTranslation?
     @State private var showOriginal = false
     @State private var translating = false
@@ -233,7 +233,7 @@ extension MailDetailView {
         }
     }
 
-    /// 设置 › 翻译 is on for mail and this one is in another language: ask the hub.
+    /// Settings › Translation is on for mail and this one is in another language: ask the hub.
     func translateIfNeeded(_ m: MailMessage) async {
         guard TranslationPrefs.translatesMail, translation == nil else { return }
         let body = m.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? m.text! : MailText.stripped(m.html ?? "")
@@ -261,7 +261,7 @@ nonisolated enum MailText {
     }
 }
 
-/// New chat sheet with the first message filled in (used by mail's "让 Claude 处理").
+/// New chat sheet with the first message filled in (used by mail's "Ask Claude").
 struct NewChatPrefilled: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -422,7 +422,7 @@ struct MailAccountsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var accounts: [MailAccount] = []
     @State private var adding = false
-    /// A sheet of its own (with 完成), or a page pushed in 设置 › 连接器 › 邮箱.
+    /// A sheet of its own (with Done), or a page pushed in Settings › Connectors › Mail.
     var inSheet = true
 
     var body: some View {
@@ -479,7 +479,7 @@ struct MailAccountsView: View {
     private func load() async { accounts = (try? await model.api?.mailAccounts()) ?? [] }
 }
 
-/// An account's provider: Gmail's and 飞书's own marks, an envelope for any other IMAP server.
+/// An account's provider: Gmail's and Lark's own marks, an envelope for any other IMAP server.
 struct MailProviderMark: View {
     var provider: String
 

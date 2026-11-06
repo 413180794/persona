@@ -62,7 +62,7 @@ struct SiriIntentsTests {
         #expect(PersonalAgentIntentText.name(title: " ", id: "ob:x") == "ob:x")
     }
 
-    // MARK: 新建待办
+    // MARK: New To-Do
 
     @Test func addTodoPostsTrimmedTitleAndNotes() async throws {
         let hub = FakeHub()

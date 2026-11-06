@@ -45,7 +45,7 @@ struct PushCryptoTests {
         #expect(content.title == "Claude 在问你")
         #expect(content.subtitle == "重构 · 笔记本")
         #expect(content.body == "要继续吗？")
-        #expect(content.categoryIdentifier == "INTERACTION_QUESTION") // the 允许 / 拒绝 buttons
+        #expect(content.categoryIdentifier == "INTERACTION_QUESTION") // the Allow / Deny buttons
         #expect(content.threadIdentifier == "s1")
         // What a tap or a button reads (AppDelegate.sessionKey, resolveFromNotification); the sealed blob is gone.
         #expect(content.userInfo["interaction_id"] as? String == "ix1")

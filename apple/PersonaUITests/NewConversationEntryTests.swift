@@ -1,6 +1,6 @@
 import XCTest
 
-/// Starting a Persona conversation from another page (收件箱 › 交给 AI) opens it on the message as sent, not on 还没有消息
+/// Starting a Persona conversation from another page (Inbox › Hand to AI) opens it on the message as sent, not on No messages yet
 /// until claude has written its transcript; once it has, the message is there once (#511, #527). Against
 /// scripts/mock/mock_hub.py with MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 (JARVIS_MOCK_HUB): the mock answers the start
 /// request at once and writes the first line that much later, as the node does.

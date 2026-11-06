@@ -1,22 +1,22 @@
 import SwiftUI
 
-/// Pushes 设置 › 模型 (value-based, like the other settings pages).
+/// Pushes Settings › Model (value-based, like the other settings pages).
 struct ModelLaunchersRoute: Hashable {}
 /// One launcher's page.
 struct ModelLauncherRoute: Hashable { var name: String }
 
-/// 设置 › 模型 (docs/launchers.md): every launcher the machines can start — added here (Persona keeps the gateway, model
+/// Settings › Model (docs/launchers.md): every launcher the machines can start — added here (Persona keeps the gateway, model
 /// and key) or found in a machine's ~/.zshrc (synced each time this opens) — and the hidden ones.
 struct ModelLaunchersView: View {
     @Environment(AppModel.self) private var model
     @State private var launchers: [LauncherView]?
     @State private var error: String?
-    /// The provider sheet, at its first step (新增) or at 从 ~/.zshrc 导入; nil: closed.
+    /// The provider sheet, at its first step (Add) or at Import from ~/.zshrc; nil: closed.
     @State private var adding: ProviderWizardStep?
     @State private var query = ""
-    /// 已隐藏 starts folded (2026-11-01): they are hidden for a reason. A search shows them anyway.
+    /// Hidden starts folded (2026-11-01): they are hidden for a reason. A search shows them anyway.
     @State private var showHidden = false
-    /// A Persona launcher swiped to 删除, waiting for the confirmation.
+    /// A Persona launcher swiped to Delete, waiting for the confirmation.
     @State private var pendingDelete: LauncherView?
 
     /// Name, model, gateway host, or a machine's name.
@@ -118,10 +118,10 @@ struct ModelLaunchersView: View {
             if debugOldEditor { LauncherEditor(existing: nil) {} } else { ProviderWizard(start: step) }
         }
         #if os(macOS) && DEBUG
-        .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = .pick } } // `-macLauncherEditor YES`: 新增启动器
+        .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = .pick } } // `-macLauncherEditor YES`: Add Launcher
         #endif
         #if DEBUG
-        // `-openLauncherEditor YES` opens the form 其他接入方式 leads to, `-openLauncherEditor preset` on 从扩展添加;
+        // `-openLauncherEditor YES` opens the form Other Connection Types leads to, `-openLauncherEditor preset` on From Extension;
         // `-openProviderWizard pick|connect|models|import` the provider sheet at that step.
         .onAppear {
             if UserDefaults.standard.string(forKey: "openLauncherEditor") != nil { adding = .pick }
@@ -271,7 +271,7 @@ struct ModelLauncherDetailView: View {
     @State private var editing = false
     @State private var confirmDelete = false
     @State private var showDefinition = false
-    /// 测试可用性: per machine, running (nil) or done.
+    /// Test Availability: per machine, running (nil) or done.
     @State private var checks: [String: LauncherCheck?] = [:]
     /// What plugins draw on this page (docs/extensions.md「声明式 UI」), and the link one of them opens.
     @State private var pluginSections: ExtensionLauncherModel?
@@ -387,7 +387,7 @@ struct ModelLauncherDetailView: View {
             }
         }
         .sheet(isPresented: $editing) {
-            // A Responses API keeps the older form; a Claude Code provider (or a Messages one) the wizard, at 连接.
+            // A Responses API keeps the older form; a Claude Code provider (or a Messages one) the wizard, at Connect.
             if launcher?.kind == "api" && launcher?.api == "responses" {
                 LauncherEditor(existing: launcher) { await load() }
             } else {
@@ -515,9 +515,9 @@ struct LauncherEditor: View {
     @State private var auth = "api_key"
     @State private var saving = false
     @State private var error: String?
-    /// The fields as the sheet opened: 取消 asks first once they differ (Mac).
+    /// The fields as the sheet opened: Cancel asks first once they differ (Mac).
     @State private var opened: [String]?
-    /// 从扩展添加: the providers the hub's plugins offer (only when adding, and only when there are some).
+    /// From Extension: the providers the hub's plugins offer (only when adding, and only when there are some).
     @State private var presets = LauncherPresetModel()
     @State private var fromExtension = false
 
@@ -590,7 +590,7 @@ struct LauncherEditor: View {
         #endif
     }
 
-    /// 自己填写: the name, the kind, the gateway and key, the models, the flags.
+    /// Manual: the name, the kind, the gateway and key, the models, the flags.
     @ViewBuilder private var manualSections: some View {
         Section {
             TextField("名字，比如 jv_strong", text: $name)

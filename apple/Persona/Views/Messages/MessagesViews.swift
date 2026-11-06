@@ -1,7 +1,7 @@
 import SwiftUI
 
-// 设置 › 连接器 › 信息: one Mac's Messages, read through the hub (docs/plan-connectors.md「五」). The user reads every
-// conversation here; 交给 Persona (on by default) also gives the real ones to the knowledge base, the inbox and the
+// Settings › Connectors › Messages: one Mac's Messages, read through the hub (docs/plan-connectors.md「五」). The user reads every
+// conversation here; Hand to Persona (on by default) also gives the real ones to the knowledge base, the inbox and the
 // assistant, and can be turned off, and what the hub kept deleted. Nothing is marked read, nothing is sent.
 
 struct MessagesChatsRoute: Hashable {}
@@ -337,7 +337,7 @@ struct MessagesLine: Identifiable {
     }
 }
 
-/// The time between messages: 今天 08:00, 昨天 21:30, 星期三 09:12, 10月21日 18:00, 2025年10月21日 18:00.
+/// The time between messages: Today 08:00, Yesterday 21:30, Wednesday 09:12, Oct 21 18:00, Oct 21, 2025 18:00.
 nonisolated enum MessagesTime {
     static func separator(_ d: Date, now: Date = .now) -> String {
         let cal = Calendar.current

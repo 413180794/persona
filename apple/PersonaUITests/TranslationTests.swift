@@ -1,8 +1,8 @@
 import XCTest
 
-/// 设置 › 翻译 (docs/ios.md「翻译」): with it on, a mail in another language opens translated with 显示原文 to go back;
+/// Settings › Translation (docs/ios.md「翻译」): with it on, a mail in another language opens translated with Show Original to go back;
 /// a Feishu chat picked there gets translations under others' foreign messages, and no other chat does. Against
-/// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): mail 504 is in English, the 设计评审 chat (f2) has English messages.
+/// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): mail 504 is in English, the 「设计评审」 chat (f2) has English messages.
 final class TranslationTests: XCTestCase {
     private var hub: String!
 

@@ -3,7 +3,7 @@ import SwiftUI
 /// The newest replies of a topic group's topics, shown on their cards as the Lark gateway does (#1087). A topic's are read
 /// when its card comes on screen, `parallel` topics at a time (a screen holds a dozen cards, and the hub passes each
 /// read on to the Lark gateway), and kept with the reply count they were read at: a topic is read again only when its count
-/// changes (also while it is being read), or after a read failed: on 重试, or when its card comes on screen again.
+/// changes (also while it is being read), or after a read failed: on Retry, or when its card comes on screen again.
 @MainActor @Observable
 final class LarkTopicReplies {
     /// The newest replies of one topic, oldest first, and the reply count they were read at.
@@ -39,8 +39,8 @@ final class LarkTopicReplies {
         return (replies, max(0, count - replies.count))
     }
 
-    /// A reply's line on its topic's card, shown and read out alike: a recalled one only with 防撤回 on and its content
-    /// kept, then marked 已撤回, as a chat's row shows it (`LarkMessageDisplay.showsBody`); an encrypted one by its cover,
+    /// A reply's line on its topic's card, shown and read out alike: a recalled one only with Keep Recalled Messages on and its content
+    /// kept, then marked Recalled, as a chat's row shows it (`LarkMessageDisplay.showsBody`); an encrypted one by its cover,
     /// as the Lark gateway's card.
     static func line(of reply: LarkMessage, display: LarkMessageDisplay) -> String {
         guard display.showsBody(of: reply) else { return String(localized: "消息已撤回") }
@@ -62,7 +62,7 @@ final class LarkTopicReplies {
         next()
     }
 
-    /// 重试 after a read failed.
+    /// Retry after a read failed.
     func retry(_ topic: LarkMessage) {
         previews[topic.id]?.failed = false
         previews[topic.id]?.count = -1

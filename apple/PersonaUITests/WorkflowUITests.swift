@@ -51,7 +51,7 @@ final class WorkflowUITests: XCTestCase {
                                  "-holdChromeOpen", "YES"] // the header's cards are tapped: it must not fold by itself
         app.launchPinned()
 
-        // The list: under 工作中, not 已看 / 完成未看, with the workflow's line.
+        // The list: under Working, not Seen / Unread, with the workflow's line.
         let working = app.buttons["agents.filter.working"]
         XCTAssertTrue(working.waitForExistence(timeout: 30), "no Agents list")
         working.tap()
@@ -71,7 +71,7 @@ final class WorkflowUITests: XCTestCase {
         sleep(1)
         shot("chat")
 
-        // 展开 agent: its agents, the running ones first.
+        // Show Agents: its agents, the running ones first.
         let expand = app.buttons.matching(identifier: "workflow.agents").firstMatch
         XCTAssertTrue(expand.waitForExistence(timeout: 5))
         expand.tap()

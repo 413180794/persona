@@ -1,30 +1,30 @@
 import Foundation
 
-/// A look for Persona (docs/persona.md), the one 形象 setting: its name, its face, the animated dot in the Persona
-/// tab's top bar, its colors and the home screen icon (`appIcon`). Built-ins and packages are the same model. The built-in ones are the app's own drawings (JarvisAvatar: 团子 in the icon's colors, the others in the
+/// A look for Persona (docs/persona.md), the one Avatar setting: its name, its face, the animated dot in the Persona
+/// tab's top bar, its colors and the home screen icon (`appIcon`). Built-ins and packages are the same model. The built-in ones are the app's own drawings (JarvisAvatar: Mochi in the icon's colors, the others in the
 /// style's accent); every other one is a
 /// package on the hub (~/.jarvis/personas/<id>/) that the phone downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
-    /// The default's id. Until 2026-11-03 the default was 面罩 under "jarvis"; a phone that never chose has no id
-    /// saved and gets 团子, one that chose 面罩 has "jarvis" saved and keeps it (`PersonaStore.chosenID`).
+    /// The default's id. Until 2026-11-03 the default was Visor under "jarvis"; a phone that never chose has no id
+    /// saved and gets Mochi, one that chose Visor has "jarvis" saved and keeps it (`PersonaStore.chosenID`).
     static let builtinID = "persona"
-    /// The default: 团子, the app icon's character, in the icon's colors.
+    /// The default: Mochi, the app icon's character, in the icon's colors.
     static let builtin = Persona(id: builtinID, name: "Persona", subtitle: String(localized: "App 图标里招手的团子"), rev: "", manifest: nil,
                                  design: "mochi", title: String(localized: "团子"))
-    /// 面罩, the default until 2026-11-03, now a choice; still named Persona, in the accent.
+    /// Visor, the default until 2026-11-03, now a choice; still named Persona, in the accent.
     static let visor = Persona(id: "jarvis", name: "Persona", subtitle: String(localized: "面罩，颜色随主题色"), rev: "", manifest: nil,
                                design: "visor", title: String(localized: "面罩"))
-    /// 汇流 (three traces running into a core with two eyes), a choice next to the default; still named Persona.
+    /// Circuit (three traces running into a core with two eyes), a choice next to the default; still named Persona.
     static let circuit = Persona(id: "jarvis-circuit", name: "Persona", subtitle: String(localized: "汇流，颜色随主题色"), rev: "", manifest: nil,
                                  design: "circuit", title: String(localized: "汇流"))
-    /// 像素, 晶面 and 软糖 (#350, from the style candidates the user picked): after 汇流, in the accent, still named Persona.
+    /// Pixel, Facet and Jelly (#350, from the style candidates the user picked): after Circuit, in the accent, still named Persona.
     static let pixel = Persona(id: "jarvis-pixel", name: "Persona", subtitle: String(localized: "像素，颜色随主题色"), rev: "", manifest: nil,
                                design: "pixel", title: String(localized: "像素"))
     static let facet = Persona(id: "jarvis-facet", name: "Persona", subtitle: String(localized: "晶面，颜色随主题色"), rev: "", manifest: nil,
                                design: "facet", title: String(localized: "晶面"))
     static let blob = Persona(id: "jarvis-blob", name: "Persona", subtitle: String(localized: "软糖，颜色随主题色"), rev: "", manifest: nil,
                               design: "blob", title: String(localized: "软糖"))
-    /// What 设置 › 外观 › 形象 offers before the hub's packages, the default first.
+    /// What Settings › Appearance › Avatar offers before the hub's packages, the default first.
     static let builtins = [builtin, visor, circuit, pixel, facet, blob]
 
     var id: String
@@ -36,12 +36,12 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     var manifest: PersonaManifest?
     /// A built-in's JarvisAvatar.Design (raw value); nil: the default's.
     var design: String?
-    /// The card's name in 设置 when it is not `name` (the built-ins are all called Persona).
+    /// The card's name in Settings when it is not `name` (the built-ins are all called Persona).
     var title: String?
 
     var isBuiltin: Bool { manifest == nil }
     var cardTitle: String { title ?? name }
-    /// A built-in's line under its card in 设置: whose colors it is drawn in.
+    /// A built-in's line under its card in Settings: whose colors it is drawn in.
     var builtinNote: String { design == PersonaFace.Design.mochi.rawValue ? String(localized: "App 图标的配色") : String(localized: "颜色随主题色") }
     var palette: PersonaPalette? {
         manifest?.colors.flatMap { PersonaPalette(light: $0.light, dark: $0.dark) }
@@ -74,12 +74,12 @@ nonisolated struct PersonaManifest: Codable, Sendable, Hashable {
     var id: String
     var name: String
     var subtitle: String?
-    /// A few words on the look's card in 设置 › 外观 › 形象, in place of its colors (奶蛙: where its level comes from).
+    /// A few words on the look's card in Settings › Appearance › Avatar, in place of its colors (Milk Frog: where its level comes from).
     var about: String?
     var avatar: Avatar
     var dot: Dot
     var colors: Colors?
-    /// The built-in 形象 (its id) whose home screen icon this one puts on: the package's own pictures cannot be one.
+    /// The built-in Avatar (its id) whose home screen icon this one puts on: the package's own pictures cannot be one.
     var appIconFallback: String?
 
     enum CodingKeys: String, CodingKey {

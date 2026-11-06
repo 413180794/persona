@@ -13,16 +13,16 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
     var unread = 0
     var items: [Item] = []
     var workingSince: Double?
-    /// The lock screen may show agent names (设置 › 通知 › 锁屏显示详情); off, only counts.
+    /// The lock screen may show agent names (Settings › Notifications › Show Details on Lock Screen); off, only counts.
     var details = false
-    /// The assistant (对话 tab) is answering; pushed only to devices whose island shows it.
+    /// The assistant (Chat tab) is answering; pushed only to devices whose island shows it.
     var assistant = false
-    /// The compact Dynamic Island's sides (设置 › 通知 › 灵动岛, IslandPrefs).
+    /// The compact Dynamic Island's sides (Settings › Notifications › Dynamic Island, IslandPrefs).
     var left: IslandSlot = .status
     var right: IslandSlot = .status
     /// The numbers the island shows, rounded to two significant digits by the hub.
     var stats: Stats?
-    /// The persona this device's activity draws (设置 › 形象). The widget extension cannot read the app's settings, and
+    /// The persona this device's activity draws (Settings › Avatar). The widget extension cannot read the app's settings, and
     /// on a phone it did not get them from the shared keychain either (build 98): the app stamps its own updates with
     /// it, and the hub echoes what the app told it (prefs `look`) in this device's pushes (docs/live-activity.md「形象」).
     /// Nil from an older hub: the extension falls back to the keychain.
@@ -71,7 +71,7 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         var place = ""
         var kind: Kind = .working
         var detail = ""
-        /// The interaction 允许 / 拒绝 / 批准 resolve.
+        /// The interaction Allow / Deny / Approve resolve.
         var interaction: String?
         var since: Double?
 
@@ -185,10 +185,10 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
     var isEmpty: Bool { phase == .none }
     /// A device's version of the fleet (`tailored`) has nothing to draw: no agent counts, and the assistant is not
     /// answering on a side of its island. Only the assistant answering is something to show where the island shows it
-    /// (思考中, #4398 / #4628), as the hub's `showsNothing` (liveactivity.go).
+    /// (Thinking, #4398 / #4628), as the hub's `showsNothing` (liveactivity.go).
     var showsNothing: Bool { phase == .none && !(assistant && (left == .assistant || right == .assistant)) }
     var workingSinceDate: Date? { workingSince.map { Date(timeIntervalSince1970: $0) } }
-    /// Agents left out when only the first `showing` items are drawn ("+2 个").
+    /// Agents left out when only the first `showing` items are drawn ("+2").
     func hidden(showing: Int) -> Int { max(0, needsYou + working + unread - min(showing, items.count)) }
     /// The first request that can be settled with a button (permission or plan).
     var firstActionable: Item? { items.first { ($0.kind == .permission || $0.kind == .plan) && $0.interaction != nil } }
@@ -205,7 +205,7 @@ nonisolated enum FleetText {
         }
     }
 
-    /// "授权：Bash: go test" / "计划等你批准" / "Claude 在问你" … for one item.
+    /// "Permission: Bash: go test" / "Plan needs approval" / "Claude has a question" … for one item.
     static func line(_ item: FleetState.Item) -> String {
         switch item.kind {
         case .permission: item.detail.isEmpty ? interfaceText("等你授权") : interfaceText("授权：\(item.detail)")
@@ -282,7 +282,7 @@ nonisolated enum IslandSlot: String, Codable, Hashable, Sendable, CaseIterable {
     }
 }
 
-/// 设置 › 通知 › 灵动岛, stored per device on the hub (prefs.island).
+/// Settings › Notifications › Dynamic Island, stored per device on the hub (prefs.island).
 nonisolated struct IslandPrefs: Codable, Hashable, Sendable {
     enum Preset: String, Codable, CaseIterable, Sendable {
         case a, b, c, custom
@@ -404,7 +404,7 @@ nonisolated enum IslandCell: Hashable, Sendable {
 }
 
 /// Which persona the Live Activity draws and in what color (docs/live-activity.md「形象」): the app's choice in
-/// 设置 › 外观 › 形象 and the accent it draws that persona in. It rides in the activity's content (`FleetState.look`),
+/// Settings › Appearance › Avatar and the accent it draws that persona in. It rides in the activity's content (`FleetState.look`),
 /// and the app also leaves it with a package's pictures in a keychain group it shares with the widget extension
 /// (LiveActivity/FleetPersona.swift: drawing, saving, reading).
 nonisolated struct FleetLook: Codable, Hashable, Sendable {

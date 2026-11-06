@@ -63,7 +63,7 @@ final class TerminalKeysTests: XCTestCase {
         XCTAssertEqual(got, expected)
     }
 
-    /// Long press selects the word under the finger and offers 拷贝.
+    /// Long press selects the word under the finger and offers Copy.
     @MainActor func testLongPressCopies() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")

@@ -318,8 +318,8 @@ type ThemeColors struct {
 	Ai       string `json:"ai,omitempty"`
 }
 
-// ThemeItem: A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do
-// not offer one that fails.
+// ThemeItem: A theme (Theme Color): the design system's role colors for light and dark; the apps check the contrast
+// and do not offer one that fails.
 type ThemeItem struct {
 	ID    string      `json:"id"`
 	Name  string      `json:"name"`
@@ -327,7 +327,7 @@ type ThemeItem struct {
 	Dark  ThemeColors `json:"dark"`
 }
 
-// BuiltinLook: A look every app draws itself: 团子 (the default), 面罩, 汇流.
+// BuiltinLook: A look every app draws itself: Mochi (the default), Visor, Circuit.
 const (
 	BuiltinLookPersona       = "persona"
 	BuiltinLookJarvis        = "jarvis"
@@ -442,9 +442,8 @@ type LookDot struct {
 	States LookDotStates `json:"states"`
 }
 
-// LookItem: A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona
-// package; app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be
-// shown.
+// LookItem: A look (docs/extensions.md「形象」): Persona's name, face, colors and dot, served as a persona package.
+// app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
 type LookItem struct {
 	ID              string      `json:"id"`
 	Name            string      `json:"name"`
@@ -1381,7 +1380,7 @@ type Tab struct {
 	Badge string `json:"badge,omitempty"`
 }
 
-// Fact: A label and its value in a header (作者 · someone).
+// Fact: A label and its value in a header (Author · someone).
 type Fact struct {
 	Label string `json:"label,omitempty"`
 	Value string `json:"value"`
@@ -1445,8 +1444,8 @@ type Thread struct {
 	Resolve *Action `json:"resolve,omitempty"`
 }
 
-// Comment: A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An
-// event is a quiet line (merged, pushed two commits).
+// Comment: A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge
+// (Approved). An event is a quiet line (merged, pushed two commits).
 type Comment struct {
 	ID     string    `json:"id,omitempty"`
 	Author string    `json:"author"`
@@ -1626,8 +1625,8 @@ type Filter struct {
 	Action  Action   `json:"action"`
 }
 
-// More: A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
-// extension answers the whole view, longer.
+// More: A section's last row, Load More (UI version 3): reaching it (or tapping it) calls ui.action with action once;
+// the extension answers the whole view, longer.
 type More struct {
 	Title  string `json:"title,omitempty"`
 	Action Action `json:"action"`
@@ -1955,7 +1954,13 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"``json:"text"`
+	Users []string `json:"users,omitempty"`
+}
+
+// MessagingDecoration: A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted
+// Message · Public).
+type MessagingDecoration struct {
+	Text string `json:"text"`
 	Icon string `json:"icon,omitempty"`
 	Tone string `json:"tone,omitempty"`
 }

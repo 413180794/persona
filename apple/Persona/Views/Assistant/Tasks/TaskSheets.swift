@@ -179,7 +179,7 @@ private struct AgentMarkLine: View {
     }
 }
 
-/// 全部: the conversation's tasks by where they are — waiting for the user, going on, done, stopped.
+/// All: the conversation's tasks by where they are — waiting for the user, going on, done, stopped.
 struct TaskBoardSheet: View {
     var conversation: String
     @State private var removing: TodoItem?
@@ -238,7 +238,7 @@ struct TaskBoardSheet: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    // The Agents page's 关闭, for a task: swiped from the trailing edge, only when nothing of it runs.
+                    // The Agents page's Close, for a task: swiped from the trailing edge, only when nothing of it runs.
                     .swipeActions(edge: .trailing) {
                         if row.state.isRemovable {
                             Button { store.askRemove(row.todo, pending: $removing) } label: {

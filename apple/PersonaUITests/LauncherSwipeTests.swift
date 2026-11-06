@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 模型: swiping a ~/.zshrc launcher left hides it (it moves under 已隐藏), swiping a hidden one brings it back.
+/// Settings › Model: swiping a ~/.zshrc launcher left hides it (it moves under Hidden), swiping a hidden one brings it back.
 /// A Persona launcher swiped left is deleted after a confirmation.
 /// Against scripts/mock/mock_hub.py with MOCK_MANAGED_LAUNCHER=1 (jv_strong added in Persona; cc_glm shown, cc_old and cc_test hidden):
 ///   TEST_RUNNER_JARVIS_LAUNCHER_HUB=http://127.0.0.1:<port>
@@ -46,13 +46,13 @@ final class LauncherSwipeTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["删除启动器「jv_strong」？"].waitForExistence(timeout: 3), "no confirmation:\n\(app.debugDescription)")
         XCTAssertTrue(jv.exists, "deleted before the confirmation")
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/launcher-delete.png"))
-        // The dialog's own 删除 (a sheet on a phone); the swipe's one is gone once the dialog is up.
+        // The dialog's own Delete (a sheet on a phone); the swipe's one is gone once the dialog is up.
         let deletes = app.sheets.buttons.matching(identifier: "删除")
         (deletes.count > 0 ? deletes : app.buttons.matching(identifier: "删除")).firstMatch.tap()
         XCTAssertTrue(jv.waitForNonExistence(timeout: 5), "jv_strong is still listed")
     }
 
-    /// Hiding a launcher on its own page: back on the list it has moved under 已隐藏 (#1433, the list kept the old one).
+    /// Hiding a launcher on its own page: back on the list it has moved under Hidden (#1433, the list kept the old one).
     @MainActor func testHidingOnItsPageUpdatesTheList() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_LAUNCHER_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_LAUNCHER_HUB)")

@@ -4,7 +4,7 @@ import Foundation
 /// preloading, the terminal; `FilePaths` ends paths the same way):
 ///
 /// - a link starts at `http://` / `https://` (or `www.`) not glued to a word before it;
-/// - it ends at whitespace, at any non-ASCII character (CJK text, full-width punctuation ），。、「」…) and at `<>"`'|\{}^`;
+/// - it ends at whitespace, at any non-ASCII character (CJK text, full-width punctuation 「），。、」, corner brackets…) and at `<>"`'|\{}^`;
 /// - trailing `.,;:!?'"*_~` are not part of it, nor a `)` / `]` without its opening one (`/wiki/Foo_(bar)` keeps its pair).
 ///
 /// GFM's autolink (MarkdownUI uses cmark-gfm) only stops at whitespace: in Chinese prose a link took the rest of the

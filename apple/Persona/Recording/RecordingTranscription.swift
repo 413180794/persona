@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 按分段保存转写结果：App 被结束后，下次从未完成的一段继续。
+/// Saves transcripts segment by segment: after the app is killed, the next run picks up at the unfinished segment.
 @Observable
 final class RecordingTranscription {
     static let shared = RecordingTranscription()

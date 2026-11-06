@@ -1,9 +1,9 @@
 import XCTest
 
-/// The Agents list's 细列表 on 体验模式's data, in every density it has to hold together: many spaces (全部), a machine
-/// with many finished-unread agents and idle spaces (Mac Studio), the 未读 and 需要你 filters, a machine where nothing runs
-/// (Mac mini), and the cards for comparison; at each text size (小 / 标准 / 大). No hub needed (`-openWelcome` drops a
-/// pairing left by other tests; the launch argument keeps 体验模式 on).
+/// The Agents list's Compact List on Demo Mode's data, in every density it has to hold together: many spaces (All), a machine
+/// with many finished-unread agents and idle spaces (Mac Studio), the Unread and Needs You filters, a machine where nothing runs
+/// (Mac mini), and the cards for comparison; at each text size (Small / Standard / Large). No hub needed (`-openWelcome` drops a
+/// pairing left by other tests; the launch argument keeps Demo Mode on).
 ///   TEST_RUNNER_JARVIS_SHOTS=<dir> TEST_RUNNER_JARVIS_STYLE=light|dark
 /// writes `compact-<state>-<size>-<style>.png` there (docs/testing.md「Agents 列表」).
 final class CompactListShots: XCTestCase {

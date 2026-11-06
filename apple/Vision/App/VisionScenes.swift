@@ -20,7 +20,7 @@ struct VisionChatScene: Scene {
 struct VisionChatWindow: View {
     static let id = "chat"
     @Environment(AppModel.self) private var model
-    /// The system's text size, before 小 / 标准 / 大 moves it (as RootView reads it).
+    /// The system's text size, before Small / Standard / Large moves it (as RootView reads it).
     @Environment(\.dynamicTypeSize) private var systemTypeSize
     var key: SessionKey?
 

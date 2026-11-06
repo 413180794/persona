@@ -46,7 +46,7 @@ final class ScreenTruthTests: XCTestCase {
         super.tearDown()
     }
 
-    /// The Agents list, paired with the mock (pairing a new hub starts the app over on 助手: pair, then open it).
+    /// The Agents list, paired with the mock (pairing a new hub starts the app over on Assistant: pair, then open it).
     private func launch() {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -94,11 +94,11 @@ final class ScreenTruthTests: XCTestCase {
     private var page: String? { shell ? "agents" : nil }
 
     /// Back on the Agents list, by the controls a user would use: the chat's back button (or a drag from the left edge,
-    /// only while a chat is open), the drawer's close, a drag to the left from 助手 in the shell. (A drag from the left
-    /// edge with no chat open is not it: in the shell it pages to 助手, and there it opens the drawer.)
+    /// only while a chat is open), the drawer's close, a drag to the left from Assistant in the shell. (A drag from the left
+    /// edge with no chat open is not it: in the shell it pages to Assistant, and there it opens the drawer.)
     private func backToList() {
         // The filter bar scrolls away with the list: a row or a card that needs you in reach says it as well. Any of its
-        // chips: BeautifulUI's floating menu button covers 全部 in the old layout, while the cards that need you keep the
+        // chips: BeautifulUI's floating menu button covers All in the old layout, while the cards that need you keep the
         // rows out of sight; scrolled into those cards, neither chips nor rows are on screen (#836, #926).
         func onList() -> Bool {
             app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "agents.filter.")).allElementsBoundByIndex.contains { $0.isHittable }

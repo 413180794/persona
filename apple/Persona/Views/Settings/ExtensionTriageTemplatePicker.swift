@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 数据由非空的设置页面读取；空的 List 行不会启动自己的 task。
-/// 替换前确认，选择后仍需页面的保存按钮。
+/// The data is read by the non-empty settings page; an empty List row does not start a task of its own.
+/// Confirms before replacing; after choosing, the page's Save button is still needed.
 struct ExtensionTriageTemplatePicker: View {
     @Binding var text: String
     var templates: [ExtensionTextTemplate]

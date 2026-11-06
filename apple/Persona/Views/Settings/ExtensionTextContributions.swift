@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 快捷提示和分拣模板的 API 条目；贡献 id 只在所属扩展内唯一。
+/// API entries for quick prompts and triage templates; a contribution id is unique only within its extension.
 nonisolated struct ExtensionTextTemplate: Codable, Hashable, Sendable, Identifiable {
     var owner: String
     var ownerName: String
@@ -36,7 +36,7 @@ nonisolated struct ExtensionTextSource: Hashable, Sendable {
     var active = true
 }
 
-/// 当前输入框所属 hub 的提示，不跨组沿用；读取失败保留同一来源的上一份结果。
+/// Prompts of the hub the current input field belongs to, not carried across groups; a failed read keeps the last result from the same source.
 @Observable final class ExtensionTextContributions {
     private(set) var prompts: [ExtensionTextTemplate] = []
     private(set) var templates: [ExtensionTextTemplate] = []
@@ -76,6 +76,6 @@ nonisolated struct ExtensionTextSource: Hashable, Sendable {
         }
     }
 
-    /// 填草稿是唯一动作：调用方决定何时确认替换，这里不发送消息或保存规则。
+    /// Filling the draft is the only action: the caller decides when to confirm replacing; nothing here sends a message or saves a rule.
     static func filling(_ template: ExtensionTextTemplate) -> String { template.text }
 }

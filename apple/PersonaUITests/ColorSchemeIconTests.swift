@@ -1,13 +1,13 @@
 import XCTest
 
-/// 设置 › 外观 › 深浅色 (docs/ios.md「深浅色」): picking 深色 or 浅色 draws the app that way (checked on `probe.scheme`,
-/// the look the page is actually in) and puts the default 形象 (团子)'s matching icon on the home screen, through the
-/// system's alert where the simulator supports alternate icons; 跟随系统 hands both back. Runs in the demo mode (no
+/// Settings › Appearance › Light & Dark (docs/ios.md「深浅色」): picking Dark or Light draws the app that way (checked on `probe.scheme`,
+/// the look the page is actually in) and puts the default Avatar (Mochi)'s matching icon on the home screen, through the
+/// system's alert where the simulator supports alternate icons; Match System hands both back. Runs in the demo mode (no
 /// hub). Screenshots go to JARVIS_ICON_SHOTS when set: the page and the home screen after each pick.
 final class ColorSchemeIconTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
-    /// A failure part way must not leave 深色 / 浅色 saved for the tests after: back to 跟随系统.
+    /// A failure part way must not leave Dark / Light saved for the tests after: back to Match System.
     override func tearDown() {
         let app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-probes", "YES", "-tab", "settings", "-openAppearance", "scheme"]

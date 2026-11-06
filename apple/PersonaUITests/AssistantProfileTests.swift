@@ -1,7 +1,7 @@
 import XCTest
 
-/// Persona's profile (详细信息 in its avatar's menu on the Persona tab) and its schedule: one list of tasks (every day, every
-/// 30 minutes, once), a task's page, 立即运行 for a daily task and for a follow-up, and a task's permission mode (全部放行
+/// Persona's profile (Details in its avatar's menu on the Persona tab) and its schedule: one list of tasks (every day, every
+/// 30 minutes, once), a task's page, Run Now for a daily task and for a follow-up, and a task's permission mode (Allow Everything
 /// asks first). Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which records what was run at /mock/schedule.
 final class AssistantProfileTests: XCTestCase {
     private var hub: String!
@@ -35,7 +35,7 @@ final class AssistantProfileTests: XCTestCase {
     }
 
     @MainActor private func openProfile(_ app: XCUIApplication) {
-        // The face in the top bar opens a menu; 详细信息 is the profile.
+        // The face in the top bar opens a menu; Details is the profile.
         let avatar = app.buttons["jarvis-avatar"]
         XCTAssertTrue(avatar.waitForExistence(timeout: 15), "no avatar on the Persona tab:\n\(app.debugDescription)")
         avatar.tap()
@@ -103,7 +103,7 @@ final class AssistantProfileTests: XCTestCase {
     }
 
     /// A task with no conversation of its own to go into runs in its own one (docs/assistant.md「定时任务」): its page
-    /// says 在同一个对话里运行 and opens it; 下次开新对话 lets the next run start over, and that run's conversation is the
+    /// says Runs in the Same Chat and opens it; New Chat Next Time lets the next run start over, and that run's conversation is the
     /// task's again. Reached from the shell's drawer and from the old layout's profile.
     @MainActor func testATaskOpensItsOwnConversationInTheShell() throws { try ownConversation(shell: true) }
     @MainActor func testATaskOpensItsOwnConversationInTheOldLayout() throws { try ownConversation(shell: false) }
@@ -141,7 +141,7 @@ final class AssistantProfileTests: XCTestCase {
                        "the task's own conversation is listed twice")
         shot(app, "own-\(name)")
         own.tap()
-        // The conversation it runs in, on 助手 / the Persona tab, with the task's page gone.
+        // The conversation it runs in, on Assistant / the Persona tab, with the task's page gone.
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 封邮件需要回复")).firstMatch.waitForExistence(timeout: 8),
                       "the task's conversation did not open:\n\(app.debugDescription)")
         XCTAssertFalse(app.staticTexts["什么时候"].exists, "still on the task's page")
@@ -163,14 +163,14 @@ final class AssistantProfileTests: XCTestCase {
         let runNow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "立即运行")).firstMatch
         reach(runNow)
         runNow.tap()
-        // The shell's top bar has the 助手 | Agents switch where the old one has Persona's face.
+        // The shell's top bar has the Assistant | Agents switch where the old one has Persona's face.
         XCTAssertTrue(app.buttons[shell ? "shell-assistant" : "jarvis-avatar"].waitForExistence(timeout: 8), "not back on the conversation")
         XCTAssertTrue(app.staticTexts["什么时候"].waitForNonExistence(timeout: 5), "still on the task's page")
         XCTAssertNotNil(try tasks().first(where: { $0["id"] as? String == "morning" })?["run_session_id"], "the run's conversation is not the task's")
     }
 
-    /// The scheduled tasks' conversations are on 定时任务, not in the drawer's 最近 (#2838): 早报's own conversation is not
-    /// listed there, the user's own ones are, and 定时任务 opens it from under 早报's row.
+    /// The scheduled tasks' conversations are on Scheduled Tasks, not in the drawer's Recent (#2838): 「早报」's own conversation is not
+    /// listed there, the user's own ones are, and Scheduled Tasks opens it from under 「早报」's row.
     @MainActor func testATasksConversationsAreOnItsRowNotInRecent() throws {
         let app = launch(["-ui.oldLayout", "NO"])
         let menu = app.buttons["assistant-sidebar-button"].firstMatch
@@ -200,7 +200,7 @@ final class AssistantProfileTests: XCTestCase {
     }
 
     /// A patrol Persona set up in a conversation is on the page like any task: every 30 minutes, its next run, what it
-    /// runs with. Its page changes the permission mode; 全部放行 asks first, says so under the picker, and is saved when
+    /// runs with. Its page changes the permission mode; Allow Everything asks first, says so under the picker, and is saved when
     /// leaving the page.
     @MainActor func testRepeatingTaskAndItsPermissionMode() throws {
         let app = launch()

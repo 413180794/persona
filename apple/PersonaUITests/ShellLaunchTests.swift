@@ -2,7 +2,7 @@ import XCTest
 
 /// Launching into a conversation makes it, and only it, appear once (docs/shell.md「启动」). The ovis lane saw a
 /// conversation's `onAppear` run several times at launch (2026-11-02): the one opened appeared once, but the shell had
-/// built 助手 behind Agents and its conversation appeared too, unseen: subscribed, marked seen, and the DEBUG switches
+/// built Assistant behind Agents and its conversation appeared too, unseen: subscribed, marked seen, and the DEBUG switches
 /// that hang off `onAppear` ran twice. `probe.chat`'s `appeared` and the shell's trace count them.
 final class ShellLaunchTests: XCTestCase {
     private struct Chat: Decodable {
@@ -10,9 +10,9 @@ final class ShellLaunchTests: XCTestCase {
         var appeared: Int
     }
 
-    /// An agent's conversation in the demo (weather's 补齐网络层的单元测试).
+    /// An agent's conversation in the demo (weather's 「补齐网络层的单元测试」).
     private static let agentChat = "macbook/a1f3c2d4-0000-4000-8000-000000000002"
-    /// A 助手 conversation in the demo (整理这个季度的读书笔记).
+    /// An Assistant conversation in the demo (「整理这个季度的读书笔记」).
     private static let assistantChat = "server/b2e4d6f8-0000-4000-8000-000000000004"
 
     override func setUp() {
@@ -21,7 +21,7 @@ final class ShellLaunchTests: XCTestCase {
 
     @MainActor private func expectOnce(_ args: [String], page: String, _ what: String, hub: String? = nil) {
         let app = XCUIApplication()
-        // Paired with scripts/mock/mock_hub.py, or 体验模式.
+        // Paired with scripts/mock/mock_hub.py, or Demo Mode.
         let source = hub.map { ["-pairURL", "jarvis://pair?url=" + $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"] }
             ?? ["-demo.on", "YES"]
         app.launchArguments = source + ["-ui.oldLayout", "NO", "-probes", "YES", "-dev.folded", ""] + args
@@ -57,7 +57,7 @@ final class ShellLaunchTests: XCTestCase {
         expectOnce(["-app.tab", "chats", "-dev.openChat", Self.agentChat], page: "agents", "the last chat restored")
     }
 
-    /// Against a hub the link says 连接中… at launch: the status row opens and folds under the open chat (the page
+    /// Against a hub the link says Connecting… at launch: the status row opens and folds under the open chat (the page
     /// makes way through the window's safe area) and must not make it appear again.
     @MainActor func testAChatOpenedAtLaunchAppearsOnceWhileTheRowComesAndGoes() {
         expectOnce(["-openSession", Self.agentChat, "-showConnectionCycle", "connecting:1:1"], page: "agents", "连接中… coming and going")
@@ -72,7 +72,7 @@ final class ShellLaunchTests: XCTestCase {
         expectOnce(["-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000001"], page: "agents", "paired with a hub", hub: hub)
     }
 
-    /// 助手's conversation, the page the shell opens on. Named: what 助手 shows is kept across launches, and a test before
+    /// Assistant's conversation, the page the shell opens on. Named: what Assistant shows is kept across launches, and a test before
     /// may have left it on a new conversation (`-newAssistant`).
     @MainActor func testTheAssistantsConversationAppearsOnce() {
         expectOnce(["-tab", "assistant", "-openAssistant", Self.assistantChat], page: "assistant", "助手")

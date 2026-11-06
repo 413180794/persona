@@ -1,9 +1,9 @@
 import SwiftUI
 
-// What can be done with one inbox item besides reading it (docs/inbox.md): AI 草拟回复 (a reply in the user's voice,
-// edited and sent from here), 交给 AI (the item as <jarvis-context> to the assistant or an agent), 已处理.
+// What can be done with one inbox item besides reading it (docs/inbox.md): AI Draft Reply (a reply in the user's voice,
+// edited and sent from here), Hand to AI (the item as <jarvis-context> to the assistant or an agent), Done.
 
-/// The strip under the navigation bar of an opened item: the AI's summary, its 线索 (`InboxLineSection`) and the two
+/// The strip under the navigation bar of an opened item: the AI's summary, its Thread (`InboxLineSection`) and the two
 /// actions.
 struct InboxActionBar: View {
     var item: InboxItem
@@ -22,12 +22,12 @@ struct InboxActionBar: View {
             }
             InboxLineSection(tree: line)
             HStack(spacing: Theme.Space.s) {
-                // A connector's thread that cannot be answered (a CI run) has only 交给 AI.
+                // A connector's thread that cannot be answered (a CI run) has only Hand to AI.
                 if item.connector.map({ $0.canReply == true }) ?? true {
                     action(item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"), symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
                 } else if let open = item.connector?.openURL, let url = Self.systemURL(open, draft: item.agentDraft) {
-                    // Answered in the source's own app (在信息里回复: Messages with the number, and the AI 分身's draft;
-                    // 在 Telegram 里回复: the conversation in Telegram; else 打开).
+                    // Answered in the source's own app (Reply in Messages: Messages with the number, and the AI twin's draft;
+                    // Reply in Telegram: the conversation in Telegram; else Open).
                     let sms = url.scheme == "sms"
                     action(Self.openTitle(item, sms: sms), symbol: sms ? Theme.Icon.messagesApp : Theme.Icon.openExternal, prominent: true) {
                         openURL(url)
@@ -43,7 +43,7 @@ struct InboxActionBar: View {
         .inboxLine(item, tree: $line)
     }
 
-    /// What the button that opens the item's `open_url` says: where the user answers it, else just 打开.
+    /// What the button that opens the item's `open_url` says: where the user answers it, else just Open.
     nonisolated static func openTitle(_ item: InboxItem, sms: Bool) -> String {
         if sms { return String(localized: "在信息里回复") }
         if let app = ConnectorText.profile(item.source).app { return String(localized: "在 \(app) 里回复") }
@@ -76,9 +76,9 @@ struct InboxActionBar: View {
     }
 }
 
-// MARK: - AI 草拟回复
+// MARK: - AI Draft Reply
 
-/// The drafted reply, editable; 重写 asks again with an instruction; 发送 replies in the Feishu chat or by mail and
+/// The drafted reply, editable; Rewrite asks again with an instruction; Send replies in the Feishu chat or by mail and
 /// files the item as done.
 struct InboxDraftSheet: View {
     @Environment(AppModel.self) private var model
@@ -93,7 +93,7 @@ struct InboxDraftSheet: View {
     @State private var loading = false
     @State private var error: String?
     @FocusState private var editing: Bool
-    /// The AI 分身's proposed status moves the user keeps (all of them to start with).
+    /// The AI twin's proposed status moves the user keeps (all of them to start with).
     @State private var kept: Set<InboxItem.DocChange>?
     private var proposed: [InboxItem.DocChange] { item.agentDraft == nil ? [] : item.agent?.changes ?? [] }
 
@@ -160,7 +160,7 @@ struct InboxDraftSheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    /// What the AI 分身 found, and a way into its conversation.
+    /// What the AI twin found, and a way into its conversation.
     private func agentNote(_ a: InboxItem.Agent) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if let note = a.note, !note.isEmpty {
@@ -196,7 +196,7 @@ struct InboxDraftSheet: View {
 
     private var keptChanges: [InboxItem.DocChange] { proposed.filter { (kept ?? Set(proposed)).contains($0) } }
 
-    /// The status moves the AI 分身 proposes, each one a toggle; the kept ones are made when the reply is sent.
+    /// The status moves the AI twin proposes, each one a toggle; the kept ones are made when the reply is sent.
     private var changesList: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Text("发送时一起改").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
@@ -247,9 +247,9 @@ struct InboxDraftSheet: View {
     }
 }
 
-// MARK: - 交给 AI
+// MARK: - Hand to AI
 
-/// Hands the item to the assistant (a new conversation in 对话) or to a running agent, as a <jarvis-context> plus
+/// Hands the item to the assistant (a new conversation in Chat) or to a running agent, as a <jarvis-context> plus
 /// what to do with it.
 struct InboxHandOffSheet: View {
     @Environment(AppModel.self) private var model

@@ -1,8 +1,8 @@
 import Foundation
 import Observation
 
-// 信息 (docs/plan-connectors.md「五」): one Mac's Messages, read through the hub. The app shows every conversation;
-// with 交给 Persona on (the hub's switch, on by default) the real ones also go to the knowledge base, the inbox and the
+// Messages (docs/plan-connectors.md「五」): one Mac's Messages, read through the hub. The app shows every conversation;
+// with Hand to Persona on (the hub's switch, on by default) the real ones also go to the knowledge base, the inbox and the
 // assistant. Nothing is marked read, nothing is sent.
 
 /// GET /api/v1/imessage: the connector's status, with the steps on the Mac when it may not read.
@@ -12,7 +12,7 @@ nonisolated struct MessagesStatus: Codable, Hashable, Sendable {
     var error: String?
     var guide: [String]?
     var via: String?
-    /// 交给 Persona: the knowledge base, the inbox and the assistant read the real conversations (nil from a hub
+    /// Hand to Persona: the knowledge base, the inbox and the assistant read the real conversations (nil from a hub
     /// before it: they did not).
     var ai: Bool?
 }
@@ -137,7 +137,7 @@ nonisolated enum MessagesFailure: Equatable, Sendable {
     }
 }
 
-/// 设置 › 连接器 › 信息 › 会话: the Mac's conversations, newest first, a page at a time.
+/// Settings › Connectors › Messages › Sessions: the Mac's conversations, newest first, a page at a time.
 @Observable final class MessagesChatsModel {
     struct Deps {
         var api: () -> APIClient?

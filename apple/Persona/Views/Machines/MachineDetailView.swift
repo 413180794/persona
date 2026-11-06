@@ -1,10 +1,10 @@
 import BeautifulUI
 import SwiftUI
 
-/// One machine (docs/machines.md「机器详情」), most used first: how it is (the card of 机器, without its numbers), its
+/// One machine (docs/machines.md「机器详情」), most used first: how it is (the card of Machines, without its numbers), its
 /// agents (a tap opens the chat), its values now and CPU / memory / network / load over 1, 6 or 24 hours (hold a chart
 /// to read a moment, all charts follow), the system, the launchers, how the hub reaches it (offline: right under the
-/// card, with 重新连接). The metrics refresh while on screen and the app is in front: every 10 s for the hour, every
+/// card, with Reconnect). The metrics refresh while on screen and the app is in front: every 10 s for the hour, every
 /// minute for the longer ranges.
 struct MachineDetailView: View {
     @Environment(AppModel.self) private var model
@@ -23,7 +23,7 @@ struct MachineDetailView: View {
     @State private var plugins = ExtensionMachineModel()
     @State private var pluginLink: LinkTarget?
 
-    /// A machine's agents: live ones, not the 对话 tab's assistant conversations (the Agents tab leaves those out too).
+    /// A machine's agents: live ones, not the Chat tab's assistant conversations (the Agents tab leaves those out too).
     static func agents(_ model: AppModel, _ ref: MachineRef) -> [Session] {
         (model.sessionsByMachine[ref] ?? []).filter { $0.status.isLive && !$0.assistant }
     }
@@ -34,7 +34,7 @@ struct MachineDetailView: View {
         Dictionary(grouping: model.allSessions(inFront: inFront).filter { $0.status.isLive && !$0.assistant }, by: \.machineRef)
     }
 
-    /// The agents before 显示全部: with dozens on one machine its charts would be screens away.
+    /// The agents before Show All: with dozens on one machine its charts would be screens away.
     static let agentsShown = 5
 
     private static var initialRange: MetricRange {
@@ -128,7 +128,7 @@ struct MachineDetailView: View {
                 try? await Task.sleep(for: .seconds(range == .hour ? 10 : 60))
             }
         }
-        // Again when it comes online (after 重新连接): an offline machine has no launchers to list.
+        // Again when it comes online (after Reconnect): an offline machine has no launchers to list.
         .task(id: machine?.online == true) { await loadLaunchers(refresh: false) }
         // Again once the hub says it has the slots (the page can open before its hello).
         .task(id: ExtensionsKey(ref: ref, slots: model.features(ref.group).hasExtensionFeature("ui_slots"))) {
@@ -251,7 +251,7 @@ struct MachineDetailView: View {
         }
     }
 
-    /// 详情: what the hub said, under the card's plain words.
+    /// Details: what the hub said, under the card's plain words.
     private func problemDetails(_ raw: String) -> some View {
         DisclosureGroup {
             Text(raw).font(Theme.Font.label).foregroundStyle(.secondary).textSelection(.enabled)
@@ -264,7 +264,7 @@ struct MachineDetailView: View {
         .card(padding: 14)
     }
 
-    /// How the hub reaches the machine, and 重新连接.
+    /// How the hub reaches the machine, and Reconnect.
     private func connection(_ machine: Machine) -> some View {
         HStack(spacing: Theme.Space.m) {
             Text(machine.kind == "local" ? "hub 所在机器，直接运行 node。"
@@ -411,7 +411,7 @@ private struct NowGrid: View {
 
     @ViewBuilder private func tile(_ title: String, _ value: String, detail: String?, fraction: Double?, color: Color, level: MetricLevel) -> some View {
         if AppStyle.current.usesBeautifulUI {
-            // Its stat tile: what it is (偏高 / 过高 after it), the number, the line under it, a meter for what has a
+            // Its stat tile: what it is (High / Critical after it), the number, the line under it, a meter for what has a
             // share; a high reading colors the number and its meter.
             BUIStatTile(level > .normal ? (level == .critical ? String(localized: "\(title) · 过高") : String(localized: "\(title) · 偏高")) : title, value: value, detail: detail ?? " ",
                         tone: level == .critical ? .red : level > .normal ? .orange : .neutral, progress: fraction)
@@ -477,7 +477,7 @@ private struct CoreBars: View {
     }
 }
 
-/// 系统: OS, kernel, hardware, host name, uptime, versions. A long value wraps under itself (a CPU's full name).
+/// System: OS, kernel, hardware, host name, uptime, versions. A long value wraps under itself (a CPU's full name).
 private struct SystemFacts: View {
     var system: MachineSystem
     var machine: Machine?

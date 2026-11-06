@@ -1,6 +1,6 @@
 import XCTest
 
-/// 浏览器登录 on a Mac's page (#1304) against scripts/mock/mock_hub.py with MOCK_BROWSER=ready (JARVIS_MOCK_HUB): the
+/// Browser Sign-ins on a Mac's page (#1304) against scripts/mock/mock_hub.py with MOCK_BROWSER=ready (JARVIS_MOCK_HUB): the
 /// sites ego lite keeps sign-ins for, a cookie file's sites to tick (none at first; the expired one cannot be), the
 /// import, and clearing a site. `-openCookieFile` stands in for the system's file picker. With JARVIS_SHOTS each step is
 /// saved there (JARVIS_SHOTS_APPEARANCE names them).
@@ -64,7 +64,7 @@ final class BrowserLoginsTests: XCTestCase {
     }
 
     /// The node could not read ego's sign-ins (#1926; mock MOCK_COOKIES_FAIL=1, JARVIS_COOKIES_FAIL=1): a sentence and
-    /// 再试一次, which reads them again.
+    /// Try Again, which reads them again.
     @MainActor func testAFailedReadSaysSoAndTriesAgain() throws {
         guard ProcessInfo.processInfo.environment["JARVIS_COOKIES_FAIL"] == "1" else {
             throw XCTSkip("needs the mock with MOCK_COOKIES_FAIL=1 (JARVIS_COOKIES_FAIL=1)")

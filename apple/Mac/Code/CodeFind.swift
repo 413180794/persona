@@ -23,7 +23,7 @@ nonisolated enum CodeFind {
         }
     }
 
-    /// The find bar's switches (Xcode's and VS Code's): Aa, 整词, .*.
+    /// The find bar's switches (Xcode's and VS Code's): Aa, Whole Word, .*.
     struct Options: Equatable, Sendable {
         var caseSensitive = false
         var wholeWord = false
@@ -56,7 +56,7 @@ nonisolated enum CodeFind {
         }
 
         /// Where the query is in `text`, left to right, not overlapping (as Xcode and Safari count). Empty matches (a
-        /// regex's `^`, `a*`) are not matches; with 整词 a match has to start and end at a word's edge.
+        /// regex's `^`, `a*`) are not matches; with Whole Word a match has to start and end at a word's edge.
         func ranges(in text: String) -> [NSRange] {
             guard !text.isEmpty else { return [] }
             let s = text as NSString

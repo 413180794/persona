@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// One topic of a Feishu topic group, drawn the way the Lark gateway draws a topic group (#1087): a card per topic with the
-/// poster's avatar, name and time on top and the topic under them, folded behind 展开 past `Theme.Size.box320`, then
-/// its newest replies (`LarkTopicReplies`), its reactions and 表情回复 / 回复.
+/// poster's avatar, name and time on top and the topic under them, folded behind Expand past `Theme.Size.box320`, then
+/// its newest replies (`LarkTopicReplies`), its reactions and Add Reaction / Reply.
 /// A tap on the topic (not on its links or a card's buttons) or on its replies opens its thread; a long press has the
 /// chat's menu. Topics are never run together like a chat's messages (`LarkChatLayout.continues`): where a bot posts a
 /// topic a minute, each one still has its own card, name and time. A recalled or edited topic, and a recalled reply,
-/// follow 风灵月影 (防撤回, 编辑历史) as a chat's row does (`LarkMessageDisplay`).
+/// follow Message Tweaks (Keep Recalled Messages, Edit History) as a chat's row does (`LarkMessageDisplay`).
 struct LarkTopicCard: View {
     var topic: LarkMessage
     /// The topic group, named under the thread's title.
@@ -18,7 +18,7 @@ struct LarkTopicCard: View {
     @Environment(\.larkReact) private var react
     @Environment(\.larkAddPin) private var addPin
     @Environment(\.larkDisplay) private var display
-    /// The open thread, and whether its box is focused (回复).
+    /// The open thread, and whether its box is focused (Reply).
     @State private var threadOpen: LarkTopicThreadOpening?
     @State private var picking = false
     @State private var showHistory = false
@@ -30,7 +30,7 @@ struct LarkTopicCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             header
             let fold = LarkTopicFold { LarkTopicContent(message: m) }.onTapGesture { openThread() }
-            // A recalled topic whose body is not shown has no menu, as a chat's row has none: 拷贝 would copy what it
+            // A recalled topic whose body is not shown has no menu, as a chat's row has none: Copy would copy what it
             // no longer shows.
             if display.showsBody(of: m) { fold.contextMenu { menu } } else { fold }
             if m.olk == nil { LarkTranslationLine(message: m, feedID: feedID) }
@@ -70,7 +70,7 @@ struct LarkTopicCard: View {
                         pickReaction: { picking = true }, addPin: addPin, showProfile: openProfile == nil ? nil : { showProfile() })
     }
 
-    /// Avatar, then the name (with 机器人 for a bot) over the time. Avatar and name open the poster's card.
+    /// Avatar, then the name (with Bot for a bot) over the time. Avatar and name open the poster's card.
     private var header: some View {
         let m = topic
         return HStack(spacing: Theme.Space.s) {
@@ -104,8 +104,8 @@ struct LarkTopicCard: View {
         }
     }
 
-    /// 表情回复 and 回复 under the topic (the Lark gateway's card footer), 已撤回 and 已编辑 at the other end. A recalled topic
-    /// has neither button; it says 已撤回 when its body shows.
+    /// Add Reaction and Reply under the topic (the Lark gateway's card footer), Recalled and Edited at the other end. A recalled topic
+    /// has neither button; it says Recalled when its body shows.
     private var actions: some View {
         HStack(spacing: Theme.Space.s) {
             if react != nil && !topic.recalled {
@@ -124,7 +124,7 @@ struct LarkTopicCard: View {
         .padding(.leading, -Theme.Space.s) // the icons, not their tap areas, line up with the text above
     }
 
-    /// 已编辑: with 编辑历史 on and old versions kept, a button to them (`LarkEditHistoryView`).
+    /// Edited: with Edit History on and old versions kept, a button to them (`LarkEditHistoryView`).
     @ViewBuilder private var editedMark: some View {
         if display.showsHistory(of: topic) {
             Button("已编辑") { showHistory = true }.buttonStyle(.plain)
@@ -159,14 +159,14 @@ struct LarkTopicCard: View {
     }
 }
 
-/// A topic's thread opening from its card, with 回复's focus in it. An item, not a flag beside a separate focus flag:
+/// A topic's thread opening from its card, with Reply's focus in it. An item, not a flag beside a separate focus flag:
 /// the sheet's content was built from the state before the tap that opened it, so the box was never focused.
 private struct LarkTopicThreadOpening: Identifiable {
     let id = UUID()
     var focus: Bool
 }
 
-/// A topic's newest two replies, a line each, under 查看更早 N 条回复 when there are more (the Lark gateway's topic card).
+/// A topic's newest two replies, a line each, under "View N earlier replies" when there are more (the Lark gateway's topic card).
 /// Until they are read, the lines they will take are there already, as placeholders: a card does not grow when its
 /// replies come in (in a list anchored at its newest end, cards growing as they come on screen moved the cards around
 /// them on and off screen, again and again). A tap opens the thread. A view of its own: a read coming in redraws these
@@ -229,7 +229,7 @@ private struct LarkTopicReplyPreview: View {
 }
 
 /// A topic's own content on its card: what a chat bubble holds, without the bubble (the card is its frame). A recalled
-/// topic shows what it said only with 防撤回 on and its content kept (`LarkMessageDisplay.showsBody`).
+/// topic shows what it said only with Keep Recalled Messages on and its content kept (`LarkMessageDisplay.showsBody`).
 private struct LarkTopicContent: View {
     var message: LarkMessage
     @Environment(\.larkDisplay) private var display
@@ -260,7 +260,7 @@ private struct LarkTopicContent: View {
     }
 }
 
-/// A topic taller than the fold shows its top under a fade with 展开 over it; open, 收起 under it (the Lark gateway folds a
+/// A topic taller than the fold shows its top under a fade with Expand over it; open, Collapse under it (the Lark gateway folds a
 /// topic at 320 px). It is laid out no taller than the fold from the start and measured as it is, so a long topic never
 /// shows whole first and then jumps shut. What the fold hides takes no taps.
 private struct LarkTopicFold<Content: View>: View {

@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// The shell's top bars grow with the text only up to `Theme.Shell.topBarLargestTypeSize` (#340): 助手's, Agents' and
+/// The shell's top bars grow with the text only up to `Theme.Shell.topBarLargestTypeSize` (#340): Assistant's, Agents' and
 /// the one that stands in for both while the strip slides (`ShellMovingBar`). One left on `.shellScaled()` is larger
 /// than the others at the accessibility sizes, and the bar visibly jumps as the strip starts or stops.
 struct ShellTopBarScaleTests {

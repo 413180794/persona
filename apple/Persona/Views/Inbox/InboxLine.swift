@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 线索 (#2128, docs/inbox.md「线索」), as on the web (#2352): under an opened item's summary, what it grew out of (its
+// Thread (#2128, docs/inbox.md「线索」), as on the web (#2352): under an opened item's summary, what it grew out of (its
 // parent's chain, up to a todo or an agent session) and what grew out of it (the items right under it). Each row opens
 // where it lives: another item, the todo, the agent's chat. Nothing is drawn when the item has neither, nor from a hub
 // without GET /api/v1/inbox/tree.
@@ -20,7 +20,7 @@ nonisolated enum InboxLine {
         var title: String
         /// Where a tap goes; nil: nowhere left to go (an item no longer in the inbox, a session id without its halves).
         var target: Target?
-        /// An ancestor (what it grew out of), or an item under it (下一步).
+        /// An ancestor (what it grew out of), or an item under it (Next).
         var up: Bool
     }
 
@@ -68,7 +68,7 @@ nonisolated enum InboxLine {
     }
 }
 
-/// The 线索 section of an opened item (iPhone's action bar, the Mac's actions column): the rows of `tree`, which the
+/// The Thread section of an opened item (iPhone's action bar, the Mac's actions column): the rows of `tree`, which the
 /// host loads with `.inboxLine(_:tree:)` (on a view that is always there: on this section, which is empty until it has
 /// rows, the answer never showed). `openItem`: how another item opens here; nil pushes it on the stack the section is in.
 struct InboxLineSection: View {
@@ -143,7 +143,7 @@ struct InboxLineSection: View {
 }
 
 extension View {
-    /// Loads `item`'s 线索 into `tree` (GET /api/v1/inbox/tree/inbox/{id}), again when the item is hung elsewhere; an
+    /// Loads `item`'s Thread into `tree` (GET /api/v1/inbox/tree/inbox/{id}), again when the item is hung elsewhere; an
     /// older hub without the route leaves it nil.
     func inboxLine(_ item: InboxItem, tree: Binding<InboxTree?>) -> some View {
         modifier(InboxLineLoader(item: item, tree: tree))

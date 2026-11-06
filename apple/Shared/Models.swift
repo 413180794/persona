@@ -22,7 +22,7 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var nodeMismatch: Bool?
     /// The machine's jarvisd build.
     var nodeVersion: String?
-    /// The hub is installing its own build there (重新部署); deployError: why the last try did not work.
+    /// The hub is installing its own build there (Redeploy); deployError: why the last try did not work.
     var deploying: Bool?
     var deployError: String?
     /// OS and hardware (docs/machines.md); nil from hubs before machine monitoring, or a machine never connected.
@@ -44,7 +44,7 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var hubGroup: String? = nil
     /// With several groups, the group's name, for lists to say where a machine is (`title`); nil with one group.
     var groupLabel: String? = nil
-    /// `pending` while it waits for the user's 是我的电脑 (feature machine_trust); nil = confirmed. Kept as the hub's
+    /// `pending` while it waits for the user's It's Mine (feature machine_trust); nil = confirmed. Kept as the hub's
     /// word: another value reads as confirmed.
     var trust: String? = nil
     /// What kind of trouble `error` is (node_service_down, link_offline, never_connected, node_outdated, or a word this
@@ -141,11 +141,11 @@ nonisolated extension Machine {
     }
     /// Which machine across groups: the same machine id can be in two groups.
     var ref: MachineRef { MachineRef(group: group, id: id) }
-    /// What lists call it: its name, and with several groups the group's ("MacBook · 公司").
+    /// What lists call it: its name, and with several groups the group's ("MacBook · Work").
     var title: String { groupLabel.map { "\(name) · \($0)" } ?? name }
     /// Waiting for the user to say it is theirs: no agents, no keys, not offered where a computer is picked.
     var isPending: Bool { trust == "pending" }
-    /// Added but never online once (`never_connected`, or waiting with no `last_seen`): not 离线, it was never there.
+    /// Added but never online once (`never_connected`, or waiting with no `last_seen`): not Offline, it was never there.
     var neverConnected: Bool {
         !online && (errorCode == "never_connected" || (isPending && (lastSeen?.timeIntervalSince1970 ?? 0) <= 0))
     }
@@ -415,7 +415,7 @@ nonisolated struct LauncherModels: Codable, Hashable, Sendable {
     var models: [AgentModel]
     /// Why a picked model would not reach the agent (the launcher passes its own --model); nil: it would.
     var locked: String?
-    /// 模型配置's list (#943): the machine whose CLI answered.
+    /// Model Settings' list (#943): the machine whose CLI answered.
     var machine: String? = nil
 }
 
@@ -542,7 +542,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var readOnlyReason: String? = nil
     var capabilities: SessionCapabilities? = nil
     var attached: Bool? = nil
-    /// 分支到新聊天 works for it (a Claude Code conversation the node can copy, #2137); older nodes never say so.
+    /// Branch to New Chat works for it (a Claude Code conversation the node can copy, #2137); older nodes never say so.
     var canFork: Bool? = nil
     /// How Persona reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」): "app_server" (joined on its shared
     /// app-server) or "terminal" (its screen and session record); the note says why it is the terminal.
@@ -565,7 +565,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var contextWindow: Int? = nil
     var startedByJarvis: Bool
     var assistant: Bool
-    /// An assistant conversation moved out of the sidebar (listed under 已归档; nothing is deleted).
+    /// An assistant conversation moved out of the sidebar (listed under Archived; nothing is deleted).
     var archived: Bool? = nil
     /// The assistant's space it belongs to (the hub's `space`, docs/health.md): `healthSpace` for a health conversation,
     /// nil for the assistant's own. Not a host's space (`spaceKind` / `spaceID` are herdr's and Orca's).
@@ -581,7 +581,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var slotName: String?
     var slotIndex: Int?
     /// The pane's place in its tab (`pane_index`, #2320): 0 is the top left one, the others split from it, whose agent is
-    /// the tab's 发起者. Nil when the host does not say (older nodes, hosts without layouts).
+    /// the tab's Started It. Nil when the host does not say (older nodes, hosts without layouts).
     var paneIndex: Int? = nil
     var state: AgentState
     var seenAt: Date?
@@ -617,7 +617,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var startError: String? = nil
     /// The todo this session is linked to, filled by the hub (docs/protocol.md).
     var todo: SessionTodoRef? = nil
-    /// It works for a task the main conversation started while 设置 › 助手 › 主对话派的任务只在主对话里通知 was on (#1731):
+    /// It works for a task the main conversation started while Settings › Assistant › Notify Main-Chat Tasks Only in the Main Chat was on (#1731):
     /// the main conversation tells the user about it, so it stays off the island, notifications, badges and the watch.
     /// The hub keeps it after the task is done; false from a hub without it.
     var quiet: Bool = false
@@ -631,13 +631,13 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var turnError: String? = nil
     var turnErrorKind: String? = nil
     var turnErrorCode: String? = nil
-    /// Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开.
+    /// Where it lives outside Persona (a botmux session's Feishu topic): Open in Lark.
     var externalURL: String? = nil
     /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/channels.md「来源标记」): the
     /// sidebar draws the latest one's mark. Nil from hubs without channels.
     var channels: [String]? = nil
-    /// Who started an assistant conversation (#3266): "user" for the user's own, else what opened it ("inbox": 收件箱's
-    /// AI 分身, "routine": a scheduled task, "lark_agent": 飞书 /agent…). The sidebar keeps the others in 自动对话. Nil
+    /// Who started an assistant conversation (#3266): "user" for the user's own, else what opened it ("inbox": the Inbox's
+    /// AI twin, "routine": a scheduled task, "lark_agent": Lark /agent…). The sidebar keeps the others in Auto Chats. Nil
     /// from hubs that do not say, which list every conversation as before.
     var origin: String? = nil
     /// The last compaction the user asked for in an assistant conversation (POST …/compact, #1727): running, done or
@@ -669,7 +669,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
 
     /// The health space's name on the wire (`space: "health"`, docs/health.md).
     static let healthSpace = "health"
-    /// A conversation of the health space: kept off the Persona page's lists, shown on 健康.
+    /// A conversation of the health space: kept off the Persona page's lists, shown on Health.
     var isHealth: Bool { assistantSpace == Self.healthSpace }
 
     var hasSource: Bool { !(sourceKind ?? "").isEmpty }
@@ -679,7 +679,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var canApprove: Bool { !hasSource || capabilities?.approve == true }
     var canTerminal: Bool { !hasSource || capabilities?.terminal == true }
     var canAttach: Bool { hasSource && capabilities?.attach == true && attached != true }
-    /// 删除对话 (docs/protocol.md `DELETE /sessions`) only for one that is not running: offline, finished or unknown,
+    /// Delete Chat (docs/protocol.md `DELETE /sessions`) only for one that is not running: offline, finished or unknown,
     /// not still starting, and not the assistant's (those archive). What the hub hides once deleted (`stillDeleted`).
     var canDelete: Bool { !assistant && starting != true && (status == .offline || status == .done || status == .unknown) }
     var sourceLabel: String? {
@@ -852,7 +852,7 @@ nonisolated struct WorkState: Codable, Hashable, Sendable {
     var line: String? = nil
     var wait: String? = nil
     var then: String? = nil
-    /// When the hub acts next on its own: 继续 (transient) or a wake (external, agent).
+    /// When the hub acts next on its own: Continue (transient) or a wake (external, agent).
     var wakeAt: Date? = nil
     var attempts: Int? = nil
     var max: Int? = nil
@@ -864,7 +864,7 @@ nonisolated struct WorkState: Codable, Hashable, Sendable {
         case wakeAt = "wake_at"
     }
 
-    /// The hub waits it out: it wakes it (`wake_at`), or it wakes itself (its background tasks, a /loop). 待唤醒 in the
+    /// The hub waits it out: it wakes it (`wake_at`), or it wakes itself (its background tasks, a /loop). Waiting in the
     /// lists (the web's `hubWaits`, lib/work.ts).
     var hubWaits: Bool {
         guard phase == "blocked", on != "user" else { return false }
@@ -876,9 +876,9 @@ nonisolated struct WorkState: Codable, Hashable, Sendable {
 /// what it may do, each only while it is on. A switch the hub leaves out is off.
 nonisolated struct TriageSwitches: Codable, Hashable, Sendable {
     var enabled = false
-    /// Waits for the user's decision become 需要你 cards.
+    /// Waits for the user's decision become Needs You cards.
     var decide = false
-    /// 继续 after a passing model API error.
+    /// Continue after a passing model API error.
     var autoContinue = false
     /// Wakes the agent to check on a deploy, CI or another agent.
     var wake = false
@@ -1048,7 +1048,7 @@ nonisolated struct LoopInfo: Codable, Hashable, Sendable {
         return p.hasPrefix("/loop") ? String(p.dropFirst(5)).trimmingCharacters(in: .whitespaces) : p
     }
 
-    /// "每 30 分钟" / "按 cron 33 17 * * *".
+    /// "Every 30 min" / "cron 33 17 * * *".
     var cadence: String? {
         if kind == "cron", let cron { return String(localized: "按计划 \(cron)") }
         guard let s = intervalSeconds, s > 0 else { return nil }
@@ -1169,7 +1169,7 @@ extension Session {
         while let c = t.first, c == "\u{26A0}" || c == "\u{FE0F}" { t.removeFirst() }
         return String(t).trimmingCharacters(in: .whitespaces)
     }
-    /// 在飞书打开: the session's place outside Persona, a web link only.
+    /// Open in Lark: the session's place outside Persona, a web link only.
     var externalLink: URL? {
         guard let s = externalURL, let u = URL(string: s), u.scheme?.lowercased() == "https" else { return nil }
         return u
@@ -1347,7 +1347,7 @@ nonisolated struct Compaction: Codable, Hashable, Sendable {
         case preTokens = "pre_tokens"
     }
 
-    /// 手动 / 自动 / 空闲时, for the divider; nil when the hub did not say.
+    /// Manual / Auto / While idle, for the divider; nil when the hub did not say.
     var source: String? {
         switch trigger {
         case "manual": String(localized: "手动", comment: "How a compaction started")
@@ -1420,7 +1420,7 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var toolName: String?
     var toolInput: JSONValue?
     var isError: Bool?
-    /// The hub cut `text` for the page (it ends in a "…（已截断，点开看全文，共 N 字节）" line): the whole is this many bytes,
+    /// The hub cut `text` for the page (it ends in a 「…（已截断，点开看全文，共 N 字节）」 line): the whole is this many bytes,
     /// `APIClient.fullItem` fetches it.
     var fullSize: Int?
     var image: ImagePayload?
@@ -1466,7 +1466,7 @@ nonisolated struct QuestionOption: Codable, Hashable, Sendable {
     var label: String
     var description: String?
 
-    /// "取最长的那段 (Recommended)" → ("取最长的那段", true): the words to show and whether Claude recommends it.
+    /// "Take the longest one (Recommended)" → ("Take the longest one", true): the words to show and whether Claude recommends it.
     /// The answer sent back keeps the original label. Phone and watch draw 「推荐」 instead of the suffix.
     static func display(_ label: String) -> (String, Bool) {
         for suffix in [" (Recommended)", "(Recommended)", "（推荐）", "(推荐)"] where label.hasSuffix(suffix) { // i18n-ignore: matches option labels from the agent
@@ -1530,7 +1530,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var agent: String?
     /// Why the agent asks for this permission, in its words.
     var reason: String?
-    /// What "always allow" allows for this request ("本会话不再问这个命令"); a Codex card without it offers no such button.
+    /// What "always allow" allows for this request ("don't ask about this command again this session"); a Codex card without it offers no such button.
     var alwaysLabel: String?
     /// What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md).
     var agentLabelHint: String?
@@ -1605,9 +1605,9 @@ nonisolated struct Resolution: Codable, Sendable {
     static let dismissed = Resolution(dismiss: true)
 }
 
-/// One device's push settings, kept by the hub per device (设置 › 通知). The timings come back from the hub's
+/// One device's push settings, kept by the hub per device (Settings › Notifications). The timings come back from the hub's
 /// hub.json "notify" so the page can say what "long" means; they are not sent back.
-/// 设置 › 翻译 as the hub keeps it with a device's prefs.
+/// Settings › Translation as the hub keeps it with a device's prefs.
 nonisolated struct TranslatePrefsBody: Codable, Equatable, Sendable {
     var enabled: Bool
     var target: String
@@ -1616,7 +1616,7 @@ nonisolated struct TranslatePrefsBody: Codable, Equatable, Sendable {
 
 /// A desktop app (the Mac app) connected to the hub, like WeChat's 「Mac 微信已登录」 (docs/protocol.md「桌面端」).
 nonisolated struct DesktopDevice: Codable, Hashable, Sendable, Identifiable {
-    /// Its device token's id (what 退出 revokes); empty when it connected with the pairing token.
+    /// Its device token's id (what Sign Out revokes); empty when it connected with the pairing token.
     var device: String
     var name: String
     var since: Date?
@@ -1629,7 +1629,7 @@ nonisolated struct DesktopDevice: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// The body that sets 手机静音 and nothing else (APIClient.setMuteWhileDesktop).
+/// The body that sets Phone Muted and nothing else (APIClient.setMuteWhileDesktop).
 nonisolated struct MuteWhileDesktopPut: Encodable, Sendable {
     var on: Bool
     enum CodingKeys: String, CodingKey { case on = "mute_while_desktop" }
@@ -1643,7 +1643,7 @@ nonisolated struct FleetLookPut: Encodable, Sendable {
 nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     enum Done: String, Codable, CaseIterable, Sendable { case off, long, always }
     var input: Bool = true
-    /// 手机静音 (WeChat's): no pushes to this phone while a desktop app is connected (hub/desktops.go).
+    /// Phone Muted (WeChat's): no pushes to this phone while a desktop app is connected (hub/desktops.go).
     var muteWhileDesktop = false
     var done: Done = .long
     /// The Fleet Live Activity on the lock screen / Dynamic Island (docs/live-activity.md).
@@ -1652,7 +1652,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     var lockDetails: Bool = false
     /// The compact Dynamic Island's two sides (FleetState.swift).
     var island = IslandPrefs()
-    /// 设置 › 翻译, so the hub translates new mail before it is opened (Translator.swift). Kept as the hub sent it.
+    /// Settings › Translation, so the hub translates new mail before it is opened (Translator.swift). Kept as the hub sent it.
     var translate: TranslatePrefsBody?
     var longTurnSeconds: Int?
     var doneDelaySeconds: Int?
@@ -1694,7 +1694,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
         // muteWhileDesktop is not sent back: the banner writes it alone (MuteWhileDesktopPut).
     }
 
-    /// "1 分钟" / "90 秒": how the page words a duration from the hub.
+    /// "1 min" / "90 s": how the page words a duration from the hub.
     static func duration(_ seconds: Int?) -> String {
         let s = seconds ?? 60
         if s >= 60, s % 60 == 0 { return String(localized: "\(s / 60) 分钟") }
@@ -1879,7 +1879,7 @@ nonisolated struct ScreenDialog: Codable, Hashable, Sendable {
     }
 }
 
-/// The words of 删除对话's confirmation (the web's `DeleteSessionDialog`).
+/// The words of Delete Chat's confirmation (the web's `DeleteSessionDialog`).
 nonisolated enum DeleteSessionText {
     /// `machine`: where its record stays (nil: unknown); `resume`: the command that continues it there (nil: none).
     static func message(title: String, machine: String?, resume: String?) -> String {

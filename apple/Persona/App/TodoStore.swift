@@ -57,7 +57,7 @@ final class TodoStore {
     }
 
     var openTodos: [TodoItem] { todos.filter { !$0.isDone } }
-    /// The 待办 badge (the drawer, the Mac's sidebar): open todos, quiet tasks left out (#1731, the main conversation
+    /// The To-dos badge (the drawer, the Mac's sidebar): open todos, quiet tasks left out (#1731, the main conversation
     /// tells about them). The list itself still has them.
     var badgeCount: Int { todos.count(where: { !$0.isDone && !$0.quiet }) }
 

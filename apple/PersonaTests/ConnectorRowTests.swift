@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 连接器's rows from the hub's list (`ConnectorRow.rows`, migration M6): mail and Feishu keep their rows and
+/// Settings › Connectors' rows from the hub's list (`ConnectorRow.rows`, migration M6): mail and Feishu keep their rows and
 /// their place whether the hub lists them or not.
 @MainActor struct ConnectorRowTests {
     private func c(_ id: String) -> HubConnector { HubConnector(id: id, name: id, status: "ok") }

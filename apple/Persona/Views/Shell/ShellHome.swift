@@ -3,7 +3,7 @@ import SwiftUI
 
 /// A new conversation in the shell (docs/ios.md「新外壳」): the same welcome as the old layout's (`AssistantWelcome`:
 /// greeting, what Persona can reach, things to ask), and over the composer what needs the user right now — agents
-/// waiting on them and the inbox's 需要你 — one quiet line each, as many as fit under the welcome's first row of things
+/// waiting on them and the inbox's Needs You — one quiet line each, as many as fit under the welcome's first row of things
 /// to ask (`NeedsRoom`). While the conversation spins up, the first message and a typing line so the send feels instant.
 struct ShellHome: View {
     @Environment(AppModel.self) private var model
@@ -18,7 +18,7 @@ struct ShellHome: View {
     @State private var room = NeedsRoom()
     @State private var route: ReadinessRoute?
 
-    /// How far the welcome fades out over 需要你 and the composer, rather than being cut off at their edge.
+    /// How far the welcome fades out over Needs You and the composer, rather than being cut off at their edge.
     fileprivate static let fade = Theme.Space.xl
 
     /// What the page shows: the start error, or under `-showHomeState error` a sample one (screenshots).
@@ -101,7 +101,7 @@ struct ShellHome: View {
     }
 }
 
-/// How tall 需要你 may be on the new conversation page: what is left between the end of the welcome's first row of things
+/// How tall Needs You may be on the new conversation page: what is left between the end of the welcome's first row of things
 /// to ask and the composer (2026-11-02, #283: on iPhone Duo's outer screen three rows and the composer took half of the
 /// screen and cut the suggestions in two). It shows as many rows as fit there, at least one. No limit until it is all
 /// measured.
@@ -117,9 +117,9 @@ private struct NeedsRoom {
     /// rows away either).
     private(set) var composer: CGFloat = 0
     private var composerSize: DynamicTypeSize?
-    /// The start error over 需要你, while it shows.
+    /// The start error over Needs You, while it shows.
     var error: CGFloat = 0
-    /// The readiness card over 需要你 (`ReadinessHomeCard`), while it shows.
+    /// The readiness card over Needs You (`ReadinessHomeCard`), while it shows.
     var card: CGFloat = 0
 
     mutating func pageAtRest(_ size: CGSize) {
@@ -183,7 +183,7 @@ private struct ShellErrorNote: View {
 }
 
 /// What needs the user, over the empty composer: the agents waiting on them (an answer, an approval, a plan), then the
-/// inbox's 需要你, newest first — three at most, fewer when `maxHeight` has no room for them (one at least), then where
+/// inbox's Needs You, newest first — three at most, fewer when `maxHeight` has no room for them (one at least), then where
 /// the rest are. A tap opens it where it lives.
 struct ShellNeedsYou: View {
     @Environment(AppModel.self) private var model
@@ -238,7 +238,7 @@ struct ShellNeedsYou: View {
     }
 
     /// The line for what is not shown: how many are left and where they are. The inbox holds only its own: once agents
-    /// are among them it says 需要你, and with only agents left it opens Agents.
+    /// are among them it says Needs You, and with only agents left it opens Agents.
     private func more(_ hidden: ArraySlice<Line>) -> (text: String, open: () -> Void) {
         let agents = hidden.filter { if case .agent = $0 { true } else { false } }.count
         let text = agents > 0 ? String(localized: "还有 \(hidden.count) 件需要你") : String(localized: "还有 \(hidden.count) 件在收件箱")
@@ -372,7 +372,7 @@ struct ShellNeedsYou: View {
         }
     }
 
-    /// A source's own mark: 飞书's for its chats, a connector's (GitHub…); nil draws the kind's symbol.
+    /// A source's own mark: Lark's for its chats, a connector's (GitHub…); nil draws the kind's symbol.
     private static func brand(_ it: InboxItem) -> String? {
         if it.connector != nil { return ConnectorText.brand(it.source) }
         return it.source == "lark" && it.kind != "doc" && it.kind != "moment" ? Theme.Brand.lark : nil
@@ -402,7 +402,7 @@ struct ShellNeedsYou: View {
     }
 }
 
-/// The pages the shell pushes onto the 助手 page by value (docs/ios.md「新外壳」), and what those push in turn: the
+/// The pages the shell pushes onto the Assistant page by value (docs/ios.md「新外壳」), and what those push in turn: the
 /// inbox (its items and Feishu pages), the machines (a machine, its agents). One stack, values only: a value pushed on
 /// top of a view-based push lands under it (docs/lessons/ios.md).
 struct ShellDestinations: ViewModifier {

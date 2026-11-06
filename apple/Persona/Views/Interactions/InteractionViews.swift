@@ -66,7 +66,7 @@ struct InteractionPreviewCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
-                // Every interaction is 需要你: the same red as the agent's dot and the section's count.
+                // Every interaction is Needs You: the same red as the agent's dot and the section's count.
                 Image(systemName: interaction.kind.symbol)
                     .foregroundStyle(StatusPalette.needsYou.dot)
                     .scaledFrame(width: Theme.Size.icon) // one column: the titles line up card to card
@@ -171,7 +171,7 @@ struct InteractionPreviewCard: View {
             // Only when the hub read the dialog too (it checks the screen before pressing the key).
             if interaction.dialog != nil, let d = interaction.screenDialog {
                 // Every plain option: a length cap here silently dropped options whose labels ran long — wrapped
-                // terminal rows rejoin into one label, and a "(Recommended)" suffix (drawn as the 推荐 chip, not
+                // terminal rows rejoin into one label, and a "(Recommended)" suffix (drawn as the Recommended chip, not
                 // words) pushed the first option over most often — and the row still looked complete (#1069).
                 // Long labels scroll in the row, single-line, as the hook path's already do.
                 let plain = d.options.filter { $0.kind == .plain }
@@ -351,8 +351,8 @@ struct InteractionPanel: View {
 }
 
 /// AskUserQuestion, iOS-list style: the question, its options in one grouped box (numbered like the terminal, a
-/// check when picked, 推荐 for the suggested one), "其他" as the box's last row. One question, one choice: a tap answers.
-/// Several questions: "header · 1/2" on top, small 上一题 / 下一题 / 提交 below.
+/// check when picked, Recommended for the suggested one), "Other" as the box's last row. One question, one choice: a tap answers.
+/// Several questions: "header · 1/2" on top, small Previous / Next / Submit below.
 struct QuestionForm: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
@@ -443,7 +443,7 @@ struct QuestionForm: View {
         .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : "") + (selected ? String(localized: "，已选", comment: "Accessibility suffix: a selected option") : ""))
     }
 
-    /// "其他": a quiet row; tapping it turns it into a field with its own send arrow.
+    /// "Other": a quiet row; tapping it turns it into a field with its own send arrow.
     @ViewBuilder private func otherRow(_ q: Question) -> some View {
         let text = Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 })
         HStack(alignment: .center, spacing: Theme.Space.m) {
@@ -507,7 +507,7 @@ struct QuestionForm: View {
 
     // MARK: Logic
 
-    /// "取最长的那段 (Recommended)" → ("取最长的那段", true). The answer sent back keeps the original label.
+    /// "Take the longest part (Recommended)" → ("Take the longest part", true). The answer sent back keeps the original label.
     static func display(_ label: String) -> (String, Bool) { QuestionOption.display(label) }
 
     private func pick(_ q: Question, _ opt: QuestionOption) {
@@ -661,7 +661,7 @@ struct PermissionForm: View {
                     Task { await model.resolve(interaction, Resolution(allow: true, always: true)) }
                 }
                 #if os(macOS)
-                // A text link as on iOS: the Mac's default style made it a third push button under 拒绝 / 允许.
+                // A text link as on iOS: the Mac's default style made it a third push button under Deny / Allow.
                 .buttonStyle(.link)
                 .lineLimit(1)
                 #endif
@@ -673,7 +673,7 @@ struct PermissionForm: View {
 }
 
 /// A Codex / TRAEX approval read off its TUI (docs/codex.md「提问和审批」): the command or the edits in full, the agent's
-/// reason, 拒绝 / 同意, 总是同意 naming what it would allow (only when the TUI offers it), and 拒绝并说明理由: the reason
+/// reason, Deny / Approve, Always Approve naming what it would allow (only when the TUI offers it), and Deny and Explain: the reason
 /// stops the turn and goes to the agent as its next message.
 struct AgentPermissionForm: View {
     @Environment(AppModel.self) private var model
@@ -734,7 +734,7 @@ struct AgentPermissionForm: View {
         }
     }
 
-    /// "拒绝并说明理由…": a quiet row that turns into a field with its own send arrow.
+    /// "Deny and Explain…": a quiet row that turns into a field with its own send arrow.
     @ViewBuilder private var reasonRow: some View {
         if explaining {
             HStack(alignment: .center, spacing: Theme.Space.m) {
@@ -779,7 +779,7 @@ struct AgentPermissionForm: View {
 }
 
 /// The terminal waiting on a choice (AskUserQuestion that bypassed the hook, a permission prompt…). The dialog is read
-/// off the screen and laid out like a question: header, question, numbered options with their descriptions, "其他回答…"
+/// off the screen and laid out like a question: header, question, numbered options with their descriptions, "Other answer…"
 /// for "Type something." The raw terminal and its keys stay one tap away; a screen with no dialog shows them directly.
 struct ScreenForm: View {
     @Environment(AppModel.self) private var model
@@ -853,7 +853,7 @@ struct ScreenForm: View {
                     }
                 }
                 Spacer(minLength: 0)
-                // The whole live terminal of that session, the one 终端 opens in its chat (#563): its keys, its scrolling.
+                // The whole live terminal of that session, the one Terminal opens in its chat (#563): its keys, its scrolling.
                 Button { Haptics.tap(); showTerminal = true } label: {
                     Label("查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
                 }
@@ -900,7 +900,7 @@ struct ScreenForm: View {
         .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : ""))
     }
 
-    /// The header, and 可多选 for a multi-select question.
+    /// The header, and Select multiple for a multi-select question.
     nonisolated static func eyebrow(_ d: ScreenParser.Dialog) -> String? {
         let parts = [d.steps.isEmpty ? d.header.flatMap { $0.isEmpty ? nil : $0 } : nil, d.multi ? String(localized: "可多选") : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -975,7 +975,7 @@ struct ScreenForm: View {
         .padding(.vertical, Theme.Space.m)
     }
 
-    /// 提交 (下一题 when another question follows): the ticks and the free text go to the terminal together.
+    /// Submit (Next when another question follows): the ticks and the free text go to the terminal together.
     private func multiFooter(_ d: ScreenParser.Dialog) -> some View {
         HStack(spacing: Theme.Space.m) {
             Spacer(minLength: 0)
@@ -1163,7 +1163,7 @@ extension Interaction {
         return try? JSON.decoder.decode(Interaction.self, from: data)
     }
 
-    /// A Bash permission request (允许 / 拒绝 / 本会话总是允许), for screenshots.
+    /// A Bash permission request (Allow / Deny / Always Allow in Session), for screenshots.
     static func samplePermission(_ key: SessionKey) -> Interaction? {
         let payload: [String: Any] = [
             "id": "sample-p", "machine_id": key.machineID, "session_id": key.sessionID, "kind": "permission",
@@ -1174,7 +1174,7 @@ extension Interaction {
         return try? JSON.decoder.decode(Interaction.self, from: data)
     }
 
-    /// A Codex approval read off its TUI (同意 / 拒绝 / 总是同意 / 拒绝并说明理由), for screenshots.
+    /// A Codex approval read off its TUI (Approve / Deny / Always Approve / Deny and Explain), for screenshots.
     static func sampleCodexApproval(_ key: SessionKey) -> Interaction? {
         let command = "curl -s 'http://localhost:8080/orders?page=1' -o /dev/null -w '%{time_total}'"
         let payload: [String: Any] = [
@@ -1239,8 +1239,8 @@ extension ApprovalCardOptions {
 }
 
 /// The BeautifulUI style's AskUserQuestion: its approval card, a question at a time with its step counter; the options with
-/// their descriptions and 推荐 for the suggested one; one choice moves on by itself (and on the last question,
-/// sends), several wait for 下一题 / 提交; "其他回答…" is the card's own field.
+/// their descriptions and Recommended for the suggested one; one choice moves on by itself (and on the last question,
+/// sends), several wait for Next / Submit; "Other answer…" is the card's own field.
 struct BUIQuestionForm: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
@@ -1266,7 +1266,7 @@ struct BUIQuestionForm: View {
         )
     }
 
-    /// "header · 可多选" above the question, when there is either.
+    /// "header · Select multiple" above the question, when there is either.
     private static func eyebrow(_ q: Question) -> String? {
         let parts = [q.header.flatMap { $0.isEmpty ? nil : $0 }, q.multiSelect ? String(localized: "可多选") : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -1286,7 +1286,7 @@ struct BUIQuestionForm: View {
         return out
     }
 
-    /// "取最长的那段 (Recommended)" → ("取最长的那段", true). The answer sent back keeps the original label.
+    /// "Take the longest part (Recommended)" → ("Take the longest part", true). The answer sent back keeps the original label.
     static func display(_ label: String) -> (String, Bool) { QuestionOption.display(label) }
 }
 
@@ -1342,10 +1342,10 @@ struct BUIPlanForm: View {
     }
 }
 
-/// The BeautifulUI style's tool approval: an approval card with the tool and what it will run on top, then 允许 /
-/// 本会话总是允许 / 拒绝. A tap sends, as the plain form's buttons do. Typing in the field denies with that reason,
-/// which Claude reads. A Codex card (docs/codex.md「提问和审批」) offers 同意 / 总是同意 (what it allows, only when Codex
-/// does) / 拒绝, with Codex's reason over the command.
+/// The BeautifulUI style's tool approval: an approval card with the tool and what it will run on top, then Allow /
+/// Always Allow in Session / Deny. A tap sends, as the plain form's buttons do. Typing in the field denies with that reason,
+/// which Claude reads. A Codex card (docs/codex.md「提问和审批」) offers Approve / Always Approve (what it allows, only when Codex
+/// does) / Deny, with Codex's reason over the command.
 struct BUIPermissionForm: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
@@ -1413,8 +1413,8 @@ struct BUIPermissionForm: View {
 }
 
 extension View {
-    /// A screen card's 查看终端: the session's whole live terminal comes up over the page (TerminalCover), the same as
-    /// 终端 in its chat; dragged down it is the card again.
+    /// A screen card's View Terminal: the session's whole live terminal comes up over the page (TerminalCover), the same as
+    /// Terminal in its chat; dragged down it is the card again.
     func terminalCover(_ shown: Binding<Bool>, for ix: Interaction) -> some View {
         fullScreenCover(isPresented: shown) {
             TerminalCover(key: SessionKey(machineID: ix.machineID, sessionID: ix.sessionID)).presentationBackground(.clear)
@@ -1423,7 +1423,7 @@ extension View {
 }
 
 /// The BeautifulUI style's terminal waiting on a choice (AskUserQuestion that bypassed the hook, a permission prompt…).
-/// The dialog is read off the screen and laid out as an approval card: question, numbered options with their descriptions, "其他回答…"
+/// The dialog is read off the screen and laid out as an approval card: question, numbered options with their descriptions, "Other answer…"
 /// for "Type something." The raw terminal and its keys stay one tap away; a screen with no dialog shows them directly.
 struct BUIScreenForm: View {
     @Environment(AppModel.self) private var model
@@ -1441,7 +1441,7 @@ struct BUIScreenForm: View {
         }
     }
 
-    /// The dialog as an approval card: the terminal's numbered options (推荐 for the suggested one), "Type something."
+    /// The dialog as an approval card: the terminal's numbered options (Recommended for the suggested one), "Type something."
     /// as the card's field, the dialog's detail on top. A tap sends the option to the terminal, as the plain form does.
     private func dialog(_ d: ScreenParser.Dialog, screen: String) -> some View {
         let choices = d.options.filter { $0.kind != .chat && $0.kind != .typeSomething }
@@ -1498,7 +1498,7 @@ struct BUIScreenForm: View {
                     }
                 }
                 Spacer(minLength: 0)
-                // The whole live terminal of that session, the one 终端 opens in its chat (#563): its keys, its scrolling.
+                // The whole live terminal of that session, the one Terminal opens in its chat (#563): its keys, its scrolling.
                 Button { Haptics.tap(); showTerminal = true } label: {
                     Label("查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
                 }

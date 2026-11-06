@@ -1,8 +1,8 @@
 import SwiftUI
 
-// 设置 › 连接器 › GitHub's sign-in (docs/connectors.md「二 · 7」): where the token comes from — one of the user's
+// Settings › Connectors › GitHub's sign-in (docs/connectors.md「二 · 7」): where the token comes from — one of the user's
 // computers' gh login, or the device flow with the GitHub CLI's built-in OAuth App — chosen here and kept on the hub (hub.json's
-// github.auth.from_machine is only the default). Choosing one leaves the other, so there is no 退出登录. When the token
+// github.auth.from_machine is only the default). Choosing one leaves the other, so there is no Sign Out. When the token
 // in use lacks a scope the connector needs, the page says which and what does not work.
 
 /// GET /api/v1/connectors/github/auth.
@@ -34,7 +34,7 @@ nonisolated struct GitHubAuth: Codable, Equatable, Sendable {
         case scopesKnown = "scopes_known"
     }
 
-    /// The scopes a token lacks, as people read them: repo、notifications.
+    /// The scopes a token lacks, as people read them, with the language's list separator: repo, notifications.
     static func names(_ missing: [Missing]) -> String { missing.map(\.scope).joined(separator: String(localized: "、", comment: "Separator between items in a list")) }
 }
 

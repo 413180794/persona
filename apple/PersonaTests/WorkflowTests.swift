@@ -53,7 +53,7 @@ import Testing
         #expect(killed.error == "Error: Workflow aborted")
         #expect(killed.elapsed() == 600)
         #expect(killed.line == "workflow「docs-sweep」 · 2/4 · 已停止")
-        // 后台 N: the workflow's copy in `background` is not counted twice.
+        // Background N: the workflow's copy in `background` is not counted twice.
         #expect(s.background?.count == 3)
         #expect(s.backgroundCount == 3)
         #expect(s.background?.first?.isWorkflow == true && s.background?.first?.runID == "wf_c1d9daf8-cd2")

@@ -1,8 +1,8 @@
 import XCTest
 
-/// The Persona tab's top bar and its sidebar (docs/ios.md「Persona 顶栏和侧边栏」): the avatar's menu (知识库, 详细信息, the
-/// copy items), 历史对话 on the left opening the sidebar, a swipe to the right anywhere on the page doing the same,
-/// 新对话 on the right, picking a conversation in the sidebar, and the bar staying put while a long chat scrolls.
+/// The Persona tab's top bar and its sidebar (docs/ios.md「Persona 顶栏和侧边栏」): the avatar's menu (Knowledge, Details, the
+/// copy items), Chat History on the left opening the sidebar, a swipe to the right anywhere on the page doing the same,
+/// New Chat on the right, picking a conversation in the sidebar, and the bar staying put while a long chat scrolls.
 /// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): its main conversation is「今天要处理的事」, the long one is ASK4.
 final class AssistantTopBarTests: XCTestCase {
     private var hub: String!
@@ -52,7 +52,7 @@ final class AssistantTopBarTests: XCTestCase {
         XCTAssertTrue(hint.exists || hint.waitForExistence(timeout: 1), "the pill did not say \(text):\n\(app.debugDescription)")
     }
 
-    /// The avatar's menu: every item is there, the copies say so (in the name pill), 详细信息 and 知识库 open their pages.
+    /// The avatar's menu: every item is there, the copies say so (in the name pill), Details and Knowledge open their pages.
     @MainActor func testAvatarMenu() throws {
         let app = launch(main)
         XCTAssertTrue(app.staticTexts["今天有 3 件事需要你："].waitForExistence(timeout: 15)
@@ -87,14 +87,14 @@ final class AssistantTopBarTests: XCTestCase {
         XCTAssertTrue(avatar(app).waitForExistence(timeout: 5), "not back on the chat")
     }
 
-    /// 新对话 on the right; 历史对话 on the left opens the sidebar, a conversation there closes it and switches.
+    /// New Chat on the right; Chat History on the left opens the sidebar, a conversation there closes it and switches.
     @MainActor func testButtonsAndPickingAConversation() throws {
         let app = launch(main)
         _ = avatar(app)
         let new = app.buttons["新对话"].firstMatch
         XCTAssertTrue(new.exists && new.isHittable, "no 新对话 on the right:\n\(app.debugDescription)")
         new.tapCenter()
-        // The conversation's own composer says 问 Persona… too: the page changed when its messages are gone and 新对话
+        // The conversation's own composer says Ask Persona… too: the page changed when its messages are gone and New Chat
         // (nothing to start anew from) is off.
         XCTAssertTrue(app.staticTexts["今天有什么需要我处理的？"].waitForNonExistence(timeout: 5) && !new.isEnabled,
                       "新对话 did not open the new-conversation page:\n\(app.debugDescription)")
@@ -105,11 +105,11 @@ final class AssistantTopBarTests: XCTestCase {
         XCTAssertTrue(history.isHittable, "no 历史对话 on the left")
         history.tapCenter()
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
-        // 豆包's layout (2026-10-31): what to start, the main conversation on its own row, 最近, Persona and 设置 at the foot.
+        // Doubao's layout (2026-10-31): what to start, the main conversation on its own row, Recent, Persona and Settings at the foot.
         for row in ["新对话", "定时任务", "知识库", "最近"] {
             XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")
         }
-        // The main conversation is 「主对话」, above 最近 and not under 置顶 (#4606).
+        // The main conversation is Main Chat, above Recent and not under Pin (#4606).
         let mainRow = app.buttons["sidebar-main"].firstMatch
         XCTAssertTrue(mainRow.exists && mainRow.label.hasPrefix("主对话"), "no 主对话 row:\n\(app.debugDescription)")
         XCTAssertLessThan(mainRow.frame.minY, app.staticTexts["最近"].firstMatch.frame.minY, "主对话 is not above 最近")

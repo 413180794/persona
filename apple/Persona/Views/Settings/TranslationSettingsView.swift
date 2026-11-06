@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 设置 › 翻译 (docs/ios.md「翻译」): on / off, the target language, and what gets translated: mail (on), and the
+/// Settings › Translation (docs/ios.md「翻译」): on / off, the target language, and what gets translated: mail (on), and the
 /// Feishu chats picked here (none: Feishu has too many messages to translate them all).
 struct TranslationSettingsView: View {
     @Environment(AppModel.self) private var model
@@ -91,7 +91,7 @@ struct TranslationChatPicker: View {
     @State private var query = ""
     @State private var loading = true
     @State private var error: String?
-    /// The chats picked as the sheet opened: 取消 asks first once they differ (Mac).
+    /// The chats picked as the sheet opened: Cancel asks first once they differ (Mac).
     @State private var opened: Set<String>?
 
     /// The picked ones first (so a chat no longer in the recent list can still be unpicked), then the recent ones.

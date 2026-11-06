@@ -1,10 +1,10 @@
 import Foundation
 
-/// 体验模式 (docs/ios.md「体验模式」): a made-up hub inside the app, for someone without one (App Review, a friend
+/// Demo Mode (docs/ios.md「体验模式」): a made-up hub inside the app, for someone without one (App Review, a friend
 /// with the TestFlight link). It sits under the data layer, so no page knows: `APIClient.request` and `LiveConnection`
 /// hand the demo config's traffic to it, and it answers with the hub's JSON. The data is scripts/mock/mock_hub.py's, written
 /// to Resources/Demo.json by scripts/mock/make_demo_data.py, with times moved to now. Nothing leaves the phone: what would
-/// reach a computer, Feishu or mail says 体验模式下不会真的发送 (`onNotSent`); a message sent to an agent is echoed
+/// reach a computer, Feishu or mail says "Nothing is actually sent in demo mode" (`onNotSent`); a message sent to an agent is echoed
 /// with a canned reply, so the chat behaves like one.
 @MainActor
 final class DemoHub {
@@ -29,9 +29,9 @@ final class DemoHub {
     private var lark: [String: [JSONValue]] = [:]
     private var tasks: [JSONValue] = []
     private var modelBindings: [String: JSONValue] = [:]
-    /// 设置 › 模型供应商's providers, the wizard's and the import's answers.
+    /// Settings › Model Providers' providers, the wizard's and the import's answers.
     private let providers = DemoProviders()
-    /// 设置 › Claude Code › 屏蔽的配置目录: machine id → the rules typed in the demo (it has no other directories).
+    /// Settings › Claude Code › Blocked Config Folders: machine id → the rules typed in the demo (it has no other directories).
     private var blockedClaudeDirs: [String: [JSONValue]] = [:]
     private var memory: [JSONValue] = []
     private var prefs: JSONValue = .object([:])
@@ -61,7 +61,7 @@ final class DemoHub {
         return data["assistant"]?["main"]?.string.map { SessionKey(machineID: data["assistant"]?["machine_id"]?.string ?? "server", sessionID: $0) }
     }
 
-    /// Back to the data as shipped (entering 体验模式 again starts over).
+    /// Back to the data as shipped (entering Demo Mode again starts over).
     func reset() {
         loaded = false
         modelBindings = [:]
@@ -106,7 +106,7 @@ final class DemoHub {
 
     private static func iso(_ d: Date) -> String { d.formatted(.iso8601) }
 
-    /// 订阅额度 (docs/usage-windows.md): a Claude and a Codex account, their windows relative to now.
+    /// Subscription Usage (docs/usage-windows.md): a Claude and a Codex account, their windows relative to now.
     private static func usageWindows(now: Date = .now) -> JSONValue {
         func win(_ label: String, _ mins: Int, _ used: Double, _ left: TimeInterval) -> JSONValue {
             ["label": .string(label), "window_minutes": .number(Double(mins)), "used_percent": .number(used),
@@ -149,7 +149,7 @@ final class DemoHub {
         #endif
     }
 
-    /// An action the demo does not pretend to do: it fails with 体验模式下不会真的发送 (an info toast, not an error:
+    /// An action the demo does not pretend to do: it fails with "Nothing is actually sent in demo mode" (an info toast, not an error:
     /// AppModel.show), so no page claims it worked.
     private func refuse() -> APIError {
         onNotSent?()
@@ -243,7 +243,7 @@ final class DemoHub {
             default: throw notFound()
             }
         #if os(macOS)
-        case ("machines", 4) where p[2] == "fs" && p[3] == "find": // ⌘K's 文件: a made-up checkout
+        case ("machines", 4) where p[2] == "fs" && p[3] == "find": // ⌘K's Files: a made-up checkout
             return ["cwd": .string(q["cwd"] ?? ""), "truncated": false, "source": "git",
                     "files": .array(Self.demoFiles.map { .string($0) })]
         #endif
@@ -420,7 +420,7 @@ final class DemoHub {
             t["agents"] = .array(ags)
             todos[i] = .object(t)
             return ["ok": true]
-        case ("assistant", 4) where p[1] == "tasks": throw refuse() // 立即运行
+        case ("assistant", 4) where p[1] == "tasks": throw refuse() // Run Now
         case ("assistant", 4) where p[1] == "conversations" && (p[3] == "archive" || p[3] == "unarchive"):
             edit(p[2]) { $0["archived"] = .bool(p[3] == "archive") }
             broadcastSessions("server")
@@ -432,7 +432,7 @@ final class DemoHub {
             guard let i = tasks.firstIndex(where: { $0["id"]?.string == p[2] }), case .object(var t) = tasks[i],
                   case .object(let edit) = body else { throw notFound() }
             for (k, v) in edit where k != "id" { t[k] = v.string == "" ? .null : v } // "" = the default
-            if t["push"]?.string == "asked" { t["session_id"] = .null } // 跑完推送: such a task runs in its own conversation
+            if t["push"]?.string == "asked" { t["session_id"] = .null } // Push When Done: such a task runs in its own conversation
             if edit["enabled"]?.bool == false { t["next_run"] = .null } else if t["repeat"]?.string != "daily" { t["next_run"] = t["at"] ?? .null }
             tasks[i] = .object(t)
             return ["task": .object(t)]
@@ -700,7 +700,7 @@ final class DemoHub {
     }
 
     #if os(macOS)
-    /// ⌘K's 文件 in the demo (Mac): the files of a small app, whatever directory is asked for.
+    /// ⌘K's Files in the demo (Mac): the files of a small app, whatever directory is asked for.
     static let demoFiles = [
         "README.md", "Package.swift", "Sources/Forecast.swift", "Sources/App/WeatherApp.swift",
         "Sources/App/Views/ForecastView.swift", "Sources/App/Views/SettingsView.swift", "Sources/App/Models/Forecast.swift",

@@ -11,7 +11,7 @@ nonisolated struct FeishuDocsIcon: Codable, Hashable, Sendable {
     var value: String
 }
 
-/// One row of 最近 / 我的空间 / 共享给我 / 收藏 / 快速访问 / 推荐 (`DocumentListItem` + `DriveSpaceItem` + `DriveDiscoverItem`).
+/// One row of Recent / My Space / Shared with Me / Favorites / Quick Access / Recommended (`DocumentListItem` + `DriveSpaceItem` + `DriveDiscoverItem`).
 nonisolated struct FeishuDocsItem: Codable, Identifiable, Hashable, Sendable {
     var id: String
     var token: String?
@@ -35,7 +35,7 @@ nonisolated struct FeishuDocsItem: Codable, Identifiable, Hashable, Sendable {
     var size: Double?
     var `extension`: String?
     var supported: Bool?
-    // 推荐 (discover) only.
+    // Recommended (discover) only.
     var summary: String?
     var reason: String?
     var views: Int?
@@ -703,7 +703,7 @@ nonisolated struct FeishuDocsMarkdownTable: Equatable, Sendable {
         return out
     }
 
-    /// One cell's Markdown as display text: `<br>` → line break, images → [图片].
+    /// One cell's Markdown as display text: `<br>` → line break, images → [Image].
     static func cellMarkdown(_ s: String) -> String {
         s.replacingOccurrences(of: #"<br\s*/?>"#, with: "\n", options: [.regularExpression, .caseInsensitive])
             .replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: String(localized: "[图片]"), options: .regularExpression)

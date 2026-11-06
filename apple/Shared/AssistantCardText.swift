@@ -3,7 +3,7 @@ import Foundation
 /// The assistant's cards in words (#2024, docs/assistant-views.md): where a reply is read as plain text (the watch,
 /// what Siri says), a ```persona-view block is its `fallback`, the words the assistant wrote for exactly this, and an
 /// old ```persona-card block its title. A block with neither, one that does not parse, or one still streaming is
-/// 〔卡片〕: never its JSON. Compiled into the watch (watchOS 10 APIs only).
+/// [Card]: never its JSON. Compiled into the watch (watchOS 10 APIs only).
 nonisolated enum AssistantCardText {
     static let view = "persona-view"
     static let card = "persona-card"

@@ -3,13 +3,13 @@ import SwiftUI
 // MARK: - Comments
 
 /// Every comment thread of a document: the quoted text and its replies; open threads first, resolved ones on their own
-/// tab. Where the hub's Feishu plugin can write comments (`LarkFeatures.docComments`, #1290) each thread has 回复 and
-/// 解决 / 重新打开, and the box at the bottom comments on the whole document, answers the thread picked, or comments
+/// tab. Where the hub's Feishu plugin can write comments (`LarkFeatures.docComments`, #1290) each thread has Reply and
+/// Resolve / Reopen, and the box at the bottom comments on the whole document, answers the thread picked, or comments
 /// on the passage the reader sent here; typing @ finds people to mention.
 struct FeishuDocsCommentsView: View {
     var url: String
     var title: String
-    /// Opened to comment on a passage of the document (the reader's 评论): the box starts there.
+    /// Opened to comment on a passage of the document (the reader's Comment): the box starts there.
     var passage: FeishuDocsCommentsModel.Target? = nil
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
@@ -119,7 +119,7 @@ struct FeishuDocsCommentsView: View {
         }
     }
 
-    /// 评论这段 over the box while it comments on a passage; × goes back to commenting on the document.
+    /// Comment on This over the box while it comments on a passage; × goes back to commenting on the document.
     private func passageBar(_ model: FeishuDocsCommentsModel) -> (heading: String, summary: String, removeLabel: String, remove: () -> Void)? {
         guard case .passage(let quote, _) = model.target else { return nil }
         return (String(localized: "评论这段"), quote, String(localized: "不评论这段"), { model.target = .document })
@@ -201,7 +201,7 @@ struct FeishuDocsThreadCard: View {
         .animation(Theme.Motion.state, value: actions?.replying)
     }
 
-    /// 回复 and 解决 / 重新打开, under the replies (Feishu's thread footer).
+    /// Reply and Resolve / Reopen, under the replies (Feishu's thread footer).
     private func footer(_ a: Actions) -> some View {
         HStack(spacing: Theme.Space.l) {
             if !thread.resolved {
@@ -247,13 +247,13 @@ struct FeishuDocsThreadCard: View {
 // MARK: - Commenting on a passage
 
 extension EnvironmentValues {
-    /// The reader's 评论这段 (#1290): opens the comments with the box on that passage (its text, the block it is in when
+    /// The reader's Comment on This (#1290): opens the comments with the box on that passage (its text, the block it is in when
     /// the reader knows). Nil where comments cannot be written.
     @Entry var feishuDocComment: ((String, String?) -> Void)? = nil
 }
 
-/// A paragraph of a document the user can comment on: a long press offers 拷贝 (when the document lets its text be
-/// copied), 评论这段 and 选一段评论… (the paragraph in a text view, where 评论 comments on the selected words). It takes
+/// A paragraph of a document the user can comment on: a long press offers Copy (when the document lets its text be
+/// copied), Comment on This and Select Text to Comment… (the paragraph in a text view, where Comment comments on the selected words). It takes
 /// the place of the text selection, whose menu takes no items of ours.
 struct FeishuDocsCommentable: ViewModifier {
     var text: String

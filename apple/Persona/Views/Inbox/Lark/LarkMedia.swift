@@ -16,7 +16,7 @@ final class LarkMedia {
     /// Bumped whenever an inline emoji image arrives, so text that drew `[label]` redraws with the picture.
     private(set) var emojiVersion = 0
     private(set) var emojis: [String: APIClient.LarkEmojis.Emoji] = [:]
-    /// The picker's sections (默认表情, 字节范…), keys in order.
+    /// The picker's sections (Default, provider…), keys in order.
     private(set) var emojiGroups: [APIClient.LarkEmojis.Group] = []
     /// The user's quick reactions (most used first).
     private(set) var quickReactions: [String] = ["THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LAUGH", "SURPRISED"]
@@ -30,7 +30,7 @@ final class LarkMedia {
 
     private init() { images.totalCostLimit = 120 << 20 }
 
-    /// Settings › 存储空间 cleared the files: drop the decoded copies too (emoji stay, they are tiny and on every page).
+    /// Settings › Storage cleared the files: drop the decoded copies too (emoji stay, they are tiny and on every page).
     func clearMemory() { images.removeAllObjects() }
 
     // MARK: Bytes

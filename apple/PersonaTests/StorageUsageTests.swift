@@ -1,7 +1,7 @@
 import Testing
 @testable import Jarvis
 
-/// 设置 › 存储空间: which caches folder counts as which kind.
+/// Settings › Storage: which caches folder counts as which kind.
 struct StorageUsageTests {
     /// ChatCache's folder goes up a version whenever its items change; every version is the Agents' chats.
     @Test func everyChatCacheVersionIsAgentChats() {

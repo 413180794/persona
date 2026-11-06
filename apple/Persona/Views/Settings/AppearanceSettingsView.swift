@@ -1,13 +1,13 @@
 import BeautifulUI
 import SwiftUI
 
-// 设置 › 外观 (2026-11-01): laid out like 连接器, one row per thing that changes how the app looks (形象, 主题色, 界面风格,
-// 深浅色 on iPhone and iPad, and 布局 on an iPhone), each opening its own page; the first three are apart (docs/ios.md「设计语言」).
-// The home screen icon is the 形象's, not a row of its own (#3203). Picking anything
+// Settings › Appearance (2026-11-01): laid out like Connectors, one row per thing that changes how the app looks
+// (Avatar, Theme Color, Interface Style, Light & Dark on iPhone and iPad, and Layout on an iPhone), each opening its own page; the first three are apart (docs/ios.md「设计语言」).
+// The home screen icon is the Avatar's, not a row of its own (#3203). Picking anything
 // there rebuilds the whole tree (`AppModel.look`, the layout switch); the settings path lives in AppModel, so the
 // rebuilt app is back on the same page.
 
-/// The 外观 section of 设置: one row per scene with what it is set to now.
+/// The Appearance section of Settings: one row per scene with what it is set to now.
 struct AppearanceSection: View {
     @Environment(AppModel.self) private var model
 
@@ -63,7 +63,7 @@ struct AppearanceSection: View {
     }
 }
 
-/// 设置 › 外观 › 形象: Persona's name, face, status dot, logo and home screen icon (its colors are the 主题色 跟随形象).
+/// Settings › Appearance › Avatar: Persona's name, face, status dot, logo and home screen icon (its colors are the Theme Color Match Avatar).
 struct PersonaSettingsPage: View {
     @Environment(AppModel.self) private var model
 
@@ -97,7 +97,7 @@ struct PersonaSettingsPage: View {
     }
 }
 
-/// 设置 › 外观 › 主题色: the sample of the look and the colors.
+/// Settings › Appearance › Theme Color: the sample of the look and the colors.
 struct ThemeColorSettingsPage: View {
     var body: some View {
         SettingsForm {
@@ -114,7 +114,7 @@ struct ThemeColorSettingsPage: View {
     }
 }
 
-/// 设置 › 外观 › 界面风格: the style and the text size.
+/// Settings › Appearance › Interface Style: the style and the text size.
 struct StyleSettingsPage: View {
     @Environment(AppModel.self) private var model
 
@@ -143,7 +143,7 @@ struct StyleSettingsPage: View {
                             }
                             .pickerStyle(.segmented)
                             #if os(macOS)
-                            .labelsHidden() // the row says 字号; a Mac form drew it again after the control (#1221)
+                            .labelsHidden() // the row says Text Size; a Mac form drew it again after the control (#1221)
                             #endif
                             .fixedSize()
                         }
@@ -161,7 +161,7 @@ struct StyleSettingsPage: View {
 }
 
 #if os(iOS) || os(visionOS)
-/// 设置 › 外观 › 布局 (iPhone): the ChatGPT-style shell or the old four tabs.
+/// Settings › Appearance › Layout (iPhone): the ChatGPT-style shell or the old four tabs.
 struct LayoutSettingsPage: View {
     @Environment(AppModel.self) private var model
 
@@ -181,7 +181,7 @@ struct LayoutSettingsPage: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// Switching rebuilds the root: land on 设置 › 外观 › 布局 again either way (the old layout's 设置 tab, the shell's sheet).
+    /// Switching rebuilds the root: land on Settings › Appearance › Layout again either way (the old layout's Settings tab, the shell's sheet).
     private func setOldLayout(_ on: Bool) {
         model.shellSettings = !on
         model.oldLayout = on
@@ -208,7 +208,7 @@ private struct SchemeProbe: ViewModifier {
 }
 #endif
 
-/// 设置 › 外观 › 深浅色: 跟随系统 / 浅色 / 深色 (`ColorSchemeChoice`), the system's own inline picker.
+/// Settings › Appearance › Light & Dark: Match System / Light / Dark (`ColorSchemeChoice`), the system's own inline picker.
 struct ColorSchemeSettingsPage: View {
     @Environment(AppModel.self) private var model
 

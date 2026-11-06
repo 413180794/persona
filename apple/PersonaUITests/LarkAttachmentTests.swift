@@ -3,7 +3,7 @@ import XCTest
 /// Mock-only sends; the same draft, preview, outbox and transport as a picked attachment.
 final class LarkAttachmentFlowTests: XCTestCase {
     /// Each test starts with no Feishu draft or outbox from the tests before it (`-showLarkSendFresh`, #1961): an
-    /// earlier test's failed or unconfirmed file stayed in 设计评审 and a later test tapped that one instead of its own.
+    /// earlier test's failed or unconfirmed file stayed in 「设计评审」 and a later test tapped that one instead of its own.
     /// Only on the first launch: a relaunch inside a test checks what the disk kept.
     private static let fresh = ["-showLarkSendFresh", "YES"]
 
@@ -298,7 +298,7 @@ final class LarkAttachmentFlowTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
     }
 
-    /// 周末徒步群 at its thread (60 replies), the thread's box with `draft` picked.
+    /// 「周末徒步群」 at its thread (60 replies), the thread's box with `draft` picked.
     @MainActor private func openThread(_ draft: String) throws -> XCUIApplication {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
         continueAfterFailure = false

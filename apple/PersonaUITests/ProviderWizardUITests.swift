@@ -1,7 +1,7 @@
 import XCTest
 
-/// 设置 › 模型供应商 (#2455) in 体验模式 (DemoHub, no hub needed): the provider wizard walked through (选供应商 → 连接 →
-/// 勾选模型 → 保存), 从 ~/.zshrc 导入 (a machine, its aliases ticked, imported) and a machine whose personad is too old.
+/// Settings › Model Providers (#2455) in Demo Mode (DemoHub, no hub needed): the provider wizard walked through (Choose Provider → Connect →
+/// Choose Models → Save), Import from ~/.zshrc (a machine, its aliases ticked, imported) and a machine whose personad is too old.
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a screenshot of each step, named with TEST_RUNNER_JARVIS_APPEARANCE (light / dark).
 final class ProviderWizardUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -67,7 +67,7 @@ final class ProviderWizardUITests: XCTestCase {
         XCTAssertEqual(glm.label, "已勾选 GLM-5")
         XCTAssertTrue(save.isEnabled)
         shot("3-models")
-        // 上一步 keeps what was typed.
+        // Back keeps what was typed.
         app.buttons["wizard.back"].tap()
         XCTAssertTrue(next.waitForExistence(timeout: 5))
         next.tap()
@@ -100,7 +100,7 @@ final class ProviderWizardUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["cc_kimi"].waitForExistence(timeout: 10), "cc_kimi is not in the list")
     }
 
-    /// 模型配置 › 主对话 has 运行方式; saving Agent SDK shows it in the category's line.
+    /// Model Settings › Main Chat has How It Runs; saving Agent SDK shows it in the category's line.
     @MainActor func testTheMainConversationsRuntime() {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "YES", "-tab", "settings", "-dev.openChat", "",

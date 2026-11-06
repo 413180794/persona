@@ -118,7 +118,7 @@ nonisolated struct ThreadMessage: Codable, Hashable, Sendable, Identifiable {
     var isMine: Bool { mine == true }
     var isEvent: Bool { event == true }
 
-    /// What the message says, for a quote and for 拷贝: its words, else what its media is.
+    /// What the message says, for a quote and for Copy: its words, else what its media is.
     var summary: String {
         if let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty { return t }
         guard let m = media?.first else { return "" }
@@ -126,7 +126,7 @@ nonisolated struct ThreadMessage: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// What a media is, in a few words: 图片, 贴纸 👍, 语音 0:12, 视频 1:05, 文件 名字.
+/// What a media is, in a few words: Image, Sticker 👍, Voice 0:12, Video 1:05, File name.
 nonisolated enum ThreadMediaText {
     static func describe(_ m: ThreadMedia) -> String {
         switch m.kind {
@@ -183,15 +183,15 @@ nonisolated enum ThreadLayout {
     /// The widest a bubble gets, as a share of the page's width: the same for mine and others'.
     static let bubbleShare: CGFloat = 0.78
 
-    /// The time in a message's corner, in the device's zone like the separators: 09:42, or 已编辑 09:42.
+    /// The time in a message's corner, in the device's zone like the separators: 09:42, or Edited 09:42.
     static func stamp(_ m: ThreadMessage, calendar: Calendar = .current) -> String {
         let c = calendar.dateComponents([.hour, .minute], from: m.at)
         let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
         return m.edited == true ? String(localized: "已编辑 \(time)") : time
     }
 
-    /// The line under the page's title, as the Feishu chat's (飞书 / 飞书话题群): the source, the kind of chat, and how
-    /// many are in it when the hub knows — Telegram 群聊 · 128 位成员.
+    /// The line under the page's title, as the Feishu chat's (Lark / Lark Topic Group): the source, the kind of chat, and how
+    /// many are in it when the hub knows — Telegram group · 128 members.
     static func subtitle(_ chat: ThreadChat?, source: String, locale: Locale = .current) -> String {
         let count = chat?.members.flatMap { $0 > 0 ? $0.formatted(.number.locale(locale)) : nil }
         switch chat?.kind {

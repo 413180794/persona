@@ -1,24 +1,24 @@
 import Foundation
 
 /// The agents the Agents list shows, top to bottom, as a plain function of what it is built from (#2213): ↑ / ↓ on the
-/// Mac open the next one from it. It follows the list's own sections (`ChatsView`): 置顶, then the grouping, a folded
-/// section or a closed 还有 N 个空闲 hiding its rows. The 需要你处理 cards are left out: their agents have rows below.
+/// Mac open the next one from it. It follows the list's own sections (`ChatsView`): Pinned, then the grouping, a folded
+/// section or a closed "N more idle" hiding its rows. The Needs You cards are left out: their agents have rows below.
 /// Unit-tested in `AgentListOrderTests`.
 struct AgentListRows {
     var order: AgentListOrder
     var grouping: DevGrouping
-    /// The quick filter is 全部: idle rows fold away (under one they are all listed).
+    /// The quick filter is All: idle rows fold away (under one they are all listed).
     var all = true
     /// A search opens every fold.
     var searching = false
     var isFolded: (String) -> Bool
-    /// Opened 还有 N 个空闲 rows (`expandedIdle`) and opened quiet spaces, repositories and working trees (`expandedQuiet`).
+    /// Opened "N more idle" rows (`expandedIdle`) and opened quiet spaces, repositories and working trees (`expandedQuiet`).
     var expandedIdle: Set<String> = []
     var expandedQuiet: Set<String> = []
 
     private func folded(_ id: String) -> Bool { !searching && isFolded(id) }
 
-    /// Busy rows, then the idle ones while their 还有 N 个空闲 is open (`ChatsView.agentRows`); a tab's agents together,
+    /// Busy rows, then the idle ones while their "N more idle" is open (`ChatsView.agentRows`); a tab's agents together,
     /// none of them while the tab is folded.
     func agentRows(_ list: [Session], key: String) -> [Session] {
         let rows = order.tabEntries(list, all: all)
@@ -34,7 +34,7 @@ struct AgentListRows {
         }
     }
 
-    /// 按项目: active spaces (each foldable), then the quiet ones that were opened; per machine when `byHost`.
+    /// By Project: active spaces (each foldable), then the quiet ones that were opened; per machine when `byHost`.
     func spaces(active: [SpaceGroup], quiet: [SpaceGroup], hosts: [MachineRef]?) -> [Session] {
         func section(_ active: [SpaceGroup], _ quiet: [SpaceGroup]) -> [Session] {
             active.flatMap { g in folded(g.id) ? [] : agentRows(g.sessions, key: g.id) }
@@ -46,7 +46,7 @@ struct AgentListRows {
         }
     }
 
-    /// 按仓库: per machine, the repositories with something going on (flat, or by working tree), then the quiet ones.
+    /// By Repository: per machine, the repositories with something going on (flat, or by working tree), then the quiet ones.
     func repos(_ tree: [RepoTree.Host], byHost: Bool) -> [Session] {
         tree.flatMap { host -> [Session] in
             if byHost && folded(Self.hostID(host.ref)) { return [] }
@@ -60,7 +60,7 @@ struct AgentListRows {
         }
     }
 
-    /// A repository with nothing going on: in 空闲的仓库 (`ChatsView.isQuiet`).
+    /// A repository with nothing going on: in Idle Repositories (`ChatsView.isQuiet`).
     func isQuiet(_ r: RepoTree.Repo) -> Bool { all && r.sessions.allSatisfy { !order.stays($0) } }
 
     /// A working tree's agents, then its nested spaces' while its「N 个子项」is open (`ChatsView.childWorktreeRows`).
@@ -73,7 +73,7 @@ struct AgentListRows {
         return own + w.children.flatMap(worktree)
     }
 
-    /// 按状态: a section per rank, each foldable (已看 starts folded).
+    /// By Status: a section per rank, each foldable (Seen starts folded).
     func states(_ live: [Session]) -> [Session] {
         let byRank = Dictionary(grouping: live, by: order.rank)
         return AgentListOrder.stateKeys.indices.flatMap { i in
@@ -81,7 +81,7 @@ struct AgentListRows {
         }
     }
 
-    /// 按机器: per machine, its busy rows and its idle ones while 空闲 is open.
+    /// By Machine: per machine, its busy rows and its idle ones while Idle is open.
     func machines(_ live: [Session], order refs: [MachineRef]) -> [Session] {
         refs.flatMap { ref -> [Session] in
             let rows = order.ordered(live.filter { $0.machineRef == ref })
@@ -92,7 +92,7 @@ struct AgentListRows {
         }
     }
 
-    /// 按待办: a section per todo, 未归属 last; `isFolded` per group (未归属 has its own default, `TodoAgentGroup.folded`).
+    /// By To-do: a section per todo, Unassigned last; `isFolded` per group (Unassigned has its own default, `TodoAgentGroup.folded`).
     func todos(_ groups: [TodoAgentGroup], isFolded: (TodoAgentGroup) -> Bool) -> [Session] {
         groups.flatMap { g in !searching && isFolded(g) ? [] : g.sessions }
     }

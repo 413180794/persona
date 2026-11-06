@@ -141,7 +141,7 @@ struct LarkOutboxTests {
     }
 }
 
-/// 回复 in the long-press menu: where the answer goes, and the line the quote bar shows.
+/// Reply in the long-press menu: where the answer goes, and the line the quote bar shows.
 @MainActor
 struct LarkReplyTests {
     private func message(_ id: String = "m1", text: String = "周六去吗", type: String = "TEXT", recalled: Bool = false) -> LarkMessage {

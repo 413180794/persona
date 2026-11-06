@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// Persona's profile, opened from its avatar on the Persona tab (and from 设置 › 助手): who it is and where it runs, what
+/// Persona's profile, opened from its avatar on the Persona tab (and from Settings › Assistant): who it is and where it runs, what
 /// it will do on its own next, and everything that shapes it — its scheduled tasks, the history of runs, what it
 /// remembers, what it is told about the user, and its launcher.
 struct AssistantProfileView: View {
@@ -20,7 +20,7 @@ struct AssistantProfileView: View {
     }
     private var machineName: String { model.machine(model.hubRef(machineID))?.name ?? machineID }
 
-    /// The machines the hub connects to, by name ("服务器、笔记本…"), from the hub's own list.
+    /// The machines the hub connects to, by name ("Server, Laptop…"), from the hub's own list.
     private var machinesLine: String {
         let names = model.machines.map(\.name)
         let list = names.joined(separator: String(localized: "、", comment: "Separator between machine names"))
@@ -223,7 +223,7 @@ struct AssistantProfileView: View {
         (model.sessionsByMachine[model.hubRef(machineID)] ?? []).contains { $0.assistant && $0.state == .working }
     }
 
-    /// 主对话派的任务只在主对话里通知 (#1731); nil (no switch) from a hub without the setting.
+    /// Tasks sent from the main chat notify only in the main chat (#1731); nil (no switch) from a hub without the setting.
     private var quietTasks: Binding<Bool>? {
         guard let on = model.assistantConfig?.mainTasksQuiet else { return nil }
         return Binding(get: { on }, set: { v in Task { await model.setMainTasksQuiet(v) } })
@@ -232,7 +232,7 @@ struct AssistantProfileView: View {
     private static let quietFooter = String(localized: "主对话派出去的任务不进灵动岛、推送和角标，做完、等你回答或出错时由 Persona 在主对话里告诉你。只影响之后派的任务。")
 
     // Where Persona asks before acting on your behalf: the Mac app asks in the app, iOS asks on the phone (#4068).
-    // The push itself still goes to the iPhone, so "给你推送" stays in both.
+    // The push itself still goes to the iPhone, so "notify you" stays in both.
     #if os(macOS)
     private static let reachApprovalLine = String(localized: "在 App 里问你、给你推送")
     private static let reachApprovalFooter = String(localized: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在 App 里问你。")
@@ -347,7 +347,7 @@ struct AssistantUpcomingRow: View {
     }
 }
 
-// MARK: - 运行记录
+// MARK: - Run History
 
 enum AssistantRunText {
     static func statusWord(_ r: APIClient.ScheduleRun) -> String {
@@ -366,7 +366,7 @@ enum AssistantRunText {
         }
     }
 
-    /// "准时" / "晚了 21 秒" / "手动运行" / the error.
+    /// "On time" / "21 s late" / "Run manually" / the error.
     static func detail(_ r: APIClient.ScheduleRun) -> String {
         if r.manual == true { return String(localized: "手动运行") }
         if r.status != "ok" { return r.error ?? statusWord(r) }
@@ -442,7 +442,7 @@ struct AssistantRunRow: View {
     }
 
     /// BeautifulUI's task row: the green check, the red cross, or an empty ring for a skipped run; what ran and how
-    /// (准时 / 晚了 21 秒 / the error) under it; the chevron when it has a conversation to open.
+    /// (On time / 21 s late / the error) under it; the chevron when it has a conversation to open.
     @ViewBuilder private var beautiful: some View {
         let row = TaskRow(TaskItem(id: run.id, title: showTitle ? run.title : AssistantScheduleText.moment(run.at),
                                    subtitle: showTitle ? "\(AssistantScheduleText.hm(run.at)) · \(AssistantRunText.detail(run))" : AssistantRunText.detail(run),

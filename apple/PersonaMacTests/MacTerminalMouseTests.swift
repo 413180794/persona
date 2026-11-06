@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import Jarvis
 
-/// The pointer on a terminal the Mac drives (docs/terminal.md 第二十五节): the same routing, buttons and bits as the
+/// The pointer on a terminal the Mac drives (docs/terminal.md「第二十五节」): the same routing, buttons and bits as the
 /// web's `lib/terminal-mouse.ts`.
 struct MacTerminalMouseTests {
     @Test func buttonsAreHerdrs() {
@@ -107,7 +107,7 @@ struct MacTerminalMouseTests {
                         .init(action: .up, button: .right, column: 7, row: 0, mods: 0)])
     }
 
-    /// Shift keeps the pointer here: a drag selects and nothing goes out. 本地选择 is the other way round.
+    /// Shift keeps the pointer here: a drag selects and nothing goes out. Select Locally is the other way round.
     @Test func shiftSelectsHere() {
         let (v, w) = view()
         var got: [MacTerminalMouse.Event] = []

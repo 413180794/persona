@@ -2,7 +2,7 @@ import Foundation
 
 /// The agents of one herdr tab as one group (#2320, docs/agent-states.md「一个 tab 里的几个 pane」): an agent splits its
 /// tab and starts more agents in the new panes to work on the same thing. They sit in the order of their panes, the
-/// 发起者 (the top left pane, the others split from it) first. The same rules as the web's (`web/src/lib/herdr-tree.ts`),
+/// starter (the top left pane, the others split from it) first. The same rules as the web's (`web/src/lib/herdr-tree.ts`),
 /// as plain functions so they are unit-tested (`TabPanesTests`) apart from the views.
 enum TabPanes {
     /// The order herdr opened the pane in, from its id: herdr counts its panes up in base 36 ("w4R:pW", "w4R:p2E"),
@@ -38,7 +38,7 @@ enum TabPanes {
         return inPaneOrder(a, b)
     }
 
-    /// The tab's 发起者: the agent in its first pane (`pane_index` 0). None when the tab has one agent, or that pane is a
+    /// The tab's starter: the agent in its first pane (`pane_index` 0). None when the tab has one agent, or that pane is a
     /// shell or not placed: the agents are then peers, and none is marked.
     static func launcher(of panes: [Session]) -> Session? {
         panes.count > 1 ? panes.first { $0.paneIndex == 0 } : nil
@@ -64,11 +64,11 @@ enum TabPanes {
         return "tab/\(s.machineRef.path)/\(space)/\(s.slotIndex.map(String.init) ?? s.slotID ?? "")"
     }
 
-    /// An agent's place in a tab of several: what it is called there and whether it is the 发起者.
+    /// An agent's place in a tab of several: what it is called there and whether it is the starter.
     nonisolated struct Role: Equatable, Hashable, Sendable {
         var name: String
         var launcher: Bool
-        /// Hangs off the 发起者 (set a level in under it); with no 发起者 the agents are peers.
+        /// Hangs off the starter (set a level in under it); with no starter the agents are peers.
         var branch = false
     }
 
@@ -89,7 +89,7 @@ enum TabPanes {
         func isLauncher(_ s: Session) -> Bool { launcher?.key == s.key }
         /// What its row says about its place in the tab.
         func role(of s: Session) -> Role { Role(name: paneName(s, among: sessions), launcher: isLauncher(s), branch: isBranch(s)) }
-        /// Hangs off the 发起者 (indented under it); with no 发起者 the agents are peers.
+        /// Hangs off the starter (indented under it); with no starter the agents are peers.
         func isBranch(_ s: Session) -> Bool { launcher != nil && !isLauncher(s) }
     }
 
@@ -145,7 +145,7 @@ enum TabPanes {
     static func grouped(_ list: [Session]) -> [Session] { entries(list).flatMap(\.sessions) }
 
     /// What a tab's agent is called beside its tab mates: its agent ("Claude", "Codex"). Two of its other agents
-    /// running the same one are numbered in pane order ("Claude 2"); the 发起者 is told apart by its mark, so it is not.
+    /// running the same one are numbered in pane order ("Claude 2"); the starter is told apart by its mark, so it is not.
     static func paneName(_ s: Session, among panes: [Session]) -> String {
         let label = s.agentLabel
         let first = launcher(of: panes)

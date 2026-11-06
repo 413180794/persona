@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// A chat in the 消息 list (#392): avatar, name and time, the last message and its unread count. The iPhone's tab
-/// (`LarkConversationsView`) and the Mac's 消息 section (`MacLarkMessagesPage`, #3162) draw the same row.
+/// A chat in the Messages list (#392): avatar, name and time, the last message and its unread count. The iPhone's tab
+/// (`LarkConversationsView`) and the Mac's Messages section (`MacLarkMessagesPage`, #3162) draw the same row.
 struct LarkConversationRow: View {
     let conversation: LarkConversation
-    /// The account's message display settings, for [removed] words in the summary (#882).
+    /// The account's message display settings, for Brave Climb words in the summary (#882).
     let display: LarkMessageDisplay
 
     var body: some View {

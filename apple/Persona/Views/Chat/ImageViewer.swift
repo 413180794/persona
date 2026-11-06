@@ -8,7 +8,7 @@ import UIKit
 
 /// An image the viewer shows: its bytes, a picture file on a machine (its thumbnail, as big as the node draws one), or
 /// a Feishu image (a hub path or a web URL, through `LarkMedia`). `title` / `detail` are the two lines of the top bar
-/// (a name; where it came from, its size); 拷贝路径 / 在文件页打开 when it is a file.
+/// (a name; where it came from, its size); Copy Path / Open in Files when it is a file.
 struct ViewerImage: Identifiable, Hashable {
     var payload: ImagePayload?
     var file: FileRef?
@@ -25,14 +25,14 @@ struct ViewerImage: Identifiable, Hashable {
 }
 
 /// The one full-screen image viewer of the app (docs/ios.md「图片查看器」), as Photos shows a picture: a round back
-/// button, the title in a capsule and a ⋯ menu on top; a strip of thumbnails when there are several, then 分享 · the
-/// main actions in a capsule (保存, 标注, 信息) · 拷贝 at the bottom. The page's own color behind it; a tap hides the
+/// button, the title in a capsule and a ⋯ menu on top; a strip of thumbnails when there are several, then Share · the
+/// main actions in a capsule (Save, Markup, Info) · Copy at the bottom. The page's own color behind it; a tap hides the
 /// bars and the backdrop turns black. Pinch / double-tap zoom, swipe between images, pull down to close (the picture
 /// follows the finger and shrinks, the backdrop fades). Every place that opens a picture large opens this.
 struct ImageViewer: View {
     var images: [ViewerImage]
     @State var index: Int
-    /// Where an edited image goes (the chat's composer); nil hides 标注.
+    /// Where an edited image goes (the chat's composer); nil hides Markup.
     var attach: ((UIImage) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var openedFile: FileRef?
@@ -64,7 +64,7 @@ struct ImageViewer: View {
         self.attach = attach
     }
 
-    /// Feishu images by URL (messages, cards, 公司圈, documents).
+    /// Feishu images by URL (messages, cards, Moments, documents).
     init(urls: [String], index: Int) {
         self.init(items: urls.map { ViewerImage(url: $0) }, index: index)
     }
@@ -102,7 +102,7 @@ struct ImageViewer: View {
         .persistentSystemOverlays(chrome ? .automatic : .hidden)
         #endif
         #if DEBUG
-        // Screenshots: `-showViewerChromeHidden YES` opens with the bars hidden, `-showViewerInfo YES` with 信息 open.
+        // Screenshots: `-showViewerChromeHidden YES` opens with the bars hidden, `-showViewerInfo YES` with Info open.
         .task {
             if UserDefaults.standard.bool(forKey: "showViewerChromeHidden") { try? await Task.sleep(for: .seconds(1)); chrome = false }
             if UserDefaults.standard.bool(forKey: "showViewerInfo") { try? await Task.sleep(for: .seconds(1)); showInfo = true }
@@ -268,7 +268,7 @@ struct ImageViewer: View {
         }
     }
 
-    /// 信息: the picture's name, size and where it is.
+    /// Info: the picture's name, size and where it is.
     private var info: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Text(current?.title ?? String(localized: "图片")).font(Theme.Font.heading).lineLimit(2)
@@ -343,7 +343,7 @@ enum ViewerLoader {
             return await LarkMedia.shared.image(url, maxPixel: 4096)
         }
         if let f = item.file, AppModel.shared.features(f.group).contains("file_thumb"), let api = AppModel.shared.api(f.group) {
-            // Only the file is known: the biggest thumbnail the node draws (1024 px); 在文件页打开 has the original.
+            // Only the file is known: the biggest thumbnail the node draws (1024 px); Open in Files has the original.
             return await FileThumbnails.shared.thumbnail(f, size: 0, modified: nil, side: min(side ?? 1024, 1024), scale: 1, api: api)
         }
         return nil

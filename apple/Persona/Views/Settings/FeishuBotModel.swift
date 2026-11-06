@@ -100,7 +100,7 @@ extension APIClient {
     func testFeishuBot() async throws { try await post("/api/v1/bots/feishu/test") }
 }
 
-/// 设置 › 连接器 › 飞书机器人: load the bot's state, edit the credentials and switches, pair. Each change goes to the hub
+/// Settings › Connectors › Lark Bot: load the bot's state, edit the credentials and switches, pair. Each change goes to the hub
 /// at once and the page shows what the hub answered; a failed change leaves the page as it was.
 @Observable final class FeishuBotModel {
     struct Deps {

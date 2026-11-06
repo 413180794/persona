@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// 这台电脑能做什么 (#3018, the web's #2429, docs/machines.md「自检」): what `personad node doctor` finds on a computer, read
+// What This Computer Can Do (#3018, the web's #2429, docs/machines.md「自检」): what `personad node doctor` finds on a computer, read
 // as features. The node reports individual checks (server/internal/node/doctor.go, DoctorReport as it is); a person
 // wants to know whether phone approvals work, so each feature is a set of those checks and takes the worst state among
 // them. The grouping, the states and the words are the web's (web/src/lib/node-health.ts): change both together.
@@ -47,7 +47,7 @@ nonisolated struct DoctorCheck: Decodable, Hashable, Sendable {
         }
     }
 
-    /// Persona's own generated file is out of date or gone: 修复 writes it again.
+    /// Persona's own generated file is out of date or gone: Repair writes it again.
     var fixable: Bool { state == "stale" || state == "missing" }
 }
 
@@ -94,9 +94,9 @@ nonisolated enum NodeHealth {
         var detail: String
         /// The checks it stands on (DoctorCheck.name).
         var checks: [String]
-        /// Something a computer may well not use: a warning alone means 未启用.
+        /// Something a computer may well not use: a warning alone means Off.
         var optional = false
-        /// For an optional one: whether this computer needs it (by its engine), which turns the warning into 有问题.
+        /// For an optional one: whether this computer needs it (by its engine), which turns the warning into Problem.
         var needed: (@Sendable (MachineEngine) -> Bool)?
     }
 
@@ -132,7 +132,7 @@ nonisolated enum NodeHealth {
         return w
     }
 
-    /// A stale or missing generated file has 修复 here, so the node's hint (a command line) is not repeated.
+    /// A stale or missing generated file has Repair here, so the node's hint (a command line) is not repeated.
     private static func note(_ c: DoctorCheck?) -> String {
         guard let c else { return "" }
         if c.state == "stale" { return String(localized: "Persona 生成的文件过期了，点「修复」重新生成") }
@@ -141,7 +141,7 @@ nonisolated enum NodeHealth {
     }
 
     /// The report as features, in a fixed order. A feature none of whose checks the report has (an older node reports
-    /// fewer) is left out; a check no feature covers and that is not fine makes 其他检查 so nothing hides.
+    /// fewer) is left out; a check no feature covers and that is not fine makes Other Checks so nothing hides.
     static func derive(_ report: DoctorReport, engine: MachineEngine = .herdr) -> [Feature] {
         var byName: [String: DoctorCheck] = [:]
         for c in report.checks where byName[c.name] == nil { byName[c.name] = c }
@@ -171,7 +171,7 @@ nonisolated enum NodeHealth {
         /// Features that are broken or partial.
         var attention: Int
         var title: String
-        /// 没有设置：… ("" when every feature is in use).
+        /// Not set up: … ("" when every feature is in use).
         var off: String
     }
 
@@ -182,7 +182,7 @@ nonisolated enum NodeHealth {
                        off: off.isEmpty ? "" : String(localized: "没有设置：\(off.joined(separator: "、"))"))
     }
 
-    /// The checks 修复 would put right: Persona's own generated files that are stale or missing.
+    /// The checks Repair would put right: Persona's own generated files that are stale or missing.
     static func fixable(_ report: DoctorReport) -> [DoctorCheck] { report.checks.filter(\.fixable) }
 
     /// The user's own settings the node only looks at: a row of information, not a feature.
@@ -190,7 +190,7 @@ nonisolated enum NodeHealth {
         report.checks.filter { infoCheckNames.contains($0.name) && $0.status != .ok }
     }
 
-    /// What the toast says after 修复: the node re-checks after writing, so the report is already the new one.
+    /// What the toast says after Repair: the node re-checks after writing, so the report is already the new one.
     static func fixResult(_ report: DoctorReport) -> (text: String, failed: Bool) {
         if let failed = report.checks.first(where: { $0.name == "fix" && $0.status == .fail }) { return (failed.detail, true) }
         return report.fixed.isEmpty ? (String(localized: "没有需要重新生成的文件"), false) : (String(localized: "已重新生成 \(report.fixed.count) 项"), false)
@@ -209,7 +209,7 @@ nonisolated enum NodeHealth {
         return nil
     }
 
-    /// Whether the hub can install its own build there (重新部署): not the hub's own machine, not one that dials in.
+    /// Whether the hub can install its own build there (Redeploy): not the hub's own machine, not one that dials in.
     static func canDeploy(_ m: Machine) -> Bool { !["local", "link", "service"].contains(m.kind) }
 
     /// Why an old node cannot be updated from here, when it cannot.
@@ -222,7 +222,7 @@ nonisolated enum NodeHealth {
     }
 }
 
-/// The section's state: checks once when shown (and on 重新检查); 修复 writes and comes back with the new report.
+/// The section's state: checks once when shown (and on Check Again); Repair writes and comes back with the new report.
 @MainActor @Observable final class NodeHealthModel {
     struct Deps {
         var check: () async throws -> DoctorReport
@@ -300,13 +300,13 @@ nonisolated enum NodeHealth {
 }
 
 extension APIClient {
-    /// 这台电脑能做什么 (docs/machines.md「自检」): the node's self-check, read only. Full devices only (403 otherwise);
+    /// What This Computer Can Do (docs/machines.md「自检」): the node's self-check, read only. Full devices only (403 otherwise);
     /// an old node answers "unknown method", an old hub a plain 404. The hub gives the node 45 s.
     func nodeDoctor(machine: String) async throws -> DoctorReport {
         try JSON.decoder.decode(DoctorReport.self, from: await request("GET", "/api/v1/machines/\(machine)/doctor", timeout: 50))
     }
 
-    /// 修复: the node writes Persona's own generated files again (never the user's settings) and re-checks.
+    /// Repair: the node writes Persona's own generated files again (never the user's settings) and re-checks.
     func fixNodeDoctor(machine: String) async throws -> DoctorReport {
         try await post("/api/v1/machines/\(machine)/doctor/fix", timeout: 65, as: DoctorReport.self)
     }

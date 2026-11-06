@@ -15,7 +15,7 @@ extension EnvironmentValues {
 }
 
 /// A person's profile card, laid out like the Lark gateway's (profile-dialog): cover, avatar, names, status, signature,
-/// 消息, then the info rows (first five, 查看更多信息 for the rest). Leader rows open the leader's card.
+/// Message, then the info rows (first five, Show More for the rest). Leader rows open the leader's card.
 struct LarkProfileView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 设置 › 连接器 › GitHub › 收件箱 (docs/inbox.md「连接器：GitHub」): which CI failures come in, and repositories
+// Settings › Connectors › GitHub › Inbox (docs/inbox.md「连接器：GitHub」): which CI failures come in, and repositories
 // that bring nothing in. Kept on the hub (PUT /api/v1/connectors/github/settings {"options": …}).
 
 /// GitHub's inbox options, as GET /api/v1/connectors gives them.
@@ -32,7 +32,7 @@ extension APIClient {
     }
 }
 
-/// The 收件箱 section of GitHub's page: the CI failures picker and the muted repositories.
+/// The Inbox section of GitHub's page: the CI failures picker and the muted repositories.
 struct GitHubInboxSettings: View {
     @Environment(AppModel.self) private var model
     @State var options: GitHubInboxOptions

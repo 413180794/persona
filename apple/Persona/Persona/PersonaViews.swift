@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
-/// The persona's face, still (the sidebar's card, the profile, 设置): a package's avatar in a circle, or a
+/// The persona's face, still (the sidebar's card, the profile, Settings): a package's avatar in a circle, or a
 /// built-in's JarvisAvatar. `persona` defaults to the one on screen.
 struct PersonaAvatar: View {
     @Environment(AppModel.self) private var model
@@ -24,8 +24,8 @@ struct PersonaAvatar: View {
                     .frame(width: size, height: size)
                     .clipShape(.circle)
             } else {
-                // The built-in in the accent it would have chosen (it brings no colors: under 跟随形象, the style's own),
-                // also while another persona is on (设置's card).
+                // The built-in in the accent it would have chosen (it brings no colors: under Match Avatar, the style's own),
+                // also while another persona is on (Settings' card).
                 AssistantAvatar(size: size, design: p.avatarDesign, state: working ? .working : .idle,
                              tint: p.isBuiltin ? model.builtinAccent : nil)
             }
@@ -62,7 +62,7 @@ struct PersonaDot: View {
 }
 
 extension Persona {
-    /// A built-in's drawing; the default's (团子) for a package, whose face falls back to it while it is not on the phone.
+    /// A built-in's drawing; the default's (Mochi) for a package, whose face falls back to it while it is not on the phone.
     var avatarDesign: AssistantAvatar.Design { design.flatMap(AssistantAvatar.Design.init(rawValue:)) ?? .mochi }
 }
 

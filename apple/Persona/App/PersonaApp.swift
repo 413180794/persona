@@ -46,8 +46,8 @@ struct PersonaApp: App {
                 model.retryRegistry() // launched in the background before the first unlock: the pairing reads now
                 model.resumeLinks()
                 LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces }
-                // The home screen icon in step with the 形象 and 深浅色 (a scheme from a launch argument, a switch the system
-                // cut short, the old App 图标 setting); nothing happens when it already is, so no alert.
+                // The home screen icon in step with the Avatar and Light & Dark (a scheme from a launch argument, a switch the system
+                // cut short, the old App Icon setting); nothing happens when it already is, so no alert.
                 model.followAppIcon()
                 if old != new { Task { await model.refresh() } }
             } else if new == .background {
@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         // `-openRecapsFresh YES`: no away recap closed yet, so the newest shows open again (RecapInFlowTests).
         if d.bool(forKey: "openRecapsFresh") { d.removeObject(forKey: "closedRecaps") }
-        // `-openScreenFresh YES`: no Mac's Screen Sharing sign-in remembered, 一键解锁 off (ScreenPasswordTests, #1322).
+        // `-openScreenFresh YES`: no Mac's Screen Sharing sign-in remembered, One-Tap Unlock off (ScreenPasswordTests, #1322).
         if d.bool(forKey: "openScreenFresh") {
             ScreenCredentials.forgetAll()
             ScreenUnlock.forgetAll()
@@ -118,8 +118,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         PagePerf.runIfAsked()
         #endif
         // Every tab a UI test can ask for. One it asks for and this does not know leaves the tab the last run saved
-        // (`app.tab`): after a run in the old layout with `-tab settings`, the shell opened on the 设置 sheet and the
-        // Feishu tests that asked for `-tab feishu` never saw the 消息 page (#1664).
+        // (`app.tab`): after a run in the old layout with `-tab settings`, the shell opened on the Settings sheet and the
+        // Feishu tests that asked for `-tab feishu` never saw the Messages page (#1664).
         switch d.string(forKey: "tab") {
         case "dev": AppModel.shared.selectedTab = .chats
         case "mail": AppModel.shared.selectedTab = .mail
@@ -130,7 +130,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         // "machine/session", or "group|machine/session" for another group.
         if let open = d.string(forKey: "openSession"), let key = AppModel.shared.resolve(path: open) {
-            // `-openFromDoneNotice YES`: as a tap on its "完成" notification (lands on the latest answer).
+            // `-openFromDoneNotice YES`: as a tap on its "Done" notification (lands on the latest answer).
             if d.bool(forKey: "openFromDoneNotice") {
                 AppDelegate.openFromNotification(key, finished: true)
             } else {
@@ -278,7 +278,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 }
                 if let pair {
                     if let request = PairReceiptActions.request(action: action, pair) {
-                        // 撤销 / 是我的电脑 / 不是: done in the background, the result posted as a local notification.
+                        // Undo / It's Mine / Not Mine: done in the background, the result posted as a local notification.
                         AppDelegate.inBackground("pair-receipt", done: done) { await PairReceiptActions.run(request, pair, id: noteID) }
                         return
                     }
@@ -292,7 +292,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 // The group the push came from (docs/multi-hub.md「推送」): its hub settles the button, its session opens.
                 let key = ref.flatMap(Self.sessionKey)
                 if let key, let reply = NotificationActions.replyText(action: action, text: text) {
-                    // 回复 on a finished turn: sent in the background, like a button (#3449).
+                    // Reply on a finished turn: sent in the background, like a button (#3449).
                     AppDelegate.inBackground("reply-from-notification", done: done) { await NotificationActions.sendReply(key, text: reply) }
                     return
                 }
@@ -301,7 +301,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                     AppDelegate.resolveFromNotification(ixID, group: key?.group ?? ref?.group, resolution, action: action, done: done)
                     return
                 }
-                // No interaction: a turn finished ("完成"), opened at its answer like from the list.
+                // No interaction: a turn finished ("Done"), opened at its answer like from the list.
                 if action != UNNotificationDismissActionIdentifier { AppDelegate.openFromNotification(key, finished: ixID == nil) }
                 done()
             }
@@ -370,7 +370,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             "actions": [["id": "reply", "title": "回复", "input": ["placeholder": "输入回复"]],
                         ["id": "open", "title": "打开处理", "foreground": true],
                         ["id": "stop", "title": "停用示例", "role": "destructive"]]]]
-        // simctl push 不执行 NSE。此处只复用其交付前的注册逻辑，不能据此声称真机 APNs 首条已验证。
+        // simctl push does not run the NSE. This only reuses its pre-delivery registration; it does not prove the first real-device APNs push.
         nonisolated(unsafe) let ready = content.copy() as! UNNotificationContent
         await ExtensionNotificationActions.register(content: ready)
         var background = NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification).makeAsyncIterator()

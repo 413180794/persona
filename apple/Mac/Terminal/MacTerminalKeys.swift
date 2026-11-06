@@ -13,7 +13,7 @@ nonisolated enum MacTerminalKeys {
 
     /// - Parameters:
     ///   - characters: the event's `charactersIgnoringModifiers`.
-    ///   - optionAsMeta: 终端设置 › 把 Option 当作 Meta 键; off, Option keeps typing the layout's characters.
+    ///   - optionAsMeta: Terminal Settings › Use Option as Meta Key; off, Option keeps typing the layout's characters.
     static func name(keyCode: UInt16, characters: String?, flags: NSEvent.ModifierFlags, optionAsMeta: Bool) -> String? {
         let f = flags.intersection(.deviceIndependentFlagsMask)
         var base = special[keyCode]

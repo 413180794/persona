@@ -1,6 +1,6 @@
 import Foundation
 
-/// A 飞书 chat's loaded messages and where paging and read reporting stand (docs/feishu.md, docs/lessons/lark-mail.md: the read
+/// A Lark chat's loaded messages and where paging and read reporting stand (docs/feishu.md, docs/lessons/lark-mail.md: the read
 /// position and the two cursors). A value with no views and no network: `LarkChatView` asks the hub for a page and
 /// hands the answer here; what to report as read comes back out. `LarkPagerTests` checks the merging and reporting.
 struct LarkPager: Equatable {
@@ -14,7 +14,7 @@ struct LarkPager: Equatable {
     /// Positions that reached the screen.
     var seen: Set<String> = []
     /// The newest messages loaded before the window moved away from them (opened at a message, a jump, a Pin):
-    /// 回到最新 goes back to them at once, with no network (#1034).
+    /// Jump to Latest goes back to them at once, with no network (#1034).
     private(set) var kept: [LarkMessage]?
     /// The window is the newest this device has, and the hub has more after it than its latest page joins up with:
     /// the newer pages load from the bottom, in order.
@@ -35,7 +35,7 @@ struct LarkPager: Equatable {
     /// A whole page in place of what was loaded (opening, jumping to a message, back to the newest).
     mutating func replace(with r: APIClient.LarkMessages) {
         if r.hasNewer == true {
-            // Moving away from the newest: keep them for 回到最新.
+            // Moving away from the newest: keep them for Jump to Latest.
             if !hasNewer, !messages.isEmpty { kept = Array(messages.suffix(Self.keptMost)) }
         } else {
             kept = nil
@@ -76,7 +76,7 @@ struct LarkPager: Equatable {
         }
     }
 
-    /// 回到最新 with no network: back to the newest messages this device has, the ones kept when the window moved away or
+    /// Jump to Latest with no network: back to the newest messages this device has, the ones kept when the window moved away or
     /// `cached` (the chat's cache), whichever reaches further. False when the window is the newest already, the newer
     /// pages are catching up, or there are none.
     mutating func toTail(cached: [LarkMessage]) -> Bool {
@@ -143,7 +143,7 @@ struct LarkPager: Equatable {
         !m.isMine && !m.isSystem && LarkPosition.less(anchor, m.position)
     }
 
-    /// What to tell 飞书 is read now: up to the newest message seen past the read cursor, with the ids of others'
+    /// What to tell Lark is read now: up to the newest message seen past the read cursor, with the ids of others'
     /// unread messages up to it. Moves the cursor; nil when nothing new was seen.
     mutating func readReport() -> APIClient.LarkReadReport? {
         let cursor = readCursor ?? "0"
@@ -168,7 +168,7 @@ final class LarkChatBook {
     var receipts = LarkReadReceipts()
     var reportTask: Task<Void, Never>?
     var receiptTask: Task<Void, Never>?
-    /// How many times the user's finger took the list: 回到最新 tells a reader who went back up from one who did not.
+    /// How many times the user's finger took the list: Jump to Latest tells a reader who went back up from one who did not.
     var drags = 0
     /// The newer-messages spinner at the bottom is on screen.
     var newerVisible = false

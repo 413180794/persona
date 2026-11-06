@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The assistant's ask_user in the chat (issue 677): it reads as 提问 with its question, not the tool's raw name
+/// The assistant's ask_user in the chat (issue 677): it reads as Question with its question, not the tool's raw name
 /// beside an empty chip, and once answered it keeps what was asked and what the user picked.
 @MainActor
 struct AskUserToolTests {
@@ -26,7 +26,7 @@ struct AskUserToolTests {
 
     @Test func namedLikeAQuestionWithItsFirstQuestion() {
         let c = call([question("先处理哪项？", ["看日程", "回邮件", "看未读消息", "都不用"])], result: nil)
-        #expect(ToolPresentation.verb(c.name) == "问你") // Persona's own ask_user; AskUserQuestion stays "提问"
+        #expect(ToolPresentation.verb(c.name) == "问你") // Persona's own ask_user; AskUserQuestion stays 「提问」
         #expect(ToolPresentation.verb("AskUserQuestion") == "提问")
         #expect(ToolPresentation.subject(c) == "先处理哪项？") // was "": an empty chip beside "ask_user"
         #expect(ToolPresentation.symbol(c.name) == ToolPresentation.symbol("AskUserQuestion"))

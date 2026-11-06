@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 外观's three choices of how the app looks (docs/ios.md「设计语言」): 形象, 主题色 and 界面风格, each on its own page
+/// Settings › Appearance's three choices of how the app looks (docs/ios.md「设计语言」): Avatar, Theme Color and Interface Style, each on its own page
 /// and apart from the others. Against scripts/mock/mock_hub.py started with MOCK_PERSONAS=<dir with a package that brings
 /// colors> (or demo) and JARVIS_MOCK_HUB. Screenshots go to JARVIS_LOOK_SHOTS when set (the appearance is the simulator's).
 final class LookPickerTests: XCTestCase {
@@ -14,7 +14,7 @@ final class LookPickerTests: XCTestCase {
         self.hub = hub
     }
 
-    /// Taps write the app's own settings: put back the defaults (液态玻璃, 跟随界面风格, the built-in) for the tests after.
+    /// Taps write the app's own settings: put back the defaults (Liquid Glass, Match Interface Style, the built-in) for the tests after.
     override func tearDown() {
         if let hub {
             let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -35,7 +35,7 @@ final class LookPickerTests: XCTestCase {
         super.tearDown()
     }
 
-    /// Opens on 设置 › 外观 › `page` (color | style | persona).
+    /// Opens on Settings › Appearance › `page` (color | style | persona).
     @MainActor private func launch(_ page: String, _ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -75,7 +75,7 @@ final class LookPickerTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 15), .completed, why)
     }
 
-    /// From a page of 外观 back to 设置, where each row says what it is set to.
+    /// From a page of Appearance back to Settings, where each row says what it is set to.
     @MainActor private func back(_ app: XCUIApplication, from title: String) {
         app.navigationBars[title].buttons["BackButton"].tap()
         XCTAssertTrue(app.buttons["settings-color"].waitForExistence(timeout: 10), "not back on 设置:\n\(app.debugDescription)")
@@ -85,7 +85,7 @@ final class LookPickerTests: XCTestCase {
         app.buttons[id].label.contains(value)
     }
 
-    /// 黏土 with the persona's colors: 跟随形象 is offered; choosing 珊瑚橙 keeps 黏土 and the persona, choosing Island keeps 珊瑚橙.
+    /// Clay with the persona's colors: Match Avatar is offered; choosing Coral keeps Clay and the persona, choosing Island keeps Coral.
     @MainActor func testTheThreeChoicesStayApart() throws {
         let app = launch("color", ["-ui.style", "clay", "-ui.color", "persona", "-openPersona", "doudou"])
         let follow = app.buttons["color-persona"]
@@ -98,7 +98,7 @@ final class LookPickerTests: XCTestCase {
         sleep(3) // the package's pictures land
         shot(app, "settings-1-color")
 
-        // 珊瑚橙: the tree is rebuilt and still on 主题色; 黏土 and the persona stay.
+        // Coral: the tree is rebuilt and still on Theme Color; Clay and the persona stay.
         let coral = app.buttons["color-coral"]
         XCTAssertTrue(reveal(app, coral))
         coral.tap()
@@ -109,7 +109,7 @@ final class LookPickerTests: XCTestCase {
         XCTAssertTrue(row(app, "settings-style", says: "黏土"), "choosing a color changed the style: \(app.buttons["settings-style"].label)")
         shot(app, "settings-2-rows")
 
-        // Island: still on 界面风格, and 珊瑚橙 stays.
+        // Island: still on Interface Style, and Coral stays.
         app.buttons["settings-style"].tap()
         XCTAssertTrue(reveal(app, app.buttons["style-clay"]))
         XCTAssertTrue(app.buttons["style-clay"].isSelected)
@@ -127,7 +127,7 @@ final class LookPickerTests: XCTestCase {
         XCTAssertTrue(app.buttons["persona-doudou"].isSelected, "the persona changed")
     }
 
-    /// The built-in brings no colors: no 跟随形象 to choose.
+    /// The built-in brings no colors: no Match Avatar to choose.
     @MainActor func testNoFollowingAPersonaWithoutColors() throws {
         let app = launch("color", ["-ui.style", "glass", "-ui.color", "style", "-openPersona", "persona"])
         XCTAssertTrue(reveal(app, app.buttons["color-blue"]))
@@ -135,7 +135,7 @@ final class LookPickerTests: XCTestCase {
         XCTAssertFalse(app.buttons["color-persona"].exists, "跟随形象 offered for the built-in")
     }
 
-    /// The iPhone's shell keeps 设置 in a sheet: a choice rebuilds the tree, the sheet included, and lands back on 主题色.
+    /// The iPhone's shell keeps Settings in a sheet: a choice rebuilds the tree, the sheet included, and lands back on Theme Color.
     @MainActor func testShellSheetStaysOnAppearance() throws {
         let app = launch("color", ["-ui.oldLayout", "NO", "-ui.style", "glass", "-ui.color", "style", "-openPersona", "persona"])
         let bar = app.navigationBars["主题色"]

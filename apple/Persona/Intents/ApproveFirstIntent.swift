@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// "批准第一个待处理": settles the oldest interaction when it is a permission or a plan. Questions and terminal
+/// "Approve First Pending": settles the oldest interaction when it is a permission or a plan. Questions and terminal
 /// prompts need the screen, so those answer with a hint to open the app.
 struct ApproveFirstIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "批准第一个待处理"

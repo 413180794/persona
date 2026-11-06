@@ -1,11 +1,11 @@
 import XCTest
 
-/// UI version 3 on an extension's page (docs/extensions.md「UI 版本 3」): the mock's example-gateway › 笔记 page — rows with
+/// UI version 3 on an extension's page (docs/extensions.md「UI 版本 3」): the mock's example-gateway › 「笔记」 page — rows with
 /// an icon, an avatar and a thumbnail, its search field and filter chips, `more` at the end of the list, a row that pushes
 /// the note's page (Markdown, a table), that page pushing its editor, saving popping back to a page drawn again, and
 /// `ui.invalidate` drawing the list again with what synced in. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
-/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`, restarted for each run (the notes are kept in its memory);
-/// `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
+/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`, restarted for each run (the notes are kept in its memory);
+/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
 final class ExtensionV3Tests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
@@ -44,7 +44,7 @@ final class ExtensionV3Tests: XCTestCase {
         XCTAssertTrue(app.buttons["plugin-ui-filter-work"].exists, "the filter's chips")
         shot(app, "list")
 
-        // The filter: 生活 only.
+        // The filter: 「生活」 only.
         app.buttons["plugin-ui-filter-home"].tap()
         XCTAssertTrue(app.staticTexts["周末采购"].waitForExistence(timeout: 10), "生活's notes:\n\(app.debugDescription)")
         XCTAssertFalse(app.staticTexts["周会纪要"].exists, "工作's are filtered out")
@@ -78,7 +78,7 @@ final class ExtensionV3Tests: XCTestCase {
         XCTAssertTrue(app.staticTexts["结论"].exists || app.descendants(matching: .any)["plugin-ui-markdown"].exists, "its Markdown")
         shot(app, "detail")
 
-        // 编辑 pushes the editor; 保存 pops back to the note, drawn again with the new title.
+        // Edit pushes the editor; Save pops back to the note, drawn again with the new title.
         app.buttons["plugin-ui-action-edit"].tap()
         let title = app.textFields.firstMatch
         XCTAssertTrue(title.waitForExistence(timeout: 10), "the editor:\n\(app.debugDescription)")

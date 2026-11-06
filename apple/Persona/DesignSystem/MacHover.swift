@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// On the Mac, what the pointer is over shows it (#2113): a row gets the shade the shell's sidebar and 收件箱 rows hover
+/// On the Mac, what the pointer is over shows it (#2113): a row gets the shade the shell's sidebar and Inbox rows hover
 /// with (`Theme.Fill.macHover`), a message or a code block its actions. Nothing changes on the iPhone.
 extension View {
     /// A shade in `shape` under the view while the pointer is over it (Mac only), `outset` past its edges (a list row
     /// whose content sits inside the row's insets).
     func macHoverShade(in shape: some Shape, outset: CGFloat = 0) -> some View { modifier(MacHoverShade(shape: shape, outset: outset)) }
 
-    /// `actions` in a row under the view, shown while the pointer is over either (Mac only): an answer's 拷贝 / 引用,
+    /// `actions` in a row under the view, shown while the pointer is over either (Mac only): an answer's Copy / Quote,
     /// as Codex's desktop app shows them under its replies. The row's room is always there, so nothing moves.
     func macHoverFooter(@ViewBuilder _ actions: @escaping () -> some View) -> some View {
         modifier(MacHoverFooter(actions: actions))

@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the plugins of every market the hub has, searched and filtered by
+/// Settings › Extensions › Extension Market (docs/extensions.md「扩展市场」): the plugins of every market the hub has, searched and filtered by
 /// market; a row each with its name, version, what it does, its tags and how it stands on this hub. The markets
-/// themselves are one tap away (市场).
+/// themselves are one tap away (Markets).
 struct ExtensionMarketView: View {
     @State private var page = ExtensionMarketModel()
     @State private var tokenFor: ExtensionMarket?
 
     var body: some View {
         SettingsForm {
-            // Laid out as 知识库's kind chips under its search field: a compact section whose row has no inset of its own,
+            // Laid out as Knowledge's kind chips under its search field: a compact section whose row has no inset of its own,
             // so the chips sit right under the search field and line up with the cards below.
             if page.markets.count > 1 {
                 #if os(macOS)
@@ -27,7 +27,7 @@ struct ExtensionMarketView: View {
                     .font(Theme.Font.label)
                     // Most often GitHub's limit for a network without a token: the fix right where it shows. Not for the
                     // official market, which asks nothing of a newcomer here (docs/onboarding.md 4.5): the hub reads it
-                    // elsewhere when GitHub rate-limits it, and a quiet way to 市场 is there for whoever wants a token.
+                    // elsewhere when GitHub rate-limits it, and a quiet way to Markets is there for whoever wants a token.
                     if m.wantsGitHubToken && m.official == true {
                         NavigationLink(value: SettingsPage.pluginMarkets) {
                             Text("被限流了？去「市场」填一个 GitHub token").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -176,7 +176,7 @@ private struct MarketExtensionRow: View {
     }
 }
 
-/// 可安装 / 可升级 / 已安装 / 装不了, in its tone.
+/// Available / Update / Installed / Can't Install, in its tone.
 private struct MarketStateChip: View {
     var item: ExtensionCatalogItem
 
@@ -198,7 +198,7 @@ private struct MarketStateChip: View {
     }
 }
 
-/// 扩展市场 › one plugin: what it is, what it may do, and the one thing to do with it — install, upgrade (with what the
+/// Extension Market › one plugin: what it is, what it may do, and the one thing to do with it — install, upgrade (with what the
 /// new version asks for in addition), or remove when it came from this market.
 struct MarketExtensionDetailView: View {
     @Environment(AppModel.self) private var app
@@ -260,7 +260,7 @@ struct MarketExtensionDetailView: View {
         } message: {
             Text(page.uninstallConfirmation?.message ?? "")
         }
-        // Closed without 安装: the operation waiting on this preview is canceled.
+        // Closed without Install: the operation waiting on this preview is canceled.
         .sheet(item: $page.preview, onDismiss: { page.declined() }) { pv in
             ExtensionInstallSheet(preview: pv, name: page.item?.name ?? pv.manifest.name ?? pv.manifest.id) {
                 // The sheet closes at once; the steps show on this page (and stay if it is left). The operation is
@@ -414,7 +414,7 @@ struct MarketExtensionDetailView: View {
 private struct PermissionLine: View {
     var permission: ExtensionPermission
     var tone: Color? = nil
-    /// The package's command-line programs (#4507): the 安装命令行程序 line lists them one per line, with where they come
+    /// The package's command-line programs (#4507): the Install command-line programs line lists them one per line, with where they come
     /// from and where they go, instead of the hub's sentence.
     var tools: [ExtensionToolSpec]? = nil
 
@@ -444,7 +444,7 @@ private struct PermissionLine: View {
 }
 
 /// The preview to agree to: the package downloaded and checked, what it may do (for an upgrade, what it asks for in
-/// addition first), then 安装 / 升级.
+/// addition first), then Install / Update.
 private struct ExtensionInstallSheet: View {
     var preview: ExtensionPreview
     var name: String
@@ -565,7 +565,7 @@ private struct ExtensionInstallSheet: View {
     }
 }
 
-/// 扩展市场 › 市场: the markets the hub reads, each with what it is, how many plugins, when it was read and what went
+/// Extension Market › Markets: the markets the hub reads, each with what it is, how many plugins, when it was read and what went
 /// wrong; added with an address and an optional token (written, never shown), refreshed, given a new token, removed.
 struct ExtensionMarketsView: View {
     @State private var page = ExtensionMarketModel()

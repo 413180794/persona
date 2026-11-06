@@ -1,6 +1,6 @@
 import XCTest
 
-/// The app's toasts in the shell (docs/shell.md「连接状态和 toast」, #1053): the result of something just done (已归档, 已复制…)
+/// The app's toasts in the shell (docs/shell.md「连接状态和 toast」, #1053): the result of something just done (Archived, Copied…)
 /// floats over everything in a window of its own and moves nothing: the Agents list's first row, the drawer's rows and
 /// the status row stay where they are while it shows, what is under it takes the taps, and it is not under the
 /// keyboard. It used to open the status row, which pushed the pages and the drawer down and back.
@@ -14,7 +14,7 @@ final class ShellToastTests: XCTestCase {
         continueAfterFailure = true
     }
 
-    /// 体验模式 in the shell; toasts `at` seconds after launch (`-showToasts`), time enough to read the page first.
+    /// Demo Mode in the shell; toasts `at` seconds after launch (`-showToasts`), time enough to read the page first.
     @MainActor private func launch(_ page: String, toasts: String, _ extra: [String] = []) {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-probes", "YES", "-dev.openChat", "", "-showToasts", toasts]
@@ -67,7 +67,7 @@ final class ShellToastTests: XCTestCase {
         XCTAssertEqual(row() ?? -1, rowBefore ?? -2, accuracy: 0.5, "the first row moved as the toast showed")
         XCTAssertEqual(new.frame.minY, newBefore.minY, accuracy: 0.5, "新建会话 moved as the toast showed")
         rowStayedFolded("Agents")
-        // Below the top bar, not on the switch (it hid 助手 / Agents), and the top bar takes its taps meanwhile.
+        // Below the top bar, not on the switch (it hid Assistant / Agents), and the top bar takes its taps meanwhile.
         XCTAssertGreaterThanOrEqual(toast.frame.minY, newBefore.maxY - 1, "the toast \(toast.frame) is on the top bar (新建会话 \(newBefore))")
         finger.switchTo(agents: false, "助手 tapped while the toast shows")
         XCTAssertTrue(toast.exists, "the toast went with the tap: it took it")
@@ -78,7 +78,7 @@ final class ShellToastTests: XCTestCase {
         app.terminate()
     }
 
-    /// The drawer: its rows stay put under a toast, and the row right under it (收件箱, the first) takes a tap there.
+    /// The drawer: its rows stay put under a toast, and the row right under it (Inbox, the first) takes a tap there.
     @MainActor func testAToastOverTheDrawerMovesNothingAndLetsTheTapsThrough() {
         launch("assistant", toasts: "10:success:已归档;12.3:success:已删除")
         let face = app.buttons["assistant-sidebar-button"].firstMatch
@@ -99,7 +99,7 @@ final class ShellToastTests: XCTestCase {
         XCTAssertTrue(inbox.frame.intersects(over), "收件箱 \(inbox.frame) is not under the toast \(over): this tap tells nothing")
         let both = over.intersection(inbox.frame) // on the toast and on the row
         app.windows.firstMatch.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: both.midX, dy: both.midY)).tap()
-        // The row opens 收件箱: the drawer goes back in.
+        // The row opens Inbox: the drawer goes back in.
         XCTAssertTrue(app.descendants(matching: .any)["assistant-drawer-close"].firstMatch.waitForNonExistence(timeout: 5),
                       "收件箱 under the toast took no tap \(app.shellTrace)")
         app.terminate()

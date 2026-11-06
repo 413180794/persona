@@ -1,6 +1,6 @@
 import XCTest
 
-/// 真实 App 的管理和声明贡献；只使用专用 mock，所有写操作均在内存中记录。
+/// Management and declared contributions in the real app; uses only the dedicated mock, every write is recorded in memory.
 final class ExtensionManagementUITests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
     private var hub: String { get throws {
@@ -217,7 +217,7 @@ final class ExtensionManagementUITests: XCTestCase {
         let attach = app.buttons["shell-composer-add"]
         XCTAssertTrue(attach.waitForExistence(timeout: 15), app.debugDescription)
         attach.tap()
-        // 原生 Menu 不保留 SwiftUI Button 的 identifier，用可见标题定位。
+        // A native Menu does not keep the SwiftUI Button's identifier: find it by its visible title.
         let prompt = app.buttons["整理示例周报"].firstMatch
         XCTAssertTrue(prompt.waitForExistence(timeout: 5), app.debugDescription)
         try shot(app, "prompt-menu")

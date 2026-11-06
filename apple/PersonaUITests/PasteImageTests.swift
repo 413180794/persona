@@ -20,12 +20,12 @@ final class PasteImageTests: XCTestCase {
 
         let field = app.descendants(matching: .any)["shell-composer-field"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 15), "no composer")
-        // The system's PasteButton may not carry the identifier through; its title is 粘贴.
+        // The system's PasteButton may not carry the identifier through; its title is 「粘贴」.
         let chip = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label IN %@", "composer-paste-image", ["粘贴", "Paste"])).firstMatch
         XCTAssertFalse(chip.exists, "offered before the composer is focused")
         field.tap()
         XCTAssertTrue(chip.waitForExistence(timeout: 5), "no 粘贴 over the focused composer")
-        chip.tap() // a PasteButton tap is the consent: no 允许粘贴 prompt
+        chip.tap() // a PasteButton tap is the consent: no Allow Paste prompt
         let attached = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "图片 1")).firstMatch
         XCTAssertTrue(attached.waitForExistence(timeout: 5), "the picture is not in the composer")
         XCTAssertTrue(chip.waitForNonExistence(timeout: 3), "the same copy is offered again")

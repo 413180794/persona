@@ -1,11 +1,11 @@
 import SwiftUI
 
 // The way out of a sheet on a Mac (#1248). A Mac sheet has no navigation bar: only its bottom row of actions is drawn,
-// so a 关闭 at the leading edge (`.topBarLeading`, `.navigation` there) never shows (#743). It cannot be swiped down
-// and a click outside it only beeps, so that row's 取消 / 完成 (Esc) is the only way out, and Esc is easy to hit.
+// so a Close at the leading edge (`.topBarLeading`, `.navigation` there) never shows (#743). It cannot be swiped down
+// and a click outside it only beeps, so that row's Cancel / Done (Esc) is the only way out, and Esc is easy to hit.
 
 extension View {
-    /// 取消 in an edit sheet's bar (Esc on a Mac). On a Mac, with unsaved edits it asks before throwing them away;
+    /// Cancel in an edit sheet's bar (Esc on a Mac). On a Mac, with unsaved edits it asks before throwing them away;
     /// iOS cancels at once, as it always has.
     /// `when`: only in a sheet, for a page that is also pushed.
     func sheetCancel(_ title: LocalizedStringKey = "取消", unsaved: Bool, when active: Bool = true,
@@ -13,8 +13,8 @@ extension View {
         modifier(SheetCancel(title: title, unsaved: unsaved, active: active, cancel: cancel))
     }
 
-    /// 完成 for a sheet that only shows things, in a Mac sheet's bottom row (Esc too). Nothing on iOS: there the page
-    /// keeps its own 关闭 or the swipe down.
+    /// Done for a sheet that only shows things, in a Mac sheet's bottom row (Esc too). Nothing on iOS: there the page
+    /// keeps its own Close or the swipe down.
     func macSheetDone(_ done: @escaping () -> Void) -> some View {
         #if os(macOS)
         toolbar { ToolbarItem(placement: .cancellationAction) { Button(action: done) { Text("完成").lineLimit(1) } } }

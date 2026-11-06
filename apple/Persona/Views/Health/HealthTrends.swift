@@ -60,7 +60,7 @@ nonisolated enum HealthTrends {
         return g
     }
 
-    /// A day's label on the chart: the weekday over a week ("周三"), the date over a month ("11/5").
+    /// A day's label on the chart: the weekday over a week ("Wed"), the date over a month ("11/5").
     static func label(_ key: String, range: HealthTrendRange) -> String {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return key }

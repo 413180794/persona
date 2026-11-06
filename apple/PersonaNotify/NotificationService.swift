@@ -25,7 +25,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         case .unopened: Self.log.error("sealed push: did not open, or too old")
         case .opened: Self.log.notice("sealed push opened")
         }
-        // 解密可能返回可变内容，先复制成只读快照；异步注册不共享任何可变内容。
+        // Decryption may return mutable content: copy it into a read-only snapshot first; the async registration shares nothing mutable.
         nonisolated(unsafe) let ready = content.copy() as! UNNotificationContent
         Task { @Sendable [self] in
             await ExtensionNotificationActions.register(content: ready)

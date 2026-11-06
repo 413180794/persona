@@ -102,7 +102,7 @@ final class SecondaryClickRecognizer: NSGestureRecognizer {
     }
 }
 
-/// `SelectableTextView` ("选择文本"): the message in a read-only, selectable text view.
+/// `SelectableTextView` ("Select Text"): the message in a read-only, selectable text view.
 struct SelectableTextView: NSViewRepresentable {
     var text: String
     /// Your own message; the Mac shows every message as written.

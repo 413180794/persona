@@ -1,8 +1,8 @@
 import XCTest
 
-/// The home screen icon is the 形象's (docs/persona.md「App 图标」, #3203): choosing 面罩 in 设置 › 外观 › 形象 really
-/// changes the home screen icon, through the system's alert; a launch on another 形象 (the old App 图标 setting left
-/// the icon apart from it) brings the icon back to that 形象's. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
+/// The home screen icon is the Avatar's (docs/persona.md「App 图标」, #3203): choosing Visor in Settings › Appearance › Avatar really
+/// changes the home screen icon, through the system's alert; a launch on another Avatar (the old App Icon setting left
+/// the icon apart from it) brings the icon back to that Avatar's. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
 /// The icon on now is the value of the page's note (`persona-icon-note`). Screenshots go to JARVIS_ICON_SHOTS when set:
 /// the page and the home screen after each switch.
 final class AppIconTests: XCTestCase {
@@ -16,7 +16,7 @@ final class AppIconTests: XCTestCase {
         self.hub = hub
     }
 
-    /// On 设置 › 外观 › 形象 with `persona` chosen as the app starts.
+    /// On Settings › Appearance › Avatar with `persona` chosen as the app starts.
     @MainActor private func launch(_ persona: String) -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -55,7 +55,7 @@ final class AppIconTests: XCTestCase {
     @MainActor func testTheLookDecidesTheHomeScreenIcon() throws {
         let app = launch("persona")
         dismissPermissionPrompt()
-        // The line under 形象 says which icon is on, or "unavailable" where the system cannot switch icons
+        // The line under Avatar says which icon is on, or "unavailable" where the system cannot switch icons
         // (`supportsAlternateIcons`): iOS 26.0.1 and 26.3.1 simulators cannot (docs/lessons/ios.md), a device can.
         XCTAssertTrue(app.buttons["persona-jarvis"].waitForExistence(timeout: 20), "no 形象 page:\n\(app.debugDescription)")
         let note = app.descendants(matching: .any)["persona-icon-note"]
@@ -63,7 +63,7 @@ final class AppIconTests: XCTestCase {
         if note.value as? String == "unavailable" {
             throw XCTSkip("this simulator cannot switch app icons (supportsAlternateIcons is false)")
         }
-        acceptIconAlert() // a simulator left on another icon goes back to 团子's first
+        acceptIconAlert() // a simulator left on another icon goes back to Mochi's first
         waitIcon(app, "standard", "团子 should be on the default icon")
 
         let visor = app.buttons["persona-jarvis"]
@@ -74,8 +74,8 @@ final class AppIconTests: XCTestCase {
         try shot("look-visor-page", app.screenshot())
         try home("look-visor-home")
 
-        // The old setting's case: the icon is apart from the 形象 (here 面罩's icon with 团子 chosen). The first time
-        // the app is in front the 形象 wins.
+        // The old setting's case: the icon is apart from the Avatar (here Visor's icon with Mochi chosen). The first time
+        // the app is in front the Avatar wins.
         app.terminate()
         let again = launch("persona")
         acceptIconAlert()

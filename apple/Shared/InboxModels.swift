@@ -28,17 +28,17 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     /// New foreign mail translated by the hub as it came in, by target language (subject and preview here; the body
     /// comes with the mail).
     var translations: [String: Translated]?
-    /// A 公司圈 post where someone commented on, replied to or @ed the user (docs/inbox.md「公司圈」).
+    /// A Moments post where someone commented on, replied to or @ed the user (docs/inbox.md「公司圈」).
     var moment: Moment?
     /// Only in GET /api/v1/inbox/{id}: the conversation as text.
     var context: String?
-    /// The AI 分身's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
+    /// The AI twin's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
     var agent: Agent?
     /// A thread of one of the hub's connectors (GitHub…): drawn the same for every source (docs/plan-connectors.md).
     var connector: Connector?
-    /// What it can be muted by (the row's menu: 静音这个仓库 / 会话 / 发件人); older hubs leave it out.
+    /// What it can be muted by (the row's menu: Mute This Repository / Session / From); older hubs leave it out.
     var mutes: [MuteOption]?
-    /// What it holds now, as the hub listed it: a bulk 已处理 sends it back so an item that took new messages since
+    /// What it holds now, as the hub listed it: a bulk Done sends it back so an item that took new messages since
     /// is left open (older hubs leave it out).
     var version: String?
     /// What it grew out of (docs/inbox.md「线索」, #2128): another item, a todo or an agent session; older hubs leave it out.
@@ -69,7 +69,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         /// The thread on the web, opened in the app; `openURL` is handed to the system instead (sms:…).
         var url: String?
         var openURL: String?
-        /// Where a reply goes and who sees it (评论到 example-org/example-repo#12（仓库可见的人都能看到）).
+        /// Where a reply goes and who sees it (「评论到 example-org/example-repo#12（仓库可见的人都能看到）」).
         var replyTo: String?
         var canReply: Bool?
 
@@ -85,7 +85,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     nonisolated struct Moment: Codable, Hashable, Sendable {
         var postID: String
         var notice: String?  // comment | reply | atInPost | atInComment (the newest)
-        var replyTo: String? // the comment 发送 answers; nil: on the post
+        var replyTo: String? // the comment Send answers; nil: on the post
         var myPost: Bool?
         var postText: String?
 
@@ -104,7 +104,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         var draft: String?
         var note: String?
         var error: String?
-        /// Status moves the agent proposes with its draft (document items); 发送 makes the ones kept.
+        /// Status moves the agent proposes with its draft (document items); Send makes the ones kept.
         var changes: [DocChange]?
 
         enum CodingKeys: String, CodingKey {
@@ -112,7 +112,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
             case machineID = "machine_id", sessionID = "session_id"
         }
 
-        /// The agent's conversation (in 对话), to see how it got to the draft.
+        /// The agent's conversation (in Chat), to see how it got to the draft.
         var sessionKey: SessionKey? {
             guard let m = machineID, let s = sessionID, !m.isEmpty, !s.isEmpty else { return nil }
             return SessionKey(machineID: m, sessionID: s)
@@ -169,7 +169,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
             var label: String
         }
 
-        /// 表格 / 多维表格 / 文档.
+        /// Sheet / Base / Document.
         var typeName: String {
             switch type {
             case "sheet": String(localized: "表格")
@@ -244,7 +244,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var isDone: Bool { doneAt != nil }
     var isLark: Bool { source == "lark" }
 
-    /// Triage tiers, most urgent first. Items not triaged yet count as 需要你 until the AI says otherwise.
+    /// Triage tiers, most urgent first. Items not triaged yet count as Needs You until the AI says otherwise.
     enum Tier: String, CaseIterable, Sendable {
         case action, fyi, noise
         var title: String {
@@ -274,7 +274,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// A node of an item's 线索 (#2128): an inbox item, a todo or an agent session (id `<machine>/<session>`). `by` says
+/// A node of an item's Thread (#2128): an inbox item, a todo or an agent session (id `<machine>/<session>`). `by` says
 /// who hung it there: continues | connector | user. Mirrors hub/assistant/inbox_parent.go `InboxParent`.
 nonisolated struct InboxParent: Codable, Hashable, Sendable {
     var kind: String // inbox | todo | session
@@ -330,7 +330,7 @@ nonisolated struct InboxTree: Decodable, Sendable, Equatable {
 nonisolated struct InboxTriageStatus: Codable, Hashable, Sendable {
     /// ok | unconfigured | paused | error | timeout | behind (the most telling of the sources').
     var state: String
-    /// The state for people, the hub's words (模型没有额度); may be empty.
+    /// The state for people, the hub's words (「模型没有额度」); may be empty.
     var reason: String?
     var waiting: Int
     var sources: [Source]?
@@ -380,7 +380,7 @@ extension APIClient {
     /// One item with its conversation text.
     func inboxItem(_ id: String) async throws -> InboxItem { try await get("/api/v1/inbox/" + id) }
 
-    /// An item's 线索 (#2128): what it hangs under and what hangs under it. Older hubs answer 404.
+    /// An item's Thread (#2128): what it hangs under and what hangs under it. Older hubs answer 404.
     func inboxTree(_ kind: String, _ id: String) async throws -> InboxTree {
         try await get(Self.inboxTreePath(kind, id))
     }
@@ -399,14 +399,14 @@ extension APIClient {
         try await post("/api/v1/inbox/" + id + "/done", body: ["done": done])
     }
 
-    /// Files (or brings back) many items in one request (全部看过 / 全部清除, Mac's multi-select, 撤销, and 全部清理 on a hub without `/bulk`): each with the version it
+    /// Files (or brings back) many items in one request (Mark All Seen / Clear All, Mac's multi-select, Undo, and Clear All on a hub without `/bulk`): each with the version it
     /// was listed at, so the hub leaves one that took new messages since open.
     func setInboxDone(_ items: [InboxItem], _ done: Bool) async throws -> InboxBulkResult {
         try await post("/api/v1/inbox/done", body: InboxBulkBody(done: done, items: items.map { .init(id: $0.id, version: $0.version) }),
                        as: InboxBulkResult.self)
     }
 
-    /// 全部清理 (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」): `action` is `dismiss` (the hub takes `done` too),
+    /// Clear All (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」): `action` is `dismiss` (the hub takes `done` too),
     /// each item with the version it was listed at (the hub leaves one that took new messages since: `skipped`, changed).
     func bulkInbox(_ action: String, _ items: [InboxItem]) async throws -> InboxBulkReply {
         try await post("/api/v1/inbox/bulk",
@@ -439,7 +439,7 @@ extension APIClient {
     private struct InboxReplyBody: Encodable { var text: String; var changes: [InboxItem.DocChange]? }
     private struct InboxDraftBody: Encodable { var instruction: String }
 
-    /// A reply drafted by the hub's model; `instruction` steers it ("同意，但下周再说").
+    /// A reply drafted by the hub's model; `instruction` steers it ("Agree, but later next week").
     func inboxDraft(_ id: String, instruction: String = "") async throws -> String {
         try await post("/api/v1/inbox/" + id + "/draft", body: InboxDraftBody(instruction: instruction), timeout: 90, as: InboxText.self).text
     }
@@ -471,7 +471,7 @@ nonisolated struct InboxMute: Codable, Identifiable, Hashable, Sendable {
         case sourceName = "source_name", createdAt = "created_at"
     }
 
-    /// What kind of thing it is, for people: 仓库 / 会话 / 发件人.
+    /// What kind of thing it is, for people: Repository / Session / From.
     var tagName: String {
         switch tag {
         case "repo": String(localized: "仓库")
@@ -494,7 +494,7 @@ private nonisolated struct InboxBulkActionBody: Encodable, Sendable {
 }
 
 /// What `POST /api/v1/inbox/bulk` answers: the items it changed (as the hub has them now) and their ids, the ones
-/// already so, the ones it left, and the `undo` to send back for 撤销 (none for a reopen).
+/// already so, the ones it left, and the `undo` to send back for Undo (none for a reopen).
 nonisolated struct InboxBulkReply: Decodable, Sendable, Equatable {
     nonisolated struct Undo: Codable, Sendable, Equatable {
         var action: String
@@ -526,7 +526,7 @@ nonisolated struct InboxBulkReply: Decodable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey { case action, changed, ids, unchanged, skipped, undo }
 }
 
-/// What a bulk 已处理 / 撤销 did: the items it moved (as the hub has them now), the ones already so, and the ones it
+/// What a bulk Done / Undo did: the items it moved (as the hub has them now), the ones already so, and the ones it
 /// left (`changed`: new messages since the list; `missing`: gone from the hub).
 nonisolated struct InboxBulkResult: Decodable, Sendable, Equatable {
     nonisolated struct Skip: Decodable, Sendable, Equatable {

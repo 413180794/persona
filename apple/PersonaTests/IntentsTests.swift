@@ -54,7 +54,7 @@ struct IntentsTests {
 
     @Test func sentTextNamesTheSession() {
         #expect(IntentText.sent(to: "修构建") == "已发给 修构建")
-        // An untitled session still reads as a sentence instead of "已发给 ".
+        // An untitled session still reads as a sentence instead of 「已发给 」.
         #expect(IntentText.sent(to: "  ") == "已发给 会话")
     }
 

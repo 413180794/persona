@@ -59,7 +59,7 @@ nonisolated enum GitHubThread {
         }
     }
 
-    /// The checks in one line: 3 项检查 · 1 项失败 · 1 项进行中.
+    /// The checks in one line: 3 checks · 1 failed · 1 in progress.
     static func checksSummary(_ checks: [ThreadMessage]) -> String {
         let states = checks.compactMap { $0.check?.state }
         var parts = [String(localized: "\(states.count) 项检查")]
@@ -72,7 +72,7 @@ nonisolated enum GitHubThread {
         return parts.joined(separator: " · ")
     }
 
-    /// A reply that quotes a comment, as GitHub's 引用回复 does: its words as a Markdown quote, a blank line, the reply.
+    /// A reply that quotes a comment, as GitHub's Quote Reply does: its words as a Markdown quote, a blank line, the reply.
     static func quoting(_ quoted: ThreadMessage?, reply: String) -> String {
         guard let quoted else { return reply }
         let said = (quoted.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

@@ -115,7 +115,7 @@ extension RuntimeCLI {
 
     /// The app's windows only (`simctl ui appearance` changes the whole simulator, status bar included).
     private static func setAppearance(_ a: Args) -> Reply {
-        // Through 设置 › 外观 › 深浅色 (one source of truth: the page shows it, a new scene keeps it); saved like a tap.
+        // Through Settings › Appearance › Light & Dark (one source of truth: the page shows it, a new scene keeps it); saved like a tap.
         AppModel.shared.colorScheme = ColorSchemeChoice(rawValue: a["value"] as? String ?? "") ?? .system
         return state()
     }

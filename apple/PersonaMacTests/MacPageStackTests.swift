@@ -51,7 +51,7 @@ struct MacPageStackTests {
         let inbox = h.first { $0.rootView.section == .inbox }
         let agents = h.first { $0.rootView.section == .agents }
         #expect(inbox?.isHidden == false)
-        #expect(agents?.rootView.activity.inFront == true) // not yet: the frame with 收件箱 in it comes first
+        #expect(agents?.rootView.activity.inFront == true) // not yet: the frame with Inbox in it comes first
         await afterTheFrame()
         #expect(agents?.rootView.activity.inFront == false)
         #expect(inbox?.rootView.activity.inFront == true)

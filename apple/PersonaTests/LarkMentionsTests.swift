@@ -37,7 +37,7 @@ struct LarkMentionsTests {
 
     @Test func anAtBeforeTheCursorIsLookedUpWhateverFollows() {
         let text = "周六 @小 一起去"
-        // The cursor right after "@小" (offset 5): the lookup is 小; what follows does not count.
+        // The cursor right after 「@小」 (offset 5): the lookup is 「小」; what follows does not count.
         #expect(LarkMentions.typing(in: text, cursor: 5) == LarkMentions.Typing(query: "小", start: 3, end: 5))
         #expect(LarkMentions.query(in: text, cursor: 4) == "", "right after the @")
         #expect(LarkMentions.query(in: text, cursor: 3) == nil, "before the @")
@@ -48,11 +48,11 @@ struct LarkMentionsTests {
     }
 
     @Test func pickingWritesTheNameAtTheCursor() {
-        // "周六 @小| 一起去": the space that follows is kept, not doubled; the cursor lands after it.
+        // 「周六 @小| 一起去」: the space that follows is kept, not doubled; the cursor lands after it.
         let mid = LarkMentions.insert(zhou, into: "周六 @小 一起去", cursor: 5)
         #expect(mid.text == "周六 @小周 一起去")
         #expect(mid.cursor == 7)
-        // "你好@|明天见": a space goes in, the cursor after it.
+        // 「你好@|明天见」: a space goes in, the cursor after it.
         let tight = LarkMentions.insert(tom, into: "你好@明天见", cursor: 3)
         #expect(tight.text == "你好@Tom 明天见")
         #expect(tight.cursor == 7)

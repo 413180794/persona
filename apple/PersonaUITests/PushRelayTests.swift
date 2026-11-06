@@ -1,6 +1,6 @@
 import XCTest
 
-/// Setup for scripts/test/relay_sim_e2e.sh (docs/push-relay.md): lets the app notify (taps the system's 允许) and has it
+/// Setup for scripts/test/relay_sim_e2e.sh (docs/push-relay.md): lets the app notify (taps the system's Allow) and has it
 /// export its push public key (`-showPushKey`), then leaves it in the background, where the script's pushes arrive.
 /// Not paired with any hub: nothing else happens.
 final class PushRelayTests: XCTestCase {

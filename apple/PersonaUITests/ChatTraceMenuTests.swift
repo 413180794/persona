@@ -1,6 +1,6 @@
 import XCTest
 
-/// 拷贝诊断 (#3783): the main conversation's menu in the drawer copies the chat's structure-only trace (ChatTrace), so a
+/// Copy Diagnostics (#3783): the main conversation's menu in the drawer copies the chat's structure-only trace (ChatTrace), so a
 /// reply that went missing can be told apart afterwards. On demo data, in the new shell.
 final class ChatTraceMenuTests: XCTestCase {
     override func setUp() {

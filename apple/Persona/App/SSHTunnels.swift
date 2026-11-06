@@ -51,7 +51,7 @@ final class SSHTunnels {
         case starting
         /// Carrying the hub's traffic.
         case up
-        /// Not up, and why (for the connection details and 设置 › hub › SSH 隧道).
+        /// Not up, and why (for the connection details and Settings › hub › SSH Tunnel).
         case down(String)
     }
 
@@ -219,7 +219,7 @@ extension AppModel {
     }
 
     /// Where a group's socket goes next when it has an SSH tunnel: straight to the hub when one of its addresses
-    /// answers (the tunnel closes), else through the tunnel; with 总是走 SSH, the tunnel first. Nothing answering at
+    /// answers (the tunnel closes), else through the tunnel; with Always Use SSH, the tunnel first. Nothing answering at
     /// all: the first address, for the socket's own retries.
     func sshRoute(_ group: String) async -> ServerConfig? {
         let candidates = HubRoute.candidates(registry, group: group)
@@ -262,7 +262,7 @@ extension AppModel {
         return (try? await SSHTunnels.shared.open(h.id, route: route, hub: h.config.url)) != nil
     }
 
-    /// 设置 › hub › SSH 隧道 saved (nil: removed): the hub's tunnel is made again from it, and the group's socket picks
+    /// Settings › hub › SSH Tunnel saved (nil: removed): the hub's tunnel is made again from it, and the group's socket picks
     /// its way again.
     func setSSH(_ route: SSHRoute?, hub id: String) {
         guard let hub = registry.hubs.first(where: { $0.id == id }), hub.ssh != route else { return }
@@ -275,7 +275,7 @@ extension AppModel {
     }
 
     /// The paired hub a group's socket is on, and whether it goes through its tunnel: what the connection details and
-    /// 设置 › hub say.
+    /// Settings › hub say.
     func tunnel(_ group: String) -> (hub: PairedHub, routed: Bool, state: SSHTunnels.State?)? {
         guard let link = link(group), let on = link.live.currentConfig,
               let hub = registry.members(group).first(where: { $0.config == on }), let route = hub.ssh, route.isUsable else { return nil }

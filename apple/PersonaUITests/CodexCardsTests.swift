@@ -1,7 +1,7 @@
 import XCTest
 
 /// Codex's approval and question cards (docs/codex.md「提问和审批」) in its chat: the approval says Codex asks, with its
-/// reason, the command, 拒绝 / 同意, 总是同意 naming what it allows, and 拒绝并说明理由 opening a field; a refused answer (a
+/// reason, the command, Deny / Approve, Always Approve naming what it allows, and Deny and Explain… opening a field; a refused answer (a
 /// draft in the computer's input box) keeps the card and says why; the question card answers both questions. Against
 /// scripts/mock/mock_hub.py with MOCK_CODEX=1 (TEST_RUNNER_JARVIS_CODEX_HUB=http://127.0.0.1:<port>);
 /// TEST_RUNNER_JARVIS_SHOT_DIR=<dir> also saves the screens there as PNG.
@@ -68,7 +68,7 @@ final class CodexCardsTests: XCTestCase {
         XCTAssertTrue(app.buttons["同意"].exists && app.buttons["拒绝"].exists)
         shot("approval")
 
-        // 拒绝并说明理由: a field with its own send button.
+        // Deny and Explain…: a field with its own send button.
         app.buttons["codex-deny-explain"].tap()
         let why = app.textFields["codex-deny-reason"].exists ? app.textFields["codex-deny-reason"] : app.textViews["codex-deny-reason"]
         XCTAssertTrue(why.waitForExistence(timeout: 5), app.debugDescription)
@@ -83,7 +83,7 @@ final class CodexCardsTests: XCTestCase {
         XCTAssertEqual(first?["allow"] as? Bool, false)
         XCTAssertEqual(first?["message"] as? String, "先别连本地服务，看慢查询日志")
 
-        // Then 同意: taken, the card goes; the question is next.
+        // Then Approve: taken, the card goes; the question is next.
         app.buttons["同意"].tap()
         let question = anything(app, "Codex 在问你")
         XCTAssertTrue(question.waitForExistence(timeout: 10), app.debugDescription)
@@ -112,7 +112,7 @@ final class CodexCardsTests: XCTestCase {
         XCTAssertEqual(answers?["改完以后怎么验证？"] as? String, "先在本地跑基准测试")
     }
 
-    /// The question card's "其他回答…" row turns into a field inside the chat list: the tap that opens it must not be
+    /// The question card's "Other answer…" row turns into a field inside the chat list: the tap that opens it must not be
     /// taken for a tap on the empty page, which closes the keyboard.
     @MainActor func testOtherAnswerFieldKeepsTheKeyboard() throws {
         let hub = try hub()
@@ -134,7 +134,7 @@ final class CodexCardsTests: XCTestCase {
         XCTAssertTrue(typed.exists, "what was typed is in the field")
     }
 
-    /// The BeautifulUI style: the same cards as its approval card — 同意 / 总是同意 (what it allows) / 拒绝, Codex's reason.
+    /// The BeautifulUI style: the same cards as its approval card — Approve / Always Approve (what it allows) / Deny, Codex's reason.
     @MainActor func testBeautifulUIStyle() throws {
         let hub = try hub()
         _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!) // the cards back, unanswered
@@ -157,7 +157,7 @@ final class CodexCardsTests: XCTestCase {
         shot("beautiful")
     }
 
-    /// 会话信息 says how Persona reaches this Codex: its app-server, or the terminal and why (TEST_RUNNER_JARVIS_CODEX_ROUTE
+    /// Session Info says how Persona reaches this Codex: its app-server, or the terminal and why (TEST_RUNNER_JARVIS_CODEX_ROUTE
     /// says which the mock was started with: MOCK_CODEX_ROUTE).
     @MainActor func testSessionInfoShowsTheRoute() throws {
         let hub = try hub()

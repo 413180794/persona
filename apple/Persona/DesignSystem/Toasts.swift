@@ -2,11 +2,11 @@ import BeautifulUI
 import SwiftUI
 
 /// One toast (`AppModel.toast`): the style's icon and the words on a floating capsule; in the BeautifulUI style its
-/// raised capsule. A toast tells the result of something just done (已复制, 已归档, 发送失败…) and goes by itself after
-/// a moment; what lasts (the hub's link: 等待网络, 连接中…) floats in the shell's toast window too (docs/shell.md「连接状态和 toast」).
+/// raised capsule. A toast tells the result of something just done (Copied, Archived, Send failed…) and goes by itself after
+/// a moment; what lasts (the hub's link: Waiting for Network, Connecting…) floats in the shell's toast window too (docs/shell.md「连接状态和 toast」).
 struct ToastCapsule: View {
     let toast: Toast
-    /// Closes the toast after its button (撤销) ran.
+    /// Closes the toast after its button (Undo) ran.
     var dismiss: () -> Void = {}
     /// Told where its button is, in global coordinates (the shell's toast window lets touches through but there).
     var onActionFrame: ((CGRect) -> Void)?
@@ -45,7 +45,7 @@ struct ToastCapsule: View {
         }
     }
 
-    /// How long it stays: an error longer, one with a button (撤销) long enough to reach it.
+    /// How long it stays: an error longer, one with a button (Undo) long enough to reach it.
     static func shown(_ toast: Toast) -> Duration { .seconds(toast.action != nil ? 5 : toast.style == .error ? 4 : 2.5) }
 }
 

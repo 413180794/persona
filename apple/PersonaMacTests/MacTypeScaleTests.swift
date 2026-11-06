@@ -22,7 +22,7 @@ struct MacTypeScaleTests {
     }
 }
 
-/// 小 / 标准 / 大 on the Mac (#833): text styles there do not follow Dynamic Type, so the fonts, Markdown and the sizes
+/// Small / Standard / Large on the Mac (#833): text styles there do not follow Dynamic Type, so the fonts, Markdown and the sizes
 /// that go with text (frames, line spacing, Feishu text) move by the Mac's own step, a point at the body (12 / 13 / 14).
 @MainActor @Suite(.serialized)
 struct MacTextSizeTests {

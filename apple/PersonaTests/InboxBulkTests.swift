@@ -1,7 +1,7 @@
 import XCTest
 @testable import Jarvis
 
-/// Bulk filing's arithmetic (InboxBulk: 全部清理, a section's 全部看过 / 全部清除, 撤销): what a request moves, how the list shows it before and after the hub's
+/// Bulk filing's arithmetic (InboxBulk: Clear All, a section's Mark All Seen / Clear All, Undo): what a request moves, how the list shows it before and after the hub's
 /// answer, the toast, and the scope line in the menu.
 final class InboxBulkTests: XCTestCase {
     private func item(_ id: String, done: Bool = false, version: String = "v1") throws -> InboxItem {
@@ -55,7 +55,7 @@ final class InboxBulkTests: XCTestCase {
         XCTAssertEqual(InboxBulk.scopeLine(filters: ["飞书"], query: "", count: 0), "没有未处理的")
     }
 
-    // MARK: 全部清理 (POST /api/v1/inbox/bulk)
+    // MARK: Clear All (POST /api/v1/inbox/bulk)
 
     func testDismissShowsAsDismissed() throws {
         let a = try item("a"), b = try item("b")
@@ -118,7 +118,7 @@ final class InboxBulkTests: XCTestCase {
             XCTAssertEqual(result.changed.map(\.id), ["a"])
             XCTAssertEqual(undo, .legacy([a]), "and 撤销 the old way")
 
-            // 全部清理 on an old hub falls back to the 已处理 request too (recorded there as done_by=user), not refused.
+            // Clear All on an old hub falls back to the Done request too (recorded there as done_by=user), not refused.
             legacy = []
             let (cleaned, cleanUndo) = try await InboxBulk.perform(.dismiss, [a],
                 bulk: { _, _ in throw APIError(status: status, message: "not found") },

@@ -9,7 +9,7 @@ extension GoalInfo {
         return isComplete ? Theme.positive : Theme.caution
     }
 
-    /// What it has spent so far, in words ("12.3k tokens · 42 分钟"), nil when nothing is known.
+    /// What it has spent so far, in words ("12.3k tokens · 42 min"), nil when nothing is known.
     var usage: String? {
         var parts: [String] = []
         if let t = tokensUsed, t > 0 {

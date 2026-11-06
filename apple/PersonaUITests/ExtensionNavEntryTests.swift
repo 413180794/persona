@@ -2,8 +2,8 @@ import XCTest
 
 /// Extensions' main-navigation pages (nav_page) opened straight from the navigation (#2961): the new shell's drawer on
 /// iPhone, the sidebar column on iPad, after the places to go, with the extension's badge. Against
-/// scripts/mock/mock_hub.py with MOCK_PLUGINS=1 (its example-gateway › 用量, badge 3): `TEST_RUNNER_JARVIS_PLUGINS_HUB=
-/// http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named by
+/// scripts/mock/mock_hub.py with MOCK_PLUGINS=1 (its example-gateway › Usage, badge 3): `TEST_RUNNER_JARVIS_PLUGINS_HUB=
+/// http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by
 /// `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
 final class ExtensionNavEntryTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -57,7 +57,7 @@ final class ExtensionNavEntryTests: XCTestCase {
             XCUIDevice.shared.orientation = orientation
             let app = try launch(["-tab", "assistant"])
             let row = app.descendants(matching: .any)[entry]
-            // Portrait folds the column away: 历史对话 brings it back.
+            // Portrait folds the column away: Chat History brings it back.
             if !row.waitForExistence(timeout: 8) {
                 let toggle = app.buttons["assistant-sidebar-button"]
                 if toggle.waitForExistence(timeout: 5) { toggle.tap() }

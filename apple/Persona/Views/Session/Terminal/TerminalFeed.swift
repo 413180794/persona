@@ -25,7 +25,7 @@ final class TerminalFeed {
     private(set) var loading = false
     private(set) var loaded = false
     private(set) var offline = false
-    /// Reading history: the screen stays as it was until 回到最新.
+    /// Reading history: the screen stays as it was until Jump to Latest.
     private(set) var paused = false
     /// A failed page load (shown briefly).
     var error: String?
@@ -34,7 +34,7 @@ final class TerminalFeed {
     enum Control: Equatable { case off, starting, active, busy, declined }
     private(set) var control = Control.off
     private(set) var controlNote: String?
-    /// This view wants to drive the terminal (设置 › 终端尺寸).
+    /// This view wants to drive the terminal (Settings › Terminal Size).
     var wantsControl = false
     /// The grid that fits the view at its font size: the size the phone asks for.
     private(set) var phoneGrid: TerminalGridSize?
@@ -181,7 +181,7 @@ final class TerminalFeed {
         leaveControl()
     }
 
-    /// Driving it or not (设置 › 终端尺寸 changed): subscribe again the other way.
+    /// Driving it or not (Settings › Terminal Size changed): subscribe again the other way.
     func setWantsControl(_ on: Bool, _ model: AppModel) {
         guard on != wantsControl else { return }
         wantsControl = on

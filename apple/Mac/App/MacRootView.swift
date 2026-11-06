@@ -1,9 +1,9 @@
 import BeautifulUI
 import SwiftUI
 
-/// The window's sidebar sections: the iPhone's four tabs, plus 知识库 and 机器 (on the phone a page inside
-/// Persona, and 机器 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
-/// (docs/mac.md「主窗口」), and 消息 while 设置 › 飞书 › 首页显示消息 is on (the iPhone's extra tab, #392). ⌘1…⌘8: see
+/// The window's sidebar sections: the iPhone's four tabs, plus Knowledge and Machines (on the phone a page inside
+/// Persona, and Machines inside Agents / Settings), which a Mac with room for a sidebar shows as sections of their own
+/// (docs/mac.md「主窗口」), and Messages while Settings › Lark › Show Messages on Home is on (the iPhone's extra tab, #392). ⌘1…⌘8: see
 /// `shortcutOrder`.
 enum MacSection: String, CaseIterable, Identifiable {
     case assistant, agents, todos, messages, inbox, knowledge, machines, settings
@@ -11,7 +11,7 @@ enum MacSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     /// The sections in ⌘ order. ⌘1…⌘6 stay where they were; 「待办」 (added later) takes ⌘7, 「消息」 ⌘8. The sidebar shows
-    /// `allCases` (「待办」 after Agents, 「消息」 before 收件箱 as on the iPhone), so the two orders are kept apart.
+    /// `allCases` (To-dos after Agents, Messages before Inbox as on the iPhone), so the two orders are kept apart.
     static let shortcutOrder: [MacSection] = [.assistant, .agents, .inbox, .knowledge, .machines, .settings, .todos, .messages]
 
     /// The ⌘ number of the section, 1-based.
@@ -51,7 +51,7 @@ enum MacSection: String, CaseIterable, Identifiable {
 
     /// The Mac-side pick across launches (the tabs are AppModel's to remember).
     static let storageKey = "mac.section"
-    /// 显示 › 隐藏侧边栏 (⌃⌘S): the sections column folded away, across launches.
+    /// View › Hide Sidebar (⌃⌘S): the sections column folded away, across launches.
     static let sidebarHiddenKey = "mac.sidebar.hidden"
     static func remember(_ s: MacSection?, in d: UserDefaults = .standard) {
         // Not at once: a write to UserDefaults draws every `AppStorage` view in every kept page again (#390).
@@ -97,7 +97,7 @@ enum MacSection: String, CaseIterable, Identifiable {
     }
 }
 
-/// The window: unpaired, the welcome page (pairing, 体验模式); paired, a sidebar with the four sections beside the
+/// The window: unpaired, the welcome page (pairing, Demo Mode); paired, a sidebar with the four sections beside the
 /// section's page (the iOS pages, `horizontalSizeClass` regular).
 struct MacRootView: View {
     @Environment(AppModel.self) private var model
@@ -133,15 +133,15 @@ struct MacRootView: View {
         .sendRefusalAlert(model)
         .overlay { if model.isPaired { MacQuickOpenLayer() } }
         .background {
-            // ⌘K's 文件: the viewer a file in the conversation opens. On a view of its own: a second sheet on the
-            // root next to 新建 Agent's crashed the window's layout when a chat opened.
+            // ⌘K's Files: the viewer a file in the conversation opens. On a view of its own: a second sheet on the
+            // root next to New Agent's crashed the window's layout when a chat opened.
             Color.clear.sheet(item: Binding(get: { MacShellState.shared.file }, set: { MacShellState.shared.file = $0 })) { ref in
                 FileViewer(ref: ref, key: MacShellState.shared.fileKey)
                     .environment(model)
             }
         }
         .sheet(isPresented: Binding(get: { MacShellState.shared.newAgent }, set: { MacShellState.shared.newAgent = $0 })) {
-            // 新建 Agent (⌘N, the menu bar, ⌘K): the iOS form in a window sheet; the new agent opens in Agents.
+            // New Agent (⌘N, the menu bar, ⌘K): the iOS form in a window sheet; the new agent opens in Agents.
             NavigationStack {
                 NewChatView { session in
                     MacShellState.shared.newAgent = false
@@ -151,7 +151,7 @@ struct MacRootView: View {
             .macSheet()
             .environment(model)
         }
-        // 添加电脑 / 确认电脑 from anywhere (the readiness card, the Agents list, the menu bar's 文件 › 添加电脑…).
+        // Add Computer / Confirm Computer from anywhere (the readiness card, the Agents list, the menu bar's File › Add Computer…).
         .addComputerPresentation()
         #if DEBUG
         .preferredColorScheme(MacSnapshot.colorScheme)
@@ -179,7 +179,7 @@ extension View {
 }
 
 /// The sections column and the section's page side by side. Not a `NavigationSplitView`: the pages are split views
-/// themselves (Agents, 收件箱, 设置 in regular width; Persona lays its list beside it, `MacListBeside`), and a split nested in another one's detail column laid its
+/// themselves (Agents, Inbox, Settings in regular width; Persona lays its list beside it, `MacListBeside`), and a split nested in another one's detail column laid its
 /// own detail out as if the outer sidebar were still in front of it (the chat sat a sidebar's width to the right,
 /// its composer cut off). The page's split is the window's; this column sits at its leading edge.
 private struct MacShell: View {
@@ -191,7 +191,7 @@ private struct MacShell: View {
         let _ = PerfTrace.body("MacShell")
         #endif
         HStack(spacing: 0) {
-            // 显示 › 隐藏侧边栏 folds it away; ⌘1…6 still move between the sections.
+            // View › Hide Sidebar folds it away; ⌘1…6 still move between the sections.
             // The divider runs up into the title bar's row too: stopping under it, the page's white showed past the
             // column's edge there, a step the user saw as a white bump (#830).
             if !sidebarHidden { sections; Divider().ignoresSafeArea(.container, edges: .top) }
@@ -209,7 +209,7 @@ private struct MacShell: View {
                 // Pages that draw their own header in that row (Persona's) start it here.
                 .environment(\.macTitleRowLeading, sidebarHidden ? Theme.Size.macTitleAfterControls : 0)
                 // The connection state lives at the sidebar's foot; folded away, it comes to the page's (only while
-                // the hub is out of reach: 知识库 and 机器 have no title spot of their own that says so).
+                // the hub is out of reach: Knowledge and Machines have no title spot of their own that says so).
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if sidebarHidden { MacConnectionFooter().background(Theme.systemSidebar) }
                 }
@@ -228,10 +228,10 @@ private struct MacShell: View {
         // A page whose plugin took it away (disabled, uninstalled) goes back to the section.
         .onChange(of: ExtensionSlots.shared.pages) { if shell.pluginPage != nil, pluginPlace == nil { shell.pluginPage = nil } }
         // No page title in the bar: the system puts it after the items beside the traffic lights, over this column, and
-        // a long one ran across the column's edge on a white backing (2026-11-02 user: 文字都超出去了). The selected
+        // a long one ran across the column's edge on a white backing (2026-11-02 user: the text all spills out). The selected
         // section and the selected row say where you are; the window keeps its title for the Window menu.
         .toolbar(removing: .title)
-        // Next to the traffic lights, over the sections column: shows or hides that column (显示 › 显示/隐藏侧边栏,
+        // Next to the traffic lights, over the sections column: shows or hides that column (View › Show/Hide Sidebar,
         // ⌃⌘S). The pages' lists have no button of their own: one there sat over this column and hid the list.
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
@@ -265,7 +265,7 @@ private struct MacShell: View {
             }
         }
         .onChange(of: LarkHomePreference.shared.shows) { _, shows in
-            // 首页显示消息 switched off (or the hub lost its Feishu chats): the window leaves 消息 as the iPhone leaves its tab.
+            // Show Messages on Home switched off (or the hub lost its Feishu chats): the window leaves Messages as the iPhone leaves its tab.
             if !shows, shell.section == .messages {
                 shell.section = nil
                 MacSection.remember(nil)
@@ -286,7 +286,7 @@ private struct MacShell: View {
     /// The section on screen: the one picked in the column, else the tab's.
     private var shown: MacSection {
         let s = MacSection.shown(override: shell.section, tab: model.selectedTab)
-        // A remembered 消息 while its switch is off (or before the hub says it has Feishu chats): the tab's section.
+        // A remembered Messages while its switch is off (or before the hub says it has Feishu chats): the tab's section.
         return s == .messages && !LarkHomePreference.shared.shows ? MacSection(model.selectedTab) : s
     }
 
@@ -296,7 +296,7 @@ private struct MacShell: View {
     private var sections: some View {
         return VStack(spacing: Theme.Space.xxs) {
             ForEach(MacSection.visibleNow) { section in
-                // The plugins' pages go with 机器 and 设置, right before 设置 (docs/extensions.md「UI 插槽」).
+                // The plugins' pages go with Machines and Settings, right before Settings (docs/extensions.md「UI 插槽」).
                 if section == .settings { pluginRows }
                 MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown && shell.pluginPage == nil,
                               badge: badge(section), identifier: "mac.section.\(section.rawValue)") { shell.go(section, model) }
@@ -304,7 +304,7 @@ private struct MacShell: View {
             Spacer(minLength: 0)
             // The subscription accounts' windows (docs/usage-windows.md), as the web's sidebar ends; nothing without any.
             MacUsageFooter()
-            // The sidebar's foot: while the hub is out of reach, 等待网络 / 连接中… (a click explains), as the
+            // The sidebar's foot: while the hub is out of reach, Waiting for Network / Connecting… (a click explains), as the
             // iPhone's title spot does (docs/mac.md「主窗口」).
             MacConnectionFooter()
         }
@@ -339,7 +339,7 @@ private struct MacShell: View {
     private func badge(_ section: MacSection) -> MacSidebarRow.Badge? {
         let n: Int
         switch section {
-        case .knowledge, .machines, .messages: return nil // 消息: the iPhone's tab has no badge either
+        case .knowledge, .machines, .messages: return nil // Messages: the iPhone's tab has no badge either
         case .todos: n = TodoStore.shared.badgeCount
         case .assistant: n = model.badges.assistant
         case .agents: n = model.badges.agents
@@ -394,7 +394,7 @@ extension EnvironmentValues {
     @Entry var macTitleRowLeading: CGFloat = 0
 }
 
-/// The sidebar's 机器: the machines page, pushing a machine's page; its agents open their chats here too
+/// The sidebar's Machines: the machines page, pushing a machine's page; its agents open their chats here too
 /// (SessionKey), as on the phone.
 struct MacMachinesPage: View {
     @State private var path = NavigationPath()

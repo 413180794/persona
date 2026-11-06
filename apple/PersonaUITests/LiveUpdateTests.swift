@@ -241,7 +241,7 @@ final class LiveUpdateTests: XCTestCase {
         report("Agents list, searching", from: before, to: counts())
     }
 
-    // A row swiped open (关闭 showing) stays open while its agent keeps working.
+    // A row swiped open (Close showing) stays open while its agent keeps working.
     @MainActor func testSwipedRowStaysOpenThroughUpdates() {
         launch()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "给天气 App 加主屏幕小组件")).firstMatch

@@ -3,7 +3,7 @@ import XCTest
 /// /loop in an agent's composer (#2601, as on the web): the quick commands offer it to a Claude agent and picking it
 /// only puts `/loop ` in the box, with a line over it saying what is still missing; a Codex agent's have no /loop.
 /// The quick commands are in the + menu, or the prompt bar's "/" menu in the BeautifulUI style's four tabs
-/// (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`). 体验模式 (Demo.json): a Claude agent at rest and the Codex one at work.
+/// (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`). Demo Mode (Demo.json): a Claude agent at rest and the Codex one at work.
 final class LoopCommandUITests: XCTestCase {
     private let claude = "macbook/a1f3c2d4-0000-4000-8000-000000000006"
     private let codex = "server/a1f3c2d4-0000-4000-8000-000000000004"

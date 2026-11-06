@@ -1,6 +1,6 @@
 import XCTest
 
-/// 操控电脑 on a Mac's page (docs/computer-use.md), against scripts/mock/mock_hub.py with `MOCK_COMPUTER=<state>`
+/// Control Computer on a Mac's page (docs/computer-use.md), against scripts/mock/mock_hub.py with `MOCK_COMPUTER=<state>`
 /// (TEST_RUNNER_JARVIS_COMPUTER_HUB=http://127.0.0.1:<port>, TEST_RUNNER_JARVIS_COMPUTER_STATE=<state>): the section
 /// says the state, and its switch turns it off and on; not installed, it installs and asks for the permissions. JARVIS_SHOTS
 /// saves the screenshots there too.
@@ -24,7 +24,7 @@ final class ComputerSectionTests: XCTestCase {
         return (app, toggle, app.descendants(matching: .any)["computer-status"].firstMatch)
     }
 
-    /// Not installed (#1183): 安装 Cua Driver shows the node's steps, then the grant waits on the Mac's dialogs, then it
+    /// Not installed (#1183): Install Cua Driver shows the node's steps, then the grant waits on the Mac's dialogs, then it
     /// can be operated. MOCK_COMPUTER=missing.
     @MainActor func testInstallThenGrant() throws {
         guard state == "missing" else { throw XCTSkip("MOCK_COMPUTER=missing") }
@@ -61,7 +61,7 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertTrue(look.waitForExistence(timeout: 10), "back on the machine page")
     }
 
-    /// In the chat, under the assistant's 看电脑 / 操控电脑: VNC for the Mac it operated (MOCK_COMPUTER=ready has a
+    /// In the chat, under the assistant's View Computer / Control Computer: VNC for the Mac it operated (MOCK_COMPUTER=ready has a
     /// conversation where it did 6 × 7 on MacBook).
     @MainActor func testTheChatOffersTheLiveScreen() throws {
         guard state == "ready", let hub = ProcessInfo.processInfo.environment["JARVIS_COMPUTER_HUB"] else {
@@ -87,7 +87,7 @@ final class ComputerSectionTests: XCTestCase {
     }
 
     /// The apps always allowed for the assistant on this Mac (#1507; MOCK_COMPUTER_APPS=1, JARVIS_COMPUTER_APPS=1):
-    /// listed under VNC, each taken back with 移除 (asked about again next time).
+    /// listed under VNC, each taken back with Remove (asked about again next time).
     @MainActor func testAllowedAppsCanBeTakenBack() throws {
         guard state == "ready", ProcessInfo.processInfo.environment["JARVIS_COMPUTER_APPS"] == "1" else {
             throw XCTSkip("MOCK_COMPUTER=ready MOCK_COMPUTER_APPS=1 (JARVIS_COMPUTER_APPS=1)")
@@ -106,7 +106,7 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertTrue(screen.exists, "the other stays")
     }
 
-    /// 扩展开着时不自动锁屏 (#1507 b2): off by default; turning it on asks first (取消 leaves it off, 打开 turns it on),
+    /// Don't Auto-Lock While On (#1507 b2): off by default; turning it on asks first (Cancel leaves it off, Open turns it on),
     /// turning it off does not ask. MOCK_COMPUTER=ready.
     @MainActor func testNoAutoLockAsksFirst() throws {
         guard state == "ready" else { throw XCTSkip("MOCK_COMPUTER=ready") }
@@ -137,8 +137,8 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertFalse(turnOn.exists, "turning it off does not ask")
     }
 
-    /// 取消 the dialog: its button where it has one, else a tap outside it (iOS 26 shows it as a popover by the switch,
-    /// with no 取消).
+    /// Cancel the dialog: its button where it has one, else a tap outside it (iOS 26 shows it as a popover by the switch,
+    /// with no Cancel).
     @MainActor private func cancelDialog(_ app: XCUIApplication) {
         let cancel = app.buttons["取消"].firstMatch
         let outside = app.otherElements["PopoverDismissRegion"].firstMatch
@@ -186,7 +186,7 @@ final class ComputerSectionTests: XCTestCase {
             XCTAssertTrue(screen.label.contains("录屏与系统录音") && screen.label.contains("Cua Driver"), screen.label)
             if state == "both" { XCTAssertTrue(accessibility.label.contains("系统设置 › 隐私与安全性 › 辅助功能"), accessibility.label) }
         }
-        if state == "locked" { // 解锁 opens its live screen, where the lock screen takes the password
+        if state == "locked" { // Unlock opens its live screen, where the lock screen takes the password
             XCTAssertTrue(app.buttons["computer-unlock"].exists, "解锁:\n\(app.debugDescription)")
         }
         shot(app, "computer-\(state)")

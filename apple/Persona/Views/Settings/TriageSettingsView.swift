@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 设置 › 会话分诊 (`TriageSettingsModel`): the triage and its model, then the three things it may do.
+/// Settings › Session Triage (`TriageSettingsModel`): the triage and its model, then the three things it may do.
 struct TriageSettingsView: View {
     @Environment(AppModel.self) private var app
     @State private var model: TriageSettingsModel?

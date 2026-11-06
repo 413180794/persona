@@ -129,7 +129,7 @@ import Foundation
     }
 
     /// What a key in a focused composer asks of the history, if anything: bare ↑ / ↓, and ⌃R (the terminal's; ⌘R is
-    /// the window's 刷新). Never while an input method holds unconfirmed text.
+    /// the window's Refresh). Never while an input method holds unconfirmed text.
     nonisolated static func key(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, composing: Bool) -> Key? {
         guard !composing else { return nil }
         let m = mods(modifiers)

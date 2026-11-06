@@ -1,6 +1,6 @@
 import XCTest
 
-/// 思考强度胶囊里切模型 (#3119): in the old layout's mode bar the effort chip also lists Claude Code's models; picking
+/// Switching models in the effort chip (#3119): in the old layout's mode bar the effort chip also lists Claude Code's models; picking
 /// one posts `…/modes {"model": …}`. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which logs the requests at
 /// /mock/modes. With JARVIS_SHOTS set it writes the open menu there (JARVIS_SHOTS_APPEARANCE names the appearance).
 final class ModelSwitchChipTests: XCTestCase {

@@ -1,8 +1,8 @@
 import XCTest
 
-/// 浏览器（ego lite） on a Mac's page (docs/plan-ego-browser.md), against scripts/mock/mock_hub.py with
+/// Browser (ego lite) on a Mac's page (docs/plan-ego-browser.md), against scripts/mock/mock_hub.py with
 /// MOCK_BROWSER=<state> (`TEST_RUNNER_JARVIS_BROWSER_HUB`, `TEST_RUNNER_JARVIS_BROWSER_STATE`): not installed it installs,
-/// installed its first-run setup is steps with 打开 ego lite, set up it is 就绪 in green. JARVIS_SHOTS keeps the
+/// installed its first-run setup is steps with Open ego lite, set up it is Ready in green. JARVIS_SHOTS keeps the
 /// screenshots, named by `TEST_RUNNER_JARVIS_LOOK`.
 final class BrowserSectionTests: XCTestCase {
     private var state: String { ProcessInfo.processInfo.environment["JARVIS_BROWSER_STATE"] ?? "ready" }
@@ -72,7 +72,7 @@ final class BrowserSectionTests: XCTestCase {
         shot(app, "browser-ready")
     }
 
-    /// 设置 › 扩展 › 浏览器: a switch per Mac, how ego lite is on each. The mock serves extensions only with MOCK_PLUGINS=1
+    /// Settings › Extensions › Browser: a switch per Mac, how ego lite is on each. The mock serves extensions only with MOCK_PLUGINS=1
     /// as well (else the page says not found).
     @MainActor func testTheExtensionListsTheMacs() throws {
         guard state == "ready" else { throw XCTSkip("MOCK_BROWSER=ready") }

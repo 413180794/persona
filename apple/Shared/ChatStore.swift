@@ -118,7 +118,7 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
     var trailing: [ChatRow] = [] // notices that belong to the turn (e.g. "interrupted")
     /// Background tasks that woke the agent during this exchange (their notices).
     var wakes: [Item] = []
-    /// Everything from the first wake on, for the "后台任务完成" drawer.
+    /// Everything from the first wake on, for the "Background Task Done" drawer.
     var afterWake: [ChatRow] = []
     /// What came after the answer (a follow-up once a background task reported back): only in the drawer.
     var tail: [ChatRow] = []
@@ -127,7 +127,7 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
     /// Messages and steps in arrival order (how the running turn is shown: input sent mid-turn stays where it was sent).
     var ordered: [ChatRow] = []
 
-    /// From the first message to the last thing the agent did ("已工作 5 分 12 秒").
+    /// From the first message to the last thing the agent did ("Worked 5 min 12 s").
     var startedAt: Date? { (users + steps).lazy.compactMap(\.firstTS).first }
     var endedAt: Date? { (steps + trailing).reversed().lazy.compactMap(\.lastTS).first }
 
@@ -399,7 +399,7 @@ final class ChatStore {
     var pending: [PendingMessage] = []
     /// A pending message's real copy arrived and its bubble went (the app saves its outbox).
     @ObservationIgnored var onArrived: (() -> Void)?
-    /// A queued message taken back out of the agent (撤回编辑, 删除) never reaches the transcript. Its sent bubble, hidden
+    /// A queued message taken back out of the agent (Take Back to Edit, Delete) never reaches the transcript. Its sent bubble, hidden
     /// while the queue strip showed it, came back at the end of the chat as if it had gone out again, and stayed while
     /// the agent worked. Drops that bubble: the oldest sent one with those words. Returns whether one went.
     @discardableResult func pulledBack(_ text: String) -> Bool {
@@ -950,7 +950,7 @@ nonisolated enum ScreenParser {
             /// What is typed into the free-text field.
             var text: String?
         }
-        /// A step of a multi-question AskUserQuestion: the TUI's tab bar "←  ☐ 审核策略  ✔ 推送代码  ✔ Submit  →".
+        /// A step of a multi-question AskUserQuestion: the TUI's tab bar 「←  ☐ 审核策略  ✔ 推送代码  ✔ Submit  →」.
         struct Step: Equatable, Sendable {
             var label: String
             var done: Bool
@@ -1139,7 +1139,7 @@ nonisolated enum ChatCache {
     }()
 
     /// Whether a caches folder is one of ChatCache's, this version or an older one ("chats", "chats-v<N>"): what
-    /// 设置 › 存储空间 counts under 「Agent 对话」.
+    /// Settings › Storage counts under 「Agent 对话」.
     static func isFolder(_ name: String) -> Bool {
         guard name != "chats" else { return true }
         guard name.hasPrefix("chats-v") else { return false }
@@ -1248,10 +1248,10 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
     }
 
     /// This transcript item is the message. An item the hub tied to a message (`Item.clientMsgID`) is the one with that
-    /// id, whatever its role, kind or words (a rewritten text, the notice `/compact` became), and no other: two "继续"
+    /// id, whatever its role, kind or words (a rewritten text, the notice `/compact` became), and no other: two "Continue"
     /// each take their own bubble. One it tied to none: a user message that arrived after it was written (two minutes'
     /// slack for the computer's clock), with its text — when the page cut a long one, its start. An older message with
-    /// the same words (a second "继续") is not it: the bubble of one never sent stayed gone.
+    /// the same words (a second "Continue") is not it: the bubble of one never sent stayed gone.
     static func arrived(_ p: PendingMessage, as item: Item) -> Bool {
         if let tied = tied(item, to: p.id) { return tied }
         guard item.role == "user", item.kind == .text, Injected.of(item) == nil else { return false }
@@ -1269,8 +1269,8 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
     }
 
     /// The transcript's copy of a message sent from here (equal once normalized, or one containing the other:
-    /// Claude adds placeholders and the phone adds notes). Containing only counts for longer texts: a pending "好"
-    /// was taken for any message with 好 in it.
+    /// Claude adds placeholders and the phone adds notes). Containing only counts for longer texts: a pending "ok"
+    /// was taken for any message with ok in it.
     static func same(_ a: String, _ b: String) -> Bool {
         let x = normalize(a), y = normalize(b)
         guard !x.isEmpty, !y.isEmpty else { return false }

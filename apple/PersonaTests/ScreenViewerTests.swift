@@ -53,7 +53,7 @@ struct ScreenViewerTests {
         #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
         #expect((attributes[kSecAttrSynchronizable as String] as? Bool ?? false) == false)
 
-        // 一键解锁 is this device's, per Mac, and only with the sign-in kept (#1507 a-2).
+        // One-Tap Unlock is this device's, per Mac, and only with the sign-in kept (#1507 a-2).
         ScreenUnlock.set(true, for: ref)
         #expect(ScreenUnlock.isOn(ref) && !ScreenUnlock.isOn(MachineRef(group: "", id: "another-mac")))
         ScreenUnlock.set(false, for: ref)

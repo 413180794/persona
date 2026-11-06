@@ -1,8 +1,8 @@
 import XCTest
 
-/// Searching Agents in the ChatGPT-style shell (docs/ios.md「新外壳」): the shell's top bar (☰, 助手 | Agents, 新建会话)
+/// Searching Agents in the ChatGPT-style shell (docs/ios.md「新外壳」): the shell's top bar (☰, Assistant | Agents, New Session)
 /// floats over the navigation bar, and the active search field rises into that bar. Drawn together they covered each
-/// other (TestFlight 70): while searching the top bar makes way, and comes back on 取消.
+/// other (TestFlight 70): while searching the top bar makes way, and comes back on Cancel.
 final class ShellSearchTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -53,7 +53,7 @@ final class ShellSearchTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-probes", "YES", "-app.tab", "chats", "-dev.openChat", ""]
         app.launchPinned()
-        // Agents (a stored tab from another test, 设置, would open its sheet over the shell).
+        // Agents (a stored tab from another test, Settings, would open its sheet over the shell).
         see(app.buttons["agents-new"].firstMatch, "新建会话 on Agents", timeout: 15)
         let field = app.revealAgentsSearch()
         assertClear(of: field, "before searching")
@@ -63,7 +63,7 @@ final class ShellSearchTests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard for the search")
         field.typeText("zqxj")
         XCTAssertEqual(field.value as? String, "zqxj", "the search field takes what is typed")
-        // No match says so (it used to show 开始第一个开发会话 and its 新建会话).
+        // No match says so (it used to show Start Your First Session and its New Session).
         see(app.staticTexts["没有找到「zqxj」"].firstMatch, "the no-match state")
         // The field has risen into the bar; the shell's controls must not be drawn over it (or under it).
         sleep(1)
@@ -84,7 +84,7 @@ final class ShellSearchTests: XCTestCase {
         // Closed, the field may fold away with the list (UIKit's): pulled out again, nothing of the bar is over it.
         assertClear(of: app.revealAgentsSearch(), "after 取消")
     }
-    /// 展开的搜索框在小、标准、大字号下都要避开顶栏，包括头像超出按钮的角标。
+    /// The expanded search field stays clear of the top bar at small, standard and large text sizes, including the avatar's badge that sticks out of its button.
     @MainActor func testExpandedSearchClearsTheTopBarAtEveryTextSize() {
         for size in ["small", "standard", "large"] {
             app = XCUIApplication()
@@ -102,7 +102,7 @@ final class ShellSearchTests: XCTestCase {
         }
     }
 
-    /// 搜索结果推出对话后不保留列表的顶部间距；返回时恢复顶栏、搜索词和不重叠的布局。
+    /// A result pushing a chat does not keep the list's top spacing; coming back restores the top bar, the search text and a layout without overlap.
     @MainActor func testSearchResultReturnsToAnUncoveredSearchField() {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-probes", "YES", "-app.tab", "chats", "-dev.openChat", ""]
@@ -146,7 +146,7 @@ final class ShellSearchTests: XCTestCase {
         finger.switchTo(agents: false, "助手 tapped after 取消")
         finger.switchTo(agents: true, "Agents tapped after 取消")
     }
-    /// 收件箱 and 知识库, pushed on 助手, search in their own navigation bar: the shell's top bar is not over them.
+    /// Inbox and Knowledge, pushed on Assistant, search in their own navigation bar: the shell's top bar is not over them.
     @MainActor func testSearchOnPagesPushedOnTheAssistant() {
         for (page, title) in [("inbox", "收件箱"), ("knowledge", "知识库")] {
             app = XCUIApplication()

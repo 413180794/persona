@@ -1,6 +1,6 @@
 import XCTest
 
-/// 回到最新 (#1034) against the isolated history mock: back to the newest messages on the device at once, then up to
+/// Jump to Latest (#1034) against the isolated history mock: back to the newest messages on the device at once, then up to
 /// date from the hub without pulling a reader back down.
 final class LarkJumpLatestFlowTests: XCTestCase {
     private func fixture(_ change: [String: Any]? = nil) async throws -> [String: Any] {

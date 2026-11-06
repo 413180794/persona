@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 连接器 › GitHub signed in from the app with GitHub's device flow (docs/connectors.md「二 · 7」): straight to
+/// Settings › Connectors › GitHub signed in from the app with GitHub's device flow (docs/connectors.md「二 · 7」): straight to
 /// the code to enter at github.com/login/device (no client ID to fill in), then signed in on its own (the page asks
 /// the hub again every interval); which computer's gh login it uses; what its token lacks. Against
 /// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_GITHUB=device (testDeviceFlow), MOCK_GITHUB_LOGIN=1

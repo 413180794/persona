@@ -12,9 +12,9 @@ nonisolated enum MainConversationActions {
     static let doneRecent: TimeInterval = 60
     /// A failed one shows when this page saw it fail, or when it failed this recently (until it is closed).
     static let failedRecent: TimeInterval = 10 * 60
-    /// How long 已压缩上下文 stays.
+    /// How long Context compacted stays.
     static let doneShown: TimeInterval = 4
-    /// How long the note says 正在压缩 after asking, before the hub's word on it arrives.
+    /// How long the note says Compacting after asking, before the hub's word on it arrives.
     static let requestGrace: TimeInterval = 15
 
     /// What the chat shows for a conversation's compaction.
@@ -46,7 +46,7 @@ nonisolated enum MainConversationActions {
         }
     }
 
-    /// The title the hub gives the archived main conversation: 旧主对话 · 至 11月4日.
+    /// The title the hub gives the archived main conversation: 「旧主对话 · 至 11月4日」.
     static func archivedTitle(_ now: Date = Date(), calendar: Calendar = .current) -> String {
         var style = Date.FormatStyle.dateTime.month().day()
         style.calendar = calendar
@@ -57,7 +57,7 @@ nonisolated enum MainConversationActions {
 }
 
 nonisolated extension Compaction {
-    /// The divider's words, as the web and Android draw it: 以上内容已压缩 · 手动 · 压缩前 18.1 万 token (the parts known).
+    /// The divider's words, as the web and Android draw it: 「以上内容已压缩 · 手动 · 压缩前 18.1 万 token」 (the parts known).
     var dividerTitle: String {
         var parts = [String(localized: "以上内容已压缩")]
         if let source { parts.append(source) }
@@ -65,9 +65,9 @@ nonisolated extension Compaction {
         return parts.joined(separator: " · ")
     }
 
-    /// 18.1 万, 8,500.
+    /// 「18.1 万」, 8,500.
     static func tokens(_ n: Int) -> String {
-        // Chinese counts in 万 (as the web and Android); other languages in their own compact form (181K, 18万).
+        // Chinese counts in 「万」 (as the web and Android); other languages in their own compact form (181K, 「18万」).
         if n >= 10_000, LanguageStore.shared.launched != "zh-Hans" {
             return n.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(.interface))
         }
@@ -105,7 +105,7 @@ extension APIClient {
         try await post("/api/v1/assistant/conversations/\(id)/compact", body: CompactBody(machineID: machineID?.isEmpty == false ? machineID : nil))
     }
 
-    /// Archives the main conversation `expect` (renamed 旧主对话 · 至 M月D日) and leaves none: the next message to the
+    /// Archives the main conversation `expect` (renamed 「旧主对话 · 至 M月D日」) and leaves none: the next message to the
     /// main conversation starts a new one, with the old one's summary in front of it when `carry`. 409 `main_changed`:
     /// another device replaced it already; `busy`: it is answering or compacting.
     func newMainConversation(carry: Bool, expect: String) async throws -> NewMainResult {

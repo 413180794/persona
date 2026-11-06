@@ -2,7 +2,7 @@ import XCTest
 
 /// The iPad draws the iPhone's composer (`ShellComposerBar`, #2779): one line, [+] the field [mic], that grows into a
 /// card while typing, in an agent's conversation and the assistant's, no wider than the conversation and centered on it.
-/// 旧布局 keeps its own composer, so these launch with it off (UI tests default to it on).
+/// Old Layout keeps its own composer, so these launch with it off (UI tests default to it on).
 /// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), on an iPad simulator; skipped on iPhone.
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a screenshot of each.
 final class IPadComposerTests: XCTestCase {

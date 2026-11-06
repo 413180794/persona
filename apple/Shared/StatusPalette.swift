@@ -17,15 +17,15 @@ nonisolated struct StatusTone: Sendable {
 }
 
 nonisolated enum StatusPalette {
-    /// 需要你: the only color allowed to call for attention — lists, cards, panels, the inbox, the watch, the island.
+    /// Needs You: the only color allowed to call for attention — lists, cards, panels, the inbox, the watch, the island.
     static let needsYou = StatusTone(dot: Color(light: 0xE5484D, dark: 0xFF6369), text: Color(light: 0xC62B33, dark: 0xFF6369))
-    /// 工作中.
+    /// Working.
     static let working = StatusTone(dot: Color(light: 0xE8890C, dark: 0xFFB224), text: Color(light: 0xA35A00, dark: 0xFFB224))
-    /// 完成未看.
+    /// Unread.
     static let unread = StatusTone(dot: Color(light: 0x30A46C, dark: 0x4CC38A), text: Color(light: 0x1D7A4C, dark: 0x4CC38A))
-    /// 已看 / 未知.
+    /// Seen / Unknown.
     static let idle = StatusTone(dot: Color.secondary.opacity(0.55), text: .secondary, tint: Color.secondary.opacity(0.12))
-    /// 未运行.
+    /// Not running.
     static let offline = StatusTone(dot: Color.secondary.opacity(0.3), text: .secondary, tint: Color.secondary.opacity(0.08))
 }
 

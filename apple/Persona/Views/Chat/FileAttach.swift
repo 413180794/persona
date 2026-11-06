@@ -231,7 +231,7 @@ struct AttachmentRow: View {
 }
 
 extension View {
-    /// The 文件 picker of a composer: any kind of file, several at once.
+    /// The Files picker of a composer: any kind of file, several at once.
     func fileUploadPicker(isPresented: Binding<Bool>, picked: @escaping ([URL]) -> Void) -> some View {
         fileImporter(isPresented: isPresented, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result, !urls.isEmpty { picked(urls) }

@@ -4,7 +4,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    /// The system's text size, before 小 / 标准 / 大 moves it.
+    /// The system's text size, before Small / Standard / Large moves it.
     @Environment(\.dynamicTypeSize) private var systemTypeSize
     @Environment(\.horizontalSizeClass) private var widthClass
     #if DEBUG
@@ -15,7 +15,7 @@ struct RootView: View {
     private let flipped = false
     #endif
 
-    /// The ChatGPT-style shell (docs/ios.md「新外壳」): an iPhone-width screen, unless 设置 › 外观 › 旧布局 is on.
+    /// The ChatGPT-style shell (docs/ios.md「新外壳」): an iPhone-width screen, unless Settings › Appearance › Old Layout is on.
     private var usesShell: Bool {
         #if os(visionOS)
         // Apple Vision Pro keeps the tabs, as the system's ornament (VisionShell), whatever the window's width.
@@ -46,7 +46,7 @@ struct RootView: View {
                 WelcomeView()
             }
         }
-        // The plugins' main-navigation entries and cards, for 设置's badge (docs/extensions.md「UI 插槽」).
+        // The plugins' main-navigation entries and cards, for Settings' badge (docs/extensions.md「UI 插槽」).
         .task(id: ExtensionSlots.source(model)) {
             let hub = ExtensionSlots.source(model).hub
             await ExtensionSlots.shared.reload(for: hub)
@@ -55,7 +55,7 @@ struct RootView: View {
         }
         .extensionThemes()
         .extensionSystemPresentation()
-        // A new style, 主题色 or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
+        // A new style, Theme Color or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
         .id(model.look)
         #if DEBUG
         .task {
@@ -83,9 +83,9 @@ struct RootView: View {
         // The shell shows the toasts in a window of its own, over its sheets too (`ToastWindow`).
         .overlay(alignment: .top) { if !usesShell || model.extensionOpen != nil { ToastOverlay() } }
         #if os(iOS) || os(visionOS)
-        // 设置 › 外观 › 深浅色 on this scene's window (and any other open one) as it first shows.
+        // Settings › Appearance › Light & Dark on this scene's window (and any other open one) as it first shows.
         .onAppear { model.colorScheme.apply() }
-        // The 主题色 on the windows too, for what UIKit draws in the window's tint (设置's row icons, `WindowTint`).
+        // The Theme Color on the windows too, for what UIKit draws in the window's tint (Settings' row icons, `WindowTint`).
         .onChange(of: model.look, initial: true) { WindowTint.apply() }
         #endif
         #if DEBUG
@@ -112,7 +112,7 @@ struct RootView: View {
             Text(c.summary)
         }
         .sendRefusalAlert(model)
-        // 添加电脑 / 确认电脑 from anywhere (the readiness card's add_computer / confirm_computer, the Agents list).
+        // Add Computer / Confirm Computer from anywhere (the readiness card's add_computer / confirm_computer, the Agents list).
         .addComputerPresentation()
         .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)
         #if os(iOS) || os(visionOS)
@@ -129,8 +129,8 @@ struct RootView: View {
     @State private var pad = PadRouter()
     #endif
 
-    /// iPad (and iPhone Duo open) without 旧布局: 收件箱 and 设置 are in Persona's sidebar, as in the iPhone's drawer, not
-    /// tabs (docs/ios.md「iPad」, 2026-11-05 user). 旧布局 keeps the four tabs; Apple Vision Pro keeps them too.
+    /// iPad (and iPhone Duo open) without Old Layout: Inbox and Settings are in Persona's sidebar, as in the iPhone's drawer,
+    /// not tabs (docs/ios.md「iPad」, 2026-11-05 user). Old Layout keeps the four tabs; Apple Vision Pro keeps them too.
     private var padSidebar: Bool {
         #if os(iOS)
         !model.oldLayout
@@ -162,13 +162,13 @@ struct RootView: View {
 }
 
 #if os(iOS)
-/// Where the iPad's routes to 收件箱 and 设置 land without their tabs (`RootTabs.padSidebar`): every route in the app still
+/// Where the iPad's routes to Inbox and Settings land without their tabs (`RootTabs.padSidebar`): every route in the app still
 /// sets `AppModel.selectedTab` (notifications, Siri, the inbox's rows…). `.mail` opens the inbox on the Persona tab's page,
 /// beside its sidebar; `.settings` the sheet, over the tab that was in front. As the iPhone's shell does (`ShellState.route`).
 @MainActor @Observable final class PadRouter: TabRouter {
     /// What the Persona tab is asked to show; `serial` makes the same request count twice.
     private(set) var request: (page: ShellPage, serial: Int)?
-    /// The tab in front, for 设置 to go back to.
+    /// The tab in front, for Settings to go back to.
     @ObservationIgnored private var front = AppTab.assistant
 
     func show(_ page: ShellPage) {
@@ -201,7 +201,7 @@ struct RootView: View {
     }
 }
 
-/// The iPad's routes (`PadRouter`) and its 设置 sheet, on the tabs.
+/// The iPad's routes (`PadRouter`) and its Settings sheet, on the tabs.
 private struct PadRoutes: ViewModifier {
     @Environment(AppModel.self) private var model
     let router: PadRouter
@@ -217,7 +217,7 @@ private struct PadRoutes: ViewModifier {
                     SettingsView()
                         .environment(\.settingsSheet, true)
                         .id(model.look)
-                        // The page's height, not the form's: 设置 is a long list.
+                        // The page's height, not the form's: Settings is a long list.
                         .presentationSizing(.page)
                 }
                 .onAppear { router.attach(to: model) }
@@ -229,12 +229,12 @@ private struct PadRoutes: ViewModifier {
 }
 
 extension EnvironmentValues {
-    /// Set on the iPad's tabs when 收件箱 and 设置 are in Persona's sidebar (`RootTabs.padSidebar`); nil otherwise.
+    /// Set on the iPad's tabs when Inbox and Settings are in Persona's sidebar (`RootTabs.padSidebar`); nil otherwise.
     @Entry var padRouter: PadRouter?
 }
 #endif
 
-/// A tab's page, drawn again only by what it reads itself. Each tab's badge (the agents waiting, the inbox's 需要你) is read
+/// A tab's page, drawn again only by what it reads itself. Each tab's badge (the agents waiting, the inbox's Needs You) is read
 /// by its `Tab`, and the hub changes them with nearly every push: without this the `Tab` built its page again each time,
 /// the page ran its body (the Agents list's toolbar handed to UIKit again: the open ⋯ menu went back to its top while
 /// choosing a machine; the open chat laid out again under the finger), TestFlight 70, docs/lessons/ios.md. The pages
@@ -325,10 +325,10 @@ private struct TabPage<Page: View>: View, Equatable {
             }
             .equatable()
         }
-        .badge(badge) // 体验模式 is left from 设置; the plugins' entries are on it (docs/extensions.md「UI 插槽」角标)
+        .badge(badge) // Demo Mode is left from Settings; the plugins' entries are on it (docs/extensions.md「UI 插槽」, badges)
     }
 
-    /// 体验; else what the plugins' main-navigation entries' badges add up to (only words: a dot).
+    /// Demo; else what the plugins' main-navigation entries' badges add up to (only words: a dot).
     private var badge: Text? {
         if model.isDemo { return Text("体验") }
         let total = ExtensionSlots.shared.total
@@ -338,7 +338,7 @@ private struct TabPage<Page: View>: View, Equatable {
 }
 
 #if DEBUG
-/// What the titles say about the link (`probe.connection`): 等待网络 / 连接中… / 更新中…, or nothing (online).
+/// What the titles say about the link (`probe.connection`): Waiting for Network / Connecting… / Updating…, or nothing (online).
 nonisolated struct ConnectionShown: Encodable, Equatable {
     var shown: String
     var network: Bool

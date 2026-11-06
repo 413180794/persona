@@ -50,7 +50,7 @@ nonisolated enum HubTransport {
     }
 }
 
-/// A paired hub's SSH tunnel (设置 › hub › SSH 隧道): the server, who logs in, where the hub is from there, and the
+/// A paired hub's SSH tunnel (Settings › hub › SSH Tunnel): the server, who logs in, where the hub is from there, and the
 /// server's key the user confirmed. Kept with the pairing (the keychain); this device's own key is kept apart
 /// (SSHKeys), one per device.
 nonisolated struct SSHRoute: Codable, Hashable, Sendable {

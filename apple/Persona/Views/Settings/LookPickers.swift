@@ -1,16 +1,16 @@
 import SwiftUI
 
-// Two of 设置 › 外观's three choices of how the app looks (docs/ios.md「设计语言」), each apart from the others: 主题色
-// (`ThemeColorPicker`) and 界面风格 (`StylePicker`); the third is 形象 (`PersonaPicker`). A choice rebuilds the view tree
-// (`AppModel.look`); 外观 stays open because the settings path is AppModel's.
+// Two of Settings › Appearance's three choices of how the app looks (docs/ios.md「设计语言」), each apart from the others: Theme Color
+// (`ThemeColorPicker`) and Interface Style (`StylePicker`); the third is Avatar (`PersonaPicker`). A choice rebuilds the view tree
+// (`AppModel.look`); Appearance stays open because the settings path is AppModel's.
 
-/// 主题色: the app as it looks now, small (drawn with the live tokens), and the colors under it: 跟随界面风格, 跟随形象
+/// Theme Color: the app as it looks now, small (drawn with the live tokens), and the colors under it: Match Interface Style, Match Avatar
 /// when the persona brings colors, then the styles' own colors, each a disc of its accent.
 struct ThemeColorPicker: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    /// 跟随形象 only when the persona brings colors, or when it is the choice already (so the choice stays in sight).
+    /// Match Avatar only when the persona brings colors, or when it is the choice already (so the choice stays in sight).
     private var options: [ThemeColor] {
         let persona = model.persona.palette != nil || model.themeColor == .persona
         return [.style] + (persona ? [.persona] : []) + ThemeColor.presets
@@ -138,8 +138,8 @@ private struct LookSample: View {
     }
 }
 
-/// 界面风格: the styles in a grid, each drawn as a tiny screen in the colors it would have with the 主题色 chosen (with
-/// 跟随界面风格, its own); tap to switch the whole app. A grid, not a row: side by side they were 560 pt wide and the
+/// Interface Style: the styles in a grid, each drawn as a tiny screen in the colors it would have with the Theme Color chosen (with
+/// Match Interface Style, its own); tap to switch the whole app. A grid, not a row: side by side they were 560 pt wide and the
 /// last two were off a 402 pt screen with nothing saying so.
 struct StylePicker: View {
     @Environment(AppModel.self) private var model

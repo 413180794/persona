@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// What can be done with an opened inbox item (#831; the iPhone's `InboxActionBar` over the item): the AI's summary,
-/// the AI 分身 at work, its 线索 (`InboxLineSection`; another item opens through `openItem`), and the actions as
-/// labelled buttons: AI 草拟回复 / 查看草稿 (or, where the source is answered
-/// in its own app, 在信息里回复 / 在 Telegram 里回复 / 打开), 交给 AI, and 已处理 (移回 once filed, the others staying as
+/// the AI Twin at work, its Thread (`InboxLineSection`; another item opens through `openItem`), and the actions as
+/// labelled buttons: AI Draft Reply / View Draft (or, where the source is answered
+/// in its own app, Reply in Messages / Reply in Telegram / Open), Hand to AI, and Done (Move Back once filed, the others staying as
 /// on the iPhone). A column at the detail's trailing edge; where the detail is too narrow for one, a strip over the item.
 struct MacInboxActions: View {
     @Environment(AppModel.self) private var model
@@ -11,9 +11,9 @@ struct MacInboxActions: View {
     var item: InboxItem
     /// A column at the trailing edge (the buttons one under another), or a strip over the item (side by side).
     var column: Bool
-    /// A document is open beside the item: the strip starts with 显示列表 / 收起列表 (the list folds away for it).
+    /// A document is open beside the item: the strip starts with Show List / Hide List (the list folds away for it).
     var reading = false
-    /// Whether the 显示列表 / 收起列表 toggle is offered. A standalone item window has no list of its own and must
+    /// Whether the Show List / Hide List toggle is offered. A standalone item window has no list of its own and must
     /// not fold the main window's list, so the toggle is hidden there (#3477).
     var showsListToggle = true
     var draft: () -> Void
@@ -34,7 +34,7 @@ struct MacInboxActions: View {
                 }
                 .padding(Theme.Space.l)
             }
-            .background(Theme.Fill.macPanel) // the chat's 会话信息 column's
+            .background(Theme.Fill.macPanel) // the chat's Session Info column's
         } else {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 summary
@@ -64,7 +64,7 @@ struct MacInboxActions: View {
         }
     }
 
-    /// The AI's summary of the item, and the AI 分身 at work when it is.
+    /// The AI's summary of the item, and the AI Twin at work when it is.
     @ViewBuilder private var summary: some View {
         let s = item.summary ?? ""
         if !s.isEmpty {
@@ -134,7 +134,7 @@ private struct MacInboxActionsHost: ViewModifier {
     var item: InboxItem
     /// A document is open beside the item: the actions are a row over it, the column's width is the document's.
     var reading: Bool
-    /// The strip offers 显示列表 / 收起列表 only when embedded in the page that owns the list (#3477).
+    /// The strip offers Show List / Hide List only when embedded in the page that owns the list (#3477).
     var showsListToggle: Bool
     var draft: () -> Void
     var handOff: () -> Void
@@ -142,7 +142,7 @@ private struct MacInboxActionsHost: ViewModifier {
     @State private var wide = true
     private var room: Bool { wide && !reading }
 
-    /// Siblings, as the link panel and 会话信息 are: the item narrows rather than running under the column. One
+    /// Siblings, as the link panel and Session Info are: the item narrows rather than running under the column. One
     /// structure for both, so crossing the width keeps the item (its scroll position, what was pushed).
     func body(content: Content) -> some View {
         HStack(spacing: 0) {

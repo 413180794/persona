@@ -41,7 +41,7 @@ enum MacMenuBar {
     /// The number beside the icon.
     static func count(needsYou: Int) -> String? { needsYou > 0 ? "\(needsYou)" : nil }
 
-    /// The number beside the icon: waiting cards of the menu's 需要你 sessions, not sessions — one session waiting
+    /// The number beside the icon: waiting cards of the menu's Needs You sessions, not sessions — one session waiting
     /// on a second card shows 2 (#4081), the same unit as the Dock badge and the iPhone's Agents tab.
     static func needsYouCount(_ sections: Sections, interactions: [Interaction]) -> Int {
         let keys = Set(sections.needsYou.map(\.key))
@@ -97,7 +97,7 @@ enum MacMenuBar {
             let shown = MacMenuBar.shown(sections, paired: model.isPaired,
                                          interactions: model.pendingInteractions,
                                          machineName: names(model.machines))
-            // Cards, not sessions: a second card for one 需要你 session moves the icon's number (#4081).
+            // Cards, not sessions: a second card for one Needs You session moves the icon's number (#4081).
             return (shown, MacMenuBar.needsYouCount(sections, interactions: model.pendingInteractions))
         } onChange: {
             // Told before the change lands: read the new values on the next turn of the main queue.
@@ -176,7 +176,7 @@ struct MacMenuBarMenu: View {
             .keyboardShortcut("q")
     }
 
-    /// An agent that needs you: a submenu with the answers the phone's cards offer in one tap, and 打开对话.
+    /// An agent that needs you: a submenu with the answers the phone's cards offer in one tap, and Open Chat.
     @ViewBuilder private func needsYouItem(_ item: MacMenuBar.Item) -> some View {
         if let ix = item.interaction, let quick = MacMenuBar.quickAnswers(ix), !quick.isEmpty {
             Menu(item.label) {
@@ -210,14 +210,14 @@ extension MacMenuBar {
     }
 
     /// The same one-tap answers as the list's cards (InteractionPreviewCard.quickActions): a single short question's
-    /// options, 允许 / 拒绝, a plan's 批准 (edits go through, commands still ask: you haven't read it in full here), and a
+    /// options, Allow / Deny, a plan's Approve (edits go through, commands still ask: you haven't read it in full here), and a
     /// terminal dialog's short options when the hub read it. Anything else needs the chat.
     static func quickAnswers(_ ix: Interaction) -> [QuickAnswer]? {
         switch ix.kind {
         case .question:
             guard let qs = ix.questions, qs.count == 1, let q = qs.first, !q.multiSelect, q.options.count <= 4 else { return nil }
             return q.options.map { o in
-                // The card's 推荐 tag, in words; the answer keeps the label as it came.
+                // The card's Recommended tag, in words; the answer keeps the label as it came.
                 let (name, recommended) = QuestionOption.display(o.label)
                 return QuickAnswer(title: recommended ? String(localized: "\(name)（推荐）") : name, resolution: Resolution(answers: [q.question: o.label]))
             }

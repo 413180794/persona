@@ -18,17 +18,17 @@ nonisolated enum PersonaState: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The built-in personas' faces (团子, 面罩, 汇流, 像素, 晶面, 软糖) at one moment: everything JarvisAvatar draws for them, without the clock.
+/// The built-in personas' faces (Mochi, Visor, Circuit, Pixel, Facet, Jelly) at one moment: everything JarvisAvatar draws for them, without the clock.
 /// Shared with the widget extension, which draws the Live Activity (docs/live-activity.md「形象」) and cannot run
 /// timelines: it passes `moving: false` and gets each state's still frame (the same one Reduce Motion shows). The app
 /// wraps it in a TimelineView and passes the time (JarvisAvatar). Reads no app-only token: the tint, the brand mark and
 /// the blink come in from the caller.
 struct PersonaFace: View {
     enum Design: String, Sendable {
-        /// 团子, the default: the app icon's character in the icon's own colors (not the tint).
+        /// Mochi, the default: the app icon's character in the icon's own colors (not the tint).
         case mochi
         case visor, circuit
-        /// 像素, 晶面, 软糖 (#350): an 8-bit face, a low-poly folded head, a jelly; in the accent like 面罩 and 汇流.
+        /// Pixel, Facet, Jelly (#350): an 8-bit face, a low-poly folded head, a jelly; in the accent like Visor and Circuit.
         case pixel, facet, blob
     }
 
@@ -37,7 +37,7 @@ struct PersonaFace: View {
     var state: PersonaState
     /// The accent it is drawn in (offline turns it gray).
     var tint: Color
-    /// The SF Symbol of the brand's star on 面罩 (`Theme.Icon.jarvis`).
+    /// The SF Symbol of the brand's star on Visor (`Theme.Icon.jarvis`).
     var mark: String
     /// Seconds (any epoch) for the moving states; ignored when not `moving`.
     var time: TimeInterval = 0
@@ -46,7 +46,7 @@ struct PersonaFace: View {
     /// The idle blink every few seconds (`Theme.Motion.blink`); nil: eyes stay open.
     var blink: Animation?
 
-    /// 需要你's ring: this share of the face's side, never thinner than `ringMin`. A package's picture with no frame for
+    /// Needs You's ring: this share of the face's side, never thinner than `ringMin`. A package's picture with no frame for
     /// the state gets the same ring on the activity (FleetFace), and offline makes it gray at this opacity.
     static let ringShare: CGFloat = 0.07
     static let ringMin: CGFloat = 1.5
@@ -68,7 +68,7 @@ struct PersonaFace: View {
         }
     }
 
-    // MARK: 团子: the app icon's white blob waving on its paper disc (a dark one in the dark), outlined in ink, with
+    // MARK: Mochi: the app icon's white blob waving on its paper disc (a dark one in the dark), outlined in ink, with
     // its orange cheek. It ignores the tint: the icon's colors are what make it the icon's character.
 
     private var mochi: some View {
@@ -125,7 +125,7 @@ struct PersonaFace: View {
         .offset(look)
     }
 
-    /// 需要你 waves: the body rocks on its bottom like the icon's hello.
+    /// Needs You waves: the body rocks on its bottom like the icon's hello.
     private func mochiRock(_ t: TimeInterval) -> Double {
         state == .needsYou && moving ? sin(t * 7) * 5 : 0
     }
@@ -146,7 +146,7 @@ struct PersonaFace: View {
             .rotationEffect(.degrees(turn - 90))
     }
 
-    // MARK: 汇流: three pads on the left whose traces run into a core with two eyes (your computers' agents coming
+    // MARK: Circuit: three pads on the left whose traces run into a core with two eyes (your computers' agents coming
     // together in Persona), in the accent on a dark disc of it.
 
     private var circuit: some View {
@@ -203,7 +203,7 @@ struct PersonaFace: View {
         .modifier(Blink(animation: state == .idle ? blink : nil))
     }
 
-    /// Where 汇流's eyes look at time t: toward the traces while working, up and right while thinking.
+    /// Where Circuit's eyes look at time t: toward the traces while working, up and right while thinking.
     private func circuitLook(_ t: TimeInterval) -> CGSize {
         let sway: CGFloat = moving ? sin(t * (state == .working ? 1.6 : 0.9)) : 0
         switch state {
@@ -213,7 +213,7 @@ struct PersonaFace: View {
         }
     }
 
-    // MARK: 面罩: an accent disc with a dark visor and two bright eyes, a glint on top.
+    // MARK: Visor: an accent disc with a dark visor and two bright eyes, a glint on top.
 
     private var visor: some View {
         let t = time
@@ -261,7 +261,7 @@ struct PersonaFace: View {
             .shadow(color: state == .offline ? .clear : accent.opacity(0.9), radius: size * 0.05)
     }
 
-    // MARK: 像素: an 8-bit face on a dark disc of the accent. The eyes step a cell at a time; while working the mouth's
+    // MARK: Pixel: an 8-bit face on a dark disc of the accent. The eyes step a cell at a time; while working the mouth's
     // cells light up in turn like a loading bar.
 
     private var pixel: some View {
@@ -323,7 +323,7 @@ struct PersonaFace: View {
         .modifier(Blink(animation: state == .idle ? blink : nil))
     }
 
-    // MARK: 晶面: a low-poly head folded from facets of the accent, slanted eyes. While working the facets' shading moves
+    // MARK: Facet: a low-poly head folded from facets of the accent, slanted eyes. While working the facets' shading moves
     // round like light sweeping over it.
 
     private var facet: some View {
@@ -399,7 +399,7 @@ struct PersonaFace: View {
         }
     }
 
-    // MARK: 软糖: a soft jelly of the accent on a pale disc, big eyes and pink cheeks. While working it squashes and
+    // MARK: Jelly: a soft jelly of the accent on a pale disc, big eyes and pink cheeks. While working it squashes and
     // springs back, its edge wobbling.
 
     private var blob: some View {
@@ -492,7 +492,7 @@ struct PersonaFace: View {
         }
     }
 
-    /// 需要你's red ring, breathing while moving.
+    /// Needs You's red ring, breathing while moving.
     @ViewBuilder private func needsYouRing(_ t: TimeInterval) -> some View {
         if state == .needsYou {
             let pulse = moving ? 0.55 + 0.45 * cos(t * 3) : 1
@@ -536,7 +536,7 @@ struct PersonaFace: View {
     }
 }
 
-/// 团子's colors in one appearance: the icon's paper (or its dark) behind, a white body outlined in ink. Offline
+/// Mochi's colors in one appearance: the icon's paper (or its dark) behind, a white body outlined in ink. Offline
 /// fades the body to gray.
 nonisolated struct MochiInk {
     var disc: [Color]
@@ -565,7 +565,7 @@ nonisolated struct MochiInk {
     }
 }
 
-/// 团子's geometry in fractions of the avatar's side, 0…1 from the top left, traced from the 1024 px app icon
+/// Mochi's geometry in fractions of the avatar's side, 0…1 from the top left, traced from the 1024 px app icon
 /// (`p` maps icon pixels into the disc, a little larger than the icon's square so it fills the circle).
 nonisolated enum Mochi {
     static let scale: CGFloat = 1.16
@@ -661,7 +661,7 @@ nonisolated enum Mochi {
     }
 }
 
-/// 汇流's geometry in fractions of the avatar's side, 0…1 from the top left: pads on the left at three rows, the
+/// Circuit's geometry in fractions of the avatar's side, 0…1 from the top left: pads on the left at three rows, the
 /// outer traces turning at exactly 45° into the core's center.
 nonisolated private enum Circuit {
     static let rows: [CGFloat] = [0.31, 0.5, 0.69]
@@ -700,7 +700,7 @@ nonisolated private enum Circuit {
     }
 }
 
-/// 像素's grid: 8 × 8 cells of this share of the side, centred; the face's frame cells, the eyes' row, the mouth's columns.
+/// Pixel's grid: 8 × 8 cells of this share of the side, centred; the face's frame cells, the eyes' row, the mouth's columns.
 nonisolated private enum Pixel {
     static let cell: CGFloat = 0.075
     static let eyeRow: CGFloat = 2.5
@@ -713,7 +713,7 @@ nonisolated private enum Pixel {
     }()
 }
 
-/// 晶面's facets: triangles fanned from a point a little above the middle to these rim points, 0…1 from the top left.
+/// Facet's facets: triangles fanned from a point a little above the middle to these rim points, 0…1 from the top left.
 nonisolated private enum Facet {
     static let center = CGPoint(x: 0.5, y: 0.46)
     static let rim: [CGPoint] = (0..<9).map { i in

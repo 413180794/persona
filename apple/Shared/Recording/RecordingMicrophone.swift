@@ -1,6 +1,6 @@
 import Foundation
 
-/// 听写与长录音共享麦克风，失败的启动不能停掉另一个使用者的音频会话。
+/// Dictation and long recordings share the microphone; a failed start must not stop the other user's audio session.
 /// A voice call holds it too, but gives way (docs/voice.md 6.5): starting a recording or dictation ends the call instead
 /// of failing while one runs.
 @MainActor final class RecordingMicrophone {

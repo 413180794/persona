@@ -1,10 +1,10 @@
 import XCTest
 
-/// 设置 › 扩展 › GitHub (#3228): the connector it contributes gets a section with the connector's own 进收件箱 switch (the
-/// same as on 设置 › 连接器 › GitHub) and a row to that page; the extension's inbox rules stay in its schema form.
+/// Settings › Extensions › GitHub (#3228): the connector it contributes gets a section with the connector's own Show in Inbox switch (the
+/// same as on Settings › Connectors › GitHub) and a row to that page; the extension's inbox rules stay in its schema form.
 /// Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1 MOCK_GITHUB_EXTENSION=1 (`TEST_RUNNER_JARVIS_PLUGINS_HUB`);
 /// with MOCK_GITHUB_EXTENSION=old (a hub from before the switch) the section is not there.
-/// `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`.
+/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`.
 final class ExtensionConnectorInboxTests: XCTestCase {
     @MainActor func testTheConnectorsInboxSwitch() async throws {
         let env = ProcessInfo.processInfo.environment
@@ -60,7 +60,7 @@ final class ExtensionConnectorInboxTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["example-org/noisy-repo"].exists, "the configured repository")
         shot("rules")
 
-        // 连接器设置 opens the connector's page, whose 进收件箱 is the same switch.
+        // Connector Settings opens the connector's page, whose Show in Inbox is the same switch.
         for _ in 0..<8 where !(open.exists && open.isHittable) { app.swipeDown() }
         open.tap()
         let there = app.switches["connector.inbox"]

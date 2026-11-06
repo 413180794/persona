@@ -6,7 +6,7 @@ import Testing
 /// Extensions that install command-line programs and sign in (#4507, docs/extensions.md「命令行程序（tools）」「登录（auth）」):
 /// the sign-in decodes from the hub's views and its `extension_auth` push (a state this app does not know reads as not
 /// known), the install's `tools` step carries its programs and `next: "auth"`, the words of the list's row, the
-/// permission and the 关于 lines, and a sign-in a step at a time against a fake hub: a QR code asked again until done,
+/// permission and the About lines, and a sign-in a step at a time against a fake hub: a QR code asked again until done,
 /// the store following, signing out.
 @MainActor
 struct ExtensionAuthTests {
@@ -85,7 +85,7 @@ struct ExtensionAuthTests {
         #expect(ExtensionAuthText.toolName(node) == "Node.js（node）" && ExtensionAuthText.toolVersion(node) == "22.23.4 · 机器上已有")
         let cli = ExtensionToolUse(name: "example-cli", version: "2.3.4")
         #expect(ExtensionAuthText.toolName(cli) == "example-cli" && ExtensionAuthText.toolVersion(cli) == "2.3.4")
-        // The hub's warning is not said twice when the 登录 section says it.
+        // The hub's warning is not said twice when the Sign In section says it.
         let warnings = ["还没登录（飞书登录）：在扩展详情里登录", "Not signed in (飞书登录). Sign in from the extension’s details", "别的"]
         #expect(ExtensionAuthText.warnings(warnings, shown: ExtensionAuth(title: "飞书登录", state: .signedOut)) == ["别的"])
         #expect(ExtensionAuthText.warnings(warnings, shown: nil) == warnings, "an older hub: the warning is all there is")

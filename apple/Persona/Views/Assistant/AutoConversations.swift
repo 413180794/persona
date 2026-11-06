@@ -1,8 +1,8 @@
 import Foundation
 
 /// What opened an assistant conversation the user did not start (#3264, docs/protocol.md「助手对话的来源」): the hub's
-/// `origin`, with its name and symbol for the sidebar's 自动对话 and the list of conversations. Origins this app does
-/// not know share 其他.
+/// `origin`, with its name and symbol for the sidebar's Auto Chats and the list of conversations. Origins this app does
+/// not know share Other.
 nonisolated struct AutoConversationSource: Hashable, Identifiable, Sendable {
     var id: String
     var name: String
@@ -18,7 +18,7 @@ nonisolated struct AutoConversationSource: Hashable, Identifiable, Sendable {
     /// All of them, in the order the sidebar lists them.
     static let all: [AutoConversationSource] = [inbox, task, larkAgent, spawned, extensionSource, other]
 
-    /// The source an origin is listed under; one this app does not know is 其他.
+    /// The source an origin is listed under; one this app does not know is Other.
     static func of(_ origin: String) -> AutoConversationSource {
         all.first { $0.id == origin && $0 != other } ?? other
     }
@@ -30,17 +30,17 @@ nonisolated struct AutoConversationSource: Hashable, Identifiable, Sendable {
     static let feature = "conversation_origin"
 }
 
-/// The sidebar's conversations split into the user's own (最近) and the ones Persona opened by itself (自动对话,
-/// #3264), counted by source and by state so a closed 自动对话 still says one waits or works.
+/// The sidebar's conversations split into the user's own (Recent) and the ones Persona opened by itself (Auto Chats,
+/// #3264), counted by source and by state so a closed Auto Chats still says one waits or works.
 ///
 /// With a hub that says who opened its conversations (`conversation_origin`, or an `origin` on any of them), the
-/// others are in 自动对话; a scheduled task's conversation the hub calls the user's is still known the way the sidebar
-/// knew it before (`AssistantTaskChats`, #2838). A hub that never says lists them as before: 最近 has all but the
-/// scheduled tasks' ones, and there is no 自动对话.
+/// others are in Auto Chats; a scheduled task's conversation the hub calls the user's is still known the way the sidebar
+/// knew it before (`AssistantTaskChats`, #2838). A hub that never says lists them as before: Recent has all but the
+/// scheduled tasks' ones, and there is no Auto Chats.
 nonisolated struct AutoConversations: Equatable, Sendable {
-    /// 最近: the user's own, and the open one whatever opened it (it keeps its row).
+    /// Recent: the user's own, and the open one whatever opened it (it keeps its row).
     var mine: [Session] = []
-    /// 自动对话, in the order they came.
+    /// Auto Chats, in the order they came.
     var auto: [Session] = []
     /// Whether the hub says who opened its conversations.
     var supported = false

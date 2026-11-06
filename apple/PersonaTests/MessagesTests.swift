@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 信息 (设置 › 连接器 › 信息): pages from the hub as Go writes them, paging both ways, and how a conversation is laid out.
+/// Messages (Settings › Connectors › Messages): pages from the hub as Go writes them, paging both ways, and how a conversation is laid out.
 /// Every name, number and text is made up.
 @MainActor
 struct MessagesTests {
@@ -82,7 +82,7 @@ struct MessagesTests {
         #expect(plain.allSatisfy { $0.sender == nil && $0.service == nil })
     }
 
-    /// 交给 Persona: the switch's state from the hub, turned off and on, and what a delete removed.
+    /// Hand to Persona: the switch's state from the hub, turned off and on, and what a delete removed.
     @Test func theSwitchAndDelete() async throws {
         let hub = FakeHub()
         hub.on("PUT", "/api/v1/imessage/settings") { req in
@@ -100,7 +100,7 @@ struct MessagesTests {
         #expect(old.ai == nil)
     }
 
-    /// 在信息里回复: the item's sms: link, with the AI 分身's draft as the body.
+    /// Reply in Messages: the item's sms: link, with the AI twin's draft as the body.
     @Test func replyInMessagesOpensTheNumber() {
         #expect(InboxActionBar.systemURL("sms:+15550100", draft: nil)?.absoluteString == "sms:+15550100")
         #expect(InboxActionBar.systemURL("sms:+15550100", draft: "好的 明天见")?.absoluteString == "sms:+15550100&body=%E5%A5%BD%E7%9A%84%20%E6%98%8E%E5%A4%A9%E8%A7%81")

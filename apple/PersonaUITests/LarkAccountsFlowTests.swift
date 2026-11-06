@@ -1,6 +1,6 @@
 import XCTest
 
-/// Several Feishu accounts (docs/feishu.md「多账号」) against a mock started with MOCK_LARK_ACCOUNTS=1: the 消息 page's
+/// Several Feishu accounts (docs/feishu.md「多账号」) against a mock started with MOCK_LARK_ACCOUNTS=1: the Messages page's
 /// account chips, a chat of the second account, and its inbox item opening in that account. Never a Feishu account.
 final class LarkAccountsFlowTests: XCTestCase {
     @MainActor private func launch(_ extra: [String] = []) throws -> XCUIApplication {
@@ -33,7 +33,7 @@ final class LarkAccountsFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["feishu-account-3"].exists, "a signed-out account has no chip")
         shot(app, "accounts-own")
         second.tapCenter()
-        // The second account has 季度规划 (w1) pinned: it is on the shelf only, not again in the list (#1342).
+        // The second account has 「季度规划」 (w1) pinned: it is on the shelf only, not again in the list (#1342).
         XCTAssertTrue(app.buttons["feishu-chat-w2"].waitForExistence(timeout: 20), "the second account's chats")
         XCTAssertTrue(app.buttons["feishu-pin-w1"].waitForExistence(timeout: 10), "the second account's pinned chat")
         XCTAssertFalse(app.buttons["feishu-chat-f2"].exists)

@@ -4,7 +4,7 @@ import SwiftUI
 import UserNotifications
 
 /// The macOS app (docs/mac.md): one AppModel, as on iOS, behind a Mac shell. A window with a sidebar (the iPhone's
-/// four tabs) beside the same pages, and 设置 also in its own window (⌘,).
+/// four tabs) beside the same pages, and Settings also in its own window (⌘,).
 @main
 struct PersonaMacApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var delegate
@@ -39,7 +39,7 @@ struct PersonaMacApp: App {
             }
         }
 
-        // An Agent's terminal on its own (Agent › 在新窗口打开终端, MacTerminalWindow).
+        // An Agent's terminal on its own (Agent › Open Terminal in New Window, MacTerminalWindow).
         WindowGroup("终端", id: MacTerminalWindow.id, for: SessionKey.self) { $key in
             MacTerminalWindow(key: key).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
@@ -125,7 +125,7 @@ struct MacCommands: Commands {
     let model: AppModel
 
     var body: some Commands {
-        // 文件: 新建 Agent 对话 ⌘N, 新建 Persona 对话 ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
+        // File: New Agent Chat ⌘N, New Persona Chat ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
         CommandGroup(replacing: .newItem) {
             Button("新建 Agent 对话…") { MacShellState.shared.newAgent = true }
                 .keyboardShortcut("n", modifiers: .command)
@@ -137,14 +137,14 @@ struct MacCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .disabled(!model.isPaired)
-            // 添加电脑 (#4196): only a hub with machines_add takes it.
+            // Add Computer (#4196): only a hub with machines_add takes it.
             if model.canAddComputer {
                 Divider()
                 Button("添加电脑…") { model.openAddComputer() }
                     .disabled(!model.isPaired)
             }
         }
-        // 前往: 快速打开 ⌘K.
+        // Go: Quick Open ⌘K.
         CommandGroup(after: .textEditing) {
             Button("查找…") { MacFind.find() }
                 .keyboardShortcut("f", modifiers: .command)
@@ -158,7 +158,7 @@ struct MacCommands: Commands {
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(!model.isPaired)
         }
-        // Persona › 设置… ⌘,: the 设置 section of the main window (#1222). A Settings window of its own held the same
+        // Persona › Settings… ⌘,: the Settings section of the main window (#1222). A Settings window of its own held the same
         // pages as the section: two ways to the same place, and one of them a window on its own.
         CommandGroup(replacing: .appSettings) {
             Button("设置…") {
@@ -345,7 +345,7 @@ enum MacLaunchArguments {
         if d.bool(forKey: "openAgentsFresh") {
             for k in ["dev.machineFilter", HubFilter.key, "dev.grouping", "dev.sort", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
         }
-        // A tab, a chat or a conversation named on the command line shows that, not the 知识库 / 机器 remembered
+        // A tab, a chat or a conversation named on the command line shows that, not the Knowledge / Machines remembered
         // from last time (MacShell's onChange is not there yet to clear it).
         if ["tab", "openSession", "openAssistant", "newAssistant", "showLark"].contains(where: { d.object(forKey: $0) != nil }) {
             MacShellState.shared.section = nil
@@ -360,7 +360,7 @@ enum MacLaunchArguments {
         // `-openMacExtensionPage <extension>/<ui>` (or the old `-openMacPluginPage`): an extension's page in the sidebar
         // (docs/extensions.md「UI 插槽」), shown once the hub lists it.
         if let key = d.string(forKey: "openMacExtensionPage") ?? d.string(forKey: "openMacPluginPage") { MacShellState.shared.pluginPage = key }
-        // `-openMacSection todos`: the window opens on that sidebar section (the 待办 page, for screenshots).
+        // `-openMacSection todos`: the window opens on that sidebar section (the To-dos page, for screenshots).
         if let raw = d.string(forKey: "openMacSection"), let section = MacSection(rawValue: raw) {
             MacShellState.shared.section = section
         }
@@ -382,13 +382,13 @@ enum MacLaunchArguments {
             model.assistantCurrent = nil
         }
         model.debugShowNewChat = d.bool(forKey: "showNewChat")
-        // `-openQuickOpen <query>` (`""` for none): ⌘K open, that typed in. `-openNewAgent YES`: the 新建 Agent sheet.
+        // `-openQuickOpen <query>` (`""` for none): ⌘K open, that typed in. `-openNewAgent YES`: the New Agent sheet.
         if let q = d.string(forKey: "openQuickOpen") {
             MacShellState.shared.seed = q
             MacShellState.shared.quickOpen = true
         }
         if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
-        // `-openEngineStep <machine id>`: pairing's 选择引擎 step for that machine, once the hub's machines are in (the
+        // `-openEngineStep <machine id>`: pairing's Choose Engine step for that machine, once the hub's machines are in (the
         // step reads the machine when it appears).
         if let id = d.string(forKey: "openEngineStep") {
             Task {
@@ -397,7 +397,7 @@ enum MacLaunchArguments {
                 model.pairingEngineMachine = ref
             }
         }
-        // `-macMenuLog YES`: the Agent menu's items and shortcuts as built for the chat on screen (the 回答 submenu).
+        // `-macMenuLog YES`: the Agent menu's items and shortcuts as built for the chat on screen (the Answer submenu).
         if d.bool(forKey: "macMenuLog") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
                 // A closed menu is brought up to date only when it opens: tell it so, as opening it would.
@@ -461,7 +461,7 @@ enum MacLaunchArguments {
         if let u = d.string(forKey: "macOpenURL").flatMap(URL.init(string:)) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { model.openURL(u) }
         }
-        // `-macFind YES`: 编辑 › 查找… 3 s in, and who has the keyboard after it (in the log).
+        // `-macFind YES`: Edit › Find… 3 s in, and who has the keyboard after it (in the log).
         if d.bool(forKey: "macFind") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 // A locked screen's snapshot run has no key window: use the main one, as ⌘F would.
@@ -496,7 +496,7 @@ enum MacLaunchArguments {
 #endif
 
 /// Whether a `jarvis://pair` link (from the browser, `jarvisd hub pair`, Finder) may pair: not over a real pairing,
-/// which a link from anywhere would otherwise replace without a word; 体验模式 makes way for a real hub.
+/// which a link from anywhere would otherwise replace without a word; Demo Mode makes way for a real hub.
 enum MacPairing {
     static func accepts(isPaired: Bool, isDemo: Bool) -> Bool { !isPaired || isDemo }
 }

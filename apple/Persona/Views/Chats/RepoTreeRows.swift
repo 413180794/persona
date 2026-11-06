@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A machine's heading where the Agents list is split by machine (按仓库, 按项目 with agents on more than one machine,
+/// A machine's heading where the Agents list is split by machine (By Repository, By Project with agents on more than one machine,
 /// #2108): its mark in a tile and its name a level above the headers under it, its agents' state counts on the right.
 struct HostHeading: View {
     var symbol: String
@@ -15,7 +15,7 @@ struct HostHeading: View {
                 .foregroundStyle(Color.primary)
                 .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
                 .background(Theme.Fill.chip, in: .rect(cornerRadius: Theme.Radius.badge))
-            // 细列表's spaces and repositories are titled at the heading's size: the machine goes a level up.
+            // Compact List's spaces and repositories are titled at the heading's size: the machine goes a level up.
             Text(title).font(compact ? Theme.Font.title : Theme.Font.heading).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
             Spacer(minLength: Theme.Space.xs)
             StateCounts(group: group)
@@ -23,8 +23,8 @@ struct HostHeading: View {
     }
 }
 
-/// A working tree's row in its repository's card (按仓库): ⌂ for the main checkout, the branch mark for the others, how
-/// many agents (空闲 when nothing goes on), and the chevron that turns as it opens.
+/// A working tree's row in its repository's card (By Repository): ⌂ for the main checkout, the branch mark for the others, how
+/// many agents (Idle when nothing goes on), and the chevron that turns as it opens.
 struct WorktreeRow: View {
     var name: String
     var main: Bool
@@ -62,7 +62,7 @@ struct WorktreeRow: View {
     }
 }
 
-/// The「N 个子项」row under a working tree (按仓库): the spaces its host nests under it (Orca's child worktrees, #3075),
+/// The "N items" row under a working tree (By Repository): the spaces its host nests under it (Orca's child worktrees, #3075),
 /// their agents' state counts, and the chevron that turns as it opens.
 struct ChildSpacesRow: View {
     var count: Int
@@ -95,7 +95,7 @@ struct ChildSpacesRow: View {
     }
 }
 
-/// The ⋯ of a repository whose agents are in more than one space (按仓库): what applies to all of them. Equal while
+/// The ⋯ of a repository whose agents are in more than one space (By Repository): what applies to all of them. Equal while
 /// its unread agents are: the menu held open is not rebuilt by every push.
 struct RepoMenuItems: View, Equatable {
     @Environment(AppModel.self) private var model

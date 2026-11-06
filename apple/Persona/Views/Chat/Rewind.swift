@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 回退到这里 (#2915, the web's #2436): go back in a Claude session to before one of your messages. The node drives
+/// Rewind to Here (#2915, the web's #2436): go back in a Claude session to before one of your messages. The node drives
 /// Claude Code's own /rewind in the session's terminal (server/internal/node/rewind.go), so what the app says is which
 /// message: its text, which of the messages with that text counted from the end, and how many of your messages came
 /// after it. Claude's list and the app's transcript are both read from the end, so older pages not loaded yet change
@@ -132,13 +132,13 @@ nonisolated enum Rewind {
 }
 
 extension View {
-    /// The questions 回退 on your own message asks (#2915): what to restore, and once more before the files go back.
+    /// The questions Rewind on your own message asks (#2915): what to restore, and once more before the files go back.
     func rewindDialogs(menu: MessageMenu) -> some View { modifier(RewindDialogs(menu: menu)) }
 }
 
 private struct RewindDialogs: ViewModifier {
     @Bindable var menu: MessageMenu
-    /// 回退代码和对话 was picked: asked again, it puts the files on the computer back too.
+    /// Rewind Code and Chat was picked: asked again, it puts the files on the computer back too.
     @State private var confirmCode: RewindAsk?
 
     func body(content: Content) -> some View {

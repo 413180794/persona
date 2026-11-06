@@ -61,7 +61,7 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
     var level: Float { shared.withLock { $0.level } }
     var failure: String? { shared.withLock { $0.failure } }
     var isRunning: Bool { shared.withLock { $0.running } }
-    /// 停止后同步取全部定稿分段，避免主线程尚未处理的回调让结束消息少算分段。
+    /// After a stop, take every finalized segment synchronously so callbacks the main thread has not handled yet do not leave segments out of the end message's count.
     var finishedSegments: [Segment] { shared.withLock { $0.finished } }
 
     /// Length of the segments being written, seconds. Lowered while someone is watching the text arrive (the iPhone app

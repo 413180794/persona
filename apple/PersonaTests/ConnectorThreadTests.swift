@@ -100,7 +100,7 @@ struct ConnectorThreadTests {
         #expect(!pr.isChat)
     }
 
-    /// The time in a bubble's corner: hours and minutes in the device's zone, 已编辑 before it for an edited message.
+    /// The time in a bubble's corner: hours and minutes in the device's zone, Edited before it for an edited message.
     @Test func stamps() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = try #require(TimeZone(secondsFromGMT: 8 * 3600))

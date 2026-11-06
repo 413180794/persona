@@ -101,7 +101,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         password.tapCenter(); password.typeText("synthetic-password")
         app.buttons["lark.encryption.unlock"].tapCenter()
         XCTAssertTrue(password.waitForNonExistence(timeout: 10))
-        // A real password kept as one (AutoFill may fill it in), alone in its sheet and emptied on 解锁: iOS does not offer
+        // A real password kept as one (AutoFill may fill it in), alone in its sheet and emptied on Unlock: iOS does not offer
         // to save it (#1598).
         PasswordPrompt.assertNone(app, "the Lark unlock password")
         XCTAssertTrue(app.buttons["lark.send"].waitForNonExistence(timeout: 15))

@@ -4,7 +4,7 @@ import Testing
 
 /// After pairing, the device trades the pairing token for its own (docs/protocol.md「临时配对」), and the hub drops the
 /// pairing token a couple of minutes later. Every socket on it has to move to the device token, whatever address or route
-/// it took, or the app sits on 401 and 连接中… for good (#2766).
+/// it took, or the app sits on 401 and Connecting… for good (#2766).
 @MainActor
 struct DeviceCredentialTradeTests {
     /// Nothing listens on these: attempts fail and retry, nothing reaches a network.

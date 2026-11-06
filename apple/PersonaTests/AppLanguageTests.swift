@@ -47,7 +47,7 @@ struct AppLanguageTests {
                                   systemValue: { ["fr-FR"] })
         // What was written to the app's own domain (lookups would also see the test run's -AppleLanguages argument).
         func saved() -> [String]? { defaults.persistentDomain(forName: name)?[LanguageStore.appleLanguages] as? [String] }
-        #expect(store.current == "en") // 跟随系统: French is English
+        #expect(store.current == "en") // Match System: French is English
         store.choice = .ja
         #expect(saved() == ["ja"])
         #expect(group.string(forKey: LanguageStore.resolvedKey) == "ja")

@@ -15,7 +15,7 @@ struct FileAttachTests {
     }
 
     @Test func insertsAtTheCursorAndReplacesASelection() {
-        let text = "比较和的区别" // cursor after 比较
+        let text = "比较和的区别" // cursor after 「比较」
         var r = PathInsert.insert(["/tmp/a.txt"], into: text, at: 2..<2)
         #expect(r.text == "比较 /tmp/a.txt 和的区别")
         #expect(r.cursor == "比较 /tmp/a.txt ".utf16.count)

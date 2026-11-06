@@ -4,9 +4,9 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-// Videos from 照片 (docs/protocol.md「发送视频」) go as files, never as pictures: read out of the library, compressed
+// Videos from Photos (docs/protocol.md「发送视频」) go as files, never as pictures: read out of the library, compressed
 // to H.264 MP4 only when they would not fit the hub's upload cap, and uploaded to the conversation's machine the way
-// 文件 is. The composer shows each as a card until the message goes; the message carries it as a `<jarvis-file>` tag
+// Files is. The composer shows each as a card until the message goes; the message carries it as a `<jarvis-file>` tag
 // after what was typed: the agent reads the path, the app draws the card from the rest.
 
 /// A file sent with a message: `<jarvis-file kind="video" path="…" name="…" size="…" duration="…"/>`.
@@ -91,7 +91,7 @@ nonisolated enum VideoPrep {
         estimates.filter { $0.bytes <= 0 || Double($0.bytes) <= Double(limit) * headroom }.map(\.preset)
     }
 
-    /// What the picker called the file, or 视频.<ext> for the names it makes up ("version=1&uuid=….mov").
+    /// What the picker called the file, or Video.<ext> for the names it makes up ("version=1&uuid=….mov").
     static func name(_ picked: String) -> String {
         let ext = (picked as NSString).pathExtension
         guard picked.contains("="), picked.contains("&") || picked.contains("uuid") else { return picked }
@@ -176,7 +176,7 @@ nonisolated enum VideoPrep {
     }
 }
 
-/// A video picked in 照片, as a file (the picker's copy, which is gone after the import returns).
+/// A video picked in Photos, as a file (the picker's copy, which is gone after the import returns).
 nonisolated struct PickedMovie: Transferable {
     let url: URL
 
@@ -223,7 +223,7 @@ final class VideoAttachments {
 
     private enum Source { case pick(PhotosPickerItem), file(URL) }
 
-    /// Videos picked in 照片, for machine.
+    /// Videos picked in Photos, for machine.
     func start(_ picks: [PhotosPickerItem], machine: MachineRef, model: AppModel) {
         for p in picks { add(.pick(p), name: String(localized: "视频"), machine: machine, model: model) }
     }
@@ -420,7 +420,7 @@ nonisolated enum AttachedVideos {
 }
 
 extension View {
-    /// A composer's 照片 picker: pictures and videos, four at most, in the library's own encoding (a video is
+    /// A composer's Photos picker: pictures and videos, four at most, in the library's own encoding (a video is
     /// compressed here, and only when it has to be: `VideoPrep`).
     func mediaPicker(isPresented: Binding<Bool>, selection: Binding<[PhotosPickerItem]>) -> some View {
         photosPicker(isPresented: isPresented, selection: selection, maxSelectionCount: 4, matching: .any(of: [.images, .videos]),

@@ -49,7 +49,7 @@ final class ReturnToChatTests: XCTestCase {
         row.tap()
         guard let first = shownChat() else { XCTFail("the chat did not open"); return "" }
         sleep(2)
-        // The tabs read "<tab>，<state>" to VoiceOver; the one open is selected.
+        // The tabs read 「<tab>，<state>」 to VoiceOver; the one open is selected.
         let tab = ["review", "widget", "release", "decide"].lazy
             .map { self.app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND selected == false", $0)).firstMatch }
             .first { $0.exists && $0.isHittable }

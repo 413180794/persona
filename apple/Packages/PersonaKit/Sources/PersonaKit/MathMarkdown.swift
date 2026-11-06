@@ -120,7 +120,7 @@ public nonisolated enum MathMarkdown {
         return spans
     }
 
-    /// A formula has no Chinese or Japanese words in it (outside `\text{…}`): between "$10 一个月：" and the next `$`
+    /// A formula has no Chinese or Japanese words in it (outside `\text{…}`): between 「$10 一个月：」 and the next `$`
     /// is prose with two dollars in it.
     private static func plausible(_ tex: ArraySlice<Character>) -> Bool {
         guard tex.count <= 400 else { return false }

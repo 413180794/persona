@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// "问 Claude": sends a message to the newest live session on a machine, or starts a new one.
+/// "Ask Claude": sends a message to the newest live session on a machine, or starts a new one.
 struct AskClaudeIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "问 Claude"
     nonisolated static let description = IntentDescription(

@@ -1,7 +1,7 @@
 import Foundation
 import UserNotifications
 
-/// 在代理回调线程上取出值类型快照，避免把系统的可变 userInfo 带到 MainActor。
+/// Takes a value-type snapshot on the delegate callback thread so the system's mutable userInfo never reaches the MainActor.
 nonisolated struct ExtensionNotificationEvent: Sendable {
     var notificationID: String
     var payload: ExtensionNotification
@@ -27,7 +27,7 @@ nonisolated struct ExtensionNotificationEvent: Sendable {
         if (text?.utf8.count ?? 0) > 16_384 || (payload.state?.utf8.count ?? 0) > 16_384 { valid = false }
     }
 
-    /// 来源一旦明确就不能退回当前 hub；未标来源只允许唯一的一组。
+    /// Once the source is known it never falls back to the current hub; with no source marked, only a single group is allowed.
     func group(hubGroups: [String: String], groups: [String]) -> String? {
         if let hubID {
             guard let group = hubGroups[hubID], groups.contains(group), sealedGroup == nil || sealedGroup == group else { return nil }

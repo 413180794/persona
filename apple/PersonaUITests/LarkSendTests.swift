@@ -2,7 +2,7 @@ import XCTest
 
 /// Sending in a Feishu chat does not wait for Feishu (docs/ios.md「飞书消息渲染」): the message is on screen at once
 /// with a spinner beside it, Feishu's own copy takes its place, and one that did not go out has a failed mark that offers
-/// 重发; replies (quoted in the chat, or in a thread sheet) go the same way. The marks are found by their identifiers
+/// Resend; replies (quoted in the chat, or in a thread sheet) go the same way. The marks are found by their identifiers
 /// (lark.outgoing.sending / .failed), not their wording. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB), whose Feishu send takes 2 seconds (longer where a case asks it to) and fails for a text with "#fail".
 final class LarkSendTests: XCTestCase {
@@ -67,7 +67,7 @@ final class LarkSendTests: XCTestCase {
     /// further up. The list glides there, so this waits for it a moment.
     /// The end is the list's content end, not a distance from the box: a chat opened at a message (an inbox item, the first unread)
     /// keeps its rows at the top when they fit (`LarkChatView.openingAnchor`), and without the soft keyboard (a
-    /// simulator that has seen a hardware keyboard) the 设计评审 chat fits, its last row ~98 pt above the box (#1891).
+    /// simulator that has seen a hardware keyboard) the 「设计评审」 chat fits, its last row ~98 pt above the box (#1891).
     @MainActor private func assertAtEnd(_ app: XCUIApplication, _ element: XCUIElement, box boxID: String = "lark.box",
                                         _ what: String, file: StaticString = #filePath, line: UInt = #line) {
         // Any type: the box grows to several lines (TextField(axis: .vertical)) and is not always a text field.
@@ -150,7 +150,7 @@ final class LarkSendTests: XCTestCase {
 
     /// The last message stays whole above the box as the keyboard comes up and as the quote bar comes up
     /// (#672: the keyboard and the quote bar used to cover it).
-    /// In the chat with 韩梅梅, which no test sends to: its last message stays the mock's.
+    /// In the chat with 「韩梅梅」, which no test sends to: its last message stays the mock's.
     @MainActor func testLastMessageStaysAboveKeyboardAndQuoteBar() {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -284,7 +284,7 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(chip.waitForExistence(timeout: 3), "one tap reacts: the message has the reaction\n\(app.debugDescription)")
     }
 
-    /// 回复 in a message's long-press menu: a quote bar over the box, and the message goes out quoting it.
+    /// Reply in a message's long-press menu: a quote bar over the box, and the message goes out quoting it.
     @MainActor func testQuotedReplyShowsTheQuoteWhileItGoes() {
         let app = openChat()
         let target = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "我先看了一下")).firstMatch
@@ -315,7 +315,7 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(quotes.firstMatch.exists, "the copy quotes the message too")
     }
 
-    /// 周末徒步群, whose box only the draft and send-button tests type into: a draft a failed run left there stays out
+    /// 「周末徒步群」, whose box only the draft and send-button tests type into: a draft a failed run left there stays out
     /// of the other tests' way. That draft goes out first (to the mock), so the box starts empty, unless the test
     /// opens the chat to find its own draft.
     @MainActor private func openHikingChat(sendingLeftover: Bool = true, fresh: Bool = true) -> XCUIApplication {
@@ -439,7 +439,7 @@ final class LarkSendTests: XCTestCase {
         let text = "草稿" + UUID().uuidString.prefix(8)
         let box = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH %@", "回复")).firstMatch
         XCTAssertTrue(box.waitForExistence(timeout: 5))
-        box.typeText(text) // 回复 focused it
+        box.typeText(text) // Reply focused it
         sleep(3) // written a moment after the last keystroke
         app.terminate()
 

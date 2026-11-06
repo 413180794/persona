@@ -5,14 +5,14 @@ import SwiftUI
 // `MacInboxDetail`). The filters are the iPhone's (same `inbox.source` / `inbox.kind` defaults), picked from the
 // sidebar instead of a row of chips.
 
-/// A row in the list: an inbox item, or an agent waiting on the user (heads 需要你, as on the iPhone).
+/// A row in the list: an inbox item, or an agent waiting on the user (heads Needs You, as on the iPhone).
 enum MacInboxSelection: Hashable {
     case item(String)
     case agent(String)
 }
 
 /// What a multi-row selection can be filed as. Agent requests are answered in their conversations, not items the
-/// inbox can mark 已处理: a selection made only of them has nothing to file, so the detail must not offer it and E
+/// inbox can mark Done: a selection made only of them has nothing to file, so the detail must not offer it and E
 /// must not be swallowed (#3479).
 nonisolated enum MacInboxMultiSelection: Equatable, Sendable {
     /// Only agent requests: nothing can be filed; the user opens their conversations.
@@ -22,7 +22,7 @@ nonisolated enum MacInboxMultiSelection: Equatable, Sendable {
     /// Only items: every selected row can be filed.
     case itemsOnly(itemCount: Int)
 
-    /// How many of the selected rows can be marked 已处理.
+    /// How many of the selected rows can be marked Done.
     var itemCount: Int {
         switch self {
         case .agentsOnly: 0
@@ -42,8 +42,8 @@ nonisolated enum MacInboxMultiSelection: Equatable, Sendable {
     }
 }
 
-/// One of the sidebar's inbox entries: 全部, 飞书, each mail account, each connector with items (sources), then @我 / 私聊 /
-/// 群聊 / 邮件 / Agent (kinds).
+/// One of the sidebar's inbox entries: All, Lark, each mail account, each connector with items (sources), then @Me / DMs /
+/// Group chat / Mail / Agent (kinds).
 enum MacInboxFilter: Hashable, Identifiable {
     case all
     case feishu
@@ -134,16 +134,16 @@ final class MacInboxState {
     }
     var query = ""
     var selection: Set<MacInboxSelection> = []
-    /// Sections shown open: tiers (action, fyi, noise) and "done". 已折叠 and 已处理 start closed, as on the iPhone.
+    /// Sections shown open: tiers (action, fyi, noise) and "done". Collapsed and Done start closed, as on the iPhone.
     var expanded: Set<String> = ["action", "fyi"]
     var accounts: [MailAccount] = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
-    /// The sheets the list opens: 写邮件, 管理邮箱, 修改 on the AI 分身's draft, 交给 AI.
+    /// The sheets the list opens: New Email, Manage Accounts, Edit on the AI Twin's draft, Hand to AI.
     var composing: ComposeDraft?
     var showAccounts = false
     var editingDraft: InboxItem?
     var drafting: InboxItem?
     var handingOff: InboxItem?
-    /// 全部清理 over many items, waiting for the user to say yes.
+    /// Clear All over many items, waiting for the user to say yes.
     var confirming = false
 
     private var store: InboxStore { .shared }
@@ -194,7 +194,7 @@ final class MacInboxState {
         }
     }
 
-    /// What still waits in an entry (the sidebar's count): open items 需要你, plus the waiting agents.
+    /// What still waits in an entry (the sidebar's count): open items Needs You, plus the waiting agents.
     func count(_ f: MacInboxFilter, model: AppModel) -> Int {
         let items = store.items.filter { !$0.isDone && $0.triage == .action && matches($0, source: f.source, kind: f.kind, query: "") }
         let agents = f.source.isEmpty && (f.kind.isEmpty || f.kind == "agent")
@@ -223,17 +223,17 @@ final class MacInboxState {
         return Sections(tiers: tiers, done: done)
     }
 
-    /// 全部清理: the open items the list shows (its filter and search); the agents waiting are not items.
+    /// Clear All: the open items the list shows (its filter and search); the agents waiting are not items.
     var openInView: [InboxItem] { kind == "agent" ? [] : store.items.filter { !$0.isDone && matches($0) } }
 
-    /// What 全部清理 covers and how many, for its help tag.
+    /// What Clear All covers and how many, for its help tag.
     var cleanUpScope: String {
         InboxBulk.scopeLine(filters: scopeFilters, query: query, count: openInView.count)
     }
 
     var scopeFilters: [String] { filter == .all ? [] : [filter.title] }
 
-    /// 全部清理 (toolbar, 收件箱 menu): the open items in view filed as dismissed, in one request with 撤销 after;
+    /// Clear All (toolbar, Inbox menu): the open items in view filed as dismissed, in one request with Undo after;
     /// from `InboxBulk.confirmFrom` items on, the list asks first (`confirming`).
     func clean(confirmed: Bool = false) {
         let scope = openInView
@@ -265,7 +265,7 @@ final class MacInboxState {
     func item(_ id: String) -> InboxItem? { store.items.first { $0.id == id } }
 
     /// The selected rows still present in the list: an `.item` the store no longer returns (it expired or was handled
-    /// elsewhere) or an `.agent` interaction that vanished is dropped, so the detail's 已选 count and the multi-select
+    /// elsewhere) or an `.agent` interaction that vanished is dropped, so the detail's Selected count and the multi-select
     /// action cover what still exists (#3795).
     func liveSelection(model: AppModel) -> Set<MacInboxSelection> {
         liveSelection(items: store.items, interactions: model.pendingInteractions)
@@ -294,7 +294,7 @@ final class MacInboxState {
         selection.compactMap { if case .item(let id) = $0 { return item(id) } else { return nil } }
     }
 
-    /// The selected agent requests: they are answered in their conversations, not filed as 已处理.
+    /// The selected agent requests: they are answered in their conversations, not filed as Done.
     var selectedAgentCount: Int {
         selection.reduce(0) { count, row in
             guard case .agent = row else { return count }
@@ -307,7 +307,7 @@ final class MacInboxState {
         .decide(itemCount: selectedItems.count, agentCount: selectedAgentCount)
     }
 
-    /// 已处理 (or 移回 when all are done already) on these rows, then the selection moves to the row after them, as
+    /// Done (or Move Back when all are done already) on these rows, then the selection moves to the row after them, as
     /// Mail does when a message is deleted.
     func toggleDone(_ ids: Set<MacInboxSelection>, model: AppModel) {
         let items = ids.compactMap { s -> InboxItem? in if case .item(let id) = s { return item(id) } else { return nil } }

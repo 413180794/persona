@@ -1,7 +1,7 @@
 import XCTest
 
-/// The shell's top-left button is the persona's face (docs/ios.md「新外壳」): it opens the drawer on 助手 and on Agents,
-/// and carries the inbox's dot while the inbox has something for the user (体验模式's has). The old layout keeps its ☰
+/// The shell's top-left button is the persona's face (docs/ios.md「新外壳」): it opens the drawer on Assistant and on Agents,
+/// and carries the inbox's dot while the inbox has something for the user (Demo Mode's has). The old layout keeps its ☰
 /// and the face in the middle of the bar. The empty-inbox case needs scripts/mock/mock_hub.py started with
 /// MOCK_INBOX=empty (JARVIS_EMPTY_INBOX_HUB).
 final class ShellAvatarTests: XCTestCase {
@@ -38,7 +38,7 @@ final class ShellAvatarTests: XCTestCase {
         let face = app.buttons["assistant-sidebar-button"].firstMatch
         XCTAssertTrue(face.waitForExistence(timeout: 15), "no face on 助手")
         XCTAssertEqual(face.label, "历史对话")
-        // The face's state first, then the inbox's mark: 体验模式's inbox has things that need the user.
+        // The face's state first, then the inbox's mark: Demo Mode's inbox has things that need the user.
         XCTAssertTrue(value(face).hasPrefix("Persona，"), "the face's state: \(value(face))")
         XCTAssertTrue(value(face).contains("收件箱有事等你"), "no inbox mark: \(value(face))")
         openAndCloseDrawer(face, "助手")

@@ -205,7 +205,7 @@ enum CodePageBlock: Identifiable {
 
     static func diff(_ d: ExtensionDiffComponent, key: String, state: CodePageState, look: CodeDiffLook,
                      canComment: Bool) -> [CodePageBlock] {
-        // `collapsed` without hunks: the file is there to be loaded (its 加载 diff shows); with hunks, it starts folded.
+        // `collapsed` without hunks: the file is there to be loaded (its Load diff shows); with hunks, it starts folded.
         let hunks = d.hunks ?? []
         let collapsed = d.collapsed == true && !hunks.isEmpty
         let folded = state.isFolded(key, collapsed: collapsed)
@@ -375,7 +375,7 @@ struct ExtensionCodePage: View {
 
     // MARK: Phone
 
-    /// The side sections are the page, a directory at a time; a file (or 查看全部改动) shows the main sections in their
+    /// The side sections are the page, a directory at a time; a file (or All Changes) shows the main sections in their
     /// place, with a way back. All in the page itself: it is pushed on stacks of every kind (settings' split, the
     /// shell, the Mac's sections) and must not push on them.
     @ViewBuilder private func phoneBody(_ v: ExtensionView) -> some View {

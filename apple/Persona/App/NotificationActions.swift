@@ -48,13 +48,13 @@ nonisolated enum NotificationActions {
                                               textInputButtonTitle: String(localized: "发送"), textInputPlaceholder: String(localized: "接下来做什么…")),
             ],
             intentIdentifiers: [], options: [])
-        // Pairing receipts (#4199): 不是你？撤销, 是我的电脑 / 不是 (PairReceiptActions).
+        // Pairing receipts (#4199): Not you? Revoke, It's Mine / Not Mine (PairReceiptActions).
         return Set([permission, plan, question, screen, done] + PairReceiptActions.categories)
     }
 
     /// What a button sends to the hub, or nil for a plain tap (and anything we don't know).
     /// Plans approve in acceptEdits: from a notification you have not read the plan in full, so edits go through but
-    /// commands still ask. "批准并自动执行" stays an in-app choice.
+    /// commands still ask. "Approve & Auto-Run" stays an in-app choice.
     static func resolution(action: String, text: String? = nil) -> Resolution? {
         switch action {
         case allow: Resolution(allow: true)
@@ -65,7 +65,7 @@ nonisolated enum NotificationActions {
         }
     }
 
-    /// The message a 回复 on a finished turn's push sends, nil for anything else or an empty one.
+    /// The message a Reply on a finished turn's push sends, nil for anything else or an empty one.
     static func replyText(action: String, text: String?) -> String? {
         guard action == reply, let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
         return t
@@ -82,7 +82,7 @@ nonisolated enum NotificationActions {
         }
     }
 
-    /// Posts "没能允许 · 这个已经处理过了" and the like: buttons run while nobody looks at the app.
+    /// Posts "Couldn't allow · This was already handled." and the like: buttons run while nobody looks at the app.
     static func reportFailure(id: String, title: String, error: Error) async {
         let content = UNMutableNotificationContent()
         content.title = title

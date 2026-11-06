@@ -109,7 +109,7 @@ struct PerfCountProbe: View {
 ///   `big` of them by 100 pt or more. The small ones happen with no push at all (the lazy rows sizing themselves, the
 ///   synthesized drags of a UI test): measured on the real hub with its pushes held back, none reached 100 pt;
 /// - `moved`: rows moved against each other (reordered, resized, a row put in between); read it on lists: on a page of
-///   glass cards (机器) the effects' own layers move against the content with no push at all;
+///   glass cards (Machines) the effects' own layers move against the content with no push at all;
 /// - `replaced`: something on screen was taken away and drawn anew while it was still in view (a flash);
 /// - `stopped`: a glide cut short;
 /// - `resized`: the content's height changed;

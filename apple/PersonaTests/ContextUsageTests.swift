@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 会话信息的上下文用量 (#3289, the web's #2430): what the session carries and the share the bar draws.
+/// Session Info's context usage (#3289, the web's #2430): what the session carries and the share the bar draws.
 struct ContextUsageTests {
     private func session(_ extra: String) throws -> Session {
         try JSON.decoder.decode(Session.self, from: Data(#"{"machine_id":"box","session_id":"s1","status":"idle","state":"idle"\#(extra)}"#.utf8))

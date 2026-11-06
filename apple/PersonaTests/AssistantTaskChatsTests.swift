@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Which conversations scheduled tasks started (#2838, as the web's #2824): kept on 定时任务, not in the sidebar's 最近.
+/// Which conversations scheduled tasks started (#2838, as the web's #2824): kept on Scheduled Tasks, not in the sidebar's Recent.
 struct AssistantTaskChatsTests {
     private func task(_ id: String, title: String = "", session: String? = nil, own: String? = nil, last: String? = nil,
                       lastRun: Date? = nil, repeats: APIClient.ScheduledTask.Repeat = .daily) -> APIClient.ScheduledTask {
@@ -42,7 +42,7 @@ struct AssistantTaskChatsTests {
     @Test func knowsAnOlderRunsByTheHubsTitleForOneOfTheTasks() {
         #expect(known.contains(sessionID: "x", title: "1101 | 定时 | 日报"))
         #expect(known.contains(sessionID: "y", title: "1101 | 定时 | 看看部署好了没有，好了告")) // cut to fit
-        // The model may call the user's own conversation 定时 too.
+        // The model may call the user's own conversation 「定时」 too.
         #expect(!known.contains(sessionID: "z", title: "1105 | 定时 | 设日报提醒"))
         #expect(!known.contains(sessionID: "w", title: ""))
     }
@@ -64,7 +64,7 @@ struct AssistantTaskChatsTests {
         #expect(chats.map(\.key.sessionID) == ["own", "r2", "r1"])
         #expect(chats.first?.at == now - 60) // when a run last went into it
         #expect(chats.map(\.key.machineID) == ["server", "server", "server"])
-        // The one it came from (接着原来的对话) is the user's own.
+        // The one it came from (Continue in Original Chat) is the user's own.
         #expect(AssistantTaskChats.chats(of: task("b", session: "mine", repeats: .once), runs: [run("b", "mine")], machineID: "server").isEmpty)
         #expect(AssistantTaskChats.chats(of: t, runs: [run("a", "r1"), run("a", "r2"), run("a", "r3")], machineID: "server", limit: 2)
             .map(\.key.sessionID) == ["own", "r1"])

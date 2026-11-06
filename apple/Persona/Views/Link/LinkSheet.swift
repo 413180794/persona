@@ -9,7 +9,7 @@ import WebKit
 // to close, with the chat behind it still usable. Feishu docs open in the native reader and company-feed links as the
 // post while the hub has them (FeishuLinks.route, LarkFeatures); any other page in a
 // WKWebView taken from a pool that preloads the links of the latest answers. Text selected on a page can go to the
-// agent as an edit request (AI 修改) or ride along with the next message (作为上下文), both as <jarvis-context>.
+// agent as an edit request (Edit with AI) or ride along with the next message (Add as Context), both as <jarvis-context>.
 
 /// A piece of a page the user picked, carried in a message as
 /// `<jarvis-context kind="context|edit" title="…" url="…">text</jarvis-context>`, the text through `ContextText.inBlock`
@@ -85,7 +85,7 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
 
 struct LinkTarget: Identifiable, Hashable {
     var url: URL
-    /// A machine's port forwarded to the phone (docs/ports.md): what to call it ("机器名 :5173"); the url is the
+    /// A machine's port forwarded to the phone (docs/ports.md): what to call it ("machine name :5173"); the url is the
     /// phone's loopback, which only this app serves.
     var forwarded: String? = nil
     var id: String { url.absoluteString }
@@ -95,7 +95,7 @@ extension EnvironmentValues {
     /// Opens a link in the in-app sheet (set by ChatView).
     @Entry var openLink: ((URL) -> Void)? = nil
     /// Inside the link sheet: hands picked text to the agent (text, "edit" | "context"). Native document views
-    /// (the Feishu reader) show AI 修改 / 作为上下文 on long press when it is set.
+    /// (the Feishu reader) show Edit with AI / Add as Context on long press when it is set.
     @Entry var docPick: ((String, String) -> Void)? = nil
 }
 
@@ -256,7 +256,7 @@ final class WebViewPool {
     /// The view for this url if the pool has one (nothing is loaded).
     func existing(for url: URL) -> SelectableWebView? { views[url.absoluteString] }
 
-    /// The sheet's 刷新: the page again from the server, not from the cache. A view that never got a page (its first
+    /// The sheet's Refresh: the page again from the server, not from the cache. A view that never got a page (its first
     /// load failed: `url` is nil) loads it afresh.
     func reload(_ url: URL) {
         guard let v = views[url.absoluteString] else { return }
@@ -290,7 +290,7 @@ final class WebViewPool {
 }
 
 #if os(iOS) || os(visionOS)
-/// A WKWebView whose selection menu has AI 修改 and 作为上下文.
+/// A WKWebView whose selection menu has Edit with AI and Add as Context.
 final class SelectableWebView: WKWebView {
     var onPick: ((String, String) -> Void)?
 
@@ -500,13 +500,13 @@ struct PickAction: Hashable, Sendable {
     var icon: String
     var kind: String
 
-    /// The chat's link sheet: AI 修改 and 作为上下文.
+    /// The chat's link sheet: Edit with AI and Add as Context.
     static let ai = [PickAction(title: String(localized: "AI 修改"), icon: Theme.Icon.ai, kind: "edit"),
                      PickAction(title: String(localized: "作为上下文"), icon: Theme.Icon.addContext, kind: "context")]
 }
 
-/// The paragraph in a text view where any span can be selected; its selection menu has `actions` (AI 修改 and
-/// 作为上下文 by default).
+/// The paragraph in a text view where any span can be selected; its selection menu has `actions` (Edit with AI and
+/// Add as Context by default).
 struct PickTextSheet: View {
     @Environment(\.dismiss) private var dismiss
     var text: String

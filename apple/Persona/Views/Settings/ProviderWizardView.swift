@@ -2,21 +2,21 @@ import SwiftUI
 
 /// Where the provider sheet starts.
 enum ProviderWizardStep: String, Hashable, Identifiable {
-    /// 选供应商 (adding).
+    /// Choose Provider (adding).
     case pick
-    /// 连接 (editing starts here).
+    /// Connect (editing starts here).
     case connect
-    /// 勾选模型.
+    /// Choose Models.
     case models
-    /// 从 ~/.zshrc 导入.
+    /// Import from ~/.zshrc.
     case importZshrc = "import"
 
     var id: Self { self }
 }
 
-/// 设置 › 模型供应商's sheet to add or change a provider (#2455, after cindy): three steps in one form, the way back in
-/// the bar's leading button (a Mac sheet does not push, #1170), and 从 ~/.zshrc 导入 as a step of its own. 其他接入方式
-/// (直接 API, a plugin's provider) is the form it had before (`LauncherEditor`).
+/// Settings › Model Providers' sheet to add or change a provider (#2455, after cindy): three steps in one form, the way back in
+/// the bar's leading button (a Mac sheet does not push, #1170), and Import from ~/.zshrc as a step of its own. Other Connection Types
+/// (Direct API, a plugin's provider) is the form it had before (`LauncherEditor`).
 struct ProviderWizard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -25,7 +25,7 @@ struct ProviderWizard: View {
     @State private var imports: LauncherImportModel
     @State private var step: ProviderWizardStep
     private let start: ProviderWizardStep
-    /// 其他接入方式: the older form in this sheet.
+    /// Other Connection Types: the older form in this sheet.
     @State private var other = false
     /// The model whose context window and thinking levels are open under its row.
     @State private var expanded: String?
@@ -58,7 +58,7 @@ struct ProviderWizard: View {
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
-                // 取消 on the first step (a Mac asks first once something is typed); 上一步 after it.
+                // Cancel on the first step (a Mac asks first once something is typed); Back after it.
                 .sheetCancel(unsaved: !wizard.name.isEmpty || !wizard.apiKey.isEmpty, when: step == start) { dismiss() }
                 .animation(Theme.Motion.standard, value: step)
                 #if DEBUG
@@ -126,7 +126,7 @@ struct ProviderWizard: View {
         }
     }
 
-    /// 下一步 from 连接: a new provider reads the gateway's models first (once), so the next step has them.
+    /// Next from Connect: a new provider reads the gateway's models first (once), so the next step has them.
     private func toModels() async {
         if !wizard.discoveredOnce && wizard.choices.isEmpty { await wizard.discover() }
         step = .models
@@ -150,7 +150,7 @@ struct ProviderWizard: View {
         return true
     }
 
-    // MARK: 1 选供应商
+    // MARK: 1 Choose Provider
 
     @ViewBuilder private var pickSections: some View {
         Section {
@@ -198,7 +198,7 @@ struct ProviderWizard: View {
         .accessibilityIdentifier(id)
     }
 
-    // MARK: 2 连接
+    // MARK: 2 Connect
 
     @ViewBuilder private var connectSections: some View {
         @Bindable var wizard = wizard
@@ -260,7 +260,7 @@ struct ProviderWizard: View {
         }
     }
 
-    // MARK: 3 勾选模型
+    // MARK: 3 Choose Models
 
     @ViewBuilder private var modelSections: some View {
         @Bindable var wizard = wizard
@@ -422,7 +422,7 @@ struct ProviderWizard: View {
     #endif
 }
 
-/// A row that is ticked or not: the tick, what it is about, and 已勾选 / 未勾选 for VoiceOver.
+/// A row that is ticked or not: the tick, what it is about, and selected / not selected for VoiceOver.
 struct CheckRow<Content: View>: View {
     var on: Bool
     var title: String
@@ -459,7 +459,7 @@ enum ProviderModelText {
     }
 }
 
-/// 测试连接's answer: ✓ with how long and which model, ✗ with why.
+/// Test Connection's answer: ✓ with how long and which model, ✗ with why.
 struct ProbeResultRow: View {
     var result: LauncherProbeResult
 
@@ -484,7 +484,7 @@ struct ProbeResultRow: View {
     }
 }
 
-/// 从 ~/.zshrc 导入's sections: the machine, what was found (to tick), and what came of it.
+/// Import from ~/.zshrc's sections: the machine, what was found (to tick), and what came of it.
 struct LauncherImportSections: View {
     var imports: LauncherImportModel
     var machines: [Machine]

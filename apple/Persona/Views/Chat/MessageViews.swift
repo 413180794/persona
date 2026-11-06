@@ -10,7 +10,7 @@ extension MarkdownUI.Theme {
     /// ScaledMetric relative to .body), so a reply and the user's bubble are one size at every setting. Headings follow
     /// `Theme.Font`: the first is the title level (1.3 em), the others the heading level (body size, semibold), told
     /// apart by the space above them; code blocks are the code level. Paragraphs have the body's line height (1.45:
-    /// 0.26 em over SF's own 1.19). On the Mac, where ScaledMetric does not follow 小 / 标准 / 大, the base size is
+    /// 0.26 em over SF's own 1.19). On the Mac, where ScaledMetric does not follow Small / Standard / Large, the base size is
     /// times `Theme.Font.scale` (#833) and the theme is made again when it changes (once on the iPhone).
     @MainActor static var jarvis: MarkdownUI.Theme { jarvisAtScale.value }
     @MainActor private static let jarvisAtScale = PerTextScale { makeJarvis() }
@@ -266,8 +266,8 @@ struct PeerMessage: View {
 }
 
 /// A message just sent from this phone, before the transcript has it: drawn like a sent bubble right away, with a
-/// quiet clock while the request runs, the clock and 连上后自动发送 while it waits for the network (Outbox.swift),
-/// and a red "重发" when it failed.
+/// quiet clock while the request runs, the clock and "Sends when connected" while it waits for the network (Outbox.swift),
+/// and a red "Resend" when it failed.
 struct PendingBubble: View {
     var msg: PendingMessage
     var retry: () -> Void
@@ -453,7 +453,7 @@ enum AttachedImageCache {
 
 struct AssistantText: View, Equatable {
     var item: Item
-    /// The words between an agent's steps (液态玻璃's work timeline): smaller and gray, part of the process.
+    /// The words between an agent's steps (Liquid Glass's work timeline): smaller and gray, part of the process.
     var quiet = false
     /// Like `UserBubble`: a hub push re-evaluating the page does not re-run every answer's body (Markdown is the
     /// heaviest row there is).
@@ -474,7 +474,7 @@ struct AssistantText: View, Equatable {
                 .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 #if os(macOS)
-                // Drag to select and ⌘C, as on the web (#2542); iOS keeps the long-press menu's 选择.
+                // Drag to select and ⌘C, as on the web (#2542); iOS keeps the long-press menu's Select.
                 .textSelection(.enabled)
                 #endif
                 .contentShape(.rect)
@@ -489,7 +489,7 @@ struct AssistantText: View, Equatable {
         .lookUpFiles(d.asked)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
         #if os(macOS)
-        // Under an answer, while the pointer is over it: 拷贝, and 引用 where the chat quotes (#2113). Not under an
+        // Under an answer, while the pointer is over it: Copy, and Quote where the chat quotes (#2113). Not under an
         // agent's words between its steps (`quiet`).
         .modifier(AnswerHoverActions(on: !quiet, id: item.id, text: item.text ?? ""))
         #endif
@@ -547,7 +547,7 @@ struct CopyButton: View {
     }
 }
 
-/// A thought. In a work card (`compact`) it is a row like the tools' around it — "✦ 思考 [its first line]", open the
+/// A thought. In a work card (`compact`) it is a row like the tools' around it — "✦ Thinking [its first line]", open the
 /// whole text under a guide rule (the reference's Thinking row); elsewhere BeautifulUI's thinking trace.
 struct ThinkingRow: View {
     var item: Item
@@ -640,7 +640,7 @@ struct ThinkingRow: View {
 }
 
 /// Where Claude Code compacted the context (`Item.compact`): a hairline across the chat, 「以上内容已压缩」 in the middle with
-/// where it came from (手动 / 自动 / 空闲时) and the size before it, when known, as the web and Android write it (#1762).
+/// where it came from (Manual / Auto / While idle) and the size before it, when known, as the web and Android write it (#1762).
 /// A tap shows the notes that came with it and when.
 struct CompactDivider: View {
     var item: Item
@@ -726,7 +726,7 @@ struct NoticeRow: View {
         else if item.wake == true { wake } else if item.task != nil { TaskNoteRow(item: item) } else if Self.isShort(item.text ?? "") { plain } else { long }
     }
 
-    /// One short line reads as a centered capsule ("已中断", "上下文已压缩"); anything longer would be a block of centered
+    /// One short line reads as a centered capsule ("Interrupted", "Context compacted"); anything longer would be a block of centered
     /// gray text, screens tall (a local command's output): it is a left-aligned box of a few lines instead.
     static func isShort(_ s: String) -> Bool { !s.contains("\n") && s.count <= 60 }
 
@@ -779,7 +779,7 @@ struct NoticeRow: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// `Background command "Release" completed (exit code 0)` → "后台命令完成 · Release".
+    /// `Background command "Release" completed (exit code 0)` → "Background command done · Release".
     private static let wakeMemo = TextMemo<(text: String, failed: Bool)>(limit: 500)
 
     static func wakeSummary(_ s: String) -> (text: String, failed: Bool) { wakeMemo(s, computeWakeSummary) }
@@ -874,8 +874,8 @@ struct WakeDrawer<Content: View>: View {
     }
 }
 
-/// Claude Code's "while you were away" recap: like a background task's report, one short line ("离开期间回顾 · 10:02 ›");
-/// the recap itself opens in a drawer. Several in a row are one line ("离开期间回顾 · 3 次 · 10:02 ›"), the newest first
+/// Claude Code's "while you were away" recap: like a background task's report, one short line ("While You Were Away · 10:02 ›");
+/// the recap itself opens in a drawer. Several in a row are one line ("While You Were Away · 3 times · 10:02 ›"), the newest first
 /// in the drawer.
 struct RecapCard: View {
     /// Oldest first, as they came.

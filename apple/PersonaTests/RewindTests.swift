@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 回退到这里 (#2915): which message the node is told about, when the chat offers it, the request it sends.
+/// Rewind to Here (#2915): which message the node is told about, when the chat offers it, the request it sends.
 struct RewindTests {
     private let a = "11111111-1111-1111-1111-111111111111"
     private let b = "22222222-2222-2222-2222-222222222222"

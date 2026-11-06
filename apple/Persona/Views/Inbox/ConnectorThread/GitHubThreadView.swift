@@ -2,11 +2,11 @@ import MarkdownUI
 import SwiftUI
 
 // A GitHub pull request or issue opened from the inbox, as GitHub's own thread page: a header (repository and number,
-// title, state, who opened it, branches, labels, 在 GitHub 打开), the description in Markdown, then the timeline —
+// title, state, who opened it, branches, labels, Open in GitHub), the description in Markdown, then the timeline —
 // comments, reviews in their state's color, comments on a line with the diff above them, CI checks (a failure with
 // the end of its log) and the gray lines of what happened. Older entries load between the description and the
 // timeline, as GitHub's 「Load more」. With a reply action, a box at the bottom: the comment goes out as github_comment
-// as the user wrote it, without a card (#1190). AI 草拟回复 / 交给 AI stay in the inbox's bar above.
+// as the user wrote it, without a card (#1190). AI Draft Reply / Hand to AI stay in the inbox's bar above.
 
 struct GitHubThreadView: View {
     var model: ConnectorThreadModel
@@ -140,7 +140,7 @@ struct GitHubThreadView: View {
 }
 
 /// The pull request's or issue's header: repository and number, title, state, who opened it, branches, labels, and
-/// 在 GitHub 打开.
+/// Open in GitHub.
 struct GitHubThreadHeader: View {
     var chat: ThreadChat
     var connector: String

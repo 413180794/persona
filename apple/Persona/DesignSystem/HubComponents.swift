@@ -25,7 +25,7 @@ struct HubTag: View {
     }
 }
 
-/// The group a hub-level page (Persona, 收件箱, the hub's settings) shows, and the menu to pick another; nothing with
+/// The group a hub-level page (Persona, Inbox, the hub's settings) shows, and the menu to pick another; nothing with
 /// one group. Each group has its own Persona, inbox and settings: they are not merged (docs/plan-hub-mesh.md 2.6).
 struct HubSwitcher: View {
     @Environment(AppModel.self) private var model

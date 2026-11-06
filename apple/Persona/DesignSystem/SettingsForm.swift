@@ -41,8 +41,8 @@ extension View {
     }
 }
 
-/// Why a settings page has nothing to show. In 体验模式 on the Mac a page whose data the demo does not make up (飞书机器人,
-/// 模型供应商) says so plainly instead of in red, which read as something broken (#1224 A4); the phone, and the Mac
+/// Why a settings page has nothing to show. In Demo Mode on the Mac a page whose data the demo does not make up (Lark Bot,
+/// Model Providers) says so plainly instead of in red, which read as something broken (#1224 A4); the phone, and the Mac
 /// with a real hub, show the error as before.
 struct LoadProblem: View {
     @Environment(AppModel.self) private var model

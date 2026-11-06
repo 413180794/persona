@@ -63,7 +63,7 @@ extension AppModel {
 
     func link(_ group: String) -> HubLink? { links.first { $0.group == group } }
 
-    /// The group hub-level pages (Persona, 收件箱, the hub's settings) show: the one picked, else the first.
+    /// The group hub-level pages (Persona, Inbox, the hub's settings) show: the one picked, else the first.
     var hub: HubLink? { link(hubGroup) ?? links.first }
 
     /// A client for the group a session, machine or interaction is from.
@@ -123,7 +123,7 @@ extension AppModel {
         return SessionKey(group: found ?? links.first?.group ?? "", machineID: machineID, sessionID: sessionID)
     }
 
-    /// A key a hub-level page read off its hub (a routine's conversation, the AI 分身's): in the hub-level group.
+    /// A key a hub-level page read off its hub (a routine's conversation, the AI Twin's): in the hub-level group.
     func inHub(_ key: SessionKey) -> SessionKey {
         var k = key
         k.group = hub?.group ?? ""
@@ -149,8 +149,8 @@ extension AppModel {
     // MARK: Routes, hellos, groups changing
 
     /// What a group's socket asks before each attempt when the group has more than one place to go: the quickest
-    /// hub that answers (HubRoute), or its SSH tunnel when none does (`sshRoute`, docs/network.md「经 SSH 隧道连
-    /// hub」). One place and no tunnel: nil, the socket goes where it was told.
+    /// hub that answers (HubRoute), or its SSH tunnel when none does (`sshRoute`, docs/network.md
+    /// 「经 SSH 隧道连 hub」). One place and no tunnel: nil, the socket goes where it was told.
     func routePicker(_ group: String) -> (@MainActor () async -> ServerConfig?)? {
         let ssh = !sshHubs(group).isEmpty
         guard ssh || HubRoute.candidates(registry, group: group).count > 1 else { return nil }
@@ -247,7 +247,7 @@ extension AppModel {
         registry.members(group).map(\.id)
     }
 
-    /// 设置 › hub › 断开: a whole group (every hub of it) goes; the others keep everything. The last group: `unpair`.
+    /// Settings › hub › Disconnect: a whole group (every hub of it) goes; the others keep everything. The last group: `unpair`.
     func removeGroup(_ group: String) {
         guard links.count > 1 else { unpair(); return }
         // Before the registry changes: afterwards the group's hubs (and their tunnels' ids) are gone from it.
@@ -280,7 +280,7 @@ extension AppModel {
         pushWatchConfigs()
     }
 
-    /// 设置 › hub › 改名: what lists call a group ("" goes back to its hub's own name).
+    /// Settings › hub › Rename: what lists call a group ("" goes back to its hub's own name).
     func renameGroup(_ group: String, to name: String) {
         var r = registry
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)

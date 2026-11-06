@@ -45,7 +45,7 @@ extension TaskState {
 
 // MARK: - Removing a task
 
-/// 移除 for a task that does not run, like the Agents page's 关闭 for an agent: a task whose agents ran asks first (their
+/// Remove for a task that does not run, like the Agents page's Close for an agent: a task whose agents ran asks first (their
 /// chats stay on the Agents page), one whose agent never started goes at once.
 struct TaskRemoval: ViewModifier {
     @Binding var pending: TodoItem?
@@ -73,7 +73,7 @@ extension TasksStore {
     }
 }
 
-/// The 移除任务 of a task's menus (long press on its card, line or pill), when nothing of it runs.
+/// The Remove Task of a task's menus (long press on its card, line or pill), when nothing of it runs.
 struct TaskRemoveMenuItem: View {
     var todo: TodoItem
     var state: TaskState
@@ -88,7 +88,7 @@ struct TaskRemoveMenuItem: View {
     }
 }
 
-/// "12 分钟", "1 小时 5 分" since a date.
+/// "12 min", "1 h 5 min" since a date.
 enum TaskClock {
     /// How often a running step's time is drawn again: it shows minutes.
     static let tick: TimeInterval = 30
@@ -249,7 +249,7 @@ struct PlanTaskRow: View {
     }
 }
 
-/// 改一下: the plan's fields the user can change before it starts.
+/// Edit: the plan's fields the user can change before it starts.
 struct PlanEditSheet: View {
     var plan: TaskPlan
     var start: ([PlanTask]) -> Void
@@ -617,8 +617,8 @@ struct AnsweredLine: View {
     }
 }
 
-/// A message about one of the conversation's tasks, with the reply the AI 分身 drafted from the task's progress
-/// (docs/unified-entry.md「信息和任务互相认得」): who said what, the task (live), the draft, 发送 / 改一下 / 稍后.
+/// A message about one of the conversation's tasks, with the reply the AI twin drafted from the task's progress
+/// (docs/unified-entry.md「信息和任务互相认得」): who said what, the task (live), the draft, Send / Edit / Later.
 struct MessageCard: View {
     var item: FeedItem
     var itemID: String
@@ -771,7 +771,7 @@ struct TaskQuestions: View {
     }
 }
 
-/// The dock: 全部 for the board, held at the leading edge so it never scrolls out of reach, then a pill for each task
+/// The dock: All for the board, held at the leading edge so it never scrolls out of reach, then a pill for each task
 /// going on (waiting for the user first), scrolling sideways beside it. In the main conversation the agents going on
 /// that no task stands for (opened on the Agents page, #1113) follow the tasks, marked as agents.
 struct TaskDock: View {
@@ -830,7 +830,7 @@ struct TaskDock: View {
                 .padding(.horizontal, Theme.Space.m)
                 .padding(.vertical, Theme.Space.sm)
                 .background(Theme.Fill.chip, in: .capsule)
-                .fixedSize() // the pills give way, 全部 does not
+                .fixedSize() // the pills give way, All does not
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("task-dock.board")
@@ -871,7 +871,7 @@ struct TaskDock: View {
     }
 }
 
-/// A dock pill's face, the same for a task and an agent: its marks, the title (which gives way), and 等你 tinted with
+/// A dock pill's face, the same for a task and an agent: its marks, the title (which gives way), and Needs You tinted with
 /// the state's tone while it waits for the user.
 struct DockPillLabel<Marks: View>: View {
     var title: String
@@ -897,7 +897,7 @@ struct DockPillLabel<Marks: View>: View {
     }
 }
 
-/// 「对「xx」说」 above the composer while the next message goes straight to a task; × sends it to Persona again.
+/// Message “xx” above the composer while the next message goes straight to a task; × sends it to Persona again.
 struct RouteChip: View {
     var conversation: String
     private var store: TasksStore { .shared }
@@ -962,7 +962,7 @@ struct TaskMentionList: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    /// The @ the draft ends with ("@", "@登录"), if any.
+    /// The @ the draft ends with ("@", "@login"), if any.
     static func mention(in draft: String) -> Range<String.Index>? {
         guard let at = draft.lastIndex(of: "@") else { return nil }
         let rest = draft[draft.index(after: at)...]

@@ -2,7 +2,7 @@ import Observation
 import SwiftUI
 import UserNotifications
 
-/// 保存在 AppModel 的系统入口。动作先领取再发送，外观和窗口重建只重画，不重放写操作。
+/// A system entry point kept in AppModel. The action is claimed before it is sent; a change of appearance or a rebuilt window only redraws, never replays the write.
 @Observable final class ExtensionSystemOpen: Identifiable {
     let id = UUID()
     let link: ExtensionSystemLink
@@ -39,7 +39,7 @@ extension AppModel {
     }
 }
 
-/// 共用普通扩展页面及其链接、push/pop、失效刷新，不另造通知专用渲染器。
+/// Reuses the regular extension pages with their links, push/pop and invalidation refresh; no separate renderer for notifications.
 private struct ExtensionSystemPresentation: ViewModifier {
     @Environment(AppModel.self) private var app
 
@@ -71,7 +71,7 @@ extension View {
 }
 
 @MainActor enum ExtensionNotificationHandler {
-    /// 只保留短期的回调去重；相同推送的另一个按钮仍是独立的用户操作。
+    /// Keeps only short-lived callback dedup; another button on the same push is still a separate user action.
     private struct DeliveryKey: Hashable {
         var group: String
         var notification: String
@@ -125,7 +125,7 @@ extension View {
             let result = try await api.pluginUI(event.payload.extension, ui, context: .here(), state: event.payload.state,
                                                 action: action.id, values: event.values.isEmpty ? nil : event.values)
             guard !Task.isCancelled else { return }
-            // 后台不处理 view、open_url、push 或 pop；只有文字反馈作为本地通知。
+            // The background does not handle view, open_url, push or pop; only text feedback becomes a local notification.
             if let toast = result.toast, !toast.isEmpty { await deps.report(event.notificationID, String(localized: "扩展操作已完成"), toast) }
         } catch {
             if !error.isCancellation {

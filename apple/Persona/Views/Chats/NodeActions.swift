@@ -15,7 +15,7 @@ nonisolated struct TerminalPanes: Decodable, Sendable, Equatable {
         var kind: String
         /// The host can open a new shell tab in a workspace (`POST /panes`).
         var newTab: Bool
-        /// The host can make a Git worktree of a workspace's repository (新建 worktree…).
+        /// The host can make a Git worktree of a workspace's repository (New Worktree…).
         var worktree: Bool
         var tabs: [Tab]
         var panes: [Pane]
@@ -124,7 +124,7 @@ nonisolated enum NodeMenu {
             case .fetch: Theme.Icon.gitFetch
             }
         }
-        /// The toast after it ran: the node's one-line summary ("已经是最新"), or 完成.
+        /// The toast after it ran: the node's one-line summary ("Already up to date"), or Done.
         func done(_ message: String?) -> String {
             let m = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let said = m.isEmpty ? String(localized: "完成") : m
@@ -191,7 +191,7 @@ nonisolated enum NodeMenu {
 final class NodeActions {
     static let shared = NodeActions()
 
-    /// A tab waiting for 关闭标签页's confirmation.
+    /// A tab waiting for Close Tab's confirmation.
     struct CloseTab: Identifiable, Equatable {
         var machine: MachineRef
         var tabID: String
@@ -201,9 +201,9 @@ final class NodeActions {
     }
 
     var closingTab: CloseTab?
-    /// The space whose 在这里运行 Agent… sheet is open.
+    /// The space whose Run Agent Here… sheet is open.
     var runningHere: SpaceGroup?
-    /// The space whose 新建 worktree… sheet is open.
+    /// The space whose New Worktree… sheet is open.
     var newWorktree: SpaceGroup?
 
     private var model: AppModel { AppModel.shared }
@@ -246,7 +246,7 @@ final class NodeActions {
         }
     }
 
-    /// 关闭标签页…: asks first (the tab's every pane goes, and the agents in them).
+    /// Close Tab…: asks first (the tab's every pane goes, and the agents in them).
     func askCloseTab(_ s: Session) {
         guard let tab = s.tabID ?? s.slotID, !tab.isEmpty else { return }
         let name = s.slotName.map { $0.allSatisfy(\.isNumber) ? "#" + $0 : $0 } ?? ""
@@ -325,7 +325,7 @@ struct AgentNodeMenuItems: View {
 }
 
 /// The node items of a space's ⋯ in Agents: run an agent in one of its shells, a Git worktree of its repository, Git in
-/// its folder. 新建 worktree… is offered for every herdr workspace: whether the host can make one is in the panes list,
+/// its folder. New Worktree… is offered for every herdr workspace: whether the host can make one is in the panes list,
 /// which the menu does not load; the sheet says so when it cannot (an older node).
 struct SpaceNodeMenuItems: View {
     var group: SpaceGroup
@@ -346,7 +346,7 @@ struct SpaceNodeMenuItems: View {
     }
 }
 
-// MARK: - 在这里运行 Agent…
+// MARK: - Run Agent Here…
 
 /// Picks a plain shell of the space and a launcher, and starts the agent in that pane (`panes/agent`); with no shell,
 /// opens a new terminal tab in the workspace first.
@@ -491,7 +491,7 @@ struct RunAgentHereSheet: View {
     }
 }
 
-// MARK: - 新建 worktree…
+// MARK: - New Worktree…
 
 /// `worktree/prepare` (`proto.WorktreePrepare`): the workspace's repository, its branch and where checkouts go.
 nonisolated struct WorktreePrepare: Decodable, Sendable, Equatable {
@@ -627,8 +627,8 @@ nonisolated enum WorktreeForm: Sendable {
     }
 }
 
-/// 新建 worktree… from a space's ⋯: reads the workspace's repository, takes a branch and a checkout path, and has the
-/// computer make the worktree and open it as a workspace; then offers 新建 Agent there (the phone has no terminal page
+/// New Worktree… from a space's ⋯: reads the workspace's repository, takes a branch and a checkout path, and has the
+/// computer make the worktree and open it as a workspace; then offers New Agent there (the phone has no terminal page
 /// to open it in, as the web does).
 struct NewWorktreeSheet: View {
     @Environment(AppModel.self) private var model

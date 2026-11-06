@@ -1,7 +1,7 @@
 import Testing
 @testable import Jarvis
 
-/// 设置 › 手机数据 on the Mac: the sources the Mac has tools for. A Mac has no health data (no health tools are
+/// Settings › Phone Data on the Mac: the sources the Mac has tools for. A Mac has no health data (no health tools are
 /// registered there), so no health switch either.
 @MainActor
 struct PhoneDataSourceTests {

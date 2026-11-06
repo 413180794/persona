@@ -4,7 +4,7 @@ import SwiftUI
 import AVFoundation
 #endif
 
-/// 知识库 › 录音 (docs/recording.md): start a recording, see this device's recordings (the watch's arrive here) with
+/// Knowledge › Record (docs/recording.md): start a recording, see this device's recordings (the watch's arrive here) with
 /// where each one is (recording, transcribing, synced), open one for its transcript. The text goes to the knowledge base
 /// by itself (`RecordingSync`); nothing is added to a composer.
 struct RecordingsSection: View {
@@ -65,7 +65,7 @@ struct RecordingRow: View {
     }
 }
 
-/// 录音中 / 转写中 / 已同步…: the one word for where a recording is.
+/// Recording / Transcribing / Synced…: the one word for where a recording is.
 struct RecordingStatusText: View {
     var entry: RecordingEntry
     @State private var transcription = RecordingTranscription.shared
@@ -104,7 +104,7 @@ struct RecordingCaptureControls: View {
     var body: some View {
         #if os(iOS) // Bluetooth input is iPhone-only (`RecordingInput`); visionOS records with its own microphone
         controls
-            .task { // the 麦克风 picker shows only while a Bluetooth device (glasses, headset) is on the route
+            .task { // the Microphone picker shows only while a Bluetooth device (glasses, headset) is on the route
                 refreshBluetooth()
                 for await _ in NotificationCenter.default.notifications(named: AVAudioSession.routeChangeNotification) { refreshBluetooth() }
             }

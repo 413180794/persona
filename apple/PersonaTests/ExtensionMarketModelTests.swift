@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 扩展市场 (ExtensionMarketModel, MarketExtensionModel) and a plugin's declarative UI (ExtensionViewModel, ExtensionLauncherModel):
+/// Extension Market (ExtensionMarketModel, MarketExtensionModel) and a plugin's declarative UI (ExtensionViewModel, ExtensionLauncherModel):
 /// what the hub sends decodes; the catalog is searched and filtered by market; markets are added (the hub's reason
 /// comes back), refreshed, given a token and removed; installing and upgrading go preview → the digest agreed to;
 /// removing is only for a plugin from this market; a View's fields go back on submit, a secret never prefilled; a
@@ -53,7 +53,7 @@ struct ExtensionMarketModelTests {
         #expect(page.markets[0].fetchedAt != nil)
     }
 
-    /// The official market reads 官方扩展 on its chip and its plugins, whatever its index calls it (#5017); others keep theirs.
+    /// The official market reads Official Extensions on its chip and its plugins, whatever its index calls it (#5017); others keep theirs.
     @Test func theOfficialMarketReadsOfficialExtensions() async throws {
         let hub = FakeHub()
         let json = #"""
@@ -238,7 +238,7 @@ struct ExtensionViewModelTests {
         #expect(v.sections[1].items[3].field?.choices?.map(\.label) == ["个人", "team"])
         #expect(page.values == ["note": "hi", "token": "", "auto": "false", "plan": "team"], "a secret is never prefilled")
         #expect(ExtensionUIStyle.tone("danger") == Theme.danger && ExtensionUIStyle.tone("bogus") == .secondary)
-        // Drawing sends no action and no values; the context says where and for whom (docs/extensions.md「UI 插槽」上下文).
+        // Drawing sends no action and no values; the context says where and for whom (docs/extensions.md「UI 插槽」, context).
         let body = try JSON.decoder.decode(JSONValue.self, from: hub.requests.last?.body ?? Data())
         #expect(body["action"] == nil && body["values"] == nil && body["state"] == nil)
         #expect(body["context"]?["ui_version"] == .number(3) && body["context"]?["platform"] == .string("ios"))

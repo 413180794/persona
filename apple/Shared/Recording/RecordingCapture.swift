@@ -7,7 +7,7 @@ import UIKit
 import WatchKit
 #endif
 
-/// Hourhand 的手机／手表会话管理，共用分段引擎、暂停、书签和资源保护。
+/// Hourhand's phone / watch session management, sharing the segment engine, pausing, bookmarks and resource protection.
 @Observable
 final class RecordingCapture {
     static let shared = RecordingCapture()
@@ -205,7 +205,7 @@ final class RecordingCapture {
         resumeTask?.cancel(); resumeTask = nil
         ticker?.cancel(); ticker = nil
         writer.stop()
-        // 停止在分段边界时没有尾段，必须取所有定稿部分再写结束消息。
+        // A stop on a segment boundary leaves no tail segment: take every finalized part before writing the end message.
         for segment in writer.finishedSegments { save(segment, id: id) }
         RecordingLibrary.shared.change(id) { entry in
             entry.active = false

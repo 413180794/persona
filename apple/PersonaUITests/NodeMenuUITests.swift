@@ -46,7 +46,7 @@ final class NodeMenuUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
     }
 
-    /// Scrolls the list until `e` can be touched (the 需要你处理 cards come first).
+    /// Scrolls the list until `e` can be touched (the Needs You cards come first).
     @MainActor @discardableResult private func reveal(_ app: XCUIApplication, _ e: XCUIElement) -> Bool {
         _ = e.waitForExistence(timeout: 20)
         // Clear of the floating tab bar at the bottom too: a press there lands on the bar.
@@ -129,8 +129,8 @@ final class NodeMenuUITests: XCTestCase {
         XCTAssertFalse((started?["launcher"] ?? "").isEmpty)
     }
 
-    /// 新建 worktree… (#3099): the path follows the branch, git's refusal is told in the sheet, and a made worktree is
-    /// where 新建 Agent starts.
+    /// New Worktree… (#3099): the path follows the branch, git's refusal is told in the sheet, and a made worktree is
+    /// where New Agent starts.
     @MainActor func testSpaceMakesAWorktreeAndStartsAnAgentThere() throws {
         let app = launch()
         let more = app.buttons["weather 的更多操作"].firstMatch

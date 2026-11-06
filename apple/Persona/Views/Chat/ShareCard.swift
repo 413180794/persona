@@ -3,7 +3,7 @@ import PersonaKit
 import Photos
 import SwiftUI
 
-/// A message to share as a picture (分享 in the long-press bar).
+/// A message to share as a picture (Share in the long-press bar).
 struct ShareMessage: Identifiable {
     var text: String
     var isUser: Bool
@@ -114,7 +114,7 @@ extension MarkdownUI.Theme {
 }
 
 /// Preview of the card, light or dark, with the image viewer's bars (#4714, `ViewerTopBar` / `ViewerBottomBar`): a round
-/// close button and 浅色 / 深色 in a glass capsule on top; 分享 (the image) · 保存 and 拷贝 in a capsule · 分享文字 (the
+/// close button and Light / Dark in a glass capsule on top; Share (the image) · Save and Copy in a capsule · Share Text (the
 /// plain text) at the bottom. The card scrolls under the bars.
 struct MessageShareSheet: View {
     @Environment(\.dismiss) private var dismiss

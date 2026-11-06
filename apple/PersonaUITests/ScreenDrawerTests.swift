@@ -1,7 +1,7 @@
 import XCTest
 
-/// The live screen as a drawer (#1343): while a chat's model operates a Mac its running work says so (「正在操作
-/// MacBook · 点 AC → 9 → × → 8」) and opens the screen like the terminal's drawer, over it the step, dragged down it
+/// The live screen as a drawer (#1343): while a chat's model operates a Mac its running work says so
+/// (「正在操作 MacBook · 点 AC → 9 → × → 8」) and opens the screen like the terminal's drawer, over it the step, dragged down it
 /// closes; the ··· menus have VNC whether or not the model is at it. Against scripts/mock/mock_hub.py with
 /// MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake MOCK_WEB=web/dist (`TEST_RUNNER_JARVIS_SCREEN_HUB`):
 /// without MOCK_SCREEN=fake the screen is this Mac's own Screen Sharing, and with it off the drawer only says the hub

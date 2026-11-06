@@ -1,6 +1,6 @@
 import XCTest
 
-/// 回到最新 in a Feishu chat answers a real tap: scrolled away from the newest message, the arrow at the bottom right
+/// Jump to Latest in a Feishu chat answers a real tap: scrolled away from the newest message, the arrow at the bottom right
 /// brings it back, and goes away there. In the glass styles it once took no touches (its glass label had no hit shape),
 /// and under the inbox's tall top bar it never went away (the at-bottom check left out the top inset).
 /// Against scripts/mock_hub.py (JARVIS_MOCK_HUB); run it in both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).

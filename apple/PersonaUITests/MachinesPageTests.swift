@@ -1,6 +1,6 @@
 import XCTest
 
-/// 机器 (docs/machines.md「App」): the Agents list's machine menu opens every machine on one page, what needs a look
+/// Machines (docs/machines.md「App」): the Agents list's machine menu opens every machine on one page, what needs a look
 /// first (the offline NAS, then the busy server called out); a card opens the machine's page: its agents on top (one
 /// opens the chat), the charts below, the range switches, the system last. Against scripts/mock/mock_hub.py
 /// (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>); TEST_RUNNER_JARVIS_SHOT_DIR=<dir> also saves the screens
@@ -44,7 +44,7 @@ final class MachinesPageTests: XCTestCase {
     @MainActor func testListThenMachineThenRange() throws {
         let app = launch(try hub())
         if ProcessInfo.processInfo.environment["JARVIS_LAYOUT"] == "shell" {
-            // The shell (the iPhone's default): its drawer's 机器.
+            // The shell (the iPhone's default): its drawer's Machines.
             let drawer = app.buttons["assistant-sidebar-button"]
             XCTAssertTrue(drawer.waitForExistence(timeout: 15), app.debugDescription)
             drawer.tapCenter()
@@ -52,7 +52,7 @@ final class MachinesPageTests: XCTestCase {
             XCTAssertTrue(item.waitForExistence(timeout: 5), app.debugDescription)
             item.tap()
         } else {
-            // The machine menu (top left of the Agents list) → 机器.
+            // The machine menu (top left of the Agents list) → Machines.
             let menu = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组")).firstMatch
             XCTAssertTrue(menu.waitForExistence(timeout: 15), app.debugDescription)
             menu.tap()
@@ -75,7 +75,7 @@ final class MachinesPageTests: XCTestCase {
         XCTAssertLessThan(nas.frame.minY, server.frame.minY, "the offline NAS goes first")
         XCTAssertLessThan(server.frame.minY, macBook.frame.minY, "the busy server before MacBook")
         shot("list")
-        // With MOCK_NODE_MISMATCH=1 Mac Studio's card says its jarvisd is not the hub's deploy, with 重新部署
+        // With MOCK_NODE_MISMATCH=1 Mac Studio's card says its jarvisd is not the hub's deploy, with Redeploy
         // (DeployButtonTests taps it); a look at it, then back up.
         let redeploy = app.buttons["重新部署"]
         if redeploy.exists {
@@ -130,7 +130,7 @@ final class MachinesPageTests: XCTestCase {
                       "the agent's chat:\n\(app.debugDescription)")
     }
 
-    /// An offline machine's page: its OS still known, 离线, 重新连接 right under its card, history up to when it went away.
+    /// An offline machine's page: its OS still known, Offline, Reconnect right under its card, history up to when it went away.
     @MainActor func testOfflineMachine() throws {
         let app = launch(try hub(), ["-openMonitor", "nas", "-openMonitorRange", "6h"])
         XCTAssertTrue(app.navigationBars["NAS"].waitForExistence(timeout: 15), app.debugDescription)

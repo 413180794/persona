@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The Mac inbox's sidebar @我 filter is the iPhone's (`InboxView.matches`): docs and the 公司圈 (moment) posts whose
+/// The Mac inbox's sidebar @Me filter is the iPhone's (`InboxView.matches`): docs and the Moments posts whose
 /// newest notice @-mentions the user count; other company-circle posts do not (#3889).
 @MainActor
 struct MacInboxFilterTests {
@@ -18,7 +18,7 @@ struct MacInboxFilterTests {
 
     @Test func mentionFilterIncludesDocsAndAtMeMoments() throws {
         let state = MacInboxState()
-        // Docs already showed in @我 before the fix.
+        // Docs already showed in @Me before the fix.
         let doc = try item("d", kind: "doc", docNotice: "mention")
         // A company-circle post that @-mentions me (atInPost / atInComment) must show too.
         let atInPost = try item("p", kind: "moment", momentNotice: "atInPost")

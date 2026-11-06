@@ -3,12 +3,12 @@ import SwiftUI
 // The Dynamic Island is an iPhone's: its preview lives in the widget's sources (LiveActivity/), and a Mac has no island.
 #if os(iOS)
 
-/// 设置 › 通知 › 灵动岛: what the compact Dynamic Island shows on each side of the camera. Kept per device on the hub
+/// Settings › Notifications › Dynamic Island: what the compact Dynamic Island shows on each side of the camera. Kept per device on the hub
 /// (prefs.island), which fills in only the numbers this device shows (docs/live-activity.md).
 struct IslandSettingsView: View {
     @Binding var island: IslandPrefs
     @Environment(AppModel.self) private var model
-    /// 灵动岛诊断, opened by touching and holding the first preview (not a row: it is for a phone that draws the wrong
+    /// Dynamic Island Diagnostics, opened by touching and holding the first preview (not a row: it is for a phone that draws the wrong
     /// persona, when asked to).
     @State private var diagnostics = false
 

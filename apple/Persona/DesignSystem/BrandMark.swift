@@ -2,7 +2,7 @@ import BeautifulUI
 import SwiftUI
 
 /// Another product's own mark (`Theme.Brand`) in a square box of `side` points (scaled with the text size): every place
-/// that shows a connector's or a provider's logo draws it with this, so 飞书, GitHub, Telegram, Gmail, Microsoft… look
+/// that shows a connector's or a provider's logo draws it with this, so Lark, GitHub, Telegram, Gmail, Microsoft… look
 /// the same size and sit on the same center, whatever shape their artwork has (`Theme.Brand.optical`). An iPhone app's
 /// icon fills the box as an app icon, in its squircle with a hairline edge (the white ones vanish on a white card
 /// otherwise). A template mark (GitHub's) takes the foreground color, as an SF Symbol does.
@@ -35,7 +35,7 @@ struct BrandMark: View {
 }
 
 /// A mark on a white tile the size and corner of BeautifulUI's `BUIIconTile`, for rows whose other marks are tiles
-/// (the BeautifulUI home's 需要你): the same tile as the symbols beside it, the mark at the size a symbol has on its tile.
+/// (the BeautifulUI home's Needs You): the same tile as the symbols beside it, the mark at the size a symbol has on its tile.
 /// White in dark mode too, as the marks are drawn for; a template mark (GitHub's) black on it.
 struct BrandTile: View {
     var asset: String

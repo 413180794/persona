@@ -105,7 +105,7 @@ final class EngineChoiceTests: XCTestCase {
         XCTAssertTrue(row.label.contains("Herdr App"), row.label)
         XCTAssertEqual(try current("server"), "herdr-core")
     }
-    /// 同时显示 botmux 会话 (#2575): on by default under the engine picker, saved at once when flipped.
+    /// Also Show botmux Sessions (#2575): on by default under the engine picker, saved at once when flipped.
     @MainActor func testBotmuxSwitchUnderEngine() throws {
         app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "server"]

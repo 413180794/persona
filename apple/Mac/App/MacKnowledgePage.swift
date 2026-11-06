@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The sidebar's 知识库: the list (the kinds' chips and their entries) in a column of its own and the open entry beside
+/// The sidebar's Knowledge: the list (the kinds' chips and their entries) in a column of its own and the open entry beside
 /// it, as Mail and the inbox have them (#2318). Across the whole window a row's time sat a thousand points from its
 /// name, and opening an entry took the list away. The list's width is dragged and remembered (`MacListBeside`); what
-/// is open is the page's own state, not written anywhere. On the phone, and pushed in Persona's page, 知识库 still
+/// is open is the page's own state, not written anywhere. On the phone, and pushed in Persona's page, Knowledge still
 /// pushes its entries (no `kbOpenEntry` there).
 struct MacKnowledgePage: View {
     @State private var opener = KBOpenEntry()
@@ -42,7 +42,7 @@ private struct MacKnowledgeDetail: View {
                 }
             }
             .modifier(MacBelowTitleRow()) // under the title row, as the list beside it
-            // The page's color as Agents' and 收件箱's detail: the entry's grouped list painted the window's gray over it.
+            // The page's color as Agents' and Inbox's detail: the entry's grouped list painted the window's gray over it.
             .scrollContentBackground(.hidden)
             .background(Theme.pageBackground.ignoresSafeArea())
         }

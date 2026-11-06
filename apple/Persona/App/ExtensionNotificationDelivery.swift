@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 
-/// 用户点击后台按钮时保住请求；系统到期时取消请求并恰好完成一次代理回调。
+/// Keeps the request alive when the user taps a background button; when the system's time runs out, cancels it and calls the delegate's completion exactly once.
 @MainActor final class ExtensionNotificationDelivery {
     private var background = UIBackgroundTaskIdentifier.invalid
     private var work: Task<Void, Never>?

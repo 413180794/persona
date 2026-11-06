@@ -545,7 +545,7 @@ struct StatusBadge: View {
 }
 
 /// The `h-5.5 rounded-full px-2 text-[11.5px] font-medium` status pill, in a tone: Completed in green, Failed in red
-/// with a spinning retry glyph, or any state a host has (需要你, 运行中, 在线…).
+/// with a spinning retry glyph, or any state a host has (Needs You, Running, Online…).
 public struct BUIPill: View {
     public enum Tone: Sendable, Hashable {
         case neutral, accent, green, red, orange

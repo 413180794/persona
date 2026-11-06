@@ -63,7 +63,7 @@ final class PendingCardsTests: XCTestCase {
     }
 
     /// The keyboard up to answer (#1912): the question card is whole above the composer, or scrolls in all the room the
-    /// conversation had, so every option and 其他回答 can be reached and tapped. It was held to half of the short page
+    /// conversation had, so every option and 「其他回答」 can be reached and tapped. It was held to half of the short page
     /// the keyboard leaves: its first two options, cut off.
     func testKeyboardKeepsTheQuestionInReach() {
         launch(chat: Self.widget, ["-showSampleQuestion", "YES"])
@@ -105,7 +105,7 @@ final class PendingCardsTests: XCTestCase {
         let first = cards.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "取最长的那段")).firstMatch
         XCTAssertTrue(first.exists && first.frame.minY < cards.frame.maxY - 16 * 3,
                       "the first option does not show (\(first.exists ? "\(first.frame)" : "not drawn") in \(cards.frame))")
-        // Every option and 其他回答 can be brought into the area and tapped there.
+        // Every option and 「其他回答」 can be brought into the area and tapped there.
         // Short drags inside the card's form, held at the end (no momentum), whichever way the option is: a swipe threw a
         // form as short as a small iPhone's past it, and one that starts on the card's header row does not scroll.
         let area = cards.frame.insetBy(dx: -1, dy: -1)
@@ -115,7 +115,7 @@ final class PendingCardsTests: XCTestCase {
         let start = origin.withOffset(CGVector(dx: cards.frame.midX, dy: (top + bottom) / 2))
         let step = max(24, min(48, (bottom - top) / 3))
         for label in ["取最长的那段", "永远取最后一段", "永远取唤醒前那段", "其他回答"] {
-            // 其他回答 is a field in BeautifulUI's card (its placeholder, no label).
+            // 「其他回答」 is a field in BeautifulUI's card (its placeholder, no label).
             let el = cards.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ OR placeholderValue BEGINSWITH %@", label, label)).firstMatch
             for _ in 0..<20 where !(el.exists && el.isHittable && area.contains(el.frame)) {
                 let dy = el.exists && el.frame.minY < top ? step : -step // not drawn yet: further down

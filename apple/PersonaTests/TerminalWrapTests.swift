@@ -50,7 +50,7 @@ private func text(_ row: TermRow, _ line: DisplayLine) -> String {
         let g = TerminalGrid(cols: 10, rows: 1)
         g.feed("\u{1B}[1;1H旧字\u{1B}[1;1H新\u{1B}[1;3H字")
         #expect(TerminalGrid.plain(g.lines[0]) == "新字")
-        g.feed("\u{1B}[1;2H中") // over the right half of 新 and the left of 字: both go
+        g.feed("\u{1B}[1;2H中") // over the right half of 「新」 and the left of 「字」: both go
         #expect(TerminalGrid.plain(g.lines[0]) == " 中")
     }
 
@@ -72,7 +72,7 @@ private func text(_ row: TermRow, _ line: DisplayLine) -> String {
                 #expect(line.to - line.from + line.indent <= perLine)
             }
         }
-        // "⏺ 终端以 cell 为单位…" hangs under its text, after the marker.
+        // 「⏺ 终端以 cell 为单位…」 hangs under its text, after the marker.
         let answer = try #require(rows.firstIndex { TerminalGrid.plain($0).hasPrefix("⏺ 终端以 cell") })
         let folded = TerminalWrap.lines(rows, cursor: nil, perLine: 40, wrap: true).filter { $0.row == answer }
         #expect(folded.count > 1 && folded.dropFirst().allSatisfy { $0.indent == 2 })

@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 // The personal-agents list prefs shared with the web (docs/protocol.md 「个人 Agent 列表偏好」): pins, the view
-// (分组 / 排序 / 显示 / 来源), and custom sections. Kept on the hub (GET/PUT /api/v1/agents/prefs), cached in
+// (Group By / Sort / Display / Source), and custom sections. Kept on the hub (GET/PUT /api/v1/agents/prefs), cached in
 // UserDefaults; an older hub without the endpoint leaves them local.
 
 nonisolated enum AgentGroupBy: String, Codable, CaseIterable, Sendable {
@@ -69,7 +69,7 @@ nonisolated struct PersonalAgentPrefs: Codable, Hashable, Sendable {
         sections.removeAll { $0.id == id }
         assign = assign.filter { $0.value != id }
     }
-    /// 重置为默认: the view only; pins and sections stay.
+    /// Reset to Default: the view only; pins and sections stay.
     mutating func resetView() { view = PersonalAgentView() }
     mutating func toggleProvider(_ p: String, all: [String]) {
         var cur = view.providerFilter.isEmpty ? all : view.providerFilter
@@ -101,7 +101,7 @@ nonisolated enum PersonalAgentArrange {
         return ("older", String(localized: "更早"), 4)
     }
 
-    /// Same order as the web's arrangeSessions: filter, 已置顶 (pin order), custom sections, then the grouping.
+    /// Same order as the web's arrangeSessions: filter, Pinned (pin order), custom sections, then the grouping.
     static func arrange(_ list: [PersonalAgentSession], prefs: PersonalAgentPrefs, query: String = "", now: Date = Date()) -> [PersonalAgentGroup] {
         let v = prefs.view
         let q = query.trimmingCharacters(in: .whitespaces)

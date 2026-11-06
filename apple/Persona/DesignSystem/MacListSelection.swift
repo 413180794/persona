@@ -20,7 +20,7 @@ struct MacSelectingList<Selection: Hashable, Content: View>: View {
 extension View {
     /// A row of a `MacSelectingList`. On the Mac the system's selected-row highlight is covered by the page's color and
     /// the shell's own shade (`Theme.Fill.macSelected`) drawn in `shape` when `selected` (the system's accent turned the
-    /// row's own colors, its state dot and 需要你, into blue on blue: 收件箱's rows do the same). `drawsShade: false` for a
+    /// row's own colors, its state dot and Needs You, into blue on blue: Inbox's rows do the same). `drawsShade: false` for a
     /// row that draws its own.
     func macListRow(selected: Bool, in shape: some Shape, outset: CGFloat = 0, drawsShade: Bool = true) -> some View {
         modifier(MacListRow(selected: selected, shape: shape, outset: outset, drawsShade: drawsShade))

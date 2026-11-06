@@ -96,13 +96,13 @@ import SwiftUI
     private(set) var phase: Phase
     /// The plugin's View of the item, once it drew one.
     private(set) var page: ExtensionViewModel?
-    /// The contribution drawing the item (its title says where 回到 goes back to).
+    /// The contribution drawing the item (its title says where Back goes back to).
     private(set) var place: ExtensionUIPlace?
-    /// Why the plugin's page is not there, said in a line over today's body with 重试: the plugin failed (502), the hub
+    /// Why the plugin's page is not there, said in a line over today's body with Retry: the plugin failed (502), the hub
     /// could not be reached. Nil when today's body is drawn quietly: no plugin for the source, or the hub refused or
     /// had nothing to draw (403 — a device that may only read —, 404, `unsupported`).
     private(set) var failure: String?
-    /// The plugin opened the item's own source (persona://inbox/<id>/source, 在会话里看): today's body, with a way
+    /// The plugin opened the item's own source (persona://inbox/<id>/source, View in Chat): today's body, with a way
     /// back to the plugin's page, which stays as it was.
     var showsSource = false
     @ObservationIgnored private let item: String
@@ -140,7 +140,7 @@ import SwiftUI
         phase = .plain
     }
 
-    /// 重试 on the line over today's body: asks the plugin again.
+    /// Retry on the line over today's body: asks the plugin again.
     func retry() async {
         guard phase == .plain, failure != nil else { return }
         failure = nil
@@ -171,7 +171,7 @@ import SwiftUI
 
 /// An inbox item's body: the plugin's View when a plugin draws it (`InboxItemSlotModel`), today's body otherwise —
 /// with a line saying the plugin failed, or a way back to the plugin's page after it opened the item's source. The
-/// detail's header around it (the title, the AI's summary, AI 草拟回复 / 交给 AI, 已处理) stays the app's.
+/// detail's header around it (the title, the AI's summary, AI Draft Reply / Hand to AI, Done) stays the app's.
 struct InboxItemSlotContent<Plain: View>: View {
     var item: InboxItem
     var slot: InboxItemSlotModel
@@ -199,13 +199,13 @@ struct InboxItemSlotContent<Plain: View>: View {
             }
         }
         .task { await slot.start() }
-        // What the plugin drew is of the item as it was: new messages, 已处理 or 移回 draw it again.
+        // What the plugin drew is of the item as it was: new messages, Done or Move Back draw it again.
         .onChange(of: InboxItemSlotChange(item)) { Task { await slot.changed() } }
     }
 
     private var name: String { slot.place.map { $0.ownerName?.isEmpty == false ? $0.ownerName! : $0.title } ?? String(localized: "扩展") }
 
-    /// The plugin failed: today's body under a line saying so, with 重试.
+    /// The plugin failed: today's body under a line saying so, with Retry.
     private func failed(_ why: String) -> some View {
         InboxSlotStrip {
             Label { Text("\(name)的详情没画出来：\(why)").lineLimit(1) } icon: { Image(systemName: Theme.Icon.plugins) }
@@ -263,7 +263,7 @@ nonisolated private struct InboxItemSlotChange: Hashable {
 }
 
 /// An inbox item's body drawn by its plugin: the View as a plugin_page draws it (`ExtensionViewRenderer`), pulled to
-/// refresh and drawn again after its `refresh_after`. The item's own source (在会话里看) switches to today's body;
+/// refresh and drawn again after its `refresh_after`. The item's own source (View in Chat) switches to today's body;
 /// other links and `open_url` open as the inbox's other links do (`openURL`: a Feishu document in the reader, a web
 /// page in the link card, beside the item on a Mac).
 struct InboxExtensionItemPage: View {

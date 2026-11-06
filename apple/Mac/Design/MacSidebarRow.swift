@@ -1,15 +1,15 @@
 import SwiftUI
 
 /// A row of a Mac side column (the shell's sections, the inbox's filters): the row `AssistantSidebar` draws for
-/// 新对话 / 定时任务 / 知识库 (an icon in a fixed box, body type), selected with the same rounded well its current
+/// New Chat / Scheduled Tasks / Knowledge (an icon in a fixed box, body type), selected with the same rounded well its current
 /// conversation has, a lighter one under the pointer. Drawn here rather than by a sidebar `List`: the system's rows
 /// turned their words light gray whenever the window was not the active one, and selected in the accent beside the
-/// shell's gray well (2026-11-02 user: 收件箱中间那栏文字看不太清).
+/// shell's gray well (2026-11-02 user: the inbox's middle column text is hard to read).
 struct MacSidebarRow: View {
     enum Badge: Equatable {
         /// Things waiting for the user (the tab bar's red number).
         case count(Int)
-        /// A quiet word or number in place of the red one (设置 in 体验模式, a filter's count).
+        /// A quiet word or number in place of the red one (Settings in Demo Mode, a filter's count).
         case word(String)
     }
 
@@ -58,7 +58,7 @@ struct MacSidebarRow: View {
     }
 }
 
-/// A group's name over a side column's rows (收件箱 / 类型), as `AssistantSidebar` heads its days.
+/// A group's name over a side column's rows (Inbox / Type), as `AssistantSidebar` heads its days.
 struct MacSidebarHeading: View {
     var title: String
 

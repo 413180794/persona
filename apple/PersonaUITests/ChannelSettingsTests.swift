@@ -1,9 +1,9 @@
 import XCTest
 
-/// 设置 › 渠道 (docs/channels.md): the 渠道 row before 连接器, the list in its three sections, WeChat's page
-/// (bound: its account, 消息发到, its features), binding a channel with a token a step at a time, the Feishu bot's
+/// Settings › Channels (docs/channels.md): the Channels row before Connectors, the list in its three sections, WeChat's page
+/// (bound: its account, Send Messages To, its features), binding a channel with a token a step at a time, the Feishu bot's
 /// pairing code, and 「来自 微信」 under the main conversation's first message. Against scripts/mock/mock_hub.py with
-/// MOCK_CHANNELS=1 MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the
+/// MOCK_CHANNELS=1 MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the
 /// screenshots, named by `TEST_RUNNER_JARVIS_CHANNELS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
 final class ChannelSettingsTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -100,7 +100,7 @@ final class ChannelSettingsTests: XCTestCase {
         shot(app, "wechat-lower")
     }
 
-    /// A channel bound with a token: 绑定, the field, a wrong token said beside it, the right one binds it.
+    /// A channel bound with a token: Bind, the field, a wrong token said beside it, the right one binds it.
     @MainActor func testBindWithAToken() throws {
         let app = try launch(["-tab", "settings", "-openChannel", "examplechat"])
         let start = app.buttons["connector.signIn"]

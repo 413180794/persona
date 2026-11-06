@@ -28,9 +28,9 @@ extension EnvironmentValues {
     @Entry var larkAccount: Int? = nil
 }
 
-/// One Feishu chat, opened like Feishu: at the oldest unread message under a 以下为新消息 line (or at the latest
+/// One Feishu chat, opened like Feishu: at the oldest unread message under a New Messages line (or at the latest
 /// when all is read), newer pages as you scroll down, read state reported only for what was on screen,
-/// 回到最新 / 有人@你 jumps.
+/// Jump to Latest / You Were Mentioned jumps.
 struct LarkChatView: View {
     @Environment(AppModel.self) private var model
     /// Polled and reported only while its page is in front: a hidden chat reports nothing to Feishu (TabActivity.swift).
@@ -39,7 +39,7 @@ struct LarkChatView: View {
     var conversation: LarkConversation
     var messageComposer = false
     @State private var encryptionDraft: LarkEncryptedDraft?
-    /// The words go as [removed] words (#882), while the account's switch is on.
+    /// The words go as Brave Climb words (#882), while the account's switch is on.
     @State private var climbing = false
     @State private var encryptionStatus: LarkNativeEncryptionStatus?
     @State private var pinsModel: LarkChatPinsModel?
@@ -66,7 +66,7 @@ struct LarkChatView: View {
     /// The one message that reports where it is while a page goes in above it.
     @State private var historyAnchor: String?
     @State private var loadingNewer = false
-    /// 回到最新 is waiting for the hub (none of the newest messages on this device).
+    /// Jump to Latest is waiting for the hub (none of the newest messages on this device).
     @State private var jumping = false
     /// The first load is on its way (the page shows a spinner when nothing was cached).
     @State private var loading = true
@@ -74,7 +74,7 @@ struct LarkChatView: View {
     @State private var problem: LarkLoadProblem?
     /// What is typed in the box; with `replyTo`, kept as the chat's draft (LarkDrafts) until it is sent.
     @State private var text: String
-    /// The message 回复 picked: quoted over the box and by what is sent next.
+    /// The message Reply picked: quoted over the box and by what is sent next.
     @State private var replyTo: LarkReplyTo?
     /// The message a reply's quote just led back to (`QuoteFlash`).
     @State private var flash: QuoteFlashMark?
@@ -102,7 +102,7 @@ struct LarkChatView: View {
     @State private var anchor: String?
     @State private var atBottom = true
     /// The list stays at its newest end as it changes (larkFollowsEnd): on opening at the latest, after sending,
-    /// after 回到最新; off once the user scrolls up or the page opens at a message.
+    /// after Jump to Latest; off once the user scrolls up or the page opens at a message.
     @State private var following: Bool
     /// The first load has put the page where it opens; until then nothing moves it to the end.
     @State private var landed = false
@@ -665,7 +665,7 @@ struct LarkChatView: View {
             // `-larkProfile <userId>` opens that person's card, `-larkPicker YES` the reaction picker on the last message.
             if let uid = UserDefaults.standard.string(forKey: "larkProfile") { person = LarkPersonRef(id: uid, name: "", feedID: conversation.id) }
             if UserDefaults.standard.bool(forKey: "larkPicker"), let last = pager.messages.last(where: { !$0.isSystem }) { debugPick = last }
-            // `-larkMoments <postId>` opens that 公司圈 post.
+            // `-larkMoments <postId>` opens that Moments post.
             if let post = UserDefaults.standard.string(forKey: "larkMoments") { debugPost = post }
             #endif
         } catch {
@@ -700,7 +700,7 @@ struct LarkChatView: View {
     }
 
     /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
-    /// `untouchedSince`: 回到最新 took the list to its end with the drag count at this; the finger has not taken it since,
+    /// `untouchedSince`: Jump to Latest took the list to its end with the drag count at this; the finger has not taken it since,
     /// so it is still at the end even when the geometry just after the window changed says otherwise.
     private func refreshLatest(untouchedSince: Int? = nil) async {
         guard !pager.hasNewer, let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic),
@@ -835,7 +835,7 @@ struct LarkChatView: View {
         if pager.hasNewer, book.newerVisible { Task { await loadNewer() } }
     }
 
-    /// 回到最新: at once to the newest messages this device has (kept from before the window moved away, or the chat's
+    /// Jump to Latest: at once to the newest messages this device has (kept from before the window moved away, or the chat's
     /// cache), then quietly up to date (#1034); the new-messages line goes away. Only with none of them here does it
     /// wait for the hub, and the button says so.
     private func jumpToLatest() async {
@@ -861,7 +861,7 @@ struct LarkChatView: View {
         await refreshLatest(untouchedSince: drags)
     }
 
-    /// 有人@你: to the mention, loading the page around it if needed.
+    /// You Were Mentioned: to the mention, loading the page around it if needed.
     private func jump(to target: String) async {
         following = false
         if let m = pager.messages.first(where: { $0.position == target }) {
@@ -1086,7 +1086,7 @@ struct LarkChatView: View {
         replyTo = composer.draft.replyTo
         mentions = composer.draft.mentions ?? []
         encryptionDraft = composer.draft.encryption
-        // The mode is chosen on 消息's box, where its bar shows; an inbox box sends what it shows.
+        // The mode is chosen on Messages' box, where its bar shows; an inbox box sends what it shows.
         climbing = messageComposer && composer.draft.braveClimb == true && encryptionDraft == nil
         attachments = composer.attachments
         if !messageComposer, text.isEmpty, replyTo == nil, attachments.isEmpty { encryptionDraft = nil }
@@ -1192,7 +1192,99 @@ struct LarkChatView: View {
             }
             if outbox === queue {
                 // Animated like the rows the outbox just added: the box shrinking back to a line (and the quote bar
-                // going) moves the list'' ids before the outbox lets those go (it may in the same
+                // going) moves the list's bottom inset with them, so the list does not drop first and then rise.
+                withAnimation(Theme.Motion.standard) {
+                    text = ""
+                    replyTo = nil
+                    mentions = []
+                    attachments = []
+                }
+            }
+            savingOutgoing = false
+            Haptics.tap()
+            for item in batch { deliver(item.id, using: api, queue: queue) }
+            if pager.hasNewer { Task { await jumpToLatest() } } else { following = true }
+        }
+    }
+
+    private func resend(_ id: UUID) {
+        guard !checkingOutgoing.contains(id), let api = chatAPI, outbox.identity != nil else { return }
+        let queue = outbox
+        checkingOutgoing.insert(id)
+        Task {
+            defer { checkingOutgoing.remove(id) }
+            do {
+                try await queue.checkAccount(using: api)
+                // Check with the original account even if the user switches Hub while this request runs.
+                let latest = try await api.larkMessages(conversation.id, topic: isTopic)
+                adopt(latest.messages)
+                try await queue.settle(latest.messages)
+                guard let item = queue.items.first(where: { $0.id == id }) else { return }
+                guard item.canRetry else {
+                    model.toast = Toast(String(localized: "尚未确认文件是否发出，请稍后再检查"), style: .error)
+                    return
+                }
+                try await queue.retry(id)
+                deliver(id, using: api, queue: queue)
+            } catch { model.toast = Toast(String(localized: "暂时无法重试，请检查连接和本机存储空间"), style: .error) }
+        }
+    }
+
+    private func discard(_ id: UUID) {
+        Task {
+            do { try await outbox.discard(id) }
+            catch { model.toast = Toast(String(localized: "未能删除，请检查本机存储空间"), style: .error) }
+        }
+    }
+
+    private func restore(_ outgoing: LarkOutgoing) {
+        guard !savingOutgoing else { return }
+        let queue = outbox
+        // Brave Climb words go back as the words typed, in that mode.
+        let words = outgoing.encrypted == nil && outgoing.attachment == nil ? LarkBraveClimbCodec.decodeMessage(outgoing.text) : nil
+        if outgoing.encrypted != nil && (!text.isEmpty || !attachments.isEmpty) || outgoing.encrypted == nil && encryptionDraft != nil
+            || words != nil && (!attachments.isEmpty || !climbing && !text.isEmpty) || words == nil && climbing && outgoing.attachment == nil {
+            model.toast = Toast(String(localized: "请先处理输入框中的草稿，再恢复这条消息"), style: .error)
+            return
+        }
+        var draft = self.draft, files = attachments
+        if let encrypted = outgoing.encrypted { draft.encryption = LarkEncryptedDraft(cover: encrypted.cover ?? "") }
+        if words != nil { draft.braveClimb = true }
+        if let attachment = outgoing.attachment {
+            guard files.count < LarkAttachment.selectionLimit else {
+                model.toast = Toast(String(localized: "请先移除一个附件，再放回输入框"), style: .error)
+                return
+            }
+            files.append(attachment)
+        } else {
+            let text = words ?? outgoing.text
+            draft.text = draft.text.isEmpty ? text : draft.text + "\n" + text
+            if draft.replyTo == nil { draft.replyTo = outgoing.replyTo }
+            draft.mentions = (draft.mentions ?? []) + outgoing.mentions
+        }
+        savingOutgoing = true
+        Task {
+            defer { savingOutgoing = false }
+            do {
+                try await queue.restore(outgoing.id, draft: draft, attachments: files)
+                if outbox === queue { applyDraft() }
+            } catch { model.toast = Toast(String(localized: "未能放回输入框，请检查本机存储空间"), style: .error) }
+        }
+    }
+
+    private func deliver(_ id: UUID, using api: APIClient, queue: LarkChatOutbox) {
+        let link = chatLink
+        queue.deliver(id, client: {
+            guard let link, model.link(link.group) === link else { return nil }
+            return model.api(link.group)?.lark(conversation.account)
+        }, feed: conversation.id) {
+            guard let link, model.link(link.group) === link, outbox === queue else { return }
+            await refreshLatest()
+            settleOutgoing(pager.messages)
+        }
+    }
+
+    /// The copies among `messages` keep their outgoing rows' ids before the outbox lets those go (it may in the same
     /// update, and then onChange(of: copies) never sees the pair).
     private func adopt(_ messages: [LarkMessage]) {
         adopted = LarkChatRows.adopting(LarkOutbox.copies(outbox.items.filter { !$0.thread }, messages: messages), into: adopted)
@@ -1226,9 +1318,9 @@ struct LarkChatView: View {
 }
 
 /// A chat's rows, laid out as they come on screen; a topic group's cards all at once. In a lazy stack with a scroll
-/// position, a topic card opened under 展开 left the app never idle again on the iPhone (#1087; likely the off-screen
+/// position, a topic card opened under Expand left the app never idle again on the iPhone (#1087; likely the off-screen
 /// rows placed by estimated heights and measured again without end, docs/lessons/ios.md). A page of a topic group is
-/// 40 topics; each 加载更早的话题 adds 40 more, all laid out: accepted, a group is rarely read that far back.
+/// 40 topics; each Load Earlier Topics adds 40 more, all laid out: accepted, a group is rarely read that far back.
 private struct LarkChatStack<Content: View>: View {
     var lazy: Bool
     @ViewBuilder var content: Content
@@ -1243,7 +1335,7 @@ private struct LarkChatStack<Content: View>: View {
     }
 }
 
-/// 加载更早的…: the older page of a chat or thread, a spinner while it comes.
+/// Load Earlier…: the older page of a chat or thread, a spinner while it comes.
 struct LarkLoadOlderButton: View {
     var title: String
     var loading: Bool
@@ -1260,7 +1352,7 @@ struct LarkLoadOlderButton: View {
     }
 }
 
-/// Feishu's 以下为新消息 line above the first unread message.
+/// Feishu's New Messages line above the first unread message.
 struct LarkNewMessagesDivider: View {
     var body: some View {
         HStack(spacing: Theme.Space.m) {
@@ -1284,7 +1376,7 @@ struct LarkTimeSeparator: View {
     }
 }
 
-/// 设置 › 翻译 for a chat picked there: a message from someone else in another language gets its translation under
+/// Settings › Translation for a chat picked there: a message from someone else in another language gets its translation under
 /// the bubble, asked for when the row shows (the requests of one screen go together).
 struct LarkTranslationLine: View {
     var message: LarkMessage
@@ -1342,7 +1434,7 @@ struct LarkMessageRow: View {
     @Environment(\.larkDisplay) private var display
     @State private var showHistory = false
     @State private var showThread = false
-    /// The thread sheet opens with its box focused (回复 on a topic group's thread).
+    /// The thread sheet opens with its box focused (Reply on a topic group's thread).
     @State private var threadFocus = false
     @State private var picking = false
 
@@ -1484,7 +1576,7 @@ struct LarkMessageRow: View {
                         showProfile: openProfile == nil ? nil : { showProfile() })
     }
 
-    /// 回复 in the menu: the quote bar over the chat's box, the thread's box, or (a topic group's topic) its thread
+    /// Reply in the menu: the quote bar over the chat's box, the thread's box, or (a topic group's topic) its thread
     /// with the box focused. Nil when there is nothing to answer.
     private var replyAction: (() -> Void)? {
         guard let reply, let route = LarkReply.route(for: message, inTopicGroup: reply.inTopicGroup, inThread: inThread) else { return nil }
@@ -1590,11 +1682,11 @@ extension LarkMessage {
 struct LarkMessageMenu: View {
     var message: LarkMessage
     var react: ((LarkMessage, String) -> Void)?
-    /// 回复, when there is somewhere to answer.
+    /// Reply, when there is somewhere to answer.
     var reply: (() -> Void)?
-    /// 表情回复: the whole picker.
+    /// Add Reaction: the whole picker.
     var pickReaction: () -> Void
-    /// 添加 Pin, where the chat can pin (`larkAddPin`).
+    /// Pin, where the chat can pin (`larkAddPin`).
     var addPin: ((LarkMessage) -> Void)?
     var showProfile: (() -> Void)?
 

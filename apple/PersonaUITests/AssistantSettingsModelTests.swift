@@ -1,7 +1,7 @@
 import XCTest
 
-/// Against the mock hub (#1291): 设置 › 助手 shows no model. The settings row carries no launcher name and the page has
-/// no 对话模型 / 模型配置 rows; the assistant's model is 模型配置 › 主对话 only.
+/// Against the mock hub (#1291): Settings › Assistant shows no model. The settings row carries no launcher name and the page has
+/// no Chat Model / Model Settings rows; the assistant's model is Model Settings › Main Chat only.
 final class AssistantSettingsModelTests: XCTestCase {
     private var hub: String!
 
@@ -54,7 +54,7 @@ final class AssistantSettingsModelTests: XCTestCase {
         shot(app, "assistant-page-settings")
     }
 
-    /// 设置 › 助手 › 任务通知 (#1731): the switch shows the hub's value and turning it off is sent to the hub.
+    /// Settings › Assistant › Task Notifications (#1731): the switch shows the hub's value and turning it off is sent to the hub.
     @MainActor func testMainTasksQuietSwitch() throws {
         try setQuiet(true)
         let app = launch(["-openAssistantPage", "assistant"])

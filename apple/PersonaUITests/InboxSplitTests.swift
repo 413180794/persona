@@ -82,8 +82,8 @@ final class InboxSplitTests: XCTestCase {
     }
 
     @MainActor func testAnotherChatOpensWithItsOwnMessagesAndDraft() {
-        let mine = "能赶上，下午三点前给你确认" // in 韩梅梅's chat only
-        let theirs = "The new icon set"        // in 设计评审 only
+        let mine = "能赶上，下午三点前给你确认" // in 「韩梅梅」's chat only
+        let theirs = "The new icon set"        // in 「设计评审」 only
         let draft = "给韩梅梅的草稿 " + UUID().uuidString.prefix(4)
         row("韩梅梅")?.tapCenter()
         XCTAssertTrue(message(mine).waitForExistence(timeout: 15), "韩梅梅's chat did not open")

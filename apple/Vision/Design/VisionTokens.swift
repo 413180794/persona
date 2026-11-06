@@ -16,7 +16,7 @@ extension Theme.Size {
 }
 
 extension View {
-    /// An ornament's panel (the 需要你 bar below the main window): the system's glass, a capsule, the look-at
+    /// An ornament's panel (the Needs You bar below the main window): the system's glass, a capsule, the look-at
     /// highlight on what is inside.
     func visionOrnamentPanel() -> some View {
         padding(.horizontal, Theme.Space.l)
@@ -25,7 +25,7 @@ extension View {
     }
 
     /// What the main window's RootView puts on its tree, for a window of its own (a conversation's): the same
-    /// style, 主题色, font design, text size and Markdown formulas, so a chat looks the same in both.
+    /// style, Theme Color, font design, text size and Markdown formulas, so a chat looks the same in both.
     func visionLook(_ model: AppModel, systemTypeSize: DynamicTypeSize) -> some View {
         id(model.look)
             .tint(Theme.accent)

@@ -1,8 +1,8 @@
 import AVFoundation
 import SwiftUI
 
-/// How touches on the Mac's screen work (#1343), kept per Mac on this device: 鼠标模式 (the default) points where
-/// the finger is, 触控板模式 moves the pointer like a trackpad.
+/// How touches on the Mac's screen work (#1343), kept per Mac on this device: Mouse Mode (the default) points where
+/// the finger is, Trackpad Mode moves the pointer like a trackpad.
 enum VNCMode: String, CaseIterable {
     case mouse, trackpad
 
@@ -14,9 +14,9 @@ enum VNCMode: String, CaseIterable {
 #if os(iOS) || os(visionOS)
 /// The Mac's screen in a layer, aspect-fit and zoomable, its pointer drawn over it, and, when interactive, touches turned
 /// into the Mac's pointer as the mode says:
-/// - 鼠标模式: a tap clicks there; one finger drags; two scroll (or, zoomed in, move the picture); two tapping or one
+/// - Mouse Mode: a tap clicks there; one finger drags; two scroll (or, zoomed in, move the picture); two tapping or one
 ///   held down is the right button; pinching zooms.
-/// - 触控板模式: one finger moves the pointer by as much; a tap clicks where it is; a tap then a drag drags; two scroll.
+/// - Trackpad Mode: one finger moves the pointer by as much; a tap clicks where it is; a tap then a drag drags; two scroll.
 /// Two fingers scroll as VNCWheel says: a notch every few points, coasting after a flick.
 final class VNCScreenUIView: UIView, UIGestureRecognizerDelegate {
     let display = AVSampleBufferDisplayLayer()
@@ -261,7 +261,7 @@ final class VNCScreenUIView: UIView, UIGestureRecognizerDelegate {
         return r
     }
 
-    /// 指针居中.
+    /// Center Pointer.
     func centerPointer() {
         guard let s = session else { return }
         s.move(to: CGPoint(x: screenSize.width / 2, y: screenSize.height / 2))
@@ -274,7 +274,7 @@ struct VNCScreen: UIViewRepresentable {
     let session: RFBSession
     var mode: VNCMode = .mouse
     var interactive = false
-    /// The view, for the page's 指针居中.
+    /// The view, for the page's Center Pointer.
     var onView: (VNCScreenUIView) -> Void = { _ in }
 
     func makeUIView(context: Context) -> VNCScreenUIView {

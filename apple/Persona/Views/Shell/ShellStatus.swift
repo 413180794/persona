@@ -2,7 +2,7 @@ import BeautifulUI
 import SwiftUI
 
 #if os(iOS) || os(visionOS)
-/// The hub's link in the shell (docs/shell.md「连接状态和 toast」): 等待网络 / 连接中… / 更新中…, floating just under
+/// The hub's link in the shell (docs/shell.md「连接状态和 toast」): Waiting for Network / Connecting… / Updating…, floating just under
 /// the top bar like a toast, in the toast window (`ToastWindow`): it takes no touches and moves nothing (#413). It used
 /// to take a row of room under the status bar through the window's safe area, and folding that row made SwiftUI lay
 /// Agents' navigation stack out again: the list jumped some 210 pt for a few frames and, 2 times in 12, the navigation
@@ -147,7 +147,7 @@ struct ShellWindowHooks: UIViewRepresentable {
         let hit = w.touchable
         w.windowLevel = .normal + 1
         w.backgroundColor = .clear
-        // 设置 › 外观 › 深浅色 reaches every window of the scene as it changes (`ColorSchemeChoice`); this one starts as the shell's.
+        // Settings › Appearance › Light & Dark reaches every window of the scene as it changes (`ColorSchemeChoice`); this one starts as the shell's.
         w.overrideUserInterfaceStyle = shell.overrideUserInterfaceStyle
         let host = UIHostingController(rootView: ToastWindowRoot(model: AppModel.shared, notices: notices) { hit.rect = $0 })
         host.view.backgroundColor = .clear
@@ -161,7 +161,7 @@ struct ShellWindowHooks: UIViewRepresentable {
         window = nil
     }
 
-    /// Where a touch is taken: the toast's button (撤销), a little around it; nowhere when it has none.
+    /// Where a touch is taken: the toast's button (Undo), a little around it; nowhere when it has none.
     final class Touchable {
         var rect = CGRect.null
     }
@@ -178,7 +178,7 @@ struct ShellWindowHooks: UIViewRepresentable {
 }
 
 /// The toast window's content: the hub's link (when it is not reached) and the app's toast just below the top bars, in
-/// the app's text size and look. Right under the status bar it lay on the switch (助手 / Agents unreadable while it
+/// the app's text size and look. Right under the status bar it lay on the switch (Assistant / Agents unreadable while it
 /// showed) and on the drawer's title and search.
 private struct ToastWindowRoot: View {
     @Environment(\.dynamicTypeSize) private var systemTypeSize

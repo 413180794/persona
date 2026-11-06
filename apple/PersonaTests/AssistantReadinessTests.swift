@@ -40,7 +40,7 @@ struct AssistantReadinessTests {
         {"mode":"setup","next":"wifi","steps":[{"id":"computer","state":"ok"},{"id":"claude","state":"weird"},
           {"id":"model","state":"ok"},{"id":"wifi","state":"problem","code":"no_wifi","title":"接上网络","action":{"id":"fix_wifi"}}]}
         """#)
-        // an unknown state is not a known pass: it holds the send like todo (还差一步 + its title)
+        // an unknown state is not a known pass: it holds the send like todo (One Step Left + its title)
         #expect(r.blockingStep?.id == "claude")
         let r2 = try decode(#"""
         {"mode":"setup","next":"wifi","steps":[{"id":"computer","state":"ok"},{"id":"claude","state":"ok"},

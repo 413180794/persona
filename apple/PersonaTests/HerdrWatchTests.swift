@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The Agents list's 「herdr 没在运行」 rows (#1916): which machines get one, what a failed read leaves, and 启动.
+/// The Agents list's 「herdr 没在运行」 rows (#1916): which machines get one, what a failed read leaves, and On.
 @MainActor struct HerdrWatchTests {
     private func machine(_ id: String, online: Bool = true, engine: MachineEngine = .herdr) -> Machine {
         var m = Machine(id: id, name: id, kind: "ssh", online: online)

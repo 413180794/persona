@@ -29,7 +29,7 @@ final class ShellRoomScrollTests: XCTestCase {
 
     @MainActor private func watch(pulledOut: Bool) {
         app = XCUIApplication()
-        // Fine for 4 s, 连接中… for 3 s, again and again.
+        // Fine for 4 s, Connecting… for 3 s, again and again.
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-app.tab", "chats", "-tab", "dev", "-dev.openChat", "",
                                "-openAgentsFresh", "YES", "-probes", "YES", "-showConnectionCycle", "connecting:4:3"]
         app.launchPinned()

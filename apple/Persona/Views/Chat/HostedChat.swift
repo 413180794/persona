@@ -18,11 +18,11 @@ struct HostedChat {
     /// The agents the title's ⌄ switches between, the chat's own among them; with fewer than two there is no ⌄.
     var agents: [Session] = []
     var select: (SessionKey) -> Void = { _ in }
-    /// The page's own items at the top of ⋯ (a task's 移除).
+    /// The page's own items at the top of ⋯ (a task's Remove).
     var menu: AnyView?
     /// Shows the agent in the Agents page, where its space's other agents are.
     var openInAgents: (SessionKey) -> Void
-    /// 全屏查看 (#3743): the sheet goes down and the agent's page is pushed onto the assistant page. Nil: no button
+    /// Full Screen (#3743): the sheet goes down and the agent's page is pushed onto the assistant page. Nil: no button
     /// (pushed into the detail column it already fills it).
     var expand: ((SessionKey) -> Void)?
 

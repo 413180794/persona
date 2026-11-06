@@ -1,8 +1,8 @@
 import XCTest
 
 /// Persona's own approval cards in its conversation (#2558): a hook's (Bash) and a connector's send the hub asks about
-/// itself, both of the conversation's session, are drawn above the composer with 允许 / 拒绝. The hub's own used to
-/// come with no session and showed only in 需要你, so the conversation looked like it was waiting on nothing.
+/// itself, both of the conversation's session, are drawn above the composer with Allow / Deny. The hub's own used to
+/// come with no session and showed only in Needs You, so the conversation looked like it was waiting on nothing.
 ///   PORT=18911 MOCK_ASSISTANT_CARDS=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18911 xcodebuild test … -only-testing:PersonaUITests/AssistantApprovalCardTests
 final class AssistantApprovalCardTests: XCTestCase {

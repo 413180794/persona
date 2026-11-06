@@ -64,7 +64,7 @@ struct SyncEventTests {
         #expect(auto.effort == "auto")
         #expect(SessionModes.effortLabel(auto.effort) == "自动")
         #expect(SessionModes.effortLevels.first?.id == "auto") // first in the running session's menu
-        #expect(!SessionModes.startEffortLevels.contains { $0.id == "auto" }) // same as 跟随启动器 when starting
+        #expect(!SessionModes.startEffortLevels.contains { $0.id == "auto" }) // same as Use Launcher's when starting
         let old = try JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"s","status":"idle"}"#.utf8))
         #expect(old.permissionMode == nil && old.effort == nil)
     }

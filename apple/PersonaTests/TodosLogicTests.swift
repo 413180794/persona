@@ -15,15 +15,15 @@ struct TodosLogicTests {
     }
 
     @Test func todoStatusPriorityOrder() {
-        // 1. Done (已完成): done_at != nil
+        // 1. Done: done_at != nil
         var tDone = TodoItem(id: "1", title: "Done", doneAt: Date(), createdAt: Date(), updatedAt: Date())
         #expect(TodosLogic.todoStatus(tDone) == .done)
 
-        // 6. Not started (未开始): no agent is attached
+        // 6. Not started: no agent is attached
         let tNotStarted = TodoItem(id: "2", title: "NotStarted", doneAt: nil, createdAt: Date(), updatedAt: Date(), agents: [])
         #expect(TodosLogic.todoStatus(tNotStarted) == .notStarted)
 
-        // 2. Needs you (等你): an agent needs the user
+        // 2. Needs you: an agent needs the user
         let sNeedsYou = session("s1", state: .needsYou)
         let sWorking = session("s2", state: .working)
         let sUnread = session("s3", state: .unread)
@@ -38,15 +38,15 @@ struct TodosLogicTests {
         let tNeedsYou = TodoItem(id: "3", title: "NeedsYou", agents: [a1, a2, a3, a4])
         #expect(TodosLogic.todoStatus(tNeedsYou, lookup: lookup) == .needsYou)
 
-        // 3. Unread (待查看): an agent finished and nobody has looked at it
+        // 3. Unread: an agent finished and nobody has looked at it
         let tUnread = TodoItem(id: "4", title: "Unread", agents: [a2, a3, a4])
         #expect(TodosLogic.todoStatus(tUnread, lookup: lookup) == .unread)
 
-        // 4. Working (进行中): an agent is working
+        // 4. Working: an agent is working
         let tWorking = TodoItem(id: "5", title: "Working", agents: [a2, a4])
         #expect(TodosLogic.todoStatus(tWorking, lookup: lookup) == .working)
 
-        // 5. Follow-up (待跟进): every agent is idle
+        // 5. Follow-up: every agent is idle
         let tFollowUp = TodoItem(id: "6", title: "FollowUp", agents: [a4])
         #expect(TodosLogic.todoStatus(tFollowUp, lookup: lookup) == .followup)
 
@@ -97,8 +97,8 @@ struct TodosLogicTests {
         #expect(groups[1].sessions.map(\.sessionID) == ["s_unassigned"])
     }
 
-    /// Agents opened by hand in herdr with no todo get "手动开的", open, before 未归属; Persona's own and other hosts' stay
-    /// in 未归属 (#2917).
+    /// Agents opened by hand in herdr with no todo get "Started Manually", open, before Unassigned; Persona's own and other hosts' stay
+    /// in Unassigned (#2917).
     @Test func manualHerdrAgentsGetTheirOwnSection() throws {
         func agent(_ id: String, kind: String?, byPersona: Bool, state: AgentState = .working) throws -> Session {
             let kindField = kind.map { ",\"space_kind\":\"\($0)\"" } ?? ""

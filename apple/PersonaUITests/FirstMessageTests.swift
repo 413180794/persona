@@ -68,7 +68,7 @@ final class FirstMessageTests: XCTestCase {
         _ = try? Data(contentsOf: c.url!)
     }
 
-    /// 助手: the new-conversation page, the first message sent, the chat taking over, a reply streaming in.
+    /// Assistant: the new-conversation page, the first message sent, the chat taking over, a reply streaming in.
     @MainActor func testAssistantFirstMessage() throws {
         launch(["-newAssistant", "YES", "-app.tab", "assistant", "-tab", "assistant"])
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
@@ -89,7 +89,7 @@ final class FirstMessageTests: XCTestCase {
         print("FIRST assistant reply: moved \(Int(replied.moved)) step \(Int(replied.step))")
     }
 
-    /// Agents: a new agent with nothing in it yet (started through the mock, as 新建 Agent does), its first message sent
+    /// Agents: a new agent with nothing in it yet (started through the mock, as New Agent does), its first message sent
     /// from the chat's composer, then the reply.
     @MainActor func testAgentFirstMessage() throws {
         var req = URLRequest(url: URL(string: hub + "/api/v1/sessions")!)

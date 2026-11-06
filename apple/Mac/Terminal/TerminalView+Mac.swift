@@ -11,7 +11,7 @@ import SwiftUI
 /// - scrolling is the terminal's wheel while driving (`onWheel`), else it scrolls the scrollback;
 /// - a click is a click on the program's screen (`onClick`) or opens a link (`onOpenURL`); a drag selects, ⌘C copies;
 /// - with `onMouse` (driving, on a hub that takes it) presses, drags and releases of every button go to the program as
-///   they are (MacTerminalMouse.swift); Shift keeps them here for selecting and the menu (the other way round in 本地选择);
+///   they are (MacTerminalMouse.swift); Shift keeps them here for selecting and the menu (the other way round in Select Locally);
 /// - ⌘+ / ⌘− / ⌘0 and a trackpad pinch change the font size (`onFontSize`); ⌘V pastes (`onDoubleTap`, the phone's paste);
 /// - files and pictures pasted with ⌘V or dragged in go to `onFiles` (uploaded, their paths typed: TerminalFiles.swift).
 struct TerminalView: NSViewRepresentable {
@@ -836,7 +836,7 @@ final class TerminalScreenView: NSView, NSTextInputClient, NSMenuItemValidation 
             return
         }
         // While composing, every key belongs to the input method.
-        // Function keys, ctrl combinations and (终端设置 › Option 当作 Meta) Option combinations go out as herdr keys.
+        // Function keys, ctrl combinations and (Terminal Settings › Option as Meta) Option combinations go out as herdr keys.
         if host.marked.isEmpty,
            let name = MacTerminalKeys.name(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers,
                                            flags: event.modifierFlags,

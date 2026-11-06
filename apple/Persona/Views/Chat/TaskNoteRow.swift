@@ -10,7 +10,7 @@ extension EnvironmentValues {
 
 /// What a background task's notice says, in words (`Item.task`).
 enum TaskNoteText {
-    /// "后台命令" / "Monitor 事件" / "Monitor 结束" / "子 Agent".
+    /// "Background command" / "Monitor event" / "Monitor ended" / "Subagent".
     static func label(_ n: TaskNote) -> String {
         switch n.kind {
         case "shell": String(localized: "后台命令")
@@ -26,7 +26,7 @@ enum TaskNoteText {
         return description.flatMap { $0.isEmpty ? nil : $0 } ?? n.title
     }
 
-    /// The outcome at the end of the line: "✓", "✗ 退出码 1", "已停止", with how long it ran when known.
+    /// The outcome at the end of the line: "✓", "✗ exit code 1", "Stopped", with how long it ran when known.
     static func outcome(_ n: TaskNote, startedAt: Date?, at: Date?) -> String? {
         var parts: [String] = []
         switch n.status {
@@ -40,7 +40,7 @@ enum TaskNoteText {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// How long it ran, short (the row keeps room for its description): "40 秒", "5 分", "2 小时 5 分".
+    /// How long it ran, short (the row keeps room for its description): "40 s", "5 min", "2 h 5 min".
     static func took(_ s: Int) -> String {
         if s < 60 { return String(localized: "\(s) 秒") }
         if s < 3600 { return String(localized: "\(s / 60) 分") }
@@ -72,7 +72,7 @@ enum TaskNoteText {
         }
     }
 
-    /// The badge on the call that started background work: "后台 · 运行中" / "后台 · 已完成" / "后台 · 3 个事件".
+    /// The badge on the call that started background work: "Background · Running" / "Background · Done" / "Background · 3 events".
     static func badge(_ notes: [TaskNote]) -> (text: String, failed: Bool) {
         let events = notes.filter { $0.status == "event" }.count
         guard let last = notes.last(where: { $0.status != "event" }) else {

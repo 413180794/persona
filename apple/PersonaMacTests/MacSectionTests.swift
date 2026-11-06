@@ -22,7 +22,7 @@ struct MacSectionTests {
         #expect(MacSection.visible(supportsTodos: false).count == 6)
     }
 
-    /// 消息 is the iPhone's extra tab (设置 › 飞书 › 首页显示消息, #392): only while it is on, before 收件箱 as on the phone.
+    /// Messages is the iPhone's extra tab (Settings › Lark › Show Messages on Home, #392): only while it is on, before Inbox as on the phone.
     @Test func messagesAreOfferedOnlyWhileTheirSwitchIsOn() {
         #expect(!MacSection.visible(supportsTodos: true).contains(.messages))
         let on = MacSection.visible(supportsTodos: true, showsMessages: true)
@@ -55,7 +55,7 @@ struct MacSectionTests {
         #expect(m == ["消息"])
     }
 
-    /// 知识库 / 机器 are not iPhone tabs, so AppModel does not remember them: the shell keeps the pick itself, and a
+    /// Knowledge / Machines are not iPhone tabs, so AppModel does not remember them: the shell keeps the pick itself, and a
     /// stored name that is not one of those two (an old build's, a tab's) restores nothing.
     @Test func theMacSidePickIsRemembered() {
         let d = UserDefaults(suiteName: "MacSectionTests-\(UUID())")!

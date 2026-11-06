@@ -9,7 +9,7 @@ struct MacInboxDetail: View {
 
     var body: some View {
         // Rows can expire out of the list while selected: the count, the single-row fallback and the action only
-        // cover what is still there; nothing left falls through to the 选一件事 placeholder (#3795).
+        // cover what is still there; nothing left falls through to the Pick an Item placeholder (#3795).
         let sel = state.liveSelection(model: model)
         if sel.count > 1 {
             VStack(spacing: Theme.Space.l) {
@@ -60,7 +60,7 @@ struct MacInboxDetail: View {
 
 /// One inbox item opened, in the detail column or a window of its own: the content (what a plugin draws for its source
 /// when one does, placement inbox_item), and beside it a column with the AI's summary and the item's actions as
-/// labelled buttons (`MacInboxActions`: AI 草拟回复 / 查看草稿, 交给 AI, 已处理 / 移回; over the item when there is no
+/// labelled buttons (`MacInboxActions`: AI Draft Reply / View Draft, Hand to AI, Done / Move Back; over the item when there is no
 /// room). Links in it open in the panel at the trailing edge; Feishu pages (a profile, another chat) push in the
 /// column's own stack.
 struct MacInboxItemDetail: View {
@@ -105,9 +105,9 @@ struct MacInboxItemDetail: View {
         .macLinkPanel($link, wide: true)
         // Outside the link panel: the actions stay at the window's edge, the document opens between them and the item.
         // While a document is open they are a row over the item; embedded in the page the filters and the list fold
-        // away (`reading`). A standalone window keeps that row for its own layout, but gets no 显示列表 button: it
+        // away (`reading`). A standalone window keeps that row for its own layout, but gets no Show List button: it
         // does not own the main window's list (#3477).
-        // Another item of its 线索 pushes in the column's stack, as a Feishu page does (back returns).
+        // Another item of its Thread pushes in the column's stack, as a Feishu page does (back returns).
         .macInboxActions(current, reading: link != nil, showsListToggle: !standalone,
                          draft: { drafting = true }, handOff: { handingOff = true },
                          openItem: { path.append($0) })
@@ -153,7 +153,7 @@ struct MacInboxItemDetail: View {
             // GitHub, Telegram…: the thread as the connector draws it, as on iOS and the web (#2611).
             InboxConnectorDetailView(item: current)
         } else if let m = current.moment {
-            LarkMomentsPostView(postID: m.postID, pushed: true) // the 公司圈 post and its comments
+            LarkMomentsPostView(postID: m.postID, pushed: true) // the Moments post and its comments
         } else if let c = item.larkConversation {
             LarkChatView(conversation: c)
         } else if let m = item.mailSummary {
@@ -222,7 +222,7 @@ struct MacInboxPage: View {
                 // so a divider stopping under the row left a step between them (#1736, as #830).
                 Divider().ignoresSafeArea(.container, edges: .top)
             }
-            // Folded too while a document is read (2026-11-05 user: 选 B), back with the actions row's 显示列表, a
+            // Folded too while a document is read (2026-11-05 user: picked B), back with the actions row's Show List, a
             // search, or the document closing. Narrowed to nothing rather than left out: the window's toolbar and
             // search field are the list's, and they stay.
             MacInboxList()

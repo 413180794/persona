@@ -49,7 +49,7 @@ public enum LoopCommand {
         return claude && !(sourceKind ?? "").hasPrefix("codex")
     }
 
-    /// Claude Code's interval forms, a number and s / m / h / d, in words ("10m" → "10 分钟"); nil for anything else.
+    /// Claude Code's interval forms, a number and s / m / h / d, in words ("10m" → 「10 分钟」); nil for anything else.
     static func interval(_ word: String) -> String? {
         guard word.count >= 2, let unit = word.last?.lowercased(), let n = Int(word.dropLast()),
               word.dropLast().allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }

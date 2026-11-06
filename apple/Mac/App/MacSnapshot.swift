@@ -53,7 +53,7 @@ import SwiftUI
                     let sheetURL = url.deletingPathExtension().appendingPathExtension("sheet").appendingPathExtension(url.pathExtension)
                     let wrote = capture(to: sheetURL, window: sheet)
                     FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(sheetURL.path)\n".utf8))
-                    // A sheet on that sheet (the terminal's 设置 over the 终端 sheet): <name>.sheet2.png.
+                    // A sheet on that sheet (the terminal's Settings over the Terminal sheet): <name>.sheet2.png.
                     if let inner = sheet.attachedSheet {
                         let innerURL = url.deletingPathExtension().appendingPathExtension("sheet2").appendingPathExtension(url.pathExtension)
                         let wrote = capture(to: innerURL, window: inner)

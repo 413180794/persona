@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 全屏查看 in the assistant's agent sheet: the sheet goes down (both of its sources cleared, so it does not rise
+/// Full Screen in the assistant's agent sheet: the sheet goes down (both of its sources cleared, so it does not rise
 /// again) and the agent is handed to the assistant page to push.
 @MainActor
 struct TaskSheetExpandTests {

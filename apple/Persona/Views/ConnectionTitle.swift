@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A main screen's title spot (Agents, 助手, 收件箱, 机器): its title, or while the hub is out of reach a small spinner
-/// and 等待网络 / 连接中… / 更新中… (ConnectionStatus); a tap on that explains. Put it in the `.principal` toolbar item.
+/// A main screen's title spot (Agents, Assistant, Inbox, Machines): its title, or while the hub is out of reach a small spinner
+/// and Waiting for Network / Connecting… / Updating… (ConnectionStatus); a tap on that explains. Put it in the `.principal` toolbar item.
 struct ConnectionTitle: View {
     /// nil: the screen shows no title (Agents) and the spot is empty while all is well.
     var title: String?
@@ -65,7 +65,7 @@ extension View {
     }
 }
 
-/// Why the title says what it says, since when, and 立即重试: what used to be a banner over the list.
+/// Why the title says what it says, since when, and Retry Now: what used to be a banner over the list.
 struct ConnectionDetails: View {
     @Environment(AppModel.self) private var model
     @State private var pairing = false
@@ -185,7 +185,7 @@ struct ConnectionDetails: View {
         return out
     }
 
-    /// "12 秒前", "3 分钟前", then the time of day.
+    /// "12 seconds ago", "3 minutes ago", then the time of day.
     static func ago(_ date: Date, now: Date) -> String {
         let s = max(0, Int(now.timeIntervalSince(date)))
         if s < 60 { return String(localized: "\(s) 秒前") }

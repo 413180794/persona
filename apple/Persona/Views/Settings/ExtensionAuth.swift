@@ -168,7 +168,7 @@ extension APIClient {
         return false
     }
 
-    /// The first step puts the status at 等待确认: the header says so too.
+    /// The first step puts the status at Waiting for confirmation: the header says so too.
     private func refreshIfPending() async {
         if deps.store.byID[id]?.state != .pending { await refresh() }
     }
@@ -200,7 +200,7 @@ enum ExtensionSignIn {
 
 /// The words of a sign-in.
 enum ExtensionAuthText {
-    /// 未登录 / 等待确认 / 已登录：<账号> / 已过期 / 出错：<原因>.
+    /// Not signed in / Waiting for confirmation / Signed in: <account> / Expired / Error: <reason>.
     static func state(_ a: ExtensionAuth) -> String {
         switch a.state {
         case .signedOut: String(localized: "未登录")
@@ -212,7 +212,7 @@ enum ExtensionAuthText {
         }
     }
 
-    /// The section's button: 登录 when not signed in, 重新登录 when signed in or expired.
+    /// The section's button: Sign In when not signed in, Sign In Again when signed in or expired.
     static func signInButton(_ a: ExtensionAuth) -> String {
         a.state == .signedIn || a.state == .expired ? String(localized: "重新登录") : String(localized: "登录")
     }
@@ -223,25 +223,25 @@ enum ExtensionAuthText {
         return a.state == .expired ? String(localized: "登录已过期") : String(localized: "未登录")
     }
 
-    /// A program's name in 关于: Node.js（node）.
+    /// A program's name in About: Node.js (node).
     static func toolName(_ t: ExtensionToolUse) -> String {
         t.title.flatMap { $0.isEmpty || $0 == t.name ? nil : $0 }.map { "\($0)（\(t.name)）" } ?? t.name // i18n-ignore
     }
 
-    /// Its version, the machine's own marked: 22.23.4 · 机器上已有.
+    /// Its version, the machine's own marked: 22.23.4 · already on the machine.
     static func toolVersion(_ t: ExtensionToolUse) -> String {
         let version = t.version
         return t.reused == true ? String(localized: "\(version) · 机器上已有") : version
     }
 
-    /// The extension's warnings, without the hub's 「还没登录（<title>）…」: the 登录 section says how it is (and follows a
+    /// The extension's warnings, without the hub's 「还没登录（<title>）…」: the Sign In section says how it is (and follows a
     /// sign-in at once, the warnings only when the page reads the extension again).
     static func warnings(_ all: [String]?, shown auth: ExtensionAuth?) -> [String] {
         guard let auth, !auth.title.isEmpty else { return all ?? [] }
         return (all ?? []).filter { !$0.contains("（\(auth.title)）") && !$0.contains("(\(auth.title))") } // i18n-ignore
     }
 
-    /// Where a program comes from, as the install sheet says it: nodejs.org, npm：registry.example.com.
+    /// Where a program comes from, as the install sheet says it: nodejs.org, npm: registry.example.com.
     static func source(_ t: ExtensionToolSpec) -> String {
         var hosts: [String] = []
         func add(_ raw: String?) {
@@ -259,7 +259,7 @@ enum ExtensionAuthText {
         return ExtensionText.list(hosts.sorted())
     }
 
-    /// A program to install, for the install sheet: Node.js（node） 22.23.4 · nodejs.org.
+    /// A program to install, for the install sheet: Node.js (node) 22.23.4 · nodejs.org.
     static func spec(_ t: ExtensionToolSpec) -> String {
         let name = t.title.flatMap { $0.isEmpty || $0 == t.name ? nil : $0 }.map { "\($0)（\(t.name)）" } ?? t.name // i18n-ignore
         let from = source(t)

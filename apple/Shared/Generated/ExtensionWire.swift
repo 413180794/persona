@@ -875,8 +875,8 @@ nonisolated struct ExtensionThemeColors: Codable, Hashable, Sendable {
     }
 }
 
-/// A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer
-/// one that fails.
+/// A theme (Theme Color): the design system's role colors for light and dark; the apps check the contrast and do not
+/// offer one that fails.
 nonisolated struct ExtensionThemeItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
@@ -906,7 +906,7 @@ nonisolated struct ExtensionThemeItem: Codable, Hashable, Sendable {
     }
 }
 
-/// A look every app draws itself: 团子 (the default), 面罩, 汇流.
+/// A look every app draws itself: Mochi (the default), Visor, Circuit.
 nonisolated enum ExtensionBuiltinLook {
     static let persona = "persona"
     static let jarvis = "jarvis"
@@ -1125,8 +1125,8 @@ nonisolated struct ExtensionLookDot: Codable, Hashable, Sendable {
     }
 }
 
-/// A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package;
-/// app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.
+/// A look (docs/extensions.md「形象」): Persona's name, face, colors and dot, served as a persona package.
+/// app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
 nonisolated struct ExtensionLookItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
@@ -4342,7 +4342,7 @@ nonisolated struct ExtensionTab: Codable, Hashable, Sendable {
     }
 }
 
-/// A label and its value in a header (作者 · someone).
+/// A label and its value in a header (Author · someone).
 nonisolated struct ExtensionFact: Codable, Hashable, Sendable {
     var label: String?
     var value: String
@@ -4554,8 +4554,8 @@ nonisolated struct ExtensionThread: Codable, Hashable, Sendable {
     }
 }
 
-/// A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An event is
-/// a quiet line (merged, pushed two commits).
+/// A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (Approved). An
+/// event is a quiet line (merged, pushed two commits).
 nonisolated struct ExtensionComment: Codable, Hashable, Sendable {
     var id: String?
     var author: String
@@ -5056,7 +5056,7 @@ nonisolated struct ExtensionFilter: Codable, Hashable, Sendable {
     }
 }
 
-/// A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
+/// A section's last row, Load More (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
 /// extension answers the whole view, longer.
 nonisolated struct ExtensionMore: Codable, Hashable, Sendable {
     var title: String?
@@ -6095,7 +6095,7 @@ nonisolated struct ExtensionMessagingReaction: Codable, Hashable, Sendable {
     }
 }
 
-/// A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+/// A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted Message · Public).
 nonisolated struct ExtensionMessagingDecoration: Codable, Hashable, Sendable {
     var text: String
     var icon: String?

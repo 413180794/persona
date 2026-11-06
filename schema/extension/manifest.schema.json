@@ -312,7 +312,7 @@
     },
     "HexColor": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
     "ThemeItem": {
-      "description": "A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer one that fails.",
+      "description": "A theme (Theme Color): the design system's role colors for light and dark; the apps check the contrast and do not offer one that fails.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -324,7 +324,7 @@
       "required": ["id", "name", "light", "dark"]
     },
     "LookID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "A look's id: also a persona package's (the apps cache by it)."},
-    "BuiltinLook": {"type": "string", "enum": ["persona", "jarvis", "jarvis-circuit"], "description": "A look every app draws itself: 团子 (the default), 面罩, 汇流."},
+    "BuiltinLook": {"type": "string", "enum": ["persona", "jarvis", "jarvis-circuit"], "description": "A look every app draws itself: Mochi (the default), Visor, Circuit."},
     "LookTexts": {
       "description": "A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
       "type": "object",
@@ -404,7 +404,7 @@
       "required": ["states"]
     },
     "LookItem": {
-      "description": "A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package; app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.",
+      "description": "A look (docs/extensions.md「形象」): Persona's name, face, colors and dot, served as a persona package. app_icon_fallback is the built-in icon used where only the app's own icons can be shown.",
       "type": "object",
       "additionalProperties": false,
       "properties": {

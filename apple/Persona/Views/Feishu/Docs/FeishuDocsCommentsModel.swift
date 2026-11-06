@@ -4,7 +4,7 @@ import Foundation
 // resolve and reopen, @ someone. The Feishu plugin serves the routes (feature `lark_doc_comments`); they are the
 // user's own writes from their device, so no gate asks about them (as with replies in the inbox, #1203).
 
-/// What 发送 writes: a comment's words with the people it @s (the text holds each `@name`, as in a chat), and for a
+/// What Send writes: a comment's words with the people it @s (the text holds each `@name`, as in a chat), and for a
 /// new comment on a passage the text it quotes and the block it is in. `client_id` keeps a retry from posting twice.
 nonisolated struct FeishuDocsCommentWrite: Encodable, Sendable {
     var url: String
@@ -52,12 +52,12 @@ extension APIClient: FeishuDocsCommentsAPI {
     private static func segment(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) ?? s }
 }
 
-/// A document's comment threads and what the user is writing (MVVM, docs/ios.md「逻辑层的选型」): loading them, 发送 to
+/// A document's comment threads and what the user is writing (MVVM, docs/ios.md「逻辑层的选型」): loading them, Send to
 /// where `target` says, resolving and reopening. After a write the threads are read again: what Feishu made of it
 /// (the reply's id, a resolved thread moving tabs) shows as Feishu has it.
 @Observable @MainActor
 final class FeishuDocsCommentsModel {
-    /// Where 发送 goes: a new comment on the whole document, a reply to a thread, or a new comment on a passage.
+    /// Where Send goes: a new comment on the whole document, a reply to a thread, or a new comment on a passage.
     enum Target: Equatable, Sendable {
         case document
         case thread(id: String, name: String, text: String)

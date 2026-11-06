@@ -32,7 +32,7 @@ nonisolated struct HubUpdateStatus: Codable, Equatable, Sendable {
         var notes: String?
         var newer: Bool
         var bad: Bool // went back before: not installed automatically
-        /// Why 自动更新 does not install this newer one by itself: its code may not contain the hub's commit (a release
+        /// Why auto-update does not install this newer one by itself: its code may not contain the hub's commit (a release
         /// published from older code than the hub was deployed from). The user can still install it.
         var held: String?
     }
@@ -218,7 +218,7 @@ extension APIClient {
 
     func checkHubUpdate() async throws -> HubUpdateStatus { try await post("/api/v1/hub/update/check") }
 
-    /// Starts the update; `now` skips waiting for idle (the second confirmation's 现在就更新).
+    /// Starts the update; `now` skips waiting for idle (the second confirmation's Update Now).
     func startHubUpdate(now: Bool) async throws -> HubUpdateStatus {
         try await post("/api/v1/hub/update", body: ["now": now])
     }

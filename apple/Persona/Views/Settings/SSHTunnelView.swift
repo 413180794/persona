@@ -1,7 +1,7 @@
 import PersonaSSH
 import SwiftUI
 
-/// 设置 › hub › SSH 隧道 (docs/network.md「经 SSH 隧道连 hub」): one paired hub's tunnel, with what it is doing now.
+/// Settings › hub › SSH Tunnel (docs/network.md「经 SSH 隧道连 hub」): one paired hub's tunnel, with what it is doing now.
 struct HubSSHTunnelPage: View {
     @Environment(AppModel.self) private var model
     let hubID: String
@@ -35,8 +35,8 @@ struct HubSSHTunnelPage: View {
     }
 }
 
-/// The SSH tunnel's settings, on 设置 › hub › SSH 隧道 and on the pairing page (before there is a hub): this device's
-/// public key to copy onto the server, the server and the hub's address from there, 总是走 SSH. Saving tests the whole
+/// The SSH tunnel's settings, on Settings › hub › SSH Tunnel and on the pairing page (before there is a hub): this device's
+/// public key to copy onto the server, the server and the hub's address from there, Always Use SSH. Saving tests the whole
 /// way first; the server's key is shown for the user to confirm the first time, and a changed one is refused until the
 /// user trusts it again — never taken silently.
 struct SSHTunnelForm<Status: View>: View {
@@ -66,7 +66,7 @@ struct SSHTunnelForm<Status: View>: View {
     @State private var removing = false
     @State private var key: SSHIdentity?
     @State private var keyProblem: String?
-    /// The fields as the form opened: in its Mac sheet 取消 asks first once they differ.
+    /// The fields as the form opened: in its Mac sheet Cancel asks first once they differ.
     @State private var opened: [String]?
     private var fields: [String] { [host, port, user, targetHost, targetPort, always ? "1" : "0"] }
 
@@ -264,7 +264,7 @@ struct SSHTunnelForm<Status: View>: View {
     #if os(macOS)
     // MARK: Mac buttons
 
-    /// 测试连接并保存 as a Mac button: the sheet's default button in its bar, or a standard one at the page's end.
+    /// Test Connection and Save as a Mac button: the sheet's default button in its bar, or a standard one at the page's end.
     private var saveButton: some View {
         Button { Task { await testAndSave() } } label: {
             HStack(spacing: Theme.Space.s) {
@@ -369,7 +369,7 @@ struct SSHTunnelForm<Status: View>: View {
         if host.trimmingCharacters(in: .whitespaces) != pinnedFor.host || Self.portValue(port, default: 22) != pinnedFor.port { pinned = nil }
     }
 
-    /// 总是走 SSH on a tunnel already saved, nothing else changed: kept right away (no test needed for it).
+    /// Always Use SSH on a tunnel already saved, nothing else changed: kept right away (no test needed for it).
     private func alwaysChanged(_ now: Bool) {
         guard loaded, var kept = saved, kept.isUsable, kept.always != now, var d = draft else { return }
         d.always = kept.always
@@ -436,7 +436,7 @@ extension SSHTunnelForm where Status == EmptyView {
 }
 
 #if os(macOS)
-/// The SSH form's frame on the Mac: a sheet's size and bar (取消, and saving as the default button), or the page's
+/// The SSH form's frame on the Mac: a sheet's size and bar (Cancel, and saving as the default button), or the page's
 /// grouped form in the detail column.
 private struct MacFormChrome<Save: View>: ViewModifier {
     var inSheet: Bool

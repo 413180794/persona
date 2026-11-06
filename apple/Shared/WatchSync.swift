@@ -181,7 +181,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
         #if os(iOS) || os(visionOS)
         guard let transfer = RecordingTransfer(dictionary: file.metadata), let segment = transfer.segment else { return }
-        // 回调返回时系统删除临时文件，必须先同步移动，再交给主线程更新索引。
+        // The system deletes the temporary file once the callback returns: move it synchronously first, then let the main thread update the index.
         let dir = RecordingLibrary.directory.appendingPathComponent(transfer.id.uuidString, isDirectory: true)
         let destination = dir.appendingPathComponent(RecordingSegment.fileName(segment.index))
         do {
@@ -190,7 +190,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
                 try FileManager.default.moveItem(at: file.fileURL, to: destination)
             }
             Task { @MainActor in self.onRecording?(transfer) }
-        } catch { /* 不确认；手表保留音频并重试。 */ }
+        } catch { /* Not acknowledged; the watch keeps the audio and retries. */ }
         #endif
     }
 

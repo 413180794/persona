@@ -55,7 +55,7 @@ import Testing
         #expect(w.queue.idle)
     }
 
-    /// 「a你b」: b waits for 你's ⌘V instead of going out before it; so does a key pressed after it.
+    /// 「a你b」: b waits for 「你」's ⌘V instead of going out before it; so does a key pressed after it.
     @Test func typedTextGoesOutInOrder() async {
         let w = Wire()
         w.queue.type("a你b") {}

@@ -11,10 +11,10 @@ import Synchronization
 ///
 /// Its source is a layer of the Mac's screen of a normal size (#1839: a 2×2 one in a window that went away never
 /// started), in the app's main window behind its content: in a window, not hidden, not seen. It is fed samples on the
-/// host clock and has a timebase of its own. Until the Mac's picture comes it shows a card (VNCPiPCard: 连接中…, or why
+/// host clock and has a timebase of its own. Until the Mac's picture comes it shows a card (VNCPiPCard: Connecting…, or why
 /// not and how to try again), so a machine's VNC starts the small window in the tap and the picture follows in it; the
-/// page makes it ready as soon as it shows a Mac, so that 小窗 (a tap) and going home start it at once. When the system
-/// will not start it, the page opens saying why (VNCPiPLog, 小窗诊断).
+/// page makes it ready as soon as it shows a Mac, so that Picture in Picture (a tap) and going home start it at once. When the system
+/// will not start it, the page opens saying why (VNCPiPLog, Picture in Picture Diagnostics).
 @MainActor final class VNCPiP: NSObject, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
     static let shared = VNCPiP()
     nonisolated static let log = Logger(subsystem: "jarvis", category: "vnc")
@@ -117,7 +117,7 @@ import Synchronization
         return true
     }
 
-    /// ref's screen in the small window, at once (in the tap that asked): 连接中… until the picture comes; failing
+    /// ref's screen in the small window, at once (in the tap that asked): Connecting… until the picture comes; failing
     /// that, the page, saying why.
     func start(_ ref: MachineRef, from: SessionKey? = nil) {
         if self.ref == ref, active { return }
@@ -126,7 +126,7 @@ import Synchronization
         wanted = true
         starting = false
         tries = 0
-        // With nothing in the source the system took the call and did nothing (TestFlight 161's 小窗诊断); the card
+        // With nothing in the source the system took the call and did nothing (TestFlight 161's Picture in Picture Diagnostics); the card
         // is in it now (prepare).
         attempt(inTap: true)
         if tries == 0 { VNCPiPLog.add("现在还不能开：能开了就开") } // i18n-ignore
@@ -296,7 +296,7 @@ import Synchronization
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController,
                                                 restoreUserInterfaceForPictureInPictureStopWithCompletionHandler done: @escaping (Bool) -> Void) {
         MainActor.assumeIsolated {
-            // 还原 (or a tap on it): the full page, which holds the session before this lets go.
+            // Restore (or a tap on it): the full page, which holds the session before this lets go.
             VNCPiPLog.add("还原成整页") // i18n-ignore
             restoring = true
             if let ref { AppModel.shared.openScreen(ref, from: from) }
@@ -427,7 +427,7 @@ import Synchronization
 #endif
 
 #if os(iOS) || os(visionOS)
-/// What the small window did, step by step (#1839): the last few dozen lines, for 小窗诊断 on the page and the
+/// What the small window did, step by step (#1839): the last few dozen lines, for Picture in Picture Diagnostics on the page and the
 /// runtime CLI's state; each also goes to the system log (category vnc). No names or passwords.
 @MainActor enum VNCPiPLog {
     private(set) static var lines: [String] = []

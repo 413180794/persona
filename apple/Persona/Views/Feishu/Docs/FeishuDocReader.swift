@@ -4,7 +4,7 @@ import SwiftUI
 
 // The native document reader: Markdown export first (fast, faithful tables and lists); when the owner forbids export,
 // the JSON node tree rendered natively. Around the text: title, where it lives, who edited it, read count, the cached
-// AI summary, the outline, comments and 在飞书中打开. Base / whiteboard / file links get their own page.
+// AI summary, the outline, comments and Open in Lark. Base / whiteboard / file links get their own page.
 
 /// What a document read produced.
 enum FeishuDocsContent {
@@ -101,7 +101,7 @@ struct FeishuDocReader: View {
     @State private var showTitle = false
     @State private var showOutline = false
     @State private var showComments = false
-    /// The passage 评论这段 is about: the comments open with the box on it (#1290).
+    /// The passage Comment on This is about: the comments open with the box on it (#1290).
     @State private var passage: FeishuDocsPassage?
     @State private var summaryExpanded = false
     @State private var gallery: FeishuDocsGallery?
@@ -450,7 +450,7 @@ struct FeishuDocsGallery: Identifiable {
     var id: String { urls.joined() + "#\(index)" }
 }
 
-/// 评论这段 where the plugin can write comments (`LarkFeatures.docComments`); nil elsewhere.
+/// Comment on This where the plugin can write comments (`LarkFeatures.docComments`); nil elsewhere.
 extension FeishuDocReader {
     var comment: ((String, String?) -> Void)? {
         guard app.larkFeatures.docComments else { return nil }
@@ -561,7 +561,7 @@ struct FeishuDocsSkeleton: View {
     }
 }
 
-/// Bases, whiteboards and files: what it is, a preview when there is one, and 在飞书中打开.
+/// Bases, whiteboards and files: what it is, a preview when there is one, and Open in Lark.
 struct FeishuDocsUnsupportedView: View {
     var info: FeishuDocsUnsupported
     var url: String
@@ -637,7 +637,7 @@ struct FeishuDocsOutlineSheet: View {
     }
 }
 
-/// The reader's 在飞书中打开 / 拷贝链接 / 分享 menu items.
+/// The reader's Open in Lark / Copy Link / Share menu items.
 struct FeishuDocsLinkMenu: View {
     var url: String
 

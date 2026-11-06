@@ -31,9 +31,9 @@ nonisolated enum VoicePhase: Equatable, Sendable {
     var isLive: Bool { if case .live = self { true } else { false } }
 }
 
-/// Why a call ended. The words for each are the page's (I3); `failed` keeps the extension's own message for 详情.
+/// Why a call ended. The words for each are the page's (I3); `failed` keeps the extension's own message for Details.
 nonisolated enum VoiceEnd: Equatable, Sendable {
-    /// 结束 tapped.
+    /// Stop tapped.
     case user
     /// The page left, or was hidden in the shell.
     case left
@@ -288,7 +288,7 @@ struct VoiceDeps {
         connect()
     }
 
-    /// 继续: picks an ended call up again, with its captions and its open runs (`history`, `resume`).
+    /// Continue: picks an ended call up again, with its captions and its open runs (`history`, `resume`).
     func restart() async {
         guard phase.isEnded else { return }
         await begin()
@@ -329,7 +329,7 @@ struct VoiceDeps {
 
     // MARK: What the page does
 
-    /// 打字说一句: the same as saying it.
+    /// Type a line: the same as saying it.
     func say(_ text: String) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, ready, let socket else { return }
@@ -337,7 +337,7 @@ struct VoiceDeps {
         lastActivity = deps.clock.now
     }
 
-    /// 打断语音: stops what the voice says (never the agent). What was queued is dropped here at once.
+    /// Interrupt Voice: stops what the voice says (never the agent). What was queued is dropped here at once.
     func interruptSpeech() {
         guard ready, let socket else { return }
         socket.send(text: VoiceMessage.interrupt)
@@ -345,7 +345,7 @@ struct VoiceDeps {
         lastActivity = deps.clock.now
     }
 
-    /// Whether 重发 / 清空并发送 can go for a run: refused, and reported by the connection that is up now. A reconnect
+    /// Whether Resend / Clear and Send can go for a run: refused, and reported by the connection that is up now. A reconnect
     /// rebuilds only the open runs (`resume`), so after one the extension no longer knows a refused run and the bar
     /// offers no button for it (docs/voice.md 3.2).
     func canResend(_ runID: String) -> Bool {
@@ -353,8 +353,8 @@ struct VoiceDeps {
         return run.state == .refused && runSeen[runID] == generation
     }
 
-    /// 重发 / 清空并发送 a run a 409 refused: the same id; `clearingDraft` sends the hub's `clearable` text for the node
-    /// to clear first. 清空并发送 is offered only when the run has one (`run.clearable`).
+    /// Resend / Clear and Send a run a 409 refused: the same id; `clearingDraft` sends the hub's `clearable` text for the node
+    /// to clear first. Clear and Send is offered only when the run has one (`run.clearable`).
     @discardableResult func resend(_ runID: String, clearingDraft: Bool = false) -> Bool {
         guard canResend(runID), let socket, let run = runs.first(where: { $0.id == runID }) else { return false }
         if clearingDraft, run.clearable == nil { return false }
@@ -443,7 +443,7 @@ struct VoiceDeps {
         }
     }
 
-    /// The socket went away: three tries, 1, 4 and 10 seconds apart, each with `history` and `resume`; then 继续. A
+    /// The socket went away: three tries, 1, 4 and 10 seconds apart, each with `history` and `resume`; then Continue. A
     /// handshake the hub refused for good is not tried again.
     private func dropped(_ close: VoiceSocketClose, generation: Int) {
         guard generation == self.generation, !phase.isEnded else { return }

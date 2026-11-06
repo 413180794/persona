@@ -5,7 +5,19 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
     var accountID: String
     var antiRecall: Bool
     var showEditHistory: Bool
-    /// The Lark gateway''s parts as the chat shows them: [removed] words decoded while the switch is on, as they came otherwise.
+    /// The Lark gateway's Brave Climb switch (#882); nil from a Feishu extension older than 0.10.0, which has no such setting:
+    /// then Settings does not offer it and the words stay as they came.
+    var braveClimb: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case accountID = "account_id", antiRecall = "anti_recall", showEditHistory = "show_edit_history"
+        case braveClimb = "brave_climb_codec"
+    }
+    static let hidden = Self(accountID: "", antiRecall: false, showEditHistory: false)
+
+    /// Brave Climb words are read and written: the switch is on.
+    var climbs: Bool { braveClimb == true }
+    /// A message's parts as the chat shows them: Brave Climb words decoded while the switch is on, as they came otherwise.
     func shown(_ parts: [LarkPart]) -> [LarkPart] { climbs ? LarkBraveClimb.decode(parts) ?? parts : parts }
     /// A message's text as the chat shows it (see `shown(_:)`).
     func shown(_ text: String) -> String { climbs ? LarkBraveClimbCodec.decodeText(text) ?? text : text }

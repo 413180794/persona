@@ -4,11 +4,11 @@ import UIKit
 #endif
 
 /// A small markup editor: freehand pen and rectangles in a few colors, undo, clear. The marks are kept in image
-/// coordinates and burned into the bitmap on 完成.
+/// coordinates and burned into the bitmap on Done.
 struct ImageEditor: View {
     @Environment(\.dismiss) private var dismiss
     let image: UIImage
-    /// Title of the done button (what happens with the result: "加到输入框", "完成").
+    /// Title of the done button (what happens with the result: "Add to Message", "Done").
     var doneTitle: String = String(localized: "完成")
     var onDone: (UIImage) -> Void
 

@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// When the Mac posts a notification for an agent (it has no APNs; docs/mac.md 推送通知 → 系统通知), following the
-/// same 设置 › 通知 choices the hub uses for the phone (NotifyPrefs).
+/// When the Mac posts a notification for an agent (it has no APNs; docs/mac.md push notifications → system notifications), following the
+/// same Settings › Notifications choices the hub uses for the phone (NotifyPrefs).
 @MainActor
 struct MacAttentionTests {
     private let now = Date(timeIntervalSince1970: 1_000_000)
@@ -77,7 +77,7 @@ struct MacAttentionTests {
         let old = [session("a", .working, since: 30), session("b", .working, since: 300), session("c", .working)]
         let new = [session("a", .unread), session("b", .unread), session("c", .needsYou)]
         #expect(ping(old, new, prefs: NotifyPrefs(input: false, done: .off)).isEmpty)
-        // 只推长任务: the turn that ran past the threshold (60 s unless the hub says otherwise).
+        // Long Tasks Only: the turn that ran past the threshold (60 s unless the hub says otherwise).
         #expect(ping(old, new, prefs: NotifyPrefs(done: .long)) == ["b:unread", "c:needs_you"])
         var short = NotifyPrefs(done: .long)
         short.longTurnSeconds = 20
@@ -93,7 +93,7 @@ struct MacAttentionTests {
         #expect(MacAttention.badge([], muted: { _ in false }) == nil)
     }
 
-    /// An agent already 在「需要你」gets a second card (a sub-agent's authorization, another confirmation): the
+    /// An agent already in Needs You gets a second card (a sub-agent's authorization, another confirmation): the
     /// state never flips, but the card is new, so it gets its own banner.
     @Test func secondCardForAnAlreadyWaitingAgentPings() throws {
         let a = try interaction("a"), b = try interaction("b")
@@ -122,7 +122,7 @@ struct MacAttentionTests {
     }
 
     /// New-card banners follow the same rules as the flip banners: frontmost open chat, muted/quiet, and the
-    /// 需要你处理 notification setting.
+    /// Needs You notification setting.
     @Test func newCardsFollowTheSameMuteFrontAndSettingsRules() throws {
         let open = SessionKey(machineID: "m", sessionID: "a")
         #expect(cards([try interaction("a")], [try interaction("a"), try interaction("b")],
@@ -175,7 +175,7 @@ struct MacAttentionTests {
     }
 
     /// A needs-you about a permission or a plan carries the hub's category and the interaction, so the banner has the
-    /// same 允许 / 拒绝 / 批准 / 打回 buttons as the phone's push (MacAppDelegate resolves them).
+    /// same Allow / Deny / Approve / Send Back buttons as the phone's push (MacAppDelegate resolves them).
     @Test func needsYouCarriesTheInteractionsButtons() throws {
         let ix = try JSON.decoder.decode(Interaction.self, from: Data(#"{"id":"ix1","machine_id":"m","session_id":"a","kind":"permission"}"#.utf8))
         let c = MacAttention.content(session("a", .needsYou), .needsYou, interaction: ix)
@@ -237,7 +237,7 @@ struct MacAttentionTests {
         #expect(MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(120 + MacAttention.settle + 0.1)))
     }
 
-    /// A 需要你 banner goes once the agent stops waiting on you, a card's banner once the card leaves the list
+    /// A Needs You banner goes once the agent stops waiting on you, a card's banner once the card leaves the list
     /// (#3513); the others stay.
     @Test func settledBannersAreTakenBack() throws {
         let old = [session("a", .needsYou), session("b", .needsYou), session("c", .needsYou), session("d", .working)]

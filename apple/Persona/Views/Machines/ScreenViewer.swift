@@ -29,7 +29,7 @@ enum ScreenViewer {
         var parts = ["token=" + encoded(token)]
         if let name, !name.isEmpty { parts.append("name=" + encoded(name)) }
         if let keep { parts.append("keep=" + encoded(keep)) }
-        if unlock { parts.append("unlock=1") } // 一键解锁 (#1507 a-2): the page asks for the password once it is in
+        if unlock { parts.append("unlock=1") } // One-Tap Unlock (#1507 a-2): the page asks for the password once it is in
         parts.append("embed=1")
         var c = URLComponents(url: page, resolvingAgainstBaseURL: false)
         c?.percentEncodedFragment = parts.joined(separator: "&")
@@ -40,9 +40,9 @@ enum ScreenViewer {
 /// The live screen asked for (`AppModel.screenOpen`).
 struct ScreenOpen: Identifiable, Hashable {
     let machine: MachineRef
-    /// 一键解锁: once signed in, the kept password goes onto the Mac's lock screen.
+    /// One-Tap Unlock: once signed in, the kept password goes onto the Mac's lock screen.
     var unlock = false
-    /// The chat it was opened from: when its agent waits on the user, the page offers 我完成了.
+    /// The chat it was opened from: when its agent waits on the user, the page offers I'm Done.
     var from: SessionKey? = nil
     var id: MachineRef { machine }
 }
@@ -173,7 +173,7 @@ struct ScreenEntry: View {
 struct ComputerActivityPill: View {
     @Environment(AppModel.self) private var model
     var activity: ComputerActivity?
-    /// The chat it is in (VNC offers 我完成了 while its agent waits).
+    /// The chat it is in (VNC offers I'm Done while its agent waits).
     var from: SessionKey? = nil
 
     var body: some View {

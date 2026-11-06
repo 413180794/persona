@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 显示 › 字号 ⌘+ ⌘- ⌘0 and 前往 › 上一个 / 下一个 Agent ⌘[ ⌘] (docs/mac.md「菜单和快捷键」).
+/// View › Text Size ⌘+ ⌘- ⌘0 and Go › Previous / Next Agent ⌘[ ⌘] (docs/mac.md「菜单和快捷键」).
 @MainActor
 struct MacViewCommandsTests {
     @Test func textSizeSteps() {
@@ -12,18 +12,18 @@ struct MacViewCommandsTests {
         #expect(MacViewCommands.step(.small, by: -1) == .small)
     }
 
-    /// 显示 › 刷新 ⌘R: the iPhone pulls to refresh the list it is on; the Mac refreshes what the section shows.
+    /// View › Refresh ⌘R: the iPhone pulls to refresh the list it is on; the Mac refreshes what the section shows.
     @Test func refreshFollowsTheSection() {
         #expect(MacViewCommands.refreshTarget(.inbox, page: false, mainWindow: true) == .inbox)
         #expect(MacViewCommands.refreshTarget(.assistant, page: false, mainWindow: true) == .assistant)
         #expect(MacViewCommands.refreshTarget(.agents, page: false, mainWindow: true) == .hub)
         #expect(MacViewCommands.refreshTarget(.settings, page: false, mainWindow: true) == .hub)
-        // A page that loads its own data (知识库, 机器, a chat's 文件 / Git pane) refreshes itself, as its pull does on iOS.
+        // A page that loads its own data (Knowledge, Machines, a chat's Files / Git pane) refreshes itself, as its pull does on iOS.
         for s in [MacSection.knowledge, .machines, .agents, .inbox, .assistant] {
             #expect(MacViewCommands.refreshTarget(s, page: true, mainWindow: true) == .page)
             #expect(MacViewCommands.refreshTarget(s, page: true, mainWindow: false) == .page)
         }
-        // Another window in front (a chat window, a sheet, 设置): the main window's section is not what is on screen.
+        // Another window in front (a chat window, a sheet, Settings): the main window's section is not what is on screen.
         for s in [MacSection.inbox, .assistant, .knowledge] {
             #expect(MacViewCommands.refreshTarget(s, page: false, mainWindow: false) == .hub)
         }

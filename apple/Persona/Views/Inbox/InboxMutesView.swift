@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 已静音 (the inbox's 更多 menu): the repositories, chats and senders muted from an item's menu, in every source,
+/// Muted (the inbox's More menu): the repositories, chats and senders muted from an item's menu, in every source,
 /// newest first. A swipe or a long press takes one back; nothing it covered comes back, only what comes in later
 /// (docs/inbox.md「静音」).
 struct InboxMutesView: View {

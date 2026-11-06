@@ -7,7 +7,7 @@ import UIKit
 
 /// Feishu's named palette (card text colors, tags, header templates), light / dark.
 nonisolated enum LarkColor {
-    /// Chrome color (links, selection, the "new messages" line): Feishu blue in the 飞书 style, else the style's accent.
+    /// Chrome color (links, selection, the "new messages" line): Feishu blue in the Lark style, else the style's accent.
     /// Card content keeps Feishu's own palette (`text(_:)` / `hue(_:)`).
     static var blue: Color { StyleSpec.current.lark.blue }
     /// The Lark gateway's --message-outgoing / --message-incoming, tinted with the style's accent elsewhere.
@@ -104,7 +104,7 @@ nonisolated enum LarkInline: Hashable {
 
 /// Base text appearance for a block of inline runs. Sizes are Feishu's, set on Persona's levels (`Theme.Level`: body,
 /// secondary, caption, label; 17 / 15 / 13 / 12 on the iPhone, 13 / 12 / 11 / 11 on the Mac); `scale` (`Theme.textScale`, set by `LarkInlineText`) makes them follow the
-/// system's text size and 小 / 标准 / 大 like the rest of the app.
+/// system's text size and Small / Standard / Large like the rest of the app.
 nonisolated struct LarkTextBase: Hashable {
     var size: CGFloat = Theme.Level.body.size
     var bold = false

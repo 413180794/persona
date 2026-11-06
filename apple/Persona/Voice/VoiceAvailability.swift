@@ -4,7 +4,7 @@ import Observation
 import UIKit
 #endif
 
-// Whether a conversation's page offers 语音对话 (docs/voice.md 6.1「显示条件」, 3.1「版本协商」), and the voice
+// Whether a conversation's page offers Voice Chat (docs/voice.md 6.1「显示条件」, 3.1「版本协商」), and the voice
 // extension's own read-only endpoints the app asks: /info, /models, /voices. Pure apart from the client calls; the Mac
 // and visionOS compile it and are told 「not here」.
 
@@ -67,7 +67,7 @@ nonisolated enum VoicePlatform: Equatable, Sendable {
     }
 }
 
-/// Whether 语音对话 is offered on a conversation, and if not, why (the 「+」 menu says the why).
+/// Whether Voice Chat is offered on a conversation, and if not, why (the 「+」 menu says the why).
 nonisolated enum VoiceAvailability: Equatable, Sendable {
     case available(extensionID: String)
     /// Not on this platform (the Mac, visionOS).

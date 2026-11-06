@@ -60,7 +60,7 @@ struct PersonalAgentEntityQuery: EntityQuery, EntityStringQuery {
     }
 }
 
-/// "让 Agent 去做某件事": one message into a personal agent session, with a fresh clientId (the hub dedupes retries).
+/// "Give an Agent a Task": one message into a personal agent session, with a fresh clientId (the hub dedupes retries).
 struct AgentTaskIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "让 Agent 去做"
     nonisolated static let description = IntentDescription(
@@ -109,7 +109,7 @@ struct AgentTaskIntent: AppIntent {
     }
 }
 
-/// "个人 Agent 有什么新消息": unread counts across personal agent sessions, the busiest first.
+/// "Personal Agent Unread": unread counts across personal agent sessions, the busiest first.
 struct AgentsStatusIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "个人 Agent 未读"
     nonisolated static let description = IntentDescription(

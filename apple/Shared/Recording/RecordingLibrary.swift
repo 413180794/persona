@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 录音不是可清理的缓存。每条独立目录，原子写入索引；共用于手机与手表。
+/// Recordings are not a cache to clear. Each gets its own directory and the index is written atomically; shared by phone and watch.
 @Observable
 final class RecordingLibrary {
     static let shared = RecordingLibrary()
@@ -81,10 +81,10 @@ final class RecordingLibrary {
         }
     }
 
-    /// 结束消息和音频可以任意顺序到达，重复消息不会覆盖已转写的分段。
+    /// The end message and the audio can arrive in any order; a repeated message never overwrites a transcribed segment.
     func receive(_ transfer: RecordingTransfer) throws {
         guard transfer.valid else { throw CocoaError(.fileReadCorruptFile) }
-        // 删除后迟到或重试的手表分段不能重新创建已删除的录音，但仍可确认让手表清理。
+        // A watch segment arriving late or retried after a delete must not recreate the deleted recording, but is still acknowledged so the watch cleans up.
         if deleted.contains(transfer.id) {
             try? FileManager.default.removeItem(at: folder(transfer.id))
             return
@@ -108,7 +108,7 @@ final class RecordingLibrary {
         entries.removeAll { $0.id == id }
     }
 
-    /// Hourhand 的异常退出收尾：只保留定稿分段，删掉没有尾部的半成品。
+    /// Hourhand's cleanup after an abnormal exit: keep only finalized segments, delete half-written ones with no tail.
     func recover(source: RecordingEntry.Source) {
         for var entry in entries where entry.active && entry.source == source {
             let known = Set(entry.segments.map { RecordingSegment.fileName($0.index) })

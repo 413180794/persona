@@ -1,15 +1,15 @@
 import XCTest
 
 /// An extension that installs command-line programs and signs in (#4507): the install sheet lists the programs under
-/// 安装命令行程序, the steps have 安装命令行 with a line per program (the machine's own one says so), the install ends on
+/// Install command-line programs, the steps have Install command-line tools with a line per program (the machine's own one says so), the install ends on
 /// the extension's page with the sign-in open (a QR code and a link to open it on this phone), it signs in by itself
-/// when the hub says done, 退出登录 signs out, and 关于 lists the programs. An older hub (no `extension_auth`) shows no
-/// 登录 section, only its warning and the extension's own sign-in page.
+/// when the hub says done, Sign Out signs out, and About lists the programs. An older hub (no `extension_auth`) shows no
+/// Sign In section, only its warning and the extension's own sign-in page.
 ///
 /// Against scripts/mock/mock_hub.py, a fresh one per run:
-/// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1` → `TEST_RUNNER_JARVIS_EXT_AUTH_HUB=http://127.0.0.1:<端口>`;
+/// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1` → `TEST_RUNNER_JARVIS_EXT_AUTH_HUB=http://127.0.0.1:<port>`;
 /// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=installed MOCK_EXTENSION_AUTH_OLD=1` →
-/// `TEST_RUNNER_JARVIS_EXT_AUTH_OLD_HUB=…`. `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named by the style and
+/// `TEST_RUNNER_JARVIS_EXT_AUTH_OLD_HUB=…`. `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by the style and
 /// `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` (light / dark).
 final class ExtensionSignInTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -79,7 +79,7 @@ final class ExtensionSignInTests: XCTestCase {
         scrollTo(confirm, in: app)
         confirm.tap()
 
-        // The steps: 安装命令行, a line per program.
+        // The steps: Install command-line tools, a line per program.
         let step = any(app, "extension-operation-step-tools")
         XCTAssertTrue(step.waitForExistence(timeout: 10), "no 安装命令行 step:\n\(app.debugDescription)")
         let end = Date.now.addingTimeInterval(15)
@@ -91,7 +91,7 @@ final class ExtensionSignInTests: XCTestCase {
         shot(app, "tools")
 
         // Installed, not signed in: the extension's page with the sign-in open.
-        // Its 登录 section is at the top (the page may have opened scrolled to where the steps were).
+        // Its Sign In section is at the top (the page may have opened scrolled to where the steps were).
         let qr = any(app, "extension-auth-qr")
         let opened = Date.now.addingTimeInterval(30)
         while Date.now < opened, !qr.exists {
@@ -112,14 +112,14 @@ final class ExtensionSignInTests: XCTestCase {
         XCTAssertTrue(app.buttons["extension-auth-sign-in"].label.contains("重新登录"))
         shot(app, "signed-in")
 
-        // 关于 lists the programs.
+        // About lists the programs.
         let about = any(app, "plugin-tool-node")
         scrollTo(about, in: app)
         XCTAssertTrue(about.exists && about.label.contains("机器上已有"), "no programs in 关于:\n\(app.debugDescription)")
         XCTAssertTrue(any(app, "plugin-tool-example-cli").exists)
         shot(app, "about")
 
-        // 退出登录.
+        // Sign Out.
         let logout = app.buttons["extension-auth-logout"]
         scrollTo(logout, in: app, up: false)
         logout.tap()

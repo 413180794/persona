@@ -1,6 +1,6 @@
 import XCTest
 
-/// A project's 相关公司圈: the posts the hub linked, and one opened with its comments. Against scripts/mock/mock_hub.py
+/// A project's related company moments (「相关公司圈」): the posts the hub linked, and one opened with its comments. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB).
 final class KnowledgeMomentsTests: XCTestCase {
     @MainActor func testAProjectListsItsPostsAndOpensOne() throws {

@@ -2,7 +2,7 @@ import CoreVideo
 import SwiftUI
 
 #if os(iOS)
-/// What the small window shows while there is no picture of the Mac (#1839): its name and 连接中… with a turning arc
+/// What the small window shows while there is no picture of the Mac (#1839): its name and Connecting… with a turning arc
 /// from the tap on (so it comes up at once, not once connected), or why it could not connect and how to try again
 /// (its ▶, or back to the app). Drawn into frames for its source (VNCPiP); the Mac's first frame replaces it.
 struct VNCPiPCard: View {
@@ -22,7 +22,7 @@ struct VNCPiPCard: View {
             }
         }
 
-        /// For 小窗诊断 (and the source's accessibility value under DEBUG -showPiPSource).
+        /// For Picture in Picture Diagnostics (and the source's accessibility value under DEBUG -showPiPSource).
         var line: String {
             switch self {
             case .connecting: String(localized: "连接中")

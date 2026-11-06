@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 设置's list beside the page it opened (#2318): the row of the page open in the detail column stays selected, the
+// Settings' list beside the page it opened (#2318): the row of the page open in the detail column stays selected, the
 // rounded gray well the sections column draws (`MacSidebarRow`). The split's own list draws no selection for value
 // links, and its path is opaque, so the list is handed the path cut to its first page and each row compares its
 // value with it; nothing is stored (the path is the navigation state already).

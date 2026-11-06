@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 机器: a machine whose jarvisd is not the hub's build has 重新部署 on its card. Tapping it (inside the card's
+/// Settings › Machines: a machine whose jarvisd is not the hub's build has Redeploy on its card. Tapping it (inside the card's
 /// link) deploys instead of opening the machine, shows the progress, and the warning goes once the hub says it is done.
 /// Against scripts/mock/mock_hub.py with MOCK_NODE_MISMATCH=1 (Mac Studio mismatched; its deploy takes 3 s):
 ///   TEST_RUNNER_JARVIS_DEPLOY_HUB=http://127.0.0.1:<port>

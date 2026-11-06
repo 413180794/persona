@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › Codex 设置, under Claude Code 设置: the node's Codex options with their values. Against scripts/mock/mock_hub.py
+/// Settings › Codex Settings, under Claude Code Settings: the node's Codex options with their values. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB).
 final class CodexSettingsTests: XCTestCase {
     @MainActor func testCodexSettingsOpen() throws {

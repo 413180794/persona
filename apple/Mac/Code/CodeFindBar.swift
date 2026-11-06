@@ -9,7 +9,7 @@ import SwiftUI
     var query = "" {
         didSet { if query != oldValue { search(from: view?.topLine ?? 0) } }
     }
-    /// 区分大小写 / 整词 / 正则: remembered for the next file while the app runs. A change searches again from the
+    /// Match Case / Whole Word / Regex: remembered for the next file while the app runs. A change searches again from the
     /// current match, so it stays where it was when it still matches.
     var options = CodeFindModel.lastOptions {
         didSet {
@@ -45,7 +45,7 @@ import SwiftUI
         if let view { view.window?.makeFirstResponder(view) }
     }
 
-    /// 查找下一个 ⌘G / 查找上一个 ⇧⌘G: the match after (before) the current one; with the bar closed it opens again on
+    /// Find Next ⌘G / Find Previous ⇧⌘G: the match after (before) the current one; with the bar closed it opens again on
     /// the last query, at the first match from the top of what is shown (as Xcode does).
     func next(forward: Bool) {
         guard visible else { return show() }
@@ -90,7 +90,7 @@ extension CodeLineSource {
     }
 }
 
-/// The bar over the code while finding: the field, how many matches and which one, previous / next, 完成.
+/// The bar over the code while finding: the field, how many matches and which one, previous / next, Done.
 struct CodeFindBar: View {
     @Bindable var find: CodeFindModel
     @FocusState private var focused: Bool
@@ -132,7 +132,7 @@ struct CodeFindBar: View {
             .help("下一个（⏎ 或 ⌘G）")
             .disabled(find.matches.isEmpty)
             .accessibilityLabel("下一个")
-            // An icon, not 完成: the file viewer's own 完成 is just below.
+            // An icon, not Done: the file viewer's own Done is just below.
             Button { find.close() } label: {
                 Image(systemName: Theme.Icon.close)
             }
@@ -151,7 +151,7 @@ struct CodeFindBar: View {
         .onChange(of: find.focusRequest) { focused = true }
     }
 
-    /// Esc / ⏎ / ⇧⏎ are caught before the window sees them (`CodeFind.barKey`): the file viewer's 完成 holds Esc as
+    /// Esc / ⏎ / ⇧⏎ are caught before the window sees them (`CodeFind.barKey`): the file viewer's Done holds Esc as
     /// its shortcut, so the field's own handlers came too late and Esc closed the whole sheet.
     @State private var keys: Any?
 

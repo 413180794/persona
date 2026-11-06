@@ -26,7 +26,7 @@ enum SessionPane: String, CaseIterable, Identifiable {
     }
 }
 
-/// The Mac's 终端 | 对话 (#3183, the web's #2445): the chat and the agent's terminal take turns in the middle of the
+/// The Mac's Terminal | Chat (#3183, the web's #2445): the chat and the agent's terminal take turns in the middle of the
 /// page. The terminal is mounted the first time it shows and stays mounted (subscribed, same size) while the chat
 /// shows, so coming back to it does not connect again.
 nonisolated struct TerminalChatSwitch: Equatable {
@@ -42,7 +42,7 @@ nonisolated struct TerminalChatSwitch: Equatable {
         return p
     }
 
-    /// ⇧⌘J: the terminal from the chat, 文件 or Git; the chat from the terminal.
+    /// ⇧⌘J: the terminal from the chat, Files or Git; the chat from the terminal.
     mutating func toggle(from pane: SessionPane, canTerminal: Bool) -> SessionPane? {
         pick(pane == .terminal ? .chat : .terminal, from: pane, canTerminal: canTerminal)
     }
@@ -64,7 +64,7 @@ struct SessionPaneBar: View {
     @Binding var pane: SessionPane
     var panes: [SessionPane]
     var badges: [SessionPane: String] = [:]
-    /// 终端 comes up from the bottom over the page instead of taking its place (TerminalCover).
+    /// Terminal comes up from the bottom over the page instead of taking its place (TerminalCover).
     var openTerminal: (() -> Void)?
     @Namespace private var ns
 
@@ -124,14 +124,14 @@ private struct PaneSegment: View {
 
 /// The session's terminal at any time (not only while Claude works), live: the hub streams herdr's frames of the pane
 /// (docs/terminal.md) — colors, cursor, wide characters — or, where it cannot, the colored screen is read once a
-/// second. Long rows fold at the phone's width unless 不换行 is on (for TUI boxes). Scrolling up loads the 200 rows
+/// second. Long rows fold at the phone's width unless No Wrap is on (for TUI boxes). Scrolling up loads the 200 rows
 /// before, again and again, back to the start of what herdr keeps (about 1000 lines — older output lives in the chat);
 /// each page is found by the lines it must end before, so output arriving meanwhile shifts nothing. Reading history
-/// holds the screen still, 回到最新 lets it follow again. A link that fails never leaves old output looking live: a
+/// holds the screen still, Jump to Latest lets it follow again. A link that fails never leaves old output looking live: a
 /// bar says how old it is and when the next try is, with a button to try now.
 ///
 /// Typing is on the terminal itself: a tap brings the keyboard up, every key goes to herdr as it is pressed (batched
-/// while a request is out), the key bar sits over the keyboard. 设置 › 输入方式 brings back a text field that sends
+/// while a request is out), the key bar sits over the keyboard. Settings › Input Mode brings back a text field that sends
 /// what is written in one go.
 struct TerminalPanel: View {
     @Environment(AppModel.self) private var model
@@ -188,7 +188,7 @@ struct TerminalPanel: View {
     var onKeyboard: ((Bool) -> Void)?
     /// Shown from the bottom over the page (TerminalCover): its header is a slim bar to drag it down by.
     var grab: TerminalGrab?
-    /// Kept mounted while another view takes its place (the Mac's 终端 | 对话, #3183): the keyboard comes to it when it
+    /// Kept mounted while another view takes its place (the Mac's Terminal | Chat, #3183): the keyboard comes to it when it
     /// shows and leaves it when it hides; its feed goes on either way. Nil: always on screen while mounted.
     var active: Bool?
 
@@ -297,7 +297,7 @@ struct TerminalPanel: View {
 
     // MARK: Controls
 
-    /// The key bar (over the keyboard while it is up), and in 输入框 mode the text field under it.
+    /// The key bar (over the keyboard while it is up), and in Input Field mode the text field under it.
     private var controls: some View {
         VStack(spacing: Theme.Space.s) {
             if !autoHideKeys || typing || keyboardUp || mods.active {
@@ -333,7 +333,7 @@ struct TerminalPanel: View {
         .padding(.bottom, Theme.Space.sm)
     }
 
-    /// 输入框 mode: write, then send with return.
+    /// Input Field mode: write, then send with return.
     private var field: some View {
         HStack(spacing: Theme.Space.s) {
             TextField(Self.placeholder(mods), text: $input)
@@ -618,7 +618,7 @@ struct TerminalPanel: View {
         }
     }
 
-    /// 换行 (rows fold at the phone's width) or 不换行 · 左右滑 (the pane's width, for TUI boxes).
+    /// Wrap (rows fold at the phone's width) or No Wrap · Swipe Sideways (the pane's width, for TUI boxes).
     private var wrapToggle: some View {
         Button {
             Haptics.tap()
@@ -934,7 +934,7 @@ struct TerminalLinkStatus: View {
         }
     }
 
-    /// "上次更新 12 秒前" / "还没有拿到终端".
+    /// "Updated 12 seconds ago" / "No terminal yet".
     static func headline(lastOK: Date?, now: Date) -> String {
         guard let lastOK else { return String(localized: "还没有拿到终端") }
         let s = max(0, Int(now.timeIntervalSince(lastOK)))
@@ -943,8 +943,8 @@ struct TerminalLinkStatus: View {
         return String(localized: "上次更新 \(lastOK.formatted(date: .omitted, time: .shortened))")
     }
 
-    /// When it tries again, then why (the reason may be cut off, the countdown never): "4 秒后重试 · 连不上 hub",
-    /// or "等待电脑回应…" while a request hangs.
+    /// When it tries again, then why (the reason may be cut off, the countdown never): "Retrying in 4 seconds · Can't reach the hub",
+    /// or "Waiting for the computer…" while a request hangs.
     static func detail(failure: String?, nextTry: Date, now: Date) -> String {
         guard let failure else { return String(localized: "等待电脑回应…") }
         let s = Int(ceil(nextTry.timeIntervalSince(now)))
@@ -1083,7 +1083,7 @@ struct BackgroundTasksStrip: View {
 
 // MARK: - Activity chips
 
-/// "⟳ 下次 11:57" and "⚙ 后台 2" under the chat's tabs: what keeps an agent going, in one small row.
+/// "⟳ Next 11:57" and "⚙ Background 2" under the chat's tabs: what keeps an agent going, in one small row.
 struct ActivityChips: View {
     var loop: LoopInfo?
     var background: [BackgroundTask]
@@ -1231,7 +1231,7 @@ struct LoopStrip: View {
 }
 
 extension LoopStrip {
-    /// "还有 4 分钟" / "还有 1 小时 5 分".
+    /// "4 min left" / "1 h 5 min left".
     static func until(_ date: Date, now: Date) -> String {
         let m = max(1, Int(ceil(date.timeIntervalSince(now) / 60)))
         if m < 60 { return String(localized: "还有 \(m) 分钟") }
@@ -1267,7 +1267,7 @@ extension EnvironmentValues {
     @Entry var openSubagent: ((String) -> Void)? = nil
 }
 
-/// The agents in this conversation, under the tabs: 主 Agent and each subagent it launched (spinning while it
+/// The agents in this conversation, under the tabs: Main Agent and each subagent it launched (spinning while it
 /// runs, a check when done). Tap one to read its conversation in the same chat UI. When some of `all` are not chips
 /// (finished, nested), 「全部子 Agent N」 at the end opens every one by who launched whom.
 struct AgentStrip: View {

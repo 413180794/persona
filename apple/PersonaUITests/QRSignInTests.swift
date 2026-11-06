@@ -1,7 +1,7 @@
 import XCTest
 
 /// Signing in to a connector by scanning a QR code with another app (#1351), against scripts/mock/mock_hub.py started
-/// with MOCK_WECHAT=signed_out (JARVIS_MOCK_HUB_QR): 设置 › 微信 › 登录 shows the code the hub drew and 保存二维码,
+/// with MOCK_WECHAT=signed_out (JARVIS_MOCK_HUB_QR): Settings › WeChat › Sign In shows the code the hub drew and Save QR Code,
 /// then signs in on its own once the mock says it was confirmed (its sixth ask) (the page asks again every interval).
 final class QRSignInTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
@@ -21,7 +21,7 @@ final class QRSignInTests: XCTestCase {
         app.launchPinned()
         let any = app.descendants(matching: .any)
 
-        // From 设置 (a page opened at launch can beat the pairing): the hub's connectors list 微信.
+        // From Settings (a page opened at launch can beat the pairing): the hub's connectors list WeChat.
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "微信")).firstMatch
         for _ in 0..<8 where !row.isHittable { app.swipeUp() }
         XCTAssertTrue(row.isHittable, "no 微信 row in 设置:\n\(app.debugDescription)")
@@ -35,7 +35,7 @@ final class QRSignInTests: XCTestCase {
         XCTAssertTrue(code.waitForExistence(timeout: 10), "no QR code:\n\(app.debugDescription)")
         sleep(1)
         shot(app, "wechat qr")
-        // 保存二维码 is under the code, below the fold (the list makes rows out of sight only when shown).
+        // Save QR Code is under the code, below the fold (the list makes rows out of sight only when shown).
         let share = any["connector.shareQR"]
         for _ in 0..<3 where !share.exists { app.swipeUp() }
         XCTAssertTrue(share.waitForExistence(timeout: 5), "no 保存二维码:\n\(app.debugDescription)")
@@ -55,8 +55,8 @@ final class QRSignInTests: XCTestCase {
     }
 
     /// A QR step the hub sent without the code or a link (MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none,
-    /// JARVIS_MOCK_HUB_QR_NONE): the page says it cannot draw it and offers 重新开始, never an empty card with a grey
-    /// 下一步 (#1693).
+    /// JARVIS_MOCK_HUB_QR_NONE): the page says it cannot draw it and offers Start Over, never an empty card with a grey
+    /// Next (#1693).
     @MainActor func testAStepItCannotDrawSaysSo() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_QR_NONE"] else {
             throw XCTSkip("needs a mock with MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none")
@@ -85,7 +85,7 @@ final class QRSignInTests: XCTestCase {
         sleep(1)
         shot(app, "wechat cannot draw")
 
-        // 重新开始 asks the hub from the first step again: the same note comes back, still no 下一步.
+        // Start Over asks the hub from the first step again: the same note comes back, still no Next.
         restart.tap()
         XCTAssertTrue(note.waitForExistence(timeout: 10), "重新开始 lost the page:\n\(app.debugDescription)")
         XCTAssertFalse(any["connector.next"].exists)

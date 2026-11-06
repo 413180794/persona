@@ -21,7 +21,7 @@ struct PendingArrivalTests {
 
     private func store() -> ChatStore { ChatStore(key: SessionKey(machineID: "box", sessionID: "s1")) }
 
-    // A long message comes back cut for the page (it ends in the 已截断 line): it is still the message, and the bubble
+    // A long message comes back cut for the page (it ends in the Truncated line): it is still the message, and the bubble
     // went away only after a minute, the message shown twice until then (2026-10-31, a 16 KB paste).
     @Test func aLongMessageCutByThePageArrives() {
         let s = store()
@@ -53,7 +53,7 @@ struct PendingArrivalTests {
         #expect(s.pending.count == 1)
     }
 
-    // 撤回编辑 / 删除 takes a queued message back out of the agent, so no copy ever arrives. Its sent bubble, hidden
+    // Take Back to Edit / Delete takes a queued message back out of the agent, so no copy ever arrives. Its sent bubble, hidden
     // while it was queued, came back at the end of the chat and stayed while the agent worked: the message looked sent
     // again (2026-11-05).
     @Test func aQueuedMessageTakenBackLeavesNoBubble() {
@@ -83,7 +83,7 @@ struct PendingArrivalTests {
     }
 
     // A new Persona conversation's first message (#511), shown as sent once the start request returns: the node answers
-    // a session claude has not written to yet with no items, which must leave the bubble (the page read 还没有消息);
+    // a session claude has not written to yet with no items, which must leave the bubble (the page read No messages yet);
     // the first line, written a moment later but stamped before the bubble was made, takes it.
     @Test func aNewConversationsFirstMessageStaysUntilWritten() {
         let s = store()

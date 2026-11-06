@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// "问 Persona": sends the sentence into the assistant's main conversation (the Persona tab) and waits a little for the
+/// "Ask Persona": sends the sentence into the assistant's main conversation (the Persona tab) and waits a little for the
 /// answer, so Siri can speak it. Runs in the background straight against the hub (Keychain.serverConfig).
 // Compatibility: the system addresses this type by its original module/type identity.
 struct AskJarvisIntent: AppIntent {

@@ -17,13 +17,13 @@ struct FleetPersonaTests {
         #expect(FleetPersona.state(FleetState(), stale: false) == .idle)
     }
 
-    /// Only the assistant at work (no agent working or waiting): 思考中, the nearest the fleet has.
+    /// Only the assistant at work (no agent working or waiting): Thinking, the nearest the fleet has.
     @Test func assistantAloneIsThinking() {
         #expect(FleetPersona.state(FleetState(phase: .done, unread: 1, assistant: true), stale: false) == .thinking)
         #expect(FleetPersona.state(FleetState(assistant: true), stale: false) == .thinking)
     }
 
-    /// Stale content (the hub stopped pushing) wins over everything: 离线, gray.
+    /// Stale content (the hub stopped pushing) wins over everything: Offline, gray.
     @Test func staleIsOffline() {
         for phase in [FleetState.Phase.needsYou, .working, .done, .none] {
             #expect(FleetPersona.state(FleetState(phase: phase), stale: true) == .offline)
@@ -81,7 +81,7 @@ struct FleetPersonaTests {
         #expect(state.tailored(island: IslandPrefs(), details: true).look == state.look)
     }
 
-    // MARK: 设置 › 外观 › 形象 → what the extension draws
+    // MARK: Settings › Appearance › Avatar → what the extension draws
 
     /// The App Group container the app and the extension share, as a directory of its own: what one saves, the other
     /// reads.
@@ -112,7 +112,7 @@ struct FleetPersonaTests {
         }
     }
 
-    /// The package chosen in 设置 the way the app does it: listed by the hub, downloaded, on screen.
+    /// The package chosen in Settings the way the app does it: listed by the hub, downloaded, on screen.
     @MainActor private func chosen() async throws -> PersonaStore {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: #"{"personas":[{"id":"mint","rev":"r1","bytes":10,"manifest":\#(Self.manifest)}]}"#)
@@ -149,7 +149,7 @@ struct FleetPersonaTests {
 
     static let center = CGPoint(x: 0.5, y: 0.5)
 
-    /// The whole chain: the package chosen in 设置 → the look and faces the app saves → what the extension reads →
+    /// The whole chain: the package chosen in Settings → the look and faces the app saves → what the extension reads →
     /// the face it draws, for every state: the package's own frame, or its avatar with the state's cue.
     @MainActor @Test func aPackageChosenInSettingsIsWhatTheExtensionDraws() async throws {
         let personas = try await chosen()
@@ -319,7 +319,7 @@ struct FleetPersonaTests {
         #expect(!a.same(b))
     }
 
-    /// 灵动岛诊断 names the first step that fails, in the order the look travels from 设置 to the island.
+    /// Dynamic Island Diagnostics names the first step that fails, in the order the look travels from Settings to the island.
     @Test func diagnosticsNameTheFailingStep() {
         let look = FleetLook(design: "visor", light: 1, dark: 1, package: "a/1")
         var i = IslandDiagnostics.Input(look: look, group: "group.example")

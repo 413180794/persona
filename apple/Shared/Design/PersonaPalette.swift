@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The colors a persona brings (docs/persona.md「色系」): the accent (what can be tapped; BeautifulUI's accent and
-/// 飞书's links follow it), the user's bubble and its words, and the persona's own primary for decoration
-/// (`Theme.persona`). They color the app only when 主题色 is 跟随形象 (`ColorSpec(persona:over:)`); what a persona leaves
+/// Lark's links follow it), the user's bubble and its words, and the persona's own primary for decoration
+/// (`Theme.persona`). They color the app only when Theme Color is Match Avatar (`ColorSpec(persona:over:)`); what a persona leaves
 /// out stays the style's, and the built-in Persona brings nothing. Held to the same floors as every color
 /// (StyleSpecTests): a color that misses one is darkened until it passes, so a package can't make a button unreadable.
 nonisolated struct PersonaPalette: Sendable, Hashable {
@@ -23,7 +23,7 @@ nonisolated struct PersonaPalette: Sendable, Hashable {
         didSet { StyleSpec.recompose() }
     }
 
-    /// The floors (docs/ios.md 设计语言): white words on the accent, the accent as a link on the page, words on the bubble.
+    /// The floors (docs/ios.md「设计语言」): white words on the accent, the accent as a link on the page, words on the bubble.
     static let onAccent = 3.5, link = 3.0, bubbleWords = 4.5
 
     /// From persona.json's `colors` ("#RRGGBB" strings per appearance), made to meet the floors. Nil when it has none.

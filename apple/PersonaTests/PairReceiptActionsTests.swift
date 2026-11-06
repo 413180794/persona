@@ -54,7 +54,7 @@ struct PairReceiptActionsTests {
         let joining = try #require(PairPush(Self.joining))
         let device = try #require(PairPush(Self.device))
         #expect(PairReceiptActions.request(action: PairReceiptActions.revoke, device) == .revokeDevice("cred_new"))
-        // A code made for a computer: 撤销 rejects the computer (still pending), not the device that made it.
+        // A code made for a computer: Undo rejects the computer (still pending), not the device that made it.
         #expect(PairReceiptActions.request(action: PairReceiptActions.revoke, code) == .rejectComputer("mach_office"))
         #expect(PairReceiptActions.request(action: PairReceiptActions.confirm, joining) == .confirmComputer("mach_office"))
         #expect(PairReceiptActions.request(action: PairReceiptActions.reject, joining) == .rejectComputer("mach_office"))
@@ -80,7 +80,7 @@ struct PairReceiptActionsTests {
         #expect(hub.sent("POST", "/api/v1/machines/mach_office/reject").count == 1)
     }
 
-    /// 撤销 on a computer that was confirmed meanwhile: its page opens instead (in the group the client is for), to
+    /// Undo on a computer that was confirmed meanwhile: its page opens instead (in the group the client is for), to
     /// decide there; the follow-up notification carries what to open.
     @Test func aConfirmedComputerOpensItsPage() async throws {
         let hub = FakeHub()

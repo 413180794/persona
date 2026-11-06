@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 设置 › 连接器 › 飞书机器人 (docs/bots.md): talk to Persona from Feishu. The user makes a custom app with a bot on the
+/// Settings › Connectors › Lark Bot (docs/bots.md): talk to Persona from Feishu. The user makes a custom app with a bot on the
 /// open platform, enters its id and secret here, pairs by sending the bot a code, and switches on what it may do.
 struct FeishuBotView: View {
     @State private var model = FeishuBotModel()

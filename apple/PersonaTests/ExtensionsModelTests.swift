@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 扩展's logic (ExtensionsModel, ExtensionModel): what the hub sends decodes, the form's draft is edited by path and
+/// Settings › Extensions' logic (ExtensionsModel, ExtensionModel): what the hub sends decodes, the form's draft is edited by path and
 /// saved as a whole without the emptied fields, a field the hub refuses comes back beside that field.
 @MainActor
 struct ExtensionsModelTests {
@@ -34,7 +34,7 @@ struct ExtensionsModelTests {
         #expect(ExtensionText.listSummary([]) == "没有")
     }
 
-    /// On or off to the user (#1684): running and idle are both 启动, and only the detail's small print tells them apart;
+    /// On or off to the user (#1684): running and idle are both On, and only the detail's small print tells them apart;
     /// the other states keep their words.
     @Test func statesReadAsOnOrOff() throws {
         func plugin(_ status: String) throws -> HubExtension {
@@ -90,7 +90,7 @@ struct ExtensionsModelTests {
     }
 
     /// A machine's switch (format machine) is saved at once on top of what the hub has: other edits stay in the draft,
-    /// unsaved, and the switch's field is not left to 保存.
+    /// unsaved, and the switch's field is not left to Save.
     @Test func aMachineSwitchIsSavedAtOnceAlone() async throws {
         let hub = FakeHub()
         let cua = #"{"id":"cua","name":"操控电脑（Cua）","kind":"computer","status":"running","enabled":true,"contributes":{"computer":["cua"]},"# +
@@ -114,7 +114,7 @@ struct ExtensionsModelTests {
         #expect(page.value(["confirm"]) == .bool(true) && page.dirty, "the other edit is still there to 保存")
     }
 
-    /// The footer says which switches take effect at once and that the rest waits for 保存.
+    /// The footer says which switches take effect at once and that the rest waits for Save.
     @Test func theFooterSaysWhatIsSavedAtOnce() {
         func field(_ name: String, _ type: String, machines: Bool = false) -> ExtensionField {
             ExtensionField(name: name, type: type, title: name == "machines" ? "能操控的电脑" : nil,

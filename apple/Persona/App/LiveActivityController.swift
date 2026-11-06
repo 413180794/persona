@@ -21,7 +21,7 @@ import UIKit
 final class LiveActivityController {
     static let shared = LiveActivityController()
 
-    /// 设置 › 通知 › 实时活动. Mirrored from the hub prefs so the app can decide without asking.
+    /// Settings › Notifications › Live Activities. Mirrored from the hub prefs so the app can decide without asking.
     static let enabledKey = "liveActivity.enabled"
     static let detailsKey = "liveActivity.lockDetails"
     static let islandKey = "liveActivity.island"
@@ -139,7 +139,7 @@ final class LiveActivityController {
     ///   - into the running activity's content now, which also makes the system draw it again;
     ///   - to the hub, which puts it in this device's pushes (`look` in the device's prefs);
     ///   - into the App Group container shared with the widget extension, with a package's pictures (`FleetLook.save`).
-    /// `force` (灵动岛诊断): written anew everywhere and redrawn even when nothing changed.
+    /// `force` (Dynamic Island Diagnostics): written anew everywhere and redrawn even when nothing changed.
     func look(_ look: FleetLook, force: Bool = false, faces: () -> FleetFaces?) {
         _ = Self.forgetKeychainLook
         if force {
@@ -159,7 +159,7 @@ final class LiveActivityController {
         Self.update(activity, ActivityContent(state: state, staleDate: stale, relevanceScore: content.relevanceScore))
     }
 
-    /// The look in the running activity's content: nil without an activity (灵动岛诊断).
+    /// The look in the running activity's content: nil without an activity (Dynamic Island Diagnostics).
     var runningLook: FleetLook?? { activity.map { $0.content.state.look } }
 
     /// The look the hub has for this device (nil: not told since launch).
@@ -337,7 +337,7 @@ extension AppModel {
 
 nonisolated extension FleetLook {
     /// A built-in in the accent it has in the app; a package as its pictures (`FleetFaces`), and while they cannot be
-    /// read 面罩 in its primary color (面罩 takes a tint; 团子, the default, keeps the icon's colors). From the persona itself, not `Theme`: the spec is recomposed after
+    /// read Visor in its primary color (Visor takes a tint; Mochi, the default, keeps the icon's colors). From the persona itself, not `Theme`: the spec is recomposed after
     /// the persona changes.
     init(persona p: Persona, builtinAccent: Color) {
         guard !p.isBuiltin else {

@@ -1,7 +1,7 @@
 import XCTest
 
 /// A new Persona conversation opens on the welcome (`AssistantWelcome`: a greeting, what Persona can reach, things to ask),
-/// in the shell and the old layout, from launch and from the sidebar's 新对话. The shell once showed nothing but the
+/// in the shell and the old layout, from launch and from the sidebar's New Chat. The shell once showed nothing but the
 /// composer there (2026-11-02, the user: 「之前设计的挺好的助手空状态，现在咋全空白了？」). Runs in the BeautifulUI
 /// style too (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`).
 final class AssistantWelcomeTests: XCTestCase {
@@ -62,7 +62,7 @@ final class AssistantWelcomeTests: XCTestCase {
     }
 
     /// What needs the user over the composer stays below the welcome's first row of things to ask: on a short screen
-    /// (iPhone Duo's outer one, an SE) fewer rows, the rest in 还有 N 件 (#283: three rows and the composer took half the
+    /// (iPhone Duo's outer one, an SE) fewer rows, the rest in "N more" (#283: three rows and the composer took half the
     /// outer screen and cut the cards in two). Typing does not change how many.
     @MainActor func testNeedsYouLeavesTheFirstRowToAsk() {
         launch(oldLayout: false, newConversation: true, needsYou: true)
@@ -86,7 +86,7 @@ final class AssistantWelcomeTests: XCTestCase {
         XCTAssertEqual(more.exists ? more.label : nil, rest, "typing changed what 还有 N 件 says")
     }
 
-    /// From a conversation, the sidebar's 新对话 opens the same welcome.
+    /// From a conversation, the sidebar's New Chat opens the same welcome.
     @MainActor func testNewConversationFromTheSidebar() {
         launch(oldLayout: false, newConversation: false)
         let menu = app.buttons["assistant-sidebar-button"].firstMatch
@@ -94,7 +94,7 @@ final class AssistantWelcomeTests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["assistant-welcome"].exists, "opened on the welcome, not a conversation")
         sleep(1)
         menu.tapCenter()
-        // The pill's own id is under the sidebar's (`assistant-sidebar`): by its label, not the top bar's 新对话.
+        // The pill's own id is under the sidebar's (`assistant-sidebar`): by its label, not the top bar's New Chat.
         let new = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "新对话", "assistant-new")).firstMatch
         XCTAssertTrue(new.waitForExistence(timeout: 5), "the sidebar did not open")
         new.tap()

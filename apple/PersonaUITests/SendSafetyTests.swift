@@ -52,7 +52,7 @@ final class SendSafetyTests: XCTestCase {
         XCTAssertTrue(toast.waitForExistence(timeout: 5), "no prompt_changed toast")
     }
 
-    /// The computer's input box has a draft: the alert shows it, 清空并发送 resends the same message with clear_draft.
+    /// The computer's input box has a draft: the alert shows it, Clear and Send resends the same message with clear_draft.
     @MainActor func testDraftRefusalClearsAndSends() throws {
         let hub = try hub()
         let app = launch(hub, ["-openSession", "macbook/" + widget, "-openSendMessage", "把测试也跑一遍"])

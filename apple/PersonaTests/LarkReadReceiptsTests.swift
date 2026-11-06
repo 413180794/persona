@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Read receipts of my 飞书 messages: what a receipt shows (`LarkReadMark`), which ones are asked for and when
+/// Read receipts of my Lark messages: what a receipt shows (`LarkReadMark`), which ones are asked for and when
 /// (`LarkReadReceipts`), and the request (`larkReadStates`).
 @MainActor struct LarkReadReceiptsTests {
     private func state(_ id: String = "m1", read: Int, unread: Int) -> LarkReadState {

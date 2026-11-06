@@ -1,6 +1,6 @@
 import XCTest
 
-/// The task dock above the assistant's composer (#1094): 全部 stays at the leading edge while the pills scroll sideways
+/// The task dock above the assistant's composer (#1094): All stays at the leading edge while the pills scroll sideways
 /// beside it, so a dock wider than the screen never pushes it out of reach. Against scripts/mock/mock_hub.py with
 /// MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_DOCK=many (JARVIS_MOCK_HUB).
 final class TaskDockTests: XCTestCase {
@@ -34,7 +34,7 @@ final class TaskDockTests: XCTestCase {
         let window = app.windows.firstMatch.frame
         XCTAssertGreaterThan(pills.element(boundBy: pills.count - 1).frame.maxX, window.maxX, "the dock fits the screen: nothing to scroll")
 
-        // Swipe the pills: they move sideways, 全部 does not (the row as a whole may still move up or down with the
+        // Swipe the pills: they move sideways, All does not (the row as a whole may still move up or down with the
         // conversation above it).
         first.swipeLeft()
         sleep(1)

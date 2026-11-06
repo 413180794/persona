@@ -173,7 +173,7 @@ nonisolated struct VoiceRun: Equatable, Identifiable, Sendable {
     /// The words left unsent in the agent's input box on the computer (409 input_draft): the whole line, shown to the user.
     var draft: String?
     /// The hub's 409 `clearable` text: present only when the node can clear that line, and not always the same as `draft`
-    /// (an IDE selection marker stays out of it). 清空并发送 sends it back as `clear_draft` exactly (docs/voice.md 3.2).
+    /// (an IDE selection marker stays out of it). Clear and Send sends it back as `clear_draft` exactly (docs/voice.md 3.2).
     var clearable: String?
 }
 
@@ -242,7 +242,7 @@ nonisolated enum VoiceErrorCode: Equatable, Sendable {
     }
 }
 
-/// An `error` frame. The message is the extension's (or the upstream's) own words: for 详情, not the line on screen.
+/// An `error` frame. The message is the extension's (or the upstream's) own words: for Details, not the line on screen.
 nonisolated struct VoiceFailure: Equatable, Sendable {
     var code: VoiceErrorCode?
     var message: String

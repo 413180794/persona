@@ -9,7 +9,7 @@ struct CodeFindTests {
         CodeFind.matches(of: q, lineCount: lines.count) { lines[$0] }
     }
 
-    /// The find field takes Esc, ⏎ and ⇧⏎ before the window does: the file viewer's 完成 holds Esc as its shortcut and
+    /// The find field takes Esc, ⏎ and ⇧⏎ before the window does: the file viewer's Done holds Esc as its shortcut and
     /// would close the whole sheet. Other keys, and these keys while the field is not focused, stay the window's.
     @Test func theFieldTakesEscReturnAndShiftReturn() {
         #expect(CodeFind.barKey(keyCode: 53, shift: false, fieldFocused: true) == .close)
@@ -19,7 +19,7 @@ struct CodeFindTests {
         #expect(CodeFind.barKey(keyCode: 53, shift: false, fieldFocused: false) == nil)
         #expect(CodeFind.barKey(keyCode: 36, shift: true, fieldFocused: false) == nil)
         #expect(CodeFind.barKey(keyCode: 0, shift: false, fieldFocused: true) == nil) // "a" is typed
-        // Composing (拼音 in the field): ⏎ and Esc belong to the input method.
+        // Composing (pinyin in the field): ⏎ and Esc belong to the input method.
         #expect(CodeFind.barKey(keyCode: 36, shift: false, fieldFocused: true, composing: true) == nil)
         #expect(CodeFind.barKey(keyCode: 53, shift: false, fieldFocused: true, composing: true) == nil)
     }
@@ -111,7 +111,7 @@ struct CodeFindTests {
     }
 }
 
-/// 查找下一个 ⌘G / 查找上一个 ⇧⌘G over an open file: the bar's model steps through the matches, going round; with the
+/// Find Next ⌘G / Find Previous ⇧⌘G over an open file: the bar's model steps through the matches, going round; with the
 /// bar closed ⌘G opens it again on the last query, at the first match from the top of what is shown.
 @MainActor
 struct CodeFindNextTests {

@@ -50,7 +50,7 @@ private func observedGrid() throws -> TerminalGrid {
 
     @Test func wideCharactersTakeTwoCells() throws {
         let g = try observedGrid()
-        // The box's right edge lines up with its corners: 中文对齐 is 4 characters in 8 cells.
+        // The box's right edge lines up with its corners: 「中文对齐」 is 4 characters in 8 cells.
         #expect(g.lines[3][11].text == "│" && g.lines[2][11].text == "┐")
         let zhong = try #require(g.lines[3].firstIndex { $0.text == "中" })
         #expect(g.lines[3][zhong].width == 2 && g.lines[3][zhong + 1].width == 0)
@@ -77,7 +77,7 @@ private func observedGrid() throws -> TerminalGrid {
         let g = TerminalGrid(cols: 10, rows: 3)
         g.feed("\u{1B}[2J\u{1B}[1;1Habcdef\u{1B}[1;3H\u{1B}[K")
         #expect(TerminalGrid.plain(g.lines[0]) == "ab")
-        g.feed("\u{1B}[2;1H中文\u{1B}[2;2Hx") // writing into the right half of 中 blanks its left half
+        g.feed("\u{1B}[2;1H中文\u{1B}[2;2Hx") // writing into the right half of 「中」 blanks its left half
         #expect(TerminalGrid.plain(g.lines[1]) == " x文")
         g.feed("\u{1B}[3;10H中") // a wide character that would cross the edge is not drawn
         #expect(TerminalGrid.plain(g.lines[2]) == "")

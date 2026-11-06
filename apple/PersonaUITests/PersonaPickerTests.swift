@@ -1,8 +1,8 @@
 import XCTest
 
-/// 设置 › 外观 › 形象 (docs/persona.md), against scripts/mock/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
+/// Settings › Appearance › Avatar (docs/persona.md), against scripts/mock/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
 /// hub's persona is offered next to the built-in Persona; choosing it downloads it, and the Persona tab's top bar takes
-/// its name and face; choosing Persona again brings the name back. The built-in 汇流 is offered too and keeps the name
+/// its name and face; choosing Persona again brings the name back. The built-in Circuit is offered too and keeps the name
 /// (and puts its home screen icon on: the system's alert is accepted).
 final class PersonaPickerTests: XCTestCase {
     private var hub: String!
@@ -25,7 +25,7 @@ final class PersonaPickerTests: XCTestCase {
             let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
             app.launchArguments = ["-pairURL", pair, "-openPersona", "persona"]
             app.launchPinned()
-            // Back on 团子's icon, if a test left another: the system's alert.
+            // Back on Mochi's icon, if a test left another: the system's alert.
             let ok = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons.firstMatch
             if ok.waitForExistence(timeout: 5) { ok.tap() }
             _ = app.tabBars.firstMatch.waitForExistence(timeout: 10)
@@ -59,7 +59,7 @@ final class PersonaPickerTests: XCTestCase {
         return face.label
     }
 
-    /// 设置 › 外观 › 形象: the settings tab remembers its page, so the second time it is already open.
+    /// Settings › Appearance › Avatar: the settings tab remembers its page, so the second time it is already open.
     @MainActor private func openAppearance(_ app: XCUIApplication) {
         app.tabBars.buttons["设置"].tap()
         if app.buttons["persona-persona"].waitForExistence(timeout: 2) { return }
@@ -81,7 +81,7 @@ final class PersonaPickerTests: XCTestCase {
 
         demo.tap()
         waitSelected(app.buttons["persona-demo"], "choosing the hub's persona did not take")
-        // The whole app was rebuilt with the new colors and is still on 形象.
+        // The whole app was rebuilt with the new colors and is still on Avatar.
         XCTAssertTrue(app.navigationBars["形象"].exists, "the rebuild left 设置 › 外观 › 形象:\n\(app.debugDescription)")
         shot(app, "settings-demo")
         XCTAssertTrue(topBarName(app).hasPrefix("小薄荷"), "the top bar does not use the persona's name")
@@ -95,7 +95,7 @@ final class PersonaPickerTests: XCTestCase {
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "the top bar did not go back to Persona")
     }
 
-    /// 汇流 and 面罩 are built-ins next to the default (no download): choosing them keeps the name Persona.
+    /// Circuit and Visor are built-ins next to the default (no download): choosing them keeps the name Persona.
     @MainActor func testChoosingCircuitKeepsTheName() throws {
         let app = launch()
         openAppearance(app)
@@ -103,13 +103,13 @@ final class PersonaPickerTests: XCTestCase {
         XCTAssertTrue(circuit.waitForExistence(timeout: 10), "汇流 is not offered:\n\(app.debugDescription)")
         XCTAssertTrue(app.buttons["persona-persona"].isSelected, "the default should be 团子")
         circuit.tap()
-        acceptIconAlert() // the home screen icon follows the 形象 (AppIconTests)
+        acceptIconAlert() // the home screen icon follows the avatar (AppIconTests)
         waitSelected(app.buttons["persona-jarvis-circuit"], "choosing 汇流 did not take")
         shot(app, "settings-circuit")
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "汇流 should keep the name Persona")
         shot(app, "topbar-circuit")
 
-        // 面罩, the default until 2026-11-03, is still there to choose.
+        // Visor, the default until 2026-11-03, is still there to choose.
         openAppearance(app)
         let visor = app.buttons["persona-jarvis"]
         XCTAssertTrue(visor.waitForExistence(timeout: 10), "面罩 is not offered:\n\(app.debugDescription)")

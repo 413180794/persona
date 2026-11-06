@@ -50,7 +50,7 @@ final class ReadinessUITests: XCTestCase {
         sleep(1)
         shot(app, "readiness-\(scenario)")
         if scenario == "zero" {
-            // 添加电脑 on the card opens adding a computer in place (#4196).
+            // Add a Computer on the card opens adding a computer in place (#4196).
             let add = card.buttons["添加电脑"].firstMatch
             XCTAssertTrue(add.waitForExistence(timeout: 5), "no 添加电脑 on the card:\n\(app.debugDescription)")
             add.tap()
@@ -90,7 +90,7 @@ final class ReadinessUITests: XCTestCase {
         shot(app, "readiness-start-\(ProcessInfo.processInfo.environment["JARVIS_START_ERROR"] ?? "")")
     }
 
-    /// The main conversation of MOCK_READINESS=not_logged_in / bad_key: its failed turn is a 模型没接好 card, not
+    /// The main conversation of MOCK_READINESS=not_logged_in / bad_key: its failed turn is a Model Not Connected card, not
     /// Claude Code's words as an answer, and the readiness card sits over its composer.
     @MainActor func testTheMainConversationShowsTheFix() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],

@@ -63,9 +63,9 @@ final class AssistantSentPhotoTests: XCTestCase {
             XCTAssertTrue(send.waitForExistence(timeout: 5), "发送")
             send.tap()
         } else {
-            // The old layout in liquid glass: the composer is one element, its field and 发送 are not in the tree
+            // The old layout in liquid glass: the composer is one element, its field and Send are not in the tree
             // (#1006), and a tap where the field is does not focus it. No text, then (the app sends 「请看图片」 with
-            // it): 发送 by where it is, at the composer's trailing bottom corner.
+            // it): Send by where it is, at the composer's trailing bottom corner.
             let composer = app.otherElements.allElementsBoundByIndex.last {
                 $0.frame.minY > app.frame.height * 0.6 && $0.frame.width > app.frame.width * 0.8 && $0.frame.height > 60 && $0.frame.height < 200
             }

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 会话分诊 (`TriageSettingsModel`, `TriageSwitches`) without the page.
+/// Settings › Session Triage (`TriageSettingsModel`, `TriageSwitches`) without the page.
 @MainActor struct TriageSettingsTests {
     private struct Boom: Error {}
 

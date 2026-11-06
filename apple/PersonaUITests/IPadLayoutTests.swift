@@ -56,7 +56,7 @@ final class IPadLayoutTests: XCTestCase {
 
     /// The list column reaches the top of the screen (the strip under the status bar has its color), and when the
     /// column is closed the strip is the detail's again (2026-10-31: the list looked cut off at the top).
-    /// 机器 from the Agents menu opens in the detail column, its cards side by side; a card opens the machine there too,
+    /// Machines from the Agents menu opens in the detail column, its cards side by side; a card opens the machine there too,
     /// the list column staying (docs/machines.md「App」).
     @MainActor func testMachinesInTheDetailColumn() {
         XCUIDevice.shared.orientation = .landscapeLeft

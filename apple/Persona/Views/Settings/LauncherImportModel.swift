@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 从 ~/.zshrc 导入 (#2455): pick a machine, see what its claude aliases come to (merged by gateway and key), tick the
+/// Import from ~/.zshrc (#2455): pick a machine, see what its claude aliases come to (merged by gateway and key), tick the
 /// ones to keep and import them; the hub reads the keys on the machine again itself, so none passes through the app.
 @Observable final class LauncherImportModel {
     struct Deps {

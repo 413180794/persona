@@ -26,7 +26,7 @@ struct SettingsView: View {
 
     nonisolated private struct SlotsKey: Hashable, Sendable { var source: ExtensionSlots.Source; var depth: Int }
 
-    /// 翻译's row value: off, or the target language.
+    /// Translation's row value: off, or the target language.
     private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : String(localized: "state.off", defaultValue: "关闭") }
 
     var body: some View {
@@ -89,7 +89,7 @@ struct SettingsView: View {
                         }
                         .settingsListRow(SettingsPage.modelConfiguration)
                         NavigationLink(value: SettingsPage.assistant) {
-                            // No model here: the assistant's model is 模型配置 › 主对话 (#1291).
+                            // No model here: the assistant's model is Model Settings › Main Chat (#1291).
                             SettingsRow(title: String(localized: "助手"), symbol: Theme.Icon.ai, tint: Theme.ai)
                         }
                         .settingsListRow(SettingsPage.assistant)
@@ -115,7 +115,7 @@ struct SettingsView: View {
 
                 ConnectorsSection()
 
-                // 扩展 (docs/extensions.md): only with a hub that has the plugin base.
+                // Extensions (docs/extensions.md): only with a hub that has the plugin base.
                 if model.hubFeatures.hasExtensionFeature("manager") {
                     Section {
                         Group {
@@ -238,16 +238,16 @@ struct SettingsView: View {
                 }
                 .navigationTitle("设置")
             .task { await model.refreshAssistant() }
-            // Measured each time the page shows and whenever a page closes (back from 存储空间 after clearing; in the
+            // Measured each time the page shows and whenever a page closes (back from Storage after clearing; in the
             // split the list never leaves the screen).
             .onAppear(perform: measureStorage)
             .onChange(of: model.settingsPath) { measureStorage() }
             #if DEBUG
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
-            // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
-            // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备), `-openHubUpdate YES` (hub),
-            // `-openSkills YES` (Skills), `-openExtensions YES` (扩展; `-openExtension <id>` one of them; the old `-openPlugin…` names too), `-openChannels YES`
-            // (渠道; `-openChannel <id>` one of them).
+            // memoryEdit|about`, `-openStorage YES` (Storage), `-openNotificationSettings YES` (Notifications), `-openMachines YES` (Machines;
+            // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (Devices), `-openHubUpdate YES` (hub),
+            // `-openSkills YES` (Skills), `-openExtensions YES` (Extensions; `-openExtension <id>` one of them; the old `-openPlugin…` names too), `-openChannels YES`
+            // (Channels; `-openChannel <id>` one of them).
             .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
@@ -259,8 +259,8 @@ struct SettingsView: View {
             .extensionPushes(ExtensionSlots.shared.cardPages)
             #endif
             #if os(macOS) && DEBUG
-            // `-tab settings -openPairSheet YES` (体验模式, or paired: 重新配对): the 连接 hub sheet, for screenshots
-            // (scripts/app/mac_shot.sh; with `-openPairSSH YES` its SSH 隧道 sheet over it).
+            // `-tab settings -openPairSheet YES` (Demo Mode, or paired: Pair Again): the Connect Hub sheet, for screenshots
+            // (scripts/app/mac_shot.sh; with `-openPairSSH YES` its SSH Tunnel sheet over it).
             .onAppear { if UserDefaults.standard.bool(forKey: "openPairSheet") { showPair = true } }
             #endif
         } empty: {
@@ -292,7 +292,7 @@ struct SettingsView: View {
         let d = UserDefaults.standard
         // Appended with their own types: a path of AnyHashable finds no destination.
         var p = NavigationPath()
-        // `-openExtension…` / `-openMarketExtension`; the `-openPlugin…` names from before 扩展 still work (#1859).
+        // `-openExtension…` / `-openMarketExtension`; the `-openPlugin…` names from before Extensions still work (#1859).
         let str = { (name: String) in d.string(forKey: name) ?? d.string(forKey: name.replacingOccurrences(of: "Extension", with: "Plugin")) }
         let flag = { (name: String) in d.bool(forKey: name) || d.bool(forKey: name.replacingOccurrences(of: "Extension", with: "Plugin")) }
         if d.bool(forKey: "openMachines") {
@@ -305,24 +305,24 @@ struct SettingsView: View {
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
         else if d.bool(forKey: "openHubs") || d.bool(forKey: "openSSHTunnel") {
             p.append(SettingsPage.hubs)
-            // `-openSSHTunnel YES`: the first hub's 设置 › hub › SSH 隧道 (screenshots).
+            // `-openSSHTunnel YES`: the first hub's Settings › hub › SSH Tunnel (screenshots).
             if d.bool(forKey: "openSSHTunnel"), let first = model.registry.hubs.first { p.append(SettingsPage.sshTunnel(first.id)) }
         }
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
-        else if flag("openExtensions") || str("openExtension") != nil { // 设置 › 扩展 (› one (› a page of it))
+        else if flag("openExtensions") || str("openExtension") != nil { // Settings › Extensions (› one (› a page of it))
             p.append(SettingsPage.plugins)
             if let id = str("openExtension") {
                 p.append(SettingsPage.plugin(id))
                 if let ui = str("openExtensionPage") { p.append(SettingsPage.pluginPage(plugin: id, ui: ui, title: "")) }
             }
         }
-        else if d.bool(forKey: "openChannels") || d.string(forKey: "openChannel") != nil { // 设置 › 渠道 (› one)
+        else if d.bool(forKey: "openChannels") || d.string(forKey: "openChannel") != nil { // Settings › Channels (› one)
             p.append(SettingsPage.channels)
             if let id = d.string(forKey: "openChannel") { p.append(SettingsPage.channel(id)) }
         }
         else if flag("openExtensionMarket") || flag("openExtensionMarkets") || str("openMarketExtension") != nil {
-            // 设置 › 扩展 › 扩展市场 (› 市场, or › <market>/<extension>)
+            // Settings › Extensions › Extension Market (› Markets, or › <market>/<extension>)
             p.append(SettingsPage.plugins)
             p.append(SettingsPage.pluginMarket)
             if flag("openExtensionMarkets") { p.append(SettingsPage.pluginMarkets) }
@@ -331,13 +331,13 @@ struct SettingsView: View {
             }
         }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
-        else if d.bool(forKey: "openClaudeSettings") { p.append(SettingsPage.claude) } // with its 屏蔽的配置目录
+        else if d.bool(forKey: "openClaudeSettings") { p.append(SettingsPage.claude) } // with its Blocked Config Folders
         else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorGitHub") { p.append(SettingsPage.connector("github")) }
         else if d.bool(forKey: "openConnectorTelegram") { p.append(SettingsPage.connector("telegram")) }
         else if let id = d.string(forKey: "openConnectorPlugin") { p.append(SettingsPage.connector(id)) } // a plugin's connector by its id
-        else if d.bool(forKey: "openConnectorMessages") || d.string(forKey: "openMessagesChat") != nil { // 信息 (› 会话 › one)
+        else if d.bool(forKey: "openConnectorMessages") || d.string(forKey: "openMessagesChat") != nil { // Messages (› Session › one)
             p.append(SettingsPage.connector("imessage"))
             if d.bool(forKey: "openMessagesChats") || d.string(forKey: "openMessagesChat") != nil { p.append(MessagesChatsRoute()) }
             if let id = d.string(forKey: "openMessagesChat") { p.append(MessagesThreadRoute(id: id, name: "")) }
@@ -346,7 +346,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
         else if d.bool(forKey: "openTriageSettings") { p.append(SettingsPage.triage) }
-        else if let a = d.string(forKey: "openAppearance") { // persona (or YES, or icon: the icon is the 形象's) | color | style | layout | scheme
+        else if let a = d.string(forKey: "openAppearance") { // persona (or YES, or icon: the icon is the Avatar's) | color | style | layout | scheme
             p.append(a == "color" ? SettingsPage.themeColor : a == "style" ? SettingsPage.style
                      : a == "layout" ? SettingsPage.layout
                      : a == "scheme" ? SettingsPage.colorScheme : SettingsPage.persona)
@@ -356,7 +356,7 @@ struct SettingsView: View {
             if let id = d.string(forKey: "openModelPurpose") { p.append(ModelPurposeRoute(id: id)) }
         }
         else if let n = d.string(forKey: "openLauncherPage") { p.append(ModelLaunchersRoute()); p.append(ModelLauncherRoute(name: n)) }
-        else if d.bool(forKey: "openModelLaunchers") || d.string(forKey: "openModelLauncher") != nil { // 设置 › 模型 (› one)
+        else if d.bool(forKey: "openModelLaunchers") || d.string(forKey: "openModelLauncher") != nil { // Settings › Model (› one)
             p.append(ModelLaunchersRoute())
             if let n = d.string(forKey: "openModelLauncher") { p.append(ModelLauncherRoute(name: n)) }
         }
@@ -406,29 +406,29 @@ struct SettingsView: View {
     }
 }
 
-/// The pages of 设置 that are not routes of their own elsewhere.
+/// The pages of Settings that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
     case persona, themeColor, style, layout, colorScheme, language, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
-    /// 设置 › 会话分诊 (docs/agent-work.md「开关」).
+    /// Settings › Session Triage (docs/agent-work.md「开关」).
     case triage
-    /// 设置 › hub: the hubs paired, by group (docs/multi-hub.md).
+    /// Settings › hub: the hubs paired, by group (docs/multi-hub.md).
     case hubs
     case hub, skills
     /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
     case connector(String)
-    /// 设置 › 扩展, and one plugin by its id (docs/extensions.md).
+    /// Settings › Extensions, and one plugin by its id (docs/extensions.md).
     case plugins
     case plugin(String)
     /// A page a plugin draws (placement plugin_page, docs/extensions.md「声明式 UI」), titled until its View says otherwise.
     case pluginPage(plugin: String, ui: String, title: String)
-    /// 设置 › 扩展 › 扩展市场, one plugin of a market, and the markets (docs/extensions.md「扩展市场」).
+    /// Settings › Extensions › Extension Market, one plugin of a market, and the markets (docs/extensions.md「扩展市场」).
     case pluginMarket
     case marketExtension(market: String, id: String)
     case pluginMarkets
-    /// 设置 › 渠道, and one channel by its id (docs/channels.md).
+    /// Settings › Channels, and one channel by its id (docs/channels.md).
     case channels
     case channel(String)
-    /// 设置 › hub › SSH 隧道 of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
+    /// Settings › hub › SSH Tunnel of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
     case sshTunnel(String)
 
 }
@@ -494,7 +494,7 @@ private struct SettingsDestinations: ViewModifier {
 
 }
 
-/// 设置 in 体验模式: what it is, and the two ways out.
+/// Settings in Demo Mode: what it is, and the two ways out.
 private struct DemoSection: View {
     @Environment(AppModel.self) private var model
     var pair: () -> Void
@@ -544,9 +544,9 @@ private struct DemoSection: View {
     }
 }
 
-/// 设置 › 连接器 › 这台 iPhone: which of the device's data Claude may use (phone_* tools). One switch per source, and
-/// the switch is the whole state: on = turned on and allowed (2026-11-01, no 已授权 / 点此授权 labels). Turning one on
-/// asks for the permission; refused (or refused before) it stays off and 设置 opens where it can be allowed.
+/// Settings › Connectors › This iPhone: which of the device's data Claude may use (phone_* tools). One switch per source, and
+/// the switch is the whole state: on = turned on and allowed (2026-11-01, no Allowed / Tap to Allow labels). Turning one on
+/// asks for the permission; refused (or refused before) it stays off and Settings opens where it can be allowed.
 struct PhoneDataView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var phase
@@ -642,7 +642,7 @@ private struct SourceIcon: View {
     }
 }
 
-/// Persona's logo beside its name (设置's header, the welcome page, the sidebar's 主对话 row): the 形象's home screen
+/// Persona's logo beside its name (Settings' header, the welcome page, the sidebar's Main Chat row): the Avatar's home screen
 /// icon, in the look the home screen shows it in (#1312). A package's own face stands in for it here, in the icon's
 /// shape: in the app it is the logo, on the home screen iOS allows only the icons the app ships (#3203).
 struct AppGlyph: View {
@@ -672,7 +672,7 @@ struct AppGlyph: View {
         .accessibilityHidden(true) // decoration: Persona's name is beside it
     }
 
-    /// Under 跟随系统 the page's look (read here so the glyph redraws when the system's changes); else the screen's.
+    /// Under Match System the page's look (read here so the glyph redraws when the system's changes); else the screen's.
     private var systemLook: ColorScheme {
         #if os(iOS) || os(visionOS)
         model.colorScheme == .system ? pageLook : AppIconChoice.systemLook
@@ -771,7 +771,7 @@ struct WelcomeView: View {
         .sheet(isPresented: $showPair) { PairView() }
         .onAppear { withAnimation(.spring(duration: 0.8, bounce: 0.35)) { appear = true } }
         #if os(macOS) && DEBUG
-        // `-openWelcome YES -openPairSheet YES`: the 连接 hub sheet, for screenshots (scripts/app/mac_shot.sh).
+        // `-openWelcome YES -openPairSheet YES`: the Connect Hub sheet, for screenshots (scripts/app/mac_shot.sh).
         .onAppear { if UserDefaults.standard.bool(forKey: "openPairSheet") { showPair = true } }
         #endif
     }
@@ -845,7 +845,7 @@ struct PairView: View {
                 }
                 Section {
                     #if os(macOS)
-                    // A sheet of its own over this one, with its own 取消 / 保存, not a page pushed inside the sheet: a
+                    // A sheet of its own over this one, with its own Cancel / Save, not a page pushed inside the sheet: a
                     // pushed page got an iPhone's round back button, and the sheet shrank to the page's minimum width
                     // while the form kept its own, cut off on the right (#1170).
                     LabeledContent {
@@ -883,7 +883,7 @@ struct PairView: View {
                 }
             }
             #if DEBUG
-            // `-openPairSheet YES -openPairSSH YES`: this sheet's SSH 隧道 sheet, for screenshots.
+            // `-openPairSheet YES -openPairSSH YES`: this sheet's SSH Tunnel sheet, for screenshots.
             .onAppear { if UserDefaults.standard.bool(forKey: "openPairSSH") { editingSSH = true } }
             #endif
             // ⌘V lands in the focused field (the address field has it when the sheet opens), not on the paste button:
@@ -1096,7 +1096,7 @@ struct ClaudeSettingsView: View {
     }
 }
 
-/// 设置's 机器 row: N / M 在线. Its own view: the page read `model.machines` for it, and a machine's heartbeat (on every
+/// Settings' Machines row: N / M online. Its own view: the page read `model.machines` for it, and a machine's heartbeat (on every
 /// push of a busy hub) drew the whole page and its list again (#1495); now only this row.
 private struct MachinesSettingsRow: View {
     @Environment(AppModel.self) private var model
@@ -1107,7 +1107,7 @@ private struct MachinesSettingsRow: View {
     }
 }
 
-/// A row of 设置's list: the system's label, with what it is set to on the right; in the BeautifulUI style its list
+/// A row of Settings' list: the system's label, with what it is set to on the right; in the BeautifulUI style its list
 /// row (a tinted tile, the name, the value) at the height the other styles' rows have.
 struct SettingsRow: View {
     enum ValueLook { case plain, code, oneLine, digits }
@@ -1165,7 +1165,7 @@ extension View {
     /// not on a row inside a `NavigationLink`'s label (it does not reach the list there). Other styles keep the list's insets.
     func bareListRow() -> some View { listRowInsets(.vertical, AppStyle.current.usesBeautifulUI ? 0 : nil) }
 
-    /// A row of 设置's list that opens `value`: on the Mac it stays selected while that page is open beside the list
+    /// A row of Settings' list that opens `value`: on the Mac it stays selected while that page is open beside the list
     /// (`MacSettingsRowSelection`, #2318). Nothing elsewhere.
     @ViewBuilder func settingsListRow(_ value: some Hashable) -> some View {
         #if os(macOS)
@@ -1176,7 +1176,7 @@ extension View {
     }
 }
 
-/// A section's title in 设置: the list's own; in the BeautifulUI style its heading.
+/// A section's title in Settings: the list's own; in the BeautifulUI style its heading.
 struct SettingsHeading: View {
     var text: String
     init(_ text: String) { self.text = text }
@@ -1186,7 +1186,7 @@ struct SettingsHeading: View {
     }
 }
 
-/// 设置's buttons that are rows: the list's tinted button; in the BeautifulUI style a plain row (its tile carries the color).
+/// Settings' buttons that are rows: the list's tinted button; in the BeautifulUI style a plain row (its tile carries the color).
 struct SettingsButtonLook: ViewModifier {
     func body(content: Content) -> some View {
         #if os(macOS)
@@ -1199,6 +1199,6 @@ struct SettingsButtonLook: ViewModifier {
 }
 
 extension EnvironmentValues {
-    /// 设置 is a sheet of its own (the iPad's, docs/ios.md「iPad」): its × closes it, as over the shell.
+    /// Settings is a sheet of its own (the iPad's, docs/ios.md「iPad」): its × closes it, as over the shell.
     @Entry var settingsSheet = false
 }

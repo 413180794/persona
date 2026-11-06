@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 连接器 › Telegram: the sign-in a step at a time against the hub (docs/plan-telegram.md), the switch, deleting
+/// Settings › Connectors › Telegram: the sign-in a step at a time against the hub (docs/plan-telegram.md), the switch, deleting
 /// what it brought in. Made-up values only.
 @MainActor
 struct ConnectorSignInTests {
@@ -73,7 +73,7 @@ struct ConnectorSignInTests {
         #expect(hub.sent("POST", "/api/v1/connectors/telegram/logout").count == 1)
     }
 
-    /// 进知识库 / 进收件箱 go to the hub as one field each; 删除已存的知识库内容 says what went.
+    /// To Knowledge / To Inbox go to the hub as one field each; Delete Saved Knowledge says what went.
     @Test func feedsAndTheArchive() async throws {
         let hub = FakeHub()
         hub.on("PUT", "/api/v1/connectors/telegram/settings",
@@ -125,7 +125,7 @@ struct ConnectorSignInTests {
         #expect(try c("").storesData)
     }
 
-    /// Switched off or not signed in is gray, not 出错了 in red; neither is a state from a newer hub.
+    /// Switched off or not signed in is gray, not Something Went Wrong in red; neither is a state from a newer hub.
     @Test func onlyAnErrorIsRed() throws {
         func c(_ status: String) throws -> HubConnector {
             try JSON.decoder.decode(HubConnector.self, from: Data(#"{"id":"telegram","name":"Telegram","status":"\#(status)"}"#.utf8))
@@ -140,7 +140,7 @@ struct ConnectorSignInTests {
         #expect(ConnectorText.tone(try c("paused_for_maintenance")) == .secondary)
     }
 
-    /// A read-only connector's item is answered in its own app: the action bar says which (Telegram, Messages), else 打开.
+    /// A read-only connector's item is answered in its own app: the action bar says which (Telegram, Messages), else Open.
     @Test func aReadOnlyItemSaysWhereItIsAnswered() throws {
         func item(_ source: String, _ open: String) throws -> InboxItem {
             try JSON.decoder.decode(InboxItem.self, from: Data("""

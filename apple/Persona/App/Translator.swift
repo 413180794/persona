@@ -2,7 +2,7 @@ import Foundation
 import NaturalLanguage
 import Observation
 
-// 设置 › 翻译 (docs/ios.md「翻译」): when it is on, content not in the target language is translated by the hub
+// Settings › Translation (docs/ios.md「翻译」): when it is on, content not in the target language is translated by the hub
 // (its small-task model). The scope is mail (on by default) and the Feishu chats picked in settings (none by default:
 // there are too many messages). Whether a text needs it is decided here, on the device, with NaturalLanguage.
 
@@ -95,7 +95,7 @@ extension APIClient {
 
     private nonisolated struct TranslatePrefsPut: Encodable { var translate: TranslatePrefsBody }
 
-    /// Tells the hub this device's 设置 › 翻译 (only that field: the rest of its prefs stay as they are).
+    /// Tells the hub this device's Settings › Translation (only that field: the rest of its prefs stay as they are).
     func setTranslatePrefs(device: String, _ prefs: TranslatePrefsBody) async throws {
         _ = try await request("PUT", "/api/v1/devices/\(device)/prefs", body: TranslatePrefsPut(translate: prefs))
     }
@@ -172,7 +172,7 @@ final class Translator {
         }
     }
 
-    /// Sends 设置 › 翻译 to the hub (on connect and when it changes) unless it already has it.
+    /// Sends Settings › Translation to the hub (on connect and when it changes) unless it already has it.
     func syncPrefs(hubHas: TranslatePrefsBody?) {
         let mine = TranslationPrefs.body
         guard hubHas != mine, let api = AppModel.shared.api else { return }

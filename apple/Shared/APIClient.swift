@@ -20,13 +20,13 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
         self.token = token
     }
 
-    /// 体验模式: the made-up hub inside the app (Persona/App/DemoHub.swift). Its host can never resolve, so nothing
+    /// Demo Mode: the made-up hub inside the app (Persona/App/DemoHub.swift). Its host can never resolve, so nothing
     /// that slipped past `APIClient.local` reaches a network.
     static let demo = ServerConfig(url: URL(string: "https://demo.invalid")!, token: "demo")
     var isDemo: Bool { url.host() == "demo.invalid" }
 }
 
-/// One request the app's own made-up hub answers instead of the network (体验模式).
+/// One request the app's own made-up hub answers instead of the network (Demo Mode).
 nonisolated struct LocalRequest: Sendable {
     var method: String
     var path: String
@@ -44,7 +44,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
     var fields: [String: String] = [:]
     /// The hub logs failed requests under this id (X-Request-Id): a server error shows it, to find that line.
     var requestID: String?
-    /// 需要用户确认的结构化错误信息（例如依赖它的扩展列表），不写日志。
+    /// Structured error details the user has to confirm (e.g. the extensions that depend on it); not logged.
     var details: JSONValue?
     var errorDescription: String? {
         guard status >= 500, let requestID else { return message }
@@ -81,7 +81,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
 }
 
 nonisolated enum DemoText {
-    /// What a 体验模式 action that would reach a computer, Feishu or mail says instead.
+    /// What a Demo Mode action that would reach a computer, Feishu or mail says instead.
     static var notSent: String { String(localized: "体验模式下不会真的发送") }
     /// `APIError.code` of such a refusal.
     static let code = "demo"
@@ -135,7 +135,7 @@ nonisolated struct APIClient: Sendable {
     }
 
     /// A path for the request line. Callers escape ids themselves (`kbDetail`: a slug with Chinese in it, an id with
-    /// a slash); `URL.appending(path:)` escaped their `%` once more and the hub got another id — 404 (2026-10-30, 知识库).
+    /// a slash); `URL.appending(path:)` escaped their `%` once more and the hub got another id — 404 (2026-10-30, Knowledge).
     /// So: a path that already has escapes is used as is, anything else is escaped like appending(path:) did.
     nonisolated static func encodedPath(_ path: String) -> String {
         let p = path.hasPrefix("/") ? path : "/" + path
@@ -266,7 +266,7 @@ nonisolated struct APIClient: Sendable {
 
     /// Sends a file to the machine's temp directory (docs/protocol.md「发送文件」), streamed from disk; progress gets
     /// the bytes sent so far. Cancelling the task cancels the upload and the machine removes what it wrote.
-    /// dest "terminal": a file pasted into a terminal, kept in Persona's own directory (docs/terminal.md 第十八节).
+    /// dest "terminal": a file pasted into a terminal, kept in Persona's own directory (docs/terminal.md section 18).
     func upload(file: URL, name: String, machine: String, dest: String? = nil,
                 progress: @escaping @Sendable (Int64) -> Void) async throws -> UploadedFile {
         if config.isDemo { throw APIError(status: 403, message: DemoText.notSent) }
@@ -382,7 +382,7 @@ nonisolated struct APIClient: Sendable {
         return m
     }
 
-    /// 同时显示 botmux 会话 (#2575): whether the machine lists botmux's sessions beside its engine's. 404 on an older hub.
+    /// Also Show botmux Sessions (#2575): whether the machine lists botmux's sessions beside its engine's. 404 on an older hub.
     func botmux(machine: String) async throws -> Bool {
         struct State: Decodable { var on: Bool }
         return try JSON.decoder.decode(State.self, from: await request("GET", "/api/v1/machines/\(machine)/botmux")).on
@@ -393,7 +393,7 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(State.self, from: await request("PUT", "/api/v1/machines/\(machine)/botmux", body: Body(on: on))).on
     }
 
-    /// 设置 › 会话分诊 (docs/agent-work.md「开关」): the four switches, all off until the user turns them on. 404 on a hub
+    /// Settings › Session Triage (docs/agent-work.md「开关」): the four switches, all off until the user turns them on. 404 on a hub
     /// without the triage, 503 while its assistant is not connected.
     func agentTriage() async throws -> TriageSwitches { try await get("/api/v1/agents/triage", as: TriageSwitches.self) }
     func setAgentTriage(_ switches: TriageSwitches) async throws -> TriageSwitches {
@@ -404,7 +404,7 @@ nonisolated struct APIClient: Sendable {
     func computer(machine: String) async throws -> MachineComputer {
         try JSON.decoder.decode(MachineComputer.self, from: await request("GET", "/api/v1/machines/\(machine)/computer"))
     }
-    /// The machine page's 操控电脑 switch.
+    /// The machine page's Control Computer switch.
     func setComputer(machine: String, enabled: Bool) async throws -> MachineComputer {
         struct Body: Encodable { var enabled: Bool }
         return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(enabled: enabled)))
@@ -415,7 +415,7 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(no_auto_lock: on)))
     }
 
-    /// The machine page's 安装 Cua Driver, 去授权 and 取消: `install`, `grant`, `cancel`.
+    /// The machine page's Install Cua Driver, Grant Access and Cancel: `install`, `grant`, `cancel`.
     func computerJob(machine: String, _ action: String) async throws -> MachineComputer {
         try JSON.decoder.decode(MachineComputer.self, from: await request("POST", "/api/v1/machines/\(machine)/computer/\(action)"))
     }
@@ -443,17 +443,17 @@ nonisolated struct APIClient: Sendable {
     func browser(machine: String) async throws -> MachineBrowser {
         try JSON.decoder.decode(MachineBrowser.self, from: await request("GET", "/api/v1/machines/\(machine)/browser"))
     }
-    /// The machine page's 允许助手用这台的浏览器.
+    /// The machine page's Let the Assistant Use This Browser.
     func setBrowser(machine: String, enabled: Bool) async throws -> MachineBrowser {
         struct Body: Encodable { var enabled: Bool }
         return try JSON.decoder.decode(MachineBrowser.self, from: await request("PUT", "/api/v1/machines/\(machine)/browser", body: Body(enabled: enabled)))
     }
-    /// 安装 ego lite, 打开 ego lite, 取消: `install`, `open`, `cancel`.
+    /// Install ego lite, Open ego lite, Cancel: `install`, `open`, `cancel`.
     func browserJob(machine: String, _ action: String) async throws -> MachineBrowser {
         try JSON.decoder.decode(MachineBrowser.self, from: await request("POST", "/api/v1/machines/\(machine)/browser/\(action)"))
     }
 
-    /// 浏览器登录 (#1304): the sites with cookies in the Mac's ego lite; only the user's own apps may ask.
+    /// Browser Sign-ins (#1304): the sites with cookies in the Mac's ego lite; only the user's own apps may ask.
     func browserCookies(machine: String) async throws -> BrowserCookies {
         try JSON.decoder.decode(BrowserCookies.self, from: await request("GET", "/api/v1/machines/\(machine)/browser/cookies", timeout: 150))
     }
@@ -477,15 +477,15 @@ nonisolated struct APIClient: Sendable {
     func launcherList(machine: String) async throws -> LaunchersResponse {
         try await get("/api/v1/machines/\(machine)/launchers", as: LaunchersResponse.self)
     }
-    /// The models the launcher's agent lists in its /model menu (新建 Agent's model picker). The node starts the CLI to
+    /// The models the launcher's agent lists in its /model menu (New Agent's model picker). The node starts the CLI to
     /// ask (a few seconds, kept 10 minutes); refresh asks it again.
     func launcherModels(machine: String, launcher: String, refresh: Bool = false) async throws -> LauncherModels {
         let path = "/api/v1/machines/\(machine)/launchers/\(launcher.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? launcher)/models"
         return try JSON.decoder.decode(LauncherModels.self, from: await request("GET", path, query: refresh ? ["refresh": "1"] : [:], timeout: 75))
     }
-    /// 模型配置's list for a launcher provider (`launcher.<name>`, #943), asked on a machine that has the launcher (its
+    /// Model Settings' list for a launcher provider (`launcher.<name>`, #943), asked on a machine that has the launcher (its
     /// `machine`); nil: an older hub, or a provider without a list (a plugin brings its own, an API has none).
-    /// `machine`: the purpose's own (a task, 飞书 /agent run there), so the list is that machine's launcher.
+    /// `machine`: the purpose's own (a task, Lark /agent run there), so the list is that machine's launcher.
     func providerModels(_ provider: String, refresh: Bool = false, machine: String? = nil) async throws -> LauncherModels? {
         let path = "/api/v1/model-config/providers/\(provider.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? provider)/models"
         var query: [String: String] = [:]
@@ -538,7 +538,7 @@ nonisolated struct APIClient: Sendable {
         var workspaceID: String?
         var permissionMode: String? = nil
         var effort: String? = nil
-        /// The model picked in 新建 Agent for this start (`LauncherModels`); nil: the launcher's, or 模型配置's.
+        /// The model picked in New Agent for this start (`LauncherModels`); nil: the launcher's, or Model Settings'.
         var model: String? = nil
         /// The herdr tab's name; nil: the hub makes one from the first message (else agent-<n>).
         var tabName: String? = nil
@@ -715,7 +715,7 @@ nonisolated struct APIClient: Sendable {
             case token, qr, expiresAt = "expires_at", pairLink = "pair_url", webURL = "web_url", webQR = "web_qr"
         }
     }
-    /// 设置 › 设备 › 连接新设备: a signed-in full device asks the hub for a pairing code; `web` is the page address the
+    /// Settings › Devices › Connect New Device: a signed-in full device asks the hub for a pairing code; `web` is the page address the
     /// browser sign-in link opens.
     func pairCode(web: String?) async throws -> PairCode {
         struct Body: Encodable { var web: String? }
@@ -727,7 +727,7 @@ nonisolated struct APIClient: Sendable {
     /// Machines carry `trust` / `error_code` and take confirm / reject (docs/protocol.md「电脑的信任」).
     static let machineTrustFeature = "machine_trust"
 
-    /// A computer's pairing code (machine › 添加电脑): the app code's fields without `qr`, and the computer's own.
+    /// A computer's pairing code (machine › Add Computer): the app code's fields without `qr`, and the computer's own.
     nonisolated struct ComputerCode: Decodable, Hashable, Sendable {
         nonisolated struct Install: Decodable, Hashable, Sendable { var linux: String? }
         var token: String
@@ -765,9 +765,9 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(ComputerCode.self, from: try await request("POST", "/api/v1/auth/pair-codes", body: Body(machine: id)))
     }
 
-    /// 是我的电脑: the computer waiting to be confirmed is confirmed (it gets the keys, it can run agents).
+    /// It's Mine: the computer waiting to be confirmed is confirmed (it gets the keys, it can run agents).
     func confirmMachine(_ id: String) async throws { _ = try await post("/api/v1/machines/\(id)/confirm") }
-    /// 不是: the hub removes the computer waiting to be confirmed and revokes its credential.
+    /// Not Mine: the hub removes the computer waiting to be confirmed and revokes its credential.
     func rejectMachine(_ id: String) async throws { _ = try await post("/api/v1/machines/\(id)/reject") }
 
     struct KeysBody: Encodable { var keys: [String]; var text: String }
@@ -784,18 +784,18 @@ nonisolated struct APIClient: Sendable {
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
     private struct ForkBody: Encodable { var at_item_id: String }
     private struct Forked: Decodable { var session_id: String }
-    /// 分支到新聊天 (#2137): a new session with the conversation up to the end of item's turn; its id.
+    /// Branch to New Chat (#2137): a new session with the conversation up to the end of item's turn; its id.
     func fork(_ k: SessionKey, at itemID: String) async throws -> String {
         try await post(sp(k) + "/fork", body: ForkBody(at_item_id: itemID), timeout: 60, as: Forked.self).session_id
     }
     private struct RewindBody: Encodable { var prompt: String; var occurrence: Int; var prompts_after: Int; var restore: String }
-    /// 回退到这里 (#2915): the node walks Claude Code's /rewind to before the message (up to 90 s on the node). Its
+    /// Rewind to Here (#2915): the node walks Claude Code's /rewind to before the message (up to 90 s on the node). Its
     /// refusals (dialog_open, input_draft, rewind_busy, rewind_nothing, rewind_mismatch…) are 409 with a message to show.
     func rewind(_ k: SessionKey, prompt: String, occurrence: Int, promptsAfter: Int, restore: String) async throws -> Data {
         try await post(sp(k) + "/rewind", body: RewindBody(prompt: prompt, occurrence: occurrence, prompts_after: promptsAfter, restore: restore),
                        timeout: 110)
     }
-    /// 删除对话: the hub takes it out of every app's list; the transcript stays on its computer.
+    /// Delete Chat: the hub takes it out of every app's list; the transcript stays on its computer.
     func deleteSession(_ k: SessionKey) async throws { try await delete(sp(k)) }
 
     struct ScreenBefore: Decodable { var text: String; var hasMore: Bool; var atLimit: Bool
@@ -858,12 +858,12 @@ nonisolated struct APIClient: Sendable {
         var launcher: String
         var cwd: String
         var conversations: [Session]
-        /// What the assistant is told about the user (设置 › 助手 › 关于我).
+        /// What the assistant is told about the user (Settings › Assistant › About Me).
         var notes: String?
         var timezone: String?
         /// The main conversation's session id (the Persona tab opens it); nil until there is one.
         var main: String?
-        /// 主对话派的任务只在主对话里通知 (#1731): tasks the main conversation starts are quiet (`TodoItem.quiet`). The
+        /// Notify Main-Chat Tasks Only in the Main Chat (#1731): tasks the main conversation starts are quiet (`TodoItem.quiet`). The
         /// value in effect (on by default); nil from a hub without the setting, which hides the switch.
         var mainTasksQuiet: Bool?
         enum CodingKeys: String, CodingKey {
@@ -899,7 +899,7 @@ nonisolated struct APIClient: Sendable {
         try JSON.decoder.decode(AssistantState.self, from: try await request("PUT", "/api/v1/assistant",
             body: AssistantConfigBody(machineID: machine, launcher: launcher, timezone: timezone, notes: notes, mainTasksQuiet: mainTasksQuiet)))
     }
-    /// The 对话 tab is open: the hub gets a claude process ready so the first message starts at once. With no launcher
+    /// The Chat tab is open: the hub gets a claude process ready so the first message starts at once. With no launcher
     /// chosen the field is omitted and the hub warms its own default (#4200: the client never sends a made-up name).
     /// A hub with `assistant_readiness` answers with the readiness it has (not probed), or none while it works it out.
     @discardableResult
@@ -912,13 +912,13 @@ nonisolated struct APIClient: Sendable {
     }
 
     /// What the main conversation still needs (docs/protocol.md「主对话就绪度」). `probe`: also try one word on it
-    /// (costs a little; only for 试一句 and 「我已经在用 Claude Code」).
+    /// (costs a little; only for Try a Message and 「我已经在用 Claude Code」).
     func assistantReadiness(probe: Bool = false) async throws -> AssistantReadiness {
         try JSON.decoder.decode(AssistantReadiness.self, from: try await request("GET", "/api/v1/assistant/readiness",
                                                                                  query: probe ? ["probe": "1"] : [:]))
     }
 
-    /// 以后再说: the checklist stops coming up by itself (the card still shows when the readiness gets worse).
+    /// Later: the checklist stops coming up by itself (the card still shows when the readiness gets worse).
     func dismissAssistantReadiness(_ dismissed: Bool = true) async throws {
         _ = try await request("POST", "/api/v1/assistant/readiness/dismiss", body: ["dismissed": dismissed])
     }
@@ -926,7 +926,7 @@ nonisolated struct APIClient: Sendable {
     // MARK: Assistant schedule, memory (docs/assistant.md)
 
     /// Something the assistant does on its own (docs/assistant.md「定时任务」): once (a follow-up it scheduled), every
-    /// day at a time (早报), or every N minutes (a patrol). Runs go into the conversation it came from, else into the
+    /// day at a time (a morning briefing), or every N minutes (a patrol). Runs go into the conversation it came from, else into the
     /// task's own one (the first run starts it, the next ones continue it), with its own launcher / permission mode /
     /// effort (nil = the assistant's defaults); pushed when done.
     struct ScheduledTask: Codable, Identifiable, Hashable, Sendable {
@@ -948,7 +948,7 @@ nonisolated struct APIClient: Sendable {
         var permissionMode: String?
         var effort: String?
         var includesModelSettings = true
-        /// 跑完推送 (hubs with the task_push feature, docs/assistant.md「跑完推送」): nil or "" every run's answer is pushed,
+        /// Push When Done (hubs with the task_push feature, docs/assistant.md「跑完推送」): nil or "" every run's answer is pushed,
         /// "asked" only what a run sends with notify_user. Such a task always runs in its own conversation. Sent only when
         /// set: a hub keeps it when left out, and an older hub never gets it.
         var push: String?
@@ -966,7 +966,7 @@ nonisolated struct APIClient: Sendable {
             case lastStatus = "last_status", lastError = "last_error"
             case runMachineID = "run_machine_id", runSessionID = "run_session_id"
         }
-        /// 跑完推送 is 只在它自己提醒时: a run's answer is not pushed, only what it sends with notify_user.
+        /// Push When Done is Only Its Alerts: a run's answer is not pushed, only what it sends with notify_user.
         var pushesOnlyAsked: Bool { push == Self.pushAsked }
         static let pushAsked = "asked"
         /// The hub feature that says it takes `push`; without it the editor leaves the setting out.
@@ -1033,7 +1033,7 @@ nonisolated struct APIClient: Sendable {
         var machineID: String
         enum CodingKeys: String, CodingKey { case sessionID = "session_id", machineID = "machine_id" }
     }
-    /// 下次开新对话: the task's next run starts a new conversation of its own (the old one stays in 对话).
+    /// New Chat Next Time: the task's next run starts a new conversation of its own (the old one stays in Chat).
     func freshTaskConversation(_ id: String) async throws -> ScheduledTask {
         try await post("/api/v1/assistant/tasks/\(id)/fresh", body: [String: String](), as: TaskBody.self).task
     }
@@ -1161,7 +1161,7 @@ nonisolated struct APIClient: Sendable {
             body: SetSetting(key: key, value: value))).settings
     }
 
-    /// One Claude Code config directory of a machine (CLAUDE_CONFIG_DIR), as 设置 › Claude Code › 屏蔽的配置目录 lists it.
+    /// One Claude Code config directory of a machine (CLAUDE_CONFIG_DIR), as Settings › Claude Code › Blocked Config Folders lists it.
     struct ClaudeDir: Codable, Identifiable, Sendable, Equatable {
         var path: String
         var isDefault: Bool?
@@ -1253,7 +1253,7 @@ nonisolated struct APIClient: Sendable {
 
     /// Which pushes this device wants (hub: notify.go).
     func notifyPrefs(device: String) async throws -> NotifyPrefs { try await get("/api/v1/devices/\(device)/prefs") }
-    /// 手机静音 alone (the PUT merges): nothing else this device chose is written back with it.
+    /// Phone Muted alone (the PUT merges): nothing else this device chose is written back with it.
     func setMuteWhileDesktop(device: String, _ on: Bool) async throws -> NotifyPrefs {
         try JSON.decoder.decode(NotifyPrefs.self, from: try await request("PUT", "/api/v1/devices/\(device)/prefs", body: MuteWhileDesktopPut(on: on)))
     }
@@ -1278,7 +1278,7 @@ nonisolated struct AnyEncodable: Encodable {
 }
 
 extension Error {
-    /// A task or request that was cancelled (the screen went away, a newer load replaced it). iOS words it "已取消";
+    /// A task or request that was cancelled (the screen went away, a newer load replaced it). iOS words it "Canceled";
     /// it is never something to show the user.
     nonisolated var isCancellation: Bool {
         if self is CancellationError { return true }
@@ -1298,7 +1298,7 @@ extension Error {
     }
 
     /// The request never got an answer because the phone has no network or cannot reach the hub (it may still have
-    /// arrived when the link broke midway: networkConnectionLost). The title already says 等待网络 / 连接中….
+    /// arrived when the link broke midway: networkConnectionLost). The title already says Waiting for Network / Connecting….
     nonisolated var isOffline: Bool {
         let ns = self as NSError
         guard ns.domain == NSURLErrorDomain else { return false }
@@ -1319,7 +1319,7 @@ extension Error {
     nonisolated var shown: String? { isQuiet ? nil : localizedDescription }
 }
 
-/// Spaces ("machine/space name") and agents ("machine/session") kept at the top of 开发.
+/// Spaces ("machine/space name") and agents ("machine/session") kept at the top of Develop.
 nonisolated struct Pins: Codable, Hashable, Sendable {
     var spaces: [String] = []
     var sessions: [String] = []
@@ -1379,7 +1379,7 @@ extension APIClient {
         var title: String?
         enum CodingKeys: String, CodingKey { case title; case tabName = "tab_name" }
     }
-    /// Archives an assistant conversation (out of the sidebar, under 已归档) or brings it back.
+    /// Archives an assistant conversation (out of the sidebar, under Archived) or brings it back.
     func archiveConversation(_ id: String, archived: Bool) async throws {
         try await post("/api/v1/assistant/conversations/\(id)/" + (archived ? "archive" : "unarchive"), body: [String: String]())
     }

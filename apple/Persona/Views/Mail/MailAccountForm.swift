@@ -1,6 +1,6 @@
 import Foundation
 
-/// 添加邮箱's form as a value: what the fields become as a request to the hub.
+/// Add Mail Account's form as a value: what the fields become as a request to the hub.
 /// `AddMailAccountView` binds to it and talks to the hub; `MailAccountFormTests` checks it.
 struct MailAccountForm: Equatable {
     enum Kind: String, CaseIterable, Identifiable {

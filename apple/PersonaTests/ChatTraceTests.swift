@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 拷贝诊断 (#3783): the chat's trace says where a reply went in structure only, and never carries a word of it.
+/// Copy Diagnostics (#3783): the chat's trace says where a reply went in structure only, and never carries a word of it.
 @MainActor
 struct ChatTraceTests {
     private func item(_ seq: Int, _ kind: ItemKind, role: String = "assistant", text: String? = nil, tool: String? = nil, id: String? = nil) -> Item {

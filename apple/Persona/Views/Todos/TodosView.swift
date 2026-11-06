@@ -141,7 +141,7 @@ struct TodosView: View {
         .task {
             await store.refresh()
             #if DEBUG
-            // `-showDoneTodos YES`: the 已完成 section starts open (screenshots of done todos).
+            // `-showDoneTodos YES`: the Done section starts open (screenshots of done todos).
             if UserDefaults.standard.bool(forKey: "showDoneTodos") { expandedDone = true }
             if let match = UserDefaults.standard.string(forKey: "openTodoTitled"),
                let todo = store.todos.first(where: { $0.title.contains(match) }) {

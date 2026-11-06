@@ -1,6 +1,6 @@
 import Foundation
 
-/// ⌘K 快速打开 (docs/mac.md「搜索」): one field over the agents, the Persona conversations, the open conversation's
+/// ⌘K Quick Open (docs/mac.md「搜索」): one field over the agents, the Persona conversations, the open conversation's
 /// files (`MacFileFind`), the inbox, the window's sections and the two "new" actions, like Xcode's Open Quickly. ↑↓ choose, ⏎ opens, Esc closes.
 enum MacQuickOpen {
     enum Target: Hashable {
@@ -54,8 +54,8 @@ enum MacQuickOpen {
     /// one whose title has them.
     static let fileScore = 60
 
-    /// The groups to list, empty ones dropped: Agent, Persona 对话, 文件, 收件箱, 前往, 动作 — unless a later group has
-    /// a better kind of match (typing 设置 puts the section above an agent that merely mentions it). `files`: what
+    /// The groups to list, empty ones dropped: Agent, Persona Chat, Files, Inbox, Go, Actions — unless a later group has
+    /// a better kind of match (typing Settings puts the section above an agent that merely mentions it). `files`: what
     /// `MacFileFind` matched in the open conversation's directory, best first.
     static func sections(_ query: String, sessions: [Session], machines: [Machine], inbox: [InboxItem],
                          files: [MacFileFind.Hit] = [], supportsTodos: Bool = true,

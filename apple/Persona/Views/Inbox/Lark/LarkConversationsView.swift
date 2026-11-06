@@ -56,7 +56,7 @@ private struct LarkConversationsPage: View {
                                                                           accountName: choice.selectedName)))
     }
 
-    /// The account''s summary (#882).
+    /// The account's message display settings, for Brave Climb words in a chat's summary (#882).
     private var display: LarkMessageDisplay { model.hub?.larkDisplay.policy ?? .hidden }
 
     private var filtered: [LarkConversation] {

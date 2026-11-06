@@ -5,7 +5,7 @@ import SwiftUI
 
 /// The Mac's `ZoomableImage` (iOS: UIScrollView in ImageViewer.swift): an NSScrollView with magnification, so a
 /// trackpad pinch and ⌘ / ⌥-scroll zoom natively; a double click zooms to the clicked point (or back to fit), a single
-/// click calls `onTap`. The pull-down to close has no Mac gesture (Esc and the 关闭 button close the viewer).
+/// click calls `onTap`. The pull-down to close has no Mac gesture (Esc and the Close button close the viewer).
 struct ZoomableImage: NSViewRepresentable {
     var image: NSImage
     var onTap: () -> Void

@@ -1,7 +1,7 @@
 import XCTest
 
 /// Feishu documents in the inbox (docs/inbox.md「云文档」): a row's status menu moves the status in the document, and
-/// 发送 on the AI 分身's draft makes its proposed move with the comment. Against scripts/mock/mock_hub.py with MOCK_DOCS=1
+/// Send on the AI twin's draft makes its proposed move with the comment. Against scripts/mock/mock_hub.py with MOCK_DOCS=1
 /// (JARVIS_MOCK_HUB), which records replies at /mock/sent and keeps the rows' status.
 final class InboxDocTests: XCTestCase {
     private var hub: String!
@@ -53,7 +53,7 @@ final class InboxDocTests: XCTestCase {
     }
 
     @MainActor func testSendingTheDraftMakesItsMove() {
-        // The sheet item's draft proposes 待验收 → 已完成.
+        // The sheet item's draft proposes 「待验收」 → 「已完成」.
         XCTAssertTrue(app.staticTexts["状态：待验收 → 已完成 · 压测报告"].firstMatch.waitForExistence(timeout: 20),
                       "no proposed move on the draft:\n\(app.debugDescription)")
         let send = app.buttons.matching(identifier: "发送 AI 分身草拟的回复").allElementsBoundByIndex

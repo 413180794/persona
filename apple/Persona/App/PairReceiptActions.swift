@@ -66,7 +66,7 @@ nonisolated struct PairPush: Sendable, Equatable {
 nonisolated enum PairReceiptActions {
     static let receiptCategory = "pair_receipt"
     static let joiningCategory = "computer_joining"
-    /// 不是你？撤销: revokes the new device's credential, or rejects the computer a code was made for.
+    /// Not you? Revoke: revokes the new device's credential, or rejects the computer a code was made for.
     static let revoke = "PAIR_REVOKE"
     static let confirm = "PAIR_CONFIRM_COMPUTER"
     static let reject = "PAIR_REJECT_COMPUTER"
@@ -92,7 +92,7 @@ nonisolated enum PairReceiptActions {
     }
 
     /// The request a button makes, by the push's kind; nil when the button is not one of these or does not fit the
-    /// kind (a 是我的电脑 on a device's receipt).
+    /// kind (an It's Mine on a device's receipt).
     enum Request: Equatable, Sendable {
         case revokeDevice(String)
         case rejectComputer(String)
@@ -194,9 +194,9 @@ nonisolated enum PairReceiptActions {
 
     /// Where tapping the notification itself goes.
     enum Destination: Equatable, Sendable {
-        /// 确认电脑 for this computer (M3's screen).
+        /// Confirm Computer for this computer (M3's screen).
         case confirmComputer(MachineRef)
-        /// 设置 › 设备.
+        /// Settings › Devices.
         case devices
         /// The computer's own page.
         case machine(MachineRef)

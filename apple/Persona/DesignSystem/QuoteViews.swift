@@ -8,7 +8,7 @@ import SwiftUI
 // context of a Feishu /agent request (instructions, documents) is not a quote and stays folded (`ContextGroup`).
 
 nonisolated extension ContextRef {
-    /// 引用 on a message of this chat: who wrote it ("我" for the user's own, as the agent reads it) and its id.
+    /// Quote on a message of this chat: who wrote it (「我」 for the user's own, as the agent reads it) and its id.
     static func quote(_ text: String, from: String, msg: String) -> ContextRef {
         ContextRef(kind: "quote", title: from, url: "", text: text, msg: msg)
     }
@@ -24,7 +24,7 @@ nonisolated extension ContextRef {
     var isSession: Bool { url.hasPrefix("jarvis://session/") }
 
     #if DEBUG
-    /// `-showSampleQuotes YES`: what 作为上下文 on a page and @ on a session put over the box.
+    /// `-showSampleQuotes YES`: what Add as Context on a page and @ on a session put over the box.
     static let samples = [
         ContextRef(kind: "context", title: "WidgetKit 时间线", url: "https://example.com/docs/widgetkit/timeline", // i18n-ignore
                    text: "时间线里的每一项都有一个日期，系统按这个日期换上新的内容；刷新策略决定时间线用完以后什么时候再要一条。"), // i18n-ignore
@@ -135,7 +135,7 @@ struct QuoteBarRow: View {
     var summary: String
     var lines = 2
     var tint: Color?
-    /// What × says to VoiceOver (Feishu's reply: 取消回复).
+    /// What × says to VoiceOver (Feishu's reply: Cancel Reply).
     var removeLabel = String(localized: "取消引用")
     var remove: () -> Void
     @Environment(\.buiTheme) private var theme

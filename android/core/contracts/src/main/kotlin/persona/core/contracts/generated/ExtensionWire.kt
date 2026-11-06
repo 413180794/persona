@@ -482,8 +482,8 @@ data class ExtensionThemeColors(
 )
 
 /**
- * A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer one
- * that fails.
+ * A theme (Theme Color): the design system's role colors for light and dark; the apps check the contrast and do not
+ * offer one that fails.
  */
 @Serializable
 data class ExtensionThemeItem(
@@ -494,7 +494,7 @@ data class ExtensionThemeItem(
 )
 
 /**
- * A look every app draws itself: 团子 (the default), 面罩, 汇流.
+ * A look every app draws itself: Mochi (the default), Visor, Circuit.
  */
 object ExtensionBuiltinLook {
     const val PERSONA = "persona"
@@ -627,8 +627,8 @@ data class ExtensionLookDot(
 )
 
 /**
- * A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package;
- * app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.
+ * A look (docs/extensions.md「形象」): Persona's name, face, colors and dot, served as a persona package.
+ * app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
  */
 @Serializable
 data class ExtensionLookItem(
@@ -2087,7 +2087,7 @@ data class ExtensionTab(
 )
 
 /**
- * A label and its value in a header (作者 · someone).
+ * A label and its value in a header (Author · someone).
  */
 @Serializable
 data class ExtensionFact(
@@ -2169,8 +2169,8 @@ data class ExtensionThread(
 )
 
 /**
- * A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An event is
- * a quiet line (merged, pushed two commits).
+ * A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (Approved). An
+ * event is a quiet line (merged, pushed two commits).
  */
 @Serializable
 data class ExtensionComment(
@@ -2428,7 +2428,7 @@ data class ExtensionFilter(
 )
 
 /**
- * A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
+ * A section's last row, Load More (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
  * extension answers the whole view, longer.
  */
 @Serializable
@@ -2847,7 +2847,7 @@ data class ExtensionMessagingReaction(
 )
 
 /**
- * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+ * A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted Message · Public).
  */
 @Serializable
 data class ExtensionMessagingDecoration(

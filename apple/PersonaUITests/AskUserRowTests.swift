@@ -1,7 +1,7 @@
 import XCTest
 
-/// The assistant's ask_user in the chat (#677): the tool row reads 提问 with its question, and opened it keeps what was
-/// asked and what the user picked (the card is gone once answered); a card the user let go says 没有回答. It used to be
+/// The assistant's ask_user in the chat (#677): the tool row reads Question with its question, and opened it keeps what was
+/// asked and what the user picked (the card is gone once answered); a card the user let go says No answer. It used to be
 /// the tool's raw name beside an empty chip.
 ///   PORT=18797 MOCK_ASK_USER=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests

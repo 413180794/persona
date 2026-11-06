@@ -136,7 +136,7 @@ nonisolated struct HTMLCardActions: Equatable, Sendable {
     mutating func restart() { pending = nil; muted = false }
 }
 
-/// An `html` component in the assistant's reply: its title and 运行; once run, the page in its sandbox. A page asking
+/// An `html` component in the assistant's reply: its title and Run; once run, the page in its sandbox. A page asking
 /// to reply or open something is shown what it asks first.
 struct AssistantHTMLCard: View {
     var title: String?
@@ -586,7 +586,7 @@ struct SandboxedHTMLView: NSViewRepresentable {
 
 #if DEBUG
 extension View {
-    /// `-showSampleHTMLCard YES`: html cards in a sheet, one waiting for 运行 and one running, for screenshots.
+    /// `-showSampleHTMLCard YES`: html cards in a sheet, one waiting for Run and one running, for screenshots.
     func htmlCardSample() -> some View { modifier(HTMLCardSample()) }
 }
 

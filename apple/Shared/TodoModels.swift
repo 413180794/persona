@@ -114,7 +114,7 @@ nonisolated struct TodoAgentGroup: Identifiable, Sendable {
     var sessions: [Session]
     var todoID: String?
     var todoStatus: TaskState?
-    /// Starts folded (未归属 below todos with nothing in it waiting for you, #1836).
+    /// Starts folded (Unassigned below todos with nothing in it waiting for you, #1836).
     var folded = false
 
     var id: String { key }
@@ -222,12 +222,12 @@ nonisolated enum TodosLogic {
 
     /**
      * TodoItem status, first match wins:
-     * 1. Done (已完成): the user marked it done (done_at != nil)
-     * 2. Needs you (等你): an attached agent needs the user (a question or an approval)
-     * 3. Unread (待查看): an attached agent finished and the user has not looked yet
-     * 4. Working (进行中): an attached agent is working or starting
-     * 5. Follow-up (待跟进): every attached agent is idle (seen, not running, or failed to start)
-     * 6. Not started (未开始): no attached agent
+     * 1. Done: the user marked it done (done_at != nil)
+     * 2. Needs you: an attached agent needs the user (a question or an approval)
+     * 3. Unread: an attached agent finished and the user has not looked yet
+     * 4. Working: an attached agent is working or starting
+     * 5. Follow-up: every attached agent is idle (seen, not running, or failed to start)
+     * 6. Not started: no attached agent
      */
     public static func todoStatus(_ todo: TodoItem, lookup: SessionLookup? = nil) -> TaskState {
         let states: [AgentState] = todo.agents.filter { $0.releasedAt == nil }.map { agent in
@@ -322,10 +322,10 @@ nonisolated enum TodosLogic {
     /**
      * Pure grouping for the Agents sidebar, by todo:
      * - one section per open todo with attached agents; the header shows the todo title and status, and tapping it opens the todo
-     * - agents with no todo opened by hand in herdr get their own section, "手动开的", open, before 未归属 (#2608, #2917)
-     * - the other agents with no todo go into the last section, "未归属": folded below todos unless one of them needs you
+     * - agents with no todo opened by hand in herdr get their own section, "Started Manually", open, before Unassigned (#2608, #2917)
+     * - the other agents with no todo go into the last section, "Unassigned": folded below todos unless one of them needs you
      *   (unread alone stays folded, many lists always have some); with no todo above it is the whole list, open (#1836)
-     * - pinning, muting and the "最近（未运行）" rules match the "按状态" grouping
+     * - pinning, muting and the "Recent (Not Running)" rules match the "By Status" grouping
      */
     public static func buildTodoAgentGroups(
         sessions: [Session],
@@ -393,7 +393,7 @@ nonisolated enum TodosLogic {
         let rest = live.filter { !assignedSessionKeys.contains("\($0.machineID)/\($0.sessionID)") }
 
         // Opened by hand in herdr and on no todo: no auto-link rule knows them (not spawned, their space is on no
-        // todo), so they get a section of their own, open, before 未归属 (#2608, #2917).
+        // todo), so they get a section of their own, open, before Unassigned (#2608, #2917).
         let manual = rest.filter(isManualHerdr).sorted(by: byRank)
         if !manual.isEmpty {
             groups.append(TodoAgentGroup(key: "todo:manual", name: String(localized: "手动开的"), sessions: manual, todoID: nil, todoStatus: nil))
@@ -417,7 +417,7 @@ nonisolated enum TodosLogic {
 
     /**
      * Format of the context attached when a todo is handed to an Agent (the same as the inbox's)
-     * `<jarvis-context kind="context" title="待办 · <标题>" url="">说明</jarvis-context>`
+     * `<jarvis-context kind="context" title="…" url="">notes</jarvis-context>`, the title 「待办 · <title>」
      */
     public static func formatTodoContext(title: String, notes: String?) -> String {
         let t = title

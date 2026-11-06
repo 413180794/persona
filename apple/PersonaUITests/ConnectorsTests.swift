@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 连接器: this device's data, the mail accounts (moved here from the inbox's ⋯ menu), 飞书 and the hub's own
+/// Settings › Connectors: this device's data, the mail accounts (moved here from the inbox's ⋯ menu), Lark and the hub's own
 /// connectors (GitHub) open from the settings list. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
 final class ConnectorsTests: XCTestCase {
     @MainActor func testEachConnectorOpens() throws {
@@ -41,7 +41,7 @@ final class ConnectorsTests: XCTestCase {
         github.tap()
         XCTAssertTrue(app.staticTexts["alice"].waitForExistence(timeout: 10), "GitHub page shows no account:\n\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["已连接"].exists)
-        // A LabeledContent row reads as one element, 登录 and its value together.
+        // A LabeledContent row reads as one element, Sign In and its value together.
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "来自 MacBook 的 gh 登录")).firstMatch.exists)
         shot("github")
         // GitHub's inbox options (docs/inbox.md「连接器：GitHub」): the CI choice and the muted repositories.

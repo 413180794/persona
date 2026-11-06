@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// 新建 Agent's model: the launcher's list (`LauncherModels`) and what is picked from it. Picking nothing ("") is the
-/// default — what the launcher runs, or 模型配置 › 新建 Agent's model when that applies — and sends no model.
+/// New Agent's model: the launcher's list (`LauncherModels`) and what is picked from it. Picking nothing ("") is the
+/// default — what the launcher runs, or Model Settings › New Agent's model when that applies — and sends no model.
 nonisolated struct LauncherModelChoice: Equatable {
     var list: LauncherModels
     /// The picked model's id; "": the default.
     var picked = ""
-    /// 模型配置 › 新建 Agent's model when it is what runs with no pick (the launcher is the one it names); "": none.
+    /// Model Settings › New Agent's model when it is what runs with no pick (the launcher is the one it names); "": none.
     var configured = ""
-    /// How 默认's line names [configured]: 模型配置 (新建 Agent), 继承 (模型配置 itself, where empty inherits).
+    /// How Default's line names [configured]: Model Settings (New Agent), Inherited (Model Settings itself, where empty inherits).
     var configuredLabel = String(localized: "模型配置")
 
     /// A pick can reach the agent: there is a list and the launcher does not pass its own --model.
@@ -22,14 +22,14 @@ nonisolated struct LauncherModelChoice: Equatable {
     /// The `model` a start sends: nil for the default.
     var sent: String? { canPick && selected?.isDefault == false ? picked : nil }
 
-    /// The row's title: the picked model's name, else 默认.
+    /// The row's title: the picked model's name, else Default.
     var title: String { selected.map(\.displayName) ?? String(localized: "默认") }
     /// The row's second line: the picked model's (`AgentModel.detail`), or what the default runs.
     var detail: String? {
         if let m = selected { return m.detail }
         return defaultDetail
     }
-    /// What runs with no pick: 模型配置's model, or the one the agent defaults to.
+    /// What runs with no pick: Model Settings' model, or the one the agent defaults to.
     var defaultDetail: String? {
         if !configured.isEmpty { return String(localized: "\(configuredLabel)：\(SessionModes.gptModelName(configured) ?? configured)") }
         return defaultModel.map { model in
@@ -45,14 +45,14 @@ nonisolated struct LauncherModelChoice: Equatable {
         return running.efforts ?? []
     }
 
-    /// What is typed, as an id to use when no model has exactly that id (模型配置 takes ids the list lacks); nil: none.
+    /// What is typed, as an id to use when no model has exactly that id (Model Settings takes ids the list lacks); nil: none.
     func customModelID(_ query: String) -> String? {
         let id = query.trimmingCharacters(in: .whitespaces)
         guard !id.isEmpty, !id.contains(where: \.isWhitespace), !list.models.contains(where: { $0.id == id }) else { return nil }
         return id
     }
 
-    /// The picked id when the list does not have it (模型配置's from before, or one typed in); nil: none.
+    /// The picked id when the list does not have it (Model Settings' from before, or one typed in); nil: none.
     var unlisted: String? { !picked.isEmpty && selected == nil ? picked : nil }
 
     /// Models whose name, id, resolved model or description has the query.
@@ -84,15 +84,15 @@ extension AgentModel {
     }
 }
 
-/// The list behind 新建 Agent's 模型 row: 默认 first, then every model the launcher's agent offers, searchable.
+/// The list behind New Agent's Model row: Default first, then every model the launcher's agent offers, searchable.
 struct LauncherModelPicker: View {
     var choice: LauncherModelChoice
     @Binding var picked: String
     /// Asks the CLI again (pull to refresh).
     var refresh: () async -> Void
-    /// 模型配置: an id the list does not have can be used (what is typed), and the current one stays shown.
+    /// Model Settings: an id the list does not have can be used (what is typed), and the current one stays shown.
     var allowsCustom = false
-    /// Under 默认: what picking nothing means here.
+    /// Under Default: what picking nothing means here.
     var defaultFooter = String(localized: "不指定模型：按启动器自己的设置运行。")
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""

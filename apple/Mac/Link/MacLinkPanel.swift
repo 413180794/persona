@@ -11,8 +11,8 @@ import WebKit
 
 extension View {
     /// Shows `link` in a panel at the trailing edge. `key` is the conversation 「AI 修改」 / 「作为上下文」 go to; without
-    /// one (收件箱, 知识库) they go to Persona' main conversation. `wide`: the panel starts as wide as the page beside it
-    /// allows (收件箱, #2113), its dragged width remembered apart from the others'.
+    /// one (Inbox, Knowledge) they go to Persona' main conversation. `wide`: the panel starts as wide as the page beside it
+    /// allows (Inbox, #2113), its dragged width remembered apart from the others'.
     func macLinkPanel(_ link: Binding<LinkTarget?>, key: SessionKey? = nil, wide: Bool = false) -> some View {
         modifier(MacLinkPanelHost(link: link, key: key, wide: wide))
     }

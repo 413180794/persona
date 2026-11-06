@@ -1,7 +1,7 @@
 import XCTest
 
 /// Interaction pushes carry buttons (NotificationActions): the app posts a look-alike local notification
-/// (`-showTestNotification`), the test expands it on SpringBoard and taps "拒绝", and the mock hub
+/// (`-showTestNotification`), the test expands it on SpringBoard and taps 「拒绝」, and the mock hub
 /// (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB=http://127.0.0.1:<port>) must have received the resolve.
 final class NotificationActionTests: XCTestCase {
     @MainActor func testDenyFromTheNotification() throws {

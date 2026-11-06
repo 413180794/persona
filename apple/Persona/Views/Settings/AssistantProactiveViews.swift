@@ -3,7 +3,7 @@ import MarkdownUI
 import PersonaKit
 import SwiftUI
 
-// 设置 › 助手: what the assistant does on its own (routines, follow-ups it scheduled), what it remembers, and what it
+// Settings › Assistant: what the assistant does on its own (routines, follow-ups it scheduled), what it remembers, and what it
 // is told about the user (docs/assistant.md). Every page reads straight from the hub; nothing is cached on the phone.
 
 // MARK: - Formatting
@@ -16,13 +16,13 @@ enum AssistantScheduleText {
          String(localized: "五", comment: "Weekday, short: Friday"), String(localized: "六", comment: "Weekday, short: Saturday"),
          String(localized: "日", comment: "Weekday, short: Sunday")]
     }
-    /// "一、三、五": the separator between weekday names.
+    /// "Mon, Wed, Fri": the separator between weekday names.
     private static func dayList(_ days: Set<Int>) -> String {
         days.sorted().map { dayNames[$0 - 1] }.joined(separator: String(localized: "、", comment: "Separator between weekday names, e.g. Mon, Wed"))
     }
     static let workdays = [1, 2, 3, 4, 5]
 
-    /// "每天" / "工作日" / "周末" / "每周一、三、五".
+    /// "Every Day" / "Weekdays" / "Weekends" / "Every Mon, Wed, Fri".
     static func repeats(_ days: [Int]) -> String {
         let d = Set(days)
         if d.isEmpty || d.count == 7 { return String(localized: "每天") }
@@ -32,8 +32,8 @@ enum AssistantScheduleText {
         return String(localized: "每周\(list)")
     }
 
-    /// The rule in words, as Reminders says it: "每个工作日 早上 9:00" / "每天 晚上 9:30" / "每周五 下午 5:00" /
-    /// "每 30 分钟" / "一次 · 今天 15:30".
+    /// The rule in words, as Reminders says it: "Every weekday 9:00 AM" / "Every Day 9:30 PM" / "Every Fri 5:00 PM" /
+    /// "Every 30 min" / "Once · Today 15:30".
     static func sentence(_ r: APIClient.ScheduledTask) -> String {
         switch r.repeats {
         case .interval: return every(r.everyMinutes)
@@ -50,7 +50,7 @@ enum AssistantScheduleText {
         return String(localized: "\(days) \(time)", comment: "Repeat rule and time of day, e.g. Every weekday 9:00 AM")
     }
 
-    /// "09:00" → "早上 9:00", "21:30" → "晚上 9:30", "00:15" → "凌晨 12:15".
+    /// "09:00" → "9:00 AM", "21:30" → "9:30 PM", "00:15" → "12:15 AM".
     static func clock(_ hhmm: String) -> String {
         let parts = hhmm.split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return hhmm }
@@ -67,7 +67,7 @@ enum AssistantScheduleText {
         }
     }
 
-    /// The day part of a moment: "今天" / "明天" / "昨天" / "周三" / "11月2日".
+    /// The day part of a moment: "Today" / "Tomorrow" / "Yesterday" / "Wed" / "Nov 2".
     static func day(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(date) { return String(localized: "今天") }
@@ -78,7 +78,7 @@ enum AssistantScheduleText {
         return date.formatted(.dateTime.month().day())
     }
 
-    /// "每 30 分钟" / "每 2 小时" / "每 1 小时 30 分钟".
+    /// "Every 30 min" / "Every 2 hr" / "Every 1 hr 30 min".
     static func every(_ minutes: Int) -> String {
         if minutes < 60 { return String(localized: "每 \(minutes) 分钟") }
         let hours = minutes / 60, rest = minutes % 60
@@ -99,7 +99,7 @@ enum AssistantScheduleText {
         r.repeats == .once ? (r.sessionID == nil ? String(localized: "一次 · 新对话") : String(localized: "一次 · 接着原来的对话")) : sentence(r)
     }
 
-    /// The mark for a task whose 跑完推送 is 只在它自己提醒时; nil when it pushes after every run.
+    /// The mark for a task whose Push When Done is Only Its Alerts; nil when it pushes after every run.
     static func pushMark(_ r: APIClient.ScheduledTask) -> String? {
         r.pushesOnlyAsked ? String(localized: "只在提醒时推送") : nil
     }
@@ -111,15 +111,15 @@ enum AssistantScheduleText {
         return r.pushesOnlyAsked ? String(localized: "\(rule) · 只在提醒时推送") : rule
     }
 
-    /// What it runs with when that isn't the default, in a few words: "claude-fast · 自动改文件 · 思考低"; `danger`
-    /// for 全部放行.
+    /// What it runs with when that isn't the default, in a few words: "claude-fast · Auto-Edit · Thinking Low"; `danger`
+    /// for Allow Everything.
     static func runsWith(_ r: APIClient.ScheduledTask) -> (text: String, danger: Bool)? {
         let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { let e = SessionModes.effortLabel($0) ?? $0; return String(localized: "思考\(e)") }]
             .compactMap { $0 }
         return parts.isEmpty ? nil : (parts.joined(separator: " · "), r.permissionMode == "bypassPermissions")
     }
 
-    /// The last run in a few words, nil when it never ran: "上次 今天 09:00 · 成功".
+    /// The last run in a few words, nil when it never ran: "Last Today 09:00 · Succeeded".
     static func lastRun(_ r: APIClient.ScheduledTask) -> (text: String, failed: Bool)? {
         guard let at = r.lastRun else { return nil }
         let word = switch r.lastStatus {
@@ -148,7 +148,7 @@ enum AssistantScheduleText {
         }
     }
 
-    /// A future moment, roughly: "马上" / "25 分钟后" / "2 小时后" / "3 天后".
+    /// A future moment, roughly: "Soon" / "in 25 min" / "in 2 hr" / "in 3 days".
     static func until(_ date: Date, now: Date = .now) -> String {
         let s = date.timeIntervalSince(now)
         if s < 60 { return s < -60 ? String(localized: "已过时间") : String(localized: "马上") }
@@ -172,7 +172,7 @@ enum AssistantScheduleText {
         return f
     }()
 
-    /// "今天 15:30" / "明天 09:00" / "周三 09:00" / "11月2日 09:00".
+    /// "Today 15:30" / "Tomorrow 09:00" / "Wed 09:00" / "Nov 2 09:00".
     static func moment(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
         let time = hm(date)
@@ -185,7 +185,7 @@ enum AssistantScheduleText {
     }
 }
 
-// MARK: - 定时任务
+// MARK: - Scheduled Tasks
 
 /// Everything Persona does on its own, on one page: what runs next, what repeats (every day at a time, every N
 /// minutes; the rule in words, next and last run, an on/off switch), the one-offs it scheduled from a conversation,
@@ -288,7 +288,7 @@ struct AssistantRoutinesView: View {
     }
 
     /// The conversations the task's runs went into, under its row (#2838): they are kept here, not in the sidebar's
-    /// 最近. A tap opens one.
+    /// Recent. A tap opens one.
     @ViewBuilder private func chats(_ t: APIClient.ScheduledTask) -> some View {
         let chats = AssistantTaskChats.chats(of: t, runs: page.lastRuns, machineID: model.assistantConfig?.machineID ?? model.hubMachineID)
         if !chats.isEmpty {
@@ -325,7 +325,7 @@ struct AssistantRoutinesView: View {
     }
 }
 
-/// One task on 定时任务: its icon, title, the rule in words, next and last run, what it runs with when that isn't the
+/// One task on Scheduled Tasks: its icon, title, the rule in words, next and last run, what it runs with when that isn't the
 /// default, and an on/off switch. Tapping opens the editor.
 struct AssistantTaskRow: View {
     var task: APIClient.ScheduledTask
@@ -336,7 +336,7 @@ struct AssistantTaskRow: View {
         if AppStyle.current.usesBeautifulUI { capsule } else { plain }
     }
 
-    /// The BeautifulUI style: its task capsule. Its mark (red when it runs with 全部放行), the title over the rule in
+    /// The BeautifulUI style: its task capsule. Its mark (red when it runs with Allow Everything), the title over the rule in
     /// words, the next run, what it runs with and the last run under that, its switch; a tap opens the editor, as the
     /// plain row does.
     private var capsule: some View {
@@ -438,7 +438,7 @@ struct AssistantTaskRow: View {
     }
 }
 
-/// Starting points for the ＋ menu.
+/// Starting points for the + menu.
 struct AssistantRoutineTemplate: Identifiable {
     var routine: APIClient.ScheduledTask
     var symbol: String
@@ -468,7 +468,7 @@ struct AssistantRoutineTemplate: Identifiable {
 
 /// Edits one task: when (once / every day / every N minutes), the prompt, what it runs with (launcher, permission
 /// mode, effort) and which conversation runs go into. An existing one is saved when leaving the page (like iOS
-/// Settings); a new one comes up as a sheet with 取消 / 添加, so trying a template and backing out doesn't create
+/// Settings); a new one comes up as a sheet with Cancel / Add, so trying a template and backing out doesn't create
 /// anything.
 struct AssistantTaskEditor: View {
     @Environment(AppModel.self) private var model
@@ -482,11 +482,11 @@ struct AssistantTaskEditor: View {
     @State private var confirmBypass = false
     @State private var deleted = false
     @State private var runs: [APIClient.ScheduleRun] = []
-    /// Presented as the "new task" sheet: nothing is saved unless 添加 (or 立即运行) is tapped.
+    /// Presented as the "new task" sheet: nothing is saved unless Add (or Run Now) is tapped.
     private let creating: Bool
-    /// The task as the sheet opened: 取消 asks first once it differs (Mac).
+    /// The task as the sheet opened: Cancel asks first once it differs (Mac).
     private let opened: APIClient.ScheduledTask
-    /// The conversation it came from, to switch back to after turning 接着原来的对话 off.
+    /// The conversation it came from, to switch back to after turning Continue in Original Chat off.
     private let conversation: String?
     var save: (APIClient.ScheduledTask) async -> APIClient.ScheduledTask?
     var delete: (APIClient.ScheduledTask) async -> Void
@@ -507,7 +507,7 @@ struct AssistantTaskEditor: View {
         return titled && !draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     private var changed: Bool { saved.map { !Self.same($0, draft) } ?? true }
-    /// 跑完推送 shows when the hub takes it (task_push), or the task already has it.
+    /// Push When Done shows when the hub takes it (task_push), or the task already has it.
     private var showsPush: Bool { model.hubFeatures.contains(APIClient.ScheduledTask.pushFeature) || opened.pushesOnlyAsked }
     private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
 
@@ -622,8 +622,8 @@ struct AssistantTaskEditor: View {
         #endif
     }
 
-    /// Where runs go (docs/assistant.md「定时任务」): the conversation it came from (接着原来的对话), else the task's own
-    /// one, which the first run starts and the next ones continue; 下次开新对话 lets the next run start over.
+    /// Where runs go (docs/assistant.md「定时任务」): the conversation it came from (Continue in Original Chat), else the task's own
+    /// one, which the first run starts and the next ones continue; New Chat Next Time lets the next run start over.
     private var conversationSection: some View {
         Section {
             // A task that pushes only what it sends runs in its own conversation (the hub clears session_id too).
@@ -663,7 +663,7 @@ struct AssistantTaskEditor: View {
         }
     }
 
-    /// 跑完推送 (docs/assistant.md「跑完推送」): every run's answer is pushed, or only what a run sends with notify_user.
+    /// Push When Done (docs/assistant.md「跑完推送」): every run's answer is pushed, or only what a run sends with notify_user.
     private var pushSection: some View {
         Section {
             SegmentedChoice(String(localized: "跑完推送"), [(value: "", label: String(localized: "每次")), (value: APIClient.ScheduledTask.pushAsked, label: String(localized: "只在它自己提醒时"))],
@@ -678,7 +678,7 @@ struct AssistantTaskEditor: View {
         }
     }
 
-    /// 只在它自己提醒时 leaves 接着原来的对话: such a task runs in its own conversation. 每次 is sent as "" (the default),
+    /// Only Its Alerts leaves Continue in Original Chat: such a task runs in its own conversation. Every Run is sent as "" (the default),
     /// so a task switched back is saved as such; one never switched sends nothing.
     private var push: Binding<String> {
         Binding { draft.push ?? "" } set: { new in
@@ -756,7 +756,7 @@ struct AssistantTaskEditor: View {
         Section {
             ModelConfigurationLink(title: draft.id.isEmpty ? String(localized: "任务默认模型") : String(localized: "任务模型"),
                                    purposeID: draft.id.isEmpty ? "schedule" : "task.\(draft.id)")
-            // A Menu around an inline picker: a menu-style Picker greys out a value that has an icon, and 全部放行 is red.
+            // A Menu around an inline picker: a menu-style Picker greys out a value that has an icon, and Allow Everything is red.
             LabeledContent {
                 Menu {
                     Picker("权限模式", selection: mode) {
@@ -797,7 +797,7 @@ struct AssistantTaskEditor: View {
         return list
     }
 
-    /// 全部放行 asks first.
+    /// Allow Everything asks first.
     private var mode: Binding<String> {
         Binding { draft.permissionMode ?? "" } set: { new in
             if new == "bypassPermissions" && draft.permissionMode != new {
@@ -808,7 +808,7 @@ struct AssistantTaskEditor: View {
         }
     }
 
-    /// Switching to 一次 picks a time an hour from now; to 每隔, half an hour.
+    /// Switching to Once picks a time an hour from now; to Interval, half an hour.
     private var repeats: Binding<APIClient.ScheduledTask.Repeat> {
         Binding { draft.repeats } set: { r in
             withAnimation(Theme.Motion.standard) {
@@ -887,7 +887,7 @@ struct AssistantTaskEditor: View {
     }
 }
 
-/// Seven round day buttons (一 … 日) plus 每天 / 工作日 shortcuts; empty `days` means every day.
+/// Seven round day buttons (Mon … Sun) plus Every Day / Weekdays shortcuts; empty `days` means every day.
 struct AssistantWeekdayPicker: View {
     @Binding var days: [Int]
 
@@ -957,7 +957,7 @@ struct AssistantCompactLabel: LabelStyle {
     }
 }
 
-// MARK: - 记忆
+// MARK: - Memory
 
 /// One memory file split into its frontmatter and body.
 struct AssistantMemoryEntry: Identifiable, Hashable {
@@ -1015,7 +1015,7 @@ struct AssistantMemoryEntry: Identifiable, Hashable {
 
 struct AssistantMemoryView: View {
     @State private var page: AssistantMemoryModel
-    /// The health space's memory (健康 › 健康记忆, docs/health.md) instead of the assistant's.
+    /// The health space's memory (Health › Health Memory, docs/health.md) instead of the assistant's.
     private var health: Bool { page.space == Session.healthSpace }
 
     init(space: String? = nil) { _page = State(initialValue: AssistantMemoryModel(space: space)) }
@@ -1032,7 +1032,7 @@ struct AssistantMemoryView: View {
     }
     private var index: APIClient.MemoryFile? { files.first { $0.name == AssistantMemoryEntry.index } }
 
-    /// The index lines "- [标题](file.md) — 说明", by file: friendlier titles than the slugs in the frontmatter.
+    /// The index lines "- [Title](file.md) — description", by file: friendlier titles than the slugs in the frontmatter.
     private var indexTitles: [String: (title: String, hook: String?)] {
         guard let index else { return [:] }
         var out: [String: (String, String?)] = [:]
@@ -1158,7 +1158,7 @@ struct AssistantMemoryTag: View {
     }
 }
 
-/// One memory, rendered; 编辑 opens the whole file (frontmatter included) as plain text. `onSaved == nil`: read-only.
+/// One memory, rendered; Edit opens the whole file (frontmatter included) as plain text. `onSaved == nil`: read-only.
 struct AssistantMemoryDetail: View {
     @Environment(AppModel.self) private var model
     @State var entry: AssistantMemoryEntry
@@ -1231,7 +1231,7 @@ struct AssistantMemoryEditor: View {
     var space: String? = nil
     var saved: (String) async -> Void
     @State private var saving = false
-    /// The text as the sheet opened: 取消 asks first once it differs (Mac).
+    /// The text as the sheet opened: Cancel asks first once it differs (Mac).
     @State private var opened: String?
 
     var body: some View {
@@ -1276,9 +1276,9 @@ struct AssistantMemoryEditor: View {
     }
 }
 
-// MARK: - 关于我
+// MARK: - About Me
 
-/// What the assistant is told about the user; saved when leaving the page (or with 保存).
+/// What the assistant is told about the user; saved when leaving the page (or with Save).
 struct AssistantNotesView: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
@@ -1336,7 +1336,7 @@ struct AssistantNotesView: View {
     }
 }
 
-/// A task on 定时任务's list: in the BeautifulUI style its capsule stands on the page (no list background or line);
+/// A task on Scheduled Tasks' list: in the BeautifulUI style its capsule stands on the page (no list background or line);
 /// otherwise the list's row.
 private struct AssistantTaskRowLook: ViewModifier {
     func body(content: Content) -> some View {

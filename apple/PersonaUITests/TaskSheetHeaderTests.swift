@@ -48,7 +48,7 @@ final class TaskSheetHeaderTests: XCTestCase {
         XCTAssertLessThan(title.frame.maxY, app.windows.firstMatch.frame.height * 0.2, "the header is not at the top")
         // No strip of the space's tabs.
         XCTAssertEqual(app.buttons.matching(identifier: "chat.sibling").count, 0, "the space's tabs are in the sheet")
-        // The mock was just started: let the link settle so the pictures show the state line, not 连接中….
+        // The mock was just started: let the link settle so the pictures show the state line, not Connecting….
         let linking = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '连接中'")).firstMatch
         let settled = Date.now.addingTimeInterval(15)
         while linking.exists && Date.now < settled { usleep(300_000) }

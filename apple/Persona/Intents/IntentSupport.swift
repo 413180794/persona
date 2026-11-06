@@ -17,7 +17,7 @@ nonisolated enum IntentText {
 
     static func sent(to title: String) -> String {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The untitled case is its own sentence, so "会话" is not translated as a bare noun.
+        // The untitled case is its own sentence, so 「会话」 is not translated as a bare noun.
         return name.isEmpty ? String(localized: "已发给 会话") : String(localized: "已发给 \(name)")
     }
 
@@ -151,7 +151,7 @@ nonisolated enum IntentSupport {
         return all.first { $0.group == group } ?? all[0]
     }
 
-    /// Every group's machines; with several groups each named with its group ("MacBook · 公司").
+    /// Every group's machines; with several groups each named with its group ("MacBook · Work").
     static func machines() async throws -> [Machine] {
         let all = try clients()
         let registry = HubStore.load()

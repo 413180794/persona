@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The pages on screen that refresh themselves (iOS pulls them: 知识库, 机器, a chat's 文件 / Git pane), per window.
-/// 显示 › 刷新 ⌘R asks the key window's latest one; when it goes, the one under it answers again.
+/// The pages on screen that refresh themselves (iOS pulls them: Knowledge, Machines, a chat's Files / Git pane), per window.
+/// View › Refresh ⌘R asks the key window's latest one; when it goes, the one under it answers again.
 struct MacPageRefreshes {
     private var entries: [(id: UUID, window: Int)] = []
 
@@ -44,7 +44,7 @@ struct MacPageRefreshes {
 }
 
 extension View {
-    /// This page refreshes itself on ⌘R (显示 › 刷新) while it is on screen in the key window: the Mac's pull to refresh.
+    /// This page refreshes itself on ⌘R (View › Refresh) while it is on screen in the key window: the Mac's pull to refresh.
     /// `id`: what the action reads that is not state (a pane's `cwd`, a machine's id); when it changes, the action
     /// registered with the old value is replaced.
     func macRefreshes(id: AnyHashable = 0, _ action: @escaping () async -> Void) -> some View {

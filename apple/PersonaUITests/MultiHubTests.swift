@@ -1,7 +1,7 @@
 import XCTest
 
-/// Several groups of hubs on one phone (docs/multi-hub.md), against three scripts/mock_hub.py: A alone (家里), B and C one
-/// group (公司, each lists the other in its hello's mesh; C owns the MacBook). Both groups have a MacBook with the same
+/// Several groups of hubs on one phone (docs/multi-hub.md), against three scripts/mock_hub.py: A alone (「家里」), B and C one
+/// group (「公司」, each lists the other in its hello's mesh; C owns the MacBook). Both groups have a MacBook with the same
 /// machine and session ids and the same interaction ids, so a request sent to the wrong group's hub shows. Start them
 /// as docs/testing.md「多 hub」 says and pass TEST_RUNNER_JARVIS_HUB_A / _B / _C (http://127.0.0.1:<port>).
 final class MultiHubTests: XCTestCase {
@@ -59,7 +59,7 @@ final class MultiHubTests: XCTestCase {
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
     }
 
-    /// The Agents list's ⋯ menu: show one group only ("全部 hub": every group).
+    /// The Agents list's ⋯ menu: show one group only (All Hubs: every group).
     private func showOnly(_ app: XCUIApplication, _ group: String) {
         let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '分组' OR label BEGINSWITH '当前'")).firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 5), "no ⋯ menu:\n\(app.debugDescription)")
@@ -69,7 +69,7 @@ final class MultiHubTests: XCTestCase {
         item.tap()
     }
 
-    /// The Agents list shows both groups' requests, each saying its group, and can show one group only; 允许 on each
+    /// The Agents list shows both groups' requests, each saying its group, and can show one group only; Allow on each
     /// goes to that group's hub only (both groups have the same interaction id on the same machine and session ids).
     @MainActor func testMergedListAndAnswersGoToTheirOwnHub() throws {
         let h = try hubs()
@@ -109,7 +109,7 @@ final class MultiHubTests: XCTestCase {
         shot("answered")
     }
 
-    /// 设置 › hub lists the two groups (B and C one group); disconnecting 公司 leaves 家里 and its agents as they were.
+    /// Settings › hub lists the two groups (B and C one group); disconnecting 「公司」 leaves 「家里」 and its agents as they were.
     @MainActor func testDisconnectingOneGroupLeavesTheOther() throws {
         let h = try hubs()
         let app = launch(h, ["-tab", "settings", "-openHubs", "YES"])
@@ -123,7 +123,7 @@ final class MultiHubTests: XCTestCase {
         while Date.now < deadline, removes.count < 2 { usleep(200_000) } // B and C merge once their hellos are in
         XCTAssertEqual(removes.count, 2, "B and C did not become one group:\n\(app.debugDescription)")
         shot("hubs")
-        // The second group's 断开这一组 (the default group is first).
+        // The second group's Disconnect This Group (the default group is first).
         removes.element(boundBy: 1).tap()
         let confirm = app.buttons["断开这一组"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))

@@ -1,6 +1,6 @@
 import XCTest
 
-/// The BeautifulUI style (设置 › 界面风格): its prompt bar sends what was typed (it once cleared the draft before the send
+/// The BeautifulUI style (Settings › Interface Style): its prompt bar sends what was typed (it once cleared the draft before the send
 /// read it, and nothing went out), and the chat shows its components only there. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB), which records sends at /mock/sent.
 final class BeautifulStyleTests: XCTestCase {

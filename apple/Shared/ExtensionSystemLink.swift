@@ -1,6 +1,6 @@
 import Foundation
 
-/// 系统入口只携带扩展、页面和所属组，不在深链接里放地址或凭据。
+/// A system entry carries only the extension, the page and its group; no address or credential goes into the deep link.
 nonisolated struct ExtensionSystemLink: Hashable, Sendable {
     var owner: String
     var ui: String?

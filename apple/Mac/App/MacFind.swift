@@ -1,6 +1,6 @@
 import AppKit
 
-/// 编辑 › 查找… ⌘F: the key window's search field takes the keyboard (Agents, 收件箱, 知识库, 模型… each have a
+/// Edit › Find… ⌘F: the key window's search field takes the keyboard (Agents, Inbox, Knowledge, Model… each have a
 /// `.searchable`, which AppKit draws as an `NSSearchField` in the toolbar or the page). A window without one is left
 /// alone and the item does nothing, as in Finder windows that have no search. A view with its own find (`MacFindable`:
 /// the code viewer) opens it instead when it has the keyboard, or when the window has no search field.
@@ -60,14 +60,14 @@ import AppKit
     }
 }
 
-/// A view with its own find (the code viewer's find bar): 查找… ⌘F opens it.
+/// A view with its own find (the code viewer's find bar): Find… ⌘F opens it.
 @MainActor protocol MacFindable: AnyObject {
     func showFind()
     func findNext(forward: Bool)
 }
 
 extension MacFind {
-    /// 编辑 › 查找下一个 ⌘G / 查找上一个 ⇧⌘G: to whatever 查找… opened. A text view with its own find bar (diffs, output)
+    /// Edit › Find Next ⌘G / Find Previous ⇧⌘G: to whatever Find… opened. A text view with its own find bar (diffs, output)
     /// steps through its matches; the code viewer (`MacFindable`) with the keyboard or in the window steps through
     /// its own. A window with only a search field has nothing to step through.
     static func findNext(forward: Bool) {

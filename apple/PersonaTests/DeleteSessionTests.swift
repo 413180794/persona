@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 删除对话 (issue #1749): which conversations offer it, what the confirmation says, the request it sends.
+/// Delete Chat (issue #1749): which conversations offer it, what the confirmation says, the request it sends.
 struct DeleteSessionTests {
     private func session(status: String, extra: String = "") throws -> Session {
         try JSON.decoder.decode(Session.self, from: Data(#"{"machine_id":"box","session_id":"s1","status":"\#(status)","state":"offline"\#(extra)}"#.utf8))

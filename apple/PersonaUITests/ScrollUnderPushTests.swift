@@ -38,7 +38,7 @@ final class ScrollUnderPushTests: XCTestCase {
     private func launch(chat: String = "", tab: String = "chats", _ extra: [String] = []) {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        // Paired with another hub than last time, the app starts over on 助手: pair first, then open the page.
+        // Paired with another hub than last time, the app starts over on Assistant: pair first, then open the page.
         app.launchArguments = ["-pairURL", pair]
         app.launchPinned()
         sleep(3)

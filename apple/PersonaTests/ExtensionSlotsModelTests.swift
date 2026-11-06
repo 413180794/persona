@@ -34,7 +34,7 @@ import Testing
         #expect(s.opened(by: s.cards[0])! == ("usage", "用量") && s.opened(by: s.cards[1]) == nil)
         #expect(s.total.count == 3 && !s.total.dot)
 
-        // The plugin's badge changes (plugin_ui): a word only is a dot on 设置; cleared, nothing.
+        // The plugin's badge changes (plugin_ui): a word only is a dot on Settings; cleared, nothing.
         s.received(plugin: "example-gateway", id: "usage", badge: ExtensionBadge(text: "新"))
         #expect(s.pages[0].badge?.text == "新" && s.total.count == 0 && s.total.dot)
         s.received(plugin: "example-gateway", id: "alerts", badge: ExtensionBadge(text: "2"))

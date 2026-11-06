@@ -1,6 +1,6 @@
 import XCTest
 
-/// The title turns into 连接中… while the hub is out of reach and back afterwards, a short drop shows nothing, and a
+/// The title turns into Connecting… while the hub is out of reach and back afterwards, a short drop shows nothing, and a
 /// message written meanwhile waits and goes by itself (docs/ios.md「连接状态」). Against scripts/mock/mock_hub.py, whose
 /// /mock/down?s=<seconds> takes the hub away (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
 final class ConnectionTests: XCTestCase {
@@ -53,7 +53,7 @@ final class ConnectionTests: XCTestCase {
         add(s)
     }
 
-    /// The hub goes away for a while: nothing for the drop's grace (8 s, docs/hub-restart.md), then 连接中… in the
+    /// The hub goes away for a while: nothing for the drop's grace (8 s, docs/hub-restart.md), then Connecting… in the
     /// title, then the title comes back on its own.
     @MainActor func testOutageShowsConnectingThenRecovers() throws {
         let hub = try hub()
@@ -81,7 +81,7 @@ final class ConnectionTests: XCTestCase {
         XCTAssertFalse(shows(status(app), within: 4), "the title flashed for a reconnect that took about a second")
     }
 
-    /// Written while the hub is down: once the drop's grace is over the bubble says 连上后自动发送 (within it the send
+    /// Written while the hub is down: once the drop's grace is over the bubble says "Sends when connected" (within it the send
     /// keeps trying), and the message reaches the hub once it is back.
     @MainActor func testMessageWaitsForTheHub() throws {
         let hub = try hub()

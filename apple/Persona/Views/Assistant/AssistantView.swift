@@ -11,11 +11,11 @@ struct AssistantView: View {
     /// The ChatGPT-style shell (docs/ios.md「新外壳」): it owns the drawer, and pushes its pages here.
     @Environment(\.shell) private var shell
     #if os(iOS)
-    /// The iPad's tabs without 收件箱 and 设置 (`RootTabs.padSidebar`): the sidebar column lists them as the shell's does.
+    /// The iPad's tabs without Inbox and Settings (`RootTabs.padSidebar`): the sidebar column lists them as the shell's does.
     @Environment(\.padRouter) private var padRouter
     #endif
     @State private var pending: PendingStart?
-    /// Pages pushed by value: the shell's 收件箱 and 机器 (and what they push themselves).
+    /// Pages pushed by value: the shell's Inbox and Machines (and what they push themselves).
     @State private var path = NavigationPath()
     /// The last shell request shown (`ShellState.request`'s serial).
     @State private var handledRequest = 0
@@ -27,11 +27,11 @@ struct AssistantView: View {
     @State private var showTodos = false
     /// An extension's main-navigation page opened from the sidebar (#2961).
     @State private var openedExtension: ExtensionNavRoute?
-    /// 健康: the health space's page (docs/health.md).
+    /// Health: the health space's page (docs/health.md).
     @State private var showHealth = false
-    /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Persona 顶栏和侧边栏」.
+    /// The sidebar (Chat History, or a drag to the right anywhere on the page): docs/ios.md「Persona 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
-    /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; 历史对话 shows or hides it.
+    /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; Chat History shows or hides it.
     @State private var columns = SplitColumns.shown
     #if DEBUG
     @State private var showAvatars = false
@@ -42,7 +42,7 @@ struct AssistantView: View {
 
     private var current: SessionKey? { model.assistantCurrent }
 
-    /// The sidebar column has the shell's places (收件箱, 待办, 机器) and 设置 (the iPad, `padRouter`).
+    /// The sidebar column has the shell's places (Inbox, To-dos, Machines) and Settings (the iPad, `padRouter`).
     private var padPlaces: Bool {
         #if os(iOS)
         padRouter != nil && widthClass == .regular
@@ -68,7 +68,7 @@ struct AssistantView: View {
         } else if widthClass == .regular {
             // The split keeps both columns clear of the fold when the device is partly folded.
             #if os(macOS)
-            // The history list beside the conversation, flush with the window; 历史对话 folds it away. Not a
+            // The history list beside the conversation, flush with the window; Chat History folds it away. Not a
             // NavigationSplitView: the Mac's would not fold the list's column (#856, `MacListBeside`).
             MacListBeside(listShown: columns != .detailOnly, widthKey: "mac.assistant.listWidth") {
                 sidebar(column: true)
@@ -97,8 +97,8 @@ struct AssistantView: View {
         }
     }
 
-    /// The sidebar, as the drawer (compact) or as a column of the split (regular, the tab bar beside it: no 设置; on
-    /// the iPad, whose tabs have neither, the shell's places and 设置 as on the iPhone, `padPlaces`).
+    /// The sidebar, as the drawer (compact) or as a column of the split (regular, the tab bar beside it: no Settings; on
+    /// the iPad, whose tabs have neither, the shell's places and Settings as on the iPhone, `padPlaces`).
     private func sidebar(column: Bool) -> some View {
         let places = column && padPlaces
         return AssistantSidebar(current: pending == nil ? current : nil,
@@ -123,7 +123,7 @@ struct AssistantView: View {
                                 openHealth: places ? { show(.health) } : { drawer.close(); showHealth = true })
     }
 
-    /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
+    /// Chat History: the drawer on a phone, the sidebar column beside the conversation on a wide display.
     private func toggleSidebar() {
         if let shell {
             shell.drawer.open()
@@ -199,13 +199,13 @@ struct AssistantView: View {
             }
             .modifier(ShellDestinations(path: $path, enabled: shell != nil || padPlaces))
             .modifier(ClassicDestinations(enabled: shell == nil && !padPlaces))
-            // 全屏查看 in an agent's sheet (TasksStore.expand): its page pushed here, as from the Agents tab.
+            // Full Screen in an agent's sheet (TasksStore.expand): its page pushed here, as from the Agents tab.
             .onChange(of: TasksStore.shared.fullAgent, initial: true) { _, key in
                 guard let key else { return }
                 TasksStore.shared.fullAgent = nil
                 path.append(key)
             }
-            // On appear too (a cold launch onto 收件箱 asks before this page exists), but each request once: the root
+            // On appear too (a cold launch onto Inbox asks before this page exists), but each request once: the root
             // appears again after every pop, and replaying the last request pushed the inbox right back.
             .onChange(of: request?.serial, initial: true) { _, serial in
                 guard let serial, serial > handledRequest else { return }
@@ -213,7 +213,7 @@ struct AssistantView: View {
                 show(request?.page)
             }
             .onChange(of: atRoot, initial: true) { _, root in shell?.chatAtRoot = root }
-            // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does 问 Persona
+            // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does Ask Persona
             // from the knowledge base, even when its conversation is the one already open.
             .onChange(of: model.assistantCurrent) { backToRoot() }
             .onChange(of: model.assistantReveal) { backToRoot(); activeDrawer.close() }
@@ -253,7 +253,7 @@ struct AssistantView: View {
             }
             #endif
             .task { await model.refreshAssistant() }
-            // 新建主对话… from the top bar's menu or the sidebar's (#1762).
+            // New Main Chat… from the top bar's menu or the sidebar's (#1762).
             .sheet(isPresented: Binding(get: { model.newMainAsked }, set: { model.newMainAsked = $0 })) { NewMainSheet() }
             #if DEBUG
             .task { // `-showNewMain YES`: the question up, for screenshots
@@ -262,7 +262,7 @@ struct AssistantView: View {
             #endif
         }
         #if os(macOS)
-        // Its pushed pages (知识库, 定时任务, 待办…) go back from the title row, not the system's button (#2318).
+        // Its pushed pages (Knowledge, Scheduled Tasks, To-dos…) go back from the title row, not the system's button (#2318).
         .environment(\.macSectionStack, true)
         #endif
     }
@@ -310,12 +310,12 @@ struct AssistantView: View {
         }
     }
 
-    /// `space`: the space the conversation opens in (健康 passes "health"; it never becomes the main conversation).
+    /// `space`: the space the conversation opens in (Health passes "health"; it never becomes the main conversation).
     private func start(_ text: String, _ images: [ImagePayload], space: String? = nil) async {
         guard let api = model.api else { return }
         startError = nil
         model.readiness.failure = nil
-        // From 健康: back to the root, which shows the message coming as for any new conversation.
+        // From Health: back to the root, which shows the message coming as for any new conversation.
         if space != nil {
             backToRoot()
             model.assistantCurrent = nil
@@ -700,9 +700,9 @@ struct StarterComposer: View {
     var disabled: Bool
     /// The shell's composer (docs/ios.md「新外壳」): the launcher, mode and effort are in its gauge menu.
     var shell: ShellModes? = nil
-    /// The field's hint; nil: 问 <Persona's name>… (健康 has its own).
+    /// The field's hint; nil: Ask <Persona's name>… (Health has its own).
     var placeholder: String? = nil
-    /// Where picked files land on the assistant's machine: "health" for 健康's reports/ (docs/health.md「体检报告」).
+    /// Where picked files land on the assistant's machine: "health" for Health's reports/ (docs/health.md「体检报告」).
     var uploadDest: String? = nil
     /// The main conversation cannot answer yet (docs/onboarding.md 4.4): send goes to what is missing, the draft stays.
     var gate: SendGate? = nil
@@ -828,9 +828,9 @@ struct BeautifulStarterComposer: View {
     @Environment(AppModel.self) private var model
     var disabled: Bool
     @Binding var launcher: String?
-    /// The field's hint; nil: 问 <Persona's name>… (健康 has its own).
+    /// The field's hint; nil: Ask <Persona's name>… (Health has its own).
     var placeholder: String? = nil
-    /// Where picked files land on the assistant's machine: "health" for 健康's reports/ (docs/health.md「体检报告」).
+    /// Where picked files land on the assistant's machine: "health" for Health's reports/ (docs/health.md「体检报告」).
     var uploadDest: String? = nil
     /// The main conversation cannot answer yet: send goes to what is missing, the draft stays (the card says what).
     var gate: SendGate? = nil
@@ -961,7 +961,7 @@ struct BeautifulStarterComposer: View {
     }
 }
 
-/// Tool activity in the assistant: one quiet line ("工具 4 · 运行 3 · 读取 1"), expandable to the steps.
+/// Tool activity in the assistant: one quiet line ("Tools 4 · Run 3 · Read 1"), expandable to the steps.
 struct AssistantToolsRow: View {
     var steps: [ToolStep]
     @State private var open = false
@@ -1041,7 +1041,7 @@ struct AssistantToolsRow: View {
 }
 
 /// Model chip on the assistant home page: which launcher the next new conversation starts with. While the Persona
-/// settings are not read it shows 正在读取, and when they cannot be read 读不到设置 with a retry — never a name (#4200).
+/// settings are not read it shows Reading, and when they cannot be read Couldn't Load Settings with a retry — never a name (#4200).
 struct StarterModelChip: View {
     @Environment(AppModel.self) private var model
     @Binding var launcher: String?
@@ -1072,7 +1072,7 @@ struct StarterModelChip: View {
 }
 
 /// The new-conversation page's model capsule while Persona settings are not known yet (#4200): a spinner with
-/// 正在读取, or 读不到设置 as a button that retries. It never shows a launcher name, and uses the `ModeChip` metrics.
+/// Reading, or Couldn't Load Settings as a button that retries. It never shows a launcher name, and uses the `ModeChip` metrics.
 struct StarterLauncherStatus: View {
     @Environment(AppModel.self) private var model
 
@@ -1133,7 +1133,7 @@ struct StarterModesMenu: View {
 
     /// The button's title: the launcher's model (its name when it names none) and the effort picked. While the
     /// launcher is not known (#4200) the title is the status text, not nil — the shell bar draws the button so the
-    /// menu's 正在读取 / 读不到设置 section is reachable on the iPhone path.
+    /// menu's Reading / Couldn't Load Settings section is reachable on the iPhone path.
     @MainActor static func title(modes: StarterComposer.ShellModes, launchers: [Launcher], model: AppModel) -> SessionModes.ComposerTitle? {
         let effort = SessionModes.effort(modes.effort)?.title
         guard let name = modes.launcher ?? model.starterLauncherSetting else {
@@ -1199,7 +1199,7 @@ struct StarterModesMenu: View {
 
 #if os(iOS) || os(visionOS)
 /// Hides the stack's navigation bar again once the page is back at its root. Swiped back from a pushed page with its
-/// search still open (知识库), UIKit left the bar showing over the root, with the root's title and ~106 pt tall: the top
+/// search still open (Knowledge), UIKit left the bar showing over the root, with the root's title and ~106 pt tall: the top
 /// bar was pushed down under it, and a tap where the switch belongs hit the empty bar (2026-11-01). SwiftUI still has
 /// the bar hidden, so it never hides it again.
 private struct RootBarHidden: UIViewRepresentable {
@@ -1228,7 +1228,7 @@ private struct RootBarHidden: UIViewRepresentable {
 #endif
 
 /// The classic layout has no ShellDestinations, so nothing registers the todo detail route in this stack: a todo row
-/// pushed from the todo list (TodosView) would open nothing. Nor the agent page 全屏查看 pushes (`SessionKey`). The
+/// pushed from the todo list (TodosView) would open nothing. Nor the agent page Full Screen pushes (`SessionKey`). The
 /// shell registers both itself (ShellHome.swift).
 private struct ClassicDestinations: ViewModifier {
     var enabled: Bool

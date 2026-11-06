@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 连接器 › 信息 against scripts/mock/mock_hub.py: the Mac's conversations and one of them, read-only (JARVIS_MOCK_HUB);
+/// Settings › Connectors › Messages against scripts/mock/mock_hub.py: the Mac's conversations and one of them, read-only (JARVIS_MOCK_HUB);
 /// without Full Disk Access on that Mac, the steps to give it (JARVIS_MOCK_HUB_DENIED, a mock with MOCK_IMESSAGE=denied).
 final class MessagesConnectorTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
@@ -22,7 +22,7 @@ final class MessagesConnectorTests: XCTestCase {
 
     @MainActor func testConversationsAndAThread() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
-        // From 设置: the hub's connectors list 信息 under 连接器.
+        // From Settings: the hub's connectors list Messages under Connectors.
         let app = launch(hub, [])
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信息")).firstMatch
         for _ in 0..<8 where !row.isHittable { app.swipeUp() }
@@ -45,7 +45,7 @@ final class MessagesConnectorTests: XCTestCase {
         shot(app, "thread")
     }
 
-    /// 交给 Persona: on to begin with; off lets the hub's copy be deleted, after a confirmation.
+    /// Hand to Persona: on to begin with; off lets the hub's copy be deleted, after a confirmation.
     @MainActor func testTheSwitchAndDelete() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
         let app = launch(hub, ["-openConnectorMessages", "YES"])

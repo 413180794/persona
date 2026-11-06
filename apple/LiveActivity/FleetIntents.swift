@@ -51,7 +51,7 @@ struct DenyPermissionIntent: LiveActivityIntent {
 }
 
 /// Approves a plan in acceptEdits, like the notification button: from the lock screen you have not read the plan in
-/// full, so commands still ask. "批准并自动执行" stays in the app.
+/// full, so commands still ask. "Approve & Auto-Run" stays in the app.
 struct ApprovePlanIntent: LiveActivityIntent {
     nonisolated static let title: LocalizedStringResource = "批准"
     nonisolated static let isDiscoverable = false

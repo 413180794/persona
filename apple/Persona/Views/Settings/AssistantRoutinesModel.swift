@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// What the assistant's pages (定时任务, 记忆) need from the app: the hub, error reporting, toasts and opening a
+/// What the assistant's pages (Scheduled Tasks, Memory) need from the app: the hub, error reporting, toasts and opening a
 /// conversation. `live` is AppModel; tests pass a FakeHub's client and record the rest.
 struct AssistantDeps {
     var api: () -> APIClient?
@@ -16,7 +16,7 @@ struct AssistantDeps {
     }
 }
 
-/// 定时任务's state and everything the page does with the hub (MVVM: ARCH-PLAN.md). The view draws what is here and
+/// Scheduled Tasks' state and everything the page does with the hub (MVVM: ARCH-PLAN.md). The view draws what is here and
 /// calls its methods, so tests run it against a `FakeHub`. One list: what repeats (every day, every N minutes) and
 /// the one-offs Persona scheduled from a conversation.
 @Observable final class AssistantRoutinesModel {
@@ -91,7 +91,7 @@ struct AssistantDeps {
         }
     }
 
-    /// 立即运行: opens the conversation it went to. A one-off is done after it (the hub drops it from the list).
+    /// Run Now: opens the conversation it went to. A one-off is done after it (the hub drops it from the list).
     func run(_ t: Item) async {
         guard let api = deps.api() else { return }
         if t.repeats == .once { withAnimation { tasks.removeAll { $0.id == t.id } } }
@@ -106,8 +106,8 @@ struct AssistantDeps {
     }
 }
 
-/// 记忆: the assistant's memory files, newest first, and deleting one. `space` "health" is the health space's own
-/// memory (健康 › 健康记忆, docs/health.md); nil the assistant's.
+/// Memory: the assistant's memory files, newest first, and deleting one. `space` "health" is the health space's own
+/// memory (Health › Health Memory, docs/health.md); nil the assistant's.
 @Observable final class AssistantMemoryModel {
     private(set) var files: [APIClient.MemoryFile] = []
     private(set) var loaded = false

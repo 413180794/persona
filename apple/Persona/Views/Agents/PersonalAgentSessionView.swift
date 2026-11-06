@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One personal agent session: its messages (oldest at the top, "加载更早" for older pages), tool calls as compact
+/// One personal agent session: its messages (oldest at the top, "Load Earlier" for older pages), tool calls as compact
 /// rows, and a send box. A send carries a fresh clientId; a retry reuses it, so the hub never sends twice. The bridge
 /// does not stream: replies arrive through the hub's `agents` events (it re-announces at 4s/15s/45s after a send).
 struct PersonalAgentSessionView: View {

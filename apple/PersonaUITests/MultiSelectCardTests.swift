@@ -15,7 +15,7 @@ final class MultiSelectCardTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + review]
         app.launchPinned()
-        // 手机 and 电脑 are ticked at the computer; 手表 is ticked here.
+        // 「手机」 and 「电脑」 are ticked at the computer; 「手表」 is ticked here.
         let watch = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "手表")).firstMatch
         XCTAssertTrue(watch.waitForExistence(timeout: 15), "no multi-select card:\n\(app.debugDescription)")
         watch.tap()
@@ -39,7 +39,7 @@ final class MultiSelectCardTests: XCTestCase {
         XCTAssertNil(r["keys"], "keys are worked out on the computer, from the screen as it is then")
     }
 
-    /// 查看终端 brings up the session's whole live terminal (#563), not a small one inside the card; closing it is
+    /// View Terminal brings up the session's whole live terminal (#563), not a small one inside the card; closing it is
     /// the card again.
     @MainActor func testViewTerminalOpensTheFullTerminal() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MULTI_HUB"] else {

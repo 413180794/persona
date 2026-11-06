@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// The built-in personas' faces (docs/persona.md「内置形象」): drawn from shapes, so they stay sharp at any size; no
-/// bitmap assets. 团子 keeps the app icon's colors; the others are in the current style's accent. As the top bar's dot each moves for the state:
-/// a blink now and then (空闲), eyes looking up under a thought bubble (思考中), eyes scanning (面罩) or signals
-/// running down the traces into the core (汇流) (工作中), a pulsing ring in 需要你's red (等你处理), dimmed and gray (离线).
+/// bitmap assets. Mochi keeps the app icon's colors; the others are in the current style's accent. As the top bar's dot each moves for the state:
+/// a blink now and then (Idle), eyes looking up under a thought bubble (Thinking), eyes scanning (Visor) or signals
+/// running down the traces into the core (Circuit) (Working), a pulsing ring in Needs You's red (Waiting for you), dimmed and gray (Offline).
 struct AssistantAvatar: View {
     /// The designs that were tried (docs/assistant.md「头像」): `.mochi` is the default persona's (the app icon's
-    /// character), `.visor` the built-in 面罩's (`Persona.visor`, the default until 2026-11-03), `.circuit` 汇流's.
+    /// character), `.visor` the built-in Visor's (`Persona.visor`, the default until 2026-11-03), `.circuit` Circuit's.
     enum Design: String, CaseIterable, Identifiable {
         case mochi, visor, circuit, pixel, facet, blob, spark, halo
         var id: String { rawValue }
@@ -66,7 +66,7 @@ struct AssistantAvatar: View {
         .accessibilityHidden(true)
     }
 
-    // MARK: 团子, 面罩, 汇流, 像素, 晶面 and 软糖: PersonaFace (shared with the Live Activity), on a clock while moving.
+    // MARK: Mochi, Visor, Circuit, Pixel, Facet and Jelly: PersonaFace (shared with the Live Activity), on a clock while moving.
 
     private func face(_ d: PersonaFace.Design) -> some View {
         TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in
@@ -75,7 +75,7 @@ struct AssistantAvatar: View {
         }
     }
 
-    // MARK: 火花: the app icon's sparkle on a dark disc tinted with the accent.
+    // MARK: Spark: the app icon's sparkle on a dark disc tinted with the accent.
 
     private var spark: some View {
         ZStack {
@@ -88,7 +88,7 @@ struct AssistantAvatar: View {
         .overlay(Circle().strokeBorder(accent.opacity(0.35), lineWidth: max(0.5, size * 0.02)))
     }
 
-    // MARK: 光环: a broken ring around a glowing core, like a heads-up display.
+    // MARK: Halo: a broken ring around a glowing core, like a heads-up display.
 
     private var halo: some View {
         ZStack {

@@ -99,7 +99,7 @@ struct InboxTests {
 
     @Test func feishuLinkTargets() throws {
         func target(_ s: String) throws -> FeishuLinks.Target { FeishuLinks.target(try #require(URL(string: s)), lark: .all) }
-        // Feishu docs and 公司圈 posts: the native views.
+        // Feishu docs and Moments posts: the native views.
         #expect(try target("https://open.feishu.cn/docx/ExampleDocument == .route(.doc(url: "https://open.feishu.cn/docx/ExampleDocument title: nil)))
         #expect(try target("https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001") == .route(.momentsPost(id: "7000000000000000001")))
         // Any other web page, Feishu's own included: the in-app link sheet.

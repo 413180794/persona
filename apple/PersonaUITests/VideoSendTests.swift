@@ -1,6 +1,6 @@
 import XCTest
 
-/// Videos picked in 照片 go as files (#981, docs/protocol.md「发送视频」), against scripts/mock/mock_hub.py with
+/// Videos picked in Photos go as files (#981, docs/protocol.md「发送视频」), against scripts/mock/mock_hub.py with
 /// `MOCK_SENT_VIDEO=<a video>` (TEST_RUNNER_JARVIS_VIDEO_SEND_HUB=http://127.0.0.1:<port>) and a made-up video in the
 /// simulator's library (`xcrun simctl addmedia`). Each runs in the layout and style the environment picks
 /// (JARVIS_LAYOUT, JARVIS_UI_STYLE); JARVIS_SHOTS saves the screenshots there too.
@@ -89,7 +89,7 @@ final class VideoSendTests: XCTestCase {
         try closePlayer(app, "video-\(name)-player", back: card)
     }
 
-    /// + › 照片, the made-up video, 添加.
+    /// + › Photos, the made-up video, Add.
     @MainActor private func pickTheVideo(_ app: XCUIApplication) throws {
         // An enabled one: offline, the box's + is there but greyed out.
         let plus = app.buttons.matching(NSPredicate(format: "(identifier == %@ OR label IN %@) AND enabled == true", "shell-composer-add", ["添加", "Add"])).firstMatch
@@ -102,7 +102,7 @@ final class VideoSendTests: XCTestCase {
         XCTAssertTrue(video.waitForExistence(timeout: 20), "no video in the picker:\n\(app.debugDescription)")
         shot(app, "video-picker")
         video.tap()
-        // The picker's ✓ (out of process; not the app's own + behind it, which reads 添加 too).
+        // The picker's ✓ (out of process; not the app's own + behind it, which reads 「添加」 too).
         let add = app.buttons.matching(identifier: "Add").firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 5), "no ✓ in the picker:\n\(app.debugDescription)")
         add.tap()

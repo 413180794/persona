@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// 这台电脑能做什么 on a machine's page (#3018, the web's NodeHealth, docs/machines.md「自检」): the node's self-check, first
-/// as features (手机审批卡片, 状态与通知, 终端与引擎, …) with 就绪 / 部分可用 / 有问题 / 未启用, then every check behind
-/// 查看全部检查. It checks when the page opens, when the computer comes online and on 重新检查; 修复 (after one
-/// confirmation) has the node write its own generated files again and re-check. No polling.
+/// What This Computer Can Do on a machine's page (#3018, the web's NodeHealth, docs/machines.md「自检」): the node's
+/// self-check, first as features (Approval Cards on Phone, Status and Notifications, Terminal and Engine, …) with Ready /
+/// Partly Working / Problem / Off, then every check behind Show All Checks. It checks when the page opens, when the
+/// computer comes online and on Check Again; Repair (after one confirmation) has the node write its own generated files again and re-check. No polling.
 struct NodeHealthSection: View {
     @Environment(AppModel.self) private var app
     var ref: MachineRef
@@ -243,7 +243,7 @@ struct NodeHealthSection: View {
         }
     }
 
-    /// The same 重新部署 as the machine card's (`DeployRow`): the hub installs its build and reconnects.
+    /// The same Redeploy as the machine card's (`DeployRow`): the hub installs its build and reconnects.
     private func deploy() async {
         deploying = true
         defer { deploying = false }

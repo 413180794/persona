@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// visionOS has no Live Activities or Dynamic Island. The hub's fleet state is kept here instead, for the 需要你
+/// visionOS has no Live Activities or Dynamic Island. The hub's fleet state is kept here instead, for the Needs You
 /// ornament (docs/vision.md「和 iOS 的对应」); nothing is started or ended.
 @Observable final class LiveActivityController {
     static let shared = LiveActivityController()

@@ -175,6 +175,6 @@ nonisolated enum OpReceipt {
 /// open chats' subscriptions (`since_seq`) and the phone's registration, which the socket needs anyway.
 nonisolated struct ReconnectPlan: Equatable, Sendable {
     var resumed: Bool
-    /// Pull the interactions, inbox, todos, tasks, Feishu, the agent lists, and say 更新中… meanwhile.
+    /// Pull the interactions, inbox, todos, tasks, Feishu, the agent lists, and say Updating… meanwhile.
     var refetch: Bool { !resumed }
 }

@@ -12,7 +12,7 @@ struct LiveActivityStepTests {
     }
 
     @Test func theAssistantAnsweringKeepsARunningActivity() {
-        // No agent working, nothing unread: only the assistant answering, its side on the island (思考中).
+        // No agent working, nothing unread: only the assistant answering, its side on the island (Thinking).
         #expect(LiveActivityController.step(state(assistant: true), running: true, active: true) == .update)
         #expect(LiveActivityController.step(state(assistant: true), running: true, active: false) == .update)
     }

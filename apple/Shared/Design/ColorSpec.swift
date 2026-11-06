@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// One 主题色 (`ThemeColor`): what can be tapped, the user's own bubble and its words, 飞书's links and my bubble, and the
-/// pale wash that the styles with a colored canvas (黏土, Island) paint with it. The same in every style, and held to
+/// One Theme Color (`ThemeColor`): what can be tapped, the user's own bubble and its words, Lark's links and my bubble, and the
+/// pale wash that the styles with a colored canvas (Clay, Island) paint with it. The same in every style, and held to
 /// the floors on every style's page (StyleSpecTests).
 nonisolated struct ColorSpec: Sendable {
     typealias Pair = PersonaPalette.Pair
 
-    /// The canvas a hue gives 黏土 and Island (the other styles keep a neutral page): the page, cards a step lighter,
+    /// The canvas a hue gives Clay and Island (the other styles keep a neutral page): the page, cards a step lighter,
     /// and the puffy surfaces' colored shadow (light; black in dark) and lit edge (dark; white in light).
     struct Wash: Sendable {
         var page: Pair
@@ -21,7 +21,7 @@ nonisolated struct ColorSpec: Sendable {
             self.highlight = highlight
         }
 
-        /// Worked out from an accent, close to what 黏土 and Island chose by hand for theirs: a page nine parts white,
+        /// Worked out from an accent, close to what Clay and Island chose by hand for theirs: a page nine parts white,
         /// a card a step lighter (in dark, the accent faint on a neutral dark, lighter than the system's cells), a
         /// shadow a little deeper than the accent. Light enough that every accent meeting its floors reads on it as a link.
         init(accent a: Pair) {
@@ -46,7 +46,7 @@ nonisolated struct ColorSpec: Sendable {
     var larkMyBubble: Color
     var extensionRoles: ExtensionThemePalette? = nil
 
-    /// `larksOwn`: 飞书's chrome takes the bubble as it is (飞书蓝, the Lark gateway's own); otherwise a pale bubble of the accent.
+    /// `larksOwn`: Lark's chrome takes the bubble as it is (Lark Blue, the Lark gateway's own); otherwise a pale bubble of the accent.
     init(title: String, subtitle: String, accent: Pair, bubble: Color, bubbleText: Color, deepensBubble: Bool,
          wash: Wash? = nil, larksOwn: Bool = false) {
         self.title = title
@@ -91,12 +91,12 @@ nonisolated struct ColorSpec: Sendable {
     }
 }
 
-/// 设置 › 外观 › 主题色 (UserDefaults `ui.color`): each style's own colors (the default), the persona's, or one style's colors
+/// Settings › Appearance › Theme Color (UserDefaults `ui.color`): each style's own colors (the default), the persona's, or one style's colors
 /// on any style. Changing it rebuilds the view tree like a style does (`AppModel.look`).
 nonisolated enum ThemeColor: String, CaseIterable, Identifiable, Sendable {
-    /// 跟随界面风格: the style's own (`ComponentSpec.colors`), as each looked before the colors were a choice.
+    /// Match Interface Style: the style's own (`ComponentSpec.colors`), as each looked before the colors were a choice.
     case style
-    /// 跟随形象: the persona's (only offered when it brings colors); the style's while it brings none.
+    /// Match Avatar: the persona's (only offered when it brings colors); the style's while it brings none.
     case persona
     case blue
     case coral
@@ -146,10 +146,10 @@ nonisolated enum ThemeColor: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The saved 界面风格 and 主题色 (UserDefaults `ui.style`, `ui.color`; `-ui.style clay -ui.color coral` as launch
+/// The saved Interface Style and Theme Color (UserDefaults `ui.style`, `ui.color`; `-ui.style clay -ui.color coral` as launch
 /// arguments). Until 2026-10-31 a style brought its colors and a persona laid its own over them; read the first time,
-/// the old settings become the choices that look the same: the style with 跟随界面风格, Claude (Liquid Glass in coral,
-/// now only a color) as 液态玻璃 with 珊瑚橙, and with a persona chosen, 跟随形象.
+/// the old settings become the choices that look the same: the style with Match Interface Style, Claude (Liquid Glass in coral,
+/// now only a color) as Liquid Glass with Coral, and with a persona chosen, Match Avatar.
 nonisolated struct AppearanceChoice: Equatable, Sendable {
     var style: AppStyle
     var color: ThemeColor

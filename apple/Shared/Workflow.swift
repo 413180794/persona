@@ -129,7 +129,7 @@ nonisolated struct WorkflowRun: Codable, Identifiable, Hashable, Sendable {
         }.map(\.element)
     }
 
-    /// One line (list rows, task cards): 「后台 workflow「parity-audit」· Verify 2/2 · 169/185」; the time apart.
+    /// One line (list rows, task cards): "Background workflow “parity-audit” · Verify 2/2 · 169/185"; the time apart.
     var line: String {
         var parts = [isRunning ? String(localized: "后台 workflow「\(title)」") : String(localized: "workflow「\(title)」")]
         if let p = phaseLabel { parts.append(p) }

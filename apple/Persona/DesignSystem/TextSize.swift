@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
-/// The app's own text size (设置 › 界面风格 › 字号: 小 / 标准 / 大), on top of the system's. It moves the Dynamic Type
+/// The app's own text size (Settings › Interface Style › Text Size: Small / Standard / Large), on top of the system's. It moves the Dynamic Type
 /// size one step down or up from whatever the system is set to, so every `Theme.Font` level, every `@ScaledMetric`
 /// and BeautifulUI's sizes (`ScaledMetric` too) move together and keep their ratios; changing the system's text size
 /// still applies underneath. At either end of the range it stays where it is.
@@ -48,7 +48,7 @@ enum TextSize: String, CaseIterable, Identifiable {
 
 extension Theme {
     /// How much larger body text is at this Dynamic Type size than at the default: for text drawn at a point size of
-    /// its own (Lark messages and cards keep Feishu's sizes), so it follows the system and 小 / 标准 / 大 too.
+    /// its own (Lark messages and cards keep Feishu's sizes), so it follows the system and Small / Standard / Large too.
     static func textScale(_ size: DynamicTypeSize) -> CGFloat {
         if let k = textScales[size] { return k }
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
@@ -62,7 +62,7 @@ extension Theme {
 }
 
 /// A value made for the current text size (`Theme.Font.scale`) and kept until it changes: Markdown themes, whose sizes
-/// are points, follow 小 / 标准 / 大 on the Mac that way (#833). The scale never changes on the iPhone: made once.
+/// are points, follow Small / Standard / Large on the Mac that way (#833). The scale never changes on the iPhone: made once.
 @MainActor final class PerTextScale<Value> {
     private let make: () -> Value
     private var made: (scale: CGFloat, value: Value)?
@@ -100,7 +100,7 @@ extension Theme {
 
 extension View {
     /// A frame whose sizes (`Theme.Size`) follow the text size: the same points at the default size, larger or smaller
-    /// with 小 / 标准 / 大 and the system's text size (`Theme.sizeScale`). Fixed and flexible frames as SwiftUI's.
+    /// with Small / Standard / Large and the system's text size (`Theme.sizeScale`). Fixed and flexible frames as SwiftUI's.
     func scaledFrame(width: CGFloat? = nil, height: CGFloat? = nil, alignment: Alignment = .center) -> some View {
         modifier(ScaledFrame(width: width, height: height, alignment: alignment))
     }

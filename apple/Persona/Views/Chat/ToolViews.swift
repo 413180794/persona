@@ -132,7 +132,7 @@ enum ToolPresentation {
 struct ToolGroupView: View {
     var steps: [ToolStep]
     var isLatest: Bool
-    /// Every step listed, no "N 个步骤" fold (inside a line that was already tapped open).
+    /// Every step listed, no "N steps" fold (inside a line that was already tapped open).
     var flat = false
     @State private var expanded = false
     @Environment(\.chatPin) private var pin
@@ -180,7 +180,7 @@ struct ToolGroupView: View {
                 }
             }
         }
-        .chatPinned(pinKey) // its top: the "N 个步骤" line closed, the first step open
+        .chatPinned(pinKey) // its top: the "N steps" line closed, the first step open
     }
 
     private func summary(_ calls: [ToolCall]) -> String {
@@ -196,7 +196,7 @@ struct ToolGroupView: View {
 }
 
 /// Two or more tool calls in a row of an open work line, as one line of chips (BeautifulUI's `ToolChipGroup`):
-/// "搜索 hourly · 读取 3 个文件 · 编辑 Provider.swift +6 −3". Tapping opens a row per call under it (`ChatView.runLines`),
+/// "Search hourly · Read 3 files · Edit Provider.swift +6 −3". Tapping opens a row per call under it (`ChatView.runLines`),
 /// where each call opens to its input and output as before. One text layout per run, however long the run.
 struct ToolRunRow: View, Equatable {
     nonisolated let calls: [ToolCall]
@@ -227,8 +227,8 @@ struct ToolRunRow: View, Equatable {
     }
 }
 
-/// A run's chips: one per kind of tool, in the order first used. One call names its subject ("读取 WeatherStore.swift"),
-/// several count ("读取 3 个文件"); edits to one file carry its +N −N; a failed call turns its chip red.
+/// A run's chips: one per kind of tool, in the order first used. One call names its subject ("Read WeatherStore.swift"),
+/// several count ("Read 3 files"); edits to one file carry its +N −N; a failed call turns its chip red.
 enum ToolRunSummary {
     private enum Kind: Hashable { case read, search, edit, run, todo, other(String) }
 
@@ -436,7 +436,7 @@ struct ToolCallRow: View {
         .padding(Self.chipInsets(grouped: grouped))
     }
 
-    /// A call that went to the background says how its task went (后台 · 已完成).
+    /// A call that went to the background says how its task went (Background · Done).
     @ViewBuilder private var taskBadge: some View {
         if let id = call.use.toolUseID, tasks.started.contains(id) || tasks.notes[id] != nil {
             let b = TaskNoteText.badge(tasks.notes[id] ?? [])
@@ -793,7 +793,7 @@ struct FullOutputSheet: View {
             .pageToolbar {
                 #if os(macOS)
                 // A Mac sheet has no navigation bar: only its bottom row of actions is drawn, and the leading item that
-                // maps to `.navigation` never showed (#743). 拷贝全文 goes in that row, before 完成.
+                // maps to `.navigation` never showed (#743). Copy All goes in that row, before Done.
                 ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.lineLimit(1) }
                 if let text {
                     ToolbarItem(placement: .primaryAction) {
@@ -819,7 +819,7 @@ struct FullOutputSheet: View {
             do { text = try await load(itemID) } catch { if let msg = error.shown { self.error = msg } }
             #if DEBUG
             if ResultBlock.debugFull, let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-                // What 看全文 got, for checking against the transcript (`-showFullOutput sheet`).
+                // What View Full Text got, for checking against the transcript (`-showFullOutput sheet`).
                 try? (text ?? "ERROR: \(error ?? "")").write(to: dir.appending(path: "full-output.txt"), atomically: true, encoding: .utf8)
                 try? itemID.write(to: dir.appending(path: "full-output-id.txt"), atomically: true, encoding: .utf8)
             }
@@ -831,7 +831,7 @@ struct FullOutputSheet: View {
 /// The chat's one diff: Edit / MultiEdit / Write (old and new text) and Codex's patches (a unified diff), on the Git
 /// page's line model (`DiffText.Line`, `DiffText.parse`; the Git page draws whole files with MonoTextView). Only the
 /// sign and the line's background are colored, the code stays label; long lines scroll sideways and a fade on the
-/// right says there is more. Long diffs show their start and 展开全部.
+/// right says there is more. Long diffs show their start and Expand All.
 nonisolated enum ToolDiffMemo {
     struct Content: Sendable {
         var lines: [DiffText.Line]
@@ -1136,7 +1136,7 @@ struct FoldedWorkRow: View {
 }
 
 /// A tool that operates a Mac, in words (#1323): what it did as a line of steps (「点 AC → 6 → × → 7 → =」), the
-/// screenshot it brought back, VNC; its JSON and what the driver answered folded under 原始参数.
+/// screenshot it brought back, VNC; its JSON and what the driver answered folded under Raw Input.
 struct ComputerToolDetail: View {
     var call: ToolCall
     var input: String

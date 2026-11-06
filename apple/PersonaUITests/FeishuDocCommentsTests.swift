@@ -2,7 +2,7 @@ import XCTest
 
 /// Commenting in the Feishu document reader (#1290), end to end against scripts/mock/mock_hub.py started with
 /// MOCK_DOC_COMMENTS=1 (JARVIS_MOCK_HUB): typing @ finds people and the comment goes out mentioning the one picked;
-/// 回复 answers that thread; 解决 moves a thread to 已解决 and 重新打开 brings it back. What the plugin's routes got is
+/// Reply answers that thread; Resolve moves a thread to Resolved and Reopen brings it back. What the plugin's routes got is
 /// read from the mock (GET /mock/doc-comments), so the test checks what was sent, not only what shows.
 final class FeishuDocCommentsTests: XCTestCase {
     private var hub: String!
@@ -68,7 +68,7 @@ final class FeishuDocCommentsTests: XCTestCase {
         XCTAssertEqual((body?["mentions"] as? [[String: Any]])?.first?["user_id"] as? String, "ou_mock_ll")
         XCTAssertNotNil(body?["client_id"] as? String)
 
-        // 回复 a thread: the box says to whom, and the words go to that thread.
+        // Reply to a thread: the box says to whom, and the words go to that thread.
         app.buttons["docComments.reply.c2"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["lark.replyBar"].waitForExistence(timeout: 3), "no 回复 bar")
         try shot(app, "replying")
@@ -79,7 +79,7 @@ final class FeishuDocCommentsTests: XCTestCase {
         sent = try writes().dropFirst(before)
         XCTAssertEqual(sent.dropFirst().first?["path"] as? String, "/api/v1/lark/documents/comments/c2/replies")
 
-        // 解决 moves the thread to 已解决; there 重新打开 brings it back.
+        // Resolve moves the thread to Resolved; there Reopen brings it back.
         app.buttons["docComments.resolve.c1"].tap()
         XCTAssertTrue(app.buttons["docComments.resolve.c1"].waitForNonExistence(timeout: 10), "the thread stayed open")
         app.buttons["已解决 2"].tap()
@@ -94,7 +94,7 @@ final class FeishuDocCommentsTests: XCTestCase {
         XCTAssertEqual(sent.suffix(2).map { ($0["body"] as? [String: Any])?["resolved"] as? Bool }, [true, false])
     }
 
-    /// 评论这段: a long press on a paragraph offers it (with 拷贝, the text selection's place), the comments open with
+    /// Comment on This: a long press on a paragraph offers it (with Copy, the text selection's place), the comments open with
     /// the box on that passage, and the new comment goes out quoting it.
     @MainActor func testCommentOnAPassage() throws {
         let before = try writes().count

@@ -14,7 +14,7 @@ final class LiveActivityShots: XCTestCase {
             app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO",
                                    "-fleetIsland", env["JARVIS_FLEET_ISLAND"] ?? "a", "-tab", "settings",
                                    "-showFleetCount", env["JARVIS_FLEET_COUNT"] ?? "0"]
-            // The persona on the activity (`persona`, the default, `jarvis` (面罩), `jarvis-circuit`, or a hub package such as mock_hub's
+            // The persona on the activity (`persona`, the default, `jarvis` (Visor), `jarvis-circuit`, or a hub package such as mock_hub's
             // `demo`, which needs JARVIS_MOCK_HUB to be downloaded from).
             if let persona = env["JARVIS_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
             if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
@@ -51,8 +51,8 @@ final class LiveActivityShots: XCTestCase {
         sleep(2)
         XCUIDevice.shared.perform(NSSelectorFromString("pressLockButton"))
         sleep(3)
-        // First time only: the system asks whether Persona may show Live Activities (on the lock screen). Its 允许 is
-        // also the activity's own button: with the activity showing (拒绝 is there), do not tap it.
+        // First time only: the system asks whether Persona may show Live Activities (on the lock screen). Its Allow is
+        // also the activity's own button: with the activity showing (Deny is there), do not tap it.
         let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
         let ours = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@ OR label CONTAINS %@",
                                                               "拒绝", "Deny", "拒否")).firstMatch
@@ -60,7 +60,7 @@ final class LiveActivityShots: XCTestCase {
             allow.tap()
             sleep(2)
         }
-        // Later the system asks again whether to keep allowing them; 始终允许 is never one of the activity's buttons.
+        // Later the system asks again whether to keep allowing them; Always Allow is never one of the activity's buttons.
         let always = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Always Allow", "始终允许"])).firstMatch
         if always.exists {
             always.tap()
@@ -73,9 +73,9 @@ final class LiveActivityShots: XCTestCase {
         sleep(1)
     }
 
-    /// A persona chosen in 设置 › 外观 › 形象 while the activity runs reaches the island within seconds, without a new
+    /// A persona chosen in Settings › Appearance › Avatar while the activity runs reaches the island within seconds, without a new
     /// activity (docs/live-activity.md「形象」). `JARVIS_PERSONA_SWITCH=demo,jarvis-circuit,jarvis`: starts on the first,
-    /// then picks each next one in 设置 and photographs the island 3 s after leaving the app. A hub package needs
+    /// then picks each next one in Settings and photographs the island 3 s after leaving the app. A hub package needs
     /// JARVIS_MOCK_HUB (scripts/mock/mock_hub.py with MOCK_PERSONAS=demo).
     @MainActor func testSwitchingPersonaRedrawsTheIsland() throws {
         let env = ProcessInfo.processInfo.environment
@@ -95,7 +95,7 @@ final class LiveActivityShots: XCTestCase {
         for (i, id) in ids.dropFirst().enumerated() {
             app.activate()
             let card = app.buttons["persona-\(id)"]
-            if !card.waitForExistence(timeout: 3) { // 设置 keeps its page; open 形象 again if it did not
+            if !card.waitForExistence(timeout: 3) { // Settings keeps its page; open Avatar again if it did not
                 app.tabBars.buttons["设置"].tap()
                 let row = app.buttons["settings-persona"]
                 XCTAssertTrue(row.waitForExistence(timeout: 10), "no 形象 row:\n\(app.debugDescription)")

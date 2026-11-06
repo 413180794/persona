@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 扩展市场: a GitHub market read without a token is the one GitHub's per-network limit stops, so the catalog's
-/// "读不到" for it comes with 填 token and why (public repositories included); a token, or another kind of market,
+/// Extension Market: a GitHub market read without a token is the one GitHub's per-network limit stops, so the catalog's
+/// "Couldn't load" for it comes with "add a token" and why (public repositories included); a token, or another kind of market,
 /// has nothing to add.
 @MainActor
 struct MarketTokenHintTests {

@@ -40,7 +40,7 @@ struct ConnectorPromptTests {
         #expect(!p.polls)
     }
 
-    /// A step the app cannot draw says so instead of an empty form whose 下一步 never lights up (#1693): an unknown
+    /// A step the app cannot draw says so instead of an empty form whose Next never lights up (#1693): an unknown
     /// kind, a QR step without the code, a device code without the code, a form with no fields.
     @Test func stepsItCannotDraw() throws {
         for json in [#"{"step":"auth","kind":"open_url","url":"https://example.com/auth"}"#,

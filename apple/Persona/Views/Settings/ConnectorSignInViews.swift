@@ -16,20 +16,20 @@ struct ConnectorDeps {
     }
 }
 
-/// 设置 › 连接器 › Telegram's own part (a connector the user signs in to here, `HubConnector.signsInHere`): its switch,
+/// Settings › Connectors › Telegram's own part (a connector the user signs in to here, `HubConnector.signsInHere`): its switch,
 /// the sign-in a step at a time (the hub says what each step asks for: docs/plan-telegram.md), signing out and
 /// deleting what it brought in.
 @Observable final class ConnectorSignInModel {
     let id: String
     /// The step on screen; nil when not signing in.
     private(set) var prompt: ConnectorPrompt?
-    /// A QR step's code as a picture for 保存二维码, drawn once per code.
+    /// A QR step's code as a picture for Save QR Code, drawn once per code.
     private(set) var qrImage: UIImage?
     var values: [String: String] = [:]
     private(set) var busy = false
     /// What the last delete removed, said for people.
     private(set) var deleted: String?
-    /// What the last 删除已存的知识库内容 removed, said for people.
+    /// What the last Delete Saved Knowledge removed, said for people.
     private(set) var archiveDeleted: String?
     @ObservationIgnored private let deps: ConnectorDeps
 
@@ -194,7 +194,7 @@ extension HubConnector {
     var isSignedIn: Bool { status == "ok" || status == "rate_limited" }
 }
 
-/// 同步 <name>: a connector's switch.
+/// Sync <name>: a connector's switch.
 struct ConnectorSwitchSection: View {
     var connector: HubConnector
     var model: ConnectorSignInModel
@@ -227,7 +227,7 @@ struct ConnectorSwitchSection: View {
     }
 }
 
-/// 进知识库 and 进收件箱, for a connector that has them (the hub lists `archive`, `inbox`), and 删除已存的知识库内容.
+/// Save to Knowledge and Show in Inbox, for a connector that has them (the hub lists `archive`, `inbox`), and Delete Saved Knowledge.
 struct ConnectorFeedsSection: View {
     var connector: HubConnector
     var model: ConnectorSignInModel
@@ -288,7 +288,7 @@ struct ConnectorFeedsSection: View {
     }
 }
 
-/// 退出登录 (when it shows) and 删除已存的数据.
+/// Sign Out (when it shows) and Delete Saved Data.
 struct ConnectorDataSection: View {
     var connector: HubConnector
     var model: ConnectorSignInModel
@@ -348,14 +348,14 @@ struct ConnectorDataSection: View {
 }
 
 /// Signing in a step at a time (the hub says what each step asks for): the step's card, then its button on its own
-/// under the card (下一步, or the page to enter a code on), so the card keeps its rounded corners.
+/// under the card (Next, or the page to enter a code on), so the card keeps its rounded corners.
 struct ConnectorSignInSteps: View {
     /// The connector's (or channel's) name, in the buttons and waiting lines.
     var name: String
     var model: ConnectorSignInModel
     var reload: () async -> Void
     var footer: String
-    /// The section's heading and the first button: 登录 for a connector, 绑定 / 扫码绑定 for a channel.
+    /// The section's heading and the first button: Sign In for a connector, Bind / Bind with QR Code for a channel.
     var heading = String(localized: "登录")
     var start: String?
 
@@ -497,7 +497,7 @@ struct ConnectorSignInSteps: View {
     }
 
     /// The QR code to scan with the other app: the page asks the hub again on its own until it is scanned and
-    /// confirmed there. On the phone that runs the other app, 保存二维码 below puts it in the photo library to scan from.
+    /// confirmed there. On the phone that runs the other app, Save QR Code below puts it in the photo library to scan from.
     @ViewBuilder private func qrCode(_ p: ConnectorPrompt) -> some View {
         QRCodeView(rows: p.qr?.rows ?? [])
             .scaledFrame(width: Theme.Size.box200, height: Theme.Size.box200)

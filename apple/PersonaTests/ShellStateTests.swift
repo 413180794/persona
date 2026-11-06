@@ -29,14 +29,14 @@ struct ShellStateTests {
         let shell = ShellState()
         shell.attach(to: model)
         defer { shell.detach(from: model) }
-        model.selectedTab = .chats // a notification, 交给 Agent…
+        model.selectedTab = .chats // a notification, Hand to Agent…
         #expect(shell.page == 1, "the shell did not take the tab as it was set")
-        model.selectedTab = .mail // the inbox lands on 助手
+        model.selectedTab = .mail // the inbox lands on Assistant
         #expect(shell.page == 0)
         #expect(model.selectedTab == .assistant)
         #expect(shell.request?.page == .inbox)
         shell.select(1)
-        model.selectedTab = .settings // 设置 is a sheet over the page in front
+        model.selectedTab = .settings // Settings is a sheet over the page in front
         #expect(model.shellSettings)
         #expect(shell.page == 1)
         #expect(model.selectedTab == .chats)

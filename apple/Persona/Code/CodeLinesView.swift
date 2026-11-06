@@ -30,7 +30,7 @@ nonisolated enum CodeMetrics {
 /// Lines of code that scroll both ways like an editor, any number of them (docs/ios.md「文件查看器」): only the
 /// lines on screen (and a few around) are labels, reused as they scroll, so a file of 100 000 lines opens and scrolls
 /// like one of ten. The gutter stays put while the code scrolls sideways under it. A long press offers the line's
-/// menu (拷贝这一行…); a tap goes to the source (JSON opens or closes a node).
+/// menu (Copy Line…); a tap goes to the source (JSON opens or closes a node).
 final class CodeLinesView: UIScrollView, UIScrollViewDelegate, UIContextMenuInteractionDelegate {
     weak var source: CodeLineSource? {
         didSet { reload() }

@@ -24,7 +24,7 @@ struct TerminalContent: Equatable {
 #if os(iOS) || os(visionOS)
 /// The terminal tab's screen: every character drawn in its own cell (wide ones in two), so columns and Chinese line up
 /// whatever the font's own widths are. Wrapped, each row is folded at the view's width; unwrapped, rows keep the pane's
-/// width and the view scrolls sideways. Long press selects (拷贝 / 全选), a tap opens a link. With `onInput` it takes the
+/// width and the view scrolls sideways. Long press selects (Copy / Select All), a tap opens a link. With `onInput` it takes the
 /// keyboard: a tap brings it up and what is typed goes to the terminal (TerminalInput.swift).
 struct TerminalView: UIViewRepresentable {
     var content: TerminalContent

@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// What the app looks like, in one value, made of three choices in 设置 (docs/ios.md「设计语言」): the style (`AppStyle`,
-/// 界面风格: how panels, cards and buttons are drawn, the type, the components), the colors (`ThemeColor`, 主题色: what
-/// can be tapped, the user's bubble, 飞书's links, the wash of a colored canvas), and the persona, of which only its own
-/// primary is here (`Theme.persona`, its face's glow). Theme, Styling, 飞书's chrome and the BeautifulUI bridge read
+/// What the app looks like, in one value, made of three choices in Settings (docs/ios.md「设计语言」): the style (`AppStyle`,
+/// Interface Style: how panels, cards and buttons are drawn, the type, the components), the colors (`ThemeColor`, Theme Color: what
+/// can be tapped, the user's bubble, Lark's links, the wash of a colored canvas), and the persona, of which only its own
+/// primary is here (`Theme.persona`, its face's glow). Theme, Styling, Lark's chrome and the BeautifulUI bridge read
 /// `StyleSpec.current`; nothing else switches on a choice. A new style is a `ComponentSpec` in Styles/ and a case in
 /// `AppStyle`, a new color a `ColorSpec` and a case in `ThemeColor`. `StyleSpecTests` checks every style in every color.
 nonisolated struct StyleSpec: Sendable {
@@ -11,11 +11,11 @@ nonisolated struct StyleSpec: Sendable {
     enum Surface: Sendable {
         /// Liquid Glass.
         case glass
-        /// A puffy pastel slab lit from the top left (黏土).
+        /// A puffy pastel slab lit from the top left (Clay).
         case puffy
         /// A white island with a deep soft shadow (Island).
         case floating
-        /// Flat, with a hairline border (飞书).
+        /// Flat, with a hairline border (Lark).
         case hairline
     }
 
@@ -39,11 +39,11 @@ nonisolated struct StyleSpec: Sendable {
         /// A gray card, the steps its rows with hairlines between them.
         case card
         /// On the page like the chat around it: a thin rail down the left that the tools' icons sit on, the agent's
-        /// narration in the quieter type (液态玻璃, 2026-10-31: the card read heavier than the chat).
+        /// narration in the quieter type (Liquid Glass, 2026-10-31: the card read heavier than the chat).
         case timeline
     }
 
-    /// 飞书's messages and cards inside the app: links, bubbles and card chrome.
+    /// Lark's messages and cards inside the app: links, bubbles and card chrome.
     struct LarkChrome: Sendable {
         var blue: Color
         var myBubble: Color
@@ -70,7 +70,7 @@ nonisolated struct StyleSpec: Sendable {
     var buttons: Buttons
     /// The soft buttons' shadow.
     var softShadow: Color
-    /// A puffy surface's colored shadow below and lit edge above (黏土), from the color's wash.
+    /// A puffy surface's colored shadow below and lit edge above (Clay), from the color's wash.
     var puffyShadow: Color
     var puffyHighlight: Color
     var fontDesign: Font.Design
@@ -131,21 +131,21 @@ nonisolated struct StyleSpec: Sendable {
         current = compose(style: .current, color: .current, persona: PersonaPalette.current)
     }
 
-    /// 飞书's own gray for other people's bubbles, used by the styles close to the system look.
+    /// Lark's own gray for other people's bubbles, used by the styles close to the system look.
     static let larkGrayBubble = Color(light: 0xEBECED, dark: 0x262626)
     static let defaultStroke = Color.primary.opacity(0.08)
     static let defaultSoftShadow = Color.black.opacity(0.12)
 }
 
-/// One 界面风格 (`AppStyle`): how things are drawn, whatever the color (that is 主题色, `ColorSpec`).
+/// One Interface Style (`AppStyle`): how things are drawn, whatever the color (that is Theme Color, `ColorSpec`).
 nonisolated struct ComponentSpec: Sendable {
     /// The page behind lists and chats, and the cards on it.
     enum Canvas: Sendable {
         /// The system's (the Liquid Glass styles).
         case system
-        /// Its own, the same in every color (飞书's light gray and white cards).
+        /// Its own, the same in every color (Lark's light gray and white cards).
         case neutral(page: Color, card: Color)
-        /// The color's pale wash, cards a step lighter (黏土).
+        /// The color's pale wash, cards a step lighter (Clay).
         case wash
         /// The color's pale wash with white islands on it; in dark, the wash's cards (Island).
         case islands
@@ -162,12 +162,12 @@ nonisolated struct ComponentSpec: Sendable {
     var workList: StyleSpec.WorkList = .card
     var canvas: Canvas
     var cardStroke = StyleSpec.defaultStroke
-    /// Soft buttons cast the color's shadow (黏土) instead of a plain one.
+    /// Soft buttons cast the color's shadow (Clay) instead of a plain one.
     var tintedShadow = false
-    /// 飞书's other people's bubbles and its cards: the style's own, or (nil) its cards.
+    /// Lark's other people's bubbles and its cards: the style's own, or (nil) its cards.
     var larkOtherBubble: Color? = nil
     var larkCard: Color? = nil
-    /// The colors it came with: 主题色「跟随界面风格」.
+    /// The colors it came with: Theme Color › Match Interface Style.
     var colors: ColorSpec
 }
 

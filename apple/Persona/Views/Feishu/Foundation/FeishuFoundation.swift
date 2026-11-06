@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - API
 
 /// Feishu data beyond chats comes through the hub's read-only window onto the Lark gateway's agent API:
-/// `/api/v1/lark/raw/<path>` = the Lark gateway's `/agent/v1/<path>` (see docs/protocol.md 飞书 API). Media / API paths inside
+/// `/api/v1/lark/raw/<path>` = the Lark gateway's `/agent/v1/<path>` (see docs/protocol.md「飞书 API」). Media / API paths inside
 /// the JSON already point back at the hub, so they load with `LarkRemoteImage` / `LarkMedia`.
 extension APIClient {
     /// GET one Lark gateway agent route, decoded. `path` has no leading slash, e.g. "documents/recent".
@@ -25,7 +25,7 @@ extension APIClient {
 
 // MARK: - Routes
 
-/// What a Feishu view can open from another: a chat, a document, a person, a company-feed (公司圈) post. Persona is
+/// What a Feishu view can open from another: a chat, a document, a person, a company-feed (Moments) post. Persona is
 /// not a second Feishu: there are no browsing screens, only what a link or a message leads to. The navigation stack that owns a
 /// Feishu view resolves these with `.feishuRoutes()`.
 enum FeishuRoute: Hashable {
@@ -76,7 +76,7 @@ private struct FeishuLinkHandling: ViewModifier {
                     open?(route)
                     return .handled
                 case .route, .sheet:
-                    // The sheet's AI 修改 / 作为上下文 go to the assistant, whose config loads with its page: opened
+                    // The sheet's Edit with AI / Add as Context go to the assistant, whose config loads with its page: opened
                     // straight into the inbox it is not there yet. With no assistant at all, the system opens the link.
                     if assistant != nil {
                         link = LinkTarget(url: url)
@@ -174,6 +174,6 @@ nonisolated enum FeishuTime {
         return Date(timeIntervalSince1970: n > 1e11 ? n / 1000 : n)
     }
 
-    /// Compact relative time used in Feishu lists: 刚刚 / 5 分钟前 / 14:05 / 昨天 / 10月21日.
+    /// Compact relative time used in Feishu lists: Just now / 5 min ago / 14:05 / Yesterday / Oct 21.
     static func short(_ d: Date?) -> String { LarkTime.short(d) }
 }

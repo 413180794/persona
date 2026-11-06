@@ -5,9 +5,9 @@ import PhotosUI
 import SwiftUI
 
 enum ChatStyle {
-    /// 开发: every step visible, tab bar hidden.
+    /// Develop: every step visible, tab bar hidden.
     case dev
-    /// 对话 (assistant): thoughts hidden, tool runs folded into one line, lives at the root of its tab.
+    /// Chat (assistant): thoughts hidden, tool runs folded into one line, lives at the root of its tab.
     case assistant
 }
 
@@ -36,7 +36,7 @@ struct ChatView: View {
     @State private var pinRising = false
     @State private var showTerminal = false
     #if os(macOS)
-    /// The Mac's terminal takes the chat's place (终端 | 对话, #3183): mounted the first time it is shown, then kept under
+    /// The Mac's terminal takes the chat's place (Terminal | Chat, #3183): mounted the first time it is shown, then kept under
     /// the chat, still subscribed and at the same size, so coming back to it does not connect again.
     @State private var macSwitch = TerminalChatSwitch()
     /// The goal / ports row over the page (`macChrome`): the terminal starts under it.
@@ -122,7 +122,7 @@ struct ChatView: View {
     @State private var renaming: Session?
     @State private var closing: Session?
     @State private var deleting: Session?
-    /// The turn whose "后台任务完成" drawer is open.
+    /// The turn whose "Background Task Done" drawer is open.
     @State private var wakeDrawer: String?
     @Environment(\.dismiss) private var dismissChat
     /// Hosted by a page about something else (a task's sheet, `HostedChat`): its header is the page's only one.
@@ -134,7 +134,7 @@ struct ChatView: View {
     @Environment(\.shell) private var shell
     /// The shell's composer (`ShellComposerBar`): the assistant's conversation and, in the shell, an agent's too, in every
     /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them. On the Mac
-    /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it 添加, the model
+    /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it Add, the model
     /// and its modes, send / stop, as Codex's and ChatGPT's desktop apps (#2113).
     private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.card }
     /// The system presents bars down the side of the screen (iPhone Duo closed, or open in landscape).
@@ -153,7 +153,7 @@ struct ChatView: View {
     /// behind another). Not observed: it draws nothing.
     @State private var shownInFront = FrontFlag()
     @State private var link: LinkTarget?
-    /// Where a 模型没接好 card's 去修 goes (`ReadinessSheets`).
+    /// Where a Model Not Connected card's Fix It goes (`ReadinessSheets`).
     @State private var readinessRoute: ReadinessRoute?
     /// The image viewer, shown by the page rather than the row it was opened from (`viewImages`).
     @State private var viewingImages: ImageViewing?
@@ -292,7 +292,7 @@ struct ChatView: View {
 
     #if os(macOS)
     /// The Mac's chat header, in the title bar's row of the chat's column as a detail page's title (`MacDetailBack`,
-    /// #2113): ‹ when there is somewhere to go back to (out of 文件 / Git, off a pushed page), the title over its state
+    /// #2113): ‹ when there is somewhere to go back to (out of Files / Git, off a pushed page), the title over its state
     /// line (a click opens the session's info, as ⌥⌘I does), then round buttons as the Agents list's
     /// (`MacTitleRowButton`): the space's other agents, a /loop or background work, and ⋯. Not window toolbar items: those
     /// follow the window's middle, not their column (#1302). The row's end is left to the search field.
@@ -351,11 +351,11 @@ struct ChatView: View {
         .ignoresSafeArea(.container, edges: inTitleBar ? .top : [])
     }
 
-    /// ‹ in the title row: off a pushed page, or out of 文件 / Git. The terminal is not a page over the chat but the
-    /// other side of 终端 | 对话: no ‹ for it.
+    /// ‹ in the title row: off a pushed page, or out of Files / Git. The terminal is not a page over the chat but the
+    /// other side of Terminal | Chat: no ‹ for it.
     private var macShowsBack: Bool { pane == .git || pane == .files || split?.isFirstPage != true }
 
-    /// 终端 | 对话 (the web's session switch, #2445): the middle of the page is one or the other, ⇧⌘J flips it.
+    /// Terminal | Chat (the web's session switch, #2445): the middle of the page is one or the other, ⇧⌘J flips it.
     private var macViewSwitch: some View {
         SegmentedChoice(String(localized: "显示"), [(SessionPane.terminal, SessionPane.terminal.title), (SessionPane.chat, SessionPane.chat.title)],
                         selection: Binding(get: { pane == .terminal ? .terminal : .chat }, set: { setMacView($0) }))
@@ -404,7 +404,7 @@ struct ChatView: View {
             }
         } else if siblings.count > 1 {
             Menu {
-                // A tab's agents under its name, in the order of their panes, the 发起者 marked (#2320).
+                // A tab's agents under its name, in the order of their panes, the one that started it marked (#2320).
                 ForEach(TabPanes.entries(siblings)) { e in
                     switch e {
                     case .agent(let s):
@@ -493,7 +493,7 @@ struct ChatView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        // The assistant's tasks (docs/unified-entry.md): a task's detail rises like a link; 全部 is the board.
+        // The assistant's tasks (docs/unified-entry.md): a task's detail rises like a link; All is the board.
         // In regular width (iPad) it fills the detail column instead, as an agent opened from the Agents list (#2816).
         .detailPresentation(isPresented: Binding(get: { style == .assistant && (TasksStore.shared.detailTask != nil || TasksStore.shared.detailAgent != nil) },
                                                  set: { if !$0 { TasksStore.shared.detailTask = nil; TasksStore.shared.detailAgent = nil } })) {
@@ -510,7 +510,7 @@ struct ChatView: View {
             TaskBoardSheet(conversation: key.sessionID)
         }
         #else
-        // On the Mac the details are an inspector beside the chat (Agent › 显示会话信息 ⌥⌘I, or the title).
+        // On the Mac the details are an inspector beside the chat (Agent › Show Session Info ⌥⌘I, or the title).
         .macInspector(isPresented: $showInfo) {
             SessionInfoSheet(key: key, session: session)
         }
@@ -584,7 +584,7 @@ struct ChatView: View {
             let next = macSwitch.switchedAgent(pane: pane, canTerminal: session?.canTerminal == true)
             if next != pane { pane = next }
         }
-        // ⌘I (聚焦输入框) goes to the chat's composer: the chat comes back first.
+        // ⌘I (Focus Message Field) goes to the chat's composer: the chat comes back first.
         .onChange(of: model.composerFocus) { _, k in if k == key, pane == .terminal { pane = .chat } }
         #endif
         // A different chat shown in place: its own cards decide whether another conversation needs you (#4348).
@@ -603,7 +603,7 @@ struct ChatView: View {
         .sheet(item: $file) { ref in FileViewer(ref: ref, key: key) }
         #if DEBUG
         // Simulator automation: `-showComposerPhoto YES` puts a made-up picture in the composer, as if picked from
-        // 照片 (the UI tests of a sent picture showing in the chat).
+        // Photos (the UI tests of a sent picture showing in the chat).
         #if os(iOS) || os(visionOS)
         .task { if UserDefaults.standard.bool(forKey: "showComposerPhoto") { model.composerInbox[key, default: []].append(Self.debugPhoto) } }
         #endif
@@ -677,7 +677,7 @@ struct ChatView: View {
         .environment(\.loadImage, actions.loadImage)
         .environment(\.loadFullText, actions.loadFullText)
         .onAppear(perform: appeared)
-        // The same chat was already open (the app left on it) when its "完成" notification was tapped: no new entry.
+        // The same chat was already open (the app left on it) when its "Done" notification was tapped: no new entry.
         .onChange(of: model.latestAnswerFor) { _, k in
             guard style == .dev, k == key, entered, takeLatestAnswer() else { return }
             entry = .latestAnswer
@@ -703,8 +703,8 @@ struct ChatView: View {
         }
         #if os(macOS)
         // Its section behind another one (the page stays in the window, `MacPageStack`): as when the page was left
-        // before it was kept. Not the chat on screen, so a reply that finishes meanwhile stays 完成未看 and notifies;
-        // not subscribed, so its streaming does not draw a chat nobody sees (about 20 ms a push behind 知识库). Back in
+        // before it was kept. Not the chat on screen, so a reply that finishes meanwhile stays Unread and notifies;
+        // not subscribed, so its streaming does not draw a chat nobody sees (about 20 ms a push behind Knowledge). Back in
         // front, as on entry: subscribed again from what it holds (`since_seq`). Not told as it appears: a page built
         // behind (its first visit, in front a turn later) would unsubscribe what `appeared()` just subscribed.
         .background {
@@ -786,7 +786,7 @@ struct ChatView: View {
     }
 
     #if DEBUG
-    /// Opens and folds a work line from its header, then from 收起 under its steps, logging how far the header and the
+    /// Opens and folds a work line from its header, then from Collapse under its steps, logging how far the header and the
     /// reply under the steps moved on screen (both should be 0).
     private func foldProbe() async {
         func pause() async { try? await Task.sleep(for: .seconds(1.5)) }
@@ -828,7 +828,7 @@ struct ChatView: View {
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             try? log.joined(separator: "\n").write(to: dir.appending(path: "fold.txt"), atomically: true, encoding: .utf8)
         }
-        // Left open with 收起 in the middle of the screen, for screenshots.
+        // Left open with Collapse in the middle of the screen, for screenshots.
         if let w = currentLines().last(where: { if case .work(let id, let items, _, _, _) = $0.content { id.hasPrefix("w-") && !items.isEmpty } else { false } })?.id {
             toggleWork(w, fromHeader: false); await pause()
             await bring(w + "-end", to: 0.5)
@@ -980,7 +980,7 @@ struct ChatView: View {
     }
 
     /// Folds or opens a work line without moving what you were reading. In the upside-down list the newest end holds
-    /// still on its own: folding from 收起 under the last step leaves the reply below it where it was. From the header,
+    /// still on its own: folding from Collapse under the last step leaves the reply below it where it was. From the header,
     /// the header stays under the finger instead (what is above it holds still; the reply comes up to meet it).
     /// Scrolls to a vertical offset, keeping the horizontal one (see `ChatScratch.offsetX`).
     private func scrollList(to y: CGFloat) {
@@ -988,7 +988,7 @@ struct ChatView: View {
     }
 
     /// Folds or opens a work line. From its header, the header stays under the finger (`ChatPin`), through the steps
-    /// arriving from the hub after the tap; from 收起 under the last step, the flipped list keeps the reply below where
+    /// arriving from the hub after the tap; from Collapse under the last step, the flipped list keeps the reply below where
     /// it was on its own. No animation: hundreds of rows animating out left blank frames behind.
     private func toggleWork(_ id: String, fromHeader: Bool, run: Bool = false) {
         Haptics.tap()
@@ -1110,7 +1110,7 @@ struct ChatView: View {
     /// the fix to show instead of Claude Code's 「Not logged in」 as an answer. Persona's conversations only, as the web.
     private var turnFix: TurnErrorFix? { style == .assistant ? TurnErrorFix(code: session?.turnErrorCode) : nil }
 
-    /// The 模型没接好 card for the line, when it is the turn's error: the last line, an answer or an API error.
+    /// The Model Not Connected card for the line, when it is the turn's error: the last line, an answer or an API error.
     private func turnErrorCard(_ line: ChatLine, raw: String?) -> ReadinessCard? {
         guard let fix = turnFix, currentLines().last?.id == line.id else { return nil }
         return ReadinessCard(title: fix.title, detail: fix.detail, tone: .danger,
@@ -1129,7 +1129,7 @@ struct ChatView: View {
         case .apiError(_, let info, _) where turnErrorCard(line, raw: info.raw) != nil:
             turnErrorCard(line, raw: info.raw)
         case .apiError(let item, let info, let count):
-            // 重试 only when the error is the last thing, the agent is not working (someone may have retried already) and
+            // Retry only when the error is the last thing, the agent is not working (someone may have retried already) and
             // trying again can help (not a login or a bad request).
             APIErrorCard(info: info, count: count, at: item.ts,
                          retry: info.transient != false && !status.isActive && currentLines().last?.id == line.id
@@ -1154,7 +1154,7 @@ struct ChatView: View {
                 .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
         case .workEnd(let group, let count, let files):
             if AppStyle.current.usesBeautifulUI {
-                // The foot of the open work line's card: the files it changed, then 收起.
+                // The foot of the open work line's card: the files it changed, then Collapse.
                 WorkEndView(count: count, files: files) { toggleWork(group, fromHeader: false) }
                     .equatable()
                     .unfolding(stepUnfolding(group))
@@ -1501,7 +1501,7 @@ struct ChatView: View {
 
     @ViewBuilder private var paneContent: some View {
         #if os(macOS)
-        // One layer for the chat and its terminal, kept mounted whichever shows (and under 文件 / Git): switching does not
+        // One layer for the chat and its terminal, kept mounted whichever shows (and under Files / Git): switching does not
         // rebuild the chat or connect the terminal again. Only what shows takes clicks and the keyboard.
         let terminalShown = pane == .terminal && session?.canTerminal == true
         let base = pane == .chat || pane == .terminal
@@ -2098,7 +2098,7 @@ struct ChatView: View {
             }
             // On this upside-down list (`flippedBack`) `.scrollDismissesKeyboard(.interactively)` never put the keyboard
             // away while scrolling (#1823). A real drag does it; a touch that may still be a tap (.tracking) does not, so
-            // a field inside the list ("其他回答…") keeps the keyboard it opens.
+            // a field inside the list ("Other answer…") keeps the keyboard it opens.
             if phase == .interacting { Keyboard.dismiss() }
             if phase == .tracking || phase == .interacting {
                 scratch.lastUserScroll = .now
@@ -2275,7 +2275,7 @@ struct ChatView: View {
         withAnimation(.smooth(duration: 0.35)) { chrome.collapse = 0 }
     }
 
-    /// The chrome folded away: back, and where you are ("app › leader · 对话") — tap it for everything again.
+    /// The chrome folded away: back, and where you are ("app › leader · Chat") — tap it for everything again.
     private var compactChrome: some View {
         HStack(spacing: 0) {
             Button { back() } label: {
@@ -2340,7 +2340,7 @@ struct ChatView: View {
     }
 
     /// The folded header's sign of a loop / background tasks: a gear with the count, or the loop arrows (still: only
-    /// 需要你 and the work spinner move).
+    /// Needs You and the work spinner move).
     private var activityMark: some View {
         let bg = session?.background?.count ?? 0
         return HStack(spacing: Theme.Space.xxs) {
@@ -2417,7 +2417,7 @@ struct ChatView: View {
     }
 
     /// A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
-    /// While the hub is out of reach the subtitle turns into a spinner and 连接中… (Telegram keeps the name and
+    /// While the hub is out of reach the subtitle turns into a spinner and Connecting… (Telegram keeps the name and
     /// swaps the "online" line the same way); a tap then explains the link instead of opening the session info.
     @ViewBuilder private var titleButton: some View {
         // Hosted for several agents (a task's): the title's ⌄ switches between them, and has the session's info too.
@@ -2526,7 +2526,7 @@ struct ChatView: View {
     private func devSubtitle(_ s: Session) -> some View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let words = stateWords(s, now: ctx.date)
-            // Hosted (one agent's page, #3255) the line is 状态 · 机器 · 项目: the tab's name would crowd the machine out.
+            // Hosted (one agent's page, #3255) the line is status · machine · project: the tab's name would crowd the machine out.
             let tabShown = host != nil || !model.siblings(of: key).isEmpty
             let place = [s.spaceName, tabShown ? nil : s.slotLabel].compactMap { $0 }.joined(separator: " › ")
             let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
@@ -2542,8 +2542,8 @@ struct ChatView: View {
         }
     }
 
-    /// Quiet states (已看, 未运行) say nothing in words (2026-10-31 user request): the dot carries them, the line is where
-    /// it runs. 需要你 / 工作中 N 分 / 完成未看 still lead the line.
+    /// Quiet states (Seen, Not running) say nothing in words (2026-10-31 user request): the dot carries them, the line is where
+    /// it runs. Needs You / Working N min / Unread still lead the line.
     private func subtitleLine(_ s: Session, _ words: String, _ rest: [String]) -> some View {
         let parts = subtitleParts(s, rest)
         if Self.quiet(s.state) {
@@ -2569,7 +2569,7 @@ struct ChatView: View {
 
     static func quiet(_ state: AgentState) -> Bool { state == .idle || state == .offline || state == .unknown }
 
-    /// "工作中 22 分" while a turn runs (minutes: the work line in the chat has the seconds), else the state's name.
+    /// "Working 22 min" while a turn runs (minutes: the work line in the chat has the seconds), else the state's name.
     private func stateWords(_ s: Session, now: Date) -> String {
         // Its turn ended and a workflow / background work keeps it going (#2935): 「工作中（后台）」, not the turn's time.
         if s.isBackgroundWorking { return s.stateLabel }
@@ -2646,7 +2646,7 @@ struct ChatView: View {
                         .padding(.bottom, Theme.Space.s)
                 }
                 // Chips only while subagents run (plus the one being read); finished and nested ones are in its
-                // 「全部子 Agent」 and stay reachable from their Agent call ("查看子 Agent").
+                // 「全部子 Agent」 and stay reachable from their Agent call ("View subagent").
                 let all = session?.subagents ?? []
                 let agents = all.filter { $0.running || $0.id == viewing?.id }
                 if pane == .chat, !all.isEmpty {
@@ -2788,7 +2788,7 @@ struct ChatView: View {
         .accessibilityLabel(backLabel)
     }
 
-    /// A hosting sheet's 全屏查看 beside its ✕ (#3743): the agent's full page instead of the sheet.
+    /// A hosting sheet's Full Screen beside its ✕ (#3743): the agent's full page instead of the sheet.
     private func hostedExpandButton(_ expand: @escaping (SessionKey) -> Void) -> some View {
         Button { expand(key) } label: {
             Image(systemName: Theme.Icon.enlarge).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -2809,7 +2809,7 @@ struct ChatView: View {
         #endif
     }
 
-    /// 终端: on the Mac it takes the chat's place (终端 | 对话, #3183); elsewhere it comes up from the bottom over the page.
+    /// Terminal: on the Mac it takes the chat's place (Terminal | Chat, #3183); elsewhere it comes up from the bottom over the page.
     private func openTerminal() {
         #if os(macOS)
         setMacView(.terminal)
@@ -2843,7 +2843,7 @@ struct ChatView: View {
         return true
     }
 
-    /// A "完成" notification for this chat asked for its latest answer (AppModel.latestAnswerFor); taken once.
+    /// A "Done" notification for this chat asked for its latest answer (AppModel.latestAnswerFor); taken once.
     private func takeLatestAnswer() -> Bool {
         guard model.latestAnswerFor == key else { return false }
         model.latestAnswerFor = nil
@@ -2972,7 +2972,7 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showCompactChrome") { // folded, once the header has its height
                 Task { try? await Task.sleep(for: .seconds(3)); withAnimation(.smooth) { chrome.collapse = chrome.maxCollapse } }
             }
-            if UserDefaults.standard.bool(forKey: "showWakeDrawer") { // the newest "后台任务完成" drawer
+            if UserDefaults.standard.bool(forKey: "showWakeDrawer") { // the newest "Background Task Done" drawer
                 Task {
                     try? await Task.sleep(for: .seconds(UserDefaults.standard.bool(forKey: "loadAll") ? 30 : 6))
                     wakeDrawer = Self.debugTrim(model.chat(key).blocks).reversed().lazy.compactMap { b -> String? in
@@ -2992,8 +2992,8 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showCloseAgent") { // the close confirmation, for screenshots
                 Task { try? await Task.sleep(for: .seconds(3)); closing = session }
             }
-            if UserDefaults.standard.bool(forKey: "showDeleteSession") { // 删除对话's confirmation, for screenshots and UI tests
-                UserDefaults.standard.set(false, forKey: "showDeleteSession") // once: the page appears again after 取消
+            if UserDefaults.standard.bool(forKey: "showDeleteSession") { // Delete Chat's confirmation, for screenshots and UI tests
+                UserDefaults.standard.set(false, forKey: "showDeleteSession") // once: the page appears again after Cancel
                 Task { // once the session list is in (the chat can open before it)
                     for _ in 0..<30 {
                         try? await Task.sleep(for: .seconds(1))
@@ -3075,7 +3075,7 @@ struct ChatView: View {
                     menu.selected = last?.id
                 }
             }
-            if let what = UserDefaults.standard.string(forKey: "showRewind") { // 回退 on the second-to-last message of yours: bar / ask / run
+            if let what = UserDefaults.standard.string(forKey: "showRewind") { // Rewind on the second-to-last message of yours: bar / ask / run
                 Task {
                     try? await Task.sleep(for: .seconds(6))
                     let users = model.chat(key).blocks.flatMap { b -> [Item] in
@@ -3085,7 +3085,7 @@ struct ChatView: View {
                     guard let pick = users.dropLast().last ?? users.last else { return }
                     if what == "ask" {
                         menu.rewinding = RewindAsk(id: pick.id, text: pick.text ?? "")
-                    } else if what == "run" { // what 只回退对话 does, through the hub
+                    } else if what == "run" { // what Rewind Chat Only does, through the hub
                         menu.rewind?(pick.id, pick.text ?? "", .conversation)
                     } else {
                         menu.anchor = CGPoint(x: 260, y: 20)
@@ -3153,7 +3153,7 @@ struct ChatView: View {
         return blocks
     }
 
-    /// 引用 puts the message over the box as a quote that goes with the next message (#986); 编辑 replaces the draft
+    /// Quote puts the message over the box as a quote that goes with the next message (#986); Edit replaces the draft
     /// with your old message.
     private func bindMenu() {
         menu.quote = { [model, key] text, id, isUser in
@@ -3291,7 +3291,7 @@ struct ChatSkeleton: View {
     }
 }
 
-/// Claude's suggested next message over the composer: a tap puts it in the box to edit, 直接发送 (long press) sends it.
+/// Claude's suggested next message over the composer: a tap puts it in the box to edit, Send Now (long press) sends it.
 /// A session Persona is still starting (node/starting.go): what is sent now waits and goes in once it is ready. Or why
 /// it did not start.
 struct StartingNote: View {
@@ -3399,7 +3399,7 @@ struct FailureNote: View {
 
 }
 
-/// 在飞书打开: the system opens it (Feishu takes its own links), not the chat's in-app web sheet.
+/// Open in Lark: the system opens it (Feishu takes its own links), not the chat's in-app web sheet.
 struct FeishuLink: View {
     var url: URL
 
@@ -3474,7 +3474,7 @@ enum ChatComposerKind {
 
     /// The iPad (and an open iPhone Duo): a regular width keeps the tabs and the split, not the shell, but draws the
     /// iPhone's composer (`ShellComposerBar`, one line that grows into a card) in every style, as the shell does, unless
-    /// 旧布局 is on (#2779). The page caps its width (`ChatView.readableWidth`), the composer with it.
+    /// Old Layout is on (#2779). The page caps its width (`ChatView.readableWidth`), the composer with it.
     static var padCard: Bool {
         #if os(iOS)
         !AppModel.shared.oldLayout
@@ -3502,7 +3502,7 @@ struct Composer: View, Equatable {
     @Environment(\.shell) private var shell
     /// The shell's composer (`ShellComposerBar`): the assistant's conversation and, in the shell, an agent's too, in every
     /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them. On the Mac
-    /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it 添加, the model
+    /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it Add, the model
     /// and its modes, send / stop, as Codex's and ChatGPT's desktop apps (#2113).
     private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.card }
     let key: SessionKey
@@ -3517,12 +3517,12 @@ struct Composer: View, Equatable {
         nonmutating set { model.drafts[key] = newValue }
     }
     private var textBinding: Binding<String> { Binding(get: { text }, set: { text = $0 }) }
-    /// The failure notice 重试 was tapped on: its note stays hidden (the host takes 继续, the list follows).
+    /// The failure notice Retry was tapped on: its note stays hidden (the host takes Continue, the list follows).
     @State private var retried: String?
     @State private var picks: [PhotosPickerItem] = []
     @State private var showPhotos = false
     @State private var showCamera = false
-    @State private var showGlasses = false // 眼镜拍照 (Persona/Glasses), only when MetaGlasses.isBuiltIn
+    @State private var showGlasses = false // Glasses Photo (Persona/Glasses), only when MetaGlasses.isBuiltIn
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var editingIndex: Int?
     @State private var showFiles = false
@@ -3693,7 +3693,7 @@ struct Composer: View, Equatable {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let s = model.session(key), let reason = s.failureReason, !reason.isEmpty, !status.isActive,
                       retried != reason {
-                // 继续 alone (not what is in the box); the note goes at once and stays gone for this notice, while the
+                // Continue alone (not what is in the box); the note goes at once and stays gone for this notice, while the
                 // host takes the message and the list catches up.
                 FailureNote(reason: reason, link: s.externalLink) {
                     retried = reason
@@ -3709,7 +3709,7 @@ struct Composer: View, Equatable {
                 CodedFailureCard(failure: f, route: $failureRoute)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            CompactionSlot(key: key) // an assistant conversation's 压缩上下文 (#1762)
+            CompactionSlot(key: key) // an assistant conversation's Compact context (#1762)
             if canLoop, let hint = LoopCommand.hint(text) {
                 LoopDraftNote(hint: hint)
                     .transition(.opacity)
@@ -3795,7 +3795,7 @@ struct Composer: View, Equatable {
                                onCommand: { command in
                                    if command.name == SlashCommand.loop.word {
                                        // The bar puts its text in without moving the caret off the "/": what is typed
-                                       // next went in the middle ("/10m 看下 CIloop "). Ours, after the bar has
+                                       // next went in the middle ("/10m check CIloop "). Ours, after the bar has
                                        // cleared the "/" it took.
                                        Task { @MainActor in startDraft(SlashCommand.loop.text) }
                                        return true
@@ -3857,7 +3857,7 @@ struct Composer: View, Equatable {
             try? await Task.sleep(for: .seconds(4))
             text = "/"
         }
-        .task { // `-showLoopDraft "/loop 10m 看下 CI"`: that draft in the box, with its line (#2601, screenshots)
+        .task { // `-showLoopDraft "/loop 10m check CI"`: that draft in the box, with its line (#2601, screenshots)
             guard let draft = UserDefaults.standard.string(forKey: "showLoopDraft") else { return }
             try? await Task.sleep(for: .seconds(4))
             for _ in 0..<20 where !canLoop { try? await Task.sleep(for: .seconds(1)) } // the session list loads
@@ -3908,7 +3908,7 @@ struct Composer: View, Equatable {
         #endif
         #if os(macOS)
         .macWindowNumber($macWindow)
-        .onChange(of: MacShellState.shared.chatRequest) { _, r in // Agent › 清空上下文…
+        .onChange(of: MacShellState.shared.chatRequest) { _, r in // Agent › Clear Context…
             guard let r, r.key == key, r.kind == .clear, r.window == nil || r.window == macWindow else { return }
             confirmClear = canClear && !status.isActive && !clearing // as the composer's own /clear item
         }
@@ -3931,7 +3931,7 @@ struct Composer: View, Equatable {
             uploads.start(urls, machine: key.machineRef, model: model, dest: uploadDest) { insertPath($0) }
         }
         #if os(macOS)
-        // Finder drags: pictures are attached like 照片, other files uploaded to the machine like 文件 (docs/mac.md).
+        // Finder drags: pictures are attached like Photos, other files uploaded to the machine like Files (docs/mac.md).
         // ⌘V of a screenshot or of files copied in Finder does the same; text is pasted as usual.
         .macComposerFiles(images: images.count, focused: focused, attach: { add($0) }, upload: { upload($0) })
         #if DEBUG
@@ -4002,14 +4002,14 @@ struct Composer: View, Equatable {
         // Picked page excerpts ride along as <jarvis-context> tags before what was typed, videos as <jarvis-file> after.
         let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "参考上面的内容。") : String(localized: "请看视频")) : String(localized: "请看图片")) : t, files: files)
         let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
-        // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+        // Routed to a task ("Tell “xx”"): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
         // Not with videos: they are on this conversation's machine, the task's agent may be on another.
         if images.isEmpty, files.isEmpty, key.group == (model.hub?.group ?? ""), TasksStore.shared.sendRouted(key.sessionID, text: message) {
             if raw == text { text = "" }
             model.composerContexts[key] = nil
             return
         }
-        // On screen at once; the request runs in the background (a failure turns the bubble into "重发").
+        // On screen at once; the request runs in the background (a failure turns the bubble into "Resend").
         model.sendNow(key, text: message, images: images.map(\.1))
         if raw == text { text = "" }
         images = []
@@ -4227,7 +4227,7 @@ extension UIImage {
     }
 }
 
-/// The session's live terminal, come up from the bottom over the page (终端, or the terminal button of a reply): all
+/// The session's live terminal, come up from the bottom over the page (Terminal, or the terminal button of a reply): all
 /// of the screen goes to it — no title, no tabs — under a slim bar that drags it back down (a tap on its handle too).
 /// Its size does not change with anything around it but the keyboard (a new size is a resize of the pane it drives).
 struct TerminalCover: View {
@@ -4336,7 +4336,7 @@ struct QueueStrip: View {
 }
 
 #if os(iOS) || os(visionOS)
-/// System camera for "拍照" in the composer.
+/// System camera for "Take Photo" in the composer.
 struct CameraPicker: UIViewControllerRepresentable {
     /// Whether this device has a camera to take a picture with (Apple Vision Pro does not lend its cameras to apps).
     static var isAvailable: Bool {
@@ -4378,7 +4378,7 @@ struct CameraPicker: UIViewControllerRepresentable {
 #endif
 
 /// Developer facts about a session, shown under the title: model, context in use, git branch, Claude Code version…
-/// 会话信息, from the bottom: who and where at the top, then what it runs, how far it has got, its settings and where
+/// Session Info, from the bottom: who and where at the top, then what it runs, how far it has got, its settings and where
 /// its files are; copying the id or the resume command last. Settings-app grouping, values on the right.
 struct SessionInfoSheet: View {
     @Environment(AppModel.self) private var model
@@ -4558,11 +4558,11 @@ struct SessionInfoSheet: View {
 }
 
 /// A finished exchange: messages, the folded process, the answer.
-/// One line of the chat. A turn renders as: its messages (queued ones gathered), a thin "正在工作 39 秒 / 已工作 5 分"
+/// One line of the chat. A turn renders as: its messages (queued ones gathered), a thin "Working 39s / Worked 5 min"
 /// line that folds the work, then — when open — the agent's words, narration in gray and each stretch of tool calls
-/// as "调用了 N 个工具"; finished turns are folded and keep just the answer. Lines are separate lazy rows on purpose.
+/// as "Used N tools"; finished turns are folded and keep just the answer. Lines are separate lazy rows on purpose.
 /// One line of the chat. A turn reads as exchanges: each message, one quiet work line for what the agent did after
-/// it ("调用了 3 个工具，思考 1 次 · 1 分 20 秒 ›", tap to see every step), then the agent's last words before the
+/// it ("Used 3 tools, thought once · 1 min 20 s ›", tap to see every step), then the agent's last words before the
 /// next message. Running and finished turns look the same; the running exchange's work line ticks. Lines are
 /// separate lazy rows on purpose (a running turn can have hundreds of steps).
 struct ChatLine: Identifiable {
@@ -4579,7 +4579,7 @@ struct ChatLine: Identifiable {
         case workStep(group: String, item: WorkItem, first: Bool)
         /// Two or more tool calls in a row of an open work line, as one line of chips.
         case toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool)
-        /// The foot of an open work card: 收起, and the files the work changed (`ChatLines.changedFiles`).
+        /// The foot of an open work card: Collapse, and the files the work changed (`ChatLines.changedFiles`).
         case workEnd(group: String, count: Int, files: [ChangedFile])
         /// A model API error (`APIErrorInfo`), repeated `count` times in a row.
         case apiError(item: Item, info: APIErrorInfo, count: Int)
@@ -4795,7 +4795,7 @@ struct WorkStepView: View, Equatable {
 }
 
 /// A slice of an open work line's card (in the BeautifulUI style its card: the style's card color, a 1 pt ring). The steps are lines of their own in the lazy chat list (a turn can hold hundreds; one view holding them
-/// all stalled the page), so each draws its part: rounded on top for the first, at the bottom for the 收起 foot,
+/// all stalled the page), so each draws its part: rounded on top for the first, at the bottom for the Collapse foot,
 /// reaching halfway into the list's gaps to meet its neighbours.
 struct WorkCardSlice: View {
     var top: Bool
@@ -4819,8 +4819,8 @@ struct WorkCardSlice: View {
         if Self.timeline { rail } else { card }
     }
 
-    /// 液态玻璃: no card, a thin line down the left through the steps, reaching into the gaps to meet its neighbours;
-    /// it starts at the first step and stops in the middle of the 收起 foot.
+    /// Liquid Glass: no card, a thin line down the left through the steps, reaching into the gaps to meet its neighbours;
+    /// it starts at the first step and stops in the middle of the Collapse foot.
     private var rail: some View {
         GeometryReader { g in
             Rectangle()
@@ -4859,7 +4859,7 @@ struct WorkCardSlice: View {
 }
 
 /// The foot of an open work card: in the BeautifulUI style the files this work changed as its diff chips (a tap opens
-/// the file, like the diff's header), the first six and "+N 个文件" for the rest; then 收起 N 步.
+/// the file, like the diff's header), the first six and "+N files" for the rest; then Collapse N steps.
 struct WorkEndView: View, Equatable {
     @Environment(\.openFile) private var openFile
     nonisolated let count: Int
@@ -4938,7 +4938,7 @@ private nonisolated struct WorkCardEdges: Shape {
 }
 
 /// The quiet line under a message: what the agent did for it, as BeautifulUI's tool run header. Finished:
-/// "⌄ 3 次工具调用，2 条消息 · 1 分 20 秒"; running: a spinner and "正在工作 39 秒 · 2 次工具调用" (ticking, shimmering)
+/// "⌄ 3 tool calls, 2 messages · 1 min 20 s"; running: a spinner and "Working 39s · 2 tool calls" (ticking, shimmering)
 /// with the terminal at the end. Tap to list every step right here (tools, thoughts, notices, earlier replies); tap
 /// the same line again to fold.
 nonisolated struct WorkSummary: Equatable {
@@ -4963,7 +4963,7 @@ nonisolated struct WorkSummary: Equatable {
         var full: [String] = []
         var short: [String] = []
         if AppStyle.current.usesBeautifulUI {
-            // BeautifulUI's header words: "5 次工具调用，2 条消息".
+            // BeautifulUI's header words: "5 tool calls, 2 messages".
             if calls > 0 { full.append(String(localized: "\(calls) 次工具调用")); short.append(String(localized: "\(calls) 次工具调用")) }
             if thoughts > 0 { full.append(String(localized: "\(thoughts) 次思考")) }
             if texts > 0 { full.append(String(localized: "\(texts) 条消息")) }
@@ -5097,7 +5097,7 @@ struct WorkLine: View, Equatable {
         let parts = short ? counts.short : counts.full
         let took = Self.duration(from: start, to: now)
         guard AppStyle.current.usesBeautifulUI else {
-            // Persona' own: "工具 3 · 思考 1 · 1 分 20 秒", "正在工作 39 秒 · 工具 2".
+            // Persona' own: "Tool 3 · Thinking 1 · 1 min 20 s", "Working 39s · Tool 2".
             var p = parts
             if live { p.insert(String(localized: "正在工作 \(took)"), at: 0) } else if !took.isEmpty { p.append(took) }
             return p.isEmpty ? String(localized: "已完成") : p.joined(separator: " · ")
@@ -5237,7 +5237,7 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
 
 /// The open header once it has faded out: still laid out (its height is what folding measures) but hidden, so its
 /// buttons leave VoiceOver and XCUITest. `accessibilityHidden` alone was not enough (its back and ⋯ are glass, UIKit):
-/// slid up under the clip, its 返回 sat in the status bar's band, invisible, "hittable", and a tap there went nowhere.
+/// slid up under the clip, its Back sat in the status bar's band, invisible, "hittable", and a tap there went nowhere.
 /// On the Mac it only leaves VoiceOver: it is already clear and takes no clicks there (`allowsHitTesting`), and
 /// swapping it for a hidden copy built the whole header again, its glass and the agents' tabs, at every fold and
 /// unfold: 71–82 ms of hitches a second scrolling a chat up and down, 9–29 without (#1337).
@@ -5409,7 +5409,7 @@ nonisolated struct ChatRowsShown: Encodable, Equatable {
     var ids: [String]
     /// The list's horizontal offset (-16 at rest: the side margins).
     var x: Int
-    /// Within `ChatFollow.tolerance` of the newest end; the follow mode; ↓ 回到最新 shows; how far the list is from its
+    /// Within `ChatFollow.tolerance` of the newest end; the follow mode; ↓ Jump to Latest shows; how far the list is from its
     /// newest end (pt); a finger is on it; the pin holds a header.
     var near: Bool
     var mode: String

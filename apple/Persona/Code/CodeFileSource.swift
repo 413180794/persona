@@ -95,7 +95,7 @@ import UIKit
     deinit { task?.cancel() }
 
     var lineCount: Int { doc.lineCount }
-    /// Room for the note on a cut line ("… 后面省略了") when a line is that long.
+    /// Room for the note on a cut line ("… the rest is cut off") when a line is that long.
     var columns: Int { doc.widestLine + (doc.widestLine >= CodeDocument.maxLineBytes ? 30 : 2) }
     var gutterColumns: Int { max(2, String(doc.lineCount).count) }
 

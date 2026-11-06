@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 健康趋势 (#3272): the phone's per-day steps, sleep and weight become the ```persona-card a health answer would draw.
+/// Health Trends (#3272): the phone's per-day steps, sleep and weight become the ```persona-card a health answer would draw.
 @MainActor
 struct HealthTrendsTests {
     private static var utc: Calendar {

@@ -34,7 +34,7 @@ import Observation
     func modelSummary(_ p: ModelPurpose) -> String {
         let model = p.effective.model ?? p.effective.provider.flatMap { id in providers.first { $0.id == id }?.name }
         let effort = p.effective.effort.map { value in SessionModes.effortLevels.first { $0.id == value }?.title ?? value }
-        // 主对话 on the Agent SDK says so; the CLI is the default and goes unsaid.
+        // Main Chat on the Agent SDK says so; the CLI is the default and goes unsaid.
         let runtime = p.effective.runtime == AssistantRuntime.agentSDK ? AssistantRuntime.title(AssistantRuntime.agentSDK) : nil
         let result = [model, effort, runtime].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         return result.isEmpty ? String(localized: "未配置") : result
@@ -54,7 +54,7 @@ import Observation
         }
     }
 
-    /// 主对话's runtimes (运行方式); empty for every other use and on an older hub.
+    /// Main Chat's runtimes (How It Runs); empty for every other use and on an older hub.
     var runtimes: [String] {
         guard let purpose, purpose.supports("runtime") else { return [] }
         return purpose.runtimes ?? []

@@ -3,8 +3,8 @@ import Testing
 @testable import Jarvis
 
 /// A topic group's cards show their topics' newest replies (`LarkTopicReplies`, #1087): which replies and how many
-/// earlier ones (the Lark gateway's topic-reply-preview cases), what a reply's line says (风灵月影, encryption), at most three
-/// reads at a time, read again only when a reply count changes (also during a read) or 重试 asks.
+/// earlier ones (the Lark gateway's topic-reply-preview cases), what a reply's line says (Message Tweaks, encryption), at most three
+/// reads at a time, read again only when a reply count changes (also during a read) or Retry asks.
 @MainActor struct LarkTopicRepliesTests {
     private func msg(_ id: String, replies: Int = 0, threadReplies: Int? = nil) -> LarkMessage {
         LarkMessage(id: id, position: id, senderID: nil, senderName: "x", isMine: false, type: "TEXT", text: id, createdAt: nil,
@@ -80,8 +80,8 @@ import Testing
         #expect(LarkTopicReplies.count(of: msg("t")) == 0)
     }
 
-    /// A reply's line follows 风灵月影 as a chat's row does: a recalled one only with 防撤回 on and its content kept (and
-    /// some content to show), marked 已撤回; an encrypted one shows its cover, never its body.
+    /// A reply's line follows Message Tweaks as a chat's row does: a recalled one only with Keep Recalled Messages on and its content kept (and
+    /// some content to show), marked Recalled; an encrypted one shows its cover, never its body.
     @Test func aReplysLineFollowsTheDisplaySettings() {
         let off = LarkMessageDisplay.hidden
         let on = LarkMessageDisplay(accountID: "a", antiRecall: true, showEditHistory: false)

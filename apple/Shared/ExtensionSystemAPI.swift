@@ -1,6 +1,6 @@
 import Foundation
 
-/// 系统级位置只存在于新路径；复用 schema 类型，不把 App 的视图模型带进系统扩展。
+/// System-level placements exist only on the new paths; reuses the schema types without pulling the app's view models into system extensions.
 nonisolated extension APIClient {
     func extensionWidgets() async throws -> [ExtensionWidgetPlace] {
         let answer: ExtensionWidgetPlaces = try await get("/api/v1/extensions/-/widgets")

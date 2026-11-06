@@ -13,22 +13,22 @@ final class TasksStore {
     private(set) var plans: [String: TaskPlan] = [:]
     /// Conversation id → its feed, oldest first.
     private(set) var feeds: [String: [FeedItem]] = [:]
-    /// Conversation id → the task the next message goes straight to (「对「xx」说」), set by @ or 说一句.
+    /// Conversation id → the task the next message goes straight to (Message “xx”), set by @ or Message.
     var routes: [String: String] = [:]
     /// The task whose detail sheet is open, and whether the board is.
     var detailTask: String?
     /// The agent (not a task's, #1113) whose page the detail sheet shows instead.
     var detailAgent: SessionKey?
-    /// The agent whose page the assistant page pushes full screen (the sheet's 全屏查看): the page takes it and clears it.
+    /// The agent whose page the assistant page pushes full screen (the sheet's Full Screen): the page takes it and clears it.
     var fullAgent: SessionKey?
     var showBoard = false
     /// A task or an agent picked on the board, opened when the board has gone down.
     var openAfterBoard: String?
     var openAgentAfterBoard: SessionKey?
-    /// Message cards (inbox item ids) put off with 稍后, and the ones sent from their card.
+    /// Message cards (inbox item ids) put off with Later, and the ones sent from their card.
     private(set) var laterMessages: Set<String> = []
     private(set) var sentMessages: Set<String> = []
-    /// Quick results (QuickResult.callID) the user took back with 撤销.
+    /// Quick results (QuickResult.callID) the user took back with Undo.
     private(set) var undone: Set<String> = []
     /// Plans being started or dismissed (their card shows it and takes no second tap).
     private(set) var busyPlans: Set<String> = []
@@ -38,7 +38,7 @@ final class TasksStore {
     @ObservationIgnored private let viewStore: AssistantViewsStore
     @ObservationIgnored private var generation: UInt = 0
     @ObservationIgnored private var loading: [String: Task<Void, Never>] = [:]
-    /// Conversation id → the day its 今天 card was asked for (once a day).
+    /// Conversation id → the day its Today card was asked for (once a day).
     @ObservationIgnored private var todayAsked: [String: String] = [:]
 
     init(todoStore: TodoStore = .shared, viewStore: AssistantViewsStore = AssistantViewsStore()) {
@@ -46,7 +46,7 @@ final class TasksStore {
         self.viewStore = viewStore
     }
 
-    /// Entering or leaving 体验模式, or another hub: nothing of the other side may show.
+    /// Entering or leaving Demo Mode, or another hub: nothing of the other side may show.
     func forget() {
         generation &+= 1
         for task in loading.values { task.cancel() }
@@ -62,7 +62,7 @@ final class TasksStore {
         busyPlans = []
     }
 
-    /// 全屏查看 in the detail sheet: the sheet goes down and the agent's page is pushed onto the assistant page, the
+    /// Full Screen in the detail sheet: the sheet goes down and the agent's page is pushed onto the assistant page, the
     /// page an agent opened from the Agents tab is. Its back comes to the conversation, not to the sheet.
     func expand(_ key: SessionKey) {
         detailTask = nil
@@ -220,7 +220,7 @@ final class TasksStore {
         return sorted.map(\.todo)
     }
 
-    /// The main conversation's 今天 card, once a day: the hub makes it on the first ask and answers it after that.
+    /// The main conversation's Today card, once a day: the hub makes it on the first ask and answers it after that.
     func loadToday(_ conversation: String) {
         let day = Date.now.formatted(.iso8601.year().month().day())
         guard todayAsked[conversation] != day, let api = AppModel.shared.api else { return }
@@ -232,7 +232,7 @@ final class TasksStore {
 
     // MARK: Actions
 
-    /// 发送 on a message card: the draft (as edited) goes out through the inbox, which files the item as done.
+    /// Send on a message card: the draft (as edited) goes out through the inbox, which files the item as done.
     func sendMessage(_ itemID: String, text: String) async {
         let inbox = InboxStore.shared
         if let item = inbox.items.first(where: { $0.id == itemID }) {
@@ -257,7 +257,7 @@ final class TasksStore {
         sentMessages.contains(itemID) || InboxStore.shared.items.first { $0.id == itemID }?.isDone == true
     }
 
-    /// 撤销 on a quick result: the reminder or event comes off the phone.
+    /// Undo on a quick result: the reminder or event comes off the phone.
     func undo(_ result: QuickResult) async {
         do {
             switch result.kind {
@@ -285,7 +285,7 @@ final class TasksStore {
         }
     }
 
-    /// 移除 on a task that does not run: the todo goes (its agents and their chats stay on the Agents page), and with
+    /// Remove on a task that does not run: the todo goes (its agents and their chats stay on the Agents page), and with
     /// it the task's card, pill and line.
     func remove(_ todo: TodoItem) async {
         guard let api = AppModel.shared.api else { return }

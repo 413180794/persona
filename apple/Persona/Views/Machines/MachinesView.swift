@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The machine pages are pushed by value (MachineListRoute, MachineDetailRoute) and so are the chats they open
 /// (SessionKey): a page pushed with `NavigationLink { … }` that pushes by value puts the new page *under* itself, so a
-/// tap seemed to do nothing (设置 › 机器 › a card; 机器详情 › an agent). Every stack that shows them registers both.
+/// tap seemed to do nothing (Settings › Machines › a card; Machine Details › an agent). Every stack that shows them registers both.
 struct MachineListRoute: Hashable {}
 struct MachineDetailRoute: Hashable {
     var ref: MachineRef
@@ -11,7 +11,7 @@ struct MachineDetailRoute: Hashable {
     init(id: String) { ref = MachineRef(path: id) }
 }
 
-/// What brings a machine to the top of 机器 (docs/machines.md「App」), most pressing first: it is offline, a value is
+/// What brings a machine to the top of Machines (docs/machines.md「App」), most pressing first: it is offline, a value is
 /// too high, an agent there needs you, its jarvisd is not the hub's build.
 enum MachineConcern: Int, Comparable {
     case pending, offline, critical, warning, needsYou, mismatch
@@ -20,7 +20,7 @@ enum MachineConcern: Int, Comparable {
 
     /// `alert`: the worst of the machine's latest values; `waiting`: its agents that need you.
     static func of(_ m: Machine, alert: MetricLevel, waiting: Int) -> MachineConcern? {
-        if m.isPending { return .pending } // waits for 是我的电脑: first of all
+        if m.isPending { return .pending } // waits for It's Mine: first of all
         if !m.online { return .offline }
         if alert == .critical { return .critical }
         if alert == .warning { return .warning }
@@ -39,7 +39,7 @@ enum MachineConcern: Int, Comparable {
     }
 }
 
-/// A machine's live agents by what they need: 需要你, 工作中, and 空闲 for the rest (finished, seen, unknown).
+/// A machine's live agents by what they need: Needs You, Working, and Idle for the rest (finished, seen, unknown).
 struct AgentTally: Equatable {
     var needsYou = 0
     var working = 0
@@ -56,9 +56,9 @@ struct AgentTally: Equatable {
     }
 }
 
-/// 机器 (docs/machines.md「App」): every machine on one screen, what needs a look first. A card each: online or not,
-/// the system, its agents (需要你 / 工作中 / 空闲), CPU / memory / network now and over the last hour, what is too high,
-/// a build unlike the hub's with 重新部署. The machine list is live; the metrics refresh every 10 s while the page is
+/// Machines (docs/machines.md「App」): every machine on one screen, what needs a look first. A card each: online or not,
+/// the system, its agents (Needs You / Working / Idle), CPU / memory / network now and over the last hour, what is too high,
+/// a build unlike the hub's with Redeploy. The machine list is live; the metrics refresh every 10 s while the page is
 /// on screen and the app is in front. A tap opens the machine.
 struct MachinesView: View {
     @Environment(AppModel.self) private var model
@@ -67,7 +67,7 @@ struct MachinesView: View {
     @State private var metrics: [MachineRef: MachineMetrics] = [:]
     /// The groups whose hub keeps no metrics (404: before machine monitoring): their cards have no CPU / memory / network.
     @State private var unmonitoredGroups = Set<String>()
-    /// 添加电脑 is up.
+    /// Add Computer is up.
     @State private var adding: AddComputerRequest?
     private var unmonitored: Bool { !unmonitoredGroups.isEmpty && unmonitoredGroups.count >= model.groupIDs.count }
 
@@ -113,12 +113,12 @@ struct MachinesView: View {
             .padding(Theme.Space.l)
         }
         #if os(macOS)
-        .modifier(MacBelowTitleRowIfAsked()) // under 机器's title in the window: the cards start below it (#1243)
+        .modifier(MacBelowTitleRowIfAsked()) // under Machines' title in the window: the cards start below it (#1243)
         #endif
         .themedGroupedPage()
         .navigationTitle("机器")
         // Large wherever it is pushed (the Agents list's stack would make it inline, and the principal item below would
-        // then hide the title); the bar's middle is only for 连接中… and the like.
+        // then hide the title); the bar's middle is only for Connecting… and the like.
         .navigationBarTitleDisplayMode(.large)
         .pageToolbar {
             #if os(macOS)
@@ -269,16 +269,16 @@ struct DotLabel: LabelStyle {
     }
 }
 
-/// One machine: on 机器 with its numbers, and at the top of its page without them (the page has the charts).
+/// One machine: on Machines with its numbers, and at the top of its page without them (the page has the charts).
 struct MachineCard: View {
     @Environment(AppModel.self) private var model
     var machine: Machine
     /// Its agents counted; nil counts them here.
     var tally: AgentTally?
-    /// Its latest values (and for 机器 the last hour); nil until they come, or from a hub without machine monitoring.
+    /// Its latest values (and for Machines the last hour); nil until they come, or from a hub without machine monitoring.
     var metrics: MachineMetrics?
     var showsMetrics = true
-    /// In 机器's grid: as tall as the row, an online card's counts and charts at the bottom so they line up across it
+    /// In Machines' grid: as tall as the row, an online card's counts and charts at the bottom so they line up across it
     /// (an offline card keeps its words at the top). At the top of a machine's page it is as tall as its content.
     var fillsRow = false
 
@@ -316,7 +316,7 @@ struct MachineCard: View {
                 // out smaller than in a card of their own.
                 .layoutPriority(1)
             } else if let line = AddComputerText.machineLine(machine) {
-                // A known error_code in words (docs/onboarding.md 5.3); the hub's own words are on its page (详情).
+                // A known error_code in words (docs/onboarding.md 5.3); the hub's own words are on its page (Details).
                 Text(line).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
             }
             if machine.isPending, model.canConfirmComputer(machine.group) {
@@ -337,7 +337,7 @@ struct MachineCard: View {
         .contentShape(.rect)
     }
 
-    /// "Ubuntu 24.04.1 LTS · 16 核 · 64.0 GB"; the host name when the machine never said what it runs.
+    /// "Ubuntu 24.04.1 LTS · 16 cores · 64.0 GB"; the host name when the machine never said what it runs.
     static func subtitle(_ m: Machine, system: MachineSystem?) -> String {
         guard let sys = system else { return m.hostname ?? m.sshHost ?? m.id }
         var parts = [sys.name]
@@ -398,7 +398,7 @@ struct MachineCard: View {
     }
 }
 
-/// 需要你 / 工作中 / 空闲 side by side, a dot and a count each; a state with none stays gray.
+/// Needs You / Working / Idle side by side, a dot and a count each; a state with none stays gray.
 struct AgentCounts: View {
     var tally: AgentTally
 
@@ -426,7 +426,7 @@ struct AgentCounts: View {
     }
 }
 
-/// CPU / 内存 / 网络 on a card: the value now, a detail under it, the last hour under that.
+/// CPU / Memory / Network on a card: the value now, a detail under it, the last hour under that.
 struct MetricCell<Chart: View>: View {
     var title: String
     var value: String
@@ -471,7 +471,7 @@ struct AlertChip: View {
     }
 }
 
-/// A machine whose jarvisd is not the hub's build: says so, and 重新部署 has the hub install its own build there.
+/// A machine whose jarvisd is not the hub's build: says so, and Redeploy has the hub install its own build there.
 struct DeployRow: View {
     @Environment(AppModel.self) private var model
     var machine: Machine
@@ -516,8 +516,8 @@ struct DeployRow: View {
     }
 }
 
-/// A computer waiting for the user (feature machine_trust): 是我的电脑 / 不是 once it is online (it can be looked at),
-/// 删掉 while it is not.
+/// A computer waiting for the user (feature machine_trust): It's Mine / Not Mine once it is online (it can be looked at),
+/// Remove while it is not.
 struct PendingRow: View {
     @Environment(AppModel.self) private var model
     var machine: Machine

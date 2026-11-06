@@ -5,7 +5,7 @@ import Testing
 /// Installs, upgrades and removals in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3307): what the hub
 /// pushes decodes (unknown states and steps kept), a hub with `extension_operations` previews in the background, waits
 /// for consent and goes on with the same operation, an older hub's request becomes a local operation with no steps, an
-/// older push does not undo a newer one, a preview turned down is canceled, and 重试 goes back to the hub when it can
+/// older push does not undo a newer one, a preview turned down is canceled, and Retry goes back to the hub when it can
 /// and starts over when it cannot.
 @MainActor
 struct ExtensionOperationsTests {
@@ -93,7 +93,7 @@ struct ExtensionOperationsTests {
         #expect(page.operation?.state == .needsConsent)
         let consent = page.takeConsent()
         #expect(consent == "op1")
-        page.declined() // the sheet closing after 安装 does not cancel it
+        page.declined() // the sheet closing after Install does not cancel it
         #expect(await page.confirm(shown, consent: consent))
         #expect(installBody == .object(["preview_id": .string("pv1"), "permissions_digest": .string("d1"), "async": .bool(true)]))
         #expect(hub.sent("DELETE", "/api/v1/plugins/-/operations/op1").isEmpty)

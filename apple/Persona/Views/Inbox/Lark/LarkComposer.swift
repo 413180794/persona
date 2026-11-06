@@ -1,13 +1,13 @@
 import SwiftUI
 
 extension EnvironmentValues {
-    /// 回复 in a message's long-press menu; set by the chat and the thread sheet. Nil: no 回复 item.
+    /// Reply in a message's long-press menu; set by the chat and the thread sheet. Nil: no Reply item.
     @Entry var larkReply: LarkReplyHandler? = nil
     /// A reply's quote was tapped: the chat goes to the message it answers and says whether it could.
     @Entry var larkJump: ((String) -> Bool)? = nil
 }
 
-/// What 回复 does where the message is shown: the page says whether it is a topic group or a thread sheet, and takes
+/// What Reply does where the message is shown: the page says whether it is a topic group or a thread sheet, and takes
 /// the message to answer (the chat puts up its quote bar, the thread sheet focuses its box).
 struct LarkReplyHandler {
     var inTopicGroup = false
@@ -170,7 +170,7 @@ struct LarkComposer: View {
     }
 }
 
-/// 回复 某某 at the top of the box: who is answered, a line of what they wrote, and × to drop it (`QuoteBarRow`).
+/// "Reply <name>" at the top of the box: who is answered, a line of what they wrote, and × to drop it (`QuoteBarRow`).
 struct LarkReplyBar: View {
     var reply: LarkReplyTo
     var cancel: () -> Void

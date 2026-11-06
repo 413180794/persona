@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Someone @-mentioned in a message I send: Feishu notifies them. The text must hold the literal `@name`
-/// (docs/protocol.md, the send and reply routes); 所有人 is `user_id` "all".
+/// (docs/protocol.md, the send and reply routes); Everyone is `user_id` "all".
 nonisolated struct LarkMention: Codable, Hashable, Sendable {
     var userID: String
     var name: String
@@ -99,18 +99,18 @@ nonisolated enum LarkMentions {
         }
     }
 
-    /// 所有人 is offered while the lookup is empty or could still become 所有人 / all.
+    /// Everyone is offered while the lookup is empty or could still become Everyone / all.
     static func offersEveryone(_ query: String) -> Bool {
         query.isEmpty || LarkMention.everyone.name.hasPrefix(query) || "all".hasPrefix(query.lowercased())
     }
 }
 
-/// The list over a group's box while an @ is typed: 所有人, then the chat's members matching what follows the @ (the
+/// The list over a group's box while an @ is typed: Everyone, then the chat's members matching what follows the @ (the
 /// box asks the hub, LarkComposer).
 struct LarkMentionPicker: View {
     var query: String
     var members: [LarkMember]
-    /// 所有人 is a group's: a document's comment has no one to notify that way.
+    /// Everyone is a group's: a document's comment has no one to notify that way.
     var everyone = true
     var pick: (LarkMention) -> Void
     /// The rows' height: the list is as tall as they are up to 240 pt, then scrolls. (A height-limited frame took all

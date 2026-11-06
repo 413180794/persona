@@ -3,7 +3,7 @@ import SwiftUI
 // The Dynamic Island is an iPhone's: a Mac has no island to diagnose.
 #if os(iOS)
 
-/// 灵动岛诊断 (hidden: touch and hold the first preview in 设置 › 通知 › 灵动岛): the steps between 设置 › 形象 and the
+/// Dynamic Island Diagnostics (hidden: touch and hold the first preview in Settings › Notifications › Dynamic Island): the steps between Settings › Avatar and the
 /// island, for a phone that draws the wrong persona — what the app saved for the widget extension, what the shared
 /// App Group container holds, what the extension last read (docs/live-activity.md「诊断」). 「复制全部」 is what to send.
 struct IslandDiagnosticsView: View {

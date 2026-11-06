@@ -12,7 +12,7 @@ import AppKit
 /// the hub answers or without it.
 @MainActor @Observable
 final class PersonaStore {
-    /// The built-ins first (the default, then 汇流), then what the hub listed last (kept across launches).
+    /// The built-ins first (the default, then Circuit), then what the hub listed last (kept across launches).
     private(set) var offered: [Persona] = Persona.builtins
     /// The chosen one as it can be shown now: the built-in until its package is on the phone.
     private(set) var current: Persona = .builtin {
@@ -20,7 +20,7 @@ final class PersonaStore {
     }
     /// Ids being downloaded.
     private(set) var downloading: Set<String> = []
-    /// Why the last list or download failed (设置 › 形象 shows it).
+    /// Why the last list or download failed (Settings › Avatar shows it).
     private(set) var error: String?
     /// Bumped when pictures land on disk (a package, a thumbnail): the views that asked for one before ask again.
     private(set) var pictures = 0
@@ -30,7 +30,7 @@ final class PersonaStore {
     @ObservationIgnored let root: URL
     @ObservationIgnored private let defaults: UserDefaults
     /// The refresh under way: another caller waits for it instead of starting a second one (connecting to the hub
-    /// and 设置 opening come together; a second refresh used to clean away the package the first was downloading).
+    /// and Settings opening come together; a second refresh used to clean away the package the first was downloading).
     @ObservationIgnored private var refreshing: Task<Void, Never>?
     @ObservationIgnored private let frameCache = NSCache<NSString, PersonaFrames>()
     @ObservationIgnored private let imageCache = NSCache<NSString, UIImage>()
@@ -110,7 +110,7 @@ final class PersonaStore {
         } else {
             current = .builtin
         }
-        // The others' faces for 设置's cards, one small picture each (the package itself comes when chosen).
+        // The others' faces for Settings' cards, one small picture each (the package itself comes when chosen).
         for p in offered where !isOnPhone(p) && !hasThumbnail(p) {
             guard let file = p.manifest?.avatarFile(points: Self.thumbnailPoints, scale: 3),
                   let data = try? await api.personaFile(p.id, file) else { continue }
@@ -121,7 +121,7 @@ final class PersonaStore {
         prune(keeping: Set(offered.map { "\($0.id)/\($0.rev)" }))
     }
 
-    /// 设置's cards show faces 64 pt wide.
+    /// Settings' cards show faces 64 pt wide.
     static let thumbnailPoints: CGFloat = 64
     private var thumbnails: URL { root.appending(path: ".thumbnails", directoryHint: .isDirectory) }
     private func thumbnail(_ p: Persona) -> URL { thumbnails.appending(path: "\(p.id)-\(p.rev).png") }

@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 扩展 › 信息（iMessage） (#1830 step 6) against scripts/mock/mock_hub.py with MOCK_PLUGINS=1
+/// Settings › Extensions › Messages (iMessage) (#1830 step 6) against scripts/mock/mock_hub.py with MOCK_PLUGINS=1
 /// (TEST_RUNNER_JARVIS_PLUGINS_HUB): a switch per Mac, MacBook on; turning on another is refused with the one on named,
 /// and nothing changes until that one is off. JARVIS_SHOTS keeps the screenshots, named by JARVIS_PLUGINS_APPEARANCE.
 final class IMessageExtensionTests: XCTestCase {

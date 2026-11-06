@@ -1,7 +1,7 @@
 import XCTest
 
 /// Archiving Persona's conversations (docs/assistant.md「管理自己的对话」): a conversation in the sidebar swipes left to
-/// 归档 (the open drawer leaves the drag to the row), it shows up under 已归档, and a swipe there brings it back. In
+/// Archive (the open drawer leaves the drag to the row), it shows up under Archived, and a swipe there brings it back. In
 /// the new shell and the old layout, on demo data.
 final class AssistantArchiveTests: XCTestCase {
     private var app: XCUIApplication!
@@ -81,8 +81,8 @@ final class AssistantArchiveTests: XCTestCase {
         archiveAndBringBack("old")
     }
 
-    /// The main conversation has no 归档. In the shell it is a row of its own, 「主对话」, under the places to go and once
-    /// only: not above 收件箱, not under 置顶 (#4606).
+    /// The main conversation has no Archive. In the shell it is a row of its own, Main Chat, under the places to go and once
+    /// only: not above Inbox, not under Pin (#4606).
     @MainActor func testTheMainConversationStays() {
         launch(oldLayout: false)
         let main = app.buttons["sidebar-main"].firstMatch

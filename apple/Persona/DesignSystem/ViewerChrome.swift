@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A symbol in one of the viewer bars' round buttons or capsules (`ImageViewer`, the share card's preview
 /// `MessageShareSheet`): the same tap-sized square everywhere. `enabled: false` draws it dimmed, for a placeholder that
-/// is not a button yet (分享 before the picture is in).
+/// is not a button yet (Share before the picture is in).
 struct ViewerIcon: View {
     var symbol: String
     var enabled = true
@@ -35,7 +35,7 @@ struct ViewerTopBar<Leading: View, Center: View, Trailing: View>: View {
     }
 }
 
-/// The bottom bar under a full-screen picture, as Photos has it: a round button on each side (分享 on the left) and
+/// The bottom bar under a full-screen picture, as Photos has it: a round button on each side (Share on the left) and
 /// the main actions in a glass capsule between them, their buttons touching. Icons only, a fixed width per button, so
 /// it fits an iPhone SE. `ImageViewer` and the share card's preview both use it, so the two always look alike.
 struct ViewerBottomBar<Leading: View, Actions: View, Trailing: View>: View {

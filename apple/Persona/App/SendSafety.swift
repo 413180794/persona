@@ -53,7 +53,7 @@ extension AppModel {
         }
     }
 
-    /// The user chose 清空并发送: the node clears that draft (only if the box still shows it) and sends.
+    /// The user chose Clear and Send: the node clears that draft (only if the box still shows it) and sends.
     func clearDraftAndSend(_ r: SendRefusal) {
         guard let msg = chat(r.key).pending.first(where: { $0.id == r.messageID }) else { return }
         retry(r.key, msg, clearDraft: r.clearable)

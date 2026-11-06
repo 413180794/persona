@@ -45,7 +45,7 @@ nonisolated struct MarkdownChunk: Identifiable, @unchecked Sendable {
 /// Unknown languages and long blocks stay plain.
 struct PersonaCodeHighlighter: CodeSyntaxHighlighter {
     /// MarkdownUI asks again on every layout of the block: the colored text is kept by text size, language and code
-    /// (its font is the code level at the text size it was made at, so 放大 / 缩小字号 make it again, #2736).
+    /// (its font is the code level at the text size it was made at, so Increase / Decrease Text Size make it again, #2736).
     @MainActor private static var memo: [String: Text] = [:]
 
     @MainActor func highlightCode(_ code: String, language: String?) -> Text {

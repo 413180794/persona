@@ -1,7 +1,7 @@
 import XCTest
 
-/// The main conversation's 压缩上下文 and 新建主对话 (#1762): the avatar's menu has both on the main conversation only,
-/// 压缩上下文 shows 正在压缩上下文… above the composer and then 已压缩上下文, 新建主对话… asks first (带上旧对话的摘要 on)
+/// The main conversation's Compact Context and New Main Chat (#1762): the avatar's menu has both on the main conversation only,
+/// Compact Context shows Compacting Context… above the composer and then Context compacted, New Main Chat… asks first (Include Old Chat Summary on)
 /// and lands on the empty main page. A failure stays until closed.
 ///   PORT=<port> MOCK_MAIN_ACTIONS=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/MainConversationActionsTests
@@ -57,7 +57,7 @@ final class MainConversationActionsTests: XCTestCase {
         XCTAssertFalse(app.buttons["新建主对话…"].exists, "新建主对话 is the main conversation's")
     }
 
-    /// 压缩上下文: running, then done, above the composer.
+    /// Compact Context: running, then done, above the composer.
     @MainActor func testCompact() {
         let app = launch(main)
         waitForMain(app)
@@ -91,7 +91,7 @@ final class MainConversationActionsTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "closing it hides it")
     }
 
-    /// 新建主对话…: the question (carry on), then the empty main page. Last: it archives the mock's main conversation.
+    /// New Main Chat…: the question (carry on), then the empty main page. Last: it archives the mock's main conversation.
     @MainActor func testZNewMain() {
         let app = launch(main)
         waitForMain(app)

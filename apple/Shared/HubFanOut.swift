@@ -1,7 +1,7 @@
 import Foundation
 
 /// Asking every group's hub the same thing (docs/multi-hub.md): all at once, so a hub out of reach (its requests wait
-/// out their 30 s) holds back none of the others (#4705: 机器's numbers, 订阅额度, the watch, the Live Activity and the
+/// out their 30 s) holds back none of the others (#4705: Machines' numbers, Subscription Usage, the watch, the Live Activity and the
 /// pins asked one hub after another).
 nonisolated enum HubFanOut {
     /// The groups worth asking on a poll: those whose link is up. With none up, all of them (nothing to hold back, and

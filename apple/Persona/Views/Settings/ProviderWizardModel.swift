@@ -16,8 +16,8 @@ enum LauncherName {
     }
 }
 
-/// 设置 › 模型供应商 › 新增 / 编辑 (#2455, after cindy's AddProviderWizard): 选供应商 → 连接 (name, address, auth, key;
-/// 测试连接, 获取模型列表) → 勾选模型 (context window, thinking levels, the default), with the rest under 高级.
+/// Settings › Model Providers › Add / Edit (#2455, after cindy's AddProviderWizard): Choose Provider → Connect (name, address, auth, key;
+/// Test Connection, Get Model List) → Choose Models (context window, thinking levels, the default), with the rest under Advanced.
 @Observable final class ProviderWizardModel {
     struct Deps {
         var api: () -> APIClient?
@@ -42,16 +42,16 @@ enum LauncherName {
     var apiKey = ""
     /// Typed headers, "Name: value" a line. Empty keeps what the hub has unless `clearHeaders`.
     var headers = ""
-    /// 清除请求头: the stored headers go when saved.
+    /// Clear Headers: the stored headers go when saved.
     var clearHeaders = false
 
     /// The models picked, in order; the default is `defaultModel`.
     private(set) var models: [ProviderModel] = []
     var defaultModel = ""
-    /// What the gateway said it serves (获取模型列表).
+    /// What the gateway said it serves (Get Model List).
     private(set) var discovered: [ProviderModel] = []
 
-    // 高级
+    // Advanced
     var opusModel = ""
     var sonnetModel = ""
     var haikuModel = ""
@@ -70,7 +70,7 @@ enum LauncherName {
     private(set) var testing = false
     private(set) var test: LauncherProbeResult?
     private(set) var discovering = false
-    /// 获取模型列表 ran (even when it found none or failed): the models step shows what came of it.
+    /// Get Model List ran (even when it found none or failed): the models step shows what came of it.
     private(set) var discoveredOnce = false
     private(set) var discoverError: String?
     private(set) var saving = false
@@ -121,12 +121,12 @@ enum LauncherName {
         return clearHeaders ? "" : nil
     }
 
-    /// 连接 is filled in: the next step can come.
+    /// Connect is filled in: the next step can come.
     var connectionReady: Bool {
         !trimmedName.isEmpty && nameProblem == nil && URL(string: address)?.host() != nil && (!key.isEmpty || hasStoredKey)
     }
 
-    /// The model 测试连接 asks for: the default, else the first picked or listed.
+    /// The model Test Connection asks for: the default, else the first picked or listed.
     var testModel: String { [defaultModel, models.first?.id ?? "", discovered.first?.id ?? ""].first { !$0.isEmpty } ?? "" }
 
     var canTest: Bool { connectionReady && !testModel.isEmpty && !testing }
@@ -151,7 +151,7 @@ enum LauncherName {
         }
     }
 
-    /// 添加: a model the list does not have, by its id; false when it is empty or already there.
+    /// Add: a model the list does not have, by its id; false when it is empty or already there.
     @discardableResult func addModel(_ id: String) -> Bool {
         let id = id.trimmingCharacters(in: .whitespaces)
         guard !id.isEmpty else { return false }

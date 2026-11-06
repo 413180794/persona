@@ -3,8 +3,8 @@ import Foundation
 /// How Persona's own MCP tools (server `jarvis`: `mcp__jarvis__agent_read`…) are named in a run of steps.
 ///
 /// Display only: the server keeps its old name `jarvis` on the wire and everything that matches tools by their full
-/// name stays as it is. The common tools get a verb of their own ("读 Agent 对话"); the rest read like the web's rows,
-/// "调用 Persona · agent read", never the raw `agent_read`.
+/// name stays as it is. The common tools get a verb of their own ("Read agent chat"); the rest read like the web's rows,
+/// "Call Persona · agent read", never the raw `agent_read`.
 enum PersonaToolNames {
     /// The MCP server names that are Persona itself (`jarvis` today; `persona` if the server is ever renamed).
     nonisolated static let servers: Set<String> = ["jarvis", "persona"]
@@ -32,7 +32,7 @@ enum PersonaToolNames {
         return fallback(n)
     }
 
-    /// "调用 Persona · agent read".
+    /// "Call Persona · agent read".
     static func fallback(_ base: String) -> String {
         let label = base.replacingOccurrences(of: "_", with: " ")
         return String(localized: "调用 Persona · \(label)")

@@ -6,11 +6,11 @@ import WatchConnectivity
 
 // One credential per device (docs/protocol.md「鉴权」): the pairing token opens everything, so right after pairing the
 // phone trades it for a token of its own and stops keeping it, and gets the watch an answer-only one. A lost device is
-// then revoked alone in 设置 › 设备 instead of re-pairing everything. Against an older hub (no /auth/tokens) the
+// then revoked alone in Settings › Devices instead of re-pairing everything. Against an older hub (no /auth/tokens) the
 // pairing token stays, as before; the next launch tries again.
 
 extension AppModel {
-    /// This device's token id at the hub-level group's hub (设置 › 设备 marks it 本机); nil while it still uses the
+    /// This device's token id at the hub-level group's hub (Settings › Devices marks it This Device); nil while it still uses the
     /// pairing token there. Each paired hub has its own (docs/multi-hub.md).
     var deviceID: String? {
         guard let hub else { return nil }
@@ -18,7 +18,7 @@ extension AppModel {
         return (registry.hubs.first { $0.group == hub.group && $0.config == on } ?? registry.primary(hub.group))?.deviceID
     }
 
-    /// The kind of this device's own credential at the hub (POST /auth/tokens), shown in 设置 › 设备. A Mac is a
+    /// The kind of this device's own credential at the hub (POST /auth/tokens), shown in Settings › Devices. A Mac is a
     /// desktop, not the phone (AppModel.registration): the hub keeps it as "other" (full rights, a computer's icon).
     nonisolated static var credentialKind: String {
         #if os(macOS)
@@ -30,7 +30,7 @@ extension AppModel {
 
     /// Every paired hub trades its pairing token for this device's own (each hub separately), and every group gets
     /// the watch an answer-only one at its first hub. A call while one runs waits for it (launch, the watch asking and
-    /// 同步到 Apple Watch can come together; each would get the watch a token of its own).
+    /// Sync to Apple Watch can come together; each would get the watch a token of its own).
     func upgradeCredentials() async {
         if let running = credentialsUpgrade { return await running.value }
         let run = Task { await upgradeCredentialsOnce() }
@@ -65,7 +65,7 @@ extension AppModel {
     /// still on the old token goes on with it at once: whatever address or route it took (a candidate address, a mesh
     /// peer, the SSH tunnel), whichever group the hub is in by now (a hello may regroup it while the trade is out).
     /// Comparing whole configs missed those, and the socket stayed on the pairing token until the hub dropped it after
-    /// its grace (docs/protocol.md「临时配对」): 401 on every attempt, 连接中… for good (#2766).
+    /// its grace (docs/protocol.md「临时配对」): 401 on every attempt, Connecting… for good (#2766).
     func adoptDeviceToken(hub id: String, old: String, token: String, deviceID: String) {
         tradedTokens[old] = token
         // nil: paired again with another link meanwhile; that pairing trades its own.
@@ -119,7 +119,7 @@ nonisolated enum DeviceCredentialTrade {
     }
 }
 
-/// 设置 › 设备: every device with its own credential, revocable one by one.
+/// Settings › Devices: every device with its own credential, revocable one by one.
 struct DevicesView: View {
     @Environment(AppModel.self) private var model
     @State private var tokens: [APIClient.DeviceToken] = []
@@ -164,7 +164,7 @@ struct DevicesView: View {
             ConnectDeviceSheet { Task { await load() } }
         }
         #if DEBUG
-        .task { // `-openConnectDevice YES | web`: 连接新设备 open (on 浏览器), for screenshots
+        .task { // `-openConnectDevice YES | web`: Connect New Device open (on Browser), for screenshots
             if UserDefaults.standard.string(forKey: "openConnectDevice") != nil { try? await Task.sleep(for: .seconds(1)); connecting = true }
         }
         #endif

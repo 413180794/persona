@@ -1,7 +1,7 @@
 import Foundation
 
 /// A model API error in a chat, read from the text Claude Code writes when it gives up ("API Error: 502 …", an
-/// assistant message) or from the hub's notice for a retry ("API 错误：Overloaded（正在重试）"). What a person needs
+/// assistant message) or from the hub's notice for a retry (「API 错误：Overloaded（正在重试）」). What a person needs
 /// first is in front: why, in words, the status code, and whether it is likely to pass by itself; the request id,
 /// session and the raw text are folded under it.
 public nonisolated struct APIErrorInfo: Hashable, Sendable {

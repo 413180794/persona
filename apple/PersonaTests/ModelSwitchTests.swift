@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 思考强度胶囊里切模型 (#3119, the web's #2434): which sessions offer it, when it waits, and what goes to the hub.
+/// Switching models in the effort capsule (#3119, the web's #2434): which sessions offer it, when it waits, and what goes to the hub.
 struct ModelSwitchTests {
     private func session(_ extra: String = "", state: String = "idle") throws -> Session {
         try JSON.decoder.decode(Session.self, from: Data(

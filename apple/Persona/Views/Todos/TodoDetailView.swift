@@ -15,7 +15,7 @@ struct TodoDetailView: View {
     @State private var showHandoff = false
     @State private var showDeleteConfirm = false
     @State private var showReleased = false
-    /// The PR its work is in, opened in the app's link sheet (docs/ios.md, 链接在 App 内打开).
+    /// The PR its work is in, opened in the app's link sheet (docs/ios.md, links open inside the app).
     @State private var link: LinkTarget?
 
     private var currentTodo: TodoItem? {

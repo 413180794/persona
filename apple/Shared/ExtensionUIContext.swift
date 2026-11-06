@@ -1,6 +1,6 @@
 import Foundation
 
-/// 共用声明式 UI 上下文；系统扩展只需 Shared，不依赖 App 的视图模型或钥匙串。
+/// Shared declarative UI context; system extensions need only Shared, not the app's view models or keychain.
 nonisolated extension ExtensionUIContext {
     static func here(launcher: String? = nil, machine: String? = nil, item: String? = nil, size: String? = nil) -> Self {
         Self(launcher: launcher, machine: machine, item: item, size: size, tz: TimeZone.current.identifier,
@@ -13,7 +13,7 @@ nonisolated extension ExtensionUIContext {
         #if os(macOS)
         ExtensionPlatform.mac
         #else
-        // 协议当前只有四种平台，Watch 和 visionOS 沿用 Apple 移动端的 ios。
+        // The protocol has only four platforms for now; watchOS and visionOS use Apple mobile's ios.
         ExtensionPlatform.ios
         #endif
     }

@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// "Persona 状态": how many sessions are working and how many are waiting, plus the first question.
+/// "Persona Status": how many sessions are working and how many are waiting, plus the first question.
 // Compatibility: the system addresses this type by its original module/type identity.
 struct JarvisStatusIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "Persona 状态"

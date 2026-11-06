@@ -24,7 +24,7 @@ struct LarkSummaryCardView: View {
     private var title: String { meta["title"]?.string ?? fallbackTitle }
 }
 
-/// "聊天记录": a few previews; tap opens every forwarded message.
+/// "Chat History": a few previews; tap opens every forwarded message.
 struct LarkMergeForwardCard: View {
     @Environment(\.larkDisplay) private var display
     var meta: JSONValue

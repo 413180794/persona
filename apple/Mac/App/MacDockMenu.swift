@@ -1,7 +1,7 @@
 import AppKit
 
 /// Right-click on the Dock icon: the Agents that need you and the ones just done (the menu bar list's first and last
-/// sections, `MacMenuBar.sections`), each opening its chat, then 新建 Agent 对话. The system adds 选项 / 显示所有窗口 / 退出.
+/// sections, `MacMenuBar.sections`), each opening its chat, then New Agent Chat. The system adds Options / Show All Windows / Quit.
 @MainActor final class MacDockMenu: NSObject {
     static let shared = MacDockMenu()
 

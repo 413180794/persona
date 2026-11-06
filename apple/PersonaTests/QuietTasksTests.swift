@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Tasks the main conversation starts with 主对话派的任务只在主对话里通知 on (#1731): the hub's `quiet` decodes (missing is
-/// false, for a hub from before), and their agents stay off the Live Activity, the watch and the 待办 badge.
+/// Tasks the main conversation starts with "notify about main-chat tasks only in the main chat" on (#1731): the hub's `quiet` decodes (missing is
+/// false, for a hub from before), and their agents stay off the Live Activity, the watch and the To-dos badge.
 @MainActor
 struct QuietTasksTests {
     private func decode<T: Decodable>(_ json: String, as: T.Type) throws -> T { try JSON.decoder.decode(T.self, from: Data(json.utf8)) }

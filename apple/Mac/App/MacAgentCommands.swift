@@ -6,7 +6,7 @@ import SwiftUI
 /// the chat's card; the menu says yes to a tool or a plan, no to a tool.
 enum MacAgentCommands {
     /// ⇧⌘⏎: allow the tool, or approve the plan with edits auto-accepted (commands still ask; the same as the
-    /// notification's 批准 — 批准并自动执行 stays a choice in the card).
+    /// notification's Approve — Approve & Auto-Run stays a choice in the card).
     static func approve(_ ix: Interaction) -> Resolution? {
         switch ix.kind {
         case .permission: Resolution(allow: true)
@@ -21,13 +21,13 @@ enum MacAgentCommands {
     }
 
     /// ⌥⌘1…9: the options a key can pick on its own (a single question's choices, a terminal dialog's).
-    /// A tool or a plan has 批准 / 拒绝 above; several questions, a multi-select or a dialog asking for text need the card.
+    /// A tool or a plan has Approve / Deny above; several questions, a multi-select or a dialog asking for text need the card.
     static func choices(_ ix: Interaction) -> [MacMenuBar.QuickAnswer] {
         switch ix.kind {
         case .question:
             guard let qs = ix.questions, qs.count == 1, let q = qs.first, !q.multiSelect else { return [] }
             return q.options.prefix(9).map { o in
-                // The card's 推荐 tag, in words: a menu item is text only. The answer keeps the label as it came.
+                // The card's Recommended tag, in words: a menu item is text only. The answer keeps the label as it came.
                 let (name, recommended) = QuestionOption.display(o.label)
                 return .init(title: recommended ? String(localized: "\(name)（推荐）") : name, resolution: Resolution(answers: [q.question: o.label]))
             }
@@ -90,7 +90,7 @@ struct MacAgentMenu: Commands {
                     MacShellState.shared.showMain()
                 }
             }
-            .keyboardShortcut("n", modifiers: [.command, .control]) // ⌥⌘N is 收件箱's 写邮件
+            .keyboardShortcut("n", modifiers: [.command, .control]) // ⌥⌘N is Inbox's New Email
             // Quiet tasks (#1731) are the main conversation's to tell: they never enable the jump either.
             .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) && !model.isQuiet($0) })
             Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
@@ -103,10 +103,10 @@ struct MacAgentMenu: Commands {
             if current?.canAttach == true {
                 Button("实时接入") { if let key { Task { await model.attach(key) } } }.lineLimit(1)
             }
-            // The row menu's 交给 Persona: the Agent's state and last answer go to the main conversation (AgentHandoff).
+            // The row menu's Hand to Persona: the Agent's state and last answer go to the main conversation (AgentHandoff).
             Button("交给 Persona") {
                 if let key, let s = model.latest(key) { // its last line as it is now
-                    MacShellState.shared.willOpen() // 知识库 / 机器 make way for the Persona page
+                    MacShellState.shared.willOpen() // Knowledge / Machines make way for the Persona page
                     Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
                 }
             }
@@ -120,7 +120,7 @@ struct MacAgentMenu: Commands {
             Button("显示会话信息") { ask(.inspector) }
                 .keyboardShortcut("i", modifiers: [.command, .option])
                 .disabled(key == nil)
-            // The chat page's 终端 | 对话 (#3183). ⇧⌘J: ⌘J (the web's toggle) is 交给 Persona here; a ⌃ key would be the
+            // The chat page's Terminal | Chat (#3183). ⇧⌘J: ⌘J (the web's toggle) is Hand to Persona here; a ⌃ key would be the
             // terminal's own when it has the keyboard.
             if !terminalOff {
                 Button("切换终端 / 对话") { ask(.terminal) }

@@ -17,9 +17,9 @@ public nonisolated struct PathRef: Hashable, Sendable {
 ///
 /// - `~/x`, `/x/y` (two parts at least: `/tmp` alone is a word), or relative with a folder and an extension (`src/a.ts`;
 ///   a letter-led extension, so `deepseek/v4.1` is not a file).
-/// - Outside backticks a path is ASCII: Chinese text or full-width punctuation right after it ends it (`/tmp/a.md里`),
+/// - Outside backticks a path is ASCII: Chinese text or full-width punctuation right after it ends it (「/tmp/a.md里」),
 ///   and a sentence's full stop after it is not part of it. In backticks the whole span is one, whatever it is written
-///   in (`~/报告/第四季度.docx`); the ASCII paths in a span are candidates too (`/a.md 和 /b.md`): what is there decides.
+///   in (「~/报告/第四季度.docx」); the ASCII paths in a span are candidates too (「/a.md 和 /b.md」): what is there decides.
 /// - Not inside a URL or a longer word.
 public nonisolated enum PathRefs {
     private static let seg = "[A-Za-z0-9_.@+\\-]+"
@@ -53,7 +53,7 @@ public nonisolated enum PathRefs {
         return ascii.matches(in: text, range: NSRange(location: 0, length: ns.length)).compactMap { ref(m: $0, in: ns) }
     }
 
-    /// The path a whole code span is (`/tmp/a.md`, `src/a.ts:12`, `~/报告/第四季度.docx`), or nil; its range is in `code`.
+    /// The path a whole code span is (`/tmp/a.md`, `src/a.ts:12`, 「~/报告/第四季度.docx」), or nil; its range is in `code`.
     public static func codePathRef(_ code: String) -> PathRef? {
         let ns = code as NSString
         let lead = ns.length - (code.drop { $0 == " " } as Substring).utf16.count

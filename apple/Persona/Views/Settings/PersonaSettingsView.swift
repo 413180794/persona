@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 设置 › 外观 › 形象 (docs/persona.md): the built-ins (Persona's default 团子, then 面罩 and 汇流) and the packages on the hub, in a
+/// Settings › Appearance › Avatar (docs/persona.md): the built-ins (Persona's default Mochi, then Visor and Circuit) and the packages on the hub, in a
 /// grid like the styles, and the chosen one's top-bar dot in each state under it. Choosing one changes Persona's name, face and dot; the app's
-/// colors only under 主题色「跟随形象」 (`ThemeColorPicker`). The tree is rebuilt, as for a style; 外观 stays open because
+/// colors only under Theme Color › Match Avatar (`ThemeColorPicker`). The tree is rebuilt, as for a style; Appearance stays open because
 /// the settings path is AppModel's. A package is downloaded first and kept on the phone.
 struct PersonaPicker: View {
     @Environment(AppModel.self) private var model

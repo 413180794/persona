@@ -1,7 +1,7 @@
 import Foundation
 
 /// Where an agent works, from its working directory alone (the protocol carries no repository): the repository and the
-/// working tree in it. The web's 按仓库 reads paths by the same rules (`web/src/lib/agent-repos.ts`): a path under one
+/// working tree in it. The web's By Repository reads paths by the same rules (`web/src/lib/agent-repos.ts`): a path under one
 /// of the usual working-tree folders belongs to the directory above that folder; any other path is its own
 /// repository's main checkout.
 nonisolated struct RepoPlace: Equatable, Sendable {
@@ -51,7 +51,7 @@ nonisolated struct RepoPlace: Equatable, Sendable {
     }
 }
 
-/// 按仓库 (docs/ios.md「Agents 的分组」): every agent under its machine, the repository its working directory names and
+/// By Repository (docs/ios.md「Agents 的分组」): every agent under its machine, the repository its working directory names and
 /// the working tree in it, as Orca's projects with the machine above them. Plain data, unit-tested apart from the list
 /// (`AgentRepoTreeTests`); the list orders the agents inside a tree (`AgentListOrder`).
 nonisolated struct RepoTree {

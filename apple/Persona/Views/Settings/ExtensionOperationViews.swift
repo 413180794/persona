@@ -2,7 +2,7 @@ import SwiftUI
 
 /// An install, upgrade or removal on the extension's market page (#3307): what is going on, the hub's steps with the
 /// one it is at (a bar while it downloads, when the hub knows the size), and for one that failed the step it stopped
-/// at, why, and 重试. While it waits for the user's yes: 查看权限 opens the preview again, 取消 drops it. An older hub
+/// at, why, and Retry. While it waits for the user's yes: Review Permissions opens the preview again, Cancel drops it. An older hub
 /// has no steps: the section says what it is doing and for how long, so the page never looks stuck.
 struct ExtensionOperationSection: View {
     var operation: ExtensionOperation
@@ -21,7 +21,7 @@ struct ExtensionOperationSection: View {
     var body: some View {
         Section {
             headline
-            // What to do (why it stopped and 重试, or the permissions to agree to) right under the title, before the
+            // What to do (why it stopped and Retry, or the permissions to agree to) right under the title, before the
             // steps: eight of them push it off the screen.
             if failed { failure }
             if waiting { consent }

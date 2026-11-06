@@ -8,7 +8,7 @@ extension EnvironmentValues {
 
 /// The space's tabs (its agents) in the chat's header, one capsule each in its state's color (no dots: the pulsing ones
 /// were too busy in a row of them), the current one bold with a ring. The agents of one tab sit together in the order
-/// of their panes, each named by its agent, the 发起者 marked 「发起」 (#2320). As many as the width holds show around the current one; a swipe scrolls through the rest. ⋯ at the end
+/// of their panes, each named by its agent, the starter marked "Starter" (#2320). As many as the width holds show around the current one; a swipe scrolls through the rest. ⋯ at the end
 /// lists every tab with its state, and the space's page, for a quick pick.
 struct SiblingTabs: View {
     @Environment(AppModel.self) private var model
@@ -122,7 +122,7 @@ struct SiblingTabs: View {
                 Text(label)
                     .lineLimit(1)
                     .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
-                // The 发起者's mark, quieter than the name (the web's 「发起」).
+                // The starter's mark, quieter than the name (the web's "Starter").
                 if launcher { Text("发起").font(Theme.Font.caption).opacity(0.75).lineLimit(1).fixedSize() }
             }
                 .padding(.horizontal, Theme.Space.m)
@@ -271,7 +271,7 @@ private struct SiblingList: View {
                             else if on { Image(systemName: Theme.Icon.done).font(Theme.Font.captionStrong).foregroundStyle(Theme.accent) }
                         }
                         .padding(.horizontal, Theme.Space.l)
-                        // A tab's other agents hang a level in under its 发起者.
+                        // A tab's other agents hang a level in under its starter.
                         .padding(.leading, role?.branch == true ? Theme.Space.l : 0)
                         .scaledFrame(minHeight: Theme.Size.box50)
                         .contentShape(.rect)
@@ -420,7 +420,7 @@ struct SpaceView: View {
 struct SlotCard: View {
     var session: Session
     var pending: Int
-    /// Its place in a tab of several agents (#2320): the tab's chip names the agent too, the 发起者 marked.
+    /// Its place in a tab of several agents (#2320): the tab's chip names the agent too, the starter marked.
     var pane: TabPanes.Role? = nil
 
     var body: some View {
@@ -444,7 +444,7 @@ struct SlotCard: View {
                 }
             }
             Text(session.displayTitle).font(Theme.Font.secondaryStrong).lineLimit(2)
-            // The 发起者 says so beside its state: the header's chips are cut first in a narrow card.
+            // The starter says so beside its state: the header's chips are cut first in a narrow card.
             Text(session.stateLabel + (pane?.launcher == true ? String(localized: " · 发起者") : "") + (pending > 0 ? String(localized: " · \(pending) 件待处理") : ""))
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)

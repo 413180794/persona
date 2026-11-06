@@ -2,7 +2,7 @@ import XCTest
 
 /// The chat header's tabs of the space (`SiblingTabs`): the tabs are laid out in a strip with their state, the current
 /// one marked; ⋯ lists every tab with its state and the space's page; picking from either switches the chat.
-/// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): weather has tests (需要你), widget (工作中) and review (已看).
+/// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): weather has tests (Needs You), widget (Working) and review (Seen).
 final class SiblingTabsTests: XCTestCase {
     private var app: XCUIApplication!
 

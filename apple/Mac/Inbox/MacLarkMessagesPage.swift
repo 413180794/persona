@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The sidebar's 消息 (#3162): the iPhone's 消息 tab (设置 › 飞书 › 首页显示消息, #392 / #530) laid out as the Mac's
+/// The sidebar's Messages (#3162): the iPhone's Messages tab (Settings › Lark › Show Messages on Home, #392 / #530) laid out as the Mac's
 /// list pages are (docs/mac-design.md): the Feishu chats in a column of their own, the open chat beside them. Not a
 /// second Feishu client: the same list model (`LarkConversationsModel`), rows (`LarkConversationRow`), account chips
 /// and pinned shelf as the iPhone's page, and the inbox's chat (`LarkChatView`) on the right. The list's width is
@@ -114,7 +114,7 @@ private struct MacLarkMessagesContent: View {
                     .listRowBackground(Theme.pageBackground)
             }
             if query.isEmpty, !store.pinned.isEmpty {
-                // Expands with its own 展开 / 收起 button (no pull-to-expand on the Mac).
+                // Expands with its own Expand / Collapse button (no pull-to-expand on the Mac).
                 LarkPinnedShelf(conversations: store.pinned, interaction: $pins, expandable: $canExpandPins) { open = $0 }
                     .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.l, bottom: 0, trailing: Theme.Space.l))
                     .listRowSeparator(.hidden)
@@ -179,10 +179,10 @@ private struct MacLarkMessagesContent: View {
         // One empty state for the page, over the list (docs/mac-design.md「空状态」); the chat column stays empty.
         .overlay { if store.conversations.isEmpty { empty } }
         .accessibilityIdentifier("feishu-conversations")
-        .modifier(MacBelowTitleRow()) // under 消息 in the title row (#1243)
+        .modifier(MacBelowTitleRow()) // under Messages in the title row (#1243)
         .background(Theme.pageBackground.ignoresSafeArea())
-        // In the window's toolbar, as the iPhone page's: the open chat's Pin 消息 / 让 Persona 总结 join it there (in the
-        // list column's title row they ran over it), as 收件箱's buttons do.
+        // In the window's toolbar, as the iPhone page's: the open chat's Pin Messages / Have Persona Summarize join it there (in the
+        // list column's title row they ran over it), as Inbox's buttons do.
         .pageToolbar {
             MacToolbarMiddle() // the buttons by the search field, not over the chat's title (#830)
             ToolbarItem(placement: .primaryAction) {
@@ -194,7 +194,7 @@ private struct MacLarkMessagesContent: View {
         .pageSearchable(text: $query, placement: .toolbar, prompt: String(localized: "lark.searchChats", defaultValue: "搜索会话", comment: "Search field over the Lark chats list"))
     }
 
-    /// A chat: opens beside the list, the open one in the shell's selected shade (as 知识库's rows, `KBEntryLink`).
+    /// A chat: opens beside the list, the open one in the shell's selected shade (as Knowledge's rows, `KBEntryLink`).
     private func row(_ conversation: LarkConversation) -> some View {
         let selected = open?.id == conversation.id
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
@@ -254,7 +254,7 @@ private struct MacLarkMessagesContent: View {
 
 /// The open chat, or a quiet line while none is (docs/mac-design.md「空状态」). Its name in the column's part of the
 /// title row; people and other chats it opens push in the column's own stack (‹ in the title row), Feishu documents
-/// and web links read in the panel at the trailing edge, as in 收件箱 (`MacInboxItemDetail`).
+/// and web links read in the panel at the trailing edge, as in Inbox (`MacInboxItemDetail`).
 private struct MacLarkChatColumn: View {
     let conversation: LarkConversation?
     @State private var link: LinkTarget?

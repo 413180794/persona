@@ -23,8 +23,8 @@ nonisolated struct MachineChoice: Equatable, Identifiable {
     }
 }
 
-/// The menu at the top left of Agents: grouping, 卡片 / 细列表, folding, the machine filter, 机器. Shows the chosen
-/// machine's name in the corner; "全部" keeps the plain filter icon.
+/// The menu at the top left of Agents: grouping, Cards / Compact List, folding, the machine filter, Machines. Shows the chosen
+/// machine's name in the corner; "All" keeps the plain filter icon.
 struct AgentsListMenu: View {
     @Environment(AppModel.self) private var model
     var actions: Actions
@@ -55,13 +55,13 @@ struct AgentsListMenu: View {
     @StoredValue("dev.machineFilter") private var machineFilter = ""
     @StoredValue(HubFilter.key) private var hubFilter = ""
     @StoredValue("dev.grouping") private var grouping: DevGrouping = .standard
-    /// The grouping the list shows: a stored 按待办 is 按项目 on a hub without todos (`DevGrouping.resolved`).
+    /// The grouping the list shows: a stored By To-do is By Project on a hub without todos (`DevGrouping.resolved`).
     private var shownGrouping: DevGrouping { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) }
     private var groupingChoice: Binding<DevGrouping> { Binding(get: { shownGrouping }, set: { grouping = $0 }) }
     @StoredValue("dev.sort") private var sort: AgentSort = .state
     @StoredValue("dev.compact") private var compact = false
 
-    /// The shell (docs/ios.md「新外壳」) shows these inside its 工作 switch's menu: the items, without a button of their own.
+    /// The shell (docs/ios.md「新外壳」) shows these inside its Work switch's menu: the items, without a button of their own.
     var inline = false
 
     var body: some View {
@@ -86,7 +86,7 @@ struct AgentsListMenu: View {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { g in Label(g.title, systemImage: g.symbol).tag(g) }
             }
             if shownGrouping != .state, shownGrouping != .recent {
-                // 按状态 is sectioned by state, and the rows in a section are by time already; 最近使用 is by time only.
+                // By Status is sectioned by state, and the rows in a section are by time already; Recently Used is by time only.
                 Picker("排序", selection: $sort) {
                     ForEach(AgentSort.allCases) { o in Label(o.title, systemImage: o.symbol).tag(o) }
                 }
@@ -162,7 +162,7 @@ struct AgentRowMenu: View, Equatable {
     nonisolated let live: Bool
     nonisolated var terminal = true
     nonisolated var attachable = false
-    /// 删除对话 is offered (`Session.canDelete`).
+    /// Delete Chat is offered (`Session.canDelete`).
     nonisolated var deletable = false
     /// The node menu's pane items (split, Git, close the tab): a live herdr pane (`NodeMenu.offersPaneActions`).
     nonisolated var paneActions = false
@@ -198,7 +198,7 @@ struct AgentRowMenu: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("RowMenu.content")
         #endif
-        // The session as it is when an item is tapped (all of it: 交给 Persona sends its last line).
+        // The session as it is when an item is tapped (all of it: Hand to Persona sends its last line).
         let now = { model.latest(key) }
         #if os(macOS)
         MacOpenInWindowButton(key: key)

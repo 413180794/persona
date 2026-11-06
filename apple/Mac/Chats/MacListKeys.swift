@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The keys of Agents' and Persona's lists, as 收件箱's (#2113): ⏎ and plain Tab go to the open conversation's
+/// The keys of Agents' and Persona's lists, as Inbox's (#2113): ⏎ and plain Tab go to the open conversation's
 /// composer, Delete asks to delete (Agents) or archives (Persona) it; ⇧Tab is left for the system's reverse focus
 /// traversal (⇧Tab in a composer comes back: `MacShellState.focusList`). ↑ / ↓
 /// are a selecting list's own (`MacSelectingList`, Persona's), or `move`'s (Agents', which does not select: #2213).

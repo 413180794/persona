@@ -2,7 +2,7 @@ import Foundation
 
 /// The finished agents marked seen here that the hub has not taken yet (#1588). A `seen` over a socket that still says
 /// connected but is gone (the hub restarted, the phone just came back) was lost without a word, and the next list from
-/// the hub put every one of them back to 完成未看: 全部标为已读 looked like it failed. A mark stays here until a list
+/// the hub put every one of them back to Unread: Mark All as Read looked like it failed. A mark stays here until a list
 /// from the hub shows it recorded (a later `seen_at`), or the agent moved on; until then the session is shown seen and
 /// the mark goes again (`AppModel.sendSeen`).
 ///

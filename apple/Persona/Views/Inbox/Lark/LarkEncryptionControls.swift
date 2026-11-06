@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LarkEncryptionModeBar: View {
     @Binding var draft: LarkEncryptedDraft?
-    /// [removed] words (#882), offered while the account's switch is on.
+    /// Brave Climb words (#882), offered while the account's switch is on.
     @Binding var climbing: Bool
     var canEncrypt: Bool
     var canClimb = false

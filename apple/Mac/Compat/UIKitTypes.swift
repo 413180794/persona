@@ -118,7 +118,7 @@ nonisolated enum UIContentSizeCategory: Sendable {
     }
 
     /// The Mac's body size at this category (`Theme.Level.body` is 13 at the default, .large): a point a step, as the
-    /// Mac's text sizes go (#779, #833). 小 / 标准 / 大 are .medium / .large / .extraLarge.
+    /// Mac's text sizes go (#779, #833). Small / Standard / Large are .medium / .large / .extraLarge.
     var macBody: CGFloat {
         switch self {
         case .extraSmall: 10
@@ -137,10 +137,10 @@ nonisolated enum UIContentSizeCategory: Sendable {
     }
 }
 
-/// macOS has no Dynamic Type; the app's own 小 / 标准 / 大 still moves the size category, and this scales by the Mac's
+/// macOS has no Dynamic Type; the app's own Small / Standard / Large still moves the size category, and this scales by the Mac's
 /// body at it (`macBody`: a point a step around 13), not iOS's table, which made a step 6–12 % on the Mac (#833).
 /// The variant without traits takes the category from the app's text size setting (`TextSize.current` applied to
-/// `.large`), so the fonts made with it — the code/file viewer's — follow 小 / 标准 / 大 (#3612).
+/// `.large`), so the fonts made with it — the code/file viewer's — follow Small / Standard / Large (#3612).
 nonisolated struct UIFontMetrics {
     init(forTextStyle: NSFont.TextStyle) {}
     func scaledValue(for value: CGFloat, compatibleWith traits: UITraitCollection?) -> CGFloat {
@@ -322,7 +322,7 @@ nonisolated enum UIUserInterfaceIdiom { case unspecified, phone, pad, mac }
     var name: String {
         #if DEBUG
         // Screenshots (`-macSnapshot`) go into PRs: not this Mac's own name, which is often its owner's (it shows in
-        // the SSH key's comment, 设置 › hub › SSH 隧道).
+        // the SSH key's comment, Settings › hub › SSH Tunnel).
         if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return "Mac" }
         #endif
         return Host.current().localizedName ?? "Mac"

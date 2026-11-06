@@ -300,7 +300,7 @@ nonisolated enum LarkPartRenderer {
 }
 
 extension LarkMedia {
-    /// `[微笑]`-style text for an emoji whose picture is not loaded.
+    /// `[Smile]`-style text for an emoji whose picture is not loaded.
     nonisolated static func labelFallback(_ key: String, text: String?) -> String {
         if let text, !text.isEmpty { return text }
         var k = key
@@ -339,7 +339,7 @@ struct LarkBlockPartView: View {
     }
 }
 
-/// Group events ("刘森 创建了话题群"): the people named in the template stand out.
+/// Group events ("<name> created the topic group"): the people named in the template stand out.
 struct LarkSystemText: View {
     var part: LarkPart
 

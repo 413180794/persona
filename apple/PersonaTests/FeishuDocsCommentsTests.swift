@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Commenting in the Feishu document reader (#1290): where 发送 goes, what it sends (the @s the text still holds, the
+/// Commenting in the Feishu document reader (#1290): where Send goes, what it sends (the @s the text still holds, the
 /// passage it quotes), a failed send keeping the words and retrying with the same id, resolving and reopening, and
 /// only a hub whose plugin says `lark_doc_comments` offering it.
 @MainActor
@@ -51,7 +51,7 @@ struct FeishuDocsCommentsTests {
         let m = FeishuDocsCommentsModel(url: "https://example.feishu.cn/docx/a", api: api)
         await m.load()
         m.draft = "  @李雷 看一下  "
-        m.mentions = [LarkMention(userID: "ou_1", name: "李雷"), LarkMention(userID: "ou_2", name: "王五")] // 王五 was deleted again
+        m.mentions = [LarkMention(userID: "ou_1", name: "李雷"), LarkMention(userID: "ou_2", name: "王五")] // 「王五」 was deleted again
         await m.send()
         #expect(api.writes.count == 1 && api.writes[0].route == "comment")
         let w = api.writes[0].write!

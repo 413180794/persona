@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 新建 worktree…'s form (`WorktreeForm`, docs/terminal.md「新建 worktree…」), the same cases as the web's worktree.test.ts.
+/// New Worktree…'s form (`WorktreeForm`, docs/terminal.md「新建 worktree…」), the same cases as the web's worktree.test.ts.
 struct WorktreeFormTests {
     @Test func namesTheFolderTheWayHerdrDoes() {
         #expect(WorktreeForm.slug("Feat/A_b.c") == "feat-a-b-c")

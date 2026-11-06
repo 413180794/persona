@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 扩展主题的角色色，只有选中这个主题时才进入 StyleSpec；未提供的角色按原 token 回退。
+/// An extension theme's role colors, in StyleSpec only while that theme is chosen; roles it leaves out fall back to the original tokens.
 nonisolated struct ExtensionThemePalette: Hashable, Sendable {
     var id: String
     var name: String
@@ -36,7 +36,7 @@ nonisolated struct ExtensionThemePalette: Hashable, Sendable {
         if invalid { return nil }
     }
 
-    /// 每次组合风格时只构造一份动态颜色；Theme 的 getter 复用它，保持 Color 的稳定身份。
+    /// One set of dynamic colors per style composition; Theme's getters reuse it so each Color keeps a stable identity.
     struct Colors: Sendable {
         var positive: Color?
         var caution: Color?

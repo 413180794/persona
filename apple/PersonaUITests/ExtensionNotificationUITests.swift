@@ -1,6 +1,6 @@
 import XCTest
 
-/// 系统通知的真实按钮和页面，只使用内存 mock；此测试不替代真机 APNs / NSE 送达验证。
+/// The system notification's real buttons and pages, against an in-memory mock only; this test does not replace checking APNs / NSE delivery on a real device.
 final class ExtensionNotificationUITests: XCTestCase {
     private var environment: [String: String] { ProcessInfo.processInfo.environment }
     private var hub: String { get throws {
@@ -77,7 +77,7 @@ final class ExtensionNotificationUITests: XCTestCase {
         springboard.buttons["回复"].tap()
         let send = springboard.buttons["发送"].firstMatch
         XCTAssertTrue(send.waitForExistence(timeout: 10), springboard.debugDescription)
-        // 系统回复栏在新版本上是 TextView，不是 TextField；通知正文的 TextView 位于上方。
+        // The system's reply bar is a TextView on newer versions, not a TextField; the notification body's TextView is above it.
         let editors = springboard.textFields.allElementsBoundByIndex + springboard.textViews.allElementsBoundByIndex
         let field = try XCTUnwrap(editors.max { $0.frame.minY < $1.frame.minY }, "系统回复栏未出现")
         field.tap()

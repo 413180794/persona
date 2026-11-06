@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 线索 (#2128): the hub's tree decoded, its rows in reading order, and the route asked.
+/// Thread (#2128): the hub's tree decoded, its rows in reading order, and the route asked.
 struct InboxLineTests {
     private func item(_ id: String, _ title: String) -> String {
         #"{"id":"\#(id)","source":"examplechat","kind":"group","account":"examplechat","account_name":"Example Chat","title":"\#(title)","preview":"","count":1}"#

@@ -53,6 +53,6 @@ nonisolated struct ExtensionAuth: Codable, Hashable, Sendable {
 
     /// Not signed in, or no longer: the list's row and the page ask the user to.
     var needsSignIn: Bool { state == .signedOut || state == .expired }
-    /// Signed in: 退出登录 shows, the button says 重新登录.
+    /// Signed in: Sign Out shows, the button says Sign In Again.
     var isSignedIn: Bool { state == .signedIn }
 }

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 这台电脑能做什么 (#3018): the node's report read as features, the same table as the web's `node-health.test.ts`.
+/// What This Computer Can Do (#3018): the node's report read as features, the same table as the web's `node-health.test.ts`.
 @MainActor struct NodeHealthTests {
     private static let names = ["node.sock", "runtime.sock", "claude-settings.json", "claude-hooks", "assistant-settings.json",
                                 "assistant-hooks", "mcp.json", "agent-plugin", "command-paths", "claude-version", "herdr",

@@ -160,10 +160,10 @@ struct TurnTests {
         var p = Pins()
         p.spaces = ["server/app"]
         #expect(p.mutes(session: "server/a", space: "server/app"))         // muted by its space
-        p = p.togglingMute(session: "server/a", space: "server/app")       // 开启通知
+        p = p.togglingMute(session: "server/a", space: "server/app")       // Unmute
         #expect(!p.mutes(session: "server/a", space: "server/app") && p.allowed == ["server/a"])
         #expect(p.mutes(session: "server/b", space: "server/app"))         // the others stay muted
-        p = p.togglingMute(session: "server/a", space: "server/app")       // 屏蔽通知 again
+        p = p.togglingMute(session: "server/a", space: "server/app")       // Mute again
         #expect(p.mutes(session: "server/a", space: "server/app") && p.sessions == ["server/a"] && p.allowed.isEmpty)
         p.spaces = []                                                       // space unmuted: own mute still holds
         #expect(p.mutes(session: "server/a", space: "server/app"))

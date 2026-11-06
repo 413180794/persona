@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import Observation
 
-/// Which of the hub's Feishu accounts the 消息 page shows (docs/feishu.md「多账号」). The hub's own account
+/// Which of the hub's Feishu accounts the Messages page shows (docs/feishu.md「多账号」). The hub's own account
 /// (lark.account) is what requests without `ol_account` are about; another one is named on each request.
 /// The last list and choice are kept per hub, so the chips are there at once on the next launch.
 @MainActor @Observable
@@ -49,7 +49,7 @@ final class LarkAccountChoice {
         return defaultID
     }
 
-    /// What the 消息 page names as `ol_account`: nil for the hub's own account.
+    /// What the Messages page names as `ol_account`: nil for the hub's own account.
     var requestAccount: Int? {
         guard let id = selectedID, id != defaultID else { return nil }
         return id

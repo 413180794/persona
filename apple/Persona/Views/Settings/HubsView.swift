@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 设置 › hub (docs/multi-hub.md「设置」): every hub this device paired with, by group. Hubs that know each other (their
+/// Settings › hub (docs/multi-hub.md「设置」): every hub this device paired with, by group. Hubs that know each other (their
 /// hellos list each other) are one group, reached over one connection; separate groups are shown side by side
-/// everywhere. Here: add a hub, rename a group, pick the group Persona / 收件箱 / the hub's settings show, disconnect a
+/// everywhere. Here: add a hub, rename a group, pick the group Persona / Inbox / the hub's settings show, disconnect a
 /// hub or a whole group.
 struct HubsView: View {
     @Environment(AppModel.self) private var model
@@ -140,7 +140,7 @@ struct HubsView: View {
         .accessibilityIdentifier("hubs.group.\(g)")
     }
 
-    /// What the SSH 隧道 row says: not set, used now, or there as the fallback / for every connection.
+    /// What the SSH Tunnel row says: not set, used now, or there as the fallback / for every connection.
     private func sshValue(_ h: PairedHub) -> String {
         guard let route = h.ssh, route.isUsable else { return String(localized: "未设置") }
         if SSHTunnels.shared.routed.contains(h.id) { return String(localized: "使用中") }

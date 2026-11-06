@@ -2,9 +2,9 @@ import XCTest
 
 /// A Feishu topic group lists its topics as cards, as the Lark gateway does (#1087): three topics in a row from one bot each
 /// keep their own card with the name and time (a chat runs them together under one name), a long topic folds behind
-/// 展开 (what it hides takes no taps), a tap on a topic opens its thread as 话题详情 from the group, and a tap on a link
-/// in a topic opens the link only. Under a topic are its newest two replies (查看更早 N 条回复 above them), then 表情回复
-/// and 回复. A recalled or edited topic, and a recalled reply, follow 风灵月影 (防撤回, 编辑历史) as a chat's row does.
+/// Expand (what it hides takes no taps), a tap on a topic opens its thread as Topic Details from the group, and a tap on a link
+/// in a topic opens the link only. Under a topic are its newest two replies (View N earlier replies above them), then Add Reaction
+/// and Reply. A recalled or edited topic, and a recalled reply, follow Message Tweaks (Keep Recalled Messages, Edit History) as a chat's row does.
 /// Against scripts/mock/mock_hub.py with MOCK_LARK_TOPIC=1 (JARVIS_MOCK_HUB); TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a
 /// screenshot of each step, light and dark.
 final class LarkTopicGroupTests: XCTestCase {
@@ -35,9 +35,9 @@ final class LarkTopicGroupTests: XCTestCase {
         }
     }
 
-    /// 风灵月影 on a topic card as on a chat's row (LarkMessageDisplayTests): a recalled topic says so, keeps what it
-    /// said to itself and has no menu to copy it, until 防撤回 is on and the Lark gateway kept it; 已编辑 opens the old versions
-    /// once 编辑历史 is on.
+    /// Message Tweaks on a topic card as on a chat's row (LarkMessageDisplayTests): a recalled topic says so, keeps what it
+    /// said to itself and has no menu to copy it, until Keep Recalled Messages is on and the Lark gateway kept it; Edited opens the old versions
+    /// once Edit History is on.
     @MainActor func testRecalledAndEditedTopicsFollowTheDisplaySettings() async throws {
         try await display("anti_recall", false)
         try await display("show_edit_history", false)
@@ -88,13 +88,13 @@ final class LarkTopicGroupTests: XCTestCase {
         XCTAssertEqual(fold.label, "展开")
         let folded = card.frame.height
         shot("topic-folded")
-        // What the fold hides takes no taps: in the middle of the card's 表情回复 / 回复 row, clear of the fold's edge and
+        // What the fold hides takes no taps: in the middle of the card's Add Reaction / Reply row, clear of the fold's edge and
         // of the card's own buttons (a tap a little off one still counts for it), a tap opens nothing.
         center(fold)
         point(x: card.frame.midX, y: card.buttons["lark.topic.reply"].frame.midY).tap()
         sleep(1)
         XCTAssertFalse(app.navigationBars["话题详情"].exists, "a tap under the fold opened the topic: what the fold hides took it")
-        // 展开 takes a whole tap target, not just its pill: a tap near its top edge opens the fold, not the topic.
+        // Expand takes a whole tap target, not just its pill: a tap near its top edge opens the fold, not the topic.
         fold.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
         let open = card.buttons["lark.topic.fold"]
         XCTAssertTrue(open.waitForExistence(timeout: 3) && open.label == "收起", "展开 did not turn into 收起")
@@ -108,7 +108,7 @@ final class LarkTopicGroupTests: XCTestCase {
     }
 
     /// Opened before (its topics cached, all on screen from the start), the group still opens a long topic: in a lazy
-    /// stack the app was never idle again after 展开 (`LarkChatStack`).
+    /// stack the app was never idle again after Expand (`LarkChatStack`).
     @MainActor func testALongTopicOpensInAGroupOpenedBefore() {
         open(scheme: "light")
         sleep(4) // the topics cached
@@ -156,7 +156,7 @@ final class LarkTopicGroupTests: XCTestCase {
         XCTAssertTrue(six.label.contains("Mia：收到"), six.label)
         XCTAssertFalse(six.label.contains("小周"), "more than the newest two: \(six.label)")
         shot("topic-replies")
-        // One reply: no 查看更早; none: no replies at all.
+        // One reply: no 「查看更早」; none: no replies at all.
         let one = topic("灰度 10% 已开始").buttons["lark.topic.replies"]
         let oneRead = NSPredicate { _, _ in one.label.contains("Tom：我盯着崩溃率") }
         XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: oneRead, evaluatedWith: nil)], timeout: 10), .completed, one.label)
@@ -223,7 +223,7 @@ final class LarkTopicGroupTests: XCTestCase {
 
     // MARK: -
 
-    /// A recalled topic shows neither its reactions nor its replies, whatever 风灵月影 says (a chat's row neither).
+    /// A recalled topic shows neither its reactions nor its replies, whatever Message Tweaks says (a chat's row neither).
     @MainActor private func noReactionsOrReplies(_ card: XCUIElement) {
         XCTAssertFalse(card.staticTexts["Tom、Mia"].exists, "a recalled topic shows its reactions:\n\(card.debugDescription)")
         XCTAssertFalse(card.buttons["1 条回复"].exists, "a recalled topic shows its replies:\n\(card.debugDescription)")
@@ -232,7 +232,7 @@ final class LarkTopicGroupTests: XCTestCase {
         }
     }
 
-    /// Sets one of 风灵月影 on the mock hub, as the settings page does; the hub tells the app, which reads them again.
+    /// Sets one of Message Tweaks on the mock hub, as the settings page does; the hub tells the app, which reads them again.
     private func display(_ key: String, _ on: Bool) async throws {
         let url = URL(string: hub + "/api/v1/lark/message-display")!
         let (data, _) = try await URLSession.shared.data(from: url)

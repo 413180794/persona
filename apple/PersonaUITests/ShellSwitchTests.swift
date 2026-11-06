@@ -1,8 +1,8 @@
 import XCTest
 
-/// The shell's 助手 | Agents switch after a page from the drawer (docs/ios.md「新外壳」): open 知识库 (or 收件箱, 定时任务,
-/// 机器), go back, switch to Agents: the Agents list must be what is drawn, not just the switch saying so (TestFlight 70:
-/// the switch said Agents over the empty chat); switch back: 助手 again. Swiped back from 知识库 with its search open, the
+/// The shell's Assistant | Agents switch after a page from the drawer (docs/ios.md「新外壳」): open Knowledge (or Inbox, Scheduled Tasks,
+/// Machines), go back, switch to Agents: the Agents list must be what is drawn, not just the switch saying so (TestFlight 70:
+/// the switch said Agents over the empty chat); switch back: Assistant again. Swiped back from Knowledge with its search open, the
 /// root kept a system navigation bar that pushed the top bar ~106 pt down: a tap on the switch where it belongs hit
 /// the empty bar (`RootBarHidden`).
 final class ShellSwitchTests: XCTestCase {
@@ -27,8 +27,8 @@ final class ShellSwitchTests: XCTestCase {
         add(shot)
     }
 
-    /// The shell on 助手's empty chat: against scripts/mock/mock_hub.py when JARVIS_MOCK_HUB is set (connected, like a phone
-    /// with its hub), else in 体验模式.
+    /// The shell on Assistant's empty chat: against scripts/mock/mock_hub.py when JARVIS_MOCK_HUB is set (connected, like a phone
+    /// with its hub), else in Demo Mode.
     @MainActor private func launchShell() {
         app = XCUIApplication()
         if let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] {
@@ -62,7 +62,7 @@ final class ShellSwitchTests: XCTestCase {
         XCTAssertTrue(now, shown ? "Agents is not drawn: \(what)" : "Agents still drawn: \(what)")
     }
 
-    /// 助手's empty chat: its composer (新对话 is disabled there, and a disabled button is not hittable).
+    /// Assistant's empty chat: its composer (New Chat is disabled there, and a disabled button is not hittable).
     @MainActor private var chatComposer: XCUIElement { app.descendants(matching: .any)["shell-composer-field"].firstMatch }
 
     /// The top bar is at the top of the screen (a system navigation bar left over the root pushed it ~106 pt down).
@@ -80,7 +80,7 @@ final class ShellSwitchTests: XCTestCase {
         XCTAssertTrue(met, "助手's top bar is not at the top (\(menu.frame)) \(what)")
     }
 
-    /// Agents, then 助手 again, tapped where a finger taps the switch, each one really in front in time (the strip,
+    /// Agents, then Assistant again, tapped where a finger taps the switch, each one really in front in time (the strip,
     /// the switch and the tab agree).
     @MainActor private func switchBothWays(_ how: String) {
         finger.switchTo(agents: true, "switched to Agents after \(how)")
@@ -106,8 +106,8 @@ final class ShellSwitchTests: XCTestCase {
         }
     }
 
-    /// From 助手, then from Agents: opens `entry` from the drawer, goes back (the button, then the swipe), switches to
-    /// Agents and back to 助手, checking each time that the page under the switch is the one it says.
+    /// From Assistant, then from Agents: opens `entry` from the drawer, goes back (the button, then the swipe), switches to
+    /// Agents and back to Assistant, checking each time that the page under the switch is the one it says.
     @MainActor private func roundTrip(_ entry: String, title: String) {
         launchShell()
         see(button("assistant-sidebar-button"), "☰", timeout: 15)
@@ -136,7 +136,7 @@ final class ShellSwitchTests: XCTestCase {
     @MainActor func testSwitchAfterRoutines() { roundTrip("sidebar-定时任务", title: "定时任务") }
     @MainActor func testSwitchAfterMachines() { roundTrip("sidebar-machines", title: "机器") }
 
-    /// 知识库 searched, and swiped back with the search still open: UIKit left the system navigation bar over 助手's root
+    /// Knowledge searched, and swiped back with the search still open: UIKit left the system navigation bar over Assistant's root
     /// (the top bar ~106 pt down, a tap on the switch where it belongs hitting the empty bar).
     @MainActor func testSwitchAfterSwipingBackFromASearch() {
         launchShell()
@@ -149,7 +149,7 @@ final class ShellSwitchTests: XCTestCase {
         field.tapCenter()
         field.typeText("a")
         sleep(1)
-        back(from: page, swipe: true) // with the search open there is no back button (取消 is in its place)
+        back(from: page, swipe: true) // with the search open there is no back button (Cancel is in its place)
         let how = "swiping back from 知识库's search"
         reachable(chatComposer, "助手's composer after \(how)")
         barAtTop("after \(how)")

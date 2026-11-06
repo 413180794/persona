@@ -187,7 +187,7 @@ nonisolated enum MetricFormat {
 
     static func load(_ v: Double?) -> String { v.map { String(format: $0 >= 10 ? "%.1f" : "%.2f", $0) } ?? "—" }
 
-    /// "3 天 4 小时", "5 小时 12 分钟", "8 分钟".
+    /// "3 d 4 hr", "5 hr 12 min", "8 min".
     static func uptime(since boot: Date, now: Date = .now) -> String {
         let s = max(0, Int(now.timeIntervalSince(boot)))
         let d = s / 86400, h = s % 86400 / 3600, m = s % 3600 / 60

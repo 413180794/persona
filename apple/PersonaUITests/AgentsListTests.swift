@@ -26,7 +26,7 @@ final class AgentsListTests: XCTestCase {
     }
 
     /// `fresh`: forget the list's saved look (cards, nothing folded, all machines) first. By space: these are about
-    /// spaces, and the default grouping is 按仓库 (#2108, `AgentsByMachineTests`).
+    /// spaces, and the default grouping is By Repository (#2108, `AgentsByMachineTests`).
     /// `chat`: the chat left open last time ("<machine>/<session>"), which the app opens again over the list.
     /// It is restored only when the tab saved with it is Agents (`app.tab`): given too, or the tab the last run ended on
     /// (another test's) decides whether the chat opens.
@@ -66,9 +66,9 @@ final class AgentsListTests: XCTestCase {
         XCTAssertFalse(e.exists, what)
     }
 
-    /// A row or header that can be below the fold (under the 需要你处理 cards and weather on a 6.3" phone; the list
+    /// A row or header that can be below the fold (under the Needs You cards and weather on a 6.3" phone; the list
     /// builds rows lazily, so it is not there to find until scrolled to). Split by machine (#2108), platform is on Mac
-    /// Studio, the hub's last machine: under 服务器's and MacBook's spaces, several screens down.
+    /// Studio, the hub's last machine: under 「服务器」's and MacBook's spaces, several screens down.
     @discardableResult private func reach(_ e: XCUIElement, _ what: String) -> XCUIElement {
         for _ in 0..<10 where !e.waitForExistence(timeout: 2) { app.swipeUp(velocity: .slow) }
         return see(e, what)
@@ -84,7 +84,7 @@ final class AgentsListTests: XCTestCase {
 
     private func filter(_ id: String) -> XCUIElement { app.buttons["agents.filter." + id] }
 
-    /// A space's header (the button that folds it): "platform，已展开，…".
+    /// A space's header (the button that folds it): 「platform，已展开，…」.
     private func header(_ space: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", space + "，")).firstMatch
     }
@@ -131,7 +131,7 @@ final class AgentsListTests: XCTestCase {
 
     // MARK: Quick filters
 
-    /// 全部 / 需要你 / 未读 / 工作中 with their counts, one tap each; they add up with the machine menu.
+    /// All / Needs You / Unread / Working with their counts, one tap each; they add up with the machine menu.
     @MainActor func testQuickFilters() throws {
         launch()
         XCTAssertEqual(filter("needsYou").label, "需要你 6")
@@ -149,7 +149,7 @@ final class AgentsListTests: XCTestCase {
         XCTAssertFalse(text("需要你处理").exists, "no cards that need you under 未读")
         see(button("全部标为已读"), "mark every one read, under 未读")
         shot("agents-unread")
-        // platform is on Mac Studio, the hub's last machine: under 服务器's and MacBook's unread (#2108).
+        // platform is on Mac Studio, the hub's last machine: under 「服务器」's and MacBook's unread (#2108).
         reach(text("platform 任务 4"), "a finished-unread agent")
         toTop()
 
@@ -214,7 +214,7 @@ final class AgentsListTests: XCTestCase {
 
     // MARK: Compact rows
 
-    /// 细列表 in the menu: one line per agent, several times as many on screen; remembered across launches.
+    /// Compact List in the menu: one line per agent, several times as many on screen; remembered across launches.
     @MainActor func testCompactRows() throws {
         launch()
         filter("unread").tap()
@@ -247,7 +247,7 @@ final class AgentsListTests: XCTestCase {
 
     // MARK: Folding spaces
 
-    /// Tapping a space's header folds it (its counts stay on the header) and back; remembered; 全部折叠 / 全部展开.
+    /// Tapping a space's header folds it (its counts stay on the header) and back; remembered; Collapse All / Expand All.
     @MainActor func testFoldingSpaces() throws {
         launch()
         let platform = reach(header("platform"), "platform's header")
@@ -287,7 +287,7 @@ final class AgentsListTests: XCTestCase {
 
     // MARK: Many unread
 
-    /// A space's ⋯ › 全部标为已读 marks its finished-unread agents seen in one go.
+    /// A space's ⋯ › Mark All as Read marks its finished-unread agents seen in one go.
     @MainActor func testMarkSpaceRead() throws {
         launch()
         reach(header("platform"), "platform's header")
@@ -302,8 +302,8 @@ final class AgentsListTests: XCTestCase {
         shot("agents-space-read")
     }
 
-    /// Under 未读 an opened agent stays where it was (seen now), so going down the list one by one works; switching
-    /// filters drops it. 全部标为已读 empties the filter at once (no confirmation).
+    /// Under Unread an opened agent stays where it was (seen now), so going down the list one by one works; switching
+    /// filters drops it. Mark All as Read empties the filter at once (no confirmation).
     @MainActor func testWorkingThroughUnread() throws {
         launch()
         filter("unread").tap()
@@ -367,7 +367,7 @@ final class AgentsListTests: XCTestCase {
         app.revealAgentsSearch()
     }
 
-    /// Whether the selected chip (全部: an accent-tinted capsule; in the BeautifulUI style its raised capsule, the surface
+    /// Whether the selected chip (All: an accent-tinted capsule; in the BeautifulUI style its raised capsule, the surface
     /// with its word in ink) is on screen at `frame`. Element frames come from layout: behind a chat restored at launch
     /// the bar was laid out under the search field but drawn ~170 pt lower (the whole top inset again), the TestFlight
     /// 35 / 38 screenshots; only the pixels show it.
@@ -474,7 +474,7 @@ final class AgentsListTests: XCTestCase {
         sleep(1)
         XCTAssertLessThan(gapAboveFilters("refreshed", searchShown: true), limit)
         shot("filters-refreshed")
-        // 需要你处理's cards can fill the screen above the first row: scroll to it, and back to the top after the chat
+        // Needs You's cards can fill the screen above the first row: scroll to it, and back to the top after the chat
         // (the list keeps its place on the way back, #382).
         reach(row(0), "the first row").tap()
         backToList(atTop: false)
@@ -552,7 +552,7 @@ final class AgentsListTests: XCTestCase {
         }
     }
 
-    /// 按状态: 已看 starts folded and its header is its one fold — one tap shows its agents, with no 还有 N 个空闲 row to
+    /// By Status: Seen starts folded and its header is its one fold — one tap shows its agents, with no "N more idle" row to
     /// tap as well (2026-10-31: it took two taps where the other states take one); a second tap folds it again.
     @MainActor func testStateGroupingOpensSeenInOneTap() throws {
         app = XCUIApplication()
@@ -560,7 +560,7 @@ final class AgentsListTests: XCTestCase {
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-dev.grouping", "state"]
         app.launchPinned()
         see(filter("all"), "the quick filters", timeout: 15)
-        // 已看 is the last section, under every other agent (~120 in the mock).
+        // Seen is the last section, under every other agent (~120 in the mock).
         for _ in 0..<20 where !(header("已看").exists && header("已看").isHittable) { app.swipeUp(velocity: .fast) }
         let seen = see(header("已看"), "已看's header")
         XCTAssertTrue(seen.label.contains("已折叠"), "已看 starts folded: \(seen.label)")

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 设置 › 设备 › 连接新设备 (#3077, after the web's #2731): a one-time pairing code from the hub
+// Settings › Devices › Connect New Device (#3077, after the web's #2731): a one-time pairing code from the hub
 // (POST /api/v1/auth/pair-codes, docs/protocol.md「临时配对」) for another app (its QR code, the code itself and the
 // pairing link, which the Mac and Android paste) or for a browser (the sign-in link and its QR code, which a phone's
 // camera opens). The code lasts ten minutes and is traded once; the sheet says which device took it.
@@ -56,7 +56,7 @@ enum ConnectDeviceText {
     }
 }
 
-/// 设置 › 设备 › 连接新设备: makes the code, counts it down and watches the device list for the one that used it.
+/// Settings › Devices › Connect New Device: makes the code, counts it down and watches the device list for the one that used it.
 @Observable final class ConnectDeviceModel {
     struct Deps {
         var api: () -> APIClient?
@@ -135,7 +135,7 @@ enum ConnectDeviceText {
     }
 }
 
-/// The sheet 连接新设备 opens.
+/// The sheet Connect New Device opens.
 struct ConnectDeviceSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// A task card waiting for the user says what its agent asks, not only 有事等你回答 (#3998).
+/// A task card waiting for the user says what its agent asks, not only "Waiting for your answer" (#3998).
 struct TaskAskTests {
     private func interaction(
         _ id: String, kind: InteractionKind, toolName: String? = nil, summary: String? = nil, questions: [Question]? = nil

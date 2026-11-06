@@ -27,10 +27,10 @@ final class ComposerAccessibilityTests: XCTestCase {
         add(shot)
     }
 
-    /// The composer's controls are in the tree and the field takes typing: + (its menu offers 照片), the field, and
-    /// send (中断 in its place while the agent works and nothing is typed, 发送 once something is).
+    /// The composer's controls are in the tree and the field takes typing: + (its menu offers Photos), the field, and
+    /// send (Interrupt in its place while the agent works and nothing is typed, Send once something is).
     @MainActor private func expectComposer(_ what: String) {
-        // ComposerRow's + reads 添加 (its symbol's own label); the shell's composer, an agent's too since #1091, says what it adds.
+        // ComposerRow's + reads Add (its symbol's own label); the shell's composer, an agent's too since #1091, says what it adds.
         let plus = app.buttons.matching(NSPredicate(format: "label == '添加' OR label == '添加照片或文件'")).firstMatch
         let send = app.buttons["发送"].firstMatch, stop = app.buttons["中断"].firstMatch
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
@@ -90,7 +90,7 @@ final class ComposerAccessibilityTests: XCTestCase {
         }
     }
 
-    /// Jarvis's main conversation in the four tabs, where its composer is in an island too (#1006; in the shell 助手
+    /// Jarvis's main conversation in the four tabs, where its composer is in an island too (#1006; in the shell Assistant
     /// has a composer of its own).
     @MainActor func testTheAssistantsComposerIsInTheTreeInTheFourTabs() throws {
         let pair = try pairURL()

@@ -29,7 +29,7 @@ struct NewChatView: View {
     @State private var launcher = ""
     @State private var unifiedModels = false
     @State private var defaultLauncher = ""
-    /// 模型配置 › 新建 Agent's model: what runs with no pick when its launcher does.
+    /// Model Settings › New Agent's model: what runs with no pick when its launcher does.
     @State private var configuredModel = ""
     @State private var mode = ""   // "" = whatever the launcher uses
     @State private var effort = ""
@@ -55,9 +55,9 @@ struct NewChatView: View {
     private var ref: MachineRef { MachineRef(path: machineID) }
     private var machine: Machine? { model.machine(ref) }
 
-    /// The launcher that will run: the one picked, or 模型配置's.
+    /// The launcher that will run: the one picked, or Model Settings'.
     private var runLauncher: String { launcher.isEmpty && unifiedModels ? defaultLauncher : launcher }
-    /// 「默认：jv_strong · glm-5」: what runs with no pick, as the machine's launchers say (#2455), else 模型配置's.
+    /// 「默认：jv_strong · glm-5」: what runs with no pick, as the machine's launchers say (#2455), else Model Settings'.
     private var defaultLabel: String {
         model.launcherDefaults[ref]?.label
             ?? LauncherDefault(provider: defaultLauncher.isEmpty ? nil : "launcher." + defaultLauncher, model: configuredModel).label
@@ -80,7 +80,7 @@ struct NewChatView: View {
     private var promptHint: String { codex ? String(localized: "想让 Codex 做什么？（必填：Codex 收到第一条消息才建会话）")
                                        : String(localized: "想让 Claude 做什么？（可以留空）") }
 
-    /// Nothing missing for 开始对话.
+    /// Nothing missing for Start Chat.
     private var ready: Bool {
         machine?.online == true && !cwd.isEmpty && (!launcher.isEmpty || unifiedModels)
             && !(codex && contextBlock == nil && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -234,7 +234,7 @@ struct NewChatView: View {
             .pageToolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 #if os(macOS)
-                // A Mac sheet's primary button sits beside 取消 and answers ⏎ (docs/mac.md「和 iOS 的对应」).
+                // A Mac sheet's primary button sits beside Cancel and answers ⏎ (docs/mac.md「和 iOS 的对应」).
                 ToolbarItem(placement: .confirmationAction) {
                     Button(starting ? startingLabel : String(localized: "开始对话")) { Task { await start() } }
                         .lineLimit(1)
@@ -244,8 +244,8 @@ struct NewChatView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: Theme.Space.s) {
-                // Next to the button, not as the form's last section: below 第一条消息 and under this button it went
-                // unseen, the button just turned back to 开始对话 (and a retry started a second agent).
+                // Next to the button, not as the form's last section: below First Message and under this button it went
+                // unseen, the button just turned back to Start Chat (and a retry started a second agent).
                 if let error {
                     Label(error, systemImage: Theme.Icon.errorFilled)
                         .font(Theme.Font.caption).foregroundStyle(Theme.danger).lineLimit(4)
@@ -286,9 +286,9 @@ struct NewChatView: View {
             .interactiveDismissDisabled(starting)
         }
         #if os(macOS)
-        // On the stack, not its root: with the minimum size on the form, pushing 启动器 / 目录 shrank a sheet opened
-        // from Agents' 新建会话 to the pushed list's own height, zero (#303). Also gives the grouped form to sheets
-        // that miss macLook's (知识库 › 开 Agent).
+        // On the stack, not its root: with the minimum size on the form, pushing Launcher / Folder shrank a sheet opened
+        // from Agents' New Session to the pushed list's own height, zero (#303). Also gives the grouped form to sheets
+        // that miss macLook's (Knowledge › Start Agent).
         .macSheet()
         #endif
     }
@@ -394,7 +394,7 @@ struct NewChatView: View {
         }
     }
 
-    /// 新建 Agent's 模型 row: loading, the pick (into the list), why it cannot be picked, or what went wrong.
+    /// New Agent's Model row: loading, the pick (into the list), why it cannot be picked, or what went wrong.
     @ViewBuilder private var modelRow: some View {
         if let modelsError {
             HStack(spacing: Theme.Space.m) {

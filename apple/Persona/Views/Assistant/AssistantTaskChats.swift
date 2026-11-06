@@ -2,10 +2,10 @@ import Foundation
 import Observation
 
 /// Which of the assistant's conversations scheduled tasks and follow-ups started (#2838; the web does the same, #2824).
-/// They are kept on 定时任务, under each task, not in the sidebar's 最近. Known from the tasks (their own conversation,
-/// the last run's) and the runs (each run's), less the conversations tasks came from (接着原来的对话: the user's own).
+/// They are kept on Scheduled Tasks, under each task, not in the sidebar's Recent. Known from the tasks (their own conversation,
+/// the last run's) and the runs (each run's), less the conversations tasks came from (Continue in Original Chat: the user's own).
 /// The run history is capped (the hub keeps the last 200), so an older run's conversation is known by its title as
-/// well: 「MMDD | 定时 | <the task's title>」, the title the hub gives it (titles.go). The title alone is not enough: 定时 is
+/// well: 「MMDD | 定时 | <the task's title>」, the title the hub gives it (titles.go). The title alone is not enough: 「定时」 is
 /// one of the kinds the model may give the user's own conversations too.
 nonisolated struct AssistantTaskChats: Equatable, Sendable {
     var ids: Set<String> = []
@@ -41,7 +41,7 @@ nonisolated struct AssistantTaskChats: Equatable, Sendable {
 
     func contains(_ s: Session) -> Bool { contains(sessionID: s.sessionID, title: s.title) }
 
-    /// 最近: the conversations without the tasks', except the open one (`current`), which keeps its row.
+    /// Recent: the conversations without the tasks', except the open one (`current`), which keeps its row.
     func recent(_ sessions: [Session], current: SessionKey?) -> [Session] {
         sessions.filter { $0.key == current || !contains($0) }
     }
@@ -71,7 +71,7 @@ nonisolated struct AssistantTaskChats: Equatable, Sendable {
         return Array(out.prefix(limit))
     }
 
-    /// What a chat's link says: when a run last went into it (今天 09:05, 昨天 21:30, 11月1日 09:00), else its place.
+    /// What a chat's link says: when a run last went into it (Today 09:05, Yesterday 21:30, Nov 1 09:00), else its place.
     static func label(_ chat: Chat, index: Int, now: Date = .now) -> String {
         guard let at = chat.at else { return String(localized: "对话 \(index + 1)") }
         let cal = Calendar.current
@@ -86,7 +86,7 @@ nonisolated struct AssistantTaskChats: Equatable, Sendable {
 }
 
 /// The scheduled tasks' conversations the sidebar leaves out, read from the hub when the sidebar shows (and the list of
-/// conversations changed), and whenever 定时任务 has read the tasks and runs anyway.
+/// conversations changed), and whenever Scheduled Tasks has read the tasks and runs anyway.
 @Observable final class AssistantTaskChatsStore {
     static let shared = AssistantTaskChatsStore()
 

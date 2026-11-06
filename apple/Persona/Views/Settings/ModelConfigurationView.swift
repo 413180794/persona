@@ -5,8 +5,8 @@ struct ModelPurposeRoute: Hashable, Identifiable { var id: String }
 
 /// The hub supplies the catalog so newly added consumers appear without another client-side list.
 struct ModelConfigurationView: View {
-    /// In 模型配置's own sheet (`ModelConfigurationLink`). A Mac sheet does not push (it shrank and cut the form off,
-    /// #1170): there a category opens over it in a sheet of its own (#1248). In 设置 it pushes, as on iOS.
+    /// In Model Settings' own sheet (`ModelConfigurationLink`). A Mac sheet does not push (it shrank and cut the form off,
+    /// #1170): there a category opens over it in a sheet of its own (#1248). In Settings it pushes, as on iOS.
     var inSheet = false
     @State private var page = ModelConfigurationModel()
     @State private var scopeExpanded = false
@@ -123,8 +123,8 @@ private struct ModelLimitLine: View {
 
 struct ModelPurposeEditorView: View {
     var purposeID: String
-    /// In a sheet of its own. On a Mac that sheet's bottom row is the way out: 取消 (asking first when there are edits)
-    /// and 保存, which closes it once saved (#1248).
+    /// In a sheet of its own. On a Mac that sheet's bottom row is the way out: Cancel (asking first when there are edits)
+    /// and Save, which closes it once saved (#1248).
     var inSheet = false
     @Environment(\.dismiss) private var dismiss
     @State private var page = ModelConfigurationModel()
@@ -264,14 +264,14 @@ struct ModelPurposeEditorView: View {
         .accessibilityIdentifier("model-config-save")
     }
 
-    /// The launcher provider whose /model list 具体模型 picks from; "": a plugin's, an API's, none.
+    /// The launcher provider whose /model list Model picks from; "": a plugin's, an API's, none.
     private var listProvider: String {
         guard let purpose = page.purpose, purpose.kind != "plugin", purpose.supports("model") else { return "" }
         let id = page.draft.provider ?? purpose.effective.provider
         return page.providers.first(where: { $0.id == id && $0.kind == "launcher" })?.id ?? ""
     }
 
-    /// The list as a choice: 默认 is leaving it empty, which inherits while the provider does too.
+    /// The list as a choice: Default is leaving it empty, which inherits while the provider does too.
     private var launcherChoice: LauncherModelChoice? {
         guard let list = launcherList, listFor == listProvider, !list.models.isEmpty, let purpose = page.purpose else { return nil }
         let inherited = page.draft.provider == nil && (purpose.override.model ?? "").isEmpty ? purpose.effective.model ?? "" : ""
@@ -360,7 +360,7 @@ struct ModelPurposeEditorView: View {
         .accessibilityIdentifier("model-config-provider")
     }
 
-    /// 主对话's 运行方式 (#2455): the Claude Code CLI or the Agent SDK; "" follows the default (the CLI).
+    /// Main Chat's How It Runs (#2455): the Claude Code CLI or the Agent SDK; "" follows the default (the CLI).
     private var runtimePicker: some View {
         Picker("运行方式", selection: optional(\.runtime)) {
             Text("跟随默认").tag("")
@@ -393,7 +393,7 @@ struct ModelPurposeEditorView: View {
 }
 
 extension View {
-    /// 模型配置 over this page as a sheet: one purpose's editor (`purposeID`), or the categories (nil). A sheet avoids
+    /// Model Settings over this page as a sheet: one purpose's editor (`purposeID`), or the categories (nil). A sheet avoids
     /// mixing value and view navigation in the stack below (the assistant's and tasks' details, the inbox).
     func modelConfigurationSheet(isPresented: Binding<Bool>, purposeID: String?) -> some View {
         modifier(ModelConfigurationSheet(showing: isPresented, purposeID: purposeID))
@@ -407,7 +407,7 @@ private struct ModelConfigurationSheet: ViewModifier {
     func body(content: Content) -> some View {
         content.sheet(isPresented: $showing) {
             #if os(macOS)
-            // No leading 关闭 and no pushing in a Mac sheet (#1248): the editor brings its own 取消 and 保存 for the
+            // No leading Close and no pushing in a Mac sheet (#1248): the editor brings its own Cancel and Save for the
             // sheet's bottom row, and the categories open each one over this sheet.
             NavigationStack {
                 if let purposeID {
@@ -434,7 +434,7 @@ private struct ModelConfigurationSheet: ViewModifier {
     }
 }
 
-/// A row that opens 模型配置 (or one purpose's editor) as a sheet (`modelConfigurationSheet`).
+/// A row that opens Model Settings (or one purpose's editor) as a sheet (`modelConfigurationSheet`).
 struct ModelConfigurationLink: View {
     var title = String(localized: "模型配置")
     var purposeID: String?

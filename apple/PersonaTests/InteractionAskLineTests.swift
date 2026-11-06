@@ -3,7 +3,7 @@ import Testing
 @testable import Jarvis
 
 /// The needs-you row's one-liner (#4393): a plan shows its first heading, a terminal dialog its question, so the
-/// inbox row says what each card asks instead of only 计划等你审批 / 终端等你处理.
+/// inbox row says what each card asks instead of only Plan Awaiting Approval / Terminal Needs You.
 struct InteractionAskLineTests {
     private func interaction(
         kind: InteractionKind,
@@ -40,7 +40,7 @@ struct InteractionAskLineTests {
     @Test func screenShowsTheDialogQuestion() {
         let dialog = ScreenDialog(question: "Do you want to proceed?", options: [], rev: "r1")
         #expect(interaction(kind: .screen, dialog: dialog).askLine(includeToolName: false) == "Do you want to proceed?")
-        // No dialog the hub or the app could read: the row keeps its generic 终端等你处理 title.
+        // No dialog the hub or the app could read: the row keeps its generic Terminal Needs You title.
         #expect(interaction(kind: .screen).askLine(includeToolName: false) == nil)
     }
 

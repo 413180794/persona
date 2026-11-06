@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 设备 › 连接新设备 (#3077): the code the hub makes decodes, the browser link asks for the hub's own page,
+/// Settings › Devices › Connect New Device (#3077): the code the hub makes decodes, the browser link asks for the hub's own page,
 /// the countdown, expiry and a new code, and the device that took the code is the credential that was not there
 /// before. Made-up values.
 @MainActor

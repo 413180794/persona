@@ -103,7 +103,7 @@ final class RenderBudgetTests: XCTestCase {
     func testAgentsList() {
         launch(["-app.tab", "chats", "-tab", "dev", "-dev.openChat", ""])
         // The bumped agent is a working one, and its row has to be on screen: below the asks (five of them since the
-        // mock's inbox grew, #622) it was not built, nothing was drawn and the push cost 0 (#633). Only 工作中.
+        // mock's inbox grew, #622) it was not built, nothing was drawn and the push cost 0 (#633). Only Working.
         let working = app.buttons["agents.filter.working"].firstMatch
         XCTAssertTrue(working.waitForExistence(timeout: 10), "the 工作中 filter")
         working.tap()

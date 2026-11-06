@@ -1,14 +1,14 @@
 import SwiftUI
 
 nonisolated extension ComponentSpec {
-    /// The picker's line under 液态玻璃: the system's own look on either platform.
+    /// The picker's line under Liquid Glass: the system's own look on either platform.
     #if os(macOS)
     private static var glassSubtitle: String { String(localized: "系统原生，简洁") }
     #else
     private static var glassSubtitle: String { String(localized: "iOS 原生，简洁") }
     #endif
 
-    /// 液态玻璃: iOS 26's own look, Liquid Glass on the system's pages.
+    /// Liquid Glass: iOS 26's own look, Liquid Glass on the system's pages.
     static let glass = ComponentSpec(
         title: String(localized: "液态玻璃"), subtitle: Self.glassSubtitle,
         surface: .glass, buttons: .glass, fontDesign: .default, previewCorner: 20, components: .jarvis, workList: .timeline,
@@ -17,7 +17,7 @@ nonisolated extension ComponentSpec {
 }
 
 nonisolated extension ColorSpec {
-    /// System blue (液态玻璃's own).
+    /// System blue (Liquid Glass's own).
     static let blue = ColorSpec(
         title: String(localized: "系统蓝"), subtitle: String(localized: "液态玻璃"),
         accent: Pair(light: 0x007AFF, dark: 0x0A84FF),

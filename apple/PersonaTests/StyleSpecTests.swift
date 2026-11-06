@@ -3,8 +3,8 @@ import Testing
 import UIKit
 @testable import Jarvis
 
-/// Every style in every color (界面风格 × 主题色, a persona's included) against the readability floors in docs/ios.md
-/// (设计语言): white words on the accent (solid buttons, selected chips) ≥ 3.5:1, the words on the user's own bubble
+/// Every style in every color (Interface Style × Theme Color, a persona's included) against the readability floors in docs/ios.md
+/// (「设计语言」): white words on the accent (solid buttons, selected chips) ≥ 3.5:1, the words on the user's own bubble
 /// ≥ 4.5:1, the accent as a link on the page ≥ 3:1. In light and in dark.
 struct StyleSpecTests {
     private static func rgb(_ c: Color, _ style: UIUserInterfaceStyle) -> (Double, Double, Double) {
@@ -53,7 +53,7 @@ struct StyleSpecTests {
         }
     }
 
-    /// Below a floor on purpose: 飞书's dark blue is 飞书's own (#4C88FF), 3.35:1 under white.
+    /// Below a floor on purpose: Lark's dark blue is Lark's own (#4C88FF), 3.35:1 under white.
     private static let known = "+lark dark"
 
     @Test func whiteOnTheAccent() {
@@ -71,7 +71,7 @@ struct StyleSpecTests {
         #expect(found.isEmpty, "the accent on the page under 3:1: \(found)")
     }
 
-    /// The colored canvases stay darker than the system's grouped cells in dark (#1C1C1E): 黏土's at #1D1A23 was one
+    /// The colored canvases stay darker than the system's grouped cells in dark (#1C1C1E): Clay's at #1D1A23 was one
     /// color with them (1.01:1); Island's own #0A1110 is 1.13:1.
     @Test func darkWashesSitUnderTheCells() {
         let cells = Color(light: 0xF2F2F7, dark: 0x1C1C1E)
@@ -87,7 +87,7 @@ struct StyleSpecTests {
         #expect(Set(ThemeColor.allCases.map(\.title)).count == ThemeColor.allCases.count)
     }
 
-    /// 跟随界面风格 draws each style exactly as it was when a style carried its colors, and 液态玻璃 + 珊瑚橙 is the old Claude.
+    /// Match Interface Style draws each style exactly as it was when a style carried its colors, and Liquid Glass + Coral is the old Claude.
     @Test func eachStyleInItsOwnColorsIsAsBefore() {
         func spec(_ s: AppStyle, _ c: ThemeColor = .style) -> StyleSpec { .compose(style: s, color: c, persona: nil) }
         func pair(_ c: Color) -> [UInt32] { [Self.hex(c), Self.hex(c, .dark)] }
@@ -134,8 +134,8 @@ struct StyleSpecTests {
         #expect(pair(beautiful.accent) == pair(glass.accent) && beautiful.components == .beautiful)
     }
 
-    /// A color goes with any style: its accent, bubble and 飞书's links on 黏土, its wash under 黏土 and Island, while
-    /// 液态玻璃 and 飞书 keep their neutral pages.
+    /// A color goes with any style: its accent, bubble and Lark's links on Clay, its wash under Clay and Island, while
+    /// Liquid Glass and Lark keep their neutral pages.
     @Test func colorsAndStylesCombine() {
         let clayCoral = StyleSpec.compose(style: .clay, color: .coral, persona: nil)
         #expect(Self.hex(clayCoral.accent) == 0xD4683F)
@@ -150,7 +150,7 @@ struct StyleSpecTests {
         #expect(larkLavender.surface == .hairline)
     }
 
-    /// A persona colors the app only under 跟随形象; its own primary (the face's glow) is there whatever the colors.
+    /// A persona colors the app only under Match Avatar; its own primary (the face's glow) is there whatever the colors.
     @Test func aPersonaColorsOnlyWhenFollowed() {
         let p = Self.yellow
         let followed = StyleSpec.compose(style: .clay, color: .persona, persona: p)
@@ -160,11 +160,11 @@ struct StyleSpecTests {
         let ownColors = StyleSpec.compose(style: .clay, color: .style, persona: p)
         #expect(Self.hex(ownColors.accent) == 0x7A5AF8)
         #expect(ownColors.personaPrimary != nil && followed.personaPrimary != nil)
-        // The built-in brings no colors: 跟随形象 is the style's own.
+        // The built-in brings no colors: Match Avatar is the style's own.
         #expect(Self.hex(StyleSpec.compose(style: .island, color: .persona, persona: nil).accent) == 0x27747F)
     }
 
-    /// Settings from before 主题色 was a choice become the choices that look the same.
+    /// Settings from before Theme Color was a choice become the choices that look the same.
     @Test func oldSettingsBecomeTheSameLook() {
         typealias C = AppearanceChoice
         #expect(C.resolve(style: nil, color: nil, persona: nil) == C(style: .glass, color: .style))

@@ -407,7 +407,7 @@ extension View {
     }
 }
 
-/// 设置 › 扩展 › an extension › one of its pages (placement extension_page / plugin_page), and the pages it pushes: its
+/// Settings › Extensions › an extension › one of its pages (placement extension_page / plugin_page), and the pages it pushes: its
 /// View as a page of its own, with its search field when it has one.
 struct ExtensionPageView: View {
     @State private var page: ExtensionViewModel

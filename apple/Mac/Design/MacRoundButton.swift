@@ -1,12 +1,12 @@
 import SwiftUI
 
 extension View {
-    /// A round button as tall as a text field (the composer's +, send and 中断). `prominent` fills it with the tint.
+    /// A round button as tall as a text field (the composer's +, send and Interrupt). `prominent` fills it with the tint.
     func macRoundButton(prominent: Bool = false) -> some View { buttonStyle(MacRoundButton(prominent: prominent)) }
 }
 
 /// The system's glass button styles drew no circle around the composer's + menu and lost the send arrow's fill once
-/// clipped (2026-11-02): the circle is drawn here. Prominent ones are filled with the tint (the accent; 中断 sets red).
+/// clipped (2026-11-02): the circle is drawn here. Prominent ones are filled with the tint (the accent; Interrupt sets red).
 struct MacRoundButton: ButtonStyle {
     var prominent: Bool
     @Environment(\.isEnabled) private var enabled

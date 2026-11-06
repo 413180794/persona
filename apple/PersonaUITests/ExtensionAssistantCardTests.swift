@@ -1,7 +1,7 @@
 import XCTest
 
-/// 在真实对话中验证统一渲染器：persona-view 与旧 persona-card 都只读，链接仍然可用。
-/// 配合 MOCK_EXTENSION_CARDS=1，截图包含两种卡片，不引入新的 DEBUG 启动开关。
+/// Checks the unified renderer in a real conversation: persona-view and the old persona-card are both read-only, links still work.
+/// With MOCK_EXTENSION_CARDS=1 the screenshot has both kinds of card; no new DEBUG launch switch.
 final class ExtensionAssistantCardTests: XCTestCase {
     @MainActor func testCardsShareTheRendererAndStayReadOnly() throws {
         let env = ProcessInfo.processInfo.environment

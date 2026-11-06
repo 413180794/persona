@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › hub and the line over the Agents list (docs/hub-update.md「App 里」), against a FakeHub.
+/// Settings › hub and the line over the Agents list (docs/hub-update.md「App 里」), against a FakeHub.
 @MainActor
 struct HubUpdateTests {
     static let available = #"{"version":"v1-202611021500","build":202611021500,"channel":"release","can_update":true,"#
@@ -37,7 +37,7 @@ struct HubUpdateTests {
         #expect(hub.sent("POST", "/api/v1/hub/update/check").count == 1)
         await m.update(now: false)
         #expect(m.status?.state == "waiting_idle")
-        await m.update(now: true) // the second confirmation's 现在就更新
+        await m.update(now: true) // the second confirmation's Update Now
         let bodies = hub.sent("POST", "/api/v1/hub/update").compactMap { $0.body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Bool] } }
         #expect(bodies.map { $0["now"] } == [false, true])
     }
@@ -104,7 +104,7 @@ struct HubUpdateTests {
         #expect(HubNotice.of(bad, compat: .ok, dismissed: []) == nil) // went back before: not offered again
     }
 
-    /// A release 自动更新 holds back says why (its code may not contain the hub's commit), and so does the history.
+    /// A release auto-update holds back says why (its code may not contain the hub's commit), and so does the history.
     @Test func aHeldRelease() throws {
         let json = Self.available.replacingOccurrences(of: #""bad":false}"#, with: #""bad":false,"held":"新版本不包含它"}"#)
         let s = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(json.utf8))
@@ -114,7 +114,7 @@ struct HubUpdateTests {
         #expect(r.resultTitle == "没有自动装")
     }
 
-    /// A Docker hub: a newer image gets a line (no 更新, the page says what to run), closed per version.
+    /// A Docker hub: a newer image gets a line (no Update, the page says what to run), closed per version.
     @Test func aDockerHub() throws {
         let docker = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(Self.docker.utf8))
         #expect(docker.image == .init(name: "ghcr.io/owner/jarvis", tag: "0.3.0", pinned: true))

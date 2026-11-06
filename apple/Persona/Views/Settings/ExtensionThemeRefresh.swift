@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 主题贡献只在前台刷新；远程停用贡献后，已选主题退回默认，网络失败则保留离线配色。
+/// Theme contributions refresh only in the foreground; once a contribution is disabled remotely the chosen theme goes back to the default, and a network failure keeps the offline colors.
 private struct ExtensionThemeRefresh: ViewModifier {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var phase

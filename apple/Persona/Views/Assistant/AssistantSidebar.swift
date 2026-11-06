@@ -21,7 +21,7 @@ import UIKit
     /// The sidebar's width, measured by `AssistantDrawerLayout`.
     @ObservationIgnored var width: CGFloat = 300
     @ObservationIgnored var dragStart: CGFloat = 0
-    /// The tab bar fades out as the sidebar comes out (it would sit over the sidebar's bottom row and repeat its 设置).
+    /// The tab bar fades out as the sidebar comes out (it would sit over the sidebar's bottom row and repeat its Settings).
     /// Faded, not hidden: hiding it changes the page's safe area, and the whole conversation was laid out again on the
     /// first frame of every drag and the last of every close (20–40 ms each, sampled). Set by `DrawerTabBarProbe`.
     @ObservationIgnored weak var tabBar: UITabBar? {
@@ -141,7 +141,7 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
     var enabled: Bool
     /// Behind the sidebar: the system's grouped gray, or the shell's near-white (docs/ios.md「新外壳」).
     var backdrop: Color = Color(.secondarySystemBackground)
-    /// The shell's 助手 | Agents strip: a drag sideways may page between them instead (`DrawerPan`).
+    /// The shell's Assistant | Agents strip: a drag sideways may page between them instead (`DrawerPan`).
     var pager: ShellPager? = nil
     @ViewBuilder var sidebar: Sidebar
     var page: Page
@@ -217,7 +217,7 @@ private struct DrawerTabBarProbe: UIViewRepresentable {
 /// as new as the last update SwiftUI sent here (and SwiftUI hands the same value down as the hosted controllers' traits),
 /// while iOS draws the app-switcher snapshots in the other look as the app goes to the background: the sidebar was then
 /// left with the other look's `Color.primary`, white text on the light backdrop, until the next update that did not
-/// always come (#4496). The window is where 设置 › 外观 › 深浅色 and the system set the look (`ColorSchemeChoice`).
+/// always come (#4496). The window is where Settings › Appearance › Light & Dark and the system set the look (`ColorSchemeChoice`).
 private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
     let drawer: AssistantDrawer
     let content: Content
@@ -240,7 +240,7 @@ private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
         /// Touches only for the sidebar itself: closed (hidden), the container is clear room over the page's top bar and
-        /// conversation, and took the 历史对话 button's tap on a 6.3" phone.
+        /// conversation, and took the Chat History button's tap on a 6.3" phone.
         final class PassThrough: UIView {
             var movedToWindow: () -> Void = {}
 
@@ -390,13 +390,13 @@ private struct DrawerPageMotion: ViewModifier {
 struct DrawerPan: UIGestureRecognizerRepresentable {
     let drawer: AssistantDrawer
     var enabled: Bool
-    /// In the shell: the 助手 | Agents strip. On 助手 a drag to the left pages to Agents (to the right is still the
-    /// drawer); on Agents a drag to the right pages back to 助手 (the drawer opens from ☰ there).
+    /// In the shell: the Assistant | Agents strip. On Assistant a drag to the left pages to Agents (to the right is still the
+    /// drawer); on Agents a drag to the right pages back to Assistant (the drawer opens from ☰ there).
     var pager: ShellPager? = nil
 
-    /// On Agents a drag to the right that starts on a row is the row's (置顶, 中断, 标为已看 under it), unless it starts
+    /// On Agents a drag to the right that starts on a row is the row's (Pin, Interrupt, Mark as Seen under it), unless it starts
     /// this close to the screen's left edge, where the system's back swipe would start. To the left, from a row that
-    /// swipes left (关闭), likewise unless it starts this close to the right edge.
+    /// swipes left (Close), likewise unless it starts this close to the right edge.
     static let edge: CGFloat = Theme.Space.xxl
 
     /// What a drag moves, decided when it starts.
@@ -424,7 +424,7 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             #endif
             if drawer.isOpen {
                 mode = .drawer
-                // A conversation in the sidebar swipes left to 归档: from its row the drag is the row's.
+                // A conversation in the sidebar swipes left to Archive: from its row the drag is the row's.
                 if dx < 0, abs(dx) > abs(dy), Self.onSwipeRow(at: start, in: view) { return refused("a row's swipe") }
                 return AssistantDrawer.takes(dx: dx, dy: dy, isOpen: true) ? true : refused("direction")
             }
@@ -440,8 +440,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
                 if Self.sidewaysScroller(at: start, in: view, towardsRight: dx < 0) { return refused("sideways scroller") }
                 if Self.typing(at: start, in: view) { return refused("typing") }
                 if pager.page == 1, dx > 0, start.x > DrawerPan.edge, Self.onRow(at: start, in: view) { return refused("a row's swipe") }
-                // To the left the strip has a page on Agents too once 消息 is on (#392): from a row that swipes left
-                // itself (an Agents row's 关闭, `SwipeRowMark`) the drag is the row's, except from the band at the
+                // To the left the strip has a page on Agents too once Messages is on (#392): from a row that swipes left
+                // itself (an Agents row's Close, `SwipeRowMark`) the drag is the row's, except from the band at the
                 // right edge, which still pages (#2822). Rows without the mark have nothing to the left: they page.
                 if dx < 0, start.x < view.bounds.width - DrawerPan.edge, Self.onSwipeRow(at: start, in: view) {
                     return refused("a row's swipe")
@@ -464,12 +464,12 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
         /// would start in (so scrolling starts no later). Without this the conversation's pan won the race on a
         /// thumb's 40° swipe (its vertical part passed the list's threshold first) and the drawer was never asked:
         /// the swipe did nothing. A code block at its left edge likewise took a drag to the right to bounce.
-        /// In the shell the list's own swipe (a row's 置顶 / 关闭) waits too: from the edge band a drag to the right is
+        /// In the shell the list's own swipe (a row's Pin / Close) waits too: from the edge band a drag to the right is
         /// the strip's, elsewhere on a row it is refused at once and the row's swipe goes ahead.
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             guard let s = other.view as? UIScrollView else { return false }
             if other === s.panGestureRecognizer { return true }
-            // The open drawer's own list (a conversation's 归档) waits too.
+            // The open drawer's own list (a conversation's Archive) waits too.
             return (pager != nil || drawer.isOpen) && other is UIPanGestureRecognizer && (s is UICollectionView || s is UITableView)
         }
 
@@ -491,7 +491,7 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
 
         /// A navigation stack under the finger has a page pushed: a drag from there is that stack's back swipe, whatever
         /// the page last said about being at its root (`enabled`). That word comes through SwiftUI state and was stale
-        /// now and then: on a chat opened on Agents the strip took the edge swipe and slid to 助手, the chat still pushed
+        /// now and then: on a chat opened on Agents the strip took the edge swipe and slid to Assistant, the chat still pushed
         /// (`ShellPagerTests.testPushedPagesSwipeBack`, 3 in 24 runs). UIKit's stack is what the swipe acts on.
         static func pushed(at point: CGPoint, in view: UIView) -> Bool {
             var r: UIResponder? = view.hitTest(point, with: nil)
@@ -515,8 +515,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             return false
         }
 
-        /// The finger is on a row that swipes to the left (`SwipeRowMark`): the sidebar's conversations (归档), the
-        /// Agents rows that can be closed (关闭).
+        /// The finger is on a row that swipes to the left (`SwipeRowMark`): the sidebar's conversations (Archive), the
+        /// Agents rows that can be closed (Close).
         static func onSwipeRow(at point: CGPoint, in view: UIView) -> Bool {
             var hit = view.hitTest(point, with: nil)
             while let v = hit, v !== view {
@@ -526,9 +526,9 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             return false
         }
 
-        /// The finger is on a list row with a swipe of its own (the Agents list's rows swipe to the right to 置顶 / 中断 /
-        /// 标为已看). A row marked `NoRowSwipe` (the filter bar, the list's first row on a phone) has none: a drag along
-        /// it turns the strip back to 助手, as it did when the bar sat above the list.
+        /// The finger is on a list row with a swipe of its own (the Agents list's rows swipe to the right to Pin / Interrupt /
+        /// Mark as Seen). A row marked `NoRowSwipe` (the filter bar, the list's first row on a phone) has none: a drag along
+        /// it turns the strip back to Assistant, as it did when the bar sat above the list.
         static func onRow(at point: CGPoint, in view: UIView) -> Bool {
             var hit = view.hitTest(point, with: nil)
             while let v = hit, v !== view {
@@ -681,8 +681,8 @@ struct DrawerPan {
 #endif
 
 #if os(iOS) || os(visionOS)
-/// Marks a list row whose swipe to the left the drawer and the strip leave alone (a sidebar conversation's 归档, an
-/// Agents row's 关闭): they look for it in the cell under the finger.
+/// Marks a list row whose swipe to the left the drawer and the strip leave alone (a sidebar conversation's Archive, an
+/// Agents row's Close): they look for it in the cell under the finger.
 struct SwipeRowMark: UIViewRepresentable {
     final class Marker: UIView {}
 
@@ -717,10 +717,10 @@ private struct SidebarClosed: View {
     }
 }
 
-/// What the sidebar lists (2026-10-31, laid out like 豆包's): Persona's name with a search button; the things to start
-/// (新对话, 定时任务, 知识库; the shell's drawer: 收件箱 … 机器); a line; 置顶; the main conversation on a row of its own
-/// right above 最近, as 「主对话」 with the app's logo (#4606, before it the shell's first row #2004); 最近, one line each
-/// with a round mark; Persona's face, where it runs and 设置 at the foot.
+/// What the sidebar lists (2026-10-31, laid out like Doubao's): Persona's name with a search button; the things to start
+/// (New Chat, Scheduled Tasks, Knowledge; the shell's drawer: Inbox … Machines); a line; Pin; the main conversation on a row of its own
+/// right above Recent, as Main Chat with the app's logo (#4606, before it the shell's first row #2004); Recent, one line each
+/// with a round mark; Persona's face, where it runs and Settings at the foot.
 struct AssistantSidebar: View {
     /// The open conversation's row. On the Mac, the shade the shell's other lists select with (`macSelected`): the
     /// phone's `well` on the Mac's lighter fills (#1169) was hard to find there.
@@ -737,12 +737,12 @@ struct AssistantSidebar: View {
     var openProfile: () -> Void
     var openRoutines: () -> Void
     var openKnowledge: () -> Void
-    /// nil when the tab bar is beside the sidebar (a column on a wide display): no second way to 设置.
+    /// nil when the tab bar is beside the sidebar (a column on a wide display): no second way to Settings.
     var openSettings: (() -> Void)?
     /// The drawer it is in (nil as a column). The drawer's sidebar stays built while closed: closing it clears the search.
     var drawer: AssistantDrawer?
-    /// The shell's drawer (docs/ios.md「新外壳」) also lists 收件箱 and 机器, and ends in 新对话 + 设置 like ChatGPT's;
-    /// so does the iPad's column (docs/ios.md「iPad」), whose tab bar has no 收件箱 or 设置.
+    /// The shell's drawer (docs/ios.md「新外壳」) also lists Inbox and Machines, and ends in New Chat + Settings like ChatGPT's;
+    /// so does the iPad's column (docs/ios.md「iPad」), whose tab bar has no Inbox or Settings.
     var openInbox: (() -> Void)? = nil
     var openTodos: (() -> Void)? = nil
     var onMachines: (() -> Void)? = nil
@@ -750,7 +750,7 @@ struct AssistantSidebar: View {
     /// nil where they are listed elsewhere (the Mac's sections column).
     // Not `openExtension`: Swift keeps property names in the binary, and that is a DEBUG switch release.sh rejects.
     var onOpenExtension: ((ExtensionNavRoute) -> Void)? = nil
-    /// 健康: the health space's page (docs/health.md); nil leaves the row out.
+    /// Health: the health space's page (docs/health.md); nil leaves the row out.
     var openHealth: (() -> Void)? = nil
     private var isShell: Bool { openInbox != nil }
     @State private var query = ""
@@ -763,7 +763,7 @@ struct AssistantSidebar: View {
     @State private var ending: Session?
     @State private var renaming: Session?
     @State private var showArchived = false
-    /// 自动对话 open in the list (#3264): closed until the user opens it, then as they left it on this device.
+    /// Auto Chats open in the list (#3264): closed until the user opens it, then as they left it on this device.
     @StoredValue("assistant.autoOpen") private var autoOpen = false
     @State private var autoList: AutoConversationsRoute?
     @State private var feed = SidebarFeed()
@@ -772,7 +772,7 @@ struct AssistantSidebar: View {
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
     @StoredValue("assistant.pinned") private var pinnedRaw = ""
 
-    /// 最近 shows this many until 查看全部.
+    /// Recent shows this many until View All.
     private static let recentCount = 30
 
     private var pinnedIDs: Set<String> { Set(pinnedRaw.split(separator: ",").map(String.init)) }
@@ -788,7 +788,7 @@ struct AssistantSidebar: View {
         // reads the live list again as soon as it starts to come out (`isOut`).
         let out = drawer?.isOut ?? true
         let all = feed.conversations(out ? model.assistantConversations : nil)
-        // The same for 已归档's count: it reads every session too (all of them redrew this while it was closed).
+        // The same for Archived's count: it reads every session too (all of them redrew this while it was closed).
         let archived = feed.archived(out ? model.archivedConversations.count : nil)
         VStack(spacing: 0) {
             topBar
@@ -804,7 +804,7 @@ struct AssistantSidebar: View {
                 .padding(.top, besideBar ? AssistantTopBar.topInset : Theme.Space.s)
                 .padding(.bottom, Theme.Space.s)
                 #endif
-            // A list (not a stack in a scroll view) for its rows' own swipe: a conversation swipes left to 归档. On the
+            // A list (not a stack in a scroll view) for its rows' own swipe: a conversation swipes left to Archive. On the
             // Mac it selects the open conversation: ↑ / ↓ open the next, Delete archives (`MacListKeys`, #2113).
             MacSelectingList(selection: Binding(get: { current }, set: { key in if let key, key != current { open(key) } })) {
                 Group {
@@ -819,7 +819,7 @@ struct AssistantSidebar: View {
                     }
                 }
                 #if os(macOS)
-                // The list's own margin is the shell's rows' `s` (`MacSidebarRow`, 收件箱's 来源): the shade and the rows'
+                // The list's own margin is the shell's rows' `s` (`MacSidebarRow`, Inbox's Source): the shade and the rows'
                 // words line up with the other sections' columns (#3179).
                 .listRowInsets(EdgeInsets())
                 #else
@@ -900,7 +900,7 @@ struct AssistantSidebar: View {
                 Spacer(minLength: Theme.Space.s)
                 if besideBar {
                     // The same button as the top bar's beside it (2026-11-04: on iPhone Duo open, this one stood lower
-                    // and larger than 历史对话 / 新对话 in the next column).
+                    // and larger than Chat History / New Chat in the next column).
                     AssistantTopBar.circle(Theme.Icon.search, label: String(localized: "搜索对话"), id: "assistant-sidebar-search", action: openSearch)
                 } else {
                     Button(action: openSearch) {
@@ -960,7 +960,7 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private func actions(_ all: [Session]) -> some View {
         if let openInbox, let onMachines {
-            // The shell's: the places to go (the main conversation is its own row right above 最近, `conversations`).
+            // The shell's: the places to go (the main conversation is its own row right above Recent, `conversations`).
             VStack(alignment: .leading, spacing: 0) {
                 action(String(localized: "收件箱"), Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
                 if TodoStore.shared.isSupported {
@@ -974,7 +974,7 @@ struct AssistantSidebar: View {
             }
         } else {
             #if os(macOS)
-            // One row as the conversations' (#2113): 新对话 is the title row's button and ⇧⌘N, 知识库 the window's
+            // One row as the conversations' (#2113): New Chat is the title row's button and ⇧⌘N, Knowledge the window's
             // sections column (2026-11-05 user: not twice). Headed by nothing: a heading over one row is noise.
             if !AppStyle.current.usesBeautifulUI {
                 macPlace(String(localized: "定时任务"), Theme.Icon.schedule, run: openRoutines)
@@ -1095,7 +1095,7 @@ struct AssistantSidebar: View {
         .disabled(key == nil && model.assistantConfig == nil)
         .contextMenu {
             if let key {
-                MainConversationMenu(key: key) // 压缩上下文, 新建主对话… (#1762), as on its row
+                MainConversationMenu(key: key) // Compact context, New Main Chat… (#1762), as on its row
                 Button {
                     UIPasteboard.general.string = key.sessionID
                     model.toast = Toast(String(localized: "已拷贝会话 ID"), style: .success)
@@ -1126,7 +1126,7 @@ struct AssistantSidebar: View {
     private func plainAction(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             HStack(spacing: Theme.Space.l) {
-                // One box for every symbol: a wide one (知识库's books) scales down into it instead of pushing its words.
+                // One box for every symbol: a wide one (Knowledge's books) scales down into it instead of pushing its words.
                 Image(systemName: symbol).resizable().scaledToFit().fontWeight(isShell ? .medium : .regular).foregroundStyle(Color.primary)
                     .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
                     .scaledFrame(width: Theme.Size.icon)
@@ -1155,11 +1155,11 @@ struct AssistantSidebar: View {
             // A line under the pinned ones: the main conversation's row below is not one of them.
             VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
         }
-        // The main conversation on a row of its own right above 最近 (#4606), as the Codex app's pinned thread: once
-        // (never under 置顶 or in 自动对话, `isPinned`), whether or not its session is listed yet, with no other one too.
+        // The main conversation on a row of its own right above Recent (#4606), as the Codex app's pinned thread: once
+        // (never under Pin or in Auto Chats, `isPinned`), whether or not its session is listed yet, with no other one too.
         if let s = all.first(where: { $0.key == main }) { row(s) } else { mainPlaceholder() }
-        // Those Persona opened by itself are in 自动对话 (#3264); with a hub that does not say, the scheduled tasks' ones
-        // are on 定时任务, under each task (#2838). The open one keeps its row.
+        // Those Persona opened by itself are in Auto Chats (#3264); with a hub that does not say, the scheduled tasks' ones
+        // are on Scheduled Tasks, under each task (#2838). The open one keeps its row.
         let split = AutoConversations(all.filter { !isPinned($0) }, tasks: taskChats.known, current: current,
                                       hubSays: model.hubFeatures.contains(AutoConversationSource.feature))
         let rest = AssistantSidebarGroups.newestFirst(split.mine)
@@ -1180,7 +1180,7 @@ struct AssistantSidebar: View {
                     }
                 }
             }
-            // Right under 最近's name, where a closed one still shows that one waits.
+            // Right under Recent's name, where a closed one still shows that one waits.
             if !split.auto.isEmpty { autoGroup(split) }
             ForEach(showAll ? rest : Array(rest.prefix(Self.recentCount))) { row($0) }
             if rest.count > Self.recentCount {
@@ -1202,9 +1202,9 @@ struct AssistantSidebar: View {
         archivedRow(archived)
     }
 
-    /// 自动对话 (#3264, docs/protocol.md「侧边栏」): the conversations Persona opened by itself (收件箱's AI 分身, scheduled
-    /// tasks, 飞书 /agent…) in one row, closed at first. Open, a row for each source with its count (and 全部); each
-    /// opens 全部对话 filtered to it. Closed, it still says how many wait for the user (or that one works, or is unread),
+    /// Auto Chats (#3264, docs/protocol.md「侧边栏」): the conversations Persona opened by itself (Inbox's AI twin, scheduled
+    /// tasks, Lark /agent…) in one row, closed at first. Open, a row for each source with its count (and All); each
+    /// opens All Chats filtered to it. Closed, it still says how many wait for the user (or that one works, or is unread),
     /// as a conversation's row does.
     @ViewBuilder private func autoGroup(_ split: AutoConversations) -> some View {
         Button {
@@ -1243,7 +1243,7 @@ struct AssistantSidebar: View {
         }
     }
 
-    /// One source under an open 自动对话: a small row, set in from the group's, with its count and state (全部对话: none).
+    /// One source under an open Auto Chats: a small row, set in from the group's, with its count and state (All Chats: none).
     private func sourceRow(_ name: String, symbol: String, count: Int?, needsYou: Int, working: Bool, id: String,
                            run: @escaping () -> Void) -> some View {
         Button(action: run) {
@@ -1287,7 +1287,7 @@ struct AssistantSidebar: View {
         return nil
     }
 
-    /// 已归档 (N) at the end of the list when there are any: where swiped-away conversations are.
+    /// Archived (N) at the end of the list when there are any: where swiped-away conversations are.
     @ViewBuilder private func archivedRow(_ n: Int) -> some View {
         if n > 0 {
             Button { showArchived = true } label: {
@@ -1385,7 +1385,7 @@ struct AssistantSidebar: View {
         return Button { open(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
                 // The shell's list is ChatGPT's: titles only, all in one column (the marks made it busy); the main
-                // conversation keeps the app's logo, as its row above 收件箱 had it (#2004).
+                // conversation keeps the app's logo, as its row above Inbox had it (#2004).
                 if isMain {
                     AppGlyph(size: isShell ? Theme.Size.icon : Theme.Size.wellM, scaled: true)
                 } else if isShell {
@@ -1428,7 +1428,7 @@ struct AssistantSidebar: View {
         .background { if !isMain { SwipeRowMark() } } // the drawer leaves a drag to the left on it to the row
         #endif
         .contextMenu {
-            if isMain { MainConversationMenu(key: s.key) } // 压缩上下文, 新建主对话… (#1762)
+            if isMain { MainConversationMenu(key: s.key) } // Compact context, New Main Chat… (#1762)
             if !isMain {
                 Button { togglePin(s) } label: {
                     isPinned(s) ? Label("取消置顶", systemImage: Theme.Icon.unpin) : Label("置顶", systemImage: Theme.Icon.pin)
@@ -1490,7 +1490,7 @@ struct AssistantSidebar: View {
         Haptics.tap()
     }
 
-    // MARK: Foot: Persona, 设置
+    // MARK: Foot: Persona, Settings
 
     private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
 
@@ -1503,13 +1503,13 @@ struct AssistantSidebar: View {
         #endif
     }
 
-    /// Persona's face and name with where it runs (a tap: its profile), 设置 on the right (the tab bar is hidden while
+    /// Persona's face and name with where it runs (a tap: its profile), Settings on the right (the tab bar is hidden while
     /// the drawer is out).
     @ViewBuilder private var footer: some View {
         if isShell {
             shellFooter
             // The iPad's column (the shell's places beside the conversation): Persona's face and where it runs stay
-            // at the foot, under the shell's 新对话 + 设置 (2026-11-05 user: 左下角没什么问题).
+            // at the foot, under the shell's New Chat + Settings (2026-11-05 user: the bottom left is fine).
             if drawer == nil {
                 AssistantProfileFooter(machineID: machineID, openProfile: openProfile, openSettings: nil)
             }
@@ -1526,7 +1526,7 @@ struct AssistantSidebar: View {
         }
     }
 
-    /// The shell's foot, ChatGPT's: a 新对话 pill in the 主题色 on the left (#1312), 设置 in a glass circle on the right.
+    /// The shell's foot, ChatGPT's: a New Chat pill in the Theme Color on the left (#1312), Settings in a glass circle on the right.
     private var shellFooter: some View {
         HStack(spacing: Theme.Space.m) {
             Button(action: newConversation) {
@@ -1552,7 +1552,7 @@ struct AssistantSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .surface(interactive: true, in: .circle)
-                // The plugins' entries are in 设置 (docs/extensions.md「UI 插槽」角标): their badges add up here, unless the
+                // The plugins' entries are in Settings (docs/extensions.md「UI 插槽」, badges): their badges add up here, unless the
                 // sidebar lists the entries itself.
                 .overlay(alignment: .topTrailing) { if onOpenExtension == nil { ExtensionSettingsBadge() } }
                 .accessibilityLabel("设置")
@@ -1564,7 +1564,7 @@ struct AssistantSidebar: View {
     }
 }
 
-/// Persona's face and name with where it runs, 设置 on the right: a view of its own, so the machines' heartbeats (and
+/// Persona's face and name with where it runs, Settings on the right: a view of its own, so the machines' heartbeats (and
 /// the page coming to the front) draw this row again, not the conversations' list.
 private struct AssistantProfileFooter: View {
     @Environment(AppModel.self) private var model
@@ -1674,7 +1674,7 @@ struct ConversationMark: View {
     }
 }
 
-/// The sidebar's conversations by day, newest first: 今天, 昨天, 最近 7 天, 更早 (and those without a time).
+/// The sidebar's conversations by day, newest first: Today, Yesterday, Previous 7 Days, Earlier (and those without a time).
 nonisolated enum AssistantSidebarGroups {
     static let older = String(localized: "更早")
 
@@ -1683,7 +1683,7 @@ nonisolated enum AssistantSidebarGroups {
         var sessions: [Session]
     }
 
-    /// Newest first, a fixed order for equal times (the sidebar's 最近).
+    /// Newest first, a fixed order for equal times (the sidebar's Recent).
     static func newestFirst(_ sessions: [Session]) -> [Session] {
         sessions.sorted {
             let a = $0.updatedAt ?? .distantPast, b = $1.updatedAt ?? .distantPast
@@ -1735,14 +1735,14 @@ final class SidebarFeed {
 
     private var archivedCount = 0
 
-    /// 已归档's count the same way.
+    /// Archived's count the same way.
     func archived(_ live: Int?) -> Int {
         if let live { archivedCount = live }
         return archivedCount
     }
 }
 
-/// A sidebar heading's ⋯ menu (#778: 置顶 with only the main conversation pinned drew a ⋯ that opened nothing).
+/// A sidebar heading's ⋯ menu (#778: Pin with only the main conversation pinned drew a ⋯ that opened nothing).
 nonisolated enum HeadingMenu {
     /// Whether the menu has nothing in it now, so the heading draws no ⋯: no items, or items behind one `if` that is
     /// false, which a view builder makes a nil `Optional` rather than an `EmptyView`. Only those two shapes are looked

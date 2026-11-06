@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 模型供应商's wizard (ProviderWizardModel), 从 ~/.zshrc 导入 (LauncherImportModel) and 主对话's 运行方式
+/// Settings › Model Providers' wizard (ProviderWizardModel), Import from ~/.zshrc (LauncherImportModel) and Main Chat's How It Runs
 /// (#2455), against FakeHub: what each sends, and what the hub's answers come to.
 @MainActor
 struct ProviderWizardTests {
@@ -112,7 +112,7 @@ struct ProviderWizardTests {
         #expect(bodies[0].keys.contains("headers") == false && bodies[0]["api_key"] == nil)
         #expect(bodies[0]["timeout_ms"]?.int == 600000 && bodies[0]["opus_model"]?.string == "glm-5-plus")
 
-        // 清除已设置的请求头: an empty string clears them.
+        // Clear Saved Headers: an empty string clears them.
         w.clearHeaders = true
         #expect(!w.hasStoredHeaders)
         #expect(await w.save())
@@ -180,7 +180,7 @@ struct ProviderWizardTests {
         #expect(!m.outdated && m.error == "离线")
     }
 
-    // MARK: 运行方式
+    // MARK: How It Runs
 
     private static let assistant = #"""
     {"id":"assistant","category_id":"assistant","uses":[{"name":"与当前 persona 的直接对话"}],"name":"主对话","group":"默认模型",
@@ -209,7 +209,7 @@ struct ProviderWizardTests {
         #expect(page.draft.runtime == "agentsdk" && page.draft.model == nil)
         #expect(await page.save())
         #expect(patches[0]["runtime"]?.string == "agentsdk" && patches[0]["provider"]?.string == "launcher.claude")
-        // 跟随默认: an explicit null takes the override away.
+        // Default: an explicit null takes the override away.
         page.restoreInheritance()
         #expect(await page.save())
         #expect(patches[1].keys.contains("runtime") && patches[1]["runtime"] == .null)

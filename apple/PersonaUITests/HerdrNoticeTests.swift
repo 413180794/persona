@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Agents list's 「herdr 没在运行」 row (#1916): shown for a machine whose classic herdr does not run, 启动 asks the
+/// The Agents list's 「herdr 没在运行」 row (#1916): shown for a machine whose classic herdr does not run, Start asks the
 /// node once and the row goes; a start that fails says why and keeps the button.
 ///   PORT=<port> python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/HerdrNoticeTests
@@ -17,7 +17,7 @@ final class HerdrNoticeTests: XCTestCase {
         _ = try Data(contentsOf: URL(string: hub + "/mock/reset")!)
     }
 
-    /// The mock's herdr: which machines are down and how 启动 goes; answers how many starts each was asked for.
+    /// The mock's herdr: which machines are down and how Start goes; answers how many starts each was asked for.
     @discardableResult private func mock(_ query: String = "") throws -> [String: Int] {
         let data = try Data(contentsOf: URL(string: hub + "/mock/herdr" + query)!)
         let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]

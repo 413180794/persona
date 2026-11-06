@@ -117,7 +117,7 @@ nonisolated struct PairedHub: Codable, Hashable, Sendable, Identifiable {
 /// (the credentials are in it).
 nonisolated struct HubRegistry: Codable, Hashable, Sendable {
     var hubs: [PairedHub] = []
-    /// group id → the name the user gave it (设置 › hub › 改名).
+    /// group id → the name the user gave it (Settings › hub › Rename).
     var groupNames: [String: String] = [:]
 
     /// The groups, in the order their first hub was paired; the default group first when there is one.

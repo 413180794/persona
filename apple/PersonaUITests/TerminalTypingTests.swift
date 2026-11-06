@@ -171,7 +171,7 @@ final class TerminalTypingTests: XCTestCase {
         XCTAssertEqual(Set(down.map { "\($0)" }).count, 1, "one swipe, one cell: \(down)")
     }
 
-    /// The terminal tab opened once the app is connected (as on a phone: the session page first, then 终端):
+    /// The terminal tab opened once the app is connected (as on a phone: the session page first, then Terminal):
     /// the view measures the phone's grid before the first frame, so the takeover starts (build 21 spun forever:
     /// the spinner stood in for the view that tells the grid the subscribe waits for).
     @MainActor func testOpeningTheTerminalWhenConnectedDrivesIt() throws {

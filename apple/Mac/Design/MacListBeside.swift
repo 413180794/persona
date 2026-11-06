@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A page's list beside its content in a Mac window, the list folding away on request (Persona's 历史对话, #856).
+/// A page's list beside its content in a Mac window, the list folding away on request (Persona's Chat History, #856).
 ///
 /// Not a `NavigationSplitView`: on the Mac the list sat in a three-column split's content column (the sidebar column
 /// is a floating glass card on macOS 26, `SplitColumns`), and that split does not fold its content column. Set to
@@ -19,7 +19,7 @@ struct MacListBeside<ListContent: View, Page: View>: View {
     /// The whole width, list and page.
     @State private var total: CGFloat = 0
 
-    /// `ideal`: the list's width until it is dragged (知识库's is narrower than Persona's history, #2318).
+    /// `ideal`: the list's width until it is dragged (Knowledge's is narrower than Persona's history, #2318).
     init(listShown: Bool, widthKey: String, ideal: CGFloat = Theme.Size.sidebar,
          @ViewBuilder list: () -> ListContent, @ViewBuilder page: () -> Page) {
         self.listShown = listShown

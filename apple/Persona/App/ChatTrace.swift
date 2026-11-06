@@ -4,7 +4,7 @@ import Foundation
 /// the store did with them), when the streamed text started and was cleared, and how the end of the chat was drawn
 /// after each change (its last lines by kind and line number, what waits in the wake drawer, held back or not). Never
 /// a word of a message. A reply that showed while it streamed and was gone until the chat was opened again could not
-/// be told apart afterwards — filed into the drawer, held back, or dropped; 拷贝诊断 (the assistant's menu) copies this.
+/// be told apart afterwards — filed into the drawer, held back, or dropped; Copy Diagnostics (the assistant's menu) copies this.
 /// Kept on disk (a few chats, the newest lines of each), so it outlives the app being closed.
 @MainActor
 final class ChatTrace {
@@ -48,7 +48,7 @@ final class ChatTrace {
     /// The trace of `key`'s chat, oldest first.
     func lines(_ key: SessionKey) -> [String] { trace[key.path] ?? [] }
 
-    /// What 拷贝诊断 copies.
+    /// What Copy Diagnostics copies.
     func text(_ key: SessionKey) -> String {
         let lines = lines(key)
         return (["Persona 对话诊断（只有结构，没有内容）", "行 \(lines.count)"] + lines).joined(separator: "\n") // i18n-ignore: diagnostics for a bug report

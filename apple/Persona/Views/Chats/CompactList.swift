@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// 细列表's one scale (docs/ios.md「Agents 列表」): every row in it — an agent, 还有 N 个空闲, 收起, a quiet space —
+/// Compact List's one scale (docs/ios.md「Agents 列表」): every row in it — an agent, "N more idle", Collapse, a quiet space —
 /// is one line of the same height with its mark (state dot, fold chevron, space icon) in one column, so the titles
 /// start at one edge; three levels of type: section titles, row titles, meta. All Dynamic Type levels, so the three
-/// text sizes (小 / 标准 / 大) keep the ratios; read each time, since the Mac's move with `Theme.Font.scale`. The cards (卡片) do not use it.
+/// text sizes (Small / Standard / Large) keep the ratios; read each time, since the Mac's move with `Theme.Font.scale`. The cards (Cards) do not use it.
 enum CompactList {
-    /// A space's name, and the list's other section titles (需要你处理, 空闲的空间, a state, a machine).
+    /// A space's name, and the list's other section titles (Needs You, Idle Spaces, a state, a machine).
     static var sectionTitle: Font { Theme.Font.heading }
-    /// What a row is: an agent's title, a quiet space's name, 还有 N 个空闲.
+    /// What a row is: an agent's title, a quiet space's name, "N more idle".
     static var title: Font { Theme.Font.secondary }
     /// A finished-unseen agent's title.
     static var titleUnread: Font { Theme.Font.secondaryStrong }
-    /// Where and when, the tab names behind 还有 N 个空闲, a header's counts.
+    /// Where and when, the tab names behind "N more idle", a header's counts.
     static var meta: Font { Theme.Font.caption }
     static var metaStrong: Font { Theme.Font.captionMedium }
     /// The column the marks sit in (`scaledFrame`: it grows with the text).
@@ -20,20 +20,20 @@ enum CompactList {
     static let gap = Theme.Space.s
     /// Every row: the same height whatever it holds.
     static let rowInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.l, bottom: Theme.Space.s, trailing: Theme.Space.m)
-    /// A row a level in, under a working tree's row (按仓库).
+    /// A row a level in, under a working tree's row (By Repository).
     static let nestedRowInsets = rowInsets(level: 1)
-    /// A row `level` levels in: under a working tree's row, under a tab's 发起者 (#2320), or both.
+    /// A row `level` levels in: under a working tree's row, under a tab's starter (#2320), or both.
     static func rowInsets(level: Int) -> EdgeInsets {
         EdgeInsets(top: Theme.Space.s, leading: Theme.Space.l + Theme.Space.l * CGFloat(level), bottom: Theme.Space.s, trailing: Theme.Space.m)
     }
 }
 
 extension EnvironmentValues {
-    /// The Agents list shows 细列表: headers and fold rows take `CompactList`'s scale.
+    /// The Agents list shows Compact List: headers and fold rows take `CompactList`'s scale.
     @Entry var compactList = false
 }
 
-/// 细列表: the idle agents of a busy space behind one line, the size of an agent's — their tab names as words, not chips.
+/// Compact List: the idle agents of a busy space behind one line, the size of an agent's — their tab names as words, not chips.
 struct CompactFoldRow: View {
     var sessions: [Session]
 
@@ -60,7 +60,7 @@ struct CompactFoldRow: View {
     }
 }
 
-/// 细列表: 收起 under the idle agents it opened, laid out like the line that opened them.
+/// Compact List: Collapse under the idle agents it opened, laid out like the line that opened them.
 struct CompactCollapseRow: View {
     var title: String
 
@@ -77,13 +77,13 @@ struct CompactCollapseRow: View {
     }
 }
 
-/// 细列表: a space where every agent is idle, one line like an agent's: its name, how many tabs, when; tap to list them.
+/// Compact List: a space where every agent is idle, one line like an agent's: its name, how many tabs, when; tap to list them.
 struct CompactQuietSpaceRow: View {
     var group: SpaceGroup
     var machine: Machine?
     var showMachine: Bool
     var expanded: Bool
-    /// A repository (按仓库's 空闲的仓库), not a space: its folder.
+    /// A repository (By Repository's Idle Repositories), not a space: its folder.
     var repo = false
     @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
@@ -115,8 +115,8 @@ struct CompactQuietSpaceRow: View {
     private var count: String { String(localized: "\(group.sessions.count) 个 Agent") }
 }
 
-/// 细列表: something waiting for you (a plan, a question, a permission) as one row like an agent's: its kind's mark in
-/// 需要你 red, what it is, which agent and machine, when. Tapping opens the chat, which answers it.
+/// Compact List: something waiting for you (a plan, a question, a permission) as one row like an agent's: its kind's mark in
+/// Needs You red, what it is, which agent and machine, when. Tapping opens the chat, which answers it.
 struct CompactInteractionRow: View {
     var interaction: Interaction
     var machine: String?

@@ -5,8 +5,8 @@ import UIKit
 import AppKit
 #endif
 
-/// How the whole app is drawn, picked in 设置 › 界面风格: panels, cards and buttons, the page they sit on, the type,
-/// the components. The colors are 主题色 (`ThemeColor`), a choice of its own; `StyleSpec` puts the two together.
+/// How the whole app is drawn, picked in Settings › Interface Style: panels, cards and buttons, the page they sit on, the type,
+/// the components. The colors are Theme Color (`ThemeColor`), a choice of its own; `StyleSpec` puts the two together.
 /// Changing either rebuilds the view tree (RootView is keyed by `AppModel.look`), so plain static tokens are enough.
 nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
     /// iOS 26 system look: Liquid Glass on the system's pages.
@@ -17,10 +17,10 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
     case island
     /// Feishu: flat white cards on light gray, hairline borders — like the Feishu app.
     case lark
-    /// 液态玻璃's surfaces with BeautifulUI's components: the thinking trace, tool chips in work cards, and its prompt
+    /// Liquid Glass's surfaces with BeautifulUI's components: the thinking trace, tool chips in work cards, and its prompt
     /// bar as the composer. Only this style uses them (CLAUDE.md: a new look is a new style, never a change to one).
     case beautiful
-    // "claude" was a style until 2026-10-31: Liquid Glass in coral, now 液态玻璃 + 主题色 珊瑚橙 (`AppearanceChoice`).
+    // "claude" was a style until 2026-10-31: Liquid Glass in coral, now Liquid Glass + Theme Color Coral (`AppearanceChoice`).
 
     nonisolated(unsafe) static var current: AppStyle = AppearanceChoice.saved.style {
         didSet { StyleSpec.recompose() }
@@ -52,10 +52,10 @@ nonisolated enum Theme {
     #endif
 
     static var accent: Color { spec.accent }
-    /// The persona's own color (主色, docs/persona.md): its face's glow and backdrop, never something to tap (that is
+    /// The persona's own color (primary color, docs/persona.md): its face's glow and backdrop, never something to tap (that is
     /// `accent`). The accent when the persona brings none (the built-in Persona is drawn in the accent).
     static var persona: Color { spec.personaPrimary ?? spec.accent }
-    /// The app icon's coral. Only for Persona' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
+    /// The app icon's coral. Only for Persona' own mark (the glyph in Settings / Chat, the Live Activity's star), never for
     /// something to tap: that is `accent`, whatever the style.
     static let brand = Palette.coral
     static var danger: Color { spec.extensionColors?.danger ?? Role.dangerColor }
@@ -86,7 +86,7 @@ nonisolated enum Theme {
     /// Where an agent was opened (#2526): a Feishu group's topic (botmux) and a terminal pane (herdr), each its own color.
     static let sourceFeishu = Color(light: 0x1D5FD6, dark: 0x82AAFF)
     static let sourceTerminal = Color(light: 0x6A46C2, dark: 0xBEA3FF)
-    /// /loop and other scheduled wake-ups (待唤醒).
+    /// /loop and other scheduled wake-ups (Waiting).
     static let loop = Color(light: 0x2E6FD0, dark: 0x5B9BFF)
     /// Count badges on rows (unread messages): white text on it is ≥ 4.5:1 in both appearances.
     static let countBadge = Color(light: 0x636366, dark: 0x636366)
@@ -116,7 +116,7 @@ nonisolated enum Theme {
     }
 
     /// Corner radii: five, plus capsules and circles. Static: the styles differ in color and surface, not in corners
-    /// (`AppStyle.corner` only draws the style previews in 设置).
+    /// (`AppStyle.corner` only draws the style previews in Settings).
     enum Radius {
         /// A file's thumbnail in a list row, about an icon's size (the Files tab): a page's corner, not a tile's.
         static let thumbnail: CGFloat = 3
@@ -188,7 +188,7 @@ nonisolated enum Theme {
     }
 
     /// The type scale: every text in the app is one of these levels, all Dynamic Type text styles, so they follow the
-    /// system's text size and the app's own 小 / 标准 / 大 (`TextSize`, which moves the Dynamic Type size a step).
+    /// system's text size and the app's own Small / Standard / Large (`TextSize`, which moves the Dynamic Type size a step).
     /// As in BeautifulUI, levels differ more by weight and color than by size: a row's title is the body's size in
     /// semibold, a section header the caption's size in semibold secondary. Sizes at the default setting in brackets.
     /// The terminal grid (its own size setting), the Live Activity (system limits), the share card (a rendered
@@ -198,12 +198,12 @@ nonisolated enum Theme {
         // The Mac's text styles are smaller than the iPhone's and spaced differently (body 13, subheadline 11,
         // footnote and caption 10): the iPhone's choices gave 10 pt times and sources next to 17 pt replies (#779).
         // The Mac has its own sizes (`Level.size`; the user chose body 13, nothing under 11) in the system font, times
-        // `scale`. Text styles do not follow Dynamic Type on the Mac, so 小 / 标准 / 大 move these through `scale`
+        // `scale`. Text styles do not follow Dynamic Type on the Mac, so Small / Standard / Large move these through `scale`
         // (#833), and the window is drawn again when it changes (`macLook`).
-        /// 小 / 标准 / 大 on the Mac: how much larger the text is than the sizes at 标准 (`Theme.textScale` of the
+        /// Small / Standard / Large on the Mac: how much larger the text is than the sizes at Standard (`Theme.textScale` of the
         /// app's text size: body 12 / 13 / 14). Set by `AppModel.textSize`, on the main thread.
         nonisolated(unsafe) static var scale: CGFloat = 1
-        /// Nothing is drawn under 11 pt (#779): at 小 the 11 pt levels (caption, label, code) stay 11, the rest go down.
+        /// Nothing is drawn under 11 pt (#779): at Small the 11 pt levels (caption, label, code) stay 11, the rest go down.
         static let smallest: CGFloat = 11
         /// A level's point size at the current `scale`.
         static func pointSize(_ level: Level) -> CGFloat { max(level.size * scale, smallest) }
@@ -352,7 +352,7 @@ nonisolated enum Theme {
     }
 
     /// Sizes of what is drawn next to text, at the default text size. Use them with `scaledFrame` so they follow
-    /// 小 / 标准 / 大 and the system's text size (up to 1.6 ×, `Theme.sizeScale`); the lines stay as they are, in a
+    /// Small / Standard / Large and the system's text size (up to 1.6 ×, `Theme.sizeScale`); the lines stay as they are, in a
     /// plain `.frame`. Nothing on a page writes a size as a number (`TokenRatchetTests`).
     enum Size {
         // Lines, rules and bars: do not scale.
@@ -360,7 +360,7 @@ nonisolated enum Theme {
         /// The width of the small window's source layer (VNC's picture in picture, #1839): a normal size, behind the
         /// app's content; one too small never started.
         static let pictureInPictureSource: CGFloat = 192
-        /// The width the small window's card is drawn at (VNCPiPCard: 连接中…, why not), in points, about the small
+        /// The width the small window's card is drawn at (VNCPiPCard: Connecting…, why not), in points, about the small
         /// window's own on an iPhone so its text reads at its size there.
         static let pictureInPictureCard: CGFloat = 240
         static let line: CGFloat = 1
@@ -423,7 +423,7 @@ nonisolated enum Theme {
         static let box260: CGFloat = 260
         static let box280: CGFloat = 280
         static let box300: CGFloat = 300
-        /// A Feishu topic folds behind 展开 past this (the Lark gateway's topic cards).
+        /// A Feishu topic folds behind Expand past this (the Lark gateway's topic cards).
         static let box320: CGFloat = 320
         static let box380: CGFloat = 380
         // Wide screens (iPad).
@@ -433,7 +433,7 @@ nonisolated enum Theme {
         static let sidebarMin: CGFloat = 340
         static let sidebar: CGFloat = 400
         static let sidebarMax: CGFloat = 480
-        /// The narrowest column of a card grid (机器's cards): two side by side in an iPad's detail column.
+        /// The narrowest column of a card grid (Machines' cards): two side by side in an iPad's detail column.
         static let cardColumn: CGFloat = 330
         // CarPlay.
         /// The image of a CarPlay voice control state: Apple's guide asks for 150 pt (CarPlay sets its own size).
@@ -448,7 +448,7 @@ nonisolated enum Theme {
     /// status bar above the column with it (`SidebarTopFill`), which the column itself cannot draw into.
     static let systemSidebar = Color(light: 0xE6E9EE, dark: 0x191C20)
 
-    /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot, the work spinner and
+    /// Motion: a state change snaps, a layout change glides. Nothing repeats except the Needs You dot, the work spinner and
     /// the persona's dot in the Persona tab's top bar (docs/persona.md), and those stop with Reduce Motion (the spinner
     /// is the system's).
     enum Motion {
@@ -498,7 +498,7 @@ nonisolated enum Theme {
         static let purple = Color(light: 0x7A5AF8, dark: 0x9D8BFF)
         /// System indigo.
         static let indigo = Color(light: 0x5856D6, dark: 0x5E5CE6)
-        /// 健康's heart (the health space, docs/health.md).
+        /// Health's heart (the health space, docs/health.md).
         static let pink = Color(light: 0xD62E5C, dark: 0xFF6B8B)
         /// A quiet mark: a list row's tile that is information, not a place to go.
         static let gray = Color(light: 0x8E8E93, dark: 0x636366)
@@ -518,9 +518,9 @@ nonisolated enum Theme {
         LinearGradient(colors: [c, c.blended(with: .black, by: 0.12)], startPoint: .top, endPoint: .bottom)
     }
 
-    /// The ChatGPT-style shell (docs/ios.md「新外壳」, iPhone without 旧布局): neutral like ChatGPT's, in every style.
+    /// The ChatGPT-style shell (docs/ios.md「新外壳」, iPhone without Old Layout): neutral like ChatGPT's, in every style.
     enum Shell {
-        /// The 助手 | Agents switch's selected segment, inside its glass capsule.
+        /// The Assistant | Agents switch's selected segment, inside its glass capsule.
         static let segment = Color(light: 0xE6E6E6, dark: 0x3A3A3C)
         /// The composer's field and its expanded card.
         static let composer = Color(light: 0xFFFFFF, dark: 0x1F1F21)
@@ -578,8 +578,8 @@ nonisolated enum Theme {
     static var busy: Color { StatusPalette.working.dot }
     static var unread: Color { StatusPalette.unread.dot }
     /// The inbox's dot on the persona's face (`ShellPersonaButton`): a soft red that says "something's there" without
-    /// calling like 需要你's red (2026-11-04 user request: smaller, paler, not drawing the eye). Visible on every built-in
-    /// face's disc (团子's paper, 面罩's accent, 汇流's dark) in both appearances, ringed in the page's color.
+    /// calling like Needs You's red (2026-11-04 user request: smaller, paler, not drawing the eye). Visible on every built-in
+    /// face's disc (Mochi's paper, Visor's accent, Circuit's dark) in both appearances, ringed in the page's color.
     static let inboxDot = Color(light: 0xEE8E8E, dark: 0xC9706F)
 }
 

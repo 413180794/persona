@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The pure part of 屏蔽的配置目录 (web `lib/agent-settings.ts` does the same): what a row says, and the rules after a
+/// The pure part of Blocked Config Folders (web `lib/agent-settings.ts` does the same): what a row says, and the rules after a
 /// change. Blocking a row adds its path; unblocking lifts the rule that blocks it (a glob lifts every directory it covers).
 nonisolated enum ClaudeDirsLogic {
     typealias Dir = APIClient.ClaudeDir
@@ -57,7 +57,7 @@ nonisolated enum ClaudeDirsLogic {
         return nil
     }
 
-    /// What the section says when the directories could not be loaded, with 重试 under it; nil for a cancelled load
+    /// What the section says when the directories could not be loaded, with Retry under it; nil for a cancelled load
     /// (the page went away). A timeout or no network is said too: the page has nothing else to show in their place,
     /// and saying nothing left it spinning for good (#744).
     static func loadFailure(_ error: Error) -> String? {
@@ -70,8 +70,8 @@ nonisolated enum ClaudeDirsLogic {
     static var noHub: String { String(localized: "还没连上这台电脑所在的 hub") }
 }
 
-/// 设置 › Claude Code › 屏蔽的配置目录 (docs/claude-integration.md「屏蔽配置目录」): the machine's Claude Code config
-/// directories, each with 屏蔽 / 取消屏蔽, and rules typed by hand (a path or a glob such as ~/.automation/*). A blocked
+/// Settings › Claude Code › Blocked Config Folders (docs/claude-integration.md「屏蔽配置目录」): the machine's Claude Code config
+/// directories, each with Block / Unblock, and rules typed by hand (a path or a glob such as ~/.automation/*). A blocked
 /// directory is not scanned or remembered and its sessions leave Agents; the files are not touched. Sections of the
 /// page's List.
 struct ClaudeDirsSection: View {

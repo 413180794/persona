@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A Mac's VNC on the whole screen (#1343), where it can be operated: its picture, the touches as the mode says (鼠标 /
-/// 触控板), the clipboard both ways, the keyboard with a row of the Mac's shortcuts, 帮助, and 小窗 back to picture in
+/// A Mac's VNC on the whole screen (#1343), where it can be operated: its picture, the touches as the mode says (Mouse /
+/// Trackpad), the clipboard both ways, the keyboard with a row of the Mac's shortcuts, Help, and Picture in Picture back to picture in
 /// picture. When the agent whose chat opened it waits on the user, 「我完成了」 hands the Mac back (closing does too).
 struct VNCPage: View {
     @Environment(AppModel.self) private var model
@@ -54,7 +54,7 @@ struct VNCPage: View {
         }
         .onChange(of: session?.phase) { _, phase in
             #if os(iOS)
-            // The small window ready (#1839): 小窗 starts it in the tap, and going home starts it by itself.
+            // The small window ready (#1839): Picture in Picture starts it in the tap, and going home starts it by itself.
             if phase == .live { VNCPiP.shared.prepare(ref, from: from, automatic: true) }
             #endif
             if phase == .live, unlock, !unlocked {
@@ -356,7 +356,7 @@ enum ScreenKeep {
     #endif
 }
 
-/// 帮助: how the touches, the keyboard and the clipboard work, and handing the Mac back.
+/// Help: how the touches, the keyboard and the clipboard work, and handing the Mac back.
 struct VNCHelp: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -419,7 +419,7 @@ struct VNCHelp: View {
 }
 
 extension RFBSession {
-    /// 一键解锁 (#1507 a-2): a Shift wakes the lock screen and puts the cursor in its password field, then the kept
+    /// One-Tap Unlock (#1507 a-2): a Shift wakes the lock screen and puts the cursor in its password field, then the kept
     /// password and Return; the hub only notes that it was unlocked.
     func unlockWithKeptPassword() {
         guard let kept = ScreenCredentials.load(ref) else { return }

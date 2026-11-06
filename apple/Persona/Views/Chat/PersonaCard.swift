@@ -102,7 +102,7 @@ nonisolated extension ExtensionPersonaCard {
 
     private static func nonEmpty(_ s: String?) -> String? { s?.isEmpty == false ? s : nil }
 
-    /// `v` written grouped with at most one decimal, then the unit: "2,250 kcal", "7.5 小时", "8,432".
+    /// `v` written grouped with at most one decimal, then the unit: "2,250 kcal", "7.5 hours", "8,432".
     static func amount(_ v: Double, _ unit: String?) -> String {
         let n = number(v)
         guard let unit, !unit.isEmpty else { return n }

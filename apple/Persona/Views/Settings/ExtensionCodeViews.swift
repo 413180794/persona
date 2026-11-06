@@ -209,7 +209,7 @@ struct CodeHunkHeader: View {
 
 // MARK: Diff file header
 
-/// What happened to a file, as a word and a color: 新增 / 修改 / 删除 / 重命名.
+/// What happened to a file, as a word and a color: added / modified / deleted / renamed.
 enum CodeFileStatus {
     static func word(_ s: String?) -> String? {
         switch s {
@@ -375,7 +375,7 @@ struct CodeTreeRowView: View {
 
 // MARK: Comments
 
-/// The relative time of an RFC 3339 instant ("3 小时前"), or the text as it came when it is no instant.
+/// The relative time of an RFC 3339 instant ("3 hours ago"), or the text as it came when it is no instant.
 enum CodeTime {
     static func relative(_ s: String?, now: Date = .now) -> String? {
         guard let s, !s.isEmpty else { return nil }
@@ -392,7 +392,7 @@ enum CodeTime {
     }
 }
 
-/// One comment: the author's avatar, name, when, a badge (已批准), the Markdown body; an event (`event: true`) is one
+/// One comment: the author's avatar, name, when, a badge (Approved), the Markdown body; an event (`event: true`) is one
 /// small line instead.
 struct CodeCommentView: View {
     var author: String
@@ -454,7 +454,7 @@ struct CodeAvatarView: View {
 
 // MARK: Composer
 
-/// A box to write in (Markdown, several lines) and the buttons that send what is written: 评论 / 批准 / 请求修改.
+/// A box to write in (Markdown, several lines) and the buttons that send what is written: Comment / Approve / Request Changes.
 struct CodeComposerView: View {
     var placeholder: String
     @Binding var text: String
@@ -474,7 +474,7 @@ struct CodeComposerView: View {
             HStack(spacing: Theme.Space.s) {
                 Spacer(minLength: 0)
                 ForEach(Array(buttons.enumerated()), id: \.offset) { i, b in
-                    // The extension's first button is its usual one (评论): filled; the others (批准, 请求修改) say
+                    // The extension's first button is its usual one (Comment): filled; the others (Approve, Request Changes) say
                     // their tone in their words only, so that a destructive one never stands out the most.
                     let primary = i == 0 && buttons.count > 1 || buttons.count == 1
                     Button(action: b.run) {

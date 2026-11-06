@@ -112,7 +112,7 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     var machine: String? { string("machine") }
     /// `routed`: what the user said straight to the task; `message`: the message itself.
     var text: String? { string("text") }
-    /// `message`: a message about a task with the AI 分身's draft reply; `ref` is the inbox item.
+    /// `message`: a message about a task with the AI twin's draft reply; `ref` is the inbox item.
     var todoID: String? { string("todo_id") }
     var source: String? { string("source") }
     var chat: String? { string("chat") }
@@ -138,7 +138,7 @@ nonisolated struct AnsweredItem: Hashable, Sendable {
     var answer: String
 }
 
-/// The 今天 card's content (docs/protocol.md「任务和对话动态」, kind `today`), built by the hub.
+/// The Today card's content (docs/protocol.md「任务和对话动态」, kind `today`), built by the hub.
 nonisolated struct TodayBody: Codable, Hashable, Sendable {
     nonisolated struct TaskRef: Codable, Hashable, Sendable { var id: String; var title: String }
     nonisolated struct Meeting: Codable, Hashable, Sendable { var start: Date; var end: Date; var title: String }
@@ -213,7 +213,7 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var stage: String?
     /// The pull request its work is in (`pr_url`, #2768); nil from a hub without it.
     var prURL: String?
-    /// Started from the main conversation while 主对话派的任务只在主对话里通知 was on (#1731, fixed when the hub made it):
+    /// Started from the main conversation while Notify Main-Chat Tasks Only in the Main Chat was on (#1731, fixed when the hub made it):
     /// the main conversation tells the user about it, nothing else does (the island, notifications, badges, the watch).
     /// Its card in the conversation shows as always. False from a hub without it.
     var quiet: Bool
@@ -333,7 +333,7 @@ nonisolated enum WatchInteractions {
     }
 }
 
-/// An agent going on (等你 / 在做) as the main conversation's dock shows it after the tasks (#1113): the ones the user
+/// An agent going on (Needs You / Working) as the main conversation's dock shows it after the tasks (#1113): the ones the user
 /// opened on the Agents page, which no conversation's task stands for. Made from the Agents page's session list, so
 /// it follows the agents without a poll of its own.
 nonisolated struct DockAgent: Hashable, Identifiable, Sendable {
@@ -457,7 +457,7 @@ nonisolated enum TaskNow: Equatable, Sendable {
 }
 
 /// What a task waiting for the user asks (#3998): the first of its pending cards that says anything, in the inbox
-/// 需要你 row's words (`InboxAgentRow`), on one line; nil when none does.
+/// Needs You row's words (`InboxAgentRow`), on one line; nil when none does.
 nonisolated enum TaskAsk {
     static func line(_ interactions: [Interaction]) -> String? {
         for ix in interactions {
@@ -489,7 +489,7 @@ nonisolated func runningSubagents(_ lead: Session?) -> [String] {
         }
 }
 
-/// A single summary line of running subagents for task cards: "子 Agent 在跑：A、B" (at most 3; "等 N 个" if more).
+/// A single summary line of running subagents for task cards: "Subagents running: A, B" (at most 3; "…, N in all" if more).
 nonisolated func subagentsSummaryLine(_ subagents: [String]) -> String? {
     guard !subagents.isEmpty else { return nil }
     let head = subagents.prefix(3).joined(separator: String(localized: "、", comment: "Separator between names in a list"))
@@ -541,7 +541,7 @@ nonisolated extension APIClient {
         try await post("/api/v1/task-plans/\(id)/dismiss", as: PlanResponse.self).plan
     }
 
-    /// The conversation's 今天 card for the user's day (made on the first call of the day).
+    /// The conversation's Today card for the user's day (made on the first call of the day).
     func today(conversation: String) async throws -> FeedItem {
         let id = conversation.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? conversation
         return try await post("/api/v1/assistant/conversations/\(id)/today", as: ItemResponse.self).item
@@ -555,7 +555,7 @@ nonisolated extension APIClient {
     }
     private struct TrustResponse: Decodable { var kinds: [TrustKind] }
 
-    /// The kinds of tasks remembered with 这类以后直接开.
+    /// The kinds of tasks remembered with Start These Directly.
     func taskTrust() async throws -> [TrustKind] { try await get("/api/v1/task-trust", as: TrustResponse.self).kinds }
 
     func forgetTrust(_ key: String) async throws {

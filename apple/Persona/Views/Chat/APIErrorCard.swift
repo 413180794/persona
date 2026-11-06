@@ -3,7 +3,7 @@ import PersonaKit
 import SwiftUI
 
 /// The card for an `APIErrorInfo`: the reason with a warning mark, BeautifulUI's chips (the status in the error
-/// style, 临时 / 要处理, how many times in a row), then — folded — the ids to copy, the raw text, and 重试 when the
+/// style, temporary / Action Needed, how many times in a row), then — folded — the ids to copy, the raw text, and Retry when the
 /// error is the last thing in an idle chat and likely to pass (a login error is not fixed by trying again).
 /// In the BeautifulUI style it is that library's failed task row, its pill the retry (`taskRow`).
 struct APIErrorCard: View {

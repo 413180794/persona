@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」): 助手 (the Persona assistant) and Agents (the Agents list)
-/// under one top switch, the drawer on the left (收件箱, 定时任务, 知识库, 机器, the conversations, 设置), 设置 as a sheet.
-/// `旧布局` (AppModel.oldLayout) brings the four tabs back unchanged.
+/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」): Assistant (the Persona assistant) and Agents (the Agents list)
+/// under one top switch, the drawer on the left (Inbox, Scheduled Tasks, Knowledge, Machines, the conversations, Settings), Settings as a sheet.
+/// `Old Layout` (AppModel.oldLayout) brings the four tabs back unchanged.
 ///
 /// The pages read this from the environment (`\.shell`): nil means they are in the old layout, on an iPad or on the
 /// Mac, and look exactly as before.
@@ -11,27 +11,27 @@ import SwiftUI
 /// read by VoiceOver, `tabIsActive` and the drawer all read it, and the strip's position follows it. It changes only
 /// through `select` (the switch, a drag that settles) and `route` (anything that sets `AppModel.selectedTab`), both at
 /// once, not when a view is next drawn: the shell's `onChange(of: selectedTab)` was skipped now and then, the strip
-/// stayed on 助手 with the tab on Agents, and Agents became the menu of an empty list of options (2026-11-02).
+/// stayed on Assistant with the tab on Agents, and Agents became the menu of an empty list of options (2026-11-02).
 @MainActor @Observable final class ShellState: TabRouter {
     /// The drawer is the shell's (it used to be the Persona tab's own): it slides both pages aside.
     let drawer = AssistantDrawer()
-    /// 助手 and Agents side by side: a drag sideways moves from one to the other (`ShellPager`).
+    /// Assistant and Agents side by side: a drag sideways moves from one to the other (`ShellPager`).
     let pager = ShellPager()
     #if os(iOS) || os(visionOS)
     /// The status row's link state and toasts (`ShellStatusRow`).
     let notices = ShellNotices()
     #endif
-    /// The page in front: 0 = 助手, 1 = Agents, 2 = optional 消息.
+    /// The page in front: 0 = Assistant, 1 = Agents, 2 = optional Messages.
     private(set) var page = 0
     /// Agents is built the first time it is selected or dragged in (TabView builds a tab when shown), then kept. Not
     /// before: hidden, its controls are still in the accessibility tree (its glass and list are UIKit).
     private(set) var agentsBuilt = false
-    /// 助手 likewise. Built while the app opened on Agents, its conversation appeared there unseen: subscribed, shown,
+    /// Assistant likewise. Built while the app opened on Agents, its conversation appeared there unseen: subscribed, shown,
     /// marked seen, and whatever hangs off `onAppear` ran a second time at launch (2026-11-02, `ShellLaunchTests`).
     private(set) var assistantBuilt = false
     private(set) var feishuBuilt = false
     var feishuAtRoot = true
-    /// What the drawer or the home page asked the 助手 page to show; `serial` makes the same request count twice.
+    /// What the drawer or the home page asked the Assistant page to show; `serial` makes the same request count twice.
     private(set) var request: (page: ShellPage, serial: Int)?
     /// Each page says whether it is at its root: the drawer's drag only opens there (pushed pages swipe back).
     var chatAtRoot = true {
@@ -114,7 +114,7 @@ import SwiftUI
         #endif
     }
 
-    /// `p` in front (0 = 助手, 1 = Agents): the switch, a drag that settled there, a route. The strip slides there and
+    /// `p` in front (0 = Assistant, 1 = Agents): the switch, a drag that settled there, a route. The strip slides there and
     /// the app's tab says so. Taps that come while the strip still moves are not lost: the last one is where it ends.
     func select(_ p: Int, animated: Bool = true) {
         let p = min(max(0, p), pager.pageCount - 1)
@@ -131,13 +131,13 @@ import SwiftUI
         if let model, model.selectedTab != tab { model.selectedTab = tab }
     }
 
-    /// Routes that are not one of the two pages land on 助手 (the inbox) or in the sheet (设置), and the tab goes
+    /// Routes that are not one of the two pages land on Assistant (the inbox) or in the sheet (Settings), and the tab goes
     /// back to the page in front.
     func route(_ t: AppTab, in model: AppModel) {
         #if DEBUG
         ShellTrace.shared.note("route \(t)")
         #endif
-        // 旧布局 was just turned on (设置 › 外观 › 布局 sets the tab to 设置 for the tabs): the tabs take it from here,
+        // Old Layout was just turned on (Settings › Appearance › Layout sets the tab to Settings for the tabs): the tabs take it from here,
         // the shell goes away with the next update.
         guard !model.oldLayout else { return detach(from: model) }
         switch t {
@@ -156,14 +156,14 @@ import SwiftUI
     }
 }
 
-/// Pages the 助手 page pushes for the shell.
+/// Pages the Assistant page pushes for the shell.
 enum ShellPage: Hashable, Sendable {
     case newConversation, profile, inbox, todos, routines, knowledge, machines, health
     /// An extension's main-navigation page (nav_page) from the drawer.
     case extensionPage(ExtensionNavRoute)
 }
 
-/// What the 助手 page pushes by value for the shell (the inbox and the machines push values of their own on top).
+/// What the Assistant page pushes by value for the shell (the inbox and the machines push values of their own on top).
 enum ShellRoute: Hashable, Sendable {
     case inbox, todos, machines
     case extensionPage(ExtensionNavRoute)

@@ -2,7 +2,7 @@ import SwiftUI
 
 // Feishu documents in the inbox (docs/inbox.md「云文档」): a sheet / Base / docx that @'d the user or commented to
 // them. The rows about the user show with their status columns, each a menu that moves the status in the document;
-// the AI 分身's draft can propose moves, made when it is sent.
+// the AI twin's draft can propose moves, made when it is sent.
 
 /// A status column's value as a chip; tapping lists the values and moving to one writes it to the document.
 struct DocStatusMenu: View {
@@ -189,7 +189,7 @@ struct InboxDocDetailView: View {
     }
 }
 
-/// The AI 分身's proposed moves, as lines ("状态：进行中 → 已完成 · 写文档"), for the draft card and sheet.
+/// The AI twin's proposed moves, as lines ("Status: In Progress → Done · Write docs"), for the draft card and sheet.
 enum DocChangeText {
     static func line(_ change: InboxItem.DocChange, in doc: InboxItem.Doc?) -> String {
         guard let (row, st) = doc?.describe(change) else { return change.value }

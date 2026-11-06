@@ -88,7 +88,7 @@ struct ShortcutsPanel: View {
     }
 }
 
-/// 终端设置: shortcuts, the key bar, appearance, and what the gestures do.
+/// Terminal Settings: shortcuts, the key bar, appearance, and what the gestures do.
 struct TerminalSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(TerminalPrefs.shortcuts) private var shortcutsJSON = ""

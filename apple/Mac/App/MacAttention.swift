@@ -3,10 +3,10 @@ import Foundation
 import UserNotifications
 
 /// What the Mac does outside its window when an agent needs you or finishes (docs/mac.md「和 iOS 的对应」):
-/// the Dock badge (how many cards wait on you) and a system notification for each agent that just turned 需要你 /
-/// 做完了, plus one for every newly arrived card while it is already 在「需要你」(#4081, a sub-agent's authorization
+/// the Dock badge (how many cards wait on you) and a system notification for each agent that just turned Needs You /
+/// Done, plus one for every newly arrived card while it is already in Needs You (#4081, a sub-agent's authorization
 /// or a second confirmation for the same agent).
-/// While the app runs it watches its own session list (the WebSocket stays open) and follows the same 设置 › 通知
+/// While the app runs it watches its own session list (the WebSocket stays open) and follows the same Settings › Notifications
 /// choices (`NotifyPrefs`); the hub pushes these to the Mac only while it is not connected (docs/mac.md「远程推送（Mac）」).
 enum MacAttention {
     /// The notifications to post for a session-list change: agents that turned needs-you or finished. Not for the
@@ -47,11 +47,11 @@ enum MacAttention {
 
     /// The newly arrived cards that each need a banner of their own (#4081): the hub pushes the phone once per card,
     /// and an agent already waiting on one card can ask again (a sub-agent's authorization, a second confirmation)
-    /// without leaving 需要你, so `transitions` alone misses the second one. A card whose uid was in the old list is
+    /// without leaving Needs You, so `transitions` alone misses the second one. A card whose uid was in the old list is
     /// never reported again, and cards removed (answered) and re-added are judged by the lists as they are now.
-    /// `transitionedKeys` names the sessions flipping to 需要你 in this change (or within the watcher's short grace
+    /// `transitionedKeys` names the sessions flipping to Needs You in this change (or within the watcher's short grace
     /// for a state event that beats the card event): their oldest waiting card is what the flip banner already
-    /// carries, so it is not posted twice — two cards landing at once still ping the second one. With 需要你处理
+    /// carries, so it is not posted twice — two cards landing at once still ping the second one. With Needs You
     /// pushes turned off (`prefs.input`) no card pings.
     static func newInteractions(old: [Interaction], new: [Interaction], transitionedKeys: Set<SessionKey>,
                                 open: SessionKey?, appActive: Bool, prefs: NotifyPrefs,
@@ -78,14 +78,14 @@ enum MacAttention {
         return n > 0 ? "\(n)" : nil
     }
 
-    /// The banner of one agent and state: one per session and state, so a second 做完了 for the same agent replaces
+    /// The banner of one agent and state: one per session and state, so a second Done for the same agent replaces
     /// the first.
     static func identifier(_ s: Session, _ state: AgentState) -> String { "\(s.machineID)/\(s.sessionID)#\(state.rawValue)" }
 
     /// The banner of one card (`newInteractions`), named by its uid like the hub push's collapse id.
     static func identifier(_ ix: Interaction) -> String { "interaction/\(ix.uid)" }
 
-    /// The banners to take back (#3513): the 需要你 one of an agent no longer waiting on you (answered here or
+    /// The banners to take back (#3513): the Needs You one of an agent no longer waiting on you (answered here or
     /// elsewhere, or gone from the list), and the one of each card that left the list.
     static func withdrawn(old: [Session], new: [Session], oldInteractions: [Interaction], newInteractions: [Interaction]) -> [String] {
         let now = Dictionary(new.map { ($0.key, $0.state) }, uniquingKeysWith: { a, _ in a })
@@ -106,7 +106,7 @@ enum MacAttention {
 
 extension MacAttention {
     /// The session a card belongs to. An `.interaction` event can briefly beat its session update, so when the list
-    /// has no matching session decode a bare 需要你 stand-in from the card: better to banner (titled by the card)
+    /// has no matching session decode a bare Needs You stand-in from the card: better to banner (titled by the card)
     /// than drop it. Returns nil only if that fixed shape ever fails to decode.
     static func session(for ix: Interaction, in sessions: [Session]) -> Session? {
         if let s = sessions.first(where: { $0.key == ix.sessionKey }) { return s }
@@ -145,7 +145,7 @@ extension MacAttention {
 
     private var last: [Session] = []
     private var lastInteractions: [Interaction] = []
-    /// Sessions whose flip to 需要你 has not met its card event yet, with the flip time (the short grace below).
+    /// Sessions whose flip to Needs You has not met its card event yet, with the flip time (the short grace below).
     /// The state event can beat the `.interaction` event by one main-queue turn; without this the card would then
     /// ping on top of the flip banner.
     private var flippedAt: [SessionKey: Date] = [:]
@@ -201,12 +201,12 @@ extension MacAttention {
                 }
             }
         }
-        // 体验模式's agents are made up.
+        // Demo Mode's agents are made up.
         guard !model.isDemo, MacAttention.armed(connectedAt: connectedAt, now: now), !last.isEmpty else { return }
         let prefs = LiveActivityController.shared.prefs ?? NotifyPrefs()
         let ping = MacAttention.transitions(old: last, new: sessions, open: model.visibleSession, appActive: NSApp.isActive,
                                             prefs: prefs, now: now, muted: mutedKey)
-        // The flip banner of a 需要你 turn already carries that session's oldest card: remember the flip for this
+        // The flip banner of a Needs You turn already carries that session's oldest card: remember the flip for this
         // turn (cards in the same list) and for one settle-length grace in case the card event lands a turn later.
         for (s, state) in ping where state == .needsYou { flippedAt[s.key] = now }
         flippedAt = flippedAt.filter { now.timeIntervalSince($0.value) <= MacAttention.settle }

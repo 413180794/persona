@@ -17,10 +17,10 @@ struct MacBelowTitleRow: ViewModifier {
     }
 }
 
-/// `MacBelowTitleRow` for a page that is a section's first page in the window but is opened elsewhere too (知识库 is also
-/// pushed in Persona's page, 机器 in 设置's detail column): the shell asks for it where the page sits under the section's
+/// `MacBelowTitleRow` for a page that is a section's first page in the window but is opened elsewhere too (Knowledge is also
+/// pushed in Persona's page, Machines in Settings' detail column): the shell asks for it where the page sits under the section's
 /// title (`macBelowTitleRow`), and the page applies it to its list inside its own background, which then still reaches
-/// up behind the title (clipped with the list, the title row lost the page's color in 黏土 and the other tinted styles).
+/// up behind the title (clipped with the list, the title row lost the page's color in Clay and the other tinted styles).
 struct MacBelowTitleRowIfAsked: ViewModifier {
     @Environment(\.macBelowTitleRow) private var asked
 

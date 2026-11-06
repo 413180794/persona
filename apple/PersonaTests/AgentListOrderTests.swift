@@ -78,7 +78,7 @@ import Testing
     }
 
     @Test func sortedByLatestUpdateOnlyTimeCounts() {
-        // 最近更新 (`AgentSort.updated`) orders rows the way a quick filter does: the state does not lift a row.
+        // Recently Updated (`AgentSort.updated`) orders rows the way a quick filter does: the state does not lift a row.
         let list = [session("needs", "needs_you", updated: 1), session("unread", "unread", updated: 5),
                     session("idle", "idle", updated: 9)]
         #expect(order(byRank: false).ordered(list).map(\.sessionID) == ["idle", "unread", "needs"])
@@ -187,7 +187,7 @@ import Testing
         #expect(rows(.state, folded: ["state/idle"], held: read.key).states(live).map(\.sessionID) == ["read", "work"])
     }
 
-    /// 按仓库: a working tree's nested spaces (Orca's child worktrees, #3075) follow its agents while「N 个子项」is open.
+    /// By Repository: a working tree's nested spaces (Orca's child worktrees, #3075) follow its agents while "N children" is open.
     @Test func nestedSpacesFollowTheirParentWhileOpened() {
         func orca(_ id: String, space: String, parent: String? = nil) -> Session {
             let parentField = parent.map { #","parent_space_id":"\#($0)""# } ?? ""

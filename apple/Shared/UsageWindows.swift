@@ -139,8 +139,8 @@ nonisolated enum UsageWindows {
         }
     }
 
-    /// When a window starts over, as a phrase: "45m 后重置" within the hour, "13:05 重置" when it is today, otherwise
-    /// "2d 3h 后重置"; "即将重置" when it is due, "" without a time.
+    /// When a window starts over, as a phrase: "resets in 45m" within the hour, "resets 13:05" when it is today, otherwise
+    /// "resets in 2d 3h"; "resets soon" when it is due, "" without a time.
     static func resetLabel(_ resetsAt: Date?, now: Date = .now, calendar: Calendar = .current) -> String {
         guard let at = resetsAt else { return "" }
         let secs = at.timeIntervalSince(now)
@@ -156,7 +156,7 @@ nonisolated enum UsageWindows {
         return d > 0 ? String(localized: "\(d)d \(hours % 24)h 后重置") : String(localized: "\(hours)h 后重置")
     }
 
-    /// How long ago a sample was taken ("12 秒前"), coarser past a minute; "" without a time.
+    /// How long ago a sample was taken ("12 s ago"), coarser past a minute; "" without a time.
     static func sampleAge(_ at: Date?, now: Date = .now) -> String {
         guard let at, at.isMeaningful else { return "" }
         let s = max(0, Int(now.timeIntervalSince(at).rounded()))
@@ -166,7 +166,7 @@ nonisolated enum UsageWindows {
         return String(localized: "\(s / 86400) 天前")
     }
 
-    /// The age as the account's header says it: "已过期 · 3 小时前" when stale.
+    /// The age as the account's header says it: "Outdated · 3 hr ago" when stale.
     static func ageLabel(_ a: UsageAccount, now: Date = .now) -> String {
         let age = sampleAge(a.sampledAt, now: now)
         return a.stale ? (age.isEmpty ? String(localized: "已过期") : String(localized: "已过期 · \(age)")) : age
@@ -189,7 +189,7 @@ nonisolated enum UsageWindows {
         return (plan.isEmpty ? a.windows : plan).map(\.usedPercent).max() ?? 0
     }
 
-    /// Where an account was seen, for people: "本机", then the gateways' names.
+    /// Where an account was seen, for people: "This Device", then the gateways' names.
     static func sourceNames(_ a: UsageAccount) -> [String] {
         (a.local ? [String(localized: "usage.source.local", defaultValue: "本机", comment: "Usage numbers read from an agent's own files on a computer")] : []) + a.sources
     }

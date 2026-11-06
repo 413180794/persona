@@ -1,8 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-/// 刷新 in the window's toolbar for a page iOS refreshes by pulling down (a Mac list has no pull to refresh): the
-/// session's 文件 and Git panes. ⌘R is 显示 › 刷新's (one shortcut for the whole app); the pane registers its load with
+/// Refresh in the window's toolbar for a page iOS refreshes by pulling down (a Mac list has no pull to refresh): the
+/// session's Files and Git panes. ⌘R is View › Refresh's (one shortcut for the whole app); the pane registers its load with
 /// it (`macRefreshes`), so ⌘R and this button do the same.
 struct MacRefreshItem: ToolbarContent {
     /// What the action reads that is not state (`macRefreshes`).

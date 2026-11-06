@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A round button in a column's title row (the Agents list's 个人 Agent and 新建会话, #1223), drawn as Persona's list
+/// A round button in a column's title row (the Agents list's personal Agent and New Session, #1223), drawn as Persona's list
 /// draws its search button there: the symbol on the material's circle, its name as the tooltip.
 struct MacTitleRowButton: View {
     let title: String

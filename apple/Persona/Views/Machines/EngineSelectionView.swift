@@ -109,7 +109,7 @@ struct EngineSelectionView: View {
                 }
                 #endif
                 if !pairing, let botmux, let on = botmux.on {
-                    // Saved as soon as it is flipped, not with 保存: it is not part of the engine choice (#2575).
+                    // Saved as soon as it is flipped, not with Save: it is not part of the engine choice (#2575).
                     Section {
                         Toggle(isOn: Binding(get: { on }, set: { next in Task { await botmux.set(next) } })) {
                             Text("同时显示 botmux 会话").font(Theme.Font.body).lineLimit(1)
@@ -183,7 +183,7 @@ struct EngineSelectionView: View {
             }
             .themedButton(prominent: true)
             .controlSize(.large)
-            // ⏎ only on the pairing step (a window of its own): pushed into the main window from 机器, a window-wide
+            // ⏎ only on the pairing step (a window of its own): pushed into the main window from Machines, a window-wide
             // default button took ⏎ from the ⌘K panel and the search field, saved and closed the page.
             .keyboardShortcut(pairing ? .defaultAction : nil)
             .disabled(selection.saving || !EngineSelectionModel.canSelect(selection.selected, on: machine))

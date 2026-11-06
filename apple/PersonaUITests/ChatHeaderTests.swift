@@ -1,8 +1,8 @@
 import XCTest
 
 /// An Agents chat's header, open and folded (`ChromeHeader`), opened from the list as a user would: it stays below the
-/// status bar, and the one 返回 VoiceOver and XCUITest find is the one on screen, which goes back. In the BeautifulUI
-/// style the folded bar once sat in the status bar's band (its place pill on the clock), and the hidden bar's 返回 stayed
+/// status bar, and the one Back VoiceOver and XCUITest find is the one on screen, which goes back. In the BeautifulUI
+/// style the folded bar once sat in the status bar's band (its place pill on the clock), and the hidden bar's Back stayed
 /// in the accessibility tree, hittable but going nowhere (2026-11-02). Both layouts here; both styles with
 /// `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`.
 final class ChatHeaderTests: XCTestCase {
@@ -13,7 +13,7 @@ final class ChatHeaderTests: XCTestCase {
     }
 
     /// Opens the first agent from the list; `folded`: the header folds itself after its idle seconds, else it is held open.
-    /// `sideBars`: laid out as under iPhone Duo's side bars (`-sideBars YES`): the system's bar takes the actions, 返回
+    /// `sideBars`: laid out as under iPhone Duo's side bars (`-sideBars YES`): the system's bar takes the actions, Back
     /// first, and the page draws no back of its own (2026-11-04: two backs, the system's and ours, one over the other).
     @MainActor private func openChat(oldLayout: Bool, folded: Bool, sideBars: Bool = false) {
         app = XCUIApplication()

@@ -93,7 +93,7 @@ struct AssistantTopBarTests {
         #expect(AssistantSidebarSearch.filter(all, "  ").count == 3)
     }
 
-    /// The sidebar's days: 今天 / 昨天 / 最近 7 天 / 更早 counted from midnight, newest first, no time goes to 更早.
+    /// The sidebar's days: Today / Yesterday / Previous 7 Days / Earlier counted from midnight, newest first, no time goes to Earlier.
     @Test func conversationsGroupByDay() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
@@ -135,7 +135,7 @@ struct AssistantTopBarTests {
         #expect(!DrawerPan.Coordinator.sidewaysScroller(at: CGPoint(x: 200, y: 500), in: root, towardsRight: true))
     }
 
-    /// The shell's strip: on 助手 a drag to the left pages (to the right is the drawer's), on Agents a drag to the right.
+    /// The shell's strip: on Assistant a drag to the left pages (to the right is the drawer's), on Agents a drag to the right.
     @Test @MainActor func stripDirection() {
         let pager = ShellPager()
         #expect(DrawerPan.Coordinator.pages(pager: pager, dx: -20))
@@ -161,7 +161,7 @@ struct AssistantTopBarTests {
         #expect(landed == [1])
         pager.slide(to: 1, animated: false)
         pager.dragBegan()
-        pager.drag(240) // 60% back towards 助手
+        pager.drag(240) // 60% back towards Assistant
         pager.letGo(velocity: 0)
         #expect(landed == [1, 0])
     }

@@ -1,8 +1,8 @@
 import PersonaKit
 import SwiftUI
 
-/// The 登录 section of an extension's page (#4507), under its status: how it is signed in (未登录 / 等待确认 / 已登录：<账号>
-/// / 已过期 / 出错：<原因>), 登录 or 重新登录, and 退出登录 when signed in. Signing in is a card a step at a time: a QR code
+/// The Sign In section of an extension's page (#4507), under its status: how it is signed in (Not signed in / Waiting for
+/// confirmation / Signed in: <account> / Expired / Error: <reason>), Sign In or Sign In Again, and Sign Out when signed in. Signing in is a card a step at a time: a QR code
 /// to scan (with its link, which opens the app it belongs to on this phone), a page to open with the code to enter there
 /// (and the link's QR code, for another phone), or fields to fill; it closes when the hub says done.
 struct ExtensionAuthSection: View {
@@ -171,7 +171,7 @@ struct ExtensionAuthSection: View {
         }
     }
 
-    /// The step's button (when it has one) and 取消, side by side in the card.
+    /// The step's button (when it has one) and Cancel, side by side in the card.
     private func buttons(primary: (String, String, () -> Void)?, primaryDisabled: Bool = false) -> some View {
         HStack(spacing: Theme.Space.s) {
             if let primary {

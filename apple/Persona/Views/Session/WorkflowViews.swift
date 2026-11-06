@@ -4,7 +4,7 @@ import SwiftUI
 // for the Agents list's rows and task cards, a section in the chat's header: a card per running one with its phases,
 // progress and agents, a line per ended one (#4532), the whole a capped share of the page that scrolls inside.
 
-/// 「后台 workflow「parity-audit」· Verify 2/2 · 169/185 · 14 分钟」 (「等 N 个」 when more run): under a row's last line.
+/// "Background workflow “parity-audit” · Verify 2/2 · 169/185 · 14 min" ("and N more" when more run): under a row's last line.
 struct WorkflowLine: View {
     var runs: [WorkflowRun]
     var font: Font = Theme.Font.caption

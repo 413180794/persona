@@ -1,8 +1,8 @@
 import XCTest
 
 /// The iPad's Persona sidebar is the iPhone drawer's (docs/ios.md「iPad」, 2026-11-05 user): Persona (the main
-/// conversation) first, then 收件箱 … 机器, the conversations, 新对话 + 设置 at the foot above Persona's face and machine.
-/// 收件箱 and 设置 are not tabs: 收件箱 opens beside the sidebar, 设置 as a sheet. Against scripts/mock/mock_hub.py
+/// conversation) first, then Inbox … Machines, the conversations, New Chat + Settings at the foot above Persona's face and machine.
+/// Inbox and Settings are not tabs: Inbox opens beside the sidebar, Settings as a sheet. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB), on an iPad simulator, portrait and landscape. TEST_RUNNER_JARVIS_SHOTS=<dir> keeps screenshots;
 /// TEST_RUNNER_JARVIS_HOLD=<seconds> stays on each page for `simctl io screenshot` (XCUITest's own turn in landscape).
 final class IPadSidebarTests: XCTestCase {
@@ -40,17 +40,17 @@ final class IPadSidebarTests: XCTestCase {
             let main = element("sidebar-main"), inbox = element("sidebar-inbox"), machines = element("sidebar-machines")
             XCTAssertTrue(main.waitForExistence(timeout: 20), "\(name): no 主对话 row:\n\(app.debugDescription)")
             XCTAssertTrue(inbox.exists && machines.exists, "\(name): the places are missing")
-            // 收件箱 … 机器 first, then 主对话 on its own row (#4606; the sidebar is the left column).
+            // Inbox … Machines first, then Main Chat on its own row (#4606; the sidebar is the left column).
             XCTAssertLessThan(inbox.frame.minY, machines.frame.minY)
             XCTAssertLessThan(machines.frame.minY, main.frame.minY, "\(name): 主对话 is not under the places")
             XCTAssertLessThan(main.frame.maxX, app.windows.firstMatch.frame.width / 2 + 100, "\(name): not in the left column")
-            // 新对话 and 设置 at the foot, below the places and 主对话, 新对话 on the left.
+            // New Chat and Settings at the foot, below the places and Main Chat, New Chat on the left.
             let new = element("sidebar-new"), settings = element("sidebar-settings")
             XCTAssertTrue(new.exists && settings.exists, "\(name): no 新对话 / 设置 at the foot")
             XCTAssertGreaterThan(new.frame.minY, main.frame.maxY)
             XCTAssertEqual(new.frame.midY, settings.frame.midY, accuracy: 4, "\(name): 新对话 and 设置 in one row")
             XCTAssertLessThan(new.frame.minX, settings.frame.minX)
-            // The tabs (iPad's bar at the top, above the sidebar's rows): Persona and Agents, no 收件箱 or 设置.
+            // The tabs (iPad's bar at the top, above the sidebar's rows): Persona and Agents, no Inbox or Settings.
             func tabs(_ label: String) -> [XCUIElement] {
                 app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).allElementsBoundByIndex
                     .filter { $0.exists && $0.frame.maxY < inbox.frame.minY - 60 }
@@ -60,18 +60,18 @@ final class IPadSidebarTests: XCTestCase {
             XCTAssertTrue(tabs("设置").isEmpty, "\(name): 设置 is still a tab")
             shot("home-\(name)")
 
-            // 收件箱 opens beside the sidebar, which stays.
+            // Inbox opens beside the sidebar, which stays.
             inbox.tap()
             let more = element("inbox.more")
             XCTAssertTrue(more.waitForExistence(timeout: 10), "\(name): no inbox:\n\(app.debugDescription)")
             XCTAssertGreaterThan(more.frame.minX, inbox.frame.maxX, "\(name): the inbox is not beside the sidebar")
             XCTAssertTrue(main.exists && inbox.isHittable, "\(name): the sidebar went away with the inbox")
             shot("inbox-\(name)")
-            // 主对话 goes back to the conversation.
+            // Main Chat goes back to the conversation.
             main.tap()
             XCTAssertTrue(element("assistant-sidebar-search").waitForExistence(timeout: 5))
 
-            // 设置 is a sheet with its ×.
+            // Settings is a sheet with its ×.
             settings.tap()
             let close = app.buttons["settings-close"].firstMatch
             XCTAssertTrue(close.waitForExistence(timeout: 10), "\(name): no 设置 sheet:\n\(app.debugDescription)")

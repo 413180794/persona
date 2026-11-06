@@ -36,7 +36,7 @@ final class FileUploadTests: XCTestCase {
         XCTAssertEqual(hits(items) - before, 1, "the chat's items read once")
     }
 
-    /// The + menu offers 文件 next to 照片 and 拍照.
+    /// The + menu offers Files next to Photos and Take Photo.
     @MainActor func testMenuHasFiles() throws {
         let app = try launch([])
         let plus = app.buttons["Add"].exists ? app.buttons["Add"] : app.buttons["添加"]

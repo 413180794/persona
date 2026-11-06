@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 设置 › 扩展: every plugin of the hub's (built in, from hub.json, installed on the hub's machine), its state, and
+/// Settings › Extensions: every plugin of the hub's (built in, from hub.json, installed on the hub's machine), its state, and
 /// the way to its page. Extensions are installed on the hub's side only (docs/extensions.md「安装」): with `personad plugin` on
 /// its machine or in its admin UI (/admin); the footer says how.
 struct ExtensionsView: View {
@@ -9,7 +9,7 @@ struct ExtensionsView: View {
 
     var body: some View {
         SettingsForm {
-            // 扩展市场 (docs/extensions.md「扩展市场」): only with a hub that has markets; first,
+            // Extension Market (docs/extensions.md「扩展市场」): only with a hub that has markets; first,
             // above the installed ones (#5017).
             if page.markets {
                 Section {
@@ -23,8 +23,8 @@ struct ExtensionsView: View {
                 }
             }
             #if os(macOS)
-            // The plugins' overview cards (docs/extensions.md「UI 插槽」): the Mac has no 总览, they lead the installed ones (their
-            // pages are in the sidebar). The iPhone has them on 设置 itself.
+            // The plugins' overview cards (docs/extensions.md「UI 插槽」): the Mac has no Overview, they lead the installed ones (their
+            // pages are in the sidebar). The iPhone has them on Settings itself.
             ExtensionCardsSection(link: $cardLink)
             #endif
             if let plugins = page.plugins, plugins.isEmpty {
@@ -106,7 +106,7 @@ private struct ExtensionRowLabel: View {
     }
 }
 
-/// A line of a plugin's 升级 section: what, and below it what happens (in the caution colour when it needs the user).
+/// A line of a plugin's Update section: what, and below it what happens (in the caution colour when it needs the user).
 private struct ExtensionUpgradeLine: View {
     var title: String
     var detail: String
@@ -142,7 +142,7 @@ private struct ExtensionStateDot: View {
     }
 }
 
-/// 设置 › 扩展 › one: what it is and how it is doing, its switch, its settings as a form drawn from its schema, its
+/// Settings › Extensions › one: what it is and how it is doing, its switch, its settings as a form drawn from its schema, its
 /// secrets (set here, never shown again), what it contributes and what it may do. A plugin written in hub.json is only
 /// looked at here.
 struct ExtensionDetailView: View {
@@ -346,7 +346,7 @@ struct ExtensionDetailView: View {
 
     /// The pages it draws (docs/extensions.md「声明式 UI」), a row each.
     @ViewBuilder private func pages(_ d: HubExtensionDetail) -> some View {
-        // The extension's own sign-in page is for apps without the 登录 section.
+        // The extension's own sign-in page is for apps without the Sign In section.
         let ui = auth?.page.map { page in d.ui.filter { $0.id != page } } ?? d.ui
         if !ui.isEmpty {
             Section {
@@ -362,7 +362,7 @@ struct ExtensionDetailView: View {
         }
     }
 
-    /// A section per connector it contributes that has an inbox (#3228): the connector's own 进收件箱 switch and the
+    /// A section per connector it contributes that has an inbox (#3228): the connector's own Show in Inbox switch and the
     /// way to its page. Not while the extension is off, nor when the hub's list cannot be read or has no such switch.
     @ViewBuilder private func connectorSections(_ d: HubExtensionDetail) -> some View {
         if d.plugin.enabled ?? true {
@@ -632,7 +632,7 @@ private struct ExtensionFieldRow: View {
         }
     }
 
-    /// What shows when it is empty: the default it falls back to, or 未设置.
+    /// What shows when it is empty: the default it falls back to, or Not set.
     private var placeholder: String {
         if let d = field.default, let s = field.enum?.first(where: { $0.value == d })?.label ?? d.string, !s.isEmpty {
             return String(localized: "默认：\(s)")
@@ -653,7 +653,7 @@ private struct ExtensionFieldRow: View {
 
 /// A list of the hub's machines (schema format machine, docs/extensions.md): a switch per machine of the systems the field
 /// names, by its name and how it is, in effect at once (`ExtensionModel.saveNow`), the same setting as where else it
-/// shows (the 操控电脑 switch on a Mac's page). A value that names no machine still shows, to be turned off.
+/// shows (the Control Computer switch on a Mac's page). A value that names no machine still shows, to be turned off.
 private struct ExtensionMachineSwitches: View {
     @Environment(AppModel.self) private var model
     var field: ExtensionField
@@ -690,7 +690,7 @@ private struct ExtensionMachineSwitches: View {
                 row(id, name: id, status: String(localized: "找不到这台机器"))
             }
         }
-        // An alert, not a confirmation dialog: anchored to the row as a popover, that one drops its 取消.
+        // An alert, not a confirmation dialog: anchored to the row as a popover, that one drops its Cancel.
         .alert("打开「\(askingName)」？", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) {
             Button("取消", role: .cancel) { asking = nil }
             Button(String(localized: "action.turnOn", defaultValue: "打开")) {
@@ -727,7 +727,7 @@ private struct ExtensionMachineSwitches: View {
         .disabled(page.saving)
     }
 
-    /// 在线 / 离线, then how ego lite is on it (就绪 is the switch worth turning on).
+    /// Online / Offline, then how ego lite is on it (Ready is the switch worth turning on).
     static func browserStatus(_ m: Machine) -> String {
         var parts = [m.online ? String(localized: "在线") : String(localized: "离线")]
         if m.online, let b = m.browser, b.checked {
@@ -740,7 +740,7 @@ private struct ExtensionMachineSwitches: View {
         return parts.joined(separator: " · ")
     }
 
-    /// 在线 / 离线, then for a computer plugin how Cua Driver is on it, once its node has said (every Mac's while the
+    /// Online / Offline, then for a computer plugin how Cua Driver is on it, once its node has said (every Mac's while the
     /// plugin is on, whether or not it is turned on for it).
     static func status(_ m: Machine, computers: Bool) -> String {
         var parts = [m.online ? String(localized: "在线") : String(localized: "离线")]

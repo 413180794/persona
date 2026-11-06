@@ -1,6 +1,6 @@
 import Foundation
 
-/// ⌘K's 文件 (docs/mac.md「快速打开、新建」): the files under the open conversation's directory, listed by the node
+/// ⌘K's Files (docs/mac.md「快速打开、新建」): the files under the open conversation's directory, listed by the node
 /// (`GET /machines/{mid}/fs/find`, one request when the panel opens) and matched here as the user types. The same
 /// matcher as the web's (`web/src/lib/file-find.ts`): every word has to match in order; word starts, path separators,
 /// camelCase humps, consecutive characters and the file's own name score higher; of two equal matches the shorter
@@ -212,7 +212,7 @@ nonisolated enum MacFileFind {
     }
 }
 
-/// The listing behind 文件: one per directory, kept a while so ⌘K opened again answers at once.
+/// The listing behind Files: one per directory, kept a while so ⌘K opened again answers at once.
 @MainActor final class MacFileIndex {
     static let shared = MacFileIndex()
     /// How long a list is reused when the panel opens again (the node keeps its own for 10 s).

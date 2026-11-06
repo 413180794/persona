@@ -9,7 +9,7 @@ nonisolated extension ComponentSpec {
 }
 
 nonisolated extension ColorSpec {
-    /// Teal (Island's own) that leans cyan and darker, away from the 完成未看 green and readable as a link on the mist;
+    /// Teal (Island's own) that leans cyan and darker, away from the Unread green and readable as a link on the mist;
     /// an ink bubble (light on dark in dark mode).
     static let teal = ColorSpec(
         title: String(localized: "青", comment: "Theme color name: teal"), subtitle: "Island",

@@ -1,12 +1,12 @@
 import PersonaKit
 import SwiftUI
 
-// 设置 › 连接器 (2026-11-01): where Persona' data comes from and acts — this device's data (phone_* tools), the mail
-// accounts, 飞书 (the hub's Lark gateway), and the 飞书机器人 the user talks to Persona through (FeishuBotView). Mail used to be managed from the inbox's ⋯ menu, this device's data was 手机数据.
+// Settings › Connectors (2026-11-01): where Persona' data comes from and acts — this device's data (phone_* tools), the mail
+// accounts, Lark (the hub's Lark gateway), and the Lark Bot the user talks to Persona through (FeishuBotView). Mail used to be managed from the inbox's ⋯ menu, this device's data was Phone Data.
 
 /// What a connector is called and says in the settings list.
 enum ConnectorText {
-    /// This device as a connector: 这台 iPhone / iPad / Mac.
+    /// This device as a connector: This iPhone / iPad / Mac.
     static var device: String {
         #if os(macOS)
         String(localized: "这台 Mac")
@@ -33,7 +33,7 @@ enum ConnectorText {
         return st.connected ? (st.name ?? String(localized: "已连接")) : String(localized: "连不上")
     }
 
-    /// A hub connector's state in a word or two (its row, its page). Only "error" is 出错了: a state this app does not
+    /// A hub connector's state in a word or two (its row, its page). Only "error" is Something Went Wrong: a state this app does not
     /// know yet (a newer hub's) is not one.
     static func state(_ c: HubConnector) -> String {
         switch c.status {
@@ -99,7 +99,7 @@ enum ConnectorText {
             : String(localized: "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。")
     }
 
-    /// A conversation's message opened where it came from: 在 Telegram 里打开; a connector without an app of its own
+    /// A conversation's message opened where it came from: Open in Telegram; a connector without an app of its own
     /// says its name.
     nonisolated static func openInTitle(_ id: String, name: String) -> String {
         let place = profile(id).app ?? name
@@ -111,9 +111,9 @@ enum ConnectorText {
 nonisolated struct ConnectorProfile: Equatable, Sendable {
     /// Its mark (`Theme.Brand`).
     var brand: String?
-    /// The app its items are answered in, for 在 Telegram 里回复 and 在 Telegram 里打开.
+    /// The app its items are answered in, for Reply in Telegram and Open in Telegram.
     var app: String?
-    /// What switching it on brings in, in the switch's footer; the default is 它的内容.
+    /// What switching it on brings in, in the switch's footer; the default is "its content".
     var reads: String?
     var signInFooter: String?
     /// Signing out also ends the session at the service (Telegram's log-out call).
@@ -151,9 +151,9 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var hosts: [String]?
     /// Its own settings (GitHub's: GitHubInboxOptions), as the hub gives them.
     var options: JSONValue?
-    /// Switched on in 设置 (nil: a hub from before the switch, always on).
+    /// Switched on in Settings (nil: a hub from before the switch, always on).
     var enabled: Bool?
-    /// 进知识库 and 进收件箱 (nil: it has no archive, no inbox, or the hub is from before these switches).
+    /// Save to Knowledge and Show in Inbox (nil: it has no archive, no inbox, or the hub is from before these switches).
     var archive: Bool?
     var inbox: Bool?
 
@@ -209,12 +209,12 @@ extension APIClient {
         try JSON.decoder.decode(ConnectorDataDeleted.self, from: try await request("DELETE", "/api/v1/connectors/\(id)/data"))
     }
 
-    /// Turns 进知识库 (`ConnectorFeed.archive`) or 进收件箱 on or off.
+    /// Turns Save to Knowledge (`ConnectorFeed.archive`) or Show in Inbox on or off.
     func setConnector(_ id: String, feed: ConnectorFeed, on: Bool) async throws -> HubConnector {
         try JSON.decoder.decode(HubConnector.self, from: try await request("PUT", "/api/v1/connectors/\(id)/settings", body: [feed.rawValue: on]))
     }
 
-    /// 删除已存的知识库内容: the knowledge base's chats and people of it; 进知识库 is turned off with it.
+    /// Delete Saved Knowledge: the knowledge base's chats and people of it; Save to Knowledge is turned off with it.
     func deleteConnectorArchive(_ id: String) async throws -> ConnectorDataDeleted {
         try JSON.decoder.decode(ConnectorDataDeleted.self, from: try await request("DELETE", "/api/v1/connectors/\(id)/archive"))
     }
@@ -227,7 +227,7 @@ extension APIClient {
     }
 }
 
-/// A row of 设置 › 连接器 after this device's, from the hub's list (GET /api/v1/connectors?all=1): mail and Feishu
+/// A row of Settings › Connectors after this device's, from the hub's list (GET /api/v1/connectors?all=1): mail and Feishu
 /// first and drawn as they always were (their own pages, their own status), then the rest in the hub's order.
 nonisolated enum ConnectorRow: Hashable, Identifiable {
     case mail, lark
@@ -251,8 +251,8 @@ nonisolated enum ConnectorRow: Hashable, Identifiable {
     }
 }
 
-/// An extension's page (设置 › 扩展 › …) for the connectors it contributes (#3228, as the web's
-/// `ExtensionConnectorInbox`): each one's 进收件箱 switch, the hub's own (PUT /api/v1/connectors/{id}/settings, the same
+/// An extension's page (Settings › Extensions › …) for the connectors it contributes (#3228, as the web's
+/// `ExtensionConnectorInbox`): each one's Show in Inbox switch, the hub's own (PUT /api/v1/connectors/{id}/settings, the same
 /// switch as on the connector's page, not a copy), and the way to that page for the rest.
 @Observable final class ExtensionConnectorsModel {
     struct Deps {
@@ -303,7 +303,7 @@ nonisolated enum ConnectorRow: Hashable, Identifiable {
     }
 }
 
-/// The 连接器 section of 设置: one row per connector with what it has now.
+/// The Connectors section of Settings: one row per connector with what it has now.
 struct ConnectorsSection: View {
     @Environment(AppModel.self) private var model
     @State private var accounts: [MailAccount]?
@@ -369,7 +369,7 @@ struct ConnectorsSection: View {
     }
 }
 
-/// One row of the 连接器 section: the connector's mark (its brand's, or a symbol) and name, what it has now on the right.
+/// One row of the Connectors section: the connector's mark (its brand's, or a symbol) and name, what it has now on the right.
 private struct ConnectorRowLabel: View {
     var title: String
     var symbol: String
@@ -397,7 +397,7 @@ private struct ConnectorRowLabel: View {
     }
 }
 
-/// 设置 › 连接器 › 飞书: whether the hub reaches the Lark gateway, who is signed in, and what Persona does with it. The account
+/// Settings › Connectors › Lark: whether the hub reaches the Lark gateway, who is signed in, and what Persona does with it. The account
 /// itself is signed in on the hub's machine (docs/feishu.md), not here.
 struct FeishuConnectorView: View {
     @Environment(AppModel.self) private var model
@@ -545,7 +545,7 @@ struct FeishuConnectorView: View {
     }
 }
 
-/// 设置 › 连接器 › GitHub (any connector of the hub's, GET /api/v1/connectors): whether it is signed in, as whom, where
+/// Settings › Connectors › GitHub (any connector of the hub's, GET /api/v1/connectors): whether it is signed in, as whom, where
 /// the sign-in comes from, what is wrong. One the user signs in to here (Telegram; GitHub with its device flow, or a
 /// computer's gh login set up on the hub's side) also gets its switch, sign-in, sign-out and delete
 /// (ConnectorSignInSections).
@@ -661,7 +661,7 @@ struct HubConnectorView: View {
 
     /// `quietly`: no spinner (asked again every second while the program starts).
     private func load(quietly: Bool = false) async {
-        guard let api = model.api else { return } // not paired yet: still 正在检查…
+        guard let api = model.api else { return } // not paired yet: still Checking…
         if !quietly { loading = true }
         defer { loading = false }
         do {

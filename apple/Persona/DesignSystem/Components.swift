@@ -58,7 +58,7 @@ struct SessionAvatar: View {
     var size: CGFloat = 44
     /// In place of the machine's symbol (the inbox shows what the agent asks: a question, a plan…).
     var symbol: String?
-    /// The state dot on the corner; off where the square's color already says it (the inbox's 需要你 rows).
+    /// The state dot on the corner; off where the square's color already says it (the inbox's Needs You rows).
     var dot = true
 
     var body: some View {
@@ -82,9 +82,9 @@ struct SessionAvatar: View {
     }
 }
 
-/// The BeautifulUI style's mark for an agent's state, its task badge (docs/agent-states.md): 需要你 a red badge with "!", working the
-/// turning ring, 完成未看 the green check, seen an empty ring; offline and unknown a gray dot. Still, apart from the
-/// working ring: the red badge says 需要你 without the breathing dot's 30 fps redraw.
+/// The BeautifulUI style's mark for an agent's state, its task badge (docs/agent-states.md): Needs You a red badge with "!", working the
+/// turning ring, Unread the green check, seen an empty ring; offline and unknown a gray dot. Still, apart from the
+/// working ring: the red badge says Needs You without the breathing dot's 30 fps redraw.
 struct AgentStateBadge: View {
     var state: AgentState
     private static let attention = BUIGlyph("M12 6v8M12 18.5v.01")
@@ -108,8 +108,8 @@ struct AgentStateBadge: View {
 }
 
 /// The app's one small label (not a control): a fact beside other text. Three looks —
-/// `.neutral`: secondary words on a soft gray (a model, a version, a tab, 私聊);
-/// `.tint`: a meaning's words on its soft fill (a state's tone, @我, 推荐 in the AI's color);
+/// `.neutral`: secondary words on a soft gray (a model, a version, a tab, DMs);
+/// `.tint`: a meaning's words on its soft fill (a state's tone, @Me, Recommended in the AI's color);
 /// `.outline`: secondary words in a hairline (which agent: Claude / Codex).
 /// The BeautifulUI style draws it as that library's pill (`BUIPill`).
 struct Chip: View {
@@ -223,7 +223,7 @@ struct LinkBadge: View {
 }
 
 /// A count on a row or a section header: bold digits on a capsule, "99+" past 99. `.solid` is white on a color —
-/// `Theme.countBadge` gray, the accent when it is about you (@我); `.tone` is a state's words on its tint.
+/// `Theme.countBadge` gray, the accent when it is about you (@Me); `.tone` is a state's words on its tint.
 /// A chip that turns a filter or a choice on and off (the inbox's sources, the Feishu accounts): in the BeautifulUI
 /// style its filter chip; otherwise a capsule filled with the accent while on. `count` follows the title.
 struct FilterChip: View {
@@ -387,7 +387,7 @@ extension View {
 
 /// Asks before closing an agent: quitting Claude and closing its herdr tab on a computer can't be undone.
 /// Asks before closing an agent: a small sheet that says which one (name, where it runs) and what closing does, with
-/// 关闭 and 取消. (The system confirmation dialog was a wall of text with no cancel button.)
+/// Close and Cancel. (The system confirmation dialog was a wall of text with no cancel button.)
 struct CloseAgentConfirmation: ViewModifier {
     @Binding var session: Session?
     var onClosed: (SessionKey) -> Void = { _ in }
@@ -528,8 +528,8 @@ struct CloseAgentSheet: View {
     }
 }
 
-/// Asks before 删除对话: says that it only leaves the lists (every app's), and that the record on the computer stays and
-/// brings it back once used again. 删除 runs it; a failure shows as the toast and the conversation stays.
+/// Asks before Delete Chat: says that it only leaves the lists (every app's), and that the record on the computer stays and
+/// brings it back once used again. Delete runs it; a failure shows as the toast and the conversation stays.
 struct DeleteSessionConfirmation: ViewModifier {
     @Environment(AppModel.self) private var model
     @Binding var session: Session?
@@ -593,7 +593,7 @@ enum Loadable<Value> {
 extension Loadable: Equatable where Value: Equatable {}
 extension Loadable: Sendable where Value: Sendable {}
 
-/// A `Loadable` drawn the one way: a centered spinner, the content, or the error with 重试.
+/// A `Loadable` drawn the one way: a centered spinner, the content, or the error with Retry.
 struct LoadableContent<Value, Content: View>: View {
     var state: Loadable<Value>
     var retry: (() -> Void)?

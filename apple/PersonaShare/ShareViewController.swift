@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// 分享 › Persona (#4586): text, a link or pictures from another app go to Persona's main conversation, with a note
+/// Share › Persona (#4586): text, a link or pictures from another app go to Persona's main conversation, with a note
 /// typed here, as Android's ShareActivity sends them. The extension talks to the hub itself (the app may not be
 /// running): it reads the pairing the app keeps in the keychain and sends like the composer does.
 final class ShareViewController: UIViewController {

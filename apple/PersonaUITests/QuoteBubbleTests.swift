@@ -1,6 +1,6 @@
 import XCTest
 
-/// 引用 as Telegram's reply (#986): a long press › 引用 puts the message over the box, inside it, with × to drop it;
+/// Quote as Telegram's reply (#986): a long press › Quote puts the message over the box, inside it, with × to drop it;
 /// several quotes stack. Sent, the bubble opens with the quote, and a tap on it goes back to the quoted message.
 ///   PORT=18797 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/QuoteBubbleTests
@@ -32,7 +32,7 @@ final class QuoteBubbleTests: XCTestCase {
         add(a)
     }
 
-    /// Long-presses a message by its centre in the window (rows of the flipped list report flipped frames) and picks 引用.
+    /// Long-presses a message by its centre in the window (rows of the flipped list report flipped frames) and picks Quote.
     @MainActor private func quote(_ message: String) {
         let text = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", message)).firstMatch
         XCTAssertTrue(text.waitForExistence(timeout: 15), "\(message) is not in the chat")
@@ -79,7 +79,7 @@ final class QuoteBubbleTests: XCTestCase {
         sleep(1)
         shot("three")
 
-        // Quotes alone are a message (the words become 参考上面的内容。): nothing typed, no keyboard over the shot.
+        // Quotes alone are a message (the words become 「参考上面的内容。」): nothing typed, no keyboard over the shot.
         let send = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "shell-composer-send", "发送")).firstMatch
         XCTAssertTrue(send.waitForExistence(timeout: 3))
         send.tap()
@@ -96,7 +96,7 @@ final class QuoteBubbleTests: XCTestCase {
         let target = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", answer)).firstMatch
         XCTAssertTrue(target.waitForExistence(timeout: 3) && target.isHittable, "the tap did not bring the quoted answer into view")
     }
-    /// The Feishu chat: 回复 quotes the message inside the box over the field, and a reply's quote in its bubble goes
+    /// The Feishu chat: Reply quotes the message inside the box over the field, and a reply's quote in its bubble goes
     /// back to the message it answers.
     @MainActor func testFeishuReply() {
         let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!

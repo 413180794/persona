@@ -6,7 +6,7 @@ import SwiftUI
     static let shared = MacShellState()
     var quickOpen = false
     var newAgent = false
-    /// 知识库 or 机器 while picked (they are not iPhone tabs); nil shows the tab's section.
+    /// Knowledge or Machines while picked (they are not iPhone tabs); nil shows the tab's section.
     var section: MacSection? = MacSection.remembered() {
         didSet { MacSection.remember(section) }
     }
@@ -19,14 +19,14 @@ import SwiftUI
     var terminalWindow: SessionKey?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
     var seed = ""
-    /// A file ⌘K's 文件 picked: the window shows it in the file viewer, for the conversation `fileKey`.
+    /// A file ⌘K's Files picked: the window shows it in the file viewer, for the conversation `fileKey`.
     var file: FileRef?
     var fileKey: SessionKey?
     /// What the Agent menu asks of the chat showing `key` (a new value each time): toggle the inspector
-    /// (显示会话信息 ⌥⌘I), or bring up its own 重命名 / 清空上下文 / 关闭 Agent dialogs.
+    /// (Show Session Info ⌥⌘I), or bring up its own Rename / Clear Context / Close Agent dialogs.
     var chatRequest: ChatRequest?
-    /// What the Agents list's menu acts on (its folds, its machine filter, 机器): the shell draws that menu in the
-    /// window's toolbar while Agents shows, and 显示 › 全部折叠 / 全部展开 use it too. The list stays in the window
+    /// What the Agents list's menu acts on (its folds, its machine filter, Machines): the shell draws that menu in the
+    /// window's toolbar while Agents shows, and View › Collapse All / Expand All use it too. The list stays in the window
     /// behind other sections (`MacPageStack`), holding still there (its `AgentsFeed` is out of sight, #390).
     var agentsList: AgentsListMenu.Actions?
     /// Counts ⇧Tab presses in a composer: the list beside it takes the keys again (`MacListKeys`).
@@ -55,7 +55,7 @@ struct MacQuickOpenPanel: View {
     @State private var query = ""
     @State private var selected = 0
     @FocusState private var focused: Bool
-    /// The directory 文件 searches: the open conversation's, when it has one (read anew as the window's chat and its
+    /// The directory Files searches: the open conversation's, when it has one (read anew as the window's chat and its
     /// session arrive).
     private var place: FilePlace? { Self.filePlace(model) }
     @State private var files: MacFileIndex.State?
@@ -144,7 +144,7 @@ struct MacQuickOpenPanel: View {
         }
     }
 
-    /// 文件's line under the list while it has something to say: the index on its way, a directory it cannot read.
+    /// Files' line under the list while it has something to say: the index on its way, a directory it cannot read.
     @ViewBuilder private var fileStatus: some View {
         if !query.trimmingCharacters(in: .whitespaces).isEmpty {
             switch files {
@@ -157,7 +157,7 @@ struct MacQuickOpenPanel: View {
         }
     }
 
-    /// The conversation the window shows, with a directory to search; nil elsewhere (no 文件 then).
+    /// The conversation the window shows, with a directory to search; nil elsewhere (no Files then).
     static func filePlace(_ model: AppModel) -> FilePlace? {
         guard let key = MacShellState.shared.focusedChat(model),
               let cwd = model.session(key)?.cwd.trimmingCharacters(in: .whitespaces), !cwd.isEmpty else { return nil }
@@ -280,7 +280,7 @@ struct MacQuickOpenLayer: View {
 }
 
 extension MacShellState {
-    /// Shows a section: an iPhone tab moves the tab, 知识库 / 机器 are picked on the Mac side.
+    /// Shows a section: an iPhone tab moves the tab, Knowledge / Machines are picked on the Mac side.
     func go(_ s: MacSection, _ model: AppModel) {
         let p = MacSection.pick(s)
         pluginPage = nil
@@ -291,7 +291,7 @@ extension MacShellState {
 
 extension MacShellState {
     /// The chat the menus act on: the key window's; with no key window (the app in the background, the menu bar's
-    /// menu open), the last one shown. A key window without a chat (知识库, a sheet) has none.
+    /// menu open), the last one shown. A key window without a chat (Knowledge, a sheet) has none.
     nonisolated static func focusedChat(keyWindow: Int?, chats: [Int: SessionKey], fallback: SessionKey?) -> SessionKey? {
         guard let keyWindow else { return fallback }
         return chats[keyWindow]
@@ -325,7 +325,7 @@ extension MacShellState {
 }
 
 extension MacShellState {
-    /// Something is about to open a chat or a tab's page: 知识库 / 机器 make way. Called directly because when the tab
+    /// Something is about to open a chat or a tab's page: Knowledge / Machines make way. Called directly because when the tab
     /// and the open chat are already the ones asked for, nothing changes for MacShell's onChange to see.
     func willOpen() { section = nil }
 

@@ -18,7 +18,7 @@ nonisolated enum ChatImageLoader {
         "\(p.identity)@\(side.map { Int($0) } ?? 0)" as NSString
     }
 
-    /// Settings › 存储空间 cleared the files: drop the decoded copies too.
+    /// Settings › Storage cleared the files: drop the decoded copies too.
     static func clearMemory() { images.removeAllObjects() }
 
     /// Already decoded: lets a row that scrolls back into view show its image without a placeholder frame.

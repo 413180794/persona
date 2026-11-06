@@ -1,14 +1,14 @@
 import XCTest
 
 /// The chat stays at the newest message (scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1, JARVIS_MOCK_HUB): a long chat
-/// opens at the bottom; at the bottom a new reply is followed; scrolled up, ↓ (回到最新) shows and brings you back; a
-/// reply that arrives while you read history does not pull you down. On an Agent's chat (working, 完成未看, and opened
+/// opens at the bottom; at the bottom a new reply is followed; scrolled up, ↓ (Jump to Latest) shows and brings you back; a
+/// reply that arrives while you read history does not pull you down. On an Agent's chat (working, Unread, and opened
 /// where you left off) and on the Persona page. Replies come from `/mock/say`. Where the list is comes from the app's `-showScrollState` probe:
 /// XCUITest's frames of rows in the flipped list are wrong (docs/lessons/ios.md).
 final class ChatFollowTests: XCTestCase {
     private var hub: String!
-    private let working = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // 给天气 App 加主屏幕小组件, 15 exchanges in front
-    private let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"   // 整理这个季度的读书笔记, a long one
+    private let working = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // 「给天气 App 加主屏幕小组件」, 15 exchanges in front
+    private let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"   // 「整理这个季度的读书笔记」, a long one
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -150,7 +150,7 @@ final class ChatFollowTests: XCTestCase {
         followAndReturn(launch(["-tab", "dev", "-openSession", working]), "agent")
     }
 
-    /// 完成未看 opens at the start of the latest answer; a short one is the bottom already, and it must follow from there.
+    /// Unread opens at the start of the latest answer; a short one is the bottom already, and it must follow from there.
     @MainActor func testUnreadAgentChatFollows() throws {
         followAndReturn(launch(["-tab", "dev", "-openSession", working, "-showAsUnread", "YES"]), "agent-unread")
     }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A page in a split's detail column, in the title bar's row at the column's own leading edge: the way back (‹) when
-/// there is a page under this one, then the page's title when it gives one (`detailTitle`, 设置's pages), as Finder and
+/// there is a page under this one, then the page's title when it gives one (`detailTitle`, Settings' pages), as Finder and
 /// System Settings have them (#1224 B2).
 /// The system's back button went to the leading end of the window's toolbar instead, by the traffic lights and over
 /// the sections column, drawn as an iPhone's round glass button (#1170). The first page has nothing to go back to.
@@ -58,7 +58,7 @@ struct MacDetailBack: ViewModifier {
     }
 }
 
-/// A page pushed in a section's own stack (知识库, 机器: no list beside it, #2318): the ‹ in the title bar's row, then
+/// A page pushed in a section's own stack (Knowledge, Machines: no list beside it, #2318): the ‹ in the title bar's row, then
 /// the page's title (`detailTitle`, or its own `pageTitle` moved past the ‹), where the section's name was. The
 /// system's back button went by the traffic lights as a round glass button, and as the window's toolbar item it stayed
 /// there when another section came to the front (the sections' pages are kept, #390): a click on it took the hidden
@@ -101,7 +101,7 @@ struct MacPushedPage: ViewModifier {
 }
 
 extension EnvironmentValues {
-    /// The page is in a section's own navigation stack (知识库, 机器), set by the shell on the stack: its pushed pages
+    /// The page is in a section's own navigation stack (Knowledge, Machines), set by the shell on the stack: its pushed pages
     /// draw their ‹ and title in the title bar's row (`sectionPushedPage`).
     @Entry var macSectionStack = false
     /// A ‹ is drawn at the title row's leading edge: a page's own title there (`MacTitleRowTitle`) starts after it.

@@ -1,7 +1,7 @@
 import SwiftUI
 
 nonisolated extension ComponentSpec {
-    /// 黏土: puffy rounded surfaces with layered shadows on a pastel wash of the color, rounded type, soft buttons.
+    /// Clay: puffy rounded surfaces with layered shadows on a pastel wash of the color, rounded type, soft buttons.
     static let clay = ComponentSpec(
         title: String(localized: "黏土", comment: "Interface style name: clay"), subtitle: String(localized: "柔和、圆润"),
         surface: .puffy, buttons: .soft, fontDesign: .rounded, previewCorner: 24, components: .jarvis, canvas: .wash,
@@ -9,7 +9,7 @@ nonisolated extension ComponentSpec {
 }
 
 nonisolated extension ColorSpec {
-    /// Soft pastel lavender (黏土's own), with the wash chosen by hand.
+    /// Soft pastel lavender (Clay's own), with the wash chosen by hand.
     static let lavender = ColorSpec(
         title: String(localized: "薰衣草紫"), subtitle: String(localized: "黏土", comment: "Interface style name: clay"),
         accent: Pair(light: 0x7A5AF8, dark: 0x8979EB),

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 按仓库 (`RepoPlace`, `RepoTree`): the repository and working tree a working directory names, and the machines →
+/// By Repository (`RepoPlace`, `RepoTree`): the repository and working tree a working directory names, and the machines →
 /// repositories → working trees the Agents list draws. The path rules are the web's (`web/src/lib/agent-repos.test.ts`).
 struct AgentRepoTreeTests {
     private func session(_ id: String, _ cwd: String, machine: String = "machine-a", group: String = "") -> Session {
@@ -156,7 +156,7 @@ struct AgentRepoTreeTests {
         #expect(orca("p", "/x", space: "w0").parentSpaceID == nil)
     }
 
-    /// An app that never chose a grouping shows 按仓库 (#2108), on a hub with todos or without.
+    /// An app that never chose a grouping shows By Repository (#2108), on a hub with todos or without.
     @Test @MainActor func byRepositoryIsTheDefault() {
         #expect(DevGrouping.standard == .repo)
         #expect(DevGrouping.resolved(.standard, supportsTodos: false) == .repo)

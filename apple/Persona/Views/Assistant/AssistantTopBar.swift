@@ -1,13 +1,13 @@
 import SwiftUI
 
 /// The Persona tab's top bar (docs/ios.md「Persona 顶栏和侧边栏」), floating over the conversation with a fog under it
-/// instead of a solid bar: 历史对话 (the sidebar) on the left, Persona's face and name in the middle, 新对话 on the right.
-/// The face opens a menu: 知识库, 详细信息 (the profile), the copy items (the working directory, a block of facts to
-/// paste to another agent, the session id), the launcher, the session info card, 中断. While the hub is out of reach
-/// the name pill shows the spinner and 等待网络 / 连接中… / 更新中….
+/// instead of a solid bar: Chat History (the sidebar) on the left, Persona's face and name in the middle, New Chat on the right.
+/// The face opens a menu: Knowledge, Details (the profile), the copy items (the working directory, a block of facts to
+/// paste to another agent, the session id), the launcher, the session info card, Interrupt. While the hub is out of reach
+/// the name pill shows the spinner and Waiting for Network / Connecting… / Updating….
 struct AssistantTopBar: View {
     @Environment(AppModel.self) private var model
-    /// In the shell (docs/ios.md「新外壳」) the middle is the 助手 | Agents switch; its 助手 opens this bar's menu.
+    /// In the shell (docs/ios.md「新外壳」) the middle is the Assistant | Agents switch; its Assistant opens this bar's menu.
     @Environment(\.shell) private var shell
     /// The conversation on screen; nil on the new-conversation page.
     var key: SessionKey?
@@ -49,11 +49,11 @@ struct AssistantTopBar: View {
         let _ = PerfTrace.body("AssistantTopBar")
         #endif
         bar
-            // 会话信息 is a sheet, like the Agents chat's (SessionInfoSheet).
+            // Session Info is a sheet, like the Agents chat's (SessionInfoSheet).
             .sheet(isPresented: Binding(get: { showInfo && key != nil }, set: { showInfo = $0 })) {
                 if let key {
                     #if os(macOS)
-                    // A window sheet: SessionInfoSheet has no stack or 完成 of its own on the Mac (it is the chat's inspector there).
+                    // A window sheet: SessionInfoSheet has no stack or Done of its own on the Mac (it is the chat's inspector there).
                     NavigationStack {
                         SessionInfoSheet(key: key, session: session)
                             .navigationTitle("会话信息")
@@ -69,7 +69,7 @@ struct AssistantTopBar: View {
             }
             .onChange(of: key) { showInfo = false }
             #if DEBUG
-            .task { // `-showInfo YES`: 会话信息 open, for screenshots (the Agents chat reads the same flag)
+            .task { // `-showInfo YES`: Session Info open, for screenshots (the Agents chat reads the same flag)
                 if UserDefaults.standard.bool(forKey: "showInfo") { try? await Task.sleep(for: .seconds(2)); showInfo = true }
             }
             #endif
@@ -89,7 +89,7 @@ struct AssistantTopBar: View {
 
     #if os(macOS)
     /// The Mac's (#2113): the title bar's row of the conversation's column, as the Agents chat's (`macTitleRow`):
-    /// 历史对话, the name (its menu: 知识库, 详细信息, the copies, the launcher, 中断), and 新对话 (⇧⌘N) at the end,
+    /// Chat History, the name (its menu: Knowledge, Details, the copies, the launcher, Interrupt), and New Chat (⇧⌘N) at the end,
     /// instead of the phone's face over a pill in the middle.
     private var macBar: some View {
         let link = model.connection.shown
@@ -140,7 +140,7 @@ struct AssistantTopBar: View {
     #endif
 
     /// ChatGPT's top bar: the persona's face (the drawer; a mark while the inbox has something for the user), the
-    /// switch, 新对话.
+    /// switch, New Chat.
     private var shellBar: some View {
         @Bindable var model = model
         let link = model.connection.shown
@@ -299,7 +299,7 @@ struct AssistantTopBar: View {
         model.toast = Toast(String(localized: "下一条消息起使用 \(what)"), style: .success)
     }
 
-    /// What the conversation runs with no pick of its own: 主对话 the launcher in 设置 › 助手, another its own.
+    /// What the conversation runs with no pick of its own: Main Chat the launcher in Settings › Assistant, another its own.
     private var defaultLauncher: String {
         if let key, key != model.assistantMain, let l = session?.launcher, !l.isEmpty { return l }
         return model.assistantConfig?.launcher ?? "claude"
@@ -328,7 +328,7 @@ struct AssistantTopBar: View {
     }
 
     private var launcher: String {
-        // The main conversation follows 设置 › 助手 (the hub sends it there), side ones keep their own.
+        // The main conversation follows Settings › Assistant (the hub sends it there), side ones keep their own.
         if let key, key == model.assistantMain, let l = model.assistantLaunchers[key] ?? model.assistantConfig?.launcher { return l }
         if let key { return model.assistantLaunchers[key] ?? session?.launcher ?? model.assistantConfig?.launcher ?? "claude" }
         return model.assistantConfig?.launcher ?? "claude"
@@ -381,13 +381,13 @@ struct AssistantTopBar: View {
             }
         }
         if model.canCompact(key) || model.canStartNewMain(key) {
-            Section { MainConversationMenu(key: key) } // 压缩上下文, 新建主对话… (#1762)
+            Section { MainConversationMenu(key: key) } // Compact context, New Main Chat… (#1762)
         }
         if let key {
             Section {
                 Menu {
                     Section("下一条消息起使用") {
-                        // The conversation's own launcher (for 主对话 the one in 设置 › 助手): no pick of this chat's.
+                        // The conversation's own launcher (for Main Chat the one in Settings › Assistant): no pick of this chat's.
                         Button { pickDefault() } label: {
                             if model.assistantLaunchers[key] == nil, pickedModel == nil { Label("默认：\(defaultLauncher)", systemImage: Theme.Icon.done) }
                             else { Text("默认：\(defaultLauncher)") }
@@ -451,7 +451,7 @@ struct AssistantTopBar: View {
     }
 }
 
-/// What 拷贝信息 puts on the clipboard: enough for another agent (or the user at a terminal) to find this conversation.
+/// What Copy Info puts on the clipboard: enough for another agent (or the user at a terminal) to find this conversation.
 nonisolated enum AssistantCopyText {
     static func info(title: String?, isMain: Bool, sessionID: String?, machine: String?, machineID: String, cwd: String,
                      launcher: String, model: String?) -> String {
@@ -489,9 +489,9 @@ extension AppModel {
         key?.machineID ?? assistantConfig?.machineID ?? hubMachineID
     }
 
-    /// What the persona's face shows for Persona's conversation `key` (docs/persona.md「状态」): 离线 when the hub or
-    /// Persona's machine is out of reach, 等你处理 when the conversation waits on the user, 思考中 / 工作中 while a turn
-    /// runs (thinking until it writes or calls a tool), else 空闲. Read only by the face's own view (`TopBarDot`,
+    /// What the persona's face shows for Persona's conversation `key` (docs/persona.md「状态」): Offline when the hub or
+    /// Persona's machine is out of reach, Waiting for you when the conversation waits on the user, Thinking / Working while a turn
+    /// runs (thinking until it writes or calls a tool), else Idle. Read only by the face's own view (`TopBarDot`,
     /// `ShellPersonaButton`): every hub push changes what it reads. `inFront`: the page's `tabIsActive`; behind another
     /// section (the Mac keeps the page, `MacPageStack`) the machine is read as it is now, not followed push by push.
     func personaState(_ key: SessionKey?, machineID: String, inFront: Bool = true) -> PersonaState {
@@ -499,7 +499,7 @@ extension AppModel {
         // `-showPersonaState idle|thinking|working|needs_you|offline`: hold the face in one state (screenshots).
         if let s = UserDefaults.standard.string(forKey: "showPersonaState").flatMap(PersonaState.init(rawValue:)) { return s }
         #endif
-        // 更新中… is the hub answering again: not 离线.
+        // Updating… is the hub answering again: not Offline.
         let link = connection.shown
         if link == .waitingForNetwork || link == .connecting || link == .rejected || machine(hubRef(machineID), inFront: inFront)?.online == false { return .offline }
         guard let key, let session = session(key) else { return .idle }

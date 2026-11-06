@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 浏览器（ego lite） on a Mac's page while the hub's plugin ego is on (docs/plan-ego-browser.md): the switch that lets
-/// the assistant drive its ego lite, and how far that is: 安装 ego lite when it is not there; its first-run setup as
-/// steps (open it on the Mac or over its live screen, import a browser's data, finish); 就绪 in green, with what is left
+/// Browser (ego lite) on a Mac's page while the hub's plugin ego is on (docs/plan-ego-browser.md): the switch that lets
+/// the assistant drive its ego lite, and how far that is: Install ego lite when it is not there; its first-run setup as
+/// steps (open it on the Mac or over its live screen, import a browser's data, finish); Ready in green, with what is left
 /// (its usage statistics) ticked or not. The node is asked again when the page opens, and every few seconds while a job
 /// runs or the setup is under way.
 struct BrowserSection: View {
@@ -94,7 +94,7 @@ struct BrowserSection: View {
         }
     }
 
-    /// Its first-run setup, done on the Mac: numbered steps in ego's own words, 打开 ego lite, VNC, 再检查一次.
+    /// Its first-run setup, done on the Mac: numbered steps in ego's own words, Open ego lite, VNC, Check Again.
     private func setUpGuide(_ b: MachineBrowser) -> some View {
         let steps = BrowserGuide.setUpSteps(b)
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -116,7 +116,7 @@ struct BrowserSection: View {
         }
     }
 
-    /// 就绪 in green, then what else there is: the browser data imported, its usage statistics.
+    /// Ready in green, then what else there is: the browser data imported, its usage statistics.
     private func readyList(_ b: MachineBrowser) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             line(b.version.map { String(localized: "就绪 · 助手能用这台的浏览器 · ego lite \($0)") } ?? String(localized: "就绪 · 助手能用这台的浏览器"), ok: true)

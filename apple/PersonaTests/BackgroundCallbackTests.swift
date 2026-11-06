@@ -3,7 +3,7 @@ import Testing
 
 /// Closures handed to system APIs that run them on their own queue. The app's default isolation is the main actor, so
 /// a plain closure written in app code is main-actor code, and Swift checks that at run time: when Photos / Speech /
-/// EventKit / WatchConnectivity call it on their queue, the app dies (保存图片 crashed, 2026-10-31). The SDK does not
+/// EventKit / WatchConnectivity call it on their queue, the app dies (Save Image crashed, 2026-10-31). The SDK does not
 /// mark these blocks `Sendable`, so the compiler says nothing. Each closure passed to them is written `{ @Sendable … in`
 /// (a Sendable closure is not isolated to the main actor). Reads the sources next to this file, like
 /// `IconVocabularyTests`.

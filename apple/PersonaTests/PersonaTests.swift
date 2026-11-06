@@ -37,7 +37,7 @@ struct PersonaTests {
         #expect(m.dotState(.needsYou)?.file == "dot/needs_you.png")
     }
 
-    /// A tier of a tiered look (奶蛙) as the hub sends it: a plain manifest, its files under the tier's directory, and
+    /// A tier of a tiered look (Milk Frog) as the hub sends it: a plain manifest, its files under the tier's directory, and
     /// the few words its card shows in place of the colors.
     @Test func tierManifestWithAbout() throws {
         let m = try Self.decode(Self.manifest
@@ -88,7 +88,7 @@ struct PersonaTests {
         #expect(PersonaPalette.contrast(dark, 0xFFFFFF) >= PersonaPalette.onAccent)
     }
 
-    /// As 主题色「跟随形象」: the accent, the bubble and 飞书's links are the persona's, on any style (飞书's own too);
+    /// As Theme Color › Match Avatar: the accent, the bubble and Lark's links are the persona's, on any style (Lark's own too);
     /// what it leaves out is the style's; the built-in (no colors) leaves the style as it is.
     @Test func colorsAsTheThemeColor() {
         let p = PersonaPalette(primary: .init(light: 0xF2C230, dark: 0xF2C230), accent: .init(light: 0x8A5A00, dark: 0xB07A00),
@@ -132,7 +132,7 @@ struct PersonaTests {
         #expect(s.current.isBuiltin) // offered, not chosen
         let p = try #require(s.offered.last)
         #expect(!s.isOnPhone(p))
-        // Only its face for 设置's card: 64 pt at 3x, the smallest avatar that big (the 128 is too small).
+        // Only its face for Settings' card: 64 pt at 3x, the smallest avatar that big (the 128 is too small).
         #expect(hub.sent("GET", "/api/v1/personas/doudou/avatar/512.png").count == 1)
         #expect(hub.sent("GET", "/api/v1/personas/doudou/avatar/128.png").isEmpty)
         #expect(hub.sent("GET", "/api/v1/personas/doudou/dot/idle.png").isEmpty)
@@ -161,8 +161,8 @@ struct PersonaTests {
         #expect(s.chosenID == "doudou")
     }
 
-    /// 团子 became the default on 2026-11-03: a phone that never chose a persona (nothing saved) gets it, one that chose
-    /// 面罩 ("jarvis" saved) or 汇流 keeps that, and choosing 面罩 again sticks across launches.
+    /// Mochi became the default on 2026-11-03: a phone that never chose a persona (nothing saved) gets it, one that chose
+    /// Visor ("jarvis" saved) or Circuit keeps that, and choosing Visor again sticks across launches.
     @Test func mochiIsTheDefaultAndAnEarlierChoiceStays() async throws {
         let (fresh, _, freshDefaults) = store()
         #expect(freshDefaults.string(forKey: PersonaStore.chosenKey) == nil)
@@ -189,7 +189,7 @@ struct PersonaTests {
         #expect(PersonaStore(root: fresh.root, defaults: freshDefaults).current.id == Persona.builtinID)
     }
 
-    /// 像素, 晶面 and 软糖 (#350) come after 汇流, are drawn by the app (no download), keep their own card titles, and
+    /// Pixel, Facet and Jelly (#350) come after Circuit, are drawn by the app (no download), keep their own card titles, and
     /// their ids are taken from hub packages.
     @Test func pixelFacetAndBlobAreBuiltInChoices() async throws {
         let (s, _, defaults) = store()
@@ -202,16 +202,16 @@ struct PersonaTests {
         await s.choose(Persona.blob, api: nil)
         #expect(defaults.string(forKey: PersonaStore.chosenKey) == "jarvis-blob")
         #expect(PersonaStore(root: s.root, defaults: defaults).current.id == "jarvis-blob")
-        // The accent is still the style's: a built-in is not 跟随形象.
+        // The accent is still the style's: a built-in is not Match Avatar.
         #expect(AppearanceChoice.resolve(style: nil, color: nil, persona: "jarvis-blob").color == .style)
     }
 
-    /// 汇流 is offered next to the default before the hub answers (or with no hub at all), is chosen without a
+    /// Circuit is offered next to the default before the hub answers (or with no hub at all), is chosen without a
     /// download, and stays chosen across launches; it is still called Persona, with its own card title.
     @Test func circuitIsABuiltInChoice() async throws {
         let (s, _, defaults) = store()
         #expect(s.offered.map(\.id) == Persona.builtins.map(\.id))
-        #expect(s.current.id == Persona.builtinID) // the default stays 团子
+        #expect(s.current.id == Persona.builtinID) // the default stays Mochi
         let circuit = try #require(s.offered.first { $0.id == Persona.circuit.id })
         #expect(circuit.isBuiltin && s.isOnPhone(circuit))
         #expect(circuit.name == "Persona" && circuit.cardTitle == "汇流")
@@ -229,7 +229,7 @@ struct PersonaTests {
         #expect(s.current.id == Persona.circuit.id)
     }
 
-    /// Two refreshes at once (connecting to the hub and 设置 opening, 2026-10-31): the second must not clean away the
+    /// Two refreshes at once (connecting to the hub and Settings opening, 2026-10-31): the second must not clean away the
     /// package the first is still downloading. It did, and the phone kept a package missing the files written first.
     @Test func refreshesAtOnceLeaveAWholePackage() async throws {
         let hub = FakeHub()

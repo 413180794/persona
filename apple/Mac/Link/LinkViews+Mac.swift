@@ -5,7 +5,7 @@ import WebKit
 
 // The Mac's versions of the UIKit views in LinkSheet.swift: same names, same call sites.
 
-/// A WKWebView whose right-click menu on a selection leads with AI 修改 and 作为上下文.
+/// A WKWebView whose right-click menu on a selection leads with AI Edit and Add as Context.
 final class SelectableWebView: WKWebView {
     var onPick: ((String, String) -> Void)?
 
@@ -63,7 +63,7 @@ struct PooledWebView: NSViewRepresentable {
     }
 }
 
-/// A paragraph in a selectable text view; right-click on a selection offers `actions` (AI 修改 and 作为上下文 by default).
+/// A paragraph in a selectable text view; right-click on a selection offers `actions` (AI Edit and Add as Context by default).
 struct PickTextView: NSViewRepresentable {
     var text: String
     var actions = PickAction.ai

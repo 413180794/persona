@@ -9,13 +9,13 @@ struct PhoneTool {
     var run: (JSONValue) async throws -> [ToolContent]
 }
 
-/// Groups of tools the user can switch on or off in Settings › 连接器 › 这台 iPhone (was 手机数据).
+/// Groups of tools the user can switch on or off in Settings › Connectors › This iPhone (was Phone Data).
 enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
     case contacts, calendar, reminders, location, health, photos, device, clipboard, notifications
 
     var id: String { rawValue }
 
-    /// The sources this device has tools for, in order (设置 › 手机数据).
+    /// The sources this device has tools for, in order (Settings › Phone Data).
     static var onThisDevice: [PhoneDataSource] {
         #if os(macOS)
         allCases.filter { $0 != .health } // no health data on a Mac (PhoneToolRegistry.healthTools)
@@ -52,7 +52,7 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// The iPhone app the data comes from (its icon in 设置 › 连接器 › 这台 iPhone); nil: no app of its own, `symbol`.
+    /// The iPhone app the data comes from (its icon in Settings › Connectors › This iPhone); nil: no app of its own, `symbol`.
     var appIcon: String? {
         switch self {
         case .contacts: Theme.Brand.iosContacts
@@ -81,8 +81,8 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
 
     private var defaultsKey: String { "phoneSource.\(rawValue)" }
 
-    /// On and allowed: what the switch in 设置 shows and what is declared to the hub (2026-11-01: the switch says both,
-    /// no separate 已授权 label). One turned on before it was allowed stays off until it is.
+    /// On and allowed: what the switch in Settings shows and what is declared to the hub (2026-11-01: the switch says both,
+    /// no separate Allowed label). One turned on before it was allowed stays off until it is.
     var isActive: Bool { isEnabled && PhoneAuthorization.status(self).isUsable }
 
     var isEnabled: Bool {

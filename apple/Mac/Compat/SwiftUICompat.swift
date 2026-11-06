@@ -143,7 +143,7 @@ extension View {
 #if os(macOS)
 // MARK: Editing lists
 
-/// iOS's 编辑 button turns on a list's edit mode (reorder handles, delete buttons). A Mac list reorders by dragging
+/// iOS's Edit button turns on a list's edit mode (reorder handles, delete buttons). A Mac list reorders by dragging
 /// and deletes from a row's context menu or the delete key without a mode, so there is nothing to switch.
 struct EditButton: View {
     var body: some View { EmptyView() }

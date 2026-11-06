@@ -9,7 +9,7 @@ import XCTest
 /// <epoch>` around the stream, for cutting both to it. What a case asserts is what XCUITest can see at the end.
 final class StreamingScrollTests: XCTestCase {
     private var hub = ""
-    private let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004" // 整理这个季度的读书笔记, a long one
+    private let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004" // 「整理这个季度的读书笔记」, a long one
 
     override func setUpWithError() throws {
         continueAfterFailure = false

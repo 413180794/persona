@@ -8,7 +8,7 @@ import Testing
 /// "logically", the spring still had a few points to go and the bar jumped that far sideways after the switch.
 @MainActor
 struct ShellPagerSettleTests {
-    /// The two pages on the strip, as `ShellView` lays them out: 助手 red, Agents blue.
+    /// The two pages on the strip, as `ShellView` lays them out: Assistant red, Agents blue.
     private struct Strip: View {
         let shell: ShellState
 

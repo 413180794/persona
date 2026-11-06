@@ -53,8 +53,8 @@ public nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     /// What the polling follows: a new code starts it over.
     public var pollKey: String? { isDeviceCode || isPairCode ? userCode : isQRCode ? qr?.rows.joined() : nil }
     /// A step this app cannot draw (#1693): a kind it does not know (a newer hub's), a code or QR code that came
-    /// without the code, or a form with no fields. Drawn as a form it was an empty card with a 下一步 that could never
-    /// light up; the page says so instead, with 重新开始.
+    /// without the code, or a form with no fields. Drawn as a form it was an empty card with a Next that could never
+    /// light up; the page says so instead, with Start Over.
     public var cannotDraw: Bool {
         if isDeviceCode || isQRCode || isPairCode { return false }
         return !(kind ?? "").isEmpty || (fields ?? []).isEmpty
@@ -63,7 +63,7 @@ public nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
 
 extension ConnectorPrompt {
     /// Why a step is not drawn and what to do: update the app; a QR code can also be scanned from the hub's web page,
-    /// which draws it (设置 › 连接器, #1693).
+    /// which draws it (Settings › Connectors, #1693).
     public func cannotDrawNote(name: String) -> String {
         let note = "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试"
         return kind == "qr" ? note + "，或在 hub 的网页版 设置 › 连接器 › \(name) 里扫码。" : note + "。"

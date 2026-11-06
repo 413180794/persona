@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 定时任务's view model against a FakeHub: one list of tasks (every day, every N minutes, once), the optimistic
-/// save and its rollback, delete, 立即运行.
+/// Scheduled Tasks' view model against a FakeHub: one list of tasks (every day, every N minutes, once), the optimistic
+/// save and its rollback, delete, Run Now.
 @MainActor
 struct AssistantRoutinesModelTests {
     private static let tasks = #"""
@@ -143,7 +143,7 @@ struct AssistantRoutinesModelTests {
     }
 }
 
-/// 记忆 against a FakeHub.
+/// Memory against a FakeHub.
 @MainActor
 struct AssistantPagesTests {
     private func deps(_ hub: FakeHub, errors: @escaping (Error) -> Void = { _ in }) -> AssistantDeps {

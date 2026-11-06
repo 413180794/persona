@@ -60,7 +60,7 @@ struct MacSendHistoryTests {
         #expect(H.key(keyCode: H.upArrow, modifiers: .shift, composing: false) == nil)
         #expect(H.key(keyCode: H.upArrow, modifiers: [], composing: true) == nil)
         #expect(H.key(keyCode: 15, modifiers: .control, composing: false) == .openSearch)
-        #expect(H.key(keyCode: 15, modifiers: .command, composing: false) == nil) // ⌘R is 刷新
+        #expect(H.key(keyCode: 15, modifiers: .command, composing: false) == nil) // ⌘R is Refresh
     }
 
     @Test func searchKeys() {

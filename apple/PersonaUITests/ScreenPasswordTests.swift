@@ -4,7 +4,7 @@ import XCTest
 /// MOCK_COMPUTER=ready MOCK_WEB=web/dist MOCK_SCREEN=fake (a Screen Sharing of the mock's own that takes me / mock-pass;
 /// TEST_RUNNER_JARVIS_SCREEN_HUB, TEST_RUNNER_JARVIS_FAKE_SCREEN=1): signed in once with 「在这台手机上记住」, the
 /// screen comes up by itself next time; after the Mac's password changed the form says so and the new one replaces
-/// it; 忘记屏幕共享密码 asks again. JARVIS_SHOTS keeps the screenshots.
+/// it; Forget Screen Sharing Password asks again. JARVIS_SHOTS keeps the screenshots.
 final class ScreenPasswordTests: XCTestCase {
     private var hub: String? { ProcessInfo.processInfo.environment["JARVIS_SCREEN_HUB"] }
 
@@ -23,7 +23,7 @@ final class ScreenPasswordTests: XCTestCase {
         for _ in 0..<6 where !look.isHittable { app.swipeUp() }
         XCTAssertFalse(app.buttons["screen-forget"].exists, "nothing remembered yet")
 
-        // The first time: the form, 记住 ticked.
+        // The first time: the form, Remember ticked.
         look.tap()
         let signIn = app.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
         XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the form:\n\(app.debugDescription)")
@@ -69,8 +69,8 @@ final class ScreenPasswordTests: XCTestCase {
         close(app)
     }
 
-    /// 一键解锁 and 锁上 (#1507 a-2): signed in once with 记住, 一键解锁 turned on (confirmed); 锁上 locks the Mac, and
-    /// 一键解锁 types the kept password on its lock screen: the mock's Screen Sharing gets it and Return, and unlocks.
+    /// One-Tap Unlock and Lock (#1507 a-2): signed in once with Remember, One-Tap Unlock turned on (confirmed); Lock locks the Mac, and
+    /// One-Tap Unlock types the kept password on its lock screen: the mock's Screen Sharing gets it and Return, and unlocks.
     /// Face ID is skipped on the simulator (-showUnlockWithoutAuth).
     @MainActor func testOneTapUnlock() throws {
         guard let hub, ProcessInfo.processInfo.environment["JARVIS_FAKE_SCREEN"] == "1" else {
@@ -153,7 +153,7 @@ final class ScreenPasswordTests: XCTestCase {
         app.buttons["vnc-connect"].firstMatch.tap()
     }
 
-    /// The drawer says 已连接.
+    /// The drawer says Connected.
     @MainActor private func live(_ app: XCUIApplication) -> Bool {
         let phase = app.descendants(matching: .any)["screen-phase"].firstMatch
         let deadline = Date.now.addingTimeInterval(30)

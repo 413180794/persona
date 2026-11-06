@@ -4,7 +4,7 @@ import Foundation
 /// out (`GET /api/v1/assistant/readiness`, feature `assistant_readiness`) and every client draws the same thing from it —
 /// in `setup` a card over the composer with the first missing step, the send button saying what to do first, example
 /// questions that open local help. Every enum-like field is a String: a newer hub's value decodes and is shown as
-/// 「还差一步」 with its title (docs/onboarding.md 第 5 节「总规矩」). The web's lib/readiness.ts is the same logic.
+/// 「还差一步」 with its title (docs/onboarding.md section 5「总规矩」). The web's lib/readiness.ts is the same logic.
 nonisolated struct AssistantReadiness: Codable, Hashable, Sendable {
     nonisolated struct Machine: Codable, Hashable, Sendable {
         var id: String
@@ -104,7 +104,7 @@ nonisolated struct AssistantReadiness: Codable, Hashable, Sendable {
 
     static let feature = "assistant_readiness"
 
-    /// The steps that decide the mode, in order; 试一句 never blocks (5.1).
+    /// The steps that decide the mode, in order; Try a Message never blocks (5.1).
     static let blocking = ["computer", "claude", "model"]
 
     func step(_ id: String) -> Step? { steps.first { $0.id == id } }
@@ -128,13 +128,13 @@ nonisolated struct AssistantReadiness: Codable, Hashable, Sendable {
         return s
     }
 
-    /// The steps of computer / claude / model still to do (设置's 「还有 N 步」).
+    /// The steps of computer / claude / model still to do (Settings's 「还有 N 步」).
     var stepsLeft: Int { Self.blocking.compactMap { step($0) }.filter { $0.state != "ok" && $0.state != "skipped" }.count }
 
     /// The main conversation already runs: its computer, Claude Code and model all check out.
     var claudeWorks: Bool { Self.blocking.allSatisfy { step($0)?.state == "ok" } }
 
-    /// The action ids a card draws a button for (5.1); any other id is text only (5 总规矩).
+    /// The action ids a card draws a button for (5.1); any other id is text only (5 General Rules).
     static let knownActions: Set<String> = ["add_computer", "confirm_computer", "wake_computer", "install_claude", "login_claude",
                                             "connect_model", "edit_provider", "test_assistant", "enable_tls", "open_admin"]
 
@@ -147,7 +147,7 @@ nonisolated struct CodedFailure: Hashable, Sendable, Identifiable {
     var code: String
     /// The hub's words, in the request's language.
     var error: String
-    /// The original text (a shell's error…): only under 详情.
+    /// The original text (a shell's error…): only under Details.
     var detail: String?
     var action: String?
     var machine: String?
@@ -183,7 +183,7 @@ nonisolated struct CodedFailure: Hashable, Sendable, Identifiable {
                   launcher: str("launcher"), requestID: str("request_id") ?? api.requestID)
     }
 
-    /// The assistant restarting answers 503 assistant_offline for a few seconds: tried again quietly (4.6 原则 4).
+    /// The assistant restarting answers 503 assistant_offline for a few seconds: tried again quietly (4.6 rule 4).
     static func passesBySelf(_ error: Error) -> Bool { (error as? APIError)?.code == "assistant_offline" }
 }
 

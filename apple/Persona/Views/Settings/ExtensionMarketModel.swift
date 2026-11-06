@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the plugins of the markets the hub has, searched and filtered by
+// Settings › Extensions › Extension Market (docs/extensions.md「扩展市场」): the plugins of the markets the hub has, searched and filtered by
 // market; one plugin's page with what it may do, installed or upgraded after its preview (the permissions agreed to
 // are the preview's digest) and removed when it came from that market; and the markets themselves (added with an
 // optional token that is never shown again, refreshed, removed). Only with a hub that says `markets: true`.
@@ -25,7 +25,7 @@ nonisolated struct ExtensionMarket: Codable, Hashable, Sendable, Identifiable {
     /// The market every hub has (#2351); nil from a hub before it.
     var official: Bool?
 
-    /// The official market reads 官方扩展 whatever its index names it (#5017): the index's name is its publisher's.
+    /// The official market reads Official Extensions whatever its index names it (#5017): the index's name is its publisher's.
     var title: String {
         if official == true { return ExtensionMarket.officialTitle }
         return name.isEmpty ? spec : name
@@ -123,7 +123,7 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
         var version: String?
         var description: String?
         var extensionPack: [ExtensionPackMember]?
-        /// The command-line programs it installs (#4507): the 安装命令行程序 line lists them.
+        /// The command-line programs it installs (#4507): the Install command-line programs line lists them.
         var tools: [ExtensionToolSpec]?
 
         enum CodingKeys: String, CodingKey {
@@ -241,7 +241,7 @@ enum ExtensionMarketText {
         return p.upgradable == true ? .upgrade : .upToDate
     }
 
-    /// The row's word on it: 可安装 / 可升级到 1.1.0 / 已安装 1.2.0 / 装不了.
+    /// The row's word on it: Available / Update to 1.1.0 / Installed 1.2.0 / Can't Install.
     static func state(_ p: ExtensionCatalogItem) -> String {
         switch step(p) {
         case .install: String(localized: "可安装")
@@ -263,7 +263,7 @@ enum ExtensionMarketText {
     }
 }
 
-/// 扩展市场: the catalog (searched, filtered by market) and the markets (added, refreshed, given a token, removed).
+/// Extension Market: the catalog (searched, filtered by market) and the markets (added, refreshed, given a token, removed).
 @Observable final class ExtensionMarketModel {
     struct Deps {
         var api: () -> APIClient?
@@ -392,7 +392,7 @@ enum ExtensionMarketText {
     }
 }
 
-/// 扩展市场 › one plugin: what it is and may do; installing or upgrading goes preview → agree → install, removing is
+/// Extension Market › one plugin: what it is and may do; installing or upgrading goes preview → agree → install, removing is
 /// only for one installed from this market. With a hub that runs operations (#3307) the preview downloads and checks
 /// in the background, the page showing its steps; the sheet opens when it waits for the user's yes and the same
 /// operation installs. The operations are the app's (`ExtensionOperations`), so they stay when the page is left.
@@ -415,7 +415,7 @@ enum ExtensionMarketText {
     /// The operation the open preview belongs to (a hub with operations): agreeing goes on with it, closing the
     /// sheet without agreeing cancels it.
     @ObservationIgnored private(set) var consentOf: String?
-    /// The last removal's choices, for 重试.
+    /// The last removal's choices, for Retry.
     @ObservationIgnored private var lastRemoval = (cascade: false, members: false)
     @ObservationIgnored private let deps: ExtensionMarketModel.Deps
     @ObservationIgnored private let operations: ExtensionOperations
@@ -479,7 +479,7 @@ enum ExtensionMarketText {
         }
     }
 
-    /// Opens the preview an operation waits on (查看权限 on its card, or the page opened again).
+    /// Opens the preview an operation waits on (Review Permissions on its card, or the page opened again).
     func review(_ op: ExtensionOperation) async throws {
         guard op.state == .needsConsent, let pv = try await operations.consentPreview(op.id) else { return }
         consentOf = op.id
@@ -519,7 +519,7 @@ enum ExtensionMarketText {
         return consentOf
     }
 
-    /// The sheet closed without 安装: the operation waiting on it is canceled (the hub drops the preview).
+    /// The sheet closed without Install: the operation waiting on it is canceled (the hub drops the preview).
     func declined() {
         guard let id = consentOf else { return }
         consentOf = nil
@@ -554,7 +554,7 @@ enum ExtensionMarketText {
         }
     }
 
-    /// 重试 on a failed operation: the hub starts it again when it can (the package is in its cache; the permissions
+    /// Retry on a failed operation: the hub starts it again when it can (the package is in its cache; the permissions
     /// already agreed to are not asked again); otherwise the same thing again from this page. true: done.
     func retry() async -> Bool {
         guard let op = operation, op.state == .failed else { return false }
@@ -589,7 +589,7 @@ enum ExtensionMarketText {
         }
     }
 
-    /// The card's 取消 (checking, waiting for consent) or 关闭 (failed): the hub cancels or forgets it.
+    /// The card's Cancel (checking, waiting for consent) or Close (failed): the hub cancels or forgets it.
     func dismissOperation() async {
         guard let op = operation else { return }
         if op.id == consentOf { consentOf = nil }

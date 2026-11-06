@@ -187,7 +187,7 @@ enum RemindersTool {
         return Output.json(encode(reminder))
     }
 
-    /// Takes back a reminder the conversation added (its 撤销, docs/unified-entry.md); false when it is gone already.
+    /// Takes back a reminder the conversation added (its Undo, docs/unified-entry.md); false when it is gone already.
     static func remove(id: String) throws -> Bool {
         let store = EKEventStore()
         guard let item = reminder(id: id, in: store) else { return false }

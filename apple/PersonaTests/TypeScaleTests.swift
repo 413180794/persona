@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// The app's text uses `Theme.Font` levels and its vertical spacing `Theme.Space` (docs/ios.md, 设计语言). These read
+/// The app's text uses `Theme.Font` levels and its vertical spacing `Theme.Space` (docs/ios.md「设计语言」). These read
 /// the sources (apple/Persona, next to this file on the Mac the tests run from) so a system text style or a size written
 /// on a page fails here instead of slowly coming back.
 struct TypeScaleTests {
@@ -44,7 +44,7 @@ struct TypeScaleTests {
         #expect(found.isEmpty, "system text styles on a page:\n\(found.joined(separator: "\n"))")
     }
 
-    /// `.system(size: 14)` ignores Dynamic Type and 小 / 标准 / 大. Allowed for SF Symbols (`Image(systemName:)` on the
+    /// `.system(size: 14)` ignores Dynamic Type and Small / Standard / Large. Allowed for SF Symbols (`Image(systemName:)` on the
     /// line) and glyphs sized to a frame, marked `// type-scale: glyph …`.
     @Test func noFixedTextSizes() throws {
         let found = try Self.hits(Self.fixedSize) { $0.contains("Image(systemName") || $0.contains("// type-scale: glyph") }

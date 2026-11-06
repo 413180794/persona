@@ -8,7 +8,7 @@ struct ThreadComposer: View {
     @Binding var text: String
     @Binding var selection: TextSelection?
     var focused: FocusState<Bool>.Binding
-    /// What the reply answers, over the field ("回复 <who>", its words); nil: nothing.
+    /// What the reply answers, over the field ("Replying to <who>", its words); nil: nothing.
     var quote: (heading: String, summary: String)?
     var sending: Bool
     var cancelQuote: () -> Void

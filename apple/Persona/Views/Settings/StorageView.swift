@@ -182,7 +182,7 @@ extension Int64 {
     var storageText: String { ByteCountFormatter.string(fromByteCount: self, countStyle: .file) }
 }
 
-/// 设置 › 存储空间: how much the app keeps on this phone, by kind, and clearing it.
+/// Settings › Storage: how much the app keeps on this phone, by kind, and clearing it.
 struct StorageView: View {
     @State private var usage: [StorageKind: Int64]?
     @State private var clearing: StorageKind?

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 健康 (docs/health.md) against a FakeHub: the space's conversations come from `GET /api/v1/assistant?space=health`,
+/// Health (docs/health.md) against a FakeHub: the space's conversations come from `GET /api/v1/assistant?space=health`,
 /// its memory from `?space=health`, a new one is started with `"space":"health"`; pushes go over the list, and the
 /// Persona page's lists never hold a health conversation.
 @MainActor

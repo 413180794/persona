@@ -1,6 +1,6 @@
 import XCTest
 
-/// 知识库 search: a hit opens its entry at what was found, and coming back shows the results again (no error).
+/// Knowledge search: a hit opens its entry at what was found, and coming back shows the results again (no error).
 /// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB); JARVIS_MOCK_TOKEN and JARVIS_KB_QUERY point it at another hub.
 final class KnowledgeSearchTests: XCTestCase {
     @MainActor func testAHitOpensAtTheMatchAndBackKeepsTheResults() throws {

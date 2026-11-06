@@ -7,7 +7,7 @@ import AppKit
 import UIKit
 #endif
 
-/// API 的主题条目复用生成的清单类型，只补所属扩展和服务端校验结果。
+/// The API's theme entries reuse the generated manifest type, adding only the owning extension and the server's validation result.
 nonisolated struct ExtensionThemeOffer: Codable, Hashable, Sendable, Identifiable {
     var owner: String
     var ownerName: String
@@ -40,7 +40,7 @@ extension APIClient {
     }
 }
 
-/// 在真实风格背景上检查，沿用 StyleSpecTests 的下限；不改色来掩盖不合格的贡献。
+/// Checked on the real style backgrounds, with StyleSpecTests' floor; a failing contribution is not recolored to hide it.
 @MainActor enum ExtensionThemeContrast {
     static func palette(_ offer: ExtensionThemeOffer) -> ExtensionThemePalette? {
         guard offer.problems.isEmpty,
@@ -89,7 +89,7 @@ extension APIClient {
     }
 }
 
-/// 只保存已选主题供离线启动；列表是内存状态，不频繁写 UserDefaults。
+/// Saves only the chosen theme, for offline launches; the list is in-memory state and does not write UserDefaults often.
 @MainActor @Observable final class ExtensionThemesModel {
     struct Deps {
         var color: () -> ThemeColor

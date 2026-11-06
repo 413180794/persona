@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 添加邮箱's form (`MailAccountForm`): the request it makes.
+/// Add Mail Account's form (`MailAccountForm`): the request it makes.
 @MainActor struct MailAccountFormTests {
     @Test func imapOn587IsStartTLSAndEmptyHostsAreLeftToTheHub() {
         var f = MailAccountForm(kind: .imap, email: "me@example.com", password: "p")

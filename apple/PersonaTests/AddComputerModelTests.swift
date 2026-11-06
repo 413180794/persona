@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 机器 › 添加电脑 (#4196, docs/protocol.md「电脑的配对码」「电脑的信任」): the add request, a new code for one that waits,
+/// Machines › Add Computer (#4196, docs/protocol.md「电脑的配对码」「电脑的信任」): the add request, a new code for one that waits,
 /// every refusal's words, the computer joining and being confirmed or rejected, machines decoding trust / error_code,
-/// and a pending computer kept out of 新建 Agent. Made-up values.
+/// and a pending computer kept out of New Agent. Made-up values.
 @MainActor
 struct AddComputerModelTests {
     private static let start = Date(timeIntervalSince1970: 1_800_000_000)

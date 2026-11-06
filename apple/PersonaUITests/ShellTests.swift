@@ -1,7 +1,7 @@
 import XCTest
 
-/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」), in 体验模式: no tab bar; 助手 | Agents; the drawer with
-/// 收件箱 / 设置; the empty chat lists what needs the user; the composer grows while typing; 旧布局 brings the tabs back.
+/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」), in Demo Mode: no tab bar; Assistant | Agents; the drawer with
+/// Inbox / Settings; the empty chat lists what needs the user; the composer grows while typing; Old Layout brings the tabs back.
 final class ShellTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -67,13 +67,13 @@ final class ShellTests: XCTestCase {
         }
         XCTAssertFalse(inbox.exists, "still on 收件箱 after back")
         see(button("assistant-sidebar-button"), "☰ again").tapCenter()
-        // The drawer's hosting view names every element in it "assistant-sidebar": find 设置 by its label.
+        // The drawer's hosting view names every element in it "assistant-sidebar": find Settings by its label.
         see(app.buttons.matching(NSPredicate(format: "label == '设置'")).firstMatch, "设置 at the drawer's foot").tap()
         see(button("settings-close"), "设置's ×").tap()
         XCTAssertTrue(button("shell-assistant").waitForExistence(timeout: 5), "back on 助手 after closing 设置")
     }
 
-    /// 机器 in the drawer: the one machines page (agents and monitoring together, docs/machines.md「App」), and a card
+    /// Machines in the drawer: the one machines page (agents and monitoring together, docs/machines.md「App」), and a card
     /// opens the machine with its agents and charts on one page.
     @MainActor func testDrawerOpensMachines() {
         launch()
@@ -90,7 +90,7 @@ final class ShellTests: XCTestCase {
 
     /// The drawer's rows keep their size however often it comes out. The shell's "a size up" (`shellScaled`) is one
     /// Dynamic Type step on the app's text size; the drawer lives in a hosting controller whose environment took that
-    /// step back in on every refresh (收件箱's row 59 → 78 → 80 pt after a few trips to 收件箱 and back).
+    /// step back in on every refresh (Inbox's row 59 → 78 → 80 pt after a few trips to Inbox and back).
     @MainActor private func inboxRowHeight(_ entry: Int, _ via: String) -> CGFloat {
         let row = see(button("sidebar-inbox"), "收件箱 in the drawer, entry \(entry) \(via)")
         sleep(1)
@@ -102,7 +102,7 @@ final class ShellTests: XCTestCase {
         launch()
         let toggle = see(button("assistant-sidebar-button"), "☰", timeout: 15)
         var heights: [CGFloat] = []
-        // From 助手: out, push 收件箱, back, out again.
+        // From Assistant: out, push Inbox, back, out again.
         for entry in 1...5 {
             toggle.tapCenter()
             heights.append(inboxRowHeight(entry, "from 助手"))
@@ -161,7 +161,7 @@ final class ShellTests: XCTestCase {
         see(app.tabBars.firstMatch, "the tab bar with 旧布局 on")
         let back = see(oldLayoutSwitch, "旧布局, still on 布局")
         back.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        // Back in the shell, 设置 is a sheet again, still on 布局 (its own pages have a back button; × is on its root).
+        // Back in the shell, Settings is a sheet again, still on Layout (its own pages have a back button; × is on its root).
         see(app.navigationBars["布局"], "the shell's 设置 sheet on 布局 with 旧布局 off")
         XCTAssertFalse(app.tabBars.firstMatch.exists, "a tab bar after turning 旧布局 off")
         app.navigationBars["布局"].buttons["BackButton"].tap()

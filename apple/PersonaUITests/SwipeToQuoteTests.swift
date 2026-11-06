@@ -105,7 +105,7 @@ final class SwipeToQuoteTests: XCTestCase {
     }
 
     /// Files are an item of the header's ··· menu (#1205; no button of their own, in the folded bar either: a tap on
-    /// it opens the header); from them, 回到对话 there goes back.
+    /// it opens the header); from them, Back to Chat there goes back.
     @MainActor func testMoreMenuOpensFiles() {
         launch()
         let folded = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch

@@ -6,9 +6,9 @@ import SwiftUI
 //
 // | placement        | iPhone / iPad                                             | Mac                                   |
 // | ---------------- | --------------------------------------------------------- | ------------------------------------- |
-// | nav_page         | the sidebar / the shell's drawer after the places to go, and | the sidebar, before 设置               |
-// |                  | 设置 home's 扩展 section at the top                           |                                       |
-// | overview_card    | 设置 home, above those entries                              | 设置 › 扩展, above the list            |
+// | nav_page         | the sidebar / the shell's drawer after the places to go, and | the sidebar, before Settings          |
+// |                  | Settings home's Extensions section at the top             |                                       |
+// | overview_card    | Settings home, above those entries                        | Settings › Extensions, above the list |
 // | machine_section  | a machine's page, after its own sections                  | the same page                         |
 //
 // Only with a hub that says `plugin_ui_slots`; an older hub is never asked about them.
@@ -90,7 +90,7 @@ import SwiftUI
         return (id, title)
     }
 
-    /// What the entries' badges add up to on 设置 (and its tab): their numbers summed; only words, a dot.
+    /// What the entries' badges add up to on Settings (and its tab): their numbers summed; only words, a dot.
     var total: (count: Int, dot: Bool) {
         let badges = pages.compactMap(\.badge)
         let count = badges.compactMap { Int($0.text) }.filter { $0 > 0 }.reduce(0, +)
@@ -155,7 +155,7 @@ struct ExtensionBadgeView: View {
     }
 }
 
-/// What the plugins' entries' badges add up to, on a way to 设置 that is not its tab (the shell drawer's 设置 button):
+/// What the plugins' entries' badges add up to, on a way to Settings that is not its tab (the shell drawer's Settings button):
 /// the sum as a count badge, only words a dot, nothing without badges.
 struct ExtensionSettingsBadge: View {
     var body: some View {
@@ -169,9 +169,9 @@ struct ExtensionSettingsBadge: View {
     }
 }
 
-// MARK: Entries and cards on 设置 (iPhone, iPad)
+// MARK: Entries and cards on Settings (iPhone, iPad)
 
-/// 设置 home's 扩展 section, at the top: the plugins' cards, then their pages, one row each (icon, title, badge).
+/// Settings home's Extensions section, at the top: the plugins' cards, then their pages, one row each (icon, title, badge).
 /// Nothing when no plugin puts anything there.
 struct ExtensionSlotsSettingsSection: View {
     @Environment(AppModel.self) private var model
@@ -225,7 +225,7 @@ struct ExtensionNavRow: View {
 }
 
 /// The plugins' overview cards as sections of a settings list: the card's title (with a chevron when it opens a page),
-/// its View drawn compact. Tapping a card that opens a page pushes that page on 设置.
+/// its View drawn compact. Tapping a card that opens a page pushes that page on Settings.
 struct ExtensionCardsSection: View {
     @Environment(AppModel.self) private var model
     /// Where the cards' links open: the page's. On a Mac the link panel lays the page out beside it, which a list's
@@ -248,7 +248,7 @@ struct ExtensionCardsSection: View {
 }
 
 /// One overview card: its title line, then the plugin's View, compact. While loading a line of progress, a failure
-/// one line with 重试; a plugin that says it has nothing here draws nothing.
+/// one line with Retry; a plugin that says it has nothing here draws nothing.
 struct ExtensionCard: View {
     var card: ExtensionUIPlace
     var model: ExtensionViewModel
@@ -417,6 +417,6 @@ private struct ExtensionRefresh: ViewModifier {
 }
 
 extension View {
-    /// Draws `model`'s View again after its `refresh_after` while on screen (docs/extensions.md「UI 插槽」刷新).
+    /// Draws `model`'s View again after its `refresh_after` while on screen (docs/extensions.md「UI 插槽」, refreshing).
     func pluginRefresh(_ model: ExtensionViewModel) -> some View { modifier(ExtensionRefresh(model: model)) }
 }

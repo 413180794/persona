@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One todo's stage as a bar: 方案 → 开发 → 审查 → 合入 → 部署 → 已验证, with the step it is on marked (#2776). The
+/// One todo's stage as a bar: Plan → Develop → Review → Merge → Deploy → Verified, with the step it is on marked (#2776). The
 /// hub sends the stage on the todo (`TodoItem.stage`); a todo without one, or with a name this build does not know,
 /// draws nothing, so the page only shows this when `TodoItem.todoStage` is set. The steps before the current one are
 /// done, the ones after it are still ahead — the same reading as the stage bar in the Feishu report (#2768).

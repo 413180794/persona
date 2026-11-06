@@ -46,14 +46,14 @@ import UIKit
         await call.begin()
     }
 
-    /// 继续 on the ended call bound to `key`.
+    /// Continue on the ended call bound to `key`.
     func resume(_ key: SessionKey) async {
         guard let call = current, call.key == key, call.phase.isEnded else { return }
         await call.restart()
     }
 
     /// Ends the call started from `surface`; a call another surface started goes on (CarPlay only stops its own).
-    /// 结束 (`.user`) ends whichever it is: the user tapped it on the call itself.
+    /// Stop (`.user`) ends whichever it is: the user tapped it on the call itself.
     func end(_ reason: VoiceEnd, from surface: VoiceSurface) {
         guard let call = current, reason == .user || call.surface == surface else { return }
         call.end(reason)
@@ -63,7 +63,7 @@ import UIKit
     /// Whether the call (live or ended) is bound to this conversation: ChatView reads only this.
     func isBound(to key: SessionKey) -> Bool { current?.key == key }
 
-    /// The page bound to `key` went away or was hidden: its call ends, and its 继续 row goes with it.
+    /// The page bound to `key` went away or was hidden: its call ends, and its Continue row goes with it.
     func leave(_ key: SessionKey, from surface: VoiceSurface = .phone) {
         guard let call = current, call.key == key, call.surface == surface else { return }
         call.end(.left)

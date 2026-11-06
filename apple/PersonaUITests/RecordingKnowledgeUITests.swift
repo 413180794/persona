@@ -1,7 +1,7 @@
 import XCTest
 
 /// Recordings go to the knowledge base, not the composer (#3235, docs/recording.md): a made-up transcribed recording
-/// shows under 知识库 › 录音, reaches the hub's `/api/v1/recordings` by itself, and deleting it there deletes it on the
+/// shows under Knowledge › Recordings, reaches the hub's `/api/v1/recordings` by itself, and deleting it there deletes it on the
 /// hub; no composer's + menu offers a recording any more. Needs its own mock hub (JARVIS_MOCK_HUB), fresh per run:
 /// the hub keeps the delete's tombstone. TEST_RUNNER_JARVIS_SHOTS=<dir> saves the list, the recording and the + menu there
 /// (JARVIS_SHOTS_APPEARANCE names the simulator's appearance in the file).
@@ -49,7 +49,7 @@ final class RecordingKnowledgeUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair(hub), "-tab", "assistant", "-newAssistant", "YES"]
         app.launchPinned()
-        // The + button: 添加照片或文件 in the shell's bar, 添加 in the older composer row.
+        // The + button: Add photo or file in the shell's bar, Add in the older composer row.
         let plus = app.buttons.matching(NSPredicate(format: "label IN %@", ["添加照片或文件", "添加"])).firstMatch
         XCTAssertTrue(plus.waitForExistence(timeout: 15), app.debugDescription)
         plus.tap()

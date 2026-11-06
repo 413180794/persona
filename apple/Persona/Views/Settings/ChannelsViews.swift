@@ -1,10 +1,10 @@
 import BeautifulUI
 import SwiftUI
 
-// 设置 › 渠道 (docs/channels.md「界面」): the list and one channel's page; the 渠道 row on 设置; the line on a
+// Settings › Channels (docs/channels.md「界面」): the list and one channel's page; the Channels row on Settings; the line on a
 // connector's page that says it is a channel; the 「来自 …」 under a message and the mark beside a conversation's title.
 
-/// A channel's mark: its brand's (飞书), else a symbol of its kind in the accent color.
+/// A channel's mark: its brand's (Lark), else a symbol of its kind in the accent color.
 struct ChannelMark: View {
     var channel: HubChannel
     var side: CGFloat
@@ -29,7 +29,7 @@ private struct ChannelStateDot: View {
     }
 }
 
-/// 设置's row before 连接器: 渠道, how many are connected (red when one went wrong). Only with a hub that has channels.
+/// Settings' row before Connectors: Channels, how many are connected (red when one went wrong). Only with a hub that has channels.
 struct ChannelsEntryRow: View {
     @Environment(AppModel.self) private var model
     @State private var channels: [HubChannel]?
@@ -67,7 +67,7 @@ struct ChannelsEntryRow: View {
     }
 }
 
-/// 设置 › 渠道: every way of talking to Persona, in three sections (the apps, the installed, a market's).
+/// Settings › Channels: every way of talking to Persona, in three sections (the apps, the installed, a market's).
 struct ChannelsView: View {
     @State private var page = ChannelsModel()
 
@@ -153,7 +153,7 @@ private struct ChannelRowLabel: View {
     }
 }
 
-/// 设置 › 渠道 › one: its state, switch, binding, where its messages go, its features, what waits on it, what it
+/// Settings › Channels › one: its state, switch, binding, where its messages go, its features, what waits on it, what it
 /// can do, a test message, and its own page if it has one. A read-only one (the apps, /agent) is only looked at.
 struct ChannelDetailView: View {
     @Environment(AppModel.self) private var model
@@ -309,7 +309,7 @@ struct ChannelDetailView: View {
         }
     }
 
-    // 消息发到: the main conversation, a new one (opened by the next message), or one of the assistant's.
+    // Send Messages To: the main conversation, a new one (opened by the next message), or one of the assistant's.
 
     private func target(_ c: HubChannel) -> some View {
         Section {
@@ -340,7 +340,7 @@ struct ChannelDetailView: View {
         var id: String { tag }
     }
 
-    /// The assistant's recent conversations (the main one is 主对话), with the current one if it is not among them.
+    /// The assistant's recent conversations (the main one is Main Chat), with the current one if it is not among them.
     private func choices(_ c: HubChannel) -> [Choice] {
         let main = model.assistantMain
         var out = model.assistantConversations.filter { $0.key != main }.prefix(15).map { s in

@@ -1,7 +1,7 @@
 import XCTest
 
 /// A plugin's list of machines (schema format machine, docs/extensions.md): a switch per Mac, by name and how it is, no
-/// machine ids typed in; a switch takes effect at once and is the machine page's 允许助手操控这台电脑 too. Against
+/// machine ids typed in; a switch takes effect at once and is the machine page's Let the Assistant Control This Computer too. Against
 /// scripts/mock/mock_hub.py with MOCK_PLUGINS=1 MOCK_COMPUTER=ready (`TEST_RUNNER_JARVIS_PLUGINS_HUB`), which has the
 /// plugin cua on for MacBook; `TEST_RUNNER_JARVIS_SHOTS` keeps the screenshots, named by
 /// `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`.
@@ -33,7 +33,7 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-machines-\(look).png"))
         }
 
-        // In effect at once, no 保存: the hub turns it on for that Mac (the machine page's switch).
+        // In effect at once, no Save: the hub turns it on for that Mac (the machine page's switch).
         studio.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         XCTAssertTrue(waitFor(studio, value: "1"), "turned on")
         XCTAssertTrue(waitUntil { (try? self.enabledMacs(hub)) == ["macbook", "studio"] }, "the hub has it: \(String(describing: try? enabledMacs(hub)))")
@@ -42,8 +42,8 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
         XCTAssertTrue(waitUntil { (try? self.enabledMacs(hub)) == ["macbook"] }, "and off again")
     }
 
-    /// A list with x-confirm (the plugin cua's 扩展开着时不自动锁屏, #1507 b2): turning a Mac on asks first, 取消 leaves
-    /// it off, 打开 turns it on (the hub has it); turning it off does not ask.
+    /// A list with x-confirm (the plugin cua's Don't Auto-Lock While On, #1507 b2): turning a Mac on asks first, Cancel leaves
+    /// it off, Open turns it on (the hub has it); turning it off does not ask.
     @MainActor func testAListWithAConfirmAsksFirst() throws {
         let env = ProcessInfo.processInfo.environment
         guard let hub = env["JARVIS_PLUGINS_HUB"], env["JARVIS_PLUGINS_COMPUTER"] == "1" else {
@@ -84,8 +84,8 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
         XCTAssertFalse(turnOn.exists, "turning it off does not ask")
     }
 
-    /// 取消 the dialog: its button where it has one, else a tap outside it (iOS 26 shows it as a popover by the switch,
-    /// with no 取消).
+    /// Cancel the dialog: its button where it has one, else a tap outside it (iOS 26 shows it as a popover by the switch,
+    /// with no Cancel).
     @MainActor private func cancelDialog(_ app: XCUIApplication) {
         let cancel = app.buttons["取消"].firstMatch
         let outside = app.otherElements["PopoverDismissRegion"].firstMatch
@@ -94,7 +94,7 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
         }
     }
 
-    /// The Macs the hub says 扩展开着时不自动锁屏 is on for (machine.computer.no_auto_lock), by id.
+    /// The Macs the hub says Don't Auto-Lock While On is on for (machine.computer.no_auto_lock), by id.
     private func noLockMacs(_ hub: String) throws -> [String] {
         try machines(hub).filter { $0.computer?.no_auto_lock == true }.map(\.id).sorted()
     }

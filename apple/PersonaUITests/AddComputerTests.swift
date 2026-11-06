@@ -1,6 +1,6 @@
 import XCTest
 
-/// 机器 › 添加电脑 (#4196, docs/onboarding.md 4.2): from no computer at all to one confirmed and online, and the list's
+/// Machines › Add Computer (#4196, docs/onboarding.md 4.2): from no computer at all to one confirmed and online, and the list's
 /// pending computer and error_code. Against scripts/mock/mock_scenarios.py, which restarts the mock hub with the
 /// variables each test needs:
 ///   TEST_RUNNER_JARVIS_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_ADD_CONTROL=http://127.0.0.1:<control>
@@ -33,7 +33,7 @@ final class AddComputerTests: XCTestCase {
         return app
     }
 
-    /// The notification question and 「你已更改“Persona”的图标」 (the icon follows 深浅色) are SpringBoard's.
+    /// The notification question and 「你已更改“Persona”的图标」 (the icon follows Light & Dark) are SpringBoard's.
     private func dismissSystemAlerts(wait: TimeInterval = 1) {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         var deadline = Date.now.addingTimeInterval(wait)
@@ -66,7 +66,7 @@ final class AddComputerTests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: id).firstMatch
     }
 
-    /// 0 computers → 添加电脑 → the Mac's steps and the countdown → it joins → 是我的电脑 → it is in the list, online.
+    /// 0 computers → Add Computer → the Mac's steps and the countdown → it joins → It's Mine → it is in the list, online.
     @MainActor func testFromNoComputerToOneConfirmed() throws {
         for scheme in ["light", "dark"] {
             try scenario("MOCK_READINESS=zero,MOCK_ADD_COMPUTER_JOIN=8")
@@ -134,7 +134,7 @@ final class AddComputerTests: XCTestCase {
         }
     }
 
-    /// The list: a computer waiting to be confirmed (等你确认, 删掉) first, and one whose Persona Link is offline in words.
+    /// The list: a computer waiting to be confirmed (Waiting for you, Remove) first, and one whose Persona Link is offline in words.
     @MainActor func testPendingAndErrorCodeInTheList() throws {
         for scheme in ["light", "dark"] {
             try scenario("MOCK_ADD_COMPUTER=seed")
@@ -166,12 +166,12 @@ final class AddComputerTests: XCTestCase {
         XCTAssertTrue(reject.waitForExistence(timeout: 20), "no pending computer:\n\(app.debugDescription)")
         reject.tap()
         XCTAssertTrue(text(app, "等你确认").waitForNonExistence(timeout: 10), "still listed")
-        // Its card (the toast 已删掉「办公室的台式机」 says the name too).
+        // Its card (the toast that says 「办公室的台式机」 was removed names it too).
         let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "办公室的台式机")).firstMatch
         XCTAssertTrue(card.waitForNonExistence(timeout: 10), "the rejected computer is still in the list")
     }
 
-    /// Agents with no computer: as the machines page says it, with 添加电脑.
+    /// Agents with no computer: as the machines page says it, with Add Computer.
     @MainActor func testAgentsWithNoComputer() throws {
         for scheme in ["light", "dark"] {
             try scenario("MOCK_READINESS=zero")

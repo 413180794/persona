@@ -1,7 +1,7 @@
 import XCTest
 
-/// The Fleet activity's 拒绝 button on the lock screen resolves the request: the app starts a sample activity
-/// (`-showFleetSample needsYou`, request `ix_sample`), the test locks the phone, taps 拒绝 and asks the mock hub
+/// The Fleet activity's Deny button on the lock screen resolves the request: the app starts a sample activity
+/// (`-showFleetSample needsYou`, request `ix_sample`), the test locks the phone, taps Deny and asks the mock hub
 /// (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB) whether the resolve arrived.
 final class LiveActivityActionTests: XCTestCase {
     @MainActor func testDenyFromTheLockScreen() throws {
@@ -21,8 +21,8 @@ final class LiveActivityActionTests: XCTestCase {
         XCUIDevice.shared.perform(NSSelectorFromString("pressLockButton"))
         sleep(2)
         let deny = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@", "拒绝")).firstMatch
-        // The system's "allow Live Activities" prompt, first time only. Its 允许 is also the activity's own button: with
-        // the activity showing (拒绝 is there), tapping "允许" would approve the sample request.
+        // The system's "allow Live Activities" prompt, first time only. Its Allow is also the activity's own button: with
+        // the activity showing (Deny is there), tapping Allow would approve the sample request.
         let allowActivities = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "Always Allow", "允许"])).firstMatch
         if !deny.exists, allowActivities.exists { allowActivities.tap(); sleep(1) }
 

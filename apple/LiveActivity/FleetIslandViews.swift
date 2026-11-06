@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Persona' agent colors: the dots of StatusPalette (Shared/StatusPalette.swift, which the extension builds too; it does
-/// not build the app's Theme). Shared by the widget and the island preview in 设置 › 通知 › 灵动岛.
+/// not build the app's Theme). Shared by the widget and the island preview in Settings › Notifications › Dynamic Island.
 enum FleetPalette {
     static var needsYou: Color { StatusPalette.needsYou.dot }
     static var working: Color { StatusPalette.working.dot }
@@ -10,13 +10,13 @@ enum FleetPalette {
     static var workingText: Color { StatusPalette.working.text }
     /// The app icon's coral (the app's `Theme.brand`): the island's number symbols, nothing to tap.
     static let coral = Palette.coral
-    /// The brand's four-point star (`Theme.Icon.jarvis`, which the extension does not build): the 面罩 persona's glint.
+    /// The brand's four-point star (`Theme.Icon.jarvis`, which the extension does not build): the Visor persona's glint.
     static let mark = "sparkle"
     /// System blue, the app's accent: the keyline and the system's action buttons.
     static let accent = Palette.systemBlue
     /// A system blue dark enough for white button labels (4.7:1).
     static let button = Palette.buttonBlue
-    /// The pictures of the island in 设置: where the camera sits, and another app's activity (a stand-in).
+    /// The pictures of the island in Settings: where the camera sits, and another app's activity (a stand-in).
     static let camera = Color(white: 0.12)
     static let otherApp = Color(white: 0.35)
 
@@ -59,7 +59,7 @@ struct IslandPair {
     var text: String
     var tint: Color
     var number: Color = .white
-    /// 做完未看's dot: a smaller symbol than the others.
+    /// Unread's dot: a smaller symbol than the others.
     var dot = false
 
     init?(_ cell: IslandCell) {
@@ -85,7 +85,7 @@ struct IslandPair {
 }
 
 /// The compact Dynamic Island's left side: the persona in the fleet's state, then the left cell. Beside the face a
-/// 需要你 / 在工作 count is just its number in its color (the face already says which: red ring, working eyes).
+/// Needs You / Working count is just its number in its color (the face already says which: red ring, working eyes).
 struct IslandLeading: View {
     var state: FleetState
     var stale: Bool
@@ -101,7 +101,7 @@ struct IslandLeading: View {
 }
 
 /// One side of the compact Dynamic Island: a symbol and a short number. `small` is the minimal island's size; `bare`
-/// drops the 需要你 / 在工作 symbol (next to the persona, which shows it).
+/// drops the Needs You / Working symbol (next to the persona, which shows it).
 struct IslandCellView: View {
     var cell: IslandCell
     var small = false
@@ -132,7 +132,7 @@ struct IslandCellView: View {
         }
     }
 
-    /// 需要你 / 在工作: the counts the persona's face shows too (red ring, working eyes).
+    /// Needs You / Working: the counts the persona's face shows too (red ring, working eyes).
     static func saysItsState(_ cell: IslandCell) -> Bool {
         switch cell {
         case .needsYou, .working: true
@@ -170,7 +170,7 @@ struct IslandNumber: View {
 
 /// The Fleet in one glyph: the minimal island (another app's activity beside ours, StandBy) and a compact side the
 /// system limits in width (iPhone 18 Pro beside another app's activity, landscape, iPhone Duo), where the compact
-/// island's other side is left empty and the system hides it. The most urgent count (需要你 > 在工作 > 做完未看), whole
+/// island's other side is left empty and the system hides it. The most urgent count (Needs You > Working > Unread), whole
 /// (IslandFitTests): its symbol and number while they fit, in a limited side's 28 pt circle the number in a ring of its
 /// state's color from 10 on, and 99+ in its color past 99. Chosen by the count: outside limited mode the island offers
 /// no width, it grows with what it shows (up to 35 pt for the minimal island), so `ViewThatFits` would always pick
@@ -230,7 +230,7 @@ struct IslandRing: View {
     }
 }
 
-/// The compact island as a picture, for 设置 › 通知 › 灵动岛: the two sides around a camera on a black pill.
+/// The compact island as a picture, for Settings › Notifications › Dynamic Island: the two sides around a camera on a black pill.
 struct IslandPreview: View {
     var state: FleetState
     var look: FleetLook = .saved
@@ -262,7 +262,7 @@ struct IslandPreview: View {
     }
 }
 
-/// The island beside another app's activity, for 设置 › 通知 › 灵动岛: our glyph by the camera, the other app's activity
+/// The island beside another app's activity, for Settings › Notifications › Dynamic Island: our glyph by the camera, the other app's activity
 /// (a gray stand-in) in a circle of its own. Which of the two sits by the camera is the system's choice; ours reads
 /// the same in either place.
 struct IslandSharedPreview: View {

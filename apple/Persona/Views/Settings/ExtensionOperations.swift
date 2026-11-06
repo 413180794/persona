@@ -1,8 +1,8 @@
 import Foundation
 import Observation
 
-// Installing, upgrading and removing extensions, with what the hub is doing meanwhile (docs/protocol.md「扩展的安装、
-// 升级、卸载进度」, #3277, #3307).
+// Installing, upgrading and removing extensions, with what the hub is doing meanwhile (docs/protocol.md「扩展的安装、升级、卸载进度」,
+// #3277, #3307).
 //
 // A hub with `extension_operations` runs each as an operation and pushes it in `extension_operation` events (to a
 // socket that declared the feature) as it goes through its steps: an install previews in the background (download,
@@ -315,7 +315,7 @@ enum ExtensionOperationText {
         return nil
     }
 
-    /// A program of the tools step: 用这台机器上的 when the hub machine's own copy is used; else where it is.
+    /// A program of the tools step: "Uses the one on this machine" when the hub machine's own copy is used; else where it is.
     static func tool(_ t: ExtensionOperationStep.Tool) -> String? {
         if t.reused == true { return String(localized: "用这台机器上的") }
         switch t.state {
@@ -326,7 +326,7 @@ enum ExtensionOperationText {
         }
     }
 
-    /// 正在安装 / 等你同意权限 / 安装没有完成 / 已安装 / 已取消.
+    /// Installing… / Waiting for your consent / Install didn't finish / Installed / Canceled.
     static func title(_ op: ExtensionOperation) -> String {
         switch (op.state, op.kind) {
         case (.running, .install): String(localized: "正在安装")
@@ -343,7 +343,7 @@ enum ExtensionOperationText {
         }
     }
 
-    /// The row's chip in the market's list: 安装中 / 等你同意 / 安装失败.
+    /// The row's chip in the market's list: Installing / Waiting for You / Install failed.
     static func chip(_ op: ExtensionOperation) -> String? {
         switch (op.state, op.kind) {
         case (.running, .install): String(localized: "安装中")
@@ -363,7 +363,7 @@ enum ExtensionOperationText {
         return op.kind == .uninstall ? nil : op.version
     }
 
-    /// 第 2 步，共 6 步 (the steps it skips not counted).
+    /// Step 2 of 6 (the steps it skips not counted).
     static func progress(_ op: ExtensionOperation) -> String? {
         let shown = op.shownSteps
         guard !shown.isEmpty else { return nil }
@@ -372,7 +372,7 @@ enum ExtensionOperationText {
         return String(localized: "第 \(max(at, 1)) 步，共 \(shown.count) 步")
     }
 
-    /// 已过 12 秒 / 已过 1 分 5 秒.
+    /// 12s elapsed / 1m 5s elapsed.
     static func elapsed(since start: Date, now: Date) -> String {
         let s = max(0, Int(now.timeIntervalSince(start)))
         return s < 60 ? String(localized: "已过 \(s) 秒") : String(localized: "已过 \(s / 60) 分 \(s % 60) 秒")

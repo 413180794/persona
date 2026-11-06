@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 操控电脑 on a Mac's page while the hub's plugin cua is on (docs/computer-use.md): the switch that lets the assistant
-/// operate it through Cua Driver, and whether it can now. What is missing comes with what to do about it: 安装 Cua Driver
-/// when it is not there, 去授权 when a permission is missing (macOS asks on the Mac's own screen), with the node's
+/// Control Computer on a Mac's page while the hub's plugin cua is on (docs/computer-use.md): the switch that lets the assistant
+/// operate it through Cua Driver, and whether it can now. What is missing comes with what to do about it: Install Cua Driver
+/// when it is not there, Grant Access when a permission is missing (macOS asks on the Mac's own screen), with the node's
 /// progress while it works. The node is asked again when the page opens, and every few seconds while a job runs.
 struct ComputerSection: View {
     @Environment(AppModel.self) private var model
@@ -162,7 +162,7 @@ struct ComputerSection: View {
     }
 
     /// The way to Cua Driver's two permissions (#1280): what is allowed already, checked; the rest as numbered steps in
-    /// System Settings' own words; 去授权 (macOS's dialogs), 再检查一次, and VNC to do it from the phone.
+    /// System Settings' own words; Grant Access (macOS's dialogs), Check Again, and VNC to do it from the phone.
     private func grantGuide(_ c: MachineComputer, asking: Bool) -> some View {
         let steps = GrantGuide.steps(c)
         let failed = c.job.flatMap { $0.kind == "grant" && $0.state == "failed" ? $0.error : nil }
@@ -268,7 +268,7 @@ struct ComputerSection: View {
     static let oneTapAuthName = String(localized: "面容")
     #endif
 
-    /// 一键解锁 on this device (it needs the sign-in kept), and 锁上 while it is on (#1507 a-2).
+    /// One-Tap Unlock on this device (it needs the sign-in kept), and Lock while it is on (#1507 a-2).
     private func unlockRow(locked: Bool) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Toggle(isOn: Binding(get: { oneTap }, set: { on in
@@ -299,7 +299,7 @@ struct ComputerSection: View {
 
     static let noLockWarning = String(localized: "打开后这台 Mac 在扩展开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。")
 
-    /// 扩展开着时不自动锁屏 for this Mac (the plugin's no_auto_lock; asked about first): its node holds caffeinate.
+    /// Don't Auto-Lock While On for this Mac (the plugin's no_auto_lock; asked about first): its node holds caffeinate.
     private func noLockRow(_ c: MachineComputer) -> some View {
         Toggle(isOn: Binding(get: { c.noAutoLock }, set: { on in
             if on { askNoLock = true } else { Task { await setNoLock(false) } }
@@ -394,8 +394,8 @@ struct ComputerSection: View {
     }
 }
 
-/// The steps to Cua Driver's permissions on that Mac (#1280), checked against macOS 26's System Settings: 隐私与安全性 ›
-/// 辅助功能 and › 录屏与系统录音 (屏幕录制 before), where the app is listed as Cua Driver (com.trycua.driver).
+/// The steps to Cua Driver's permissions on that Mac (#1280), checked against macOS 26's System Settings: Privacy &
+/// Security › Accessibility and › Screen & System Audio Recording (Screen Recording before), where the app is listed as Cua Driver (com.trycua.driver).
 nonisolated enum GrantGuide {
     struct Step: Hashable, Identifiable {
         var id: String
@@ -403,7 +403,7 @@ nonisolated enum GrantGuide {
         var text: String
     }
 
-    /// What is allowed already first, then what is left to do, then 再检查一次.
+    /// What is allowed already first, then what is left to do, then Check Again.
     static func steps(_ c: MachineComputer) -> [Step] {
         let accessibility = c.accessibility == "granted", screen = c.screenRecording == "granted"
         var done: [Step] = [], todo: [Step] = []

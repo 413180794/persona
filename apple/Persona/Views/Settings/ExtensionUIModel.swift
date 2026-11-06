@@ -15,11 +15,11 @@ nonisolated extension ExtensionUIPlace: Identifiable {
     var ownerName: String? { extensionName?.isEmpty == false ? extensionName : pluginName }
 
     /// The slots this app draws (anything else from a newer hub is ignored). `extension_page` is UI version 3's name for
-    /// `plugin_page` (docs/extensions.md「UI 版本 3」兼容).
+    /// `plugin_page` (docs/extensions.md「UI 版本 3」, compatibility).
     static let slots: Set<String> = ["plugin_page", "extension_page", "launcher_section", "nav_page", "overview_card",
                                      "machine_section", "inbox_item"]
 
-    /// An extension's own page in 设置 › 扩展 › it.
+    /// An extension's own page in Settings › Extensions › it.
     var isExtensionPage: Bool { placement.isEmpty || placement == "plugin_page" || placement == "extension_page" }
 }
 
@@ -184,9 +184,9 @@ extension APIClient {
     var popped = false
     /// `ui.invalidate` came for it: drawn again at once while on screen, else when it is next shown.
     private(set) var stale = false
-    /// 每次失效都推进版本，合并请求期间到达的第二次事件不会被第一次刷新吞掉。
+    /// Every invalidation bumps the version, so a second event arriving while a request is merged is not swallowed by the first refresh.
     private(set) var invalidationVersion = 0
-    /// 忙碌期间暂缓的刷新，在当前操作结束后重试；开始请求时不改变任务键。
+    /// A refresh held back while busy is retried once the current operation ends; starting a request does not change the task key.
     private(set) var completedOperations = 0
     var group: String { deps.api()?.group ?? "" }
 
@@ -383,7 +383,7 @@ extension APIClient {
         defer { loading = false; completedOperations += 1 }
         let result = try? await call(nil, values: nil)
         guard !Task.isCancelled else { return }
-        // 请求结束后才处理失效标记，避免改变 SwiftUI 任务键而取消自己的网络请求。
+        // Invalidation marks are handled only after the request ends, so changing the SwiftUI task key does not cancel our own network request.
         if version == invalidationVersion { stale = false }
         guard let v = result?.view else {
             drawnAt = .now

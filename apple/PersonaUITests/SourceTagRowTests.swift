@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Agents rows' 终端 / 飞书群 tag sits under the row's time, at its end (#3043), in the default and the BeautifulUI
+/// The Agents rows' Terminal / Lark Group tag sits under the row's time, at its end (#3043), in the default and the BeautifulUI
 /// style: not before the title, which it pushed onto two lines, nor in the badge's 24 pt column (#3004), which spilled
 /// both ways (the badge half out of the capsule, the tag over the title's first characters).
 ///   MOCK_BOTMUX=1 PORT=<port> python3 scripts/mock/mock_hub.py &
@@ -24,7 +24,7 @@ final class SourceTagRowTests: XCTestCase {
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-ui.style", style]
         app.launchPersona()
 
-        // The 需要你处理 cards fill the first screen: the list's own 终端 / 飞书群 filters bring those rows up.
+        // The Needs You cards fill the first screen: the list's own Terminal / Lark Group filters bring those rows up.
         for (filter, label) in [("terminal", "终端"), ("feishu", "飞书群")] {
             if filter == "feishu" && env["JARVIS_BOTMUX"] == nil { continue }
             let chip = app.buttons["agents.filter." + filter]

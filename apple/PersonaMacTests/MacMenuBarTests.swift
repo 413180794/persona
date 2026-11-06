@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The menu bar item (docs/mac.md: 灵动岛 / 锁屏实时活动 → 菜单栏): what needs you, what's working, what finished.
+/// The menu bar item (docs/mac.md: Dynamic Island / Lock Screen Live Activity → menu bar): what needs you, what's working, what finished.
 @MainActor
 struct MacMenuBarTests {
     private func session(_ id: String, _ state: AgentState, assistant: Bool = false, ago: TimeInterval = 0) -> Session {
@@ -55,7 +55,7 @@ struct MacMenuBarTests {
         #expect(MacMenuBar.quickAnswers(one)?.last?.resolution.answers == ["用哪个?": "B"])
         let multi = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"哪些?","multi_select":true,"options":[{"label":"A"}]}]}"#)
         #expect(MacMenuBar.quickAnswers(multi) == nil)
-        // "(Recommended)" reads as 推荐; the answer keeps the label as it came.
+        // "(Recommended)" reads as Recommended; the answer keeps the label as it came.
         let rec = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"框架?","multi_select":false,"options":[{"label":"Swift Testing (Recommended)"},{"label":"XCTest"}]}]}"#)
         #expect(MacMenuBar.quickAnswers(rec)?.first?.title == "Swift Testing（推荐）")
         #expect(MacMenuBar.quickAnswers(rec)?.first?.resolution.answers == ["框架?": "Swift Testing (Recommended)"])
@@ -89,7 +89,7 @@ struct MacMenuBarTests {
         #expect(MacMenuBar.count(needsYou: 3) == "3")
     }
 
-    /// The icon's number counts waiting cards of the menu's 需要你 sessions, not sessions (#4081): one agent on a
+    /// The icon's number counts waiting cards of the menu's Needs You sessions, not sessions (#4081): one agent on a
     /// second card shows 2, matching the Dock badge and the iPhone's Agents tab.
     @Test func iconCountsCardsNotSessions() throws {
         func ix(_ id: String, _ session: String) throws -> Interaction {

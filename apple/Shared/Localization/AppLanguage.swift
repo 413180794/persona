@@ -2,7 +2,7 @@ import Foundation
 
 // The interface language (docs/i18n.md「选哪种语言」, docs/ios.md「界面语言」): zh-Hans, en or ja.
 //
-// 设置 › 外观 › 语言 picks 跟随系统 (default) or one of the three. The choice is applied the way iOS's own per-app
+// Settings › Appearance › Language picks Match System (default) or one of the three. The choice is applied the way iOS's own per-app
 // language setting applies it: `AppleLanguages` in the app's defaults, read by Foundation when the process starts.
 // So a change takes effect the next time the app opens (Foundation's `String(localized:)` cannot be pointed at
 // another language in a running process); the settings page says so. Following the system resolves the system's
@@ -126,8 +126,8 @@ nonisolated final class LanguageStore: @unchecked Sendable {
             group?.set(current, forKey: Self.resolvedKey)
             return current
         }
-        // iOS's per-app setting picked something since this app last wrote it: adopt it as the choice, so 设置 ›
-        // 外观 › 语言 and the system's page agree.
+        // iOS's per-app setting picked something since this app last wrote it: adopt it as the choice, so Settings ›
+        // Appearance › Language and the system's page agree.
         if let app = Self.first(appValue()), let applied = defaults.string(forKey: Self.appliedKey), app != applied {
             defaults.set(AppLanguage.resolve(app), forKey: Self.choiceKey)
         }

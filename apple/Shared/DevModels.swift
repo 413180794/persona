@@ -1,6 +1,6 @@
 import Foundation
 
-// 会话项目的 Git / Files 模型和接口（hub → node `git.*` / `fs.list`）。
+// Git / Files models and calls for a session's project (hub → node `git.*` / `fs.list`).
 
 nonisolated struct GitCommit: Codable, Identifiable, Hashable, Sendable {
     var hash: String

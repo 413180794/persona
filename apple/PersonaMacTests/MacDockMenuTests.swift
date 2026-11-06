@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Right-click on the Dock icon: what needs you, then what just finished, each opening its chat; 新建 Agent 对话 last.
+/// Right-click on the Dock icon: what needs you, then what just finished, each opening its chat; New Agent Chat last.
 @MainActor
 struct MacDockMenuTests {
     private func session(_ id: String, _ state: AgentState) -> Session {

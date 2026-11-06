@@ -5,7 +5,7 @@ import Testing
 /// The first review round's findings on the Mac shell (docs/mac.md).
 @MainActor
 struct MacReviewFixesTests {
-    /// Opening a chat from ⌘K, the menu bar or a notification leaves 知识库 / 机器 even when the tab and the open
+    /// Opening a chat from ⌘K, the menu bar or a notification leaves Knowledge / Machines even when the tab and the open
     /// chat are already the ones asked for (no onChange fires then).
     @Test func openingAChatLeavesTheMacSections() {
         let shell = MacShellState()
@@ -38,7 +38,7 @@ struct MacReviewFixesTests {
     /// A pairing link while paired to a real hub does not switch hubs silently.
     @Test func aPairingLinkDoesNotReplaceAPairing() {
         #expect(MacPairing.accepts(isPaired: false, isDemo: false))
-        #expect(MacPairing.accepts(isPaired: true, isDemo: true)) // 体验模式 ends when a real hub comes
+        #expect(MacPairing.accepts(isPaired: true, isDemo: true)) // Demo Mode ends when a real hub comes
         #expect(!MacPairing.accepts(isPaired: true, isDemo: false))
     }
 

@@ -5,7 +5,7 @@ import XCTest
 /// #1512 for the plugin pages). Each test also checks the secret still reached the hub.
 ///
 /// Against scripts/mock/mock_hub.py with `MOCK_PLUGINS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1`:
-/// `TEST_RUNNER_JARVIS_SECRETS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named by
+/// `TEST_RUNNER_JARVIS_SECRETS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by
 /// `TEST_RUNNER_JARVIS_SECRETS_APPEARANCE` (light / dark) and the style.
 final class SecretFieldTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -62,7 +62,7 @@ final class SecretFieldTests: XCTestCase {
         return try? JSONSerialization.jsonObject(with: data)
     }
 
-    /// 设置 › 模型 › 新增供应商, filled in by hand: name, address, key, model; saved, the sheet closes.
+    /// Settings › Model › Add Provider, filled in by hand: name, address, key, model; saved, the sheet closes.
     @MainActor func testALauncherKey() throws {
         let app = try launch(["-tab", "settings", "-openModelLaunchers", "YES", "-openLauncherEditor", "YES", "-dev.openChat", ""])
         let name = "jv_key\(Int.random(in: 1000...9999))"
@@ -79,7 +79,7 @@ final class SecretFieldTests: XCTestCase {
         XCTAssertEqual(launchers.first { $0["name"] as? String == name }?["has_key"] as? Bool, true, "the key did not reach the hub")
     }
 
-    /// 新增供应商 › 从扩展添加: a plugin's provider, a name and its key; saved, the sheet closes.
+    /// Add Provider › From Extension: a plugin's provider, a name and its key; saved, the sheet closes.
     @MainActor func testAPresetKey() throws {
         let app = try launch(["-tab", "settings", "-openModelLaunchers", "YES", "-openLauncherEditor", "preset", "-dev.openChat", ""])
         let preset = app.buttons["launcher.preset.example-gateway/team"]
@@ -97,7 +97,7 @@ final class SecretFieldTests: XCTestCase {
         XCTAssertEqual(launchers.first { $0["name"] as? String == name }?["has_key"] as? Bool, true, "the key did not reach the hub")
     }
 
-    /// 设置 › 飞书机器人 on a fresh hub: App ID and App Secret, 验证并保存, then back.
+    /// Settings › Lark Bot on a fresh hub: App ID and App Secret, Verify and Save, then back.
     @MainActor func testTheFeishuBotSecret() throws {
         let app = try launch(["-tab", "settings", "-openConnectorBot", "YES", "-dev.openChat", ""])
         let appID = field(app, "App ID")
@@ -117,7 +117,7 @@ final class SecretFieldTests: XCTestCase {
         PasswordPrompt.assertNone(app, "the Feishu bot's App Secret")
     }
 
-    /// 设置 › 邮箱 › 添加 (其他 IMAP): address and password, 连接, the sheet closes.
+    /// Settings › Mail › Add (Other IMAP): address and password, Connect, the sheet closes.
     @MainActor func testAMailPassword() throws {
         let app = try launch(["-tab", "settings", "-addMail", "YES", "-dev.openChat", ""])
         let imap = app.buttons["其他 IMAP"]

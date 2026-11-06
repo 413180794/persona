@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A small tag after a chat's name: 外部, 机器人, 公开, 会议…
+/// A small tag after a chat's name: External, Bot, Public, Meeting…
 struct LarkNameTag: View {
     var text: String
 
@@ -38,7 +38,7 @@ nonisolated enum LarkTime {
         }
     }
 
-    /// Feishu's feed times: 05:59, 昨天, 星期三, 10月21日, 2025/10/21.
+    /// Feishu's feed times: 05:59, Yesterday, Wednesday, Oct 21, 2025/10/21.
     static func short(_ d: Date?, now: Date = .now, calendar: Calendar = .current) -> String {
         guard let d, d.isMeaningful else { return "" }
         return switch tier(of: d, now: now, calendar: calendar) {

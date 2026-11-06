@@ -2,10 +2,10 @@ import EventKit
 import SwiftUI
 
 // The top of the day in the main conversation (docs/unified-entry.md「对话的形状」): a line with the date, and the
-// 今天 card — what finished overnight, what waits, the day's meetings, the chats that @ the user, the phone's reminders
+// Today card — what finished overnight, what waits, the day's meetings, the chats that @ the user, the phone's reminders
 // due today. Each row is one tap: open the task, or say the obvious thing to Persona.
 
-/// 今天要知道的: the hub's `today` item, plus the phone's reminders due today when the app may read them.
+/// Today at a Glance: the hub's `today` item, plus the phone's reminders due today when the app may read them.
 struct TodayCard: View {
     var item: FeedItem
     var today: TodayBody
@@ -74,7 +74,7 @@ struct TodayCard: View {
     }
 }
 
-/// One row of the 今天 card: a tinted mark, what it is, and its one action.
+/// One row of the Today card: a tinted mark, what it is, and its one action.
 struct TodayRow: View {
     enum Run: Hashable { case open(String), board, say(String) }
 
@@ -144,7 +144,7 @@ struct TodayReminder: Hashable {
     }
 }
 
-/// 今天 · 11 月 3 日 周一: the line over the first thing of each day in the assistant's conversation.
+/// Today · Mon, Nov 3: the line over the first thing of each day in the assistant's conversation.
 struct DayLine: View {
     var date: Date
 

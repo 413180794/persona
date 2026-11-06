@@ -1,15 +1,15 @@
 import XCTest
 
-/// 设置 › 扩展 (docs/extensions.md): the list, a plugin's page with its form drawn from its schema, a secret filled in
+/// Settings › Extensions (docs/extensions.md): the list, a plugin's page with its form drawn from its schema, a secret filled in
 /// (and never shown again), a setting the hub refuses shown beside its field. Against scripts/mock/mock_hub.py with
-/// MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the
+/// MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the
 /// screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
 final class ExtensionSettingsTests: XCTestCase {
     @MainActor func testSetUpAnExtension() async throws {
         let env = ProcessInfo.processInfo.environment
         guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
         let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
-        // 从当前 mock 的列表取数量，不写死后来新增示例之前的六个扩展。
+        // Take the count from the current mock's list, not the six extensions there were before later examples were added.
         var (data, response) = try await URLSession.shared.data(from: URL(string: hub + "/api/v1/extensions")!)
         if (response as? HTTPURLResponse)?.statusCode == 404 {
             (data, response) = try await URLSession.shared.data(from: URL(string: hub + "/api/v1/plugins")!)
@@ -35,7 +35,7 @@ final class ExtensionSettingsTests: XCTestCase {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["允许", "Allow"] where springboard.buttons[label].waitForExistence(timeout: 3) { springboard.buttons[label].tap() }
 
-        // 设置's row: how many, and how many need the user.
+        // Settings' row: how many, and how many need the user.
         let entry = app.buttons["settings-plugins"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15) || app.staticTexts["设置"].exists, "no settings")
         for _ in 0..<8 where !(entry.exists && entry.isHittable) { app.swipeUp() }
@@ -66,7 +66,7 @@ final class ExtensionSettingsTests: XCTestCase {
         app.buttons["plugin-save"].tap()
         XCTAssertTrue(app.staticTexts["要是一个网址"].waitForNonExistence(timeout: 5))
 
-        // The secret: typed in hidden, saved, then only 已设置.
+        // The secret: typed in hidden, saved, then only Set.
         let secret = app.buttons["plugin-secret-api_key"]
         for _ in 0..<6 where !(secret.exists && secret.isHittable) { app.swipeUp() }
         secret.tap()

@@ -1,11 +1,11 @@
 import AuthenticationServices
 import SwiftUI
 
-// 添加邮箱 › Outlook (docs/mail.md「Outlook 接入方式」): Microsoft's sign-in for personal Outlook.com and work Microsoft
+// Add Mail Account › Outlook (docs/mail.md「Outlook 接入方式」): Microsoft's sign-in for personal Outlook.com and work Microsoft
 // 365 mailboxes, with a client ID the user registered in Microsoft Entra themselves (never built into the app): the
-// first time, the field for it with the steps; then 使用 Microsoft 账号登录, the same flow as Google's.
+// first time, the field for it with the steps; then Sign In with Microsoft, the same flow as Google's.
 
-/// The Outlook part of 添加邮箱: the client ID while the hub has none (or the user changes it), else the sign-in.
+/// The Outlook part of Add Mail Account: the client ID while the hub has none (or the user changes it), else the sign-in.
 struct OutlookSignInSection: View {
     @Environment(AppModel.self) private var model
     @Environment(\.webAuthenticationSession) private var webAuth

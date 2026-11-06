@@ -90,7 +90,7 @@ struct RelayQuotaAccountsPageTests {
         #expect(type.choices.map(\.value) == ["all", "claude", "kiro", "other"], "four choices: all of them drawn (5 at most)")
         #expect(type.choices.allSatisfy { $0.label.count <= 12 }, "short enough for a segment")
         #expect(head.contains { $0.statGrid?.stats.count == 4 })
-        // The filter's 全部 counts what the segmented's 全部 does: the default hides nothing.
+        // The filter's All counts what the segmented's All does: the default hides nothing.
         #expect(v.filter?.choices.first?.label == type.choices.first?.label)
 
         // One row per account, each with its badge and its push; a section per group, the refresh button at the end.

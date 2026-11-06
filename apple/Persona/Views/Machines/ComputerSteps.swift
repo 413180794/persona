@@ -14,7 +14,7 @@ nonisolated enum ComputerSteps {
         return lower.hasPrefix("mcp__cua") || lower.contains("cua-driver") || lower.contains("cua_driver")
     }
 
-    /// The whole call in a line: 「点 AC → 6 → × → 7 → =」, 「输入「你好」 → 按 return」, 「看 Calculator」, 「运行脚本：…」.
+    /// The whole call in a line: "Click AC → 6 → × → 7 → =", "Type “hello” → press return", "Look at Calculator", "Run script: …".
     static func describe(_ name: String, input: JSONValue) -> String {
         let base = ToolPresentation.baseName(name)
         switch base {
@@ -41,7 +41,7 @@ nonisolated enum ComputerSteps {
         }
     }
 
-    /// Steps in a line, clicks after a click joined by → alone (点 AC → 6 → ×).
+    /// Steps in a line, clicks after a click joined by → alone (Click AC → 6 → ×).
     static func join(_ words: [String]) -> String {
         var out: [String] = []
         var clicking = false
@@ -63,7 +63,7 @@ nonisolated enum ComputerSteps {
         return o["expect"] != nil || o["wait_for"] != nil ? String(localized: "检查", comment: "A computer tool step that only checks the screen") : nil
     }
 
-    /// A click's verb, kept once for a run of clicks by `join` (点 AC → 6 → ×): the target follows it directly.
+    /// A click's verb, kept once for a run of clicks by `join` (Click AC → 6 → ×): the target follows it directly.
     static var clickVerb: String { String(localized: "点 ", comment: "Click verb prefix, followed by a button name; a run of clicks shows it once: 点 AC → 6 → ×") }
 
     /// One action: its verb and what it acts on.

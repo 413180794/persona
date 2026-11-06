@@ -1,6 +1,6 @@
 import AppKit
 
-/// The pointer on a terminal the Mac drives (docs/terminal.md 第二十五节, as the web's `lib/terminal-mouse.ts`): which
+/// The pointer on a terminal the Mac drives (docs/terminal.md section 25, as the web's `lib/terminal-mouse.ts`): which
 /// presses go to herdr as `terminal_input.mouse` (and so to a program that takes the mouse: vim, Claude Code, Codex) and
 /// which stay here (selection, the right-click menu), the button and modifier bits herdr takes, and one motion event
 /// per cell. Pure, so the decisions are tested without a window.
@@ -8,7 +8,7 @@ nonisolated enum MacTerminalMouse {
     enum Button: String, Equatable { case left, middle, right }
     enum Action: String, Equatable { case down, up, drag }
 
-    /// Who gets the mouse (终端设置 › 鼠标): herdr does not say whether the program in the pane takes it, so it is the user's.
+    /// Who gets the mouse (Terminal Settings › Mouse): herdr does not say whether the program in the pane takes it, so it is the user's.
     /// program (the default): presses go to herdr, Shift keeps them here; local: they stay here, Shift sends them on.
     enum Mode: String, CaseIterable { case program, local }
 
@@ -20,7 +20,7 @@ nonisolated enum MacTerminalMouse {
         var mods: Int
     }
 
-    /// herdr's modifier bits on a mouse event (measured: docs/terminal.md 第二十五节).
+    /// herdr's modifier bits on a mouse event (measured: docs/terminal.md section 25).
     static let shift = 1, ctrl = 2, alt = 4
     /// herdr drops a cell past this; the hub refuses it too.
     static let maxCell = 4096

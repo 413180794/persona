@@ -16,7 +16,7 @@ nonisolated struct RecordingReceipt: Codable, Sendable {
 }
 
 #if os(watchOS)
-/// Hourhand 回传队列的适配：索引先持久化，手机确认落盘后才删除音频，失败退避。
+/// Adapter for Hourhand's upload queue: the index is persisted first, audio is deleted only after the phone confirms it is on disk, failures back off.
 @Observable
 final class WatchRecordingTransfer {
     static let shared = WatchRecordingTransfer()

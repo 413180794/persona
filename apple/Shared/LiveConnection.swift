@@ -67,7 +67,7 @@ nonisolated enum ServerEvent: Sendable {
     /// Folders a Files / Git pane watches (`fs_watch`) changed on the computer, or the Git status of `cwd` did (#2439,
     /// docs/protocol.md「文件自动刷新」).
     case fsChanged(machineID: String, cwd: String, dirs: [String], git: Bool)
-    /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」角标): nil clears it.
+    /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」 badges): nil clears it.
     case pluginBadge(plugin: String, id: String, badge: ExtensionBadge?)
     /// An extension's data changed (`ui.invalidate`, docs/extensions.md「ui.invalidate」): its interface `id` (nil: all of
     /// them) is drawn again where it is shown.
@@ -284,7 +284,7 @@ nonisolated extension ServerEvent {
     }
 }
 
-/// The 体验模式 hub's end of the socket (Persona/App/DemoHub.swift): what the app sends goes to `receive`, and it
+/// The Demo Mode hub's end of the socket (Persona/App/DemoHub.swift): what the app sends goes to `receive`, and it
 /// answers through `deliver` with the same JSON a hub sends.
 protocol LocalSocket: AnyObject {
     func open(deliver: @escaping (Data) -> Void)
@@ -304,12 +304,12 @@ final class LiveConnection {
     /// Connected, but a ping has gone unanswered for `slowAfter`, or its pong came that late: a weak or stalled
     /// network. Only a prompt pong clears it (a late one alone made the title flip every ping), and pings go every
     /// `slowPingEvery` meanwhile. The socket is only declared dead after `deadAfter`; until then the app says
-    /// 连接中… (ConnectionStatus).
+    /// Connecting… (ConnectionStatus).
     private(set) var stalled = false { didSet { if stalled != oldValue { onChange?() } } }
     /// Round trip of the last answered ping.
     private(set) var rtt: TimeInterval?
     /// The hub turned the socket's credential down (401 on the handshake): a revoked device, or a pairing token past its
-    /// grace (docs/protocol.md「临时配对」). Retrying alone will not fix it; the app says 配对已失效 (ConnectionStatus) and
+    /// grace (docs/protocol.md「临时配对」). Retrying alone will not fix it; the app says Pairing Expired (ConnectionStatus) and
     /// tries again only slowly (`rejectedRetry`). Cleared once a socket opens, and by `connect` (paired again).
     private(set) var rejected = false { didSet { if rejected != oldValue { onChange?() } } }
     static let rejectedRetry: TimeInterval = 60
@@ -586,7 +586,7 @@ final class LiveConnection {
         }
     }
 
-    /// 体验模式: no network, no heartbeat; the made-up hub's messages arrive like a socket's.
+    /// Demo Mode: no network, no heartbeat; the made-up hub's messages arrive like a socket's.
     private func openLocal(_ gen: Int) {
         guard let make = Self.makeLocal else {
             state = .failed(String(localized: "体验模式不可用"))

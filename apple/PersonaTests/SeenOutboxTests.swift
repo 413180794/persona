@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 全部标为已读 over a socket that is gone (#1588): a mark waits until a list from the hub shows it recorded, the
+/// Mark All as Read over a socket that is gone (#1588): a mark waits until a list from the hub shows it recorded, the
 /// session stays seen meanwhile, and the mark goes again over HTTP or the next socket.
 @MainActor struct SeenOutboxTests {
     private let machine = MachineRef(group: "", id: "m")

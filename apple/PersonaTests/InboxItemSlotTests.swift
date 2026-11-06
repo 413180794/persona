@@ -4,7 +4,7 @@ import Testing
 
 /// The inbox_item slot (docs/extensions.md「收件箱条目」, #1682): which sources' items a plugin draws, the item's body as
 /// the plugin's View (`context.item`, its buttons), today's body whenever that cannot be (quietly, or with a line and
-/// 重试 when the plugin failed), and 在会话里看 (persona://inbox/<id>/source) back to today's body.
+/// Retry when the plugin failed), and View in Session (persona://inbox/<id>/source) back to today's body.
 @MainActor struct InboxItemSlotTests {
     private static let list = #"""
     {"ui":[{"plugin":"larkext","plugin_name":"飞书","id":"event","title":"事件","placement":"inbox_item","size":"full",
@@ -126,7 +126,7 @@ import Testing
         #expect(pressed["action"] == .string("reply") && pressed["context"]?["item"] == .string("lark:F1:1051"))
         #expect(pressed["state"] == .string("page=1") && pressed["values"] == .object(["reply": .string("周四可以")]))
 
-        // The item changes (new messages, 已处理): drawn again.
+        // The item changes (new messages, Done): drawn again.
         let before = bodies.count
         await slot.changed()
         #expect(bodies.count == before + 1 && bodies.last?["action"] == nil)
@@ -150,7 +150,7 @@ import Testing
 
     @Test func aFailedExtensionSaysSoAndTriesAgain() async throws {
         // 502 (the plugin failed, a view the hub cannot draw), a hub out of reach, an answer without a view: today's body
-        // under a line saying why, with 重试.
+        // under a line saying why, with Retry.
         for failure in [APIError(status: 502, message: "插件出错了", fields: ["code": "plugin_failed"]),
                         APIError(status: 0, message: "连不上 hub")] {
             let hub = FakeHub()
@@ -161,7 +161,7 @@ import Testing
             await slot.start()
             #expect(slot.phase == .plain && slot.failure == failure.message && slot.place?.pluginName == "飞书")
 
-            // 重试 once the plugin is back: its page.
+            // Retry once the plugin is back: its page.
             hub.on("POST", "/api/v1/plugins/larkext/-/ui/event", json: Self.event)
             await slot.retry()
             #expect(slot.phase == .plugin && slot.failure == nil && slot.page?.view != nil)
@@ -207,7 +207,7 @@ import Testing
         await slot.start()
         let page = try #require(slot.page)
 
-        // 在会话里看: the item's own source, today's body; 回到 brings the plugin's page back as it was.
+        // View in Session: the item's own source, today's body; Back brings the plugin's page back as it was.
         let open = await page.perform(ExtensionAction(id: "open"))
         let url = try #require(open.url)
         #expect(slot.open(url) && slot.showsSource && slot.phase == .plugin)

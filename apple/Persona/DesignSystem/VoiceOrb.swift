@@ -6,14 +6,14 @@ import SwiftUI
 /// while Persona speaks, and a ring laps it while the call connects or the bound conversation works. With Reduce Motion
 /// (or in Low Power Mode, as `PersonaDot`) every phase is a still frame, and Reduce Motion swaps one phase for the next
 /// without a zoom. Everything it draws stays inside its box, the halo too, so it never washes over the words and buttons
-/// beside it in the bar. While Persona speaks and `interrupt` is given it is a button, 打断语音: a tap stops the
-/// voice, never the agent (停止 Claude is the bar's own button, with its own words). Otherwise it is decoration and
+/// beside it in the bar. While Persona speaks and `interrupt` is given it is a button, Interrupt Voice: a tap stops the
+/// voice, never the agent (Stop Claude is the bar's own button, with its own words). Otherwise it is decoration and
 /// VoiceOver skips it: the bar says the state in words beside it.
 ///
-/// Every style draws it from the same roles, and the page only passes the phase: 液态玻璃 and the solid styles a lit
+/// Every style draws it from the same roles, and the page only passes the phase: Liquid Glass and the solid styles a lit
 /// sphere, pale in the persona's color while it listens and full while it speaks (`Theme.persona`); BeautifulUI a flat
 /// disc with a five-bar level meter, as its prompt bar draws dictation. The ring is the persona's while connecting and
-/// 工作中's amber while the agent works (`Theme.busy`); gray is a voice that is off (paused, muted, ended).
+/// Working's amber while the agent works (`Theme.busy`); gray is a voice that is off (paused, muted, ended).
 ///
 /// A clock drives it (`TimelineView`), paused whenever nothing moves; a repeating state animation leaked into the layout
 /// of what sat around it (`StatusDot`). On the Mac a clock that never stops lays the whole window out every frame
@@ -88,7 +88,7 @@ struct VoiceOrb: View {
         }
     }
 
-    // MARK: 液态玻璃 and the solid styles: a lit sphere
+    // MARK: Liquid Glass and the solid styles: a lit sphere
 
     private func lit(_ pose: VoiceOrbPose, disc: CGFloat, box: CGFloat) -> some View {
         let persona = Theme.persona
@@ -202,7 +202,7 @@ struct VoiceOrb: View {
 
     // MARK: Both
 
-    /// What sits on a still orb whose voice is off: 已暂停's pause, 已静音's slashed mic.
+    /// What sits on a still orb whose voice is off: Paused's pause, Muted's slashed mic.
     @ViewBuilder private func glyph(disc: CGFloat, color: Color) -> some View {
         if let symbol = phase.glyph {
             Image(systemName: symbol).font(.system(size: disc * 0.36, weight: .semibold)).foregroundStyle(color)
@@ -256,7 +256,7 @@ nonisolated extension VoiceOrb.Phase {
 /// One frame of the orb, worked out from its phase, the time and the level; pure, so the tests can hold it to the tokens.
 /// `at: nil` is the still frame (Reduce Motion, or a phase that does not move): the same at any time and any level.
 nonisolated struct VoiceOrbPose: Equatable, Sendable {
-    /// The sphere's scale (液态玻璃 and the solid styles).
+    /// The sphere's scale (Liquid Glass and the solid styles).
     var scale: Double
     /// How strongly it glows: the sphere's halo, the BeautifulUI disc's pulse ring.
     var glow: Double

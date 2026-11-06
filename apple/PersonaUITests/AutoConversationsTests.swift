@@ -1,8 +1,8 @@
 import XCTest
 
-/// 自动对话 in Persona's sidebar (#3264): the conversations Persona opened by itself (收件箱's AI 分身, scheduled tasks,
-/// 飞书 /agent…) are not in 最近 but in one row, closed at first, that still says one waits for the user; open, a row for
-/// each source, which opens 全部对话 filtered to it. Against scripts/mock/mock_hub.py with
+/// Auto Chats in Persona's sidebar (#3264): the conversations Persona opened by itself (Inbox's AI twin, scheduled tasks,
+/// Lark /agent…) are not in Recent but in one row, closed at first, that still says one waits for the user; open, a row for
+/// each source, which opens All Chats filtered to it. Against scripts/mock/mock_hub.py with
 /// MOCK_AUTO_CONVERSATIONS=1 (JARVIS_MOCK_HUB). SHOT_DIR keeps the screenshots (closed, open, the list).
 final class AutoConversationsTests: XCTestCase {
     private var hub: String!
@@ -61,7 +61,7 @@ final class AutoConversationsTests: XCTestCase {
             group.tap()
             XCTAssertTrue(app.buttons["sidebar-auto-inbox"].waitForNonExistence(timeout: 3), "did not close")
         }
-        // Closed: the user's own in 最近, Persona's own not; the row says one waits for the user.
+        // Closed: the user's own in Recent, Persona's own not; the row says one waits for the user.
         XCTAssertTrue(conversation("帮我约周五").exists, "the user's own conversation is not in 最近")
         XCTAssertFalse(conversation("1105 | 收件箱").exists, "an inbox conversation is still in 最近")
         // Ten with an origin, and the mock's scheduled tasks' own conversations (known the #2838 way).
@@ -71,7 +71,7 @@ final class AutoConversationsTests: XCTestCase {
         sleep(1)
         shot("closed")
 
-        // Open: a row for each source, and 全部对话.
+        // Open: a row for each source, and All Chats.
         group.tap()
         let inbox = app.buttons["sidebar-auto-inbox"].firstMatch
         XCTAssertTrue(inbox.waitForExistence(timeout: 3), "no 收件箱 row")
@@ -82,7 +82,7 @@ final class AutoConversationsTests: XCTestCase {
         sleep(1)
         shot("open")
 
-        // A source's row: 全部对话 filtered to it.
+        // A source's row: All Chats filtered to it.
         inbox.tap()
         let rows = app.buttons.matching(identifier: "auto-conversation")
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5), "the list did not open")
@@ -96,7 +96,7 @@ final class AutoConversationsTests: XCTestCase {
         XCTAssertFalse(rows.matching(NSPredicate(format: "label CONTAINS %@", "收件箱")).firstMatch.exists, "我的 has an inbox one")
         app.buttons["auto-filter-all"].firstMatch.tap()
         XCTAssertTrue(app.buttons["auto-filter-all"].isSelected, "全部 is not the chosen filter")
-        // A list draws only the rows on screen: more than 收件箱's 6 is all of them here.
+        // A list draws only the rows on screen: more than Inbox's 6 is all of them here.
         XCTAssertGreaterThan(rows.count, 6, "全部's list")
         shot("list-all")
 

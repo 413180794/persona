@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 新建 Agent's model: the launcher's list as the hub sends it and what a start sends (docs/model-config.md「新建 Agent 选模型」).
+/// New Agent's model: the launcher's list as the hub sends it and what a start sends (docs/model-config.md「新建 Agent 选模型」).
 @MainActor struct LauncherModelChoiceTests {
     private func list(_ json: String) throws -> LauncherModels {
         try JSON.decoder.decode(LauncherModels.self, from: Data(json.utf8))
@@ -60,7 +60,7 @@ import Testing
         #expect(c.efforts == [])
         c.picked = "gateway/glm-5.3"
         #expect(c.efforts == ["low", "medium", "high"])
-        // 模型配置's model runs when nothing is picked.
+        // Model Settings' model runs when nothing is picked.
         c.picked = ""
         c.configured = "gateway/glm-5.3"
         #expect(c.efforts == ["low", "medium", "high"] && c.detail == "模型配置：gateway/glm-5.3")
@@ -77,7 +77,7 @@ import Testing
         #expect(c.matching("nothing").isEmpty)
     }
 
-    /// 模型配置 (#943): an id the list lacks can be used, the current unlisted one stays shown, and 默认 names what is
+    /// Model Settings (#943): an id the list lacks can be used, the current unlisted one stays shown, and Default names what is
     /// inherited.
     @Test func modelConfigurationTakesIdsTheListLacks() throws {
         var c = LauncherModelChoice(list: try claude, configured: "model-chat", configuredLabel: "继承")

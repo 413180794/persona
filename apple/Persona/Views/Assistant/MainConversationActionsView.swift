@@ -1,22 +1,22 @@
 import SwiftUI
 
-// The main conversation's 压缩上下文 and 新建主对话 (#1762, the hub's side in #1727; docs/assistant.md「手动压缩」
+// The main conversation's Compact context and New Main Chat (#1762, the hub's side in #1727; docs/assistant.md「手动压缩」
 // 「新建主对话」): the menu entries, the note above the composer while it compacts, and the question before a new one.
 
 extension AppModel {
-    /// 压缩上下文 is offered: on the main conversation, when its hub can.
+    /// Compact context is offered: on the main conversation, when its hub can.
     func canCompact(_ key: SessionKey?) -> Bool {
         guard let key, key == assistantMain else { return false }
         return features(key.group).contains(MainConversationActions.compactFeature)
     }
 
-    /// 新建主对话… is offered: on the main conversation, when its hub can.
+    /// New Main Chat… is offered: on the main conversation, when its hub can.
     func canStartNewMain(_ key: SessionKey?) -> Bool {
         guard let key, key == assistantMain else { return false }
         return features(key.group).contains(MainConversationActions.newMainFeature)
     }
 
-    /// Asks the hub to compact `key`; its progress comes on the session (`compaction`). A refusal (正在回答, 已经在压…)
+    /// Asks the hub to compact `key`; its progress comes on the session (`compaction`). A refusal (already answering, already compacting…)
     /// is the hub's own words.
     func compactConversation(_ key: SessionKey) async {
         guard let api = api(key.group) else { return }
@@ -100,7 +100,7 @@ struct CompactionTracker: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .onChange(of: signature, initial: true) { old, new in
-                // The hub's first word after 压缩上下文 was asked: it speaks for itself from now on.
+                // The hub's first word after Compact context was asked: it speaks for itself from now on.
                 if old != new { model.compactionRequests[key] = nil }
                 update()
                 seen = run?.state
@@ -161,7 +161,7 @@ struct CompactionTracking: ViewModifier {
     }
 }
 
-/// Above the composer: 正在压缩上下文…, 已压缩上下文 for a moment, 压缩失败：<why> with a close button.
+/// Above the composer: Compacting Context…, Context compacted for a moment, Compacting failed: <why> with a close button.
 struct CompactionNote: View {
     @Environment(AppModel.self) private var model
     var key: SessionKey
@@ -208,8 +208,8 @@ struct CompactionNote: View {
     private var isFailed: Bool { if case .failed = shown { true } else { false } }
 }
 
-/// The question before 新建主对话: the main conversation is archived (renamed 旧主对话 · 至 M月D日, under 已归档), the
-/// next message starts the new one; 带上旧对话的摘要 on by default.
+/// The question before New Main Chat: the main conversation is archived (renamed Old main chat · to <date>, under Archived), the
+/// next message starts the new one; Include Old Chat Summary on by default.
 struct NewMainSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

@@ -106,7 +106,7 @@ targets:
         # (SplitNavigation), as on an open iPhone Duo.
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # The 形象's home screen icon (AppIconChoice, scripts/assets/make_alt_icons.py); the Mac target shares the catalog but not these.
+        # The avatar's home screen icon (AppIconChoice, scripts/assets/make_alt_icons.py); the Mac target shares the catalog but not these.
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Visor AppIcon-Circuit AppIcon-Pixel AppIcon-Facet AppIcon-Blob AppIcon-PaperLight AppIcon-PaperDark"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
@@ -114,7 +114,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         # The commit stamp below reads the repository's .git, which the script sandbox does not let it see.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
-    # Which commit a build is (设置 › 关于 › 构建): stamped into the built Info.plist on every build, before signing;
+    # Which commit a build is (Settings › About › Build): stamped into the built Info.plist on every build, before signing;
     # "+" when the working tree had changes not committed.
     postBuildScripts:
       - name: Stamp the commit
@@ -280,7 +280,7 @@ targets:
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # The native visionOS app (docs/vision.md): the iOS app's logic and content views, compiled for visionOS (UIKit, so
   # most of it as is), inside a visionOS shell (Vision/): an ornament for the tabs, a window per conversation, the
-  # 需要你 ornament. iPhone-only parts (Live Activity, the watch, haptics) are behind `#if os(iOS)` / `os(visionOS)`.
+  # Needs You ornament. iPhone-only parts (Live Activity, the watch, haptics) are behind `#if os(iOS)` / `os(visionOS)`.
   PersonaVision:
     type: application
     platform: visionOS
@@ -431,7 +431,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
-  # 分享 › Persona (#4586): text, links and pictures from another app sent to Persona's main conversation.
+  # Share › Persona (#4586): text, links and pictures from another app sent to Persona's main conversation.
   PersonaShare:
     type: app-extension
     platform: iOS
@@ -536,7 +536,7 @@ targets:
     platform: macOS
     sources:
       - path: PersonaMacTests
-      # Shared logic the Mac runs as is: the same tests, run against the Mac build (docs/mac.md 验收清单).
+      # Shared logic the Mac runs as is: the same tests, run against the Mac build (docs/mac.md「验收清单」).
       - path: PersonaTests/HeadingMenuTests.swift
       - path: PersonaTests/IntentsTests.swift
       - path: PersonaTests/KnowledgeTests.swift

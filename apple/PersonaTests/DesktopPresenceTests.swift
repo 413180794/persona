@@ -3,7 +3,7 @@ import Testing
 @testable import Jarvis
 
 /// 「Mac 上的 Persona 已登录」(docs/protocol.md「桌面端」): the hub says which desktops are connected; a phone may
-/// choose 手机静音 while one is.
+/// choose Phone Muted while one is.
 struct DesktopPresenceTests {
     @Test func decodesTheDesktopsEvent() throws {
         let json = #"{"type":"desktops","desktops":[{"device":"dev_1","name":"MacBook","since":"2026-11-01T08:00:00.123456789+08:00"}]}"#
@@ -24,7 +24,7 @@ struct DesktopPresenceTests {
         #expect(try JSON.decoder.decode(NotifyPrefs.self, from: Data("{}".utf8)).muteWhileDesktop == false)
         var p = try JSON.decoder.decode(NotifyPrefs.self, from: Data(#"{"mute_while_desktop":true}"#.utf8))
         #expect(p.muteWhileDesktop)
-        // 设置 › 通知 saves the whole NotifyPrefs it loaded: it must not carry 手机静音 back (an older value would undo a
+        // Settings › Notifications saves the whole NotifyPrefs it loaded: it must not carry Phone Muted back (an older value would undo a
         // switch made on the banner meanwhile). The banner writes it alone.
         let obj = try JSONSerialization.jsonObject(with: try JSON.encoder.encode(p)) as? [String: Any]
         #expect(obj?["mute_while_desktop"] == nil)

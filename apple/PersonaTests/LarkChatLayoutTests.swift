@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Where a 飞书 chat puts its time separators and avatars (`LarkChatLayout`), with a fixed clock and calendar.
+/// Where a Lark chat puts its time separators and avatars (`LarkChatLayout`), with a fixed clock and calendar.
 @MainActor struct LarkChatLayoutTests {
     private static let cal: Calendar = {
         var c = Calendar(identifier: .gregorian)
@@ -47,7 +47,7 @@ import Testing
         #expect(tier(at(2026, 10, 29, 0, 0)) == .thisWeek)
         #expect(tier(at(2026, 10, 28, 23, 59)) == .thisYear)
         #expect(tier(at(2025, 12, 31, 23, 59)) == .older)
-        // Just after midnight on New Year's day: yesterday is last year, still 昨天.
+        // Just after midnight on New Year's day: yesterday is last year, still Yesterday.
         let jan1 = at(2027, 1, 1, 0, 10)
         #expect(LarkTime.tier(of: at(2026, 12, 31, 23, 50), now: jan1, calendar: Self.cal) == .yesterday)
         #expect(LarkTime.tier(of: at(2026, 12, 20, 9, 0), now: jan1, calendar: Self.cal) == .older)
@@ -89,7 +89,7 @@ import Testing
 
     @Test func myMessagesAreOneSenderEvenOnTheirWay() {
         let sent = msg("1", from: "王小明", uid: "u-me", mine: true, at: at(10, 0))
-        let onItsWay = LarkOutgoing(text: "hi", at: at(10, 1)).message(like: nil) // 我, no id: no message of mine loaded
+        let onItsWay = LarkOutgoing(text: "hi", at: at(10, 1)).message(like: nil) // Me, no id: no message of mine loaded
         #expect(LarkChatLayout.continues(onItsWay, after: sent, calendar: Self.cal))
         #expect(!LarkChatLayout.continues(onItsWay, after: msg("2", from: "我", uid: "u-other", at: at(10, 0)), calendar: Self.cal),
                 "someone else called 我 is not me")

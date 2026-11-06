@@ -74,7 +74,7 @@ struct SessionWorkTests {
         #expect(try session(work: #"{"phase":"blocked","on":"external","line":"等 CI","wait":"CI 跑完"}"#).work?.hubWaits == false)
         #expect(try session(work: #"{"phase":"blocked","on":"user","line":"等你","wake_at":"\#(at(9))"}"#).work?.hubWaits == false)
         #expect(try session(work: #"{"phase":"done","line":"做完了"}"#).isWaiting == false)
-        // Unread stays unread: 待唤醒 is only for one with nothing to look at.
+        // Unread stays unread: Waiting is only for one with nothing to look at.
         #expect(try session(state: "unread", work: #"{"phase":"blocked","on":"external","line":"等部署","wake_at":"\#(at(9))"}"#).isWaiting == false)
     }
 

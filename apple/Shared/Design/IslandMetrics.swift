@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The Dynamic Island's sizes (docs/live-activity.md): the Fleet activity's pieces and the picture of it in 设置 › 通知 ›
-/// 灵动岛. A table of its own because the widget extension builds this file but not `Theme`. The island's type has fixed
+/// The Dynamic Island's sizes (docs/live-activity.md): the Fleet activity's pieces and the picture of it in Settings › Notifications ›
+/// Dynamic Island. A table of its own because the widget extension builds this file but not `Theme`. The island's type has fixed
 /// sizes: the system gives its regions in points, whatever the text size.
 nonisolated enum IslandMetrics {
     // MARK: What the system gives (measured on the iOS 27 simulators, docs/live-activity.md「和其他 App 共用灵动岛」)
@@ -27,7 +27,7 @@ nonisolated enum IslandMetrics {
     /// The minimal island's (and a limited side's) symbol and number.
     static let smallSymbol: CGFloat = 10
     static let smallNumber: CGFloat = 12
-    /// 做完未看's dot, smaller than the other symbols.
+    /// Unread's dot, smaller than the other symbols.
     static let dot: CGFloat = 8
     static let smallDot: CGFloat = 6
     /// The assistant's star.

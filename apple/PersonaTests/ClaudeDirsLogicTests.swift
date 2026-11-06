@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › Claude Code › 屏蔽的配置目录 (`ClaudeDirsLogic`): the same cases as web `agent-settings.test.ts`.
+/// Settings › Claude Code › Blocked Config Folders (`ClaudeDirsLogic`): the same cases as web `agent-settings.test.ts`.
 struct ClaudeDirsLogicTests {
     private func state() throws -> APIClient.ClaudeDirsState {
         let json = """
@@ -38,7 +38,7 @@ struct ClaudeDirsLogicTests {
         #expect(ClaudeDirsLogic.cleaned(" ~/.bots/ ") == "~/.bots")
     }
 
-    /// A load that failed says so, with 重试 under it: a timeout or no network too, which left the section spinning
+    /// A load that failed says so, with Retry under it: a timeout or no network too, which left the section spinning
     /// for good (#744); a cancelled one (the page went away) says nothing.
     @Test func loadFailures() {
         let timeout = URLError(.timedOut), offline = URLError(.notConnectedToInternet), cancelled = CancellationError()

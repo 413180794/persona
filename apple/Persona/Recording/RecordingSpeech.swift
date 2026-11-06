@@ -1,7 +1,7 @@
 import AVFoundation
 import Speech
 
-// 本机引擎与按时间戳断句迁移自 Hourhand 的 SpeechEngines.swift，不包含云端路径。
+// The on-device engines and timestamp-based sentence splitting come from Hourhand's SpeechEngines.swift, without the cloud path.
 
 nonisolated protocol RecordingSpeechEngine: Sendable {
     /// Stored in `Recording.engine`: "analyzer", "dictation", "speech", "cloud".

@@ -76,7 +76,7 @@ enum LocationTool {
                      place.thoroughfare, place.subThoroughfare].compactMap { $0 }.filter { !$0.isEmpty }
         if !parts.isEmpty {
             let joined = parts.joined()
-            // Avoid "中国中国上海..." when the placemark repeats the country.
+            // Avoid the country twice (e.g. "China China Shanghai...") when the placemark repeats it.
             return joined
         }
         return place.name

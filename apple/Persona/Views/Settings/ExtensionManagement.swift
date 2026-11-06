@@ -1,6 +1,6 @@
 import Foundation
 
-/// 详情和安装预览里的依赖状态；不是清单里的版本约束本身。
+/// Dependency status in the details and the install preview; not the manifest's version constraint itself.
 nonisolated struct ExtensionDependencyStatus: Codable, Hashable, Sendable, Identifiable {
     var id: String
     var version: String?
@@ -22,7 +22,7 @@ nonisolated struct ExtensionDependencyStatus: Codable, Hashable, Sendable, Ident
     }
 }
 
-/// 每项贡献的有效开关；旧 hub 没有 contributions 字段，不合成假的开关。
+/// Each contribution's effective switch; an older hub has no contributions field, and no fake switches are made up.
 nonisolated struct ExtensionContributionSwitch: Codable, Hashable, Sendable, Identifiable {
     var point: String
     var contributionID: String
@@ -40,7 +40,7 @@ nonisolated struct ExtensionContributionSwitch: Codable, Hashable, Sendable, Ide
     }
 }
 
-/// 停用前展示由服务端返回的被影响扩展；确认后才发送 cascade。
+/// Before disabling, shows the affected extensions the server returned; cascade is sent only after confirming.
 nonisolated struct ExtensionDisableConfirmation {
     var message: String
     var dependents: [String]
@@ -59,7 +59,7 @@ nonisolated struct ExtensionRemovalResult: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case removedMembers = "removed_members" }
 }
 
-/// 一次确认对应每个预览各自的权限摘要，旧 hub 不需要 bundle 时不发送新字段。
+/// One confirmation covers each preview's own permission summary; for an older hub that needs no bundle, the new field is not sent.
 nonisolated struct ExtensionInstallRequest: Encodable {
     struct BundleReference: Encodable {
         var previewID: String
@@ -87,7 +87,7 @@ nonisolated struct ExtensionInstallRequest: Encodable {
     }
 }
 
-/// 未保存的表单只留在内存，按 hub 和扩展隔离，外观重建或重新读取不会丢掉草稿。
+/// Unsaved forms live only in memory, kept apart per hub and extension; rebuilding the view or reloading does not drop the drafts.
 @MainActor final class ExtensionDrafts {
     static let shared = ExtensionDrafts()
     struct Key: Hashable { var source: String; var id: String }

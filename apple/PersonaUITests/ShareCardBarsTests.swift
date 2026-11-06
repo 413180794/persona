@@ -1,7 +1,7 @@
 import XCTest
 
-/// The share card's preview (长按消息 › 分享, `MessageShareSheet`) has the image viewer's bars (#4714): a round close
-/// button and 浅色 / 深色 in a capsule on top; 分享 · 保存 and 拷贝 in a capsule · 分享文字 at the bottom, every one inside
+/// The share card's preview (long-press a message › Share, `MessageShareSheet`) has the image viewer's bars (#4714): a round close
+/// button and Light / Dark in a capsule on top; Share · Save and Copy in a capsule · Share Text at the bottom, every one inside
 /// the screen. Run it on the narrowest phone too (SE).
 ///   PORT=18832 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18832 xcodebuild test … -only-testing:PersonaUITests/ShareCardBarsTests
@@ -37,7 +37,7 @@ final class ShareCardBarsTests: XCTestCase {
             XCTAssertTrue(c.waitForExistence(timeout: 10), "missing \(c):\n\(app.debugDescription)")
             XCTAssertTrue(screen.contains(c.frame), "\(c.label) at \(c.frame) is not inside the screen \(screen)")
         }
-        // The bottom row, on one line: 分享 · [保存 拷贝] · 分享文字.
+        // The bottom row, on one line: Share · [Save Copy] · Share Text.
         XCTAssertLessThan(app.buttons["分享"].frame.maxX, save.frame.minX)
         XCTAssertLessThanOrEqual(save.frame.maxX, app.buttons["拷贝"].frame.minX)
         XCTAssertLessThan(app.buttons["拷贝"].frame.maxX, app.buttons["分享文字"].frame.minX)
@@ -52,7 +52,7 @@ final class ShareCardBarsTests: XCTestCase {
             try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("share-card-\(name).png"))
         }
 
-        // 浅色 / 深色 still switches the card, and the close button still closes the sheet.
+        // Light / Dark still switches the card, and the close button still closes the sheet.
         let darkSegment = app.segmentedControls["share-card-style"].buttons.element(boundBy: 1)
         darkSegment.tap()
         let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: darkSegment)

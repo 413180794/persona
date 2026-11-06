@@ -91,7 +91,7 @@ struct ChatLines {
     }
 
     /// Claude Code writes a recap each time an idle session is looked at again: several in a row (nothing else
-    /// between) are one line, like the background tasks' reports (2026-10-31: three 离开期间回顾 lines stacked up).
+    /// between) are one line, like the background tasks' reports (2026-10-31: three While You Were Away lines stacked up).
     /// The line keeps the first recap's id, so it stays put as more arrive.
     static func foldRecaps(_ lines: [ChatLine]) -> [ChatLine] {
         var out: [ChatLine] = []
@@ -135,7 +135,7 @@ struct ChatLines {
     }
 
     /// Claude Code's "API Error: …" answers and the hub's API error notices become error cards; the same error
-    /// again right after, with nothing but a retry ("继续") between, folds into the first with a count.
+    /// again right after, with nothing but a retry ("Continue") between, folds into the first with a count.
     static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] {
         var out: [ChatLine] = []
         out.reserveCapacity(lines.count)
@@ -162,7 +162,7 @@ struct ChatLines {
         return ["继续", "重试", "再试一次", "continue", "retry", "go on", "続けて", "続行", "再試行", "もう一度"].contains(t) // i18n-ignore
     }
 
-    /// Open work lines get their steps as lines of their own and a 收起 line after the last.
+    /// Open work lines get their steps as lines of their own and a Collapse line after the last.
     func unfold(_ lines: [ChatLine]) -> [ChatLine] {
         var out: [ChatLine] = []
         out.reserveCapacity(lines.count)
@@ -203,7 +203,7 @@ struct ChatLines {
 
     /// An open work line's steps: two or more tool calls in a row fold into one line of chips (`ToolRunRow`); opened,
     /// their rows follow it, one lazy line per call as before. Thoughts, notices and words stay lines of their own, and
-    /// so does a call that went to the background: its row says how the task went (后台 · 已完成).
+    /// so does a call that went to the background: its row says how the task went (Background · Done).
     func runLines(group: String, items: [WorkItem]) -> [ChatLine] {
         var out: [ChatLine] = []
         var run: [ToolCall] = []

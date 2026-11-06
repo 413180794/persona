@@ -2,7 +2,7 @@ import SwiftUI
 import Testing
 @testable import Jarvis
 
-/// A sidebar heading draws its ⋯ only when the menu has items (#778: 置顶 with only the main conversation pinned had
+/// A sidebar heading draws its ⋯ only when the menu has items (#778: Pin with only the main conversation pinned had
 /// a ⋯ that opened nothing).
 @MainActor
 struct HeadingMenuTests {
@@ -10,7 +10,7 @@ struct HeadingMenuTests {
         #expect(HeadingMenu.isEmpty(items {}))
     }
 
-    /// 置顶's menu: 全部取消置顶 only while something besides the main conversation is pinned.
+    /// Pin's menu: Unpin All only while something besides the main conversation is pinned.
     @Test func anItemBehindAFalseConditionIsEmpty() {
         let othersPinned = false
         #expect(HeadingMenu.isEmpty(items { if othersPinned { Button("全部取消置顶") {} } }))

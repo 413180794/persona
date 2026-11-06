@@ -2,7 +2,7 @@
 // i18n-ignore-file: DEBUG-only made-up recording for screenshots
 import Foundation
 
-/// 演示与截图只使用虚构文字，不启动麦克风；配对了 hub 时照常同步进它的知识库（UI 测试用 mock hub 验这一步）。
+/// Demo and screenshots use made-up text only and never start the microphone; with a hub paired they sync into its Knowledge as usual (UI tests check this step with the mock hub).
 enum RecordingSamples {
     /// Once per launch: the page appears again after its recording was deleted, and must not bring it back.
     nonisolated(unsafe) private static var installed = false

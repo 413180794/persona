@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] 问 Persona… [mic] — that grows into a card
+/// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] Ask Persona… [mic] — that grows into a card
 /// while typing, the field on top and a row under it: [+] … [model · effort] [mic] [send]. The assistant's
 /// conversation and an agent's (in the shell) both type here (#1091). The field is one view in both
 /// shapes (only the buttons around it come and go), so focus and the IME's marked text survive the change.
@@ -16,8 +16,8 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var hasAttachments = false
     /// Set while the agent works: a stop button takes send's place while nothing is typed.
     var stop: (() -> Void)?
-    /// What the model button says, ChatGPT's "6.1 Sol 中": the model, then the effort (`SessionModes.composerTitle`);
-    /// nil: no button. Its menu says what needs saying about the permission mode (全部放行), not the button (#1117).
+    /// What the model button says, ChatGPT's "6.1 Sol Medium": the model, then the effort (`SessionModes.composerTitle`);
+    /// nil: no button. Its menu says what needs saying about the permission mode (Allow Everything), not the button (#1117).
     var modesTitle: SessionModes.ComposerTitle?
     /// What goes with the message, quoted at the top of the card (#986); quotes keep it open (`hasAttachments`).
     var quotes: Binding<[ContextRef]>? = nil

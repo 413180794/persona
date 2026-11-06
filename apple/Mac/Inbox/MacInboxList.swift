@@ -1,14 +1,14 @@
 import SwiftUI
 
 // The Mac inbox (docs/inbox.md; docs/mac.md「主窗口」): the sidebar's inbox entries (`MacInboxFilters`), the list column
-// (`MacInboxList`) and the detail column (`MacInboxDetail`). The list is the iPhone's: the same rows, sections 需要你 /
-// 知悉即可 / 已折叠 / 已处理, the AI 分身's draft cards. Mac ways on top: system selection (⇧ / ⌘ for several), ↑↓ to move,
-// E or ⌫ files the selected as 已处理 and selects the next, ⏎ or a double click opens it in a window of its own (an
-// agent row: its chat), a right-click menu with everything the row can do, swipe left on the trackpad for 已处理.
+// (`MacInboxList`) and the detail column (`MacInboxDetail`). The list is the iPhone's: the same rows, sections Needs You /
+// FYI / Collapsed / Done, the AI Twin's draft cards. Mac ways on top: system selection (⇧ / ⌘ for several), ↑↓ to move,
+// E or ⌫ files the selected as Done and selects the next, ⏎ or a double click opens it in a window of its own (an
+// agent row: its chat), a right-click menu with everything the row can do, swipe left on the trackpad for Done.
 
-/// The inbox's filters column: sources (全部, 飞书, each mail account, each connector with items) and kinds (@我, 私聊, 群聊, 邮件, Agent), each with
+/// The inbox's filters column: sources (All, Lark, each mail account, each connector with items) and kinds (@Me, DMs, Group chat, Mail, Agent), each with
 /// what still waits in it; picking one sets the list's filter. The shell's rows (`MacSidebarRow`), not a sidebar
-/// `List`: its words went light gray whenever the window was not the active one (2026-11-02 user: 看不太清).
+/// `List`: its words went light gray whenever the window was not the active one (2026-11-02 user: hard to read).
 struct MacInboxFilters: View {
     @Environment(AppModel.self) private var model
     var state = MacInboxState.shared
@@ -16,7 +16,7 @@ struct MacInboxFilters: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                MacSidebarHeading(title: String(localized: "来源")) // the page's title says 收件箱 above it (#830)
+                MacSidebarHeading(title: String(localized: "来源")) // the page's title says Inbox above it (#830)
                 ForEach(state.sources) { row($0) }
                 MacSidebarHeading(title: String(localized: "类型"))
                 ForEach(state.kinds) { row($0) }
@@ -103,7 +103,7 @@ struct MacInboxList: View {
         }
         .onDeleteCommand { state.toggleDone(state.selection, model: model) }
         // A selected row can expire out of the list (the hub stops returning an item, an agent stops waiting): prune
-        // the selection on refresh so the detail's 已选 count and the multi-select action match what is still there.
+        // the selection on refresh so the detail's Selected count and the multi-select action match what is still there.
         .onChange(of: store.items) { _, items in
             state.pruneStale(items: items, interactions: model.pendingInteractions)
         }
@@ -131,7 +131,7 @@ struct MacInboxList: View {
             await state.loadAccounts(model)
             #if DEBUG
             // `-openInboxFirst YES`: select the first open item; `-openInboxMatch <text>`: the first whose title has the
-            // text (detail screenshots); `-addMail YES`: 管理邮箱.
+            // text (detail screenshots); `-addMail YES`: Manage Accounts.
             if UserDefaults.standard.bool(forKey: "addMail") { state.showAccounts = true }
             let match = UserDefaults.standard.string(forKey: "openInboxMatch")
             if UserDefaults.standard.bool(forKey: "openInboxFirst") || match != nil {
@@ -145,12 +145,12 @@ struct MacInboxList: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        MacToolbarMiddle() // at the narrowest window these buttons covered 收件箱 (#830)
+        MacToolbarMiddle() // at the narrowest window these buttons covered Inbox (#830)
         ToolbarItemGroup(placement: .primaryAction) {
-            // ⌘R is 显示 › 刷新's, which refreshes the inbox while it is on screen.
+            // ⌘R is View › Refresh's, which refreshes the inbox while it is on screen.
             Button { Task { await store.refresh() } } label: { Label("刷新", systemImage: Theme.Icon.retry) }
                 .help("刷新（⌘R）")
-            // ⇧⌘E is the 收件箱 menu's (MacInboxMenu), which holds the same action.
+            // ⇧⌘E is the Inbox menu's (MacInboxMenu), which holds the same action.
             Button { state.clean() } label: {
                 Label("全部清理", systemImage: Theme.Icon.cleanUpAll)
             }
@@ -303,7 +303,7 @@ private struct MacInboxAgentRow: View {
 }
 
 /// The system's selection stays (↑↓, ⇧ / ⌘, E and ⌫ go by it) but is not what shows: in the active window it filled the
-/// row with the accent, and what the row draws in its own colors went under it (the AI 分身's draft header, its 修改
+/// row with the accent, and what the row draws in its own colors went under it (the AI Twin's draft header, its Edit
 /// button, the sparkles: 2026-11-02). The page's color over it, the well on that, and the row's words in their usual
 /// colors (selected, the system turned them white).
 private struct MacHoverRow: ViewModifier {

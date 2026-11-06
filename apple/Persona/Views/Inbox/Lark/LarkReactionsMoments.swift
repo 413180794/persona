@@ -41,7 +41,7 @@ nonisolated enum LarkQuickReactions {
     }
 }
 
-/// 表情回复: the user's quick reactions on top, then every group of the catalogue (Feishu's picker).
+/// Add Reaction: the user's quick reactions on top, then every group of the catalogue (Feishu's picker).
 struct LarkReactionPicker: View {
     var message: LarkMessage
     var pick: (String) -> Void
@@ -92,10 +92,10 @@ struct LarkReactionPicker: View {
     }
 }
 
-// MARK: - 公司圈
+// MARK: - Moments
 
 nonisolated enum LarkMoments {
-    /// The post id of a 公司圈 share link (`applink…/client/moments/detail?postId=…`).
+    /// The post id of a Moments share link (`applink…/client/moments/detail?postId=…`).
     static func postID(_ link: String?) -> String? {
         guard let link, let c = URLComponents(string: link), c.path.hasSuffix("/client/moments/detail") || c.path.hasSuffix("/moments/detail"),
               let id = c.queryItems?.first(where: { $0.name == "postId" })?.value, !id.isEmpty, id.allSatisfy(\.isNumber) else { return nil }
@@ -103,7 +103,7 @@ nonisolated enum LarkMoments {
     }
 }
 
-/// A shared 公司圈 post in a chat: Feishu's link preview card (title, author, excerpt, counts); tap reads the post.
+/// A shared Moments post in a chat: Feishu's link preview card (title, author, excerpt, counts); tap reads the post.
 struct LarkMomentsCard: View {
     var part: LarkPart
     @Environment(\.larkContext) private var context
@@ -150,7 +150,7 @@ struct LarkMomentsCard: View {
     }
 }
 
-/// One 公司圈 post: author, text with Feishu emoji, pictures, reactions, comments.
+/// One Moments post: author, text with Feishu emoji, pictures, reactions, comments.
 struct LarkMomentsPostView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -158,7 +158,7 @@ struct LarkMomentsPostView: View {
     @Environment(\.larkAccount) private var larkAccount
     var postID: String
     var link: String?
-    /// Pushed as a page (the inbox's 公司圈 item) instead of presented as a sheet: no stack of its own, no 完成.
+    /// Pushed as a page (the inbox's Moments item) instead of presented as a sheet: no stack of its own, no Done.
     var pushed = false
     @State private var post: LarkMomentsPost?
     @State private var comments: [LarkMomentsComment] = []

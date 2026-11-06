@@ -27,7 +27,7 @@ final class InboxStore {
 
     var open: [InboxItem] { items.filter { !$0.isDone } }
 
-    /// Entering or leaving 体验模式: the other side's items must not show for a moment.
+    /// Entering or leaving Demo Mode: the other side's items must not show for a moment.
     func forget() {
         items = []
         triage = nil
@@ -83,10 +83,10 @@ final class InboxStore {
         WatchSync.shared.push(summary: AppModel.shared.watchSummary())
     }
 
-    /// 全部看过 / 全部清除 (a section), Mac's multi-select, and every 撤销: one request for them all on the 已处理 request
+    /// Mark All Seen / Clear All (a section), Mac's multi-select, and every Undo: one request for them all on the Done request
     /// (docs/inbox.md「全部清理」). Shown at once; the hub files each as the list showed it, so one that took new
     /// messages since stays open (it goes back here too), and a failure puts them all back. Filing ends with a toast and
-    /// its 撤销, which brings back what was filed.
+    /// its Undo, which brings back what was filed.
     func setDone(_ list: [InboxItem], _ done: Bool, undoable: Bool = true) {
         guard let api = AppModel.shared.api else { return }
         run(list, done: done, action: .done) { targets in
@@ -95,9 +95,9 @@ final class InboxStore {
         }
     }
 
-    /// 全部清理 (the view's open items, its filters and search): filed as dismissed in the hub's bulk request
-    /// (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」); on a hub without it the 已处理 request instead (recorded as
-    /// handled there). Same as above: shown at once, put back on a failure, a toast whose 撤销 sends the hub's `undo`.
+    /// Clear All (the view's open items, its filters and search): filed as dismissed in the hub's bulk request
+    /// (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」); on a hub without it the Done request instead (recorded as
+    /// handled there). Same as above: shown at once, put back on a failure, a toast whose Undo sends the hub's `undo`.
     func clean(_ list: [InboxItem]) {
         guard let api = AppModel.shared.api else { return }
         let action = InboxBulk.Action.dismiss
@@ -131,7 +131,7 @@ final class InboxStore {
         }
     }
 
-    /// The toast's 撤销: the hub's `undo` as it came (only what that request changed), or the 已处理 request back.
+    /// The toast's Undo: the hub's `undo` as it came (only what that request changed), or the Done request back.
     private func undo(_ undo: InboxBulk.Undo, done: Bool) {
         switch undo {
         case .legacy(let moved):
@@ -145,7 +145,7 @@ final class InboxStore {
         }
     }
 
-    /// The 已处理 request for many, one at a time on a hub from before it.
+    /// The Done request for many, one at a time on a hub from before it.
     private func fileDone(_ targets: [InboxItem], _ done: Bool, api: APIClient) async throws -> InboxBulkResult {
         do {
             return try await api.setInboxDone(targets, done)
@@ -183,7 +183,7 @@ final class InboxStore {
         }
     }
 
-    /// 静音这个仓库 / 会话 / 发件人 (the row's menu): the item and the others of its source it covers are done at once;
+    /// Mute This Repository / Session / Sender (the row's menu): the item and the others of its source it covers are done at once;
     /// the hub keeps the mute, so later ones do not come in. A failure puts them back.
     func mute(_ item: InboxItem, _ option: InboxItem.MuteOption) {
         let before = items
@@ -213,7 +213,7 @@ final class InboxStore {
     /// Replies that did not go out, by item: the reply sheet opens with that text again.
     var unsentReplies: [String: String] = [:]
 
-    /// 发送 on the AI 分身's draft: the hub replies in the chat / by mail / in the document (moving the rows' status
+    /// Send on the AI Twin's draft: the hub replies in the chat / by mail / in the document (moving the rows' status
     /// in `changes` first) and files the item as done. Filed at once (the reply takes Feishu / the mail server a few
     /// seconds); a failure puts the item back and keeps the text for the reply sheet.
     @discardableResult
@@ -284,7 +284,7 @@ extension InboxItem.Doc {
         rows?[r].status?[f].value = value
     }
 
-    /// The row and column a change names, for showing it ("状态：进行中 → 已完成").
+    /// The row and column a change names, for showing it ("Status: Active → Done").
     func describe(_ change: InboxItem.DocChange) -> (row: InboxItem.DocRow, status: InboxItem.DocStatus)? {
         guard let row = rows?.first(where: { $0.ref == change.ref }), let st = row.status?.first(where: { $0.field == change.field }) else { return nil }
         return (row, st)
@@ -300,7 +300,7 @@ extension InboxItem {
         c.updatedAt = updatedAt
         c.readPosition = l.readPosition
         c.account = l.olAccount
-        // "飞书 · <name>" while the hub reads more than one account.
+        // 「飞书 · <name>」 while the hub reads more than one account.
         if let name = accountName.split(separator: " · ", maxSplits: 1).dropFirst().first { c.accountName = String(name) }
         if !isDone, let p = l.startPosition { c.focus = p }
         return c

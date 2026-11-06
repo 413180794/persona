@@ -8,7 +8,7 @@ import SwiftUI
 
 struct ConnectorThreadView: View {
     var model: ConnectorThreadModel
-    /// The connector's name (the inbox item's), for 在 <name> 里打开.
+    /// The connector's name (the inbox item's), for Open in <name>.
     var source: String
     @State private var position = ScrollPosition(idType: String.self)
     @State private var flash: QuoteFlashMark?
@@ -182,7 +182,7 @@ struct ConnectorThreadRow: View {
     var canReply: Bool
     /// The widest a bubble gets (ThreadLayout.bubbleShare of the page), the same for mine and others'.
     var bubbleMax: CGFloat
-    /// The menu's 在 Telegram 里打开.
+    /// The menu's Open in Telegram.
     var openTitle: String
     var reply: (ThreadMessage) -> Void
     var jump: (String) async -> Bool

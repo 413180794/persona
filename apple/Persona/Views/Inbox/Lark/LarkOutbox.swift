@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A message typed in a Feishu chat on its way out: on screen the moment 发送 is tapped, sent in the background in the
+/// A message typed in a Feishu chat on its way out: on screen the moment Send is tapped, sent in the background in the
 /// order written, and replaced by Feishu's own copy when that arrives (LarkChatView).
 nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
     enum State: Codable, Equatable, Sendable { case sending, sent, failed(String), unconfirmed }
@@ -22,17 +22,17 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
     var attempted = false
     /// Direct file uploads have no server outbox replay contract. An uncertain upload is check-only.
     var canRetry: Bool { state != .sent && (attachment?.kind != .file || state != .unconfirmed) }
-    /// Who Feishu notifies (the @ picker), kept for 重发 and 放回输入框.
+    /// Who Feishu notifies (the @ picker), kept for Resend and Back to Composer.
     var mentions: [LarkMention] = []
-    /// When it was first written, once a 重发 has moved `at` on (nil until then).
+    /// When it was first written, once a Resend has moved `at` on (nil until then).
     var firstAt: Date? = nil
-    /// When it was written: where it stands among the chat's messages (LarkChatRows), whatever 重发 did since.
+    /// When it was written: where it stands among the chat's messages (LarkChatRows), whatever Resend did since.
     var written: Date { firstAt ?? at }
 
     /// What the hub gets as `client_id`: this message's id, unchanged by retries.
     var clientID: String { id.uuidString.lowercased() }
 
-    /// 重发: on its way again, as the same message.
+    /// Resend: on its way again, as the same message.
     mutating func retry(at now: Date = .now) {
         state = .sending
         attempted = false
@@ -126,7 +126,7 @@ enum LarkOutbox {
     }
 }
 
-/// 回复 on a message (long press): where the answer goes.
+/// Reply on a message (long press): where the answer goes.
 enum LarkReply {
     enum Route: Equatable {
         /// A quote bar over the chat's box; the message goes to the chat quoting it.
@@ -166,7 +166,7 @@ enum LarkReply {
 }
 
 /// How a message of mine on its way stands, drawn beside its bubble: a spinner while it goes, nothing once sent,
-/// the failed mark when it did not go out (tap: 重发 / 放回输入框 / 删除).
+/// the failed mark when it did not go out (tap: Resend / Back to Composer / Delete).
 struct LarkSendMark {
     var state: LarkOutgoing.State
     var retry: () -> Void

@@ -1,9 +1,9 @@
 import XCTest
 
-/// 体验模式 (docs/ios.md): from the pairing page into the app's own made-up hub (DemoHub, no server), every tab walked
-/// through — Agents (filters, 细列表, a Claude and a Codex session, cards, a table, the terminal), the machines and
-/// their 24-hour charts, Persona (sidebar, a conversation, 定时任务), the inbox (a Feishu chat, a mail) — and back out to
-/// the pairing page from 设置. Needs no mock hub.
+/// Demo Mode (docs/ios.md): from the pairing page into the app's own made-up hub (DemoHub, no server), every tab walked
+/// through — Agents (filters, Compact List, a Claude and a Codex session, cards, a table, the terminal), the machines and
+/// their 24-hour charts, Persona (sidebar, a conversation, Scheduled Tasks), the inbox (a Feishu chat, a mail) — and back out to
+/// the pairing page from Settings. Needs no mock hub.
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> saves a screenshot of each step there (with TEST_RUNNER_JARVIS_STYLE in the name).
 final class DemoModeTests: XCTestCase {
     private var app: XCUIApplication!
@@ -58,7 +58,7 @@ final class DemoModeTests: XCTestCase {
         XCTAssertFalse(anything("连不上 hub").exists, "\(page): tried to reach a hub")
     }
 
-    /// The page's own 返回 (a chat page has two, the folded header's and the hidden full one, both "hittable"): each
+    /// The page's own Back (a chat page has two, the folded header's and the hidden full one, both "hittable"): each
     /// in turn until the page goes, then the edge swipe.
     @MainActor private func back() {
         let all = app.buttons.matching(NSPredicate(format: "label == %@", "返回"))
@@ -68,7 +68,7 @@ final class DemoModeTests: XCTestCase {
             sleep(1)
             if !b.exists || b.frame != frame || !b.isHittable { return }
         }
-        // The bar's back button, not a page's own bar buttons (the Agents list's 新建会话 / 分组 sit there too).
+        // The bar's back button, not a page's own bar buttons (the Agents list's New Session / Group By sit there too).
         let bar = app.navigationBars.buttons.matching(NSPredicate(format: "NOT (label IN %@) AND NOT (label BEGINSWITH %@)",
                                                                   ["新建会话", "新对话", "更多"], "分组")).firstMatch
         if bar.exists, bar.isHittable {
@@ -89,7 +89,7 @@ final class DemoModeTests: XCTestCase {
     @MainActor private func openAgent(_ title: String) {
         let list = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch
         // Back on the list already, it can take a moment to be hittable: wait for that first. A back() on the list
-        // itself found no 返回 and tapped the first bar button, 新建会话, and the search went on inside its sheet.
+        // itself found no Back and tapped the first bar button, New Session, and the search went on inside its sheet.
         func onList() -> Bool { list.exists && list.isHittable }
         for _ in 0..<3 where !onList() {
             let settle = Date().addingTimeInterval(3)
@@ -134,7 +134,7 @@ final class DemoModeTests: XCTestCase {
         shot("welcome")
         demo.tap()
 
-        // Agents: spaces in every state, the quick filters, 细列表.
+        // Agents: spaces in every state, the quick filters, Compact List.
         see(text(Self.firstAgent), "the demo's agents", timeout: 10)
         XCTAssertTrue(text("weather").exists)
         noErrors("agents")
@@ -231,7 +231,7 @@ final class DemoModeTests: XCTestCase {
         back()
         back()
 
-        // Persona: a conversation, the sidebar, 定时任务.
+        // Persona: a conversation, the sidebar, Scheduled Tasks.
         tab("Persona")
         see(text("今天有"), "the main conversation", timeout: 10)
         noErrors("jarvis")
@@ -268,7 +268,7 @@ final class DemoModeTests: XCTestCase {
         shot("mail")
         back()
 
-        // 设置 says it is the demo; leaving it is the pairing page again, and stays so after a relaunch.
+        // Settings says it is the demo; leaving it is the pairing page again, and stays so after a relaunch.
         tab("设置")
         see(text("体验模式 · 数据都是编造的"), "体验模式 in 设置")
         shot("settings")
@@ -282,7 +282,7 @@ final class DemoModeTests: XCTestCase {
         see(app.buttons["welcome.demo"], "the pairing page after a relaunch", timeout: 15)
     }
 
-    /// 体验模式 is remembered: a relaunch opens the demo again, not the pairing page.
+    /// Demo Mode is remembered: a relaunch opens the demo again, not the pairing page.
     @MainActor func testStaysAcrossLaunches() throws {
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-dev.openChat", ""]

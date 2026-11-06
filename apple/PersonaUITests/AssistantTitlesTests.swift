@@ -1,7 +1,7 @@
 import XCTest
 
 /// The assistant's conversations titled by the hub 「MMDD | 类型 | 主题」 (docs/assistant.md「对话标题」) in the drawer,
-/// a topic too long for it cut at the end, and 重命名… in a conversation's long-press menu (the user's title is then
+/// a topic too long for it cut at the end, and Rename… in a conversation's long-press menu (the user's title is then
 /// the hub's for good). Against scripts/mock/mock_hub.py with MOCK_TITLES=1 (JARVIS_MOCK_HUB), which records renames at
 /// /mock/renamed.
 final class AssistantTitlesTests: XCTestCase {
@@ -60,7 +60,7 @@ final class AssistantTitlesTests: XCTestCase {
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40) + "周五饭局")
         shot(app, "rename")
-        // The alert moves up with the keyboard: tap 保存 once it has settled, again if the tap was lost.
+        // The alert moves up with the keyboard: tap Save once it has settled, again if the tap was lost.
         sleep(1)
         for _ in 0..<3 where app.alerts.firstMatch.exists {
             app.alerts.buttons["保存"].tap()

@@ -12,7 +12,7 @@ enum ReadinessRoute: Identifiable, Hashable {
     case addComputer
     case confirmComputer
     case providerWizard
-    /// 设置 › 模型供应商, at one provider when the step names it.
+    /// Settings › Model Providers, at one provider when the step names it.
     case provider(String?)
     case link(URL)
 
@@ -34,7 +34,7 @@ enum ReadinessRoute: Identifiable, Hashable {
     /// Where `action` goes; nil for test_assistant (a probe, run where the button is) and ids this app does not know.
     @MainActor static func route(for action: String, launcher: String?, machine: String?, model: AppModel) -> ReadinessRoute? {
         switch action {
-        // 添加电脑 / 确认电脑 in place where the hub lets this device do it (#4196); else the machines page.
+        // Add a Computer / Confirm the Computer in place where the hub lets this device do it (#4196); else the machines page.
         case "add_computer": return model.canAddComputer ? .addComputer : .machines
         case "confirm_computer": return model.pendingToConfirm().map { model.canConfirmComputer($0.group) } == true ? .confirmComputer : .machines
         case "wake_computer", "install_claude", "login_claude": return .help(action, machine: machine)
@@ -129,7 +129,7 @@ struct ReadinessSheets: ViewModifier {
     }
 }
 
-/// 完成 on a sheet's own stack.
+/// Done on a sheet's own stack.
 private struct DoneButton: View {
     var action: () -> Void
     var body: some View {
@@ -142,7 +142,7 @@ extension View {
 }
 
 /// The card over a new conversation's composer (docs/onboarding.md 4.4): a refused start first (5.2), else the step
-/// the readiness says is missing, else 试一句's result. Nothing on a hub without readiness and nothing when all is well.
+/// the readiness says is missing, else Try a Message's result. Nothing on a hub without readiness and nothing when all is well.
 struct ReadinessHomeCard: View {
     @Environment(AppModel.self) private var model
     @Binding var route: ReadinessRoute?
@@ -188,7 +188,7 @@ struct ReadinessHomeCard: View {
 }
 
 /// A start or a send the hub refused with a code (docs/onboarding.md 5.2): the hub's words, a button for what to do, the
-/// original text under 详情; closed with ×. A computer that is offline says so, not that the hub cannot be reached.
+/// original text under Details; closed with ×. A computer that is offline says so, not that the hub cannot be reached.
 struct CodedFailureCard: View {
     @Environment(AppModel.self) private var model
     var failure: CodedFailure
@@ -308,7 +308,7 @@ struct ReadinessHelpView: View {
     }
 }
 
-/// A command to paste, with 拷贝.
+/// A command to paste, with Copy.
 private struct CommandLine: View {
     @Environment(AppModel.self) private var model
     var text: String

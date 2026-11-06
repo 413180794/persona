@@ -4,7 +4,7 @@ import XCTest
 /// Sharing: ARD, me / mock-pass, ZRLE; it records the pointer, clicks, keys and the clipboard), MOCK_DEVICE_TOKEN
 /// (TEST_RUNNER_JARVIS_SCREEN_HUB, TEST_RUNNER_JARVIS_FAKE_SCREEN=1): the small window (picture in picture) from VNC,
 /// over the home screen, back to the whole page and down again; and on the page, the two modes, the clipboard both
-/// ways, the keyboard and 帮助. TEST_RUNNER_JARVIS_VNC_PAUSE slows it down for a screen recording.
+/// ways, the keyboard and Help. TEST_RUNNER_JARVIS_VNC_PAUSE slows it down for a screen recording.
 final class VNCTests: XCTestCase {
     private var hub: String? { ProcessInfo.processInfo.environment["JARVIS_SCREEN_HUB"] }
     private var pause: UInt32 { UInt32(ProcessInfo.processInfo.environment["JARVIS_VNC_PAUSE"] ?? "") ?? 0 }
@@ -75,7 +75,7 @@ final class VNCTests: XCTestCase {
         if !pip.exists { print("SPRINGBOARD:\n\(springboard.debugDescription)") }
         XCTAssertTrue(pip.waitForExistence(timeout: 5), "the small window over the home screen:\n\(springboard.debugDescription)")
 
-        // Its 还原: the whole page in the app.
+        // Its Restore: the whole page in the app.
         pip.tap()
         rest()
         let restore = springboard.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'restore' OR label CONTAINS[c] '还原' OR identifier CONTAINS[c] 'restore'")).firstMatch
@@ -85,14 +85,14 @@ final class VNCTests: XCTestCase {
         rest(2)
         shot(app, "vnc-page")
 
-        // 小窗 again from the page's …
+        // Picture in Picture again from the page's …
         app.buttons["vnc-more"].tap()
         app.buttons["小窗"].firstMatch.tap()
         XCTAssertTrue(on.waitForExistence(timeout: 20), "the small window again")
         rest(3)
     }
 
-    /// The small window comes up in the tap (#1839), 连接中… until the Mac's picture, then the picture; when the Mac
+    /// The small window comes up in the tap (#1839), Connecting… until the Mac's picture, then the picture; when the Mac
     /// hangs up, why. The simulators have no picture in picture: DEBUG -showPiPSource lays its source over the app.
     @MainActor func testTheSmallWindowConnectsInIt() throws {
         let (app, vnc) = try signedInMachinePage(["-showPiPSource", "YES"])
@@ -122,13 +122,13 @@ final class VNCTests: XCTestCase {
     }
 
     /// On the page: the two modes (the mock's Screen Sharing says where it was clicked), the clipboard both ways, the
-    /// keyboard, 帮助.
+    /// keyboard, Help.
     @MainActor func testThePage() throws {
         let (app, _) = try signedInMachinePage()
         let screen = app.descendants(matching: .any)["vnc-screen"].firstMatch
         XCTAssertTrue(screen.waitForExistence(timeout: 10))
 
-        // 鼠标模式: a tap clicks there.
+        // Mouse Mode: a tap clicks there.
         screen.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         rest()
         var seen = try mockState()
@@ -140,7 +140,7 @@ final class VNCTests: XCTestCase {
         rest()
         shot(app, "vnc-mouse")
 
-        // 触控板模式, from …
+        // Trackpad Mode, from …
         app.buttons["vnc-more"].tap()
         app.buttons["触控板模式"].firstMatch.tap()
         XCTAssertTrue(screen.value as? String ?? "" == "" || (screen.value as? String ?? "").contains("mode=trackpad"), "\(String(describing: screen.value))")
@@ -157,8 +157,8 @@ final class VNCTests: XCTestCase {
         app.buttons["vnc-more"].tap()
         app.buttons["鼠标模式"].firstMatch.tap()
 
-        // 复制到 iPhone: the Mac copies, the phone gets it; then 只放进 Mac 的剪贴板 gives it back (the phone's own
-        // clipboard, so no 允许粘贴 to answer), which shows the phone had it.
+        // Copy to iPhone: the Mac copies, the phone gets it; then Copy to Mac's Clipboard Only gives it back (the phone's own
+        // clipboard, so no Allow Paste to answer), which shows the phone had it.
         try mock(hub!, "/mock/screen-password?clear=1&clip=" + "copied on the Mac".addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)
         rest()
         app.buttons["vnc-clipboard"].tap()
@@ -176,7 +176,7 @@ final class VNCTests: XCTestCase {
         try mock(hub!, "/mock/screen-password?clear=1")
         app.buttons["vnc-keyboard"].tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard:\n\(app.debugDescription)")
-        app.typeText("hello") // to what has the keyboard (the page's catcher: a tap on it could land on 我完成了)
+        app.typeText("hello") // to what has the keyboard (the page's catcher: a tap on it could land on I'm Done)
         rest()
         XCTAssertTrue(app.buttons["vnc-key-cmd"].exists && app.buttons["vnc-key-esc"].exists, "the row of the Mac's keys")
         shot(app, "vnc-keyboard")
@@ -184,7 +184,7 @@ final class VNCTests: XCTestCase {
         XCTAssertEqual(seen["typed"] as? String, "hello")
         app.buttons["vnc-keyboard"].tap()
 
-        // 小窗诊断 (#1839): what this device can and what the small window did, step by step.
+        // Picture in Picture Diagnostics (#1839): what this device can and what the small window did, step by step.
         app.buttons["vnc-more"].tap()
         app.buttons["小窗诊断"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["vnc-pip-diagnostics"].firstMatch.waitForExistence(timeout: 5), "小窗诊断")
@@ -195,7 +195,7 @@ final class VNCTests: XCTestCase {
         app.buttons["关闭"].firstMatch.tap()
         XCTAssertTrue(app.buttons["vnc-help"].waitForExistence(timeout: 5))
 
-        // 帮助.
+        // Help.
         app.buttons["vnc-help"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["vnc-help-page"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["触控板模式"].exists, "\(app.debugDescription)")
@@ -231,7 +231,7 @@ final class VNCTests: XCTestCase {
         return false
     }
 
-    /// iOS asks before the app reads what another app (here the test runner) copied: 允许粘贴.
+    /// iOS asks before the app reads what another app (here the test runner) copied: Allow Paste.
     @MainActor private func allowPaste(_ app: XCUIApplication) {
         let allow = NSPredicate(format: "label IN %@", ["允许粘贴", "Allow Paste"])
         for owner in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {

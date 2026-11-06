@@ -67,8 +67,8 @@ final class MachinePagesLiveTests: XCTestCase {
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
     }
 
-    /// 设置 › 机器: every machine the hub lists; each card opens its details (on top, not under the list); the offline
-    /// one shows the hub's error and 重新连接 answers (still offline: a toast says why).
+    /// Settings › Machines: every machine the hub lists; each card opens its details (on top, not under the list); the offline
+    /// one shows the hub's error and Reconnect answers (still offline: a toast says why).
     @MainActor func testMachinesFromTheHub() throws {
         let machines = (api("/api/v1/machines")["machines"] as? [[String: Any]]) ?? []
         let online = machines.filter { $0["online"] as? Bool == true }
@@ -99,7 +99,7 @@ final class MachinePagesLiveTests: XCTestCase {
         }
     }
 
-    /// 新建会话 on the online machine: pick a directory in the browser and start: the chat opens and the hub has the
+    /// New Session on the online machine: pick a directory in the browser and start: the chat opens and the hub has the
     /// session. The test closes it again. JARVIS_LIVE_MACHINES_CODE is a directory on that machine holding `demo`
     /// (the browser starts there; the node's recent directories are the machine's real ones).
     @MainActor func testNewSessionOnTheLocalMachine() throws {

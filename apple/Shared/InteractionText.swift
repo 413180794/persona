@@ -1,7 +1,7 @@
 import Foundation
 
 /// The first heading line of an agent's plan: the first non-empty line without Markdown markers
-/// ("### Plan" -> "Plan"), what every card and the Mac menu bar title shows. An empty plan is 执行计划.
+/// ("### Plan" -> "Plan"), what every card and the Mac menu bar title shows. An empty plan is Plan.
 nonisolated enum PlanText {
     static func title(_ plan: String) -> String {
         for line in plan.split(separator: "\n") {
@@ -14,9 +14,9 @@ nonisolated enum PlanText {
 
 nonisolated extension Interaction {
     /// One line on what a needs-you card asks, chosen by its kind — the same wording on the chat card, the inbox's
-    /// 需要你 row and the Mac menu bar: a plan's first heading, a terminal dialog's question, a question card's
+    /// Needs You row and the Mac menu bar: a plan's first heading, a terminal dialog's question, a question card's
     /// first question, and a permission card's tool with what it runs.
-    /// - Parameter includeToolName: a permission card shows `toolName：summary`; pass false to show the summary
+    /// - Parameter includeToolName: a permission card shows `toolName: summary`; pass false to show the summary
     ///   only and fall back to the tool name, as the inbox row does (its next line already names the card kind).
     /// - Returns: nil when the card carries no such text; the caller falls back to its generic title.
     func askLine(includeToolName: Bool) -> String? {

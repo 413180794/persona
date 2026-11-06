@@ -3,7 +3,7 @@ import Network
 import Observation
 
 /// What the top of the main screens says about the link to the hub, the way Telegram does it (docs/ios.md「连接状态」):
-/// no banner, the title itself turns into a small spinner and 等待网络 / 连接中… / 更新中…, and quietly back.
+/// no banner, the title itself turns into a small spinner and Waiting for Network / Connecting… / Updating…, and quietly back.
 @Observable
 final class ConnectionStatus {
     enum Phase: Equatable {
@@ -15,7 +15,7 @@ final class ConnectionStatus {
         /// Connected again and fetching what was missed (interactions, the open chats' backlog).
         case updating
         /// The hub answers but turns this device's credential down (401, LiveConnection.rejected): revoked, or a
-        /// pairing that never got its own token. Only pairing again fixes it, so the titles say so instead of 连接中….
+        /// pairing that never got its own token. Only pairing again fixes it, so the titles say so instead of Connecting….
         case rejected
 
         var title: String {
@@ -112,8 +112,8 @@ final class ConnectionStatus {
         return Self.refined(p, rejected: lives.filter { $0.state != .idle }.map(\.rejected))
     }
 
-    /// 连接中… because every group's hub turned its credential down: 配对已失效. One group refused while another is
-    /// still trying stays 连接中… (the hub list says which).
+    /// Connecting… because every group's hub turned its credential down: Pairing Expired. One group refused while another is
+    /// still trying stays Connecting… (the hub list says which).
     static func refined(_ phase: Phase, rejected: [Bool]) -> Phase {
         phase == .connecting && !rejected.isEmpty && rejected.allSatisfy { $0 } ? .rejected : phase
     }
@@ -129,7 +129,7 @@ final class ConnectionStatus {
     }
 
     /// Several groups (docs/multi-hub.md「连接状态」): connecting only while none of them is up — one group out of reach
-    /// (a work hub behind a VPN) would otherwise keep every title on 连接中…; the hub list and the group chips say which
+    /// (a work hub behind a VPN) would otherwise keep every title on Connecting…; the hub list and the group chips say which
     /// one is down. One group: exactly the single-link rule.
     static func phase(network: Bool, links: [(state: LiveConnection.State, stalled: Bool)], catchingUp: Bool) -> Phase {
         let active = links.filter { $0.state != .idle }

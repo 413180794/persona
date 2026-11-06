@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 「MacBook 的 herdr 没在运行」 with 启动, at the top of the Agents list (#1916, docs/engines.md「herdr 没在运行时」): told
+// "herdr isn't running on MacBook" with Start, at the top of the Agents list (#1916, docs/engines.md「herdr 没在运行时」): told
 // before a message to an agent there fails, not after. Only classic herdr (engines herdr and herdr-both): Herdr App's
 // herdr-core has no server for the node to start.
 
@@ -13,18 +13,18 @@ nonisolated struct HerdrState: Decodable, Equatable, Sendable {
 }
 
 nonisolated extension APIClient {
-    /// Whether herdr's server answers on the machine now (and the 需要时自动启动 switch).
+    /// Whether herdr's server answers on the machine now (and the start-automatically-when-needed switch).
     func herdr(machine: String) async throws -> HerdrState {
         try await get("/api/v1/machines/\(machine)/herdr", as: HerdrState.self)
     }
 
-    /// The row's 启动: the node starts herdr's server whatever the switch says. The hub waits up to 40 s for it.
+    /// The row's Start: the node starts herdr's server whatever the switch says. The hub waits up to 40 s for it.
     func startHerdr(machine: String) async throws -> HerdrState {
         try await post("/api/v1/machines/\(machine)/herdr/start", timeout: 45, as: HerdrState.self)
     }
 }
 
-/// Why a 启动 did not work: what the row says, in words, and what 复制详情 copies (the hub's own text, its status and
+/// Why a Start did not work: what the row says, in words, and what Copy Details copies (the hub's own text, its status and
 /// request id), kept out of the row.
 nonisolated struct HerdrFailure: Equatable, Sendable {
     var text: String
@@ -76,9 +76,9 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
 
     /// The machines whose herdr is known not to run, as last read.
     private(set) var stopped: Set<MachineRef> = []
-    /// 启动 pressed and not answered yet.
+    /// Start pressed and not answered yet.
     private(set) var starting: Set<MachineRef> = []
-    /// Why the last 启动 did not work (shown under the row until it is pressed again).
+    /// Why the last Start did not work (shown under the row until it is pressed again).
     private(set) var failures: [MachineRef: HerdrFailure] = [:]
     /// Their hub has no such row (older than the row): not asked again.
     @ObservationIgnored private var unsupported: Set<MachineRef> = []
@@ -124,7 +124,7 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
         if next != stopped { withAnimation(Theme.Motion.state) { stopped = next } }
     }
 
-    /// The row's 启动. Not cancelled with the list: the start goes on when the row is scrolled away.
+    /// The row's Start. Not cancelled with the list: the start goes on when the row is scrolled away.
     func start(_ m: Machine, api: APIClient) async {
         guard !starting.contains(m.ref) else { return }
         starting.insert(m.ref)
@@ -165,7 +165,7 @@ struct HerdrPolling: ViewModifier {
     }
 }
 
-/// One machine's 「herdr 没在运行」 row: 启动, then 正在启动…, and why when it did not start.
+/// One machine's "herdr isn't running" row: Start, then Starting…, and why when it did not start.
 struct HerdrNoticeRow: View {
     @Environment(AppModel.self) private var model
     let machine: Machine
@@ -216,7 +216,7 @@ struct HerdrNoticeRow: View {
         .accessibilityElement(children: .contain) // or the row's id hides its button's (docs/lessons/ios.md)
         .accessibilityIdentifier("agents.herdrNotice")
         #if DEBUG
-        // `-showHerdrStart YES`: the first row shown presses its 启动 by itself, once (screenshots of 正在启动… and of a
+        // `-showHerdrStart YES`: the first row shown presses its Start by itself, once (screenshots of Starting… and of a
         // failure, with the mock's MOCK_HERDR_START=slow / fail).
         .task {
             guard UserDefaults.standard.bool(forKey: "showHerdrStart"), !Self.pressedForShots else { return }

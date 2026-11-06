@@ -1,8 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Files dragged onto a composer (docs/mac.md「细节」): pictures go into the message as images (as the + menu's 照片
-/// does), everything else is uploaded to the session's machine and its path typed in (as 文件 does).
+/// Files dragged onto a composer (docs/mac.md「细节」): pictures go into the message as images (as the + menu's Photos
+/// does), everything else is uploaded to the session's machine and its path typed in (as Files does).
 nonisolated enum MacDrop {
     /// The + menu's photo limit per message.
     static let maxImages = 4
@@ -51,7 +51,7 @@ extension MacDrop {
 }
 
 extension MacDrop {
-    /// A picture as the composers send it: at most 1600 px on the long side, JPEG (the + menu's 照片 does the same).
+    /// A picture as the composers send it: at most 1600 px on the long side, JPEG (the + menu's Photos does the same).
     @MainActor static func payload(_ img: UIImage) -> (UIImage, ImagePayload)? {
         let scaled = img.scaledDown(maxSide: 1600)
         guard let jpeg = scaled.jpegData(compressionQuality: 0.75) else { return nil }

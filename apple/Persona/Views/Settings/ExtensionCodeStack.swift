@@ -497,7 +497,7 @@ struct CodeTabsBar: View {
 // MARK: A file's code
 
 /// A file's code: the viewer's lines view (line numbers, colors, both-way scrolling, only the lines on screen drawn),
-/// filling the column (`fills`) or a block of its own height in a stack; 加载更多 when the extension cut it.
+/// filling the column (`fills`) or a block of its own height in a stack; Load More when the extension cut it.
 struct CodeFileBlock: View {
     var code: ExtensionCodeComponent
     @Bindable var model: ExtensionViewModel

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A notice at the top of a page's content (the inbox's 等分拣 line): a symbol in its tone's color, a sentence in
+/// A notice at the top of a page's content (the inbox's waiting-for-triage line): a symbol in its tone's color, a sentence in
 /// secondary words, and optionally one action, on a soft wash of the tone — the look of the chat's notes
 /// (`AttentionNote`, `StartingNote`), on the style's surface. Not dismissable: it goes when what it says stops being so.
 /// The action sits under the words on the phone (a narrow row would squeeze both) and at the trailing end on the Mac.

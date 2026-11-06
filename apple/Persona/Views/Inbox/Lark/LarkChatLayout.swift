@@ -13,7 +13,7 @@ nonisolated enum LarkChatLayout {
 
     /// Same sender as the message before, both timed, with no separator between them: no second avatar / name.
     /// Senders compare by id; by name only when either has no id. All of mine are one sender (a message on its
-    /// way has no id and is called 我 until the chat has one of mine to copy).
+    /// way has no id and is called Me until the chat has one of mine to copy).
     static func continues(_ m: LarkMessage, after prev: LarkMessage?, calendar: Calendar = .current) -> Bool {
         guard let prev, !m.isSystem, !prev.isSystem, sameSender(m, prev), prev.createdAt != nil, m.createdAt != nil,
               !showsTimeSeparator(m, after: prev, calendar: calendar) else { return false }
@@ -41,8 +41,8 @@ nonisolated enum LarkChatLayout {
         return startsDay(m, after: prev, calendar: calendar) || d.timeIntervalSince(p) >= separatorGap
     }
 
-    /// The separator's words, tiered like the list's times (`LarkTime.tier`): 14:32, 昨天 14:32, 星期三 14:32,
-    /// 10月21日 14:32, 2025年10月21日 14:32. Days and dates follow the current locale; the time stays 24-hour.
+    /// The separator's words, tiered like the list's times (`LarkTime.tier`): 14:32, Yesterday 14:32, Wednesday 14:32,
+    /// Oct 21 14:32, Oct 21, 2025 14:32. Days and dates follow the current locale; the time stays 24-hour.
     static func dayLabel(_ d: Date?, now: Date = .now, calendar cal: Calendar = .current) -> String {
         guard let d else { return "" }
         let c = cal.dateComponents([.hour, .minute], from: d)

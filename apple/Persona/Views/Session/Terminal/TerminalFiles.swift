@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import UniformTypeIdentifiers
 
-// Pictures and files pasted or dropped into a terminal the app drives (docs/terminal.md 第十八节, as the web's
+// Pictures and files pasted or dropped into a terminal the app drives (docs/terminal.md, section 18, as the web's
 // #2232): each is uploaded to the machine of the pane (`POST /machines/{mid}/files?dest=terminal`), and once all
 // are there their paths are typed into the pane as one bracketed paste, escaped as shell words, without a return.
 // Claude Code and Codex read a pasted image path as an attachment.
@@ -80,13 +80,13 @@ nonisolated enum TerminalPaste {
     enum Verdict: Equatable { case ok, changed, watching }
 
     /// Whether the paths may still be typed when the uploads end: only into the pane they were meant for (changed: the
-    /// panel left it meanwhile) and only while this app still drives it (watching: taken back, or 只看).
+    /// panel left it meanwhile) and only while this app still drives it (watching: taken back, or View Only).
     static func verdict(left: Bool, driving: Bool) -> Verdict {
         if left { return .changed }
         return driving ? .ok : .watching
     }
 
-    /// "正在上传 shot.png…" / "正在上传 shot.png 等 3 个文件…".
+    /// "Uploading shot.png…" / "Uploading shot.png and 3 files…".
     static func uploadingText(_ names: [String]) -> String {
         guard names.count > 1 else {
             let name = names.first ?? String(localized: "terminalUpload.fileFallback", defaultValue: "文件", comment: "A single file of unknown name being uploaded")

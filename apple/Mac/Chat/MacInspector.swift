@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension View {
-    /// An inspector column on the trailing edge (the chat's 会话信息, ⌥⌘I). SwiftUI's `.inspector` comes up empty
+    /// An inspector column on the trailing edge (the chat's Session Info, ⌥⌘I). SwiftUI's `.inspector` comes up empty
     /// inside the Agents split view's detail column, so this is the link panel's arrangement: a sibling in an HStack
     /// with a draggable divider, the width remembered; too narrow for both, it covers the page.
     func macInspector<Panel: View>(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Panel) -> some View {

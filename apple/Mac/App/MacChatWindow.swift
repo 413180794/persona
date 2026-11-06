@@ -60,8 +60,8 @@ struct MacWindowOpener: ViewModifier {
     }
 }
 
-/// An Agent's terminal in a window of its own (docs/mac.md「窗口」: 终端也可以单独开窗口), beside its chat or on another
-/// screen. The same panel the chat's 终端 sheet shows; dragging it down does nothing here (the window closes with ⌘W).
+/// An Agent's terminal in a window of its own (docs/mac.md「窗口」: the terminal can open in its own window too), beside its chat or on another
+/// screen. The same panel the chat's Terminal sheet shows; dragging it down does nothing here (the window closes with ⌘W).
 struct MacTerminalWindow: View {
     static let id = "terminal"
     @Environment(AppModel.self) private var model

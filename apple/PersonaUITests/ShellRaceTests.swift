@@ -28,7 +28,7 @@ final class ShellRaceTests: XCTestCase {
         add(shot)
     }
 
-    /// 体验模式's agents: the first one waiting on the user, or the first one at work (its chat streams), picked with the
+    /// Demo Mode's agents: the first one waiting on the user, or the first one at work (its chat streams), picked with the
     /// list's own filter (the titles move about with the demo's time).
     private static let chats = ["需要你", "工作中"]
 
@@ -62,7 +62,7 @@ final class ShellRaceTests: XCTestCase {
         }
     }
 
-    /// Agents → a chat → back → 助手 → Agents, the switch tapped `delay` seconds after the back. Each round on a fresh
+    /// Agents → a chat → back → Assistant → Agents, the switch tapped `delay` seconds after the back. Each round on a fresh
     /// launch: one that goes wrong does not lead the next astray.
     @MainActor private func round(swipe: Bool, delay: Double, row: Int = 0) {
         let what = "\(swipe ? "swiped" : "tapped") back from \(Self.chats[row]), switch after \(delay)s"
@@ -87,7 +87,7 @@ final class ShellRaceTests: XCTestCase {
         }
     }
 
-    /// The working agent's chat streams while it is open (体验模式's 工作中 row).
+    /// The working agent's chat streams while it is open (Demo Mode's Working row).
     @MainActor func testBackFromAStreamingChat() {
         for swipe in [false, true] {
             for delay in [0.0, 0.4] {
@@ -120,7 +120,7 @@ final class ShellRaceTests: XCTestCase {
         finger.tap(agents: true)
         usleep(150_000)
         // A drag to the right from Agents' left edge (on a row elsewhere it is the row's swipe) while it still slides
-        // in: back to 助手.
+        // in: back to Assistant.
         let w = app.windows.firstMatch
         w.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.6))
             .press(forDuration: 0.05, thenDragTo: w.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.6)),

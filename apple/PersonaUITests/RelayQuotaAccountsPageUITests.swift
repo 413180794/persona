@@ -3,7 +3,7 @@ import XCTest
 /// quota-relay's sidebar page 「中转账号」 (#4576) opened from the shell's drawer, on the extension's exported
 /// fixture: the default view, the Kiro type picked, a search, one account's page. Against scripts/mock/mock_hub.py with
 /// `MOCK_PLUGINS=1 MOCK_RELAY_ACCOUNTS=apple/PersonaTests/Fixtures/relay-accounts-view.json`:
-/// `TEST_RUNNER_JARVIS_RELAY_ACCOUNTS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots,
+/// `TEST_RUNNER_JARVIS_RELAY_ACCOUNTS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots,
 /// named by `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` and the style.
 final class RelayQuotaAccountsPageUITests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }

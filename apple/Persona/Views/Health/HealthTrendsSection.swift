@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 健康趋势 (#3272): the phone's steps, sleep and weight from Apple Health as the cards a health answer draws
+/// Health Trends (#3272): the phone's steps, sleep and weight from Apple Health as the cards a health answer draws
 /// (```persona-card through `AssistantViewCard`), for the health space's home (#2901) to put in as it is.
 /// Asks for Health when it was never asked; says so when nothing could be read (the system never tells an app whether
 /// reading was allowed, so no data and no permission look the same).
@@ -59,7 +59,7 @@ struct HealthTrendsSection: View {
 
 #if DEBUG
 extension View {
-    /// `-showHealthTrends YES`: 健康趋势 in a sheet reading this phone's Health; `-showHealthTrends sample`: with made-up
+    /// `-showHealthTrends YES`: Health Trends in a sheet reading this phone's Health; `-showHealthTrends sample`: with made-up
     /// days (a simulator has no Health data), `-showHealthTrends empty` / `ask`: the empty and never-asked states.
     func healthTrendsSample() -> some View { modifier(HealthTrendsSample()) }
 }

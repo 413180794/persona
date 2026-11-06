@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The hub's stage on a todo (#2776): one of 方案 / 开发 / 审查 / 合入 / 部署 / 已验证, read tolerantly (a hub from before
+/// The hub's stage on a todo (#2776): one of Plan / Build / Review / Merge / Deploy / Verified, read tolerantly (a hub from before
 /// the field, or one sending a name this build does not know, draws no bar at all), and the PR it named (#2768).
 struct TodoStageTests {
     private func decode(_ json: String) throws -> TodoItem {

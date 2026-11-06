@@ -8,7 +8,7 @@ import SwiftUI
 /// way out is handing it to Persona or an Agent.
 ///
 /// Layout (2026-10-31 redo): a row of kind chips instead of a six-way segmented control, a tag menu instead of a second
-/// chip row, projects grouped into 重点 / 进行中 / 已完成 / 不是项目, and search hits that open their entry.
+/// chip row, projects grouped into Focus / Active / Done / Not a Project, and search hits that open their entry.
 struct KnowledgeView: View {
     @Environment(AppModel.self) private var model
     @State private var kind: KBKind = .projects
@@ -30,12 +30,12 @@ struct KnowledgeView: View {
     #if os(iOS) || os(visionOS)
     @State private var recordings = RecordingLibrary.shared
     #endif
-    /// Where entries open beside the list instead of pushing (the Mac's 知识库 section).
+    /// Where entries open beside the list instead of pushing (the Mac's Knowledge section).
     @Environment(\.kbOpenEntry) private var opener
 
     private var list: KBList? { lists[kind] }
 
-    /// 录音 on a phone is this device's own list (with what is still recording or transcribing), not the hub's copy.
+    /// Recordings on a phone is this device's own list (with what is still recording or transcribing), not the hub's copy.
     private var localRecordings: Bool {
         #if os(iOS) || os(visionOS)
         true
@@ -85,14 +85,14 @@ struct KnowledgeView: View {
         }
         .listStyle(.insetGrouped)
         #if os(macOS)
-        .modifier(MacBelowTitleRowIfAsked()) // under 知识库's title in the window: the list starts below it (#1243)
+        .modifier(MacBelowTitleRowIfAsked()) // under Knowledge's title in the window: the list starts below it (#1243)
         #endif
         .themedPage()
-        .detailTitle(String(localized: "知识库")) // pushed in Persona's page: ‹ 知识库 in the title row on the Mac
+        .detailTitle(String(localized: "知识库")) // pushed in Persona's page: ‹ Knowledge in the title row on the Mac
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             #if os(macOS)
-            MacToolbarMiddle() // the menu by the search field, clear of the title row's 知识库 (#830)
+            MacToolbarMiddle() // the menu by the search field, clear of the title row's Knowledge (#830)
             #endif
             ToolbarItem(placement: .topBarTrailing) { if !(kind == .recordings && localRecordings) { tagMenu } }
         }
@@ -176,7 +176,7 @@ struct KnowledgeView: View {
                 }
             }
         } else {
-            // Most people are only someone in a group (no importance yet): folded under the ranked ones, as 不是项目.
+            // Most people are only someone in a group (no importance yet): folded under the ranked ones, as Not a Project.
             let ranked = tag != nil ? list.items : list.items.filter { !($0.importance ?? "").isEmpty }
             let rest = tag != nil ? [] : list.items.filter { ($0.importance ?? "").isEmpty }
             if !ranked.isEmpty {
@@ -297,8 +297,8 @@ struct KnowledgeView: View {
         }
     }
 }
-/// The entry open beside 知识库's list, where entries open there rather than push: the Mac's 知识库 section puts the
-/// list and the open entry side by side (#2318) and sets one on the list. Elsewhere (the phone, 知识库 pushed in
+/// The entry open beside Knowledge's list, where entries open there rather than push: the Mac's Knowledge section puts the
+/// list and the open entry side by side (#2318) and sets one on the list. Elsewhere (the phone, Knowledge pushed in
 /// Persona's page) there is none and the rows push their entry. A reference, so opening one redraws the rows that
 /// change and the detail, not the list's page.
 @Observable final class KBOpenEntry {
@@ -346,7 +346,7 @@ struct KBEntryLink<Label: View>: View {
 
 /// The six kinds as chips with their icon (and how many, once loaded), all in sight: no sideways scroll view (the
 /// navigation stack can take one at the top of a page for the page's own and inset it, docs/lessons/ios.md「布局与组件」, and
-/// 日程 was off the edge). Chips that do not fit drop their icons, then go to a second row.
+/// Events was off the edge). Chips that do not fit drop their icons, then go to a second row.
 struct KBKindBar: View {
     @Binding var kind: KBKind
     var counts: [KBKind: Int]
@@ -406,7 +406,7 @@ struct KBKindBar: View {
         }
     }
 
-    /// 1985 → "1985" (no grouping comma: the chip is narrow), past 9999 → "1万+".
+    /// 1985 → "1985" (no grouping comma: the chip is narrow), past 9999 → "10K+".
     static func count(_ n: Int) -> String { n > 9999 ? String(localized: "1万+") : String(n) }
 }
 
@@ -596,11 +596,11 @@ struct KnowledgeDetailView: View {
     static let debugLower = false
     #endif
 
-    /// Timeline lines shown before 显示全部.
+    /// Timeline lines shown before Show All.
     static let logShown = 6
-    /// Related entries of one kind shown before 全部.
+    /// Related entries of one kind shown before All.
     static let linksShown = 4
-    /// Search matches shown before 显示全部.
+    /// Search matches shown before Show All.
     static let matchesShown = 5
 
     var body: some View {
@@ -758,7 +758,7 @@ struct KnowledgeDetailView: View {
     private static let buttonsSize = ControlSize.large
     #endif
 
-    /// A project's status when it is not the usual 进行中.
+    /// A project's status when it is not the usual Active.
     private var projectStatus: String? {
         guard entry.kind == KBKind.projects.rawValue, let st = detail?.detail.meta?["status"]?.string ?? entry.extra?.components(separatedBy: " · ").last else { return nil }
         switch st {
@@ -777,9 +777,9 @@ struct KnowledgeDetailView: View {
         }
     }
 
-    // MARK: 公司圈
+    // MARK: Moments
 
-    /// Posts in 公司圈 about this project (the hub finds them by the project's keywords and has the model keep the
+    /// Posts in Moments about this project (the hub finds them by the project's keywords and has the model keep the
     /// ones really about it): who, when, comments, how it bears on the project; open one for the text and comments.
     private func momentsSection(_ moments: [KBMomentRef]) -> some View {
         let shownMoments = allMoments ? moments : Array(moments.prefix(Self.linksShown))
@@ -888,7 +888,7 @@ struct KnowledgeDetailView: View {
 
     // MARK: Related
 
-    /// Related entries by kind (projects, chats, people…), a few each with 全部 for the rest; then the code directories.
+    /// Related entries by kind (projects, chats, people…), a few each with All for the rest; then the code directories.
     @ViewBuilder private func links(_ d: KBDetail) -> some View {
         let links = d.links ?? []
         let dirs = d.meta?["dirs"]?.array?.compactMap(\.string) ?? []
@@ -982,7 +982,7 @@ struct KnowledgeDetailView: View {
     }
 }
 
-/// A 公司圈 post in a project: author, day and comments on a line, how it bears on the project, then the text.
+/// A Moments post in a project: author, day and comments on a line, how it bears on the project, then the text.
 struct KBMomentRow: View {
     var moment: KBMomentRef
 
@@ -1012,7 +1012,7 @@ struct KBMomentRow: View {
     }
 }
 
-/// One archived 公司圈 post: its text and every comment as the crawler kept them, long ones in chunks.
+/// One archived Moments post: its text and every comment as the crawler kept them, long ones in chunks.
 struct KBMomentView: View {
     @Environment(AppModel.self) private var model
     var ref: KBMomentRef
@@ -1080,12 +1080,12 @@ struct ItemFacts {
         openLabel = k == .docs ? String(localized: "打开文档") : k == .meetings ? String(localized: "打开会议纪要") : String(localized: "打开日程")
     }
 
-    /// "10月30日 周五 14:00" (24-hour: SwiftUI's hour style is 12-hour in Chinese, docs/lessons/ios.md), the year when not this one.
+    /// "Fri, Oct 30, 14:00" (24-hour: SwiftUI's hour style is 12-hour in Chinese, docs/lessons/ios.md), the year when not this one.
     static func format(_ d: Date, now: Date = .now) -> String {
         let f = DateFormatter()
         f.locale = .current
         let sameYear = Calendar.current.component(.year, from: d) == Calendar.current.component(.year, from: now)
-        // Templates with HH keep the 24-hour clock; zh-Hans renders "M月d日 EEE HH:mm" / "y年M月d日 HH:mm".
+        // Templates with HH keep the 24-hour clock; zh-Hans renders 「M月d日 EEE HH:mm」 / 「y年M月d日 HH:mm」.
         f.setLocalizedDateFormatFromTemplate(sameYear ? "MMMdEEEHHmm" : "yMMMdHHmm")
         return f.string(from: d)
     }
@@ -1099,7 +1099,7 @@ struct ItemFacts {
     }
 }
 
-/// A place a search found in an entry: where (档案, 聊天记录 · day), the line with the words in bold, and for a message
+/// A place a search found in an entry: where (Profile, Chat History · day), the line with the words in bold, and for a message
 /// the one before and after it in grey.
 struct KBMatchRow: View {
     var match: KBMatch
@@ -1245,7 +1245,7 @@ struct KBDayView: View {
         }
     }
 
-    /// "2026-10-30" → "10月30日 周五" (with the year when it is not this one).
+    /// "2026-10-30" → "Fri, Oct 30" (with the year when it is not this one).
     static func title(_ day: String) -> String {
         guard let d = dayFormat.date(from: day) else { return day }
         let sameYear = Calendar.current.component(.year, from: d) == Calendar.current.component(.year, from: .now)
@@ -1260,13 +1260,13 @@ struct KBDayView: View {
     private static let shortFormat: DateFormatter = {
         let f = DateFormatter()
         f.locale = .current
-        f.setLocalizedDateFormatFromTemplate("MMMdEEE") // zh-Hans: "M月d日 EEE"
+        f.setLocalizedDateFormatFromTemplate("MMMdEEE") // zh-Hans: 「M月d日 EEE」
         return f
     }()
     private static let longFormat: DateFormatter = {
         let f = DateFormatter()
         f.locale = .current
-        f.setLocalizedDateFormatFromTemplate("yMMMdEEE") // zh-Hans: "y年M月d日 EEE"
+        f.setLocalizedDateFormatFromTemplate("yMMMdEEE") // zh-Hans: 「y年M月d日 EEE」
         return f
     }()
 }

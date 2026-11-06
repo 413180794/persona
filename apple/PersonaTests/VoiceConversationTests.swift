@@ -191,7 +191,7 @@ struct VoiceConversationTests {
         #expect(call.phase == .live(.listening), "a caption that stopped changing is no longer being spoken")
     }
 
-    /// 清空并发送 hands back the hub's `clearable` text, not the whole `draft` line (an IDE selection marker is in `draft`
+    /// Clear and Send hands back the hub's `clearable` text, not the whole `draft` line (an IDE selection marker is in `draft`
     /// only), and is refused for a run with nothing the node can clear.
     @Test func resendCarriesTheClearableText() async throws {
         let rig = VoiceRig()

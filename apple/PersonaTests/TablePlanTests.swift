@@ -9,7 +9,7 @@ struct TablePlanTests {
         #expect(p == TablePlan(widths: [20, 80, 100], scrolls: false))
     }
 
-    /// "# / 事项 / 裁定" with a long 裁定: # and 事项 keep their width, 裁定 takes the rest and wraps.
+    /// 「# / 事项 / 裁定」 with a long 「裁定」: # and 「事项」 keep their width, 「裁定」 takes the rest and wraps.
     @Test func longColumnWraps() {
         let p = TablePlan.fit(natural: [16, 120, 900], minimum: [16, 30, 30], available: 300)
         #expect(!p.scrolls)

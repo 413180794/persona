@@ -1,8 +1,8 @@
 import XCTest
 
-/// The hub's line over the Agents list and 设置 › hub (docs/hub-update.md「App 里」). Each button on the line takes only
+/// The hub's line over the Agents list and Settings › hub (docs/hub-update.md「App 里」). Each button on the line takes only
 /// its own taps (it sits in a list row that opens the hub page), and an update waiting for busy agents shows them and
-/// asks before 现在就更新. Against scripts/mock/mock_hub.py (any MOCK_HUB_UPDATE; each test sets its own mode):
+/// asks before Update Now. Against scripts/mock/mock_hub.py (any MOCK_HUB_UPDATE; each test sets its own mode):
 ///   TEST_RUNNER_JARVIS_HUB_UPDATE_HUB=http://127.0.0.1:<port>
 final class HubNoticeUITests: XCTestCase {
     private func hub(mode: String) throws -> String {
@@ -26,7 +26,7 @@ final class HubNoticeUITests: XCTestCase {
         return app
     }
 
-    /// 知道了 hides 「hub 会在空闲时自动更新」 and leaves auto-update on; it does not open the page either.
+    /// OK hides 「hub 会在空闲时自动更新」 and leaves auto-update on; it does not open the page either.
     @MainActor func testSeenKeepsAutoUpdateOn() throws {
         let hub = try hub(mode: "notice")
         let app = launch(hub, ["-tab", "dev"])
@@ -40,7 +40,7 @@ final class HubNoticeUITests: XCTestCase {
         XCTAssertEqual(s["auto_notice"] as? Bool, false, "the hub was not told the notice was seen")
     }
 
-    /// 关闭 on the same line turns auto-update off (and counts as seen).
+    /// Close on the same line turns auto-update off (and counts as seen).
     @MainActor func testOffTurnsAutoUpdateOff() throws {
         let hub = try hub(mode: "notice")
         let app = launch(hub, ["-tab", "dev"])
@@ -51,7 +51,7 @@ final class HubNoticeUITests: XCTestCase {
         XCTAssertEqual(try status(hub)["auto"] as? Bool, false, "关闭 left auto-update on")
     }
 
-    /// An update waiting for idle lists what it waits for; 现在就更新 asks first, then the hub restarts.
+    /// An update waiting for idle lists what it waits for; Update Now asks first, then the hub restarts.
     @MainActor func testUpdateNowAsksFirst() throws {
         let hub = try hub(mode: "waiting")
         let app = launch(hub, ["-tab", "settings", "-openHubUpdate", "YES"])

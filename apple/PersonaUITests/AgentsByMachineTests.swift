@@ -1,7 +1,7 @@
 import XCTest
 
-/// The Agents list split by machine (#2108): 按仓库, the default, puts each machine's repositories under its heading, and
-/// 按项目 its spaces; a heading folds its machine; one machine shown (the machine menu) has no heading. Against
+/// The Agents list split by machine (#2108): By Repository, the default, puts each machine's repositories under its heading, and
+/// By Project its spaces; a heading folds its machine; one machine shown (the machine menu) has no heading. Against
 /// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB: three machines). The working-tree level is `AgentRepoTreeTests`' and the
 /// screenshots' (`MOCK_WORKTREES=1`, docs/testing.md).
 final class AgentsByMachineTests: XCTestCase {
@@ -20,8 +20,8 @@ final class AgentsByMachineTests: XCTestCase {
         super.tearDown()
     }
 
-    /// A fresh list (nothing folded, cards, the default grouping unless `grouping`), under 工作中: the mock's working
-    /// agents are on 服务器 (shop-api) and MacBook (weather), which keeps the list short.
+    /// A fresh list (nothing folded, cards, the default grouping unless `grouping`), under Working: the mock's working
+    /// agents are on 「服务器」 (shop-api) and MacBook (weather), which keeps the list short.
     @MainActor private func launch(grouping: String? = nil, machine: String = "") throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")

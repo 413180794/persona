@@ -1,6 +1,6 @@
 import Foundation
 
-/// 设置 › Claude Code / Codex: an enum option's name, by the setting's key (node claudeconfig.go / codexconfig.go), the
+/// Settings › Claude Code / Codex: an enum option's name, by the setting's key (node claudeconfig.go / codexconfig.go), the
 /// same names as the web's (`web/src/lib/agent-settings.ts` `optionText`, #3835). Effort levels read as the session menu
 /// calls them (`SessionModes`). An option with no name here (a new one) stays as the node wrote it. The names are in the
 /// app's language (Localizable.xcstrings, the web's wording in en and ja, #4793).

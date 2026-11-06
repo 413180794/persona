@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// 设置 › 扩展 (docs/extensions.md「hub 的接口」): the hub's plugins, each one's switch, its configuration as a form drawn
+// Settings › Extensions (docs/extensions.md「hub 的接口」): the hub's plugins, each one's switch, its configuration as a form drawn
 // from its schema (`form.fields`), its secrets, write-only, and the pages it draws (`ui`, ExtensionUIModel). Installing,
 // upgrading and removing are done on the hub's machine (`personad plugin`), or from a plugin market the hub has
 // (ExtensionMarketModel: only what a market lists).
@@ -72,7 +72,7 @@ nonisolated struct ExtensionNodeState: Codable, Hashable, Sendable {
         }
     }
 
-    /// Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → 退出码 3.
+    /// Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → Exit code 3.
     static func exitText(_ error: String) -> String {
         error.replacing(#/\bexit status (-?\d+)/#) { m in let code = String(m.1); return String(localized: "退出码 \(code)") }
             .replacing(#/\bsignal: ([a-z ]+)/#) { m in let signal = String(m.1); return String(localized: "被信号结束（\(signal)）") }
@@ -233,7 +233,7 @@ nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
     }
 }
 
-/// GET /api/v1/plugins: the plugins, and whether this hub has plugin markets (`markets`: 设置 › 扩展 › 扩展市场).
+/// GET /api/v1/plugins: the plugins, and whether this hub has plugin markets (`markets`: Settings › Extensions › Extension Market).
 nonisolated struct HubExtensionList: Decodable, Sendable {
     var plugins: [HubExtension]
     var canInstall: Bool
@@ -293,13 +293,13 @@ extension APIClient {
 
 /// What a plugin is called and says in the settings.
 enum ExtensionText {
-    /// Names in a row: 「a」、「b」.
+    /// Names in a row, with the language's list separator (「、」 in Chinese): a, b.
     static func list(_ items: [String]) -> String {
         items.joined(separator: String(localized: "、", comment: "Separator between list items"))
     }
 
     /// To the user a plugin is on or off (#1684, as the web and Android since #1670): an idle one starts by itself when
-    /// it is used, so running and idle are both 启动; whether it runs right now is the detail page's small print
+    /// it is used, so running and idle are both On; whether it runs right now is the detail page's small print
     /// (`runNote`). hub's `status` values are unchanged.
     static func state(_ p: HubExtension) -> String {
         switch p.status {
@@ -358,7 +358,7 @@ enum ExtensionText {
     }
 
     /// Under the form: which switches take effect at once (lists of machines, `ExtensionModel.saveNow`) and that the rest
-    /// waits for 保存. Nil when there is only such switches: the fields say so themselves, nothing waits for 保存.
+    /// waits for Save. Nil when there is only such switches: the fields say so themselves, nothing waits for Save.
     static func saveFooter(_ fields: [ExtensionField]) -> String? {
         let all = fields.flatMap { $0.type == "object" ? ($0.fields ?? []) : [$0] }
         let now = all.filter { $0.items?.format == "machine" }.map { String(localized: "「\($0.label)」", comment: "A field's name in quotes") }
@@ -368,7 +368,7 @@ enum ExtensionText {
         return String(localized: "\(names)的开关即时生效；其他项改完点右上角「保存」，保存后扩展会重新启动。留空的项用扩展的默认值。")
     }
 
-    /// The 升级 section's line for a newer version: what happens to it (docs/extensions.md「自动升级」).
+    /// The Update section's line for a newer version: what happens to it (docs/extensions.md「自动升级」).
     static func upgradeDetail(_ u: ExtensionUpgrade) -> String {
         let why = u.detail.flatMap { $0.isEmpty ? nil : $0 }
         switch u.state {
@@ -399,7 +399,7 @@ enum ExtensionText {
             p.detail.flatMap { $0.isEmpty ? nil : $0 }.map { String(localized: "\(p.title)（\($0)）", comment: "A permission and its detail") } ?? p.title
         }
         let all = list(lines)
-        // One sentence per small count: the hub's notice says them with Chinese numerals (要多一项权限).
+        // One sentence per small count: the hub's notice says them with Chinese numerals (「要多一项权限」).
         return switch added.count {
         case 1: String(localized: "要多一项权限：\(all)")
         case 2: String(localized: "要多两项权限：\(all)")
@@ -419,7 +419,7 @@ enum ExtensionText {
         }
     }
 
-    /// 设置's row: how many, and how many need the user.
+    /// Settings' row: how many, and how many need the user.
     static func listSummary(_ list: [HubExtension]?) -> String {
         guard let list else { return "" }
         if list.isEmpty { return String(localized: "没有", comment: "No extensions") }
@@ -428,7 +428,7 @@ enum ExtensionText {
     }
 }
 
-/// 设置 › 扩展: the list.
+/// Settings › Extensions: the list.
 @Observable final class ExtensionsModel {
     struct Deps {
         var api: () -> APIClient?
@@ -436,7 +436,7 @@ enum ExtensionText {
     }
 
     private(set) var plugins: [HubExtension]?
-    /// The hub has plugin markets: the list shows 扩展市场.
+    /// The hub has plugin markets: the list shows Extension Market.
     private(set) var markets = false
     private(set) var loading = false
     private(set) var error: String?
@@ -444,7 +444,7 @@ enum ExtensionText {
 
     init(deps: Deps = .live) { self.deps = deps }
 
-    /// The hub has no extensions to list (404: an older hub, or 体验模式): the Mac says so instead of the error.
+    /// The hub has no extensions to list (404: an older hub, or Demo Mode): the Mac says so instead of the error.
     private(set) var missing = false
 
     func load() async {
@@ -466,7 +466,7 @@ enum ExtensionText {
     }
 }
 
-/// 设置 › 扩展 › one: its switch, its form (a draft saved as a whole), its secrets.
+/// Settings › Extensions › one: its switch, its form (a draft saved as a whole), its secrets.
 @Observable final class ExtensionModel {
     struct Deps {
         var api: () -> APIClient?
@@ -568,7 +568,7 @@ enum ExtensionText {
     }
 
     /// Saves one field at once (a machine's switch) on top of what the hub has, keeping the rest of what is being
-    /// edited for 保存.
+    /// edited for Save.
     func saveNow(_ value: JSONValue?, at path: [String]) async {
         guard let saved = detail?.config else { return }
         let editing = draft
@@ -595,7 +595,7 @@ enum ExtensionText {
         deps.drafts.values[key] = dirty ? .init(config: draft, numbers: numberText) : nil
     }
 
-    /// 保存时接收新配置；重新读取和非配置操作保留未保存的草稿。
+    /// Takes the new configuration on save; reloading and non-configuration actions keep the unsaved draft.
     @discardableResult private func run(preservingDraft: Bool = false, _ call: @escaping (APIClient) async throws -> HubExtensionDetail) async -> Bool {
         do {
             guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }

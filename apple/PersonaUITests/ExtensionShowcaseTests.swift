@@ -1,6 +1,6 @@
 import XCTest
 
-/// #1852 的共享 View 快照，通过 mock HTTP 和真实 App 页面渲染；不改写快照数据。
+/// The shared View snapshots of #1852, rendered through mock HTTP and the real app's pages; the snapshot data is not rewritten.
 final class ExtensionShowcaseTests: XCTestCase {
     @MainActor func testEverySharedSnapshot() throws {
         let env = ProcessInfo.processInfo.environment

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// A 飞书 chat's paging and read reporting (`LarkPager`), without the chat.
+/// A Lark chat's paging and read reporting (`LarkPager`), without the chat.
 @MainActor struct LarkPagerTests {
     private func msg(_ p: Int, mine: Bool = false, read: Bool? = nil, text: String = "") -> LarkMessage {
         let json = """
@@ -140,7 +140,7 @@ import Testing
         #expect(p.messages.map(\.position) == ["10", "11", "12"])
     }
 
-    // MARK: 回到最新 (#1034)
+    // MARK: Jump to Latest (#1034)
 
     @Test func movingAwayKeepsTheNewestForGoingBackWithoutTheNetwork() {
         var p = LarkPager()

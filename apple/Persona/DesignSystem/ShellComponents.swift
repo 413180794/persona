@@ -4,14 +4,14 @@ import SwiftUI
 // Components of the ChatGPT-style shell (docs/ios.md「新外壳」). Neutral in every style (Theme.Shell): the shell is laid
 // out like ChatGPT's, the styles still color the rest of the app.
 
-/// The top switch: 助手 | Agents in a glass capsule, the selected one on a soft gray pill that glides across. Agents carries
-/// the count of agents waiting on the user. Tapping 助手 while it is selected opens `chatMenu` (the conversation's
-/// menu: 知识库, 详细信息, the launcher…), like tapping the title in ChatGPT; tapping Agents while it is selected opens
-/// the list's options (分组, 显示, 机器…).
+/// The top switch: Assistant | Agents in a glass capsule, the selected one on a soft gray pill that glides across. Agents carries
+/// the count of agents waiting on the user. Tapping Assistant while it is selected opens `chatMenu` (the conversation's
+/// menu: Knowledge, Details, the launcher…), like tapping the title in ChatGPT; tapping Agents while it is selected opens
+/// the list's options (Group By, Display, Machines…).
 ///
 /// In the shell the selection is the shell's (`ShellState.page`, docs/shell.md), not `tab`: a tap selects at once, and a
 /// segment is its page's menu only while the strip rests on that page, so a segment never stands for a page that is
-/// not on screen (a tab that said Agents over 助手 made Agents the menu of an empty list of options, 2026-11-02).
+/// not on screen (a tab that said Agents over Assistant made Agents the menu of an empty list of options, 2026-11-02).
 ///
 /// The switch reads nothing that the hub's pushes change: an open menu is laid out again whenever its button is, and
 /// went back to its top under the finger choosing a machine (TestFlight 70, docs/lessons/ios.md). The count is
@@ -154,7 +154,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     }
 }
 
-/// The switch's pill in the shell: under 助手 or Agents as the strip's position says, gliding with the finger. Its own
+/// The switch's pill in the shell: under Assistant or Agents as the strip's position says, gliding with the finger. Its own
 /// view: only it reads the position, the switch (and its menus) are not drawn again on every frame of a drag.
 ///
 /// Only the moving bar's pill follows the strip. A page's bar can be out of the window (a page pushed over it, even
@@ -211,7 +211,7 @@ private struct WaitingBadge: View {
     }
 }
 
-/// A round glass button of the shell's top bar (新对话, 新建会话): the same size as the system toolbar's, so the 助手
+/// A round glass button of the shell's top bar (New Chat, New Session): the same size as the system toolbar's, so the Assistant
 /// page's floating bar and the Agents page's navigation bar line up.
 struct ShellCircleButton: View {
     var symbol: String
@@ -242,7 +242,7 @@ struct ShellCircleButton: View {
 
 /// The top bar's left button on both pages (2026-11-01 user request, in place of ☰): the persona's face in Persona's
 /// state, as the old layout's bar shows it in the middle (`PersonaDot`, docs/persona.md「状态」), opening the drawer
-/// (历史对话, 收件箱…). The state is that of Persona's conversation on 助手 (`assistantCurrent`), on Agents too, so the
+/// (Chat History, Inbox…). The state is that of Persona's conversation on Assistant (`assistantCurrent`), on Agents too, so the
 /// face stays the same while the strip slides. While the inbox has something for the user a small soft red dot sits
 /// on the face's lower right (2026-11-04 user request, in place of a red tray beside it: smaller, paler, overlapping
 /// the face so it takes no room and does not draw the eye), inside the round face so nothing reaches past it (it once
@@ -327,7 +327,7 @@ extension View {
 extension View {
     /// The shell's chrome a size up (docs/ios.md「新外壳」): one Dynamic Type step, about 12 %, so its text, icons, buttons
     /// and the composer grow together and keep their proportions, ChatGPT's roomier scale. The conversation's messages
-    /// keep the reading size. 小 / 标准 / 大 and the system's size still apply under it.
+    /// keep the reading size. Small / Standard / Large and the system's size still apply under it.
     func shellScaled() -> some View { modifier(ShellScaled()) }
 
     /// A top bar of the shell: a size up like the rest of its chrome, but no larger than
@@ -402,10 +402,10 @@ private struct PromptLine: UIViewControllerRepresentable {
 }
 #endif
 
-/// The text size the app settled on (the system's, moved by 小 / 标准 / 大), set once at the root. `shellScaled` goes one
+/// The text size the app settled on (the system's, moved by Small / Standard / Large), set once at the root. `shellScaled` goes one
 /// step up from this, not from the environment's own size: that one is not always what the page has. The drawer's
 /// sidebar lives in a hosting controller whose environment follows its UIKit trait collection, which takes up the
-/// step set inside it, so reading the environment there added a step on every refresh (收件箱's row 59 → 78 → 80 pt).
+/// step set inside it, so reading the environment there added a step on every refresh (Inbox's row 59 → 78 → 80 pt).
 private struct ShellBaseTypeSizeKey: EnvironmentKey {
     static let defaultValue: DynamicTypeSize? = nil
 }

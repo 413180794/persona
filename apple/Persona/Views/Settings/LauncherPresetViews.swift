@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 新增供应商 › 从扩展添加 (docs/extensions.md「模型供应商」): the providers the hub's plugins offer, then only the name, the
+/// Add Provider › From Extension (docs/extensions.md「模型供应商」): the providers the hub's plugins offer, then only the name, the
 /// key and maybe another of the provider's models; the address and the kind come from the plugin.
 struct LauncherPresetSections: View {
     @Bindable var model: LauncherPresetModel

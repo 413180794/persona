@@ -3,13 +3,13 @@ import XCTest
 
 /// #1941: the new shell's Agents page left with only a chat's large title over a black page (TestFlight, never
 /// reproduced). Presses the moments a push and a pop can meet: a chat opened from outside the list (a notification, the
-/// runtime CLI's `navigate … keep`, which sets `model.openChat` the same way) while 返回 is on its way, during a back
+/// runtime CLI's `navigate … keep`, which sets `model.openChat` the same way) while Back is on its way, during a back
 /// swipe let go halfway or carried through, while the list reorders under a busy hub, while the shell changes page, and
 /// while the tree is rebuilt (the background snapshot's width change). After each step: the list or a chat, never neither.
 /// Against scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 (JARVIS_MOCK_HUB); JARVIS_RACE_ROUNDS (default 1).
 final class AgentsPushPopRaceTests: XCTestCase {
-    private static let a = "macbook/a1f3c2d4-0000-4000-8000-000000000007" // 菜谱网站加搜索
-    private static let b = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // 给天气 App 加主屏幕小组件
+    private static let a = "macbook/a1f3c2d4-0000-4000-8000-000000000007" // 「菜谱网站加搜索」
+    private static let b = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // 「给天气 App 加主屏幕小组件」
     private static let port = 18958
     private static let token = UUID().uuidString
     private var hub = ""
@@ -19,25 +19,25 @@ final class AgentsPushPopRaceTests: XCTestCase {
         let app = try launchForRaces()
         let rounds = Self.rounds
         let gaps: [UInt32] = [0, 60, 120, 200, 300, 450]
-        var unread = 0 // the next 完成未看 agent of MOCK_AGENTS (platform's 4…38, mobile's 101…105)
+        var unread = 0 // the next Unread (finished, not seen) agent of MOCK_AGENTS (platform's 4…38, mobile's 101…105)
         for round in 0..<rounds {
             for gap in gaps {
                 let tag = "r\(round)-\(gap)ms"
-                // 返回, and a chat opened from outside while the pop is on its way.
+                // Back, and a chat opened from outside while the pop is on its way.
                 open(app, Self.a)
                 back(app); after(gap) { Self.ctl("navigate", ["scene": "chat", "session": Self.b, "keep": true]) }
                 check(app, "back-open-other-\(tag)")
                 open(app, Self.a)
                 back(app); after(gap) { Self.ctl("navigate", ["scene": "chat", "session": Self.a, "keep": true]) }
                 check(app, "back-open-same-\(tag)")
-                // A 完成未看 agent opened (held in its place, #2509), and 返回: it moves as the pop lands (the last ones of
-                // a space fold it into 空闲的空间), with a chat opened from outside meanwhile.
+                // An Unread agent opened (held in its place, #2509), and Back: it moves as the pop lands (the last ones of
+                // a space fold it into Idle Spaces), with a chat opened from outside meanwhile.
                 unread += 1
                 let held = unread % 7 == 0 ? "macbook/e5f7a9b1-0000-4000-8000-%012d" : "studio/e5f7a9b1-0000-4000-8000-%012d"
                 open(app, String(format: held, unread % 7 == 0 ? 100 + unread / 7 : 3 + unread))
                 back(app); after(gap) { Self.ctl("navigate", ["scene": "chat", "session": Self.b, "keep": true]) }
                 check(app, "held-back-open-\(tag)")
-                // Opened from outside, and 返回 before the push has landed.
+                // Opened from outside, and Back before the push has landed.
                 toList(app)
                 Self.ctl("navigate", ["scene": "chat", "session": Self.a, "keep": true]); usleep(gap * 1000)
                 back(app, wait: false)
@@ -121,7 +121,7 @@ final class AgentsPushPopRaceTests: XCTestCase {
         _ = backButton(app).waitForExistence(timeout: 5)
     }
 
-    /// At the list: 返回 while a chat is open.
+    /// At the list: Back while a chat is open.
     @MainActor private func toList(_ app: XCUIApplication) {
         for _ in 0..<3 where !list(app) { back(app); sleep(1) }
     }

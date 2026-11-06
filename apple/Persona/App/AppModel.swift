@@ -23,11 +23,11 @@ final class AppModel {
     /// Pairing tokens this launch traded for the device's own, to that token (DeviceCredentialTrade): a socket or a
     /// pairing link still on one goes on with the device's.
     @ObservationIgnored var tradedTokens: [String: String] = [:]
-    /// One per group, in the registry's order; the demo's alone in 体验模式.
+    /// One per group, in the registry's order; the demo's alone in Demo Mode.
     private(set) var links: [HubLink] = []
     /// The group hub-level pages show (`selectHub`); the first group when it is not one of them.
     var hubGroup: String
-    /// The hub-level group's hub (what Persona, 收件箱 and the hub's settings talk to); nil when not paired.
+    /// The hub-level group's hub (what Persona, Inbox and the hub's settings talk to); nil when not paired.
     var config: ServerConfig? { hub?.config }
     /// Persona's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
     let personas = PersonaStore()
@@ -38,7 +38,7 @@ final class AppModel {
     /// The hub-level group's socket (its state for the pages about the hub); every group has its own (`links`).
     var live: LiveConnection { hub?.live ?? idleLive }
     @ObservationIgnored private let idleLive = LiveConnection()
-    /// What the titles say about the links (等待网络 / 连接中… / 更新中…).
+    /// What the titles say about the links (Waiting for Network / Connecting… / Updating…).
     let connection: ConnectionStatus
     private(set) var machines: [Machine] = [] {
         didSet {
@@ -102,9 +102,9 @@ final class AppModel {
     /// drawn again by every push. Pass the page's `tabIsActive`: the page is drawn again when it comes to the front.
     func allSessions(inFront: Bool) -> [Session] { inFront ? allSessions : sessionsNow }
     @ObservationIgnored private var sessionIndex: [SessionKey: Session] = [:]
-    /// Sessions a 分支到新聊天 is being made from (fork): a second tap waits for the first.
+    /// Sessions a Branch to New Chat is being made from (fork): a second tap waits for the first.
     @ObservationIgnored private var forking: Set<SessionKey> = []
-    /// Sessions a 回退到这里 is running in (#2915): the node drives Claude's /rewind, up to a minute and a half.
+    /// Sessions a Rewind to Here is running in (#2915): the node drives Claude's /rewind, up to a minute and a half.
     private(set) var rewinding: Set<SessionKey> = []
     /// One observable cell per session a view has looked up (`session(_:)`): a view showing one session is drawn again
     /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn
@@ -132,7 +132,7 @@ final class AppModel {
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
     /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「连接状态和 toast」).
     var toast: Toast?
-    /// 通知、小组件和快捷指令打开的扩展页面，不写入 UserDefaults。
+    /// The extension page opened from a notification, widget or shortcut; not written to UserDefaults.
     var extensionOpen: ExtensionSystemOpen?
     /// A Mac whose live screen is up (`ScreenDrawer`, RootView presents it; #1343): opened from the chat's running
     /// work, its ··· menu, the machine page or a tool's details.
@@ -143,7 +143,7 @@ final class AppModel {
     var computerActivities: [MachineRef: ComputerActivity] = [:]
     var openChat: SessionKey?
     /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
-    /// "完成" notification. From the background the session list is stale (the agent still reads as working until the
+    /// "Done" notification. From the background the session list is stale (the agent still reads as working until the
     /// hub's next list), so the chat cannot tell by itself that this turn finished unseen (2026-10-31).
     var latestAnswerFor: SessionKey?
     /// A hub link's message to land on once its chat shows (HubPageRouting, #2696); taken by that chat.
@@ -181,8 +181,8 @@ final class AppModel {
     var visibleSession: SessionKey? {
         didSet { if heldInList != visibleSession { heldInList = nil } }
     }
-    /// The open agent that was 完成未看 and was marked seen by being open: the Agents list keeps it where it was until
-    /// its chat is left (`AgentListOrder.held`, #2213; user, 2026-11-05: 离开后才收进空闲).
+    /// The open agent that was Unread and was marked seen by being open: the Agents list keeps it where it was until
+    /// its chat is left (`AgentListOrder.held`, #2213; user, 2026-11-05: it moves to Idle only after you leave).
     private(set) var heldInList: SessionKey?
     private(set) var assistantConfig: APIClient.AssistantState? {
         didSet {
@@ -190,12 +190,12 @@ final class AppModel {
             saveSnapshot()
         }
     }
-    /// GET /api/v1/assistant failed while no settings are held: the new-conversation page shows 读不到设置 with a retry
+    /// GET /api/v1/assistant failed while no settings are held: the new-conversation page shows Couldn't Load Settings with a retry
     /// instead of a made-up launcher name (#4200). Held settings (or a restored snapshot) keep the page usable. An
     /// answer that names no launcher sets it too (current hubs always name one; purely defensive against old hubs).
     private(set) var assistantConfigLoadFailed = false
     @ObservationIgnored private var assistantRetryInFlight: Task<Void, Never>?
-    /// The assistant conversation shown in the 对话 tab (persisted across launches).
+    /// The assistant conversation shown in the Chat tab (persisted across launches).
     var assistantCurrent: SessionKey? {
         didSet {
             let v = assistantCurrent?.path ?? ""
@@ -204,15 +204,15 @@ final class AppModel {
     }
     var debugShowNewChat = false
     /// Bumped whenever another page hands the user to a Persona conversation (`askJarvis`): the Persona tab goes back
-    /// to its conversation even when it is the one already shown (a pushed 知识库 page would otherwise stay on top).
+    /// to its conversation even when it is the one already shown (a pushed Knowledge page would otherwise stay on top).
     var assistantReveal = 0
-    /// 压缩上下文 asked here, and when: the chat says 正在压缩 until the hub's word on it arrives (#1762).
+    /// Compact context asked here, and when: the chat says Compacting until the hub's word on it arrives (#1762).
     var compactionRequests: [SessionKey: Date] = [:]
     /// The failed compaction the user closed, per conversation (`MainConversationActions.key`).
     var compactionDismissed: [SessionKey: String] = [:]
     /// What the composer's note shows for a conversation's compaction (`CompactionTracker` works it out).
     var compactionShown: [SessionKey: MainConversationActions.Shown] = [:]
-    /// 新建主对话… was picked (the top bar's menu, the sidebar's): the Persona page asks before doing it.
+    /// New Main Chat… was picked (the top bar's menu, the sidebar's): the Persona page asks before doing it.
     var newMainAsked = false
 
     @ObservationIgnored private(set) var chats: [SessionKey: ChatStore] = [:]
@@ -226,11 +226,11 @@ final class AppModel {
     /// What each machine's launcher pickers run with none picked (`LauncherDefault`), loaded with `launcherCache`.
     @ObservationIgnored private(set) var launcherDefaults: [MachineRef: LauncherDefault] = [:]
 
-    /// The hub-level group's client: for pages about the hub (Persona, 收件箱, its settings). A session's, a machine's
+    /// The hub-level group's client: for pages about the hub (Persona, Inbox, its settings). A session's, a machine's
     /// or an interaction's requests go to its own group (`api(_:)`).
     var api: APIClient? { hub?.api }
     var isPaired: Bool { !links.isEmpty }
-    /// 体验模式: the made-up hub inside the app (DemoHub), no server at all. Remembered across launches until the
+    /// Demo Mode: the made-up hub inside the app (DemoHub), no server at all. Remembered across launches until the
     /// user leaves it or pairs. It is a group of its own, the only one.
     var isDemo: Bool { links.first?.isDemo == true }
     static let demoKey = "demo.on"
@@ -241,11 +241,11 @@ final class AppModel {
         connection = ConnectionStatus()
         DemoHub.install()
         #if DEBUG
-        // `-openWelcome YES`: start unpaired and out of 体验模式, on the pairing page (DemoModeTests); with `-demo.on YES`
-        // too, 体验模式 from a clean start (UI tests, `launchJarvis`).
+        // `-openWelcome YES`: start unpaired and out of Demo Mode, on the pairing page (DemoModeTests); with `-demo.on YES`
+        // too, Demo Mode from a clean start (UI tests, `launchJarvis`).
         if UserDefaults.standard.bool(forKey: "openWelcome") {
             HubStore.save(HubRegistry()) // known empty: deletes the registry and the old single pairing
-            StateCache.remove(Self.snapshotName("")) // and the lists it left: 体验模式 would show them (a paired app)
+            StateCache.remove(Self.snapshotName("")) // and the lists it left: Demo Mode would show them (a paired app)
             UserDefaults.standard.removeObject(forKey: Self.demoKey)
         }
         #endif
@@ -259,7 +259,7 @@ final class AppModel {
         }
         #if DEBUG && os(visionOS)
         // `-openWelcome YES` just emptied the registry: known empty, even when the keychain cannot be read at all (an
-        // unsigned simulator build has no keychain entitlement, errSecMissingEntitlement), so `-demo.on YES` starts 体验模式.
+        // unsigned simulator build has no keychain entitlement, errSecMissingEntitlement), so `-demo.on YES` starts Demo Mode.
         if UserDefaults.standard.bool(forKey: "openWelcome"), registryUnreadable {
             registry = HubRegistry()
             registryUnreadable = false
@@ -293,7 +293,7 @@ final class AppModel {
             return all
         }
 
-        // 设置 › 外观 › 语言 (docs/ios.md「界面语言」): written for the next launch, the extensions and the watch.
+        // Settings › Appearance › Language (docs/ios.md「界面语言」): written for the next launch, the extensions and the watch.
         let language = LanguageStore.shared.apply()
         WatchSync.shared.onActivated = { [weak self] in
             WatchSync.shared.push(language: language)
@@ -330,7 +330,7 @@ final class AppModel {
         registry = r
         buildLinks()
         if registry.hubs.isEmpty, UserDefaults.standard.bool(forKey: Self.demoKey) {
-            links = [makeLink("", .demo)] // 体验模式, as a launch that could read would have opened it
+            links = [makeLink("", .demo)] // Demo Mode, as a launch that could read would have opened it
             applyPersonaPalette()
         }
         guard isPaired else { return }
@@ -429,7 +429,7 @@ final class AppModel {
     /// there; any other hub starts a group of its own beside the others (docs/multi-hub.md「添加 hub」). The other
     /// groups keep everything.
     /// `ssh`: the SSH tunnel set up on the pairing page (docs/network.md「经 SSH 隧道连 hub」): pairing goes through it
-    /// when the address does not answer (or always, with 总是走 SSH), and the hub keeps it.
+    /// when the address does not answer (or always, with Always Use SSH), and the hub keeps it.
     func pair(_ new: ServerConfig, ssh: SSHRoute? = nil) async throws {
         retryRegistry()
         // Unknown pairings would be written over (the keychain is not readable before the first unlock).
@@ -450,7 +450,7 @@ final class AppModel {
             throw error
         }
         let identity = try? await client.identity()
-        if isDemo { leaveDemo() } // a real hub ends 体验模式
+        if isDemo { leaveDemo() } // a real hub ends Demo Mode
         var r = registry
         let group: String
         let same = r.hubs.firstIndex { h in
@@ -500,7 +500,7 @@ final class AppModel {
     }
 
 
-    /// 体验模式 from the pairing page: every tab runs on DemoHub's made-up data, nothing is sent anywhere.
+    /// Demo Mode from the pairing page: every tab runs on DemoHub's made-up data, nothing is sent anywhere.
     func enterDemo() {
         guard !isPaired else { return }
         DemoHub.shared.reset()
@@ -525,7 +525,7 @@ final class AppModel {
         toast = Toast(String(localized: "已进入体验模式，数据都是编造的"))
     }
 
-    /// Out of 体验模式 (退出 or pairing): what it showed goes with it.
+    /// Out of Demo Mode (Sign Out or pairing): what it showed goes with it.
     private func leaveDemo() {
         UserDefaults.standard.set(false, forKey: Self.demoKey)
         for link in links { link.live.disconnect() }
@@ -553,7 +553,7 @@ final class AppModel {
         for key in demo { ChatCache.remove(key) }
     }
 
-    /// 退出 everything: every group, every hub (设置 › 断开 with one group, a revoked credential of this device).
+    /// Sign Out of everything: every group, every hub (Settings › Disconnect with one group, a revoked credential of this device).
     func unpair() {
         LarkChatOutbox.forget()
         LarkDrafts.shared.forget()
@@ -637,7 +637,7 @@ final class AppModel {
         return cell.value
     }
 
-    /// One session as the hub last sent it, all of it, without watching it: for an action when it is tapped (交给
+    /// One session as the hub last sent it, all of it, without watching it: for an action when it is tapped (Hand to
     /// Persona sends its last line), not for a view.
     func latest(_ key: SessionKey) -> Session? { sessionIndex[key] }
 
@@ -649,7 +649,7 @@ final class AppModel {
     }
 
     /// A Persona conversation this app just started with `text` as its first message: listed at once (`adopt`) and
-    /// opened on that message as sent (`showSent`), not on 还没有消息 until claude has written it (#511, #527). Every
+    /// opened on that message as sent (`showSent`), not on No messages yet until claude has written it (#511, #527). Every
     /// place that starts one goes through here.
     func began(_ s: Session, text: String, images: [ImagePayload] = []) {
         adopt(s)
@@ -678,8 +678,8 @@ final class AppModel {
     nonisolated static func showsScreen(_ m: Machine) -> Bool {
         (m.computer.map { $0.enabled && $0.screenSharing } ?? false) || (m.browser.map { $0.enabled && $0.screenSharing } ?? false)
     }
-    /// Brings up ref's VNC on the whole screen; `unlock`: and types its kept password on the lock screen (一键解锁,
-    /// #1507 a-2); `from`: the chat it came from (我完成了 hands back to its agent).
+    /// Brings up ref's VNC on the whole screen; `unlock`: and types its kept password on the lock screen (One-Tap Unlock,
+    /// #1507 a-2); `from`: the chat it came from (I'm Done hands back to its agent).
     func openScreen(_ ref: MachineRef, unlock: Bool = false, from: SessionKey? = nil) {
         guard api(ref.group) != nil else { toast = Toast(String(localized: "尚未连接 hub"), style: .error); return }
         if VNCPiP.shared.ref == ref { VNCPiP.shared.handOver() }
@@ -718,10 +718,10 @@ final class AppModel {
     /// The hub-level group's Persona conversations (each hub has its own Persona), newest first.
     var assistantConversations: [Session] { assistantLists(for: hub?.group ?? "").open }
 
-    /// The archived ones (已归档), newest first.
+    /// The archived ones (Archived), newest first.
     var archivedConversations: [Session] { assistantLists(for: hub?.group ?? "").archived }
 
-    /// The health space's open conversations the hub has pushed, newest first (健康; `HealthModel` adds the hub's list).
+    /// The health space's open conversations the hub has pushed, newest first (Health; `HealthModel` adds the hub's list).
     var healthConversations: [Session] { assistantLists(for: hub?.group ?? "").health }
 
     /// The two lists as of the last push, set only when they changed: a push about the agents (most of them) leaves
@@ -738,7 +738,7 @@ final class AppModel {
             let st = try await api.assistant()
             guard api.group == hub?.group else { return } // another group was picked meanwhile
             assistantConfig = st
-            // Only on the very first launch: after "新对话" the key exists but is empty, and the home page stays.
+            // Only on the very first launch: after New Chat the key exists but is empty, and the home page stays.
             let neverChosen = UserDefaults.standard.object(forKey: "assistant.current") == nil
             if assistantCurrent == nil, neverChosen {
                 if let main = assistantMain {
@@ -752,16 +752,16 @@ final class AppModel {
             let tz = TimeZone.current.identifier
             if st.timezone != tz, let updated = try? await api.setAssistant(timezone: tz) { assistantConfig = updated }
             // A hub that names no launcher gets the same retry state as a failed read (#4200): current hubs always
-            // resolve one (their default), so an empty answer means an old hub — show 读不到设置 instead of an
-            // endless 正在读取 or a made-up name.
+            // resolve one (their default), so an empty answer means an old hub — show Couldn't Load Settings instead of an
+            // endless Reading or a made-up name.
             assistantConfigLoadFailed = (assistantConfig?.launcher ?? "").isEmpty
         } catch {
-            // Settings that already name a launcher stay usable; with none held the page shows 读不到设置 (#4200).
+            // Settings that already name a launcher stay usable; with none held the page shows Couldn't Load Settings (#4200).
             if (assistantConfig?.launcher ?? "").isEmpty { assistantConfigLoadFailed = true }
         }
     }
 
-    /// The 读不到设置 retry: the page flips back to 正在读取 at once, and repeated taps share the one request (#4200).
+    /// The Couldn't Load Settings retry: the page flips back to Reading at once, and repeated taps share the one request (#4200).
     func retryAssistantLoad() {
         guard assistantRetryInFlight == nil else { return }
         assistantConfigLoadFailed = false
@@ -777,8 +777,8 @@ final class AppModel {
         return SessionKey(group: hub?.group ?? "", machineID: st.machineID, sessionID: id)
     }
 
-    /// Shows a Persona conversation from another page (定时任务's 立即运行 / its own conversation): the Persona tab or the
-    /// shell's 助手, back at the conversation even from a page pushed on it or the shell's 设置 sheet.
+    /// Shows a Persona conversation from another page (Scheduled Tasks' Run Now / its own conversation): the Persona tab or the
+    /// shell's Assistant, back at the conversation even from a page pushed on it or the shell's Settings sheet.
     func openAssistantConversation(_ key: SessionKey) {
         shellSettings = false
         selectedTab = .assistant
@@ -843,7 +843,7 @@ final class AppModel {
         } catch { show(error) }
     }
 
-    /// 设置 › 助手 › 主对话派的任务只在主对话里通知 (#1731). Shown at once, put back if the hub says no; tasks already
+    /// Settings › Assistant › notify main-chat tasks only in the main chat (#1731). Shown at once, put back if the hub says no; tasks already
     /// started keep how they were made.
     func setMainTasksQuiet(_ on: Bool) async {
         guard let api, var shown = assistantConfig else { return }
@@ -986,7 +986,7 @@ final class AppModel {
     }
     /// The one line about the hub over the Agents list, if any (docs/hub-update.md「App 里」).
     var hubNotice: HubNotice? { isDemo ? nil : HubNotice.of(hubUpdate, compat: hubCompat, dismissed: hubNoticeDismissed) }
-    /// 手机静音: this device's NotifyPrefs.muteWhileDesktop, shown on that banner.
+    /// Phone Muted: this device's NotifyPrefs.muteWhileDesktop, shown on that banner.
     private(set) var muteWhileDesktop = false
     @ObservationIgnored private var muteWrites = 0
     /// The terminal views streaming each session (one at a time; a newer one replaces the handler).
@@ -1049,7 +1049,7 @@ final class AppModel {
         socket(key.group)?.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "click": [column, row]])
     }
 
-    /// The pointer on a terminal the app drives (docs/terminal.md 第二十五节): action down / up / drag, button left /
+    /// The pointer on a terminal the app drives (docs/terminal.md section 25): action down / up / drag, button left /
     /// middle / right, at a cell of its screen (0-based), mods herdr's bits (shift 1, ctrl 2, alt 4).
     func terminalMouse(_ key: SessionKey, action: String, button: String, column: Int, row: Int, mods: Int) {
         guard session(key)?.canTerminal == true else { return }
@@ -1177,7 +1177,7 @@ final class AppModel {
         guard let link = link(group) else { return }
         registerPhone(link)
         // The hub resumed its broadcasts (docs/hub-restart.md): what this app missed follows the hello, and the
-        // connection's snapshot (machines, sessions, pending interactions) is whole: nothing to fetch again, no 更新中….
+        // connection's snapshot (machines, sessions, pending interactions) is whole: nothing to fetch again, no Updating….
         let plan = ReconnectPlan(resumed: link.live.resumed)
         if group == hub?.group {
             // The hub's version and whether an update is out or under way (an older hub has no such page: nil).
@@ -1194,7 +1194,7 @@ final class AppModel {
         // A new socket is a new client for the hub: the Files / Git panes' folders are told again and refreshed (#3089).
         fsLive.reconnected(group: group)
         let mine = subscribed.filter { $0.group == group }
-        // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus); nothing when
+        // Updating… until the open chats' backlog and the pending interactions are in (ConnectionStatus); nothing when
         // resumed (an empty catch-up only lets the outbox go).
         connection.startCatchUp(group, plan.refetch ? [Self.interactionsPart(group)] + mine.map(Self.catchUpPart) : [])
         for key in mine {
@@ -1274,7 +1274,7 @@ final class AppModel {
     }
 
 
-    /// Turns 手机静音 on or off: optimistic, only this one setting is written (the PUT merges), and only the latest
+    /// Turns Phone Muted on or off: optimistic, only this one setting is written (the PUT merges), and only the latest
     /// switch's answer counts (a quick on → off must not end on whichever reply came last).
     func setMuteWhileDesktop(_ on: Bool) async {
         guard let api else { return }
@@ -1293,7 +1293,7 @@ final class AppModel {
         }
     }
 
-    /// 退出 a desktop: revokes its device token; the hub closes its connection and says it is gone (desktops event).
+    /// Sign Out a desktop: revokes its device token; the hub closes its connection and says it is gone (desktops event).
     func signOutDesktop(_ d: DesktopDevice) async {
         guard let api, !d.device.isEmpty else { return }
         do {
@@ -1377,7 +1377,7 @@ final class AppModel {
             if RuntimeCLI.overHub, let link = link(group) { registerPhone(link) }
             #endif
             #if DEBUG
-            // `-showDesktopSample YES`: a Mac signed in (and 手机静音 on), for screenshots of the banner (the demo hub sends no desktops).
+            // `-showDesktopSample YES`: a Mac signed in (and Phone Muted on), for screenshots of the banner (the demo hub sends no desktops).
             if UserDefaults.standard.bool(forKey: "showDesktopSample"), isHub {
                 link(group)?.desktops = [DesktopDevice(device: "dev_sample", name: "MacBook Pro", since: Date().addingTimeInterval(-3600))]
                 muteWhileDesktop = true
@@ -1739,7 +1739,7 @@ final class AppModel {
 
     private func deliver(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         Task {
-            // The hub is out of reach: the message waits (clock, 连上后自动发送) instead of failing after a timeout.
+            // The hub is out of reach: the message waits (clock, Sends when connected) instead of failing after a timeout.
             let socket = socket(key.group)
             // A socket that dropped a moment ago (a hub restart) is coming back: send, it keeps trying through the gap.
             let outcome: SendOutcome = socket?.takesWrites == true
@@ -1804,7 +1804,7 @@ final class AppModel {
         }
     }
 
-    /// 全部标为已读: every finished-unread one of these, in one update of the list.
+    /// Mark All as Read: every finished-unread one of these, in one update of the list.
     func markSeen(_ keys: [SessionKey]) {
         let unread = keys.filter { session($0)?.state == .unread }
         guard !unread.isEmpty else { return }
@@ -1904,7 +1904,7 @@ final class AppModel {
         do { try await api(key.group)?.keys(key, keys: keys, text: text) } catch { show(error) }
     }
 
-    /// 分支到新聊天 (#2137): the node copies the conversation up to the end of item's turn into a new session, which
+    /// Branch to New Chat (#2137): the node copies the conversation up to the end of item's turn into a new session, which
     /// opens where the original lives (the assistant's page for a conversation of Persona's, else the Agents chat).
     /// Returns the new session's key; an Agents chat switches to it itself (it changes agents in place, the path does not).
     @discardableResult
@@ -1946,7 +1946,7 @@ final class AppModel {
         }
     }
 
-    /// 回退到这里 (#2915): the node walks Claude Code's /rewind back to before the message with this item id (`Rewind`).
+    /// Rewind to Here (#2915): the node walks Claude Code's /rewind back to before the message with this item id (`Rewind`).
     /// `text` (the bubble's words) goes back into the composer when Claude's own box was emptied. One at a time per
     /// session; the chat's list reloads by itself (the node changes the transcript's `history` token).
     @discardableResult
@@ -2016,7 +2016,7 @@ final class AppModel {
         }
     }
 
-    /// 删除对话 (issue #1749): the hub takes it out of every app's list (the transcript stays on its computer, and it
+    /// Delete Chat (issue #1749): the hub takes it out of every app's list (the transcript stays on its computer, and it
     /// is listed again once used). It leaves this app's list right away; the hub's next sessions push agrees.
     /// The conversation last deleted from this app: every chat showing it closes (the split's detail, a Mac window),
     /// wherever the delete was asked from.
@@ -2045,17 +2045,17 @@ final class AppModel {
         }
     }
 
-    /// Moves on every change to the launchers (hide, restore, delete, save): 设置 › 模型供应商's list reloads on it, as
+    /// Moves on every change to the launchers (hide, restore, delete, save): Settings › Model Providers' list reloads on it, as
     /// the page a change is made on is not the list (#1433).
     private(set) var launchersRevision = 0
 
-    /// After a change in 设置 › 模型: the pickers read the machines' lists again, and the list of launchers reloads.
+    /// After a change in Settings › Model: the pickers read the machines' lists again, and the list of launchers reloads.
     func launchersChanged() {
         launchersRevision += 1
         launcherDefaultsChanged()
     }
 
-    /// After 模型配置 changed what runs by default: the pickers read the machines' lists (and their 默认) again; the
+    /// After Model Settings changed what runs by default: the pickers read the machines' lists (and their Default) again; the
     /// list of launchers itself did not change.
     func launcherDefaultsChanged() {
         launcherCache = [:]
@@ -2074,7 +2074,7 @@ final class AppModel {
 
     // MARK: Style
 
-    /// How the app is drawn (设置 › 界面风格); RootView rebuilds everything when it changes.
+    /// How the app is drawn (Settings › Interface Style); RootView rebuilds everything when it changes.
     var style: AppStyle = AppStyle.current {
         didSet {
             AppStyle.current = style
@@ -2082,7 +2082,7 @@ final class AppModel {
         }
     }
 
-    /// The app's colors (设置 › 外观 › 主题色): the style's own, the persona's, or a fixed one; rebuilds everything too.
+    /// The app's colors (Settings › Appearance › Theme Color): the style's own, the persona's, or a fixed one; rebuilds everything too.
     var themeColor: ThemeColor = ThemeColor.current {
         didSet {
             ThemeColor.current = themeColor
@@ -2090,18 +2090,18 @@ final class AppModel {
         }
     }
 
-    /// Where 设置 is (its pages), here and not in SettingsView's state: picking a style or a persona in 设置 › 外观
+    /// Where Settings is (its pages), here and not in SettingsView's state: picking a style or a persona in Settings › Appearance
     /// rebuilds the whole tree (`look`), and the rebuilt settings stay on that page.
     var settingsPath = NavigationPath()
     /// The space's other agent a chat page switched to in its header (`ChatView.switchTo`), by the session it opened
     /// with: the page built again for that path goes to it. Cleared back at the list.
     var chatSwitched: [SessionKey: SessionKey] = [:]
 
-    /// The persona on screen: the chosen one, the built-in in 体验模式 (its packages are the user's hub's).
+    /// The persona on screen: the chosen one, the built-in in Demo Mode (its packages are the user's hub's).
     var persona: Persona { isDemo ? .builtin : personas.current }
 
-    /// What RootView keys the whole tree by: a new style, 主题色 or persona rebuilds it (tokens are static; a persona's
-    /// palette is its own primary, and the colors under 跟随形象).
+    /// What RootView keys the whole tree by: a new style, Theme Color or persona rebuilds it (tokens are static; a persona's
+    /// palette is its own primary, and the colors under Match Avatar).
     var look: Look {
         Look(style: style, color: themeColor, palette: persona.palette,
              extensionPalette: themeColor == .extensionTheme ? ExtensionThemesModel.shared.palette : nil)
@@ -2114,7 +2114,7 @@ final class AppModel {
         var extensionPalette: ExtensionThemePalette? = nil
     }
 
-    /// The accent the built-in persona is drawn in: the 主题色 as it is with no persona colors.
+    /// The accent the built-in persona is drawn in: the Theme Color as it is with no persona colors.
     var builtinAccent: Color { themeColor.colors(style: style, persona: nil).accent }
 
     /// The persona's palette into the spec (`StyleSpec.compose`), before RootView builds with it.
@@ -2126,35 +2126,35 @@ final class AppModel {
     /// Agents (not the assistant) waiting on the user, not muted: the Agents tab's badge, the shell's Agents.
     var agentsWaiting: Int { badges.agents }
 
-    /// 设置 › 外观 › 旧布局 (2026-11-01, docs/ios.md「新外壳」): on, the iPhone keeps the four tabs exactly as before;
-    /// off (the default), it is the ChatGPT-style shell (助手 | Agents, the drawer, 设置 as a sheet). Kept for a few days
+    /// Settings › Appearance › Old Layout (2026-11-01, docs/ios.md「新外壳」): on, the iPhone keeps the four tabs exactly as before;
+    /// off (the default), it is the ChatGPT-style shell (Assistant | Agents, the drawer, Settings as a sheet). Kept for a few days
     /// of transition. iPad, iPhone Duo open and the Mac always use their own layouts.
     var oldLayout: Bool = UserDefaults.standard.bool(forKey: "ui.oldLayout") {
         didSet { UserDefaults.standard.set(oldLayout, forKey: "ui.oldLayout") }
     }
 
-    /// The shell's 设置 sheet is up. Here and not in the shell's state: picking a style in it rebuilds the whole tree
+    /// The shell's Settings sheet is up. Here and not in the shell's state: picking a style in it rebuilds the whole tree
     /// (`look`), and the rebuilt shell puts the sheet back on the same page (`settingsPath`).
     var shellSettings = false
 
-    /// 添加电脑 / 确认电脑 over the whole app (AddComputerView.swift): set it from anywhere without a sheet of its own
+    /// Add Computer / Confirm Computer over the whole app (AddComputerView.swift): set it from anywhere without a sheet of its own
     /// (`openAddComputer()`, `openConfirmComputer(_:)`, the main conversation's readiness card); nil closes it.
     var addComputer: AddComputerRequest?
 
-    /// The home screen icon, the 形象's (the system keeps it; this mirrors it and switches it, `followAppIcon`).
+    /// The home screen icon, the Avatar's (the system keeps it; this mirrors it and switches it, `followAppIcon`).
     let appIcon = AppIconModel.live()
 
-    /// Puts the 形象's icon on the home screen, in the set for 深浅色: when either changes and when the app comes to
-    /// the front (a switch the system cut short, the first launch after the separate App 图标 setting went). Nothing
+    /// Puts the Avatar's icon on the home screen, in the set for Light & Dark: when either changes and when the app comes to
+    /// the front (a switch the system cut short, the first launch after the separate App Icon setting went). Nothing
     /// happens when it already is, so no alert.
     func followAppIcon() {
         #if os(iOS) || os(visionOS)
-        let look = isDemo ? AppIconChoice.standard : personas.appIcon // 体验模式 shows only the default 形象
+        let look = isDemo ? AppIconChoice.standard : personas.appIcon // Demo Mode shows only the default Avatar
         Task { await appIcon.follow(look, scheme: colorScheme) }
         #endif
     }
 
-    /// 小 / 标准 / 大 on top of the system's text size (设置 › 界面风格 › 字号); RootView applies it. On the Mac the
+    /// Small / Standard / Large on top of the system's text size (Settings › Interface Style › Text Size); RootView applies it. On the Mac the
     /// fonts read it from `Theme.Font.scale` (text styles there do not follow Dynamic Type, #833).
     var textSize: TextSize = TextSize.current {
         didSet {
@@ -2163,15 +2163,15 @@ final class AppModel {
         }
     }
 
-    /// 跟随系统 / 浅色 / 深色 (设置 › 外观 › 深浅色), on the app's windows; RootView puts it on a new window. Nothing is
+    /// Match System / Light / Dark (Settings › Appearance › Light & Dark), on the app's windows; RootView puts it on a new window. Nothing is
     /// rebuilt (`look` stays): the tokens are dynamic colors and follow the window's style. The home screen icon, when
-    /// it follows it (`AppIconChoice.followsScheme`: 团子's 纸色), switches to that look too.
+    /// it follows it (`AppIconChoice.followsScheme`: Mochi's Paper), switches to that look too.
     var colorScheme: ColorSchemeChoice = ColorSchemeChoice.current {
         didSet {
             UserDefaults.standard.set(colorScheme.rawValue, forKey: ColorSchemeChoice.key)
             #if os(iOS) || os(visionOS)
             colorScheme.apply()
-            followAppIcon() // 纸色 on the home screen takes the same look
+            followAppIcon() // Paper on the home screen takes the same look
             #endif
         }
     }
@@ -2309,7 +2309,7 @@ final class AppModel {
 
     // MARK: Quiet tasks
 
-    /// An agent of a task the main conversation started with 主对话派的任务只在主对话里通知 on (#1731): the main
+    /// An agent of a task the main conversation started with "notify main-chat tasks only in the main chat" on (#1731): the main
     /// conversation tells the user about it, so the island, notifications, the Agents badge, the watch and the Mac's
     /// Dock and menu bar leave it out. The hub's own word on the session first, then the current hub's todo list.
     func isQuiet(_ s: Session) -> Bool {
@@ -2370,7 +2370,7 @@ final class AppModel {
     /// Kept across launches with the text (#4578): a quote is the larger part of a reply.
     var composerContexts: [SessionKey: [ContextRef]] = AppModel.savedContexts() { didSet { saveContexts(); markDrafts() } }
     @ObservationIgnored let contextWriter = Debouncer()
-    /// The chats with something unsent (text or quotes): the Agents rows' 草稿 (#4578). Apart from `drafts`, which
+    /// The chats with something unsent (text or quotes): the Agents rows' Draft (#4578). Apart from `drafts`, which
     /// changes on every key: this changes only when a chat gains or loses a draft, so the rows do not draw again as
     /// one is typed.
     var draftMarks: Set<SessionKey> = AppModel.marks(AppModel.savedDrafts(), AppModel.savedContexts())
@@ -2497,7 +2497,7 @@ final class AppModel {
             replaceInteractions(group, ixs, askedAt: asked)
             link.live.ensureConnected()
         } catch {
-            // The title says 等待网络 / 连接中…; with several groups one unreachable is not an error to show.
+            // The title says Waiting for Network / Connecting…; with several groups one unreachable is not an error to show.
             if !error.isOffline, !isMultiHub { show(error) }
         }
     }
@@ -2505,7 +2505,7 @@ final class AppModel {
 
     func show(_ error: Error) {
         if error.isOffline { notDone(); return }
-        if (error as? APIError)?.code == DemoText.code { toast = Toast(DemoText.notSent); return } // 体验模式: not an error
+        if (error as? APIError)?.code == DemoText.code { toast = Toast(DemoText.notSent); return } // Demo Mode: not an error
         // A start or a send the hub refused with a code (no computer, Claude Code missing…): a card with what to do where
         // the conversation is, not a toast; a 409 is never quiet (docs/onboarding.md 5.2).
         if let coded = CodedFailure(error) {
@@ -2565,7 +2565,7 @@ struct PhoneConfirmation: Identifiable {
 
 struct Toast: Identifiable, Equatable {
     enum Style { case info, success, error }
-    /// A button on the toast (撤销): it runs, and the toast goes.
+    /// A button on the toast (Undo): it runs, and the toast goes.
     struct Action {
         let title: String
         let run: @MainActor () -> Void
@@ -2629,7 +2629,7 @@ nonisolated struct TabBadges: Equatable, Sendable {
 }
 
 /// The Persona conversations of one group, newest first: open and archived (`AppModel.assistantConversations`), and
-/// apart from them the health space's open ones (健康, docs/health.md), which the sidebar never lists.
+/// apart from them the health space's open ones (Health, docs/health.md), which the sidebar never lists.
 nonisolated struct AssistantLists: Equatable {
     let group: String
     let open: [Session]

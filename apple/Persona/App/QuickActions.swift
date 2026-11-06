@@ -1,7 +1,7 @@
 #if os(iOS)
 import UIKit
 
-/// The home screen icon's long-press menu (#3199): 新对话, Agents and 收件箱, as Android's shortcuts and the web app's
+/// The home screen icon's long-press menu (#3199): New Chat, Agents and Inbox, as Android's shortcuts and the web app's
 /// manifest have. They only open a page; with no hub paired the app stays on its welcome page.
 enum QuickAction: String, CaseIterable {
     case newConversation = "persona.new-conversation"
@@ -32,7 +32,7 @@ enum QuickAction: String, CaseIterable {
         switch action {
         case .newConversation:
             model.selectedTab = .assistant
-            // As the drawer's 新对话: the shell takes 助手 back to its root (a pushed inbox included), the old tabs only
+            // As the drawer's New Chat: the shell takes Assistant back to its root (a pushed inbox included), the old tabs only
             // need the conversation gone.
             if let shell = model.tabRouter as? ShellState {
                 shell.show(.newConversation)

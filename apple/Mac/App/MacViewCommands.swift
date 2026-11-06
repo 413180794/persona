@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 显示 › 字号 (⌘+ ⌘- ⌘0, over 设置 › 字号's 小 / 标准 / 大) and 前往 › 上一个 / 下一个 Agent (⌘[ ⌘]).
+/// View › Text Size (⌘+ ⌘- ⌘0, over Settings › Text Size's Small / Standard / Large) and Go › Previous / Next Agent (⌘[ ⌘]).
 enum MacViewCommands {
     /// One step bigger or smaller, stopping at the ends.
     static func step(_ size: TextSize, by delta: Int) -> TextSize {
@@ -10,7 +10,7 @@ enum MacViewCommands {
     }
 
     /// The agent above / below in the Agents list's order (AgentListOrder: needs you → unread → working → seen, or by
-    /// time alone under 最近更新),
+    /// time alone under Recently Updated),
     /// wrapping around; Persona conversations are not in that list. From nothing, the first.
     static func neighbour(of key: SessionKey?, by delta: Int, in sessions: [Session], order: AgentListOrder,
                           recent: Bool = false, pinOrder: (SessionKey) -> Int = { _ in 0 }) -> SessionKey? {
@@ -31,13 +31,13 @@ enum MacViewCommands {
         return list[((i + delta) % list.count + list.count) % list.count]
     }
 
-    /// What 显示 › 刷新 (⌘R, the iPhone's pull to refresh) loads again: the key window's page when it loads its own
-    /// data (`macRefreshes`: 知识库, 机器, a chat's 文件 / Git pane), else what the section shows from the hub.
+    /// What View › Refresh (⌘R, the iPhone's pull to refresh) loads again: the key window's page when it loads its own
+    /// data (`macRefreshes`: Knowledge, Machines, a chat's Files / Git pane), else what the section shows from the hub.
     enum RefreshTarget: Equatable { case page, hub, assistant, inbox, todos }
 
     static func refreshTarget(_ section: MacSection, page: Bool, mainWindow: Bool) -> RefreshTarget {
         if page { return .page }
-        // The section is the main window's: with a chat window, a sheet or 设置 in front, only the hub's lists.
+        // The section is the main window's: with a chat window, a sheet or Settings in front, only the hub's lists.
         guard mainWindow else { return .hub }
         return switch section {
         case .inbox: .inbox
@@ -80,7 +80,7 @@ struct MacViewMenu: Commands {
             .disabled(!model.isPaired)
             Divider()
             Toggle("紧凑列表", isOn: $compact)
-            // the grouping in use: a stored 按待办 is 按项目 on a hub without todos
+            // the grouping in use: a stored By To-do is By Project on a hub without todos
             Picker("分组方式", selection: Binding(get: { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) },
                                                 set: { grouping = $0 })) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { Text($0.title).tag($0) }
@@ -88,7 +88,7 @@ struct MacViewMenu: Commands {
             Picker("排序方式", selection: $sort) {
                 ForEach(AgentSort.allCases) { Text($0.title).tag($0) }
             }
-            // sectioned by state, the rows in a section by time already; 最近使用 is by time only
+            // sectioned by state, the rows in a section by time already; Recently Used is by time only
             .disabled(grouping == .state || grouping == .recent)
             // The Agents list is kept behind other sections (`MacPageStack`): only while it shows.
             Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
@@ -96,7 +96,7 @@ struct MacViewMenu: Commands {
             Button("全部展开") { MacShellState.shared.agentsList?.expand() }
                 .disabled(MacShellState.shared.agentsList == nil || !agentsShown || grouping == .recent)
             Divider()
-            // The iPhone's pull to refresh: a Mac list has no pull. The one ⌘R in the app (the toolbars' 刷新 buttons
+            // The iPhone's pull to refresh: a Mac list has no pull. The one ⌘R in the app (the toolbars' Refresh buttons
             // have none, so two never claim it).
             Button("刷新") { refresh() }
                 .keyboardShortcut("r", modifiers: .command)

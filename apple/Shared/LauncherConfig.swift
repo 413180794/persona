@@ -1,6 +1,6 @@
 import Foundation
 
-/// 设置 › 模型 (docs/launchers.md): every launcher, from each machine's ~/.zshrc or added in Persona.
+/// Settings › Model (docs/launchers.md): every launcher, from each machine's ~/.zshrc or added in Persona.
 nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var name: String
     var source: String // zshrc | jarvis
@@ -128,7 +128,7 @@ nonisolated struct LauncherDetail: Codable, Hashable, Sendable {
     }
 }
 
-/// One 测试可用性 run on a machine: a real one-word request through the launcher.
+/// One Test Availability run on a machine: a real one-word request through the launcher.
 nonisolated struct LauncherCheck: Codable, Hashable, Sendable {
     var ok: Bool
     var agent: String?
@@ -181,7 +181,7 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     }
 }
 
-/// What 测试连接 and 获取模型列表 send (POST /api/v1/launchers/test, …/discover): the form as typed; with `name` the hub
+/// What Test Connection and Get Model List send (POST /api/v1/launchers/test, …/discover): the form as typed; with `name` the hub
 /// uses the stored key and headers where these are nil.
 nonisolated struct LauncherProbe: Encodable, Hashable, Sendable {
     var name: String?
@@ -196,7 +196,7 @@ nonisolated struct LauncherProbe: Encodable, Hashable, Sendable {
     }
 }
 
-/// 测试连接's answer: one tiny request through the gateway. A gateway's failure is `ok: false` with `error`.
+/// Test Connection's answer: one tiny request through the gateway. A gateway's failure is `ok: false` with `error`.
 nonisolated struct LauncherProbeResult: Decodable, Hashable, Sendable {
     var ok: Bool
     var ms: Int?
@@ -204,13 +204,13 @@ nonisolated struct LauncherProbeResult: Decodable, Hashable, Sendable {
     var error: String?
 }
 
-/// 获取模型列表's answer: the gateway's /v1/models, filled in from the hub's catalog.
+/// Get Model List's answer: the gateway's /v1/models, filled in from the hub's catalog.
 nonisolated struct LauncherDiscovery: Decodable, Hashable, Sendable {
     var models: [ProviderModel]?
     var error: String?
 }
 
-/// 从 ~/.zshrc 导入's preview (GET /api/v1/launchers/import): a machine's claude aliases merged into providers by gateway
+/// Import from ~/.zshrc's preview (GET /api/v1/launchers/import): a machine's claude aliases merged into providers by gateway
 /// and key. No key or header is in it.
 nonisolated struct LauncherImportPreview: Decodable, Hashable, Sendable {
     var machine: String
@@ -244,10 +244,10 @@ nonisolated struct LauncherImportResult: Decodable, Hashable, Sendable {
     var updated: [String]?
 }
 
-/// What a machine's launcher picker runs with no pick (`default` of GET /api/v1/machines/{id}/launchers): 模型配置's
+/// What a machine's launcher picker runs with no pick (`default` of GET /api/v1/machines/{id}/launchers): Model Settings'
 /// effective value for the use.
 nonisolated struct LauncherDefault: Codable, Hashable, Sendable {
-    /// `launcher.<name>`, as in 模型配置.
+    /// `launcher.<name>`, as in Model Settings.
     var provider: String?
     var model: String?
     var effort: String?
@@ -351,15 +351,15 @@ extension APIClient {
     func restoreLauncher(_ name: String) async throws {
         _ = try await request("POST", "/api/v1/launchers/\(name)/restore")
     }
-    /// 测试连接: the hub sends one max_tokens 1 request through the gateway (30 s at most).
+    /// Test Connection: the hub sends one max_tokens 1 request through the gateway (30 s at most).
     func testLauncher(_ probe: LauncherProbe) async throws -> LauncherProbeResult {
         try await post("/api/v1/launchers/test", body: probe, timeout: 45)
     }
-    /// 获取模型列表: the gateway's own list.
+    /// Get Model List: the gateway's own list.
     func discoverLauncherModels(_ probe: LauncherProbe) async throws -> LauncherDiscovery {
         try await post("/api/v1/launchers/discover", body: probe, timeout: 45)
     }
-    /// 从 ~/.zshrc 导入: what the machine's claude aliases come to (409 `node_outdated` from a node too old to say).
+    /// Import from ~/.zshrc: what the machine's claude aliases come to (409 `node_outdated` from a node too old to say).
     func launcherImportPreview(machine: String) async throws -> LauncherImportPreview {
         try JSON.decoder.decode(LauncherImportPreview.self,
                                 from: await request("GET", "/api/v1/launchers/import", query: ["machine": machine], timeout: 45))

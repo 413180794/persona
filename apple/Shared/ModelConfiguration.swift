@@ -5,7 +5,7 @@ nonisolated struct ModelBinding: Codable, Hashable, Sendable {
     var provider: String?
     var model: String?
     var effort: String?
-    /// The main conversation's runtime (`cli` | `agentsdk`, #2455); only 主对话 has it (`ModelPurpose.runtimes`).
+    /// The main conversation's runtime (`cli` | `agentsdk`, #2455); only Main Chat has it (`ModelPurpose.runtimes`).
     var runtime: String? = nil
 
     var isEmpty: Bool { provider == nil && model == nil && effort == nil && runtime == nil }
@@ -33,7 +33,7 @@ nonisolated struct ModelPurpose: Codable, Hashable, Identifiable, Sendable {
     var limit: ModelLimit?
     var fields: [String]?
     var providerIDs: [String]?
-    /// The runtimes 主对话 can run on (`cli`, `agentsdk`); nil for every other use and on an older hub.
+    /// The runtimes Main Chat can run on (`cli`, `agentsdk`); nil for every other use and on an older hub.
     var runtimes: [String]?
 
     enum CodingKeys: String, CodingKey {
@@ -51,7 +51,7 @@ nonisolated struct ModelLimit: Codable, Hashable, Sendable {
     var reason: String // quota | busy
     var until: Date
 
-    /// The hub's wording, counted from `now`: 额度用完，23 分钟后重试.
+    /// The hub's wording, counted from `now`: 「额度用完，23 分钟后重试」.
     func text(now: Date = .now) -> String {
         let what = reason == "quota" ? String(localized: "额度用完") : String(localized: "并发已满")
         let left = until.timeIntervalSince(now)
@@ -112,7 +112,7 @@ nonisolated struct ModelConfigurationPatch: Encodable, Sendable {
     }
 }
 
-/// 主对话's 运行方式 (#2455): how its Claude runs.
+/// Main Chat's How It Runs (#2455): how its Claude runs.
 nonisolated enum AssistantRuntime {
     static let cli = "cli"
     static let agentSDK = "agentsdk"

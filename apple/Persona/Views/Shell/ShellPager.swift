@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// The shell's two pages side by side, 助手 on the left and Agents on the right like the switch over them
-/// (docs/ios.md「新外壳」): a drag to the left on 助手 brings Agents in under the finger, a drag to the right on Agents
-/// brings 助手 back, and the switch's pill follows. The whole strip reads 抽屉 | 助手 | Agents: on 助手 a drag to the
+/// The shell's two pages side by side, Assistant on the left and Agents on the right like the switch over them
+/// (docs/ios.md「新外壳」): a drag to the left on Assistant brings Agents in under the finger, a drag to the right on Agents
+/// brings Assistant back, and the switch's pill follows. The whole strip reads drawer | Assistant | Agents: on Assistant a drag to the
 /// right still opens the drawer (`DrawerPan` decides which one a drag is).
 ///
 /// Its own object, like `AssistantDrawer`: while the finger moves only the pages' slide, the top bars' pin and the
 /// switch's pill read the position, never the pages themselves.
 @MainActor @Observable final class ShellPager {
-    /// 0 = 助手 in full, 1 = Agents in full; in between while dragging or settling.
+    /// 0 = Assistant in full, 1 = Agents in full; in between while dragging or settling.
     private(set) var position: CGFloat = 0
     private(set) var pageCount = 2
 
@@ -20,7 +20,7 @@ import SwiftUI
     private(set) var moving = false
     /// The strip came to rest under a finger already down: the moving bar stays in its place until the finger lets go,
     /// so a tap that began on its switch still lands (`ShellMovingBar`). Taken away, the switch under the finger took
-    /// nothing: a tap on Agents as the strip came back to 助手 was lost (`ShellRaceTests`).
+    /// nothing: a tap on Agents as the strip came back to Assistant was lost (`ShellRaceTests`).
     private(set) var lingering = false
     /// A finger is on the screen (the window's watcher, `ShellWindowHooks`).
     @ObservationIgnored private var touching = false
@@ -202,7 +202,7 @@ enum SwipeRelease {
 /// (`ShellState.page`) with the strip at rest on it takes taps and is read by VoiceOver.
 struct ShellPageSlide: ViewModifier {
     let shell: ShellState
-    /// 0 = 助手, 1 = Agents.
+    /// 0 = Assistant, 1 = Agents.
     let index: Int
 
     func body(content: Content) -> some View {
@@ -227,12 +227,12 @@ struct ShellPageSlide: ViewModifier {
 /// `ShellPager.lingering`): `ShellMovingBar` stands in for both (drawn in its page, each
 /// bar was covered by the other page where it reached over it). While the strip rests on the other page the bar is not
 /// there at all. Hidden (`accessibilityHidden`, opacity, hit testing) was not enough: its switch is a menu and its
-/// buttons are glass, all UIKit, and after a page pushed on 助手 was swiped back Agents' bar was in the accessibility
-/// tree again over 助手's, invisible and "hittable" — VoiceOver could land on it, and a tap on the switch the tree
+/// buttons are glass, all UIKit, and after a page pushed on Assistant was swiped back Agents' bar was in the accessibility
+/// tree again over Assistant's, invisible and "hittable" — VoiceOver could land on it, and a tap on the switch the tree
 /// offered first hit neither segment (`ShellSwitchTests`). It comes back, transparent, as soon as a slide starts.
 struct ShellBarAtRest: ViewModifier {
     @Environment(\.shell) private var shell
-    /// The bar's page on the strip: 0 = 助手, 1 = Agents.
+    /// The bar's page on the strip: 0 = Assistant, 1 = Agents.
     let page: Int
 
     func body(content: Content) -> some View {
@@ -240,7 +240,7 @@ struct ShellBarAtRest: ViewModifier {
             let standIn = pager.moving || pager.lingering
             // The bar comes and goes with `pager.page`, which a slide changes in its animated transaction, and a page pushed
             // over it (now or before the spring ends) takes it out of the window, where that transition never runs: the
-            // slide waited for it (`ShellPager.settle`). Opening an agent from the inbox, pushed on 助手, left the strip
+            // slide waited for it (`ShellPager.settle`). Opening an agent from the inbox, pushed on Assistant, left the strip
             // moving, both pages out of reach and the moving bar's switch over the chat (2026-11-03,
             // `ShellInboxAgentTests`). It is transparent while the strip moves (`ShellMovingBar` stands in): no animation.
             Group {

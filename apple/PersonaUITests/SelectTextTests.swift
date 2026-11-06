@@ -1,7 +1,7 @@
 import XCTest
 
-/// Long-press a message › 选择文本: the message opens in a page where any part of it can be selected and copied, not
-/// only the whole of it (复制). A reply reads as in the chat, without the Markdown marks; your own message stays as
+/// Long-press a message › Select Text: the message opens in a page where any part of it can be selected and copied, not
+/// only the whole of it (Copy). A reply reads as in the chat, without the Markdown marks; your own message stays as
 /// written (its bubble shows it plain: `__init__.py`, `2*3*4`, `# …`, `- …` are kept).
 ///   PORT=18950 MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18950 xcodebuild test … -only-testing:PersonaUITests/SelectTextTests
@@ -28,7 +28,7 @@ final class SelectTextTests: XCTestCase {
         app.launchPinned()
     }
 
-    /// Long-presses the message starting with `message` and opens 选择文本; returns the page's text view.
+    /// Long-presses the message starting with `message` and opens Select Text; returns the page's text view.
     @MainActor private func openSelection(_ message: String, shot name: String) -> XCUIElement {
         let text = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", message)).firstMatch
         XCTAssertTrue(text.waitForExistence(timeout: 20), "\(message) is not in the chat")
@@ -115,7 +115,7 @@ final class SelectTextTests: XCTestCase {
         XCTAssertTrue(all.contains("$S = \\pi r^2$"), "the formula is not as written: \(all)")
     }
 
-    /// Persona's main conversation: bold and a numbered list read as they do in the chat, without `**`; 全部拷贝
+    /// Persona's main conversation: bold and a numbered list read as they do in the chat, without `**`; Copy All
     /// copies the message as written.
     @MainActor func testAPersonaReplyReadsAsInTheChat() throws {
         launch(mainChat)

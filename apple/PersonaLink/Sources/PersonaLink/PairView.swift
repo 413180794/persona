@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 配对 / 修改连接: choose how this Mac and the hub find each other. Active (我去连 hub): paste the link `jarvisd hub
-/// pair` printed, and look at or add the hub's addresses. Passive (让 hub 来连): make the link the hub's admin page takes.
+/// 「配对 / 修改连接」 (Pair / Change Connection): choose how this Mac and the hub find each other. Active (「我去连 hub」): paste the link `jarvisd hub
+/// pair` printed, and look at or add the hub's addresses. Passive (「让 hub 来连」): make the link the hub's admin page takes.
 struct PairView: View {
     let model: LinkModel
     @State private var link = ""

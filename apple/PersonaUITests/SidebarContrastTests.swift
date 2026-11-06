@@ -3,7 +3,7 @@ import XCTest
 /// The drawer's rows stay readable (#4496): on an iPhone in light mode the sidebar came up now and then with its
 /// titles and rows white on its near-white backdrop, while the glass buttons and badges in it were fine. The sidebar
 /// lives in a hosting controller of its own; its text has to follow the same look as the window it is drawn in.
-/// Measured on the screenshot: in the 收件箱 row the text has to stand apart from the row's own background.
+/// Measured on the screenshot: in the Inbox row the text has to stand apart from the row's own background.
 /// Run once per look (`simctl ui <udid> appearance light|dark`) and per style (`TEST_RUNNER_JARVIS_UI_STYLE`).
 final class SidebarContrastTests: XCTestCase {
     private var app: XCUIApplication!
@@ -15,7 +15,7 @@ final class SidebarContrastTests: XCTestCase {
     @MainActor private func launch(_ extra: [String] = []) {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-newAssistant", "YES"] + extra
-        // 设置 › 外观 › 深浅色 set against the system's (`-ui.scheme light` on a dark simulator).
+        // Settings › Appearance › Light & Dark set against the system's (`-ui.scheme light` on a dark simulator).
         if let scheme = ProcessInfo.processInfo.environment["JARVIS_SCHEME"] { app.launchArguments += ["-ui.scheme", scheme] }
         app.launchPinned()
     }
@@ -33,7 +33,7 @@ final class SidebarContrastTests: XCTestCase {
         _ = app.buttons["sidebar-inbox"].firstMatch.waitForNonExistence(timeout: 5)
     }
 
-    /// The spread of luminance (0…1) over the 收件箱 row's left part: its text on the backdrop is over 0.4 in every style (the
+    /// The spread of luminance (0…1) over the Inbox row's left part: its text on the backdrop is over 0.4 in every style (the
     /// BeautifulUI style's gray rows 0.44, the glass 0.9); white text on the light backdrop is a few percent.
     @MainActor private func rowContrast() -> Double {
         let row = app.buttons["sidebar-inbox"].firstMatch

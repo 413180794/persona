@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The main conversation's 压缩上下文 / 新建主对话 (#1762): what the chat shows for a compaction, the divider's words, and
+/// The main conversation's Compact Context / New Main Chat (#1762): what the chat shows for a compaction, the divider's words, and
 /// the session's `compaction` from the hub.
 struct MainConversationActionsTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)

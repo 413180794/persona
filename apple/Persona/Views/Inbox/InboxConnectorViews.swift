@@ -33,7 +33,7 @@ struct InboxConnectorDetailView: View {
 }
 
 /// What the hub collected about a connector's item (the description and the newest comments, read for triage) and
-/// 在 GitHub 打开. The action bar above it drafts the reply, which goes where `reply_to` says.
+/// Open in GitHub. The action bar above it drafts the reply, which goes where `reply_to` says.
 struct InboxConnectorTextView: View {
     var item: InboxItem
     /// Why the conversation page could not be read (a rate limit), said over the text.

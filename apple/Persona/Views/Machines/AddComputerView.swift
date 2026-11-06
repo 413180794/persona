@@ -1,10 +1,10 @@
 import SwiftUI
 
-// 机器 › 添加电脑 (docs/onboarding.md 4.2「你的电脑 ↔ hub」, 5.3; docs/protocol.md「电脑的配对码」「电脑的信任」, #4196): a
+// Machines › Add Computer (docs/onboarding.md 4.2「你的电脑 ↔ hub」, 5.3; docs/protocol.md「电脑的配对码」「电脑的信任」, #4196): a
 // signed-in device adds a computer with POST /api/v1/auth/pair-codes {"add"}, hands the pairing link to that computer's
 // Persona Link (a line for a Linux terminal, a link to share for a Mac, a line for Windows' PowerShell), counts the code
 // down (a new one with {"machine"} once it expires) and waits for the computer to come online. It then asks, on the
-// same screen, whether it is the user's: 是我的电脑 (POST /machines/{id}/confirm) or 不是 (…/reject). The same sheet
+// same screen, whether it is the user's: It's Mine (POST /machines/{id}/confirm) or Not Mine (…/reject). The same sheet
 // confirms a computer that was added elsewhere (`AddComputerRequest.confirm`). After the web's (#3934) and Android's.
 
 /// The systems there are instructions for; the hub takes the same words (`add.os`).
@@ -32,7 +32,7 @@ enum ComputerOS: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// What 添加电脑 opens on: the form, or one computer waiting to be confirmed (the readiness card's `confirm_computer`,
+/// What Add Computer opens on: the form, or one computer waiting to be confirmed (the readiness card's `confirm_computer`,
 /// a pending machine's card).
 enum AddComputerRequest: Identifiable, Hashable {
     case add
@@ -48,15 +48,15 @@ enum AddComputerRequest: Identifiable, Hashable {
 extension AppModel {
     /// The hub lets this device add a computer (`machines_add`); an older hub keeps the old pages.
     var canAddComputer: Bool { hubFeatures.contains(APIClient.machinesAddFeature) }
-    /// The group's hub takes 是我的电脑 / 不是 (`machine_trust`).
+    /// The group's hub takes It's Mine / Not Mine (`machine_trust`).
     func canConfirmComputer(_ group: String) -> Bool { features(group).contains(APIClient.machineTrustFeature) }
-    /// 添加电脑 over the whole app (nothing on a hub without `machines_add`).
+    /// Add Computer over the whole app (nothing on a hub without `machines_add`).
     func openAddComputer() { if canAddComputer { addComputer = .add } }
-    /// 确认电脑 for one computer; nil: the one the hub most likely means (`pendingToConfirm`), else the form.
+    /// Confirm Computer for one computer; nil: the one the hub most likely means (`pendingToConfirm`), else the form.
     func openConfirmComputer(_ ref: MachineRef? = nil) {
         if let ref = ref ?? pendingToConfirm()?.ref { addComputer = .confirm(ref) } else { openAddComputer() }
     }
-    /// The computer 确认电脑 is about: `preferred` while it waits, else the first one waiting that is online (it can be
+    /// The computer Confirm Computer is about: `preferred` while it waits, else the first one waiting that is online (it can be
     /// asked about now), else the first one waiting.
     func pendingToConfirm(preferred: String? = nil) -> Machine? { AddComputerText.pendingToConfirm(machines, preferred: preferred) }
 }
@@ -70,7 +70,7 @@ struct AddComputerFailure: Equatable {
 /// The words, kept apart from the view to test.
 enum AddComputerText {
     static let maxName = 40
-    /// How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md 拍板 1).
+    /// How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md 6.3, decision 1).
     static let macInstallDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md")!
     /// How to install it on a Linux without the hub's install script (docs/link.md「Linux（headless）」).
     static let linuxInstallDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless")!
@@ -172,7 +172,7 @@ enum AddComputerText {
     }
 }
 
-/// 添加电脑 / 确认电脑: the form, the code and its countdown, the computer joining, confirmed or rejected.
+/// Add Computer / Confirm Computer: the form, the code and its countdown, the computer joining, confirmed or rejected.
 @Observable final class AddComputerModel {
     struct Deps {
         /// The client of a group's hub.
@@ -201,9 +201,9 @@ enum AddComputerText {
         case working
         /// The code is out, counting down (expired at 0), waiting for the computer.
         case waiting
-        /// It is online and waits: 是你的吗？
+        /// It is online and waits: Is it yours?
         case joined
-        /// 确认电脑 for one that is not online (no code made here).
+        /// Confirm Computer for one that is not online (no code made here).
         case offline
         case confirmed
         case rejected
@@ -253,7 +253,7 @@ enum AddComputerText {
     /// sleeping computer has).
     var canReissue: Bool { machine.map { $0.isPending && !$0.online && $0.neverConnected } ?? false }
 
-    /// 下一步: adds the computer and shows its code.
+    /// Next: adds the computer and shows its code.
     func submit() async {
         guard let n = validName else {
             failure = AddComputerFailure(message: String(localized: "名字不能为空，最多 40 个字。"), code: "invalid_name")
@@ -272,7 +272,7 @@ enum AddComputerText {
         }
     }
 
-    /// 重新生成 / 重新出链接: a new code for the same computer ({"machine": id}).
+    /// Regenerate / New Link: a new code for the same computer ({"machine": id}).
     func reissue() async {
         guard let id = machineID else { return }
         guard let api = deps.api(group) else { failure = Self.disconnected; return }
@@ -325,7 +325,7 @@ enum AddComputerText {
         }
     }
 
-    /// 是我的电脑.
+    /// It's Mine.
     func confirm() async {
         guard let id = machineID, let api = deps.api(group) else { return }
         busy = true
@@ -341,7 +341,7 @@ enum AddComputerText {
         }
     }
 
-    /// 不是 / 删掉: the hub removes it.
+    /// Not Mine / Remove: the hub removes it.
     func reject() async {
         guard let id = machineID, let api = deps.api(group) else { return }
         busy = true
@@ -381,7 +381,7 @@ enum AddComputerText {
 }
 
 extension View {
-    /// 添加电脑 / 确认电脑 as a sheet while `request` is set.
+    /// Add Computer / Confirm Computer as a sheet while `request` is set.
     func addComputerSheet(_ request: Binding<AddComputerRequest?>) -> some View {
         modifier(AddComputerSheetModifier(request: request))
     }
@@ -412,14 +412,14 @@ private struct AppAddComputerPresentation: ViewModifier {
         @Bindable var model = model
         content
             #if os(macOS)
-            // On a view of its own: a second sheet on the Mac's root next to 新建 Agent's broke the window's layout.
+            // On a view of its own: a second sheet on the Mac's root next to New Agent's broke the window's layout.
             .background { Color.clear.addComputerSheet($model.addComputer) }
             #else
             .addComputerSheet($model.addComputer)
             #endif
             #if DEBUG
-            // `-showAddComputer YES | add:<mac|linux|windows>:<name> | <machine id>`: 添加电脑 (filled in and sent with add:…),
-            // or 确认电脑 for that computer, as the app opens: for screenshots.
+            // `-showAddComputer YES | add:<mac|linux|windows>:<name> | <machine id>`: Add Computer (filled in and sent with add:…),
+            // or Confirm Computer for that computer, as the app opens: for screenshots.
             .task {
                 guard let v = UserDefaults.standard.string(forKey: "showAddComputer"), !v.isEmpty else { return }
                 try? await Task.sleep(for: .seconds(1.5))
@@ -429,7 +429,7 @@ private struct AppAddComputerPresentation: ViewModifier {
     }
 }
 
-/// The sheet 添加电脑 / 确认电脑 open.
+/// The sheet Add Computer / Confirm Computer open.
 struct AddComputerSheet: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss

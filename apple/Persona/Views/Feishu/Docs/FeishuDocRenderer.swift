@@ -397,8 +397,8 @@ struct FeishuDocsBlock: View {
 }
 
 /// Selectable text when the document allows copying. Inside the chat's link sheet (`docPick` set) a long press
-/// offers AI 修改 / 作为上下文 for the paragraph instead (SwiftUI's selection menu takes no custom items); where
-/// comments can be written (`feishuDocComment`), 评论这段 (`FeishuDocsCommentable`, #1290). `blockID`: the block the
+/// offers Edit with AI / Add as Context for the paragraph instead (SwiftUI's selection menu takes no custom items); where
+/// comments can be written (`feishuDocComment`), Comment on This (`FeishuDocsCommentable`, #1290). `blockID`: the block the
 /// text is in (a comment on it is anchored there).
 struct FeishuDocsText: View {
     var text: AttributedString

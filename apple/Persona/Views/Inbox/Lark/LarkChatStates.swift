@@ -22,7 +22,7 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
     /// The hub's code for the Lark gateway without a Feishu login (docs/protocol.md, Feishu routes).
     static let notLoggedInCode = "lark_not_logged_in"
 
-    /// `subject` names what did not load in the catch-all title (这个会话, 这个话题).
+    /// `subject` names what did not load in the catch-all title (this chat, this topic).
     static func of(_ error: Error, subject: String = String(localized: "这个会话")) -> LarkLoadProblem {
         if isNotLoggedIn(error) {
             return LarkLoadProblem(kind: .notLoggedIn, title: String(localized: "飞书登录已失效"),
@@ -55,7 +55,7 @@ nonisolated enum LarkChatPlaceholder: Equatable, Sendable {
     case loading
     /// Loaded, and the chat has no messages.
     case empty
-    /// Nothing to show and the load failed: the problem, with 重试.
+    /// Nothing to show and the load failed: the problem, with Retry.
     case failed(LarkLoadProblem)
 
     /// Nil while there is something to show (messages, or mine on their way): a problem then is one line on top.

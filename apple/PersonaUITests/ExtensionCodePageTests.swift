@@ -4,7 +4,7 @@ import XCTest
 /// (schema/extension/examples/showcase/code-*.json), through the mock's showcase extension: iPad side by side (the file
 /// tree beside the diffs, landscape and portrait), the phone a directory at a time with the diffs pushed; a line
 /// number opens the inline comment box. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
-/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named
+/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named
 /// by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
 final class ExtensionCodePageTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }

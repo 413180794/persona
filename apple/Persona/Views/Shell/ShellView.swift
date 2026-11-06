@@ -2,12 +2,12 @@ import BeautifulUI
 import SwiftUI
 
 #if os(iOS) || os(visionOS)
-/// The iPhone's ChatGPT-style shell (docs/ios.md「新外壳」): no tab bar. 助手 (the Persona assistant) and Agents (the Agents
+/// The iPhone's ChatGPT-style shell (docs/ios.md「新外壳」): no tab bar. Assistant (the Persona assistant) and Agents (the Agents
 /// list) are two pages under the top switch, both kept alive like tabs (switching keeps each one's place); the drawer
-/// slides both aside; 收件箱 / 定时任务 / 知识库 / 机器 push onto 助手; 设置 is a sheet.
+/// slides both aside; Inbox / Scheduled Tasks / Knowledge / Machines push onto Assistant; Settings is a sheet.
 ///
-/// Every route in the app still goes through `AppModel.selectedTab` (notifications, Siri, 交给 Persona, the inbox's
-/// rows…): `.assistant` / `.chats` pick the page, `.mail` opens the inbox on 助手, `.settings` the sheet.
+/// Every route in the app still goes through `AppModel.selectedTab` (notifications, Siri, Hand to Persona, the inbox's
+/// rows…): `.assistant` / `.chats` pick the page, `.mail` opens the inbox on Assistant, `.settings` the sheet.
 struct ShellView: View {
     @Environment(AppModel.self) private var model
     /// Opens on the app's tab: the page behind is built when it is first selected or dragged in.
@@ -23,7 +23,7 @@ struct ShellView: View {
                               backdrop: Theme.Shell.drawer, pager: shell.pager, sidebar: { sidebar }, page: pages)
             .environment(\.shell, shell)
             .sheet(isPresented: $model.shellSettings) {
-                // The sheet outlives RootView's rebuild for a new look: it takes the look as its identity too, or 外观's
+                // The sheet outlives RootView's rebuild for a new look: it takes the look as its identity too, or Appearance's
                 // sample and everything else drawn with the static tokens keeps the old colors.
                 SettingsView()
                     .environment(\.shell, shell)
@@ -53,12 +53,12 @@ struct ShellView: View {
                 #endif
             }
             .onDisappear { shell.detach(from: model) }
-            // 等待网络 / 连接中… / 更新中… and the toasts float in a window of their own above the shell's, moving nothing
+            // Waiting for Network / Connecting… / Updating… and the toasts float in a window of their own above the shell's, moving nothing
             // (docs/shell.md「连接状态和 toast」).
             .background { ShellWindowHooks(notices: shell.notices, pager: shell.pager) }
     }
 
-    /// The two pages on one strip, 助手 on the left (`ShellPager`): at rest only the selected one is on screen.
+    /// The two pages on one strip, Assistant on the left (`ShellPager`): at rest only the selected one is on screen.
     private var pages: some View {
         GeometryReader { g in
             ZStack {
@@ -162,7 +162,7 @@ nonisolated struct ShellShown: Encodable, Equatable {
         trace = ShellTrace.shared.events
     }
 
-    /// A page of the strip by name: 0 = 助手, 1 = Agents, 2 = 飞书.
+    /// A page of the strip by name: 0 = Assistant, 1 = Agents, 2 = Lark.
     private static func name(_ page: Int) -> String {
         page == 2 ? "feishu" : page == 1 ? "agents" : "assistant"
     }
@@ -170,10 +170,10 @@ nonisolated struct ShellShown: Encodable, Equatable {
 #endif
 
 /// The top bar while the strip moves, over both pages and still: the face and the switch where they always are (the switch's
-/// pill under the finger), the right-hand button fading from 助手's 新对话 into Agents' 新建会话, 助手's fog fading with
+/// pill under the finger), the right-hand button fading from Assistant's New Chat into Agents' New Session, Assistant's fog fading with
 /// its page. Only its switch takes taps (one while the strip slides picks where it ends: a tap is never lost to the
 /// slide); the pages' own bars (hidden meanwhile, `ShellBarAtRest`) take the taps at rest. Laid out as
-/// `AgentsTopBar`, which lines up with 助手's to the pixel.
+/// `AgentsTopBar`, which lines up with Assistant's to the pixel.
 private struct ShellMovingBar: View {
     @Environment(AppModel.self) private var model
     let pager: ShellPager
@@ -185,7 +185,7 @@ private struct ShellMovingBar: View {
                 ShellPersonaButton(id: "shell-moving-sidebar") {}
                 Spacer(minLength: 0)
                 ZStack {
-                    // 新对话 is dimmed on an empty chat (AssistantTopBar).
+                    // New Chat is dimmed on an empty chat (AssistantTopBar).
                     ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "新对话"), id: "shell-moving-new") {}
                         .opacity(max(0, 1 - p) * (model.assistantCurrent == nil ? 0.4 : 1))
                     ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "新建会话"), id: "shell-moving-agents-new") {}

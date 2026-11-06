@@ -602,6 +602,7 @@ iOS、Mac、visionOS、手表和扩展的界面有简体中文、English、日�
   和 `.environment(\.locale, LanguageStore.drawingLocale)`，App 改了语言下一次刷新就换；手表下次启动生效。
 - **告诉 hub**：每个 HTTP 请求和 WebSocket 握手带 `Accept-Language: <代码>`，连上后发 `{"type":"client_hello","locale":…}`（只带 locale，features / 心跳 / platform 不变），
   `POST /api/v1/devices` 带 `locale`。值是这次启动的界面语言（`LanguageStore.launched`）。
+- **代码注释用英文**（#5055）：`python3 scripts/i18n/apple_comments.py check`（`scripts/test/test_apple_comments.py` 跑它）查 apple/ 下的注释里「」外没有中日文；「」里只放中文文档的标题（`docs/ios.md`「界面语言」）或代码要逐字匹配的原文。
 - **测试**：scheme 的测试动作固定 `language: zh-Hans`、`region: CN`，单元测试、UI 测试、像素 / 布局测试都按中文跑；`AppLanguageTests` 测解析规则和存取。
 - **还没覆盖**：hub 推来的文字（实时活动的标题、详情和「终端等你处理」、推送正文、助手回答）由 hub 按语言出；体验模式的演示数据（对话、人名）只有中文。
 

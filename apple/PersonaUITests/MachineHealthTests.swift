@@ -1,7 +1,7 @@
 import XCTest
 
-/// 这台电脑能做什么 on a machine's page (#3018, docs/machines.md「自检」), against scripts/mock/mock_hub.py started with
-/// MOCK_DOCTOR=stale (hooks and MCP files out of date; 修复 puts them right):
+/// What This Computer Can Do on a machine's page (#3018, docs/machines.md「自检」), against scripts/mock/mock_hub.py started with
+/// MOCK_DOCTOR=stale (hooks and MCP files out of date; Repair puts them right):
 ///   TEST_RUNNER_JARVIS_DOCTOR_HUB=http://127.0.0.1:<port>
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there.
 final class MachineHealthTests: XCTestCase {

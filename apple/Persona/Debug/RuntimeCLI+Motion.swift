@@ -30,7 +30,7 @@ extension RuntimeCLI {
     /// bar too): "strip" (default: every running Core Animation animation removed once, layers jump to where they were
     /// going; the same pixels run after run), "pause" (Core Animation's clock stopped in the app's windows: what runs now
     /// stays where it is, at whatever phase; transitions started meanwhile do not end, so unfreeze before navigating) or
-    /// "none". Not reached either way: views on a timer (`TimelineView`: "N 分钟前") and data that keeps coming (a
+    /// "none". Not reached either way: views on a timer (`TimelineView`: "N min ago") and data that keeps coming (a
     /// machine's live metrics), for which `settle` takes `ignore`.
     private static func freeze(_ a: Args) -> Reply {
         let on = a["on"] as? Bool ?? true

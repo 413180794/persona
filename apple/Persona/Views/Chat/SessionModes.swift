@@ -43,11 +43,11 @@ nonisolated enum SessionModes {
     /// Modes a running session can switch to (bypassPermissions only at start, see node/modes.go).
     static let switchableModes = permissionModes.filter { $0.id != "bypassPermissions" }
 
-    /// Levels for something not started yet: auto starts without --effort, which is what 跟随启动器 already does.
+    /// Levels for something not started yet: auto starts without --effort, which is what Use Launcher's already does.
     static let startEffortLevels = effortLevels.filter { $0.id != "auto" }
 
     /// Every mode for an assistant conversation (the main one too, new or running): the node restarts its Claude in
-    /// 全部放行 (#2416), so the option doesn't say "only when new".
+    /// Allow Everything (#2416), so the option doesn't say "only when new".
     static let assistantModes = permissionModes.map { o in
         o.id == "bypassPermissions" ? Option(id: o.id, title: o.title, detail: String(localized: "改文件、跑命令都不问你"), symbol: o.symbol) : o
     }
@@ -91,28 +91,28 @@ nonisolated enum SessionModes {
 
     static func modeTint(_ id: String?) -> Color {
         switch id {
-        // Neutral: amber is the working state and would read as 等你处理. Only "allow everything" warns.
+        // Neutral: amber is the working state and would read as Waiting for you. Only "allow everything" warns.
         case "bypassPermissions": Theme.danger
         default: .secondary
         }
     }
 
-    /// "手动确认" for known modes, the raw value otherwise (Codex approval policies, newer Claude Code modes).
+    /// "Ask First" for known modes, the raw value otherwise (Codex approval policies, newer Claude Code modes).
     /// For a mode or effort the session has not reported.
     static var unknown: String { String(localized: "未知") }
     static func modeLabel(_ id: String?) -> String? { id.map { mode($0)?.title ?? $0 } }
     static func effortLabel(_ id: String?) -> String? { id.map { effort($0)?.title ?? $0 } }
 
-    /// The shell composer's model button's two words (#1091, #1117), ChatGPT's "6.1 Sol 中": the model, drawn in the text's
+    /// The shell composer's model button's two words (#1091, #1117), ChatGPT's "6.1 Sol Medium": the model, drawn in the text's
     /// ink, and the effort, in the quieter ink after it.
     struct ComposerTitle: Equatable, Sendable {
         var model: String
         var effort: String?
-        /// For VoiceOver and the UI tests: "Opus 5.5 高".
+        /// For VoiceOver and the UI tests: "Opus 5.5 High".
         var spoken: String { effort.map { "\(model) \($0)" } ?? model }
     }
 
-    /// "Opus 5.5" + "高"; the model alone; "思考" + "高" with no model known; nil with neither.
+    /// "Opus 5.5" + "High"; the model alone; "Thinking" + "High" with no model known; nil with neither.
     static func composerTitle(model: String?, effort: String?) -> ComposerTitle? {
         switch (model, effort) {
         case let (m?, e): ComposerTitle(model: m, effort: e)
@@ -260,7 +260,7 @@ struct SessionModesMenu: View {
     var body: some View {
         let mode = session?.permissionMode
         let effort = session?.effort
-        // 全部放行 is said here, not on the composer's button (#1117). First: a menu opening upward from the button puts
+        // Allow Everything is said here, not on the composer's button (#1117). First: a menu opening upward from the button puts
         // its first item next to it, where a menu too tall for the screen is never cut off.
         if setsModes, mode == "bypassPermissions" {
             Section { BypassWarning() }
@@ -309,7 +309,7 @@ struct SessionModesMenu: View {
     }
 }
 
-/// The model menu's warning while everything is allowed (全部放行): red (a destructive item: its words and its shield),
+/// The model menu's warning while everything is allowed (Allow Everything): red (a destructive item: its words and its shield),
 /// as the composer's button used to be. Picking it does nothing; the permission mode is chosen a few rows up.
 struct BypassWarning: View {
     var body: some View {

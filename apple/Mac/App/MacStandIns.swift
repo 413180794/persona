@@ -5,7 +5,7 @@ import Observation
 // Same names and calls as on iOS, so AppModel and the pages stay as they are.
 
 /// Live Activities / the Dynamic Island do not exist on a Mac. The hub's fleet state is kept here for the
-/// menu bar (docs/mac.md: 灵动岛 → 菜单栏); nothing is started or ended.
+/// menu bar (docs/mac.md: Dynamic Island → menu bar); nothing is started or ended.
 @Observable final class LiveActivityController {
     static let shared = LiveActivityController()
 

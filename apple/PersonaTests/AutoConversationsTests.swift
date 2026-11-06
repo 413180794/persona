@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The sidebar's 自动对话 (#3264, docs/protocol.md「助手对话的来源」): the conversations Persona opened by itself out of
-/// 最近, by source; a hub that never says who opened them lists them as before.
+/// The sidebar's Auto Chats (#3264, docs/protocol.md「助手对话的来源」): the conversations Persona opened by itself out of
+/// Recent, by source; a hub that never says who opened them lists them as before.
 struct AutoConversationsTests {
     private func session(_ id: String, origin: String? = nil, state: String = "idle", title: String = "") throws -> Session {
         var o: [String: Any] = ["machine_id": "server", "session_id": id, "status": "idle", "state": state, "title": title, "assistant": true]
@@ -44,7 +44,7 @@ struct AutoConversationsTests {
         #expect(split.auto.map(\.sessionID) == ["in1"])
     }
 
-    /// A hub with the feature whose conversations are all the user's: none in 自动对话, the tasks' ones still are.
+    /// A hub with the feature whose conversations are all the user's: none in Auto Chats, the tasks' ones still are.
     @Test func theFeatureAloneSaysTheHubKnows() throws {
         let split = AutoConversations([try session("me"), try session("task")], tasks: tasks, current: nil, hubSays: true)
         #expect(split.supported)
@@ -52,7 +52,7 @@ struct AutoConversationsTests {
         #expect(split.auto.map(\.sessionID) == ["task"])
     }
 
-    /// An older hub: no 自动对话, 最近 as before (the scheduled tasks' conversations on 定时任务, #2838).
+    /// An older hub: no Auto Chats, Recent as before (the scheduled tasks' conversations on Scheduled Tasks, #2838).
     @Test func anOlderHubListsThemAsBefore() throws {
         let split = AutoConversations([try session("me"), try session("task"), try session("x")], tasks: tasks, current: nil)
         #expect(!split.supported)

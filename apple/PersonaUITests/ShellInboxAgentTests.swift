@@ -1,7 +1,7 @@
 import XCTest
 
-/// The user's report (2026-11-03): from the inbox's 需要你, an agent's row opens its chat in Agents; back from it and
-/// switched about, 助手 showed the inbox under its own switch and took neither drags nor taps, and the Agents chat had
+/// The user's report (2026-11-03): from the inbox's Needs You, an agent's row opens its chat in Agents; back from it and
+/// switched about, Assistant showed the inbox under its own switch and took neither drags nor taps, and the Agents chat had
 /// the switch over its title. Every step here: the strip, the switch and the app's tab agree (`ShellFinger`), the page
 /// in front is the one drawn, the switch is never over a pushed page, and the page in front scrolls and takes taps.
 final class ShellInboxAgentTests: XCTestCase {
@@ -39,7 +39,7 @@ final class ShellInboxAgentTests: XCTestCase {
         }
     }
 
-    /// The probe says which page's root is in front: `chatRoot` (助手) and `workRoot` (Agents).
+    /// The probe says which page's root is in front: `chatRoot` (Assistant) and `workRoot` (Agents).
     @MainActor private func roots(chat: Bool? = nil, work: Bool? = nil, _ what: String) {
         var ok = false
         for _ in 0..<15 {
@@ -61,7 +61,7 @@ final class ShellInboxAgentTests: XCTestCase {
                    withVelocity: .slow, thenHoldForDuration: 0.1)
     }
 
-    /// 体验模式 on 助手's empty chat; the inbox from the drawer, an agent's row from its 需要你.
+    /// Demo Mode on Assistant's empty chat; the inbox from the drawer, an agent's row from its Needs You.
     @MainActor private func openAgentFromInbox() {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-newAssistant", "YES", "-tab", "assistant",
@@ -83,13 +83,13 @@ final class ShellInboxAgentTests: XCTestCase {
     /// No slide here ended late (`ShellPager.settleLimit`'s backstop): each ended with its animation.
     @MainActor private func noLostSettle(_ what: String) {
         let lost = app.shellTrace.contains("settle lost")
-        // `settle late` is the strip ending on time without `.removed`: on this path 助手's root is out of the window.
+        // `settle late` is the strip ending on time without `.removed`: on this path Assistant's root is out of the window.
         if lost { attachScreen("settle lost: \(what)") }
         XCTAssertFalse(lost, "a slide did not end with its animation: \(what) \(app.shellTrace)")
     }
 
-    /// 收件箱 › 需要你 › an agent: its chat in Agents, nothing of the shell over it; back: the Agents list with its
-    /// switch; 助手: still the inbox, as it was left, with its own bar; back from it: 助手's root; Agents again.
+    /// Inbox › Needs You › an agent: its chat in Agents, nothing of the shell over it; back: the Agents list with its
+    /// switch; Assistant: still the inbox, as it was left, with its own bar; back from it: Assistant's root; Agents again.
     @MainActor func testAnAgentFromTheInboxThenBackAndSwitch() {
         openAgentFromInbox()
         app.expectShell(agents: true, "an agent opened from the inbox", limit: 2.5)
@@ -132,8 +132,8 @@ final class ShellInboxAgentTests: XCTestCase {
         app.terminate()
     }
 
-    /// The same chat, then straight to 助手 with the switch not there: a drag from Agents' left edge goes back in
-    /// the chat (not to 助手), and the list's switch to 助手 lands on the inbox as it was left.
+    /// The same chat, then straight to Assistant with the switch not there: a drag from Agents' left edge goes back in
+    /// the chat (not to Assistant), and the list's switch to Assistant lands on the inbox as it was left.
     @MainActor func testAnAgentFromTheInboxThenSwitchFromTheList() {
         openAgentFromInbox()
         app.expectShell(agents: true, "an agent opened from the inbox", limit: 2.5)

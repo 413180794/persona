@@ -1,10 +1,10 @@
 import XCTest
 
-/// 设置 › 扩展 › 扩展市场 and a plugin's own page (docs/extensions.md「扩展市场」「声明式 UI」): a plugin installed from a market
+/// Settings › Extensions › Extension Market and a plugin's own page (docs/extensions.md「扩展市场」「声明式 UI」): a plugin installed from a market
 /// (preview, its permissions agreed to, installed, then removed so the next run finds it as before), a plugin page's
 /// form filled in and saved (the plugin's toast, its new view), and a launcher's page with the plugin's section — the
 /// one that says unsupported (#1339) not there at all. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
-/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named
+/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named
 /// by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark) and the style.
 final class ExtensionMarketTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -41,7 +41,7 @@ final class ExtensionMarketTests: XCTestCase {
         scrollTo(entry, in: app)
         entry.tap()
 
-        // 扩展市场 is there: the hub has markets.
+        // Extension Market is there: the hub has markets.
         let market = app.buttons["plugins-market"]
         XCTAssertTrue(market.waitForExistence(timeout: 15), "no 插件市场:\n\(app.debugDescription)")
         shot(app, "plugins")
@@ -66,7 +66,7 @@ final class ExtensionMarketTests: XCTestCase {
         shot(app, "detail")
         install.tap()
 
-        // The preview: what it may do, then 安装.
+        // The preview: what it may do, then Install.
         let confirm = app.buttons["market-confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 10), "no preview:\n\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["在 hub 机器上运行程序"].exists)
@@ -100,8 +100,8 @@ final class ExtensionMarketTests: XCTestCase {
         XCTAssertTrue(upgrade.waitForExistence(timeout: 5))
     }
 
-    /// A market plugin's 升级 section (docs/extensions.md「自动升级」): its own switch, the newer version that waits for the
-    /// user with what it asks for more, opening the market's upgrade; the 市场 page's switch for all of them. The mock's
+    /// A market plugin's Update section (docs/extensions.md「自动升级」): its own switch, the newer version that waits for the
+    /// user with what it asks for more, opening the market's upgrade; the Markets page's switch for all of them. The mock's
     /// MOCK_PLUGIN_UPGRADE picks the state (needs_permission by default; the screenshots of the others are named by it).
     @MainActor func testAutoUpgrade() throws {
         let state = env["JARVIS_PLUGIN_UPGRADE"] ?? "needs_permission"
@@ -120,7 +120,7 @@ final class ExtensionMarketTests: XCTestCase {
         toggle.switches.firstMatch.tap()
         sleep(1)
         XCTAssertEqual(toggle.value as? String, "1", "not switched on again")
-        // 去确认 opens the market's upgrade, where the permissions are agreed to.
+        // Review opens the market's upgrade, where the permissions are agreed to.
         app.buttons["plugin-upgrade"].firstMatch.tap()
         XCTAssertTrue(app.buttons["market-upgrade"].waitForExistence(timeout: 10), "the market's upgrade did not open:\n\(app.debugDescription)")
         shot(app, "auto-upgrade-confirm")

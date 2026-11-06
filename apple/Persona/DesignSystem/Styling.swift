@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Surfaces and buttons that follow the chosen style (AppStyle, through StyleSpec.current): Liquid Glass in 液态玻璃 /
-// BeautifulUI, the style's own solid look in 黏土 / Island / 飞书. Use these instead of `glassEffect` / `.themedButton()` directly.
+// Surfaces and buttons that follow the chosen style (AppStyle, through StyleSpec.current): Liquid Glass in Liquid Glass /
+// BeautifulUI, the style's own solid look in Clay / Island / Lark. Use these instead of `glassEffect` / `.themedButton()` directly.
 
 extension View {
     /// A floating panel (composer, interaction panel, status strips, toasts).
@@ -15,7 +15,7 @@ extension View {
     }
 
     /// A scroll page that paints its own background (not a List): the system's grouped gray in the glass styles, the
-    /// style's canvas otherwise (it used to stay system gray in 黏土 / Island / 飞书, and jumped against the next page).
+    /// style's canvas otherwise (it used to stay system gray in Clay / Island / Lark, and jumped against the next page).
     func themedGroupedPage() -> some View { background(Theme.groupedPage) }
 
     /// The page behind a list / scroll view: the style's canvas; the glass styles keep the system's.
@@ -102,7 +102,7 @@ extension View {
     }
 
     /// A `Menu` that keeps the button the system draws for it, without the Mac's ⌄ beside the label: a ⋯ among a
-    /// toolbar's bordered buttons (the file viewer's, next to 完成). iOS unchanged.
+    /// toolbar's bordered buttons (the file viewer's, next to Done). iOS unchanged.
     @ViewBuilder func arrowlessMenu() -> some View {
         #if os(macOS)
         menuIndicator(.hidden).fixedSize()
@@ -121,7 +121,7 @@ extension View {
         #endif
     }
 
-    /// Glass buttons in the glass styles, bordered ones in 飞书, soft raised pills in 黏土 / Island. Picks the system
+    /// Glass buttons in the glass styles, bordered ones in Lark, soft raised pills in Clay / Island. Picks the system
     /// style directly: wrapping `Button(configuration)` in a PrimitiveButtonStyle that re-styles it recursed until the
     /// stack overflowed (crash on opening a chat in the glass styles).
     @ViewBuilder func themedButton(prominent: Bool = false) -> some View {
@@ -157,8 +157,8 @@ private struct DimWhenDisabled: ViewModifier {
 }
 
 /// A raised pill for the clay / island styles, at least 44 pt tall (it was 34). Colored by the current tint, as the
-/// system styles are: the accent, or what the call site sets — 中断 and 关闭 Agent are red here too (they were the
-/// accent: purple in 黏土, teal in Island).
+/// system styles are: the accent, or what the call site sets — Interrupt and Close Agent are red here too (they were the
+/// accent: purple in Clay, teal in Island).
 private struct SoftButtonStyle: ButtonStyle {
     var prominent: Bool
     @Environment(\.isEnabled) private var enabled

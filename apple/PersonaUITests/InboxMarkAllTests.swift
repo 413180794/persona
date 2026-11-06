@@ -1,7 +1,7 @@
 import XCTest
 
-/// 更多 › 全部清理 (docs/inbox.md「全部清理」): the menu says what it covers (the 飞书 filter here) and how many; one bulk
-/// request files them all as dismissed, with their versions; the toast's 撤销 brings them back. Against
+/// More › Clear All (docs/inbox.md「全部清理」): the menu says what it covers (the Lark filter here) and how many; one bulk
+/// request files them all as dismissed, with their versions; the toast's Undo brings them back. Against
 /// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which keeps the bulk requests at /mock/inbox_bulk (each test counts the
 /// ones it adds, so both run against one mock). `TEST_RUNNER_JARVIS_SHOTS=<dir>` also writes the screenshots there.
 final class InboxMarkAllTests: XCTestCase {
@@ -76,7 +76,7 @@ final class InboxMarkAllTests: XCTestCase {
 
         undo.tap()
         XCTAssertTrue(text("已移回 \(feishuOpen.count) 件").waitForExistence(timeout: 5), "no undo toast:\n\(app.debugDescription)")
-        // 撤销 sends the reply's undo back: reopen, the ids this one changed.
+        // Undo sends the reply's undo back: reopen, the ids this one changed.
         let undone = Array(try requests().dropFirst(earlier + 1))
         XCTAssertEqual(undone.first?["action"] as? String, "reopen", "撤销 did not send the hub's undo: \(undone)")
         XCTAssertEqual(Set(undone.first?["ids"] as? [String] ?? []), Set(feishuOpen))
@@ -87,8 +87,8 @@ final class InboxMarkAllTests: XCTestCase {
         shot(shotName + " undone")
     }
 
-    /// 10 items and more ask first (MOCK_INBOX_EXTRA=<n> gives the mock n more 知悉即可 mails): the dialog says how many and
-    /// what it covers; 取消 leaves them, the dialog's own button does them.
+    /// 10 items and more ask first (MOCK_INBOX_EXTRA=<n> gives the mock n more FYI mails): the dialog says how many and
+    /// what it covers; Cancel leaves them, the dialog's own button does them.
     @MainActor func testManyAskFirst() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")

@@ -15,7 +15,7 @@ nonisolated struct LarkReadState: Codable, Hashable, Sendable {
     var isFinal: Bool { unreadCount == 0 && readCount > 0 }
 }
 
-/// What sits beside a message of mine, like Feishu: 已读 / 未读 in a one-to-one chat; in a group a ring that fills as
+/// What sits beside a message of mine, like Feishu: Read / Unread in a one-to-one chat; in a group a ring that fills as
 /// people read it, and a tick once everyone has.
 nonisolated enum LarkReadMark: Equatable {
     case read, unread

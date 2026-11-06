@@ -4,7 +4,7 @@ import ActivityKit
 import SwiftUI
 import UserNotifications
 
-/// 设置 › 通知: which pushes this iPhone gets. The hub keeps the choice per device (notify.go), so a second phone or
+/// Settings › Notifications: which pushes this iPhone gets. The hub keeps the choice per device (notify.go), so a second phone or
 /// an iPad can choose differently; the system switch (allowed at all, sounds, lock screen) stays in iOS Settings.
 struct NotificationSettingsView: View {
     @Environment(AppModel.self) private var model
@@ -70,7 +70,7 @@ struct NotificationSettingsView: View {
                 Text(doneFooter)
             }
 
-            // Live Activities (锁屏和灵动岛) are an iPhone's: a Mac has neither (docs/mac.md).
+            // Live Activities (Lock Screen and Dynamic Island) are an iPhone's: a Mac has neither (docs/mac.md).
             #if os(iOS)
             Section {
                 Toggle(isOn: binding(\.liveActivity)) {
@@ -137,7 +137,7 @@ struct NotificationSettingsView: View {
         .overlay { if prefs == nil { ProgressView() } }
         .task { await load() }
         #if DEBUG && os(iOS)
-        // `-openIslandSettings YES` (with `-openNotificationSettings YES -tab settings`): 灵动岛.
+        // `-openIslandSettings YES` (with `-openNotificationSettings YES -tab settings`): Dynamic Island.
         .navigationDestination(isPresented: $debugIsland) { IslandSettingsView(island: binding(\.island)) }
         .task {
             if UserDefaults.standard.bool(forKey: "openIslandSettings") {

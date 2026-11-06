@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 连接器 › Telegram against scripts/mock/mock_hub.py started with MOCK_TELEGRAM=off MOCK_TELEGRAM_2FA=1
+/// Settings › Connectors › Telegram against scripts/mock/mock_hub.py started with MOCK_TELEGRAM=off MOCK_TELEGRAM_2FA=1
 /// (JARVIS_MOCK_HUB_TELEGRAM), as a hub has it at first: switched off, its program not run, so the hub lists no
 /// capabilities for it. Switching it on, then signing in a step at a time (API credentials → phone → code, a wrong one
 /// first → two-step password), then signing out. The mock is left on and signed out (its credentials gone too).
@@ -22,8 +22,8 @@ final class TelegramConnectorTests: XCTestCase {
         app.launchPinned()
         let any = app.descendants(matching: .any)
 
-        // From 设置 (not -openConnectorTelegram: opened at launch, the page can beat the pairing): the hub's connectors
-        // list Telegram under 连接器.
+        // From Settings (not -openConnectorTelegram: opened at launch, the page can beat the pairing): the hub's connectors
+        // list Telegram under Connectors.
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Telegram")).firstMatch
         for _ in 0..<8 where !row.isHittable { app.swipeUp() }
         XCTAssertTrue(row.isHittable, "no Telegram row in 设置:\n\(app.debugDescription)")
@@ -89,7 +89,7 @@ final class TelegramConnectorTests: XCTestCase {
         shot(app, "password")
         next()
 
-        // Signed in: the account (退出登录 is there from the credentials on, so it says nothing).
+        // Signed in: the account (Sign Out is there from the credentials on, so it says nothing).
         XCTAssertTrue(app.staticTexts["示例用户（@example）"].waitForExistence(timeout: 15), "not signed in:\n\(app.debugDescription)")
         let logout = any["connector.logout"]
         XCTAssertTrue(logout.exists)
@@ -100,7 +100,7 @@ final class TelegramConnectorTests: XCTestCase {
         PasswordPrompt.assertNone(app, "Telegram's api_hash and password")
 
         logout.tap()
-        // Once the dialog is up (its title), its own 退出登录 (an action sheet or a popover, by size), not the row's.
+        // Once the dialog is up (its title), its own Sign Out (an action sheet or a popover, by size), not the row's.
         XCTAssertTrue(app.staticTexts["退出 Telegram 登录？"].waitForExistence(timeout: 5), "no confirmation:\n\(app.debugDescription)")
         let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "退出登录", "connector.logout")).firstMatch
         XCTAssertTrue(confirm.exists, "no 退出登录 in the dialog:\n\(app.debugDescription)")

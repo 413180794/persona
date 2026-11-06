@@ -1,7 +1,7 @@
 import OSLog
 import SwiftUI
 
-/// A list and the pages it opens (Agents, 收件箱, 设置), laid out for the width there is (docs/ios.md「iPhone Duo」).
+/// A list and the pages it opens (Agents, Inbox, Settings), laid out for the width there is (docs/ios.md「iPhone Duo」).
 ///
 /// Compact width — every iPhone, and iPhone Duo closed — is one stack with the list at its root, exactly as before.
 /// Regular width — iPhone Duo open — keeps the list as a sidebar column and opens its pages in the detail column,
@@ -87,7 +87,7 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
 
 /// What a split shows when its list is out: the list beside the page. On the Mac the list is the content column of a
 /// three-column split whose sidebar column stays empty (`noSidebar`): macOS 26 draws the sidebar column as a glass card
-/// floating off the window's edges, the window's backdrop showing round it (2026-11-02 user: 像浮在背景板上，有缺口).
+/// floating off the window's edges, the window's backdrop showing round it (2026-11-02 user: like floating on a backdrop, with a gap).
 /// The shell's sections column is the window's sidebar there.
 enum SplitColumns {
     #if os(macOS)

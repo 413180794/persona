@@ -1,7 +1,7 @@
 import XCTest
 
-/// Every tappable thing on the machine pages (设置 › 机器, a machine's details, an Agents list's machine menu, a
-/// machine's projects, 新对话's machine / directory / launcher), against scripts/mock/mock_hub.py started with
+/// Every tappable thing on the machine pages (Settings › Machines, a machine's details, an Agents list's machine menu, a
+/// machine's projects, New Chat's machine / directory / launcher), against scripts/mock/mock_hub.py started with
 /// MOCK_MACHINES=1 (an offline machine that reconnect brings back, a machine with 36 agents):
 ///   TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:<port>
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「机器页面」).
@@ -30,7 +30,7 @@ final class MachinePagesTests: XCTestCase {
     private func launch(_ args: [String]) {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        // Nothing kept from an earlier run: the last dev chat (reopened at launch), 新对话's last machine and launcher. The argument domain wins over what the app saves, so only for values the test never changes.
+        // Nothing kept from an earlier run: the last dev chat (reopened at launch), New Chat's last machine and launcher. The argument domain wins over what the app saves, so only for values the test never changes.
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-newChat.machine", "macbook", "-launcher.macbook", ""] + args
         app.launchPinned()
     }
@@ -87,7 +87,7 @@ final class MachinePagesTests: XCTestCase {
 
     private func openSettingsMachines() {
         launch(["-tab", "settings"])
-        // Below 界面风格 (styles and 字号): on a phone the row starts under the fold, and the list only makes rows on screen.
+        // Below Interface Style (styles and Text Size): on a phone the row starts under the fold, and the list only makes rows on screen.
         _ = app.navigationBars["设置"].waitForExistence(timeout: 15)
         for _ in 0..<4 where !button("在线").exists { app.swipeUp() }
         let row = see(button("在线"), "设置 › 机器 row (n / m 在线)", timeout: 15)
@@ -96,7 +96,7 @@ final class MachinePagesTests: XCTestCase {
         see(app.navigationBars["机器"], "机器 page")
     }
 
-    // MARK: 设置 › 机器
+    // MARK: Settings › Machines
 
     /// The list: every machine, the offline one with its error; pull to refresh asks the hub again; a card opens
     /// its details, a running agent there opens its chat.
@@ -104,7 +104,7 @@ final class MachinePagesTests: XCTestCase {
         openSettingsMachines()
         for name in ["服务器", "MacBook", "Mac Studio", "实验室主机"] { see(text(name), "card \(name)") }
         see(text("Connection refused"), "the offline machine's error")
-        // The hub's machine runs the 对话 tab's assistant too: its conversations are not counted as agents.
+        // The hub's machine runs the Chat tab's assistant too: its conversations are not counted as agents.
         let server = see(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "服务器")).firstMatch, "服务器 card")
         XCTAssertTrue(server.label.contains("1 个 Agent 工作中"), server.label)
         shot("machines-list")
@@ -131,7 +131,7 @@ final class MachinePagesTests: XCTestCase {
         see(app.navigationBars["MacBook"], "back on the details")
     }
 
-    /// An offline machine: its details say so instead of an empty launcher list; 重新连接 asks the hub, the page
+    /// An offline machine: its details say so instead of an empty launcher list; Reconnect asks the hub, the page
     /// turns online and its launchers load.
     @MainActor func testReconnectOfflineMachine() throws {
         openSettingsMachines()
@@ -148,7 +148,7 @@ final class MachinePagesTests: XCTestCase {
         shot("machine-detail-reconnected")
     }
 
-    /// 设置 › Claude Code 设置: its machine picker offers the online machines only, and switching asks that machine.
+    /// Settings › Claude Code Settings: its machine picker offers the online machines only, and switching asks that machine.
     @MainActor func testClaudeSettingsMachinePicker() throws {
         launch(["-tab", "settings"])
         see(button("Claude Code 设置"), "Claude Code 设置 row", timeout: 15).tap()
@@ -166,8 +166,8 @@ final class MachinePagesTests: XCTestCase {
 
     // MARK: Agents
 
-    /// The Agents list's top-left menu: 按机器 shows a section per machine, a machine filter narrows the list and
-    /// shows in the button, 全部机器 clears it.
+    /// The Agents list's top-left menu: By Machine shows a section per machine, a machine filter narrows the list and
+    /// shows in the button, All Machines clears it.
     @MainActor func testAgentsMachineMenu() throws {
         launch(["-tab", "dev"])
         let menu = see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch, "the machine menu", timeout: 15)
@@ -182,7 +182,7 @@ final class MachinePagesTests: XCTestCase {
         menu.tap()
         see(button("Mac Studio"), "machine filter item").tap()
         let filtered = see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "当前机器：Mac Studio")).firstMatch, "filter shown")
-        // MacBook's rows are gone (its question stays in 需要你处理: those cards are for every machine).
+        // MacBook's rows are gone (its question stays in Needs You: those cards are for every machine).
         XCTAssertFalse(text("给天气 App 加主屏幕小组件").exists, "MacBook's agents are filtered out")
         shot("agents-filter-studio")
         filtered.tap()
@@ -206,10 +206,10 @@ final class MachinePagesTests: XCTestCase {
         see(app.navigationBars["Mac Studio"], "machine projects again from the project page")
         app.buttons["机器详情"].tap()
         see(app.descendants(matching: .any)["metric-range"].firstMatch, "details from the info button, with the charts")
-        // Needs-you first, five of them; the rest behind 显示全部 so the charts stay near.
+        // Needs-you first, five of them; the rest behind Show All so the charts stay near.
         XCTAssertFalse(button("infra 的第 1 个任务").exists, "a working agent behind the ones needing you")
         shot("machine-detail-many")
-        see(button("显示全部"), "显示全部").tap() // 显示全部 38 个: the 36 plus the two Mac Studio always has
+        see(button("显示全部"), "显示全部").tap() // 「显示全部 38 个」: the 36 plus the two Mac Studio always has
         let agent = see(button("infra 的第 1 个任务"), "one of the 36 agents")
         agent.tap()
         see(app.textFields.firstMatch.exists ? app.textFields.firstMatch : app.textViews.firstMatch, "that agent's chat, on top")
@@ -228,7 +228,7 @@ final class MachinePagesTests: XCTestCase {
         see(button("重新连接"), "reconnect from there")
     }
 
-    // MARK: 新对话
+    // MARK: New Chat
 
     /// A start the computer refuses says why next to the button (it sat below the form, unseen) and stays open.
     @MainActor func testNewSessionFailureShowsWhy() throws {
@@ -243,7 +243,7 @@ final class MachinePagesTests: XCTestCase {
         shot("new-chat-failed")
     }
 
-    /// 新建会话: the offline machine cannot be picked; pick a machine, a directory (browse into it), a launcher and
+    /// New Session: the offline machine cannot be picked; pick a machine, a directory (browse into it), a launcher and
     /// start: POST /api/v1/sessions with those, and the new chat opens.
     @MainActor func testNewSessionPicksMachineDirectoryLauncher() throws {
         launch(["-tab", "dev"])
@@ -256,7 +256,7 @@ final class MachinePagesTests: XCTestCase {
 
         see(app.buttons["newChat.directory"], "directory row").tap()
         // It opens at the directory picked (the last one used): up to ~/code when that is a project.
-        let blog = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "blog")).firstMatch // not 使用「blog」
+        let blog = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "blog")).firstMatch // not Use “blog”
         see(button("上一级"), "the directory browser")
         for _ in 0..<3 where !app.navigationBars["code"].exists { button("上一级").tap(); usleep(500_000) }
         see(blog, "a directory").tap()
@@ -269,7 +269,7 @@ final class MachinePagesTests: XCTestCase {
         see(button("sonnetcc"), "a Claude launcher").tap()
         see(text("sonnetcc"), "launcher picked")
 
-        // 标签名 (optional, below the fold): what is typed names the herdr tab.
+        // Tab name (optional, below the fold): what is typed names the herdr tab.
         let tabName = app.textFields["newChat.tabName"]
         for _ in 0..<4 where !tabName.isHittable { app.swipeUp() }
         see(tabName, "the tab name field").tap()
@@ -277,7 +277,7 @@ final class MachinePagesTests: XCTestCase {
         shot("new-chat-tab-name")
         app.keyboards.buttons.matching(NSPredicate(format: "label IN %@", ["完成", "done", "Done"])).firstMatch.tap()
 
-        // 第一条消息 goes out as an ordinary message of the new chat (on screen at once, typed in once claude is up).
+        // First Message goes out as an ordinary message of the new chat (on screen at once, typed in once claude is up).
         let prompt = app.textViews["newChat.prompt"].exists ? app.textViews["newChat.prompt"] : app.textFields["newChat.prompt"]
         for _ in 0..<4 where !prompt.isHittable { app.swipeDown() }
         see(prompt, "the first message field").tap()
@@ -307,13 +307,13 @@ final class MachinePagesTests: XCTestCase {
         shot("new-chat-started")
     }
 
-    /// 新建会话's 模型 (#794): the list the launcher's CLI shows in /model, searchable; the pick goes with the start,
+    /// New Session's Model (#794): the list the launcher's CLI shows in /model, searchable; the pick goes with the start,
     /// and only the picked model's efforts are offered.
     @MainActor func testNewSessionPicksAModel() throws {
         launch(["-tab", "dev", "-cwd.macbook", "/Users/me/code/blog"])
         see(app.buttons["新建会话"], "新建会话", timeout: 15).tap()
         see(button("MacBook"), "MacBook card").tap()
-        // 模型配置's launcher (claude in the mock) runs; with nothing picked, so does its model.
+        // Model Settings' launcher (claude in the mock) runs; with nothing picked, so does its model.
         let row = see(app.buttons["newChat.model"], "模型 row", timeout: 15)
         XCTAssertTrue(row.label.contains("默认模型") && row.label.contains("模型配置：model-chat"), row.label)
         shot("new-chat-model")

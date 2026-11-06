@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 浏览器登录 on a Mac's page (#1304, docs/plan-ego-browser.md「导入 cookies」; the web's BrowserLogins): the sites whose
+/// Browser Sign-ins on a Mac's page (#1304, docs/plan-ego-browser.md「导入 cookies」; the web's BrowserLogins): the sites whose
 /// sign-ins ego lite keeps (how many cookies, until when, never what), clearing a site's or all, and importing a cookie
 /// file (cookies.txt, or an extension's JSON). The file is read here, its sites ticked by the user (none at first), and
 /// only the ticked ones go to the hub, which passes them to the Mac and keeps nothing. The Mac must be online.
@@ -210,7 +210,7 @@ struct BrowserLoginsSection: View {
     }
 }
 
-/// The sites of a picked cookie file to tick (none at first), and 导入 N 条.
+/// The sites of a picked cookie file to tick (none at first), and Import N.
 private struct CookiePickSheet: View {
     @Binding var file: BrowserLoginsSection.PickedFile?
     var busy: Bool

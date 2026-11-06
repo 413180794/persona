@@ -1,6 +1,6 @@
 import Foundation
 
-/// 分段自描述，手表回传可以乱序到达。格式来自 Hourhand 的 WatchProtocol。
+/// Segments describe themselves, so the watch's uploads can arrive out of order. The format comes from Hourhand's WatchProtocol.
 nonisolated struct RecordingSegment: Codable, Hashable, Sendable {
     var index: Int
     var start: Double

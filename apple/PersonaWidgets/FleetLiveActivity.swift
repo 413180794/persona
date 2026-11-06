@@ -3,9 +3,9 @@ import SwiftUI
 import WidgetKit
 
 /// Draws the Fleet activity: lock screen (and the Watch Smart Stack's small family), Dynamic Island compact / minimal /
-/// expanded. The compact island's left side is the persona chosen in 设置 › 外观 › 形象 in its state for the fleet
+/// expanded. The compact island's left side is the persona chosen in Settings › Appearance › Avatar in its state for the fleet
 /// (FleetFace) with the most urgent count; the right side is the next count or a number the device chose (IslandCell,
-/// 设置 › 通知 › 灵动岛). Beside another app's activity it is one glyph, the most urgent count (`IslandGlyph`): no room
+/// Settings › Notifications › Dynamic Island). Beside another app's activity it is one glyph, the most urgent count (`IslandGlyph`): no room
 /// for a face beside it; with no count, the persona alone (`IslandMinimal`). The expanded island and the lock screen
 /// lead with the persona and the counts, then the agents.
 /// Status colors are Persona' agent colors
@@ -236,7 +236,7 @@ struct FleetStatsLine: View {
     }
 }
 
-/// 拒绝 / 允许 for a permission, 查看 / 批准 for a plan (rejecting a plan needs words: that is the app's job).
+/// Deny / Allow for a permission, View / Approve for a plan (rejecting a plan needs words: that is the app's job).
 /// Hidden while the content is stale, so nobody approves something the agent has moved past.
 struct FleetActionRow: View {
     var item: FleetState.Item
@@ -245,8 +245,8 @@ struct FleetActionRow: View {
         if let id = item.interaction {
             HStack(spacing: 10) {
                 switch item.kind {
-                // 拒绝 / 查看: the system's neutral fill with primary words (white on gray was 1.6:1 on a light lock
-                // screen); 允许 / 批准: a blue dark enough for white words.
+                // Deny / View: the system's neutral fill with primary words (white on gray was 1.6:1 on a light lock
+                // screen); Allow / Approve: a blue dark enough for white words.
                 case .permission:
                     Button(intent: DenyPermissionIntent(interactionID: id)) { label("拒绝", "xmark") }
                         .buttonStyle(.bordered)
@@ -307,7 +307,7 @@ struct FleetLockScreen: View {
                 FleetStatsLine(state: state)
             }
             if !stale, let act = state.firstActionable {
-                // 允许 / 批准 need Face ID first (authenticationRequired); 拒绝 works locked.
+                // Allow / Approve need Face ID first (authenticationRequired); Deny works locked.
                 FleetRow(item: act, showTitle: state.details)
                 FleetActionRow(item: act)
             } else if state.details {

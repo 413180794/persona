@@ -7,8 +7,8 @@ import SwiftUI
 /// 100 000 lines opens and scrolls like one of ten. The gutter (line numbers, JSON's fold arrows) is drawn at the
 /// visible left edge, so it stays put while the code scrolls sideways under it. A click goes to the source (JSON
 /// opens or closes a node) and selects the line (⇧-click extends, ⌘A selects all, ⌘C copies); a right click
-/// offers the line's menu (拷贝这一行…).
-/// ⌘F (编辑 › 查找…, `MacFind`) opens a find bar over the lines (`CodeFindBar`): matches are filled behind the text,
+/// offers the line's menu (Copy Line…).
+/// ⌘F (Edit › Find…, `MacFind`) opens a find bar over the lines (`CodeFindBar`): matches are filled behind the text,
 /// the current one stronger, and scrolled to.
 final class CodeLinesView: NSView, MacFindable {
     weak var source: CodeLineSource? {

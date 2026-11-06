@@ -149,7 +149,7 @@ nonisolated struct FleetFaces: Hashable, Sendable {
 
 /// Where the app leaves the look and a package's pictures for the widget extension: files in the App Group container
 /// they share (Info.plist `JarvisAppGroup`), under `Fleet/`. On a phone a Live Activity's extension cannot use the
-/// keychain (build 103's 灵动岛诊断, 2026-11-02: the app wrote and read back both items, the extension never reported),
+/// keychain (build 103's Dynamic Island Diagnostics, 2026-11-02: the app wrote and read back both items, the extension never reported),
 /// so nothing goes there any more. Readable on the lock screen once the phone was unlocked after boot. Tests pass a
 /// directory of their own.
 ///
@@ -332,7 +332,7 @@ nonisolated struct FleetLookStore: Sendable {
     }
 }
 
-/// What the widget extension last drew from, written by it into the container (`seen.json`) and shown on 灵动岛诊断:
+/// What the widget extension last drew from, written by it into the container (`seen.json`) and shown on Dynamic Island Diagnostics:
 /// whether it has the container, the look saved there, and the package picture it read. Written only when it changes
 /// or ten minutes on, never on every render.
 nonisolated struct FleetLookReport: Codable, Hashable, Sendable {
@@ -399,9 +399,9 @@ nonisolated struct FleetLookReport: Codable, Hashable, Sendable {
 
 /// The Fleet's state as the persona's (PersonaState): the face says what the counts say.
 nonisolated enum FleetPersona {
-    /// - needs you → 等你处理 (red ring); working → 工作中; finished-unseen or nothing → 空闲;
-    /// - only the assistant answering (no agent in the fleet working) → 思考中: the nearest the fleet has to it;
-    /// - stale (the hub stopped updating it) → 离线, gray: the face of "this may be out of date". The fleet has no
+    /// - needs you → Waiting for you (red ring); working → Working; finished-unseen or nothing → Idle;
+    /// - only the assistant answering (no agent in the fleet working) → Thinking: the nearest the fleet has to it;
+    /// - stale (the hub stopped updating it) → Offline, gray: the face of "this may be out of date". The fleet has no
     ///   error state of its own; a hub that cannot be reached is the error it shows.
     static func state(_ s: FleetState, stale: Bool) -> PersonaState {
         if stale { return .offline }

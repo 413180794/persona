@@ -79,7 +79,7 @@ nonisolated final class CodeDocument: @unchecked Sendable {
         return bytes.withUnsafeBufferPointer { String(decoding: UnsafeBufferPointer(rebasing: $0[r]), as: UTF8.self) }
     }
 
-    /// The whole text (拷贝全部, 分享).
+    /// The whole text (Copy All, Share).
     var string: String { String(decoding: bytes, as: UTF8.self) }
 
     /// Line i's tokens, or nil while it is not colored yet.

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Persona › 定时任务: the rules in words, the times, and what runs next (docs/assistant.md).
+/// Persona › Scheduled Tasks: the rules in words, the times, and what runs next (docs/assistant.md).
 @MainActor
 struct AssistantScheduleTests {
     private func routine(_ time: String, _ days: [Int], enabled: Bool = true, next: Date? = nil) -> APIClient.ScheduledTask {
@@ -35,7 +35,7 @@ struct AssistantScheduleTests {
         #expect(AssistantScheduleText.runsWith(t)?.danger == true)
     }
 
-    /// 跑完推送 (#2676): "asked" comes from the hub and goes back; a hub that never sends it, or sends "", is 每次, and
+    /// Push When Done (#2676): "asked" comes from the hub and goes back; a hub that never sends it, or sends "", is Every Run, and
     /// such a task saves no `push` at all (an older hub never gets the field).
     @Test func pushRoundTrip() throws {
         func decode(_ push: String) throws -> APIClient.ScheduledTask {
@@ -54,11 +54,11 @@ struct AssistantScheduleTests {
             #expect(try body(t)["push"] == nil, "left out: the hub keeps it")
         }
         var back = asked
-        back.push = "" // switched back to 每次
+        back.push = "" // switched back to Every Run
         #expect(try body(back)["push"] as? String == "")
     }
 
-    /// The capsule row says 只在提醒时推送 on its rule line, the plain row on a line of its own; the editor sees a switch to it as a change, and nil and "" as the same.
+    /// The capsule row says "Pushes only when it alerts you" on its rule line, the plain row on a line of its own; the editor sees a switch to it as a change, and nil and "" as the same.
     @Test func pushOnTheRowAndInTheEditor() {
         var t = APIClient.ScheduledTask(id: "p", title: "巡检", prompt: "x", repeats: .interval, everyMinutes: 30)
         #expect(AssistantScheduleText.ruleLine(t) == "每 30 分钟")

@@ -65,7 +65,7 @@ public extension BUISidebarRow where Trailing == EmptyView {
     }
 }
 
-/// A sidebar group's label ("Chats", 今天, 置顶), with an optional control at its end.
+/// A sidebar group's label ("Chats", Today, Pin), with an optional control at its end.
 public struct BUISidebarHeading<Accessory: View>: View {
     var title: String
     var accessory: Accessory

@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 #endif
 
-/// 设置 › 外观 › 语言 (docs/i18n.md「选哪种语言」, docs/ios.md「界面语言」): 跟随系统 / 简体中文 / English / 日本語.
+/// Settings › Appearance › Language (docs/i18n.md「选哪种语言」, docs/ios.md「界面语言」): Match System / 「简体中文」 / English / 「日本語」.
 /// The choice is written where Foundation reads it when the app starts, so it shows the next time the app opens;
 /// until then the page says so (the Mac can reopen itself).
 struct LanguageSettingsPage: View {
@@ -52,7 +52,7 @@ struct LanguageSettingsPage: View {
         #endif
     }
 
-    /// 跟随系统, and what it comes to on this device.
+    /// Match System, and what it comes to on this device.
     private var systemTitle: String {
         let name = AppLanguage(rawValue: AppLanguage.resolve(store.systemFirst))?.title ?? ""
         return String(localized: "跟随系统（\(name)）")
@@ -88,7 +88,7 @@ struct LanguageSettingsPage: View {
 }
 
 extension AppLanguage {
-    /// The row's value in 设置 › 外观: what the interface will be in.
+    /// The row's value in Settings › Appearance: what the interface will be in.
     static var settingsSummary: String {
         let store = LanguageStore.shared
         let name = AppLanguage(rawValue: store.current)?.title ?? store.current
