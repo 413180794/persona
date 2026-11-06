@@ -637,12 +637,16 @@ func (b *orcaBridge) request(ctx context.Context, method string, params json.Raw
 	switch method {
 	case "session.watch", "session.unwatch":
 		return ok, nil // the transcript is the node's to follow
-	case "session.items": // before the transcript is on disk: nothing yet
-		return map[string]any{"items": []any{}, "to_seq": 0}, nil // no history: it is a string (the file's version) when set
 	}
 	b.mu.Lock()
 	orca := b.orcaOf[p.SessionID]
 	b.mu.Unlock()
+	if method == "session.items" && orca != "" { // before the transcript is on disk: nothing yet
+		return map[string]any{"items": []any{}, "to_seq": 0}, nil // no history: it is a string (the file's version) when set
+	}
+	// Not one of Orca's chats: say so, also to session.items, which is how the node asks who owns a session it does
+	// not know yet (runtimeFor). An empty page here claimed every such session for good, a new assistant conversation
+	// whose transcript was not on disk yet included, and its next message was refused with the line below.
 	if orca == "" {
 		return nil, &rpc.Error{Code: "session_gone", Message: "这个会话已经不在 Orca 里了"}
 	}

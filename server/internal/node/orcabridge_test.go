@@ -145,6 +145,23 @@ func TestOrcaBridgeItemsBeforeTranscriptDecodeAsSpan(t *testing.T) {
 	}
 }
 
+// A session the bridge does not list is not Orca's: asked who owns it (session.items, runtimeFor), the bridge says
+// so instead of answering an empty page, and the node does not hand the session to it. An empty page claimed every
+// session the node had lost track of, an assistant conversation included, and its next message was refused with
+// "这个会话已经不在 Orca 里了".
+func TestOrcaBridgeDoesNotClaimOtherSessions(t *testing.T) {
+	n, _, _ := orcaBridgeNode(t)
+	const other = "5d2c7a10-3b4e-4f6a-8c9d-0e1f2a3b4c5d"
+	_, _ = nodeCall(t, n, "session.items", map[string]any{"session_id": other})
+	h, _, known := n.runtimes.belongs(other)
+	if h != nil || known {
+		t.Fatalf("the bridge claimed %s", other)
+	}
+	if n.runtimes.ownerOf(orcaChatUUID) == nil {
+		t.Fatal("the bridge's own chat lost its owner")
+	}
+}
+
 // A message goes to Orca's session with the envelope Orca checks; the same client_msg_id again is the same operation
 // (Orca replays it); interrupting and modes are Orca's writes too.
 func TestOrcaBridgeSendsInterruptsAndSetsModes(t *testing.T) {
