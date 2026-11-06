@@ -227,7 +227,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		branch := strings.TrimSpace(a.Worktree.Branch)
 		where := am.Name + " · " + a.Cwd
 		if branch != "" {
-			where += " · 新 worktree：" + branch
+			where += i18n.T(s.lang(ctx), "assistant-tools.new_worktree", i18n.Args{"branch": branch})
 		}
 		if ok, err := s.confirmOutbound(ctx, machine, self, name, where+"\n\n"+a.Prompt, args); err != nil {
 			return "", err

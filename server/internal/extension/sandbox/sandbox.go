@@ -20,6 +20,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // RunCommand is personad's hidden subcommand that is the sandbox's first process on Linux: it carries the proxy's
@@ -99,14 +101,14 @@ func probe() Support {
 		}
 		dir, err := os.MkdirTemp("", "persona-sandbox-probe-*")
 		if err != nil {
-			s.Why = "探测沙箱无法创建临时目录：" + err.Error()
+			s.Why = i18n.T(i18n.Default, "extension-sandbox.probe_tmp", i18n.Args{"err": err.Error()})
 			return s
 		}
 		defer os.RemoveAll(dir)
 		pkg, data, run := filepath.Join(dir, "pkg"), filepath.Join(dir, "data"), filepath.Join(dir, "run")
 		for _, d := range []string{pkg, data, run} {
 			if err := os.MkdirAll(d, 0o700); err != nil {
-				s.Why = "探测沙箱无法创建临时目录：" + err.Error()
+				s.Why = i18n.T(i18n.Default, "extension-sandbox.probe_tmp", i18n.Args{"err": err.Error()})
 				return s
 			}
 		}

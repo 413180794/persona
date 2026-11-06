@@ -55,5 +55,7 @@
   "new_token": "新的 token（现在的不显示）",
   "token_save_hint": "保存后 hub 用它重新读一次索引。",
   "official_unreachable": "暂时读不到官方扩展，稍后再试。",
-  "catalog_unreadable": "市场暂时读不到，读到后扩展会列在这里"
+  "catalog_unreadable": "市场暂时读不到，读到后扩展会列在这里",
+  "token_create_hint": "没有 token？在 GitHub 上生成一个：名字、用途和一年的有效期已经填好，不用勾任何权限，点 Generate token 后复制回来粘贴到上面。",
+  "token_create": "去 GitHub 生成"
 }

@@ -40,5 +40,7 @@
   "err_max_context_negative": "最大コンテキストは負の値にできません",
   "err_proxy": "プロキシはhttp(s)://またはsocks5://で始まるアドレスにしてください",
   "err_proxy_credentials": "プロキシにユーザー名やパスワードは含められません",
-  "err_tier_model_long": "ティアモデルの名前が長すぎます"
+  "err_tier_model_long": "ティアモデルの名前が長すぎます",
+  "role_default": "既定のメインモデル",
+  "role_optional": "選択可能なモデル"
 }

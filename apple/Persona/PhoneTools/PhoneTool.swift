@@ -96,9 +96,13 @@ enum PhoneToolError: LocalizedError {
     case invalidArgument(String)
     case unavailable(String)
 
+    /// Where the user turns a source on. iOS shows its prompt only once, so a source refused before can only be
+    /// allowed in the iOS Settings app.
+    nonisolated static let grantHint = "请在 iPhone 的 Persona › 设置 › 连接器 › 这台 iPhone 里打开；以前拒绝过的，到 iOS 设置 › Persona 里允许。" // i18n-ignore
+
     var errorDescription: String? {
         switch self {
-        case .denied(let s): "没有权限：\(s)。请在 iPhone 的 Persona › 设置 › 连接器 › 这台 iPhone 里授权。" // i18n-ignore
+        case .denied(let s): "没有权限：\(s)。\(Self.grantHint)" // i18n-ignore
         case .invalidArgument(let s): "参数错误：\(s)" // i18n-ignore
         case .unavailable(let s): s
         }

@@ -1333,7 +1333,7 @@ func (s *Service) notifyTaskFailed(ctx context.Context, t Todo, machine, reason 
 	if s.inHealth(ctx, t.Origin) {
 		title = i18n.T(l, "assistant-tasks.task_failed_title_health")
 	}
-	r := strings.TrimRight(strings.TrimSpace(reason), ".。")
+	r := strings.TrimRight(strings.TrimSpace(reason), ".。") // i18n-ignore: trailing full stops trimmed, not text
 	body := i18n.T(l, "assistant-tasks.task_failed_body_no_reason")
 	if r != "" {
 		body = i18n.T(l, "assistant-tasks.task_failed_body", i18n.Args{"reason": r})

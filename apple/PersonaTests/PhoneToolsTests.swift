@@ -127,6 +127,13 @@ struct PhoneToolsTests {
         #expect(text(of: result.content).contains("turned off"))
     }
 
+    @Test func deniedSaysWhereToAllowIt() {
+        let message = ToolErrors.describe(ToolFailure(.denied, "日历 / Calendar"))
+        #expect(message.contains("设置 › 连接器 › 这台 iPhone"))
+        #expect(message.contains("iOS 设置 › Persona"), "a source refused before can only be allowed in iOS Settings")
+        #expect(!message.contains("Phone data"), "the page was renamed")
+    }
+
     // MARK: - Dispatch
 
     @Test func unknownToolIsAnError() async {

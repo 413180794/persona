@@ -561,6 +561,13 @@ private fun TokenSheet(market: ExtensionMarket, busy: Boolean, error: String? = 
                 singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
             SettingsCaption(stringResource(R.string.settings_ext_token_note, market.label))
+            if (isGitHubMarket(market.spec)) {
+                // The browser, not an in-app page: GitHub's form needs the user's GitHub session.
+                val uri = LocalUriHandler.current
+                SettingsCaption(stringResource(R.string.settings_ext_token_create_hint))
+                JButton(stringResource(R.string.settings_ext_token_create), { runCatching { uri.openUri(GitHubTokenUrl) } }, kind = JButtonKind.Secondary,
+                    size = JButtonSize.Small, icon = PhIcons.ArrowSquareOut)
+            }
             error?.let { JInlineStatus(it, tone = InlineTone.Failed) }
             JButton(stringResource(R.string.settings_ext_save), { onSave(token) }, Modifier.fillMaxWidth(), loading = busy, enabled = !busy && token.isNotBlank())
             if (market.hasToken) JButton(stringResource(R.string.settings_ext_token_remove), { onSave("") }, Modifier.fillMaxWidth(), kind = JButtonKind.Destructive, enabled = !busy)

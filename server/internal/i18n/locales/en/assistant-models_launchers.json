@@ -40,5 +40,7 @@
   "err_max_context_negative": "Max context can’t be negative",
   "err_proxy": "Proxy must start with http(s):// or socks5://",
   "err_proxy_credentials": "Proxy can't carry a username or password",
-  "err_tier_model_long": "A tier model name is too long"
+  "err_tier_model_long": "A tier model name is too long",
+  "role_default": "Default model",
+  "role_optional": "Optional model"
 }

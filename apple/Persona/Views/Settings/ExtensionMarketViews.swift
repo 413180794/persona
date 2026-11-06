@@ -115,7 +115,7 @@ struct ExtensionMarketView: View {
         }
         .refreshable { await page.load(refresh: true) }
         .sheet(item: $tokenFor) { m in
-            MarketTokenSheet(title: String(localized: "Token for “\(m.title)”"), asksSpec: false, hasToken: m.hasToken) { _, token in
+            MarketTokenSheet(title: String(localized: "Token for “\(m.title)”"), asksSpec: false, hasToken: m.hasToken, marketSpec: m.spec) { _, token in
                 if let why = await page.setToken(m.id, token: token) { return why }
                 await page.load()
                 return nil
@@ -644,7 +644,7 @@ struct ExtensionMarketsView: View {
             }
         }
         .sheet(item: $tokenFor) { m in
-            MarketTokenSheet(title: String(localized: "Token for “\(m.title)”"), asksSpec: false, hasToken: m.hasToken) { _, token in
+            MarketTokenSheet(title: String(localized: "Token for “\(m.title)”"), asksSpec: false, hasToken: m.hasToken, marketSpec: m.spec) { _, token in
                 await page.setToken(m.id, token: token)
             }
         }
@@ -764,6 +764,8 @@ private struct MarketTokenSheet: View {
     var title: String
     var asksSpec: Bool
     var hasToken: Bool
+    /// The market's address when it has one (a new token): a GitHub market's sheet says how to get a token.
+    var marketSpec = ""
     /// nil: done; otherwise why not.
     var save: (_ spec: String, _ token: String) async -> String?
     @Environment(\.dismiss) private var dismiss
@@ -795,6 +797,17 @@ private struct MarketTokenSheet: View {
                     SettingsHeading(asksSpec ? String(localized: "Token (Optional)") : "Token")
                 } footer: {
                     Text("GitHub markets: a private repo needs a read-only token (read access to this repo's Contents). A token helps a public repo too: it raises the limit from 60 reads an hour (shared by your whole network) to 5,000. Choose Public repositories with no permissions. It's stored encrypted on the hub, sent only to the market itself, and not shown again once saved. git: markets use the hub machine's SSH credentials and don't need one.")
+                }
+                if (asksSpec ? spec : marketSpec).trimmingCharacters(in: .whitespaces).hasPrefix("github:") {
+                    Section {
+                        // Safari, not the app's browser: GitHub's page needs the user's GitHub session.
+                        Link(destination: ExtensionMarketText.gitHubTokenURL) {
+                            Label { Text("Create on GitHub").lineLimit(1) } icon: { Image(systemName: Theme.Icon.openExternal) }
+                        }
+                        .accessibilityIdentifier("market-token-create")
+                    } footer: {
+                        Text("No token yet? Create one on GitHub: the name, purpose and a one-year expiry are filled in and no permissions are needed. Tap Generate token, then paste it above.")
+                    }
                 }
                 if !asksSpec && hasToken {
                     Section {

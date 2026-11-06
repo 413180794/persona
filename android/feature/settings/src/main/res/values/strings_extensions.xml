@@ -264,6 +264,8 @@
     <string name="settings_ext_github_token_hint">Without a token, GitHub allows 60 reads an hour, and every device on the same network shares that. A GitHub token raises it to 5000, and public repositories count too (choose Public repositories in the fine-grained token; no permissions needed).</string>
     <string name="settings_ext_github_token_fill">Add token</string>
     <string name="settings_ext_official_token_link">Rate-limited? Add a GitHub token in Manage markets</string>
+    <string name="settings_ext_token_create_hint">No token yet? Create one on GitHub: the name, purpose and a one-year expiry are filled in and no permissions are needed. Tap Generate token, then paste it above.</string>
+    <string name="settings_ext_token_create">Create on GitHub</string>
     <string name="settings_ext_token_replace">Enter a new token to replace</string>
     <string name="settings_ext_token_enter">Enter token</string>
     <string name="settings_ext_token_note">After saving, the hub reads %1$s again with the new token. Tokens are stored encrypted on the hub, sent only to that market, and never shown again.</string>

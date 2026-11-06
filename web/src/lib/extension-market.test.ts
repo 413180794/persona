@@ -151,6 +151,21 @@ describe("市场的接口", () => {
   });
 });
 
+describe("GITHUB_TOKEN_URL", () => {
+  it("opens GitHub's fine-grained token page filled in, within GitHub's limits", async () => {
+    const { GITHUB_TOKEN_URL, isGitHubMarket } = await import("./extension-market");
+    const u = new URL(GITHUB_TOKEN_URL);
+    expect(u.origin + u.pathname).toBe("https://github.com/settings/personal-access-tokens/new");
+    expect((u.searchParams.get("name") ?? "").length).toBeGreaterThan(0);
+    expect((u.searchParams.get("name") ?? "").length).toBeLessThanOrEqual(40);
+    expect(Number(u.searchParams.get("expires_in"))).toBeGreaterThanOrEqual(1);
+    expect(Number(u.searchParams.get("expires_in"))).toBeLessThanOrEqual(366);
+    expect([...u.searchParams.keys()].some((k) => k === "contents" || k.endsWith("_permissions"))).toBe(false); // no permission asked
+    expect(isGitHubMarket({ spec: "github:example/extensions" })).toBe(true);
+    expect(isGitHubMarket({ spec: "https://example.com/extensions/" })).toBe(false);
+  });
+});
+
 // #5017: the official market reads Official extensions whatever its index calls itself; the others keep their own names.
 describe("官方市场的名字", () => {
   const official = { id: "o1", spec: "github:example/official", name: "Example 扩展", has_token: false, extensions: 1, warnings: [], official: true } as Market;

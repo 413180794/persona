@@ -121,5 +121,7 @@
   "op_progress": "Step {done} of {total}",
   "official_unreachable": "Can't reach the official extensions right now. Try again later.",
   "official_token_link": "Rate-limited? Add a GitHub token in Manage marketplaces",
-  "market_unread": "Extensions show up here once the market can be read."
+  "market_unread": "Extensions show up here once the market can be read.",
+  "token_create_hint": "No token yet? Create one on GitHub: the name, purpose and a one-year expiry are filled in and no permissions are needed. Click Generate token, then paste it above.",
+  "token_create": "Create on GitHub"
 }

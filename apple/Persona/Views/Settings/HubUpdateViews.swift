@@ -30,8 +30,17 @@ struct HubUpdateDeps {
 
     init(deps: HubUpdateDeps = .live) { self.deps = deps }
 
+    /// Said when the version could not be read for a timeout or no network: `shown` is nil for those, and the page
+    /// had nothing else to show in their place, spinning for good (#3484).
+    static var unreachable: String { String(localized: "Can't reach the hub to read its version") }
+    static var noHub: String { String(localized: "Not connected to a hub yet") }
+
     func load() async {
-        guard let api = deps.api() else { return }
+        guard let api = deps.api() else {
+            if status == nil { error = Self.noHub }
+            loaded = true
+            return
+        }
         // Claim this load's write generation before the requests fly; a finished status below makes reloadHistory
         // claim a newer one, so a delayed inline snapshot is dropped instead of covering the fresher reload.
         let gen = historyGeneration + 1
@@ -49,7 +58,9 @@ struct HubUpdateDeps {
         } catch let e as APIError where e.status == 404 {
             unsupported = true
         } catch {
-            self.error = error.shown ?? self.error
+            if !error.isCancellation {
+                self.error = error.shown ?? (status == nil ? Self.unreachable : self.error)
+            }
         }
         loaded = true
     }
@@ -124,7 +135,8 @@ struct HubSettingsPage: View {
         .themedPage()
         .detailTitle("hub")
         .task { await model.load() }
-        .refreshable { await model.check() }
+        // Before the version was read, pulling down reads it again (a check needs a hub that answered).
+        .refreshable { if model.status == nil { await model.load() } else { await model.check() } }
         .onChange(of: app.hubUpdate) { _, s in
             if let s, s != model.status { model.apply(s) }
         }

@@ -257,6 +257,8 @@
     <string name="settings_ext_github_token_hint">トークンがない場合、GitHubは1時間に60回しか読めず、同じネットワーク上のすべての端末でその枠を共有します。GitHubトークンを設定すると5000回になり、公開リポジトリにも使えます（fine-grained tokenでPublic repositoriesを選び、権限は不要です）。</string>
     <string name="settings_ext_github_token_fill">トークンを設定</string>
     <string name="settings_ext_official_token_link">レート制限中？「マーケットの管理」でGitHubトークンを設定</string>
+    <string name="settings_ext_token_create_hint">トークンがない場合はGitHubで作成できます。名前・用途・1年の有効期限は入力済みで、権限は不要です。Generate tokenを押し、コピーして上に貼り付けてください。</string>
+    <string name="settings_ext_token_create">GitHubで作成</string>
     <string name="settings_ext_token_replace">新しいトークンを入力して置き換え</string>
     <string name="settings_ext_token_enter">トークンを入力</string>
     <string name="settings_ext_token_note">保存後、ハブは新しいトークンで%1$sを再度読み込みます。トークンはハブに暗号化して保存され、そのマーケットにだけ送られ、保存後は表示されません。</string>

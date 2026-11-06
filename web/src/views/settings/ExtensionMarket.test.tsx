@@ -101,5 +101,9 @@ describe("MarketCatalog rate-limited GitHub market", () => {
     act(() => fix!.click());
     await flush();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("「team」的 token");
+    // and how to get one: GitHub's token page, filled in
+    const create = [...document.querySelectorAll('[role="dialog"] a')].find((a) => a.textContent?.includes("去 GitHub 生成")) as HTMLAnchorElement | undefined;
+    expect(create?.href).toContain("https://github.com/settings/personal-access-tokens/new?");
+    expect(create?.target).toBe("_blank");
   });
 });

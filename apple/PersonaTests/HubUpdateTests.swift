@@ -66,6 +66,31 @@ struct HubUpdateTests {
         #expect(m.unsupported && m.loaded)
     }
 
+    /// A timeout or no network says so instead of spinning for good; a second load reads it (#3484).
+    @Test func anUnreachableHubSaysSo() async {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/hub/update") { _ in throw URLError(.timedOut) }
+        let m = model(hub)
+        await m.load()
+        #expect(m.status == nil && m.loaded && !m.unsupported)
+        #expect(m.error == HubUpdateModel.unreachable)
+        hub.on("GET", "/api/v1/hub/update", json: Self.available)
+        await m.load()
+        #expect(m.status?.installable == true && m.error == nil)
+    }
+
+    /// Not connected to a hub says so; a cancelled load (the page went away) says nothing.
+    @Test func noHubAndACancelledLoad() async {
+        let none = HubUpdateModel(deps: HubUpdateDeps(api: { nil }, report: { _ in }, publish: { _ in }))
+        await none.load()
+        #expect(none.error == HubUpdateModel.noHub && none.loaded)
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/hub/update") { _ in throw CancellationError() }
+        let m = model(hub)
+        await m.load()
+        #expect(m.status == nil && m.error == nil)
+    }
+
     @Test func compatibility() {
         #expect(HubCompat.of(nil, appBuild: 100) == .ok)
         #expect(HubCompat.of(HubHello(protocolVersion: 1, minAppBuild: 0), appBuild: 100) == .ok)

@@ -7,7 +7,7 @@ import { tRich } from "../../i18n/rich";
 import { useEffect, useRef, useState } from "react";
 import { previewBlocked } from "../../lib/extension-model";
 import { ago } from "../../lib/format";
-import { canUninstall, isGitMarket, itemState, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, specLabel, wantsGitHubToken, type CatalogItem, type Catalog, type Market } from "../../lib/extension-market";
+import { canUninstall, isGitMarket, itemState, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, specLabel, wantsGitHubToken, GITHUB_TOKEN_URL, isGitHubMarket, type CatalogItem, type Catalog, type Market } from "../../lib/extension-market";
 import { Button, cx, Dialog, IconButton, toast, useNow } from "../../ui/atoms";
 import { addMarket, AdminError, errorText, getCatalog, getMarkets, installExtension, previewFromMarket, refreshMarket, removeMarket, setMarketToken, upgradeExtension } from "../api";
 import { AdminIcon } from "../icons";
@@ -434,6 +434,14 @@ function TokenDialog({ market, onClose, onDone }: { market: Market | null; onClo
           autoComplete="new-password"
           hint={t("admin-pages-extensionmarket.token_save_hint")}
         />
+        {market && isGitHubMarket(market) && (
+          <div className="flex flex-wrap items-center gap-2 rounded-[8px] bg-hover px-3 py-2">
+            <p className="min-w-[200px] flex-1 text-[12px] leading-relaxed text-ink-3">{t("admin-pages-extensionmarket.token_create_hint")}</p>
+            <Button tone="secondary" icon="external" href={GITHUB_TOKEN_URL}>
+              {t("admin-pages-extensionmarket.token_create")}
+            </Button>
+          </div>
+        )}
         {error && <p className="text-[12.5px] leading-relaxed break-words text-red">{error}</p>}
       </div>
     </Dialog>

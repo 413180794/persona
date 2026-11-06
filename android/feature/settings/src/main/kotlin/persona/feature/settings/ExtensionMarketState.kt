@@ -30,8 +30,19 @@ internal enum class CatalogAction { Install, Upgrade, Uninstall }
  * A GitHub market read without a token: GitHub allows 60 reads an hour per address, shared by every device on the
  * same network, so offering it a read-only token is what gets the market read again (docs/extensions.md "Extension market").
  */
-internal fun wantsGitHubToken(market: ExtensionMarket): Boolean =
-    !market.hasToken && market.spec.trim().startsWith("github:", ignoreCase = true)
+internal fun wantsGitHubToken(market: ExtensionMarket): Boolean = !market.hasToken && isGitHubMarket(market.spec)
+
+/** A market read through GitHub's API (github:owner/repo), the kind a GitHub token is for. */
+internal fun isGitHubMarket(spec: String): Boolean = spec.trim().startsWith("github:", ignoreCase = true)
+
+/**
+ * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md「GitHub 限流」): a name, what it
+ * is for, a year. No permission: such a token always reads public repositories, which is what lifts the hourly limit.
+ */
+internal const val GitHubTokenUrl = "https://github.com/settings/personal-access-tokens/new" +
+    "?name=Persona%20hub%20extension%20markets" +
+    "&description=Lets%20a%20Persona%20hub%20read%20its%20GitHub%20extension%20markets%20%28read-only%29." +
+    "&expires_in=365"
 
 internal object CatalogText {
     fun standing(p: CatalogExtension): CatalogStanding = when {

@@ -30,6 +30,16 @@ struct MarketTokenHintTests {
         #expect(try market(spec: "github:example/market", token: false).official == nil) // a hub before #2351
     }
 
+    /// 去 GitHub 生成 opens GitHub's fine-grained token page filled in, inside GitHub's limits, asking no permission.
+    @Test func tokenPageIsFilledIn() throws {
+        let c = try #require(URLComponents(url: ExtensionMarketText.gitHubTokenURL, resolvingAgainstBaseURL: false))
+        #expect(c.host == "github.com" && c.path == "/settings/personal-access-tokens/new")
+        let q = Dictionary(uniqueKeysWithValues: (c.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+        #expect(!(q["name"] ?? "").isEmpty && (q["name"] ?? "").count <= 40)
+        #expect((1...366).contains(Int(q["expires_in"] ?? "") ?? 0))
+        #expect(q["contents"] == nil)
+    }
+
     @Test func hintSaysPublicReposToo() {
         #expect(ExtensionMarketText.gitHubTokenHint.contains("公开仓库也适用"))
     }

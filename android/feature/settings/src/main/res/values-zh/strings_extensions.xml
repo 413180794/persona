@@ -257,6 +257,8 @@
     <string name="settings_ext_github_token_hint">GitHub 不带 token 时每小时只能读 60 次，同一个网络里的设备共用这份额度。填一个 GitHub token 能到 5000 次，公开仓库也适用（fine-grained token 选 Public repositories，不用勾任何权限）。</string>
     <string name="settings_ext_github_token_fill">填 token</string>
     <string name="settings_ext_official_token_link">被限流了？去「管理市场」填一个 GitHub token</string>
+    <string name="settings_ext_token_create_hint">没有 token？在 GitHub 上生成一个：名字、用途和一年的有效期已经填好，不用勾任何权限，点 Generate token 后复制回来粘贴到上面。</string>
+    <string name="settings_ext_token_create">去 GitHub 生成</string>
     <string name="settings_ext_token_replace">输入新的 token 替换</string>
     <string name="settings_ext_token_enter">输入 token</string>
     <string name="settings_ext_token_note">保存后 hub 用新的 token 重新读一次 %1$s。token 加密存在 hub 上，只发给这个市场，存好后不再显示。</string>

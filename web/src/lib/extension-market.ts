@@ -165,7 +165,23 @@ export const marketKind = (spec: string): "github" | "git" | "web" => (spec.star
  * same network, so this is the market an error leaves fixable here. A token raises the limit to 5,000, public repos
  * included.
  */
-export const wantsGitHubToken = (m: Pick<Market, "spec" | "has_token">) => m.spec.startsWith("github:") && !m.has_token;
+export const wantsGitHubToken = (m: Pick<Market, "spec" | "has_token">) => isGitHubMarket(m) && !m.has_token;
+
+/** A market read through GitHub's API (github:owner/repo), the kind a GitHub token is for. */
+export const isGitHubMarket = (m: Pick<Market, "spec">) => m.spec.startsWith("github:");
+
+/**
+ * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md「GitHub 限流」): a name, what it
+ * is for, a year. It needs no permission at all: such a token always reads public repositories, which is what lifts the
+ * hourly limit; a private market's repository is chosen on that page.
+ */
+export const GITHUB_TOKEN_URL =
+  "https://github.com/settings/personal-access-tokens/new?" +
+  new URLSearchParams({
+    name: "Persona hub extension markets",
+    description: "Lets a Persona hub read its GitHub extension markets (read-only).",
+    expires_in: "365",
+  }).toString();
 
 /** The words under the add form's address field, and its placeholder: the three ways to write one. */
 export const MARKET_SPEC_PLACEHOLDER = t("lib-extension-market.spec_placeholder");

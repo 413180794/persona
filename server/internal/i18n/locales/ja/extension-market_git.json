@@ -1,0 +1,3 @@
+{
+  "git_missing": "ハブのマシンに git がありません。git マーケット（git:…、git@…、ssh://…）には git が必要です。github: と、インデックスの URL を直接指定する https:// マーケットには不要です。"
+}

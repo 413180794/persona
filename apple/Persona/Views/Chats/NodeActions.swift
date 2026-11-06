@@ -429,7 +429,7 @@ struct RunAgentHereSheet: View {
                     if let failure {
                         Text(failure).foregroundStyle(Theme.danger)
                     } else {
-                        Text("Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Agent.")
+                        Text("Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Session.")
                     }
                 }
             }

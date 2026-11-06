@@ -55,4 +55,25 @@ import Testing
         #expect(!m.unsupported && m.switches == nil)
         #expect(m.error == "没读到：助手没有连上")
     }
+
+    /// A timeout says so instead of spinning for good; reading again clears it (#3485).
+    @Test func aTimeoutSaysSoAndAReadAgainClearsIt() async {
+        var fail = true
+        let m = TriageSettingsModel(deps: .init(load: {
+            if fail { throw URLError(.timedOut) }
+            return TriageSwitches()
+        }, save: { $0 }))
+        await m.load()
+        #expect(m.switches == nil && m.error == "没读到：连不上 hub")
+        fail = false
+        await m.load()
+        #expect(m.switches == TriageSwitches() && m.error == nil)
+    }
+
+    /// A read cancelled because the page went away says nothing.
+    @Test func aCancelledReadSaysNothing() async {
+        let m = TriageSettingsModel(deps: .init(load: { throw CancellationError() }, save: { $0 }))
+        await m.load()
+        #expect(m.switches == nil && m.error == nil && !m.unsupported)
+    }
 }

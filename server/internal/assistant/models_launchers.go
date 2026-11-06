@@ -694,13 +694,14 @@ func (s *Service) launcherRoutes() {
 			} else if v.Source == "agy" {
 				v.Details = map[string]proto.LauncherDetail{}
 				for _, id := range v.Machines {
-					models := []proto.LauncherModel{{Role: "默认主模型", Env: "agy acp", Model: v.Model}}
+					l := s.lang(ctx)
+					models := []proto.LauncherModel{{Role: i18n.T(l, "assistant-models_launchers.role_default"), Env: "agy acp", Model: v.Model}}
 					if res, err := s.askLauncherModels(ctx, id, name, false); err == nil && len(res.Models) > 0 {
 						models = nil
 						for _, am := range res.Models {
-							role := "可选模型"
+							role := i18n.T(l, "assistant-models_launchers.role_optional")
 							if am.Default {
-								role = "默认主模型"
+								role = i18n.T(l, "assistant-models_launchers.role_default")
 							}
 							models = append(models, proto.LauncherModel{Role: role, Env: am.ID, Model: am.Name})
 						}

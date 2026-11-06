@@ -26,8 +26,9 @@ nonisolated enum ToolErrors {
         if let failure = error as? ToolFailure {
             switch failure.kind {
             case .denied:
-                return "没有权限：\(failure.message)。请在 iPhone 的 Persona › 设置 › 连接器 › 这台 iPhone 里授权。" // i18n-ignore
-                    + "\nPermission denied: \(failure.message). Grant access in Persona › Settings › Phone data on the iPhone."
+                return "没有权限：\(failure.message)。\(PhoneToolError.grantHint)" // i18n-ignore
+                    + "\nPermission denied: \(failure.message). Turn it on in Persona › Settings › Connectors › This iPhone on the phone; "
+                    + "if it was refused before, iOS will not ask again, so allow it in the iOS Settings app › Persona."
             case .invalidArgument:
                 return "参数错误 / Invalid argument: \(failure.message)" // i18n-ignore
             case .unavailable:

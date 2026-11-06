@@ -40,5 +40,7 @@
   "err_max_context_negative": "最大上下文不能是负数",
   "err_proxy": "代理要是 http(s):// 或 socks5:// 开头的地址",
   "err_proxy_credentials": "代理地址里不能带用户名和密码",
-  "err_tier_model_long": "档位模型的名字太长"
+  "err_tier_model_long": "档位模型的名字太长",
+  "role_default": "默认主模型",
+  "role_optional": "可选模型"
 }

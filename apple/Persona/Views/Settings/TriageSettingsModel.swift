@@ -30,7 +30,12 @@ import Observation
         } catch let e as APIError where e.status == 404 {
             unsupported = true
         } catch {
-            if switches == nil { self.error = error.shown.map { String(localized: "Couldn't load: \($0)") } }
+            // A timeout or no network has no `shown` text, and the page had nothing else to show: it spun for good
+            // with every switch greyed out (#3485). A cancelled read (the page went away) says nothing.
+            if switches == nil, !error.isCancellation {
+                let why = error.shown ?? String(localized: "Can't reach the hub")
+                self.error = String(localized: "Couldn't load: \(why)")
+            }
         }
     }
 

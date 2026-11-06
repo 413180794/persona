@@ -19146,6 +19146,29 @@
       },
       "extractionState": "manual"
     },
+    "Can't reach the hub to read its version": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach the hub to read its version"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub に接続できず、バージョンを読み取れません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上 hub，读不到它的版本"
+          }
+        }
+      }
+    },
     "Can't reach the hub%@. Make sure your phone can reach it (same network or VPN).": {
       "localizations": {
         "en": {
@@ -19376,28 +19399,28 @@
       },
       "extractionState": "manual"
     },
-    "Can't reach your iPhone. Open Persona on your iPhone, or go to Settings › Sync to Apple Watch.": {
+    "Can't reach your iPhone. Open Persona on your iPhone, or tap Sync to Apple Watch in its Settings.": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can't reach your iPhone. Open Persona on your iPhone, or go to Settings › Sync to Apple Watch."
+            "value": "Can't reach your iPhone. Open Persona on your iPhone, or tap Sync to Apple Watch in its Settings."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "iPhoneに接続できません。iPhoneでPersonaを開くか、設定 › Apple Watchに同期 を開いてください。"
+            "value": "iPhoneに接続できません。iPhoneでPersonaを開くか、iPhoneの設定で「Apple Watchに同期」をタップしてください。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "连不上 iPhone：打开 iPhone 上的 Persona，或在 设置 › 同步到 Apple Watch。"
+            "value": "连不上 iPhone：打开 iPhone 上的 Persona，或在它的 设置 里点「同步到 Apple Watch」。"
           }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "Can't reach “%@”; showing older data": {
       "localizations": {
@@ -30976,6 +30999,28 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Create on GitHub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create on GitHub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHubで作成"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去 GitHub 生成"
+          }
+        }
+      }
     },
     "Created %@": {
       "localizations": {
@@ -57480,29 +57525,6 @@
       },
       "extractionState": "manual"
     },
-    "No Claude running": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No Claude running"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "実行中のClaudeはありません"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有运行中的 Claude"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "No Data Yet": {
       "localizations": {
         "en": {
@@ -58101,6 +58123,28 @@
       },
       "extractionState": "manual"
     },
+    "No token yet? Create one on GitHub: the name, purpose and a one-year expiry are filled in and no permissions are needed. Tap Generate token, then paste it above.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No token yet? Create one on GitHub: the name, purpose and a one-year expiry are filled in and no permissions are needed. Tap Generate token, then paste it above."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トークンがない場合はGitHubで作成できます。名前・用途・1年の有効期限は入力済みで、権限は不要です。Generate tokenを押し、コピーして上に貼り付けてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有 token？在 GitHub 上生成一个：名字、用途和一年的有效期已经填好，不用勾任何权限，点 Generate token 后复制回来粘贴到上面。"
+          }
+        }
+      }
+    },
     "No Wrap · Scroll Sideways": {
       "localizations": {
         "en": {
@@ -58261,6 +58305,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "No agents running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No agents running"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "実行中のエージェントはありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有运行中的 Agent"
+          }
+        }
+      }
     },
     "No agents running [Machine Detail View 658973]": {
       "localizations": {
@@ -86934,24 +87001,24 @@
       },
       "extractionState": "manual"
     },
-    "Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Agent.": {
+    "Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Session.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Agent."
+            "value": "Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Session."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "選択したshellで起動し、新しいタブは開きません。Codexには最初のメッセージが必要なため、「新しいエージェント」を使ってください。"
+            "value": "選択したshellで起動し、新しいタブは開きません。Codexには最初のメッセージが必要なため、「新規セッション」を使ってください。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在选中的 shell 里启动，不新开标签页。Codex 需要第一条消息，请用「新建 Agent」。"
+            "value": "在选中的 shell 里启动，不新开标签页。Codex 需要第一条消息，请用「新建会话」。"
           }
         }
       },

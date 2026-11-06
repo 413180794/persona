@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // A git repository as a market (docs/extensions.md "Extension market"): the hub keeps a shallow clone in its data directory and
@@ -67,7 +69,7 @@ func (m *Market) git(ctx context.Context, dir string, args ...string) error {
 	}
 	out, err := cmd.CombinedOutput()
 	if errors.Is(err, exec.ErrNotFound) { // no output to show: say what is missing (the Docker image has no git)
-		return errors.New("hub 所在的机器上没有 git：git 市场（git:…、git@…、ssh://…）要用它，github: 和直接写索引地址的 https:// 市场不用")
+		return i18n.Err("extension-market_git.git_missing")
 	}
 	if err != nil {
 		msg := strings.TrimSpace(string(out))

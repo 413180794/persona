@@ -9,7 +9,7 @@ import { ago } from "../../lib/format";
 import {
   addMarket, agreeLabel, canUninstall, getCatalog, installPreview, isGitMarket, itemLine, itemState, listMarkets, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, previewFromMarket,
   previewVersion, refreshMarket, removeMarket, setMarketToken, specLabel, uninstallExtension, upgradePreview, wantsGitHubToken,
-  type Catalog, type CatalogItem, type Market, type MarketPreview,
+  GITHUB_TOKEN_URL, isGitHubMarket, type Catalog, type CatalogItem, type Market, type MarketPreview,
 } from "../../lib/extension-market";
 import { extensionDetail, extensionUpgrades, pointText, setExtensionUpgrades, type ExtensionPermission } from "../../lib/extensions";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast, useNow } from "../../ui/atoms";
@@ -979,6 +979,14 @@ function TokenDialog({ market, onClose, onDone }: { market: Market; onClose: () 
           className={cx(inputClass, "h-9 font-mono")}
         />
         <p className="text-[11.5px] leading-relaxed text-ink-3">{t("settings-extensionmarket.token_reload_note")}</p>
+        {isGitHubMarket(market) && (
+          <div className="mt-1 flex flex-wrap items-center gap-2 rounded-[8px] bg-hover px-3 py-2">
+            <p className="min-w-[200px] flex-1 text-[11.5px] leading-relaxed text-ink-3">{t("settings-extensionmarket.token_create_hint")}</p>
+            <Button tone="secondary" icon="external" href={GITHUB_TOKEN_URL}>
+              {t("settings-extensionmarket.token_create")}
+            </Button>
+          </div>
+        )}
         {error && <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">{t("settings-extensionmarket.not_saved", { error })}</p>}
         <button type="submit" hidden />
       </form>

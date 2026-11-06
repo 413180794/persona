@@ -54,6 +54,7 @@ struct TriageSettingsView: View {
             }
             await model?.load()
         }
+        .refreshable { await model?.load() }
     }
 
     private func toggle(_ key: WritableKeyPath<TriageSwitches, Bool>, _ title: String, _ hint: String, _ symbol: String,

@@ -367,7 +367,7 @@ struct WatchRootView: View {
                             }
                             .watchCard()
                         } else if model.sessions.isEmpty {
-                            Text("No Claude running").font(.footnote).foregroundStyle(.secondary)
+                            Text("No agents running").font(.footnote).foregroundStyle(.secondary)
                                 .watchCard()
                         }
                         ForEach(model.sessions) { s in
@@ -791,7 +791,7 @@ struct WatchSyncButton: View {
             .buttonStyle(.borderedProminent)
             .disabled(syncing)
             if failed {
-                Text("Can't reach your iPhone. Open Persona on your iPhone, or go to Settings › Sync to Apple Watch.").font(.caption2).foregroundStyle(Theme.cautionText)
+                Text("Can't reach your iPhone. Open Persona on your iPhone, or tap Sync to Apple Watch in its Settings.").font(.caption2).foregroundStyle(Theme.cautionText)
                     .multilineTextAlignment(.center)
             }
         }

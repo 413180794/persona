@@ -1,0 +1,3 @@
+{
+  "probe_tmp": "The sandbox probe could not create a temporary directory: {err}"
+}

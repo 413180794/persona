@@ -118,5 +118,7 @@
   "op_progress": "{done}/{total} ステップ",
   "official_unreachable": "今は公式の拡張機能を読み込めません。しばらくしてから試してください。",
   "official_token_link": "レート制限中？「マーケットを管理」でGitHubトークンを設定",
-  "market_unread": "マーケットを読み込めると、ここに拡張機能が表示されます。"
+  "market_unread": "マーケットを読み込めると、ここに拡張機能が表示されます。",
+  "token_create_hint": "トークンがない場合はGitHubで作成できます。名前・用途・1年の有効期限は入力済みで、権限は不要です。Generate tokenを押し、コピーして上に貼り付けてください。",
+  "token_create": "GitHubで作成"
 }

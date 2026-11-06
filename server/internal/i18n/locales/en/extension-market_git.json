@@ -1,0 +1,3 @@
+{
+  "git_missing": "The hub's machine has no git: git markets (git:…, git@…, ssh://…) need it; github: markets and https:// markets that name an index don't."
+}

@@ -309,4 +309,17 @@ class ExtensionMarketStateTest {
         assertNull(old.state.value.autoUpgrade)
         assertEquals(1, old.state.value.markets?.size)
     }
+
+    @Test
+    fun gitHubTokenPageIsFilledInAndAsksNoPermission() {
+        val u = java.net.URI(GitHubTokenUrl)
+        assertEquals("github.com", u.host)
+        assertEquals("/settings/personal-access-tokens/new", u.path)
+        val q = u.query.split("&").associate { it.substringBefore("=") to it.substringAfter("=") }
+        assertTrue(q.getValue("name").isNotEmpty() && q.getValue("name").length <= 40)
+        assertTrue(q.getValue("expires_in").toInt() in 1..366)
+        assertFalse("contents" in q)
+        assertTrue(isGitHubMarket(" github:example/extensions"))
+        assertFalse(isGitHubMarket("https://example.com/extensions/"))
+    }
 }

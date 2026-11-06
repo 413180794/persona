@@ -1,0 +1,3 @@
+{
+  "git_missing": "hub 所在的机器上没有 git：git 市场（git:…、git@…、ssh://…）要用它，github: 和直接写索引地址的 https:// 市场不用"
+}

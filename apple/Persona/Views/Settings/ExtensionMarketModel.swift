@@ -254,6 +254,16 @@ enum ExtensionMarketText {
     /// Under a GitHub market's error when it has no token: why a token helps a public repository too.
     static let gitHubTokenHint = String(localized: "Without a token, GitHub allows only 60 reads an hour, shared by every device on your network. A GitHub token raises that to 5,000, public repos included (a fine-grained token with Public repositories and no permissions is enough).")
 
+    /// GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md「GitHub 限流」): a name, what
+    /// it is for, a year. No permission: such a token always reads public repositories, which is what lifts the limit.
+    static let gitHubTokenURL: URL = {
+        var c = URLComponents(string: "https://github.com/settings/personal-access-tokens/new")!
+        c.queryItems = [URLQueryItem(name: "name", value: "Persona hub extension markets"),
+                        URLQueryItem(name: "description", value: "Lets a Persona hub read its GitHub extension markets (read-only)."),
+                        URLQueryItem(name: "expires_in", value: "365")]
+        return c.url!
+    }()
+
     /// A market's line: how many plugins, when it was read.
     static func marketSummary(_ m: ExtensionMarket) -> String {
         var parts = [String(localized: "\(m.plugins ?? 0) extensions")]
