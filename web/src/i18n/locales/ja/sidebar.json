@@ -129,6 +129,5 @@
   "auto_chats_label": "自動のチャット {count} 件",
   "auto_working": "{count} 件実行中",
   "auto_needs_you": "{count} 件が対応待ち",
-  "not_connected_yet": "未接続",
-  "main_chat": "メインチャット"
+  "not_connected_yet": "未接続"
 }

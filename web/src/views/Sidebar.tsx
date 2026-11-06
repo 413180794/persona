@@ -63,7 +63,6 @@ import { SessionMark } from "../ui/AgentMark";
 import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
-import { PersonaAvatar } from "./assistant/Persona";
 import { FoldScope, useFolded } from "../lib/use-folded";
 import { clipsOverflow, glideBox, glideStyle, sameBox, type GlideBox, type Span } from "../lib/glide";
 import { AGENTS_FOLD, onGrouping, setAgentsFolded } from "../lib/sidebar-api";
@@ -290,9 +289,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const pinnedIds = usePinnedConversations();
   const { pinned: pinnedConvs, recent } = sidebarConversations(assistant?.conversations ?? [], assistant?.main, pinnedIds, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
   const convs = [...pinnedConvs, ...recent];
-  // 「Persona 对话」is drawn while the first load is out too, so the main row does not jump into it once it is in (#2824)
-  const loaded = useStore((s) => s.loaded);
-  const chats = !!assistant || !loaded;
+  // the main row sits above the pages, so「Persona 对话」waits for the assistant (a hub without it has none)
+  const chats = !!assistant;
   // a conversation row's ⋯ / right click (iOS: its long press), and the section title's 全部取消置顶
   const [convMenu, setConvMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
   const onConvMenu: RowMenuFn = (s, anchor, at) => setConvMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
@@ -322,8 +320,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
       <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
         {highlight}
         <div className="flex flex-col gap-px pt-1">
-          {/* a hub without the assistant has no「Persona 对话」to put it in */}
-          {!chats && <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} />}
+          {/* the main conversation is the column's first row, Persona with the app's mark, and only there (#2004, #5109) */}
+          <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />
+          <span aria-hidden data-persona-divider className="mx-2 my-1 h-px shrink-0 bg-line" />
           {narrow && <NavGrid pages={pages} activeKey={activeKey} go={go} />}
         </div>
         {!narrow && (
@@ -337,10 +336,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
             title={t("sidebar.persona_chats")}
             folded={jarvisFolded}
             onToggle={toggleJarvis}
-            // while the first load is out only the main row: a hub without the assistant has no new chat or 全部对话
-            right={assistant ? <SectionAdd label={t("sidebar.new_chat")} to={{ name: "persona-new" }} go={go} /> : undefined}
-            // the main conversation is its first row, on show however the section is folded (#2824)
-            lead={<PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} badge onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />}
+            right={<SectionAdd label={t("sidebar.new_chat")} to={{ name: "persona-new" }} go={go} />}
           >
             {pinnedConvs.length > 0 && <PinnedHeading onMenu={(at) => setChatsMenu(at)} />}
             {convs.map((c) => (
@@ -868,8 +864,7 @@ function AutoConversations({ conversations, main, shown, activeKey, holds, reg, 
   );
 }
 
-/** `lead`: rows that stay on show when the section is folded (the main conversation, #2824). */
-function Section({ title, children, folded, onToggle, right, onMenu, first, hint, lead }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean; hint?: string; lead?: React.ReactNode }) {
+function Section({ title, children, folded, onToggle, right, onMenu, first, hint }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean; hint?: string }) {
   return (
     <div className={first ? "mt-1" : "mt-3"}>
       <div className="group/sec relative flex items-center gap-1 px-2 pb-1" {...(onMenu ? contextMenuProps(onMenu) : {})}>
@@ -881,7 +876,6 @@ function Section({ title, children, folded, onToggle, right, onMenu, first, hint
       </div>
       {/* a group whose name does not say why its agents are here (没挂待办的, 在终端里开的) says it in one line, folded too */}
       {hint && <p className="px-2 pb-1 text-[11px] leading-[1.45] text-ink-3">{hint}</p>}
-      {lead}
       <Collapse open={!folded}>
         <div className="flex flex-col gap-px" inert={folded || undefined}>{children}</div>
       </Collapse>
@@ -1538,11 +1532,10 @@ type RowMenuFn = (s: Session, anchor: HTMLElement, at?: MenuAt) => void;
 /** A machine's, a workspace's or a tab's menu (src/lib/node-actions.ts); `toggle`: from its ⋯, which closes it again. */
 type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean) => void;
 
-// Persona's main conversation: the first and strongest entry (its face, always in ink), with the conversation's state
-// when it is working or wants you.
+// Persona's main conversation: the column's first and strongest entry (the app's mark, always in ink, #2004), with the
+// conversation's state when it is working or wants you. A line under it parts it from the pages.
 // Its menu (拷贝会话 ID, 结束…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
-/** `badge`: labelled 主对话, as the first row of「Persona 对话」(#2824). */
-export function PersonaRow({ reg, hover, active, go, main, onMenu, badge }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void; badge?: boolean }) {
+export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
   const to: Route = { name: "jarvis" };
   const st = main ? stateOf(main) : undefined;
   const pending = main?.pending_interactions ?? 0;
@@ -1563,18 +1556,10 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu, badge }: { re
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
       title={t("sidebar.persona_main")}
-      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", !onMenu && "mb-1", active && CURRENT_ROW, onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
     >
-      <PersonaAvatar
-        size={18}
-        fallback={
-          <span className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-ink text-surface">
-            <Icon name="spark" size={11} stroke={2} />
-          </span>
-        }
-      />
+      <AppMark size={18} radius={5} className="shadow-hairline" />
       <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
-      {badge && <span className={cx("shrink-0 whitespace-nowrap rounded-full bg-accent-tint px-1.5 text-[10.5px] font-medium leading-4 text-accent-ink", aside)}>{t("sidebar.main_chat")}</span>}
       {pending > 0 ? (
         <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums", aside)}>{pending}</span>
       ) : st === "working" || st === "needs_you" || st === "unread" ? (
@@ -1584,7 +1569,7 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu, badge }: { re
   );
   if (!onMenu) return link;
   return (
-    <div className="group/row relative mb-1">
+    <div className="group/row relative">
       {link}
       <button
         type="button"
@@ -2125,7 +2110,7 @@ export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onS
           "persona",
           { name: "jarvis" },
           pending > 0 ? `Persona ${pending}` : "Persona",
-          <PersonaAvatar size={20} fallback={<span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-ink text-surface"><Icon name="spark" size={12} stroke={2} /></span>} />,
+          <AppMark size={20} radius={5} className="shadow-hairline" />,
           pending > 0 ? <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-red ring-2 ring-canvas" />
             : st === "working" || st === "needs_you" || st === "unread" ? <span aria-hidden className="absolute top-0.5 right-0.5 flex rounded-full ring-2 ring-canvas"><StatusMark state={st} /></span> : null,
           t("sidebar.persona_main"),

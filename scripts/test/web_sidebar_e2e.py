@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of the web sidebar's entries (#1239): Persona opens the main conversation, the one-off new
+"""End-to-end check of the web sidebar's entries (#1239, #5109): Persona, the column's first row, opens the main conversation, the one-off new
 conversation and 新建 Agent are the「+」of their sections, and the old links still land where they should.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome):
@@ -66,20 +66,31 @@ def run(browser, base, token, main_id, other, shots):
     assert path_of(page) == "/", path_of(page)
     ok("/ opens the main conversation, Persona selected")
 
-    # Persona is the first row of「Persona 对话」, with the 主对话 badge (#2824).
-    chats = page.locator("aside .group\\/sec", has=page.locator("button", has_text="Persona 对话"))
-    lead = chats.locator("xpath=following-sibling::*[1]")
-    expect(lead.locator("xpath=descendant-or-self::a[@title='Persona 的主对话']")).to_have_count(1)
-    expect(lead.get_by_text("主对话", exact=True)).to_have_count(1)
-    ok("Persona is the first row of「Persona 对话」, with the 主对话 badge")
-    # folding「Persona 对话」keeps the main row on show
-    head = chats.locator("button[aria-expanded]").first
-    head.click()
-    expect(head).to_have_attribute("aria-expanded", "false")
-    expect(persona).to_be_visible()
-    head.click()
-    expect(head).to_have_attribute("aria-expanded", "true")
-    ok("folded,「Persona 对话」still shows the main row")
+    # Persona, with the app's mark, is the column's first row, a line under it, above the pages (#2004, #5109).
+    first = page.locator("aside [data-sidebar-rows] a").first
+    expect(first).to_have_attribute("title", "Persona 的主对话")
+    expect(first.locator('img[src$="/app-icon.png"], img[src$="/app-icon-dark.png"]')).to_have_count(2)
+    expect(first.get_by_text("主对话", exact=True)).to_have_count(0)
+    expect(page.locator("aside [data-persona-divider]")).to_have_count(1)
+    below = page.evaluate("""() => {
+      const line = document.querySelector('aside [data-persona-divider]').getBoundingClientRect();
+      const row = document.querySelector('aside a[title="Persona 的主对话"]').getBoundingClientRect();
+      const pages = [...document.querySelectorAll('aside button')].find((b) => b.textContent.trim() === '页面').getBoundingClientRect();
+      return row.bottom <= line.top && line.bottom <= pages.top;
+    }""")
+    assert below, "the line is not between Persona and the pages"
+    chats = page.locator("aside .group\\/sec", has=page.locator("button", has_text="Persona 对话")).locator("xpath=..")
+    expect(chats.locator(PERSONA)).to_have_count(0)
+    ok("Persona + app mark is the first row, a line under it, above the pages; not in「Persona 对话」")
+    # folding「Persona 对话」and 页面 keeps the main row on show
+    for title in ("Persona 对话", "页面"):
+        head = page.locator("aside button[aria-expanded]", has_text=title).first
+        head.click()
+        expect(head).to_have_attribute("aria-expanded", "false")
+        expect(persona).to_be_visible()
+        head.click()
+        expect(head).to_have_attribute("aria-expanded", "true")
+    ok("folding「Persona 对话」or 页面 leaves the main row on show")
 
     # 2. 总览 and back to Persona.
     page.locator('aside a[href="/overview"]').click()
@@ -92,7 +103,8 @@ def run(browser, base, token, main_id, other, shots):
 
     # 3. The main conversation is not listed twice.
     expect(page.locator(f'aside a[href="/j/{main_id}"]')).to_have_count(0)
-    expect(page.locator("aside").get_by_text("主对话", exact=True)).to_have_count(1)  # only the badge
+    expect(page.locator(PERSONA)).to_have_count(1)
+    expect(page.locator("aside").get_by_text("主对话", exact=True)).to_have_count(0)
     ok("the main conversation has one entry")
 
     if shots:
@@ -152,6 +164,7 @@ def run(browser, base, token, main_id, other, shots):
         page.locator("main").get_by_role("button", name="侧边栏").first.click()
         persona = page.locator(PERSONA)
         expect(persona).to_be_in_viewport()
+        expect(page.locator("aside [data-sidebar-rows] a").first).to_have_attribute("title", "Persona 的主对话")
         if shots:
             page.wait_for_timeout(500)
             page.screenshot(path=os.path.join(shots, f"narrow-drawer-{theme}.png"))
@@ -162,7 +175,7 @@ def run(browser, base, token, main_id, other, shots):
             page.wait_for_timeout(800)
             page.screenshot(path=os.path.join(shots, f"narrow-persona-{theme}.png"))
         ctx.close()
-    ok("narrow: the drawer's「Persona 对话」starts with Persona, which opens the main conversation and closes the drawer")
+    ok("narrow: the drawer starts with Persona, which opens the main conversation and closes the drawer")
 
 
 if __name__ == "__main__":

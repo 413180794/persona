@@ -195,12 +195,11 @@ describe("the Agents list menu (#3027)", () => {
   });
 });
 
-describe("the main conversation in「Persona 对话」(#2824)", () => {
-  const conv = (id: string, title: string): Session => ({ machine_id: "hub", session_id: id, title, cwd: "/", status: "idle", state: "idle", assistant: true });
+describe("the main conversation: the column's first row, Persona with the app's mark (#2004, #5109)", () => {
+  const conv = (id: string, title: string): Session => ({ machine_id: "hub", session_id: id, title, cwd: "/", status: "idle", state: "idle", assistant: true, pending_interactions: id === "main" ? 2 : 0 });
   const assistant: AssistantInfo = { machine_id: "hub", main: "main", conversations: [conv("main", "Persona"), conv("c1", "整理周报")] };
   const block = (title: string) => button(title)!.closest(".mt-1, .mt-3") as HTMLElement;
-  // the rows under a block's title (its「+」is on the title line)
-  const rows = (title: string) => [...block(title).querySelectorAll("a")].filter((a) => !button(title)!.parentElement!.contains(a));
+  const mainRow = () => host.querySelector<HTMLAnchorElement>('a[title="Persona 的主对话"]')!;
   const load = async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       const body = new URL(url, "http://x").pathname === "/api/v1/assistant" ? assistant : {};
@@ -211,25 +210,41 @@ describe("the main conversation in「Persona 对话」(#2824)", () => {
     await flush();
   };
 
-  it("is its first row, labelled 主对话, and listed only there", async () => {
+  it("is the first row, above the pages, with the app's mark, a line under it, and nowhere else", async () => {
     await load();
-    const [first, second] = rows("Persona 对话");
-    expect(first.title).toBe("Persona 的主对话");
-    expect([...first.querySelectorAll("span")].map((s) => s.textContent)).toContain("主对话");
-    expect(second.textContent).toContain("整理周报");
+    const rows = [...host.querySelectorAll<HTMLAnchorElement>("[data-sidebar-rows] a")];
+    expect(rows[0]).toBe(mainRow());
+    expect(mainRow().textContent).toContain("Persona");
+    expect(mainRow().textContent).not.toContain("主对话");
+    expect(mainRow().querySelector('img[src$="/app-icon.png"]')).not.toBeNull();
+    expect(mainRow().textContent).toContain("2"); // its pending count
+    // the line parts it from the pages, which come after it
+    const line = host.querySelector("[data-persona-divider]")!;
+    expect(mainRow().compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(line.compareDocumentPosition(button("页面")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(host.querySelectorAll('a[title="Persona 的主对话"]')).toHaveLength(1);
+    expect(host.querySelectorAll("[data-persona-divider]")).toHaveLength(1);
     expect(host.querySelector('a[href="/j/main"]')).toBeNull();
+    // 「Persona 对话」starts with the other conversations, the main one not in it
+    expect(block("Persona 对话").querySelector('a[title="Persona 的主对话"]')).toBeNull();
+    expect(block("Persona 对话").textContent).toContain("整理周报");
+    // its ⋯ opens the conversation's menu
+    expect(mainRow().parentElement!.querySelector('button[aria-label="对话的操作"]')).not.toBeNull();
   });
 
-  it("stays on show when the block is folded, the other conversations folded away", async () => {
+  it("stays on show however 页面 and「Persona 对话」are folded", async () => {
     await load();
-    const title = button("Persona 对话")!;
-    act(() => title.click());
-    expect(title.getAttribute("aria-expanded")).toBe("false");
-    expect(localStorage.getItem("fold:jarvis")).toBe("1");
-    const main = block("Persona 对话").querySelector<HTMLElement>('a[title="Persona 的主对话"]')!;
-    expect(main).not.toBeNull();
-    expect(main.closest("[inert]")).toBeNull();
-    expect(rows("Persona 对话").find((a) => a.textContent?.includes("整理周报"))!.closest("[inert]")).not.toBeNull();
+    act(() => button("Persona 对话")!.click());
+    act(() => button("页面")!.click());
+    expect(mainRow()).not.toBeNull();
+    expect(mainRow().closest("[inert]")).toBeNull();
+  });
+
+  it("is drawn while the first load is out, before the hub answers", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    expect(host.querySelector("[data-sidebar-rows] a")).toBe(mainRow());
+    expect(host.querySelector("[data-persona-divider]")).not.toBeNull();
   });
 });

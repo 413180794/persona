@@ -117,6 +117,8 @@ export function useLookIcon(): LookIcon | null {
       return () => listeners.delete(l);
     },
     () => icon,
+    // a static render (the row tests) draws the app icon
+    () => null,
   );
 }
 
