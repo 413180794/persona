@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -90,7 +91,10 @@ func (n *Node) readFile(path, cwd string, offset int64, stream bool) (*FileConte
 		}
 		return fc, nil
 	}
-	if offset < 0 || offset > st.Size() {
+	// A regular file whose size is 0 can still have content: Linux's /proc and /sys make theirs up as they are read
+	// (#4172). Such a file is read to its end, a page at a time like any other; its size says nothing about the offset.
+	madeUp := st.Size() == 0 && st.Mode().IsRegular()
+	if offset < 0 || (!madeUp && offset > st.Size()) {
 		return nil, fmt.Errorf("offset %d is outside the file (%d bytes)", offset, st.Size())
 	}
 	f, err := os.Open(real)
@@ -108,10 +112,27 @@ func (n *Node) readFile(path, cwd string, offset int64, stream bool) (*FileConte
 			}
 		}
 	}
-	buf := make([]byte, min(st.Size()-offset, maxFileBytes))
-	nr, _ := f.ReadAt(buf, offset)
-	buf = buf[:nr]
-	more := st.Size() > offset+int64(nr)
+	var buf []byte
+	var more bool
+	if madeUp {
+		// One byte past the page says whether there is more; a device (size 0, not regular) is never read: /dev/zero
+		// does not end.
+		var r io.Reader = io.NewSectionReader(f, offset, maxFileBytes+1)
+		if offset == 0 {
+			r = io.LimitReader(f, maxFileBytes+1) // a plain read from the start, which every such file allows
+		}
+		buf, _ = io.ReadAll(r)
+		if more = len(buf) > maxFileBytes; more {
+			buf = buf[:maxFileBytes]
+		} else {
+			fc.Size = offset + int64(len(buf)) // as far as it goes: what the viewer shows as its size
+		}
+	} else {
+		buf = make([]byte, min(st.Size()-offset, maxFileBytes))
+		nr, _ := f.ReadAt(buf, offset)
+		buf = buf[:nr]
+		more = st.Size() > offset+int64(nr)
+	}
 	fc.Mime = fileMime(path, buf[:min(len(buf), sniffBytes)])
 	// Text is valid UTF-8 (a page may cut the last character) with no NUL bytes.
 	if bytes.IndexByte(buf, 0) < 0 && (utf8.Valid(buf) || (more && utf8.Valid(trimPartialRune(buf)))) {

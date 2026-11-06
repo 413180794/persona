@@ -53,6 +53,14 @@ var dataSecrets = []string{"hub.json", "link.json", "tailcat.json", "tailcat-hub
 // dataSecretDirs are folders in the data folder refused whole: the launchers' merged settings hold their tokens.
 var dataSecretDirs = []string{"launcher-settings"}
 
+// procSecrets are what Linux's /proc holds besides the processes' own folders that hands out a secret: the kernel's
+// memory, its log, its symbols' addresses, the keyrings' entries and the page tables (#4172).
+var procSecrets = []string{"kcore", "kmem", "kmsg", "kallsyms", "keys", "key-users", "kpagecount", "kpageflags", "kpagecgroup"}
+
+// sysSecretDirs are folders in Linux's /sys refused whole: firmware variables, kernel debugging, tracing and security
+// policy.
+var sysSecretDirs = []string{"firmware", "kernel/debug", "kernel/security", "kernel/tracing"}
+
 // fold compares paths as macOS's default file system does: case-insensitively.
 func fold(p string) string { return strings.ToLower(filepath.ToSlash(p)) }
 
@@ -65,7 +73,7 @@ func (n *Node) offLimits(path string) error {
 		return errICloud
 	}
 	p := fold(path)
-	if keyNames[filepath.Base(p)] {
+	if keyNames[filepath.Base(p)] || pseudoFSSecret(p) {
 		return errOffLimits
 	}
 	// The hub's, the node's and the managers' own folders: the credentials in them and the keys beside them (secret.key,
@@ -104,6 +112,39 @@ func (n *Node) offLimits(path string) error {
 		}
 	}
 	return nil
+}
+
+// pseudoFSSecret says whether the folded path p is a secret Linux's /proc or /sys makes up as it is read (#4172).
+// Every process's own folder is refused whole (/proc/<pid>, self, thread-self): its environment (API keys and tokens,
+// the hub's and the agents' own among them), command line, memory, maps and open files, and root and cwd, which lead
+// back into the whole file system as that process sees it. Files about the machine (cpuinfo, meminfo, loadavg, net/…)
+// stay readable.
+func pseudoFSSecret(p string) bool {
+	if rest, ok := strings.CutPrefix(p, "/proc/"); ok {
+		first, _, _ := strings.Cut(rest, "/")
+		return first == "self" || first == "thread-self" || isPID(first) || slices.Contains(procSecrets, first)
+	}
+	if rest, ok := strings.CutPrefix(p, "/sys/"); ok {
+		for _, d := range sysSecretDirs {
+			if rest == d || strings.HasPrefix(rest, d+"/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isPID: a /proc entry named by a process id.
+func isPID(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // inDataDir says whether the folded path p is in a data folder, and where in it: one named .persona or .jarvis

@@ -157,6 +157,8 @@ struct SyntaxTests {
         #expect(SyntaxLanguage.detect(name: "docker/Dockerfile.dev")?.id == "dockerfile")
         #expect(SyntaxLanguage.detect(name: "Makefile")?.id == "makefile")
         #expect(SyntaxLanguage.detect(name: ".env.local")?.id == "ini")
+        #expect(SyntaxLanguage.detect(name: ".env")?.id == "ini")
+        #expect(SyntaxLanguage.detect(name: "app/.envrc")?.id == "shell")
         #expect(SyntaxLanguage.detect(name: "deploy", firstLine: "#!/usr/bin/env bash")?.id == "shell")
         #expect(SyntaxLanguage.detect(name: "tool", firstLine: "#!/usr/bin/env python3")?.id == "python")
         #expect(SyntaxLanguage.detect(name: "Info.plist")?.id == "xml")

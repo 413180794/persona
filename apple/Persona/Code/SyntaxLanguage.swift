@@ -392,7 +392,8 @@ nonisolated extension SyntaxLanguage {
         if ["podfile", "gemfile", "rakefile", "fastfile", "appfile", "brewfile", "vagrantfile", "guardfile"].contains(lower) { return ruby }
         if lower == "cmakelists.txt" { return cmake }
         if lower == "jenkinsfile" { return java }
-        if lower.hasPrefix(".env") || [".gitignore", ".dockerignore", ".npmrc", ".gitattributes", ".gitmodules"].contains(lower) { return ini }
+        // .envrc is direnv's shell script (below), not a .env file.
+        if (lower.hasPrefix(".env") && lower != ".envrc") || [".gitignore", ".dockerignore", ".npmrc", ".gitattributes", ".gitmodules"].contains(lower) { return ini }
         if [".bashrc", ".zshrc", ".profile", ".bash_profile", ".zprofile", ".zshenv", ".bash_aliases", ".envrc"].contains(lower) { return shell }
         if ["go.mod", "go.sum", "cargo.lock", "package-lock.json"].contains(lower) {
             return lower.hasSuffix(".json") ? json : (lower == "cargo.lock" ? toml : nil)
