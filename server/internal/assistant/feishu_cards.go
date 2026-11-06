@@ -1049,11 +1049,15 @@ func (s *Service) feishuAgentDone(machine string, sess proto.Session, head, text
 		}
 		return n
 	}
-	clipped := len([]rune(text)) > agentDoneClip
 	limit := agentDoneClip
-	var card *feishubot.Card
+	var (
+		card    *feishubot.Card
+		body    string
+		clipped bool
+	)
 	for { // a chart-laden answer can render wide: halve the body until the card fits Feishu's limit
-		body := clip(text, limit)
+		body = clip(text, limit)
+		clipped = len([]rune(text)) > limit
 		card = feishubot.NewCard(head, color, head).Markdown(feishubot.CardMarkdown(body)).
 			Note(note(clipped)).Buttons(s.openButton(ctx, machine, session))
 		if len(card.JSON()) <= answerCardMaxBytes || limit <= agentDoneClip/8 {
@@ -1061,7 +1065,6 @@ func (s *Service) feishuAgentDone(machine string, sess proto.Session, head, text
 		}
 		limit /= 2
 	}
-	body := clip(text, limit)
 	fallback := fallbackText.Replace(head) + "\n\n" + fallbackText.Replace(body) + "\n" + fallbackText.Replace(note(clipped))
 	mid, err := s.botPost(ctx, "", card, strings.TrimSpace(fallback))
 	if err != nil {

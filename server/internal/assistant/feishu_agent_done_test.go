@@ -180,3 +180,30 @@ func TestFeishuAgentDoneLongResult(t *testing.T) {
 		t.Fatalf("long result is not marked as cut short:\n%s", card)
 	}
 }
+
+// When the card's JSON size exceeds answerCardMaxBytes and gets halved, the note and fallback
+// must mark it as cut short even if the original text was <= agentDoneClip (#4944).
+func TestFeishuAgentDoneHalvedCardMarksClipped(t *testing.T) {
+	ft := newFleetTest(t)
+	fastDone(ft)
+	answerAgentDoneBot(ft, true)
+	sess := agentSession()
+	sess.Title = strings.Repeat("A", 27000)
+	// 600 runes <= agentDoneClip (1000), but with wide title it exceeds answerCardMaxBytes
+	// on the first iteration and limit is halved to 500 runes.
+	sess.LastText = strings.Repeat("字", 600)
+	driveAgentDone(ft, sess)
+	posts := waitAgentDonePosts(ft, 1)
+	if len(posts) != 1 {
+		t.Fatalf("posted %d cards, want 1", len(posts))
+	}
+	card, _ := posts[0]["card"].(string)
+	if !strings.Contains(card, "只发了开头") {
+		t.Fatalf("halved card is missing cut short notice:\n%s", card)
+	}
+	fallback, _ := posts[0]["fallback"].(string)
+	if !strings.Contains(fallback, "只发了开头") {
+		t.Fatalf("halved fallback is missing cut short notice:\n%s", fallback)
+	}
+}
+
