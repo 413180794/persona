@@ -5,7 +5,7 @@
 // program only talks to WeChat: it receives, sends what the hub gives it (channel.send) and shows "typing…".
 //
 // It is a plugin like any other: it speaks the plugin protocol through the Go SDK (sdk/go: ext and the
-// schema/extension wire types) and depends on nothing of the server's (plugins_guard_test.go). It keeps its own in
+// schema/extension wire types) and uses no other code of this repository (plugins/guard_test.go). It keeps its own in
 // one sealed blob in the hub (the connector's secrets): the bot token, the polling cursor and the owner's latest
 // context token, so a restart picks up where it was.
 package wechat

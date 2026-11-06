@@ -620,3 +620,18 @@ On a Linux development machine without the Android SDK or Xcode, pure-logic clie
 The Mac-only `test_hub_restart_mac.py` fixture used an empty, non-executable `jarvisd` file. After blue-green switching was added, `hub-systemd.sh` executed it before restarting launchd. With `set -e`, macOS bash 3.2 returned 1 for `"$f" … || rc=$?`, which the script interpreted as a failed switch, rather than 126 for an executable failure. Bash 5 returned 126.
 
 Use an executable fixture that logs calls and returns the documented result: 0 for a successful switch, 3 for no edge to switch. Assert that success avoids launchd and that the no-edge case restarts only the hub agent, skipping node agents. Run this Mac-only suite on macOS; Linux CI skips it: `cd scripts/test && python3 -B -m unittest -v test_hub_restart_mac`.
+
+## Import guards read source files, not `go list` (2026-11-06, #5814)
+
+`go list -deps` resolves imports for the host's GOOS / GOARCH and no build tags, so a `server/internal` import in a `_darwin.go` file, a `//go:build public` file (release builds use `-tags public`) or a `//go:build ignore` generator passed the plugin guard on Linux. A guard that must hold for every build parses each `.go` file's imports with `go/parser` (`parser.ImportsOnly`), whatever its constraints, and keeps `go list` as a second view of indirect dependencies, run for every GOOS / GOARCH pair the server ships and every set of build tags it is built with (with `CGO_ENABLED=0`, as the builds are made): an `_arm64.go` file is as invisible to an amd64 host as a `_darwin.go` file is to Linux, and a `// +build !public` line still counts.
+
+Walking files has pitfalls of its own. Reviews of `server/plugins/guard_test.go` found each of these: the first six let plugin or internal code into a binary unseen, the last two failed on code that is fine.
+
+- The go tool leaves `testdata`, `_x` and `.x` directories out of `./...` patterns, but a package there can still be imported by its explicit path: scan them too.
+- `filepath.WalkDir` does not follow a linked directory: a link to a plugin from `internal/` builds the plugin into the hub unseen. Check where every link to code leads, including into a nested module the walk skips (the go tool builds it as the server's through the link).
+- A module prefix written with a trailing slash (`…/server/`) never matches the module's root package.
+- A package in the directory that holds the plugins (`server/plugins` itself) is a way around "only programs import a plugin".
+- Go's `internal` rule limits only who imports the internal package itself: a package next to it can re-export it to anyone. Hold a program's whole tree to itself instead: no package outside `cmd/<x>` imports one of `cmd/<x>`'s, and no link from outside leads into it.
+- A package the guard lets through by its path (the SDK) must be read the same way: a link or a tagged file in it reaches past the guard. Likewise a local `replace` or a `go.work` module is this repository's code under another path: judge `go list` results by `.Dir` as well as by import path, for local code only (the main module and directory replacements: a module cache may sit inside a checkout). A `replace` by a published version of this repository's own module has no local directory to judge: refuse it in go.mod and go.work. And since a published module could import a plugin by its path, the programs that run no plugin are held to `go list -deps` too.
+- Decide what a directory is (a plugin's program or not) from its non-test files: a test importing a plugin is not linked into a program.
+- Skip files whose names start with `.` or `_` (the go tool never builds them; editors leave lock files so named), but not directories so named.

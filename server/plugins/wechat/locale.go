@@ -12,8 +12,8 @@ import (
 //go:embed locales/*.json
 var localeFiles embed.FS
 
-// The languages the hub sends that are not one of these files fall back as the hub's catalogs do: none said is
-// defaultLang, one the plugin has no file for is English.
+// The hub sends one of its own languages (or none): none said is defaultLang, as the hub's default; a hub language the
+// plugin has no file for is English, as the hub's fallback for a text a language lacks.
 const (
 	langEn      = "en"
 	langZhHans  = "zh-Hans"
