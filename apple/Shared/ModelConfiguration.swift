@@ -43,6 +43,11 @@ nonisolated struct ModelPurpose: Codable, Hashable, Identifiable, Sendable {
     }
 
     func supports(_ field: String) -> Bool { (fields ?? ["provider", "model"]).contains(field) }
+
+    /// Explicit capabilities allow a child to own a binding without pretending to be a category.
+    var hasWritableFields: Bool {
+        fields?.contains(where: { ["provider", "model", "effort", "runtime"].contains($0) }) == true
+    }
 }
 
 /// The hub stopped calling a connection after the upstream said its quota is used up or it is busy, until `until`

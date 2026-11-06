@@ -48818,6 +48818,121 @@
         }
       }
     },
+    "Categories provide defaults. A separately configured use keeps its own settings. Changes take effect from the next run.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categories provide defaults. A separately configured use keeps its own settings. Changes take effect from the next run."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カテゴリの設定が既定値になります。個別に設定した用途は、その設定を使います。変更は次の実行から適用されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分类提供默认设置。单独配置的用途使用自己的设置。修改从下次运行起生效。"
+          }
+        }
+      }
+    },
+    "Configuration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuration"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置方式"
+          }
+        }
+      }
+    },
+    "Follow Agents": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow Agents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agents に従う"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随 Agents"
+          }
+        }
+      }
+    },
+    "Only applies to Lark /agent, not other Agents. Empty fields follow Agents. Changing the provider clears the previous model and thinking effort. Choose Follow Agents and save to clear the independent settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only applies to Lark /agent, not other Agents. Empty fields follow Agents. Changing the provider clears the previous model and thinking effort. Choose Follow Agents and save to clear the independent settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lark /agent のみに適用され、他の Agents には影響しません。空欄は Agents の設定に従います。プロバイダーを変更すると、以前のモデルと思考量がクリアされます。「Agents に従う」を選んで保存すると、個別設定を解除できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅用于飞书 /agent，不影响其他 Agents。留空的字段跟随 Agents。更换供应商会清除原来的模型和思考强度。选择「跟随 Agents」并保存，即可清除独立设置。"
+          }
+        }
+      }
+    },
+    "Separately configured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separately configured"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個別に設定済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单独配置"
+          }
+        }
+      }
+    },
     "Lark /agent": {
       "localizations": {
         "en": {

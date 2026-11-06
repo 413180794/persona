@@ -7,6 +7,8 @@ struct ModelConfigurationModelTests {
     private static let purpose = #"{"id":"agent.new","category_id":"agent.new","uses":[{"name":"AI 分身执行"}],"name":"Agents","group":"默认模型","kind":"launcher","override":{},"effective":{"provider":"launcher.strong","model":"model-a"},"revision":0,"fields":["provider","model"],"provider_ids":["launcher.strong"],"inherited_from":"助手"}"#
     private static let providers = #"[{"id":"launcher.strong","name":"strong","kind":"launcher","model":"model-a"},{"id":"legacy.ai","name":"hub API","kind":"api","model":"model-b"}]"#
     private static let detail = #"{"purpose":\#(purpose),"providers":\#(providers)}"#
+    private static let lark = #"{"id":"lark.agent","category_id":"agent.new","parent":"agent.new","name":"飞书 /agent","group":"Agents","kind":"launcher","override":{},"effective":{"provider":"launcher.strong","model":"model-a","effort":"medium"},"revision":7,"fields":["provider","model","effort"],"provider_ids":["launcher.strong","legacy.ai"],"inherited_from":"Agents"}"#
+    private static let larkDetail = #"{"purpose":\#(lark),"providers":\#(providers)}"#
 
     private func make(_ hub: FakeHub) -> ModelConfigurationModel { .init(deps: .init(api: { hub.client })) }
 
@@ -20,6 +22,142 @@ struct ModelConfigurationModelTests {
         #expect(page.categories.first?.uses?.first?.name == "AI 分身执行")
         #expect(page.summary(page.purposes[0]) == "strong · model-a")
         #expect(page.modelSummary(page.purposes[0]) == "model-a")
+    }
+
+    @Test func writableChildStaysIndependentWithoutUsesAndAppearsInTheCatalog() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/model-config", json: #"{"purposes":[\#(Self.purpose),\#(Self.lark)],"providers":\#(Self.providers)}"#)
+        hub.on("GET", "/api/v1/model-config/purposes/lark.agent", json: Self.larkDetail)
+        let page = make(hub)
+        await page.load()
+        #expect(page.categories.map(\.id) == ["agent.new"])
+        #expect(page.independentPurposes.map(\.id) == ["lark.agent"])
+        await page.load(purposeID: "lark.agent")
+        let purpose = try #require(page.purpose)
+        #expect(page.error == nil && purpose.id == "lark.agent" && purpose.uses == nil)
+        #expect(purpose.categoryID == "agent.new" && purpose.parent == "agent.new")
+        #expect(purpose.revision == 7 && page.isLarkAgent)
+        #expect(hub.sent("GET", "/api/v1/model-config/purposes/agent.new").isEmpty)
+        #expect(page.candidates.map(\.id) == ["launcher.strong", "legacy.ai"])
+        #expect(page.inheritanceStatus(purpose) == String(localized: "Follow Agents"))
+    }
+
+    @Test func returningFromTheModelPickerKeepsTheCompleteIndependentDraft() async {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/model-config/purposes/lark.agent", json: Self.larkDetail)
+        let page = make(hub)
+        await page.loadIfNeeded(purposeID: "lark.agent")
+        let draft = ModelBinding(provider: "launcher.strong", model: "lark-model", effort: "high")
+        page.draft = draft
+        await page.loadIfNeeded(purposeID: "lark.agent")
+        #expect(page.draft == draft && page.dirty)
+        #expect(hub.sent("GET", "/api/v1/model-config/purposes/lark.agent").count == 1)
+        await page.load(purposeID: "lark.agent")
+        #expect(!page.dirty && page.draft.isEmpty)
+        #expect(hub.sent("GET", "/api/v1/model-config/purposes/lark.agent").count == 2)
+    }
+
+    @Test func aLegacyRedirectIsAlsoLoadedOnlyOnceWhenReturningFromItsPicker() async {
+        let hub = FakeHub()
+        let legacy = Self.lark.replacingOccurrences(of: #"["provider","model","effort"]"#, with: "[]")
+        hub.on("GET", "/api/v1/model-config/purposes/lark.agent", json: #"{"purpose":\#(legacy),"providers":\#(Self.providers)}"#)
+        hub.on("GET", "/api/v1/model-config/purposes/agent.new", json: Self.detail)
+        let page = make(hub)
+        await page.loadIfNeeded(purposeID: "lark.agent")
+        page.draft.model = "unsaved-category-model"
+        await page.loadIfNeeded(purposeID: "lark.agent")
+        #expect(page.purpose?.id == "agent.new" && page.draft.model == "unsaved-category-model")
+        #expect(hub.sent("GET", "/api/v1/model-config/purposes/agent.new").count == 1)
+    }
+
+    @Test func independentSaveAndResetUseTheirOwnRevisionAndExplicitNulls() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/model-config/purposes/lark.agent", json: Self.larkDetail)
+        var saved = try JSON.decoder.decode(ModelPurposeDetail.self, from: Data(Self.larkDetail.utf8))
+        var updates = 0
+        hub.on("PATCH", "/api/v1/model-config/purposes/lark.agent") { req in
+            let body = try JSONSerialization.jsonObject(with: req.body ?? Data()) as! [String: Any]
+            #expect(Set(body.keys) == ["revision", "provider", "model", "effort"])
+            #expect(body["revision"] as? Int == saved.purpose.revision)
+            if saved.purpose.revision == 7 {
+                #expect(body["provider"] as? String == "launcher.strong")
+                #expect(body["model"] as? String == "lark-model")
+                #expect(body["effort"] as? String == "high")
+                saved.purpose.override = .init(provider: "launcher.strong", model: "lark-model", effort: "high")
+                saved.purpose.effective = saved.purpose.override
+                saved.purpose.inheritedFrom = nil
+            } else {
+                #expect(saved.purpose.revision == 8)
+                #expect(body["provider"] is NSNull && body["model"] is NSNull && body["effort"] is NSNull)
+                saved.purpose.override = .init()
+                saved.purpose.effective = .init(provider: "launcher.strong", model: "model-a", effort: "medium")
+                saved.purpose.inheritedFrom = "Agents"
+            }
+            saved.purpose.revision += 1
+            let purpose = String(decoding: try JSON.encoder.encode(saved.purpose), as: UTF8.self)
+            return Data(#"{"purpose":\#(purpose),"providers":\#(Self.providers)}"#.utf8)
+        }
+        let page = ModelConfigurationModel(deps: .init(api: { hub.client }, updated: { updates += 1 }))
+        await page.load(purposeID: "lark.agent")
+        page.chooseProvider("launcher.strong")
+        page.draft.model = " lark-model "
+        page.draft.effort = " high "
+        #expect(await page.save())
+        #expect(page.purpose?.id == "lark.agent" && page.purpose?.revision == 8)
+        #expect(page.inheritanceStatus(try #require(page.purpose)) == String(localized: "Separately configured"))
+        page.restoreInheritance()
+        #expect(page.draft.isEmpty && page.dirty)
+        #expect(await page.save())
+        let reset = try #require(page.purpose)
+        #expect(reset.id == "lark.agent" && reset.revision == 9 && reset.override.isEmpty)
+        #expect(reset.effective.model == "model-a" && reset.effective.effort == "medium")
+        #expect(page.inheritanceStatus(reset) == String(localized: "Follow Agents"))
+        #expect(!page.dirty && updates == 2)
+        #expect(hub.sent("PATCH", "/api/v1/model-config/purposes/lark.agent").count == 2)
+        #expect(hub.sent("PATCH", "/api/v1/model-config/purposes/agent.new").isEmpty)
+    }
+
+    @Test func independentConflictRetainsAllDraftFieldsAndBlocksAnotherWrite() async {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/model-config/purposes/lark.agent", json: Self.larkDetail)
+        hub.on("PATCH", "/api/v1/model-config/purposes/lark.agent") { _ in throw APIError(status: 409, message: "changed") }
+        let page = make(hub)
+        await page.load(purposeID: "lark.agent")
+        let draft = ModelBinding(provider: "legacy.ai", model: "lark-model", effort: "high")
+        page.draft = draft
+        #expect(await page.save() == false)
+        #expect(page.conflict && page.dirty && page.draft == draft && page.purpose?.revision == 7)
+        #expect(await page.save() == false)
+        #expect(hub.sent("PATCH", "/api/v1/model-config/purposes/lark.agent").count == 1)
+        await page.load(purposeID: "lark.agent")
+        #expect(!page.conflict && !page.dirty && page.purpose?.id == "lark.agent")
+    }
+
+    @Test func launcherEffortIsSupportedForMessagesProvidersButDirectAPIRulesStayTheSame() async {
+        let hub = FakeHub()
+        let providers = #"[{"id":"legacy.ai","name":"Messages API","kind":"api","api":"messages"},{"id":"api.responses","name":"Responses API","kind":"api","api":"responses"}]"#
+        hub.on("GET", "/api/v1/model-config/purposes/lark.agent", json: #"{"purpose":\#(Self.lark),"providers":\#(providers)}"#)
+        let apiPurpose = Self.lark.replacingOccurrences(of: "lark.agent", with: "api.child").replacingOccurrences(of: "\"kind\":\"launcher\"", with: "\"kind\":\"api\"")
+        hub.on("GET", "/api/v1/model-config/purposes/api.child", json: #"{"purpose":\#(apiPurpose),"providers":\#(providers)}"#)
+        let page = make(hub)
+        await page.load(purposeID: "lark.agent")
+        page.chooseProvider("legacy.ai")
+        #expect(page.allowsEffort)
+        await page.load(purposeID: "api.child")
+        page.chooseProvider("legacy.ai")
+        #expect(!page.allowsEffort)
+        page.chooseProvider("api.responses")
+        #expect(page.allowsEffort)
+    }
+
+    @Test func legacyChildWithoutExplicitCapabilitiesStillRedirects() async {
+        let hub = FakeHub()
+        let legacy = Self.lark.replacingOccurrences(of: #","fields":["provider","model","effort"]"#, with: "")
+        hub.on("GET", "/api/v1/model-config/purposes/lark.agent", json: #"{"purpose":\#(legacy),"providers":\#(Self.providers)}"#)
+        hub.on("GET", "/api/v1/model-config/purposes/agent.new", json: Self.detail)
+        let page = make(hub)
+        await page.load(purposeID: "lark.agent")
+        #expect(page.purpose?.id == "agent.new" && page.error == nil)
     }
 
     @Test func oldPurposeLinksOpenTheirCategoryInsteadOfAnIndividualEditor() async {

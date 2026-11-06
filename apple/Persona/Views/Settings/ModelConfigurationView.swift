@@ -25,7 +25,7 @@ struct ModelConfigurationView: View {
             }
             if !page.categories.isEmpty {
                 Section {
-                    ForEach(page.categories) { category in
+                    ForEach(page.categories + page.independentPurposes) { category in
                         categoryLink(category)
                             .accessibilityIdentifier("model-purpose-\(category.id)")
                     }
@@ -47,7 +47,7 @@ struct ModelConfigurationView: View {
                     }
                     .accessibilityIdentifier("model-config-scope")
                 } footer: {
-                    Text("Changing a category applies to every use in it. Takes effect from the next run without interrupting current tasks.")
+                    Text("Categories provide defaults. A separately configured use keeps its own settings. Changes take effect from the next run.")
                         .font(Theme.Font.caption)
                 }
             } else if page.loaded && page.error == nil {
@@ -90,9 +90,12 @@ struct ModelConfigurationView: View {
 
     private func categoryLabel(_ category: ModelPurpose) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            Text(category.name).font(Theme.Font.body).lineLimit(1)
+            Text(category.id == "lark.agent" ? String(localized: "Lark /agent") : category.name).font(Theme.Font.body).lineLimit(1)
             Text(page.modelSummary(category))
                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            if category.id == "lark.agent" {
+                Text(page.inheritanceStatus(category)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
             if let limit = category.limit {
                 ModelLimitLine(limit: limit, font: Theme.Font.caption)
             } else if let status = category.status, !status.isEmpty, status != "未验证" { // i18n-ignore: status value from the hub
@@ -139,9 +142,13 @@ struct ModelPurposeEditorView: View {
         SettingsForm {
             if let purpose = page.purpose {
                 Section("In Effect") {
+                    if page.isLarkAgent {
+                        LabeledContent("Configuration", value: page.inheritanceStatus(purpose))
+                            .accessibilityIdentifier("model-config-inheritance")
+                    }
                     LabeledContent("Model [Assistant View c98e11]", value: page.summary(purpose).isEmpty ? String(localized: "Not set up") : page.summary(purpose))
                     if let source = purpose.inheritedFrom, !source.isEmpty {
-                        LabeledContent("Inherited From", value: source)
+                        LabeledContent("Inherited From", value: page.isLarkAgent ? String(localized: "Agents") : source)
                     }
                     if let limit = purpose.limit {
                         ModelLimitLine(limit: limit, font: Theme.Font.label)
@@ -183,7 +190,7 @@ struct ModelPurposeEditorView: View {
                             }
                         }
                     }
-                    if purpose.supports("effort") && allowsEffort {
+                    if page.allowsEffort {
                         Picker("Thinking Effort", selection: optional(\.effort)) {
                             Text("Default [Model Configuration View a44f9f]").tag("")
                             ForEach(SessionModes.startEffortLevels) { Text($0.title).tag($0.id) }
@@ -192,21 +199,25 @@ struct ModelPurposeEditorView: View {
                             }
                         }
                         .lineLimit(1)
+                        .accessibilityIdentifier("model-config-effort")
                     }
                     if !page.runtimes.isEmpty { runtimePicker }
                 } header: {
                     Text("Model Settings [Model Configuration View 082a73]")
                 } footer: {
-                    Text("Every use in this category uses this setting. Leave fields empty to keep the current default. Changing the provider clears the previous model and reasoning effort. Custom model IDs must be supported by the provider.")
+                    Text(page.isLarkAgent
+                         ? String(localized: "Only applies to Lark /agent, not other Agents. Empty fields follow Agents. Changing the provider clears the previous model and thinking effort. Choose Follow Agents and save to clear the independent settings.")
+                         : String(localized: "Every use in this category uses this setting. Leave fields empty to keep the current default. Changing the provider clears the previous model and reasoning effort. Custom model IDs must be supported by the provider."))
                 }
                 .disabled(page.saving || page.loading)
                 Section {
                     Button {
                         page.restoreInheritance()
                     } label: {
-                        Label("Restore Default", systemImage: Theme.Icon.undo).lineLimit(1)
+                        Label(page.isLarkAgent ? String(localized: "Follow Agents") : String(localized: "Restore Default"), systemImage: Theme.Icon.undo).lineLimit(1)
                     }
-                    .disabled(page.saving || page.loading || page.draft.isEmpty)
+                    .accessibilityIdentifier("model-config-restore")
+                    .disabled(page.saving || page.loading || page.conflict || page.draft.isEmpty)
                 } footer: {
                     Text("Changes take effect from the next run. Current tasks aren't interrupted and past data isn't reprocessed. Permission settings don't change with the model.")
                 }
@@ -222,7 +233,7 @@ struct ModelPurposeEditorView: View {
             }
         }
         .themedPage()
-        .detailTitle(page.purpose?.name ?? String(localized: "Model Settings [Launcher Model Picker 8cbcf7]"))
+        .detailTitle(page.isLarkAgent ? String(localized: "Lark /agent") : page.purpose?.name ?? String(localized: "Model Settings [Launcher Model Picker 8cbcf7]"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             #if os(macOS)
@@ -238,7 +249,7 @@ struct ModelPurposeEditorView: View {
         #if os(macOS)
         .sheetCancel(unsaved: page.dirty, when: inSheet) { dismiss() }
         #endif
-        .task(id: purposeID) { await page.load(purposeID: purposeID) }
+        .task(id: purposeID) { await page.loadIfNeeded(purposeID: purposeID) }
         .task(id: listProvider) { await loadList() }
         .confirmationDialog("Reloading discards your unsaved edits.", isPresented: $confirmReload, titleVisibility: .visible) {
             Button("Reload [Lark Chat Pins View 7bdd5c]", role: .destructive) { Task { await page.load(purposeID: purposeID) } }
@@ -340,15 +351,9 @@ struct ModelPurposeEditorView: View {
         }
     }
 
-    private var allowsEffort: Bool {
-        let id = page.draft.provider ?? page.purpose?.effective.provider
-        guard let provider = page.providers.first(where: { $0.id == id }) else { return true }
-        return provider.kind != "api" || provider.api == "responses"
-    }
-
     private var providerPicker: some View {
         Picker("Model Providers", selection: Binding(get: { page.draft.provider ?? "" }, set: { page.chooseProvider($0) })) {
-            Text("Default [Model Configuration View a44f9f]").tag("")
+            Text(page.isLarkAgent ? String(localized: "Follow Agents") : String(localized: "Default [Model Configuration View a44f9f]")).tag("")
             ForEach(page.candidates) { provider in
                 Text(provider.name).tag(provider.id)
             }
@@ -454,6 +459,7 @@ struct ModelConfigurationLink: View {
                     Label(title, systemImage: Theme.Icon.model).lineLimit(1)
                 }
                 .lineLimit(1)
+                .contentShape(.rect)
             }
         }
         .buttonStyle(.plain)

@@ -24,12 +24,30 @@ import Observation
     private(set) var conflict = false
     var draft = ModelBinding()
     @ObservationIgnored private let deps: Deps
+    @ObservationIgnored private var loadedPurposeID: String?
 
     init(deps: Deps = .live) { self.deps = deps }
 
     var dirty: Bool { purpose.map { draft != $0.override } ?? false }
 
     var categories: [ModelPurpose] { purposes.filter { $0.uses != nil } }
+    var independentPurposes: [ModelPurpose] {
+        purposes.filter { $0.uses == nil && $0.categoryID != nil && $0.categoryID != $0.id && $0.hasWritableFields }
+    }
+
+    var isLarkAgent: Bool { purpose?.id == "lark.agent" }
+
+    func inheritanceStatus(_ p: ModelPurpose) -> String {
+        p.override.isEmpty ? String(localized: "Follow Agents") : String(localized: "Separately configured")
+    }
+
+    /// Launchers translate effort to their runtime; direct API calls still require Responses.
+    var allowsEffort: Bool {
+        guard let purpose, purpose.supports("effort") else { return false }
+        let id = draft.provider ?? purpose.effective.provider
+        guard let provider = providers.first(where: { $0.id == id }) else { return true }
+        return purpose.kind == "launcher" || provider.kind != "api" || provider.api == "responses"
+    }
 
     func modelSummary(_ p: ModelPurpose) -> String {
         let model = p.effective.model ?? p.effective.provider.flatMap { id in providers.first { $0.id == id }?.name }
@@ -69,6 +87,12 @@ import Observation
 
     func restoreInheritance() { draft = ModelBinding() }
 
+    /// Returning from a model picker must not reload the server binding over the draft.
+    func loadIfNeeded(purposeID: String) async {
+        guard loadedPurposeID != purposeID else { return }
+        await load(purposeID: purposeID)
+    }
+
     func load(purposeID: String? = nil) async {
         guard !loading && !saving else { return }
         loading = true
@@ -77,16 +101,18 @@ import Observation
             guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             if let purposeID {
                 var result = try await api.modelPurpose(purposeID)
-                if let category = result.purpose.categoryID, category != result.purpose.id {
+                if !result.purpose.hasWritableFields, let category = result.purpose.categoryID, category != result.purpose.id {
                     result = try await api.modelPurpose(category)
                 }
-                guard result.purpose.kind == "plugin" || (result.purpose.categoryID == result.purpose.id && result.purpose.uses != nil) else {
+                guard result.purpose.kind == "plugin" || (result.purpose.categoryID != nil &&
+                    (result.purpose.hasWritableFields || (result.purpose.categoryID == result.purpose.id && result.purpose.uses != nil))) else {
                     purpose = nil
                     throw APIError(status: 0, message: String(localized: "This hub doesn't support model configuration by category yet. Update the server first."))
                 }
                 purpose = result.purpose
                 providers = result.providers
                 draft = result.purpose.override
+                loadedPurposeID = purposeID
             } else {
                 let result = try await api.modelConfiguration()
                 purposes = result.purposes
@@ -104,7 +130,8 @@ import Observation
     }
 
     func save() async -> Bool {
-        guard !saving && !loading, let purpose, purpose.fields?.isEmpty != true else { return false }
+        guard !saving && !loading && !conflict, let purpose,
+              purpose.hasWritableFields || (purpose.fields == nil && (purpose.kind == "plugin" || purpose.uses != nil)) else { return false }
         saving = true
         defer { saving = false }
         do {
