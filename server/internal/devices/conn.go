@@ -87,12 +87,9 @@ func (m *Machine) run(ctx context.Context) {
 	if conn != nil {
 		conn.close()
 	}
-	m.mu.Lock()
-	if m.next != nil {
-		m.next.close()
-		m.next = nil
+	if next := m.takeNext(); next != nil { // closing waits for its process (open): not under m.mu
+		next.close()
 	}
-	m.mu.Unlock()
 }
 
 // wake makes the run loop look again (its paths changed, a link came, the hub's role changed).

@@ -333,7 +333,17 @@ func (m *Machine) open(ctx context.Context, via string) (*nodePipe, error) {
 			defer errMu.Unlock()
 			return lastErr.String()
 		},
-		close: func() { cancel(); _ = cmd.Wait() },
+		// Wait closes the stderr pipe: let the reader take the line the process wrote as it ended first, or a lastErr
+		// asked after close (establish's failed node.info) has lost it (#5254). A descendant holding stderr open
+		// bounds the wait.
+		close: func() {
+			cancel()
+			select {
+			case <-stderrDone:
+			case <-time.After(shutdownStepTimeout):
+			}
+			_ = cmd.Wait()
+		},
 	}, nil
 }
 

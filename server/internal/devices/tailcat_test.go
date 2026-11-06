@@ -205,6 +205,22 @@ func TestBothWaysFailing(t *testing.T) {
 	}
 }
 
+// ssh's last line is the error even when the stderr reader is behind as the process ends (a loaded machine): closing
+// the process lets the reader finish before Wait closes the pipe, so the line written after the first is not lost (#5254).
+func TestBothWaysFailingKeepsSSHsLastLineWhenTheReaderIsBehind(t *testing.T) {
+	h := New(Options{Hub: &fakeHost{}, Store: newMemStore(), Logf: func(string, ...any) { time.Sleep(300 * time.Millisecond) }})
+	m := tailcatMachine(h, time.Hour, time.Hour, time.Hour)
+	m.nodeCmd = func(ctx context.Context) *exec.Cmd {
+		return exec.CommandContext(ctx, "sh", "-c",
+			"echo 'Warning: Permanently added box' >&2; sleep 0.1; echo 'ssh: connect to host box port 22: Operation timed out' >&2; exit 255")
+	}
+	m.dialTailcat = func(context.Context) (net.Conn, error) { return nil, errors.New("no answer") }
+	err := m.connect(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "ssh：ssh: connect to host box") {
+		t.Fatalf("error %v, want ssh's last line", err)
+	}
+}
+
 // A tailcat connection that stops answering is ended after two missed pings, and the machine reconnects.
 func TestDeadTailcatConnectionIsNoticed(t *testing.T) {
 	h := newTestDevices(t)
