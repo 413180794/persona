@@ -18801,6 +18801,29 @@
       },
       "extractionState": "manual"
     },
+    "Can't load it right now: open it again once connected to the hub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't load it right now: open it again once connected to the hub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今は読み込めません：hub に接続してからもう一度開いてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时读不到：连上 hub 后再打开"
+          }
+        }
+      }
+    },
     "Can't load right now": {
       "localizations": {
         "en": {
@@ -46216,6 +46239,29 @@
       },
       "extractionState": "manual"
     },
+    "It may not have been sent: once connected to the hub, check before deciding whether to send it again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It may not have been sent: once connected to the hub, check before deciding whether to send it again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信されていない可能性があります：hub に接続してから確認し、再送するか決めてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可能没发出去：连上 hub 后看一眼再决定要不要重发"
+          }
+        }
+      }
+    },
     "It now has its own credentials, which you can revoke on their own in the device list.": {
       "localizations": {
         "en": {
@@ -62150,28 +62196,28 @@
       },
       "extractionState": "manual"
     },
-    "Not sent: the hub doesn't allow it": {
+    "Not sent: the hub's rules don't allow it": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not sent: the hub doesn't allow it"
+            "value": "Not sent: the hub's rules don't allow it"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "送信されませんでした：ハブが許可していません"
+            "value": "送信されませんでした：hub のルールで許可されていません"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "没有发送：hub 不允许"
+            "value": "没有发送：hub 的规则不允许"
           }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "Not set": {
       "localizations": {
@@ -92959,6 +93005,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "The hub doesn't allow this device to read this conversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub doesn't allow this device to read this conversation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub はこのデバイスにこの会話の読み取りを許可していません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 不允许这台设备读这个会话"
+          }
+        }
+      }
     },
     "The hub doesn't have this connector": {
       "localizations": {

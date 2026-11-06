@@ -301,7 +301,7 @@ nonisolated enum ThreadLayout {
             try await api.connectorThreadReply(connector, thread: thread, action: action, text: text, replyTo: quote?.id)
             failure = nil
         } catch {
-            if !error.isCancellation { failure = Self.said(error) }
+            if !error.isCancellation { failure = Self.said(error, sending: true) }
             return false
         }
         if let page = try? await api.connectorThread(connector, thread: thread) {
@@ -312,11 +312,13 @@ nonisolated enum ThreadLayout {
         return true
     }
 
-    /// A failure in words: a rate limit's says how long to wait (the hub's), a declined reply says so.
-    private static func said(_ error: Error) -> String {
-        if let e = error as? APIError {
-            return e.status == 403 ? String(localized: "Not sent: the hub doesn't allow it") : e.message
+    /// A failure in words, a read's or a send's: a rate limit's says how long to wait (the hub's), a refusal (403)
+    /// and no answer (offline, a timeout) say what happened and what to do next.
+    private static func said(_ error: Error, sending: Bool = false) -> String {
+        if let e = error as? APIError, e.status == 403 {
+            return sending ? String(localized: "Not sent: the hub's rules don't allow it") : String(localized: "The hub doesn't allow this device to read this conversation")
         }
-        return error.shown ?? String(localized: "Couldn't load [Connector Thread Models 153e20]")
+        if let shown = error.shown { return shown }
+        return sending ? String(localized: "It may not have been sent: once connected to the hub, check before deciding whether to send it again") : String(localized: "Can't load it right now: open it again once connected to the hub")
     }
 }

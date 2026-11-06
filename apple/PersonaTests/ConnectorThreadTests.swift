@@ -60,6 +60,24 @@ struct ConnectorThreadTests {
         hub.on("POST", "/api/v1/connectors/telegram/thread/reply") { _ in throw APIError(status: 403, message: "The user declined telegram_send.") }
         #expect(await !m.reply("算了", to: nil))
         #expect(m.failure?.contains("没有发送") == true)
+
+        // No answer from the hub (it may still have arrived): the line says the reply may not have gone out, not "Couldn't load".
+        hub.on("POST", "/api/v1/connectors/telegram/thread/reply") { _ in throw URLError(.notConnectedToInternet) }
+        #expect(await !m.reply("再试一次", to: nil))
+        #expect(m.failure == "可能没发出去：连上 hub 后看一眼再决定要不要重发")
+    }
+
+    /// A read the hub refuses or never answers says so in a read's words, not a send's.
+    @Test func readFailureWords() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/connectors/telegram/thread") { _ in throw APIError(status: 403, message: "forbidden") }
+        let refused = ConnectorThreadModel(connector: "telegram", thread: "u1", api: { hub.client })
+        await refused.load()
+        #expect(refused.failure == "hub 不允许这台设备读这个会话")
+        hub.on("GET", "/api/v1/connectors/telegram/thread") { _ in throw URLError(.cannotConnectToHost) }
+        let offline = ConnectorThreadModel(connector: "telegram", thread: "u1", api: { hub.client })
+        await offline.load()
+        #expect(offline.failure == "暂时读不到：连上 hub 后再打开")
     }
 
     /// A thread the hub cannot read (no conversations for that connector, signed out) leaves the page to what the hub

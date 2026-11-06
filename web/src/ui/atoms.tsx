@@ -11,7 +11,7 @@ import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
 import { keyboardFrame } from "../lib/viewport";
 import { prefersReducedMotion } from "./stream/motion";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
-import { focusables, NARROW_QUERY, placeMenu, placeSubmenu, SHEET_QUERY, trapTab, useMedia, type MenuPlace } from "./overlay";
+import { NARROW_QUERY, placeMenu, placeSubmenu, SHEET_QUERY, useEscapeClose, useMedia, useModalFocus, type MenuPlace } from "./overlay";
 import { STATE_LABEL } from "../lib/state-labels";
 
 export const EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
@@ -538,21 +538,41 @@ function MenuPanel({
   const origin = root && place.point ? "top left" : root && place.side === "top" ? `bottom ${place.align}` : root ? `top ${place.align}` : "top left";
 
   useLayoutEffect(() => {
-    if (!ref.current) return;
-    // On a phone it keeps to what the keyboard leaves visible (the frame --kb-top / --kb-h follow).
-    const view = narrow ? keyboardFrame(innerHeight, window.visualViewport) : undefined;
-    const h = ref.current.offsetHeight;
-    let at: MenuPlace;
-    if (place.rect) at = placeSubmenu(place.rect, h, { width: place.width, screenW: innerWidth, screenH: innerHeight, view });
-    else if (place.point) {
-      const { x, y } = place.point;
-      const right = x + Math.min(place.width, innerWidth - 16) + 8 > innerWidth; // no room on the right: it opens leftwards
-      at = placeMenu({ left: x, right: x, top: y, bottom: y }, h, { width: place.width, align: right ? "right" : "left", side: "bottom", screenW: innerWidth, screenH: innerHeight, view, gap: 0 });
-    } else if (place.anchor) {
-      at = placeMenu(place.anchor.getBoundingClientRect(), h, { width: place.width, align: place.align, side: place.side, screenW: innerWidth, screenH: innerHeight, view });
-    } else return;
-    const { maxHeight, ...rest } = at;
-    setPos(maxHeight === undefined ? rest : { ...rest, maxHeight: `min(70vh, 520px, ${maxHeight}px)` });
+    const reposition = () => {
+      if (!ref.current) return;
+      // On a phone it keeps to what the keyboard leaves visible (the frame --kb-top / --kb-h follow).
+      const view = narrow ? keyboardFrame(innerHeight, window.visualViewport) : undefined;
+      // Measure the natural height: the inline maxHeight left by the previous placement (a keyboard that has since
+      // closed) would otherwise be read back as the menu's height, and the menu placed for a height it no longer has.
+      // The scroll offset is put back too: the uncapped layout may clamp it.
+      const el = ref.current;
+      const { scrollTop } = el;
+      const capped = el.style.maxHeight;
+      el.style.maxHeight = "";
+      const h = el.offsetHeight;
+      el.style.maxHeight = capped;
+      el.scrollTop = scrollTop;
+      let at: MenuPlace;
+      if (place.rect) at = placeSubmenu(place.rect, h, { width: place.width, screenW: innerWidth, screenH: innerHeight, view });
+      else if (place.point) {
+        const { x, y } = place.point;
+        const right = x + Math.min(place.width, innerWidth - 16) + 8 > innerWidth; // no room on the right: it opens leftwards
+        at = placeMenu({ left: x, right: x, top: y, bottom: y }, h, { width: place.width, align: right ? "right" : "left", side: "bottom", screenW: innerWidth, screenH: innerHeight, view, gap: 0 });
+      } else if (place.anchor) {
+        at = placeMenu(place.anchor.getBoundingClientRect(), h, { width: place.width, align: place.align, side: place.side, screenW: innerWidth, screenH: innerHeight, view });
+      } else return;
+      const { maxHeight, ...rest } = at;
+      setPos(maxHeight === undefined ? rest : { ...rest, maxHeight: `min(70vh, 520px, ${maxHeight}px)` });
+    };
+    reposition();
+    // An open menu keeps to where it belongs when the window or the visual viewport (a phone keyboard) resizes.
+    const vv = window.visualViewport;
+    window.addEventListener("resize", reposition);
+    vv?.addEventListener("resize", reposition);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      vv?.removeEventListener("resize", reposition);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- placed again when what decides its place or height changes
   }, [place.rect, root ? place.anchor : null, root ? place.point?.x : 0, root ? place.point?.y : 0, place.width, items.length, narrow, loading, loadError]);
 
@@ -780,7 +800,8 @@ export function useExit(open: boolean, ms: number, play: () => (Animation | unde
 
 /** A modal. Wide: a card in the middle of the page. Phone width (max-sm): a sheet up from the bottom of what the
  *  keyboard leaves visible (--kb-top / --kb-h), at most 90% of it, its body scrolling between the title and the footer,
- *  and Back closes it. Either way the focus moves in, Tab stays in, and goes back where it was when it closes. */
+ *  and Back closes it. Either way the focus moves in, Tab stays in, and goes back where it was when it closes
+ *  (unless the close moved it elsewhere). */
 export function Dialog({
   open,
   onClose,
@@ -800,32 +821,10 @@ export function Dialog({
   const titleId = useId();
   const sheet = useMedia(SHEET_QUERY);
   useCloseOnBack(open, onClose, sheet);
-  useEffect(() => {
-    if (!open) return;
-    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    addEventListener("keydown", key);
-    return () => removeEventListener("keydown", key);
-  }, [open, onClose]);
-  useEffect(() => {
-    const el = panel.current;
-    if (!open || !el) return;
-    const back = document.activeElement as HTMLElement | null;
-    // The dialog itself, so a phone's keyboard does not come up for its first field (one with autoFocus took it already).
-    if (!el.contains(document.activeElement)) el.focus({ preventScroll: true });
-    const tab = (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
-      const list = focusables(el);
-      const i = trapTab(list.length, list.indexOf(document.activeElement as HTMLElement), e.shiftKey);
-      if (i === null) return;
-      e.preventDefault();
-      (list[i] ?? el).focus();
-    };
-    el.addEventListener("keydown", tab);
-    return () => {
-      el.removeEventListener("keydown", tab);
-      if (back?.isConnected) back.focus({ preventScroll: true });
-    };
-  }, [open]);
+  useEscapeClose(open, onClose);
+  // The dialog itself takes the focus, so a phone's keyboard does not come up for its first field (one with autoFocus
+  // took it already). On close it goes back to the opener, unless the close moved it outside on purpose.
+  useModalFocus(panel, open);
   const backdrop = useRef<HTMLDivElement>(null);
   // what it showed when last open: a caller may clear what the body reads once it is closed, while it still leaves
   const kept = useRef({ title, children, footer });

@@ -7,7 +7,7 @@ import { isNoHover, NARROW, useMedia } from "./media-query";
 import { copyText, cx } from "./atoms";
 import { t } from "../i18n";
 import { Icon } from "./icons";
-import { useModalFocus } from "./overlay";
+import { useEscapeClose, useModalFocus } from "./overlay";
 
 const SETTLE_MS = 350;
 
@@ -105,11 +105,7 @@ function Zoomed({ svg, onClose }: { svg: string; onClose: () => void }) {
   const dialog = useRef<HTMLDivElement>(null);
   useModalFocus(dialog);
   useCloseOnBack(true, onClose, useMedia(NARROW));
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [onClose]);
+  useEscapeClose(true, onClose);
   return (
     <div
       ref={dialog}

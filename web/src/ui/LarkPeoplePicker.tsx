@@ -16,7 +16,10 @@ export interface PeoplePicker {
   active: number;
   setActive: (i: number) => void;
   pick: (p: LarkPerson) => void;
-  /** For the box's onKeyDown, first: true when the picker took the key (↑↓, Enter, Tab, Esc while it is open). */
+  /**
+   * For the box's onKeyDown, first: true when the picker took the key (↑↓, Enter, Tab, Esc while it is open). Enter and
+   * Tab are also taken, without a pick, while the query being typed has not been answered yet.
+   */
   onKeyDown: (e: React.KeyboardEvent) => boolean;
 }
 
@@ -29,7 +32,10 @@ export function useLarkPeoplePicker({ text, caret, open, find, apply, onPicked }
   const found = personAt(text, caret);
   const token = open && found && dismissed !== found.start ? found : null;
   const query = token?.query;
-  const [rows, setRows] = useState<LarkPerson[]>([]);
+  // the rows on screen and the query they answer: while a new query loads, the last answer stays shown (arrows still
+  // move over it), but Enter / Tab only pick from the answer to the query being typed
+  const [shown, setShown] = useState<{ query: string | null; rows: LarkPerson[] }>({ query: null, rows: [] });
+  const rows = shown.rows;
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
   const cache = useRef(new Map<string, LarkPerson[]>());
@@ -41,7 +47,7 @@ export function useLarkPeoplePicker({ text, caret, open, find, apply, onPicked }
     setActive(0);
     const have = cache.current.get(query);
     if (have) {
-      setRows(have);
+      setShown({ query, rows: have });
       setLoading(false);
       return;
     }
@@ -52,10 +58,10 @@ export function useLarkPeoplePicker({ text, caret, open, find, apply, onPicked }
         .current(query, ac.signal)
         .then((people) => {
           cache.current.set(query, people);
-          if (!ac.signal.aborted) setRows(people);
+          if (!ac.signal.aborted) setShown({ query, rows: people });
         })
         .catch(() => {
-          if (!ac.signal.aborted) setRows([]);
+          if (!ac.signal.aborted) setShown({ query, rows: [] });
         })
         .finally(() => {
           if (!ac.signal.aborted) setLoading(false);
@@ -92,7 +98,14 @@ export function useLarkPeoplePicker({ text, caret, open, find, apply, onPicked }
         return true;
       case "Enter":
       case "Tab":
-        if (!n || e.shiftKey) return false;
+        if (e.shiftKey) return false;
+        if (shown.query !== token.query) {
+          // still looking up what is typed now: the rows shown answer an older query, so take the key (the text is not
+          // sent) without picking from them
+          e.preventDefault();
+          return true;
+        }
+        if (!n) return false;
         e.preventDefault();
         pick(rows[Math.min(active, n - 1)]);
         return true;

@@ -1,5 +1,5 @@
 // The pure parts of the overlays in atoms.tsx (#1996): where Tab goes in a dialog, where a menu sits on screen.
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { NARROW, PHONE, useMedia } from "../lib/viewport";
 
 /** A phone-width screen: Dialog is a bottom sheet, Settings a list of categories (Tailwind's max-sm). */
@@ -113,4 +113,43 @@ export function placeSubmenu(
   if (top + fit > hi) top = hi - fit;
   if (top < lo) top = lo;
   return maxHeight === undefined ? { left, top, width } : { left, top, width, maxHeight };
+}
+
+// Escape closes one overlay, the topmost. Each open overlay that closes on Escape has an entry here; one window listener
+// runs the onClose of the entry opened last and stops the event, so a zoomed diagram in a Dialog, or a Dialog over a
+// Dialog, closes alone and the one under it stays open for the next Escape.
+type EscapeEntry = { order: number; close: () => void };
+const escapeStack: EscapeEntry[] = [];
+let escapeOrder = 0;
+
+function onEscapeKey(e: KeyboardEvent): void {
+  if (e.key !== "Escape") return;
+  let top: EscapeEntry | undefined;
+  for (const entry of escapeStack) if (!top || entry.order > top.order) top = entry;
+  if (!top) return;
+  e.stopPropagation();
+  top.close();
+}
+
+/** While `open`, Escape anywhere calls `onClose`, but only for the most recently opened overlay that uses this hook.
+ *  The order is taken when `open` turns true during render, which React does parents first, so an overlay inside
+ *  another (even both open from the first render, whose effects run children first) still counts as above it. */
+export function useEscapeClose(open: boolean, onClose: () => void): void {
+  const close = useRef(onClose);
+  const order = useRef(0);
+  if (!open) order.current = 0;
+  else if (!order.current) order.current = ++escapeOrder;
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const entry: EscapeEntry = { order: order.current, close: () => close.current() };
+    if (escapeStack.length === 0) addEventListener("keydown", onEscapeKey);
+    escapeStack.push(entry);
+    return () => {
+      escapeStack.splice(escapeStack.indexOf(entry), 1);
+      if (escapeStack.length === 0) removeEventListener("keydown", onEscapeKey);
+    };
+  }, [open]);
 }
