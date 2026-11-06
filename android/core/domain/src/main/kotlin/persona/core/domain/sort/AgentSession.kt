@@ -19,8 +19,8 @@ data class AgentSession(
     } ?: AgentState.of(null, session.status)
     val isLive: Boolean get() = state != AgentState.Offline
     val isQuiet: Boolean get() = state == AgentState.Idle || state == AgentState.Unknown
-    val isWaiting: Boolean get() = isQuiet &&
-        (session.loop != null || !session.background.isNullOrEmpty() || hasRunningSubagent || session.work?.hubWaits == true)
+    val isWaiting: Boolean get() = isQuiet && (session.waiting
+        ?: (session.loop != null || !session.background.isNullOrEmpty() || hasRunningSubagent || session.work?.hubWaits == true))
     /**
      * Awaiting Reply (#5096, docs/agent-states.md): seen, but it stopped on a question nobody answered yet. Not quiet unless
      * muted ([awaitsReply] with the mutes): its space stays open and it stays out of the idle folds.

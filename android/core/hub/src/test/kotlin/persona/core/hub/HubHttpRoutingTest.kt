@@ -113,7 +113,7 @@ class HubHttpRoutingTest {
             val server = MockWebServer().apply {
                 useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false)
                 dispatcher = object : Dispatcher() {
-                    override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+                    override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
                         "/api/v1/health" -> MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
                         "/api/v1/ws" -> MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -147,7 +147,7 @@ class HubHttpRoutingTest {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     if (request.path == "/api/v1/health") return MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
-                    if (request.path == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                    if (request.requestUrl!!.encodedPath == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                         override fun onOpen(webSocket: WebSocket, response: Response) {
                             webSocket.send("""{"type":"hello","hub_id":"test-hub","features":["client_ops"]}""")
                         }
@@ -256,7 +256,7 @@ class HubHttpRoutingTest {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     if (request.path == "/api/v1/health") return MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
-                    if (request.path == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                    if (request.requestUrl!!.encodedPath == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                         override fun onOpen(webSocket: WebSocket, response: Response) {
                             webSocket.send("""{"type":"hello","hub_id":"test-hub","features":["client_ops"]}""")
                         }

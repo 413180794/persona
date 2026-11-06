@@ -11,6 +11,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.DecodeSequenceMode
+import kotlinx.serialization.json.decodeToSequence
 
 /** Atomic, pairing-scoped snapshots. Failed reads never delete or replace the original file. */
 class ListSnapshotStore(private val directory: File) {
@@ -19,6 +22,18 @@ class ListSnapshotStore(private val directory: File) {
         val file = File(directory, snapshotHash(key))
         if (file.exists()) file.readText() else null
     } }
+    /** Decode only the first window, including when an older app left a full history snapshot. */
+    @OptIn(ExperimentalSerializationApi::class)
+    internal suspend fun sessionWindow(limit: Int): List<persona.core.contracts.Session>? = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val file = File(directory, snapshotHash("sessions"))
+            if (!file.exists()) null else file.inputStream().use { input ->
+                JsonCodec.decodeToSequence<persona.core.contracts.Session>(input, DecodeSequenceMode.ARRAY_WRAPPED)
+                    .take(limit).toList()
+            }
+        }
+    }
+
     suspend fun write(key: String, value: String) = withContext(Dispatchers.IO) { lock.withLock {
         check(directory.isDirectory || directory.mkdirs())
         val temp = File.createTempFile("snapshot-", ".tmp", directory)

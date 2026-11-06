@@ -137,8 +137,16 @@ private fun ChatPage(
     }
     val workflowAgent = workflowParent?.workflows.orEmpty().firstNotNullOfOrNull { w -> w.agents.orEmpty().firstOrNull { it.sessionId == key.sessionId } }
     val readOnly = historyReadOnly || child != null || workflowAgent != null || key.sessionId.contains('@')
-    var lastSession by remember { mutableStateOf<Session?>(null) }
-    val session = sessionList.firstOrNull { it.key == key } ?: child?.let {
+    var lastSession by remember(key) { mutableStateOf<Session?>(null) }
+    var detailInfo by remember(key) { mutableStateOf<SessionInfo?>(null) }
+    val row = sessionList.firstOrNull { it.key == key }
+    LaunchedEffect(key, row?.waiting != null, row?.rev, row?.model, chrome.actions) {
+        if (row?.waiting == null) return@LaunchedEffect
+        try { detailInfo = chrome.actions?.info(row) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { /* Keep held detail; the info sheet still offers an explicit retry. */ }
+    }
+    val session = row?.let { sessionWithDetail(it, lastSession, detailInfo) } ?: child?.let {
         parent?.copy(sessionId = it.sessionId, title = it.description?.takeIf(String::isNotBlank) ?: it.type,
             status = if (it.running) "working" else "done", state = if (it.running) "working" else "unread", subagents = emptyList(),
             queued = null, loop = null, background = null, pendingInteractions = 0)

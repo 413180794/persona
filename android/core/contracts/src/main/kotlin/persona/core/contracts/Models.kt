@@ -394,6 +394,12 @@ data class Session(
      * app-server, where only the effort changes (node/codex_effort.go). Empty for every other session.
      */
     val efforts: List<String> = emptyList(),
+    /** Present on bounded summary rows; absent on legacy complete rows. */
+    val waiting: Boolean? = null,
+    @SerialName("background_count") val backgroundCountHint: Int? = null,
+    @SerialName("running_subagents") val runningSubagents: Int? = null,
+    @SerialName("running_workflows") val runningWorkflowsCount: Int? = null,
+    @SerialName("background_working") val backgroundWorking: Boolean? = null,
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)
@@ -440,7 +446,7 @@ data class Session(
      * How much runs in the background without counting a workflow twice: its other background tasks and its running
      * workflows. An older hub sends no [workflows]: every background entry counts, as before.
      */
-    val backgroundCount: Int get() = if (workflows == null) background.orEmpty().size
+    val backgroundCount: Int get() = backgroundCountHint ?: if (workflows == null) background.orEmpty().size
         else background.orEmpty().count { !it.isWorkflow } + runningWorkflows.size
     /** The background tasks that are not workflows, where the hub lists those apart ([workflows]). */
     val backgroundTasks: List<BackgroundTask> get() = if (workflows == null) background.orEmpty() else background.orEmpty().filter { !it.isWorkflow }

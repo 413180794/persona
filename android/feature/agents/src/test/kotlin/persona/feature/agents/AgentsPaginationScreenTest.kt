@@ -1,0 +1,155 @@
+package persona.feature.agents
+
+import android.graphics.Bitmap
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.navigation3.runtime.NavKey
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.JsonObject
+import org.junit.Assert.*
+import org.junit.After
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import persona.core.contracts.*
+import persona.core.contracts.api.*
+import persona.core.designsystem.*
+import persona.core.domain.sort.AgentQuickFilter
+import persona.core.navigation.*
+import java.io.File
+
+/** Real AgentsScreen, native JVM rendering; not physical-device frame-time evidence. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35], qualifiers = "en-w400dp-h900dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class AgentsPaginationScreenTest {
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+    private val models = mutableListOf<AgentsViewModel>()
+    @After fun disposeModels() { models.forEach { it.viewModelScope.cancel() } }
+
+    private class PagedRepository : SessionsRepository {
+        private fun row(index: Int) = Session("demo", "s-$index", title = "Task $index", cwd = "/demo/app",
+            state = "working", status = "working", waiting = false, updatedAt = "2026-11-06T09:00:00Z")
+        override val sessions = MutableStateFlow((0 until 50).map(::row))
+        override val machines = MutableStateFlow(listOf(Machine("demo", "Example computer", online = true)))
+        private val counts = SessionListCounts(total = 8000, machine = mapOf("demo" to 8000),
+            project = mapOf("/demo/app" to 8000), state = mapOf("working" to 8000), revision = "r1")
+        override val listStatus = MutableStateFlow(SessionListStatus(paged = true, loaded = true, hasMore = true,
+            total = 8000, counts = counts, machineCounts = counts))
+        val filters = mutableListOf<SessionListFilter>()
+        val countFilters = mutableListOf<SessionListFilter>()
+        override suspend fun listCounts(filter: SessionListFilter): SessionListCounts { countFilters += filter; return counts }
+        var pages = 1
+        override suspend fun refresh() = Unit
+        override suspend fun setListFilter(filter: SessionListFilter) { filters += filter }
+        override suspend fun loadMore() {
+            pages++
+            val start = sessions.value.size
+            sessions.value += (start until start + 50).map(::row)
+        }
+    }
+
+    @Test fun firstFiftyVirtualizedThenScrollLoadsNextPageAndServerFilters() {
+        val repository = PagedRepository()
+        val model = model(repository)
+        rule.setContent { PersonaTheme(reduceMotion = true) { AgentsScreen(model, Nowhere, AgentsMetadata()) } }
+        rule.waitUntil(5_000) { model.page.value.loaded }
+        rule.waitForIdle()
+        assertEquals(1, repository.pages)
+        assertEquals(50, model.page.value.sessions.size)
+        assertEquals(8000, model.page.value.allCount)
+        assertEquals(8000, model.page.value.machineTotal)
+        assertEquals(8000, model.page.value.list.counts[AgentQuickFilter.Working])
+        rule.waitUntil(5_000) { model.page.value.list.machines.firstOrNull()?.sessionCount == 8000 &&
+            model.page.value.list.groups.firstOrNull()?.totalCount == 8000 }
+        assertTrue(repository.countFilters.contains(SessionListFilter(machineId = "demo", project = "/demo/app")))
+        assertEquals(8000, model.page.value.list.groups.first().totalCount)
+        assertTrue("offscreen row is not composed", rule.onAllNodesWithText("Task 49", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex)).performScrollToIndex(50)
+        rule.waitUntil(5_000) { repository.pages > 1 }
+        assertEquals(100, repository.sessions.value.size)
+        rule.runOnIdle { model.query("deploy"); model.machine("demo"); model.filter(AgentQuickFilter.Working) }
+        rule.waitForIdle()
+        println("Forwarded filters=${repository.filters}; failure=${model.failure.value}")
+        rule.waitUntil(5_000) { repository.filters.lastOrNull() == SessionListFilter(state = "working", machineId = "demo", query = "deploy") }
+        println("8000 synthetic sessions: first page=50, after end scroll=100; LazyColumn offscreen Task 49 not composed")
+    }
+
+    @Test fun firstPageScreenshotsAllStylesLightAndDark() {
+        val repository = PagedRepository()
+        val model = model(repository)
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, style = style, reduceMotion = true) {
+                Box(Modifier.fillMaxSize().background(PersonaTheme.palette.background).testTag("shot")) {
+                    AgentsScreen(model, Nowhere, AgentsMetadata())
+                }
+            }
+        }
+        rule.waitUntil(5_000) { model.page.value.loaded }
+        rule.waitUntil(5_000) { model.page.value.list.groups.firstOrNull()?.totalCount == 8000 }
+        val directory = File("build/pagination-shots").also { it.mkdirs() }
+        for (appearance in AppStyle.entries) {
+            var lightPixel = 0
+            for (isDark in listOf(false, true)) {
+                rule.runOnIdle { style = appearance; dark = isDark; Snapshot.sendApplyNotifications() }
+                rule.waitForIdle()
+                val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
+                if (!isDark) lightPixel = bitmap.getPixel(0, 0)
+                else assertNotEquals("dark and light differ", lightPixel, bitmap.getPixel(0, 0))
+                File(directory, "agents-${appearance.name.lowercase()}-${if (isDark) "dark" else "light"}.png")
+                    .outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                assertEquals("screenshots do not prefetch the entire collection", 1, repository.pages)
+            }
+        }
+    }
+
+    private fun model(repository: SessionsRepository) = AgentsViewModel(repository, object : InteractionCenter {
+        override val pending = MutableStateFlow<List<Interaction>>(emptyList())
+        override suspend fun refresh() = Unit
+        override suspend fun resolve(id: String, resolution: Resolution) = Unit
+    }, object : HubConnection {
+        override val state = MutableStateFlow(ConnectionState.Online)
+        override val events = MutableSharedFlow<ServerEvent>()
+        override fun reconnect() = Unit
+        override fun send(message: JsonObject) = true
+    }, object : MessageSender {
+        override val outbox = MutableStateFlow<List<OutboxMessage>>(emptyList())
+        override suspend fun send(session: SessionKey, text: String, clientMessageId: String, clearDraft: String?) = Unit
+    }, AgentsPreferences(object : DataStore<Preferences> {
+        override val data = MutableStateFlow<Preferences>(emptyPreferences())
+        override suspend fun updateData(transform: suspend (Preferences) -> Preferences) = transform(data.value).also { data.value = it }
+    }, object : HubPreferences {
+        override val preferences = MutableStateFlow(HubPreferencesSnapshot())
+        override suspend fun refresh() = Unit
+        override suspend fun togglePin(path: String, space: Boolean) = Unit
+        override suspend fun toggleMute(path: String, space: Boolean) = Unit
+        override suspend fun markSeen(session: SessionKey, version: String) = Unit
+    })).also { models += it }
+
+    private object Nowhere : Navigator {
+        override fun navigate(key: NavKey) = Unit
+        override fun back() = Unit
+        override fun selectTab(tab: AppTab) = Unit
+    }
+}

@@ -188,5 +188,6 @@ internal val AgentMachineGroup.headingCounts: List<Pair<Status, Int>>
 internal val AgentListGroup.headingCounts: List<Pair<Status, Int>>
     get() = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread).map { state ->
         // A repository with working trees holds no rows itself (its trees do): it counts from stateCounts.
-        state.designStatus to if (rows.isEmpty()) stateCounts?.get(state) ?: 0 else rows.count { !it.session.isCodexSubagent && it.state == state }
+        state.designStatus to if (totalCount != null || rows.isEmpty()) stateCounts?.get(state) ?: 0
+            else rows.count { !it.session.isCodexSubagent && it.state == state }
     }

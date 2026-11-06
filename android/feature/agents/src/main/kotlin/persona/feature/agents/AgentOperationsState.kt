@@ -147,8 +147,12 @@ internal class AgentOperationsState(private val api: AgentOperations, private va
     private val expectedSpaces = mutableMapOf<String, AgentSpaceEdit>()
 
     /** Only authoritative snapshots can resolve an ambiguous one-shot write. */
-    suspend fun reconcile(source: List<Session>): List<SessionKey> = mutex.withLock {
-        val resolved = expectedSessions.filter { (_, value) -> value.second.matches(source.firstOrNull { it.key == value.first }) }
+    suspend fun reconcile(source: List<Session>, complete: Boolean = true): List<SessionKey> = mutex.withLock {
+        fun observed(key: SessionKey, edit: AgentSessionEdit): Boolean {
+            val row = source.firstOrNull { it.key == key }
+            return (complete || row != null) && edit.matches(row)
+        }
+        val resolved = expectedSessions.filter { (_, value) -> observed(value.first, value.second) }
         val resolvedSpaces = expectedSpaces.filter { (_, edit) -> source.any {
             it.machineId == edit.machine && it.operationWorkspaceId == edit.workspace && it.spaceName == edit.name
         } }
@@ -156,7 +160,7 @@ internal class AgentOperationsState(private val api: AgentOperations, private va
         expectedSessions.keys.removeAll(resolvedKeys)
         expectedSpaces.keys.removeAll(resolvedKeys)
         mutable.value = mutable.value.copy(
-            sessions = mutable.value.sessions.filter { (key, edit) -> !edit.matches(source.firstOrNull { it.key == key }) },
+            sessions = mutable.value.sessions.filter { (key, edit) -> !observed(key, edit) },
             spaces = mutable.value.spaces.filter { (_, edit) -> source.none {
                 it.machineId == edit.machine && it.operationWorkspaceId == edit.workspace && it.spaceName == edit.name
             } },

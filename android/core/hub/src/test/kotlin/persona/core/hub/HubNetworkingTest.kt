@@ -111,7 +111,7 @@ class HubNetworkingTest {
                 assertEquals(count, server.requestCount)
             }
             assertTrue(requests.filter { it.path == "/api/v1/health" }.all { it.getHeader("Authorization") == null })
-            assertTrue(requests.filter { it.path == "/api/v1/ws" }.all { it.getHeader("Authorization") != null })
+            assertTrue(requests.filter { it.requestUrl!!.encodedPath == "/api/v1/ws" }.all { it.getHeader("Authorization") != null })
         }
     }
 

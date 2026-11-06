@@ -48,6 +48,59 @@ class HubChatTransport internal constructor(
 
     override suspend fun machines() = get<MachinesResponse>(api("machines")).machines
     override suspend fun sessions() = get<SessionsResponse>(api("sessions")).sessions
+
+    override suspend fun sessionPage(filter: SessionListFilter, cursor: String?, since: String?): SessionListPage =
+        bounded(sessionListPath(filter, cursor, since), setOf("sessions", "has_more", "total"))
+
+    override suspend fun sessionCounts(filter: SessionListFilter): SessionListCounts =
+        bounded(sessionListPath(filter, counts = true), setOf("total", "machine", "project", "group", "state"))
+
+    private fun sessionListPath(
+        filter: SessionListFilter,
+        cursor: String? = null,
+        since: String? = null,
+        counts: Boolean = false,
+    ): String {
+        val url = path("sessions").apply {
+            addQueryParameter("summary", "1")
+            addQueryParameter("limit", "50")
+            if (counts) addQueryParameter("counts", "1")
+            filter.state?.let { addQueryParameter("state", it) }
+            filter.machineId?.let { addQueryParameter("machine_id", it) }
+            filter.project?.let { addQueryParameter("project", it) }
+            filter.group?.let { addQueryParameter("group", it) }
+            filter.source?.let { addQueryParameter("source", it) }
+            filter.provider?.let { addQueryParameter("provider", it) }
+            if (filter.query.isNotEmpty()) addQueryParameter("q", filter.query)
+            cursor?.let { addQueryParameter("cursor", it) }
+            since?.let { addQueryParameter("since", it) }
+        }.build()
+        return url.encodedPath + "?" + url.encodedQuery
+    }
+
+    /** Only capability failures permit legacy fallback; all other failures remain observable. */
+    private suspend inline fun <reified T> bounded(path: String, envelope: Set<String>): T {
+        val body = try {
+            request(path, "GET", null).use { response ->
+                if (!response.isSuccessful) throw HubFailure.from(response)
+                response.body!!.string()
+            }
+        } catch (failure: HubFailure) {
+            when {
+                failure.status in setOf(404, 405, 501) -> throw SessionListsUnsupported()
+                failure.status == 409 && failure.code in setOf("cursor_expired", "revision_expired") ->
+                    throw SessionListExpired()
+                else -> throw failure
+            }
+        }
+        val element = try { JsonCodec.parseToJsonElement(body) }
+        catch (error: Exception) { throw HubFailure(HubError.Protocol, retryable = false, cause = error) }
+        val obj = element as? JsonObject ?: throw SessionListsUnsupported()
+        val revision = (obj["revision"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        if (revision.isNullOrEmpty() || !obj.keys.containsAll(envelope)) throw SessionListsUnsupported()
+        return try { JsonCodec.decodeFromJsonElement<T>(obj) }
+        catch (error: Exception) { throw HubFailure(HubError.Protocol, retryable = false, cause = error) }
+    }
     override suspend fun interactions() = get<InteractionsResponse>(api("interactions")).interactions
 
     override suspend fun items(session: SessionKey, query: ItemsQuery): ItemsResponse {

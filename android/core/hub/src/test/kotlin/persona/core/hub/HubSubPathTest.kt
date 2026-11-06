@@ -180,7 +180,7 @@ class HubSubPathTest {
                 val path = request.path!!.takeIf { it.startsWith("/jarvis/") }?.removePrefix("/jarvis")
                     ?: return MockResponse().setResponseCode(404)
                 if (path == "/api/v1/health") return MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
-                if (path == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                if (path.substringBefore('?') == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: Response) {
                         webSocket.send("""{"type":"hello","hub_id":"test-hub","features":["client_ops"]}""")
                     }

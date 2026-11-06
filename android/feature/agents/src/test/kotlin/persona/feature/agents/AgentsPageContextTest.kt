@@ -7,7 +7,8 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +38,10 @@ class AgentsPageContextTest {
 
     @Before fun setMain() { Dispatchers.setMain(main) }
     @After fun tearDown() {
-        if (::model.isInitialized) model.viewModelScope.cancel()
+        // Real executor callbacks must finish before replacing the global Main dispatcher.
+        if (::model.isInitialized) runBlocking {
+            withTimeout(10_000) { model.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+        }
         Dispatchers.resetMain()
         main.close(); list.close()
     }

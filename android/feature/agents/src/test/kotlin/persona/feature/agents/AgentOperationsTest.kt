@@ -96,6 +96,18 @@ class AgentOperationsTest {
         assertTrue(operations.state.value.sessions.isEmpty())
     }
 
+    @Test fun unloadedWindowIsNotEvidenceOfAnAmbiguousDeletion() = runTest {
+        val api = FakeOperations().apply { fail = true; uncertain = true }
+        val operations = AgentOperationsState(api)
+        val session = Session("demo", "task", status = "offline")
+        try { operations.session(session, AgentSessionEdit(deleted = true)); fail("Expected uncertain result") }
+        catch (_: AgentOperationFailure) { }
+        assertTrue(operations.reconcile(emptyList(), complete = false).isEmpty())
+        assertTrue(operations.state.value.uncertain.isNotEmpty())
+        assertEquals(listOf(session.key), operations.reconcile(emptyList(), complete = true))
+        assertTrue(operations.state.value.uncertain.isEmpty())
+    }
+
     private class FakeOperations : AgentOperations {
         override val scope = "scope"
         var pins = AgentOperationPreferences()

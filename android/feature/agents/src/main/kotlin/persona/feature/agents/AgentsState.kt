@@ -125,7 +125,7 @@ data class AgentRowMetadata(
 private val Session.readVersion: String get() = "${updatedAt.orEmpty()}|${rev ?: ""}"
 fun Session.listSession(preferences: AgentsPreferencesSnapshot): AgentSession {
     val visible = if (agentState == AgentState.Unread && preferences.seen[key.path] == readVersion) copy(state = "idle") else this
-    return AgentSession(visible, stateSince, subagents.orEmpty().any { it.running == true })
+    return AgentSession(visible, stateSince, (runningSubagents ?: subagents.orEmpty().count { it.running == true }) > 0)
 }
 
 /** Keep opened rows in their old group and slot while the quick filter remains selected. */

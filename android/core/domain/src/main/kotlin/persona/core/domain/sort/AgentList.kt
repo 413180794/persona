@@ -89,6 +89,8 @@ data class AgentListGroup(
     val repo: RepoLevel? = null,
     /** The group this one sits in: a working tree's repository, whose own [rows] are then empty (its trees hold them). */
     val under: String? = null,
+    /** Server membership for this exact group; null means its rows/counts describe the loaded window. */
+    val totalCount: Int? = null,
 )
 
 data class AgentListResult(

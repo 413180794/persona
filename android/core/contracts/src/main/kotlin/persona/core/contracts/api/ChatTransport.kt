@@ -9,6 +9,13 @@ import persona.core.contracts.*
 interface ChatTransport {
     suspend fun machines(): List<Machine>
     suspend fun sessions(): List<Session>
+    suspend fun sessionPage(
+        filter: SessionListFilter = SessionListFilter(),
+        cursor: String? = null,
+        since: String? = null,
+    ): SessionListPage = throw SessionListsUnsupported()
+    suspend fun sessionCounts(filter: SessionListFilter = SessionListFilter()): SessionListCounts =
+        throw SessionListsUnsupported()
     suspend fun items(session: SessionKey, query: ItemsQuery): ItemsResponse
     suspend fun interactions(): List<Interaction>
     suspend fun resolve(id: String, resolution: Resolution)

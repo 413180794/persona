@@ -26,12 +26,51 @@ private fun <T> GroupStack.mapped(flow: Flow<T>, transform: GroupNames.(T) -> T)
     if (names.plain) flow else flow.map { names.transform(it) }
 
 internal fun mergedSessions(stacks: GroupStacks): SessionsRepository = object : SessionsRepository, VerifiedSessionsRepository {
+    private val listNamespaces = MutableStateFlow<Set<String?>?>(null)
+    private fun selected(stack: GroupStack) = listNamespaces.value?.contains(stack.names.namespace) != false
+    override suspend fun setListNamespaces(namespaces: Set<String?>?) { listNamespaces.value = namespaces }
     override val machines = stacks.merged(emptyList<Machine>(), { s ->
         s.mapped(s.repositories.sessions.machines) { list -> list.map(::machine) }
     }) { it.flatten() }
     override val sessions = stacks.merged(emptyList<Session>(), { s ->
         s.mapped(s.repositories.shownSessions) { list -> list.map(::session) }
     }) { it.flatten() }
+    override val listStatus = stacks.merged(SessionListStatus(), { stack ->
+        combine(stack.repositories.sessions.listStatus, listNamespaces) { status, namespaces ->
+            if (namespaces?.contains(stack.names.namespace) == false) SessionListStatus(loaded = true)
+            else status.copy(
+                counts = status.counts.copy(machine = status.counts.machine.mapKeys { (id, _) -> stack.names.machineId(id) }),
+                machineCounts = status.machineCounts.copy(machine = status.machineCounts.machine.mapKeys { (id, _) -> stack.names.machineId(id) }),
+            )
+        }
+    }) { statuses ->
+        fun totals(map: (SessionListCounts) -> Map<String, Int>, machines: Boolean = false) = statuses.flatMap { map(if (machines) it.machineCounts else it.counts).entries }
+            .groupBy({ it.key }, { it.value }).mapValues { (_, values) -> values.sum() }
+        SessionListStatus(
+            paged = statuses.any { it.paged }, loaded = statuses.isNotEmpty() && statuses.all { it.loaded },
+            loading = statuses.any { it.loading }, hasMore = statuses.any { it.hasMore }, hasPrevious = statuses.any { it.hasPrevious },
+            total = statuses.sumOf { it.total },
+            counts = SessionListCounts(total = statuses.sumOf { it.counts.total }, machine = totals({ it.machine }),
+                project = totals({ it.project }), group = totals({ it.group }), state = totals({ it.state }),
+                revision = statuses.joinToString("|") { it.counts.revision }),
+            machineCounts = SessionListCounts(total = statuses.sumOf { it.machineCounts.total }, machine = totals({ it.machine }, true),
+                project = totals({ it.project }, true), group = totals({ it.group }, true), state = totals({ it.state }, true)),
+        )
+    }
+    override suspend fun setListFilter(filter: SessionListFilter) = stacks.forEach { stack ->
+        if (!selected(stack)) return@forEach
+        val machine = filter.machineId?.let { id -> if (stack.names.owns(id)) GroupKeys.raw(id) else id }
+        stack.repositories.sessions.setListFilter(filter.copy(machineId = machine))
+    }
+    override suspend fun loadMore() = stacks.forEach { if (selected(it)) it.repositories.sessions.loadMore() }
+    override suspend fun loadPrevious() = stacks.forEach { if (selected(it)) it.repositories.sessions.loadPrevious() }
+    override suspend fun listCounts(filter: SessionListFilter): SessionListCounts {
+        val machine = requireNotNull(filter.machineId)
+        return stacks.use(GroupKeys.namespaceOf(machine)) { stack ->
+            val counts = stack.repositories.sessions.listCounts(filter.copy(machineId = GroupKeys.raw(machine)))
+            counts.copy(machine = counts.machine.mapKeys { (id, _) -> stack.names.machineId(id) })
+        }
+    }
     override suspend fun refresh() = stacks.forEach { it.repositories.sessions.refresh() }
     override fun verifiedSessions(): Map<String, List<Session>> = stacks.stacks.value.flatMap { stack ->
         stack.repositories.sessions.verifiedSessions().map { (machine, sessions) ->

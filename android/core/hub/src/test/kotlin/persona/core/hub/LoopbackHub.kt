@@ -41,11 +41,11 @@ internal class LoopbackHub(
     private val server = MockWebServer().apply {
         dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                authorizations.add(request.path.orEmpty() to request.getHeader("Authorization"))
+                authorizations.add(request.requestUrl!!.encodedPath to request.getHeader("Authorization"))
                 if (request.path != "/api/v1/health" && request.getHeader("Authorization")?.removePrefix("Bearer ") in refused) {
                     return MockResponse().setResponseCode(401).setBody("""{"error":"expired","code":"invalid_token","retryable":false}""")
                 }
-                return when (request.path) {
+                return when (request.requestUrl!!.encodedPath) {
                 "/api/v1/health" -> {
                     probes.incrementAndGet()
                     log?.add(url)

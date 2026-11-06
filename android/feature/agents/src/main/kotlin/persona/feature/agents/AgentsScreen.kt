@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -35,6 +37,8 @@ import persona.core.navigation.*
 import kotlinx.coroutines.delay
 import java.time.Instant
 
+private const val AGENTS_PREFETCH_ROWS = 6
+
 @Composable
 internal fun AgentsScreen(
     model: AgentsViewModel,
@@ -49,6 +53,15 @@ internal fun AgentsScreen(
     cardRequests: CardOpenRequests = AgentsCardOpen,
 ) {
     val page by model.page.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    LaunchedEffect(model, listState, page.pagination.paged) {
+        if (!page.pagination.paged) return@LaunchedEffect
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val last = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            listState.canScrollBackward && last >= layout.totalItemsCount - AGENTS_PREFETCH_ROWS
+        }.distinctUntilChanged().collect { nearEnd -> if (nearEnd) model.loadMore() }
+    }
     val connection by model.connection.state.collectAsStateWithLifecycle()
     val group by model.group.collectAsStateWithLifecycle()
     val everyRequest by model.interactions.pending.collectAsStateWithLifecycle()
@@ -232,6 +245,7 @@ internal fun AgentsScreen(
     Box(Modifier.fillMaxSize()) {
         JListPage(
             title = if (connection == ConnectionState.Online) names[page.settings.machineFilter] ?: "Agents" else connection.title,
+            state = listState,
             summary = summary, subtitle = subtitle, greet = true,
             titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = if (connection == ConnectionState.Online) null else connectionDetails, refreshing = refreshing, onRefresh = model::refresh,
@@ -339,10 +353,16 @@ internal fun AgentsScreen(
                         action = { JButton(stringResource(R.string.agents_empty_show_all), { model.filter(AgentQuickFilter.All) }, kind = JButtonKind.Secondary) })
                 }
             }
+            if (page.pagination.hasPrevious) item("sessions-previous", contentType = "pagination") {
+                JTextButton(stringResource(R.string.agents_page_previous), model::loadPrevious)
+            }
             tree.forEach { entry ->
                 when (entry) {
                     is TreeMachineEntry -> item(entry.key, contentType = "machine") {
                         val machine = entry.machine
+                        LaunchedEffect(entry.key, page.pagination.counts.revision, page.settings.query, page.settings.quick) {
+                            model.countMachine(machine)
+                        }
                         // A computer only the sessions name (no machine snapshot yet) says so (AgentsViewModel.page).
                         val machineTitle = if (page.machines.any { it.id == machine.machine.id }) machine.machine.displayName
                             else stringResource(R.string.agents_machine_pending)
@@ -357,11 +377,14 @@ internal fun AgentsScreen(
                     }
                     is TreeGroupEntry -> item(entry.key, contentType = if (entry.space) "space" else "section") {
                         val group = entry.group
+                        LaunchedEffect(entry.key, page.pagination.counts.revision, page.settings.query, page.settings.quick, page.settings.grouping) {
+                            model.countGroup(group)
+                        }
                         val space = spacesById[group.id]
                         // A history group of a session without a directory has no title of its own (AgentHistory.kt).
                         val groupTitle = group.title.text().ifBlank { stringResource(R.string.agents_history_unknown_folder) }
                         if (entry.space) AgentSpaceHeader(groupTitle, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
-                            quiet = entry.quiet, sessions = group.rows.size, counts = group.headingCounts,
+                            quiet = entry.quiet, sessions = group.totalCount ?: group.rows.size, counts = group.headingCounts,
                             flags = buildList {
                                 if (space != null && space.preferenceKey in page.preferences.pins.spaces) add(RowFlag(stringResource(R.string.agents_flag_space_pinned), PhIcons.PushPin))
                                 if (space != null && space.preferenceKey in page.preferences.mutes.spaces) add(RowFlag(stringResource(R.string.agents_flag_space_muted), PhIcons.Prohibit))
@@ -417,6 +440,14 @@ internal fun AgentsScreen(
                     is TreeIdleEntry -> item(entry.key, contentType = "idle") {
                         AgentIdleRow(entry.hidden, onClick = { model.showIdle(entry.group) }, depth = entry.depth)
                     }
+                }
+            }
+            if (page.pagination.paged) item("sessions-pagination", contentType = "pagination") {
+                Column(Modifier.fillMaxWidth().padding(vertical = Tokens.Space.m), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.agents_page_loaded, page.sessions.size, page.pagination.total),
+                        style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+                    if (page.pagination.loading) JSpinner()
+                    else if (page.pagination.hasMore) JTextButton(stringResource(R.string.agents_page_more), model::loadMore)
                 }
             }
         }
@@ -606,7 +637,7 @@ internal fun SlotRow(
             session.loop?.let { add(RowFact(it.nextRunLabel(agentResources(), now))) }
             // a running workflow is in background too: counted once (#2935)
             session.backgroundCount.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_background, it))) }
-            session.subagents?.count { it.running == true }?.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_subagents, it))) }
+            (session.runningSubagents ?: session.subagents?.count { it.running == true })?.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_subagents, it))) }
             if (metadata.needsConfirmation) add(RowFact(if (metadata.verifying) PendingStatus.Verifying.localizedLabel else PendingStatus.Unconfirmed.localizedLabel, caution = true))
             if (metadata.pendingCount > 0) add(RowFact(stringResource(R.string.agents_row_queued, metadata.pendingCount), caution = true))
             if (metadata.sending) add(RowFact(PendingStatus.Sending.localizedLabel))

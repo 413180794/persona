@@ -13,6 +13,8 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
 
+private data class GroupListCounts(val filter: SessionListFilter, val revision: String, val counts: SessionListCounts)
+
 internal data class AgentsPageState(
     val sessions: List<Session> = emptyList(),
     val machines: List<Machine> = emptyList(),
@@ -33,6 +35,7 @@ internal data class AgentsPageState(
      * asynchronously, so until then the list shows no empty state (as the space page's `loaded`, #5377).
      */
     val loaded: Boolean = false,
+    val pagination: SessionListStatus = SessionListStatus(),
 )
 
 /**
@@ -69,6 +72,8 @@ internal class AgentsViewModel(
     private val messageIds = mutableMapOf<String, String>()
     private var changing = false
     private val settings = MutableStateFlow(AgentListSettings())
+    private val groupListCounts = MutableStateFlow<Map<String, GroupListCounts>>(emptyMap())
+    private val countingGroups = mutableSetOf<Triple<String, String, SessionListFilter>>()
     private val groupFilter = MutableStateFlow<GroupFilter?>(null)
     /** The hub group the list shows; null is every group (AgentGroups.kt). */
     val group = groupFilter.asStateFlow()
@@ -154,8 +159,9 @@ internal class AgentsViewModel(
     }
 
     private val todosFlow = tasks?.todos ?: MutableStateFlow(emptyList())
-    val page = combine(renamer?.project(repository.sessions) ?: repository.sessions, repository.machines, preferences.snapshots(pairingScope),
-        settings.combine(groupFilter, ::Pair), combine(operationState, todosFlow, ::Pair)) { everySession, everyMachine, localPrefs, (settings, group), (ops, todos) ->
+    private val projectedPage = combine(renamer?.project(repository.sessions) ?: repository.sessions, repository.machines,
+        preferences.snapshots(pairingScope).combine(repository.listStatus) { prefs, status -> prefs to status },
+        settings.combine(groupFilter, ::Pair), combine(operationState, todosFlow, ::Pair)) { everySession, everyMachine, (localPrefs, pagination), (settings, group), (ops, todos) ->
         val source = if (group == null) everySession else everySession.filter { group.admits(it.machineId) }
         val machines = if (group == null) everyMachine else everyMachine.filter { group.admits(it.id) }
         val sessions = ops.project(source)
@@ -168,19 +174,134 @@ internal class AgentsViewModel(
         val context = listOf(prefs.range, effective.grouping, effective.sort, effective.hideBotmux, effective.quick, effective.query, effective.machineFilter, prefs.pins, todos)
         if (context != previousContext) previous = null
         previousContext = context
-        val sorted = scopedAgentList(rows, knownMachines, prefs, effective, todos)
+        // Server row search uses complete index text; searching the truncated summary again would lose matches.
+        val projectionSettings = if (pagination.paged) effective.copy(query = "") else effective
+        val sorted = scopedAgentList(rows, knownMachines, prefs, projectionSettings, todos)
         val result = retainOpenedRows(sorted, previous, effective.kept).also { previous = it }
         val all = scopedAgentList(rows, knownMachines, prefs,
-            effective.copy(quick = AgentQuickFilter.All, kept = emptySet()), todos)
+            projectionSettings.copy(quick = AgentQuickFilter.All, kept = emptySet()), todos)
         // The chips count what each computer would show under the current range, search and quick filter.
-        val everywhere = scopedAgentList(rows, knownMachines, prefs, effective.copy(machineFilter = "", kept = emptySet()), todos)
+        val everywhere = scopedAgentList(rows, knownMachines, prefs, projectionSettings.copy(machineFilter = "", kept = emptySet()), todos)
             .groups.flatMap { it.rows }.filterNot { it.session.isCodexSubagent }
         AgentsPageState(sessions, knownMachines, prefs, effective, result, all.groups.sumOf { group -> group.rows.count { !it.session.isCodexSubagent } },
             machineCounts(knownMachines, everywhere), everywhere.size, groupCounts(everySession, everyMachine, prefs, effective, ops),
             // With botmux shown, "All"'s own "Lark groups" count is it; hidden, counted without a fourth list.
             botmuxCount = if (effective.hideBotmux) botmuxCount(rows, prefs, effective)
                 else all.counts[AgentQuickFilter.Feishu] ?: 0, loaded = true)
-    }.flowOn(listContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentsPageState())
+    }.flowOn(listContext)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val page = combine(projectedPage, repository.listStatus, flow {
+        // Apply filters only while the page is observed; hidden/destroyed screens retain no filter worker.
+        emitAll(remoteFilter.mapLatest { (filter, group) ->
+            try {
+                repository.setListNamespaces(group?.let { setOf(it.namespace) })
+                repository.setListFilter(filter)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { _failure.value = error }
+            Unit
+        })
+    }, groupListCounts) { projected, status, _, metadata ->
+        if (!status.paged) projected.copy(pagination = status)
+        else {
+            val counts = status.counts
+            val machineCounts = status.machineCounts
+            val quickCounts = AgentQuickFilter.entries.associateWith { filter ->
+                filter.state?.let { counts.state[it.wire] ?: 0 }
+                    ?: if (filter == AgentQuickFilter.All) counts.total else projected.list.counts[filter] ?: 0
+            }
+            fun count(id: String): SessionListCounts? = metadata[id]?.takeIf {
+                it.revision == status.counts.revision && it.filter.query == projected.settings.query.take(256) &&
+                    it.filter.state == projected.settings.quick.state?.wire
+            }?.counts
+            fun SessionListCounts.states() = AgentState.entries.associateWith { state -> this.state[state.wire] ?: 0 }
+            val countedGroups = projected.list.groups.map { group ->
+                count("group:${group.id}")?.let { group.copy(totalCount = it.total, stateCounts = it.states()) } ?: group
+            }
+            val countedMachines = projected.list.machines.map { machine ->
+                count("machine:${machine.machine.id}")?.let { machine.copy(sessionCount = it.total, stateCounts = it.states(),
+                    repoCount = it.project.size, spaceCount = it.group.size) } ?: machine
+            }
+            projected.copy(
+                list = projected.list.copy(counts = quickCounts, groups = countedGroups, machines = countedMachines), allCount = counts.total,
+                machineCounts = projected.machines.sortedBy { !it.online }.map { MachineCount(it, machineCounts.machine[it.id] ?: 0) },
+                machineTotal = machineCounts.total,
+                groupCounts = machineCounts.machine.entries.groupBy { GroupKeys.namespaceOf(it.key) }
+                    .mapValues { (_, rows) -> rows.sumOf { it.value } },
+                loaded = status.loaded, pagination = status,
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), AgentsPageState())
+
+    /** Network filters reset the frozen cursor; the repository discards responses from an older selection. */
+    private val remoteFilter = settings.combine(groupFilter) { settings, group ->
+        SessionListFilter(state = settings.quick.state?.wire, machineId = settings.machineFilter.takeIf { it.isNotEmpty() },
+            query = settings.query.take(256)) to group
+    }.distinctUntilChanged()
+
+    fun countMachine(machine: AgentMachineGroup) = requestGroupCounts("machine:${machine.machine.id}",
+        SessionListFilter(machineId = machine.machine.id))
+
+    fun countGroup(group: AgentListGroup) {
+        val page = this.page.value
+        val members = group.rows + page.list.groups.filter { it.under == group.id }.flatMap { it.rows }
+        val machine = members.map { it.session.machineId }.distinct().singleOrNull() ?: return
+        val dimension = when (page.settings.grouping) {
+            AgentGrouping.Repo -> {
+                if (group.repo != RepoLevel.Repository) return // Worktree recipes need a cwd dimension the server lacks.
+                val project = members.map { it.session.repoRoot?.takeIf(String::isNotEmpty) ?: it.session.cwd }
+                    .distinct().singleOrNull() ?: return
+                SessionListFilter(machineId = machine, project = project)
+            }
+            AgentGrouping.MachineSpace -> {
+                val id = members.map { it.session.spaceId?.takeIf(String::isNotEmpty) ?: it.session.workspaceId.orEmpty() }
+                    .distinct().singleOrNull() ?: return
+                SessionListFilter(machineId = machine, group = id)
+            }
+            else -> return // Pin/mute ranks and custom to-do sections are not server groups.
+        }
+        requestGroupCounts("group:${group.id}", dimension)
+    }
+
+    private fun requestGroupCounts(id: String, dimension: SessionListFilter) {
+        val page = this.page.value
+        val revision = page.pagination.counts.revision
+        if (!page.pagination.paged || revision.isEmpty()) return
+        val filter = dimension.copy(state = page.settings.quick.state?.wire, query = page.settings.query.take(256))
+        val key = Triple(id, revision, filter)
+        if (groupListCounts.value[id]?.let { it.revision == revision && it.filter == filter } == true || !countingGroups.add(key)) return
+        viewModelScope.launch {
+            try {
+                val counts = repository.listCounts(filter)
+                val current = this@AgentsViewModel.page.value
+                if (current.pagination.counts.revision == revision && current.settings.query.take(256) == filter.query &&
+                    current.settings.quick.state?.wire == filter.state) groupListCounts.update { metadata ->
+                    (metadata + (id to GroupListCounts(filter, revision, counts))).entries.toList().takeLast(512)
+                        .associate { it.key to it.value }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: SessionListsUnsupported) { /* Existing local group recipe; no unbounded fallback. */ }
+            catch (error: Exception) { _failure.value = error }
+            finally { countingGroups.remove(key) }
+        }
+    }
+
+    fun loadMore() {
+        if (!repository.listStatus.value.hasMore || repository.listStatus.value.loading) return
+        viewModelScope.launch {
+            try { repository.loadMore() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { _failure.value = error }
+        }
+    }
+
+    fun loadPrevious() {
+        if (!repository.listStatus.value.hasPrevious || repository.listStatus.value.loading) return
+        viewModelScope.launch {
+            try { repository.loadPrevious() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { _failure.value = error }
+        }
+    }
 
     init {
         if (hubUpdates != null) {
@@ -224,7 +345,8 @@ internal class AgentsViewModel(
             localChange { operations.refresh() }
             viewModelScope.launch {
                 repository.sessions.collect { sessions ->
-                    operations.reconcile(sessions).forEach { bindings?.onSessionClosed?.invoke(it) }
+                    val status = repository.listStatus.value
+                    operations.reconcile(sessions, complete = status.loaded && !status.paged).forEach { bindings?.onSessionClosed?.invoke(it) }
                     messageIds.keys.removeAll { operation ->
                         operation.startsWith("loop:") && sessions.none { "loop:${it.key.path}" == operation && it.loop != null }
                     }

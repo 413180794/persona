@@ -283,7 +283,7 @@ class HubGroupConnectionTest {
                     assertEquals("证书指纹不符",
                         (connection.diagnostics.value.candidates.single { endpointKey(it.url) == endpointKey(endpoint(impostor).url) }.result).zhAny())
                     assertEquals(fingerprint(otherCertificate), connection.diagnostics.value.fingerprint)
-                    assertEquals(0, impostor.requests.count { it.path == "/api/v1/ws" })
+                    assertEquals(0, impostor.requests.count { it.requestUrl!!.encodedPath == "/api/v1/ws" })
                     // Without the group, the other hub's pin is not trusted at all.
                     HubHttpClient("hub-b", fingerprint(homeCertificate), "test").use { single ->
                         assertEquals(HubError.CertificateMismatch,
@@ -309,7 +309,7 @@ class HubGroupConnectionTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 hub.requests += request
-                return when (request.path) {
+                return when (request.requestUrl!!.encodedPath) {
                     "/api/v1/health" -> MockResponse().setBody("""{"ok":true,"hub_id":"$hubId"}""")
                     "/api/v1/ws" -> MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                         override fun onOpen(webSocket: WebSocket, response: Response) {

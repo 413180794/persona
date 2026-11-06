@@ -91,6 +91,10 @@ data class SessionsEvent(
     @SerialName("machine_id") val machineId: String, val sessions: List<Session> = emptyList(),
 ) : ServerEvent
 
+/** A bounded runtime list invalidation hint, never a completed HTTP baseline. */
+@Serializable
+data class SessionsListEvent(val revision: String) : ServerEvent
+
 @KeepGeneratedSerializer
 @Serializable(with = MachinesEventSerializer::class)
 data class MachinesEvent(
@@ -209,6 +213,9 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "sessions" -> input.json.decodeFromJsonElement<SessionsEvent>(obj).let { event ->
                 event.copy(sessions = event.sessions.map { it.copy(machineId = event.machineId) })
             }
+            "sessions_list" -> input.json.decodeFromJsonElement<SessionsListEvent>(obj).also {
+                require(it.revision.isNotEmpty()) { "A list hint has a revision" }
+            }
             "machines" -> input.json.decodeFromJsonElement<MachinesEvent>(obj)
             "revs" -> input.json.decodeFromJsonElement<RevsEvent>(obj)
             "fleet" -> input.json.decodeFromJsonElement<FleetEvent>(obj)
@@ -266,6 +273,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is Hello -> "hello" to output.json.encodeToJsonElement(value)
             is ItemsEvent -> "items" to output.json.encodeToJsonElement(value)
             is SessionsEvent -> "sessions" to output.json.encodeToJsonElement(value)
+            is SessionsListEvent -> "sessions_list" to output.json.encodeToJsonElement(value)
             is MachinesEvent -> "machines" to output.json.encodeToJsonElement(value)
             is RevsEvent -> "revs" to output.json.encodeToJsonElement(value)
             is FleetEvent -> "fleet" to output.json.encodeToJsonElement(value)
