@@ -39,17 +39,20 @@ func (t *terminals) callLock(key [2]string) *sync.Mutex {
 }
 
 type termRelay struct {
-	subs   map[*client]bool
+	// Each subscriber with the machine ids it asked by: the computer's own id, or one it absorbed. Everything an app
+	// gets carries the id it asked with, which is what its page matches a push by (web/src/views/session/terminal/feed.ts).
+	subs   map[*client]map[string]bool
 	epoch  string
 	frames []termFrame // from the latest whole frame on
 
 	// The app driving the terminal at its size (nil: the stream is of the pane at its own size) and that size. What
 	// the node runs follows these: every change starts a sync (terminalSync).
-	controller *client
-	ctl        termCtl
-	takeover   bool
-	synced     *termCtl // what the node runs: controlled at that size, or (nil) observing if observing
-	observing  bool
+	controller   *client
+	controllerID string // the machine id the controller asked by
+	ctl          termCtl
+	takeover     bool
+	synced       *termCtl // what the node runs: controlled at that size, or (nil) observing if observing
+	observing    bool
 }
 
 // termCtl is a controlled terminal's grid.
@@ -110,6 +113,10 @@ func (h *Hub) terminalSubscribe(ctx context.Context, c *client, machineID, sessi
 		c.sendJSON(map[string]any{"type": "terminal", "machine_id": machineID, "session_id": sessionID, "error": "unknown machine"})
 		return
 	}
+	// Kept under the computer's own id, which is what its frames and ends carry (a page may have asked by an absorbed
+	// one); what goes back to this app carries the id it asked by.
+	asked := machineID
+	machineID = m.cfg.ID
 	key := [2]string{machineID, sessionID}
 	t := &h.terms
 	t.mu.Lock()
@@ -119,17 +126,22 @@ func (h *Hub) terminalSubscribe(ctx context.Context, c *client, machineID, sessi
 	r := t.relays[key]
 	first := r == nil
 	if first {
-		r = &termRelay{subs: map[*client]bool{}}
+		r = &termRelay{subs: map[*client]map[string]bool{}}
 		t.relays[key] = r
 	}
-	r.subs[c] = true
+	if r.subs[c] == nil {
+		r.subs[c] = map[string]bool{}
+	}
+	r.subs[c][asked] = true
 	sync := first
 	switch {
-	case ctl != nil && r.controller != c:
-		if old := r.controller; old != nil { // the newest device drives; the one before watches
-			old.sendTerm(termControlMessage(machineID, sessionID, "taken", nil, i18n.T(old.lang(), "hub-terminal.taken_by_device")))
+	case ctl != nil && (r.controller != c || r.controllerID != asked):
+		// The newest device drives; the one before watches. So does a page of the same app that drove it by the
+		// computer's other id: each page knows only the id it asked by.
+		if old := r.controller; old != nil {
+			old.sendTerm(termControlMessage(r.controllerID, sessionID, "taken", nil, i18n.T(old.lang(), "hub-terminal.taken_by_device")))
 		}
-		r.controller, r.ctl, r.takeover, sync = c, *ctl, takeover, true
+		r.controller, r.controllerID, r.ctl, r.takeover, sync = c, asked, *ctl, takeover, true
 	case ctl != nil: // the same app again (it lost frames, or reconnected): continue, at its size now
 		if takeover && !r.takeover {
 			r.takeover, sync = true, true
@@ -140,13 +152,13 @@ func (h *Hub) terminalSubscribe(ctx context.Context, c *client, machineID, sessi
 				h.terminalNotify(m, "terminal.resize", map[string]any{"session_id": sessionID, "cols": ctl.Cols, "rows": ctl.Rows})
 			}
 		}
-	case r.controller == c: // it only watches now
-		r.controller, sync = nil, true
+	case r.controller == c && r.controllerID == asked: // it only watches now
+		r.controller, r.controllerID, sync = nil, "", true
 	}
 	// Under the lock: the replay goes out before any frame that arrives meanwhile. A sync starts the stream over.
 	if !sync {
 		for _, f := range r.replay(epoch, after) {
-			c.sendTerm(termMessage(machineID, sessionID, r.epoch, f))
+			c.sendTerm(termMessage(asked, sessionID, r.epoch, f))
 		}
 	}
 	t.mu.Unlock()
@@ -186,9 +198,12 @@ func (h *Hub) terminalSyncOnce(ctx context.Context, m *Machine, key [2]string, r
 		t.mu.Unlock()
 		return false
 	}
-	controller, ctl, takeover := r.controller, r.ctl, r.takeover
+	controller, controllerID, ctl, takeover := r.controller, r.controllerID, r.ctl, r.takeover
 	if controller == nil && r.observing ||
 		controller != nil && r.synced != nil && *r.synced == ctl && !takeover {
+		if controller != nil { // a device that took it over at the size the node drives it at: it drives it now
+			controller.sendTerm(termControlMessage(controllerID, key[1], "active", &ctl, ""))
+		}
 		t.mu.Unlock() // the node already streams it so
 		return false
 	}
@@ -217,7 +232,7 @@ func (h *Hub) terminalSyncOnce(ctx context.Context, m *Machine, key [2]string, r
 			r.controller, r.takeover = nil, false
 		}
 		r.synced, r.observing = nil, false // the node stopped watching to try: watch again
-		controller.sendTerm(termControlMessage(key[0], key[1], "busy", nil, i18n.T(controller.lang(), "hub-terminal.busy")))
+		controller.sendTerm(termControlMessage(controllerID, key[1], "busy", nil, i18n.T(controller.lang(), "hub-terminal.busy")))
 		return true
 	case err != nil:
 		go h.terminalEnded(key[0], key[1], err.Error(), r)
@@ -227,13 +242,13 @@ func (h *Hub) terminalSyncOnce(ctx context.Context, m *Machine, key [2]string, r
 			r.controller, r.takeover = nil, false
 		}
 		r.synced, r.observing = nil, true // it ignored control and watches
-		controller.sendTerm(termControlMessage(key[0], key[1], "unsupported", nil, i18n.T(controller.lang(), "hub-terminal.unsupported")))
+		controller.sendTerm(termControlMessage(controllerID, key[1], "unsupported", nil, i18n.T(controller.lang(), "hub-terminal.unsupported")))
 	case controller != nil:
 		r.synced, r.observing = &termCtl{ctl.Cols, ctl.Rows}, false
 		if r.controller == controller {
 			r.takeover = false
 		}
-		controller.sendTerm(termControlMessage(key[0], key[1], "active", &ctl, ""))
+		controller.sendTerm(termControlMessage(controllerID, key[1], "active", &ctl, ""))
 		if r.controller == controller && r.ctl != ctl { // it resized while the node was starting
 			r.synced = &termCtl{r.ctl.Cols, r.ctl.Rows}
 			h.terminalNotify(m, "terminal.resize", map[string]any{"session_id": key[1], "cols": r.ctl.Cols, "rows": r.ctl.Rows})
@@ -241,7 +256,7 @@ func (h *Hub) terminalSyncOnce(ctx context.Context, m *Machine, key [2]string, r
 	default:
 		r.synced, r.observing = nil, true
 	}
-	return r.controller != controller || r.controller != nil && r.takeover
+	return r.controller != controller || r.controllerID != controllerID || r.controller != nil && r.takeover
 }
 
 // terminalNotify sends the node an event about a terminal it streams (keys, sizes, the lease); events keep their order.
@@ -259,8 +274,8 @@ func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *t
 	}
 	t := &h.terms
 	t.mu.Lock()
-	r := t.relays[[2]string{machineID, sessionID}]
-	if r == nil || r.controller != c {
+	r := t.relays[[2]string{m.cfg.ID, sessionID}]
+	if r == nil || r.controller != c || r.controllerID != machineID { // only the page that drives it
 		t.mu.Unlock()
 		return
 	}
@@ -302,8 +317,8 @@ func (h *Hub) terminalClick(c *client, machineID, sessionID string, column, row 
 	}
 	t := &h.terms
 	t.mu.Lock()
-	r := t.relays[[2]string{machineID, sessionID}]
-	live := r != nil && r.controller == c && r.synced != nil
+	r := t.relays[[2]string{m.cfg.ID, sessionID}]
+	live := r != nil && r.controller == c && r.controllerID == machineID && r.synced != nil
 	t.mu.Unlock()
 	if live {
 		_ = m.notify("terminal.click", map[string]any{"session_id": sessionID, "column": column, "row": row})
@@ -348,8 +363,8 @@ func (h *Hub) terminalMouse(c *client, machineID, sessionID string, e termMouse)
 	}
 	t := &h.terms
 	t.mu.Lock()
-	r := t.relays[[2]string{machineID, sessionID}]
-	live := r != nil && r.controller == c && r.synced != nil
+	r := t.relays[[2]string{m.cfg.ID, sessionID}]
+	live := r != nil && r.controller == c && r.controllerID == machineID && r.synced != nil
 	t.mu.Unlock()
 	if live {
 		_ = m.notify("terminal.mouse", map[string]any{"session_id": sessionID, "action": e.Action, "button": e.Button,
@@ -385,26 +400,40 @@ func (h *Hub) terminalKeepalive(ctx context.Context) {
 	}
 }
 
+// terminalUnsubscribe takes the id the app asked by off its subscription; the app leaves the relay with its last one.
 func (h *Hub) terminalUnsubscribe(c *client, machineID, sessionID string) {
-	key := [2]string{machineID, sessionID}
+	asked := machineID
+	m := h.localMachine(machineID)
+	if m != nil { // the relay is under the computer's own id (terminalSubscribe)
+		machineID = m.cfg.ID
+	}
+	h.terminalLeave(c, m, [2]string{machineID, sessionID}, asked)
+}
+
+// terminalLeave takes asked off the app's subscription to the relay under key (the computer's own id); m is that
+// computer (nil: it is gone, the relay only goes).
+func (h *Hub) terminalLeave(c *client, m *Machine, key [2]string, asked string) {
 	t := &h.terms
 	t.mu.Lock()
 	r := t.relays[key]
-	if r == nil || !r.subs[c] {
+	if r == nil || !r.subs[c][asked] {
 		t.mu.Unlock()
 		return
 	}
-	delete(r.subs, c)
+	delete(r.subs[c], asked)
+	if len(r.subs[c]) == 0 {
+		delete(r.subs, c)
+	}
 	last := len(r.subs) == 0
 	if last {
 		delete(t.relays, key)
 	}
-	drove := r.controller == c
+	// The page that drove it is the one that asked by this id; one of the same app under the other id only watched.
+	drove := r.controller == c && (r.controllerID == asked || r.subs[c] == nil)
 	if drove {
-		r.controller = nil // the pane goes back to its size; whoever still watches sees it there
+		r.controller, r.controllerID = nil, "" // the pane goes back to its size; whoever still watches sees it there
 	}
 	t.mu.Unlock()
-	m := h.localMachine(machineID)
 	if m == nil {
 		return
 	}
@@ -437,15 +466,20 @@ func (h *Hub) terminalUnwatch(m *Machine, key [2]string) {
 func (h *Hub) terminalDrop(c *client) {
 	t := &h.terms
 	t.mu.Lock()
-	var keys [][2]string
+	type sub struct {
+		key   [2]string
+		asked string
+	}
+	var subs []sub
 	for k, r := range t.relays {
-		if r.subs[c] {
-			keys = append(keys, k)
+		for asked := range r.subs[c] {
+			subs = append(subs, sub{k, asked})
 		}
 	}
 	t.mu.Unlock()
-	for _, k := range keys {
-		h.terminalUnsubscribe(c, k[0], k[1])
+	// By the relay's own key: an id the app asked by may no longer reach the computer.
+	for _, s := range subs {
+		h.terminalLeave(c, h.localMachine(s.key[0]), s.key, s.asked)
 	}
 }
 
@@ -485,8 +519,25 @@ func (h *Hub) onTerminalFrame(machineID string, params json.RawMessage) {
 	if err != nil {
 		return
 	}
-	for c := range r.subs {
-		c.queue(b) // the same non-blocking queue sendTerm uses
+	var aliased map[string][]byte // the frame under an absorbed id a page asked by, encoded once each
+	for c, ids := range r.subs {
+		for id := range ids {
+			if id == machineID {
+				c.queue(b) // the same non-blocking queue sendTerm uses
+				continue
+			}
+			ab, ok := aliased[id]
+			if !ok {
+				if ab, err = json.Marshal(termMessage(id, p.SessionID, r.epoch, p.termFrame)); err != nil {
+					continue
+				}
+				if aliased == nil {
+					aliased = map[string][]byte{}
+				}
+				aliased[id] = ab
+			}
+			c.queue(ab)
+		}
 	}
 }
 
@@ -506,9 +557,9 @@ func (h *Hub) terminalControlEnded(machineID, sessionID, why string, taken bool)
 		state, text = "taken", "hub-terminal.taken_by_program"
 	}
 	if c := r.controller; c != nil {
-		c.sendTerm(termControlMessage(machineID, sessionID, state, nil, i18n.T(c.lang(), text)))
+		c.sendTerm(termControlMessage(r.controllerID, sessionID, state, nil, i18n.T(c.lang(), text)))
 	}
-	r.controller, r.synced, r.observing = nil, nil, false
+	r.controller, r.controllerID, r.synced, r.observing = nil, "", nil, false
 	t.mu.Unlock()
 	h.logf("[%s] terminal %s: control ended: %s", machineID, sessionID, why)
 	if m := h.localMachine(machineID); m != nil {
@@ -532,11 +583,12 @@ func (h *Hub) terminalEnded(machineID, sessionID, why string, only *termRelay) {
 	if m := h.localMachine(machineID); m != nil && r.synced != nil {
 		go h.terminalUnwatch(m, key) // the node may still drive it (a watch that timed out here but started there)
 	}
-	msg := map[string]any{"type": "terminal", "machine_id": machineID, "session_id": sessionID, "error": why,
-		// an old node ("unknown method") or herdr: read the screen instead of trying again
-		"unsupported": strings.Contains(why, "unknown method") || strings.HasPrefix(why, "unsupported")}
-	for c := range r.subs {
-		c.sendTerm(msg)
+	// an old node ("unknown method") or herdr: read the screen instead of trying again
+	unsupported := strings.Contains(why, "unknown method") || strings.HasPrefix(why, "unsupported")
+	for c, ids := range r.subs {
+		for id := range ids {
+			c.sendTerm(map[string]any{"type": "terminal", "machine_id": id, "session_id": sessionID, "error": why, "unsupported": unsupported})
+		}
 	}
 }
 

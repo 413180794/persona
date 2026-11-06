@@ -95,7 +95,9 @@ func (h *Hub) herdrOpen(ctx context.Context, c *client, machineID, id, sessionID
 	}
 	var raw [8]byte
 	_, _ = rand.Read(raw[:])
-	r := &fullRelay{c: c, machineID: machineID, id: id, nodeID: "hc_" + hex.EncodeToString(raw[:])}
+	// The machine it reached, not the id the app named: an absorbed id answers for that machine, and its node's events
+	// come in under the machine's own id.
+	r := &fullRelay{c: c, machineID: m.cfg.ID, id: id, nodeID: "hc_" + hex.EncodeToString(raw[:])}
 	t := &h.fulls
 	t.mu.Lock()
 	own := 0

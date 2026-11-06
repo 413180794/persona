@@ -93,7 +93,7 @@ func TestTerminalPushEncodesAsItsMap(t *testing.T) {
 func TestTerminalFramesFanOutFromAWholeFrame(t *testing.T) {
 	h := &Hub{}
 	a := &client{out: make(chan []byte, 16)}
-	h.terms.relays = map[[2]string]*termRelay{{"m1", "s1"}: {subs: map[*client]bool{a: true}}}
+	h.terms.relays = map[[2]string]*termRelay{{"m1", "s1"}: {subs: map[*client]map[string]bool{a: {"m1": true}}}}
 	frame := func(epoch string, seq int, full bool) json.RawMessage {
 		b, _ := json.Marshal(map[string]any{"session_id": "s1", "epoch": epoch, "seq": seq, "full": full, "cols": 80, "rows": 24, "data": "eA=="})
 		return b

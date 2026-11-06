@@ -18,11 +18,11 @@ func BenchmarkTerminalFrameFanOut(b *testing.B) {
 	for _, n := range []int{1, 2, 3} {
 		b.Run("subs="+strconv.Itoa(n), func(b *testing.B) {
 			h := &Hub{}
-			subs := map[*client]bool{}
+			subs := map[*client]map[string]bool{}
 			var clients []*client
 			for range n {
 				c := &client{out: make(chan []byte, 1)}
-				subs[c] = true
+				subs[c] = map[string]bool{"m1": true}
 				clients = append(clients, c)
 			}
 			h.terms.relays = map[[2]string]*termRelay{{"m1", "s1"}: {subs: subs, epoch: "e1"}}

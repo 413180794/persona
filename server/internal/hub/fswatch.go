@@ -27,6 +27,9 @@ type fsWatchReq struct {
 	Cwd   string
 	Paths []string
 	Git   bool
+	// AskedID is the machine id the browser sent, which fs_changed echoes: it may be an id the computer absorbed,
+	// and the page matches the event by the id it asked with (web/src/lib/fs-live.ts).
+	AskedID string
 }
 
 func (r fsWatchReq) empty() bool { return len(r.Paths) == 0 && !r.Git }
@@ -48,7 +51,9 @@ func cleanFsWatch(cwd string, paths []string, git bool) fsWatchReq {
 	return r
 }
 
-// fsWatchSet records a browser's open folders for a machine and brings the node's set in line.
+// fsWatchSet records a browser's open folders for a machine and brings the node's set in line. The set is keyed by
+// the computer's own id, which fsWatchSync and fsChanged look it up by, so an absorbed id reaches the node too; and by
+// the id asked with, so panels of one page that watch a folder by both ids keep their own sets and events.
 func (h *Hub) fsWatchSet(c *client, machineID string, req fsWatchReq) {
 	m := h.localMachine(machineID)
 	if m == nil {
@@ -57,13 +62,14 @@ func (h *Hub) fsWatchSet(c *client, machineID string, req fsWatchReq) {
 	if req.Cwd == "" { // nothing to key it by (cleanFsWatch refused it)
 		return
 	}
-	key := [2]string{machineID, req.Cwd}
+	key := [3]string{m.cfg.ID, req.Cwd, machineID}
+	req.AskedID = machineID
 	c.mu.Lock()
 	if req.empty() {
 		delete(c.fsw, key)
 	} else {
 		if c.fsw == nil {
-			c.fsw = map[[2]string]fsWatchReq{}
+			c.fsw = map[[3]string]fsWatchReq{}
 		}
 		c.fsw[key] = req
 	}
@@ -206,7 +212,7 @@ func (h *Hub) fsChanged(machineID string, dirs, git []string) {
 			if len(hit) == 0 && !gitHit {
 				continue
 			}
-			c.sendJSON(map[string]any{"type": "fs_changed", "machine_id": machineID, "cwd": r.Cwd, "dirs": hit, "git": gitHit})
+			c.sendJSON(map[string]any{"type": "fs_changed", "machine_id": r.AskedID, "cwd": r.Cwd, "dirs": hit, "git": gitHit})
 		}
 	}
 }

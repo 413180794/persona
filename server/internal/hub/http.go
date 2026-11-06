@@ -717,7 +717,7 @@ type client struct {
 	out            chan []byte
 	mu             sync.Mutex
 	subs           map[[2]string]bool
-	fsw            map[[2]string]fsWatchReq // {machine id, cwd} -> the folders this browser has open there (fswatch.go)
+	fsw            map[[3]string]fsWatchReq // {machine id, cwd, asked id} -> the folders this browser has open there (fswatch.go)
 	phone          bool
 	phoneID        string
 	phoneToolNames map[string]bool
