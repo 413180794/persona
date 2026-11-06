@@ -8,8 +8,13 @@
   "expand_details": "展开子 Agent 详情",
   "subagent": "子 Agent",
   "fork": "分叉",
-  "running_for": "已运行 {duration}",
   "background": "后台",
   "ended": "已结束",
-  "view_full": "查看完整过程"
+  "view_full": "查看完整过程",
+  "starting": "启动中…",
+  "steps_other": "{count} 步",
+  "agents_running_other": "{count} 个子 Agent 在运行",
+  "agents_ran_other": "跑了 {count} 个子 Agent",
+  "agents_steps_other": "共 {count} 步",
+  "result": "结果"
 }

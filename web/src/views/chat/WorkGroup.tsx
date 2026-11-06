@@ -3,13 +3,14 @@
 // exchange's outer group is a timeline: the agent's words between inner groups that stay folded.
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useSessionLive } from "../../lib/live";
+import { subagentFor } from "../../lib/tasks";
 import type { Item } from "../../lib/types";
 import { groupOpens, groupTitle, isAgentStep, isPlanStep, isRowStep, planTodos, previewSteps, workDuration, type AgentStatus, type ToolStep, type WorkGroupNode, type WorkNode } from "../../lib/work-groups";
 import type { Step } from "../../lib/turns";
 import { Collapse, cx, Spinner, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ActionRow } from "./ActionRow";
-import { FreshWords, LiveClockContext } from "./chat-context";
+import { FreshWords, LiveClockContext, useChatContext } from "./chat-context";
 import { inOpenedFold, openFoldRange, useExpanded } from "./expanded";
 import { useReveal } from "./search-reveal";
 import { nodeItemIds } from "../../lib/chat-search";
@@ -145,18 +146,28 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
 /** Nodes in order; tool calls next to each other sit together without a gap, like cindy's tool segments. `fade`: the
  *  agent's words among them that just came in fade in (FreshWords); not inside a group. */
 export function WorkNodes({ nodes, p, live, fade }: { nodes: WorkNode[]; p: WorkProps; live?: boolean; fade?: boolean }) {
-  const runs: (WorkNode | ToolStep[])[] = [];
+  const runs: (WorkNode | ToolStep[] | AgentRun)[] = [];
   for (const n of nodes) {
     const last = runs[runs.length - 1];
     if (n.kind === "step" && isRowStep(n.step)) {
       if (Array.isArray(last)) last.push(n.step);
       else runs.push([n.step]);
+    } else if (n.kind === "step" && isAgentStep(n.step)) {
+      // subagents launched one after another (in parallel) sit together in one grid (#5602)
+      if (last && "agents" in last) last.agents.push(n.step as ToolStep);
+      else runs.push({ agents: [n.step as ToolStep] });
     } else runs.push(n);
   }
   return (
     <>
       {runs.map((run) =>
-        Array.isArray(run) ? (
+        "agents" in run ? (
+          run.agents.length === 1 ? (
+            <StepView key={run.agents[0].id} step={run.agents[0]} p={p} live={live} fade={fade} />
+          ) : (
+            <AgentGrid key={run.agents[0].id} agents={run.agents} p={p} />
+          )
+        ) : Array.isArray(run) ? (
           <div key={run[0].id} className="flex min-w-0 flex-col">
             {run.map((s) => (
               <ActionRow key={s.id} step={s} running={live && !s.result} mid={p.mid} sid={p.sid} />
@@ -169,6 +180,35 @@ export function WorkNodes({ nodes, p, live, fade }: { nodes: WorkNode[]; p: Work
         ),
       )}
     </>
+  );
+}
+
+interface AgentRun {
+  agents: ToolStep[];
+}
+
+/** Subagents launched together: "Running N agents" while any runs, "Ran N agents · M steps" after; their cards in a
+ *  grid, two to a row where there is room, in the order they were launched. */
+function AgentGrid({ agents, p }: { agents: ToolStep[]; p: WorkProps }) {
+  const { subagents } = useChatContext();
+  const statuses = agents.map((a) => p.agentStatus(a));
+  const running = statuses.filter((s) => s === "running").length;
+  const steps = agents.reduce((n, a) => n + (subagentFor(subagents, a.use)?.steps ?? 0), 0);
+  const head = running
+    ? t("chat-subagentcard.agents_running", { count: running })
+    : [t("chat-subagentcard.agents_ran", { count: agents.length }), steps ? t("chat-subagentcard.agents_steps", { count: steps }) : ""].filter(Boolean).join(" · ");
+  return (
+    <div className="@container flex min-w-0 flex-col gap-1.5" data-subagent-grid={agents.length}>
+      <div className="flex items-center gap-1.5 text-[12px] leading-[1.333333] text-ink-2">
+        {running ? <Spinner size={11} /> : <Icon name="agent" size={12} />}
+        <span className="min-w-0 truncate">{head}</span>
+      </div>
+      <div className="grid min-w-0 grid-cols-1 gap-2 @[560px]:grid-cols-2">
+        {agents.map((a, i) => (
+          <SubagentCard key={a.id} step={a} status={statuses[i]} mid={p.mid} scope={p.scope} />
+        ))}
+      </div>
+    </div>
   );
 }
 

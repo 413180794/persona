@@ -41,7 +41,7 @@ interface WorkGroupOptions {
   live: boolean;
   /** When the exchange began (your message): the first group's clock starts there. */
   turnStart?: string;
-  /** How a subagent call is going (ChatView knows the session's subagents); running ones never fold. */
+  /** How a subagent call is going (ChatView knows the session's subagents). */
   agentStatus?: (step: ToolStep) => AgentStatus;
 }
 
@@ -106,13 +106,14 @@ const boundaryTs = (s: Step | undefined): number | null => (s && (s.kind === "te
 
 const isAnswer = (s: Step) => s.kind === "text" && Boolean(s.item.text?.trim());
 
-function adapter(opts: WorkGroupOptions) {
-  const running = (s: Step) => isAgentStep(s) && opts.agentStatus?.(s as ToolStep) === "running";
-  /** A step that folds into a run: tools, thoughts, notices, pictures, folded work, a subagent that finished. */
+function adapter(_opts: WorkGroupOptions) {
+  /** A step that folds into a run: tools, thoughts, notices, pictures, folded work. A subagent's card never does,
+   *  running or done (#5602: it used to fold once done, so a run split around a running one joined up when it ended,
+   *  the group took another key and the card jumped into it). */
   const isActivity = (s: Step) => {
     if (s.kind === "text" || isCompactStep(s)) return false;
-    if (isPlanStep(s)) return false;
-    return !running(s);
+    if (isPlanStep(s) || isAgentStep(s)) return false;
+    return true;
   };
   /** What a finished exchange may fold: the activities and the agent's words, except delivered ones. */
   const isArchivable = (s: Step) => {

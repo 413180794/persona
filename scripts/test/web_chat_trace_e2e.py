@@ -143,17 +143,22 @@ def agents_page(page, tag, shot):
     if running.evaluate("(n) => !!n.closest('[data-work-group]')"):
         fail(f"{tag}: the running subagent's card is inside a group")
     expect(main.locator('[data-work-group="live"]')).to_contain_text("正在工作…")
-    ok(f"{tag}: a running subagent's card stays in the open next to the live 「正在工作…」")
+    expect(running.locator("[data-subagent-line]")).to_contain_text("跑筛选用例")
+    ok(f"{tag}: a running subagent's card stays in the open next to the live 「正在工作…」, saying what it does now")
     if page.locator('[role="tablist"][aria-label="子 Agent"]').count():
         fail(f"{tag}: the subagent tab strip is still there")
     ok(f"{tag}: no tab strip of subagents")
 
     page.evaluate(WHEEL_UP, 0)
-    done = main.locator('[data-work-group="done"]').first
-    done.locator("button").first.click()
+    # subagents launched together sit in one grid, in the open, finished or not (#5602)
+    done = main.locator('[data-subagent-grid="3"]').first
+    expect(done).to_contain_text("跑了 3 个子 Agent")
     expect(done.locator('[data-subagent-card="completed"]').first).to_be_visible()
     expect(done.locator('[data-subagent-card="failed"]')).to_contain_text("失败")
-    ok(f"{tag}: finished and failed subagents fold with the work they were part of")
+    if done.evaluate("(n) => !!n.closest('[data-work-group]')"):
+        fail(f"{tag}: the finished subagents are inside a group")
+    expect(done.locator('[data-subagent-card="completed"] [data-subagent-line]').first).to_contain_text("2 步")
+    ok(f"{tag}: subagents launched together sit in one grid, finished and failed ones too, each with its steps")
 
     card = done.locator('[data-subagent-card="completed"]').nth(1)
     card.locator("button").first.click()

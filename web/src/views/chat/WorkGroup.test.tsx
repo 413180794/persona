@@ -8,7 +8,7 @@ import { ChatContext } from "./chat-context";
 import { emptyTaskIndex } from "../../lib/tasks";
 import { PlanCard } from "./PlanCard";
 import { Answer, bubbleLines, SegmentView, UserBubble } from "./SegmentView";
-import { SubagentCard } from "./SubagentCard";
+import { reportOf, SubagentCard, subagentLine } from "./SubagentCard";
 import { ThinkingCard } from "./ThinkingCard";
 import { WorkGroup, type WorkProps } from "./WorkGroup";
 
@@ -169,11 +169,28 @@ describe("SubagentCard", () => {
     const html = card("running");
     expect(html).toContain('data-subagent-card="running"');
     expect(html).toContain(">回归：结算<");
-    expect(html).toContain(">运行中");
+    // running with no call yet: starting (#5602); with one: what it does now
+    expect(html).toContain("启动中…");
     expect(html).toContain(">general-purpose<");
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain("查看完整过程");
     expect(card("failed")).toContain(">失败");
+  });
+
+  it("says what it does now while it runs, its outcome and steps once it ended (#5602)", () => {
+    const meta = { id: "sa1", session_id: "s@sa1", running: true, steps: 4, last_tool: { id: "t9", name: "Bash", summary: "跑结算回归" } };
+    expect(subagentLine("running", meta)).toEqual({ text: "跑结算回归", live: true });
+    expect(subagentLine("running", { ...meta, last_tool: undefined })).toEqual({ text: "启动中…", live: true });
+    expect(subagentLine("completed", meta)).toEqual({ text: "已完成 · 4 步", live: false });
+    expect(subagentLine("failed", { ...meta, steps: 0 })).toEqual({ text: "失败", live: false });
+  });
+
+  it("takes a background subagent's report from its notice, not its launch receipt", () => {
+    const receipt: Item = { id: "r#0", seq: 2, role: "user", kind: "tool_result", tool_use_id: "c", text: "Async agent launched successfully." };
+    const notes = [{ kind: "agent", status: "completed", detail: "120 个用例都过了。" }];
+    expect(reportOf(receipt, notes)).toBe("120 个用例都过了。");
+    expect(reportOf({ ...receipt, text: "done" }, notes)).toBe("");
+    expect(reportOf(receipt, [])).toBe("");
   });
 });
 

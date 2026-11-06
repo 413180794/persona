@@ -8,8 +8,13 @@
   "expand_details": "サブエージェントの詳細を展開",
   "subagent": "サブエージェント",
   "fork": "フォーク",
-  "running_for": "{duration}実行中",
   "background": "バックグラウンド",
   "ended": "終了",
-  "view_full": "全過程を表示"
+  "view_full": "全過程を表示",
+  "starting": "起動中…",
+  "steps_other": "{count} ステップ",
+  "agents_running_other": "サブエージェント {count} 件が実行中",
+  "agents_ran_other": "サブエージェント {count} 件を実行",
+  "agents_steps_other": "計 {count} ステップ",
+  "result": "結果"
 }

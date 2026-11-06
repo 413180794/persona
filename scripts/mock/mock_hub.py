@@ -6350,16 +6350,52 @@ def mock_subagent_cards():
                                       "tool_use_id": use, "running": False, "started_at": ago(minutes=kw.pop("at", 20)), **kw}
     SESSIONS.append(sess("macbook", SUBCARDS, "回归拆给子 Agent", "/Users/me/code/shop-web", "working", "working", "shop-web", 15, "agents", 2, 0,
                          "搜索全量在后台跑，首页在打包。", subagents=[
-                             sub("scrun", "回归：搜索全量", _run, at=9.8, running=True, background=True, last_text="筛选的用例在跑。"),
-                             sub("scdone", "回归：结算流程", _done, at=29.5, last_text="结算流程 42 个用例全部通过。"),
-                             sub("scfail", "回归：支付回调", _fail, at=27),
-                             sub("scnest", "回归：价格筛选", _nest, at=26, type="Explore"),
+                             sub("scrun", "回归：搜索全量", _run, at=9.8, running=True, background=True, last_text="筛选的用例在跑。", steps=3,
+                                 last_tool={"id": "toolu_scrunb", "name": "Bash", "summary": "跑筛选用例"}),
+                             sub("scdone", "回归：结算流程", _done, at=29.5, last_text="结算流程 42 个用例全部通过。", steps=2,
+                                 updated_at=ago(minutes=27)),
+                             sub("scfail", "回归：支付回调", _fail, at=27, steps=1),
+                             sub("scnest", "回归：价格筛选", _nest, at=26, type="Explore", steps=2),
                              sub("scdata", "查价格的测试数据", _data, at=25, parent_id="scnest"),
                              sub("scold", "核对下架商品", None, at=24.5, parent_id="scdata", type="fork", fork=True)]))
 
 
 if os.environ.get("MOCK_SUBAGENT_CARDS") == "1":
     mock_subagent_cards()
+
+
+# MOCK_SUBAGENT_PARALLEL=1: three subagents launched together in the live exchange (#5602, the grid): one done, one
+# still running (its latest call is what its card says it does), one that failed.
+SUBPAR = "a1f3c2d4-0000-4000-8000-0000000c1e05"
+
+
+def mock_subagent_parallel():
+    _p = [it("user", "text", 6, text="把三个模块的单测并行拆给子 Agent")]
+    _p += tool("Agent", {"description": "单测：购物车", "subagent_type": "general-purpose", "prompt": "跑购物车模块的单测"},
+               "购物车 58 个用例全部通过。\nagentId: spa (use SendMessage with to: 'spa' to continue this agent)", 5.9)
+    _a = _p[-2]["tool_use_id"]
+    _p[-1]["ts"] = ago(minutes=3)
+    _p.append(it("assistant", "tool_use", 5.8, tool_use_id="toolu_spb", tool_name="Agent",
+                 tool_input={"description": "单测：订单", "subagent_type": "general-purpose", "prompt": "跑订单模块的单测"}))
+    _p += tool("Agent", {"description": "单测：优惠券", "subagent_type": "Explore", "prompt": "跑优惠券模块的单测"},
+               "优惠券的单测跑不起来：缺少测试数据库。", 5.7, err=True)
+    _c = _p[-2]["tool_use_id"]
+    ITEMS[SUBPAR] = _p
+    ITEMS[SUBPAR + "@spb"] = ([it("user", "text", 5.8, text="跑订单模块的单测")]
+        + tool("Read", {"file_path": "/Users/me/code/shop-web/src/order/order.test.ts"}, "describe('order', …)", 5)
+        + [it("assistant", "tool_use", 1, tool_use_id="toolu_spb2", tool_name="Bash", tool_input={"command": "npm test -- order", "description": "跑订单单测"})])
+    sub = lambda i, desc, use, **kw: {"id": i, "session_id": SUBPAR + "@" + i, "type": kw.pop("type", "general-purpose"), "description": desc,
+                                      "tool_use_id": use, "running": False, "started_at": ago(minutes=kw.pop("at", 6)), **kw}
+    SESSIONS.append(sess("macbook", SUBPAR, "单测并行", "/Users/me/code/shop-web", "working", "working", "shop-web", 6, "unit", 2, 0,
+                         "三个模块的单测在跑。", subagents=[
+                             sub("spb", "单测：订单", "toolu_spb", at=5.8, running=True, steps=4,
+                                 last_tool={"id": "toolu_spb2", "name": "Bash", "summary": "跑订单单测"}),
+                             sub("spa", "单测：购物车", _a, at=5.9, steps=6, updated_at=ago(minutes=3)),
+                             sub("spc", "单测：优惠券", _c, at=5.7, type="Explore", steps=1)]))
+
+
+if os.environ.get("MOCK_SUBAGENT_PARALLEL") == "1":
+    mock_subagent_parallel()
 
 
 # MOCK_WORK_GROUPS=1: one finished conversation with every way a work group reads (#1963, web): a short run (five steps
@@ -6934,12 +6970,14 @@ def fold_work(items):
     """transcript.FoldWork: each run of tool calls (with their results) and thoughts becomes one fold item."""
     uses = {x.get("tool_use_id") for x in items if x["kind"] == "tool_use"}
     results = {x.get("tool_use_id") for x in items if x["kind"] == "tool_result"}
+    # a subagent's call stays on the page: the chat draws it as a card that never folds (#5602)
+    agents = {x.get("tool_use_id") for x in items if x["kind"] == "tool_use" and x.get("tool_name") in ("Task", "Agent")}
 
     def inside(x):
         if x["kind"] == "thinking":
             return True
         t = x.get("tool_use_id")
-        return x["kind"] in ("tool_use", "tool_result", "image") and t and t in uses and t in results
+        return x["kind"] in ("tool_use", "tool_result", "image") and t and t in uses and t in results and t not in agents
     out, i = [], 0
     while i < len(items):
         if not inside(items[i]):

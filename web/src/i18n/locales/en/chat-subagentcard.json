@@ -8,8 +8,17 @@
   "expand_details": "Show subagent details",
   "subagent": "Subagent",
   "fork": "Fork",
-  "running_for": "Running for {duration}",
   "background": "Background",
   "ended": "Ended",
-  "view_full": "View full run"
+  "view_full": "View full run",
+  "starting": "Starting…",
+  "steps_one": "{count} step",
+  "steps_other": "{count} steps",
+  "agents_running_one": "Running {count} agent",
+  "agents_running_other": "Running {count} agents",
+  "agents_ran_one": "Ran {count} agent",
+  "agents_ran_other": "Ran {count} agents",
+  "agents_steps_one": "{count} step",
+  "agents_steps_other": "{count} steps",
+  "result": "Result"
 }

@@ -173,10 +173,14 @@ describe("subagents", () => {
     expect(groups(b).length).toBeGreaterThan(0);
   });
 
-  it("a finished one folds with the work", () => {
-    const b = blocks(items(), false, () => "completed");
-    expect(topSteps(b)).toEqual(["final"]);
-    expect(folded(b, "task1")).toBe(true);
+  it("a finished one stays where it was, in the open (#5602: it folded once done and the runs around it joined)", () => {
+    const same = items();
+    const running = blocks(same, false, () => "running");
+    const done = blocks(same, false, () => "completed");
+    expect(topSteps(done)).toEqual(["task1", "final"]);
+    expect(folded(done, "task1")).toBe(false);
+    // the same groups, with the same keys, either way
+    expect(groups(done).map((g) => g.id)).toEqual(groups(running).map((g) => g.id));
   });
 
   it("a running one in the middle of live work splits the runs around it", () => {
