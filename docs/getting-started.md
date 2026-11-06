@@ -1,175 +1,173 @@
-# 开始使用 Persona
+# Getting started with Persona
 
-这一页写给不写代码、平时不开终端的人。照着做，你会装好 Persona、用手机连上它、接上一台电脑和一个模型，然后跟它说上第一句话。
-哪一步现在还得用终端、哪些暂时做不到，下面都直说。
+This page is for people who don't write code and don't usually open a terminal. Follow it and you'll have Persona installed, your phone connected to it, a computer and a model hooked up, and your first message sent.
+Where a step still needs the terminal, and what isn't possible yet, is spelled out below.
 
-已经会用命令行、想自己编译和部署的，看 [README](../README.md)「我想开发」。
+If you're comfortable with the command line and want to build and deploy it yourself, see [README](../README.md) ("I want to develop").
 
-## Persona 由三部分组成
+## Persona has three parts
 
-- **hub**：家里的总机。装在一台一直开着的电脑或 NAS 上，你的消息、设置、记忆都存在这里，只存在你自己的机器上。全家只要一台。
-- **你的电脑**：Persona 干活的地方，在上面读文件、跑程序、写代码。hub 所在的那台电脑要是在装 hub 之前就装好了 Claude Code，自动算一台；装完 hub 才补装的不算，见「接上一台电脑」。
-- **手机 / 网页**：遥控器。看它在做什么，在它动手前点「允许」。扫一次码就连上，以后自动连。
+- **hub**: the home switchboard. It runs on a computer or NAS that stays on. Your messages, settings and memory are stored here, and only on your own machine. One per household is enough.
+- **Your computers**: where Persona does the work: reading files, running programs, writing code. If Claude Code was installed on the hub machine before you installed the hub, that machine counts as one automatically; if you add Claude Code only after installing the hub, it doesn't (see "Connect a computer").
+- **Phone / web**: the remote control. See what it's doing and tap **Allow** before it acts. Scan a code once to connect; it reconnects automatically after that.
 
-还要接一个**模型**，它是 Persona 的大脑：已经在用 Claude Code 的直接用；有 API Key 的粘贴进来；什么都没有的，向导里告诉你去哪开通。
+You also need a **model**, Persona's brain: if you already use Claude Code, use that; if you have an API key, paste it in; if you have neither, the wizard tells you where to sign up.
 
 ```
-   手机 / 网页 ──扫码一次──▶  hub（一直开着的那台）  ◀──Persona Link── 你的笔记本
-   （遥控器）                 存东西、收消息、调度          （干活的地方）
+   Phone / web ──scan once──▶  hub (the always-on one)  ◀──Persona Link── your laptop
+   (remote control)            stores, receives, schedules     (where work happens)
                                     │
-                               这台自己也算一台电脑
+                               also counts as a computer itself
                                     │
-                              模型（Claude Code 或 API Key）
+                              model (Claude Code or API key)
 ```
 
-## 先看看你手里有什么
+## First, check what you have
 
-| 你有什么 | hub 装在哪 | 现在能走到哪 |
+| What you have | Where the hub goes | How far you can get now |
 | --- | --- | --- |
-| 一台常开的 Linux 电脑（小主机、旧台式机）+ 手机 | 那台 Linux | 最顺的一条：粘一行命令装 hub，手机扫码，接模型。装 hub 之前先在那台装好 Claude Code，就不用另加电脑 |
-| 只有一台 Mac + 手机 | 这台 Mac | 要先装 Docker Desktop 或 OrbStack（hub 的数据库靠它），再粘一行命令。合上盖子 Persona 也跟着休息 |
-| Mac 笔记本 + 常开的 Linux | Linux | hub 装在 Linux 上，Mac 当「你的电脑」接进来。Mac 上的 Persona Link 目前要自己编译 |
-| NAS（群晖、威联通等） | NAS 的 Docker | hub 能装，但 NAS 上不能干活，一定要再加一台电脑。安装包目前要登录 GitHub 才能下载，适合会用 Docker 的人，见 [docker.md](docker.md) |
-| 只有手机，想先看看 | 不装 | 用 App 的体验模式：配对页点「没有 hub？先体验一下」，数据都是编造的，不连任何服务器 |
-| 公司的电脑（装不了软件） | 家里的 Linux、NAS 或云服务器 | hub 能装、手机能连；主对话还要一台能装 Claude Code 的电脑 |
-| Windows 电脑 | 不能当 hub | 只能当「你的电脑」，而且目前要自己编译 |
+| An always-on Linux computer (mini PC, old desktop) + a phone | That Linux machine | The smoothest path: paste one command to install the hub, scan with the phone, connect a model. Install Claude Code on that machine before the hub, and you don't need another computer |
+| Only a Mac + a phone | This Mac | Install Docker Desktop or OrbStack first (the hub's database runs on it), then paste one command. When you close the lid, Persona rests too |
+| A Mac laptop + an always-on Linux | Linux | Install the hub on Linux and connect the Mac as "your computer". Persona Link on the Mac currently has to be built yourself |
+| A NAS (Synology, QNAP, etc.) | The NAS's Docker | The hub installs, but no work can happen on the NAS, so you must add another computer. The install package currently needs a GitHub login to download; suited to people who know Docker, see [docker.md](docker.md) |
+| Only a phone, just want a look | Nothing to install | Use the App's demo mode: on the pairing screen tap **No Hub? Try the Demo**. All data is made up and nothing connects to any server |
+| A work computer (can't install software) | A Linux at home, a NAS or a cloud server | The hub installs and the phone connects; the main chat still needs a computer that can run Claude Code |
+| A Windows computer | Can't be the hub | Can only be "your computer", and currently has to be built yourself |
 
-有常开的电脑，就把 hub 装在它上面。笔记本当 hub 也能用，只是合上盖子、电脑睡着的时候，手机就连不上了。
+If you have an always-on computer, put the hub on it. A laptop works as the hub too, but when the lid is closed and it sleeps, your phone can't connect.
 
-## 装好 App
+## Install the App
 
-| 设备 | 怎么装 |
+| Device | How to install |
 | --- | --- |
-| iPhone（iOS 26 或更新） | [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)：先从 App Store 装 TestFlight，再点这个链接，App 名叫 Persona Side |
-| Apple Watch | 跟着 iPhone 版一起装 |
-| 网页 | 不用装：hub 装好后，用浏览器打开 hub 的地址（下面会说） |
-| Android | 还没有公开的安装包，要自己编译（[android.md](android.md)） |
-| Mac 版 App | 还没有安装包，要自己编译（[mac.md](mac.md)） |
+| iPhone (iOS 26 or later) | [TestFlight public beta](https://testflight.apple.com/join/vsjfy3hE): install TestFlight from the App Store first, then tap this link. The App is called Persona Side |
+| Apple Watch | Installs along with the iPhone version |
+| Web | Nothing to install: once the hub is set up, open the hub's address in a browser (explained below) |
+| Android | No public package yet; build it yourself ([android.md](android.md)) |
+| Mac App | No package yet; build it yourself ([mac.md](mac.md)) |
 
-## 装 hub：粘贴一行命令
+## Install the hub: paste one command
 
-这一步要用终端，只在 hub 那台电脑上做一次。想让 hub 这台电脑自己也干活的，先在它上面装好 Claude Code 再装 hub：装 hub 时它会看这台有没有 Claude Code，有才把这台算成一台电脑，以后不会再回头看。
-手机和网页那边全程不用终端；给电脑装 Claude Code、接一台 Linux 电脑时还会用到，到时候也只是粘贴一行。
+This step uses the terminal, and you do it once, only on the hub machine. If you want the hub machine to do work too, install Claude Code on it before installing the hub: the hub installer checks whether this machine has Claude Code, counts it as a computer only if it does, and never checks again.
+The phone and web side never need the terminal; installing Claude Code on a computer and connecting a Linux computer will need it, and even then it's just pasting one line.
 
-1. 在要当 hub 的电脑上打开「终端」。Mac：按 Command + 空格，输入「终端」，回车。Linux：在应用列表里找「终端」。
-2. 打开 Persona 官网，复制首页「hub」那一栏的命令，粘贴进终端，回车。命令长这样：
+1. Open **Terminal** on the computer that will be the hub. Mac: press Command + Space, type "Terminal", press Return. Linux: find "Terminal" in the app list.
+2. Open the Persona website, copy the command in the "hub" section of the home page, paste it into the terminal and press Return. It looks like this:
 
    ```sh
-   curl -fsSL <官网地址>/install.sh | sh -s -- --hub
+   curl -fsSL <website address>/install.sh | sh -s -- --hub
    ```
 
-3. 它会一步一步装：下载并核对程序、准备数据库、设成开机自动运行、检查一遍。每做完一步打一行中文。
-   中途可能问一次要不要用管理员权限，好让 hub 在没人登录时也能运行；回答「是」，输入这台电脑的登录密码。
-4. 最后屏幕上会出现：
-   - 一个二维码，下一节用手机扫它，10 分钟内有效；
-   - 一条配对链接，扫不了码时把它发到手机上打开；
-   - 管理界面的地址，打开它能设一个管理员密码。这一步可以以后再做。
+3. It installs step by step: download and verify the program, set up the database, make it start at boot, run a check. It prints one line per finished step.
+   Partway through it may ask once whether to use administrator rights, so the hub can run even when nobody is logged in; answer "yes" and type this computer's login password.
+4. At the end the screen shows:
+   - a QR code to scan with your phone in the next section, valid for 10 minutes;
+   - a pairing link to open on your phone if you can't scan;
+   - the admin page address, where you can set an admin password. You can do this later.
 
-某一步写着「有问题」时，下面一行「下一步」会写该怎么办。最常见的是「这台电脑还缺数据库」：Mac 上装 Docker Desktop 或 OrbStack，Linux 上装 Docker，然后再粘贴一次同一行命令。
-已经做好的步骤不会重做，所以放心重跑；二维码过期了也是重跑这一行，会出一个新的。
+When a step says something is wrong, the "Next step" line below it says what to do. The most common one is "this computer is missing a database": on a Mac install Docker Desktop or OrbStack, on Linux install Docker, then paste the same command again.
+Steps already done aren't redone, so rerunning is safe; if the QR code expires, rerun the same command to get a new one.
+## Connect your phone by scanning
 
-## 用手机扫码连上
+1. Scan the QR code in the terminal with the iPhone camera and tap the prompt that pops up; Persona opens and connects automatically. You can also tap scan on the App's first screen.
+2. When the system asks to allow finding devices on your local network, tap **Allow**.
 
-1. 用 iPhone 的相机扫终端里的二维码，点弹出来的提示，会打开 Persona 并自动连上。也可以在 App 首屏点扫码。
-2. 系统问「允许查找本地网络上的设备」时，点允许。
+The App's first screen may also tell you to run a command on the hub machine to get a code. Ignore it and scan the code the hub installer printed (that text is still being revised).
 
-App 首屏的说明可能还让你到 hub 那台电脑上运行命令出码，不用管它，扫装 hub 时出的码就行（这段文字还在改）。
+If scanning doesn't connect:
 
-扫了连不上时：
+- The phone must be on the same Wi-Fi as the hub.
+- The QR code is valid for 10 minutes and works once. If it expired, go back to the hub machine and rerun the hub install command to get a new one.
+- If you previously denied local network access, turn Persona on in the iPhone's **Settings › Privacy & Security › Local Network**.
 
-- 手机要和 hub 连同一个 Wi-Fi。
-- 二维码 10 分钟内有效、只能用一次，过期了回到 hub 那台电脑重跑装 hub 的命令，出一个新的。
-- 之前点了拒绝本地网络的话，到 iPhone 的 设置 › 隐私与安全性 › 本地网络 里把 Persona 打开。
+For now it's only guaranteed to work on the same network at home. To connect back home while out, the only no-terminal option is to set up a VPN yourself. For direct IPv6, besides turning on IPv6 on your router, you also need to run one more command in the hub machine's terminal (see "Advanced", [network.md](network.md)).
 
-现在只保证在家里同一个网络里能用。出门在外要连回家，不用终端的办法只有自己配 VPN。走 IPv6 直连的话，除了让路由器打开 IPv6，还要在 hub 那台电脑的终端里再运行一条命令（见「高级」，[network.md](network.md)）。
+### A second phone, a browser on a computer
 
-### 第二台手机、电脑上的浏览器
+A phone that's already connected can let other devices in, without going back to the hub machine:
 
-已经连上的手机能给别的设备开门，不用再回 hub 那台电脑：
+- **Another phone or tablet**: in the connected App open **Settings › Devices › Connect New Device**, and scan the code on screen with the new device.
+- **A browser on a computer**: open the hub's address in the browser. That's the part before `/admin` in the admin page address the hub installer printed, like `http://<LAN address>:18660`.
+  The sign-in page walks you through it: on the connected phone open **Settings › Devices › Connect New Device**, choose **Browser**, then scan the code on the web page with the phone camera, or send the sign-in link to this computer and open it there.
 
-- **另一台手机或平板**：在已连上的 App 里打开 设置 › 设备 › 连接新设备，用新设备扫屏幕上的码。
-- **电脑上的浏览器**：浏览器里打开 hub 的地址，就是装 hub 时打印的管理界面地址里 `/admin` 前面那一段，形如 `http://<局域网地址>:18660`。
-  登录页会教你：在已连上的手机上打开 设置 › 设备 › 连接新设备，选「浏览器」，再用手机相机扫网页上的码，或者把登录链接发到这台电脑上打开。
+## Connect a computer
 
-## 接上一台电脑
+If Claude Code was installed on the hub machine before the hub, that machine is already your first computer and you can skip this section.
+If you added Claude Code to it only after installing the hub, the hub won't find it on its own, and the main chat will still show **Add your computers** above it; for now ask someone comfortable with the command line to add it using the item in "Advanced".
 
-装 hub 之前 hub 那台电脑就装好了 Claude Code 的话，它自己就是第一台电脑，这一节可以跳过。
-装完 hub 才给它补装 Claude Code 的，hub 不会自己发现，主对话上方还会是「添加你的电脑」；现在要请会用命令行的人按「高级」里的一条把它加进来。
+To add another computer (say, your Mac laptop), do it on the web:
 
-要加别的电脑（比如你的 Mac 笔记本），在网页上做：
+1. Open **Machines** in the web version and click **Add computer**.
+2. Choose that computer's system and give it a name, for example "My MacBook".
+3. Follow the on-screen instructions on that computer; each system is different:
+   - **Linux**: copy the line on screen, open a terminal on that computer, paste, press Return. It installs Persona's background service and connects by itself.
+   - **Mac**: you first need Persona Link, a small menu bar App. There's no package yet, so you build it from source: that needs Xcode (several GB; the download can take over an hour) and Go, plus a few commands in the terminal. Follow [persona-link-install.md](persona-link-install.md) step by step.
+     Once installed, send the pairing link to that Mac (with **Copy Pairing Link** or **Share…**), click the Persona Link menu bar icon › **Pair…**, and paste it in.
+   - **Windows**: build two programs yourself, then paste one line in PowerShell ([windows.md](windows.md)). There's no package or tray app yet.
+4. Once that computer connects, the same screen asks "A computer wants to join: <name>. Is it yours?". If it's yours click **It's mine**; if you don't recognize it click **No, remove**.
 
-1. 打开网页版的「机器」，点「添加电脑」。
-2. 选那台电脑的系统，起一个名字，可以用中文，比如「我的 MacBook」。
-3. 照屏幕上的说明在那台电脑上操作，每种系统不一样：
-   - **Linux**：拷贝屏幕上的一行，在那台电脑上打开终端，粘贴，回车。它会装好 Persona 的后台服务并自己连上来。
-   - **Mac**：要先装好 Persona Link，它是菜单栏里的一个小 App。目前还没有安装包，要自己从源码编译，要装 Xcode（几个 GB，下载可能要一小时以上）和 Go，还要在终端里运行几条命令，按 [persona-link-install.md](persona-link-install.md) 一步步来。
-     装好后把配对链接发到那台 Mac（可以用「拷贝配对链接」或「分享…」），点菜单栏的 Persona Link 图标 › 配对…，粘贴进去。
-   - **Windows**：要自己编译两个程序，再在 PowerShell 里粘贴一行（[windows.md](windows.md)）。还没有安装包和托盘程序。
-4. 那台电脑连上来以后，同一屏会问「有一台电脑想加入：<名字>，是你的吗？」。是你的就点「是我的电脑」，不认识就点「不是，删掉」。
+Why confirm again: if someone else gets hold of the pairing link, their computer can connect too. Until you confirm, the computer gets none of your model keys and Persona won't do work on it; if it isn't confirmed within 24 hours, it's removed automatically.
+So only send the pairing link to your own computers; don't paste it in a group chat. The link is valid for 10 minutes and works once; if it expired, click **Regenerate** on the same screen.
 
-为什么还要确认一次：配对链接一旦被别人拿到，别人的电脑也能连上来。确认之前，这台电脑拿不到你的模型 Key，Persona 也不会在上面干活；24 小时没确认，它会被自动删掉。
-所以配对链接只发给自己的电脑，别贴到群里。链接 10 分钟内有效、只能用一次，过期了在同一屏点「重新生成」。
+Closing that screen is fine: the computer's card in the machine list shows an orange notice, and you can confirm or remove it there.
 
-关掉了那一屏也没关系：机器列表里这台电脑的卡片上会有橙色的提示，在那里确认或删掉。
+**Add Computer** on iPhone and Android is still in progress; use the web for now. On iPhone, you can first sign in to the web version in a computer's browser as described in the previous section.
 
-iPhone 和 Android 上的「添加电脑」还在做，现在先用网页。用 iPhone 的话，可以先按上一节在电脑浏览器里登录网页版。
+## Connect a model
 
-## 接上一个模型
+The main chat always runs on a computer with Claude Code installed. Even if you use another vendor's API key, it's the Claude Code on that computer that connects to it. So first make sure your computer has Claude Code; if it doesn't, the card above the main chat shows you how to install it (see the next section). If you only use the hub machine, remember Claude Code has to be installed before the hub (see "Install the hub").
 
-主对话一定要在一台装了 Claude Code 的电脑上运行，就算你用的是别家的 API Key，也是那台电脑上的 Claude Code 去连它。所以先确认你的电脑上装了 Claude Code；没装的话，主对话上方的卡片会教你装（见下一节）。只用 hub 那一台的，记得 Claude Code 要在装 hub 之前装好（见「装 hub」）。
+Pick a path based on what you have:
 
-按你手里有什么，选一条路：
+- **Already using Claude Code and signed in**: nothing to fill in; just send something in the main chat.
+- **Have an API key**: in the web version open **Settings › Model Providers › Add Provider**, choose a vendor from the list and paste the key. It sends one very short message as a test, which costs a tiny amount.
+  Once saved, the main chat and newly opened Agents use it automatically; if you previously chose a different model in **Model Settings**, your choice is kept and not replaced.
+- **Have nothing**: pick a vendor from the same list, click **Where do I get a key?** to sign up on their site and copy a key, then come back and paste it.
 
-- **已经在用 Claude Code，而且登录过**：什么都不用填，到主对话里发一句试试。
-- **有 API Key**：在网页版打开 设置 › 模型供应商 › 新增供应商，从列表里选一家，粘贴 Key。它会自动发一句很短的话测试一下，会花一点点钱。
-  保存以后，主对话和新开的 Agent 会自动用它；你之前在「模型配置」里另选过模型的，保留你的选择，不会被换掉。
-- **什么都没有**：在同一个列表里挑一家，点「Key 从哪拿」去对方网站开通、复制 Key，再回来粘贴。
+The list currently has: Anthropic official, DeepSeek, Kimi (Moonshot AI), Zhipu GLM, Alibaba Cloud Model Studio (Qwen), MiniMax; Kimi and MiniMax also have international editions.
+The ones marked as directly available in mainland China can be opened with a Chinese phone number and payment method; Anthropic official and the two international editions need an overseas account and payment method. If none fit, choose **Custom compatible gateway** at the end of the list.
 
-列表里现在有这几家：Anthropic 官方、DeepSeek、Kimi（月之暗面）、智谱 GLM、阿里云百炼（通义千问）、MiniMax，Kimi 和 MiniMax 另有国际版。
-标着「国内直接开通」的用国内手机号和支付方式就能开；Anthropic 官方和两个国际版要海外账号和支付方式。都不合适的，选列表最后的「自定义兼容网关」。
+**Settings › Model Providers** on iPhone and Android can add providers too, but the new "pick a vendor, just paste the key" wizard is still in progress, so the web is easiest for now.
+## What the cards above the main chat mean
 
-iPhone 和 Android 的 设置 › 模型供应商 也能加，但新的「选一家、只粘 Key」向导还在做，现在网页上最省事。
+In the web version's main chat, when something isn't connected yet, a card appears above the input box saying which step is missing, with a button. The send button also changes to text like **Add a computer first** or **Connect a model first**; clicking it takes you straight to that step.
+What you typed stays in the input box, to send once things are connected. When the computer is connected and the model is set up, the card disappears by itself, no refresh needed. No card means everything is connected; try sending "hello".
 
-## 主对话上面的卡片是什么意思
-
-网页版的主对话里，还差什么没接好，输入框上方就会出一张卡片，写着还差哪一步，配一个按钮；发送按钮也会换成「先添加电脑」「先接上模型」这类字，点了直接去那一步。
-你打的字会留在输入框里，接好以后再发。电脑连上、模型接好以后，卡片会自己消失，不用刷新。没有卡片，就是都接好了，发一句「你好」试试。
-
-| 卡片上写着 | 意思 | 怎么办 |
+| The card says | Meaning | What to do |
 | --- | --- | --- |
-| 添加你的电脑 | 还没有能干活的电脑，或者加了还没确认 | 按上面「接上一台电脑」加一台；加过的到机器列表里点「是我的电脑」 |
-| <电脑名> 不在线 | 那台电脑睡着了，或者上面的 Persona Link 没开 | 打开盖子、唤醒它，确认 Persona Link 在运行 |
-| <电脑名> 上的 Persona 版本太旧 | 那台电脑上的 Persona 程序要更新 | 更新那台电脑上的 Persona Link。Mac 上的是自己编译的，要重新编一次 |
-| 还没装 Claude Code | 那台电脑上没有 Claude Code | 点「怎么安装」：在那台电脑上打开终端，粘贴卡片给的一行，回车 |
-| Claude Code 还没登录 | 装了，但没登录 | 点「怎么登录」：在那台电脑上打开终端，输入 `claude`，回车，按提示在浏览器里登录一次。也可以点「改用 API Key」 |
-| 模型的 Key 不对 | Key 填错了或者过期了 | 点「换 Key」，粘贴一个能用的 |
-| 这个模型现在用不了 | 模型名不对，或者对方暂时停了这个模型 | 到 设置 › 模型供应商 里换一个模型 |
+| Add your computers | There's no computer that can do work yet, or one was added but not confirmed | Add one following "Connect a computer" above; for one you already added, click **It's mine** in the machine list |
+| <computer name> is offline | That computer is asleep, or its Persona Link isn't running | Open the lid, wake it up, make sure Persona Link is running |
+| Persona on <computer name> is too old | The Persona program on that computer needs updating | Update Persona Link on that computer. On a Mac you built it yourself, so build it again |
+| Claude Code isn't installed | That computer has no Claude Code | Click **How to install**: open a terminal on that computer, paste the line the card gives you, press Return |
+| Claude Code isn't signed in | It's installed but not signed in | Click **How to sign in**: open a terminal on that computer, type `claude`, press Return, and sign in once in the browser as prompted. Or click **Use an API key** |
+| The model's key is wrong | The key was mistyped or has expired | Click **Change the key** and paste one that works |
+| This model isn't available now | The model name is wrong, or the vendor has paused that model | Pick another model in **Settings › Model Providers** |
 
-发出去之后才失败的，卡片会出在那条消息下面，写法和上表一样，点开「详情」能看到原始的报错，找人求助时可以截这个图。
+If it fails only after sending, the card appears under that message, worded the same as in the table. Open **Details** to see the raw error; screenshot that when asking someone for help.
 
-iPhone 和 Android 上的这些卡片还在做，现在那边发出去才会看到报错。
+These cards on iPhone and Android are still in progress; there you'll only see the error after sending.
 
-## 现在还做不到、还要用终端的
+## What isn't possible yet, and what still needs the terminal
 
-- 装 hub 要在那台电脑的终端里粘一行命令，只做一次。
-- Mac 当 hub 要先装 Docker Desktop 或 OrbStack。
-- Mac 上的 Persona Link、Mac 版 App、Android 版、Windows 上的程序都还没有安装包，要自己编译。
-- 给电脑装 Claude Code、登录 Claude Code，都要在那台电脑的终端里做一次。
-- 只有 API Key、没有电脑的话，主对话还用不了；必须接上一台装了 Claude Code 的电脑。
-- NAS 上的安装包要登录 GitHub 才能下载。
-- 出门在外连回家，要自己配 VPN；走 IPv6 直连还要在 hub 那台电脑的终端里运行一条命令。
-- 装完 hub 才给 hub 那台电脑装 Claude Code 的，要手动把它加成一台电脑（见「高级」）。
-- 添加电脑、新的模型向导、主对话上的卡片，现在只有网页上有，iPhone 和 Android 的在做。
+- Installing the hub means pasting one command in that computer's terminal, once.
+- A Mac as the hub needs Docker Desktop or OrbStack first.
+- Persona Link on the Mac, the Mac App, the Android App and the Windows programs have no packages yet; you build them yourself.
+- Installing Claude Code on a computer and signing in to Claude Code each have to be done once in that computer's terminal.
+- With only an API key and no computer, the main chat doesn't work; you must connect a computer that has Claude Code.
+- The NAS install package needs a GitHub login to download.
+- Connecting back home while out needs a VPN you set up yourself; direct IPv6 also needs one command run in the hub machine's terminal.
+- If Claude Code was installed on the hub machine only after the hub, you have to add it as a computer manually (see "Advanced").
+- Add Computer, the new model wizard and the cards on the main chat are only on the web for now; iPhone and Android are in progress.
 
-## 高级
+## Advanced
 
-给会用命令行的人。上面每一步背后对应的命令和文件：
+For people comfortable with the command line. The commands and files behind each step above:
 
-- 装 hub 的那行命令最后运行的是 `personad hub setup`：写 `~/.persona/hub.json`、在 Docker 里建 Postgres 容器 `jarvis-postgres`、装 systemd 用户服务（Mac 上是 LaunchAgent `com.jarvis.hub`）、自检，最后打印配对二维码和 `/admin#setup=<设置码>`。
-  它做什么、不改什么见 [onboarding.md](onboarding.md)「安装器」；手动部署见 [server.md](server.md)，NAS 见 [docker.md](docker.md)。
-- 再出一个手机配对码：在 hub 机器上 `personad hub pair`。网页登录页「高级」里能用 hub 的总钥匙登录，它就是 hub.json 的 `token`，拿到它能做任何事。
-- 不经网页添加电脑：管理界面 › 电脑 › 添加电脑，或者在 hub 机器上 `personad hub pair --machine <id> --add --name <名字>`。这两种加的电脑直接算已确认。细节见 [link.md](link.md)。
-- 装 hub 时这台没有 `claude` 或 `herdr`，`hub.json` 的 `machines` 就是空的，以后重跑 `personad hub setup` 也不会补。补装 Claude Code 后要让 hub 这台自己干活：在管理界面改 hub.json（或直接编辑），`machines` 里加一项 `{"id": "<主机名>", "name": "<名字>", "kind": "local"}`，再重启 hub（[config.md](config.md)）。
-- 新装的 hub 只在局域网 IPv4 上开 TLS 端口；出门也要直连时重跑 `personad hub setup --outside`，见 [network.md](network.md)。
-- 已经在 `~/.zshrc` 里写了 claude 的启动函数的，照样会被发现、照样能选，也能在 设置 › 模型供应商 里「从 ~/.zshrc 导入」，见 [launchers.md](launchers.md)。
-- 主对话就绪度和错误码的接口见 [protocol.md](protocol.md)「主对话就绪度」，设计和后续计划见 [onboarding.md](onboarding.md)。
+- The hub install command ends by running `personad hub setup`: it writes `~/.persona/hub.json`, creates the Postgres container `jarvis-postgres` in Docker, installs a systemd user service (on a Mac, the LaunchAgent `com.jarvis.hub`), runs a self-check, and finally prints the pairing QR code and `/admin#setup=<setup code>`.
+  What it does and doesn't change is in [onboarding.md](onboarding.md) ("Installer"); for manual deployment see [server.md](server.md), for a NAS see [docker.md](docker.md).
+- Get another phone pairing code: run `personad hub pair` on the hub machine. Under "Advanced" on the web sign-in page you can sign in with the hub's master key; it's the `token` in hub.json, and whoever has it can do anything.
+- Add a computer without the web: **Admin › Computers › Add computer**, or run `personad hub pair --machine <id> --add --name <name>` on the hub machine. Computers added either way count as confirmed right away. Details in [link.md](link.md).
+- If the machine had no `claude` or `herdr` when the hub was installed, `machines` in `hub.json` is empty, and rerunning `personad hub setup` later won't fill it in. To have the hub machine do work after adding Claude Code: edit hub.json in the admin page (or directly), add an entry `{"id": "<hostname>", "name": "<name>", "kind": "local"}` to `machines`, and restart the hub ([config.md](config.md)).
+- A freshly installed hub only opens its TLS port on LAN IPv4; to connect directly from outside too, rerun `personad hub setup --outside`, see [network.md](network.md).
+- If you already wrote a claude launcher function in `~/.zshrc`, it's still discovered and selectable, and you can also use **Import from ~/.zshrc** in **Settings › Model Providers**; see [launchers.md](launchers.md).
+- The APIs for main chat readiness and error codes are in [protocol.md](protocol.md) ("Main chat readiness"); design and future plans are in [onboarding.md](onboarding.md).

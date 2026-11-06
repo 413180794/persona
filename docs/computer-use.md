@@ -1,513 +1,513 @@
-# 操控电脑（Cua Driver / LCU）
+# Computer control (Cua Driver / LCU)
 
-Persona 助手操控用户的 Mac：看窗口和屏幕、点按、输入、截图。做成 hub 的**内置扩展 `cua`**（[extensions.md](extensions.md)），**默认关**，打开后再**按机器**逐台打开。
-后端有两个，扩展设置里的「操控后端」选：
+The Persona assistant controls the user's Mac: view windows and screens, click, type, take screenshots. Implemented as the hub's **built-in `cua` extension** ([extensions.md](extensions.md)), **off by default**, then enabled **per machine** after the extension is on.
+There are two backends, selected by Control Backend in extension settings:
 
-| 后端 | 是什么 | 什么时候用 |
+| Backend | What it is | When to use it |
 | --- | --- | --- |
-| **Cua Driver**（默认） | [trycua/cua](https://github.com/trycua/cua) 的 `cua-driver`（MIT，外部安装，不进仓库） | 装好 Cua Driver、给了辅助功能和屏幕录制 |
-| **LCU** | [amontlabs/lcu](https://github.com/amontlabs/lcu)（[lcu.amontlabs.com](https://lcu.amontlabs.com)）。它不自己实现键鼠和截图，而是把官方 ChatGPT 桌面版里的 Codex computer-use 运行时以 stdio MCP（命令 `lcu`）暴露出来 | 本机已经有官方 ChatGPT 桌面版，并且装了 LCU |
-| **自动** | 装好了 LCU、并且 ChatGPT（或安装器记下的 Node）在，就用 LCU，否则用 Cua Driver | 想让每台 Mac 自己认 |
+| **Cua Driver** (default) | `cua-driver` from [trycua/cua](https://github.com/trycua/cua) (MIT, installed externally, not vendored) | Cua Driver is installed and has Accessibility and Screen Recording permission |
+| **LCU** | [amontlabs/lcu](https://github.com/amontlabs/lcu) ([lcu.amontlabs.com](https://lcu.amontlabs.com)). It doesn't implement input and screenshots itself; it exposes the Codex computer-use runtime in the official ChatGPT desktop app as stdio MCP (command `lcu`) | The official ChatGPT desktop app and LCU are already installed locally |
+| **Auto** | Uses LCU if LCU is installed and ChatGPT (or the Node recorded by the installer) is available, otherwise Cua Driver | Let each Mac choose for itself |
 
-助手的工具还是 `computer_state` / `computer_run`。LCU 把它们翻成运行时的 `js`（`cua.getState()`、`cua.getApp(...)`）。确认不走 LCU 的 Claude / Codex 审批界面，见下面「LCU 的确认」。
+The assistant's tools remain `computer_state` / `computer_run`. LCU translates them into the runtime's `js` (`cua.getState()`, `cua.getApp(...)`). Confirmation doesn't use LCU's Claude / Codex approval UI; see "LCU confirmation" below.
 
-点击音效和 Agent 光标只对 Cua Driver 生效。LCU 没有单独的 daemon，进程在第一次调用时由 node 拉起，对话期间保持着，这样运行时自己记住的「本会话允许」还在。
+Click sounds and the Agent cursor only apply to Cua Driver. LCU has no separate daemon: the node starts its process on the first call and keeps it alive during the chat, preserving the runtime's "allow for this session" decisions.
 
-| 块 | issue | 状态 |
+| Area | Issue | Status |
 | --- | --- | --- |
-| 接入：能力发现、助手的 `computer_state` / `computer_run`、截图 | #1182 | 本文「接入」 |
-| 手机上一键安装、引导授权 | #1183 | 本文「一键安装」 |
-| 实时画面：Agent 操作电脑时在手机、网页上看，必要时接管 | #1184 | 本文「实时画面」 |
-| 锁屏、防睡眠、按 App 批准、点击音效（参考 Codex 桌面版） | #1507 | 方案已拍板，按顺序在做：本文「锁屏、防睡眠、按 App 批准」 |
+| Integration: capability discovery, assistant `computer_state` / `computer_run`, screenshots | #1182 | "Integration" in this doc |
+| One-tap installation on the phone, permission guidance | #1183 | "One-tap installation" in this doc |
+| Live view: watch the Agent operate the computer on phone and web, take over if needed | #1184 | "Live view" in this doc |
+| Lock screen, prevent sleep, per-App approval, click sounds (reference: Codex desktop app) | #1507 | Design decided, being implemented in order: "Locking, preventing sleep and per-App approval" in this doc |
 
-## 开关
+## Switches
 
-- **扩展 `cua`**：personad 自带的纯声明扩展（不跑进程），贡献扩展点 `computer`。在「设置 › 扩展」里开关（#1191），
-  或在 hub 机器上 `personad extension enable cua`（老命令 `personad plugin …` 照旧能用）。默认关。
-- **按机器**：扩展打开后，每台 Mac 的机器页多一节「操控电脑」，开关「允许助手操控这台电脑」
-  （`PUT /api/v1/machines/{mid}/computer`），存在扩展配置的 `machines` 里。扩展页的「能操控的电脑」是同一个值：只列 Mac，每台一个开关（名字、在线与否、Cua 的状态），即时生效（`format: machine`，[extensions.md](extensions.md)）。
-- **操作前确认**：扩展配置的 `confirm`（「操作前在手机上确认」），默认关，见「写操作」。
+- **`cua` extension**: a declaration-only extension shipped with personad (no process), contributing the `computer` extension point. Toggle it in **Settings › Extensions** (#1191),
+  or run `personad extension enable cua` on the hub machine (old `personad plugin …` commands still work). Off by default.
+- **Per machine**: once the extension is on, each Mac's machine page gains Control Computer, with **Let the Assistant Control This Computer**
+  (`PUT /api/v1/machines/{mid}/computer`), stored in `machines` in extension config. Controllable Computers on the extension page is the same value: Macs only, one switch each (name, online status, Cua status), effective immediately (`format: machine`, [extensions.md](extensions.md)).
+- **Confirm before acting**: extension config `confirm` (Confirm on Phone Before Acting), off by default; see "Write operations".
 
-**扩展关着时**：
-- hub 不向任何 node 问 cua-driver（node 自己从不探测）。
-- 机器没有 `computer` 字段，机器页什么都不显示。
-- 助手没有 `computer_*` 工具。
+**With the extension off**:
+- The hub never asks any node about cua-driver (the node never probes on its own).
+- Machines have no `computer` field; nothing appears on their machine pages.
+- The assistant has no `computer_*` tools.
 
-**扩展开着、某台没打开时**：hub 照样问它的 node（连上时、扩展改了时），这台 Mac 的 `computer` 带着状态，只是 `enabled` 为 false：机器页只有开关，扩展页的那一行写出 Cua 的状态（「在线 · Cua 没装」）。助手的工具只在至少一台打开后才出现，而且只能操作打开了的机器。
+**With the extension on but a machine off**: the hub still asks its node (at connection and extension changes). That Mac's `computer` contains its status, but `enabled` is false: the machine page only has a switch; its row on the extension page shows Cua status ("Online · Cua not installed"). Assistant tools appear only once at least one machine is enabled, and can only operate enabled machines.
 
-关掉扩展或某台的开关时，撤掉的是工具和入口；那台 Mac 上装好的 Cua Driver 或 LCU 不动。
+Turning off the extension or a machine removes the tools and entry points; Cua Driver or LCU installed on that Mac is left untouched.
 
-## LCU 的确认
+## LCU confirmation
 
-LCU 的运行时在真正碰到一个 App（以及开了 Chrome 时的网站来源）时，会用 MCP 的 `elicitation/create` 问客户端：允许一次、本会话允许、一直允许、拒绝，高风险时带它自己的警告，网站是允许或拒绝。官方适配器把这些交给 Claude、Codex、Pi 自己的界面。
+When LCU's runtime actually touches an App (and a website origin when Chrome is open), it asks the client through MCP `elicitation/create`: allow once, allow for this session, always allow, deny; high-risk actions carry its own warning, and websites offer allow or deny. Official adapters hand these to Claude, Codex and Pi's own interfaces.
 
-Persona 不注册那些适配器。node 作为 MCP 客户端自己接这条 elicitation，经 hub 的 `computer.elicit` 变成手机和网页上**已经有的**授权卡（和「第一次操作一个 App 时先问」「操作前在手机上确认」同一套 `permission` / 选项多的时候用 `question`）：
+Persona doesn't register those adapters. The node handles this elicitation itself as the MCP client, and the hub's `computer.elicit` turns it into the **existing** phone and web approval cards (the same `permission` cards used by Ask Before First Operating an App and Confirm on Phone Before Acting; `question` when there are more options):
 
-| 运行时问的 | 卡片 |
+| Runtime request | Card |
 | --- | --- |
-| 只允许一次，或另加「本会话」/「一直允许」里的一个 | 授权卡：允许 / 总是允许（文案写明是本会话还是一直）/ 拒绝 |
-| 「本会话」和「一直允许」都有 | 提问卡：允许一次、本会话允许、一直允许、拒绝。授权卡只有一个「总是允许」，装不下两个时长 |
-| 网站来源、没有字段的表单 | 授权卡：允许 / 拒绝。不写成运行时没提供的「一直允许」 |
-| 要打开一个 URL | 授权卡里带上那个 URL，允许或拒绝 |
-| 一个枚举字段 | 提问卡，选项是枚举本身加拒绝 |
-| 要填的简单字段 | 授权卡的输入框（手机能填；网页这张卡填不了，所以填不上就不算允许） |
-| 认不出的结构 | 仍出一张卡，点允许也按取消送回，不假装已经同意 |
+| Allow once only, or also one of "this session" / "always" | Permission card: Allow / Always Allow (text specifies this session or permanently) / Deny |
+| Both "this session" and "always" | Question card: Allow once, allow for this session, always allow, deny. A permission card only has one Always Allow and can't represent two durations |
+| Website origin, form without fields | Permission card: Allow / Deny. Doesn't invent "always allow" when the runtime didn't offer it |
+| Open a URL | Permission card includes the URL, allow or deny |
+| One enum field | Question card, with the enum values plus deny |
+| Simple fields to fill in | Permission card input fields (phone can fill them; the web card can't, so missing required values never count as approval) |
+| Unknown structure | Still a card; even tapping Allow returns cancellation, never pretends consent |
 
-没人答、关掉卡片、超时、或者助手自己用 `interaction_answer` 去答，一律回 `cancel`。运行时就当没批准。模型看不到「已经允许」，也不能自己批准。
+No answer, dismissing the card, timeout, or the assistant answering through `interaction_answer` all return `cancel`. The runtime considers it unapproved. The model never sees "allowed" and cannot approve itself.
 
-Persona 自己的「第一次操作一个 App 时先问」仍然先问一遍（认得出 App 的时候）。运行时之后再问的那一次也要人在卡片上答，不会因为上一张已经允许就自动过。
+Persona's own Ask Before First Operating an App still asks first (when the App can be identified). Any later runtime prompt also needs a human answer on the card; approval of the previous card doesn't auto-approve it.
 
-安装用发行包里的 `scripts/install.sh --runtime-only --yes`：只装运行时、记下 ChatGPT 自带的 Node，**不**跑 `lcu setup --agent`。那个参数会把审批登记进 Claude 或 Codex。ChatGPT 桌面版要用户自己先装好（macOS 默认 `/Applications/ChatGPT.app`），Persona 不下载、不登录。第一次使用时，辅助功能和屏幕录制是 ChatGPT 应用自己的，要在那台 Mac 上点允许。装好后的命令一般在 `~/.local/share/lcu/current/bin/lcu`。
+Installation uses `scripts/install.sh --runtime-only --yes` from the release package: installs only the runtime and records ChatGPT's bundled Node; does **not** run `lcu setup --agent`, which registers approvals in Claude or Codex. The user must install the ChatGPT desktop app first (macOS default `/Applications/ChatGPT.app`); Persona neither downloads it nor signs in. On first use, Accessibility and Screen Recording permissions belong to ChatGPT itself, and must be allowed on that Mac. The installed command is usually `~/.local/share/lcu/current/bin/lcu`.
 
-## 两条路
+## Two paths
 
-| | 助手（Persona 主对话等） | 电脑上的 Agent（Claude Code、Codex……） |
+| | Assistant (Persona main chat, etc.) | Agent on a computer (Claude Code, Codex…) |
 | --- | --- | --- |
-| 怎么调 | hub 的 MCP 工具 `computer_state` / `computer_run` → hub → node 的 `computer.call` → Cua Driver 的 `cua-driver call`，或 LCU 的 stdio MCP（`js`） | 在那台电脑的 Agent 里直接注册 Cua Driver 的 MCP：`cua-driver mcp-config --client claude --no-skills` 打印配置，`cua-driver mcp` 保持一个会话。LCU 不从这里登记进 Agent，避免审批出现在 Agent 自己的界面 |
-| 能操作哪台 | 扩展打开了的任何一台 Mac | 只有自己所在的那台 |
-| 开关、确认、日志 | 本扩展的 | Cua Driver 自己的，以及 Agent 自己的工具授权 |
+| How it's called | hub MCP tools `computer_state` / `computer_run` → hub → node `computer.call` → Cua Driver `cua-driver call`, or LCU stdio MCP (`js`) | Register Cua Driver's MCP directly in the Agent on that computer: `cua-driver mcp-config --client claude --no-skills` prints config, `cua-driver mcp` maintains a session. LCU is not registered in the Agent this way, to avoid approvals appearing in the Agent's own UI |
+| Which computers | Any Mac enabled in the extension | Only the computer the Agent runs on |
+| Switches, confirmation, logs | This extension's | Cua Driver's and the Agent's own tool permissions |
 
-Agent 那条路不经过 hub，本扩展不管。
+The Agent path doesn't pass through the hub and is outside this extension's control.
 
-## 接入（#1182）
+## Integration (#1182)
 
-### 能力发现
+### Capability discovery
 
-hub 问 node 的 `computer.status`。只有扩展对这台打开时才问，时机：
-- 连上时；
-- 打开开关时；
-- 机器页打开时（`GET …/computer`）；
-- 扩展开关或配置改了时。
+The hub asks the node for `computer.status`. It only asks when the extension is enabled for that machine, at these times:
+- on connection;
+- when the switch is enabled;
+- when the machine page opens (`GET …/computer`);
+- when the extension switch or config changes.
 
-node 的探测：
+The node's probes:
 
-| 看什么 | 怎么看 |
+| Check | How |
 | --- | --- |
-| 装了没有 | `cua-driver` 在 PATH，或在 `~/.local/bin/cua-driver`（安装器默认放这），或在 `/Applications/CuaDriver.app/Contents/MacOS/`。常驻 node（launchd）的 PATH 很短，所以后两处要单独找 |
-| 版本 | `cua-driver --version` |
-| daemon | `cua-driver status`（「daemon is running」） |
-| 权限 | `cua-driver permissions status --json` 的 `accessibility`、`screen_recording`。这两项是 daemon（`com.trycua.driver`）自己的 TCC 身份；daemon 不在时读不到，记为 `unknown` |
-| 桌面会话 | `ioreg -n Root -d1` 的 `IOConsoleUsers`：这个用户的会话在不在前台（`kCGSSessionOnConsoleKey`）、锁没锁屏（`CGSSessionScreenIsLocked` / `IOConsoleLocked`）→ `active` / `locked` / `away` |
+| Installed | `cua-driver` in PATH, or `~/.local/bin/cua-driver` (installer default), or `/Applications/CuaDriver.app/Contents/MacOS/`. A resident node (launchd) has a short PATH, so the latter two are searched explicitly |
+| Version | `cua-driver --version` |
+| Daemon | `cua-driver status` ("daemon is running") |
+| Permissions | `accessibility` and `screen_recording` from `cua-driver permissions status --json`. These belong to the daemon's own TCC identity (`com.trycua.driver`); unavailable if the daemon isn't running, recorded as `unknown` |
+| Desktop session | `IOConsoleUsers` from `ioreg -n Root -d1`: whether this user's session is foreground (`kCGSSessionOnConsoleKey`) and locked (`CGSSessionScreenIsLocked` / `IOConsoleLocked`) → `active` / `locked` / `away` |
 
-结果是 `proto.Computer`。`ready` 表示全部就绪；`note` 是给 App 看的中文，说缺什么、怎么办。机器页显示：
-- 就绪：「现在可以操控 · Cua Driver 0.38.0」；
-- 没就绪：显示 `note`，例如「Cua Driver 还没有屏幕录制权限：在这台 Mac 上运行 cua-driver permissions grant，在弹出的窗口里允许」。
+The result is `proto.Computer`. `ready` means everything is ready; `note` is user-facing text explaining what's missing and what to do. The machine page shows:
+- ready: "Ready to control · Cua Driver 0.38.0";
+- not ready: `note`, e.g. "Cua Driver doesn't have Screen Recording permission yet: run cua-driver permissions grant on this Mac and allow it in the window that appears".
 
-**锁屏、没有桌面会话**：Cua Driver 靠辅助功能和屏幕录制，都要登录着、解锁着的桌面。
-- 锁屏时 `note` 是「这台 Mac 锁屏了，解锁后才能操控」。
-- 退出登录或切到了别的用户时，是「这台 Mac 现在没有你登录的桌面……」。
-- 重启后还停在 FileVault 解锁界面的 Mac 连网络都没有，机器直接离线。
+**Locked, no desktop session**: Cua Driver relies on Accessibility and Screen Recording, both requiring a logged-in, unlocked desktop.
+- When locked, `note` says "This Mac is locked; unlock it to control it".
+- Logged out or switched to another user: "This Mac doesn't currently have a desktop logged in as you…".
+- A Mac still at the FileVault unlock screen after reboot has no network either, so the machine is simply offline.
 
-这些情况下工具照样会去调，失败时把 Cua Driver 的原话回给助手。
+In these cases tools still attempt the call, returning Cua Driver's original error to the assistant on failure.
 
-### 调用路径
+### Call path
 
-助手的两个工具（描述在 `server/internal/prompts/mcp/computer/`）：
+The assistant's two tools (descriptions in `server/internal/prompts/mcp/computer/`):
 
 - **`computer_state {machine, app?, query?, screenshot?}`**
-  - 给 `app`：先用 `run_script` 里的 `cua.getApp(app)` 找到它最前面的窗口（Cua Driver 自己的查找），再 `get_window_state`：无障碍树（markdown）加截图。
-  - 不给：`get_accessibility_tree`（屏幕上的 App 和窗口）加 `get_desktop_state`（整屏截图）。
+  - With `app`: first use `cua.getApp(app)` in `run_script` to find its frontmost window (Cua Driver's own lookup), then `get_window_state`: accessibility tree (markdown) plus screenshot.
+  - Without: `get_accessibility_tree` (on-screen Apps and windows) plus `get_desktop_state` (full-screen screenshot).
 - **`computer_run {machine, steps | script, app?, observe?, timeout_ms?}`**
-  - `steps` → `run_steps`：一串动作，按角色和名字找目标，或用 `element_token`；遇到第一个失败就停。
-  - `script` → `run_script`：一段 JS，里面可以循环、判断，最长 120 秒。
+  - `steps` → `run_steps`: a sequence of actions, finding targets by role and name or `element_token`; stops on the first failure.
+  - `script` → `run_script`: JS with loops and conditions, up to 120 seconds.
 
-**会话**：每个对话的调用都带同一个 Cua Driver 会话名 `persona-<对话 id 前 8 位>`。
-- 本机实测（Cua Driver 0.38.0）：
-  - `cua-driver call` **不带**会话名时，每次调用是一个新会话，上一次读到的 `element_token` 下一次就失效（`stale_element_token`）。
-  - **带同一个**会话名时，跨调用有效：读一次拿到「Clear」的 token，下一次 `call` 点它，计算器归零。
-  - 带名字的会话空闲 5 分钟过期。
-  - 所以 `computer_state` 读到的行号，可以在后面的 `computer_run` 里用。
-- **为什么不在 node 上常驻一个 `cua-driver mcp` 子进程**：会话名已经能保住 token。每次一个 `call` 是无状态的：node 重启、hub 被重新部署、两个对话同时用都不受影响。代价是每次多起一个进程（几十毫秒），和 Cua Driver 操作本身（一次点击约 0.3 秒、找窗口约 1.3 秒）比可以忽略。
+**Session**: each chat's calls carry the same Cua Driver session name, `persona-<first 8 characters of chat id>`.
+- Tested locally (Cua Driver 0.38.0):
+  - Without a session name, each `cua-driver call` is a new session, and an `element_token` from the previous call is invalid next time (`stale_element_token`).
+  - With the **same** session name, tokens work across calls: read the Clear token once, click it in the next `call`, and Calculator resets.
+  - Named sessions expire after 5 minutes idle.
+  - So line numbers from `computer_state` can be used in later `computer_run` calls.
+- **Why not keep a `cua-driver mcp` child resident on the node**: a session name already preserves tokens. One `call` per invocation is stateless: node restarts, hub redeployments and two concurrent chats don't affect it. It costs one extra process per call (tens of milliseconds), negligible next to Cua Driver operations (about 0.3 seconds per click, 1.3 seconds to find a window).
 
-**参数和工具**：
-- 参数经 stdin 给 `cua-driver call`：没有长度限制，也不出现在进程列表里。
-- node 只认 7 个工具：`get_desktop_state`、`get_accessibility_tree`、`get_window_state`、`list_apps`、`list_windows`、`run_script`、`run_steps`。Cua Driver 的设置、更新、扩展、剪贴板都不经这里。
+**Arguments and tools**:
+- Arguments go to `cua-driver call` through stdin: no length limit, and absent from process listings.
+- The node accepts only 7 tools: `get_desktop_state`, `get_accessibility_tree`, `get_window_state`, `list_apps`, `list_windows`, `run_script`, `run_steps`. Cua Driver settings, updates, extensions and clipboard don't go through this path.
 
-**daemon 没在跑时**：node 先 `open -g -b com.trycua.driver`，经 LaunchServices 在后台打开 CuaDriver.app，不弹窗口。实测 1 秒内起来，权限照旧，然后再调用。
+**If the daemon isn't running**: the node first runs `open -g -b com.trycua.driver`, opening CuaDriver.app in the background through LaunchServices with no window. Measured: starts within 1 second, retaining permissions, then the call proceeds.
 
-### 截图
+### Screenshots
 
-- `cua-driver call --screenshot-out-file` 把截图写进临时文件，JSON 里就不再带 base64：计算器窗口那次只有约 600 字节。
-- node 读回图片，比 PNG 小时转成 JPEG（透明的圆角垫白），放进 `computer.call` 结果的 `image`，然后删掉临时文件。
-- 计算器窗口：230×408，JPEG 约 12 KB；整屏会大一些，Cua Driver 按 `max_image_dimension` 限了长边。
-- hub 把图作为 MCP 的图片块和文字一起交给模型：模型要看到像素才能操作，MCP 也没有「给一个链接」的图片。
-- **不另建媒体缓存**：图进了助手的 transcript 以后，hub 推给 App 时本来就去掉图片数据（`lazy_images`），App 显示时再按条目取。App 在工具调用下面画出这张图：工具行「看电脑 · MacBook · Calculator」，点开就是截图。
-- 截图不写日志。工具返回的 JSON 超过 6 万字节就截断（按字符边界），提示用 `query` 缩小。
+- `cua-driver call --screenshot-out-file` writes the screenshot to a temporary file, so JSON no longer includes base64: the Calculator window result was only about 600 bytes.
+- The node reads the image, converts it to JPEG if smaller than PNG (transparent corners padded white), puts it in `image` in the `computer.call` result, then deletes the temporary file.
+- Calculator window: 230×408, about 12 KB as JPEG; full-screen images are larger, with Cua Driver limiting the long edge via `max_image_dimension`.
+- The hub gives the image to the model as an MCP image block alongside text: the model needs pixels to operate, and MCP images have no "give a link" form.
+- **No separate media cache**: once the image is in the assistant transcript, hub pushes to the App already omit image data (`lazy_images`), fetched per item when displayed. The App draws this image under the tool call: "View computer · MacBook · Calculator"; expand it for the screenshot.
+- Screenshots aren't logged. Tool-result JSON over 60,000 bytes is truncated at a character boundary, with a hint to narrow it using `query`.
 
-### 写操作
+### Write operations
 
-`computer_state` 只读。`computer_run` 可能点击、输入、按键、打开或关闭 App。
+`computer_state` is read-only. `computer_run` may click, type, press keys, open or close Apps.
 
-- **默认放行，记日志**。hub 的日志一行：
+- **Allowed by default, logged**. One hub log line:
   ```
   [macbook] computer_run for 1a2b3c4d: run_steps [click click press_key], 1.2s, ok
   ```
-  只记动作名和步数（脚本只记字节数），不记输入的文字、点的是什么。
-- **扩展配置打开「操作前在手机上确认」**（`confirm`）后，每次 `computer_run` 先在手机上弹授权卡片：「在「MacBook」上依次执行：click、click、press_key」或「运行脚本：<第一行>」。
-  - 不批准（或 15 分钟没人理），就告诉助手用户拒绝了，不要重试。
-  - 和 `connector_gate` 是同一套卡片（`hub.approve`）。
+  Only action names and step counts (byte count only for scripts), not typed text or click targets.
+- After enabling **Confirm on Phone Before Acting** (`confirm`) in extension config, each `computer_run` first shows a permission card on the phone: "On MacBook, perform in order: click, click, press_key" or "Run script: <first line>".
+  - If not approved (or unanswered for 15 minutes), tell the assistant the user denied it and not to retry.
+  - Same cards as `connector_gate` (`hub.approve`).
 
-### 安全和隐私
+### Security and privacy
 
-- 仓库和测试里没有真实的截图、窗口内容、人名。测试用造的 PNG 和假的 cua-driver 脚本。
-- 真机端到端测试（下面）的截图只落在测试者指定的本地文件。
-- 截图只在助手的 transcript 里（和发给助手的照片一样）。不进 hub 日志，也不进扩展审计（`plugin_audit` 只记开关、改了配置，不记值）。
-- Cua Driver 自己的 telemetry：一键安装时会关掉（`cua-driver telemetry disable`，#1183）；手动装的由用户自己决定。
+- No real screenshots, window content or names in the repository or tests. Tests use fabricated PNGs and a fake cua-driver script.
+- Screenshots from real-device end-to-end tests (below) are only written to a local file chosen by the tester.
+- Screenshots live only in the assistant transcript (like photos sent to the assistant), not hub logs or extension audit (`plugin_audit` records only toggles and config changes, not values).
+- Cua Driver's own telemetry: disabled during one-tap installation (`cua-driver telemetry disable`, #1183); users decide for manual installations.
 
-## 一键安装（#1183）
+## One-tap installation (#1183)
 
-扩展对一台 Mac 打开后，机器页「操控电脑」按状态给按钮，不再让人去那台 Mac 上敲命令：
+After enabling the extension for a Mac, Control Computer on its machine page offers buttons by status, rather than asking the user to type commands on that Mac:
 
-| 状态 | 机器页 |
+| Status | Machine page |
 | --- | --- |
-| 没装 | 「这台 Mac 上还没有装 Cua Driver」+「安装 Cua Driver」 |
-| 正在安装 | 转圈 + 当前步骤 +「取消」 |
-| 装失败 | 「没装上：<安装器最后几行>」+「重新安装」 |
-| 缺权限，或请求授权中 | 分步引导（#1280）：已允许的打勾，没允许的按顺序编号，用 macOS 26 系统设置里的原名（「系统设置 › 隐私与安全性 › 辅助功能」「录屏与系统录音」，旧版叫「屏幕录制」；应用在列表里叫「Cua Driver」）；缺录屏时多一步「系统提示退出重开或直接访问屏幕时选允许」；最后「回到这里点再检查一次」。按钮「去授权」「再检查一次」，屏幕共享开着时加「VNC」 |
-| 就绪 | 「现在可以操控 · Cua Driver 0.38.0」 |
+| Not installed | "Cua Driver isn't installed on this Mac" + Install Cua Driver |
+| Installing | Spinner + current step + Cancel |
+| Failed | "Installation failed: <last installer lines>" + Reinstall |
+| Missing permissions or requesting permission | Step-by-step guidance (#1280): approved permissions checked, missing ones numbered in order; uses the original macOS 26 System Settings names (System Settings › Privacy & Security › Accessibility; Screen & System Audio Recording, called Screen Recording in older versions; the app is listed as Cua Driver). Missing recording adds "When the system asks to quit and reopen or allow direct screen access, choose Allow"; ends with "Return here and tap Check Again". Buttons Grant Access and Check Again, plus VNC when Screen Sharing is on |
+| Ready | "Ready to control · Cua Driver 0.38.0" |
 
-页面在有任务、或请求过授权还在等「允许」时每 2 秒问一次。
+The page polls every 2 seconds while a job runs or permission was requested and it is still waiting for Allow.
 
-### 怎么装（node 的 `computer.install`）
+### Installation (`computer.install` on the node)
 
-一次只跑一个后台任务，状态随 `computer.status` 的 `job` 回来（`{kind: install|grant, state: running|done|failed|cancelled, step, error}`）：
+Only one background job runs at a time; status comes back in `job` in `computer.status` (`{kind: install|grant, state: running|done|failed|cancelled, step, error}`):
 
-1. **下载安装器**：Cua 官方的 `install.sh` 只是转交给 `_install-rust.sh`，后者再 source `_install-common.sh`。
-   - 三个脚本先全部从 `https://cua.ai/driver/` 下载到一个新的临时目录，**从磁盘运行**：`install.sh` 优先用同目录的 helper，helper 优先 source 同目录的 common。所以运行时不会再从网上取别的代码。
-   - 运行前检查（`checkScript`）：两个要执行的是 bash 脚本；被 source 的是 shell 文件；`_install-rust.sh` 里还有对照 SHA256SUMS 的校验。不满足就不运行。
-   - Cua 没有给安装脚本本身公布哈希，所以这一步只能做到「来自 cua.ai 的 HTTPS、像是它的安装器」，记在这里，别当成签名校验。
-2. **下载并校验 Cua Driver，装进「应用程序」**：`/bin/bash install.sh --no-modify-path`，不改 shell 的 rc 文件。
-   - 安装器自己把发布包对照 release 的 SHA256SUMS 校验。机器上有 `cosign` 时再加 `--require-signature`（校验 Sigstore 签名）。
-   - 不需要 sudo：用 `ditto` 装进 `/Applications`，所以要是管理员账户；`~/.local/bin/cua-driver` 链到 app 里。
-   - 已经装着同一个 app 时会替换它：安装器先停掉 daemon，签名要求不变就保留授权。所以已经装好的机器不给「安装」。
-3. **关闭 Cua 的使用统计**：
-   - 安装时带 `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`，安装器连「装了一次」都不上报。
-   - 装完执行 `cua-driver telemetry disable`，持久关掉。
-4. 装好以后 node 立刻开始授权任务。
+1. **Download installer**: Cua's official `install.sh` delegates to `_install-rust.sh`, which sources `_install-common.sh`.
+   - Download all three scripts first from `https://cua.ai/driver/` into a new temporary directory, and **run from disk**: `install.sh` prefers a sibling helper, which prefers a sibling common script. Thus no other code is fetched from the network while running.
+   - Before execution, check (`checkScript`): the two executable scripts are bash, the sourced file is shell, and `_install-rust.sh` contains verification against SHA256SUMS. Otherwise don't run.
+   - Cua publishes no hashes for the install scripts themselves, so this only proves "HTTPS from cua.ai, looks like its installer". Recorded here; don't mistake it for signature verification.
+2. **Download and verify Cua Driver, install in Applications**: `/bin/bash install.sh --no-modify-path`, without changing shell rc files.
+   - The installer verifies the release package against its SHA256SUMS. If `cosign` is installed, add `--require-signature` (Sigstore verification).
+   - No sudo needed: uses `ditto` into `/Applications`, so the account must be an administrator; `~/.local/bin/cua-driver` links into the app.
+   - Replaces the same app if already installed: the installer stops the daemon first and retains permissions if the signing requirement is unchanged. That's why already-installed machines don't get Install.
+3. **Disable Cua usage statistics**:
+   - Pass `CUA_DRIVER_RS_TELEMETRY_ENABLED=0` during installation, so even an installation event isn't reported.
+   - Afterward run `cua-driver telemetry disable` to persist the setting.
+4. Once installed, the node starts the permission job immediately.
 
-### 授权（node 的 `computer.grant`）
+### Granting permissions (`computer.grant` on the node)
 
-- node 执行 `cua-driver permissions grant`：它经 LaunchServices 打开 CuaDriver.app，弹出辅助功能、屏幕录制的系统窗口。
-- **这一步只能在那台 Mac 的屏幕上点「允许」**，App 替不了点。屏幕共享开着时，机器页给「VNC」（下一节），在手机上的画面里远程点。
-- **做不到的**：那台 Mac 的屏幕共享也没开时，第一次授权必须本人在机器前操作。之后都能远程。
-- 卸载按钮没做，不是必须的。要卸载就运行 Cua 自己的 `https://cua.ai/driver/uninstall.sh`。
+- The node runs `cua-driver permissions grant`: it opens CuaDriver.app through LaunchServices, showing the system Accessibility and Screen Recording prompts.
+- **Allow must be clicked on that Mac's screen**; the App can't click it for you. If Screen Sharing is on, the machine page offers VNC (next section), so you can click remotely in the phone's view.
+- **Not possible**: if Screen Sharing is also off on that Mac, first-time permission must be granted in person at the machine. Everything afterward can be remote.
+- No uninstall button; it isn't essential. To uninstall, run Cua's own `https://cua.ai/driver/uninstall.sh`.
 
-### 接口
+### API
 
-`POST /api/v1/machines/{mid}/computer/{install|grant|cancel}` → 200 `Computer`（带 `job`）。
-- 扩展没对这台打开：404。
-- 离线、已经有任务在跑、node 太旧：409 `{"error"}`。
-- 「取消」只停安装；授权等的是 Mac 上的系统窗口，那是用户的事。
+`POST /api/v1/machines/{mid}/computer/{install|grant|cancel}` → 200 `Computer` (with `job`).
+- Extension not enabled for this machine: 404.
+- Offline, job already running, or node too old: 409 `{"error"}`.
+- Cancel only stops installation; granting permissions waits for a system prompt on the Mac, which is up to the user.
 
-## 实时画面（#1184）
+## Live view (#1184)
 
-用途：Agent 或助手操作电脑时，在手机、网页上看那台 Mac 的真实桌面。先只看，再支持接管点按。
-Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。它画的 agent cursor 是一个浮在最上层的窗口，屏幕上看得到。
+Purpose: watch that Mac's real desktop on the phone or web while an Agent or assistant operates it. View-only first, then taking over input.
+Cua Driver operates in the background without stealing focus; the view shows the real desktop. Its agent cursor is a topmost floating window visible on screen.
 
-### 两条路
+### Two paths
 
-| | a) macOS 自带的屏幕共享（VNC，`127.0.0.1:5900`） | b) node 自己抓屏推流 |
+| | a) Built-in macOS Screen Sharing (VNC, `127.0.0.1:5900`) | b) node captures and streams the screen |
 | --- | --- | --- |
-| 那台 Mac 要做的 | 开一次「系统设置 › 通用 › 共享 › 屏幕共享」 | 给抓屏的程序屏幕录制权限：可以复用 Cua 的那次授权，让 Cua Driver 截屏，node 轮询 |
-| 远程打开 | 要 sudo；据 Apple 的说明，macOS 12.1 起用命令行（`kickstart`）打开的远程管理只能观看、不能控制（没有 MDM 时）。实现时实测 | 跟 Cua 的授权走 |
-| 延迟、帧率 | 系统的编码，几十帧，低延迟 | 每帧一次截屏加编码，估计每秒几帧 |
-| 接管点按 | 协议自带（键鼠） | 要把点按翻成 Cua Driver 的点击，只能做到点、不能拖得顺 |
-| 解锁、登录窗口 | 能看到、能操作（锁屏时也能远程解锁） | 锁屏后截不到桌面 |
-| 首次授权的鸡和蛋 | 屏幕共享开着时，Cua 的授权弹窗能经它远程点 | 抓屏本身就要授权，第一次只能在机器前 |
+| What the Mac needs | Enable System Settings › General › Sharing › Screen Sharing once | Screen Recording permission for the capture program: reuse Cua's permission, have Cua Driver capture and node poll |
+| Enable remotely | Requires sudo; Apple says Remote Management enabled by command line (`kickstart`) since macOS 12.1 allows viewing but not control without MDM. Verify during implementation | Same permissions as Cua |
+| Latency, frame rate | System encoding, tens of frames per second, low latency | One capture and encode per frame, estimated a few frames per second |
+| Taking over input | Built into the protocol (keyboard/mouse) | Translate taps into Cua Driver clicks; clicking works, smooth dragging doesn't |
+| Unlock, login window | Visible and controllable (can remotely unlock a locked screen) | Can't capture the desktop after locking |
+| First-permission chicken and egg | With Screen Sharing enabled, Cua permission prompts can be clicked remotely | Capturing itself needs permission, so the first grant must be in person |
 
-**选 a**：
-- 一次性操作最少：开屏幕共享和给 Cua 授权，本人在机器前一次做完；此后装 Cua、授权、解锁都能远程。
-- 延迟最低，接管现成。
-- b 只在用户不愿开屏幕共享时有意义，第一版不做。
+**Choose a**:
+- Fewest one-time steps: enable Screen Sharing and grant Cua permissions in person once; afterward installing Cua, granting permissions and unlocking can all be remote.
+- Lowest latency, takeover already implemented.
+- b only matters for users unwilling to enable Screen Sharing; not in the first version.
 
-### 连接
+### Connection
 
-只经 hub 的隧道，不对外开新端口：
-- 客户端 ⇄ hub：WebSocket `GET /api/v1/machines/{mid}/ports/5900/connect?token=…`，二进制帧，原样 TCP 字节（[ports.md](ports.md) 的端口转发）。
-  - 扩展 `cua` 或 `ego` 对这台 Mac 打开时，hub 常设放行 5900（`portAllowed`），只放 5900，不用 Agent 在听、也不用手动 `open`。ego 的首次设置要经它在手机上做（#1507 第 6 条），所以不要求同时开着 `cua`；页面先问 `computer`，没开再问 `browser`。
-  - 接受 noVNC 可能带的 `binary` 子协议。
-  - 只读的设备（手表那种）照旧 403。
-- hub ⇄ node：`port.dial`，node 只连本机的 `127.0.0.1:5900`。
-- `computer.status` 多报一个 `screen_sharing`：node 连一下 `127.0.0.1:5900`，看对方是不是用 RFB 的版本号打招呼（macOS 是 `RFB 003.889`）。机器页据此决定给「VNC」，还是说明怎么打开屏幕共享。
-- 单个流的未确认上限仍是 512 KB：按 50 ms 往返算约 10 MB/s，VNC够用，没有改。
+Only through the hub tunnel, no new externally exposed port:
+- Client ⇄ hub: WebSocket `GET /api/v1/machines/{mid}/ports/5900/connect?token=…`, binary frames with raw TCP bytes (port forwarding in [ports.md](ports.md)).
+  - When `cua` or `ego` is enabled for that Mac, the hub permanently allows 5900 (`portAllowed`), and only 5900; no Agent listener or manual `open` needed. ego's first setup must use it from the phone (#1507 item 6), so `cua` needn't also be on; the page asks `computer` first, then `browser` if not enabled.
+  - Accepts the `binary` subprotocol noVNC may send.
+  - Read-only devices (like the watch) still get 403.
+- hub ⇄ node: `port.dial`; the node only connects to its own `127.0.0.1:5900`.
+- `computer.status` adds `screen_sharing`: the node connects to `127.0.0.1:5900` and checks for an RFB version greeting (macOS: `RFB 003.889`). This determines whether the machine page offers VNC or explains how to enable Screen Sharing.
+- Each stream's unacknowledged limit remains 512 KB: about 10 MB/s at 50 ms round-trip, sufficient for VNC; unchanged.
 
-**屏幕共享的局限**：
-- 它监听所有网卡，局域网里看得到 5900。这是系统的行为，Persona 不另开端口。要只留回环，需要 sudo 加一条 pf 规则，由用户自己决定。
-- 它要那台 Mac 的 macOS 账号和密码（Apple 的 ARD 认证），或单独设的 VNC 密码。
-  - 页面每次让用户输入，只发给那台 Mac，不进 hub、不进仓库，页面也不保存。
-  - 账号名按机器的家目录（`/Users/<名字>`）预填。
+**Screen Sharing limitations**:
+- It listens on every interface, so 5900 is visible on the LAN. That's system behavior; Persona opens no extra port. Restricting it to loopback needs a pf rule with sudo, for the user to decide.
+- It requires that Mac's macOS account and password (Apple ARD authentication), or a separately configured VNC password.
+  - The page asks each time, sends them only to that Mac, not the hub or repository, and doesn't store them.
+  - Account name prefilled from the machine's home directory (`/Users/<name>`).
 
-### 页面：`/screen/<机器 id>`（网页，`web/src/screen/`）
+### Page: `/screen/<machine id>` (web, `web/src/screen/`)
 
-- **加载**：网页的入口在路径是 `/screen/…` 时不走登录和侧栏，只动态加载这一页。noVNC（[noVNC](https://github.com/novnc/noVNC) 1.7，MPL-2.0，`@novnc/novnc`）在单独的代码块里，不进主包。
-- **token**：
-  - App 打开时把自己的设备 token 放在 `#token=…&embed=1` 里：URL 的 fragment 不发给服务器；页面一加载就从地址栏去掉，只放在内存里。
-    - 还带上机器的显示名 `name=`（Mac Studio），页面在 hub 回答之前就用它，不显示 id。
-    - 每个值只做一次百分号编码（`ScreenViewer.url`，`percentEncodedFragment`）。#1498 之前编了两次，`jd_` 的设备 token 到页面成了 `jd%5F…`，hub 回 invalid token。
-    - hub 一侧照常：设备 token 走 `Authorization` 或 WebSocket 的 `?token=`，只答不打字的设备（手表）403。
-    - 测试：`ScreenViewerTests`、`screen.test.ts`、`TestTheLiveScreenTakesTheAppsDeviceToken`。最后一个用一个替身「屏幕共享」，确认设备 token 能经转发收到它的版本号，错的 token 和编两次的 token 都在拨号之前被拒。
-  - 不像网页的登录链接那样换一个新的浏览器 token（那样每打开一次就多一个设备 token）。
-  - 网页里已经登录的用户直接用自己的 token。
-- **先问 hub**：有没有这台、在不在线、扩展开没开、屏幕共享开没开，各给一句中文说明。然后才连。
-- **登录**：屏幕共享要登录时，出一个表单「登录这台 Mac 的屏幕共享」（账号、密码、「连接」）。登录失败就说「账号或密码不对」，可以再试。
-- **连上以后**：
-  - 默认「只看」（`viewOnly`），顶栏的「只看 / 接管」切换后，键盘和鼠标（触屏）都交给那台 Mac。
-  - 画面按窗口缩放（`scaleViewport`），不改那台 Mac 的分辨率。
-  - 断了给「重新连接」。
-- **没有 `crypto.subtle` 时**：ARD 登录要用 AES 加密账号和密码，而 noVNC 的 AES 用的是浏览器的 `crypto.subtle`。HTTP 打开的页面（hub 的内网地址、App 的 WebView）不是安全上下文，没有 `crypto.subtle`。
-  - `aes.ts` 在缺它时补一个只会 AES-CBC 加密的替身。
-  - 测试：FIPS-197 的三组标准向量，以及和 WebCrypto 逐字节比对。
-  - HTTPS 或 localhost 打开时不补，用浏览器自己的。
-- **画面**：Cua Driver 在后台操作，不抢焦点，画面里是真实桌面。它画的 agent cursor 是最上层的一个窗口，看得到。
+- **Loading**: on `/screen/…`, the web entry bypasses login and sidebar and dynamically loads only this page. noVNC ([noVNC](https://github.com/novnc/noVNC) 1.7, MPL-2.0, `@novnc/novnc`) lives in a separate chunk, not the main bundle.
+- **Token**:
+  - The App opens it with its device token in `#token=…&embed=1`: URL fragments aren't sent to the server; the page removes it from the address bar immediately on load, keeping it only in memory.
+    - Includes the machine's display name in `name=` (Mac Studio), used before the hub responds instead of displaying its id.
+    - Each value is percent-encoded only once (`ScreenViewer.url`, `percentEncodedFragment`). Before #1498, double encoding turned `jd_` device tokens into `jd%5F…` on the page, and the hub returned invalid token.
+    - Hub side unchanged: device tokens use `Authorization` or WebSocket `?token=`; devices that may answer but not type (the watch) get 403.
+    - Tests: `ScreenViewerTests`, `screen.test.ts`, `TestTheLiveScreenTakesTheAppsDeviceToken`. The last uses a stand-in Screen Sharing server to verify its version greeting is received through forwarding with a device token, while incorrect and double-encoded tokens are rejected before dialing.
+  - Doesn't exchange for a new browser token like web login links (which would add a device token on every open).
+  - Users already logged into the web use their own token directly.
+- **Ask the hub first**: does the machine exist, is it online, is the extension enabled, is Screen Sharing on? Each has a user-facing explanation. Only then connect.
+- **Login**: when Screen Sharing requires login, show "Sign in to Screen Sharing on this Mac" (account, password, Connect). Failure says "Incorrect account or password", allowing another try.
+- **Once connected**:
+  - View Only (`viewOnly`) by default. Switching View Only / Take Over in the top bar hands keyboard and mouse (touch) input to that Mac.
+  - Scale to the window (`scaleViewport`), without changing the Mac's resolution.
+  - On disconnection, offer Reconnect.
+- **Without `crypto.subtle`**: ARD login AES-encrypts the account and password; noVNC's AES uses browser `crypto.subtle`. Pages opened over HTTP (hub LAN address, App WebView) aren't secure contexts and lack `crypto.subtle`.
+  - `aes.ts` supplies an AES-CBC-encryption-only substitute when missing.
+  - Tests: three FIPS-197 standard vectors and byte-for-byte comparison with WebCrypto.
+  - HTTPS or localhost uses the browser's implementation, without the substitute.
+- **View**: Cua Driver operates in the background without taking focus, so the view is the real desktop. Its agent cursor is a topmost window and visible.
 
-### App 里的原生客户端（#1343，`apple/Persona/Screen/`）
+### Native client in the App (#1343, `apple/Persona/Screen/`)
 
-画中画小窗（`AVSampleBufferDisplayLayer`）要拿到每一帧，WebView 里的 noVNC 给不了，所以 App 自己说 RFB。网页照旧用 noVNC。
+Picture in Picture (`AVSampleBufferDisplayLayer`) needs access to each frame, which noVNC in a WebView can't provide, so the App speaks RFB itself. The web still uses noVNC.
 
-- **连哪里**：hub 的 5900 转发（`RFBWebSocket`）：一条二进制 WebSocket，走 App 连 hub 的同一条路（`APIClient.url`：SSH 隧道时经隧道；`APIClient.session`：公网 TLS 的钉扎），带设备 token（`Authorization`）。
-- **登录**（`RFBAuth`）：
-  - macOS 的屏幕共享给的是 30（Apple Remote Desktop）、33、35、36。这里用 30：
-    1. 服务器给出生成元、素数和它的公钥。
-    2. 这边算出 DH 共享密钥，取它的 MD5 当 AES-128 的密钥（ECB）。
-    3. 账号、密码各占 64 字节，以 NUL 结尾，其余是随机数。封好的 128 字节先发，然后是这边的公钥。
-  - 大数运算是自己写的 Montgomery 模幂（`RFBBigUInt`），对照 Python 的 `pow`。
-  - mock 自己的屏幕共享还给 VeNCrypt 的 Plain（19 → 256），测试用；没有登录的（1）也认。
-  - 账号密码来自记住的（`ScreenCredentials`，#1322）。
-- **画面**（`RFBFramebuffer`）：
-  - 要 32 位、深度 24、小端、红在第 16 位的像素格式，内存里就是 BGRA，`CVPixelBuffer` 的 32BGRA 直接用。
-  - 编码按优先顺序是 ZRLE（16）、CopyRect（1）、Raw（0），还有 DesktopSize、Cursor、LastRect 三个伪编码。
-  - ZRLE 的 zlib 流整个连接一条，用 Compression 的 raw DEFLATE，跳过开头两字节的 zlib 头。
-  - ZRLE 的五种 tile 都认：raw、solid、packed palette、plain RLE、palette RLE。
-- **回去的**：指针（按键位：左、中、右，滚轮上下）、按键（keysym）、剪贴板（ClientCutText，RFB 只能带 Latin-1，别的字经 node，见下面「剪贴板」）。
-  - 都进同一个发件队列（`AsyncStream`），握手完了由一个任务按来的顺序发：以前每条各开一个 `Task`，按下和松开、移动和点击可能乱序到 Mac。握手前来的先存着，不会插进握手中间。
-- **测试**：
-  - `RFBClientTests`：
-    - 大数对照 Python；
-    - ARD 对照 Python 加 openssl 封出来的字节；
-    - ZRLE 对照 Python 的编码器，五种 tile 跨两个矩形共用一条流；
-    - 照一段脚本走完整个会话，逐字节核对发出去的；
-    - ARD 握手和登录被拒；
-    - 指针、按键、剪贴板的字节和顺序（握手前来的排在握手之后，120 条按原样的顺序）。
-  - mock 的 `MOCK_SCREEN=fake` 现在像 macOS 一样先给 ARD（DH 在 Python 里算，AES 用 openssl），按客户端要的给 ZRLE 或 Raw。它记下指针、点击、滚轮、剪贴板（`/mock/screen-password` 读，`?clip=…` 让它往客户端发剪贴板）。`MOCK_SCREEN_ANIMATE=1` 时画面里有个方块按大约每秒 30 帧移动，用来量帧率。
+- **Connection**: hub's 5900 forwarding (`RFBWebSocket`), a binary WebSocket over the same route as the App's hub connection (`APIClient.url`: via SSH tunnel when used; `APIClient.session`: pinning for public TLS), with device token (`Authorization`).
+- **Login** (`RFBAuth`):
+  - macOS Screen Sharing offers 30 (Apple Remote Desktop), 33, 35, 36. This uses 30:
+    1. Server sends the generator, prime and its public key.
+    2. Client calculates the DH shared secret, using its MD5 as the AES-128 key (ECB).
+    3. Account and password each occupy 64 bytes, NUL-terminated and padded with random bytes. Send the encrypted 128 bytes first, then the client's public key.
+  - Large-number arithmetic is a custom Montgomery modular exponentiation (`RFBBigUInt`), checked against Python `pow`.
+  - Mock Screen Sharing also offers VeNCrypt Plain (19 → 256) for tests; no authentication (1) is accepted too.
+  - Account/password come from saved credentials (`ScreenCredentials`, #1322).
+- **Frames** (`RFBFramebuffer`):
+  - Requests 32-bit, depth 24, little-endian pixels with red at bit 16; BGRA in memory, directly usable as `CVPixelBuffer` 32BGRA.
+  - Encoding preference: ZRLE (16), CopyRect (1), Raw (0), plus DesktopSize, Cursor and LastRect pseudo-encodings.
+  - One zlib stream for ZRLE over the whole connection, using Compression raw DEFLATE after skipping the two-byte zlib header.
+  - All five ZRLE tile types: raw, solid, packed palette, plain RLE, palette RLE.
+- **Sending back**: pointer (button bits: left, middle, right, wheel up/down), keys (keysym), clipboard (ClientCutText; RFB only carries Latin-1, other characters go through the node, see "Clipboard" below).
+  - All use one outgoing queue (`AsyncStream`), sent in order by one task after the handshake. Previously a `Task` per message could reorder press/release or move/click on the Mac. Messages before the handshake wait and can't interrupt it.
+- **Tests**:
+  - `RFBClientTests`:
+    - large numbers checked against Python;
+    - ARD bytes checked against Python plus openssl encryption;
+    - ZRLE checked against a Python encoder, all five tiles sharing one stream across two rectangles;
+    - complete scripted session, outgoing bytes checked byte for byte;
+    - ARD handshake and rejected login;
+    - pointer, key and clipboard bytes and order (pre-handshake messages after handshake; 120 messages in original order).
+  - Mock `MOCK_SCREEN=fake` now offers ARD first like macOS (DH in Python, AES with openssl), then ZRLE or Raw as the client requests. It records pointer, clicks, wheel and clipboard (read at `/mock/screen-password`; `?clip=…` sends clipboard to the client). `MOCK_SCREEN_ANIMATE=1` moves a square at about 30 frames per second to measure frame rate.
 
 ### App
 
-- **机器页「操控电脑」**：
-  - 就绪时给「VNC」。
-  - 授权中、或请求过还缺权限时，给突出的「VNC」，在手机上远程点「允许」。
-  - 屏幕共享没开时，说明在那台 Mac 的「系统设置 › 通用 › 共享」里打开。
-- **对话页**：工具详情下面也有「VNC」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的扩展开着、屏幕共享开着：
-  - 助手的 `computer_state` / `computer_run`：对应它点名的那台；
-  - 电脑上的 Agent 自己注册的 Cua Driver MCP 工具（`mcp__cua-driver__…`）：对应这个 Agent 所在的那台。
-- **整页**（`VNCPage`，#1343）：原生客户端的画面铺满屏幕，在它自己的窗口里（`ScreenWindow`，#1604：iOS 上一个 `UIWindow` 在 shell 之上、toast 之下，Mac 上一个独立窗口，跟着 `AppModel.screenOpen`；以前挂在 `RootView` 的 `fullScreenCover` 上，机器页在 sheet 里时 present 被吞掉）。原来的网页抽屉（WKWebView + noVNC + 桥）去掉了，网页端照旧用 noVNC。
-  - 顶栏：关闭、连接的阶段（连接中 / 要登录 / 已连接 / 已断开）和机器名、帮助、「…」（鼠标模式 / 触控板模式、指针居中、小窗）。助手或 Agent 正在操作这台时多一行「正在：点 AC → 6 → × → 7 → =」。
-  - 底栏：剪贴板、「我完成了」（打开它的 Agent 在等你时才有）、键盘。
-  - **两种模式**（按 Mac 记住，`vnc.mode.<组>/<机器>`）：
-    - 鼠标模式（默认）：指针跟着手指。轻点就点在那里；单指拖动是拖拽；两指拖动滚动；两指轻点或长按是右键；双指开合放大，放大后两指拖动是移动画面。
-    - 触控板模式：手指移动指针（相对移动），轻点在指针处点击，轻点后马上拖动是拖拽，两指拖动在指针处滚动。指针跑偏了用「指针居中」。
-    - **两指滚动**（两种模式一样，`VNCWheel`，#4878）：按画面原大小，手指每走 8 pt 发一格滚轮（放大后按倍数加大，同一格在画面上走得一样远），第一格在半格就发，没满一格的余数留着、往回滑会扣掉，所以小位移也能滚；滑 100 pt 约 13 格（以前每 24 pt 一格、抬手丢掉余数，100 pt 只有 4 格）。方向是自然滚动：手指往下拉看上面的内容，同 iOS 和 Mac 默认。松手时每秒超过 300 pt 就按 UIScrollView 的减速（每毫秒剩 0.997）继续滚，一次最多加 30 格，不一甩就滚到底；手指再按下立刻停。
-    - 指针画 Mac 发来的光标（Cursor 伪编码），没有时画一个箭头。
-  - **键盘**：底栏的键盘弹出系统键盘，打的字直接发给 Mac（`VNCKeyInputView`）。键盘上面一排 Mac 的键（`VNCShortcutBar`，放在页面里，跟着键盘上去）：⌘ ⌥ ⌃ ⇧ 点一下按住、再点松开，Esc、Tab、方向键、⌘C ⌘V ⌘Z ⌘Tab ⌘空格。Latin-1 的字按键发；中文等别的字经剪贴板粘贴过去（放进 Mac 的剪贴板再按 ⌘V）。⌘ 发的是 Super_L（0xffeb），macOS 的屏幕共享当 Command。
-  - **剪贴板**：「从 iPhone 粘贴」把手机剪贴板的字放进 Mac 的剪贴板并按 ⌘V；「只放进 Mac 的剪贴板」不按；「复制到 iPhone」把 Mac 剪贴板的字拿过来。Latin-1 走 RFB 的 cut text，别的字和读 Mac 的剪贴板走 node（`computer.clipboard`：`pbcopy` / `pbpaste`，最多 1 MB；hub 的 `GET/POST /api/v1/machines/{mid}/computer/clipboard`，和 5900 的转发一样要扩展 `cua` 或 `ego` 对那台开着）。读手机剪贴板里别的 App 复制的字时，iOS 会问一次「允许粘贴」。
-  - **我完成了**：Agent 等你在电脑上操作时（它的对话打开了这页），点了往它的对话发「我在电脑上操作完了，你继续吧。」。直接关掉也算交还。
-  - **帮助**：「使用 VNC」一页，分移动操作、输入和剪贴板、何时用触控板模式、小窗、交还电脑。
-- **小窗**（`VNCPiP`，#1343）：
-  - iOS 是系统的画中画：`AVPictureInPictureController` + `AVSampleBufferDisplayLayer`，浮在别的 App 和桌面上，能拖、能缩放。小窗只能看，操作都在整页。点小窗的还原（或点小窗）回到整页；整页的「…」› 小窗放回小窗。
-  - 后台：音频会话用 `.playback`（`mixWithOthers`，不出声、不打断别的声音），`UIBackgroundModes` 有 `audio`，切到后台小窗照样在动。关掉小窗就断开（整页还开着时除外）。
-  - Mac 是一个浮在别的窗口上的面板（`NSPanel`，`.floating`，所有桌面都在）；点它打开整页窗口，关掉就断开。
-  - 一台 Mac 一条连接（`VNC.hold` / `release`）：整页和小窗共用，最后一个放手 2 秒后才断，来回切换不重连。
-  - 帧：`RFBFrameSink` 在更新之间从帧缓冲（加锁）拷进 `CVPixelBufferPool`（32BGRA、IOSurface），最多每秒 30 帧，时间戳取主机时钟（递增）。整页的层标 DisplayImmediately；小窗的源层有自己的 `controlTimebase`（主机时钟、速率 1），收不带 DisplayImmediately 的样本（AVFoundation 不建议两者混用）。
-  - **小窗的源**（#1839）：一个按 Mac 画面比例、宽 192pt 的显示层（`Theme.Size.pictureInPictureSource`），放在 App 主窗口里、内容的后面：在窗口里、不隐藏、看不见。以前是 2×2pt，从整页开时还加在了整页自己的窗口上，整页一关就没了，真机上小窗起不来（TestFlight 161）。
-  - **什么时候开**：整页一连上就把小窗准备好（源、控制器、音频会话）。「…」› 小窗在点按里直接 `startPictureInPicture`，开起来以后整页再像点 × 一样关掉；整页开着时回桌面，小窗自己开（`canStartPictureInPictureAutomaticallyFromInline`）。从机器页、对话里点「VNC」（记住了登录）时也在点按里开：源里先放一张卡片（下一条），不等连接；`isPictureInPicturePossible` 还是 false 或系统没反应，就在它变成 true 时、隔 0.4 秒、之后每秒再开一次，最多 6 次，只在 App 在前台时开（在后台靠自动开）。8 秒内开不了或系统不让开（`failedToStart`），就提示「小窗打不开：原因，已改用整页」并打开整页。
-  - **卡片**（`VNCPiPCard`，#1839 跟进：用户嫌「连上了才有小窗」迟钝）：Mac 的画面到之前，源里是 `ImageRenderer` 画的一帧（黑底、机器名、转圈的「连接中…」，每 0.1 秒一帧），按主机时钟做成样本塞给源层；这一次连接的第一帧到了（`RFBSession.pictured`，每次连接重新算）换成 Mac 的画面。连不上或中途断了，卡片写原因和「点 ▶ 重新连接，或点还原回到 App」：这时告诉系统「暂停了」，小窗上的 ▶（`setPlaying(true)`）重新连接。记住的密码不对了：App 在前台就打开整页重新登录（小窗交给整页），在后台卡片上说回到 App 登录。
-  - 为什么要卡片（TestFlight 161 的小窗诊断）：源还空着（还在连）时调 `startPictureInPicture`，`isPictureInPicturePossible` 已经是 true，系统却什么也不做，既不开也不报失败；整页里的「小窗」（已经有画面）一点就开。#1928 改成等第一帧再开，能开了，但要等连上。
-  - **小窗诊断**（整页「…」里）：设备支不支持画中画、音频会话、后台音频，和小窗最近每一步（`VNCPiPLog`：点了 VNC、准备好了、能不能开、在点按里开还是等画面、开了、关了、为什么改用整页），「复制全部」发给我们。DEBUG 构建的 runtime CLI `state` 里是 `vncPiP`；系统日志里是子系统 jarvis、类别 vnc。
-  - **模拟器没有画中画**（`isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上都是 false），这时点「VNC」直接打开整页。小窗只能在真机上看；DEBUG 启动参数 `-showPiPSource YES` 把小窗的源摆到 App 右上角（不开整页），能在模拟器上看卡片 → 画面 → 断开这一段（`VNCTests.testTheSmallWindowConnectsInIt`），系统小窗本身的开、▶、还原仍只能真机看。
-- **从哪里打开「VNC」**：记住了那台 Mac 的登录、整页没开、设备有画中画时直接进小窗（`AppModel.openVNC`），否则打开整页（要登录时总是整页）。
-- **记住登录**（#1322）：
-  - 登录框多一个「在这台手机上记住」（Mac 上是「在这台 Mac 上记住」），默认勾着。浏览器里打开的页面没有这一项，表单标好 `username` / `current-password`，交给浏览器自己的密码管理。
-  - 存什么、存哪里：账号和密码按机器存在设备钥匙串（`ScreenCredentials`），用自己的 service。iOS 上是 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`，不同步 iCloud 钥匙串；Mac 上在登录钥匙串里。不上传 hub，不进日志。
-  - 什么时候存：那台 Mac 接受了这次登录才存。没勾「记住」就删掉原来记住的。
-  - 怎么用上：那台 Mac 要求登录时，原生客户端（`RFBSession`）先用钥匙串里记住的，没有才出登录框。密码只在 App 的内存里交给客户端，不经网页。
-  - 密码不对了（那台 Mac 改过密码）：表单回来，写「记住的密码不对了」，账号已填好。输入新的、连上以后替换掉记住的。
-  - 机器页「操控电脑」里，记住了的时候「VNC」旁边有「忘记屏幕共享密码」。
-  - 一键解锁（上面方案 a-2）以后用同一份。
-- **从哪里打开**：
-  - **正在操作的条**：对话里最近一次操作电脑的工具（助手的 `computer_*`，Agent 的 `mcp__cua-driver__*`）还在跑、或刚结束 6 秒内，输入框上面的任务条最前面多一个「正在操作 MacBook · 点 …」（`ComputerActivityPill`），点它打开那台的画面。
-  - **··· 菜单**（`ScreenMenu`，#1604）：Agent 的对话里直接一项「VNC · <它所在的 Mac>」，那台不是 Mac、扩展没开或屏幕共享没开就没有这一项；助手的对话里是它最近操作的那台，没有时才列出能看的 Mac（几台时是子菜单）。
-  - 机器页「操控电脑」和工具详情里的「VNC」（`ScreenEntry`）也是同一个（小窗或整页）。
-- **工具写成人话**（#1323，`ComputerSteps`）：工具详情先是一行步骤（连续的点按合成「点 AC → 6 → × → 7 → =」，计算器的按键名换成符号），再是截图和「VNC」；原来的 JSON 收在「原始参数」里，点开才看。标题里的机器用它的名字（MacBook），按 id 或名字认（和 hub 一样），认不出才照工具里写的；放不下时截掉尾部（文件路径照旧截中间）。
+- **Control Computer on the machine page**:
+  - Ready: offers VNC.
+  - Granting permissions, or still missing them after a request: prominent VNC button to click Allow remotely from the phone.
+  - Screen Sharing off: explains how to enable it in System Settings › General › Sharing on that Mac.
+- **Chat page**: VNC (`ScreenEntry`) also appears below tool details for two types of tool, provided the extension and Screen Sharing are enabled for that Mac:
+  - assistant `computer_state` / `computer_run`: the named machine;
+  - Cua Driver MCP tools registered directly by a computer's Agent (`mcp__cua-driver__…`): that Agent's machine.
+- **Full page** (`VNCPage`, #1343): native client fills the screen in its own window (`ScreenWindow`, #1604: iOS `UIWindow` above the shell, below toasts; separate Mac window; follows `AppModel.screenOpen`). Previously a `fullScreenCover` on `RootView`, whose presentation was swallowed when the machine page was in a sheet. The old web drawer (WKWebView + noVNC + bridge) is removed; the web still uses noVNC.
+  - Top bar: Close, connection stage (connecting / login required / connected / disconnected) and machine name, Help, "…" (Mouse Mode / Trackpad Mode, Center Pointer, Picture in Picture). When the assistant or an Agent operates this Mac, another line: "Now: tap AC → 6 → × → 7 → =".
+  - Bottom bar: Clipboard, I'm Done (only when the Agent that opened it is waiting for you), Keyboard.
+  - **Two modes** (remembered per Mac, `vnc.mode.<group>/<machine>`):
+    - Mouse Mode (default): pointer follows the finger. Tap clicks there; one-finger drag drags; two-finger drag scrolls; two-finger tap or long-press right-clicks; pinch zooms, then two-finger drag pans the zoomed view.
+    - Trackpad Mode: finger moves the pointer relatively; tap clicks at the pointer, tap then immediately drag drags, two-finger drag scrolls at the pointer. Use Center Pointer if it strays.
+    - **Two-finger scrolling** (same in both modes, `VNCWheel`, #4878): at original view size, every 8 pt of finger motion sends one wheel notch (scaled up when zoomed, so a notch travels the same distance on screen); the first notch is sent at half a notch. Remainders are retained and reverse motion subtracts them, so small movements also scroll; 100 pt gives about 13 notches (previously one per 24 pt, discarding remainders on lift, giving only 4). Natural scrolling: pulling down reveals content above, like iOS and Mac defaults. Lift at over 300 pt/s continues with UIScrollView deceleration (0.997 remaining per millisecond), adding at most 30 notches so a fling doesn't jump to the bottom; touching again stops immediately.
+    - Pointer draws the cursor sent by the Mac (Cursor pseudo-encoding), or an arrow if none.
+  - **Keyboard**: the bottom-bar Keyboard opens the system keyboard; typed text goes directly to the Mac (`VNCKeyInputView`). A row of Mac keys above it (`VNCShortcutBar`, in the page, moving up with the keyboard): ⌘ ⌥ ⌃ ⇧ tap to hold, tap again to release; Esc, Tab, arrow keys, ⌘C ⌘V ⌘Z ⌘Tab ⌘Space. Latin-1 characters are sent as keys; Chinese and other characters are pasted via clipboard (put in the Mac clipboard, then ⌘V). ⌘ sends Super_L (0xffeb), interpreted as Command by macOS Screen Sharing.
+  - **Clipboard**: Paste from iPhone puts the phone clipboard text in the Mac clipboard and presses ⌘V; Copy to Mac's Clipboard Only skips the keypress; Copy to iPhone retrieves the Mac clipboard text. Latin-1 uses RFB cut text; other characters and reading the Mac clipboard use the node (`computer.clipboard`: `pbcopy` / `pbpaste`, up to 1 MB; hub `GET/POST /api/v1/machines/{mid}/computer/clipboard`, requiring `cua` or `ego` enabled for the machine, like 5900 forwarding). Reading text copied by another App on the phone causes iOS to ask Allow Paste once.
+  - **I'm Done**: when the Agent waits for you to act on the computer (its chat opened this page), tapping sends 我在电脑上操作完了，你继续吧。 ("I'm done on the computer; please continue.") to its chat. Closing the page also hands control back.
+  - **Help**: Using VNC page covers touch controls, input and clipboard, when to use Trackpad Mode, Picture in Picture, and handing back the computer.
+- **Picture in Picture** (`VNCPiP`, #1343):
+  - On iOS, system Picture in Picture: `AVPictureInPictureController` + `AVSampleBufferDisplayLayer`, floats over other Apps and the home screen, draggable and resizable. View-only; all input is on the full page. Restore (or tap the small window) returns to the full page; "…" › Picture in Picture on the full page returns to the small window.
+  - Background: audio session `.playback` (`mixWithOthers`, silent and doesn't interrupt other audio), `audio` in `UIBackgroundModes`; the small window keeps updating in the background. Closing it disconnects (unless the full page is still open).
+  - Mac: a panel above other windows (`NSPanel`, `.floating`, on all desktops); clicking opens the full-page window, closing disconnects.
+  - One connection per Mac (`VNC.hold` / `release`), shared by full page and PiP. Disconnects 2 seconds after the last release, so switching doesn't reconnect.
+  - Frames: between updates, `RFBFrameSink` copies the framebuffer (locked) into `CVPixelBufferPool` (32BGRA, IOSurface), up to 30 fps, with increasing host-clock timestamps. The full-page layer sets DisplayImmediately; PiP's source layer has its own `controlTimebase` (host clock, rate 1) and receives samples without DisplayImmediately (AVFoundation advises against mixing them).
+  - **PiP source** (#1839): a 192pt-wide display layer matching the Mac screen ratio (`Theme.Size.pictureInPictureSource`), in the App's main window behind content: in the window, not hidden, but not visible. Previously 2×2pt, and attached to the full-page window when opened from there; closing the full page removed it and PiP couldn't start on real devices (TestFlight 161).
+  - **When it opens**: once the full page connects, prepare PiP (source, controller, audio session). "…" › Picture in Picture calls `startPictureInPicture` directly from the tap; once started, close the full page as if × were tapped. Going home with the full page open starts PiP automatically (`canStartPictureInPictureAutomaticallyFromInline`). Tapping VNC from a machine page or chat (with login remembered) also starts from the tap: first put a card in the source (next item), don't wait for connection. If `isPictureInPicturePossible` is false or the system doesn't respond, try again when it becomes true, after 0.4 seconds, then every second, at most 6 times, only in the foreground (background relies on automatic start). If it can't start within 8 seconds, or the system refuses (`failedToStart`), show "Picture in Picture couldn't open: reason; switched to full page" and open the full page.
+  - **Card** (`VNCPiPCard`, #1839 follow-up: user found "PiP only after connecting" sluggish): before a Mac frame arrives, the source shows an `ImageRenderer` frame (black background, machine name, spinning Connecting…, every 0.1 seconds), converted to a sample with the host clock and fed to the source layer. The first frame of this connection (`RFBSession.pictured`, reset each connection) replaces it with the Mac view. Failure or disconnection shows the reason and "Tap ▶ to reconnect, or Restore to return to the App"; mark playback paused, and PiP's ▶ (`setPlaying(true)`) reconnects. Saved password wrong: in the foreground, open the full page to sign in again (PiP hands over); in the background, the card asks you to return to the App to sign in.
+  - Why a card (TestFlight 161 PiP diagnostics): `startPictureInPicture` with an empty source (still connecting), even with `isPictureInPicturePossible` true, made the system do nothing—neither opening nor reporting failure. Picture in Picture on the full page (already displaying frames) opened immediately. #1928 waited for the first frame, making it work, but requiring connection first.
+  - **PiP diagnostics** (full-page "…" menu): device PiP support, audio session, background audio, and each recent step (`VNCPiPLog`: tapped VNC, prepared, possible, started during tap or after waiting for a frame, opened, closed, why fallback). Copy All sends it to us. DEBUG runtime CLI `state` includes `vncPiP`; system logs use subsystem jarvis, category vnc.
+  - **No PiP in the simulator** (`isPictureInPictureSupported()` is false in iOS 27.0 and 27.1 simulators); tapping VNC opens the full page. PiP itself needs a real device; DEBUG `-showPiPSource YES` places the source at the App's top right (without opening the full page), so card → frame → disconnection can be checked in the simulator (`VNCTests.testTheSmallWindowConnectsInIt`). Starting system PiP, ▶ and Restore still require a real device.
+- **Where VNC opens**: with that Mac's login saved, no full page open and PiP supported, go straight to PiP (`AppModel.openVNC`); otherwise full page (always full page when login is needed).
+- **Remember login** (#1322):
+  - Login form adds Remember on This iPhone (Remember on This Mac on Mac), checked by default. Browser pages lack this; the form uses `username` / `current-password`, leaving it to browser password management.
+  - What and where: account/password per machine in the device keychain (`ScreenCredentials`), with its own service. iOS `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, no iCloud Keychain sync; Mac login keychain. Never uploaded to the hub or logged.
+  - When: only after that Mac accepts login. Unchecked Remember deletes previous saved credentials.
+  - Use: when the Mac requests login, the native client (`RFBSession`) tries saved keychain credentials first, otherwise shows the form. Password is handed to the client only in App memory, never through a web page.
+  - Password changed on the Mac: form returns with Saved password no longer works and account prefilled; after a successful new login, replace the saved password.
+  - In Control Computer on the machine page, saved login adds Forget Screen Sharing Password beside VNC.
+  - One-tap unlock (plan a-2 above) uses the same credentials.
+- **Entry points**:
+  - **Activity bar**: while the latest computer-control tool in the chat (assistant `computer_*`, Agent `mcp__cua-driver__*`) is running or finished within 6 seconds, the front of the task bar above input adds "Operating MacBook · tap …" (`ComputerActivityPill`). Tap to open that machine's screen.
+  - **··· menu** (`ScreenMenu`, #1604): an Agent chat has "VNC · <its Mac>"; absent if not a Mac, extension off or Screen Sharing off. An assistant chat uses its most recently controlled Mac, or lists viewable Macs if none (submenu for several).
+  - VNC (`ScreenEntry`) on the machine page and in tool details opens the same thing (PiP or full page).
+- **Readable tools** (#1323, `ComputerSteps`): tool details show a step summary first (consecutive clicks become "tap AC → 6 → × → 7 → =", Calculator key names become symbols), then screenshot and VNC. Original JSON is tucked into Raw Input, visible only when expanded. Titles use machine display names (MacBook), resolving by id or name (same as hub), falling back to the tool's text if unknown. Truncate at the end if it doesn't fit (file paths still truncate in the middle).
 
-## 锁屏、防睡眠、按 App 批准（方案，#1507，已拍板）
+## Locking, preventing sleep and per-App approval (plan, #1507, decided)
 
-参考 Codex 桌面版的 Computer Use 设置。主会话只读看了它安装包里的界面文字，没拿代码，看到的设置有：
-- 锁屏时也能用（Locked use）；
-- 点击音效（无 / 只前台 / 前台和后台）；
-- 按 App 的批准清单；
-- Office 三件套的 live control；
-- 信息（Messages）的读 / 发权限。
+Reference: Computer Use settings in the Codex desktop app. The main session read only the UI strings in its package, took no code, and found:
+- Locked use;
+- click sounds (none / foreground only / foreground and background);
+- per-App approval list;
+- live control for the three Office apps;
+- read / send permissions for Messages.
 
-### 现在怎样
+### Current behavior
 
-- **锁屏时用不了**：
-  - node 从 `IOConsoleUsers` 读到 `locked`，机器页写「这台 Mac 锁屏了，解锁后才能操控」，助手的工具也这么回。
-  - Cua Driver 0.37 起在锁屏时每条通道都拒绝，回 `screen_locked`（[trycua/cua#5483](https://github.com/trycua/cua/pull/5483)）。
-  - 实测报告（[trycua/cua#1745](https://github.com/trycua/cua/issues/1745)）：锁屏下辅助功能只够得着菜单栏，窗口截图是 0×0。
-  - 锁屏时真的键鼠都落在锁屏上，所以拒绝是对的。
-- **macOS 什么时候自己锁**：
-  - 屏幕保护程序启动或显示器空闲变暗时就锁（`kLWLockFromDisplayDim`），「需要密码」设成立即的时候尤其如此。
-  - 也就是说，Agent 在操作、或者用户在手机上只看不点的时候，Mac 都可能因为「空闲」锁上。
-- **Cua Driver 已经做了一半**：
-  - 每次工具调用后，它持有一个 `PreventUserIdleDisplaySleep` 断言，最后一次调用后再持续 10 分钟。环境变量 `CUA_DRIVER_KEEP_DISPLAY_AWAKE=<秒>` 可以改时长，`0` 关掉。
-  - 它不会叫醒已经睡着的显示器，也过不了锁。
-  - 这只管经 cua-driver 的调用。VNC、Agent 想得久（超过 10 分钟没调用）的时候不管。
+- **Doesn't work while locked**:
+  - The node reads `locked` from `IOConsoleUsers`; the machine page says "This Mac is locked; unlock it to control it", as do assistant tools.
+  - Since Cua Driver 0.37, all channels reject calls while locked with `screen_locked` ([trycua/cua#5483](https://github.com/trycua/cua/pull/5483)).
+  - Empirical report ([trycua/cua#1745](https://github.com/trycua/cua/issues/1745)): Accessibility can only reach the menu bar while locked, and window screenshots are 0×0.
+  - Real keyboard/mouse input lands on the lock screen, so rejecting it is correct.
+- **When macOS locks itself**:
+  - When the screen saver starts or the display dims from inactivity (`kLWLockFromDisplayDim`), particularly with Require Password set to Immediately.
+  - So the Mac may lock from inactivity while an Agent operates it, or a user watches on the phone without tapping.
+- **Cua Driver already handles half**:
+  - After each tool call it holds a `PreventUserIdleDisplaySleep` assertion, lasting 10 minutes after the last call. `CUA_DRIVER_KEEP_DISPLAY_AWAKE=<seconds>` changes the duration; `0` disables it.
+  - It doesn't wake an already sleeping display or bypass a lock.
+  - Only covers calls through cua-driver, not VNC or an Agent thinking for more than 10 minutes without calls.
 
-### a) 锁屏时也能用
+### a) Use while locked
 
-三条路，推荐 1 + 2，不做 3。
+Three approaches; recommend 1 + 2, not 3.
 
-1. **不让它锁**：就是下面的 b。最简单，随时可撤。代价是不锁的那段时间里，Mac 对坐在它前面的人是敞开的。
-2. **解锁入口：用户自己解**：
-   - 那台 Mac 锁着时，机器页、抽屉和助手的提示里给「解锁」，打开实时画面。屏幕共享在锁屏下能看能输，用户在锁屏上输密码。现在就能用，只差一个入口。
-   - 和 #1322（在这台手机上记住 Mac 的登录密码，存设备钥匙串、要 Face ID）一起做之后，可以改成一键：手机取出密码，经 VNC 的键盘事件打进锁屏的密码框。
-     - 密码只过隧道，不在 hub 落盘，不进日志、不进仓库。
-     - hub 日志只记「谁、什么时候、解了哪台」。
-   - **安全边界**：
-     - 手机加 Face ID 就能解开那台 Mac。所以默认关、按 Mac 开，打开时在手机上确认一次。
-     - 解开以后不会自动再锁。抽屉里提示「用完记得锁上」，并给一个「锁上」（`pmset displaysleepnow`，显示器一睡就锁）。
-   - **要用户在 Mac 上做一次的**：打开屏幕共享，已经是VNC的前提。没有别的了。
-   - **管不了的**：
-     - 重启后 FileVault 的开机解锁：屏幕共享在那一步连不上。
-     - 合盖睡着的 MacBook，node 也是断的。
-3. **像 Codex 那样的授权插件**：
-   - Codex 装一个 Apple authorization plug-in，参与 macOS 的解锁流程。只在它自己的、进行中的操作里临时解锁，盖住所有屏幕，一有本地键鼠输入就重新锁上（[OpenAI 的说明](https://developers.openai.com/codex/app/computer-use)）。
-   - 代价：
-     - 要管理员权限安装，改系统的认证规则（`authorizationdb`）。
-     - 写错了可能锁不住或解不开。插件本身也成了攻击面，hub 或手机被拿下就等于能解开 Mac。
-     - 合盖时也不行。
-   - Cua 有同样的打算（#1745 第二阶段：`cua-driver unlock-screen --purpose … --duration 30s`），还没有实现。
-   - **不做**。等 Cua 出了这个能力，再评估接它的，不自己写系统插件。
+1. **Prevent locking**: b below. Simplest, reversible anytime. Cost: the Mac is open to anyone sitting in front of it during the unlocked period.
+2. **Unlock entry: user unlocks it**:
+   - When that Mac is locked, offer Unlock in the machine page, drawer and assistant hints, opening live view. Screen Sharing supports viewing and typing while locked; the user enters the password on the lock screen. Works already, only needs an entry point.
+   - Combined with #1322 (remember Mac login password in the phone's device keychain, require Face ID), make it one tap: retrieve the password on the phone and type it into the lock screen password field via VNC keyboard events.
+     - Password only crosses the tunnel; not persisted on the hub, logged or checked in.
+     - Hub log records only who, when and which machine was unlocked.
+   - **Security boundary**:
+     - Phone + Face ID can unlock that Mac. Therefore off by default, enabled per Mac, with one confirmation on the phone when enabled.
+     - Doesn't automatically relock afterward. Drawer reminds "Remember to lock when done" and offers Lock (`pmset displaysleepnow`, locks when the display sleeps).
+   - **One-time action on the Mac**: enable Screen Sharing, already required for VNC. Nothing else.
+   - **Out of scope**:
+     - FileVault unlock after reboot: Screen Sharing can't connect at that stage.
+     - Sleeping MacBook with lid closed: the node is disconnected too.
+3. **An authorization plug-in like Codex**:
+   - Codex installs an Apple authorization plug-in participating in macOS unlocking. It temporarily unlocks only during its own active operations, covers all displays and relocks on local keyboard/mouse input ([OpenAI documentation](https://developers.openai.com/codex/app/computer-use)).
+   - Costs:
+     - Administrator installation; changes system authentication rules (`authorizationdb`).
+     - Bugs could prevent locking or unlocking. The plug-in itself adds attack surface: compromising the hub or phone means unlocking the Mac.
+     - Still can't work with the lid closed.
+   - Cua has the same plan (#1745 phase 2: `cua-driver unlock-screen --purpose … --duration 30s`), not implemented yet.
+   - **Not doing this**. Reassess integration when Cua offers it; don't write our own system plug-in.
 
-- **一键解锁（a-2，已做）**：
-  - 机器页「操控电脑」在记住了屏幕共享登录（#1322）后多一个「在这台手机上一键解锁」（`ScreenUnlock`，存在这台设备，按 Mac），默认关，打开时确认一次。忘记屏幕共享密码时它跟着关。
-  - 那台锁屏时给「一键解锁」：
-    1. 先过 Face ID / Touch ID / 设备密码（`LAContext`）。
-    2. 打开整页（`unlock`），原生客户端用记住的账号登录屏幕共享。
-    3. 连上后按一下 Shift 叫醒锁屏，再按 keysym 打出记住的密码和回车（`RFBSession.unlockWithKeptPassword`）。密码只在 App 的内存里。
-  - hub 只记一行「谁、什么时候、解了哪台」（`POST …/computer/unlocking`），密码不经过它的存储和日志。
-  - 一键解锁打开时，解开以后机器页有「锁上」（`POST …/computer/lock` → node 的 `pmset displaysleepnow`：显示器立即睡，「需要密码」是立即时就锁）。
-  - 局限：重启后的 FileVault 解锁、合盖睡着的 MacBook 不行（屏幕共享连不上）。
+- **One-tap unlock (a-2, implemented)**:
+  - After remembering Screen Sharing login (#1322), Control Computer on the machine page adds One-Tap Unlock on This iPhone (`ScreenUnlock`, stored on this device per Mac), off by default, confirmed once when enabled. Forgetting the password disables it too.
+  - A locked Mac offers One-Tap Unlock:
+    1. Face ID / Touch ID / device passcode first (`LAContext`).
+    2. Open full page (`unlock`); native client signs in to Screen Sharing with the saved account.
+    3. After connecting, press Shift to wake the lock screen, then type the saved password and Return as keysyms (`RFBSession.unlockWithKeptPassword`). Password only lives in App memory.
+  - Hub logs only who, when and which machine (`POST …/computer/unlocking`); password never enters its storage or logs.
+  - With one-tap unlock enabled, the machine page offers Lock after unlocking (`POST …/computer/lock` → node `pmset displaysleepnow`: display sleeps immediately; locks if Require Password is Immediately).
+  - Limits: no FileVault unlock after reboot or sleeping MacBook with closed lid (Screen Sharing can't connect).
 
-### b) 防睡眠、不自动锁屏（扩展 `cua` 的设置，按机器两个开关）
+### b) Prevent sleep and automatic locking (`cua` extension settings, two switches per machine)
 
-都用 `caffeinate`，不改系统设置（不碰「锁定屏幕」里的时间和「需要密码」）。关掉或 node 退出就恢复原样。
+Both use `caffeinate`, without changing system settings (no changes to Lock Screen timers or Require Password). Disabling them or exiting the node restores normal behavior.
 
-用到的参数：
-- `-d`：显示器不睡；
-- `-i`：系统不因空闲睡眠；
-- `-m`：磁盘不睡；
-- `-s`：系统不睡，只在接电源时有效；
-- `-u`：声明用户在场，显示器关着就点亮；
-- `-t`：时长（秒）；
-- `-w <pid>`：那个进程退出就撤。
+Flags used:
+- `-d`: prevent display sleep;
+- `-i`: prevent idle system sleep;
+- `-m`: prevent disk sleep;
+- `-s`: prevent system sleep, on AC power only;
+- `-u`: declare user activity, waking a sleeping display;
+- `-t`: duration in seconds;
+- `-w <pid>`: remove when that process exits.
 
-- **「操作和VNC时保持唤醒」**（已做，扩展 `cua` 的 `keep_awake`，默认开）：
-  - 做成扩展里的一个总开关，不按 Mac 分开。扩展页按机器的开关没法默认开；它又只在操作、VNC期间生效，过后自己撤，按机器分开意义不大。按机器的只有下面的「不自动锁屏」。
-  - node 持有 `caffeinate -dimsu -t <秒> -w <node 的 pid>`（`node/awake.go`），同一时间只有一个：
-    - 助手的 `computer_*` 调用：hub 在 `computer.call` 里带 `keep_awake`，最后一次之后 10 分钟撤；
-    - 有人在VNC：hub 在 5900 的 `port.dial` 里带 `keep_awake`，流开着就一直续（快到期时换一个新的，中间不断），流关了就撤。只看不点不算本地活动，以前看着看着就锁了。
-  - Agent 自己的 Cua MCP（`mcp__cua-driver__*`）不经 node。Cua 0.37 起每次调用后自己保持 10 分钟，所以 node 不去扫会话。
-  - 只在 Mac 上。实测（`TestAwakeOnThisMac`，`PERSONA_AWAKE_E2E=1`）：`pmset -g assertions` 里有这个 caffeinate 的 `PreventUserIdleDisplaySleep`，撤掉后就没了。
-- **锁着时的「解锁」入口**（已做）：机器页「操控电脑」在那台锁屏时写「这台 Mac 锁屏了，解锁后才能操控」。屏幕共享开着时，给「解锁」打开实时画面：切到「接管」，在锁屏上输登录密码。node 的说明也改成「屏幕共享开着时，可以在它的画面上输登录密码解锁」。
-- **「扩展开着时不自动锁屏」**（已做，#1507 b2，扩展 `cua` 的 `no_auto_lock`：按 Mac 的列表，默认空）：
-  - 打开时先确认：机器页「操控电脑」的开关弹确认框；扩展页的按机器开关看 schema 的 `x-confirm`（扩展设置表单的通用约定，[extensions.md](extensions.md)），App 弹确认框、网页用 `window.confirm`。关掉不问。
-  - 扩展对这台开着、开关也开着时，node 持有 `caffeinate -dims -t 1800 -w <node 的 pid>`（`node/awake.go` 的 `computer.nolock`，和「保持唤醒」的那个分开）。
-  - hub 在开关或扩展变了、node 连上时说一次，之后每 10 分钟再说一次（`extmgr/computer_nolock.go`）。node 每次收到都换一个新的 30 分钟；hub 不再说（断开了），30 分钟后自己到期，就恢复按时锁屏。
-  - 没有 `-u`，所以不会去点亮已经关了的显示器。
-  - 什么时候撤：开关或扩展关掉（hub 马上说一次 off）、node 退出、node 和 hub 断开 30 分钟。
-  - 机器页的开关改了，hub 日志记一行（哪台、开或关）。
-  - **管不了的**：
-    - 手动锁屏（Control-Command-Q、触发角）；
-    - 合盖；
-    - 快速切换用户；
-    - 公司管理的 Mac 上强制的屏保锁定策略。以实测为准。
-  - **安全边界**：这台 Mac 一直不锁，旁边的人能直接用它。机器页和扩展页把这一句写在开关下面；hub 日志记开关的时间。
-  - **和 Codex 的区别**：Codex 是锁着也能用（要授权插件），这里是不让它锁。实现简单、能完全撤回，但不锁的那段时间 Mac 是敞开的。
+- **Keep Awake During Control and VNC** (implemented, `cua` extension `keep_awake`, on by default):
+  - One global extension switch, not per Mac. The extension's per-machine switches can't default to on; this only applies during control and VNC and withdraws itself afterward, so per-machine settings add little. Only No Automatic Lock below is per machine.
+  - The node holds one `caffeinate -dimsu -t <seconds> -w <node pid>` at a time (`node/awake.go`):
+    - assistant `computer_*` calls: hub includes `keep_awake` in `computer.call`; expires 10 minutes after the last call;
+    - someone on VNC: hub includes `keep_awake` in 5900 `port.dial`; continually renews while the stream is open (replace before expiration without a gap), withdraws on stream close. Watching without tapping isn't local activity, so previously the Mac locked while being watched.
+  - An Agent's own Cua MCP (`mcp__cua-driver__*`) bypasses the node. Cua 0.37+ keeps awake for 10 minutes after each call itself, so the node doesn't scan sessions.
+  - Mac only. Verified (`TestAwakeOnThisMac`, `PERSONA_AWAKE_E2E=1`): `pmset -g assertions` shows this caffeinate's `PreventUserIdleDisplaySleep`, disappearing on removal.
+- **Unlock entry while locked** (implemented): Control Computer says "This Mac is locked; unlock it to control it". With Screen Sharing enabled, Unlock opens live view: switch to Take Over and enter the login password on the lock screen. Node guidance now also says "With Screen Sharing enabled, enter your login password in its view to unlock".
+- **Prevent Automatic Lock While Extension Is Enabled** (implemented, #1507 b2, `cua` extension `no_auto_lock`: per-Mac list, empty by default):
+  - Confirm on enable: the machine page switch shows a confirmation; the extension page's per-machine switch reads schema `x-confirm` (generic extension form convention, [extensions.md](extensions.md)), with an App confirmation dialog and web `window.confirm`. No confirmation when disabling.
+  - When both the extension and this switch are enabled for the machine, the node holds `caffeinate -dims -t 1800 -w <node pid>` (`computer.nolock` in `node/awake.go`, separate from Keep Awake).
+  - Hub sends it on switch/extension change and node connection, then every 10 minutes (`extmgr/computer_nolock.go`). Each receipt replaces it with a new 30-minute assertion; if the hub stops sending (disconnected), it expires after 30 minutes and timed locking resumes.
+  - No `-u`, so it doesn't wake an already sleeping display.
+  - Withdraws when switch/extension is disabled (hub immediately sends off), node exits, or node and hub have been disconnected 30 minutes.
+  - Changing the machine page switch logs one hub line (machine, on/off).
+  - **Can't prevent**:
+    - manual locking (Control-Command-Q, hot corners);
+    - lid closing;
+    - fast user switching;
+    - enforced screen-saver lock policies on a company-managed Mac; verify empirically.
+  - **Security boundary**: this Mac remains unlocked, so nearby people can use it directly. Machine and extension pages say so below the switch; hub logs toggle times.
+  - **Unlike Codex**: Codex operates while locked (requires an authorization plug-in); this prevents locking. Simple and fully reversible, but the Mac is exposed during that unlocked period.
 
-### c) 按 App 批准（已做）
+### c) Per-App approval (implemented)
 
-- **怎么问**：
-  - 扩展 `cua` 的「第一次操作一个 App 时先问」（`app_approval`），默认开。
-  - 助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时，手机上出一张卡片：「让助手操作「MacBook」上的「计算器」」，选项是允许 / 「以后操作「计算器」不再问」/ 拒绝。
-  - 选「一直允许」的按 bundle id 记在 hub 的设置里（`computer.apps`，按机器），不再问。
-  - 机器页「操控电脑」的「已允许助手操作的 App」逐个列出，「移除」后下次再问（`GET` / `DELETE /api/v1/machines/{mid}/computer/apps[/{bundle}]`）。
-- **怎么认 App**（`callApps`，`computer_apps.go`）：
-  - `computer_state` 的 `app`；没有 app 就是「整个屏幕」，也问一次。
-  - `computer_run` 的每一步写的 `app`（或这次调用的 `app`）。
-  - 脚本里写死的 `cua.getApp("…")`。
-  - 名字经 Cua 的 `list_apps` 换成 bundle id 再比，同名的不同 App 不会混；不认识的名字按名字记。
-  - 有一步没写 app、脚本里有算出来的名字，或者脚本里没有 getApp 时，认不全：整次每次都问，不给「一直允许」。
-- **每次都问、不给「一直允许」的**：终端（Terminal、iTerm2、Warp、Ghostty 等）、系统设置、钥匙串访问、密码管理器（密码、1Password、Bitwarden 等）、Persona，按 bundle id 或名字（中英文）认。
-- **和「操作前在手机上确认」**：这次已经因为 App 问过了，就不再问第二遍；没问过、而确认开着时，照旧每次问。
-- **Agent 自己的 Cua MCP**（`mcp__cua-driver__*`）：不经 hub，还是走 Agent 的工具审批。以后再接上已允许的 App。
+- **Asking**:
+  - `cua` extension Ask Before First Operating an App (`app_approval`), on by default.
+  - The first time the assistant operates an App on a Mac (or views the whole screen), the phone shows a card: "Let the assistant operate Calculator on MacBook", options Allow / "Don't ask again for Calculator" / Deny.
+  - Always Allow is stored by bundle id in hub settings (`computer.apps`, per machine), preventing future prompts.
+  - Allowed Apps for Assistant in Control Computer lists each one; Remove asks again next time (`GET` / `DELETE /api/v1/machines/{mid}/computer/apps[/{bundle}]`).
+- **Identifying Apps** (`callApps`, `computer_apps.go`):
+  - `app` in `computer_state`; absent means whole screen, also asks once.
+  - Each step's `app` in `computer_run` (or the call-level `app`).
+  - Literal `cua.getApp("…")` in scripts.
+  - Names resolved to bundle ids through Cua `list_apps` before comparison, so identically named different Apps aren't conflated; unknown names stored by name.
+  - Any step without an app, computed app names in a script, or no getApp in a script makes identification incomplete: ask every time for the whole call, without Always Allow.
+- **Always ask, never offer Always Allow**: terminals (Terminal, iTerm2, Warp, Ghostty, etc.), System Settings, Keychain Access, password managers (Passwords, 1Password, Bitwarden, etc.), Persona, identified by bundle id or name (Chinese/English).
+- **With Confirm on Phone Before Acting**: if this call already asked because of an App, don't ask twice; otherwise with confirmation enabled, ask each time as before.
+- **Agent's own Cua MCP** (`mcp__cua-driver__*`): bypasses the hub and still uses the Agent's tool approvals. Integrate allowed Apps later.
 
-### d) 小配置
+### d) Small settings
 
-- **点击音效**（已做，扩展 `cua` 的 `click_sound`）：无 / 只前台点击 / 前台和后台点击，默认无。
-  - Cua 的点按分两种：前台（`delivery_mode: foreground`）把窗口提到前面、动真的鼠标；后台（默认）按进程投递，不动光标。
-  - hub 在 `computer.call` 里带上设置，node 数 `run_steps` 里的点按步骤（`click`、`double_click`、`right_click`，`{"click": {…}}` 和 `{tool, args}` 两种写法都认）。有要响的就放一下系统音效（`afplay /System/Library/Sounds/Tink.aiff`，不等它放完），一次调用响一下：这些步骤在 Cua 里一口气跑完，node 不知道每一下是什么时候点的。
-  - 管不到的：`run_script` 里的点按（在它的程序里），电脑上的 Agent 自己的 Cua MCP（不经 node）。
-- **显示 Agent 的光标**（已做，扩展 `cua` 的 `show_cursor`）：默认开，VNC 时知道它点在哪。
-  - 光标浮层是 Cua 后台进程的，启动时定，`cua-driver config` 改不了（`agent_cursor.enabled` 只读）。关掉就停掉它、用 `open -g -b com.trycua.driver --args serve --no-overlay` 重新打开（`node/cua_extras.go` 的 `computer.cursor`），之后 node 自己启动它时也带上。正在进行的操作会断一下，设置的说明里写了。
-  - hub 在设置变了、node 连上时说一次（`extmgr/computer_cursor.go`）：扩展对这台开着才照设置说，别的 Mac 都说「开」。
-  - 「开」只撤销这个 node 自己关的：用户自己带 `--no-overlay` 启动的 Cua 不去动。后台进程已经是要的样子、或没在跑，都不重启。
-  - 电脑上的 Agent 自己的 Cua MCP 用的是同一个后台进程，所以它们的光标也跟着关。
-- **Office、信息（Messages）的单独权限**：不做。这些我们没有专门的接入；要读信息走以后的 iMessage 连接器（[plan-connectors.md](plan-connectors.md)）。
+- **Click sounds** (implemented, `cua` extension `click_sound`): none / foreground clicks only / foreground and background clicks, default none.
+  - Cua has two click delivery modes: foreground (`delivery_mode: foreground`) brings the window forward and moves the real mouse; background (default) delivers to the process without moving the cursor.
+  - The hub includes the setting in `computer.call`; the node counts click steps in `run_steps` (`click`, `double_click`, `right_click`, accepting both `{"click": {…}}` and `{tool, args}`). If sound is required, plays a system sound once (`afplay /System/Library/Sounds/Tink.aiff`, without waiting), once per call: Cua runs the steps as a batch, so the node doesn't know each click's timing.
+  - Not covered: clicks in `run_script` (inside its process), and the computer Agent's own Cua MCP (bypasses node).
+- **Show Agent Cursor** (implemented, `cua` extension `show_cursor`): on by default, so VNC viewers can see where it clicks.
+  - Cursor overlay belongs to Cua's background process and is determined at startup; `cua-driver config` can't change it (`agent_cursor.enabled` read-only). Disabling stops it and restarts with `open -g -b com.trycua.driver --args serve --no-overlay` (`computer.cursor` in `node/cua_extras.go`), also used when the node starts it later. In-progress operations are briefly interrupted; the setting says so.
+  - Hub sends on settings change and node connection (`extmgr/computer_cursor.go`): configured value only on machines enabled for the extension, "on" for other Macs.
+  - "On" only undoes what this node disabled; Cua started by the user with `--no-overlay` isn't touched. No restart if the process already matches or isn't running.
+  - Computer Agents' own Cua MCP uses the same background process, so their cursor is disabled too.
+- **Separate Office / Messages permissions**: not implemented. We have no dedicated integration for these; reading Messages belongs to the future iMessage connector ([plan-connectors.md](plan-connectors.md)).
 
-### 顺序
+### Order
 
-1. **b**：「Agent 操作期间保持唤醒」，含VNC期间。锁着时给「解锁」入口，打开实时画面。小，先做。
-2. **c**：按 App 批准，先管助手，再管 Agent 的 Cua MCP。
-3. **a-2**：一键解锁，和 #1322 一起。
-4. **b2**：「扩展开着时不自动锁屏」（已做）。
-5. **d**：点击音效、光标开关（已做）。
+1. **b**: keep awake during Agent control, including VNC. Unlock entry when locked, opening live view. Small, first.
+2. **c**: per-App approval, assistant first, then Agent Cua MCP.
+3. **a-2**: one-tap unlock, together with #1322.
+4. **b2**: prevent automatic locking while the extension is enabled (implemented).
+5. **d**: click sounds and cursor switch (implemented).
 
-每一步都在这台 Mac 上实测，开关、锁屏、恢复都要验证。锁屏的实测要用户在场：锁上以后得有人输密码。
+Test each step on this Mac: switches, locking and restoration. Lock testing requires the user present: someone must enter the password afterward.
 
-### 拍板结果（2026-11-04，用户：都按建议）
+### Decisions (2026-11-04, user accepted all recommendations)
 
-1. **锁屏**：只做「不让它锁」和「解锁入口」，不做系统授权插件。
-2. **「扩展开着时不自动锁屏」**：默认关，打开时在手机上确认；node 和 hub 断开 30 分钟后自动撤掉。
-3. **按 App 批准**：默认开。每个 App 第一次操作时问一次，之后记住，设置里可以移除。
-4. **默认拒绝清单**：终端、系统设置、钥匙串访问、密码管理器、Persona，就这些。
-5. **一键解锁**：做。Mac 密码存在手机钥匙串，经 VNC 打进锁屏的密码框。默认关、按 Mac 开，和 #1322「在这台手机上记住」一起做。
-6. **ego**：扩展 `ego` 对那台 Mac 开着时，也放行那台的屏幕共享（VNC），页面也认 ego。
+1. **Locking**: only prevent locking and provide an unlock entry; no system authorization plug-in.
+2. **Prevent automatic locking while enabled**: off by default, confirm on the phone when enabling; withdraw automatically after 30 minutes without node–hub connection.
+3. **Per-App approval**: on by default. Ask on first operation per App, remember afterward, removable in Settings.
+4. **Default deny list**: terminals, System Settings, Keychain Access, password managers, Persona, nothing else.
+5. **One-tap unlock**: implement. Mac password in phone keychain, typed into the lock screen via VNC. Off by default, per Mac, together with #1322 Remember on This iPhone.
+6. **ego**: when `ego` is enabled for that Mac, also allow its Screen Sharing (VNC); the page recognizes ego too.
 
-按上面的「顺序」做，每块一个 PR。第 6 条和 b 一起，或者单独一个小 PR 先合。
+Follow the order above, one PR per area. Item 6 can go with b, or a separate small PR merged first.
 
-## 怎么验证
+## Verification
 
-- **单元测试**：
-  - `server/internal/node/computer_test.go`：解析、就绪判断、用假的 cua-driver 脚本跑 `computer.call`（参数、会话名、截图、拒绝的工具）。
-  - `server/internal/node/computer_install_test.go`：假的下载源和安装器，验证三个脚本从磁盘运行、参数和环境变量、关统计、接着授权、不像安装器的不运行、取消。
-    `PERSONA_CUA_INSTALLER_CHECK=1` 时对真的 cua.ai 只下载、只检查（2026-11-04 通过）。
-  - `server/internal/extmgr/computer_test.go`：扩展默认关、按机器开、工具出现和消失、经假 node 调用、确认被拒。
-  - `apple/PersonaTests/ComputerTests.swift`：机器的 `computer` 字段、工具的中文名、步骤写成人话、最近一次操作在结果回来前算在跑。
-- **真机（node 一侧）**：在装好 Cua Driver 的 Mac 上跑 node 包的 `TestCuaEndToEnd`。
-  - 打开方式：`PERSONA_CUA_E2E=1`，可选 `PERSONA_CUA_SHOT=<图片路径>`；测试二进制用 `GOOS=darwin go test -c` 编好拷过来。
-  - 内容：用 `run_steps` 在计算器里算 6×7，再读窗口，断言有 42，并写出截图。
-  - 2026-11-04 实测：就绪、42、230×408 的 JPEG。会动这台 Mac 的计算器。
-- **网页**：`web/src/screen/aes.test.ts`（AES 替身对 FIPS-197 和 WebCrypto）、`screen.test.ts`（路径、fragment 里的 token、WebSocket 地址、预填的账号）。
-- **VNC端到端**（App 的原生客户端 → hub 的 5900 转发 → mock 自己的屏幕共享，`MOCK_SCREEN=fake`，[testing.md](testing.md)）：
-  - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「VNC」，一直走到它要求登录（ARD）。
-  - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake`；不加 `MOCK_SCREEN=fake` 时屏幕是这台 Mac 自己的屏幕共享，没开就只显示「hub 不让连这台的屏幕」，用例失败，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开整页，点 × 关掉。
-  - `ScreenPasswordTests`：记住、下次自己登录（真机进小窗，模拟器进整页）、密码改了重输、忘记；一键解锁。
-  - `VNCTests`：小窗（真机：菜单 → 小窗 → 回桌面还在 → 还原成整页 → 回小窗；模拟器没有画中画，只验证退回整页）；小窗的源（`-showPiPSource`，模拟器也能跑）：点了 1.5 秒内出来、是「连接中」（mock 晚 3 秒才回），然后是实时画面，mock 挂断后写「没连上」；整页上两种模式各点一下、拖一下、指针居中（mock 记下的点击和指针位置）、剪贴板来回、键盘打字和 Mac 的那排键、帮助页。`TEST_RUNNER_JARVIS_VNC_PAUSE=2` 放慢，录屏用；`testMeasure`（`MOCK_SCREEN_ANIMATE=1`、`TEST_RUNNER_JARVIS_VNC_MEASURE=1`）打印帧率和延迟。
-  - 连真实 Mac 的登录那一步要那台 Mac 的密码，测试不做。
-- **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
-- **部署后验收**：
-  1. 在「设置 › 扩展」打开「操控电脑（Cua）」。
-  2. 在那台 Mac 的机器页打开开关。
-  3. 在手机上对助手说「在 <机器> 上用计算器算 6×7，把截图发给我」。
+- **Unit tests**:
+  - `server/internal/node/computer_test.go`: parsing, readiness, `computer.call` through a fake cua-driver script (arguments, session name, screenshots, rejected tools).
+  - `server/internal/node/computer_install_test.go`: fake download source and installer, verifies all three scripts run from disk, arguments/environment, telemetry off, permission grant afterward, rejection of non-installer scripts, cancellation.
+    `PERSONA_CUA_INSTALLER_CHECK=1` downloads and checks only against real cua.ai (passed 2026-11-04).
+  - `server/internal/extmgr/computer_test.go`: extension off by default, per-machine enabling, tools appear/disappear, calls through a fake node, denied confirmation.
+  - `apple/PersonaTests/ComputerTests.swift`: machine `computer` field, Chinese tool names, readable steps, latest operation considered running before result arrives.
+- **Real device (node side)**: run node package `TestCuaEndToEnd` on a Mac with Cua Driver installed.
+  - Enable with `PERSONA_CUA_E2E=1`, optionally `PERSONA_CUA_SHOT=<image path>`; compile the test binary with `GOOS=darwin go test -c` and copy it over.
+  - Uses `run_steps` to calculate 6×7 in Calculator, then reads the window, asserts 42, and writes a screenshot.
+  - Verified 2026-11-04: ready, 42, 230×408 JPEG. It operates Calculator on that Mac.
+- **Web**: `web/src/screen/aes.test.ts` (AES substitute vs FIPS-197 and WebCrypto), `screen.test.ts` (path, token in fragment, WebSocket URL, prefilled account).
+- **VNC end-to-end** (App native client → hub 5900 forwarding → mock Screen Sharing, `MOCK_SCREEN=fake`, [testing.md](testing.md)):
+  - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` taps VNC through to login required (ARD).
+  - `ScreenDrawerTests` (mock with `MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake`; without `MOCK_SCREEN=fake`, it uses this Mac's real Screen Sharing, showing "hub doesn't allow this machine's screen" and failing if off; assistant and Agent chats each have a running operation): open the full page from the operating bar and ··· menu in assistant and Agent chats, close with ×.
+  - `ScreenPasswordTests`: remember, automatic login next time (PiP on real device, full page in simulator), reenter changed password, forget; one-tap unlock.
+  - `VNCTests`: PiP (real device: menu → PiP → remains on home screen → restore full page → PiP again; simulator has no PiP, verifies full-page fallback only). PiP source (`-showPiPSource`, also runs in simulator): appears within 1.5 seconds of tapping, shows Connecting (mock delays 3 seconds), then live view, and Failed to Connect after mock disconnects. On full page, tap/drag in both modes, Center Pointer (mock records clicks and pointer positions), clipboard both ways, typing and Mac shortcut row, Help. `TEST_RUNNER_JARVIS_VNC_PAUSE=2` slows it for recording; `testMeasure` (`MOCK_SCREEN_ANIMATE=1`, `TEST_RUNNER_JARVIS_VNC_MEASURE=1`) prints frame rate and latency.
+  - Logging into a real Mac needs that Mac's password, so tests don't do it.
+- **Screenshots**: mock `MOCK_COMPUTER=ready|permissions|locked|missing|off` ([testing.md](testing.md)), with `-tab settings -openMachines YES -openMachineDetail macbook`.
+- **Post-deployment acceptance**:
+  1. Enable Computer Control (Cua) in **Settings › Extensions**.
+  2. Enable the switch on that Mac's machine page.
+  3. On the phone, tell the assistant "Use Calculator on <machine> to calculate 6×7 and send me the screenshot".
 
-  对话里应出现「操控电脑」和「看电脑」两行，点开有截图，显示 42。
+  The chat should have Control Computer and View Computer tool rows, expanding to a screenshot showing 42.

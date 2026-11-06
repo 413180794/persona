@@ -1,30 +1,30 @@
-# 飞书聊天导航过渡（#952）
+# Lark chat navigation transition (#952)
 
-iPhone 18 Pro / iOS 27.0，合成 mock 数据。所有截图均已查看；真实飞书账号没有参与测试。
+iPhone 18 Pro / iOS 27.0, synthetic mock data. Every screenshot was reviewed; no real Lark account took part in testing.
 
-聊天页显式采用系统导航栏材质 `.bar` 并保持可见，避免 push 时先透出清晰的缓存图片、动画结束才变模糊。底栏复用现有 `hidesTabBarWhenShown()`，让隐藏和恢复跟随导航过渡。
+The chat page explicitly uses the system navigation bar material `.bar` and keeps it visible, so a push no longer shows the sharp cached image through first and only blurs it after the animation ends. The tab bar reuses the existing `hidesTabBarWhenShown()`, so hiding and restoring follow the navigation transition.
 
-## 动画检查
+## Animation check
 
-| 场景 | 证据与结果 |
+| Scenario | Evidence and result |
 | --- | --- |
-| 有缓存的群聊，修改前 / 修改后 | [导航栏逐帧对比](push-before-after.png)：上行为修改前，下行为最终修复；修改前图片先清晰透到标题后面，修复后从入场开始就是磨砂背景。仅设置 `.visible` 的中间方案没有通过这一检查，未采用。 |
-| 深色玻璃、浅色 BeautifulUI | [补充两种样式](push-other-styles.png)：包含进入动画的中间帧；保持各自主题，不再先透明后模糊。 |
-| 未缓存、网络尚未返回 | [首次加载过程](loading-sequence.png)：只移走合成群聊缓存，在本机 mock 给消息请求增加 8 秒延迟；从列表、进入、等待到消息出现，背景持续存在。 |
-| 右滑取消、完成返回 | [交互返回过程](interactive-back.png)：短距离右滑后留在聊天，完整右滑返回原消息列表，背景随页面一起过渡。 |
+| Cached group chat, before / after | [Frame-by-frame navigation bar comparison](push-before-after.png): top row is before the change, bottom row is the final fix. Before, the image showed sharply behind the title first; after the fix the background is frosted from the start of the transition. An intermediate approach that only set `.visible` failed this check and was not used. |
+| Dark glass, light BeautifulUI | [Two more styles](push-other-styles.png): includes mid-transition frames; each keeps its own theme and no longer goes transparent before blurring. |
+| Not cached, network not back yet | [First load](loading-sequence.png): only the synthetic group chat's cache was removed, and the local mock delayed the message request by 8 seconds; from the list, through entering and waiting, to messages appearing, the background stays in place. |
+| Swipe-back cancelled, swipe-back completed | [Interactive back](interactive-back.png): a short right swipe stays in the chat; a full right swipe returns to the original message list, and the background transitions with the page. |
 
-## 自动化回归
+## Automated regression
 
-`LarkNavigationTests` 两个测试分别从消息页、收件箱的真实会话行进入，遍历新旧布局及群聊、私聊，检查取消右滑仍留在聊天、完整右滑返回原入口；旧布局同时检查底栏的可见性。
+The two `LarkNavigationTests` tests enter from real conversation rows on the Messages page and in the Inbox respectively. They cover the new and old layouts and both group chats and direct messages, checking that a cancelled right swipe stays in the chat and a full right swipe returns to the original entry point; on the old layout they also check tab bar visibility.
 
-- 浅色玻璃：2 个测试通过，8 条导航路径。
-- 深色 BeautifulUI：2 个测试通过，8 条导航路径。
-- 自动化断言负责页面和返回路径；材质连续性以录屏中间帧检查为准。
-- 首次收件箱测试使用了会替换导航栈的 DEBUG 深链，导致无法返回收件箱；已改为点击真实收件箱行，两套主题重跑通过。未为测试修改产品路由。
+- Light glass: 2 tests passed, 8 navigation paths.
+- Dark BeautifulUI: 2 tests passed, 8 navigation paths.
+- Automated assertions cover the pages and back paths; material continuity is judged from mid-transition frames in the screen recordings.
+- The first Inbox test used a DEBUG deep link that replaced the navigation stack, so it could not go back to the Inbox. It now taps a real Inbox row, and both themes pass on rerun. Product routing was not changed for the test.
 
-| 主题 | 消息 / 收件箱截图（均为取消右滑后） |
+| Theme | Messages / Inbox screenshots (all after a cancelled right swipe) |
 | --- | --- |
-| 浅色玻璃 | [第一组](light-glass-0.png)、[第二组](light-glass-1.png) |
-| 深色 BeautifulUI | [第一组](dark-beautiful-0.png)、[第二组](dark-beautiful-1.png) |
+| Light glass | [Set 1](light-glass-0.png), [Set 2](light-glass-1.png) |
+| Dark BeautifulUI | [Set 1](dark-beautiful-0.png), [Set 2](dark-beautiful-1.png) |
 
-Xcode 26.0 的 iOS、Watch、扩展和 Mac 构建通过；模拟器测试使用 Xcode 27。此次改动只影响飞书聊天导航，不改消息内容、输入框或服务端。
+Xcode 26.0 builds for iOS, Watch, extensions and Mac passed; simulator tests used Xcode 27. This change only affects Lark chat navigation; it does not change message content, the input box or the server.

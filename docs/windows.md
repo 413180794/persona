@@ -1,187 +1,184 @@
-# Windows 上的 node（herdr、Orca 引擎）
+# node on Windows (herdr and Orca engines)
 
-让手机看到、驱动一台 Windows 电脑上 herdr 或 Orca 里的 Claude Code：这台电脑跑常驻 node（`personad node --attach`）和连接器 jarvis-link（主动模式，见 [link.md](link.md)），
-hub 在别处（WSL2 / Docker / 另一台机器）。需求和分步见 #1090，Windows 支持的总览见 #1179。踩过的坑在 [lessons/windows.md](lessons/windows.md)。
+Lets the phone see and drive Claude Code inside herdr or Orca on a Windows computer: that computer runs the resident node (`personad node --attach`) and the connector jarvis-link (active mode, see [link.md](link.md)),
+while the hub lives elsewhere (WSL2 / Docker / another machine). Requirements and steps are in #1090; the overview of Windows support is #1179. Pitfalls we hit are in [lessons/windows.md](lessons/windows.md).
 
-## 现状
+## Status
 
-两个引擎都能用：**herdr**（0.9.5 起有原生 Windows 版，见下面「herdr」）能从手机新建、继续会话，和 macOS / Linux 一样；**Orca** 只能看、驱动已经开着的会话。
-下表是 Orca 的；herdr 引擎和 Orca 不同的地方在「herdr」一节的表里。
+Both engines work: **herdr** (native Windows build since 0.9.5, see "herdr" below) can create and resume sessions from the phone, same as macOS / Linux; **Orca** can only view and drive sessions that are already open.
+The table below is for Orca; where the herdr engine differs is in the table in the "herdr" section.
 
-| 能力 | Windows（Orca） | 说明 |
+| Capability | Windows (Orca) | Notes |
 | --- | --- | --- |
-| 编译 | ✅ | `GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间在 `internal/osproc` 和各包的 `_windows.go` |
-| 常驻 node、jarvis-link 主动模式 | ✅ | `jarvis-link install` 装成登录时启动的计划任务，退出了自动重启、不弹窗口（下面「安装和开机自启」）；没有一键安装脚本和安装包（#1179） |
-| 列出 Orca 会话、状态 | ✅ | 和 macOS 一样每秒一次快照 |
-| 读对话记录、会话信息 | ✅ | `%USERPROFILE%\.claude\projects\<编码后的目录>\<id>.jsonl`，目录编码规则和 Claude Code 一样（非字母数字都换成 `-`，`C:\Users\…` → `C--Users-…`） |
-| 发消息（多行一整条）、按键、打断 | ✅ | ConPTY 下括号粘贴照常 |
-| 回答对话框（AskUserQuestion、权限） | ✅ | 读屏回答，同 macOS 上的 Orca |
-| 关闭会话 | ✅ | |
-| 从手机新建会话、继续未运行的会话 | ❌ | Orca 引擎在所有平台上都还不支持（[plan-orca-support.md](plan-orca-support.md)「第二期」），不是 Windows 的问题 |
-| 机器监控（CPU、内存、交换、网络、磁盘、系统信息） | ✅ | Win32 调用，不起进程，口径见 [machines.md](machines.md)「采集口径」的 Windows 一列（#1943） |
-| 端口转发、Codex / TRAEX 发现 | ❌ | 依赖 `ps` / `lsof` / `/proc`，Windows 上安静地不可用（#1179） |
-| node 自己起的进程：受管启动器、`codex` 启动 | ✅ | `osproc.Exec`：Windows 没有 exec，在同一个控制台里起子进程、按它的退出码退出（下面「herdr」） |
-| hub 自更新 | ❌ | 还是 `syscall.Exec`；hub 不在 Windows 上原生跑（#1179） |
-| 经 hub 更新常驻 node（[node-update.md](node-update.md)） | ❌ | node 报告不支持（「常驻 node 未由 launchd/systemd 管理」），App 里看得到原因；升级是再跑一次 `jarvis-link install --jarvisd <新的 personad.exe>` |
-| 被动模式（hub 来连这台） | 没验证 | 能编译、`install --listen` 走同一条路；Windows 防火墙要自己放行端口（`install` 打印 `New-NetFirewallRule` 的写法） |
+| Build | ✅ | `GOOS=windows go build ./...`; process groups, signals, file locks and CPU time are in `internal/osproc` and each package's `_windows.go` |
+| Resident node, jarvis-link active mode | ✅ | `jarvis-link install` installs a scheduled task that starts at logon, restarts on exit and shows no window ("Install and start at logon" below); there is no one-line install script or installer package (#1179) |
+| List Orca sessions and state | ✅ | One snapshot per second, as on macOS |
+| Read transcripts and session info | ✅ | `%USERPROFILE%\.claude\projects\<encoded directory>\<id>.jsonl`; the directory encoding is the same as Claude Code's (every non-alphanumeric becomes `-`, `C:\Users\…` → `C--Users-…`) |
+| Send messages (multi-line as one), keys, interrupt | ✅ | Bracketed paste works under ConPTY |
+| Answer dialogs (AskUserQuestion, permissions) | ✅ | Answered by reading the screen, same as Orca on macOS |
+| Close a session | ✅ | |
+| Create a session from the phone, resume a session that isn't running | ❌ | The Orca engine doesn't support this on any platform yet ([plan-orca-support.md](plan-orca-support.md), "Phase 2"); not a Windows problem |
+| Machine monitoring (CPU, memory, swap, network, disk, system info) | ✅ | Win32 calls, no processes spawned; the metrics follow the Windows column of [machines.md](machines.md) ("Collection metrics") (#1943) |
+| Port forwarding, Codex / TRAEX discovery | ❌ | Depends on `ps` / `lsof` / `/proc`; silently unavailable on Windows (#1179) |
+| Processes the node starts itself: managed launchers, `codex` start | ✅ | `osproc.Exec`: Windows has no exec, so it starts a child in the same console and exits with its exit code ("herdr" below) |
+| hub self-update | ❌ | Still `syscall.Exec`; the hub doesn't run natively on Windows (#1179) |
+| Updating the resident node through the hub ([node-update.md](node-update.md)) | ❌ | The node reports it as unsupported ("resident node is not managed by launchd/systemd"), and the App shows why; to upgrade, run `jarvis-link install --jarvisd <new personad.exe>` again |
+| Passive mode (hub connects to this machine) | Not verified | Builds, and `install --listen` takes the same path; you have to open the port in Windows Firewall yourself (`install` prints the `New-NetFirewallRule` command) |
 
-## 安装和开机自启
+## Install and start at logon
 
 ```powershell
 cd server
 go build -o personad.exe .\cmd\personad
 go build -o jarvis-link.exe .\cmd\jarvis-link
-.\jarvis-link.exe install --jarvisd .\personad.exe --pair '<hub 给的 jarvis://link?… 链接>'   # 配对过的不用 --pair
+.\jarvis-link.exe install --jarvisd .\personad.exe --pair '<the jarvis://link?… link from the hub>'   # skip --pair if already paired
 ```
 
-不要管理员。`install` 在 Windows 上依次做：
+No administrator needed. On Windows, `install` does, in order:
 
-1. 带 `--pair` 先配对，`--listen` 改成被动模式（同 Linux，见 [link.md](link.md)「Linux（headless）」）。
-2. 计划任务在跑就先结束它（跑着的程序文件换不掉），等 jarvis-link 放开运行锁。还有别的 jarvis-link 在跑（比如前台的 `jarvis-link run`）时提示停掉它。
-3. 把自己复制成 `~/.persona/bin/jarvis-link.exe`；`--jarvisd` 给的 personad 复制成 `~/.persona/bin/jarvisd.exe`。和 Linux 不同，给了就换：
-   Windows 上还没有经 hub 更新 node，再跑一次 `install` 就是升级。没给又没有 `jarvisd.exe` 时只装 jarvis-link（`--no-node` 同）。
-4. 再放一份 `~/.persona/bin/jarvis-link-service.exe`：同一个程序，只把 PE 头里的子系统从控制台改成 GUI（`guicopy.go`）。
-5. 写 `~/.persona/jarvis-link-task.xml`（UTF-16），`schtasks /Create /XML` 注册计划任务「Persona Link」，`schtasks /Run` 启动，等连上 hub（同 Linux，最多 20 秒）。
+1. With `--pair`, pair first; `--listen` switches to passive mode (same as Linux, see [link.md](link.md), "Linux (headless)").
+2. If the scheduled task is running, end it first (a running program file can't be replaced) and wait for jarvis-link to release its run lock. If another jarvis-link is running (say, a foreground `jarvis-link run`), it asks you to stop it.
+3. Copy itself to `~/.persona/bin/jarvis-link.exe`; copy the personad given by `--jarvisd` to `~/.persona/bin/jarvisd.exe`. Unlike Linux, if one is given it is always replaced:
+   Windows can't update the node through the hub yet, so running `install` again is the upgrade. If none is given and there is no `jarvisd.exe`, only jarvis-link is installed (same as `--no-node`).
+4. Put another copy at `~/.persona/bin/jarvis-link-service.exe`: the same program, with only the subsystem in the PE header changed from console to GUI (`guicopy.go`).
+5. Write `~/.persona/jarvis-link-task.xml` (UTF-16), register the scheduled task "Persona Link" with `schtasks /Create /XML`, start it with `schtasks /Run`, and wait for it to connect to the hub (same as Linux, up to 20 seconds).
 
-计划任务「Persona Link」：
+The "Persona Link" scheduled task:
 
-- **当前用户，跟着登录会话跑**（`InteractiveToken`）。标准用户注册不了「不管是否登录都运行」的任务（S4U，真机上拒绝访问；存密码的那种要管理员），
-  node 也得在用户会话里才看得到 Orca 和它的 agent。代价：没登录 Windows 时不在，注销就停，再登录时自己起来。
-- **触发**：登录时；外加从安装那一刻起每 5 分钟一次。多实例策略是「忽略新的」：守护进程在跑时什么都不做，没了 5 分钟内拉回来。
-  不用计划任务自己的「失败后重启」：它只管任务起不来，程序以非 0 退出不算（真机上试过）。登录触发器上的「重复」要到下次登录才开始，所以另加时间触发。
-- 不限运行时间（默认 72 小时就结束任务）、用电池也跑、空闲结束也不停、正常优先级（默认 7 是「低于正常」，CPU 和磁盘都低）。
-- **跑的是守护进程** `jarvis-link-service.exe supervise`（`supervise_windows.go`）：以 `CREATE_NO_WINDOW` 拉起 jarvis-link（`run --log ~/.persona/link.log`）
-  和常驻 node（`jarvisd.exe node --attach`，日志 `~/.persona/node-attach.log`，满 10 MB 挪到 `.1`），谁退出了分别 5 秒、10 秒后重启（同 Linux 两个单元的 `RestartSec`）；
-  它自己干了什么写 `~/.persona/link-service.log`（jarvis-link 崩溃时的输出也在这里）。一台电脑只跑一个守护进程（`~/.persona/link-service.run` 的文件锁）。
-  先起 node，等它重新建好 `node-attach.sock`（只看文件的修改时间，不去连：连一次就是一次 attach，会把 hub 的连接顶掉；最多等 10 秒）再起 jarvis-link：
-  反过来的话 hub 先连上链路、马上开流去连还没在听的 node，把这台报成离线一下，`install` 的结论也成了「hub 连不上本机的 node」（#1984）。
-- 守护进程把自己放进一个「最后一个句柄关掉就杀掉里面所有进程」的 Job：守护进程没了（结束任务、再 install / uninstall、注销、崩溃），
-  jarvis-link 和 node 跟着没，计划任务再拉起它时不会和留下的旧进程抢。
+- **Current user, runs with the logon session** (`InteractiveToken`). A standard user can't register a "run whether logged on or not" task (S4U gets access denied on a real machine; the stored-password kind needs an administrator),
+  and the node has to be in the user session to see Orca and its agents anyway. The cost: it isn't there when nobody is logged in to Windows, stops at logoff, and starts again at the next logon.
+- **Triggers**: at logon, plus every 5 minutes starting from install. The multiple-instances policy is "ignore new": while the supervisor is running it does nothing; if it's gone it is brought back within 5 minutes.
+  The task's own "restart on failure" isn't used: it only covers the task failing to start, not the program exiting non-zero (tested on a real machine). "Repeat" on a logon trigger only starts at the next logon, so a separate time trigger is added.
+- No run-time limit (by default the task is ended after 72 hours), runs on battery, isn't stopped when idle ends, normal priority (the default 7 is "below normal", lowering both CPU and disk).
+- **What runs is the supervisor** `jarvis-link-service.exe supervise` (`supervise_windows.go`): it starts jarvis-link (`run --log ~/.persona/link.log`) with `CREATE_NO_WINDOW`
+  and the resident node (`jarvisd.exe node --attach`, log `~/.persona/node-attach.log`, moved to `.1` at 10 MB), and restarts whichever exits after 5 and 10 seconds respectively (same as `RestartSec` on the two Linux units).
+  What the supervisor itself does goes to `~/.persona/link-service.log` (jarvis-link's output when it crashes is there too). Only one supervisor runs per computer (file lock on `~/.persona/link-service.run`).
+  It starts the node first and waits for it to recreate `node-attach.sock` (it only checks the file's modification time and doesn't connect: each connection is an attach and would kick off the hub's connection; waits up to 10 seconds) before starting jarvis-link.
+  The other way round, the hub connects the link first and immediately opens a stream to a node that isn't listening yet, briefly reporting this machine offline, and `install` concludes "the hub can't reach this machine's node" (#1984).
+- The supervisor puts itself in a Job that "kills every process inside when the last handle closes": when the supervisor goes away (task ended, another install / uninstall, logoff, crash),
+  jarvis-link and the node go with it, so when the scheduled task brings it back it doesn't fight leftover old processes.
 
-**为什么要一份 GUI 子系统的副本**：计划任务在用户会话里起控制台程序，会给它开一个控制台窗口（默认终端是 Windows Terminal 时开一个 Windows Terminal 窗口），
-一直挂在桌面上；GUI 子系统的程序没有窗口，它再用 `CREATE_NO_WINDOW` 起的控制台程序有控制台、没有窗口。复制而不是另编一个：不管 `jarvis-link.exe`
-是发布的还是自己 `go build` 的，守护进程都是同一个程序。没用的办法：`conhost --headless`（没有文档）、VBScript 包一层（VBScript 正在被 Windows 移除）、
-`powershell -WindowStyle Hidden`（还是会闪一下窗口）。
+**Why a GUI-subsystem copy**: when a scheduled task starts a console program in the user session, Windows opens a console window for it (a Windows Terminal window if Windows Terminal is the default terminal),
+which stays on the desktop. A GUI-subsystem program has no window, and the console programs it starts with `CREATE_NO_WINDOW` get a console but no window. It's a copy rather than a separate build: whether `jarvis-link.exe`
+is a release or your own `go build`, the supervisor is the same program. Approaches not used: `conhost --headless` (undocumented), a VBScript wrapper (VBScript is being removed from Windows),
+`powershell -WindowStyle Hidden` (still flashes a window).
 
-| 命令 | Windows 上 |
+| Command | On Windows |
 | --- | --- |
-| `jarvis-link status` | 多一行「后台服务：计划任务「Persona Link」· 状态 · 登录时启动」，状态是 schtasks 按系统语言给的（Running / 正在运行…），只显示不解析 |
-| `jarvis-link uninstall [--purge]` | 结束并删掉计划任务（node 一起停），删 `jarvis-link-task.xml` 和 `jarvis-link-service.exe`；`--purge` 同 Linux，另删守护进程的日志和锁 |
-| `jarvis-link node install` / `node uninstall` | 不单独装：node 在同一个计划任务里，用 `install`（带 node）/ `install --no-node` |
-| `jarvis-link node status [--json]` | 计划任务里有没有 node，任务的状态 |
+| `jarvis-link status` | An extra line "Background service: scheduled task "Persona Link" · state · starts at logon"; the state is whatever schtasks prints in the system language (Running / 正在运行, the Chinese-locale "Running"…), shown but not parsed |
+| `jarvis-link uninstall [--purge]` | Ends and deletes the scheduled task (the node stops with it), deletes `jarvis-link-task.xml` and `jarvis-link-service.exe`; `--purge` is as on Linux and also deletes the supervisor's logs and lock |
+| `jarvis-link node install` / `node uninstall` | Not installed separately: the node is in the same scheduled task; use `install` (with node) / `install --no-node` |
+| `jarvis-link node status [--json]` | Whether the scheduled task includes the node, and the task's state |
+## hub in Docker Desktop on the same computer
 
-## hub 在这台电脑的 Docker Desktop 里
+During acceptance, the hub and node were on the same Windows machine: the hub ran in Docker Desktop (WSL 2), node and jarvis-link on the Windows side.
 
-验收时 hub 和 node 在同一台 Windows 上：hub 用 Docker Desktop（WSL 2）跑，node 和 jarvis-link 在 Windows 这边。
+- With WSL mirrored networking (`networkingMode=mirrored` in `.wslconfig`), ports published by Docker are only reachable on Windows' `127.0.0.1`; LAN and Tailscale addresses can't connect
+  (opening them requires changing the Hyper-V firewall, which needs an administrator).
+- The local jarvis-link connects to `127.0.0.1`: if the hub's advertised candidate addresses include no loopback address, add it manually with `jarvis-link address add https://127.0.0.1:<hub TLS port>`.
+- The phone connects over Tailscale: this machine forwards the tailnet port to localhost with `tailscale serve --bg --tcp <port> tcp://127.0.0.1:<port>` (plain TCP forwarding; TLS is still done by the hub itself,
+  and the pinned certificate is still the hub's), and `public.advertise` in hub.json lists `https://<this machine's Tailscale address>:<port>`.
+- To pair the phone with a new hub, use **Settings › hub › Add Hub** in the App, not the root pairing link: that would replace the phone's existing pairing ([lessons/android.md](lessons/android.md)).
 
-- WSL 开了镜像网络（`.wslconfig` 里 `networkingMode=mirrored`）时，Docker 发布的端口只在 Windows 的 `127.0.0.1` 上能连，局域网和 Tailscale 的地址都连不上
-  （要放开得改 Hyper-V 防火墙，要管理员）。
-- 本机的 jarvis-link 连 `127.0.0.1`：hub 广告的候选地址里没有回环地址时手动加 `jarvis-link address add https://127.0.0.1:<hub 的 TLS 端口>`。
-- 手机经 Tailscale 连：这台把 tailnet 上的端口转到本机，`tailscale serve --bg --tcp <端口> tcp://127.0.0.1:<端口>`（TCP 原样转发，TLS 仍由 hub 自己做，
-  钉的还是 hub 的证书），hub.json 的 `public.advertise` 写上 `https://<这台的 Tailscale 地址>:<端口>`。
-- 给手机配对新 hub 用 App 的「设置 › hub › 添加 hub」，不要点根配对链接：那会替换掉手机上原有的配对（[lessons/android.md](lessons/android.md)）。
+## Running it manually (for development and acceptance)
 
-## 怎么跑（手动，开发和验收用）
-
-装了计划任务的机器先 `schtasks /End /TN "Persona Link"`（或者 `jarvis-link uninstall`），否则前台的和计划任务里的两个 jarvis-link、两个 node 会抢。
+On a machine with the scheduled task installed, first run `schtasks /End /TN "Persona Link"` (or `jarvis-link uninstall`); otherwise the foreground and scheduled-task copies, two jarvis-links and two nodes, will fight.
 
 ```powershell
 cd server
 go build -o personad.exe .\cmd\personad
 go build -o jarvis-link.exe .\cmd\jarvis-link
-.\personad.exe node --attach            # 常驻 node，另开一个窗口一直开着
-.\jarvis-link.exe pair '<hub 给的 jarvis://link?… 链接>'
-.\jarvis-link.exe run                    # 保持链路
+.\personad.exe node --attach            # resident node; keep it open in another window
+.\jarvis-link.exe pair '<the jarvis://link?… link from the hub>'
+.\jarvis-link.exe run                    # keeps the link up
 ```
 
-hub 那边：hub.json 的 `machines` 里这台是 `kind: link`，开着 `public.tls_listen`；配对链接用 `personad hub pair --machine <id>`（Docker 部署是
-`docker compose exec hub jarvisd hub pair --machine <id>`）。连上后在 App 里把这台的引擎选成 Orca（设置 › 机器 › 引擎）。
+On the hub side: this machine is `kind: link` in `machines` in hub.json, with `public.tls_listen` on; get the pairing link with `personad hub pair --machine <id>` (for a Docker deployment,
+`docker compose exec hub jarvisd hub pair --machine <id>`). Once connected, set this machine's engine to Orca in the App (**Settings › Machines › Engine**).
 
 ## herdr
 
-herdr 0.9.5 起有原生 Windows 版（ConPTY 窗格，[官方说明](https://herdr.dev/docs/windows-beta/)）。node 只经 herdr 的 socket API 驱动它，所以 herdr 引擎在 Windows 上和别处一样：
+herdr has a native Windows build since 0.9.5 (ConPTY panes, [official notes](https://herdr.dev/docs/windows-beta/)). The node drives it only through herdr's socket API, so the herdr engine on Windows behaves as everywhere else:
 
-| 能力 | Windows（herdr） | 说明 |
+| Capability | Windows (herdr) | Notes |
 | --- | --- | --- |
-| 列出会话、状态，读对话记录 | ✅ | 同 macOS / Linux |
-| 从手机新建会话、继续未运行的会话 | ✅ | node 在新标签页里输入启动命令，和别处一样 |
-| 发消息（多行一整条）、按键、打断 | ✅ | |
-| 回答提问 / 授权卡片 | ✅ | 走 Claude Code 的 hook，不读屏 |
-| 实时终端（`terminal session observe`） | ❌ | herdr 在 Windows 上没有 direct terminal attach；退回读屏 |
+| List sessions and state, read transcripts | ✅ | Same as macOS / Linux |
+| Create a session from the phone, resume a session that isn't running | ✅ | The node types the start command in a new tab, as elsewhere |
+| Send messages (multi-line as one), keys, interrupt | ✅ | |
+| Answer question / permission cards | ✅ | Via Claude Code hooks, no screen reading |
+| Live terminal (`terminal session observe`) | ❌ | herdr has no direct terminal attach on Windows; falls back to reading the screen |
 
-- **socket**：herdr 在 Windows 上的 API 是命名管道，名字是 `\\.\pipe\` 加 socket 路径（`\\.\pipe\C:\Users\<你>\AppData\Roaming\herdr\herdr.sock`），
-  配置目录是 `%APPDATA%\herdr`（`$XDG_CONFIG_HOME` 设了就是它下面的 `herdr`）。`internal/herdr` 的 `socket_windows.go` 按这个规则拨号，和 herdr 自己的
-  `config_dir` / interprocess `GenericNamespaced` 一致；`$HERDR_SOCKET_PATH` 照旧优先。路径本身不是文件，`SocketUp` 看管道在不在。
-- **窗格里的 shell**：herdr 在 Windows 上默认开 PowerShell，而 node 输入的启动命令是 POSIX shell 的写法（`'…'` 引号、`A=1 cmd`）。要在 herdr 的
-  `%APPDATA%\herdr\config.toml` 里把窗格的 shell 设成 Git Bash：
+- **socket**: herdr's API on Windows is a named pipe, named `\\.\pipe\` plus the socket path (`\\.\pipe\C:\Users\<you>\AppData\Roaming\herdr\herdr.sock`);
+  the config directory is `%APPDATA%\herdr` (or `herdr` under `$XDG_CONFIG_HOME` if that's set). `socket_windows.go` in `internal/herdr` dials by this rule, matching herdr's own
+  `config_dir` / interprocess `GenericNamespaced`; `$HERDR_SOCKET_PATH` still takes precedence. The path itself isn't a file, so `SocketUp` checks whether the pipe exists.
+- **Shell in the pane**: herdr opens PowerShell by default on Windows, but the start commands the node types are POSIX shell syntax (`'…'` quoting, `A=1 cmd`). Set the pane shell to Git Bash in herdr's
+  `%APPDATA%\herdr\config.toml`:
 
   ```toml
   [terminal]
   default_shell = "C:/Program Files/Git/bin/bash.exe"
   ```
 
-- **herdr 要在用户的桌面会话里常驻**：从 ssh 会话起的 `herdr server` 会随会话一起退出。用一个登录时启动的计划任务跑 `herdr.exe server`（当前用户、
-  `Interactive`、不限时）；和 `jarvis-link install` 的任务是同一种。
-- **`syscall.Exec`**：`jarvisd launch`（受管启动器）、`codex-start` / `tab-start` 要把自己换成 claude / codex。Windows 没有 exec，`osproc.Exec` 在同一个
-  控制台里起子进程（标准输入输出原样继承，窗格里看到的就是那个程序）、自己接住 Ctrl+C 不退出（同一个控制台的子进程照样收到；只能用 `signal.Notify`，`Ignore` 挡不住），子进程结束后按它的退出码退出。
-- **Claude Code 第一次运行**：新装的 Claude Code 先出选主题的引导，node 等不到输入框（「claude did not become ready」）。在这台电脑上手动开一次
-  `claude` 走完引导，或在 `%USERPROFILE%\.claude.json` 里设 `"hasCompletedOnboarding": true`。
+- **herdr has to stay resident in the user's desktop session**: a `herdr server` started from an ssh session exits with that session. Run `herdr.exe server` from a scheduled task that starts at logon (current user,
+  `Interactive`, no time limit); it's the same kind as the `jarvis-link install` task.
+- **`syscall.Exec`**: `jarvisd launch` (managed launchers) and `codex-start` / `tab-start` replace themselves with claude / codex. Windows has no exec, so `osproc.Exec` starts a child in the same
+  console (stdin/stdout inherited as-is, so the pane shows that program), catches Ctrl+C itself without exiting (the child in the same console still receives it; only `signal.Notify` works, `Ignore` doesn't block it), and exits with the child's exit code when it ends.
+- **Claude Code's first run**: a freshly installed Claude Code first shows the theme-picking onboarding, so the node never sees the input box ("claude did not become ready"). Run
+  `claude` manually once on that computer to finish onboarding, or set `"hasCompletedOnboarding": true` in `%USERPROFILE%\.claude.json`.
+## Local sockets
 
-## 本地 socket
-
-node 的 `node.sock`、`runtime.sock`、`node-attach.sock` 在 Windows 上照旧是 AF_UNIX 的 socket 文件（Windows 10 1803 起有），放在 `%USERPROFILE%\.persona\`。
-没换成命名管道：Go 的 `net` 直接支持，hooks、jarvis-link、`--stdio` 转发的代码一行不改；Windows 11 真机上验证过监听、连接、半关闭（`CloseWrite`）、替换残留的 socket 文件。
-限制：路径不能超过 108 字节（`%USERPROFILE%` 很深时会 `bind: invalid argument`）；`0600` 这类权限位在 Windows 上没有意义，靠用户目录本身的 ACL。
+The node's `node.sock`, `runtime.sock` and `node-attach.sock` are still AF_UNIX socket files on Windows (available since Windows 10 1803), under `%USERPROFILE%\.persona\`.
+They weren't switched to named pipes: Go's `net` supports them directly, so the hooks, jarvis-link and `--stdio` forwarding code didn't change a line. Listening, connecting, half-close (`CloseWrite`) and replacing a leftover socket file were verified on a real Windows 11 machine.
+Limits: the path can't exceed 108 bytes (a very deep `%USERPROFILE%` gives `bind: invalid argument`); permission bits like `0600` mean nothing on Windows, so it relies on the user directory's own ACL.
 
 ## Orca
 
-- **传输**：Windows 版 Orca 的 `orca-runtime.json`（`%APPDATA%\orca\`）写的是 `named-pipe`（`\\.\pipe\orca-<pid>-…`）和 `websocket`，没有 `unix`。
-  `orcart` 按平台挑：Windows 先 `named-pipe` 再 `unix`，其他平台只 `unix`；命名管道用已有依赖 `tailscale/go-winio` 拨号。协议、token、重读元数据的规则都不变。
-  测试用的假 runtime（`orcarttest`）在 Windows 上也走命名管道，所以 `orcart` 和 `hostorca` 的测试在 Windows 上测的就是真实传输。
-- **认窗格、认会话**：和 macOS 一样靠 claude / codex 进程环境变量里的 `ORCA_PANE_KEY`（缺了看 `ORCA_AGENT_PANE`），再读 `sessions/<pid>.json`。
-  Windows 没有 `ps -E` 和 `/proc`：`procs_windows.go` 用 Toolhelp32 列进程，只对候选（`claude`、`codex`、`node`、`bun`）读 PEB 里的命令行、当前目录和环境块，
-  环境里只留要用的几个变量（Orca 的 hook token 等一概不留）。
-- **在前台**：Windows 没有终端的前台进程组，也没有「挂起」。改成「父进程链上没有同一窗格的 agent 进程」的才算（claude 自己起的 claude 不是终端显示的那个）；
-  pid 会复用，所以祖先必须比自己先启动。同一窗格多个时 claude 在前、按启动时间排（Windows 的 pid 不递增，不能按 pid 排）。
-- **读屏卡**：Orca 在 AskUserQuestion 的 PreToolUse hook 一触发就把会话报成 blocked，而 Windows 上起 hook 进程要几秒，对话框晚出来。
-  hub 当时建的卡读不出对话框（「暂时读不出这个对话框」），之后会每 500 毫秒再看一次屏幕（最多 30 秒），对话框一出现就换成带选项的卡（`hub.upgradeScreenCard`，各平台通用）。
+- **Transport**: the Windows build of Orca writes `named-pipe` (`\\.\pipe\orca-<pid>-…`) and `websocket` in `orca-runtime.json` (`%APPDATA%\orca\`), with no `unix`.
+  `orcart` picks by platform: on Windows `named-pipe` first, then `unix`; elsewhere only `unix`. Named pipes are dialed with the existing dependency `tailscale/go-winio`. The protocol, token and metadata re-read rules are unchanged.
+  The fake runtime used in tests (`orcarttest`) also uses named pipes on Windows, so the `orcart` and `hostorca` tests on Windows exercise the real transport.
+- **Identifying panes and sessions**: as on macOS, by `ORCA_PANE_KEY` in the claude / codex process environment (falling back to `ORCA_AGENT_PANE`), then reading `sessions/<pid>.json`.
+  Windows has no `ps -E` or `/proc`: `procs_windows.go` lists processes with Toolhelp32 and reads the command line, current directory and environment block from the PEB only for candidates (`claude`, `codex`, `node`, `bun`);
+  only the few environment variables needed are kept (Orca's hook token and the like are never kept).
+- **In the foreground**: Windows has no terminal foreground process group and no "suspended". Instead, a process counts only if "no ancestor in its parent chain is an agent process in the same pane" (a claude started by claude isn't the one the terminal shows);
+  pids get reused, so an ancestor must have started before the process itself. When a pane has several, claude comes first, then by start time (Windows pids don't increase, so they can't be sorted by pid).
+- **Screen-reading card**: Orca reports the session as blocked as soon as the AskUserQuestion PreToolUse hook fires, but starting a hook process on Windows takes a few seconds, so the dialog appears late.
+  The card the hub built at that moment couldn't read the dialog ("can't read this dialog yet"); after that the hub looks at the screen again every 500 ms (up to 30 seconds) and swaps in a card with options as soon as the dialog appears (`hub.upgradeScreenCard`, on all platforms).
 
 ## shell
 
-node 在 Windows 上跑启动器探测、`claude --version` 这类 shell 脚本时用 Git for Windows 的 bash（`loginShellProgram`：`CLAUDE_CODE_GIT_BASH_PATH`，
-否则从 `git` 的位置和常见安装目录找），和 Claude Code 自己在 Windows 上一样。不用裸的 `bash`：服务拿到的 PATH 里 `System32\bash.exe` 在前，它是 WSL。
-找不到 Git Bash 时这些命令起不来（机器信息里没有 Claude 版本），不会跑到 WSL 里去。
+When the node runs shell scripts on Windows, such as launcher probing and `claude --version`, it uses Git for Windows' bash (`loginShellProgram`: `CLAUDE_CODE_GIT_BASH_PATH`,
+otherwise found from `git`'s location and common install directories), the same as Claude Code itself on Windows. It doesn't use a bare `bash`: in the PATH the service gets, `System32\bash.exe` comes first, and that's WSL.
+If Git Bash can't be found, these commands don't start (the machine info has no Claude version); they never end up running in WSL.
 
-## 验证记录：herdr 引擎（2026-11-04，Windows 10 真机）
+## Verification record: herdr engine (2026-11-04, real Windows 10 machine)
 
-- herdr 0.9.5（官方 `herdr-windows-x86_64.zip`）、Claude Code 2.1.311（原生 `claude.exe`）、Git for Windows 2.56（PortableGit）；herdr 由登录时启动的计划任务常驻，
-  窗格 shell 设成 Git Bash。hub 在一台 Linux 上，经 ssh 跑这台的 `jarvisd.exe node --stdio`。
-- hub 上这台在线，`windows/amd64`、引擎 herdr、herdr 0.9.5。经 hub 的接口：新建会话（`POST /api/v1/sessions`，带第一条消息）收到回复；
-  多行消息一整条提交、收到回复；让 Claude 调 AskUserQuestion，卡片经 hook 到 hub，`POST /api/v1/interactions/{id}/resolve` 回答后 Claude 照答案回复；
-  `/exit` 后会话变成 offline，再发消息时 node 在新标签页里 `--resume` 起来，Claude 记得前面的答案。
-- `jarvisd tab-start`：用文件里的 argv 起 `claude -p`（回复照常）、`cmd /c exit 3`（退出码 3）、带 `A=1` 前缀的命令（环境变量传到了）；文件用完就删。
-- 测试：`internal/herdr`（`TestPipeName`、`TestSocketPathWindows`，以及测试 herdr 改成监听命名管道的 RPC / 订阅测试）和 `internal/osproc`（`TestExecExitCode`、`TestExecSurvivesCtrlC`：换回 `signal.Ignore` 时失败）
-  在这台 Windows 上通过；用 shell 脚本冒充 herdr 可执行文件的几个测试在 Windows 上跳过。Linux 上 `internal/herdr`、`internal/osproc`、`internal/node`、`internal/hub` 通过。
-- 没验证：App 界面（用的是 App 调的同一套 hub 接口）；Codex；herdr 的实时终端（Windows 上 herdr 不支持）。
+- herdr 0.9.5 (official `herdr-windows-x86_64.zip`), Claude Code 2.1.311 (native `claude.exe`), Git for Windows 2.56 (PortableGit); herdr stays resident via a scheduled task that starts at logon,
+  with the pane shell set to Git Bash. The hub was on a Linux machine, running this machine's `jarvisd.exe node --stdio` over ssh.
+- On the hub this machine was online: `windows/amd64`, engine herdr, herdr 0.9.5. Through the hub APIs: creating a session (`POST /api/v1/sessions`, with a first message) got a reply;
+  a multi-line message was submitted as one and got a reply; asking Claude to call AskUserQuestion, the card reached the hub via the hook, and after answering with `POST /api/v1/interactions/{id}/resolve` Claude replied according to the answer;
+  after `/exit` the session went offline, and on the next message the node started it with `--resume` in a new tab, and Claude remembered the earlier answer.
+- `jarvisd tab-start`: with the argv from a file, started `claude -p` (replied normally), `cmd /c exit 3` (exit code 3), and a command prefixed with `A=1` (the environment variable came through); the file is deleted after use.
+- Tests: `internal/herdr` (`TestPipeName`, `TestSocketPathWindows`, and the RPC / subscription tests with the test herdr switched to listening on a named pipe) and `internal/osproc` (`TestExecExitCode`, `TestExecSurvivesCtrlC`: fails when switched back to `signal.Ignore`)
+  passed on this Windows machine; the few tests that use shell scripts posing as the herdr executable are skipped on Windows. On Linux, `internal/herdr`, `internal/osproc`, `internal/node` and `internal/hub` passed.
+- Not verified: the App UI (the same hub APIs the App calls were used); Codex; herdr's live terminal (herdr doesn't support it on Windows).
+## Verification record: install and start at logon (2026-11-04, the same real Windows 11 machine)
 
-## 验证记录：安装和开机自启（2026-11-04，同一台 Windows 11 真机）
+- Replaced the previously hand-added registry Run entry with `jarvis-link install --jarvisd personad.exe`: the scheduled task registered and started, connected to the hub within seconds, and the local node came online;
+  in the hub's `GET /api/v1/machines` this machine was online with engine Orca, and `GET /api/v1/sessions` had Orca's 10 panes.
+- Processes: svchost (scheduled task) → `jarvis-link-service.exe supervise` → `jarvis-link.exe run`, `jarvisd.exe node --attach`; each of the two children has a hidden conhost, and there is no window on the desktop.
+- Killed jarvis-link: back after 5 seconds. Killed the node: back after 11 seconds. Killed the supervisor: within 2 seconds jarvis-link and the node were both gone; the next 5-minute time trigger brought them all back and the machine came back online on the hub.
+- A probe task had confirmed earlier: a non-administrator can register an `InteractiveToken` task but not an S4U one; the GUI-subsystem copy and the children it starts with `CREATE_NO_WINDOW` have no console window
+  and all run in the user session; `RestartOnFailure` does not restart a program that exits with code 1.
+- Tests: `go test ./cmd/jarvis-link/` passes on Windows and on Linux (`golang:1.27` container); `supervise_windows_test.go` fails when the Job is removed (the child outlives the supervisor).
+- Not verified: the logon trigger on an actual logoff and logon (that would close the Orca and Claude sessions in use on this machine; the logon trigger was accepted at registration); passive mode; the phone UI (the phone was locked; the same hub APIs the App calls were used; the App UI was checked during the second step below).
 
-- 用 `jarvis-link install --jarvisd personad.exe` 换掉之前手工加的注册表 Run 项：计划任务注册、启动，几秒内连上 hub、本机 node 在线；
-  hub 的 `GET /api/v1/machines` 里这台在线、引擎 Orca，`GET /api/v1/sessions` 里有 Orca 的 10 个窗格。
-- 进程：svchost（计划任务）→ `jarvis-link-service.exe supervise` → `jarvis-link.exe run`、`jarvisd.exe node --attach`；两个子进程各有一个隐藏的 conhost，桌面上没有窗口。
-- 杀掉 jarvis-link，5 秒后回来；杀掉 node，11 秒后回来；杀掉守护进程，2 秒内 jarvis-link 和 node 都没了，下一次 5 分钟的时间触发把它们一起拉回来，hub 那边这台重新上线。
-- 之前用一个探测任务确认过：非管理员能注册 `InteractiveToken` 的任务、注册不了 S4U；GUI 子系统的副本和它用 `CREATE_NO_WINDOW` 起的子进程都没有控制台窗口，
-  都在用户的会话里；退出码 1 的程序 `RestartOnFailure` 不会重启。
-- 测试：`go test ./cmd/jarvis-link/` 在 Windows 和 Linux（`golang:1.27` 容器）上都过；`supervise_windows_test.go` 去掉 Job 时失败（子进程活过了守护进程）。
-- 没验证：真的注销再登录时的登录触发（会关掉这台机器上在用的 Orca 和 Claude 会话；任务注册时登录触发器被接受了）；被动模式；手机界面（手机锁着，用的是 App 调的同一套 hub 接口；App 界面在下面第二步时验过）。
+## Verification record (2026-11-03, real Windows 11 machine)
 
-## 验证记录（2026-11-03，Windows 11 真机）
-
-- Orca 1.4.242（runtime protocol 3）、Claude Code 2.1.318（原生 `claude.exe`）；hub 是本仓库的 Docker 镜像（Docker Desktop），手机经 `adb reverse` 连 hub 的 TLS 端口。
-- `go test -tags orcalive -run OrcaLive ./internal/node/`（只读）：10 个 Orca 里的 Claude 窗格全部认出，会话 id 和 `sessions/<pid>.json` 一一对上，一次刷新约 50 毫秒。
-- 经 hub：列出会话和状态、读对话记录、发一条多行消息（一整条提交）、AskUserQuestion 用读屏卡选项回答、关闭会话（只关了目标终端）。
-- 真机 App（Android）：在设置 › hub › 添加 hub 加入测试 hub（原有配对不动），Agents 里看到这台 Windows 和上面的会话；在手机上发消息、两次在读屏卡上点选项回答
-  AskUserQuestion（对话记录里是手机选的那项）、从会话菜单关闭 Agent（确认框写的是 Orca 的标签页名，只关了那一个终端）。第一次的卡读不出对话框，由此修了上面「读屏卡」那条。
-- Linux（`golang:1.27` 容器）：`orcart`、`osproc`、`plugin`、`transcript`、整个 `node` 包，`hub` 里读屏卡 / Orca / 引擎 / link / 机器相关的测试：通过。
-- Windows 上跑 `orcart`、`osproc`、`transcript` 的全部测试和 `node` 里 Orca / attach / 进程扫描相关的测试：通过。`node`、`link`、`jarvis-link` 包里还有一批测试本身写死了
-  Unix（shell 脚本冒充可执行文件、`/tmp`、文件权限位），在 Windows 上失败，和这次改动无关，留给 #1179。
+- Orca 1.4.242 (runtime protocol 3), Claude Code 2.1.318 (native `claude.exe`); the hub was this repository's Docker image (Docker Desktop), and the phone reached the hub's TLS port via `adb reverse`.
+- `go test -tags orcalive -run OrcaLive ./internal/node/` (read-only): all 10 Claude panes in Orca were recognized, session ids matched `sessions/<pid>.json` one to one, one refresh took about 50 ms.
+- Through the hub: list sessions and state, read transcripts, send a multi-line message (submitted as one), answer AskUserQuestion through a screen-reading card option, close a session (only the target terminal closed).
+- Real-device App (Android): joined the test hub via **Settings › hub › Add Hub** (existing pairing untouched); Agents showed this Windows machine and the sessions above. From the phone: sent messages, answered
+  AskUserQuestion twice by tapping options on the screen-reading card (the transcript shows the option the phone picked), closed the Agent from the session menu (the confirmation named the Orca tab, and only that one terminal closed). The first card couldn't read the dialog, which led to the fix in the "screen-reading card" item above.
+- Linux (`golang:1.27` container): `orcart`, `osproc`, `plugin`, `transcript`, the whole `node` package, and the screen-reading card / Orca / engine / link / machine tests in `hub`: passed.
+- On Windows, all tests in `orcart`, `osproc`, `transcript` and the Orca / attach / process-scanning tests in `node`: passed. A batch of tests in the `node`, `link` and `jarvis-link` packages hard-code
+  Unix (shell scripts posing as executables, `/tmp`, permission bits) and fail on Windows; unrelated to this change, left for #1179.
