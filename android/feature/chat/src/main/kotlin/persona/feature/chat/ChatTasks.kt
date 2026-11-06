@@ -23,6 +23,21 @@ import persona.core.contracts.Item
 
 private data class TaskReturnPosition(val rowId: String, val offset: Int, val expanded: Set<String>)
 
+/** Where the chat is asked to go: the record of a task on the progress page, or the call a task's notice came from. */
+private fun interface RecordDestination { fun resolve(lines: List<ChatLine>): TaskRecordTarget? }
+
+/** The call a notice [notice] asks for. A class, not the id: the same call asked for again is a new request. */
+internal class CallJump(val toolUseId: String, val notice: Item)
+
+/** A task's notice asking for the call that started it ("Jump to the step that started it"), taken by [ChatTasks]. */
+@Stable
+internal class ChatCallJumps {
+    var pending by mutableStateOf<CallJump?>(null)
+        private set
+    fun jump(toolUseId: String, notice: Item) { pending = CallJump(toolUseId, notice) }
+    internal fun take(): CallJump? = pending.also { pending = null }
+}
+
 /** One chat-header attachment owns the full page and its return affordance. */
 @Composable
 internal fun ChatTasks(
@@ -35,9 +50,11 @@ internal fun ChatTasks(
     foldErrors: Map<String, String>,
     /** False while the link card peeks and leaves the conversation four tenths: the bar goes, its page and state stay. */
     showBar: Boolean = true,
+    /** Notices' jumps to their calls: the same way there and the same "Back" as the progress page's record link. */
+    callJumps: ChatCallJumps? = null,
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
-    var target by remember { mutableStateOf<TaskProgressItem?>(null) }
+    var target by remember { mutableStateOf<RecordDestination?>(null) }
     var origin by remember { mutableStateOf<TaskReturnPosition?>(null) }
     var returning by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -58,8 +75,7 @@ internal fun ChatTasks(
             returning = false
             origin = null
         } else {
-            val task = target ?: return@LaunchedEffect
-            val destination = taskRecordTarget(lines, task.sourceItemId, task.sourceSeq)
+            val destination = (target ?: return@LaunchedEffect).resolve(lines)
             when {
                 destination?.expandFold != null -> {
                     if (destination.expandFold.id in foldErrors) {
@@ -85,17 +101,28 @@ internal fun ChatTasks(
     notice?.let { Text(it, Modifier.padding(horizontal = Tokens.Space.m), style = PersonaTheme.type.caption,
         color = PersonaTheme.palette.ink2) }
 
+    fun go(destination: RecordDestination) {
+        if (origin == null) {
+            val row = chatList.list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == chatList.list.firstVisibleItemIndex }
+            (row?.key as? String)?.let { origin = TaskReturnPosition(it,
+                chatList.list.firstVisibleItemScrollOffset, chatList.position.expanded) }
+        }
+        chatList.beginRecordNavigation()
+        onFreeze()
+        notice = null
+        // A jump while "Back" is still on its way keeps the first origin and its "Back".
+        returning = false
+        target = destination
+    }
+    val call = callJumps?.pending
+    LaunchedEffect(call) {
+        val jump = callJumps?.take() ?: return@LaunchedEffect
+        go { lines -> callRecordTarget(lines, jump.toolUseId, jump.notice) }
+    }
+
     if (open) JFullScreen({ open = false }) {
         TaskProgressPage(index.progress, onBack = { open = false }, onRecord = { task ->
-            if (origin == null) {
-                val row = chatList.list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == chatList.list.firstVisibleItemIndex }
-                (row?.key as? String)?.let { origin = TaskReturnPosition(it,
-                    chatList.list.firstVisibleItemScrollOffset, chatList.position.expanded) }
-            }
-            chatList.beginRecordNavigation()
-            onFreeze()
-            notice = null
-            target = task
+            go { lines -> taskRecordTarget(lines, task.sourceItemId, task.sourceSeq) }
             open = false
         })
     }

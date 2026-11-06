@@ -380,6 +380,8 @@
     <string name="chat_tasks_record_gone">相关记录已不在当前列表中</string>
     <string name="chat_link_message_gone">链接里的这条消息不在这段对话里了</string>
     <string name="chat_tasks_return">返回查看任务前的位置</string>
+    <string name="chat_task_note_output">查看输出</string>
+    <string name="chat_task_note_jump">跳到发起的这一步</string>
     <string name="chat_tasks_bar">%1$d/%2$d 已完成，%3$d 个进行中</string>
     <string name="chat_tasks_view_all">查看全部任务</string>
     <string name="chat_tasks_title">任务进度</string>

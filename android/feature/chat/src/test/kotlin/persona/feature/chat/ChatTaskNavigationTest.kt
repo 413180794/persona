@@ -51,4 +51,46 @@ class ChatTaskNavigationTest {
         assertNotNull(taskRecordTarget(expanded.lines, task.sourceItemId, task.sourceSeq)?.rowId)
     }
 
+    /** "Jump to the step that started it": a task's notice finds the call that started it by its tool_use_id, opening the work line first. */
+    @Test fun aNoticeFindsTheCallThatStartedIt() {
+        val items = listOf(
+            Item("user", seq = 1, kind = "text", role = "user", text = "跑测试"),
+            Item("use#0", seq = 2, kind = "tool_use", toolUseId = "toolu_1", toolName = "Bash"),
+            Item("result#0", seq = 3, kind = "tool_result", toolUseId = "toolu_1", text = "Command running in background with ID: b1"),
+            Item("reply#0", seq = 4, kind = "text", role = "assistant", text = "在后台跑着"),
+            Item("note#0", seq = 5, kind = "notice", text = "后台命令结束",
+                task = persona.core.contracts.TaskNote(kind = "shell", status = "completed", title = "npm test", taskId = "b1")),
+        ).map { it.asLineItem() }
+        val projection = chatLines(items)
+        val call = requireNotNull(projection.tasks.note(items.last()).callId)
+        assertEquals("toolu_1", call)
+        val closed = requireNotNull(callRecordTarget(projection.lines, call))
+        val group = requireNotNull(closed.expandGroup)
+        val opened = chatLines(items, LineOptions(openWork = setOf(group))).lines
+        assertEquals("w-user/use#0", callRecordTarget(opened, call)?.rowId)
+        assertNull(callRecordTarget(opened, "toolu_gone"))
+    }
+
+    /** The call is in a fold of the hub's that is not loaded: the fold before the notice opens, then the call is found. */
+    @Test fun aNoticeOpensTheFoldItsCallIsIn() {
+        val user = Item("user", seq = 1, kind = "text", role = "user", text = "跑测试")
+        val folded = Item("fold:use#0", seq = 2, kind = "fold", fold = persona.core.contracts.Fold(
+            items = 2, tools = 1, thoughts = 0, throughSeq = 3, throughId = "result#0"))
+        val notice = Item("note#0", seq = 5, kind = "notice", text = "后台命令结束",
+            task = persona.core.contracts.TaskNote(kind = "shell", status = "completed", title = "npm test", toolUseId = "toolu_1"))
+        val timeline = ChatTimeline()
+        val closed = timeline.lines(listOf(user, folded, notice), false, emptySet())
+        val group = requireNotNull(callRecordTarget(closed.lines, "toolu_1", notice)?.expandGroup)
+        val open = setOf(group)
+        val loading = timeline.lines(listOf(user, folded, notice), false, open)
+        assertEquals(folded, callRecordTarget(loading.lines, "toolu_1", notice)?.expandFold)
+        assertNull(callRecordTarget(loading.lines, "toolu_1"))
+        timeline.unfold(folded, listOf(Item("use#0", seq = 2, kind = "tool_use", toolName = "Bash", toolUseId = "toolu_1"),
+            Item("result#0", seq = 3, kind = "tool_result", toolUseId = "toolu_1", text = "ok")))
+        val loaded = timeline.lines(listOf(user, folded, notice), false, open)
+        assertNotNull(callRecordTarget(loaded.lines, "toolu_1", notice)?.rowId)
+        // A call that is in no fold before the notice is gone.
+        assertNull(callRecordTarget(loaded.lines, "toolu_gone", notice))
+    }
+
 }

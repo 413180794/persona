@@ -40,6 +40,8 @@ data class TaskNote(
     val kind: String, val title: String, val status: String? = null,
     val toolUseId: String? = null, val taskId: String? = null,
     val detail: String? = null, val exitCode: Int? = null,
+    /** Where the task wrote its output on the session's machine (「查看输出」). */
+    val outputFile: String? = null,
 ) {
     val failed get() = status == "failed" || (exitCode != null && exitCode != 0)
 }

@@ -393,6 +393,8 @@
     <string name="chat_tasks_record_gone">The related record is no longer in the list</string>
     <string name="chat_link_message_gone">The linked message isn\'t in this conversation any more</string>
     <string name="chat_tasks_return">Back to where you were</string>
+    <string name="chat_task_note_output">View output</string>
+    <string name="chat_task_note_jump">Jump to the step that started it</string>
     <string name="chat_tasks_bar">%1$d/%2$d done, %3$d in progress</string>
     <string name="chat_tasks_view_all">View all tasks</string>
     <string name="chat_tasks_title">Task progress</string>
