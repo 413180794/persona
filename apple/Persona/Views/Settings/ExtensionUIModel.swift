@@ -78,6 +78,9 @@ nonisolated extension ExtensionComponent {
         case .diff(let c): c.key
         case .commentThread(let c): c.key
         case .composer(let c): c.key
+        case .image(let c): c.key
+        case .grid(let c): c.key
+        case .carousel(let c): c.key
         case .unknown: nil
         }
     }

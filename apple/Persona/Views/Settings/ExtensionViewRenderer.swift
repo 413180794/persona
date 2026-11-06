@@ -218,7 +218,9 @@ struct ExtensionItemRow: View {
                         return await context.onRequest(request, key, version)
                     })
             }
-        case .divider, .unknown: EmptyView()
+        // UI version 6's picture, grid and carousel are drawn in #5473; the app still asks for version 5, so the hub
+        // turns them into version 5 components before they get here.
+        case .divider, .unknown, .image, .grid, .carousel: EmptyView()
         // UI version 4's code-hosting components: a View with them is drawn by the code page (`ExtensionCodePage`, #2961).
         case .header, .breadcrumb, .fileTree, .code, .diff, .commentThread, .composer: EmptyView()
         }
