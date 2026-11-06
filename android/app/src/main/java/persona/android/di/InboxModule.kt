@@ -19,6 +19,7 @@ import persona.core.hub.HttpMailTransport
 import persona.core.hub.HttpInboxActionsTransport
 import persona.core.hub.HubFailure
 import persona.core.hub.HubError
+import persona.core.hub.PublicImageReader
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import persona.feature.inbox.*
 import kotlinx.coroutines.*
@@ -62,7 +63,7 @@ class InboxDataOwner @Inject constructor(
             val socket = runtime.connectionFor(data)
             fun isCurrent() =
                 runtime.scopedData.value === data && data.coroutineScope.coroutineContext[Job]?.isActive == true
-            val transport = HttpInboxAssistantTransport(data.scope.path, socket, ::isCurrent)
+            val transport = HttpInboxAssistantTransport(data.scope.path, socket, PublicImageReader.shared, ::isCurrent)
             val actions = HttpInboxActionsTransport(socket.http.client,
                 { (socket.route.value?.endpoint?.url ?: throw HubFailure(HubError.NoNetwork)).toHttpUrl() },
                 data.credentials.deviceToken, ::isCurrent)

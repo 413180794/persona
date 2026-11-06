@@ -22,18 +22,22 @@ class HttpInboxAssistantTransport private constructor(
     override val scope: String,
     private val request: suspend (String, String, RequestBody?) -> Response,
     private val mediaOrigin: () -> HttpUrl,
+    private val publicImages: PublicImageReader,
     private val isCurrent: () -> Boolean,
 ) : InboxAssistantTransport, LarkThreadTransport, LarkThreadReplyTransport {
-    constructor(scope: String, connection: OkHttpHubConnection, isCurrent: () -> Boolean = { true }) : this(
+    constructor(
+        scope: String, connection: OkHttpHubConnection, publicImages: PublicImageReader = PublicImageReader.shared,
+        isCurrent: () -> Boolean = { true },
+    ) : this(
         scope, { path, method, body -> connection.request(path, method, body) },
-        { connection.activeRoute().endpoint.baseUrl() }, isCurrent,
+        { connection.activeRoute().endpoint.baseUrl() }, publicImages, isCurrent,
     )
 
     /** Fixed origins are only available to tests in this module. */
     internal constructor(
         scope: String, baseUrl: String, token: String, client: OkHttpClient,
-        isCurrent: () -> Boolean = { true },
-    ) : this(scope, fixedRequest(baseUrl, token, client), { baseUrl.toHttpUrl() }, isCurrent)
+        publicImages: PublicImageReader = PublicImageReader.shared, isCurrent: () -> Boolean = { true },
+    ) : this(scope, fixedRequest(baseUrl, token, client), { baseUrl.toHttpUrl() }, publicImages, isCurrent)
 
     private fun url(vararg segments: String): HttpUrl = HttpUrl.Builder().scheme("https").host("example.com").apply {
         segments.forEach(::addPathSegment)
@@ -250,6 +254,18 @@ class HttpInboxAssistantTransport private constructor(
     }
 
     override suspend fun media(ref: String): ByteArray = readMedia(ref, document = false)
+
+    /**
+     * A picture on the hub (a path, or a full URL on its origin) goes through the pairing as [media]; a full https URL
+     * elsewhere (a bot's avatar on Feishu's CDN) is read straight from there with [publicImages], without credentials.
+     */
+    override suspend fun avatar(ref: String): ByteArray {
+        checkScope()
+        val onHub = ref.startsWith("/") && !ref.startsWith("//") ||
+            runCatching { mediaOrigin().hubResolve(ref) }.getOrNull() != null
+        if (onHub || PublicImageReader.publicImageUrl(ref) == null) return media(ref)
+        return publicImages.read(ref).also { checkScope() }
+    }
 
     private suspend fun readMedia(ref: String, document: Boolean): ByteArray {
         checkScope()

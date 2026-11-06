@@ -50,7 +50,7 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
                         LarkForwardedMessage(
                             id = fm.text("id"),
                             senderName = fm.text("senderName").ifBlank { fm.text("sender_name") },
-                            senderAvatar = larkAvatar(fm.cursor("senderAvatarUrl") ?: fm.cursor("sender_avatar"), transport.scope, transport::media),
+                            senderAvatar = larkAvatar(fm.cursor("senderAvatarUrl") ?: fm.cursor("sender_avatar"), transport.scope, transport::avatar),
                             time = fm.text("createdAt").ifBlank { fm.text("created_at") },
                             text = fm.text("textPreview").ifBlank { fm.text("text") },
                             parts = (fm["parts"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { fp ->
@@ -77,7 +77,7 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
                             LarkForwardedMessage(
                                 id = fm.text("id"),
                                 senderName = fm.text("senderName").ifBlank { fm.text("sender_name") },
-                                senderAvatar = larkAvatar(fm.cursor("senderAvatarUrl") ?: fm.cursor("sender_avatar"), transport.scope, transport::media),
+                                senderAvatar = larkAvatar(fm.cursor("senderAvatarUrl") ?: fm.cursor("sender_avatar"), transport.scope, transport::avatar),
                                 time = fm.text("createdAt").ifBlank { fm.text("created_at") },
                                 text = fm.text("textPreview").ifBlank { fm.text("text") }
                             )
@@ -105,7 +105,7 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
             "sending", "pending" -> LarkDelivery.Sending
             else -> LarkDelivery.Sent
         },
-        avatar = larkAvatar(data.cursor("sender_avatar"), transport.scope, transport::media), bot = data.text("sender_type") == "bot",
+        avatar = larkAvatar(data.cursor("sender_avatar"), transport.scope, transport::avatar), bot = data.text("sender_type") == "bot",
         system = data.text("type") == "SYSTEM" || recalled, edited = data.flag("edited"),
         quote = quote?.let { LarkQuote(it.text("id"), it.text("sender_name"), if (it.flag("recalled")) "" else it.text("text"), it.flag("recalled")) },
         badgeCount = data.number("badge_count"), isRead = data.flag("is_read"),

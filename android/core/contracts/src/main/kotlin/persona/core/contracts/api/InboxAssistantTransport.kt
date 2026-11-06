@@ -56,6 +56,11 @@ interface InboxAssistantTransport {
     suspend fun pins(): JsonObject
     suspend fun mutes(): JsonObject
     suspend fun media(ref: String): ByteArray
+    /**
+     * A person's, chat's or bot's picture: like [media] for one on the hub, while a bot's is a full https URL on
+     * Feishu's CDN, which the hub transport reads directly without the pairing's credentials.
+     */
+    suspend fun avatar(ref: String): ByteArray = media(ref)
     suspend fun readDocument(url: String): JsonObject = throw UnsupportedOperationException("Document reader unavailable")
     suspend fun documentMedia(ref: String): ByteArray = media(ref)
     /**

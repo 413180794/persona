@@ -984,7 +984,7 @@ class RealInboxRepository(
         }.getOrNull()
     }
     private fun avatar(ref: String?, transport: InboxAssistantTransport) =
-        larkAvatar(ref, transport.scope) { sized -> images.get("${transport.scope}:$sized") { transport.media(sized) } }
+        larkAvatar(ref, transport.scope) { sized -> images.get("${transport.scope}:$sized") { transport.avatar(sized) } }
     private fun message(data: JsonObject, window: Window): LarkMessage {
         val source = LarkContentSource(window.transport)
         val id = data.string("id")

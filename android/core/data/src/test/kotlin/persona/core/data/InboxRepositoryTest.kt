@@ -474,6 +474,31 @@ class InboxRepositoryTest {
         }
     }
 
+    @Test fun aBotsRowReadsItsFullUrlPictureAsAnAvatarOnceAndKeyedByPairing() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-bot-avatar-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(
+                    buildJsonObject { put("id", "lark:bot:1"); put("source", "lark"); put("kind", "dm"); put("title", "Bot")
+                        put("avatar", "https://cdn.example.com/avatar/bot.jpg"); put("lark", buildJsonObject { put("feed_id", "bot") }) },
+                ))
+            }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            val avatar = repository.snapshot.value.records.single().avatar!!
+            assertEquals("hub/generation:https://cdn.example.com/avatar/bot.jpg", avatar.cacheKey)
+            avatar.read()
+            avatar.read()
+            // Read once as an avatar (the hub transport reads a full https URL directly); the second is cached.
+            assertEquals(listOf("https://cdn.example.com/avatar/bot.jpg"), transport.avatarRefs)
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun feishuRowsCarryTheChatsPictureAtThumbnailSizeAndMailRowsDoNot() = runBlocking {
         val directory = Files.createTempDirectory("inbox-avatar-test").toFile()
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -500,6 +525,7 @@ class InboxRepositoryTest {
             avatars["lark:chat:1"]!!.read()
             // Read with the pairing at the thumbnail size, and once: the second comes from the bytes cache.
             assertEquals(listOf("/api/v1/lark/media/key?size=144"), transport.mediaRefs)
+            assertEquals(transport.mediaRefs, transport.avatarRefs)
             // A refresh rebuilds the records; the same picture is the same value, so unchanged rows stay equal.
             val before = repository.snapshot.value.records
             repository.refresh()
@@ -950,6 +976,8 @@ class InboxRepositoryTest {
         override suspend fun pins() = JsonObject(emptyMap())
         override suspend fun mutes() = JsonObject(emptyMap())
         override suspend fun media(ref: String) = byteArrayOf(1).also { mediaRefs += ref }
+        val avatarRefs = mutableListOf<String>()
+        override suspend fun avatar(ref: String) = media(ref).also { avatarRefs += ref }
         var onMute: suspend (String, String) -> JsonObject = { _, _ -> JsonObject(emptyMap()) }
         override suspend fun muteInbox(itemId: String, tag: String) = onMute(itemId, tag)
     }
