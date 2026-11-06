@@ -178,13 +178,13 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	// Replace only the random client ID, leaving all protocol fields from hello intact.
 	hello["client_id"] = "000000000001"
 	add("connection", "hello_features", "握手携带当前分支的能力列表。", "event", ws(hello),
-		map[string]any{"/type": "hello", "/features": proto.Features}, "server/internal/hub/hello.go: Hub.hello", "apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol.md: 鉴权")
+		map[string]any{"/type": "hello", "/features": h.features()}, "server/internal/hub/hello.go: Hub.hello", "apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol.md: 鉴权")
 	w := httptest.NewRecorder()
 	healthReq := httptest.NewRequest("GET", "/api/v1/health", nil)
 	healthReq.RemoteAddr = "127.0.0.1:1234" // from the LAN, where version and features are shown
 	h.health(w, healthReq)
 	add("connection", "health_features", "健康检查与握手使用同一份能力列表。", "health", wireBody(t, w, 200),
-		map[string]any{"/ok": true, "/version": "fixture-version", "/features": proto.Features}, "server/internal/hub/hello.go: Hub.health", "docs/protocol.md: 鉴权")
+		map[string]any{"/ok": true, "/version": "fixture-version", "/features": h.features()}, "server/internal/hub/hello.go: Hub.health", "docs/protocol.md: 鉴权")
 	add("connection", "revs_changed_sessions", "版本事件只携带发生变化的会话及其版本。", "event",
 		ws(map[string]any{"type": "revs", "machine_id": "m1", "revs": map[string]int64{"s1": 120, "s2": 7}}),
 		map[string]any{"/type": "revs", "/machine_id": "m1", "/revs": map[string]int64{"s1": 120, "s2": 7}},
