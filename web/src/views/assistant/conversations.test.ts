@@ -55,12 +55,25 @@ describe("arrange", () => {
   it("merges what was fetched with the store and the live sessions", () => {
     const fetched = [conv("a", { archived: true, title: "旧标题" }), conv("b")];
     const listed: Session[] = [conv("b", { title: "新的 b" }), conv("n", { title: "刚开的" })];
-    const live: Session[] = [conv("a", { title: "新标题", state: "unread" }), conv("other", { assistant: false })];
+    const live: Session[] = [conv("a", { title: "新标题", state: "unread", archived: true }), conv("other", { assistant: false })];
     const m = mergeConversations(fetched, listed, live);
     expect(m.map((s) => [s.session_id, s.title, s.archived, s.state])).toEqual([
       ["a", "新标题", true, "unread"],
       ["b", "新的 b", undefined, undefined],
       ["n", "刚开的", undefined, undefined],
     ]);
+  });
+
+  it("takes the archive mark from the live sessions both ways: one brought back elsewhere leaves 已归档", () => {
+    // the hub marks every assistant session it pushes (archived only when it is, omitempty): one unarchived on another
+    // device, by a message sent to it or by Persona comes without the mark
+    const fetched = [conv("back", { archived: true }), conv("gone")];
+    const live: Session[] = [conv("back"), conv("gone", { archived: true })];
+    const m = mergeConversations(fetched, [], live);
+    expect(m.map((s) => [s.session_id, !!s.archived])).toEqual([
+      ["back", false],
+      ["gone", true],
+    ]);
+    expect(arrange(m, undefined, now).archived.map((s) => s.session_id)).toEqual(["gone"]);
   });
 });

@@ -32,6 +32,21 @@ export function History({ origin, onToggleSidebar }: { origin?: string; onToggle
   const [renaming, setRenaming] = useState<Conversation | null>(null);
   /** Titles just given here: the sessions pushed by the hub may still carry the old one for a while. */
   const [titles, setTitles] = useState<Record<string, string>>({});
+  /** Archived or brought back here: shown so until the hub pushes the session with that mark (the live sessions carry
+   *  the old one until then, and the push may come after the answer), or the hub refused it. */
+  const [marked, setMarked] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setMarked((m) => {
+      const settled = Object.keys(m).filter((id) => {
+        const s = live.find((x) => x.session_id === id);
+        return !s || (s.archived === true) === m[id];
+      });
+      if (!settled.length) return m;
+      const rest = { ...m };
+      settled.forEach((id) => delete rest[id]);
+      return rest;
+    });
+  }, [live]);
   const nowMs = useNow(60_000);
 
   const load = useCallback(async () => {
@@ -48,8 +63,13 @@ export function History({ origin, onToggleSidebar }: { origin?: string; onToggle
   }, [load]);
 
   const all = useMemo(
-    () => mergeConversations(fetched ?? [], assistant?.conversations ?? [], live.filter((s) => s.assistant)).map((s) => (titles[s.session_id] ? { ...s, title: titles[s.session_id] } : s)),
-    [fetched, assistant?.conversations, live, titles],
+    () =>
+      mergeConversations(fetched ?? [], assistant?.conversations ?? [], live.filter((s) => s.assistant)).map((s) => {
+        const title = titles[s.session_id];
+        const archived = marked[s.session_id];
+        return title || archived !== undefined ? { ...s, ...(title ? { title } : {}), ...(archived !== undefined ? { archived } : {}) } : s;
+      }),
+    [fetched, assistant?.conversations, live, titles, marked],
   );
   const hits = useMemo(() => filterConversations(all.filter((s) => matchesOrigin(s, filter)), query), [all, query, filter]);
   // the sources there are (#3264): 全部 · 我的 · one per kind of automatic conversation, when there are any
@@ -63,13 +83,15 @@ export function History({ origin, onToggleSidebar }: { origin?: string; onToggle
   };
 
   const archive = async (s: Conversation, on: boolean) => {
-    // shown at once; what the hub lists next is what stays
+    // shown at once (one the node no longer lists goes by what was read); what the hub lists next is what stays
     setFetched((list) => (list ?? []).map((x) => (x.session_id === s.session_id ? { ...x, archived: on } : x)));
+    setMarked((m) => ({ ...m, [s.session_id]: on }));
     try {
       await api(`/assistant/conversations/${enc(s.session_id)}/${on ? "archive" : "unarchive"}`, { method: "POST", json: {} });
       toast(on ? t("assistant-history.archived_toast", { title: conversationTitle(s) }) : t("assistant-history.unarchived_toast", { title: conversationTitle(s) }), "ok");
     } catch (e) {
       toast(errorText(e), "error");
+      setMarked(({ [s.session_id]: _, ...rest }) => rest); // as it was
     }
     await after();
   };

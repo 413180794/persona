@@ -57,14 +57,15 @@ export function groupByDay<T extends Session>(list: T[], now: Date): { title: st
 }
 
 /** One list from what was fetched with the archived ones (`fetched`), the store's list (newer conversations, without
- *  the archived ones) and the live sessions pushed since (state, title, last message; `archived` when the hub sends it). */
+ *  the archived ones) and the live sessions pushed since (state, title, last message, and the archive mark: the hub
+ *  marks every assistant session it pushes, `archived` only when it is, so one without it was brought back since). */
 export function mergeConversations(fetched: Conversation[], listed: Session[], live: Session[]): Conversation[] {
   const by = new Map<string, Conversation>();
   for (const s of fetched) by.set(s.session_id, s);
   for (const s of listed) by.set(s.session_id, { ...by.get(s.session_id), ...s });
   for (const s of live) {
     const had = by.get(s.session_id);
-    if (had) by.set(s.session_id, { ...had, ...s });
+    if (had) by.set(s.session_id, { ...had, ...s, archived: s.archived === true });
   }
   return [...by.values()];
 }
