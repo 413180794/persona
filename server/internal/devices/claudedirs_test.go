@@ -153,7 +153,7 @@ func TestBlockClaudeDirs(t *testing.T) {
 		t.Fatalf("remembered %v", seen)
 	}
 	// Reconnecting hands the node the patterns.
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	f.mu.Lock()
 	last = f.configure[len(f.configure)-1]
 	f.mu.Unlock()
@@ -215,10 +215,10 @@ func TestConfigureNodeSaysBotmux(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	off := false
 	m.cfg.Botmux = &off
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	m.reconfigureClaudeDirs(ctx)
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -234,10 +234,10 @@ func TestConfigureNodeSaysHerdrAutostart(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	off := false
 	m.cfg.HerdrAutostart = &off
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["herdr_autostart"]) != "true" || string(f.configure[1]["herdr_autostart"]) != "false" {
@@ -250,9 +250,9 @@ func TestConfigureNodeSaysClaudeStartDir(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	m.cfg.ClaudeStartDir = "~/.config/claude-code/profiles/work"
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["claude_start_dir"]) != `""` ||
@@ -270,9 +270,9 @@ func TestConfigureNodeSaysClaudeGlobalHooks(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	m.cfg.ClaudeGlobalHooks = true
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["claude_global_hooks"]) != "false" || string(f.configure[1]["claude_global_hooks"]) != "true" {
@@ -285,10 +285,10 @@ func TestConfigureNodeSaysUsageWindows(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	off := false
 	m.cfg.UsageWindows = &off
-	m.configureNode(ctx, m.peer, nil)
+	m.configureNode(ctx, m.peer, nil, true)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["usage_windows"]) != "true" || string(f.configure[1]["usage_windows"]) != "false" {

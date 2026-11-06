@@ -203,7 +203,7 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	out := json.RawMessage(`{"ok":true}`)
-	if s, _ := m.session(sid); isAssistant(s, m.assistantCwd()) {
+	if s, _ := m.session(sid); m.isAssistant(s) {
 		res, err := h.asstOf(h.sessionOwner(m.cfg.ID, sid)).Rename(ctx, m.cfg.ID, sid, p)
 		if err != nil {
 			writeAssistantErr(w, err)

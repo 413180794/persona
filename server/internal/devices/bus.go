@@ -3,6 +3,7 @@ package devices
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"time"
@@ -101,18 +102,21 @@ func (d *Devices) Hello(res json.RawMessage) {
 // hubConnected hands the node, through the hub, what is the hub's (Codex settings, the sends it
 // remembers), before the manager asks the node for its sessions; the hub also starts what it does on a connection
 // (the plugins' programs, Cua). The hub not there: it does that when it is back (it sees the connection then).
-func (d *Devices) hubConnected(ctx context.Context, m *Machine, at time.Time) *devicewire.ConnectedReply {
+// theirs: the hub refused it as another manager's machine (it moved away while this manager still had it): the
+// manager gives it nothing of its own (its launchers with their keys, its extensions' part).
+func (d *Devices) hubConnected(ctx context.Context, m *Machine, at time.Time) (reply *devicewire.ConnectedReply, theirs bool) {
 	if !d.busUp() {
-		return nil
+		return nil, false
 	}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	var out devicewire.ConnectedReply
 	if err := d.opts.Hub.Call(cctx, devicewire.MethodConnected, devicewire.Connected{MachineID: m.cfg.ID, ConnectedAt: at}, &out); err != nil {
 		d.logf("[%s] the hub's part of the connection: %v", m.cfg.ID, err)
-		return nil
+		var re *rpc.Error
+		return nil, errors.As(err, &re) && re.Code == devicewire.CodeNoDevice
 	}
-	return &out
+	return &out, false
 }
 
 // withOwn adds the manager's own part of a connection (Options.Own) to the hub's reply (nil: the hub is not there).
@@ -148,8 +152,8 @@ func (d *Devices) rehook(ctx context.Context) {
 			continue
 		}
 		go func() {
-			if reply := d.hubConnected(ctx, m, at); reply != nil {
-				m.configureNode(ctx, peer, d.withOwn(ctx, m.cfg.ID, reply))
+			if reply, _ := d.hubConnected(ctx, m, at); reply != nil {
+				m.configureNode(ctx, peer, d.withOwn(ctx, m.cfg.ID, reply), true)
 			}
 		}()
 	}

@@ -22,26 +22,21 @@ import (
 // SpaceHealth is the health space's name (Session.Space, StartParams.Space, ?space=).
 const SpaceHealth = identity.SpaceHealth
 
-// healthDir is the health space's directory on a machine, relative to its home (node assistant.prepare).
-const healthDir = ".jarvis/health"
+// healthRel is this manager's health space directory on a machine, relative to its home (node assistant.prepare):
+// .jarvis/health for the built-in manager, .jarvis/health-<id> for another (identity.HealthDirName).
+func (s *Service) healthRel() string { return path.Join(".jarvis", identity.HealthDirName(s.id)) }
 
-// healthCwd is the health space's directory on d, or "" while d has not reported its home.
-func healthCwd(d Device) string {
-	if d.Home == "" {
-		return ""
-	}
-	if d.DataDir != "" {
-		return path.Join(d.DataDir, SpaceHealth)
-	}
-	return path.Join(d.Home, healthDir)
+// healthCwd is this manager's health space directory on d, or "" while d has not reported its home.
+func (s *Service) healthCwd(d Device) string {
+	return stateDirOn(d.Home, d.DataDir, identity.HealthDirName(s.id))
 }
 
 // spaceCwd is the directory of space ("" the assistant's own) on d.
-func spaceCwd(d Device, space string) string {
+func (s *Service) spaceCwd(d Device, space string) string {
 	if space == SpaceHealth {
-		return healthCwd(d)
+		return s.healthCwd(d)
 	}
-	return assistantCwd(d)
+	return s.assistantCwd(d)
 }
 
 // healthClaudeMD is the health space's CLAUDE.md for machine here (prompts/assistant/health_claude_md.md).
@@ -50,7 +45,7 @@ func (s *Service) healthClaudeMD(ctx context.Context, here string) string {
 	d := prompts.AssistantHealthClaudeMD{Owner: strings.TrimSpace(hello.Owner), Notes: s.notes(ctx), Language: answerLanguage(hello.Locale)}
 	devices := s.devices(ctx)
 	if i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == here }); i >= 0 {
-		if cwd := assistantCwd(devices[i]); cwd != "" {
+		if cwd := s.assistantCwd(devices[i]); cwd != "" {
 			d.StateDir = path.Dir(cwd)
 		}
 	}

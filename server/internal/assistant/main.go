@@ -270,7 +270,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	// sealed with its own secret.key.
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logf, Devices: devs,
 		KB: &KBOptions{Dir: o.KBDir, KeyDir: o.HandlesDir}, SecretKey: o.SecretKey,
-		Trust: devs})
+		Trust: devs, ID: o.ID})
 	svc.SetExtensions(ext) // the connectors', Cua's and ego's tools, in this process (fleet_tools.go)
 	logf("connecting to %s as %s", hub, o.ID)
 	done := make(chan struct{})

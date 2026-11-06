@@ -34,6 +34,8 @@ type fakeHost struct {
 	request func(ctx context.Context, p devicewire.NodeCall) (json.RawMessage, error)
 	// credCall, when set, runs before devices.connector_cred is answered (a test acts while the fetch is out).
 	credCall func()
+	// theirs are the machines devices.connected refuses as another manager's (the hub's ownsMachine).
+	theirs map[string]bool
 }
 
 func (f *fakeHost) Call(ctx context.Context, method string, params, out any) error {
@@ -46,7 +48,11 @@ func (f *fakeHost) Call(ctx context.Context, method string, params, out any) err
 		f.mu.Lock()
 		f.connected = append(f.connected, p)
 		res = f.reply
+		theirs := f.theirs[p.MachineID]
 		f.mu.Unlock()
+		if theirs {
+			return &rpc.Error{Code: devicewire.CodeNoDevice, Message: "another manager's"}
+		}
 	case devicewire.MethodRequest:
 		var p devicewire.NodeCall
 		_ = json.Unmarshal(raw, &p)

@@ -196,7 +196,7 @@ func (l assistantLink) deviceCallFrom(ctx context.Context, from string, p assist
 			return nil, noDevice(p.Device)
 		}
 		if ok {
-			s.Assistant = isAssistant(s, m.assistantCwd())
+			s.Assistant = m.isAssistant(s)
 			if s.Assistant {
 				s.Space = assistantSpace(s.Cwd)
 			}

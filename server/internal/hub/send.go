@@ -154,12 +154,12 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		}
 		p = said
 	}
-	if s, ok := m.session(sid); ok && isAssistant(s, m.assistantCwd()) {
+	if s, ok := m.session(sid); ok && m.isAssistant(s) {
 		// The user is talking in it again: back in the list, and it works for them, not for a chain of conversations.
 		h.asstOf(h.sessionOwner(m.cfg.ID, sid)).UserSpoke(r.Context(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: sid})
 	}
 	s, known := m.session(sid)
-	if h.isMainOn(m.cfg.ID, sid) || (known && (s.Assistant || isAssistant(s, m.assistantCwd()))) {
+	if h.isMainOn(m.cfg.ID, sid) || (known && (s.Assistant || m.isAssistant(s))) {
 		// One of the assistant's conversations: it says what the message runs on (and, the first one to a new main
 		// conversation started empty, what the old one left before it).
 		if err := h.assistantSend(r.Context(), m, sid, p); err != nil {

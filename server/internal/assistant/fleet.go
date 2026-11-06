@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -212,20 +211,20 @@ func (s *Service) fleetStart(ctx context.Context) {
 
 // ---- the machines, as the devices have them ----
 
-// fleetMachine is one machine as the moved code needs it.
+// fleetMachine is one machine as the moved code needs it; manager is the manager this assistant is (Service.id).
 type fleetMachine struct {
 	ID, Name, Home, DataDir string
+	manager                 string
 }
 
-// assistantCwd is the assistant directory on the machine, or "" while it has not reported its home.
+// assistantCwd is this manager's assistant directory on the machine, or "" while it has not reported its home.
 func (m fleetMachine) assistantCwd() string {
-	if m.Home == "" {
-		return ""
-	}
-	if m.DataDir != "" {
-		return path.Join(m.DataDir, "assistant")
-	}
-	return path.Join(m.Home, ".jarvis/assistant")
+	return stateDirOn(m.Home, m.DataDir, identity.AssistantDirName(m.manager))
+}
+
+// isAssistant: sess is one of this manager's assistant's conversations on the machine (isAssistantSession).
+func (m fleetMachine) isAssistant(sess proto.Session) bool {
+	return isAssistantSession(sess, m.assistantCwd(), m.manager)
 }
 
 // fleetMachines are the machines the devices carry.
@@ -235,7 +234,7 @@ func (s *Service) fleetMachines() []fleetMachine {
 	}
 	var out []fleetMachine
 	for _, d := range s.devs.List() {
-		out = append(out, fleetMachine{ID: d.ID, Name: d.Name, Home: d.Home, DataDir: d.DataDir})
+		out = append(out, fleetMachine{ID: d.ID, Name: d.Name, Home: d.Home, DataDir: d.DataDir, manager: s.id})
 	}
 	return out
 }
@@ -295,14 +294,15 @@ func (s *Service) nodeSessions(machine string) []proto.Session {
 	return list
 }
 
-// isAssistantSession identifies headless conversations. A host pane is stronger evidence than a shared working
-// directory.
-func isAssistantSession(sess proto.Session, dir string) bool {
+// isAssistantSession identifies manager's headless conversations in its directory dir, or its health space's. A host
+// pane is stronger evidence than a shared working directory. Another manager's directory, left on a machine moved
+// away from it, is not this one's (docs/managers.md "Directories on a computer").
+func isAssistantSession(sess proto.Session, dir, manager string) bool {
 	if sess.PaneID != "" || dir == "" || sess.Cwd == "" {
 		return false
 	}
 	// The working directory may go through a symlinked home; runtimes and offline assistants have no host pane.
-	return sess.Cwd == dir || identity.IsAssistantDir(sess.Cwd)
+	return sess.Cwd == dir || identity.IsAssistantDirOf(sess.Cwd, manager)
 }
 
 // ---- the nodes' events and requests ----
@@ -897,7 +897,6 @@ func (s *Service) decorated(machine string) []proto.Session {
 		}
 	}
 	s.fleet.mu.Unlock()
-	dir := m.assistantCwd()
 	r := &s.fleet.rep
 	r.mu.RLock()
 	shown, via := r.sessions, r.marks
@@ -906,7 +905,7 @@ func (s *Service) decorated(machine string) []proto.Session {
 	for i := range list {
 		list[i].MachineID = machine
 		list[i].PendingInteractions = counts[list[i].SessionID]
-		list[i].Assistant = isAssistantSession(list[i], dir)
+		list[i].Assistant = m.isAssistant(list[i])
 		if list[i].Assistant {
 			list[i].Space = identity.SpaceOf(list[i].Cwd)
 		}

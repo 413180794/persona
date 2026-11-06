@@ -82,3 +82,45 @@ func TestHealthReportRules(t *testing.T) {
 		t.Fatalf("flags %q", flags)
 	}
 }
+
+// Every manager's health space is denied to a conversation outside it, its own or another's: health and health-<id>
+// next to the conversation's directory. A health conversation is denied every other manager's health space, never
+// its own.
+func TestHealthDenyRulesEveryManager(t *testing.T) {
+	n, home := testNode(t)
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	health, other := filepath.Join(home, ".persona", "health"), filepath.Join(home, ".persona", "health-m-0b0b0b")
+	for _, d := range []string{health, other, filepath.Join(home, ".persona", "health-notes")} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rules := n.healthDenyRules(filepath.Join(home, ".persona", "assistant-m-0b0b0b"))
+	for _, want := range []string{"Read(/" + health + "/**)", "Read(/" + other + "/**)", "Edit(/" + other + "/**)"} {
+		if !slices.Contains(rules, want) {
+			t.Fatalf("missing %s in %q", want, rules)
+		}
+	}
+	if slices.ContainsFunc(rules, func(r string) bool { return strings.Contains(r, "health-notes") }) {
+		t.Fatalf("a directory that is no manager's health space denied: %q", rules)
+	}
+	third := filepath.Join(home, ".persona", "health-m-0c0c0c")
+	if err := os.MkdirAll(third, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ cwd, deny1, deny2 string }{
+		{other, health, third}, // a manager's health conversation: the built-in's and the third's
+		{health, other, third}, // the built-in's: every other manager's
+	} {
+		rules := n.healthDenyRules(c.cwd)
+		for _, want := range []string{"Read(/" + c.deny1 + "/**)", "Read(/" + c.deny2 + "/**)"} {
+			if !slices.Contains(rules, want) {
+				t.Fatalf("%s: missing %s in %q", c.cwd, want, rules)
+			}
+		}
+		if slices.ContainsFunc(rules, func(r string) bool { return strings.Contains(r, "/"+filepath.Base(c.cwd)+"/") }) {
+			t.Fatalf("%s: its own space denied: %q", c.cwd, rules)
+		}
+	}
+}

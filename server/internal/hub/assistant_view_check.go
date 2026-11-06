@@ -18,7 +18,7 @@ func (m *Machine) checkAssistantView(params json.RawMessage) (assistantwire.View
 		return result, err
 	}
 	session, known := m.session(input.SessionID)
-	if !known || !isAssistant(session, m.assistantCwd()) || !wire.HasAssistantView(input.Message) {
+	if !known || !m.isAssistant(session) || !wire.HasAssistantView(input.Message) {
 		return result, nil
 	}
 	var problems []string

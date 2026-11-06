@@ -182,7 +182,7 @@ func TestEngineOnline(t *testing.T) {
 	f.mu.Lock()
 	f.calls = nil
 	f.mu.Unlock()
-	m.configureNode(context.Background(), peer, nil)
+	m.configureNode(context.Background(), peer, nil, true)
 	for _, c := range f.seen() {
 		if strings.HasPrefix(c, "engine.use") {
 			t.Errorf("configureNode sent %s", c)

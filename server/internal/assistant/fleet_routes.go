@@ -172,7 +172,7 @@ func (s *Service) localFleetDeviceCall(ctx context.Context, p DeviceCall) (json.
 		}
 		sess, ok := s.nodeSession(m.ID, a.SessionID)
 		if ok {
-			sess.Assistant = isAssistantSession(sess, m.assistantCwd())
+			sess.Assistant = m.isAssistant(sess)
 			if sess.Assistant {
 				sess.Space = identity.SpaceOf(sess.Cwd)
 			}

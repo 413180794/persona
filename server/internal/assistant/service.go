@@ -35,10 +35,15 @@ type Options struct {
 	// SecretKey is the path of the key the model providers' keys are sealed with (the manager's own secret.key,
 	// models_launchers.go); "" makes one for this run only (tests).
 	SecretKey string
+	// ID is the manager this assistant is ("" and assistantwire.AssistantID: the built-in one). Its directories on a
+	// computer are named after it (identity.AssistantDirName, docs/managers.md "Directories on a computer").
+	ID string
 }
 
 // Service is the assistant. It implements Handler.
 type Service struct {
+	// id is Options.ID: the manager this assistant is.
+	id string
 	// ext is the extensions' tools in this process (extensions.go SetExtensions); nil: none (tests).
 	ext ExtensionTools
 
@@ -117,7 +122,7 @@ var _ Handler = (*Service)(nil)
 // New makes the assistant; nothing runs until the hub calls it.
 func New(o Options) *Service {
 	s := &Service{hub: o.Hub, store: o.Store, logf: o.Logf, mux: http.NewServeMux(), epoch: randomHex(8), tasks: newTasksState(),
-		devs: o.Devices, trustSrc: o.Trust}
+		devs: o.Devices, trustSrc: o.Trust, id: o.ID}
 	s.inbox.lang = func() i18n.Lang { return s.lang(context.Background()) }
 	if s.store == nil {
 		s.store = func() Store { return nil }

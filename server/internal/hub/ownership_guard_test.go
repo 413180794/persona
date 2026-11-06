@@ -26,12 +26,14 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// guardManager is a manager on the bus that answers the hub's calls with answer and keeps a log of them.
+// guardManager is a manager on the bus that answers the hub's calls with answer and keeps a log of them; onEvent
+// (f.mu), when set, is told the hub's events (heard).
 type guardManager struct {
-	id   string
-	peer *rpc.Peer
-	mu   sync.Mutex
-	got  []string
+	id      string
+	peer    *rpc.Peer
+	mu      sync.Mutex
+	got     []string
+	onEvent func(method string, params json.RawMessage)
 }
 
 func connectGuardManager(t *testing.T, h *Hub, url, id string, answer func(method string, params json.RawMessage) (any, error)) *guardManager {
@@ -46,7 +48,14 @@ func connectGuardManager(t *testing.T, h *Hub, url, id string, answer func(metho
 	t.Cleanup(func() { _ = ws.CloseNow() })
 	conn := bus.NewConn(ctx, ws)
 	f.peer = rpc.New("g", conn)
-	f.peer.OnEvent = func(string, json.RawMessage) {}
+	f.peer.OnEvent = func(method string, params json.RawMessage) { // set before Serve; the hook is f.onEvent
+		f.mu.Lock()
+		fn := f.onEvent
+		f.mu.Unlock()
+		if fn != nil {
+			fn(method, params)
+		}
+	}
 	f.peer.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
 		f.mu.Lock()
 		f.got = append(f.got, method+" "+string(params))

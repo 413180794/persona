@@ -12,11 +12,17 @@ import (
 // healthDenyRules are the permission rules that keep an assistant conversation outside the health space off the
 // health space's files (docs/health.md "How the directory and memory are isolated", #3282): its directory (the assistant directory's sibling,
 // and the data directory's in case they differ) and its Claude project directories (auto memory, transcripts). Deny
-// rules hold over any allow rule: "Always allow in this session" and bypassPermissions included. A health conversation itself gets
-// none. Bash is not covered: a command can name a path any way it likes (the issue says what would).
+// rules hold over any allow rule: "Always allow in this session" and bypassPermissions included. A health conversation
+// gets the other managers' health spaces only (health, health-<id>), never its own. Bash is not covered: a command can
+// name a path any way it likes (the issue says what would).
 func (n *Node) healthDenyRules(cwd string) []string {
-	if cwd == "" || identity.SpaceOf(cwd) == identity.SpaceHealth {
+	if cwd == "" {
 		return nil
+	}
+	// A health conversation has its own space: every other manager's is denied to it (its own is not).
+	own := ""
+	if identity.SpaceOf(cwd) == identity.SpaceHealth {
+		own = filepath.Base(filepath.Clean(cwd))
 	}
 	var dirs []string
 	add := func(d string) {
@@ -24,9 +30,26 @@ func (n *Node) healthDenyRules(cwd string) []string {
 			dirs = append(dirs, d)
 		}
 	}
-	candidates := []string{filepath.Join(filepath.Dir(cwd), identity.SpaceHealth)}
+	// Every manager's health space: the built-in's health, another's health-<id> (identity.HealthDirName), next to
+	// the conversation's directory and in the data directory.
+	roots := []string{filepath.Dir(cwd)}
 	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, identity.HealthDir(home))
+		roots = append(roots, filepath.Dir(identity.HealthDir(home)))
+	}
+	var candidates []string
+	for _, root := range roots {
+		if own != identity.SpaceHealth {
+			candidates = append(candidates, filepath.Join(root, identity.SpaceHealth))
+		}
+		entries, _ := os.ReadDir(root)
+		for _, e := range entries {
+			if e.IsDir() && e.Name() != identity.SpaceHealth && e.Name() != own && identity.IsManagerDirName(e.Name(), identity.SpaceHealth) {
+				candidates = append(candidates, filepath.Join(root, e.Name()))
+			}
+		}
+	}
+	if own != "" { // the same space reached another way (a symlinked home) stays its own
+		candidates = slices.DeleteFunc(candidates, func(d string) bool { return sameDir(d, cwd) })
 	}
 	for _, d := range candidates {
 		add(filepath.Clean(d))
@@ -62,4 +85,17 @@ func healthReportRules(cwd string) []string {
 	}
 	// Edit(path) covers Write too: Claude Code matches path rules on Read and Edit only.
 	return []string{"Edit(/" + filepath.Join(cwd, "reports") + "/**)"}
+}
+
+// sameDir: a and b are the same directory (as they resolve), or the same path when either cannot be read.
+func sameDir(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	x, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	y, err := os.Stat(b)
+	return err == nil && os.SameFile(x, y)
 }

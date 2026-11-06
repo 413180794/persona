@@ -441,6 +441,34 @@ func TestTheHubsPartOfAConnection(t *testing.T) {
 	}
 }
 
+// A machine the hub says is another manager's now (devices.connected refused no_device: it moved away while this
+// manager still had it) gets nothing of this manager's: not its launchers with their keys (NodeCalls), not its
+// extensions' part (Own). One that is its own gets both.
+func TestNothingOfTheManagersOnAnotherManagersMachine(t *testing.T) {
+	d := newTestDevices(t)
+	d.opts.NodeCalls = func(_ context.Context, machine string) []devicewire.NodeCall {
+		return []devicewire.NodeCall{{MachineID: machine, Method: "launchers.managed", Params: json.RawMessage(`{"launchers":[{"name":"MY KEY"}]}`)}}
+	}
+	d.opts.Own = func(context.Context, string) map[string]json.RawMessage {
+		return map[string]json.RawMessage{"cua": json.RawMessage(`"MINE"`)}
+	}
+	f := d.host()
+	f.theirs = map[string]bool{"moved": true}
+	moved, mine := &testNode{}, &testNode{}
+	connectedMachine(t, d, "moved", moved)
+	connectedMachine(t, d, "mine", mine)
+	if len(moved.seen("launchers.managed")) != 0 || strings.Contains(strings.Join(moved.seen("node.configure"), ""), "MINE") {
+		t.Fatalf("another manager's machine got this one's: %v", moved.seen(""))
+	}
+	if len(moved.seen("node.configure")) == 0 {
+		t.Fatal("not configured at all")
+	}
+	if got := mine.seen("launchers.managed"); len(got) != 1 || !strings.Contains(got[0], "MY KEY") ||
+		!strings.Contains(strings.Join(mine.seen("node.configure"), ""), "MINE") {
+		t.Fatalf("its own machine: %v", mine.seen(""))
+	}
+}
+
 // When the connection to the hub is up again, the hub gets every machine and its sessions, and does its part of
 // every live connection again (it may have restarted).
 func TestBusUpTellsTheHubEverything(t *testing.T) {

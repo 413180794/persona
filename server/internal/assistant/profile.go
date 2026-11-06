@@ -14,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -27,8 +28,9 @@ import (
 // settingsKey is the setting the assistant keeps them in (the hub wrote the same JSON until 2026-11-04).
 const settingsKey = "assistant"
 
-// assistantDir is the assistant's directory on a machine, relative to its home (node assistant.prepare).
-const assistantDir = ".jarvis/assistant"
+// assistantRel is this manager's assistant directory on a machine, relative to its home (node assistant.prepare):
+// .jarvis/assistant for the built-in manager, .jarvis/assistant-<id> for another (identity.AssistantDirName).
+func (s *Service) assistantRel() string { return path.Join(".jarvis", identity.AssistantDirName(s.id)) }
 
 // settingsFresh is how long the settings read from the database are used before they are read again (the assistant
 // writes them itself; another hub sharing the database might too).
@@ -283,15 +285,21 @@ func (s *Service) settingsChanged(ctx context.Context) {
 
 // ---- GET / PUT /api/v1/assistant, the warm-up, the memory ----
 
-// assistantCwd is the assistant's directory on d, or "" while d has not reported its home.
-func assistantCwd(d Device) string {
-	if d.Home == "" {
+// assistantCwd is this manager's assistant directory on d, or "" while d has not reported its home.
+func (s *Service) assistantCwd(d Device) string {
+	return stateDirOn(d.Home, d.DataDir, identity.AssistantDirName(s.id))
+}
+
+// stateDirOn is the directory name in a machine's state directory: its data directory when it reported one (a custom
+// PERSONA_HOME), else ~/.jarvis; "" while it has not reported its home.
+func stateDirOn(home, dataDir, name string) string {
+	if home == "" {
 		return ""
 	}
-	if d.DataDir != "" {
-		return path.Join(d.DataDir, "assistant")
+	if dataDir != "" {
+		return path.Join(dataDir, name)
 	}
-	return path.Join(d.Home, assistantDir)
+	return path.Join(home, ".jarvis", name)
 }
 
 type assistantView struct {
@@ -321,7 +329,7 @@ func (s *Service) view(ctx context.Context, withArchived bool, space ...string) 
 		StartRequestedTasks: quietOn(v.StartRequestedTasks), RecordingDays: s.recordingDays(ctx),
 		DoneNeedsDelivery: v.DoneNeedsDelivery != nil && *v.DoneNeedsDelivery}
 	if d, ok := s.device(ctx, v.MachineID); ok {
-		out.Cwd = spaceCwd(d, sp)
+		out.Cwd = s.spaceCwd(d, sp)
 		list, _ := s.sessions(ctx, d.ID)
 		for _, c := range list {
 			if c.Assistant && spaceOf(c) == sp && (withArchived || !c.Archived) {
@@ -562,7 +570,7 @@ func (s *Service) memory(ctx context.Context, op map[string]any, out any) error 
 	if !validSpace(space) {
 		return badRequest(fmt.Errorf("space %q: health or none", space))
 	}
-	cwd := spaceCwd(d, space) // the health space keeps a memory of its own (docs/health.md)
+	cwd := s.spaceCwd(d, space) // the health space keeps a memory of its own (docs/health.md)
 	if cwd == "" {
 		return errors.New("assistant machine is offline")
 	}

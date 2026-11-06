@@ -30,7 +30,9 @@ import (
 func heard(f *guardManager, event string) func() string {
 	var mu sync.Mutex
 	var evs []string
-	f.peer.OnEvent = func(method string, params json.RawMessage) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.onEvent = func(method string, params json.RawMessage) { // not peer.OnEvent: Serve reads that as it runs
 		if method != event {
 			return
 		}

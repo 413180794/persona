@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -51,6 +52,12 @@ const (
 // errUnknownManager: the request names a manager the roster does not have.
 var errUnknownManager = errors.New("no such manager")
 
+// errOtherManager: an extension's token is for a machine, session or card of another manager's than its own
+// (extensionReach); answered 403 codeOtherManager.
+var errOtherManager = errors.New("this extension's manager does not own it")
+
+const codeOtherManager = "other_manager"
+
 // namedManager is the manager r names itself, "" when it names none.
 func namedManager(r *http.Request) string {
 	if id := strings.TrimSpace(r.Header.Get(ManagerHeader)); id != "" {
@@ -59,10 +66,27 @@ func namedManager(r *http.Request) string {
 	return strings.TrimSpace(r.URL.Query().Get(ManagerQuery))
 }
 
-// requestManager is the manager a request that names no thing goes to: the one it names (errUnknownManager when the
-// roster has no such manager), else the default.
+// impliedManager is the manager r is for, "" for none: an extension's token acts as its manager (the one that knew
+// the token: authorizeExtension) and only as it, so naming another (header or query) is errOtherManager; any other
+// credential, the manager it names.
+func impliedManager(r *http.Request) (string, error) {
+	named := namedManager(r)
+	if p := principalOf(r.Context()); p.Role == roleExtension && p.Manager != "" {
+		if named != "" && named != p.Manager {
+			return "", errOtherManager
+		}
+		return p.Manager, nil
+	}
+	return named, nil
+}
+
+// requestManager is the manager a request that names no thing goes to: the one it is for (impliedManager: the one it
+// names, errUnknownManager when the roster has no such manager; an extension's, its own), else the default.
 func (h *Hub) requestManager(r *http.Request) (string, error) {
-	id := namedManager(r)
+	id, err := impliedManager(r)
+	if err != nil {
+		return "", err
+	}
 	if id == "" {
 		return h.defaultOwner(r.Context()), nil
 	}
@@ -196,30 +220,121 @@ type ownerOf func(r *http.Request) (string, error)
 func (h *Hub) byRequest(r *http.Request) (string, error) { return h.requestManager(r) }
 
 // byMachine: the request's machine ({mid}) decides; a request that also names a manager still goes to the
-// machine's (the machine is the thing it is about).
+// machine's (the machine is the thing it is about). An extension's token goes only to its own manager's machine.
 func (h *Hub) byMachine(r *http.Request) (string, error) {
 	mid := r.PathValue("mid")
 	if mid == "" {
 		mid = r.PathValue("id")
 	}
-	return h.machineOwner(mid), nil
+	return h.extensionsOwn(r, h.machineOwner(mid))
 }
 
-// bySession: the request's session ({mid}/{sid}).
+// bySession: the request's session ({mid}/{sid}); an extension's token, only its own manager's.
 func (h *Hub) bySession(r *http.Request) (string, error) {
-	return h.sessionOwner(r.PathValue("mid"), r.PathValue("sid")), nil
+	return h.extensionsOwn(r, h.sessionOwner(r.PathValue("mid"), r.PathValue("sid")))
 }
 
-// byInteraction: the pending interaction ({id}) decides; one that is no longer pending goes by the request.
+// byInteraction: the pending interaction ({id}) decides (an extension's token: only its own manager's); one that is
+// no longer pending goes by the request.
 func (h *Hub) byInteraction(r *http.Request) (string, error) {
 	if id := h.interactionOwner(r.PathValue("id")); id != "" {
-		return id, nil
+		return h.extensionsOwn(r, id)
 	}
 	return h.requestManager(r)
 }
 
+// extensionsOwn is owner, the manager of the thing r is about; errOtherManager when r carries an extension's token
+// of another manager (an extension acts on its own manager's things only, as its manager does).
+func (h *Hub) extensionsOwn(r *http.Request, owner string) (string, error) {
+	if p := principalOf(r.Context()); p.Role == roleExtension && p.Manager != "" && owner != p.Manager {
+		return "", errOtherManager
+	}
+	return owner, nil
+}
+
+// extensionReach checks, before the request is served, that an extension's token p is about its own manager's
+// things only: a route of a machine ({mid}, machines/{id}), a session ({mid}/{sid}), a pending card
+// (interactions/{id}) or a conversation (assistant/conversations/{id}) of another manager's is errOtherManager. What a
+// route takes in its query or body is the route's to check (TestEveryExtensionRouteIsBounded). This covers the routes the hub serves itself as much
+// as the ones it forwards by owner (byMachine, bySession, byInteraction check the same).
+func (h *Hub) extensionReach(r *http.Request, p principal) error {
+	if p.Role != roleExtension || p.Manager == "" || h.apiMux == nil {
+		return nil
+	}
+	_, pattern := h.apiMux.Handler(r)
+	route, values := routeValues(pattern, r)
+	mid := values["mid"]
+	if mid == "" && strings.HasPrefix(route, "/api/v1/machines/{id}") {
+		mid = values["id"]
+	}
+	if mid != "" && h.machineOwner(mid) != p.Manager {
+		return errOtherManager
+	}
+	if strings.HasPrefix(route, "/api/v1/interactions/{id}") {
+		if o := h.interactionOwner(values["id"]); o != "" && o != p.Manager {
+			return errOtherManager
+		}
+	}
+	if strings.HasPrefix(route, "/api/v1/assistant/conversations/{id}") {
+		if o := h.conversationOwner(values["id"]); o != "" && o != p.Manager {
+			return errOtherManager
+		}
+	}
+	return nil
+}
+
+// extensionManager is the manager whose extension's token r carries; "" for any other credential (then nothing is
+// limited by it).
+func extensionManager(r *http.Request) string {
+	if p := principalOf(r.Context()); p.Role == roleExtension {
+		return p.Manager
+	}
+	return ""
+}
+
+// routeValues are the path of a ServeMux pattern (its method left out) and the path values the mux sets for r on
+// it, read before the mux serves r. Literal segments are taken as they are, {name} is one segment unescaped,
+// {name...} the rest.
+func routeValues(pattern string, r *http.Request) (string, map[string]string) {
+	if i := strings.IndexByte(pattern, ' '); i >= 0 {
+		pattern = pattern[i+1:]
+	}
+	values := map[string]string{}
+	if !strings.HasPrefix(pattern, "/") {
+		return pattern, values
+	}
+	pats := strings.Split(strings.TrimPrefix(pattern, "/"), "/")
+	segs := strings.Split(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
+	for i, p := range pats {
+		name, ok := strings.CutPrefix(p, "{")
+		if !ok || !strings.HasSuffix(name, "}") || i >= len(segs) {
+			continue
+		}
+		name = strings.TrimSuffix(name, "}")
+		if rest, wild := strings.CutSuffix(name, "..."); wild {
+			if v, err := url.PathUnescape(strings.Join(segs[i:], "/")); err == nil {
+				values[rest] = v
+			}
+			break
+		}
+		if v, err := url.PathUnescape(segs[i]); err == nil && name != "$" {
+			values[name] = v
+		}
+	}
+	return pattern, values
+}
+
 // byConversation: the manager whose conversation {id} is; one no snapshot lists goes by the request.
+// An extension's token reaches only its own manager's conversations.
 func (h *Hub) byConversation(r *http.Request) (string, error) {
+	if p := principalOf(r.Context()); p.Role == roleExtension && p.Manager != "" {
+		if id := h.conversationOwner(r.PathValue("id")); id != "" {
+			if _, err := h.extensionsOwn(r, id); err != nil {
+				return "", err
+			}
+		}
+		return h.requestManager(r)
+	}
 	if named := namedManager(r); named == "" {
 		if id := h.conversationOwner(r.PathValue("id")); id != "" {
 			return id, nil
@@ -228,9 +343,14 @@ func (h *Hub) byConversation(r *http.Request) (string, error) {
 	return h.requestManager(r)
 }
 
-// owner resolves r's manager with by, answering 404 no_manager itself; false once it answered.
+// owner resolves r's manager with by, answering 404 no_manager itself (403 codeOtherManager for an extension's token
+// of another manager); false once it answered.
 func (h *Hub) owner(w http.ResponseWriter, r *http.Request, by ownerOf) (string, bool) {
 	id, err := by(r)
+	if errors.Is(err, errOtherManager) {
+		writeErrCode(w, http.StatusForbidden, codeOtherManager, err)
+		return "", false
+	}
 	if err != nil {
 		writeErrCode(w, http.StatusNotFound, "no_manager", err)
 		return "", false
@@ -305,13 +425,18 @@ func (h *Hub) listManagers(ctx context.Context) []string {
 	return append(out, rest...)
 }
 
-// mergeList answers a list request: a request naming a manager gets that manager's answer, else every manager is
-// asked (ask, one after the other: the managers are few) and the lists under key merged, the default's first. Every
+// mergeList answers a list request: a request for a manager (one it names, an extension's: its own, impliedManager) gets
+// that manager's answer, else every manager is asked (ask, one after the other: the managers are few) and the lists under key merged, the default's first. Every
 // item is stamped with its manager. A manager that does not answer is left out; when none does, the default's
 // answer is given as it is.
 func (h *Hub) mergeList(w http.ResponseWriter, r *http.Request, key string, ask func(w http.ResponseWriter, r *http.Request, id string)) {
 	ids := []string{}
-	if named := namedManager(r); named != "" {
+	named, err := impliedManager(r)
+	if err != nil {
+		writeErrCode(w, http.StatusForbidden, codeOtherManager, err)
+		return
+	}
+	if named != "" {
 		id, ok := h.owner(w, r, h.byRequest)
 		if !ok {
 			return

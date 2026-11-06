@@ -224,7 +224,7 @@ func TestHerdrRowInstalling(t *testing.T) {
 	}
 
 	m.cfg.HerdrAutoinstall = true
-	m.configureNode(context.Background(), m.peer, nil)
+	m.configureNode(context.Background(), m.peer, nil, true)
 	var said bool
 	for _, c := range seen() {
 		if c["method"] == "node.configure" && c["herdr_autoinstall"] == true {

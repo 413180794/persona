@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,7 +37,11 @@ func (h *Hub) routes() http.Handler {
 		h.upd.routes(api)
 	}
 	api.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"machines": localizedMachines(h.requestLang(r), h.machineList())})
+		list := h.machineList()
+		if em := extensionManager(r); em != "" { // an extension's token: its manager's machines only
+			list = slices.DeleteFunc(list, func(m proto.Machine) bool { return h.machineOwner(m.ID) != em })
+		}
+		writeJSON(w, map[string]any{"machines": localizedMachines(h.requestLang(r), list)})
 	})
 	// Confirm / reject a computer (machine_trust.go).
 	h.machineTrustRoutes(api)
@@ -146,6 +152,9 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/machines/{mid}/worktree/create", h.nodeAction(nodeActions["worktree/create"]))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
 		ixs := visibleInteractions(h.pendingInteractions(), h.requestHasElicitation(r))
+		if em := extensionManager(r); em != "" { // an extension's token: its manager's cards only
+			ixs = slices.DeleteFunc(ixs, func(ix proto.Interaction) bool { return cmp.Or(ix.Manager, assistantwire.AssistantID) != em })
+		}
 		writeJSON(w, map[string]any{"interactions": h.withMuted(ixs)})
 	})
 	api.HandleFunc("GET /api/v1/ops/{id}", h.getClientOp)
@@ -279,6 +288,11 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 					body["scope"] = scope
 				}
 				writeErrorBody(w, http.StatusForbidden, body)
+				return
+			}
+			// Its manager's machines, sessions and cards only (ownership.go extensionReach).
+			if err := h.extensionReach(r, p); err != nil {
+				writeErrCode(w, http.StatusForbidden, codeOtherManager, err)
 				return
 			}
 		} else if !allowed(p, r.Method, r.URL.Path) {
@@ -544,7 +558,7 @@ func (h *Hub) interruptSession(w http.ResponseWriter, r *http.Request, m *Machin
 		callErr(w, err)
 		return
 	}
-	if s, ok := m.session(sid); ok && (s.Assistant || isAssistant(s, m.assistantCwd())) {
+	if s, ok := m.session(sid); ok && (s.Assistant || m.isAssistant(s)) {
 		h.asstOf(h.sessionOwner(m.cfg.ID, sid)).UserStopped(r.Context(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: sid})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -557,9 +571,14 @@ func (h *Hub) listSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mid := r.URL.Query().Get("machine_id")
+	em := extensionManager(r) // an extension's token: its manager's machines only
+	if em != "" && mid != "" && h.machineOwner(mid) != em {
+		writeErrCode(w, http.StatusForbidden, codeOtherManager, errOtherManager)
+		return
+	}
 	out := []proto.Session{}
 	for _, m := range h.machinesNow() {
-		if mid != "" && m.cfg.ID != mid {
+		if mid != "" && m.cfg.ID != mid || em != "" && h.machineOwner(m.cfg.ID) != em {
 			continue
 		}
 		out = append(out, h.shown(m.cfg.ID, h.decorated(m))...)
@@ -603,6 +622,11 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if p.TodoID != "" && principalOf(r.Context()).Role != roleFull {
 		writeErr(w, http.StatusForbidden, errors.New("read-only role cannot modify todos"))
+		return
+	}
+	// An extension's token starts (or resumes) agents on its own manager's machines only (ownership.go).
+	if _, err := h.extensionsOwn(r, h.sessionOwner(p.MachineID, p.ResumeSessionID)); err != nil {
+		writeErrCode(w, http.StatusForbidden, codeOtherManager, err)
 		return
 	}
 	m := h.localMachine(p.MachineID)

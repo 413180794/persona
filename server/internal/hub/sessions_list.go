@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 
@@ -173,8 +174,26 @@ func (h *Hub) pagedSessions(w http.ResponseWriter, r *http.Request) {
 	index := h.sessionListIndex()
 	// Machine disappearance does not always carry a final sessions event.
 	h.pruneSessionListMachines()
+	// An extension's token: its manager's machines only (ownership.go), as if it had asked for those.
+	own, limited := h.extensionMachines(r)
+	if limited {
+		if opts.Machine != "" && !slices.Contains(own, opts.Machine) {
+			writeErrCode(w, http.StatusForbidden, codeOtherManager, errOtherManager)
+			return
+		}
+		if opts.Machine == "" && len(own) == 1 {
+			opts.Machine = own[0]
+		}
+		limited = opts.Machine == ""
+	}
 	if counts := r.URL.Query().Get("counts"); counts == "1" || counts == "true" {
-		counts, err := index.Counts(opts)
+		var counts sessionlist.Counts
+		var err error
+		if limited {
+			counts, err = ownCounts(index, opts, own)
+		} else {
+			counts, err = index.Counts(opts)
+		}
 		if err != nil {
 			sessionListErr(w, err)
 			return
@@ -187,7 +206,74 @@ func (h *Hub) pagedSessions(w http.ResponseWriter, r *http.Request) {
 		sessionListErr(w, err)
 		return
 	}
+	if limited {
+		if page, err = ownPage(index, opts, own, page); err != nil {
+			sessionListErr(w, err)
+			return
+		}
+	}
 	writeJSON(w, page)
+}
+
+// extensionMachines are the machines of the manager whose extension's token r carries, and whether that limits what
+// it is shown: not for any other credential, nor while every machine is that manager's (one manager: as before).
+func (h *Hub) extensionMachines(r *http.Request) (own []string, limited bool) {
+	em := extensionManager(r)
+	if em == "" {
+		return nil, false
+	}
+	for _, m := range h.machinesNow() {
+		if h.machineOwner(m.cfg.ID) == em {
+			own = append(own, m.cfg.ID)
+		} else {
+			limited = true
+		}
+	}
+	return own, limited
+}
+
+// ownCounts are the counts of opts over the machines own only (each machine's, added up).
+func ownCounts(index *sessionlist.Index, opts sessionlist.Options, own []string) (sessionlist.Counts, error) {
+	out := sessionlist.Counts{Machine: map[string]int{}, Project: map[string]int{}, Group: map[string]int{}, State: map[string]int{}}
+	for _, mid := range own {
+		o := opts
+		o.Machine, o.Cursor = mid, "" // current membership (a cursor's frozen view is of every machine)
+		c, err := index.Counts(o)
+		if err != nil {
+			return sessionlist.Counts{}, err
+		}
+		out.Total += c.Total
+		out.Revision = c.Revision
+		for dst, src := range map[*map[string]int]map[string]int{&out.Machine: c.Machine, &out.Project: c.Project, &out.Group: c.Group, &out.State: c.State} {
+			for k, n := range src {
+				(*dst)[k] += n
+			}
+		}
+	}
+	return out, nil
+}
+
+// ownPage is page without the sessions and removals of machines not in own; its total is own's.
+func ownPage(index *sessionlist.Index, opts sessionlist.Options, own []string, page sessionlist.Page) (sessionlist.Page, error) {
+	keep := func(mid string) bool { return slices.Contains(own, mid) }
+	page.Sessions = slices.DeleteFunc(page.Sessions, func(v any) bool {
+		raw, _ := json.Marshal(v)
+		var s struct {
+			MachineID string `json:"machine_id"`
+		}
+		return json.Unmarshal(raw, &s) != nil || !keep(s.MachineID)
+	})
+	page.Remove = slices.DeleteFunc(page.Remove, func(id string) bool {
+		var k [2]string
+		return json.Unmarshal([]byte(id), &k) != nil || !keep(k[0])
+	})
+	counts, err := ownCounts(index, sessionlist.Options{Since: opts.Since, State: opts.State, Project: opts.Project, Group: opts.Group,
+		Source: opts.Source, Provider: opts.Provider, Q: opts.Q}, own)
+	if err != nil {
+		return sessionlist.Page{}, err
+	}
+	page.Total = counts.Total
+	return page, nil
 }
 
 // pruneSessionListMachines scans only machine ids, never session rows. Called

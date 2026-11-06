@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
@@ -20,14 +21,21 @@ type skill struct {
 	Source      string `json:"source"` // user | builtin
 }
 
-// machineSkills asks m's node for the assistant's skills there.
-func (h *Hub) machineSkills(ctx context.Context, m *Machine) ([]skill, error) {
+// machineSkills asks m's node for manager id's assistant's skills there: another manager's in its own directory (the
+// connectors signed in there), the built-in's as ever (the node picks its directory).
+func (h *Hub) machineSkills(ctx context.Context, m *Machine, id string) ([]skill, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var out struct {
 		Skills []skill `json:"skills"`
 	}
-	if err := m.call(ctx, "skills.list", map[string]any{}, &out); err != nil {
+	params := map[string]any{}
+	if id != assistantwire.AssistantID {
+		if cwd := m.assistantCwdOf(id); cwd != "" {
+			params["cwd"] = cwd
+		}
+	}
+	if err := m.call(ctx, "skills.list", params, &out); err != nil {
 		return nil, err
 	}
 	return out.Skills, nil
@@ -44,7 +52,7 @@ func (h *Hub) serveSkills(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, errNoAssistantMachine)
 		return
 	}
-	list, err := h.machineSkills(r.Context(), m)
+	list, err := h.machineSkills(r.Context(), m, id)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err)
 		return

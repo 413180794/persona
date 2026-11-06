@@ -98,7 +98,7 @@ func (s *Service) followedItems(machine string, params json.RawMessage) {
 			return
 		}
 		conversation, known := s.nodeSession(machine, p.SessionID)
-		if !known || !isAssistantSession(conversation, m.assistantCwd()) {
+		if !known || !m.isAssistant(conversation) {
 			return
 		}
 		var cards []proto.Item

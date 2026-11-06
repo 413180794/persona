@@ -255,10 +255,10 @@ func (s *Service) firstMessage(ctx context.Context, machine, id string) (string,
 	return "", true
 }
 
-// isAssistantConversation: c runs in one of the assistant's directories (the hub's Assistant flag on a decorated
-// list; the node's own lists only have the directory).
-func isAssistantConversation(c proto.Session) bool {
-	return c.Assistant || c.PaneID == "" && c.Cwd != "" && identity.IsAssistantDir(c.Cwd)
+// isAssistantRow: c runs in one of this manager's assistant directories (the hub's Assistant flag on a
+// decorated list; the node's own lists only have the directory).
+func (s *Service) isAssistantRow(c proto.Session) bool {
+	return c.Assistant || c.PaneID == "" && c.Cwd != "" && identity.IsAssistantDirOf(c.Cwd, s.id)
 }
 
 // BackfillResult is what one backfill did.
@@ -279,7 +279,7 @@ func (s *Service) backfillOrigins(ctx context.Context, machine string, list []pr
 	}
 	var todo []proto.Session
 	for _, c := range list {
-		if c.SessionID == "" || !isAssistantConversation(c) {
+		if c.SessionID == "" || !s.isAssistantRow(c) {
 			continue
 		}
 		o := b.m[c.SessionID]
@@ -409,7 +409,7 @@ func (s *Service) originsChanged(machine string, list []proto.Session) {
 	}
 	need := false
 	for _, c := range list {
-		if c.SessionID != "" && b.m[c.SessionID] == nil && !b.checked[c.SessionID] && isAssistantConversation(c) {
+		if c.SessionID != "" && b.m[c.SessionID] == nil && !b.checked[c.SessionID] && s.isAssistantRow(c) {
 			need = true
 			break
 		}

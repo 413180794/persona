@@ -118,7 +118,7 @@ func (s *Service) overviewTodos(ctx context.Context, l i18n.Lang, web string, ad
 func (s *Service) sessionAssistantLocal(machine, session string) bool {
 	m, ok := s.fleetMachine(machine)
 	sess, found := s.nodeSession(machine, session)
-	return ok && found && isAssistantSession(sess, m.assistantCwd())
+	return ok && found && m.isAssistant(sess)
 }
 
 // packOverview splits entries with the reports' greedy packer; labels get no divider, each card has a fallback.

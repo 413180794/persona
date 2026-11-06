@@ -303,7 +303,11 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	// rest), but is neither configured nor listed nor watched: what it would answer is not known.
 	if compat.Incompatible == "" {
 		// The hub's part (Codex, managed launchers, its sends; it starts the plugins' work on the computer) with it.
-		m.configureNode(ctx, c.peer, m.d.withOwn(ctx, m.cfg.ID, m.d.hubConnected(ctx, m, connectedAt)))
+		if reply, theirs := m.d.hubConnected(ctx, m, connectedAt); theirs {
+			m.configureNode(ctx, c.peer, nil, false) // another manager's now: nothing of this one's (bus.go hubConnected)
+		} else {
+			m.configureNode(ctx, c.peer, m.d.withOwn(ctx, m.cfg.ID, reply), true)
+		}
 		var list struct {
 			Sessions []proto.Session `json:"sessions"`
 		}

@@ -189,17 +189,57 @@ func HealthDir(home string) string {
 // SpaceHealth is the health space's name: its directory's and Session.Space.
 const SpaceHealth = "health"
 
-// IsAssistantDir: path is one of the assistant's directories, its own or the health space's.
-func IsAssistantDir(path string) bool {
-	return isStateDir(path, "assistant") || isStateDir(path, SpaceHealth)
+// builtinManager is the id of the manager the hub starts (assistantwire.AssistantID): its directories keep their
+// names.
+const builtinManager = "assistant"
+
+// AssistantDirName is the name in the state directory of manager id's assistant directory: "assistant" for the
+// built-in manager's ("" too), "assistant-<id>" for another's (docs/managers.md "Directories on a computer").
+func AssistantDirName(id string) string { return managerDirName("assistant", id) }
+
+// HealthDirName is AssistantDirName for its health space: "health", or "health-<id>".
+func HealthDirName(id string) string { return managerDirName(SpaceHealth, id) }
+
+func managerDirName(base, id string) string {
+	if id == "" || id == builtinManager {
+		return base
+	}
+	return base + "-" + id
 }
 
-// SpaceOf is the space of an assistant directory: SpaceHealth for the health space's, "" for the assistant's own.
+// IsManagerDirName: name is base or base-<id> for a manager id the hub makes ("m-" and hex digits). Other names that
+// start the same (assistant-bin, assistant-hooks) are not.
+func IsManagerDirName(name, base string) bool {
+	if name == base {
+		return true
+	}
+	hex, ok := strings.CutPrefix(name, base+"-m-")
+	return ok && hex != "" && strings.Trim(hex, "0123456789abcdef") == ""
+}
+
+// IsAssistantDir: path is one of the assistant's directories, its own or the health space's, of any manager.
+func IsAssistantDir(path string) bool {
+	return isManagerStateDir(path, "assistant") || isManagerStateDir(path, SpaceHealth)
+}
+
+// IsAssistantDirOf: path is one of manager id's assistant directories, its own or its health space's (another
+// manager's, left on a computer moved away from it, is not).
+func IsAssistantDirOf(path, id string) bool {
+	return isStateDir(path, AssistantDirName(id)) || isStateDir(path, HealthDirName(id))
+}
+
+// SpaceOf is the space of an assistant directory: SpaceHealth for a health space's, "" for the assistant's own.
 func SpaceOf(path string) string {
-	if isStateDir(path, SpaceHealth) {
+	if isManagerStateDir(path, SpaceHealth) {
 		return SpaceHealth
 	}
 	return ""
+}
+
+// isManagerStateDir: path is the directory base, or base-<id> (IsManagerDirName), in the state directory.
+func isManagerStateDir(path, base string) bool {
+	name := filepath.Base(filepath.Clean(path))
+	return IsManagerDirName(name, base) && isStateDir(path, name)
 }
 
 // isStateDir: path is the directory name in the state directory (~/.persona, ~/.jarvis or PERSONA_HOME's).

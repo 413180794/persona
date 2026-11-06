@@ -49,7 +49,7 @@ func (s *Service) claudeMD(ctx context.Context, here string, larkCLI bool) strin
 	devices := s.devices(ctx)
 	if i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == here }); i >= 0 {
 		d.OnHub = devices[i].Kind == "local"
-		if cwd := assistantCwd(devices[i]); cwd != "" {
+		if cwd := s.assistantCwd(devices[i]); cwd != "" {
 			d.StateDir = path.Dir(cwd)
 		}
 	}
@@ -91,9 +91,9 @@ func (s *Service) prepareSpace(ctx context.Context, machine, space string) (stri
 	if len(plugins.Skills) == 0 {
 		plugins.Skills = json.RawMessage("null")
 	}
-	dir, md := assistantDir, s.claudeMD(ctx, machine, conns.LarkCLI)+plugins.Instructions
+	dir, md := s.assistantRel(), s.claudeMD(ctx, machine, conns.LarkCLI)+plugins.Instructions
 	if space == SpaceHealth {
-		dir, md = healthDir, s.healthClaudeMD(ctx, machine)
+		dir, md = s.healthRel(), s.healthClaudeMD(ctx, machine)
 	}
 	params := map[string]any{"dir": dir, "claude_md": md,
 		"connectors": conns.Connectors, "clis": conns.CLIs, "plugin_skills": plugins.Skills}

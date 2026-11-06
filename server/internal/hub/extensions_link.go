@@ -253,9 +253,16 @@ func (h *Hub) extensionAPIs(next http.Handler, mux *http.ServeMux) http.Handler 
 			next.ServeHTTP(w, r)
 			return
 		}
-		// The manager whose extension serves the prefix answers, unless the request names another.
+		// The manager whose extension serves the prefix answers, unless the request names another (or is an extension's:
+		// its own manager's, impliedManager). Served by several: the named one, the default, the built-in, the others
+		// by id (extPrefixOwner).
 		relay := func(w http.ResponseWriter, r *http.Request) {
-			if id := h.extPrefixOwner(seg, namedManager(r), h.defaultOwner(r.Context())); id != "" && (namedManager(r) == "" || id == namedManager(r)) {
+			named, err := impliedManager(r)
+			if err != nil {
+				writeErrCode(w, http.StatusForbidden, codeOtherManager, err)
+				return
+			}
+			if id := h.extPrefixOwner(seg, named, h.defaultOwner(r.Context())); id != "" && (named == "" || id == named) {
 				h.relayTo(w, r, false, id)
 				return
 			}
@@ -517,17 +524,20 @@ func (h *Hub) authorizeExtension(ctx context.Context, tok string, r *http.Reques
 	defer cancel()
 	// The token is one manager's extension's: each is asked, the default first, until one knows it.
 	var a extwire.Authorized
+	manager := ""
 	for _, id := range h.listManagers(ctx) {
 		a = extwire.Authorized{}
 		if err := h.callBus(ctx, id, extwire.MethodAuthorize, extwire.Authorize{Hash: hashToken(tok), Pattern: pattern,
 			Method: method, Path: path}, &a); err == nil && a.Extension != "" {
+			manager = id
 			break
 		}
 	}
 	if a.Extension == "" {
 		return principal{}, false, false, ""
 	}
-	p = principal{ID: "extension:" + a.Extension, Name: a.Name, Role: roleExtension, Extension: a.Extension, Scopes: a.Scopes}
+	p = principal{ID: "extension:" + a.Extension, Name: a.Name, Role: roleExtension, Extension: a.Extension, Scopes: a.Scopes,
+		Manager: manager}
 	return p, true, a.OK, a.Scope
 }
 

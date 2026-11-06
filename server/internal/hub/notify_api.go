@@ -279,6 +279,11 @@ func (h *Hub) notifyRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
+		// An extension's notification names only its own manager's machine and session (ownership.go ownsRef).
+		if p.Role == roleExtension && p.Manager != "" && !h.ownsRef(p.Manager, in.MachineID, in.SessionID) {
+			writeErrCode(w, http.StatusForbidden, codeOtherManager, errOtherManager)
+			return
+		}
 		res, err := h.deliverNotify(in, h.machineNameFor(in), extensionOf(p))
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err)

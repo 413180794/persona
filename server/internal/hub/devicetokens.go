@@ -44,9 +44,11 @@ type principal struct {
 	PairHash    string
 	PairExpires time.Time
 	Machine     string // roleLink, roleLinkPair: the machine in hub.json it is bound to; rolePeer: the peer's hub_id
-	// roleExtension: the extension the token was made for and the scopes it opens (extension_scopes.go).
+	// roleExtension: the extension the token was made for and the scopes it opens (extension_scopes.go), and the
+	// manager whose extension it is (the one that knew the token): a request that names no manager is its.
 	Extension string
 	Scopes    []string
+	Manager   string
 	// extOpens, extScope: an extension's token opens the request's route (the manager said), else the scope it lacks.
 	extOpens bool
 	extScope string

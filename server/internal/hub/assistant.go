@@ -12,28 +12,43 @@ import (
 // node runs in a dedicated directory on one machine; the hub tells them apart from the agents by that directory, and
 // relays the assistant's routes to it (assistant_link.go).
 
-const assistantDir = ".jarvis/assistant" // relative to the machine's home
-
-// assistantCwd is the assistant directory on a machine, or "" while the machine has not reported its home.
+// assistantCwd is the machine's manager's assistant directory on it, or "" while the machine has not reported its
+// home.
 func (m *Machine) assistantCwd() string {
+	return m.assistantCwdOf(m.hub.machineOwner(m.cfg.ID))
+}
+
+// assistantCwdOf is manager id's assistant directory on m (identity.AssistantDirName: the built-in's "assistant",
+// another's "assistant-<id>"), or "" while m has not reported its home.
+func (m *Machine) assistantCwdOf(id string) string {
+	name := identity.AssistantDirName(id)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.info.Home == "" {
 		return ""
 	}
 	if m.info.DataDir != "" {
-		return path.Join(m.info.DataDir, "assistant")
+		return path.Join(m.info.DataDir, name)
 	}
-	return path.Join(m.info.Home, assistantDir)
+	return path.Join(m.info.Home, ".jarvis", name)
 }
 
-// isAssistant identifies headless conversations. A host pane is stronger evidence than a shared working directory.
-func isAssistant(s proto.Session, dir string) bool {
+// isAssistant: s is one of the headless conversations of m's manager's assistant (its own directory or its health
+// space's). Another manager's, left on m when m moved away from it, is not: the new manager does not read it
+// (docs/managers.md "Directories on a computer").
+func (m *Machine) isAssistant(s proto.Session) bool {
+	owner := m.hub.machineOwner(m.cfg.ID)
+	return isAssistantOf(s, m.assistantCwdOf(owner), owner)
+}
+
+// isAssistantOf identifies manager owner's headless conversations in its directory dir. A host pane is stronger
+// evidence than a shared working directory.
+func isAssistantOf(s proto.Session, dir, owner string) bool {
 	if s.PaneID != "" || dir == "" || s.Cwd == "" {
 		return false
 	}
 	// The working directory may go through a symlinked home; runtimes and offline assistants have no host pane.
-	return s.Cwd == dir || identity.IsAssistantDir(s.Cwd)
+	return s.Cwd == dir || identity.IsAssistantDirOf(s.Cwd, owner)
 }
 
 // assistantRoutes are the skills the assistant's machine has and the assistant's own routes, relayed to it.
