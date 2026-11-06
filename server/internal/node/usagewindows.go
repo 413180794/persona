@@ -306,7 +306,7 @@ func clampPercent(p float64) float64 {
 	if math.IsNaN(p) || p < 0 {
 		return 0
 	}
-	return p
+	return math.Min(p, 100)
 }
 
 // claudeStatusWindows are the rate_limits keys of Claude Code's status line input and the length of each window.

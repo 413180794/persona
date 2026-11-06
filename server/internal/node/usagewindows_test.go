@@ -76,6 +76,14 @@ func TestParseCodexRateLimitsIgnoresWhatIsNotAWindow(t *testing.T) {
 	}
 }
 
+func TestParseCodexRateLimitsCapsOverusedAtAHundred(t *testing.T) {
+	line := `{"timestamp":"2026-11-04T09:00:00.000Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":130,"window_minutes":300}}}}`
+	s, ok := parseCodexRateLimits([]byte(line))
+	if !ok || s.windows[0].UsedPercent != 100 {
+		t.Errorf("got %+v %v", s, ok)
+	}
+}
+
 func TestLastCodexSampleReadsOnlyTheTailAndSkipsTheCutLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "rollout.jsonl")
 	old := `{"timestamp":"2026-11-03T08:00:00.000Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":1,"window_minutes":300}}}}` + "\n"
@@ -131,6 +139,15 @@ func TestParseClaudeStatusLimits(t *testing.T) {
 		if a, ok := parseClaudeStatusLimits([]byte(in), mod, now); ok {
 			t.Errorf("%s: parsed %+v", name, a)
 		}
+	}
+}
+
+func TestParseClaudeStatusLimitsCapsOverusedAtAHundred(t *testing.T) {
+	now := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
+	in := `{"rate_limits":{"five_hour":{"used_percentage":130},"seven_day":{"used_percentage":100}}}`
+	a, ok := parseClaudeStatusLimits([]byte(in), now.Add(-time.Minute), now)
+	if !ok || len(a.Windows) != 2 || a.Windows[0].UsedPercent != 100 || a.Windows[1].UsedPercent != 100 {
+		t.Errorf("got %+v %v", a, ok)
 	}
 }
 
