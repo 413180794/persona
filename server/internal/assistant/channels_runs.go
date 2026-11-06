@@ -243,7 +243,10 @@ func (s *Service) startChannelRun(r *channel.Run) {
 	var folded []*channel.Run
 	keep := c.st.Runs[:0]
 	for _, o := range c.st.Runs {
-		if o.Channel == r.Channel && o.MachineID == r.MachineID && o.SessionID == r.SessionID && !c.answering[o.ID] && !o.Recalled {
+		// One answer covers both only when both go to the same place: a topic's reply never turns up in the private chat
+		// (or another topic), nor the other way round.
+		if o.Channel == r.Channel && o.MachineID == r.MachineID && o.SessionID == r.SessionID && !c.answering[o.ID] && !o.Recalled &&
+			o.Ext["chat"] == r.Ext["chat"] && o.Ext["thread"] == r.Ext["thread"] {
 			folded = append(folded, o)
 			r.Fold(o)
 			continue
@@ -557,6 +560,18 @@ func (s *Service) channelProgressTick(id string) {
 		return
 	}
 	ps.progress(ctx, r, now.Sub(started), steps, live)
+}
+
+// runExts are some of a run's channel values, read under the channels' lock.
+func (s *Service) runExts(r *channel.Run, keys ...string) map[string]string {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[string]string, len(keys))
+	for _, k := range keys {
+		out[k] = r.Ext[k]
+	}
+	return out
 }
 
 // setRunExt sets one of a run's channel values and keeps it.

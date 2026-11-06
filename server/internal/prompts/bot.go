@@ -5,6 +5,7 @@ package prompts
 // the files it carried, saved on the machine the conversation runs on.
 type BotMessage struct {
 	Jarvis  bool   // a Persona conversation (not a coding agent): add the note about answering in Feishu
+	Topic   bool   // said in a topic of a group chat (the thread of a todo), not in the bot's private chat
 	Owner   string // "" is the Chinese word for "user"
 	Text    string
 	Quote   *BotQuote

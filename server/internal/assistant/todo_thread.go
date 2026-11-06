@@ -43,6 +43,12 @@ func cleanThread(th TodoThread) (TodoThread, error) {
 	return th, nil
 }
 
+// postable: whether decision d may be posted into the chat thread its todo is bound to. What the user said in the thread
+// is already there: posting it again would only echo it (and the bot's own post must not come back as a reply).
+func postable(d db.TodoDecisionRow) bool {
+	return d.Source != db.DecisionThread
+}
+
 // sameThread: a and b name the same thread (the title is only a label).
 func sameThread(a, b TodoThread) bool {
 	return a.Channel == b.Channel && a.ChatID == b.ChatID && a.ThreadID == b.ThreadID

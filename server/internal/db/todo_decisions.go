@@ -17,12 +17,14 @@ var (
 
 // Decision sources: written in the todo by hand, from the user's answer to an agent's question card, what a task
 // came to when it was finished (its outcome, decisions and pitfalls, #2820), or noted by an agent on it as it worked
-// (todo_decision_add, #5279: the agent's call, not the user's).
+// (todo_decision_add, #5279: the agent's call, not the user's), or said by the user in the chat thread the todo is bound
+// to (#5279: kept as said; never posted back into that thread).
 const (
 	DecisionManual  = "manual"
 	DecisionCard    = "card"
 	DecisionOutcome = "outcome"
 	DecisionAgent   = "agent"
+	DecisionThread  = "thread"
 )
 
 // TodoDecisionRow is one call the user made on a todo (#1618). SupersedesID names the earlier decision this one

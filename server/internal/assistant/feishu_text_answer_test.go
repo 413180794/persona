@@ -185,6 +185,7 @@ func TestFeishuMessageTypedAnswer(t *testing.T) {
 	s, f, _, _, rs := textAnswerBot(t, nil, ix)
 	seedCard(s, ix)
 	var ev feishubot.MessageEvent
+	ev.Message.ChatType = "p2p"
 	ev.Message.MessageID, ev.Message.MessageType, ev.Message.Content = "om_in", "text", `{"text":"第二个"}`
 	st, _ := s.feishuStatus(context.Background())
 	s.feishuMessage(ev, st, "oa_1")
@@ -202,6 +203,7 @@ func TestTypedAnswerToACardEndedElsewhereIsNotForwarded(t *testing.T) {
 	seedCard(s, ix)
 	s.feishuInteractionDone(ix, "已在 App 中回答")
 	var ev feishubot.MessageEvent
+	ev.Message.ChatType = "p2p"
 	ev.Message.MessageID, ev.Message.MessageType, ev.Message.Content = "om_in", "text", `{"text":"上海"}`
 	st, _ := s.feishuStatus(context.Background())
 	s.feishuMessage(ev, st, "oa_1")
@@ -293,6 +295,7 @@ func TestTypedFreeAnswerInTopic(t *testing.T) {
 	s, f, _, _, rs := textAnswerBot(t, nil, free)
 	seedThreadCard(s, free, "om_topic", 1000)
 	var ev feishubot.MessageEvent
+	ev.Message.ChatType = "p2p"
 	ev.Message.MessageID, ev.Message.RootID, ev.Message.MessageType, ev.Message.Content =
 		"om_in", "om_topic", "text", `{"text":"想换个方案"}`
 	st, _ := s.feishuStatus(context.Background())
@@ -305,6 +308,7 @@ func TestTypedFreeAnswerInTopic(t *testing.T) {
 	s, f, _, _, rs = textAnswerBot(t, nil, free)
 	seedCard(s, free)
 	ev = feishubot.MessageEvent{}
+	ev.Message.ChatType = "p2p"
 	ev.Message.MessageID, ev.Message.MessageType, ev.Message.Content = "om_in2", "text", `{"text":"帮我查天气"}`
 	s.feishuMessage(ev, st, "oa_1")
 	if len(*rs) != 0 || !strings.Contains(sendOnceText(f), "帮我查天气") {
@@ -332,6 +336,7 @@ func TestTypedFreeAnswerInTopic(t *testing.T) {
 	seedThreadCard(s, free, "om_topic", 1000)
 	s.feishuInteractionDone(free, "已在 App 中回答")
 	ev = feishubot.MessageEvent{}
+	ev.Message.ChatType = "p2p"
 	ev.Message.MessageID, ev.Message.RootID, ev.Message.MessageType, ev.Message.Content =
 		"om_in3", "om_topic", "text", `{"text":"帮我看看别的"}`
 	s.feishuMessage(ev, st, "oa_1")

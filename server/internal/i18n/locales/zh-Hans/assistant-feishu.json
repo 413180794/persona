@@ -85,5 +85,9 @@
   "missing_pieces_one": "这条回答有 {count} 段没能发到飞书（第 {pieces} 段），完整内容在 App 里看。",
   "missing_pieces_other": "这条回答有 {count} 段没能发到飞书（第 {pieces} 段），完整内容在 App 里看。",
   "file_too_large": "这些文件太大，没交给助手：{files}。可以放到电脑上，再告诉它路径。",
-  "file_too_large_only": "文件太大（{files}），可以放到电脑上，再告诉助手路径。"
+  "file_too_large_only": "文件太大（{files}），可以放到电脑上，再告诉助手路径。",
+  "thread_unbound": "这个话题还没有绑定待办，你的回复没有转出去。先在 App 里把话题绑到一个待办上。",
+  "thread_done": "这个话题绑定的待办已经完成，你的回复没有转出去。要继续的话，先在 App 里重新打开它。",
+  "thread_question": "在飞书话题里的回复",
+  "thread_recorded_not_sent": "已记在待办上，但没有交给任何人：{error}"
 }

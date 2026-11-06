@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 func golden(t *testing.T, name, got string) {
@@ -105,4 +107,15 @@ func TestGoldenTodoTitle(t *testing.T) {
 	f.hello.Locale = "en"
 	s.todoTitleFromModel(context.Background(), "fix the login crash")
 	golden(t, "todo_title.system_en", f.todoTitleAsked[1].System)
+}
+
+// What a todo's agent gets when the user replies in the todo's chat thread (todo/thread_reply), and the note a Persona
+// conversation gets with a message said there (bot/message); the private chat's note is as it was.
+func TestGoldenTodoThreadReply(t *testing.T) {
+	golden(t, "todo_thread_reply", prompts.RenderTodoThreadReply(prompts.TodoThreadReply{Title: "天气 App 发 1.3 版", Text: "先发安卓，iOS 等审核过了再说", Recorded: true}))
+	golden(t, "todo_thread_reply.unrecorded", prompts.RenderTodoThreadReply(prompts.TodoThreadReply{Title: "天气 App 发 1.3 版", Text: "先发安卓，iOS 等审核过了再说"}))
+	in := prompts.BotMessage{Jarvis: true, Owner: "示例用户", Text: "先发安卓"}
+	golden(t, "bot_message.private", prompts.RenderBotMessage(in))
+	in.Topic = true
+	golden(t, "bot_message.topic", prompts.RenderBotMessage(in))
 }

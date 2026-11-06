@@ -422,7 +422,7 @@ export interface TodoDecision {
   question: string;
   choice: string;
   reason: string;
-  source: "manual" | "card" | "outcome" | "agent" | string;
+  source: "manual" | "card" | "outcome" | "agent" | "thread" | string;
   source_machine: string;
   source_session: string;
   /** The question card (interaction id) it was answered in; empty for one written by hand. */
@@ -438,6 +438,7 @@ export interface TodoDecision {
 export function decisionSourceLabel(d: TodoDecision, todo: Todo, lookup: ReturnType<typeof makeSessionLookup>): string {
   if (d.source === "outcome") return t("lib-todos.decision_outcome");
   if (d.source === "agent") return t("lib-todos.decision_by_agent");
+  if (d.source === "thread") return t("lib-todos.decision_by_thread");
   if (d.source !== "card") return t("lib-todos.decision_manual");
   const title = lookup(d.source_machine, d.source_session)?.title
     || todo.agents?.find((a) => a.machine_id === d.source_machine && a.session_id === d.source_session)?.title;

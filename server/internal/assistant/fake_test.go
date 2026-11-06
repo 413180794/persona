@@ -102,6 +102,7 @@ type fakeHub struct {
 	hubCards       []proto.Interaction // interactions.list: what the hub has up
 	told           []told              // the manager's fleet.* events (Tell)
 	failSend       error               // session.send fails with it
+	failSendOnce   map[string]error    // session.send_once fails with these, by "machine/session"
 	failInterrupt  error               // session.interrupt fails with it
 	failAssistant  error               // assistant.send fails with it (a launcher that cannot start)
 
@@ -177,6 +178,11 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 	var a map[string]any
 	_ = json.Unmarshal(p.Params, &a)
 	switch p.Method {
+	case DeviceSessionSendOnce:
+		if sid, _ := a["session_id"].(string); f.failSendOnce[p.Device+"/"+sid] != nil {
+			return nil, f.failSendOnce[p.Device+"/"+sid]
+		}
+		return json.RawMessage(`{}`), nil
 	case DeviceSessionsList:
 		if f.sessionsFail[p.Device] > 0 { // a node that answers offline for a few tries, then recovers
 			f.sessionsFail[p.Device]--

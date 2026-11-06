@@ -71,7 +71,8 @@ func (s *Service) loadCot(p *cotProgress, r *channel.Run) {
 		}
 	}
 	// The bot-wide refusal only keeps a run from starting one: an agent message already open is finished as usual.
-	p.off = p.off || s.runExt(r, "cot_off") != "" || p.cot == "" && s.cotUnavailable()
+	// A run answering in a topic has none: the hub makes the agent message in the owner's private chat only.
+	p.off = p.off || s.runExt(r, "cot_off") != "" || s.runExt(r, "chat") != "" || p.cot == "" && s.cotUnavailable()
 }
 
 // cotUnavailable: Feishu refused this bot an agent message since the assistant started (the app lacks the

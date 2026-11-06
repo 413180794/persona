@@ -85,5 +85,9 @@
   "missing_pieces_one": "{count} part of this answer couldn't be sent to Lark (part {pieces}); see the whole answer in the app.",
   "missing_pieces_other": "{count} parts of this answer couldn't be sent to Lark (parts {pieces}); see the whole answer in the app.",
   "file_too_large": "These files were too large to pass on: {files}. Put them on a computer and tell the assistant the path.",
-  "file_too_large_only": "the file is too large ({files}). Put it on a computer and tell the assistant the path."
+  "file_too_large_only": "the file is too large ({files}). Put it on a computer and tell the assistant the path.",
+  "thread_unbound": "This topic isn't tied to a to-do, so your reply was not passed on. Tie the topic to a to-do in the app first.",
+  "thread_done": "The to-do tied to this topic is already done, so your reply was not passed on. Reopen it in the app to go on.",
+  "thread_question": "Reply in the Lark topic",
+  "thread_recorded_not_sent": "Noted on the to-do, but not passed to anyone: {error}"
 }

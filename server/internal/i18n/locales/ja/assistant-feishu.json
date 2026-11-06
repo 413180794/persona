@@ -85,5 +85,9 @@
   "missing_pieces_one": "この回答のうち {count} つの部分（{pieces} 番目）を Lark に送れませんでした。全文は App で確認してください。",
   "missing_pieces_other": "この回答のうち {count} つの部分（{pieces} 番目）を Lark に送れませんでした。全文は App で確認してください。",
   "file_too_large": "次のファイルは大きすぎるため渡していません：{files}。コンピューターに置いてパスを伝えてください。",
-  "file_too_large_only": "ファイルが大きすぎます（{files}）。コンピューターに置いてパスを伝えてください。"
+  "file_too_large_only": "ファイルが大きすぎます（{files}）。コンピューターに置いてパスを伝えてください。",
+  "thread_unbound": "このトピックはまだ ToDo に結び付いていないため、返信は渡されませんでした。先にアプリでトピックを ToDo に結び付けてください。",
+  "thread_done": "このトピックに結び付いた ToDo はすでに完了しているため、返信は渡されませんでした。続けるにはアプリで再開してください。",
+  "thread_question": "Lark のトピックでの返信",
+  "thread_recorded_not_sent": "ToDo には記録しましたが、誰にも渡せませんでした：{error}"
 }

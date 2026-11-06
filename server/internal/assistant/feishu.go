@@ -115,6 +115,8 @@ type feishuBook struct {
 	turnWait time.Duration
 	// recalled are the messages the owner recalled lately (FeishuRecalled): one not in its conversation yet is not sent.
 	recalled map[string]time.Time
+	// hinted are the topics told lately that they are tied to no open to-do (threadHint), by chat and thread.
+	hinted map[string]time.Time
 }
 
 // feishuRecalledKeep is how long a recall is remembered: a message waits at most feishuTurnWait for the one before
@@ -836,6 +838,12 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus, acti
 		s.logf("bots: a sticker was accepted silently: no turn")
 		return
 	}
+	if msg.ChatType != "p2p" {
+		// A group chat's message never takes the private chat's road (its commands, its replies, the current target):
+		// the hub does not hand any over yet, and this is the second line when it does (feishu_thread.go).
+		s.threadMessage(ctx, ev, st, content)
+		return
+	}
 	if _, _, isCommand := parseBotCommand(content.Text); isCommand && !content.Forward && len(content.Media) == 0 {
 		handled, rest := s.botCommand(ctx, st.Features, msg.MessageID, content.Text, msg.RootID, msg.ParentID)
 		if handled {
@@ -940,6 +948,13 @@ const (
 
 // botSend passes a message on to its target and starts the run that answers it.
 func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, content feishubot.Content, t botTarget) error {
+	return s.botSendIn(ctx, ev, content, t, nil)
+}
+
+// botSendIn is botSend for a message said in a topic (topic given: the chat and thread of the todo it is bound to,
+// feishu_thread.go): the message quotes and forwards nothing in (what others said there is not the owner's words),
+// and the run's progress, answer and notes go back into that thread (runTo).
+func (s *Service) botSendIn(ctx context.Context, ev *feishubot.MessageEvent, content feishubot.Content, t botTarget, topic *feishuTopic) error {
 	rt, err := s.resolveBotTarget(ctx, t)
 	if err != nil {
 		return err
@@ -955,7 +970,8 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 			s.botUnreact(context.WithoutCancel(ctx), msg.MessageID, reaction)
 		}
 	}()
-	in := prompts.BotMessage{Jarvis: !t.agent(), Owner: s.owner(ctx), Text: content.Text}
+	in := prompts.BotMessage{Jarvis: !t.agent(), Topic: topic != nil, Owner: s.owner(ctx), Text: content.Text}
+	to := topic.target()
 	s.fbot.mu.Lock()
 	_, ours := s.fbot.st.Threads[msg.ParentID]
 	s.fbot.mu.Unlock()
@@ -970,14 +986,14 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 	for _, md := range content.Media {
 		media = append(media, botMedia{of: msg.MessageID, Media: md})
 	}
-	if msg.ParentID != "" && !ours {
+	if msg.ParentID != "" && !ours && topic == nil {
 		var quoted []feishubot.Media
 		in.Quote, quoted = s.botQuote(ctx, msg.ParentID)
 		for _, md := range quoted {
 			media = append(media, botMedia{of: msg.ParentID, quoted: true, Media: md})
 		}
 	}
-	if content.Forward {
+	if content.Forward && topic == nil {
 		in.Forward = s.botForward(ctx, msg.MessageID)
 	}
 	var images []proto.Image
@@ -1043,7 +1059,7 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 	if len(tooLarge) > 0 {
 		defer func() {
 			if started {
-				s.botNote(context.WithoutCancel(ctx), msg.MessageID, i18n.T(s.botLang(ctx), "assistant-feishu.file_too_large", i18n.Args{"files": strings.Join(tooLarge, listSep(s.botLang(ctx)))}))
+				s.botNoteTo(context.WithoutCancel(ctx), to, msg.MessageID, i18n.T(s.botLang(ctx), "assistant-feishu.file_too_large", i18n.Args{"files": strings.Join(tooLarge, listSep(s.botLang(ctx)))}))
 			}
 		}()
 	}
@@ -1052,6 +1068,9 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 		Probe: botProbe(content.Text, in), Ext: map[string]string{}}
 	if reaction != "" {
 		run.Ext["reaction"] = reaction
+	}
+	if topic != nil {
+		run.Ext["chat"], run.Ext["thread"] = topic.Chat, topic.Thread
 	}
 	if rt.isNew {
 		sess, err := s.Start(ctx, StartParams{Text: text, Images: images, Main: rt.main, Origin: OriginChannel, OriginRef: channel.Feishu})
@@ -1237,14 +1256,17 @@ func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Dura
 		}
 		return
 	}
-	mid, err := s.botPost(ctx, r.ReplyTo, c, "")
+	to := runTo(s.runExts(r, "chat", "thread"))
+	mid, err := s.botPostTo(ctx, to, r.ReplyTo, c, "", "")
 	if err != nil {
 		s.logf("bots: progress card: %v", err)
 		return
 	}
 	prog.sentCard, prog.backoff, prog.quietUntil = sum, 0, time.Time{}
 	s.setRunExt(r, "card", mid)
-	s.rememberBotThread(mid, botTargetOf(r), r.Label)
+	if to.ChatID == "" { // a topic's messages never reach the private chat's routing
+		s.rememberBotThread(mid, botTargetOf(r), r.Label)
+	}
 }
 
 // liveView is what the progress card shows besides the steps (a copy of chanLive's notes) and the time now.
@@ -1334,10 +1356,12 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 		processPanel(l, c, steps)
 		cards = []botAnswerCard{{card: c.Note(foot)}}
 	}
+	// r is a copy of the run (channels_runs.go): its Ext is read without the lock.
+	to := runTo(r.Ext)
 	var missing []int // the pieces that did not get out (1-based): said at the end, not sent again
 	defer func() {
 		if len(missing) > 0 {
-			s.botNote(ctx, r.ReplyTo, missingPiecesNote(l, missing))
+			s.botNoteTo(ctx, to, r.ReplyTo, missingPiecesNote(l, missing))
 		}
 	}()
 	for i, ac := range cards {
@@ -1365,7 +1389,7 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 			}
 		}
 		if mid == "" {
-			mid, err = s.botPost(ctx, r.ReplyTo, c, piece)
+			mid, err = s.botPostTo(ctx, to, r.ReplyTo, c, piece, "")
 		}
 		if err != nil {
 			if i == 0 && unreachable(err) {
@@ -1375,7 +1399,9 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 			missing = append(missing, i+1)
 			continue
 		}
-		s.rememberBotThread(mid, botTargetOf(r), r.Label)
+		if to.ChatID == "" {
+			s.rememberBotThread(mid, botTargetOf(r), r.Label)
+		}
 	}
 	if !final {
 		return nil

@@ -24,6 +24,17 @@ func RenderTodoDecisions(d TodoDecisions) string {
 	return render("todo/decisions", d)
 }
 
+// TodoThreadReply is what the user said in the chat thread a todo is bound to, as it goes to the todo's agent (todo/thread_reply,
+// #5279, docs/todos.md "Chat thread"): one line saying whose decision it is, then the words as they were said. Title
+// is the todo's, on one line, with nothing in it that closes a context block; Recorded: the words were written into
+// the todo's decisions (it is not said when they were not: a message of only a picture, no database, a failed write).
+type TodoThreadReply struct {
+	Title, Text string
+	Recorded    bool
+}
+
+func RenderTodoThreadReply(r TodoThreadReply) string { return render("todo/thread_reply", r) }
+
 // TodoTitle is the system prompt naming a todo a task opened after what the agent is asked to do (todo/title, #2775,
 // docs/todos.md "To-do titles").
 type TodoTitle struct {

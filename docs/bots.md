@@ -109,6 +109,10 @@ Defaults (when first turned on) are `main`, `cards` and `reports` (`reports` was
      When a stretch of text or a "备注：" line has lots of escaping (`<` takes 5 bytes in a card) and 6000 characters exceed 24000 bytes, it's cut smaller by bytes, so even a single stretch never pushes a card past 30 KB.
 6. Turns started from Lark and answered in Lark no longer push a "done" notification to the phone (`botAnswered`), and `sync` doesn't send them again.
 
+## Group chat messages (assistant side)
+
+The bot still handles nothing from a group today: the hub drops every message that is not the owner's DM (`bots_chat.go`). The assistant is ready for the step that opens topic groups (the hub's whitelist, the opt-in command and the gate come in the next PR), and does not rely on the hub being closed: a `feishu.message` whose `chat_type` is not `p2p` goes to `threadMessage`, not to the road above (no commands, no card answers, no `botTargetFor`, never the current target). The to-do bound to the message's topic takes it as a `source = "thread"` decision and its Agent (else the conversation that opened it, else the main chat) gets it; the answer, progress card and notes go back into the same topic with `chat_id` and `in_thread`. A topic with no open to-do gets one hint per 10 minutes. Details: `docs/todos.md` ("Replies in the thread").
+
 ## Commands
 
 `/help`, `/main`, `/new [first message]`, `/list`, `/agents [keyword]`, `/start [what it should do]` (a form to pick a machine and fill in a directory), `/stop` (Chinese aliases `/停止`, `/停`; interrupts the turn: sent in a message's thread / as a reply to it, it interrupts the chat or Agent bound to that message, otherwise the current target), `/status` (picks the target the same way from the reply / thread binding: who messages go to now, how many answers are pending).
