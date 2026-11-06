@@ -365,6 +365,9 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 **系统设置**
 - 没有 Dock 图标（`LSUIElement`）。
 - 不开沙盒：要读写 `~/.persona` 里的 socket 和配置。
+- Info.plist 注册了 `jarvis` 和 `persona` 两个 URL scheme（#4198）：在备忘录、AirDrop、邮件、Safari 里点 `jarvis://link?…` 会打开配对窗口并预填，见下面「配对窗口」。
+  App 没签名公证：第一次打开要在 Finder 里右键 › 打开，过一次 Gatekeeper 的提示；scheme 要在 App 打开过一次之后才登记到系统里，之前点链接打不开它。
+  同一台 Mac 上装着 Mac App（`PersonaMac`，也注册了这两个 scheme）时，系统可能把链接交给它：它认出 `link` 链接就转给 Persona Link（按可执行文件 `JarvisLink` 找，bundle id 可配置），没装 Persona Link 时提示先装，不会拿它配对；iPhone 的 Persona 收到时提示「在要加入的那台电脑上打开这条链接」。
 - Info.plist 写了 `NSLocalNetworkUsageDescription`：macOS 15 起，连内网地址要本地网络权限，第一次连内网时系统会弹窗问。
   拒绝的话，内网候选会报「不可达」，要去 系统设置 › 隐私与安全性 › 本地网络 里打开。
 
@@ -380,12 +383,13 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 
 | 状态 | 图标 |
 | --- | --- |
-| 已连接（被动模式：hub 连进来了） | `personalhotspot` |
+| 已连上（被动模式：hub 连进来了） | `personalhotspot` |
+| 连上了，等你在手机上确认（`pending`） | `hourglass` |
 | 连接中 | `arrow.triangle.2.circlepath` |
 | 被动模式在监听、等 hub 连进来 | `antenna.radiowaves.left.and.right` |
-| 未连接或出错（被动模式：监听不了） | `personalhotspot.slash` |
+| 离线或出错（被动模式：监听不了） | `personalhotspot.slash` |
 | 未配对 | `link.badge.plus` |
-| 链路通了，但 hub 连不上本机 node | `exclamationmark.triangle` |
+| 链路通了，但这台电脑上的 Persona 后台服务（常驻 node）没在运行 | `exclamationmark.triangle` |
 
 **菜单**
 - 第二行是模式：「我去连 hub（主动）」，或「让 hub 来连（被动）· 监听 :18663」。
@@ -394,12 +398,18 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
   或者监听不了（端口被占用等，多久后重试）。
 - 连着哪台 hub、所在互联组几台：「hub「家里」· 互联组共 3 台 hub」，只有一台时「hub「家里」· 没和别的 hub 互联」；没连上时只写名字。
   旧 hub 不发名字时没有这一行，菜单和以前一样。
+- 第一行用大白话说状态：未配对「还没连上 hub」（菜单项是「粘贴配对链接…」）；「已连上 hub」；hub 还在等确认时「等你在手机上确认」加「在手机 App 里点「是我的电脑」」；
+  常驻 node 没在运行时「这台电脑上的 Persona 后台服务没在运行」，菜单里有「重新安装」（`jarvis-link node uninstall` 再 `node install`，`~/.persona/bin/jarvisd` 留着）；「连接中」「离线」。
+  「等你确认」看状态行的 `pending`：hub 还不发这个字段（#4655），现在这段时间显示「已连上」。
 - 立即重连（被动模式没有：是 hub 来连）、配对 / 修改连接…、安装本机 node 服务（只在没装时出现）、登录时启动、退出。
 
 **配对窗口**
 - 顶上选「我去连 hub（主动）」或「让 hub 来连（被动）」，默认是现在的模式；只是看，不切换。切换发生在配对时（主动：粘贴链接配对；被动：生成配对链接），
   或者点「改用这个」（那个模式以前配对过，不用重新配对，`jarvis-link mode`）。
-- 主动：粘贴配对链接，必要时填机器 id。App 调 `jarvis-link pair`，成功的结果或错误都显示在窗口里。列出候选地址，正在用的那个标「在用」；
+- 主动：粘贴手机或网页「添加电脑」给的配对链接，或者直接点开它（URL scheme 打开窗口并预填）。**不自动配对**：窗口里先写出要连的 hub（链接里 `url` 的主机）、
+  带了指纹（`fp`）时写「已带安全指纹」、这台在 hub 上叫什么，用户点「配对」才执行：一条被转发、伪造的链接不能自己把这台电脑交给别人的 hub。
+  只认 `link` 这个 host；`jarvis://pair?…` 之类别的链接，窗口里说「这是给手机 / Mac App 用的链接」，不填也不做别的。
+  机器 id 收在「高级」里（链接没写 `machine` 时才有，比如 `personad hub pair` 不带 `--machine` 打的链接）。App 调 `jarvis-link pair`，成功的结果或错误都显示在窗口里。列出候选地址，正在用的那个标「在用」；
   可以手动加一个地址（`jarvis-link address add`），手动加的可以移除。
 - 被动：填监听地址（默认 `:18663`），「生成配对链接」调 `jarvis-link pair --listen`，显示链接（可以选中、有「复制」）、链接里的地址和防火墙提示；
   已经配对过时写着和哪台 hub、这台叫什么。
@@ -424,6 +434,7 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 - 被动模式另有 `listen`（在哪监听）、`addrs`（hub 可以用的本机地址，`host:port`，好的在前）、`last_seen` 和 `from`（hub 最后一次来的时间和地址）、
   `code_expires`（`pair --listen` 的码到什么时候）。
 - `node`：`online` / `offline` / `unknown`，原因在 `node_error`。
+- `pending`（待做，#4655）：`true` 时 hub 还在等用户在 App 里确认这台电脑；没有这个字段按已确认处理。
 - `waiting` / `refused` 时带 `error`（多个候选的失败用「；」隔开）和 `retry`（下次尝试的时间）。
 - `hub_name`、`mesh_hubs`：见「hub 的名字和互联组」，旧 hub 时没有。
 - `pending`：只在 `connected` 时有意义，`true` 是 hub 还在等用户确认这台电脑（见「待确认」）；没有这一项或 `false` 按已确认处理。

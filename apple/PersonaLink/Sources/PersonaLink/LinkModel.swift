@@ -38,12 +38,15 @@ struct LinkStatus: Decodable, Equatable {
     /// "system": the hub sits behind an HTTPS reverse proxy and is checked with the system's CAs and its host name, not
     /// a pin (docs/link.md「hub 在反向代理后面」); nil when pinned or with older helpers.
     var trust: String?
+    /// The hub still waits for someone to confirm this computer in the phone App or on the web (「是我的电脑」,
+    /// docs/onboarding.md 4.2). Helpers and hubs that do not say yet send nothing: shown as connected.
+    var pending: Bool?
 
     var passive: Bool { mode == "passive" }
     var systemTrust: Bool { trust == "system" }
 
     enum CodingKeys: String, CodingKey {
-        case state, machine, address, kind, since, node, error, retry, endpoints, mode, listen, addrs, from, trust
+        case state, machine, address, kind, since, node, error, retry, endpoints, mode, listen, addrs, from, trust, pending
         case nodeError = "node_error"
         case hubName = "hub_name"
         case meshHubs = "mesh_hubs"
@@ -94,14 +97,15 @@ struct NodeService: Decodable, Equatable {
     }
 }
 
-/// What the menu bar shows: the four states of the link, a link that is up while the node is not, and passive mode
-/// listening for the hub.
+/// What the menu bar shows: the four states of the link, a link that is up while the node is not or while the hub
+/// waits for the user to confirm this computer, and passive mode listening for the hub.
 enum LinkLook {
-    case connected, nodeMissing, connecting, listening, down, unpaired
+    case connected, awaitingConfirm, nodeMissing, connecting, listening, down, unpaired
 
     var symbol: String {
         switch self {
         case .connected: "personalhotspot"
+        case .awaitingConfirm: "hourglass"
         case .nodeMissing: "exclamationmark.triangle"
         case .connecting: "arrow.triangle.2.circlepath"
         case .listening: "antenna.radiowaves.left.and.right"
@@ -188,6 +192,12 @@ enum LinkText {
     /// The resident node's service; nil until asked.
     private(set) var nodeService: NodeService?
     private(set) var nodeNote: String?
+    /// A pairing link opened from outside (`jarvis://link?…`), for the pairing window to fill in; it never pairs by
+    /// itself. `incomingNotice`: a link of ours that is not for this app, said in the window instead.
+    private(set) var incoming: PairLink?
+    private(set) var incomingNotice: String?
+    /// How many times pairing ran (`jarvis-link pair`): only the 「配对」 (Pair) button does it.
+    private(set) var pairRuns = 0
 
     @ObservationIgnored private var process: Process?
     @ObservationIgnored private var keepStdin: Pipe?
@@ -223,8 +233,10 @@ enum LinkText {
     var look: LinkLook {
         if helperDown != nil { return .down }
         switch status?.state {
-        case "connected": return status?.node == "offline" ? .nodeMissing : .connected
-        case "listening": return status?.node == "offline" ? .nodeMissing : .listening
+        case "connected", "listening":
+            if status?.pending == true { return .awaitingConfirm }
+            if status?.node == "offline" { return .nodeMissing }
+            return status?.state == "connected" ? .connected : .listening
         case "connecting", nil: return .connecting
         case "unpaired": return .unpaired
         default: return .down
@@ -367,7 +379,28 @@ enum LinkText {
 
     // MARK: pairing and addresses: one-off runs of the helper, which owns link.json
 
+    /// A `jarvis://` / `persona://` link opened from outside: the pairing window fills in a link for this app and says
+    /// what a link for another one is. Nothing is sent to any hub here.
+    func openLink(_ url: URL) {
+        let parsed = PairLink.parse(url)
+        if case .link(let l) = parsed {
+            incoming = l
+            incomingNotice = nil
+        } else if let notice = PairLink.notice(for: parsed) {
+            incoming = nil
+            incomingNotice = notice
+        }
+    }
+
+    /// The pairing window took the incoming link into its field.
+    func clearIncoming() { incoming = nil }
+
+    /// The notice about a link for another app goes once the user pairs or opens a link for this one.
+    func clearNotice() { incomingNotice = nil }
+
     func pair(link: String, machine: String) async -> (ok: Bool, message: String) {
+        pairRuns += 1
+        incomingNotice = nil
         var args = ["pair"]
         let id = machine.trimmingCharacters(in: .whitespacesAndNewlines)
         if !id.isEmpty { args += ["--machine", id] }
@@ -443,6 +476,15 @@ enum LinkText {
         let r = await Self.runHelper(["node", "install", "--jarvisd", Self.jarvisdURL.path], stdin: nil)
         if !r.ok { nodeNote = r.message }
         await refreshNodeService()
+    }
+
+    /// The resident node's service is there but not running: set it up again (`node uninstall` keeps the jarvisd in
+    /// ~/.persona/bin, `node install` loads the service anew).
+    func reinstallNode() async {
+        nodeNote = nil
+        _ = await Self.runHelper(["node", "uninstall"], stdin: nil)
+        await installNode()
+        if nodeNote == nil { signal(SIGUSR1) }
     }
 
     /// The first time the app runs it sets up the resident node itself (one app is the whole node service); after

@@ -6,6 +6,9 @@ nonisolated enum MacOpenURL {
         case session(SessionKey)
         case app
         case pair
+        /// `jarvis://link?…`: a computer's pairing link, for Persona Link on the computer joining the hub; this app
+        /// hands it over (or says to install Persona Link) and never pairs with it (#4198).
+        case computerLink
         case ignore
     }
 
@@ -20,6 +23,7 @@ nonisolated enum MacOpenURL {
             // "group|machine" for another group's row (FleetMerge); resolved against the groups where it is opened.
             return SessionKey(path: m + "/" + s).map { .session($0) } ?? .app
         case "pair": return .pair
+        case "link": return .computerLink
         default: return .ignore
         }
     }

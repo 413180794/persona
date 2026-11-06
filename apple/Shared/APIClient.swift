@@ -4,15 +4,23 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
     var url: URL
     var token: String
 
-    /// Parses both `persona://pair?url=…&token=…` and the legacy `jarvis://` link.
+    /// Parses both `persona://pair?url=…&token=…` and the legacy `jarvis://` link. Not a computer's `…://link?…`
+    /// (`isComputerLink`, for Persona Link on that computer): its one-time code would pair this device in its place.
     init?(pairURL: String) {
         guard let comps = URLComponents(string: pairURL.trimmingCharacters(in: .whitespacesAndNewlines)),
               ["persona", "jarvis"].contains(comps.scheme?.lowercased() ?? ""),
+              comps.host?.lowercased() != "link",
               let u = comps.queryItems?.first(where: { $0.name == "url" })?.value, let url = URL(string: u),
               let token = comps.queryItems?.first(where: { $0.name == "token" })?.value, !token.isEmpty
         else { return nil }
         self.url = url
         self.token = token
+    }
+
+    /// `jarvis://link?…` / `persona://link?…`: the pairing link a signed-in device made for one computer (「添加电脑」, Add computer).
+    /// It is opened on that computer, by Persona Link; a phone or the Mac app only says so.
+    static func isComputerLink(_ url: URL) -> Bool {
+        ["persona", "jarvis"].contains(url.scheme?.lowercased() ?? "") && url.host()?.lowercased() == "link"
     }
 
     init(url: URL, token: String) {

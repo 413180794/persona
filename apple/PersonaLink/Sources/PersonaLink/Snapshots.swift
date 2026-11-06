@@ -73,6 +73,11 @@ import SwiftUI
             ("connected-proxy", LinkStatus(state: "connected", machine: "macbook", address: proxied[0].url, kind: "name",
                                            since: now.addingTimeInterval(-600), node: "online", endpoints: proxied, hubName: "家里",
                                            meshHubs: 1, trust: "system"), nil),
+            // Paired from a link the phone made: the hub waits for 「是我的电脑」 (pending).
+            ("awaiting-confirm", status("connected") {
+                $0.address = endpoints[0].url; $0.kind = "lan"; $0.since = now.addingTimeInterval(-40); $0.node = "online"
+                $0.hubName = "家里"; $0.meshHubs = 1; $0.pending = true
+            }, nil),
         ]
         for dark in [false, true] {
             let mode = dark ? "dark" : "light"
@@ -113,14 +118,29 @@ import SwiftUI
             let viaProxy = LinkModel()
             viaProxy.show(menus.last!.1, endpoints: proxied, machine: "macbook")
             png(PairView(model: viaProxy), dark: dark, to: dir.appendingPathComponent("pair-proxy-\(mode).png"))
+            // A `jarvis://link?…` link opened from outside: the window filled in, waiting for 「配对」 (Pair).
+            let opened = LinkModel()
+            opened.show(LinkStatus(state: "unpaired"))
+            opened.openLink(URL(string: "jarvis://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_ZXhhbXBsZQ&machine=macbook&hub=h_example&fp=Wm9vb3ZlcnRoZW1vb24&tls=18662")!)
+            png(PairView(model: opened), dark: dark, to: dir.appendingPathComponent("pair-opened-link-\(mode).png"))
+            // The phone's link (jarvis://pair?…) opened here: said, nothing filled in.
+            let other = LinkModel()
+            other.show(LinkStatus(state: "unpaired"))
+            other.openLink(URL(string: "jarvis://pair?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_ZXhhbXBsZQ")!)
+            png(PairView(model: other), dark: dark, to: dir.appendingPathComponent("pair-other-app-link-\(mode).png"))
+            // A link without a machine (pasted from `personad hub pair`): the machine id under 「高级」 (Advanced).
+            let fresh3 = LinkModel()
+            fresh3.show(LinkStatus(state: "unpaired"))
+            png(PairView(model: fresh3), dark: dark, to: dir.appendingPathComponent("pair-empty-\(mode).png"))
             png(icons(dark: dark), dark: dark, to: dir.appendingPathComponent("icons-\(mode).png"), plain: true)
         }
     }
 
     /// The menu bar icons as they look there: the template symbol in the bar's text color.
     static func icons(dark: Bool) -> some View {
-        let looks: [(LinkLook, String)] = [(.connected, "已连接"), (.connecting, "连接中"), (.listening, "等 hub 来连"),
-                                           (.down, "未连接或出错"), (.unpaired, "未配对"), (.nodeMissing, "node 没在跑")]
+        let looks: [(LinkLook, String)] = [(.connected, "已连上"), (.awaitingConfirm, "等你确认"), (.connecting, "连接中"),
+                                           (.listening, "等 hub 来连"), (.down, "离线或出错"), (.unpaired, "未配对"),
+                                           (.nodeMissing, "后台服务没在运行")]
         return HStack(spacing: 18) {
             ForEach(looks, id: \.1) { look, title in
                 VStack(spacing: 6) {

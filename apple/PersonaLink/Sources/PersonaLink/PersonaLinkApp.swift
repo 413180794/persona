@@ -13,11 +13,18 @@ struct PersonaLinkApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        // A `jarvis://link?…` / `persona://link?…` link opened anywhere (Notes, AirDrop, Mail, Safari) opens this window
+        // with the link filled in (Info.plist CFBundleURLTypes); pairing still waits for the 「配对」 (Pair) button.
         Window("配对 / 修改连接", id: "pair") {
             PairView(model: model)
+                .onOpenURL { url in
+                    model.openLink(url)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)
+        .handlesExternalEvents(matching: ["*"])
     }
 }
 

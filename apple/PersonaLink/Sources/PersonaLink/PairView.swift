@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// 「配对 / 修改连接」 (Pair / Change Connection): choose how this Mac and the hub find each other. Active (「我去连 hub」): paste the link `jarvisd hub
-/// pair` printed, and look at or add the hub's addresses. Passive (「让 hub 来连」): make the link the hub's admin page takes.
+/// 「配对 / 修改连接」 (Pair / Change Connection): choose how this Mac and the hub find each other. Active (「我去连 hub」): paste
+/// the link the phone or the web made in 「添加电脑」 (or open it: `jarvis://link?…` fills this in), and look at or add the
+/// hub's addresses. Passive (「让 hub 来连」): make the link the hub's admin page takes.
 struct PairView: View {
     let model: LinkModel
     @State private var link = ""
@@ -16,6 +17,7 @@ struct PairView: View {
     @State private var invite: (link: String, note: String)?
     @State private var inviteError: String?
     @State private var copied = false
+    @State private var advanced = false
 
     init(model: LinkModel, link: String = "", machine: String = "", result: (ok: Bool, message: String)? = nil,
          newAddress: String = "", addressError: String? = nil, tab: String? = nil, invite: (link: String, note: String)? = nil) {
@@ -176,7 +178,18 @@ struct PairView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.pairedMachine == nil ? "配对这台电脑" : "重新配对").font(.title3.weight(.semibold))
             switchBack(to: "active", paired: model.pairedMachine != nil, what: "现在是「让 hub 来连」。主动模式的配对还在，不用重新配对。")
-            Text("在 hub 所在的机器上运行 `jarvisd hub pair --machine <这台的 id> --add`，把拿到的链接粘贴到下面。链接 10 分钟内有效，只能用一次。")
+            if let notice = model.incomingNotice {
+                Label {
+                    Text(notice).fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "info.circle.fill").foregroundStyle(.orange)
+                }
+                .font(.callout)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            }
+            Text("在手机或网页的「添加电脑」里拷贝配对链接，粘贴到这里（或者直接点开那条链接）。链接 10 分钟内有效，只能用一次。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -184,9 +197,20 @@ struct PairView: View {
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.callout, design: .monospaced))
                 .truncationMode(.middle)
-            HStack(spacing: 10) {
-                TextField("机器 id（链接里带了就不用填）", text: $machine)
-                    .textFieldStyle(.roundedBorder)
+            if let parsed = parsedLink {
+                linkSummary(parsed)
+            }
+            if parsedLink?.machine == nil { // a link made for this computer names it: nothing to fill in then
+                DisclosureGroup(isExpanded: $advanced) {
+                    TextField("机器 id（链接里带了就不用填）", text: $machine)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.top, 6)
+                } label: {
+                    Text("高级").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            HStack {
+                Spacer(minLength: 8)
                 Button {
                     Task { await pair() }
                 } label: {
@@ -205,6 +229,55 @@ struct PairView: View {
                 .font(.callout)
             }
         }
+        .onChange(of: model.incoming, initial: true) { _, incoming in
+            guard let incoming else { return }
+            fill(incoming)
+            model.clearIncoming()
+        }
+    }
+
+    /// The link in the field, when it is one for this app.
+    private var parsedLink: PairLink? {
+        if case .link(let l) = PairLink.parse(link) { return l }
+        return nil
+    }
+
+    /// Which hub the link pairs with, said before anything is sent: the user checks it, then taps 「配对」 (Pair).
+    private func linkSummary(_ l: PairLink) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label {
+                Text(l.hubHost.map { "要连的 hub：\($0)" } ?? "链接里没写 hub 的地址").textSelection(.enabled)
+            } icon: {
+                Image(systemName: "server.rack").foregroundStyle(.secondary)
+            }
+            if l.pinned {
+                Label {
+                    Text("已带安全指纹：只连配对时的那台 hub")
+                } icon: {
+                    Image(systemName: "lock.shield").foregroundStyle(.green)
+                }
+            }
+            if let m = l.machine {
+                Label {
+                    Text("这台电脑在 hub 上叫「\(m)」")
+                } icon: {
+                    Image(systemName: "laptopcomputer").foregroundStyle(.secondary)
+                }
+            }
+        }
+        .font(.callout)
+        .labelStyle(StatusLabelStyle())
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Fills the window in from a link opened outside; never pairs.
+    private func fill(_ l: PairLink) {
+        tab = "active"
+        link = l.raw
+        machine = l.machine ?? ""
+        result = nil
     }
 
     private var addresses: some View {
@@ -269,7 +342,8 @@ struct PairView: View {
 
     private func pair() async {
         busy = true
-        result = await model.pair(link: link, machine: machine)
+        // A link made for this computer names it; the field is only for links that do not (「高级」, Advanced).
+        result = await model.pair(link: link, machine: parsedLink?.machine == nil ? machine : "")
         busy = false
         if result?.ok == true { link = "" }
     }

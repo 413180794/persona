@@ -20,6 +20,20 @@
 	<string>6.0</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Persona Link pairing link</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>jarvis</string>
+				<string>persona</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>

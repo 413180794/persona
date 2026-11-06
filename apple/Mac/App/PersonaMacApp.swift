@@ -84,7 +84,7 @@ struct PersonaMacApp: App {
 
 extension AppModel {
     /// `jarvis://pair?…` (a link from `jarvisd hub pair`, or pasted): pair with that hub.
-    /// A `jarvis://` link from outside (MacOpenURL): open a chat, or pair.
+    /// A `jarvis://` link from outside (MacOpenURL): open a chat, pair, or hand a computer's link to Persona Link.
     func openURL(_ url: URL) {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "macWindowLog") { // how many main windows a link leaves (docs/mac.md)
@@ -98,6 +98,7 @@ extension AppModel {
         switch MacOpenURL.route(url) {
         case .session(let key): MacShellState.shared.open(resolve(path: key.path) ?? key, self)
         case .pair: openPairing(url)
+        case .computerLink: openComputerLink(url)
         case .app, .ignore: break
         }
     }

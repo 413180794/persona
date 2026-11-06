@@ -42,7 +42,9 @@ Add this Mac in the web client already connected to your hub, get a pairing link
 
 1. Open **Machines** in the web client, click **Add computer**, choose Mac, give it a name (Chinese is supported too, such as "我的 MacBook"—"My MacBook"), and click Next. **Add computer** on iPhone and Android is still in progress; use the web client for now.
 2. A pairing link appears. Click **Copy pairing link** or **Share…** and send it to this Mac (Notes, AirDrop, or email all work).
-3. On this Mac, click the Persona Link menu-bar icon › **Pair…**, keep the default **I connect to hub (active)**, paste the link, and click Pair.
+3. On this Mac, open the link directly: Persona Link opens its pairing window with the link filled in. Or click the Persona Link menu-bar icon › **粘贴配对链接…** (Paste pairing link), keep the default **I connect to hub (active)**, and paste the link.
+   Check that the hub shown in the window (「要连的 hub」) is yours, then click Pair: opening a link never pairs by itself.
+   The app is not signed or notarized: open it the first time with right-click › Open in Finder. Clicking a link works only after the app has been opened once.
 4. Return to that web screen. It asks, "A computer wants to join: <name>. Is it yours?" Click **It's my computer**.
    Before confirmation, this Mac cannot receive Persona-managed model keys, and Persona will not run work on it. It is deleted automatically if not confirmed within 24 hours. If you closed that screen, you can also confirm on the computer's card in the machine list.
 5. Success: the icon shows connected; the menu says "Local node online" and "This computer is '<name>' on the hub"; this computer is online in the web and mobile machine lists.

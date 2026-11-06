@@ -24062,6 +24062,28 @@
         }
       }
     },
+    "在要加入的那台电脑上打开这条链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open this link on the computer you're adding"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加するコンピュータでこのリンクを開いてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在要加入的那台电脑上打开这条链接"
+          }
+        }
+      }
+    },
     "处理链条": {
       "localizations": {
         "en": {
@@ -24322,6 +24344,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "总结"
+          }
+        }
+      }
+    },
+    "打不开 Persona Link：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't open Persona Link: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona Link を開けません：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打不开 Persona Link：%@"
           }
         }
       }
@@ -96707,6 +96751,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台电脑经 Persona Link 连到 hub。"
+          }
+        }
+      }
+    },
+    "这是给 Persona Link 的配对链接，先装 Persona Link": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This pairing link is for Persona Link. Install Persona Link first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これは Persona Link 用のペアリングリンクです。先に Persona Link をインストールしてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是给 Persona Link 的配对链接，先装 Persona Link"
           }
         }
       }

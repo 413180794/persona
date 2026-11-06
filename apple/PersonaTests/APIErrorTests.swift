@@ -11,6 +11,13 @@ struct APIErrorTests {
         }
         #expect(ServerConfig(pairURL: "https://pair?url=https%3A%2F%2Fhub.example.com&token=fixture") == nil)
         #expect(ServerConfig(pairURL: "persona://pair?url=https%3A%2F%2Fhub.example.com&token=") == nil)
+        // A computer's link (「添加电脑」, Add computer) is for Persona Link on that computer: this device never pairs with it (#4198).
+        for scheme in ["persona", "jarvis", "JARVIS"] {
+            let link = "\(scheme)://link?url=https%3A%2F%2Fhub.example.com&token=fixture&machine=macbook"
+            #expect(ServerConfig(pairURL: link) == nil)
+            #expect(ServerConfig.isComputerLink(URL(string: link)!))
+        }
+        #expect(!ServerConfig.isComputerLink(URL(string: "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=t")!))
     }
     /// An id the caller escaped (a Knowledge project slug with Chinese in it) reaches the hub once escaped, not twice (404).
     @MainActor @Test func escapedIdsAreNotEscapedAgain() throws {
