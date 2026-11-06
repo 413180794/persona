@@ -34,10 +34,13 @@ type Runner func(ctx context.Context, env []string, name string, args ...string)
 // Container is one Postgres container and its volume.
 type Container struct {
 	Name, Volume string
-	Port         int // the host port it is published on (127.0.0.1:<Port>) when it is made
-	Run          Runner
-	Sleep        func(time.Duration)
-	Wait         time.Duration // how long Start waits for Postgres to answer
+	// User and Database are the role and database its Postgres was made with; "" is the package's (User, Database).
+	// An existing container keeps its own: one made before the rename has jarvis (#6149), read with Identity.
+	User, Database string
+	Port           int // the host port it is published on (127.0.0.1:<Port>) when it is made
+	Run            Runner
+	Sleep          func(time.Duration)
+	Wait           time.Duration // how long Start waits for Postgres to answer
 }
 
 // Why Docker can't be used (CheckDocker).
@@ -84,7 +87,7 @@ func (c *Container) Create(ctx context.Context, password string) error {
 	// goes through the environment (-e NAME with no value), not the command line others can read.
 	args := []string{"run", "-d", "--name", c.Name, "--restart", "unless-stopped",
 		"-p", fmt.Sprintf("127.0.0.1:%d:5432", c.Port), "-v", c.Volume + ":/var/lib/postgresql",
-		"-e", "POSTGRES_USER=" + User, "-e", "POSTGRES_PASSWORD", "-e", "POSTGRES_DB=" + Database, Image}
+		"-e", "POSTGRES_USER=" + c.user(), "-e", "POSTGRES_PASSWORD", "-e", "POSTGRES_DB=" + c.database(), Image}
 	if out, err := c.Run(ctx, []string{"POSTGRES_PASSWORD=" + password}, "docker", args...); err != nil {
 		return &StepError{Step: "run", Output: FirstLine(string(out))}
 	}
@@ -93,16 +96,65 @@ func (c *Container) Create(ctx context.Context, password string) error {
 
 // Password is the password the container was made with (its environment).
 func (c *Container) Password(ctx context.Context) (string, error) {
-	out, err := c.Run(ctx, nil, "docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", c.Name)
+	env, err := c.env(ctx)
 	if err != nil {
 		return "", err
 	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "POSTGRES_PASSWORD="); ok && v != "" {
-			return v, nil
-		}
+	if v := env["POSTGRES_PASSWORD"]; v != "" {
+		return v, nil
 	}
 	return "", errors.New("no POSTGRES_PASSWORD")
+}
+
+// Identity sets User and Database to the ones the container was made with, from its environment (POSTGRES_USER;
+// POSTGRES_DB, else that user, as the postgres image reads them). Every container made here has them; without them
+// the package's stay.
+func (c *Container) Identity(ctx context.Context) error {
+	env, err := c.env(ctx)
+	if err != nil {
+		return err
+	}
+	if u := env["POSTGRES_USER"]; u != "" {
+		c.User, c.Database = u, u
+	}
+	if d := env["POSTGRES_DB"]; d != "" {
+		c.Database = d
+	}
+	return nil
+}
+
+// env is the container's POSTGRES_* environment.
+func (c *Container) env(ctx context.Context) (map[string]string, error) {
+	out, err := c.Run(ctx, nil, "docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", c.Name)
+	if err != nil {
+		return nil, err
+	}
+	env := map[string]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok && strings.HasPrefix(k, "POSTGRES_") {
+			env[k] = v
+		}
+	}
+	return env, nil
+}
+
+func (c *Container) user() string {
+	if c.User != "" {
+		return c.User
+	}
+	return User
+}
+
+func (c *Container) database() string {
+	if c.Database != "" {
+		return c.Database
+	}
+	return Database
+}
+
+// URL is the container's database at port on this machine, as its own user.
+func (c *Container) URL(password string, port int) string {
+	return urlFor(c.user(), c.database(), password, port)
 }
 
 // ErrNotPublished: the container's 5432 is published on no host port (on the host's network, or a container another
@@ -131,9 +183,11 @@ func portTaken(err error) bool {
 	return strings.Contains(s, "port is already allocated") || strings.Contains(s, "address already in use")
 }
 
-// URL is the container's database at port on this machine.
-func URL(password string, port int) string {
-	return fmt.Sprintf("postgres://%s:%s@127.0.0.1:%d/%s?sslmode=disable", User, url.QueryEscape(password), port, Database)
+// URL is a new container's database at port on this machine.
+func URL(password string, port int) string { return urlFor(User, Database, password, port) }
+
+func urlFor(user, database, password string, port int) string {
+	return fmt.Sprintf("postgres://%s:%s@127.0.0.1:%d/%s?sslmode=disable", user, url.QueryEscape(password), port, database)
 }
 
 // Start starts the container and waits until Postgres in it answers (db.sh's 30 seconds). dbURL is the address it was
@@ -154,7 +208,7 @@ func (c *Container) Start(ctx context.Context, dbURL string) error {
 	for {
 		// Over TCP: while a new container initializes, its temporary server answers on the Unix socket only, then
 		// restarts; a socket check would pass in between.
-		if _, err := c.Run(ctx, nil, "docker", "exec", c.Name, "pg_isready", "-h", "127.0.0.1", "-p", inner, "-U", User, "-d", Database); err == nil {
+		if _, err := c.Run(ctx, nil, "docker", "exec", c.Name, "pg_isready", "-h", "127.0.0.1", "-p", inner, "-U", c.user(), "-d", c.database()); err == nil {
 			return nil
 		}
 		if !time.Now().Before(deadline) || ctx.Err() != nil {
@@ -252,9 +306,15 @@ func ProvisionManagerDB(ctx context.Context, managerID string, o ManagerDBOption
 			return "", false, fmt.Errorf("make the database container %s: %w", pg.Name, err)
 		}
 		created = true
-	} else if password == "" {
-		if password, err = pg.Password(ctx); err != nil {
-			return "", false, fmt.Errorf("the database container %s is there but its password can't be read: %w", pg.Name, err)
+	} else {
+		// its own role and database, not today's names: one made before the rename has jarvis (#6149)
+		if err := pg.Identity(ctx); err != nil {
+			return "", false, fmt.Errorf("the database container %s is there but its settings can't be read: %w", pg.Name, err)
+		}
+		if password == "" {
+			if password, err = pg.Password(ctx); err != nil {
+				return "", false, fmt.Errorf("the database container %s is there but its password can't be read: %w", pg.Name, err)
+			}
 		}
 	}
 	err = pg.Start(ctx, "")
@@ -279,7 +339,7 @@ func ProvisionManagerDB(ctx context.Context, managerID string, o ManagerDBOption
 	if err != nil {
 		return "", created, fmt.Errorf("%w: it is not one `personad manager install` made; remove it (docker rm -f %s) or give --database-url", err, pg.Name)
 	}
-	databaseURL = URL(password, port)
+	databaseURL = pg.URL(password, port)
 	if o.Ping == nil {
 		return databaseURL, created, nil
 	}

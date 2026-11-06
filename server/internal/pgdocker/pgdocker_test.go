@@ -13,6 +13,7 @@ import (
 type fake struct {
 	calls     []string
 	password  string
+	user      string // the POSTGRES_USER (and POSTGRES_DB) it was made with
 	exists    bool
 	noDocker  bool
 	port      int  // the port the container publishes (docker port); 0: none
@@ -38,8 +39,13 @@ func (f *fake) run(_ context.Context, env []string, name string, args ...string)
 				f.password = v
 			}
 		}
+		for _, a := range args {
+			if v, ok := strings.CutPrefix(a, "POSTGRES_USER="); ok {
+				f.user = v
+			}
+		}
 	case strings.HasPrefix(call, "docker inspect -f {{range .Config.Env}}"):
-		return []byte("POSTGRES_PASSWORD=" + f.password + "\n"), nil
+		return []byte("POSTGRES_USER=" + f.user + "\nPOSTGRES_PASSWORD=" + f.password + "\nPOSTGRES_DB=" + f.user + "\n"), nil
 	case strings.HasPrefix(call, "docker port"):
 		if !f.published {
 			return nil, errors.New("exit status 1")
@@ -127,5 +133,35 @@ func TestProvisionManagerDBNotPublished(t *testing.T) {
 	if url, _, err := ProvisionManagerDB(context.Background(), "m-0a1b2c", o); !errors.Is(err, ErrNotPublished) || url != "" ||
 		!strings.Contains(err.Error(), "docker rm -f persona-mgr-m-0a1b2c-pg") {
 		t.Fatalf("not published: %q %v", url, err)
+	}
+}
+
+// A manager's container made before the rename has the role and database jarvis (#6149): its URL keeps them, also when
+// it is made again on another port, instead of today's persona, which it has no role for.
+func TestProvisionManagerDBKeepsAnOlderContainersOwnUser(t *testing.T) {
+	f := &fake{exists: true, published: true, port: 25432, user: "jarvis", password: "kept"}
+	ports := []int{25433}
+	o := ManagerDBOptions{Run: f.run, LookPath: func(string) (string, error) { return "/usr/bin/docker", nil },
+		FreePort: func() (int, error) { p := ports[0]; ports = ports[1:]; return p, nil }, Sleep: func(time.Duration) {}, Wait: time.Second}
+	ctx := context.Background()
+	got, created, err := ProvisionManagerDB(ctx, "m-0a1b2c", o)
+	want := "postgres://jarvis:kept@127.0.0.1:25432/jarvis?sslmode=disable"
+	if err != nil || created || got != want || f.count("docker run") != 0 {
+		t.Fatalf("existing: %q %v %v", got, created, err)
+	}
+	if f.count("docker exec persona-mgr-m-0a1b2c-pg pg_isready -h 127.0.0.1 -p 5432 -U jarvis -d jarvis") == 0 {
+		t.Fatalf("asked as another role:\n%s", strings.Join(f.calls, "\n"))
+	}
+	// its port taken meanwhile: made again over the same volume with its own role and database
+	f.taken = 25432
+	o.Password = "kept"
+	moved, _, err := ProvisionManagerDB(ctx, "m-0a1b2c", o)
+	if err != nil || moved != "postgres://jarvis:kept@127.0.0.1:25433/jarvis?sslmode=disable" || f.user != "jarvis" ||
+		f.count("docker run -d --name persona-mgr-m-0a1b2c-pg --restart unless-stopped -p 127.0.0.1:25433:5432 -v persona-mgr-m-0a1b2c-data:/var/lib/postgresql -e POSTGRES_USER=jarvis -e POSTGRES_PASSWORD -e POSTGRES_DB=jarvis") != 1 {
+		t.Fatalf("moved: %q %v\n%s", moved, err, strings.Join(f.calls, "\n"))
+	}
+	// a new one has today's names
+	if c := (&Container{}); c.URL("pw", 1) != URL("pw", 1) || !strings.Contains(URL("pw", 1), "//"+User+":pw@") {
+		t.Fatalf("new: %q", URL("pw", 1))
 	}
 }
