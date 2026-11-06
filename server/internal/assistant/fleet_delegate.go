@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
@@ -26,12 +27,168 @@ import (
 
 // delegable: ix is a question the assistant decides on first.
 func (s *Service) delegable(ix proto.Interaction) bool {
-	if ix.Kind != proto.IxQuestion || len(ix.Questions) == 0 || len(ix.Fields) > 0 || ix.ToolName == "ask_user" {
+	if ix.Kind != proto.IxQuestion || len(ix.Questions) == 0 || len(ix.Fields) > 0 || ix.ToolName == "ask_user" || !asksForInput(ix) {
 		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	return s.hello(ctx).Agents.Delegate.On()
+	if !s.hello(ctx).Agents.Delegate.On() {
+		return false
+	}
+	if s.delegatedBefore(ctx, ix) {
+		s.workEvent(ix.MachineID, ix.SessionID, "delegate_repeat", map[string]any{"questions": len(ix.Questions)})
+		return false
+	}
+	return true
+}
+
+// asksForInput: ix really asks something. An agent's own question (AskUserQuestion, a Codex request) waits for input
+// by itself. A card the manager made from a stopped turn's text (workCardTool) asks only when one of its questions
+// does: it has a question mark, or options of its own to pick from. A turn that ended on a statement ("waiting for the
+// runner and the release") gets the card with only 好，按你说的做 / 先不管 on it: answering that for the user only
+// sends the agent its own statement back, and it says the same again.
+func asksForInput(ix proto.Interaction) bool {
+	if ix.ToolName != workCardTool {
+		return true
+	}
+	for _, q := range ix.Questions {
+		if strings.ContainsAny(q.Question, "?？") {
+			return true
+		}
+		own := 0
+		for _, o := range q.Options {
+			if _, canned := answerKeys[canonicalAnswer(o.Label)]; !canned {
+				own++
+			}
+		}
+		if own >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
+// delegatedAsk is a question the assistant answered for the user: its text as delegateText has it, and when.
+type delegatedAsk struct {
+	text string
+	at   time.Time
+}
+
+// delegateRepeatFor is how long an answer the assistant gave keeps it from answering the same question of the same
+// agent again.
+const delegateRepeatFor = 24 * time.Hour
+
+// delegateText is what ix asks, for telling the same question again apart: its questions' words, without spaces,
+// punctuation or case.
+func delegateText(ix proto.Interaction) string {
+	var b strings.Builder
+	for _, q := range ix.Questions {
+		for _, r := range strings.ToLower(q.Question) {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
+}
+
+// sameAsk: a and b (delegateText's) ask the same thing, word for word or nearly (an agent saying its line again
+// rewords a little: 「等 runner 恢复 + 发版」「等 runner 恢复和发版」).
+func sameAsk(a, b string) bool {
+	if a == b {
+		return true
+	}
+	pairs := func(s string) map[[2]rune]int {
+		r := []rune(s)
+		out := map[[2]rune]int{}
+		for i := 0; i+1 < len(r); i++ {
+			out[[2]rune{r[i], r[i+1]}]++
+		}
+		return out
+	}
+	pa, pb := pairs(a), pairs(b)
+	na, nb, both := 0, 0, 0
+	for k, n := range pa {
+		na += n
+		both += min(n, pb[k])
+	}
+	for _, n := range pb {
+		nb += n
+	}
+	return na+nb > 0 && float64(2*both)/float64(na+nb) >= 0.8
+}
+
+// delegatedBefore: the assistant answered the same question of ix's agent within delegateRepeatFor. It does not
+// answer it again: the agent asking once more means the answer did not settle it, and the user should see it.
+func (s *Service) delegatedBefore(ctx context.Context, ix proto.Interaction) bool {
+	s.loadDelegated(ctx)
+	text := delegateText(ix)
+	if text == "" {
+		return false
+	}
+	cutoff := time.Now().Add(-delegateRepeatFor)
+	s.work.mu.Lock()
+	defer s.work.mu.Unlock()
+	for _, d := range s.work.delegated[[2]string{ix.MachineID, ix.SessionID}] {
+		if d.at.After(cutoff) && sameAsk(d.text, text) {
+			return true
+		}
+	}
+	return false
+}
+
+// rememberDelegated notes that the assistant answered ix for the user (kept in the events, so a restart keeps it).
+func (s *Service) rememberDelegated(ix proto.Interaction) {
+	text := delegateText(ix)
+	if text == "" {
+		return
+	}
+	s.addDelegated([2]string{ix.MachineID, ix.SessionID}, delegatedAsk{text: text, at: time.Now()})
+	s.workEvent(ix.MachineID, ix.SessionID, "delegated", map[string]any{"text": text})
+}
+
+func (s *Service) addDelegated(k [2]string, d delegatedAsk) {
+	cutoff := time.Now().Add(-delegateRepeatFor)
+	s.work.mu.Lock()
+	defer s.work.mu.Unlock()
+	if s.work.delegated == nil {
+		s.work.delegated = map[[2]string][]delegatedAsk{}
+	}
+	kept := []delegatedAsk{d}
+	for _, o := range s.work.delegated[k] {
+		if o.at.After(cutoff) {
+			kept = append(kept, o)
+		}
+	}
+	s.work.delegated[k] = kept
+}
+
+// loadDelegated reads the answers the assistant gave within delegateRepeatFor back from the events, once.
+func (s *Service) loadDelegated(ctx context.Context) {
+	s.work.mu.Lock()
+	loaded := s.work.delegatedLoaded
+	s.work.mu.Unlock()
+	st := s.workDB()
+	if loaded || st == nil {
+		return
+	}
+	events, err := st.WorkEvents(ctx, time.Now().Add(-delegateRepeatFor))
+	if err != nil {
+		s.logf("delegate: read back the answers given: %v", err)
+		return // tried again next time
+	}
+	s.work.mu.Lock()
+	if s.work.delegatedLoaded {
+		s.work.mu.Unlock()
+		return
+	}
+	s.work.delegatedLoaded = true
+	s.work.mu.Unlock()
+	for _, e := range events {
+		if text, _ := e.Detail["text"].(string); e.Kind == "delegated" && text != "" {
+			s.addDelegated([2]string{e.MachineID, e.SessionID}, delegatedAsk{text: text, at: e.At})
+		}
+	}
 }
 
 // delegate shows ix as delegating and has the assistant decide on it, in the background.
@@ -75,6 +232,9 @@ func (s *Service) delegateNow(ix proto.Interaction) {
 		s.logf("delegate %s: %v; asking the user", ix.ID, d.err)
 	case d.res.Answer:
 		ok, err := s.answerQuestion(ix.MachineID, ix.SessionID, ix.ID, d.res.Answers, d.res.Reason)
+		if ok {
+			s.rememberDelegated(ix)
+		}
 		if ok || err == nil {
 			return // answered, or no longer pending (the user answered it meanwhile)
 		}

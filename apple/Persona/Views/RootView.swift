@@ -66,7 +66,10 @@ struct RootView: View {
             try? await Task.sleep(for: .seconds(1))
             flipped = false
         }
+        // LookBlink drives UIWindowScene overrides, so it only exists on iOS and visionOS.
+        #if os(iOS) || os(visionOS)
         .task { await LookBlink.run() }
+        #endif
         #endif
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)

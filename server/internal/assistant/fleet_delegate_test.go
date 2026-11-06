@@ -307,3 +307,90 @@ func TestReanswer(t *testing.T) {
 		t.Fatalf("reanswer of the user's own answer: %d", code)
 	}
 }
+
+// A card the manager made from a turn that ended on a statement asks nothing: it goes to the user, not the assistant.
+// One whose question has a question mark, or options of its own, is a question and is delegated as before.
+func TestDelegateLeavesAStatementToTheUser(t *testing.T) {
+	df := newDelegateFleet(t, func(p DelegateParams) (DelegateResult, error) {
+		q := p.Interaction.Questions[0]
+		return DelegateResult{Answer: true, Answers: map[string]string{q.Question: q.Options[0].Label}}, nil
+	})
+	statement := delegateQuestion("work_stmt")
+	statement.ToolName = workCardTool
+	statement.Questions = []proto.Question{{Question: "等 runner 恢复和 0.14.0 发版",
+		Options: []proto.QuestionOption{{Label: answerOK}, {Label: answerSkip}}}}
+	df.ask(statement)
+	waitDelegate(t, "the push", func() bool { return df.pushedFor(statement.ID) != nil })
+	if got := df.delegateCalls(); got != 0 {
+		t.Fatalf("a statement was delegated %d times", got)
+	}
+
+	asked := delegateQuestion("work_q")
+	asked.ToolName = workCardTool
+	asked.Questions = []proto.Question{{Question: "PR 还是 Draft，下一步？",
+		Options: []proto.QuestionOption{{Label: answerOK}, {Label: answerSkip}}}}
+	if res := answerOf(t, df.ask(asked)); res.AnsweredBy != proto.AnsweredByAssistant {
+		t.Fatalf("a question with a question mark: %+v", res)
+	}
+	options := delegateQuestion("work_opts")
+	options.ToolName = workCardTool
+	options.Questions = []proto.Question{{Question: "下一步走哪条路",
+		Options: []proto.QuestionOption{{Label: "先做 A"}, {Label: "先做 B"}, {Label: answerSkip}}}}
+	if res := answerOf(t, df.ask(options)); res.AnsweredBy != proto.AnsweredByAssistant {
+		t.Fatalf("a question with options of its own: %+v", res)
+	}
+}
+
+// The assistant answers a question of an agent's once: the same one again (a new card, worded a little differently)
+// goes to the user, and the assistant is not asked.
+func TestDelegateDoesNotAnswerTheSameQuestionTwice(t *testing.T) {
+	df := newDelegateFleet(t, func(p DelegateParams) (DelegateResult, error) {
+		q := p.Interaction.Questions[0]
+		return DelegateResult{Answer: true, Answers: map[string]string{q.Question: q.Options[0].Label}}, nil
+	})
+	first := delegateQuestion("work_r1")
+	first.ToolName = workCardTool
+	first.Questions = []proto.Question{{Question: "等 runner 恢复 + 0.14.0 发版，可以吗？",
+		Options: []proto.QuestionOption{{Label: answerOK}, {Label: answerSkip}}}}
+	if res := answerOf(t, df.ask(first)); res.AnsweredBy != proto.AnsweredByAssistant {
+		t.Fatalf("first: %+v", res)
+	}
+	again := first
+	again.ID = "work_r2"
+	again.Questions = []proto.Question{{Question: "等 runner 恢复和 0.14.0 发版，可以吗？",
+		Options: []proto.QuestionOption{{Label: answerOK}, {Label: answerSkip}}}}
+	answered := df.ask(again)
+	waitDelegate(t, "the push", func() bool { return df.pushedFor(again.ID) != nil })
+	if got := df.delegateCalls(); got != 1 {
+		t.Fatalf("asked the assistant %d times", got)
+	}
+	// Another agent's same question, or another question of this one's, is the assistant's to answer.
+	other := delegateQuestion("ix_r3")
+	if res := answerOf(t, df.ask(other)); res.AnsweredBy != proto.AnsweredByAssistant {
+		t.Fatalf("another question: %+v", res)
+	}
+	if err := df.s.resolve(again.ID, proto.Resolution{Answers: map[string]string{again.Questions[0].Question: answerSkip}}); err != nil {
+		t.Fatal(err)
+	}
+	if res := answerOf(t, answered); res.AnsweredBy != "" {
+		t.Fatalf("the repeat: %+v", res)
+	}
+}
+
+func TestSameAsk(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		same bool
+	}{
+		{"等 runner 恢复 + lark-connector 0.14.0 发版", "等 runner 恢复和 lark-connector 0.14.0 发版", true},
+		{"用哪个分支？", "用哪个分支?", true},
+		{"用哪个分支？", "要不要合并？", false},
+		{"PR #100 还是 Draft，下一步？", "PR #3407 的 CI 一直排队，接下来怎么处理？", false},
+	} {
+		a := delegateText(proto.Interaction{Questions: []proto.Question{{Question: c.a}}})
+		b := delegateText(proto.Interaction{Questions: []proto.Question{{Question: c.b}}})
+		if got := sameAsk(a, b); got != c.same {
+			t.Errorf("sameAsk(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+}

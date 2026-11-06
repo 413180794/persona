@@ -80,9 +80,11 @@ func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 	b := &s.accept
 	b.mu.Lock()
 	s.loadAcceptLocked(ctx)
-	if _, asked := b.asks[t.ID]; asked {
+	if old := b.asks[t.ID]; old != nil && !acceptAskStale(old, t) {
 		b.mu.Unlock()
 		return
+	} else if old != nil {
+		delete(b.asks, t.ID) // asked before the task's latest reopen: the new round gets its own card
 	}
 	b.asks[t.ID] = &acceptAsk{} // claimed: a second turn ending meanwhile does not ask twice
 	b.mu.Unlock()
@@ -195,6 +197,14 @@ func (s *Service) acceptFor(ids ...string) string {
 	return ""
 }
 
+// acceptAskLocked returns todo id's stored ask (nil: none); callers only read its immutable AskedAt.
+func (s *Service) acceptAskLocked(id string) *acceptAsk {
+	b := &s.accept
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.asks[id]
+}
+
 // passWords accepts bare approval, optionally prefixed with 验收 and followed by one or two completion
 // particles (通过了, 可以啊, 没问题了呀, ok啦) or a stop. Question markers stay out: 吗/么/吧/呢 and
 // both ？/? are neither particles nor stops here, so 可以了吗 and 通过了？ still go to the agent, and
@@ -213,15 +223,26 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	if text == "" {
 		return true
 	}
+	t, ok := s.todoNow(id)
 	if passWords.MatchString(text) {
+		// Approval on a pre-reopen card is answered but neither accepts nor reopens; a gone todo keeps old behavior.
+		if ok {
+			if a := s.acceptAskLocked(id); a != nil && acceptAskStale(a, t) {
+				s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.already_handled"))
+				return true
+			}
+		}
 		if s.accepted(ctx, id) {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accepted"))
 		}
 		return true
 	}
-	t, ok := s.todoNow(id)
 	if !ok {
 		s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accept_gone"))
+		return true
+	}
+	if a := s.acceptAskLocked(id); a != nil && acceptAskStale(a, t) { // old round's change is answered, not routed
+		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.already_handled"))
 		return true
 	}
 	if st := s.todoDB(); st != nil {
@@ -258,13 +279,14 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	return true
 }
 
-// accepted marks task id verified (false: it already was, or never asked).
+// accepted marks task id verified; false when already handled, never asked, or asked before the latest reopen.
 func (s *Service) accepted(ctx context.Context, id string) bool {
+	t, todoOK := s.todoNow(id)
 	b := &s.accept
 	b.mu.Lock()
 	s.loadAcceptLocked(ctx)
 	a, ok := b.asks[id]
-	if !ok || a.MessageID == "" || !a.AcceptedAt.IsZero() {
+	if !ok || a.MessageID == "" || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) {
 		b.mu.Unlock()
 		return false
 	}
@@ -328,9 +350,9 @@ func (s *Service) remindAcceptance(now time.Time) {
 		t, ok := s.todoNow(id)
 		b.mu.Lock()
 		a := b.asks[id]
-		if !ok || a == nil || acceptAskEnded(t) {
-			// The todo is gone, or it ended without the hub's auto-judge (the owner closed it or a review did): the
-			// card can never be passed, so stop asking and drop it.
+		if !ok || a == nil || acceptAskEnded(t) || acceptAskStale(a, t) {
+			// The todo is gone, it ended without the hub's auto-judge (the owner closed it or a review did), or the
+			// card is from before its latest reopen: it can never be passed, so stop asking and drop it.
 			delete(b.asks, id)
 			s.saveAcceptLocked(ctx)
 			b.mu.Unlock()
@@ -410,8 +432,8 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 		if !ok {
 			continue
 		}
-		if acceptAskEnded(t) {
-			ended = append(ended, x.id) // closed by the owner or a review: not waiting any more
+		if acceptAskEnded(t) || acceptAskStale(&x.a, t) {
+			ended = append(ended, x.id) // closed by the owner or a review, or asked before the todo's latest reopen
 			continue
 		}
 		total++
@@ -443,4 +465,11 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 // still has to pass the card.
 func acceptAskEnded(t Todo) bool {
 	return t.DoneAt != nil && t.DoneBy != db.DoneByAuto
+}
+
+// acceptAskStale says an ask belongs to an earlier round: the todo was reopened (PATCH done:false, change feedback
+// on its card, or a failed start's retry) after the ask, so the old card is dead and the next deploy asks fresh.
+// A ReopenedAt the auto-judge's second close leaves is harmless (the new ask is younger); zero AskedAt is a claim.
+func acceptAskStale(a *acceptAsk, t Todo) bool {
+	return !a.AskedAt.IsZero() && t.ReopenedAt != nil && a.AskedAt.Before(*t.ReopenedAt)
 }

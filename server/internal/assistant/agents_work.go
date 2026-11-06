@@ -153,6 +153,10 @@ type workBook struct {
 	// (a redelivered webhook, a second tap, phone and watch together) is the same answer, not a second one.
 	answering map[string]bool
 	switches  *TriageSwitches // the saved switches, once read (nil: not read yet)
+	// delegated are the questions the assistant answered for the user, by session (fleet_delegate.go), read back
+	// from the events once (delegatedLoaded): the same question again is the user's.
+	delegated       map[[2]string][]delegatedAsk
+	delegatedLoaded bool
 
 	sampleAt, pruneAt, backfillAt time.Time
 	publishing                    atomic.Bool // a snapshot is on its way (publishSoon)

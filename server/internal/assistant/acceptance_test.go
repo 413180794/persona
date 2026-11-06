@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,6 +46,21 @@ func acceptCardOf(posts []string) string {
 	return ""
 }
 
+func countAcceptCards(posts []string) (n int) {
+	for _, p := range posts {
+		if strings.Contains(p, "请验收") {
+			n++
+		}
+	}
+	return n
+}
+
+// waitAcceptCard waits for the final ask (MessageID stored only after botPost), so ask reads do not race it under -race.
+func waitAcceptCard(t *testing.T, s *Service, id string, posts func() []string) {
+	t.Helper()
+	waitFor(t, "the 请验收 card", func() bool { a := askOf(s, id); return a != nil && a.MessageID != "" && acceptCardOf(posts()) != "" })
+}
+
 // A turn that says the work is deployed gets a 请验收 card: what changed, a link straight to the page (one from the
 // reply, never made up), how to check, and 通过. 通过 marks the task verified.
 func TestDeployedTaskAsksForAcceptance(t *testing.T) {
@@ -51,7 +68,7 @@ func TestDeployedTaskAsksForAcceptance(t *testing.T) {
 	todo := startedTask(t, s, f)
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
-	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	waitAcceptCard(t, s, todo.ID, posts)
 	card := acceptCardOf(posts())
 	for _, want := range []string{"改了什么", "飞书机器人多了任务进展开关", "去哪看", "https://hub.example.com/settings?tab=feishu", "怎么验", "通过", `"a":"accept"`} {
 		if !strings.Contains(card, want) {
@@ -88,7 +105,7 @@ func TestAcceptanceFeedbackGoesToTheAgent(t *testing.T) {
 	todo := startedTask(t, s, f)
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
-	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	waitAcceptCard(t, s, todo.ID, posts)
 	if card := acceptCardOf(posts()); strings.Contains(card, "evil.example.com") || !strings.Contains(card, "/todos?id="+todo.ID) {
 		t.Fatalf("link:\n%s", card)
 	}
@@ -117,7 +134,7 @@ func TestAcceptanceReminderNextMorning(t *testing.T) {
 	todo := startedTask(t, s, f)
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
-	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	waitAcceptCard(t, s, todo.ID, posts)
 	loc := s.location(context.Background())
 	s.accept.mu.Lock()
 	s.accept.asks[todo.ID].AskedAt = time.Now().Add(-30 * time.Hour)
@@ -139,7 +156,7 @@ func TestUnacceptedInTheMorningBriefing(t *testing.T) {
 	todo := startedTask(t, s, f)
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
-	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	waitAcceptCard(t, s, todo.ID, posts)
 	ctx := context.Background()
 	loc := s.location(ctx)
 	got, total := s.snapshotUnaccepted(ctx, loc)
@@ -185,7 +202,7 @@ func TestAcceptanceFeedbackReopensTheClosedTask(t *testing.T) {
 	todo := startedTask(t, s, f)
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
-	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	waitAcceptCard(t, s, todo.ID, posts)
 	ctx := context.Background()
 	if ok, err := s.autoDoneTodo(ctx, todo.ID, "做完了", time.Now().Add(-time.Minute)); err != nil || !ok {
 		t.Fatalf("auto done: %v %v", ok, err)
@@ -292,10 +309,7 @@ func TestAcceptanceAskEndedElsewhere(t *testing.T) {
 		agentTurn(s, f, proto.StatusDone, deployedReply, 0)
 		// Wait for the final ask (MessageID is set only after botPost returns): backdating AskedAt must not race the
 		// post-botPost replacement of the claimed placeholder.
-		waitFor(t, "the 请验收 card", func() bool {
-			a := askOf(s, todo.ID)
-			return acceptCardOf(posts()) != "" && a != nil && a.MessageID != ""
-		})
+		waitAcceptCard(t, s, todo.ID, posts)
 		return s, f, posts, todo.ID
 	}
 	for _, c := range cases {
@@ -329,4 +343,142 @@ func TestAcceptanceAskEndedElsewhere(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAcceptanceReopenRound(t *testing.T) {
+	ctx := context.Background()
+	setup := func(t *testing.T) (*Service, *fakeHub, func() []string, func() []string, string) {
+		s, f, posts := acceptService(t)
+		var mu sync.Mutex
+		var notes []string
+		note := func(s string) { mu.Lock(); notes = append(notes, s); mu.Unlock() }
+		f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
+			var m map[string]string
+			json.Unmarshal(p, &m)
+			note(m["text"])
+			return map[string]any{}, nil
+		})
+		todo := startedTask(t, s, f)
+		agentTurn(s, f, proto.StatusWorking, "", 0)
+		agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+		waitAcceptCard(t, s, todo.ID, posts)
+		return s, f, posts, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), notes...) }, todo.ID
+	}
+	closeReopen := func(s *Service, id string) {
+		s.autoDoneTodo(ctx, id, "做完了", time.Now().Add(-time.Minute))
+		s.reopenTodo(ctx, id)
+	}
+	t.Run("the next deploy asks with a fresh card", func(t *testing.T) {
+		s, f, posts, _, id := setup(t)
+		first := askOf(s, id)
+		closeReopen(s, id)
+		reopened := *onlyTodo(s).ReopenedAt
+		agentTurn(s, f, proto.StatusWorking, "", 0)
+		agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+		waitFor(t, "a new 请验收 card", func() bool { // the post fake reuses one message id: rounds tell apart by AskedAt
+			a := askOf(s, id)
+			return a != nil && a.MessageID != "" && a.AskedAt.After(reopened)
+		})
+		second := askOf(s, id)
+		if !second.AskedAt.After(first.AskedAt) || len(second.Messages) != 1 {
+			t.Fatalf("second-round ask %+v, first %+v", second, first)
+		}
+		if n := countAcceptCards(posts()); n != 2 {
+			t.Fatalf("%d 请验收 cards, want 2", n)
+		}
+		if !s.acceptReply(ctx, second.MessageID, "通过", second.MessageID) || onlyTodo(s).Stage != "verify" {
+			t.Fatal("the new card did not accept the new round")
+		}
+	})
+
+	t.Run("the old card is dead after reopen", func(t *testing.T) {
+		for _, c := range []struct{ name, text string }{
+			{"pass reply", "通过"}, {"change reply", "再改一下这个开关"},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				s, f, _, notes, id := setup(t)
+				mid := askOf(s, id).MessageID
+				closeReopen(s, id)
+				before := len(f.agentSent)
+				if !s.acceptReply(ctx, "om_old", c.text, mid) {
+					t.Fatal("the old-card reply was not consumed")
+				}
+				if a, got := askOf(s, id), notes(); len(f.agentSent)-before != 0 || a == nil || !a.AcceptedAt.IsZero() ||
+					onlyTodo(s).Stage == "verify" || len(got) != 1 || !strings.Contains(got[0], "已经处理过了") {
+					t.Fatalf("routed=%d notes=%q accepted=%v stage=%q", len(f.agentSent)-before, got, a != nil, onlyTodo(s).Stage)
+				}
+			})
+		}
+		t.Run("button", func(t *testing.T) {
+			s, _, _, _, id := setup(t)
+			closeReopen(s, id)
+			if s.accepted(ctx, id) || !askOf(s, id).AcceptedAt.IsZero() {
+				t.Fatal("the old card's button verified the reopened task")
+			}
+			s.todos.mu.Lock()
+			delete(s.todos.todos, id)
+			s.todos.mu.Unlock()
+			if !s.accepted(ctx, id) || askOf(s, id).AcceptedAt.IsZero() {
+				t.Fatal("a deleted todo's button changed its old accept behavior")
+			}
+		})
+		t.Run("reminder", func(t *testing.T) {
+			s, _, posts, _, id := setup(t)
+			closeReopen(s, id)
+			s.accept.mu.Lock()
+			s.accept.asks[id].AskedAt = time.Now().Add(-30 * time.Hour)
+			s.accept.mu.Unlock()
+			now := time.Now().In(s.location(ctx))
+			n := len(posts())
+			s.remindAcceptance(time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, s.location(ctx)))
+			if got := posts()[n:]; len(got) != 0 || askOf(s, id) != nil {
+				t.Fatalf("the stale card was reminded %q, ask kept %v", got, askOf(s, id) != nil)
+			}
+		})
+		t.Run("snapshot", func(t *testing.T) {
+			s, _, _, _, id := setup(t)
+			closeReopen(s, id)
+			if _, total := s.snapshotUnaccepted(ctx, s.location(ctx)); total != 0 || askOf(s, id) != nil {
+				t.Fatalf("total=%d ask kept=%v", total, askOf(s, id) != nil)
+			}
+		})
+		t.Run("reply racing a sweep", func(t *testing.T) {
+			s, _, _, _, id := setup(t)
+			mid := askOf(s, id).MessageID
+			closeReopen(s, id)
+			var stop atomic.Bool
+			var wg sync.WaitGroup
+			loop := func(fn func()) {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for !stop.Load() {
+						fn()
+					}
+				}()
+			}
+			for i := 0; i < 4; i++ {
+				loop(func() { s.acceptReply(ctx, "om_race", "通过", mid) })
+			}
+			loop(func() {
+				s.accept.mu.Lock()
+				if s.accept.asks[id] == nil {
+					s.accept.asks[id] = &acceptAsk{MessageID: mid, Messages: []string{mid}, AskedAt: time.Now().Add(-time.Hour)}
+				}
+				s.accept.mu.Unlock()
+				s.snapshotUnaccepted(ctx, s.location(ctx))
+			})
+			time.Sleep(150 * time.Millisecond)
+			stop.Store(true)
+			wg.Wait()
+		})
+	})
+
+	t.Run("a round never reopened is unchanged", func(t *testing.T) {
+		s, _, _, _, id := setup(t)
+		s.autoDoneTodo(ctx, id, "做完了", time.Now().Add(-time.Minute))
+		if !s.acceptReply(ctx, "om_fresh", "通过", askOf(s, id).MessageID) || onlyTodo(s).Stage != "verify" {
+			t.Fatal("the ordinary card was not accepted")
+		}
+	})
 }
