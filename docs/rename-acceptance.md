@@ -1,48 +1,48 @@
-# Persona 改名：本地实现验收与发布边界
+# Persona rename: local implementation acceptance and release boundary
 
-## 当前结论
+## Current conclusion
 
-2026-11-03，本地迁移实现、兼容补洞以及固定快照的 open PR 审计已完成。最终代码基准为 `761ce5473289be03808f7d941d8c17f10813cbaf`，包含外部环境文件兼容 #837、增量审计归档 #877 和测试数据库隔离修复 #879。
+As of 2026-11-03, the local migration implementation, the compatibility gap fixes, and the open PR audit against a fixed snapshot are done. The final code baseline is `761ce5473289be03808f7d941d8c17f10813cbaf`, which includes external environment file compatibility #837, the incremental audit archive #877, and the test database isolation fix #879.
 
-**这不等于整个 #277 已无后续事项。** 旧功能 PR 中的迁移项由原负责人继续处理；尚未合入的功能不放进最终冻结版本。真实设备升级与系统快捷指令连续性仍需要设备验收。最终发布必须另在一个干净、固定提交上跑完整流水线，不能把中间周期版本当作最终验收。
+**This does not mean #277 has nothing left.** Migration items in older feature PRs stay with their original owners; features not yet merged don't go into the final frozen version. Upgrades on real devices and continuity of system Shortcuts still need device acceptance. The final release must run the full pipeline on a separate, clean, fixed commit; an intermediate cycle build can't count as final acceptance.
 
-## 已落地的兼容边界
+## Compatibility boundaries in place
 
-- 产品展示为 Persona；服务端推荐 `personad`，旧 `jarvisd` 入口与产物继续可用。
-- 新默认运行根与构建配置目录分别为 `~/.persona`、`~/.config/persona`；旧目录通过既有数据与缺失别名兼容。两份独立目录不合并、不覆盖；自定义根不改全局默认别名。
-- `PERSONA_*` 定义优先，包括空值；旧 `JARVIS_*` 仍支持。配置切换重新计算派生导出，不沿用上一份环境的地址或 bundle 设置。
-- Go、SDK 和脚本的自定义根按词法规范化；默认 socket 可使用同一存储的短旧路径。服务恢复区分 hub / node / link，支持旧无 HOME 单元、环境重置、用户 drop-in、XDG 路径及环境文件中的 HOME 字段。
-- 原生与 Web / hub / 连接器输入支持新旧 scheme；生成链接继续用旧格式，支持未升级客户端。
-- Bundle、module、Intent / Control / Live Activity、序列化、缓存、协议、数据库、服务与 runtime 更新身份保持。已有用户或外部资源名称不是产品文案，不能盲改。
+- The product shows as Persona; on the server `personad` is recommended, and the old `jarvisd` entry point and artifacts keep working.
+- The new default runtime root and build config directory are `~/.persona` and `~/.config/persona`; old directories stay compatible through existing data and missing-alias handling. Two independent directories are never merged or overwritten; a custom root doesn't change the global default alias.
+- `PERSONA_*` definitions take precedence, including empty values; old `JARVIS_*` are still supported. Switching config recomputes the derived exports and doesn't carry over the previous environment's addresses or bundle settings.
+- Custom roots in Go, the SDK and scripts are normalized lexically; the default socket can use the short old path of the same store. Service recovery distinguishes hub / node / link, and supports old units without HOME, environment resets, user drop-ins, XDG paths, and a HOME field in the environment file.
+- Native, web / hub / connector inputs accept both the new and old schemes; generated links keep the old format so clients that haven't upgraded still work.
+- Bundle, module, Intent / Control / Live Activity, serialization, cache, protocol, database, service, and runtime update identities are kept. Names of existing users or external resources are not product copy and must not be changed blindly.
 
-完整规则见 [迁移说明](rename.md)；原审计及最后增量见 [PR 审计记录](rename-pr-audit.md)。
+Full rules in the [migration notes](rename.md); the original audit and the last increment in the [PR audit record](rename-pr-audit.md).
 
-## 按固定版本保存的验证
+## Verification recorded per fixed version
 
-| 范围 | 已执行的证据 | 不代表什么 |
+| Scope | Evidence collected | What it does not show |
 | --- | --- | --- |
-| 默认存储与升级 / 回退 | #718 的临时 HOME、软链 / 独立根 / 循环 / 跨进程初始化、新旧入口与真实旧 binary 升级回退验证 | 不代替用户每一种生产部署的恢复演练 |
-| 原生品牌 | #756 的 iOS 632 项（630 通过、2 环境跳过）、Mac 151 项；iPhone 两风格深浅色 80 张、Mac 及手表预览；产物用途字符串检查 | Xcode 26.0 未实编；手表模拟器不支持切换深浅，不能把两份原生深色截图算作不同外观 |
-| Android | #745 文案整合 981 项 JVM 通过、三风格深浅色 108 张截图；后续固定 `f98a77df` 的完整集成 1,327 项与 APK 构建通过 | 后一轮不是前一轮截图的新基准，未声称真机旧 APK 升级已验收 |
-| 脚本 / runtime | #773 本机 193 项脚本、99 项 runtime；#837 最终 128 项脚本与 16 项专项，通过独立报告问题的逐项修复复验 | 不扩展为完整 systemd 语法或真实服务环境穷尽验证 |
-| Web / 本地 Go | #786 的 108 项脚本、448 项 Web 与构建；canonical 短目录下 Go 2,167 个测试 / 子用例通过、72 明确跳过 | 跳过的数据库 / 平台 / fixture 项不算真实 Postgres 通过 |
-| 测试数据库隔离 | #879 本机 225 项 Python、41 项流程；两布局各 38 个匿名实际 pgx 解析子用例；独立 query / PG 环境 / profile / TLS / parser child 复验 | 没有连接数据库；不代替最终冻结的真实 Postgres 全套或 TLS 握手验收 |
+| Default storage and upgrade / rollback | #718: temporary HOME, symlink / independent root / loop / cross-process init, new and old entry points, and upgrade / rollback with a real old binary | Does not replace a recovery drill for every production deployment users have |
+| Native branding | #756: 632 iOS tests (630 passed, 2 skipped for environment), 151 Mac tests; 80 iPhone screenshots across two styles in light and dark, Mac and watch previews; usage-description string check on the artifacts | Not actually compiled with Xcode 26.0; the watch simulator can't switch light / dark, so two native dark screenshots don't count as different appearances |
+| Android | #745: 981 JVM tests for the copy consolidation passed, 108 screenshots across three styles in light and dark; later, on fixed `f98a77df`, the full integration suite of 1,327 tests and the APK build passed | The later round is not a new baseline for the earlier screenshots; upgrading an old APK on a real device is not claimed as accepted |
+| Scripts / runtime | #773: 193 script tests and 99 runtime tests locally; #837: final 128 script tests and 16 targeted tests, re-verified item by item after fixes for issues found by an independent report | Not extended to exhaustive verification of full systemd syntax or real service environments |
+| Web / local Go | #786: 108 script tests, 448 web tests and the build; under the canonical short directory, 2,167 Go tests / subtests passed and 72 were explicitly skipped | Skipped database / platform / fixture tests don't count as passing against real Postgres |
+| Test database isolation | #879: 225 Python tests and 41 flow tests locally; 38 anonymous real pgx parse subtests for each of the two layouts; independent re-verification of query / PG environment / profile / TLS / parser child | No database connection made; does not replace the full real-Postgres suite or TLS handshake acceptance on the final freeze |
 
-各结果归对应 PR 和固定 head，不把不同版本的计数相加，也不把他人执行的测试写成文档车道重跑。
+Each result belongs to its PR and fixed head. Counts from different versions are not added up, and tests run by others are not written up as reruns by the docs lane.
 
-## 测试安全与事故边界
+## Test safety and incident boundary
 
-#812 隔离真实运行根和测试进程环境；#879 进一步拒绝数据库 URL 查询参数覆盖、外部 service / 目标来源及重复键，清除 `PG*`，明确选择同一专用测试库的两前缀变量。显式 TLS 参数保留；隐式 OS 用户 profile 文件不被采用。上游 pgx 在合并参数前可能探测 OS 用户默认 TLS 路径元数据，不能声称完全没有路径探测。
+#812 isolates the real runtime root and the test process environment. #879 goes further: it rejects database URL query parameter overrides, external service / target sources and duplicate keys, clears `PG*`, and explicitly selects the two-prefix variables for the same dedicated test database. Explicit TLS parameters are kept; implicit OS-user profile files are not used. Upstream pgx may probe the metadata of the OS user's default TLS paths before merging parameters, so we can't claim there is no path probing at all.
 
-修复与独立匿名复验已合入。之前的真实测试 / 发布暂停不靠文档解除：只有发布负责人核对冻结提交包含两项隔离修复，并使用新启动器完成全套验证后，才继续后续部署 / 上传。
+The fixes and the independent anonymous re-verification are merged. The earlier pause on real tests / releases is not lifted by documentation: only after the release owner confirms the frozen commit contains both isolation fixes, and the full suite passes with the new launcher, do later deploys / uploads continue.
 
-1045 的失败冻结、退出码和受保护事故证据保留。先前已有生产文件删除证据，完整影响范围仍未知；限定的只读恢复可行性评估不足以定位具体被删对象或确认原内容可恢复。没有执行恢复。新版本通过测试或发布不等于事故无损，也不代表数据已恢复。
+The failed freeze, exit codes, and protected incident evidence from 1045 are kept. There was already evidence of production files being deleted, and the full extent of the impact is still unknown; the limited read-only assessment of recovery feasibility isn't enough to identify which objects were deleted or confirm the original contents can be recovered. No recovery was performed. A new version passing tests or being released does not mean the incident caused no loss, nor that data has been recovered.
 
-## 最终冻结与发布的验收条件
+## Acceptance conditions for the final freeze and release
 
-1. 从已合并的干净提交冻结；包含 #837、#877、#879 和本验收记录，不把其他未合功能混入冻结，不复用失败构建号。
-2. 发布前跑完整脚本 / runtime / Web / 原生验证；服务端只能使用修复后的隔离启动器与专用 Postgres 测试库。失败时停止，不让后续命令覆盖失败退出码。
-3. 归档 App / 扩展检查用途字符串、正式 IPA 四 bundle entitlements 和 production APNs；实际 Xcode 版本与未运行项明确记录。
-4. hub / 配置内节点部署和健康检查通过；官网与公开产物的版本、清单和全部下载 SHA 校验一致。
-5. TestFlight 内部、外部同时完成，确认构建状态与可访问性，再告诉用户最终构建号。
-6. 在 #277 补固定 SHA、实际测试 / 跳过、线上校验、剩余 PR 协作和事故恢复边界。未完成项不改为通过。
+1. Freeze from a clean, merged commit that includes #837, #877, #879 and this acceptance record; don't mix other unmerged features into the freeze, and don't reuse a failed build number.
+2. Before release, run the full script / runtime / web / native verification; the server may only use the fixed isolated launcher and the dedicated Postgres test database. Stop on failure; don't let later commands overwrite the failing exit code.
+3. For the archive, check the App / extension usage-description strings, the entitlements of all four bundles in the release IPA, and production APNs; record the actual Xcode version and anything not run.
+4. Deployment and health checks pass for the hub and the nodes in the config; the versions, manifests and every download SHA of the website and public artifacts match.
+5. TestFlight internal and external both complete; confirm build status and accessibility before giving the user the final build number.
+6. In #277, add the fixed SHA, actual tests run / skipped, live checks, remaining PR coordination, and the incident recovery boundary. Unfinished items are not changed to passed.

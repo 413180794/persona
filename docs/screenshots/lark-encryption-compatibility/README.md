@@ -1,12 +1,12 @@
-# 加密服务版本与授权提示
+# Encryption service version and authorization prompts
 
-iPhone 18 Pro / iOS 27，隔离 mock Hub；无真实账号、密码或发送。
+iPhone 18 Pro / iOS 27, isolated mock hub; no real account, password or sending.
 
-| 场景 | 浅色玻璃 | 深色 BeautifulUI |
+| Scenario | Light Liquid Glass | Dark BeautifulUI |
 | --- | --- | --- |
-| Hub 缺少接口 | [升级 Hub](light-unavailable-hub.png) | [升级 Hub](dark-unavailable-hub.png) |
-| 飞书网关缺少接口 | [升级飞书网关](light-unavailable-gateway.png) | [升级飞书网关](dark-unavailable-gateway.png) |
-| 缺少独立原生授权 | [开启授权](light-unavailable-authorization.png) | [开启授权](dark-unavailable-authorization.png) |
-| 升级后重新检查 | [选择外显](light-upgrade-recovered.png) | [选择外显](dark-upgrade-recovered.png) |
+| Hub is missing the API | [Upgrade hub](light-unavailable-hub.png) | [Upgrade hub](dark-unavailable-hub.png) |
+| Lark gateway is missing the API | [Upgrade Lark gateway](light-unavailable-gateway.png) | [Upgrade Lark gateway](dark-unavailable-gateway.png) |
+| Separate native authorization is missing | [Turn on authorization](light-unavailable-authorization.png) | [Turn on authorization](dark-unavailable-authorization.png) |
+| Recheck after upgrading | [Choose the public text](light-upgrade-recovered.png) | [Choose the public text](dark-upgrade-recovered.png) |
 
-8 张截图已逐张检查。UI 回归验证三种失败均在进入外显页前说明原因；恢复服务后重新检查，输入和加密模式保留，再进入候选列表。现有解锁、错误密码、加密发送、失败重试、跨入口草稿保护的 3 个流程也在浅、深色通过。所有写入仅发送至 mock。
+All 8 screenshots were checked one by one. The UI regression test confirms that all three failures explain the cause before entering the public-text page; after the service is restored, a recheck keeps the input and the encryption mode, then goes on to the candidate list. The 3 existing flows (unlock, wrong password, encrypted send, retry after failure, draft protection across entry points) also pass in light and dark. All writes go to the mock only.

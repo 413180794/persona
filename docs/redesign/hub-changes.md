@@ -1,293 +1,293 @@
-# hub 改动清单
+# Hub change list
 
-> 草案 v1（2026-10-30），属于 [重设计方案](README.md)。依据见 [research/jarvis-protocol.md](research/jarvis-protocol.md)。
-> 原则：所有改动**对旧 App 兼容**（新字段可选，旧字段语义不变）；新 App 遇到旧 hub 时按能力位退回旧行为。
-> **这一轮 iOS 只读不改**：每一项改动都要让现有的 iOS App 不改代码也照常工作，包括内网明文连接、旧格式的配对二维码、单个地址。每次 hub 改动都用现有 iOS App 跑一遍 UI 测试和真机配对。
-> 迁移号按车道分段（CLAUDE.md），挑号前先看所有 worktree 的 `server/internal/db/migrations/` 和 `jarvis_test` 库的 `schema_migrations`。
+> Draft v1 (2026-10-30), part of the [redesign plan](README.md). Basis: [research/jarvis-protocol.md](research/jarvis-protocol.md).
+> Principle: every change is **compatible with old Apps** (new fields optional, old field semantics unchanged); a new App meeting an old hub falls back to the old behavior based on capability flags.
+> **iOS is read-only this round**: every change must keep the existing iOS App working without code changes, including plaintext LAN connections, the old pairing QR format, and a single address. After every hub change, run the UI tests and a real-device pairing with the existing iOS App.
+> Migration numbers are allocated in ranges per lane (CLAUDE.md); before picking one, check `server/internal/db/migrations/` in all worktrees and `schema_migrations` in the `jarvis_test` database.
 
-## 1. 公网直连（必须）
+## 1. Public direct connection (required)
 
-> 2026-10-30 定：手机经公网直连 hub 要能通，优先探测和使用 IPv6；VPN 用户自己配。依据见 [research/public-direct-ipv6.md](research/public-direct-ipv6.md)（国内 IPv6 现状、地址发现、TLS、加固、保活，带来源）和 [research/hub-network-current.md](research/hub-network-current.md)（hub 现有网络代码，带行号）。
-> 原稿的「FCM」一节已删除：按「手机没有 Google 服务」设计，不做 FCM（[README.md](README.md) D8）。
+> Decided 2026-10-30: the phone must be able to connect directly to the hub over the public internet, probing and preferring IPv6; VPNs are configured by users themselves. Basis: [research/public-direct-ipv6.md](research/public-direct-ipv6.md) (state of IPv6 in China, address discovery, TLS, hardening, keepalive, with sources) and [research/hub-network-current.md](research/hub-network-current.md) (the hub's current network code, with line numbers).
+> The original draft's "FCM" section was removed: we design for "the phone has no Google services" and don't do FCM ([README.md](README.md) D8).
 
-**现状**：
-- hub 只有一个明文监听（`listen` 默认 `:18660`），没设任何超时；
-- 鉴权失败不限流、不记来源；查不到的 token 也进缓存，而且不清理；
-- 二维码里是**永久有效的主 token**，只有一个地址（`public_url`）；
-- 文档要求「只放在内网或 VPN 里」。
+**Current state**:
+- The hub has a single plaintext listener (`listen`, default `:18660`) with no timeouts at all;
+- authentication failures aren't rate-limited or logged by source; unknown tokens also go into the cache and are never cleaned up;
+- the QR code carries the **never-expiring master token** and only one address (`public_url`);
+- the docs say "only put it on the LAN or a VPN".
 
-Go 对通配地址开的是双栈 socket，IPv6 本来就能连进来；能不能从公网连进来，取决于光猫、路由器和 hub 机器的防火墙。
+Go opens a dual-stack socket for the wildcard address, so IPv6 can already connect in; whether it's reachable from the internet depends on the modem, the router, and the hub machine's firewall.
 
-**兼容现有 iOS 的总原则**：
-- 明文端口原样保留，只对**公网来源**拒绝明文；
-- 二维码格式不变（`url=` + `token=`），新信息放在附加参数里；
-- 不发心跳协商的连接保持现在的 20 秒；
-- 候选地址不放进免鉴权的接口。
+**Overall rule for staying compatible with existing iOS**:
+- Keep the plaintext port as is, rejecting plaintext only from **public sources**;
+- keep the QR format (`url=` + `token=`), putting new information in extra parameters;
+- connections that don't negotiate heartbeats keep today's 20 seconds;
+- candidate addresses never go into unauthenticated endpoints.
 
-### 1.1 TLS 监听
+### 1.1 TLS listener
 
-- **端口**：新开一个 TLS 端口，可配。避开 80 / 443 / 8080 / 8443（部分地区家宽封这些端口），也避开 18661（Postgres 占用）。明文 `listen` 保留，给内网、VPN 和现有 iOS。
-  - 已定用两个端口（README 第 12 节第 9 题）。同端口嗅探（第一个字节是 `0x16` 就走 TLS）留作以后的选项：用户只需在路由器上放行一个端口，代价是约 100 行自己写的接收循环。
-- **证书**：
-  - hub 的身份密钥是 ECDSA P-256，0600，放 `~/.persona/tls/`，不进数据库（CLAUDE.md「密钥绝不入库」）。
-  - 用它签自签证书；证书快到期时用**同一把密钥**重签，所以指纹不变。
-  - 指纹是 SPKI 的 SHA-256，打印进 `personad hub pair`，也放进二维码。
-  - 换密钥时所有设备重新扫码（已定）；计划内的轮换可以在 `hello` 里提前预告下一把密钥的指纹（`fp_next`）。
-- **有域名时（可选）**：用 ACME DNS-01，以同一把密钥换公共 CA 签的通配证书。通配证书避免具体的名字出现在 CT 日志里被扫描。客户端照样钉公钥。
-- **不做 IP 地址证书**：Let's Encrypt 的 IP 证书 2026-01 才正式提供，有效期只有 6 天，而且只能用 HTTP-01 / TLS-ALPN-01 验证，要开 80 / 443。
-- **服务器参数**：两个 server 都补上 `ReadHeaderTimeout`、`IdleTimeout`、收小 `MaxHeaderBytes`。不设整体的 `ReadTimeout` / `WriteTimeout`，那会掐断 WS 和大文件上传。
-- **改动面**：新文件 `tlscert.go`；`hub.go` 的 `Run()` 起第二个 listener；`hub.json` 加 `tls: {listen, cert_file?, key_file?}`。约 150–250 行（估计）。
+- **Port**: open a new, configurable TLS port. Avoid 80 / 443 / 8080 / 8443 (some home broadband ISPs block these) and 18661 (used by Postgres). The plaintext `listen` stays, for the LAN, VPNs, and existing iOS.
+  - Decided: two ports (README section 12, question 9). Same-port sniffing (go TLS if the first byte is `0x16`) is kept as a future option: users would only need to open one port on the router, at the cost of about 100 lines of hand-written accept loop.
+- **Certificate**:
+  - The hub's identity key is ECDSA P-256, 0600, stored in `~/.persona/tls/`, not in the database (CLAUDE.md: "Secrets never go into the repo").
+  - It signs a self-signed certificate; when the certificate nears expiry, it re-signs with **the same key**, so the fingerprint doesn't change.
+  - The fingerprint is the SHA-256 of the SPKI, printed by `personad hub pair` and included in the QR code.
+  - Changing the key means every device rescans (decided); a planned rotation can announce the next key's fingerprint in advance in `hello` (`fp_next`).
+- **With a domain (optional)**: use ACME DNS-01 to get a wildcard certificate from a public CA for the same key. A wildcard certificate keeps specific names out of CT logs where they'd get scanned. Clients still pin the public key.
+- **No IP address certificates**: Let's Encrypt only started offering IP certificates officially in 2026-01, valid for just 6 days, and only with HTTP-01 / TLS-ALPN-01 validation, which needs 80 / 443 open.
+- **Server parameters**: add `ReadHeaderTimeout` and `IdleTimeout` to both servers and shrink `MaxHeaderBytes`. Don't set an overall `ReadTimeout` / `WriteTimeout`; that would cut off WS and large file uploads.
+- **Change surface**: new file `tlscert.go`; `Run()` in `hub.go` starts a second listener; `hub.json` gains `tls: {listen, cert_file?, key_file?}`. About 150–250 lines (estimate).
 
-### 1.2 地址发现与下发
+### 1.2 Address discovery and distribution
 
-- **发现**（新文件 `endpoints.go`）：
-  - 用 netlink 读带 `IFA_FLAGS` 的地址。`/proc/net/if_inet6` 看不到 0x100 以上的标志。
-  - 排除临时（隐私）地址、已废弃地址、ULA、链路本地、文档前缀，以及 docker、TUN 之类的虚拟网卡。
-  - 订阅地址变化，再加每几分钟一次全量重扫。
-- **候选类型**：
+- **Discovery** (new file `endpoints.go`):
+  - Read addresses with `IFA_FLAGS` via netlink. `/proc/net/if_inet6` can't see flags above 0x100.
+  - Exclude temporary (privacy) addresses, deprecated addresses, ULA, link-local, documentation prefixes, and virtual interfaces like docker and TUN.
+  - Subscribe to address changes, plus a full rescan every few minutes.
+- **Candidate types**:
 
-  | 类型 | 内容 | 什么时候发布 |
+  | Type | Content | When published |
   | --- | --- | --- |
-  | `ipv6` | 全局、稳定的 IPv6 | 探测到就发布 |
-  | `name` | DDNS 名字或配置的 `public_url` / `advertise` | 配了就发布 |
-  | `lan` | 内网 IPv4 / ULA | 探测到就发布 |
-  | `ipv4` | 公网 IPv4 | 只在确认外部连得进来时：UPnP / NAT-PMP / PCP 查 WAN 口，加 STUN 或 HTTPS 回显，判断有没有运营商 NAT |
+  | `ipv6` | Global, stable IPv6 | When detected |
+  | `name` | DDNS name or the configured `public_url` / `advertise` | When configured |
+  | `lan` | LAN IPv4 / ULA | When detected |
+  | `ipv4` | Public IPv4 | Only once inbound reachability is confirmed: query the WAN port via UPnP / NAT-PMP / PCP, plus STUN or an HTTPS echo, to tell whether there's carrier-grade NAT |
 
-  每项带端口、协议（`https` / `http`）、`seen_at`。
-- **可达性 hub 自己测不出来**：本机连自己的地址走的是环回，不经过光猫。要靠手机在蜂窝网络上探测，或者一台不在家的 node 帮忙测。
-- **下发**：
-  - 鉴权后的 `GET /api/v1/endpoints`；
-  - WS `hello` 的新字段（`hub_id`、`endpoints`、`tls_port`、`fp`）。现有 iOS 先把每条 WS 消息整体解成一个 `Envelope`（`ios/Shared/LiveConnection.swift`），新字段名如果和它已有的键撞名而类型不同（`id`、`state`、`data`、`name`、`error`、`text` 等都是字符串），整条 `hello` 会解码失败、被丢掉。上面四个都不撞（已核对），以后加字段也要先查这张表；
-  - 地址变化时推 `{"type":"endpoints"}`，只发给在 `client_hello` 里声明了 `endpoints` 能力的连接；
-  - `features` 加 `endpoints`、`tls`、`heartbeat`、`app_ping`。
-- **免鉴权的 `/api/v1/health`** 只加不敏感的字段（`hub_id`、TLS 端口、`fp`），**候选地址不放这里**，免得任何扫到端口的人拿到家里的其他地址。它现在还公开版本号和能力位：对公网来源只回 `ok`、`hub_id`、TLS 端口和指纹，内网来源照旧，现有 iOS 在内网读它（已定，[README.md](README.md) 第 12 节第 9 题）。
-- **TUN 代理的坑**（未实测）：hub 机器开了 TUN 代理的自动路由时，从外面连进来的 IPv6 连接，回包可能被路由进代理，连接建不起来。部署前要用蜂窝网络的手机实测，`hub doctor`（1.8）也要检查。
+  Each entry carries port, protocol (`https` / `http`), and `seen_at`.
+- **The hub can't test reachability by itself**: connecting to its own address from the same machine goes over loopback and never passes through the modem. It takes a phone probing on cellular, or a node away from home helping out.
+- **Distribution**:
+  - authenticated `GET /api/v1/endpoints`;
+  - new fields in the WS `hello` (`hub_id`, `endpoints`, `tls_port`, `fp`). Existing iOS first decodes each WS message whole into one `Envelope` (`ios/Shared/LiveConnection.swift`); if a new field name collides with one of its existing keys with a different type (`id`, `state`, `data`, `name`, `error`, `text` and others are strings), the whole `hello` fails to decode and is dropped. None of the four above collide (checked); check this table before adding fields in the future too;
+  - on address changes, push `{"type":"endpoints"}`, only to connections that declared the `endpoints` capability in `client_hello`;
+  - `features` gains `endpoints`, `tls`, `heartbeat`, `app_ping`.
+- **The unauthenticated `/api/v1/health`** only gains non-sensitive fields (`hub_id`, TLS port, `fp`); **candidate addresses don't go here**, so anyone who scans the port can't get the home's other addresses. It currently also exposes the version and capability flags: to public sources it returns only `ok`, `hub_id`, the TLS port and fingerprint; LAN sources are unchanged, since existing iOS reads it on the LAN (decided, [README.md](README.md) section 12, question 9).
+- **TUN proxy pitfall** (not measured): when the hub machine runs a TUN proxy with auto-routing, return packets for IPv6 connections coming in from outside may be routed into the proxy, and the connection never gets established. Test with a phone on cellular before deploying; `hub doctor` (1.8) should check this too.
 
-### 1.3 配对：二维码改发短时临时 token（格式不变）
+### 1.3 Pairing: QR codes issue short-lived temporary tokens (format unchanged)
 
-- `personad hub pair` 默认不再打印主 token。它经本机回环调运行中的 hub，生成一个**高熵、短时有效（比如 10 分钟）、只能换一次**的临时 token，落库（hub 的内存状态会被部署清掉，所以必须落库），二维码格式不变：
+- `personad hub pair` no longer prints the master token by default. It calls the running hub over local loopback to generate a **high-entropy, short-lived (e.g. 10 minutes), single-use** temporary token, stored in the database (deployments wipe the hub's in-memory state, so persistence is required). The QR format stays the same:
 
-  `jarvis://pair?url=<内网明文地址>&token=<临时 token>&hub=<hub_id>&fp=<指纹>&tls=<TLS 端口>&alt=<一两个外部候选>`
+  `jarvis://pair?url=<LAN plaintext address>&token=<temporary token>&hub=<hub_id>&fp=<fingerprint>&tls=<TLS port>&alt=<one or two external candidates>`
 
-- **参数格式**（各端照这个实现）：
-  - `hub`：hub 实例 id（1.5）；
-  - `fp`：证书公钥的钉扎值，SHA-256 作用于证书的 SubjectPublicKeyInfo（DER），再用 base64url（RFC 4648 §5）编码、不带填充，43 个字符；
-  - `tls`：TLS 端口（十进制）；
-  - `alt`：完整的 `https://` 地址，可以出现一到两次，好的在前；
-  - `url`、`token` 的含义不变。
-- **为什么这样兼容现有 iOS**：iOS 的 `ServerConfig(pairURL:)` 只按名字取 `url` 和 `token`，忽略其他参数。它配对时先 `GET /machines`，再连 WS、注册推送，最后 `POST /auth/tokens` 换自己的设备 token。所以临时 token 在有效期内要当完整的 Bearer 用；换过设备 token 后，再宽限一小会儿才作废。
-- 新 App（Android）读附加参数：钉住 `fp`，记下 `hub_id`，把 `alt` 加进候选。二维码里外部候选只放一两个，免得二维码太密，其余配对后从 `/endpoints` 取。
-- 已经配对过、手里没有指纹的设备（PR #84 版本的 Android）：在内网上经已鉴权的通道（`hello` 或 `/endpoints`）取一次指纹并钉住，和现在内网明文的信任程度相同（已定，README 第 12 节第 9 题）。
-- `--legacy` 照旧打印主 token，留给 CLI 和特殊情况。
-- **公网直连开启后，主 token 只接受回环和内网来源**。
-- 任何 `full` 设备 token 现在都能再发新 token：配对时给用户推一条「有新设备配对」的通知，方便发现异常。
+- **Parameter format** (all platforms implement this):
+  - `hub`: hub instance id (1.5);
+  - `fp`: certificate public-key pin: SHA-256 of the certificate's SubjectPublicKeyInfo (DER), encoded as base64url (RFC 4648 §5) without padding, 43 characters;
+  - `tls`: TLS port (decimal);
+  - `alt`: a complete `https://` address, occurring once or twice, best first;
+  - `url` and `token` retain their meanings.
+- **Why this works with existing iOS**: iOS's `ServerConfig(pairURL:)` reads only `url` and `token` by name and ignores other parameters. During pairing it first calls `GET /machines`, then connects WS and registers push, and finally exchanges for its own device token with `POST /auth/tokens`. The temporary token must therefore work as a full Bearer during its lifetime; after exchange for a device token, allow a brief grace period before invalidating it.
+- New Apps (Android) read the extra parameters: pin `fp`, record `hub_id`, and add `alt` to the candidates. Include only one or two external candidates in the QR code so it doesn't get too dense; fetch the rest from `/endpoints` after pairing.
+- Already-paired devices without a fingerprint (Android from PR #84): fetch the fingerprint once over an authenticated LAN channel (`hello` or `/endpoints`) and pin it. This has the same trust level as today's plaintext LAN connection (decided, README section 12, question 9).
+- `--legacy` still prints the master token for CLI use and special cases.
+- **Once public direct connection is enabled, the master token accepts only loopback and LAN sources**.
+- Any `full` device token can currently issue new tokens: send the user a "new device paired" notification during pairing so unexpected activity is visible.
 
-### 1.4 加固
+### 1.4 Hardening
 
-- **公网来源拒绝明文**：
-  - 明文监听上来自公网地址的请求一律回 `403 {"code":"tls_required"}`，只放行 `/api/v1/health` 以便客户端提示「请用 https」。
-  - 「公网」的判断要看连接从哪块本机网卡进来，不能只看地址：100.64/10 既是 Tailscale 的网段，也是运营商 NAT 的网段。可以配 `trusted_cidrs` 加白名单。
-  - 已经在经公网明文用 hub 的人升级后会连不上，留一个 `allow_public_plaintext` 开关（默认关），`hub doctor` 和日志里给出提示。
-  - 注意：token 是随请求明文发出去的，hub 拒绝时它已经暴露了。真正的保护在客户端：**公网地址上绝不用 `http://` 发 token**。
-- **鉴权失败限流**：
-  - IPv4 按单个地址、**IPv6 按 /64 前缀**聚合计数，按单个 IPv6 地址限等于没限；
-  - 限流放在查库之前；超限回 `429` + `Retry-After`；
-  - 内网和 VPN 来源不计数，免得同一个家庭网络里的设备互相连累；
-  - 查不到的 token 的缓存加上限；
-  - WS 的鉴权失败也要记日志（现在完全不记），来源打码，日志本身也限速。
-- **主机防火墙兜底**：光猫多数只能整体开关 IPv6 防火墙，一关就把整个家庭网络都暴露了；Docker 发布的端口还会绕过 ufw。文档写清楚 hub 机器上只放行 TLS 端口。
-- IPv6 接口标识用随机值，别用 `::1` 这类好猜的后缀（文档里写给用户）。
+- **Reject plaintext from public sources**:
+  - Requests from public addresses on the plaintext listener return `403 {"code":"tls_required"}`; only `/api/v1/health` is allowed so clients can say "please use https".
+  - Classifying "public" must consider which local interface the connection entered through, not just the address: 100.64/10 is both Tailscale's range and a carrier-grade NAT range. Allow a `trusted_cidrs` allowlist.
+  - Users already accessing the hub over public plaintext lose access after upgrading; keep `allow_public_plaintext` (off by default), with warnings in `hub doctor` and logs.
+  - Note: the token travels with the plaintext request and is already exposed by the time the hub rejects it. The real protection belongs in the client: **never send a token over `http://` to a public address**.
+- **Rate-limit authentication failures**:
+  - Count per IPv4 address and **per /64 IPv6 prefix**; limiting individual IPv6 addresses is effectively no limit;
+  - apply the limit before querying the database; over the limit, return `429` + `Retry-After`;
+  - don't count LAN and VPN sources, so devices in one home network don't penalize each other;
+  - cap the cache of unknown tokens;
+  - log WS authentication failures too (currently not logged at all), mask sources, and rate-limit the logs themselves.
+- **Host firewall as the backstop**: most modems only have an all-or-nothing IPv6 firewall switch, so disabling it exposes the entire home network; Docker-published ports also bypass ufw. Docs must say to allow only the TLS port on the hub machine.
+- Use a random IPv6 interface identifier, not an easy-to-guess suffix like `::1` (explain this to users in the docs).
 
-### 1.5 hub 实例 id
+### 1.5 Hub instance id
 
-`Run()` 打开数据库后读 `settings` 表的 `hub_id`，没有就生成 UUID 写回，不用新迁移。在 `health`、`hello`、配对二维码里下发。客户端用它确认连上的是同一台 hub（旧前缀可能已经分给了别人），并用它给本地数据分作用域（[README.md](README.md) D6）。原 3.5 节并入这里。
+After `Run()` opens the database, read `hub_id` from the `settings` table; if absent, generate a UUID and write it back. No new migration needed. Send it in `health`, `hello`, and the pairing QR code. Clients use it to confirm they're connected to the same hub (the old prefix may have been reassigned to someone else), and to scope local data ([README.md](README.md) D6). The original section 3.5 is merged here.
 
-### 1.6 心跳按连接协商
+### 1.6 Heartbeats negotiated per connection
 
-- **为什么必须由 hub 发起**：Android 深睡时，OkHttp 的客户端 ping 不会触发（它的计时用 `System.nanoTime`，深睡时停走）；后台能用的闹钟（`AllowWhileIdle`）最快 9 分钟一次。后台常驻连接的心跳只能由 hub 发，按连接协商间隔。
-- **协议**：
-  - 客户端连上后在 `client_hello`（3.3）里带 `heartbeat: {interval, pong_timeout}`；
-  - hub 调整这条连接的 WS ping 间隔、pong 超时和 TCP keepalive，并回一条 `client_hello_ack`，写明实际生效的值。hub 的 `hello` 是一连上就发的，早于 `client_hello`，所以生效值要另回一条。
-- **取值**：
-  - 后台从 **4 分钟**起，低于已知的约 5 分钟运营商 NAT 超时（这个数据来自约 2015 年的 2G/3G 测量，4G/5G 的值**没查到**）；按网络自动调整，抖动只往下取。
-  - 前台 20 秒，加上应用层 ping（3.8）判断弱网。
-  - 不发协商的旧连接（现有 iOS）保持 20 秒 / 15 秒不变。
-- **改动面**：集中在 `http.go`（`client` 结构、写协程的 ticker、`onClientMessage`），约 50 行（估计）。耗电和运营商的空闲超时都要实测（[android.md](android.md) 第 10 节）。
+- **Why the hub must initiate them**: during Android deep sleep, OkHttp's client ping doesn't fire (its timer uses `System.nanoTime`, which stops in deep sleep); background alarms (`AllowWhileIdle`) run at most once every 9 minutes. The hub must send the heartbeat for a persistent background connection, with the interval negotiated per connection.
+- **Protocol**:
+  - After connecting, the client includes `heartbeat: {interval, pong_timeout}` in `client_hello` (3.3);
+  - the hub adjusts this connection's WS ping interval, pong timeout, and TCP keepalive, and returns a `client_hello_ack` specifying the effective values. The hub sends `hello` immediately upon connection, before `client_hello`, so the effective values need a separate reply.
+- **Values**:
+  - Start at **4 minutes** in the background, below the known carrier NAT timeout of about 5 minutes (that data comes from 2G/3G measurements around 2015; 4G/5G values **weren't found**); adjust automatically for the network, with jitter only downward.
+  - Foreground: 20 seconds, plus application-layer ping (3.8) to assess weak networks.
+  - Old connections without negotiation (existing iOS) keep 20 seconds / 15 seconds unchanged.
+- **Change surface**: concentrated in `http.go` (`client` struct, the write goroutine's ticker, `onClientMessage`), about 50 lines (estimate). Battery cost and carrier idle timeouts both need real measurements ([android.md](android.md) section 10).
 
-### 1.7 DDNS（可选，推荐）
+### 1.7 DDNS (optional, recommended)
 
-- **为什么推荐**：拨号重连时 IPv4 和 IPv6 前缀一起变，旧连接当场断开。没有 FCM 的 Android 这时收不到新地址；有的地区一天换两次前缀。所以「没有域名」只能算降级模式。
-- **支持的接口**：Cloudflare、阿里云 DNS、DNSPod，或者一个通用的回调 URL。
-- **发布规则**：只发布 1.2 规则选出的稳定地址；A 记录只在确认外部可达时发布；DNS 令牌和 ACME 共用，权限收窄到一个 zone。
-- **手机怎么用**：国内两家 DNS 免费版的 TTL 最低 600 秒，所以手机优先用 hub 下发的字面地址，DNS 名字只用来找回 hub。
+- **Why recommended**: reconnecting the broadband session changes both IPv4 and the IPv6 prefix, immediately breaking old connections. Android without FCM can't receive the new address then; some regions change prefixes twice a day. So "no domain" is only a degraded mode.
+- **Supported APIs**: Cloudflare, Alibaba Cloud DNS, DNSPod, or a generic callback URL.
+- **Publishing rules**: publish only stable addresses selected by the rules in 1.2; publish A records only after external reachability is confirmed; share the DNS token with ACME, restricting permissions to one zone.
+- **How phones use it**: the free tiers of the two Chinese DNS providers have a minimum TTL of 600 seconds, so phones prefer literal addresses sent by the hub and use the DNS name only to find the hub again.
 
 ### 1.8 `personad hub doctor`
 
-一条自检命令，列出：
-- 监听的端口；
-- 主机防火墙是否放行；
-- TUN 代理的风险；
-- 当前发布的候选地址；
-- 证书指纹和到期时间。
+One self-check command that lists:
+- listening ports;
+- whether the host firewall allows them;
+- TUN proxy risks;
+- currently published candidate addresses;
+- certificate fingerprint and expiry.
 
-它还请一个外部点（不在家的 node，或手机）测一遍可达性，给出可以照做的结论，例如「IPv6 入站被拦，去光猫或路由器放行 TLS 端口」。
+It also asks an external point (a node away from home, or a phone) to test reachability and gives actionable conclusions, e.g. "IPv6 inbound traffic is blocked; allow the TLS port on the modem or router".
 
-### 1.9 文档
+### 1.9 Documentation
 
-- 新增 `docs/network.md`，写公网直连：TLS 端口和证书、指纹怎么看和怎么换、光猫和路由器怎么放行 IPv6、DDNS、TUN 代理的回包问题、反向代理会把来源地址变成本机、限流参数。
-- 改掉 README、`docs/config.md`、`docs/server.md`、`docs/protocol.md`、`docs/architecture.md` 里「只放内网 / VPN」「默认 HTTP」的写法。`docs/architecture.md` 图上写的「HTTPS」现在就不准确。逐处的位置见 research/hub-network-current.md 第 7 节。
-- 在 CLAUDE.md「约定」里记下这条用户要求。
+- Add `docs/network.md` for public direct connection: TLS port and certificates, reading and changing fingerprints, allowing IPv6 on the modem and router, DDNS, TUN proxy return-packet problems, reverse proxies making source addresses appear local, and rate-limit parameters.
+- Replace "LAN / VPN only" and "HTTP by default" in README, `docs/config.md`, `docs/server.md`, `docs/protocol.md`, and `docs/architecture.md`. The "HTTPS" label in the `docs/architecture.md` diagram is already inaccurate. Locations are listed in research/hub-network-current.md section 7.
+- Record this user requirement under "Conventions" in CLAUDE.md.
 
-## 2. 必须（Android 首版）
+## 2. Required (first Android release)
 
-### 2.1 手机工具按设备注册和路由
+### 2.1 Register and route phone tools per device
 
-- 现在 `register_phone` 整表覆盖 `h.phoneTools` 和 `phone_tools` 表（`hub.go`），调用发给「真机优先、最近注册」的那台（`http.go` 的 `phoneClient`）。两台手机都在线时互相覆盖，调用落在哪台不确定。而且 Android 没有 `phone_reminders_*`，调用落到 Android 上就是「未知工具」。
-- 改法：
-  - `register_phone` 带 `device_id` 和 `platform`；
-  - 工具表按设备存（新迁移：`phone_tools` 加 `device_id`）；
-  - `mcpTools()` 合并去重（同名工具取能力最多的那份描述）；
-  - `callPhone` 选设备的顺序：有这个工具 → 前台在线 → 最近活跃 → 唤醒有这个工具的设备。
-- 撤销设备凭据时，顺带删掉它的推送注册和工具注册（可选项 4.5 的一部分）。
+- Currently `register_phone` replaces all of `h.phoneTools` and the `phone_tools` table (`hub.go`), and calls go to the "prefer real devices, most recently registered" phone (`phoneClient` in `http.go`). Two online phones overwrite each other, so the destination is uncertain. Android also lacks `phone_reminders_*`, so routing such a call to Android returns "unknown tool".
+- Change:
+  - `register_phone` includes `device_id` and `platform`;
+  - store the tool table per device (new migration: add `device_id` to `phone_tools`);
+  - `mcpTools()` merges and dedups (for the same tool name, use the description with the most capabilities);
+  - `callPhone` chooses a device in this order: has the tool → online in the foreground → most recently active → wake a device with the tool.
+- Revoking device credentials also removes its push registration and tool registration (part of optional item 4.5).
 
-### 2.2 Android 安装包托管和更新检查
+### 2.2 Android package hosting and update checks
 
-没有 Play 商店，Android 的安装包由 hub 托管（[android.md](android.md) 第 9 节）。
+There is no Play Store; the hub hosts the Android package ([android.md](android.md) section 9).
 
-- **存放**：`~/.persona/apps/android/` 下放 APK 和一份 `latest.json`（`version_code`、`version_name`、`sha256`、`size`、`min_sdk`、`notes`）。发布脚本签好 APK 后经 SSH 传上去，不进数据库。
-- **接口**（都要鉴权，走 TLS 端口或内网）：
-  - `GET /api/v1/app/android/latest`：回 `latest.json`；
-  - `GET /api/v1/app/android/apk`：下载，支持 Range（断点续传）。
-- **首次安装**：手机上还没有 App 时没有设备 token。`personad hub pair --android` 在二维码旁边再打印一个内网下载链接，带同一个临时 token（10 分钟），用手机浏览器打开下载；装好后再扫配对二维码。也可以用 adb 或别的方式把 APK 传到手机上。
-- 能力位：`features` 加 `android_update`。
+- **Storage**: APK and `latest.json` under `~/.persona/apps/android/` (`version_code`, `version_name`, `sha256`, `size`, `min_sdk`, `notes`). After signing the APK, the release script uploads it via SSH; it doesn't go into the database.
+- **Endpoints** (all authenticated, through the TLS port or LAN):
+  - `GET /api/v1/app/android/latest`: returns `latest.json`;
+  - `GET /api/v1/app/android/apk`: download, supports Range (resuming).
+- **First install**: a phone without the App has no device token. `personad hub pair --android` prints a LAN download link beside the QR code, carrying the same temporary token (10 minutes); open it in the phone's browser to download, install, then scan the pairing QR code. adb or other APK transfer methods also work.
+- Capability flag: add `android_update` to `features`.
 
-## 3. 建议（可靠性和兼容，和 Android 一起做）
+## 3. Recommended (reliability and compatibility, alongside Android)
 
-### 3.1 操作回执落库（`client_ops`）
+### 3.1 Persist operation receipts (`client_ops`)
 
-- 新迁移，`client_ops` 表：
+- New migration, `client_ops` table:
 
-  | 字段 | 说明 |
+  | Field | Description |
   | --- | --- |
-  | `id` | 客户端生成的 UUID |
-  | `device_id` | 发起的设备 |
+  | `id` | Client-generated UUID |
+  | `device_id` | Initiating device |
   | `kind` | `message` / `resolve` / `interrupt` / `rename` / `close` / `modes` / `stop_loop` / `clear` / `lark_send` / `inbox_reply` / `mail_send` |
-  | `target` | 目标的 JSON |
-  | `digest` | `sha256(kind + 规范化后的参数)` |
+  | `target` | Target JSON |
+  | `digest` | `sha256(kind + normalized parameters)` |
   | `state` | `pending` / `done` / `failed` / `unknown` |
   | `result` | JSON |
-  | `created_at`、`updated_at` | |
+  | `created_at`, `updated_at` | |
 
-- 语义（照 removed 主机端的 `once()`，但落在 Postgres）：
-  - 同 id、同摘要、已完成 → 原样返回结果或原错误，**不再执行**；
-  - 同 id、同摘要、还在 `pending` → 等它完成（有上限），超时返回 `202 {state:"pending"}`；
-  - 同 id、不同摘要 → `409 {code:"op_id_reused"}`；
-  - 只有「可以证明没执行」的确定错误（`input_draft`、`dialog_open`、`invalid`、`stale_session`…）记为已完成的失败，**其他异常保持 `unknown`**。
-- 新接口 `GET /api/v1/ops/{id}`：只读查询，客户端在结果未知时用。
-- 消息的 `client_msg_id` 就是 op id。node 的内存去重（`server/internal/node/sendsafe.go`，10 分钟）继续保留，挡住 hub 和 node 之间的重试；hub 这层挡住部署、重启和超过 10 分钟的重试。
-- `delivered: unknown`（node 打字到一半出错）：hub 记成 `unknown`，并在对话记录里找同一条消息（文字 + 时间窗）做**正向证明**，找到就改成 `done`。找不到的交给客户端「待核对」（[ux.md](ux.md) 5.2）。
-- 清理：保留 30 天。
-- 能力位：`features` 加 `client_ops`。
+- Semantics (following an internal host service's `once()`, but persisted in Postgres):
+  - Same id, same digest, completed → return the original result or error, **don't execute again**;
+  - same id, same digest, still `pending` → wait for completion (bounded); on timeout return `202 {state:"pending"}`;
+  - same id, different digest → `409 {code:"op_id_reused"}`;
+  - only definite errors that **prove nothing was executed** (`input_draft`, `dialog_open`, `invalid`, `stale_session`…) are recorded as completed failures; **other exceptions stay `unknown`**.
+- New endpoint `GET /api/v1/ops/{id}`: read-only query for clients when the result is unknown.
+- A message's `client_msg_id` is its op id. node's in-memory dedup (`server/internal/node/sendsafe.go`, 10 minutes) stays to block retries between hub and node; this hub layer blocks retries across deploys, restarts, and intervals beyond 10 minutes.
+- `delivered: unknown` (node errors halfway through typing): the hub records `unknown` and searches the transcript for the same message (text + time window) as **positive evidence**; if found, change to `done`. If not found, let the client show "Needs verification" ([ux.md](ux.md) 5.2).
+- Cleanup: retain for 30 days.
+- Capability flag: add `client_ops` to `features`.
 
-### 3.2 飞书发送幂等和页完整性
+### 3.2 Idempotent Lark sends and page completeness
 
-- `lark.Send`（`server/internal/lark/lark.go`）现在每次随机生成 clientId。改成接收调用方给的 clientId：
-  - 会话页发送：手机生成；
-  - 收件箱回复、AI 分身发送、助手工具 `lark_send`：hub 按件或按工具调用生成并落库。
-- 飞书网关本来就按 clientId 幂等（已发出的直接返回原消息 id）。
-- 消息投影（`lark.go`）透传 `clientId` 和 `localState`，App 用它们精确地消掉自己的出站气泡。
-- 分页结果透传上游的 `syncState`（`complete` / `local` / `gap`），不再丢掉。App 只在 `complete` 时删本地的行。
+- `lark.Send` (`server/internal/lark/lark.go`) currently generates a random clientId each time. Change it to accept the caller's clientId:
+  - sends from a chat page: generated by the phone;
+  - Inbox replies, AI twin sends, assistant tool `lark_send`: generated and persisted by the hub per item or tool call.
+- The Lark gateway already dedups by clientId (an already-sent request returns the original message id).
+- Message projections (`lark.go`) pass through `clientId` and `localState`, letting the App remove its own outgoing bubbles precisely.
+- Paginated results pass through upstream `syncState` (`complete` / `local` / `gap`) instead of dropping it. The App deletes local rows only for `complete`.
 
-### 3.3 客户端上报自己的能力（双向协商）
+### 3.3 Clients report their capabilities (two-way negotiation)
 
-- WS：客户端连上后发 `{"type":"client_hello","device_id","platform","version","build","os":{"name","version","sdk"},"features":[…],"heartbeat":{…}}`（心跳协商见 1.6）。`os` 是识别出的系统（澎湃 OS、ColorOS、鸿蒙 4…）和版本，hub 汇总后就知道哪家哪版的设置页跳转失效了（[android.md](android.md) 5.18）。
-- HTTP：请求头带 `X-Jarvis-Client: <platform>/<version>`。
-- hub 记在连接上，用于：
-  - 推送和手机工具按平台路由；
-  - 不认识新交互类型（比如 `elicitation`）的客户端收到降级的屏幕卡；
-  - 日志排查。
-- 旧客户端不发 `client_hello`，按 iOS 的旧版本处理。
+- WS: after connecting, the client sends `{"type":"client_hello","device_id","platform","version","build","os":{"name","version","sdk"},"features":[…],"heartbeat":{…}}` (heartbeat negotiation in 1.6). `os` is the detected system (HyperOS, ColorOS, HarmonyOS 4…) and version; aggregated by the hub, it shows which vendor/version's Settings deep links have broken ([android.md](android.md) 5.18).
+- HTTP: include the header `X-Jarvis-Client: <platform>/<version>`.
+- The hub records it on the connection for:
+  - platform-based routing of push and phone tools;
+  - fallback screen cards for clients that don't know a new interaction type (e.g. `elicitation`);
+  - log-based troubleshooting.
+- Old clients send no `client_hello` and are treated as an old iOS version.
 
-### 3.4 统一错误体
+### 3.4 Unified error body
 
-- `{"error":"给人看的话","code":"机器码","retryable":true|false,"delivered":"none|unknown|yes"}`，保留现有的 `{error}` 和 409 平铺字段（`http.go`）。
-- 主 API 的 404 / 405 也回 JSON。现在是 Go 默认的纯文本，只有邮件子路由改写成了 JSON。
-- 客户端只认 `code`。
+- `{"error":"human-readable message","code":"machine code","retryable":true|false,"delivered":"none|unknown|yes"}`, retaining the existing `{error}` and flattened 409 fields (`http.go`).
+- Main API 404 / 405 responses are JSON too. They're currently Go's default plain text; only mail subroutes rewrite them as JSON.
+- Clients key only on `code`.
 
-### 3.5 hub 实例 id
+### 3.5 Hub instance id
 
-已并入 1.5。
+Merged into 1.5.
 
-### 3.6 Fleet（锁屏汇总）的 Android 分支
+### 3.6 Android branch of Fleet (Lock Screen summary)
 
-**不用改**：Android 只走常驻连接，hub 已经经 WS 广播 `fleet` 事件（`liveactivity.go`），前台服务直接用它更新那条常驻通知。原稿里「按设备类型发 FCM `type=fleet`」不做。
+**No change needed**: Android uses only the persistent connection, and the hub already broadcasts `fleet` events over WS (`liveactivity.go`); the foreground service uses them directly to update its persistent notification. The draft's "send FCM `type=fleet` by device type" is not being done.
 
-### 3.7 交互的来源信息和新类型
+### 3.7 Interaction source information and new types
 
-- 子 Agent 来源：hook 输入里有 `agent_id` / `agent_type` 时透传到 Interaction。
-- MCP 来源：PermissionRequest 针对 `mcp__*` 工具时，带上服务器名和配置来源。拿不到就不带，客户端显示「未提供」。
-- 新交互类型 `elicitation`（MCP 表单 / 链接）：
-  - node 接 Claude Code 的 Elicitation hook；
-  - Resolution 增加 `action: accept|decline|cancel` 和 `content`；
-  - 只发给声明了 `elicitation` 能力的客户端，其他客户端退回成「去终端处理」。
-- 计划审批：保持现有的 `mode`。App 侧统一审批策略表，hub 不需要改。
+- Sub-Agent source: pass `agent_id` / `agent_type` from hook input through to Interaction when present.
+- MCP source: when PermissionRequest targets an `mcp__*` tool, include server name and configuration source. Omit when unavailable; clients show "Not provided".
+- New interaction type `elicitation` (MCP forms / links):
+  - node handles Claude Code's Elicitation hook;
+  - Resolution gains `action: accept|decline|cancel` and `content`;
+  - send only to clients declaring `elicitation`; others fall back to "handle in the terminal".
+- Plan approval: keep the existing `mode`. The App unifies its approval policy table; no hub change needed.
 
-### 3.8 应用层 ping / pong（Android 判断弱网要用）
+### 3.8 Application-layer ping / pong (for Android weak-network detection)
 
-- OkHttp 的 WebSocket 心跳全自动：没有手动 ping 的 API，也没有 pong 回调，拿不到往返时间。iOS 靠「5 秒内回没回 pong」判断弱网，Android 做不到。
-- 加一条客户端发起的 JSON 心跳：App 发 `{"type":"ping","id":"<n>"}`，hub 原样回 `{"type":"pong","id":"<n>"}`。`id` 用字符串：iOS 的 `Envelope` 里 `id` 是字符串（1.2）。两端都按 id 计时，弱网判断的规则和 iOS 一致（[ux.md](ux.md) 5.5）。协议层的 ping 继续保留，用来发现死连接。
-- 能力位：`features` 加 `app_ping`。旧 hub 没有这个能力时，Android 只能在连接断了以后才知道。
+- OkHttp's WebSocket heartbeat is fully automatic: no manual ping API, no pong callback, no round-trip time. iOS assesses weak networks by "did pong return within 5 seconds"; Android can't do that.
+- Add a client-initiated JSON heartbeat: the App sends `{"type":"ping","id":"<n>"}`, and the hub echoes `{"type":"pong","id":"<n>"}`. Use a string `id`: iOS's `Envelope` has a string `id` (1.2). Both clients time by id and use the same weak-network rules as iOS ([ux.md](ux.md) 5.5). Keep protocol-level ping to detect dead connections.
+- Capability flag: add `app_ping` to `features`. With an old hub lacking this capability, Android only knows once the connection breaks.
 
-### 3.9 通知事件经 WS 下发给常驻连接的设备
+### 3.9 Notification events sent over WS to persistently connected devices
 
-- PR #84 现在由手机自己判断「做完了」：看到「工作中 → 完成未看」且 App 不在前台就弹。这和 hub 给 iPhone 的推送策略不一致。hub 的策略（`notify.go`）是：
-  - 等 `done_delay_seconds`；
-  - 只推长任务；
-  - 后台任务结束才推；
-  - 在电脑上或 App 里看过就不推；
-  - 屏蔽的不推；
-  - 助手刚 `notify_user` 过就不推。
-- 改法：hub 在决定给 iPhone 发 APNs 的同一个地方，给声明了 `ws_notify` 能力、而且连着的设备发
-  `{"type":"notify","kind":"done|interaction|assistant","machine_id","session_id","interaction_id","title","subtitle","body"}`。设备的通知偏好（`prefs.input`、`prefs.done`）照样生效。手机只负责显示，不再自己算。
-- 交互的通知仍然用现有的 `interaction` / `interaction_resolved` 事件（Android 收到就发通知、处理后撤回），不用改。
-- 和 APNs 共用同一套「发什么、发给谁」的判断，只是送达的通道不同。
+- In PR #84 the phone decides "done" itself: when it sees "Working → Unread" while the App isn't foregrounded, it notifies. This differs from the hub's push policy for iPhone. The hub policy (`notify.go`) is:
+  - wait `done_delay_seconds`;
+  - notify only for long tasks;
+  - notify only when a background task ends;
+  - don't notify if already seen on the computer or in the App;
+  - don't notify if muted;
+  - don't notify if the assistant just called `notify_user`.
+- Change: at the same point where the hub decides to send APNs to iPhone, send connected devices declaring `ws_notify`
+  `{"type":"notify","kind":"done|interaction|assistant","machine_id","session_id","interaction_id","title","subtitle","body"}`. Device notification preferences (`prefs.input`, `prefs.done`) still apply. The phone only displays them; it no longer computes the policy.
+- Interaction notifications still use the existing `interaction` / `interaction_resolved` events (Android posts a notification on receipt and withdraws it when resolved); no changes needed.
+- Share the same "what to send, to whom" decision as APNs; only the delivery channel differs.
 
-### 3.10 设备连接记录（Android 的后台自检要用）
+### 3.10 Device connection history (for Android background diagnostics)
 
-- 国产系统没有「查自启动、查后台白名单」的接口，设没设对只能看结果：常驻连接断了多久。hub 本来就知道每条 WS 什么时候连上、什么时候断，把它记下来。
-- 新迁移，`device_sessions` 表：`device_id`、`connected_at`、`disconnected_at`、断开原因（pong 超时 / 对端关闭 / 被新连接顶掉 / hub 重启）、来源前缀（打码）、协商的心跳间隔。保留 14 天。
-- hub 会被别的 agent 随时重新部署（CLAUDE.md），所以要落库；hub 重启造成的断开单独标出来，不算在手机头上。
-- 新接口 `GET /api/v1/devices/{id}/sessions?since=`：诊断页显示「过去 24 小时后台断开 N 次，最长 X 分钟」；A1 的过夜存活实测也用它（[android.md](android.md) 5.9、第 8 节）。
-- 只记时间和原因，不记内容。
+- Chinese Android systems have no API to "check autostart / background allowlisting"; whether settings are correct can only be judged by the result: how long the persistent connection was down. The hub already knows when each WS connects and disconnects; record it.
+- New migration, `device_sessions` table: `device_id`, `connected_at`, `disconnected_at`, disconnect reason (pong timeout / peer closed / replaced by a new connection / hub restart), source prefix (masked), negotiated heartbeat interval. Retain 14 days.
+- Other Agents may redeploy the hub at any time (CLAUDE.md), so persist this; mark disconnects caused by hub restarts separately rather than blaming the phone.
+- New endpoint `GET /api/v1/devices/{id}/sessions?since=`: the diagnostics page shows "N background disconnects in the past 24 hours, longest X minutes"; A1's overnight survival tests use it too ([android.md](android.md) 5.9, section 8).
+- Record only times and reasons, not content.
 
-## 4. 可选
+## 4. Optional
 
-| # | 改动 | 涉及 |
+| # | Change | Affects |
 | --- | --- | --- |
-| 4.1 | ~~一次性配对码~~：改成 1.3 的「短时临时 token，二维码格式不变」，兼容现有 iOS | — |
-| 4.2 | **文案平台中立**：工具失败提示、助手 CLAUDE.md 里的说明、实时快照、`ask_user` 工具描述里写死的「iPhone」，改成「手机」或按在线手机的平台说 | `hub.go`、`assistant.go`、`assistant_snapshot.go`、`assistant_tools.go` |
-| 4.3 | **交互处理后撤回通知**：`Pusher.clear` 现在是空函数。Android 推一条 `NORMAL` 的 `type=interaction_resolved`，App 取消对应通知 | `push.go`、`hub.go` |
-| 4.4 | ~~推送直接带工具调用~~：不做。Android 常驻连接不需要唤醒；iOS 以后跟进时再看 | — |
-| 4.5 | **设备凭据和推送设备关联**：`device_tokens` 记平台和推送 `device_id`，撤销时一起清理 | `devicetokens.go`、`db.go`、迁移 |
-| 4.6 | ~~Gmail 的 Android 登录~~：不做。Google 的登录接口依赖 Google Play 服务；邮箱账号存在 hub 上、两端共用，在 iPhone 上加，或用应用专用密码走普通 IMAP | — |
-| 4.7 | ~~UnifiedPush~~：不做。Android 只走常驻连接 | — |
-| 4.8 | **目标实例指纹**：针对某个 Agent 的写操作带「机器 + pane + 进程启动标识 + session id」，node 执行前核对，不一致就返回 `stale_session` | `node/*`、`proto` |
-| 4.9 | **屏幕卡用完整命令**：herdr 报 blocked、对话记录里正好有一个没完成的 tool_use 时，把完整的 tool_input 附到屏幕卡上，免得显示被截断的屏幕文字 | `server/internal/screen`、`node` |
-| 4.10 | **提示词模板下沉**：「交给 Persona」「飞书总结」「停止循环」这几段提示词现在写在客户端（`KnowledgeView`、`LarkChatView`、`AppModel`），挪到 hub，两端就不用各维护一份 | 新接口或助手配置 |
-| 4.11 | **会话全文搜索**：`GET /api/v1/sessions/{m}/{s}/search?q=`，node 在对话记录里搜，返回 seq 和摘要；客户端连续向前加载到那里 | `node`、`transcript` |
-| 4.12 | **文档对齐**：`docs/protocol.md` 补上漏写的接口（`queue`、`info`、`seen`、`file`、知识库、`lark/raw` 等）和事件（`assistant_schedule`、`hook_event`、`error`、客户端发的 `seen`），删掉代码里没有的 `session` / `ping` / `pong`；核对 `docs/architecture.md` 里「没有 App 在线时 hook 立即放行」（代码里没找到这段逻辑） | 文档 |
-| 4.13 | **协议样本导出**：Go 测试把典型的线上 JSON（会话、items 各种类型、交互四种、Fleet、收件箱、飞书消息）写到 `spec/fixtures/wire/`（`-update` 刷新），两端的解码测试读同一批 | `server/internal/proto` 测试 |
-| 4.14 | **mock hub 对齐**：在 Go 测试里校验 `scripts/mock/mock_hub.py` 的响应格式；mock 增加「已执行但丢掉回执」「地址变了」「证书不符」的故障开关，以及 TLS 监听 | `scripts/mock/mock_hub.py`、Go 测试 |
-| 4.15 | **崩溃日志上传**：不接 Firebase。App 把 `ApplicationExitInfo` 和未捕获的异常存在本地，下次启动时 `POST /api/v1/devices/{id}/crashes`，hub 落库、设置里能看；以后 iOS 跟进时共用 | 新接口、迁移 |
+| 4.1 | ~~One-time pairing code~~: replaced by 1.3's "short-lived temporary token, QR format unchanged", compatible with existing iOS | — |
+| 4.2 | **Platform-neutral copy**: replace hardcoded "iPhone" in tool failure messages, the assistant's CLAUDE.md, live snapshots, and the `ask_user` tool description with "phone" or the online phone's platform | `hub.go`, `assistant.go`, `assistant_snapshot.go`, `assistant_tools.go` |
+| 4.3 | **Withdraw notifications after interactions are resolved**: `Pusher.clear` is currently empty. Send Android a `NORMAL` `type=interaction_resolved`; the App cancels the matching notification | `push.go`, `hub.go` |
+| 4.4 | ~~Tool calls directly in push~~: not doing this. Android's persistent connection needs no wakeup; revisit when iOS follows later | — |
+| 4.5 | **Associate device credentials with push devices**: `device_tokens` records platform and push `device_id`; clean both up on revocation | `devicetokens.go`, `db.go`, migration |
+| 4.6 | ~~Gmail sign-in on Android~~: not doing this. Google's sign-in API depends on Google Play services; mail accounts live on the hub and are shared across clients, so add them on iPhone or use an app password with ordinary IMAP | — |
+| 4.7 | ~~UnifiedPush~~: not doing this. Android uses only the persistent connection | — |
+| 4.8 | **Target instance fingerprint**: writes targeting an Agent include "machine + pane + process start identity + session id"; node checks before execution and returns `stale_session` on mismatch | `node/*`, `proto` |
+| 4.9 | **Full commands in screen cards**: when herdr reports blocked and the transcript contains an unfinished tool_use, attach the full tool_input to the screen card rather than showing truncated terminal text | `server/internal/screen`, `node` |
+| 4.10 | **Move prompt templates to the hub**: "Hand to Persona", "Lark summary", and "Stop loop" prompts currently live in the clients (`KnowledgeView`, `LarkChatView`, `AppModel`); move them to the hub so both clients don't maintain copies | New endpoint or assistant config |
+| 4.11 | **Full-text session search**: `GET /api/v1/sessions/{m}/{s}/search?q=`; node searches the transcript and returns seq and excerpt, and the client keeps loading backward to that point | `node`, `transcript` |
+| 4.12 | **Align docs**: add missing endpoints (`queue`, `info`, `seen`, `file`, knowledge base, `lark/raw`, etc.) and events (`assistant_schedule`, `hook_event`, `error`, client-sent `seen`) to `docs/protocol.md`; remove `session` / `ping` / `pong` absent from code; check `docs/architecture.md`'s claim "hooks are immediately allowed when no App is online" (no such logic found in code) | Docs |
+| 4.13 | **Export protocol samples**: Go tests write representative production JSON (sessions, every items type, four interaction types, Fleet, Inbox, Lark messages) to `spec/fixtures/wire/` (`-update` refreshes); both clients' decode tests read the same set | `server/internal/proto` tests |
+| 4.14 | **Align mock hub**: validate `scripts/mock/mock_hub.py` response formats in Go tests; add fault switches for "executed but receipt lost", "address changed", "certificate mismatch", and a TLS listener | `scripts/mock/mock_hub.py`, Go tests |
+| 4.15 | **Upload crash logs**: no Firebase. The App stores `ApplicationExitInfo` and uncaught exceptions locally, then calls `POST /api/v1/devices/{id}/crashes` on next launch; the hub persists them and Settings can show them; shared when iOS follows later | New endpoint, migration |
 
-## 5. 不需要改的
+## 5. No changes needed
 
-会话、items、交互、终端、文件、收件箱、飞书、邮件（Gmail 登录除外）、知识库、监控、pins / mutes、每台设备的通知设置：都是平台无关的 JSON，Android 直接用。`prefs.island` 的结构原样复用为「状态栏胶囊显示什么」。
+Sessions, items, interactions, terminal, files, Inbox, Lark, mail (except Gmail sign-in), knowledge base, monitoring, pins / mutes, and per-device notification settings are all platform-independent JSON that Android can use directly. Reuse the `prefs.island` structure unchanged for "what the status bar capsule shows".
 
-## 6. 顺序
+## 6. Order
 
-1. 第 1 节（公网直连）和 3.3、3.4、3.8 放在规格阶段（P0）做：Android 重组和公网直连都要用。每一步都用现有 iOS App 验证不受影响。
-2. 2.1、2.2 和 3.9 和 Android 首版（A2）一起做：2.1 避免 iPhone 的手机工具被覆盖，2.2 让测试的人能在 App 里升级，3.9 让「做完了」和 iPhone 一致。
-3. 3.10 和 Android 的 A1 一起做：过夜存活的实测要用它。
-4. 3.1、3.2 和 Android 的 outbox 改造一起做（A3）。
-5. 4.x 按需。
+1. Do section 1 (public direct connection) and 3.3, 3.4, 3.8 in the specification phase (P0): Android restructuring and public direct connection both need them. Verify each step leaves the existing iOS App unaffected.
+2. Do 2.1, 2.2, and 3.9 with the first Android release (A2): 2.1 prevents overwriting iPhone phone tools, 2.2 lets testers upgrade in the App, and 3.9 makes "done" consistent with iPhone.
+3. Do 3.10 with Android A1: overnight survival measurements need it.
+4. Do 3.1 and 3.2 with Android's outbox rework (A3).
+5. 4.x as needed.

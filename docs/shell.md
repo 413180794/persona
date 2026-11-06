@@ -1,180 +1,178 @@
-# 新外壳的状态模型（哪一页在前）
+# State model of the new shell (which page is in front)
 
-新外壳（`docs/ios.md`「新外壳」）的「助手 | Agents」切换、两页横条、抽屉、各页的导航栈，背后谁说了算、怎么同步、怎么测。
-2026-11-02 重做，起因是用户报的问题和一连串补丁。
+Behind the new shell's (`docs/ios.md` ("New shell")) "Assistant | Agents" switcher, the two-page strip, the drawer, and each page's navigation stack: who is in charge, how things sync, and how it's tested.
+Reworked 2026-11-02, prompted by a user report and a string of patches.
 
-## 起因
+## Background
 
-用户原话（2026-11-02）：「在查看完 Agent 的内容之后，退出回来想要切回助手，点击顶部的助手与 Agent 的切换 Tab，发现点到 Agent
-无法真正切换到 Agent 的界面……感觉现在这个 UI 状态管理上面存在底层的设计不是很合理的问题，导致好像一直在缝缝补补」。
+The user's words (2026-11-02): "After viewing an Agent's content, I go back and want to switch to the assistant. I tap the Assistant / Agents switcher tab at the top and find that tapping Agents
+doesn't actually switch to the Agents screen… It feels like the UI state management has an underlying design problem, which is why it seems we keep patching it."
 
-之前补过的：#174 搜索框和顶栏重叠、#182 知识库搜索右滑返回后导航栏残留、#190 左右滑切页、#178 角标导致重建、#203 头像、
-56b2ead 筛选条搬进列表、`ShellBarAtRest` / `NoRowSwipe`。每次修的是一个症状，「当前是哪页」本身没有一个说了算的地方。
+Earlier patches: #174 search field overlapping the top bar, #182 nav bar left over after swiping back from knowledge search, #190 swiping left / right to switch pages, #178 a badge causing rebuilds, #203 avatar,
+56b2ead moving the filter bar into the list, `ShellBarAtRest` / `NoRowSwipe`. Each fixed one symptom; "which page is current" itself had no single source of truth.
 
-## 复现（改之前）
+## Reproduction (before the change)
 
-`ShellRaceTests` 用坐标点击模拟手指（`ShellFinger`，不点无障碍元素）：Agents → 打开一个 Agent 的对话 → 返回（返回按钮 / 右滑，
-返回动画没结束就点、0.15 s、0.4 s、1 s 后点；对话正在流式输出时退出）→ 点助手 → 点 Agents。每一步读 DEBUG 探针
-（`probe.shell`：横条停在哪页、选中的段、App 的 tab、抽屉、两页是否在根部、连接状态）和 `ShellTrace`（最近的点击、路由、滑动事件）。
+`ShellRaceTests` simulates a finger with coordinate taps (`ShellFinger`, not tapping accessibility elements): Agents → open an Agent's chat → go back (back button / swipe right;
+tap before the back animation finishes, and after 0.15 s, 0.4 s, 1 s; leave while the chat is streaming) → tap Assistant → tap Agents. Each step reads the DEBUG probe
+(`probe.shell`: which page the strip rests on, the selected segment, the App's tab, the drawer, whether both pages are at root, connection state) and `ShellTrace` (recent taps, routes, swipe events).
 
-- 12 轮里 4 轮复现：探针是「横条停在助手，tab=agents」，Agents 段加粗，横条不动。
-- 追踪是这样的：`switch chats` → `tab assistant->chats`，之后再没有外壳的 body，也没有 `route`。也就是说，点击到了切换段，
-  `AppModel.selectedTab` 也改了，但外壳靠的 `.onChange(of: model.selectedTab)` 没触发（SwiftUI 没有重新求外壳的 body），横条没收到要滑的指令。
-- 分叉以后点不回来：切换段按 `selectedTab` 决定哪一段是「已选中」，已选中的那段是一个 Menu（再点一下打开这页的选项）。
-  助手顶栏传给 Agents 段的菜单是空的，所以之后每次点 Agents 都是打开一个空菜单，看上去就是点了没反应。
-- 拖动也会分叉：`ShellPagerTests` 在 10 次矩阵里 7 次随机挂，探针是「横条停在 Agents，tab=assistant」，追踪里拖动 settle 之后同样没有 `route`。
-- 快速连点：`slide(to:)` 静止时下一轮才开始动；这期间反方向的点击被「位置已经在那」挡掉，等它开始动又滑去前一次点的那页，tab 和横条反了。
-- 滑动中（约 0.4 s）点击会丢：两页自己的顶栏这时透明，顶替的 `ShellMovingBar` 整条不接触摸。
+- Reproduced in 4 of 12 rounds: the probe says "strip rests on assistant, tab=agents", the Agents segment is bold, and the strip doesn't move.
+- The trace reads: `switch chats` → `tab assistant->chats`, then no more shell body and no `route`. So the tap reached the switcher,
+  and `AppModel.selectedTab` changed, but the shell's `.onChange(of: model.selectedTab)` didn't fire (SwiftUI didn't re-evaluate the shell's body), and the strip never got the instruction to slide.
+- Once diverged, you can't tap your way back: the switcher decides which segment is "selected" from `selectedTab`, and the selected segment is a Menu (tap again to open this page's options).
+  The assistant top bar passed an empty menu to the Agents segment, so every later tap on Agents opened an empty menu, which looks like the tap did nothing.
+- Dragging diverges too: `ShellPagerTests` failed randomly 7 times in a 10-run matrix, with the probe at "strip rests on Agents, tab=assistant" and, again, no `route` in the trace after the drag settles.
+- Fast repeated taps: when idle, `slide(to:)` only starts moving on the next run loop; a tap in the opposite direction during that window was blocked by "already there", and once it started moving it slid to the previously tapped page, leaving tab and strip reversed.
+- Taps during a slide (about 0.4 s) were lost: the two pages' own top bars are transparent at that point, and the stand-in `ShellMovingBar` accepts no touches at all.
 
-## 改之前：「当前是哪页」有五个来源
+## Before the change: five sources for "which page is current"
 
 ```
- 通知 / Siri / 收件箱 / 抽屉 … (≈30 处)            切换段 (Binding)
-                 │                                        │
-                 ▼                                        ▼
+ notifications / Siri / Inbox / drawer … (≈30 sites)        switcher (Binding)
+                 │                                                │
+                 ▼                                                ▼
         AppModel.selectedTab  ──── ShellView.onChange ────►  route ──► ShellPager.slide(to:)
-          ▲        │        （会漏：没有重新求 body 就不触发）               │
+          ▲        │        (leaks: doesn't fire if body isn't re-evaluated)  │
           │        │                                                     ▼
-          │        └─► 切换段的选中态、哪一段是 Menu           ShellPager.position / page
-          │                                                  │  药丸、两页的位置 / 透明 / 接不接触摸、
-   pager.settled ◄─── 拖动松手 ◄──────────────────────────────┘  顶栏、DrawerPan 的方向、tabIsActive(#211)
+          │        └─► switcher's selected state, which segment is a Menu   ShellPager.position / page
+          │                                                  │  pill, both pages' position / opacity / hit testing,
+   pager.settled ◄─── drag release ◄──────────────────────────┘  top bar, DrawerPan direction, tabIsActive(#211)
 ```
 
-| 来源 | 谁写 | 谁读 | 和别的怎么同步 |
+| Source | Written by | Read by | How it syncs with the others |
 | --- | --- | --- | --- |
-| `AppModel.selectedTab` | 约 30 处路由、切换段的 Binding、拖动 settle | 切换段（选中态、Menu 还是按钮）、外壳的 `onChange` | `onChange` → `route` → `pager.slide`；会漏 |
-| `ShellPager.position`（`page` 由它算） | 拖动、`slide`、settle 的动画 | 药丸、两页位置 / 透明 / 接触摸 / 层级、顶栏、`DrawerPan`、`tabIsActive` | settle 时回调写 `selectedTab` |
-| 各页的导航栈 | `AssistantView`、`ChatsView` 自己的 `path` | 只报给外壳「在不在根部」（`chatAtRoot` / `workAtRoot`） | `onChange(of: path.isEmpty)` |
-| 抽屉 `AssistantDrawer` | 拖动、头像按钮、抽屉里的行 | `DrawerPan`、布局 | 和页无关，只看「当前页在不在根部」 |
-| `tabIsActive`（#211） | `ShellPageSlide` 按 `pager.page` | 轮询、已读上报 | 跟着横条，不跟着选中 |
+| `AppModel.selectedTab` | ~30 routing sites, the switcher's Binding, drag settle | Switcher (selected state, Menu or button), the shell's `onChange` | `onChange` → `route` → `pager.slide`; leaks |
+| `ShellPager.position` (`page` derived from it) | Drag, `slide`, settle animation | Pill, both pages' position / opacity / hit testing / z-order, top bar, `DrawerPan`, `tabIsActive` | Callback writes `selectedTab` on settle |
+| Each page's navigation stack | `AssistantView`'s and `ChatsView`'s own `path` | Only reports "at root or not" to the shell (`chatAtRoot` / `workAtRoot`) | `onChange(of: path.isEmpty)` |
+| Drawer `AssistantDrawer` | Drag, avatar button, rows in the drawer | `DrawerPan`, layout | Independent of pages; only looks at "is the current page at root" |
+| `tabIsActive` (#211) | `ShellPageSlide`, from `pager.page` | Polling, read reporting | Follows the strip, not the selection |
 
-不一致或者有竞态的地方：前两行之间只有一条会漏的 `onChange`；切换段读 tab、药丸读 position，分叉时同一个控件上两种说法；
-`slide` 的异步启动和「已在目标」判断；滑动中点击无处落地。
+Where they disagree or race: only a leaky `onChange` connects the first two rows; the switcher reads tab while the pill reads position, so after a divergence one control says two things;
+`slide`'s async start and its "already at target" check; taps during a slide have nowhere to land.
 
-**不在前面的那页**一直留在窗口里（两页是一个 ZStack，Agents 第一次用到后就不拆）：透明、`allowsHitTesting(false)`、
-`accessibilityHidden`。但它的 UIKit 部分（玻璃按钮、Menu 的 UIButton、导航栏）在推出页面右滑返回后又回到了无障碍树，
-XCUITest 能点到它（`ShellSwitchTests` 曾因此点到隐藏的切换段）；真实手指的点击没有落到它上面过。所以现在不在前面那页的顶栏干脆不画（`ShellBarAtRest`）。
-页面被推出的页盖住时（助手推着收件箱、机器，Agents 推着对话），它的顶栏在窗口外，接了滑动的动画也跑不完，横条的 `settle`（`.removed`）就一直等，
-两页都停在「滑动中」不接点按（2026-11-03，从收件箱的需要你进 Agent 对话，`ShellInboxAgentTests`）。所以各页顶栏的出现消失不带动画，
-切换器的药丸只有 `ShellMovingBar` 那条跟着 position 走（`shellPillFollowsStrip`），各页顶栏里的停在 `shell.page`；切换器选中段开不开菜单也只看 `moving`，不看 `pager.page`。
-各页顶栏里的东西一律不读 `position` 和由它算出的 `pager.page`。`settle` 另有 1.2 秒兜底（`settle lost`）。
+**The page not in front** always stays in the window (the two pages are one ZStack, and Agents is never torn down after first use): transparent, `allowsHitTesting(false)`,
+`accessibilityHidden`. But its UIKit parts (glass buttons, the Menu's UIButton, the navigation bar) came back into the accessibility tree after a pushed page was swiped back,
+and XCUITest could tap them (`ShellSwitchTests` once tapped the hidden switcher that way); real finger taps never landed on it. So now the top bar of the page not in front isn't drawn at all (`ShellBarAtRest`).
+When a page is covered by a pushed page (the assistant pushing Inbox or machines, Agents pushing a chat), its top bar is outside the window, a slide animation attached to it never finishes, and the strip's `settle` (`.removed`) waits forever,
+leaving both pages "sliding" and ignoring taps (2026-11-03, entering an Agent chat from Inbox's Needs you, `ShellInboxAgentTests`). So the pages' top bars appear and disappear without animation;
+only the switcher pill in `ShellMovingBar` follows position (`shellPillFollowsStrip`), while the pills in the pages' top bars stay on `shell.page`; whether the switcher's selected segment opens a menu also looks only at `moving`, not `pager.page`.
+Nothing in a page's top bar reads `position` or the `pager.page` derived from it. `settle` also has a 1.2 s fallback (`settle lost`).
 
-**顶栏**：每页各画一个（`AssistantTopBar`、`AgentsTopBar`），滑动中外壳画一个 `ShellMovingBar` 顶替；同一时刻只有一条在。
-三条都用 `.shellTopBarScaled()`，字号到 `Theme.Shell.topBarLargestTypeSize`（xxxLarge）就不再变大（#340）。顶替的那条要是还用 `.shellScaled()`，辅助功能大字号下会比两页的顶栏大，滑动开始和停下时顶栏会跳一下。`ShellTopBarScaleTests` 检查这三条。
-
-## 现在：`ShellState.page` 是唯一来源
+**Top bars**: each page draws its own (`AssistantTopBar`, `AgentsTopBar`), and during a slide the shell draws a `ShellMovingBar` as a stand-in; only one exists at any moment.
+All three use `.shellTopBarScaled()`, so the font stops growing at `Theme.Shell.topBarLargestTypeSize` (xxxLarge) (#340). If the stand-in still used `.shellScaled()`, it would be larger than the pages' top bars at accessibility sizes, and the top bar would jump when a slide starts and stops. `ShellTopBarScaleTests` checks all three.
+## Now: `ShellState.page` is the single source
 
 ```
- 通知 / Siri / 收件箱 / 抽屉 …        切换段（含滑动中顶替的那条）      拖动松手（pager.settled）
+ notifications / Siri / Inbox / drawer …   switcher (incl. the stand-in during a slide)   drag release (pager.settled)
             │                                   │                            │
    AppModel.selectedTab = x                     │                            │
-            │ didSet，当场（tabRouter）          │                            │
+            │ didSet, immediately (tabRouter)   │                            │
             ▼                                   ▼                            ▼
    ShellState.route(x)  ───────────────►  ShellState.select(page)  ◄─────────┘
-                                          │  page = p（唯一来源）
-                                          │  pager.slide(to: p)（幂等；没开始的被替换，进行中的掉头）
-                                          │  AppModel.selectedTab = 对应的 tab（给别处读）
+                                          │  page = p (single source)
+                                          │  pager.slide(to: p) (idempotent; a pending slide is replaced, one in progress turns around)
+                                          │  AppModel.selectedTab = matching tab (for others to read)
                                           ▼
-     读 page 的：切换段的选中态和 Menu、哪页接触摸 / 被 VoiceOver 读、tabIsActive、抽屉能不能拉（当前页在不在根部）、探针
-     读 position 的：药丸、两页滑动的位置、顶栏在滑动中让位
+     Reads page: switcher's selected state and Menu, which page takes touches / is read by VoiceOver, tabIsActive, whether the drawer can be pulled (is the current page at root), probe
+     Reads position: pill, both pages' slide position, top bars giving way during a slide
 ```
 
-- **一个来源**：`ShellState.page`（0 助手、1 Agents、2 为用户开启后的消息）。改它只有两个方法：`select`（切换段、拖动 settle）和 `route`（任何地方写了 `AppModel.selectedTab`）。
-  两个都是**当场**做完，不等视图重画：`AppModel.selectedTab` 的 `didSet` 直接调 `tabRouter`（外壳出现时 `attach`，消失时 `detach`），
-  不再用 `onChange`。`.mail` 推收件箱回到助手页，`.settings` 开设置浮层、tab 回到在前的那页；打开「旧布局」时外壳不再接路由，交给 tab 栏。
-- **横条跟着 page 走**：`ShellPager.slide(to:)` 记着要去哪（`goal`），同一个目标再来一次什么都不做；还没开始的滑动被新的替换，进行中的掉头；
-  没有位移可动画时直接停下（不会因为等不到动画结束而一直 `moving`）。拖动时手指说了算，松手 settle 到哪页就 `select` 哪页。
-- **切换段只读 page**：选中态是 page；只有横条静止在这一页时，这一段才是 Menu（再点打开选项），滑动中两段都是普通按钮。
-  点击直接 `select`，不经过 Binding。滑动中顶替的 `ShellMovingBar` 上的切换段也接点击：动画中来的点击不丢，最后一次说了算。
-  横条在手指按着时停下（点击刚好赶上动画结束）时，`ShellMovingBar` 留到这根手指抬起（`ShellPager.lingering`，窗口上的 `Watcher` 报手指按下 / 抬起）：
-  原来停下就拿掉，按在它切换段上的那一下没有着落，BeautifulUI 下动画更慢，`testQuickTapsEndOnTheLast` 几乎每次都碰上（第三下点击丢了）。
-- **不在前面的页**：只有「横条静止在这页而且 page 就是这页」时接触摸、被 VoiceOver 读；`tabIsActive` 跟 page（拖到一半不算换页）。
-  顶栏只画在前面那页的，滑动中只有外壳那条。
-- **导航栈和抽屉**留在各自的页里：两页的 `path` 有各自的规矩（搜索结果先收起搜索再推、空间页的深度表…），外壳只需要「当前页在不在根部」，
-  `ShellState.atRoot` 按 page 取。这个值是 SwiftUI 状态传过来的，偶尔落后：Agents 上推进的对话里从左边缘右滑，横条把手势接走、
-  翻到了助手，对话还推着（矩阵 24 次里 3 次）。所以横条和抽屉的拖动在开始时再问一次 UIKit：手指下的导航栈推了页，就让给它的返回手势
-  （`DrawerPan.pushed`）。
+- **One source**: `ShellState.page` (0 assistant, 1 Agents, 2 Messages once the user turns it on). Only two methods change it: `select` (switcher, drag settle) and `route` (anywhere that writes `AppModel.selectedTab`).
+  Both finish **immediately**, without waiting for a redraw: the `didSet` of `AppModel.selectedTab` calls `tabRouter` directly (`attach` when the shell appears, `detach` when it disappears),
+  no more `onChange`. `.mail` pushes Inbox and returns to the assistant page; `.settings` opens the settings sheet and sets the tab back to the page in front. With **Old Layout** turned on, the shell stops taking routes and leaves them to the tab bar.
+- **The strip follows page**: `ShellPager.slide(to:)` remembers where it's going (`goal`), and the same target again does nothing; a slide that hasn't started is replaced by the new one, and one in progress turns around;
+  when there's no displacement to animate it stops right away (so it never stays `moving` waiting for an animation that won't end). While dragging, the finger is in charge; whichever page the release settles on gets `select`ed.
+- **The switcher reads only page**: the selected state is page; a segment is a Menu (tap again for options) only when the strip is at rest on that page, and both segments are plain buttons during a slide.
+  A tap calls `select` directly, not through a Binding. The switcher on the stand-in `ShellMovingBar` during a slide also takes taps: taps during the animation aren't lost, and the last one wins.
+  If the strip stops while a finger is down (the tap lands just as the animation ends), `ShellMovingBar` stays until that finger lifts (`ShellPager.lingering`; a `Watcher` on the window reports finger down / up).
+  Before, it was removed as soon as the strip stopped and the press on its switcher went nowhere; animations are slower under BeautifulUI, and `testQuickTapsEndOnTheLast` hit this almost every time (the third tap was lost).
+- **The page not in front**: a page takes touches and is read by VoiceOver only when "the strip is at rest on it and page is this page"; `tabIsActive` follows page (half a drag isn't a page change).
+  Only the front page's top bar is drawn; during a slide there's only the shell's.
+- **Navigation stacks and the drawer** stay in their own pages: each page's `path` has its own rules (search results collapse the search before pushing, the space page's depth table…). The shell only needs "is the current page at root",
+  and `ShellState.atRoot` picks it by page. That value arrives via SwiftUI state and occasionally lags: swiping right from the left edge inside a chat pushed on Agents, the strip took the gesture
+  and flipped to the assistant while the chat was still pushed (3 of 24 runs in the matrix). So the strip's and drawer's drags ask UIKit again when they start: if the navigation stack under the finger has a pushed page, they yield to its back gesture
+  (`DrawerPan.pushed`).
 
-### 为什么顶栏还是每页一条
+### Why there's still one top bar per page
 
-主会话的方向是「外壳统一画一份」。没有这么做：两条顶栏的内容是各页自己的（助手的对话菜单要读当前对话和连接详情，Agents 的列表选项绑在
-`ChatsView` 的状态上，搜索时 Agents 的顶栏要让位给系统搜索框），挪到外壳要把这些状态都往上提，改动大、又会碰到 #178 的重建问题。
-现在同一时刻只有一条顶栏在：静止时是在前那页的，滑动中是外壳的。用户看到的、能点到的都只有一条，效果一样。
+The main session's direction was "the shell draws a single one". We didn't do that: the content of the two top bars belongs to each page (the assistant's chat menu reads the current chat and connection details, the Agents list options are bound to
+`ChatsView`'s state, and during search the Agents top bar gives way to the system search field). Moving them into the shell would mean lifting all of that state up, a big change that also runs into #178's rebuild problem.
+Now only one top bar exists at a time: the front page's when at rest, the shell's during a slide. The user sees and can tap only one, so the effect is the same.
+## Launch
 
-## 启动
+The ovis lane found that the chat page's `appeared()` ran several times in a row at launch (a DEBUG switch hooked into it sent its message repeatedly). We counted across launch modes, `-openSession`, restoring the last chat,
+connected to a hub (`-pairURL`), and the connection notice opening / closing (`appeared` in `probe.chat` plus `ShellTrace`): the chat being opened appeared only once on both master
+and this branch, and navigation didn't bounce back and forth (one route, the strip moving into place without animation). The extra appearance was **another chat**: the shell built both pages, so launching into Agents
+also built the assistant page, and its chat "appeared" once behind the scenes: subscribing, `show`, marking as seen, everything hung on `onAppear` ran, though the user never saw it. The Old Layout's
+TabView only builds a tab when it's shown, so it doesn't have this problem.
 
-ovis 车道发现启动时对话页的 `appeared()` 连着跑了几次（挂在里面的 DEBUG 开关重复发了消息）。按 `-openSession`、恢复上次的对话、
-连着 hub（`-pairURL`）、连接提示开合这几种启动方式数了一遍（`probe.chat` 的 `appeared` 和 `ShellTrace`）：打开的那个对话在 master
-和这个分支上都只出现一次，导航也没有来回切（路由一次、横条不动画地到位）。多出来的一次是**另一个对话**：外壳两页都建，从 Agents
-启动时助手页也建了，它的对话在后面「出现」了一次：订阅、`show`、标为已看，挂在 `onAppear` 上的东西都跑了，用户却没看到它。旧布局的
-TabView 只在显示时建 tab，没有这个问题。
+Now each page is built only when first selected or dragged in (`ShellState.assistantBuilt` / `agentsBuilt`), and the shell starts on the App's tab page right away
+(`ShellState(page:)`, without waiting for the first route in `onAppear`). `ShellLaunchTests` asserts for each launch mode above: after launch only the front page's chat appears,
+exactly once, and the page behind has no chat.
 
-现在两页都是第一次选中或拖进来时才建（`ShellState.assistantBuilt` / `agentsBuilt`），外壳一开始就停在 App 的 tab 那页
-（`ShellState(page:)`，不等 `onAppear` 里的第一次路由）。`ShellLaunchTests` 按上面几种启动方式断言：启动后只有在前那页的对话出现、
-只出现一次，后面那页没有对话。
+## Connection status and toasts
 
-## 连接状态和 toast
+The "Connecting…" pill on a weak network used to float below the top bar, right on top of the Agents filter bar and the pulled-down search field; the global toast floated at the top of the window, and in the new shell it covered the avatar, switcher and new-chat buttons,
+so tapping it dismissed it and swallowed the tap meant for the switcher (2026-11-02). At the time both went into a row under the status bar, making room by changing the window's safe area.
+Later the toast went back to an overlay first (2026-11-04, #1053: "Archived" pushed the sidebar and page down and back up), and connection status became an overlay too (2026-11-04, #413; the user chose it from screen recordings of three approaches):
+when that row collapsed, SwiftUI re-laid out the Agents navigation stack, the list read an inset of 0 for a few frames and jumped about 210pt in one frame, and the navigation bar sometimes (2 of 6 runs) took that as a scroll and collapsed and re-expanded the pulled-down search field.
+As long as room is made through the window's safe area, it can't be fixed cleanly (the approaches tried and frame-by-frame data are in #413), so we no longer make room.
 
-原来弱网的「连接中…」药丸浮在顶栏下面，正好压在 Agents 的筛选条和拉出来的搜索框上；全局 toast 浮在窗口顶部，新外壳里盖住头像、切换和新建按钮，
-点到它就把它关掉，点切换的那一下被吞了（2026-11-02）。当时两样都进了状态栏下面的一行，靠改窗口的 safe area 让出位置。
-后来 toast 先改回浮层（2026-11-04，#1053：「已归档」把侧栏和页面往下推一下再推回来）；连接状态也改成浮层（2026-11-04，#413，用户在三种做法的录屏里选的）：
-这一行收起时 SwiftUI 重排 Agents 的导航栈，列表有几帧读到 inset 为 0、一帧跳约 210pt，导航栏偶尔（6 次里 2 次）把这当成一次滚动，把拉出来的搜索框收了又放出来。
-只要还靠窗口的 safe area 让位就修不干净（试过的做法和逐帧数据在 #413），所以不再让位。
+- **Both float; nothing moves**: connection status (Waiting for Network / Connecting… / Updating…) and toasts are drawn in a separate window of the shell (`ToastWindow`, one level above the shell window),
+  right below the top bar, connection status on top and the toast below it; the drawer, both pages, pushed pages, and sheets presented by the shell are all beneath it. Appearing and disappearing never changes any page's layout, safe area, or list position.
+- **No swallowed taps**: apart from the toast's button (Undo), that window takes no touches, so the filter bar, search field and switcher under the pill and toast stay tappable; which also means they can't be tapped away: connection status follows the connection, and a toast leaves on its own when time is up.
+  Since VoiceOver won't move to a window that takes no touches, a toast is announced when it appears (`AccessibilityNotification.Announcement`).
+- **Appears immediately**: nothing moves, so there's no need to wait for the finger to lift; as soon as `ConnectionStatus.shown` is set it goes to `ShellNotices` (`onShown`), without relying on a view redraw.
+- **One-off results are toasts**: the result of something just done (archived, deleted, pinned, copied, submitted, send failed, deploy failed…, i.e. every `AppModel.toast`),
+  short (info / success 2.5 s, error 4 s), one at a time, the new one replacing the old. It looks like the design system's `ToastCapsule`; connection status is `ShellLinkPill` (the same capsule:
+  Liquid Glass, or the raised capsule under the BeautifulUI style). The keyboard is at the bottom and these are at the top, so they're never covered.
+- Old Layout, iPad, Mac: the toast is `ToastOverlay` (the same `ToastCapsule`, tap to dismiss), and connection status is in the title.
 
-- **都浮着，什么都不动**：连接状态（等待网络 / 连接中… / 更新中…）和 toast 画在外壳的一个窗口里（`ToastWindow`，在外壳窗口上面一层），
-  就在顶栏下面，连接状态在上、toast 在它下面；抽屉、两页、推出的页面、外壳上弹出的 sheet 都在它下面。出现、消失都不改任何页面的布局、safe area 或列表的位置。
-- **不吞点击**：那个窗口除了 toast 的按钮（撤销）不接任何触摸，药丸和 toast 下面的筛选条、搜索框、切换照常能点；所以它们也不能点掉，连接状态随连接走，toast 到时间自己走。
-  因为 VoiceOver 不会移到一个不接触摸的窗口上，toast 出现时直接朗读出来（`AccessibilityNotification.Announcement`）。
-- **当场出现**：不移动东西，也就不用等手指松开；`ConnectionStatus.shown` 一设就转给 `ShellNotices`（`onShown`），不靠视图重画。
-- **一次性的结果是 toast**：刚做完一件事的结果（已归档、已删除、已置顶、已复制、已提交、发送失败、部署失败……，也就是所有 `AppModel.toast`），
-  短（info / success 2.5 s，error 4 s），同一时间只有一条，新的换掉旧的。样子是设计系统的 `ToastCapsule`；连接状态是 `ShellLinkPill`（同一种胶囊：
-  液态玻璃，BeautifulUI 风格下是它凸起的胶囊）。键盘在底部，它们在顶部，不会被挡。
-- 旧布局、iPad、Mac：toast 是 `ToastOverlay`（同一个 `ToastCapsule`，点它关掉），连接状态在标题里。
+DEBUG: `-showConnectionCycle connecting:7:4` (from second 7, show Connecting… for 4 seconds, then recover; `waiting` / `connecting` / `updating`),
+`-showToasts "5:info:text;5.4:error:text"` (pop toasts at those times).
 
-DEBUG：`-showConnectionCycle connecting:7:4`（第 7 秒起显示连接中… 4 秒，然后恢复；`waiting` / `connecting` / `updating`）、
-`-showToasts "5:info:文字;5.4:error:文字"`（这些时刻弹 toast）。
-
-| 项 | 定义 | 测试 |
+| Item | Definition | Test |
 | --- | --- | --- |
-| 连接状态不动布局 | 三种连接状态、两页：出现时和消失后，头像、切换、新建、筛选条、搜索框、输入框和屏幕上的行都不动，药丸在顶栏按钮下面 | `ShellStatusRowTests.testTheLinkFloatsAndMovesNothingInEveryState` |
-| 搜索框不闪 | 连接状态来去 12 次，拉出 / 收起的搜索框都不变，行不动，导航容器的 safe area 不变 | `ShellRoomScrollTests` |
-| toast 不推布局 | toast 出现、消失时 Agents 列表第一行（`probe.agents-scroll`）、新建按钮、抽屉里的行都不动，不带出连接状态 | `ShellToastTests` |
-| toast 不吞点击 | toast 显示时点它下面的切换、抽屉里的行照常生效 | `ShellToastTests` |
-| toast 不被键盘挡 | 键盘弹着时 toast 整个在屏幕里、和键盘不相交 | `ShellToastTests.testAToastWithTheKeyboardUpIsAboveIt` |
-| 手指优先 | 手指按着时连接中…不展开，松手后才展开；等待网络立刻展开 | `testTheRowWaitsForTheFingerUnlessUrgent` |
+| Connection status doesn't move layout | Three connection states, both pages: when it appears and after it goes away, the avatar, switcher, new-chat button, filter bar, search field, input field and on-screen rows don't move, and the pill sits below the top bar buttons | `ShellStatusRowTests.testTheLinkFloatsAndMovesNothingInEveryState` |
+| Search field doesn't flicker | Connection status comes and goes 12 times; the pulled-down / collapsed search field doesn't change, rows don't move, the navigation container's safe area doesn't change | `ShellRoomScrollTests` |
+| Toasts don't push layout | When a toast appears and disappears, the first row of the Agents list (`probe.agents-scroll`), the new-chat button and the drawer rows don't move, and no connection status is dragged in | `ShellToastTests` |
+| Toasts don't swallow taps | While a toast is showing, taps on the switcher and drawer rows under it still work | `ShellToastTests` |
+| Toasts aren't covered by the keyboard | With the keyboard up, the toast is entirely on screen and doesn't intersect the keyboard | `ShellToastTests.testAToastWithTheKeyboardUpIsAboveIt` |
+| The finger comes first | While a finger is down, Connecting… doesn't expand until it lifts; Waiting for Network expands immediately | `testTheRowWaitsForTheFingerUnlessUrgent` |
 
-## 一致和及时（验收标准）
+## Consistency and timeliness (acceptance criteria)
 
-这块的「真实状态」在 App 里（不是 hub 的数据）：用户最后一次点的段、拖动 settle 的页、最后一次路由。
+The "true state" here lives in the App (not in hub data): the segment the user last tapped, the page a drag settled on, the last route.
 
-| 项 | 定义 | 上限 | 测试 |
+| Item | Definition | Limit | Test |
 | --- | --- | --- | --- |
-| 一致 | 静止时 横条停的页 == 切换段选中的页（`page`）== App 的 tab；没有字段允许延后 | — | `agentsDrawn` / `assistantDrawn` 三项都要对上 |
-| 及时 | 点击、路由以后横条静止在目标页 | 动画约 0.4 s；测试连探针读取的开销给 1.5 s | `ShellFinger.switchTo`、`expectShell` |
-| 不吞点击 | 动画中、连点、返回动画中的点击都算数，结束在最后一次点的那页 | 同上 | `testQuickTapsEndOnTheLast`、`testBackThenSwitchAtEveryPace` |
-| 收敛 | 点击、拖动、路由、进出对话任意组合以后，回到上面三项一致 | 同上 | `ShellRaceTests` 各项、`ShellPagerTests` |
+| Consistent | At rest, page the strip rests on == page selected in the switcher (`page`) == the App's tab; no field is allowed to lag | — | `agentsDrawn` / `assistantDrawn`: all three must match |
+| Timely | After a tap or route, the strip comes to rest on the target page | Animation about 0.4 s; tests allow 1.5 s including probe read overhead | `ShellFinger.switchTo`, `expectShell` |
+| No swallowed taps | Taps during an animation, repeated taps, and taps during a back animation all count; it ends on the last page tapped | Same as above | `testQuickTapsEndOnTheLast`, `testBackThenSwitchAtEveryPace` |
+| Converges | After any combination of taps, drags, routes, and entering / leaving chats, it returns to the three items above being consistent | Same as above | Each case in `ShellRaceTests`, `ShellPagerTests` |
 
-返回动画还没结束就点，点击可能落在正在滑走的对话页上（和手指一样），这时测试允许 2.5 s，并要求随后的点击正常。
+A tap before the back animation finishes may land on the chat page that's sliding away (same as a real finger); in that case the test allows 2.5 s and requires the following tap to work normally.
 
-和 msg-render 车道共用一套探针和断言（ScreenProbe，`docs/ios-state.md`「探针」）：外壳的状态是 `probe.shell`，启动时要 `-probes YES`；
-测试端 `ShellPageProbe.swift` 的 `shellPage` / `shellValue` / `shellRoom` / `shellTrace` 从它读（#499，原来的 `shell-pager-probe` 已删掉）。
+It shares one set of probes and assertions with the msg-render lane (ScreenProbe, `docs/ios-state.md` ("Probes")): the shell's state is `probe.shell`, which needs `-probes YES` at launch;
+on the test side, `shellPage` / `shellValue` / `shellRoom` / `shellTrace` in `ShellPageProbe.swift` read from it (#499; the old `shell-pager-probe` has been deleted).
 
-## 测试
+## Tests
 
-| 测试 | 场景 |
+| Test | Scenario |
 | --- | --- |
-| `ShellRaceTests` | 用户这次的流程：看完 Agent 的对话返回（按钮 / 右滑，0–1 s 后点）、流式输出中退出、快速连点、点了马上拖、从空对话的「需要你」路由过去再切 |
-| `ShellInboxAgentTests` | 收件箱（推在助手上）的「需要你」点进 Agent 对话 → 返回 → 切到助手（还是收件箱，自己的导航栏）→ 返回 → 切回 Agents：每步探针一致、切换器不在推出的页上、收件箱能滑能点、没有 `settle lost` |
-| `ShellSwitchTests` | #182 等：抽屉里的页面（知识库、收件箱、定时任务、机器）推出再返回以后切换，坐标点击 |
-| `ShellSearchTests` | #174：搜索让位、取消后切换 |
-| `ShellPagerTests` | #190 左右滑翻页、56b2ead 后筛选条上右滑翻回 |
-| `ShellAvatarTests` | #203：两页的头像和抽屉，之间用坐标点切换 |
-| `ShellTests` | 切换、抽屉、旧布局开关 |
-| `ShellLaunchTests` | 启动进对话（`-openSession`、恢复上次的、连着 hub、连接提示开合中）和启动在助手：只有在前的那个对话出现，且只出现一次 |
+| `ShellRaceTests` | The user's flow this time: go back after viewing an Agent's chat (button / swipe right, tap after 0–1 s), leave while streaming, fast repeated taps, drag right after a tap, route in from an empty chat's "Needs You" and then switch |
+| `ShellInboxAgentTests` | Tap into an Agent chat from "Needs You" in Inbox (pushed on the assistant) → back → switch to the assistant (still Inbox, with its own navigation bar) → back → switch to Agents again: probe consistent at every step, the switcher isn't on the pushed page, Inbox can scroll and be tapped, no `settle lost` |
+| `ShellSwitchTests` | #182 etc.: switching after pages from the drawer (knowledge base, Inbox, scheduled tasks, machines) are pushed and popped, with coordinate taps |
+| `ShellSearchTests` | #174: search giving way, switching after cancel |
+| `ShellPagerTests` | #190 swiping left / right to flip pages, swiping right on the filter bar to flip back after 56b2ead |
+| `ShellAvatarTests` | #203: the avatar and drawer on both pages, switching between them with coordinate taps |
+| `ShellTests` | Switching, drawer, Old Layout toggle |
+| `ShellLaunchTests` | Launching into a chat (`-openSession`, restoring the last one, connected to a hub, while the connection notice opens / closes) and launching on the assistant: only the front chat appears, exactly once |
 
-切换段一律用 `ShellFinger`（`PersonaUITests/ShellPageProbe.swift`）点：启动时从助手页的切换段读一次两个段的位置，之后都点这两个坐标，
-点完断言三项一致和时限；失败时打印探针和最近的 `ShellTrace`。
+The switcher is always tapped with `ShellFinger` (`PersonaUITests/ShellPageProbe.swift`): at launch it reads the positions of both segments once from the assistant page's switcher, then always taps those two coordinates,
+and after each tap asserts the three-way consistency and the time limit; on failure it prints the probe and the recent `ShellTrace`.
 
-### 可选的消息页（#392）
+### Optional Messages page (#392)
 
-飞书设置的「首页显示消息」默认关闭，打开后外壳增加第三页，复用同一个 `ShellState.page`、路由器、顶栏切换和拖动模型。消息页首次选中或拖入才创建；设置浮层不会把当前消息页切回助手。关闭开关时如果正在消息页，立即回到助手，过期的 `.feishu` 路由也回到助手，不留下不可见页面。`LarkMessagesShellTests` 覆盖三页往返、拖动反向取消、关闭与重新开启、消息页启动及设置返回。
+**Show Messages on Home** in Lark settings is off by default; turning it on adds a third page to the shell, reusing the same `ShellState.page`, router, top bar switcher, and drag model. The Messages page is created only when first selected or dragged in; the settings sheet doesn't switch the current Messages page back to the assistant. Turning the switch off while on the Messages page returns to the assistant immediately, and a stale `.feishu` route also goes to the assistant, so no invisible page is left behind. `LarkMessagesShellTests` covers round trips across the three pages, reversing a drag to cancel, turning it off and on again, launching on the Messages page, and returning from settings.
