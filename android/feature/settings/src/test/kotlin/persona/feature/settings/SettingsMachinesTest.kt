@@ -296,7 +296,7 @@ class ModelConfigurationStateTest {
         assertEquals("", model.state.value.draft.model)
         result = ModelPurposeSave.Saved(ModelPurposeDetail(agent.copy(revision = 4), providers))
         assertEquals("已恢复继承", model.save(restore = true)?.resolve(res))
-        assertEquals(ModelConfigurationDraft(), sent)
+        assertEquals(ModelConfigurationDraft.Restore, sent)
         assertEquals(4L, model.state.value.purpose?.revision)
     }
 

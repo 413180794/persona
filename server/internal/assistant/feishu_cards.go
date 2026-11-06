@@ -749,7 +749,7 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 	go func() {
 		rctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		ok, err := s.resolveInteraction(rctx, id, r, action)
+		ok, err := s.resolveInteraction(rctx, channel.Feishu, id, r, action)
 		done <- outcome{ok, err}
 	}()
 	select {

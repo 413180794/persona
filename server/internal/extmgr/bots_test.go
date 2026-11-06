@@ -416,7 +416,7 @@ func TestBotCardPressGoesToTheAssistantWithTheOwnersAction(t *testing.T) {
 		t.Fatalf("handed %+v", a)
 	}
 	resolve := func(action string) (map[string]any, error) {
-		raw, _ := json.Marshal(map[string]any{"interaction_id": "ix_q", "action": action,
+		raw, _ := json.Marshal(map[string]any{"interaction_id": "ix_q", "action": action, "channel": "feishu", "kind": "question",
 			"resolution": map[string]any{"answers": map[string]string{"发给谁？": "李四"}, "answered_by": "assistant"}})
 		out, _, err := w.h.AppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppInteractions,
 			Method: assistantwire.InteractionsOwnerAction, Params: raw})
@@ -582,7 +582,7 @@ func TestChannelAnswersNeedTheOwnersAction(t *testing.T) {
 	h := newTestManager(t)
 	h.store = newBotStore()
 	resolve := func(action string) error {
-		p, _ := json.Marshal(map[string]any{"interaction_id": "ix_plan", "action": action,
+		p, _ := json.Marshal(map[string]any{"interaction_id": "ix_plan", "action": action, "channel": "feishu", "kind": "plan",
 			"resolution": map[string]any{"approve": true, "mode": "bypassPermissions", "answered_by": "assistant"}})
 		_, _, err := h.AppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppInteractions,
 			Method: assistantwire.InteractionsOwnerAction, Params: p})

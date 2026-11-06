@@ -171,7 +171,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
         if (current.busy || current.conflict) return null
         mutable.update { it.copy(busy = true, error = null) }
         return try {
-            when (val result = api.save(purpose, if (restore) ModelConfigurationDraft() else current.draft)) {
+            when (val result = api.save(purpose, if (restore) ModelConfigurationDraft.Restore else current.draft)) {
                 is ModelPurposeSave.Saved -> {
                     mutable.update { it.copy(detail = result.detail, draft = ModelConfigurationDraft.from(result.detail.purpose)) }
                     ResText.of(if (restore) R.string.settings_src_model_restored else R.string.settings_src_model_saved)

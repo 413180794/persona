@@ -888,9 +888,10 @@ const (
 	// ChannelsUnbind: {channel} → {}: signed out, unpaired.
 	ChannelsUnbind = "channels.unbind"
 
-	// InteractionsResolve: {interaction_id, resolution, action} → {ok, status}: the card answered as the user answered
-	// it in a channel. action is the owner's action the hub handed over with that press or message (single use; a
-	// card's is for that card only); without one the hub refuses. ok false (status as InteractionsGet's) when it is no
+	// InteractionsResolve: {interaction_id, resolution, action, channel} → {ok, status}: the card answered as the user
+	// answered it in channel. action is the owner's action the hub handed over with that press or message there
+	// (single use; a card's is for that card only, a message's for a kind of card the channel takes a typed answer
+	// for); without one, or with another channel's, the hub refuses. ok false (status as InteractionsGet's) when it is no
 	// longer pending, an error when the answer does not fit it.
 	InteractionsResolve = "interactions.resolve"
 

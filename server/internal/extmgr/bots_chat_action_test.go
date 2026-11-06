@@ -31,7 +31,7 @@ func TestBotMessageCarriesTheOwnersAction(t *testing.T) {
 		t.Fatalf("no owner action: %+v", msg)
 	}
 	take := func(action string) (err error) {
-		p, _ := json.Marshal(map[string]any{"interaction_id": "ix_q1", "action": action})
+		p, _ := json.Marshal(map[string]any{"interaction_id": "ix_q1", "action": action, "channel": "feishu", "kind": "question"})
 		_, _, err = w.h.AppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppInteractions,
 			Method: assistantwire.InteractionsOwnerAction, Params: p})
 		return

@@ -44,7 +44,8 @@ const (
 )
 
 // InteractionsOwnerAction has the manager's channels take the owner action they handed over with a channel's press or
-// message, for the card the assistant is about to answer with it ({interaction_id, action} → {}; an error: refused).
+// message, for the card the assistant is about to answer with it in channel ({interaction_id, action, channel, kind}
+// → {}, kind the card's in the queue; an error: refused).
 // Answered in the manager's process (internal/extmgr channels_bus.go).
 const InteractionsOwnerAction = "interactions.owner_action"
 

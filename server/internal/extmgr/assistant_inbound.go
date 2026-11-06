@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,18 +38,30 @@ type inbound struct {
 	actions map[string]ownerAction
 }
 
-// ownerAction is an owner's press or message the hub handed the assistant: what it may answer with it.
+// ownerAction is an owner's press or message the hub handed the assistant: what it may answer with it. It answers
+// only in the channel it came from: a card's press that card alone, of any kind; a message (no card) only a card of
+// one of kinds, those the channel takes a typed answer for.
 type ownerAction struct {
 	channel     string
-	interaction string // a card's press: that card only ("" for a message: what the channel asked last)
+	interaction string   // a card's press: that card only ("" for a message)
+	kinds       []string // a message: the kinds of card it may answer (none: no card at all)
 	expires     time.Time
 }
 
 const ownerActionFor = 10 * time.Minute
 
-// issueOwnerAction records an action of the owner's in channel (for interaction when it is a card's press) and
-// returns its id for the assistant.
+// issueOwnerAction records the owner's press on interaction's card in channel and returns its id for the assistant.
 func (h *Manager) issueOwnerAction(channel, interaction string) string {
+	return h.recordOwnerAction(ownerAction{channel: channel, interaction: interaction})
+}
+
+// issueMessageAction records one of the owner's messages in channel and returns its id for the assistant: it answers
+// a card of one of kinds, the channel's typed answers (it can't know which card the message answers).
+func (h *Manager) issueMessageAction(channel string, kinds ...string) string {
+	return h.recordOwnerAction(ownerAction{channel: channel, kinds: kinds})
+}
+
+func (h *Manager) recordOwnerAction(a ownerAction) string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])
 	id := "oa_" + hex.EncodeToString(b[:])
@@ -64,27 +77,38 @@ func (h *Manager) issueOwnerAction(channel, interaction string) string {
 	if in.actions == nil {
 		in.actions = map[string]ownerAction{}
 	}
-	in.actions[id] = ownerAction{channel: channel, interaction: interaction, expires: now.Add(ownerActionFor)}
+	a.expires = now.Add(ownerActionFor)
+	in.actions[id] = a
 	return id
 }
 
 // errNoOwnerAction: an answer to a card from a channel without the owner's action behind it.
 var errNoOwnerAction = i18n.Err("hub-assistant_inbound.no_owner_action")
 
-// takeOwnerAction uses up the owner action id for an answer to interaction (once).
-func (h *Manager) takeOwnerAction(id, interaction string) error {
+// takeOwnerAction uses up the owner action id for an answer in channel to interaction, a card of kind (once). The
+// action must be one issued in that channel, and be that card's press or a message that answers its kind; anything
+// else is refused, and the action stays unused.
+func (h *Manager) takeOwnerAction(id, channel, interaction, kind string) error {
 	in := &h.chans.in
 	in.mu.Lock()
 	defer in.mu.Unlock()
 	a, ok := in.actions[id]
-	if !ok || id == "" || time.Now().After(a.expires) {
-		return errNoOwnerAction
-	}
-	if a.interaction != "" && a.interaction != interaction {
+	if !ok || id == "" || time.Now().After(a.expires) || !a.answers(channel, interaction, kind) {
 		return errNoOwnerAction
 	}
 	delete(in.actions, id)
 	return nil
+}
+
+// answers: the action may answer interaction, a card of kind, in channel.
+func (a ownerAction) answers(channel, interaction, kind string) bool {
+	switch {
+	case channel == "" || a.channel != channel || interaction == "":
+		return false
+	case a.interaction != "":
+		return a.interaction == interaction
+	}
+	return kind != "" && slices.Contains(a.kinds, kind)
 }
 
 // toAssistant hands one of the owner's messages to the assistant (method, params): it waits for the assistant up to

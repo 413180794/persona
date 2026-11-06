@@ -1826,7 +1826,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 
 - hub → 助手，调用：`channels.receive {channel, message, action}` → `{}`（插件渠道主人的一条消息，`message` 是 `channel.Message`）、`feishu.message {event}` → `{}`（飞书私聊里主人的一条消息，`im.message.receive_v1` 的 `event` 原样）：
   助手按消息 id 去重、收下就回，处理在后台（飞书的先读 `feishu.status`，读不到回 `try_again`，没收下）；`feishu.card_action {event, action}` → 卡片回调的回答（`{toast?, card?}`，飞书等 3 秒，hub 给 2.5 秒）；`feishu.view {}` → `{target?, agents?}`（`GET /api/v1/bots/feishu` 里助手的那两项）。
-  `action` 是 hub 发的一次性**主人操作**（`oa_…`，10 分钟内有效；按卡片的只能答那一张卡）：助手答卡片（`interactions.resolve`）要带上它。
+  `action` 是 hub 发的一次性**主人操作**（`oa_…`，10 分钟内有效，只在发它的那个渠道里有效；按卡片的只能答那一张卡；一条消息的只能答这个渠道收文字回答的那几种卡：飞书只有提问，插件渠道是提问、计划、权限、终端选项）：助手答卡片（`interactions.resolve`）要带上它。
   主人的消息 hub 先等助手连上最多 60 秒（同时最多 500 条），调用断了、超时、`try_again` 就再交一次（助手按 id 只收一次）；等不到 hub 自己回主人：飞书「没能发出去：助手暂时连不上，稍后再试」，卡片 toast「助手暂时连不上，稍后再试」，插件渠道 `channel.send`（`kind: note`）「没发出去：助手暂时连不上，稍后再试」（同一条只回一次）。
 - hub → 助手，单向事件：`interaction.announced {interaction}`（新的卡片，安静的任务的除外）、`interaction.ended {interaction, resolution?}`（卡片结束了：答了的带回答，撤回、过期的不带；同一张卡先带回答再不带地各来一次）、
   `session.items {machine_id, session_id, items}`、`session.delta {machine_id, session_id, text}`（助手跟着的对话的新条目和正在写的字）、`feishu.owner {paired}`（机器人配对 / 解除配对）、
@@ -1841,7 +1841,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
     `feishu.configure {enabled?, features?: {id: on}}`、`feishu.test {}`。机器人没开、没连上或没配对时（`ready` 是 false）发、改的方法回错误「机器人没打开或还没配对」；只发给配对的主人。
   - `channels`：`channels.list {}` → `{channels: [channel.View]}`（每个渠道的传输状态：不带目标、插件渠道的功能，助手填）、`channels.send {channel, ref, text, kind, reply_to?}` → `{message_id?}`（一段，失败按同一个 `ref` 重试；还没地方发回错误码 `cannot_send`）、
     `channels.typing {channel, on}`、`channels.enable {channel, on}`（插件和它的连接器、飞书机器人的开关；收件箱的分拣模型没配时回 `needs_triage_model`）、`channels.unbind {channel}`。绑定不在这里：`POST /api/v1/channels/{id}/bind` 是 hub 自己的路由（凭证不经过助手）。
-  - `interactions`：`interactions.resolve {interaction_id, resolution, action}` → `{ok, status?}`（按用户在渠道里的回答答掉这张卡；`action` 是那一下的主人操作，没有、用过、是别的卡的一律拒绝，记成用户自己答的；已经不在等了 `ok` 是 false）。
+  - `interactions`：`interactions.resolve {interaction_id, resolution, action, channel}` → `{ok, status?}`（按用户在渠道 `channel` 里的回答答掉这张卡；`action` 是那一下的主人操作，没有、用过、是别的卡的、别的渠道的、一条消息答了它不收的那种卡的一律拒绝，记成用户自己答的；已经不在等了 `ok` 是 false）。
 - 快照多了 `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}`：hub 照 `marks` 给会话填 `channels`（变了推那台机器的会话列表），
   照 `turns`（`answered` 空着是正在跟，否则是答完的时间，一小时内的）不推那段对话这一轮的「完成」；`null`（读不出来，快照算不完整）时留着上一份。
 - 助手的路由多了 `/api/v1/channels*`，绑定 `POST …/bind` 除外（`docs/channels.md`「接口」）。

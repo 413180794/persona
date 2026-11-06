@@ -111,7 +111,7 @@ hub 留下的只有会话列表上的来源标记、完成推送（照快照的 
 | 扩展渠道 | 起扩展程序、`channel.receive` / `channel.status` / `channel.send` / `channel.typing`（同一个 `ref` 重试）、开关、绑定（连接器登录、二维码）、列出有哪些渠道和它们的状态 | 目标、功能开关、最近的对话（`channels`）、runs、文字提问、去重（`channels.state`）、命令、提问和回答、推送和同步 |
 | 来源标记、完成推送 | 会话列表上画 `channels`、一轮在渠道里答了就不推「完成」：照助手快照里的 `channels` 报告（`assistantwire.ChannelsReport`） | 记哪段对话从哪些渠道来过、哪段对话的一轮正在 / 刚在渠道里答 |
 | 接口 | `/api/v1/channels*` 原样转给助手（`http.request`），除了绑定 `POST …/bind`：它带着凭证和登录要填的东西，是 hub 自己的路由，渠道和机器人的密钥从不经过助手 | 回答 `/api/v1/channels*`（绑定除外） |
-| 批准类不代答 | 答卡片要有主人刚做的那一下：hub 把主人的按卡片、一条消息交给助手时各发一个**一次性的主人操作**（按卡片的只能答那一张，10 分钟内有效），`interactions.resolve` 要带上它，没有、用过、对不上的一律拒绝；记成用户自己答的（不带 `answered_by`） | 用渠道里的回答答卡片时带上那一下的主人操作；自己没有任何办法批准计划、允许工具、往终端里打字 |
+| 批准类不代答 | 答卡片要有主人刚做的那一下：hub 把主人的按卡片、一条消息交给助手时各发一个**一次性的主人操作**（只在发它的渠道里有效，10 分钟内；按卡片的只能答那一张；一条消息的只能答这个渠道收文字回答的那几种卡：飞书只有提问，插件渠道是 `channel.TypedAnswerKinds`），`interactions.resolve` 带上它和答的是哪个渠道，没有、用过、渠道或卡对不上的一律拒绝（#5011）；记成用户自己答的（不带 `answered_by`） | 用渠道里的回答答卡片时带上那一下的主人操作；自己没有任何办法批准计划、允许工具、往终端里打字 |
 
 两边经总线（`docs/protocol.md`「总线」「渠道用的方法」）：主人的消息和按钮 hub 交给助手（`channels.receive`、`feishu.message`、`feishu.card_action`），
 新的、结束的卡片告诉助手（`interaction.announced`、`interaction.ended`），助手跟的对话 hub 把新的条目和正在写的字转给它（`session.follow` 之后的 `session.items`、`session.delta`）；

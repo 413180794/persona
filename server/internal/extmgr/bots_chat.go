@@ -248,8 +248,9 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 		}
 		b.mu.Unlock()
 	}
-	// The owner wrote it (the hub checked the sender): what it answers, it answers once, like a card's press.
-	action := h.issueOwnerAction(channel.Feishu, "")
+	// The owner wrote it (the hub checked the sender): what it answers, it answers once, like a card's press — but
+	// only a question: the bot takes no typed answer to a plan, a permission or a terminal (#4675).
+	action := h.issueMessageAction(channel.Feishu, proto.IxQuestion)
 	err := h.toAssistantSince(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw, Action: action}, since)
 	pass() // handed over (or not): the next one need not wait for the note below
 	if err == nil {

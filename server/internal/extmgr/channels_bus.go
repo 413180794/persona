@@ -53,13 +53,16 @@ func (h *Manager) channelsAppCall(ctx context.Context, p assistantwire.AppCall) 
 		var a struct {
 			InteractionID string `json:"interaction_id"`
 			Action        string `json:"action"`
+			Channel       string `json:"channel"`
+			Kind          string `json:"kind"`
 		}
 		if err := json.Unmarshal(p.Params, &a); err != nil {
 			return nil, true, err
 		}
 		// The assistant answers a card from a channel only with the owner's action handed over with that press or
-		// message (a card's for that card), once (fleet_routes.go channelResolve there).
-		err = h.takeOwnerAction(a.Action, strings.TrimSpace(a.InteractionID))
+		// message in that channel (a card's for that card, a message's for a kind it takes typed), once
+		// (fleet_routes.go channelResolve there; kind is the queue's).
+		err = h.takeOwnerAction(a.Action, a.Channel, strings.TrimSpace(a.InteractionID), a.Kind)
 		out = map[string]any{}
 	default:
 		return nil, false, nil

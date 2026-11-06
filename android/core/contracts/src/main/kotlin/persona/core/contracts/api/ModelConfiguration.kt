@@ -139,9 +139,12 @@ data class ModelPurposeDetail(
 
 /**
  * The edit of one purpose. An empty field means "inherit", never an empty override; switching providers drops the
- * model and effort chosen for the old one.
+ * model and effort chosen for the old one. The app does not edit the runtime: edits leave it alone, only [Restore]
+ * clears it (as iOS does).
  */
-data class ModelConfigurationDraft(val provider: String = "", val model: String = "", val effort: String = "") {
+data class ModelConfigurationDraft(
+    val provider: String = "", val model: String = "", val effort: String = "", val clearsRuntime: Boolean = false,
+) {
     fun choosingProvider(id: String): ModelConfigurationDraft = if (id == provider) this else ModelConfigurationDraft(provider = id)
 
     /** The PATCH body: the revision, and only the fields [purpose] takes; blank ones go as null (restore inheritance). */
@@ -150,9 +153,13 @@ data class ModelConfigurationDraft(val provider: String = "", val model: String 
         for ((key, value) in listOf("provider" to provider, "model" to model, "effort" to effort)) {
             if (purpose.supports(key)) put(key, value.trim().takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
         }
+        if (clearsRuntime && purpose.supports("runtime")) put("runtime", JsonNull)
     }
 
     companion object {
+        /** 恢复默认: every override of the purpose cleared, the runtime set elsewhere too (#5077). */
+        val Restore = ModelConfigurationDraft(clearsRuntime = true)
+
         fun from(purpose: ModelPurpose) = ModelConfigurationDraft(
             purpose.override.provider.orEmpty(), purpose.override.model.orEmpty(), purpose.override.effort.orEmpty(),
         )

@@ -213,6 +213,10 @@ func unwrappedNumber(text string) string {
 	return text
 }
 
+// TypedAnswerKinds are the kinds of card ReadAnswer takes a channel's text answer for: what an owner's message in a
+// channel may answer (the hub's owner action for the message, extmgr issueMessageAction).
+var TypedAnswerKinds = []string{proto.IxPermission, proto.IxPlan, proto.IxScreen, proto.IxQuestion}
+
 // ReadAnswer reads text as the answer to a: the resolution once complete (done), or what to say in l when text does
 // not answer it (again). A question of several takes one answer per message: a.Step moves on, and the caller asks
 // QuestionText(l, a, a.Step) next.

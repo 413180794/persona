@@ -164,8 +164,9 @@ func (h *Manager) channelReceive(id string, m channel.Message) {
 	if err != nil {
 		return
 	}
-	// The owner wrote it (the channel's program only hands over the owner's): what it answers, it answers once.
-	action := h.issueOwnerAction(id, "")
+	// The owner wrote it (the channel's program only hands over the owner's): what it answers, it answers once, in
+	// this channel, and only a card the channel takes a typed answer for.
+	action := h.issueMessageAction(id, channel.TypedAnswerKinds...)
 	err = h.toAssistant(assistantwire.MethodChannelReceive, assistantwire.ChannelReceive{Channel: id, Message: raw, Action: action})
 	if err == nil {
 		return

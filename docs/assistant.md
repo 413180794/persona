@@ -121,7 +121,7 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 | | `feishu.owner {paired}`、`channels.noted {channel, machine_id, session_id}` | 机器人配对 / 解除配对了；一条渠道来的消息经 App 的接口进了对话（语音的 `voice-…`） |
 | 助手 → hub，`device.call` | `session.follow` / `session.unfollow {session_id}`、`session.send_once {…session.send 的参数}` | 跟一段对话（断开后 hub 全部放掉，连回来助手再跟）；发进对话，和 App 同一个只发一次的保护（`sent_messages`） |
 | 助手 → hub，`app.call` | `feishu.status`、`feishu.post`、`feishu.text`、`feishu.update_card`、`feishu.react`、`feishu.unreact`、`feishu.messages`、`feishu.resource`、`feishu.save`、`feishu.user_name`、`feishu.configure`、`feishu.test` | 飞书的传输：发 / 回 / 改卡片和文字（只发给主人的私聊）、表情、读消息、下载图片、文件存到那台电脑、开关和功能 |
-| | `channels.list`、`channels.send`、`channels.typing`、`channels.enable`、`channels.unbind`、`interactions.resolve {interaction_id, resolution, action}` | 插件渠道的传输和渠道列表（不带目标、插件渠道的功能）；按渠道里的回答答掉卡片：要带 hub 发的主人操作（批准类不代答），没有就拒绝。绑定（带凭证）是 hub 自己的路由，不经过助手 |
+| | `channels.list`、`channels.send`、`channels.typing`、`channels.enable`、`channels.unbind`、`interactions.resolve {interaction_id, resolution, action, channel}` | 插件渠道的传输和渠道列表（不带目标、插件渠道的功能）；按渠道里的回答答掉卡片：要带 hub 在这个渠道发的主人操作（批准类不代答），没有、别的渠道的就拒绝。绑定（带凭证）是 hub 自己的路由，不经过助手 |
 | 快照 | `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}` | 每段对话从哪些渠道来过（会话列表的 `channels`）、哪段对话的一轮正在 / 刚在渠道里答（hub 不再推「完成」）；`null` 时 hub 留着上一份 |
 
 **为什么照总线来画**：接口就是线上的消息，hub 那头的 `assistantLink` 是唯一的实现，总线上只多了编解码；hub 这边不再算助手的状态（标题、归档、排队、提问都是助手报什么就显示什么），也不再懂助手的语义（工具清单、提示词、提问的意思都在助手那边）。

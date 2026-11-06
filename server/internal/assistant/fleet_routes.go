@@ -199,6 +199,7 @@ func (s *Service) localFleetAppCall(ctx context.Context, p AppCall) (json.RawMes
 		Answers       map[string]string `json:"answers"`
 		Resolution    proto.Resolution  `json:"resolution"`
 		Action        string            `json:"action"`
+		Channel       string            `json:"channel"`
 	}
 	if err := json.Unmarshal(p.Params, &a); err != nil {
 		return nil, true, err
@@ -222,7 +223,7 @@ func (s *Service) localFleetAppCall(ctx context.Context, p AppCall) (json.RawMes
 			out = map[string]any{"ok": false, "status": s.interactionOutcome(ctx, a.InteractionID)}
 		}
 	case InteractionsResolve:
-		r, err := s.channelResolve(ctx, a.InteractionID, a.Resolution, a.Action)
+		r, err := s.channelResolve(ctx, a.Channel, a.InteractionID, a.Resolution, a.Action)
 		if err != nil {
 			return nil, true, err
 		}
@@ -234,13 +235,18 @@ func (s *Service) localFleetAppCall(ctx context.Context, p AppCall) (json.RawMes
 	return b, true, err
 }
 
-// channelResolve answers a card as the user answered it in a channel (interactions.resolve): only with the owner
-// action the hub handed over with that press or message (a card's for that card), once — the hub takes it
-// (interactions.owner_action) before the card is answered. It is the user's own answer (no AnsweredBy).
-func (s *Service) channelResolve(ctx context.Context, id string, r proto.Resolution, action string) (any, error) {
+// channelResolve answers a card as the user answered it in channel ch (interactions.resolve): only with the owner
+// action the hub handed over with that press or message in ch (a card's for that card, a message's for a kind of
+// card the channel takes typed), once — the hub takes it (interactions.owner_action, with the card's kind from the
+// queue) before the card is answered. It is the user's own answer (no AnsweredBy).
+func (s *Service) channelResolve(ctx context.Context, ch, id string, r proto.Resolution, action string) (any, error) {
 	id = strings.TrimSpace(id)
+	ix, ok := s.pendingIx(id)
+	if !ok {
+		return map[string]any{"ok": false, "status": s.interactionOutcome(ctx, id)}, nil
+	}
 	if err := s.appCall(ctx, AppInteractions, assistantwire.InteractionsOwnerAction, map[string]any{"interaction_id": id,
-		"action": action}, nil); err != nil {
+		"action": action, "channel": ch, "kind": ix.Kind}, nil); err != nil {
 		return nil, err
 	}
 	r.AnsweredBy = ""

@@ -568,7 +568,7 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 		reply(channel.QuestionText(l, a, a.Step)) // a question answered, the next one asked
 		return true
 	}
-	ok, err := s.resolveInteraction(ctx, a.ID, r, action)
+	ok, err := s.resolveInteraction(ctx, id, a.ID, r, action)
 	c.mu.Lock()
 	if err == nil {
 		c.st.Asks = slices.DeleteFunc(c.st.Asks, func(x *channel.Ask) bool { return x.ID == a.ID })
@@ -604,13 +604,15 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	return true
 }
 
-// resolveInteraction answers a card as the user did in a channel (interactions.resolve), with the owner's action the
-// hub handed over with that message or press (the hub refuses one without it): false when it is no longer pending.
-func (s *Service) resolveInteraction(ctx context.Context, id string, r proto.Resolution, action string) (bool, error) {
+// resolveInteraction answers a card as the user did in channel ch (interactions.resolve), with the owner's action the
+// hub handed over with that message or press there (the hub refuses one without it, or one of another channel):
+// false when it is no longer pending.
+func (s *Service) resolveInteraction(ctx context.Context, ch, id string, r proto.Resolution, action string) (bool, error) {
 	var res struct {
 		OK bool `json:"ok"`
 	}
-	err := s.appCall(ctx, AppInteractions, InteractionsResolve, map[string]any{"interaction_id": id, "resolution": r, "action": action}, &res)
+	err := s.appCall(ctx, AppInteractions, InteractionsResolve, map[string]any{"interaction_id": id, "resolution": r,
+		"action": action, "channel": ch}, &res)
 	return res.OK, err
 }
 

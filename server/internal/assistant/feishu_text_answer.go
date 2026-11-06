@@ -67,7 +67,7 @@ func (s *Service) botAnswerQuestion(ctx context.Context, messageID, text, action
 	cur, had := b.cards[ix.ID]
 	delete(b.cards, ix.ID)
 	b.mu.Unlock()
-	switch ok, err := s.resolveInteraction(ctx, ix.ID, r, action); {
+	switch ok, err := s.resolveInteraction(ctx, channel.Feishu, ix.ID, r, action); {
 	case err != nil:
 		s.logf("bots: typed answer %s: %v", ix.ID, err)
 		if had {

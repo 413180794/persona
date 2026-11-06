@@ -104,6 +104,16 @@ class MachineManagementContractTest {
         assertEquals(setOf("revision", "provider", "model"), ModelConfigurationDraft().patch(purpose.copy(fields = null)).keys)
     }
 
+    @Test fun restoreClearsRuntimeWhereThePurposeTakesIt() {
+        val withRuntime = purpose.copy(fields = listOf("provider", "model", "effort", "runtime"))
+        val restore = ModelConfigurationDraft.Restore.patch(withRuntime)
+        assertEquals(setOf("revision", "provider", "model", "effort", "runtime"), restore.keys)
+        assertEquals(JsonNull, restore["runtime"])
+        // Without runtime in its fields nothing about it is sent; an ordinary edit leaves the runtime as it is.
+        assertEquals(setOf("revision", "provider", "model", "effort"), ModelConfigurationDraft.Restore.patch(purpose).keys)
+        assertFalse("runtime" in ModelConfigurationDraft(provider = "other").patch(withRuntime))
+    }
+
     @Test fun choosingAnotherProviderClearsModelAndEffort() {
         val draft = ModelConfigurationDraft.from(purpose)
         assertEquals(ModelConfigurationDraft("strong", "main", "high"), draft)
