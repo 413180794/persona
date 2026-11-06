@@ -289,3 +289,33 @@ func TestRuntimeListSubscriberOnlyReceivesRevision(t *testing.T) {
 		t.Fatal("unchanged list sent a notice")
 	}
 }
+
+func TestRuntimeListFollowsRevs(t *testing.T) {
+	h := newTestHub(t)
+	m := newMachine(h, MachineConfig{ID: "demo"})
+	h.machines, h.byID["demo"] = []*Machine{m}, m
+	m.sessions = []proto.Session{{MachineID: "demo", SessionID: "a", Rev: 1}, {MachineID: "demo", SessionID: "b", Rev: 1}}
+	first := runtimePage(t, h, "summary=1")
+	c := &client{hub: h, listMode: true, delta: true, out: make(chan []byte, 4), role: roleFull}
+	h.clients[c] = struct{}{}
+	m.onEvent("sessions.revs", json.RawMessage(`{"revs":{"a":7}}`))
+	var notified bool
+	for len(c.out) > 0 {
+		var v map[string]any
+		_ = json.Unmarshal(<-c.out, &v)
+		notified = notified || v["type"] == "sessions_list"
+	}
+	if !notified {
+		t.Fatal("paged client not told about the new revs")
+	}
+	delta := runtimePage(t, h, "summary=1&since="+url.QueryEscape(first.Revision))
+	if len(delta.Sessions) != 1 || delta.Sessions[0].SessionID != "a" || delta.Sessions[0].Rev != 7 {
+		t.Fatalf("delta: %+v", delta)
+	}
+	all := runtimePage(t, h, "summary=1")
+	for _, s := range all.Sessions {
+		if want := map[string]int64{"a": 7, "b": 1}[s.SessionID]; s.Rev != want {
+			t.Fatalf("%s rev %d, want %d", s.SessionID, s.Rev, want)
+		}
+	}
+}

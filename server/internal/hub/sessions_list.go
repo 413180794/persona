@@ -315,6 +315,31 @@ func (h *Hub) pruneSessionListMachines() bool {
 	return changed
 }
 
+// reindexSessions refreshes m's paged rows after a change that sends no legacy
+// list (sessions.revs): the "revs" broadcast updates whole-list apps, but paged
+// readers only ever see what the index holds.
+func (h *Hub) reindexSessions(m *Machine) {
+	h.sessionsMu.Lock()
+	defer h.sessionsMu.Unlock()
+	if !h.listCache.machines[m.cfg.ID] {
+		return // no paginated reader yet, or the machine was pruned
+	}
+	before := h.listCache.index.Revision()
+	shown := h.shown(m.cfg.ID, h.decorated(m))
+	h.indexSessionsLocked(m.cfg.ID, shown, encodeSessions(shown))
+	revision := h.listCache.index.Revision()
+	if revision == before {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.listMode {
+			c.sendJSON(map[string]any{"type": "sessions_list", "revision": revision})
+		}
+	}
+}
+
 func (h *Hub) broadcastSessionListNotice() {
 	revision := h.listCache.index.Revision()
 	h.mu.Lock()

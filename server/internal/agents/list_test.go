@@ -39,3 +39,19 @@ func TestPagedLateInvalidatedSourceDoesNotResurrect(t *testing.T) {
 		t.Fatalf("fresh list missing: %+v %v", page, err)
 	}
 }
+
+func TestPagedRemovedSourceDoesNotResurrect(t *testing.T) {
+	a := &memSource{name: "first", sessions: []AgentSession{{SessionKey: "a"}}}
+	b := &memSource{name: "second", sessions: []AgentSession{{SessionKey: "b"}}}
+	s := NewService(nil, nil, nil, a, b)
+	a.during = func() { s.Remove("second") }
+	page, err := s.ListPage(context.Background(), sessionlist.Options{})
+	if err != nil || page.Total != 1 {
+		t.Fatalf("removed source listed: %+v %v", page, err)
+	}
+	a.during = nil
+	counts, err := s.ListCounts(context.Background(), sessionlist.Options{})
+	if err != nil || counts.Total != 1 {
+		t.Fatalf("removed source counted: %+v %v", counts, err)
+	}
+}

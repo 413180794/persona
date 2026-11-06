@@ -16,6 +16,9 @@ func (s *Service) indexSessions(source string, list []Session) {
 		s.listIndex.RemoveSource(source)
 		return
 	}
+	if !s.has(source) {
+		return // removed after the refresh took its snapshot of sources; Remove already dropped its rows
+	}
 	items := make([]sessionlist.Item, 0, len(list))
 	seen := make(map[string]bool, len(list))
 	for _, row := range list {
