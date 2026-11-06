@@ -54,7 +54,7 @@ describe("answerCard", () => {
     apiOp.mockRejectedValue(new ApiError(409, "changed", { code: "prompt_changed" }));
     expect(await answerCard(ix, allowBody())).toEqual({ ok: false, error: "电脑上的对话框变了，已按新的屏幕重新生成" });
     apiOp.mockRejectedValue(new ApiError(500, "boom", {}));
-    expect(await answerCard(ix, allowBody())).toEqual({ ok: false, error: "没送到：boom" });
+    expect(await answerCard(ix, allowBody())).toEqual({ ok: false, error: expect.stringMatching(/^没送到：.+（HTTP 500: boom）$/) });
     expect(ended).toEqual([]);
   });
 });

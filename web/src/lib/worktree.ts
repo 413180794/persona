@@ -94,7 +94,7 @@ export function worktreeProblem(e: unknown, what: string): { text: string; needs
   const message = errorText(e);
   const old =
     e instanceof ApiError
-      ? e.status === 404 || e.status === 405 || e.status === 501 || e.code === "unknown_method" || /unknown method|^unsupported/i.test(message)
+      ? e.status === 404 || e.status === 405 || e.status === 501 || e.code === "unknown_method" || /unknown method|^unsupported/i.test(e.message)
       : false;
   if (old) return { text: WORKTREE_COPY.needsUpdate, needsUpdate: true };
   return { text: message ? tr("worktree.failed_with", { what, message }) : what, needsUpdate: false };

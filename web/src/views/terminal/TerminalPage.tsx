@@ -298,7 +298,7 @@ function MachineBlock({
           {machine.online && !listing && loading && <p className="px-2.5 py-2 text-[12px] text-ink-3">{t("terminal-terminalpage.loading")}</p>}
           {machine.online && listing?.error && !listing.data && (
             <p className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-red">
-              <span className="min-w-0 flex-1 truncate">{listing.error}</span>
+              <span className="min-w-0 flex-1 truncate" title={listing.error}>{listing.error}</span>
               <button type="button" onClick={onRetry} className="shrink-0 whitespace-nowrap rounded-control px-2 py-0.5 text-ink-2 hover:bg-hover hover:text-ink">
                 {t("terminal-terminalpage.retry")}
               </button>

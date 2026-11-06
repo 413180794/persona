@@ -157,6 +157,6 @@ describe("import preview", () => {
     expect(importSummary({ created: ["a", "b"], updated: ["c"] })).toBe("新建 2 个，合并 1 个");
     expect(importErrorText(new ApiError(409, "x", { code: "node_outdated" }))).toBe("这台电脑的 Persona 需要更新");
     expect(importErrorText(new ApiError(503, "x", { code: "offline" }))).toBe("这台电脑不在线");
-    expect(importErrorText(new ApiError(502, "坏了", { code: "internal" }))).toBe("坏了");
+    expect(importErrorText(new ApiError(502, "坏了", { code: "internal" }))).toContain("HTTP 502: 坏了");
   });
 });

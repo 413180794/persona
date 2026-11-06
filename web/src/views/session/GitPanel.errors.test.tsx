@@ -60,7 +60,7 @@ describe("GitPanel failures with a status on screen", () => {
     const page = pending.at(-1)!;
     expect(page.path).toContain("/log?");
     await act(async () => page.fail(500, "log broke"));
-    expect(toast).toHaveBeenCalledWith("log broke", "error");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/（HTTP 500: log broke）$/), "error");
     expect(host.textContent).toContain("head-0");
     expect(button(t("session-gitpanel.load_older_commits"))!.disabled).toBe(false);
   });
@@ -71,7 +71,7 @@ describe("GitPanel failures with a status on screen", () => {
     const read = pending.at(-1)!;
     expect(read.path).toContain("/status?");
     await act(async () => read.fail(500, "status broke"));
-    expect(toast).toHaveBeenCalledWith("status broke", "error");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/（HTTP 500: status broke）$/), "error");
     expect(host.textContent).toContain("head-0");
   });
 

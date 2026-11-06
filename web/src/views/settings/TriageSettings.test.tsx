@@ -57,7 +57,8 @@ describe("设置 › 会话分诊", () => {
     await render();
     await fail(0, hubSays(503, "hub 没回答"));
     expect(switches()).toHaveLength(0);
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe("没读到会话分诊的开关：hub 没回答");
+    // errorText explains a 503 and keeps the hub's own text after it (#3728)
+    expect(host.querySelector('[role="alert"]')?.textContent).toMatch(/^没读到会话分诊的开关：.+（HTTP 503: hub 没回答）$/);
     await act(async () => retry()!.click());
     expect(pending).toHaveLength(2);
     expect(pending[1].method).toBe("GET");
@@ -84,7 +85,7 @@ describe("设置 › 会话分诊", () => {
     expect(named("要你决定的开卡片")!.getAttribute("aria-checked")).toBe("false"); // optimistic
     await fail(1, hubSays(500, "500"));
     expect(named("要你决定的开卡片")!.getAttribute("aria-checked")).toBe("true");
-    expect(toast).toHaveBeenCalledWith("没改成：500", "error");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/^没改成：.+（HTTP 500: 500）$/), "error");
   });
 
   it("重试又失败：写新的原因，还能再点重试", async () => {

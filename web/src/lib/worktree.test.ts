@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./router", () => ({ href: () => "/", navigate: vi.fn() }));
 
-import { ApiError } from "./api";
+import { ApiError, errorText } from "./api";
 import { navigate } from "./router";
 import {
   branchProblem, branchSlug, createWorktree, emptyForm, formProblem, onOpenNewWorktree, openCreated, openNewWorktree, prepareWorktree, suggestedPath,
@@ -104,10 +104,12 @@ describe("errors", () => {
     expect(worktreeProblem(new ApiError(404, "HTTP 404", {}, false), WORKTREE_COPY.failed)).toEqual({ text: WORKTREE_COPY.needsUpdate, needsUpdate: true });
     expect(worktreeProblem(new ApiError(502, "unknown method worktree.prepare", { code: "internal" }), WORKTREE_COPY.readFailed).needsUpdate).toBe(true);
     expect(worktreeProblem(new ApiError(409, "unsupported: herdr cannot do this", {}), WORKTREE_COPY.failed).needsUpdate).toBe(true);
+    expect(worktreeProblem(new ApiError(500, "unsupported: herdr cannot do this", {}), WORKTREE_COPY.failed)).toEqual({ text: WORKTREE_COPY.needsUpdate, needsUpdate: true });
   });
-  it("anything else is said as it is", () => {
-    expect(worktreeProblem(new ApiError(502, "新建 worktree 失败：'x' is already used by worktree", {}), WORKTREE_COPY.failed)).toEqual({
-      text: "没能新建 worktree：新建 worktree 失败：'x' is already used by worktree", needsUpdate: false,
+  it("keeps other failures' readable detail without asking for an update", () => {
+    const failed = new ApiError(502, "新建 worktree 失败：'x' is already used by worktree", {});
+    expect(worktreeProblem(failed, WORKTREE_COPY.failed)).toEqual({
+      text: `没能新建 worktree：${errorText(failed)}`, needsUpdate: false,
     });
     expect(worktreeProblem(new ApiError(403, "changing a computer's terminals needs a full device", {}), WORKTREE_COPY.failed).needsUpdate).toBe(false);
   });

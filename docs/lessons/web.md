@@ -62,6 +62,7 @@
 
 ### 和 hub 打交道
 
+- **统一翻译错误前要查提示的消费者**（#3728）：`errorText` 除了显示，还被登录、worktree 兼容判断、会话缺失提示和离线 toast 合并逻辑使用。给 5xx 加说明后，`^unsupported` 不再匹配翻译后的开头；兼容判断改读 `ApiError.message`。显示仍保留完整原文和 HTTP 状态码，让会话专用解释、502 / 503 / 504 的离线提示合并继续生效；401 的 `invalid token` 保持原样。
 - `api()` 没显式传 token 时任何 401 都会把浏览器登出；飞书网关掉了飞书登录也回 401。`/lark/raw`、`/lark/moments` 这类代理的请求显式传 `token: getToken()`。
 - `PUT /assistant/tasks/{id}` 整体替换字段（不带 `session_id` 就清空），连只切开关也要带完整任务；Go 的零时间是 `0001-01-01T00:00:00Z`，`at` 没有就省掉，不能发空串。
 - 文件分页：后续页用最初请求的 `path` + `cwd` 取，不能用服务端规范化后的 `path`；第一页的 `truncated` 一直是 true，「只显示了开头」看第一页有没有 `next`。

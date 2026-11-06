@@ -1,4 +1,7 @@
 {
   "cant_reach_hub": "Can't reach the hub",
-  "hub_no_response": "The hub took too long to answer. It may be restarting, or the network may be down. Try again in a moment."
+  "hub_no_response": "The hub took too long to answer. It may be restarting, or the network may be down. Try again in a moment.",
+  "not_found": "Content not found, or this version doesn't support this feature. Refresh the page or check for updates to the hub and your computer's software. ({detail})",
+  "server_error": "The service ran into a problem. Try again later. If it keeps failing, check that the hub is running properly. ({detail})",
+  "hub_unavailable": "The hub can't respond right now. Try again later. If it keeps failing, check that the hub and your computer's software are running properly. ({detail})"
 }

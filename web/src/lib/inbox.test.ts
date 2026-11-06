@@ -364,7 +364,7 @@ describe("列表状态", () => {
     finish(fail(500, "boom"));
     await p;
     expect(getInbox().items[0].done_at).toBeUndefined();
-    expect(toast).toHaveBeenCalledWith("没标成已处理：boom", "error");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/^没标成已处理：.*HTTP 500: boom/), "error");
     const [url, init] = fetcher.mock.calls[1];
     expect(url).toBe("/api/v1/inbox/lark:f1:1/done");
     expect(JSON.parse(init.body)).toEqual({ done: true });
@@ -474,7 +474,7 @@ describe("列表状态", () => {
     fetcher.mockReset().mockResolvedValueOnce(fail(502, "boom"));
     await setAllDone(getInbox().items, true);
     expect(getInbox().items.every((x) => !x.done_at)).toBe(true);
-    expect(toast).toHaveBeenLastCalledWith("没标成已处理：boom", "error");
+    expect(toast).toHaveBeenLastCalledWith(expect.stringMatching(/^没标成已处理：.*HTTP 502: boom/), "error");
   });
 
   it("全部清理：按忽略记（done_by=dismissed），撤销移回；失败恢复", async () => {
@@ -494,7 +494,7 @@ describe("列表状态", () => {
     fetcher.mockResolvedValueOnce(fail(502, "boom"));
     await setAllDone([a], "dismiss");
     expect(getInbox().items[0].done_at).toBeFalsy();
-    expect(toast).toHaveBeenLastCalledWith("没清理成：boom", "error");
+    expect(toast).toHaveBeenLastCalledWith(expect.stringMatching(/^没清理成：.*HTTP 502: boom/), "error");
   });
 
   it("老 hub 没有 /inbox/bulk：已处理和全部清理都退回 /inbox/done", async () => {

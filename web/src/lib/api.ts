@@ -158,7 +158,17 @@ export function isAbort(e: unknown) {
 }
 
 export function errorText(e: unknown): string {
-  if (e instanceof ApiError) return e.message;
+  if (e instanceof ApiError) {
+    // Keep both the status and the original reason for diagnostics and existing error-specific explanations.
+    const status = `HTTP ${e.status}`;
+    const detail = e.message && e.message !== status ? `${status}: ${e.message}` : status;
+    if (e.status === 404 || e.code === "not_found" || /^not[ _]found$/i.test(e.message.trim())) {
+      return t("lib-api.not_found", { detail });
+    }
+    if (e.status === 502 || e.status === 503 || e.status === 504) return t("lib-api.hub_unavailable", { detail });
+    if (e.status >= 500 && e.status < 600) return t("lib-api.server_error", { detail });
+    return e.message;
+  }
   if (e instanceof TypeError) return t("lib-api.cant_reach_hub");
   return e instanceof Error ? e.message : String(e);
 }
