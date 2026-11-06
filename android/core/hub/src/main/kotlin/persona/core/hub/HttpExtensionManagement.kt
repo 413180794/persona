@@ -4,6 +4,8 @@ import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.HubExtension
 import persona.core.contracts.api.ExtensionCatalog
 import persona.core.contracts.api.ExtensionConfigRejected
+import persona.core.contracts.api.ExtensionDependent
+import persona.core.contracts.api.ExtensionHasDependents
 import persona.core.contracts.api.ExtensionDetail
 import persona.core.contracts.api.ExtensionListing
 import persona.core.contracts.api.ExtensionManagement
@@ -75,8 +77,8 @@ class HttpExtensionManagement internal constructor(
 
     override suspend fun extension(id: String) = detail(call(path(id, "-", ""), "GET"))
 
-    override suspend fun setEnabled(id: String, enabled: Boolean) =
-        detail(call(path(id, "-", "enabled"), "PUT", buildJsonObject { put("enabled", enabled) }))
+    override suspend fun setEnabled(id: String, enabled: Boolean, cascade: Boolean) =
+        detail(call(path(id, "-", "enabled"), "PUT", buildJsonObject { put("enabled", enabled); if (cascade) put("cascade", true) }))
 
     override suspend fun setContribution(id: String, point: String, contribution: String, enabled: Boolean) =
         detail(call(path(id, "-", "contributions", point.also { require(it.matches(ContributionPoint)) }, id(contribution)),
@@ -206,8 +208,9 @@ class HttpExtensionManagement internal constructor(
     override suspend fun upgrade(id: String, preview: ExtensionPreview): ExtensionDetail =
         detail(call(path(id, "-", "upgrade"), "POST", agreed(preview)))
 
-    override suspend fun uninstall(id: String, keepData: Boolean) {
-        call(path(id, "-", "") + if (keepData) "?keep_data=1" else "", "DELETE")
+    override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean) {
+        val query = listOfNotNull("keep_data=1".takeIf { keepData }, "cascade=1".takeIf { cascade }).joinToString("&")
+        call(path(id, "-", "") + if (query.isNotEmpty()) "?$query" else "", "DELETE")
     }
 
     // ---- signing in (#4507): the extension's own sign-in, a step at a time; the values go to the extension only.
@@ -304,11 +307,20 @@ class HttpExtensionManagement internal constructor(
         throw rejected(failure) ?: failure
     }
 
-    /** 400 `{code: "invalid_config", field, message}`: the field the hub refused and why. */
-    private fun rejected(failure: HubFailure): ExtensionConfigRejected? =
-        if (failure.status == 400 && failure.code == "invalid_config") {
+    /**
+     * 400 `{code: "invalid_config", field, message}`: the field the hub refused and why. 409 `{code: "has_dependents",
+     * dependents: [{id, name}]}`: the extensions that would be switched off too (#5192).
+     */
+    private fun rejected(failure: HubFailure): Exception? = when {
+        failure.status == 400 && failure.code == "invalid_config" ->
             ExtensionConfigRejected(failure.field.orEmpty(), failure.detail?.takeIf { it.isNotBlank() } ?: failure.message)
-        } else null
+        failure.status == 409 && failure.code == "has_dependents" -> {
+            val list = runCatching { (JsonCodec.parseToJsonElement(failure.body.orEmpty()) as? JsonObject)?.get("dependents") as? JsonArray }.getOrNull()
+            ExtensionHasDependents(list?.let { runCatching { JsonCodec.decodeFromJsonElement(ListSerializer(ExtensionDependent.serializer()), it) }.getOrNull() }.orEmpty(),
+                failure.message)
+        }
+        else -> null
+    }
 
     /** `/api/v1/extensions[/id/…]` (or `/api/v1/plugins`); an empty last segment keeps the trailing slash the detail route has. */
     private fun path(id: String? = null, vararg rest: String): String {

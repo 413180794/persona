@@ -316,6 +316,8 @@ extension Theme {
         static let hubGroup = "network"
         /// A hub reached through an SSH tunnel (Settings › hub › SSH Tunnel, docs/network.md「经 SSH 隧道连 hub」).
         static let sshTunnel = "network.badge.shield.half.filled"
+        /// A hub reached through the app's own in-app tunnel (docs/network.md「经 App 内隧道连 hub」).
+        static let inAppTunnel = "lock.shield"
         /// This device's own SSH key (its public half, to copy onto the server).
         static let sshKey = "key.horizontal"
         /// The SSH server's key fingerprint, confirmed and pinned.
@@ -431,7 +433,17 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video''s, the sidebar's).
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
+        /// Send someone a message.
+        static let message = "bubble.left.fill"
+        static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
+        static let locked = "lock"
+        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
+        static let memory = "brain"
+        /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

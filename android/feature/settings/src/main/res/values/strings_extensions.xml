@@ -229,6 +229,10 @@
     <string name="settings_ext_preview_cancel">Don\'t install</string>
     <string name="settings_ext_uninstall_title">Remove %1$s?</string>
     <string name="settings_ext_uninstall_text">This stops it and deletes its settings and secrets; the connectors it provides go too.</string>
+    <string name="settings_ext_dependents_title">Switch off the extensions that depend on it?</string>
+    <string name="settings_ext_dependents_text">Extensions that depend on %2$s will be switched off too: %1$s.</string>
+    <string name="settings_ext_dependents_off">Switch all off</string>
+    <string name="settings_ext_dependents_remove">Switch off and remove</string>
     <string name="settings_ext_keep_data">Keep its data</string>
     <string name="settings_ext_markets_empty_title">No markets yet</string>
     <string name="settings_ext_markets_empty_text">Enter a market\'s address: an https://… website, github:owner/repo, or a git repository as git:&lt;address&gt;. GitHub markets can take a read-only token: private repositories need it, and public ones get a higher limit.</string>

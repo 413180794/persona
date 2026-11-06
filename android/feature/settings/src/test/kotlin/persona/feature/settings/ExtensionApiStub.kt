@@ -10,7 +10,7 @@ internal abstract class ExtensionApiStub : ExtensionManagement {
     private fun unused(): Nothing = throw AssertionError("not used in this test")
     override suspend fun extensions(): List<HubExtension> = unused()
     override suspend fun extension(id: String): ExtensionDetail = unused()
-    override suspend fun setEnabled(id: String, enabled: Boolean): ExtensionDetail = unused()
+    override suspend fun setEnabled(id: String, enabled: Boolean, cascade: Boolean): ExtensionDetail = unused()
     override suspend fun setConfig(id: String, config: JsonObject): ExtensionDetail = unused()
     override suspend fun setSecret(id: String, name: String, value: String): ExtensionDetail = unused()
     override suspend fun clearSecret(id: String, name: String): ExtensionDetail = unused()
@@ -27,5 +27,5 @@ internal abstract class ExtensionApiStub : ExtensionManagement {
     override suspend fun previewFromMarket(market: String, extension: String): ExtensionPreview = unused()
     override suspend fun install(preview: ExtensionPreview): ExtensionDetail = unused()
     override suspend fun upgrade(id: String, preview: ExtensionPreview): ExtensionDetail = unused()
-    override suspend fun uninstall(id: String, keepData: Boolean): Unit = unused()
+    override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean): Unit = unused()
 }

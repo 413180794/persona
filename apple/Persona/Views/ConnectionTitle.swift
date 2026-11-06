@@ -126,9 +126,17 @@ struct ConnectionDetails: View {
         .sheet(isPresented: $pairing) { PairView() }
     }
 
-    /// The hub-level group's SSH tunnel, when its hub has one.
+    /// The hub-level group's tunnel, when its hub has one: the in-app one while it carries the traffic, else the
+    /// SSH one, else the in-app one.
     private var sshFact: SSHFact? {
-        guard let group = model.hub?.group, let t = model.tunnel(group) else { return nil }
+        guard let group = model.hub?.group else { return nil }
+        let inApp: SSHFact? = model.inAppTunnelState(group).map { t in
+            var problem: String?
+            if case .down(let why) = t.state { problem = why }
+            return SSHFact(server: "", routed: t.routed, problem: problem, inApp: t.route.title)
+        }
+        if inApp?.routed == true { return inApp }
+        guard let t = model.tunnel(group) else { return inApp }
         var problem: String?
         if case .down(let why) = t.state { problem = why }
         return SSHFact(server: t.hub.ssh?.label ?? "", routed: t.routed, problem: problem)
@@ -160,6 +168,8 @@ struct ConnectionDetails: View {
         var server: String
         var routed: Bool
         var problem: String?
+        /// The in-app tunnel's name when it is that one (docs/network.md「经 App 内隧道连 hub」), not the SSH one.
+        var inApp: String?
     }
 
     /// Short lines under the explanation: why the last try failed, when the next is, since when, what is waiting, and
@@ -168,8 +178,13 @@ struct ConnectionDetails: View {
                       rtt: TimeInterval?, outbox: Int, now: Date, ssh: SSHFact? = nil) -> [String] {
         var out: [String] = []
         if let ssh {
-            out.append(ssh.routed ? String(localized: "线路：经 SSH 隧道（\(ssh.server)）") : String(localized: "线路：直连"))
-            if phase != .online, let why = ssh.problem { out.append(String(localized: "SSH 隧道：\(why)")) }
+            if let name = ssh.inApp {
+                out.append(ssh.routed ? String(localized: "线路：经\(name)") : String(localized: "线路：直连"))
+                if phase != .online, let why = ssh.problem { out.append(String(localized: "\(name)：\(why)")) }
+            } else {
+                out.append(ssh.routed ? String(localized: "线路：经 SSH 隧道（\(ssh.server)）") : String(localized: "线路：直连"))
+                if phase != .online, let why = ssh.problem { out.append(String(localized: "SSH 隧道：\(why)")) }
+            }
         }
         if phase == .connecting || phase == .rejected, case .failed(let why) = link { out.append(String(localized: "上次失败：\(why)")) }
         if phase == .connecting || phase == .rejected, let nextTry {

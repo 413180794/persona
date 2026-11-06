@@ -330,6 +330,7 @@ data class ExtensionContributes(
     val looks: List<ExtensionLookItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
+    val tunnels: List<ExtensionTunnelItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
     /** Extra keys stay at this object's level on the wire; declared fields always win. */
     val additionalProperties: Map<String, JsonElement> = emptyMap(),
@@ -357,12 +358,13 @@ private data class ExtensionContributesKnown(
     val looks: List<ExtensionLookItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
+    val tunnels: List<ExtensionTunnelItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
 )
 
 object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
     private val known = ExtensionContributesKnown.serializer()
-    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging")
+    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging")
     override val descriptor: SerialDescriptor = known.descriptor
 
     override fun deserialize(decoder: Decoder): ExtensionContributes {
@@ -391,6 +393,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             looks = fields.looks,
             triageTemplates = fields.triageTemplates,
             agentFilters = fields.agentFilters,
+            tunnels = fields.tunnels,
             messaging = fields.messaging,
             additionalProperties = obj.filterKeys { it !in keys },
         )
@@ -419,6 +422,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             looks = value.looks,
             triageTemplates = value.triageTemplates,
             agentFilters = value.agentFilters,
+            tunnels = value.tunnels,
             messaging = value.messaging,
         )
         val obj = output.json.encodeToJsonElement(known, fields) as JsonObject
@@ -651,6 +655,16 @@ data class ExtensionTriageTemplateItem(
     val id: String = "",
     val title: String = "",
     val text: String = "",
+)
+
+/**
+ * A tunnel the apps can reach this hub through when its own addresses do not answer (docs「App 内隧道」): an in-app tunnel
+ * core built into the app, going to the configuration's target_host and target_port.
+ */
+@Serializable
+data class ExtensionTunnelItem(
+    val id: String = "",
+    val name: String = "",
 )
 
 /**

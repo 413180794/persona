@@ -560,7 +560,7 @@ final class AppModel {
         pairingEngineMachine = nil
         if isDemo { leaveDemo() }
         for link in links { link.live.disconnect() }
-        SSHTunnels.shared.closeAll() // no hub left to route through a tunnel (also drops HubTransport's routes)
+        closeAllTunnels() // no hub left to route through a tunnel (also drops HubTransport's routes)
         LiveActivityController.shared.endAll() // its buttons would talk to a hub we no longer know
         links = []
         registry = HubRegistry()
@@ -1370,6 +1370,7 @@ final class AppModel {
         switch ev {
         case .hello(let hello):
             link(group)?.received(hello)
+            Task { await refreshInAppTunnel(group) }
             // Back on the hub: an install that moved on while the connection was down shows where it is now (#3307).
             if isHub, Set(hello.features).hasExtensionFeature("operations") { Task { await ExtensionOperations.shared.reload() } }
             #if DEBUG && (os(iOS) || os(visionOS))

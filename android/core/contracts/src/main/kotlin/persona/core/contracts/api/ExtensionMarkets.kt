@@ -42,8 +42,11 @@ interface ExtensionMarkets {
     /** `POST /api/v1/extensions/{id}/-/upgrade`. */
     suspend fun upgrade(id: String, preview: ExtensionPreview): ExtensionDetail
 
-    /** `DELETE /api/v1/extensions/{id}/-/` (only those installed from a market, on a phone); its data stays unless told otherwise. */
-    suspend fun uninstall(id: String, keepData: Boolean = true)
+    /**
+     * `DELETE /api/v1/extensions/{id}/-/` (only those installed from a market, on a phone); its data stays unless told
+     * otherwise. With enabled dependents it is a [ExtensionHasDependents] unless [cascade] (`cascade=1`) switches them off.
+     */
+    suspend fun uninstall(id: String, keepData: Boolean = true, cascade: Boolean = false)
 
     /** `GET /api/v1/extensions/-/upgrades`: the auto-upgrade switch for all market extensions; null on a hub without it. */
     suspend fun autoUpgrades(): Boolean? = null

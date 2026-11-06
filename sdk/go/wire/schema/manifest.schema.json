@@ -270,6 +270,7 @@
         "looks": {"type": "array", "items": {"$ref": "#/$defs/LookItem"}},
         "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}},
         "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
+        "tunnels": {"type": "array", "items": {"$ref": "#/$defs/TunnelItem"}},
         "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
@@ -430,6 +431,16 @@
         "text": {"type": "string", "minLength": 1, "maxLength": 4000}
       },
       "required": ["id", "title", "text"]
+    },
+    "TunnelItem": {
+      "description": "A tunnel the apps can reach this hub through when its own addresses do not answer (docs「App 内隧道」): an in-app tunnel core built into the app, going to the configuration's target_host and target_port.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 40}
+      },
+      "required": ["id", "name"]
     },
     "AgentFilterItem": {
       "description": "Agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and any of the matchers fits it.",

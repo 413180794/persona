@@ -123,6 +123,7 @@ hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `lega
 | `looks`（版本 1） | — | `id`（`^[a-z0-9][a-z0-9-]{0,31}$`）、`name`、`names?`、`subtitle?`、`subtitles?`、`avatar`（`sizes`：PNG，`svg?`、`safe?`、`dark?`）、`colors?`、`dot?`、`app_icon_fallback`（内置形象的 id） | 纯声明即可；包里有它点名的图 | 设置里的「形象」多一个：Persona 的名字、头像、配色、状态圆点，能换的地方连 App 图标一起换，见下面「形象」 |
 | `triage_templates`（版本 1） | — | `id`、`title`（≤ 40 字）、`text`（≤ 4000 字） | 纯声明即可 | 填收件箱分拣规则（`triage_rules`）时能选的模板，见「纯声明贡献」 |
 | `agent_filters`（版本 1） | — | `id`、`title?`（≤ 40 字）、`when?`（配置里一个布尔字段的名字）、`agents?`（`claude` / `codex`）、`originators?`、`added_dirs?`、`first_message_prefixes?`（至少一种） | 纯声明即可 | 各台电脑上哪些 Agent 会话不进 Agents，见下面「Agent 过滤」 |
+| `tunnels`（版本 1） | — | `id`、`name`（1–40 字，App 设置里那一行的标题） | 纯声明即可；`configuration` 必须有必填的 `string` 字段 `target_host`，`target_port` 有就得是 `integer` | 手机连不上 hub 的地址时，经 App 内置的隧道核心连 hub，见下面「App 内隧道」 |
 | `messaging`（版本 1，#2138） | — | `id`（`^[a-z][a-z0-9_]{0,31}$`，也是接口路径和事件里的来源 id）、`name`、`icon?`、`capabilities?`、`composer_modes?`、`settings_ui?`（同一个扩展的 `extension_page`）、`links?` | `runtime.http`，`activation_events` 有 `on_startup` | App 的「消息」入口：会话、聊天、发送都走 `/api/v1/messaging/<id>/…`，App 用通用的原生消息组件画，见 [extension-messaging.md](extension-messaging.md) |
 
 hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
@@ -1788,6 +1789,15 @@ App 里是「设置 › 模型供应商 › 新增」：iOS 是有预设时才�
 - **不会拿掉的**：助手的会话、保留的会话（主对话）、分支出来的会话、宿主里的 Agent（herdr 的窗格、runtime）。规则只看磁盘上找到的 transcript / rollout。
 - **代价**：node 读每个文件开头（最多 512 KB，读到第一条消息后不再读），结果按文件缓存；Claude 的会话在「最新 80 个」截断之前过滤，平台的会话不会把自己的挤出去。
 - 代码：`server/internal/extension/agentfilters.go`（扩展点和校验）、`server/internal/extmgr/agent_filters.go`（下发）、`server/internal/node/agentfilters.go`（读标记、过滤）、`server/internal/proto/agentfilters.go`（规则和匹配）。
+
+## App 内隧道
+
+扩展贡献 `tunnels`，告诉 App 这台 hub 还能经一条**App 内隧道**连上：手机连不上 hub 自己的地址时（比如 hub 在一个专用网络里），App 在自己进程里起隧道，再经它连 hub 在那个网络里的地址。只有 Persona 连 hub 的流量走它，不建系统 VPN。见 [network.md](network.md)「经 App 内隧道连 hub」。
+
+- **纯声明**：hub 上不跑程序。隧道本身是构建时编进 App 的隧道核心（一个 C 静态库，接口见 network.md），没编进核心的 App 不显示入口。
+- **去哪里**：扩展设置里的 `target_host`（必填，主机名或 IP，由隧道里的 DNS 解析）和 `target_port`（默认 18660，hub 的 HTTP 端口）。装、升级时查这两个字段，不对就装不上。
+- **App 怎么读**：每次收到 hello 问一次 `GET /api/v1/extensions`，找开着、`contributes` 里有 `tunnels` 的扩展；再读详情（完整权限的设备）里的 `config` 和 `contributions`（`point` 是 `tunnels` 且开着的那项，`title` 就是 `name`）。结果存在配对信息里，连不上 hub 时就靠这份；扩展停用、卸载或这一项关掉，入口和隧道一起去掉。一台 hub 只用第一条。
+- 账号、节点这些登录信息由隧道核心自己的控制面板管，只在手机上，不经过 hub。
 
 ## App：设置 › 扩展
 

@@ -103,13 +103,13 @@ export function FilesHeading() {
 }
 
 /** A file in the list: its name with the matched letters marked, and the folders it is in beneath. */
-export const FileResultRow = forwardRef<HTMLButtonElement, { row: FileRow; className: string; onMouseMove: () => void; onClick: () => void }>(function FileResultRow({ row, className, onMouseMove, onClick }, ref) {
+export const FileResultRow = forwardRef<HTMLButtonElement, { row: FileRow; className: string; onMouseMove: () => void; onClick: () => void; option?: { id: string; role: "option"; "aria-selected": boolean } }>(function FileResultRow({ row, className, onMouseMove, onClick, option }, ref) {
   const { hit } = row;
   const dirLen = hit.path.lastIndexOf("/") + 1;
   const dir = hit.path.slice(0, dirLen);
   const name = hit.path.slice(dirLen);
   return (
-    <button ref={ref} type="button" onMouseMove={onMouseMove} onClick={onClick} className={className}>
+    <button ref={ref} type="button" {...option} onMouseMove={onMouseMove} onClick={onClick} className={className}>
       <span className="flex size-5 shrink-0 items-center justify-center">
         <FileGlyph name={name} size={13} />
       </span>

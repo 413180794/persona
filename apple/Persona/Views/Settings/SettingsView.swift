@@ -280,6 +280,7 @@ struct SettingsView: View {
     private var linkState: String {
         guard model.live.looksConnected else { return model.connection.phase == .online ? String(localized: "未连接") : model.connection.phase.title }
         let tunneled = model.hub.flatMap { model.tunnel($0.group) }?.routed == true
+        if let t = model.hub.flatMap({ model.inAppTunnelState($0.group) }), t.routed { return String(localized: "已连接 hub · 经\(t.route.title)") }
         return tunneled ? String(localized: "已连接 hub · 经 SSH 隧道") : String(localized: "已连接 hub")
     }
 
@@ -430,6 +431,7 @@ enum SettingsPage: Hashable {
     case channel(String)
     /// Settings › hub › SSH Tunnel of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
     case sshTunnel(String)
+    case inAppTunnel(String)
 
 }
 
@@ -479,6 +481,7 @@ private struct SettingsDestinations: ViewModifier {
         case .modelConfiguration: ModelConfigurationView()
         case .hubs: HubsView()
         case .sshTunnel(let id): HubSSHTunnelPage(hubID: id)
+        case .inAppTunnel(let id): HubInAppTunnelPage(hubID: id)
         case .hub: HubSettingsPage()
         case .skills: SkillsPage()
         case .plugins: ExtensionsView()

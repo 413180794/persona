@@ -84,4 +84,31 @@ class HttpExtensionModelTest {
         server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"busy"}"""))
         try { api.themes(); fail() } catch (e: HubFailure) { assertEquals(503, e.status) }
     }
+
+    @Test fun switchingOffOrRemovingWithDependentsAsksThenGoesOnWithCascade() = withHub { server, api ->
+        // #5192: 409 has_dependents names the extensions depending on it; cascade switches them off too.
+        server.enqueue(MockResponse().setResponseCode(409).setBody("""{"code":"has_dependents","error":"B depends on it",
+            "dependents":[{"id":"ext-b","name":"B"},{"id":"ext-c","name":""}]}"""))
+        try { api.setEnabled("ext-a", false); fail() } catch (e: ExtensionHasDependents) {
+            assertEquals(listOf("ext-b", "ext-c"), e.dependents.map { it.id })
+            assertEquals(listOf("B", "ext-c"), e.dependents.map { it.label })
+            assertEquals("B depends on it", e.message)
+        }
+        assertEquals("""{"enabled":false}""", server.takeRequest().body.readUtf8())
+        server.enqueue(MockResponse().setBody("""{"id":"ext-a","enabled":false}"""))
+        api.setEnabled("ext-a", false, cascade = true)
+        assertEquals("""{"enabled":false,"cascade":true}""", server.takeRequest().body.readUtf8())
+        server.enqueue(MockResponse().setBody("{}"))
+        api.uninstall("ext-a", keepData = true, cascade = true)
+        server.takeRequest().let {
+            assertEquals("DELETE", it.method)
+            assertEquals("/api/v1/extensions/ext-a/-/?keep_data=1&cascade=1", it.path)
+        }
+        server.enqueue(MockResponse().setBody("{}"))
+        api.uninstall("ext-a", keepData = false, cascade = true)
+        assertEquals("/api/v1/extensions/ext-a/-/?cascade=1", server.takeRequest().path)
+        server.enqueue(MockResponse().setBody("{}"))
+        api.uninstall("ext-a", keepData = false)
+        assertEquals("/api/v1/extensions/ext-a/-/", server.takeRequest().path)
+    }
 }

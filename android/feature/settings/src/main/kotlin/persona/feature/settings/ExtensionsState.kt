@@ -7,6 +7,7 @@ import persona.core.contracts.api.ExtensionConfigRejected
 import persona.core.contracts.api.ExtensionAuth
 import persona.core.contracts.api.ExtensionDetail
 import persona.core.contracts.api.ExtensionField
+import persona.core.contracts.api.ExtensionHasDependents
 import persona.core.contracts.api.ExtensionManagement
 import persona.core.contracts.api.ExtensionNodeState
 import persona.core.contracts.api.ExtensionPermission
@@ -63,6 +64,10 @@ internal object ExtensionText {
         "starting" -> Status.Working
         else -> Status.Offline
     }
+
+    /** What asking before switching off [name]'s dependents with it says (#5192). */
+    fun cascade(res: Resources, ask: ExtensionCascade, name: String): String =
+        res.getString(R.string.settings_ext_dependents_text, ask.names.joinToString(res.getString(R.string.settings_ext_list_separator)), name)
 
     fun source(res: Resources, s: String?): String? = when (s) {
         "builtin" -> res.getString(R.string.settings_ext_source_builtin)
@@ -339,6 +344,8 @@ internal data class ExtensionState(
     /** A switch or secret call is on its way. */
     val busy: Boolean = false,
     val error: String? = null,
+    /** The hub would switch others off with it (409 `has_dependents`): asked before going on with `cascade`. */
+    val cascade: ExtensionCascade? = null,
 ) {
     val editable: Boolean get() = detail?.readOnly == false
     val dirty: Boolean get() = detail != null && (draft != detail.config || numberProblems.isNotEmpty())
@@ -348,6 +355,9 @@ internal data class ExtensionState(
 
     fun fieldError(path: List<String>): String? = path.joinToString(".").let { fieldErrors[it] ?: numberProblems[it] }
 }
+
+/** The dependents named by `has_dependents`; [keepData] is the removal asked about, null switching it off. */
+internal data class ExtensionCascade(val names: List<String>, val keepData: Boolean? = null)
 
 /** 设置 › 扩展 › one: its switch, its form (a draft saved as a whole), its secrets. */
 internal class ExtensionModel(private val api: ExtensionManagement, private val id: String, private val res: Resources) {
@@ -360,7 +370,16 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
         try { run { api.extension(id) } } finally { mutable.update { it.copy(loading = false) } }
     }
 
-    suspend fun setEnabled(on: Boolean) = busy { run { api.setEnabled(id, on) } }
+    suspend fun setEnabled(on: Boolean, cascade: Boolean = false) = busy { run { api.setEnabled(id, on, cascade) } }
+
+    /** Asked about the dependents: switches them off with it and goes on with what was refused. */
+    suspend fun confirmCascade(): Boolean {
+        val ask = state.value.cascade ?: return false
+        mutable.update { it.copy(cascade = null) }
+        return if (ask.keepData == null) setEnabled(false, cascade = true) else uninstall(ask.keepData, cascade = true)
+    }
+
+    fun dismissCascade() = mutable.update { it.copy(cascade = null) }
 
     /** Follows the hub's `extension_auth` pushes for this extension while the page is open (#4507). */
     suspend fun watchAuth() = api.authUpdates.collect { event -> if (event.extension == id) setAuth(event.auth) }
@@ -436,15 +455,18 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
     }
 
     /** Removes an extension installed from a market; its data folder stays when [keepData]. */
-    suspend fun uninstall(keepData: Boolean): Boolean {
+    suspend fun uninstall(keepData: Boolean, cascade: Boolean = false): Boolean {
         if (state.value.busy || state.value.saving) return false
         mutable.update { it.copy(busy = true, error = null) }
         return try {
-            api.uninstall(id, keepData)
+            api.uninstall(id, keepData, cascade)
             ExtensionChanges.changed(api)
             true
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) {
+        catch (refused: ExtensionHasDependents) {
+            mutable.update { it.copy(cascade = ExtensionCascade(refused.dependents.map { d -> d.label }, keepData)) }
+            false
+        } catch (error: Exception) {
             mutable.update { it.copy(error = res.getString(R.string.settings_ext_not_removed, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(busy = false) } }
@@ -483,6 +505,10 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
             else it.copy(fieldErrors = emptyMap(), error = res.getString(R.string.settings_ext_not_saved,
                 listOf(refused.field, reason).filter { f -> f.isNotBlank() }.joinToString(res.getString(R.string.settings_ext_colon))))
         }
+        false
+    } catch (refused: ExtensionHasDependents) {
+        // Only switching it off is refused so; asked, it goes on with cascade.
+        mutable.update { it.copy(cascade = ExtensionCascade(refused.dependents.map { d -> d.label }), error = null) }
         false
     } catch (error: Exception) {
         mutable.update { it.copy(error = res.getString(failed ?: if (it.detail == null) R.string.settings_ext_load_failed else R.string.settings_ext_not_changed, failureReasonText(error).resolve(res))) }

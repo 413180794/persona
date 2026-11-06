@@ -131,5 +131,28 @@ class MetaWearablesConfigTests(unittest.TestCase):
                 self.assertIn(token_line, lines)
 
 
+    def test_xcconfig_links_the_tunnel_core_only_when_configured(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'apple').mkdir()
+            core = root / 'core dir'
+            core.mkdir()
+
+            def lines(cfg):
+                with patch.object(config, 'ROOT', str(root)):
+                    config.xcconfig(cfg)
+                return (root / 'apple' / 'Config.xcconfig').read_text().splitlines()
+
+            off = lines({'app': {}})
+            self.assertIn('PERSONA_TUNNEL_INCLUDE = ', off)
+            self.assertIn('PERSONA_TUNNEL_LDFLAGS = ', off)
+            with self.assertRaises(SystemExit):
+                lines({'app': {'tunnel_core': str(core)}})
+            (core / 'libpersonatunnel.a').write_bytes(b'')
+            (core / 'module.modulemap').write_text('module PersonaTunnelCore {}\n')
+            on = lines({'app': {'tunnel_core': str(core)}})
+            self.assertIn('PERSONA_TUNNEL_INCLUDE = "%s"' % core, on)
+            self.assertIn('PERSONA_TUNNEL_LDFLAGS = -L"%s" -lpersonatunnel -lresolv -framework Security -framework CoreFoundation' % core, on)
+
 if __name__ == '__main__':
     unittest.main()

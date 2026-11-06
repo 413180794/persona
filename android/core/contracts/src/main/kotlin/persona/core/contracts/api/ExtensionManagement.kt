@@ -38,8 +38,11 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
     /** `GET /api/v1/extensions/{id}/-/`. */
     suspend fun extension(id: String): ExtensionDetail
 
-    /** `PUT /api/v1/extensions/{id}/-/enabled`. */
-    suspend fun setEnabled(id: String, enabled: Boolean): ExtensionDetail
+    /**
+     * `PUT /api/v1/extensions/{id}/-/enabled`. Switching off one others depend on is a [ExtensionHasDependents] unless
+     * [cascade], which switches them off too.
+     */
+    suspend fun setEnabled(id: String, enabled: Boolean, cascade: Boolean = false): ExtensionDetail
 
     suspend fun setContribution(id: String, point: String, contribution: String, enabled: Boolean): ExtensionDetail =
         throw UnsupportedOperationException("Contribution switches unsupported by this hub")
@@ -86,6 +89,15 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
 
 /** The hub refused the configuration (400 `invalid_config`): [field] is its dotted path (`proxy.host`). */
 class ExtensionConfigRejected(val field: String, message: String) : Exception(message)
+
+/** 409 `has_dependents`: enabled extensions depend on it (deepest first); asked, the call goes on with `cascade`. */
+class ExtensionHasDependents(val dependents: List<ExtensionDependent>, message: String) : Exception(message)
+
+/** One extension of a `has_dependents` answer. */
+@Serializable
+data class ExtensionDependent(val id: String = "", val name: String = "") {
+    val label: String get() = name.ifBlank { id }
+}
 
 /** One field of an extension's form (`form.fields`): the hub's reading of the manifest's JSON Schema subset. */
 @Serializable

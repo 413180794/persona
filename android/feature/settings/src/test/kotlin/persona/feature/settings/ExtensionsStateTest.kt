@@ -27,11 +27,15 @@ private class FakeExtensions(var detail: ExtensionDetail) : ExtensionApiStub() {
     var fail: Exception? = null
     val autoUpgrades = mutableListOf<Boolean>()
     val uninstalls = mutableListOf<Boolean>()
+    /** Enabled extensions that depend on it: refused (409 has_dependents) without cascade. */
+    var dependents: List<ExtensionDependent> = emptyList()
+    val cascades = mutableListOf<String>()
 
     private fun answer(): ExtensionDetail { fail?.let { throw it }; return detail }
     override suspend fun extensions() = fail?.let { throw it } ?: list
     override suspend fun extension(id: String) = answer()
-    override suspend fun setEnabled(id: String, enabled: Boolean): ExtensionDetail {
+    override suspend fun setEnabled(id: String, enabled: Boolean, cascade: Boolean): ExtensionDetail {
+        if (!enabled) refuseDependents("off", cascade)
         detail = detail.copy(extension = detail.extension.copy(enabled = enabled, status = if (enabled) "running" else "disabled"))
         return answer()
     }
@@ -52,7 +56,14 @@ private class FakeExtensions(var detail: ExtensionDetail) : ExtensionApiStub() {
         detail = detail.copy(extension = detail.extension.copy(autoUpgrade = auto))
         return detail
     }
-    override suspend fun uninstall(id: String, keepData: Boolean) { uninstalls += keepData; fail?.let { throw it } }
+    override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean) {
+        refuseDependents("uninstall", cascade)
+        uninstalls += keepData; fail?.let { throw it }
+    }
+    private fun refuseDependents(call: String, cascade: Boolean) {
+        cascades += "$call cascade=$cascade"
+        if (dependents.isNotEmpty() && !cascade) throw ExtensionHasDependents(dependents, "B depends on it")
+    }
     override suspend fun clearSecret(id: String, name: String): ExtensionDetail {
         secrets += name to null
         detail = detail.copy(secrets = detail.secrets.map { if (it.name == name) it.copy(set = false) else it })
@@ -367,5 +378,31 @@ class ExtensionsStateTest {
         api.fail = HubFailure(HubError.Server, "还有扩展依赖它", status = 409)
         assertFalse(model.uninstall(keepData = false))
         assertEquals("没有卸载：还有扩展依赖它", model.state.value.error)
+    }
+
+    @Test fun dependentsAreAskedAboutThenSwitchedOffWithIt() = runBlocking {
+        // #5192: switching off or removing one others depend on asks, naming them, then goes on with cascade.
+        val api = FakeExtensions(notes).apply { dependents = listOf(ExtensionDependent("ext-b", "B"), ExtensionDependent("ext-c")) }
+        val model = ExtensionModel(api, "example-notes", res)
+        model.load()
+        assertFalse(model.setEnabled(false))
+        assertEquals(ExtensionCascade(listOf("B", "ext-c")), model.state.value.cascade)
+        assertNull(model.state.value.error)
+        assertEquals(true, model.state.value.detail!!.extension.enabled)
+        model.dismissCascade()
+        assertNull(model.state.value.cascade)
+        assertFalse(model.setEnabled(false))
+        assertTrue(model.confirmCascade())
+        assertNull(model.state.value.cascade)
+        assertEquals(false, model.state.value.detail!!.extension.enabled)
+        assertEquals(listOf("off cascade=false", "off cascade=false", "off cascade=true"), api.cascades)
+
+        assertFalse(model.uninstall(keepData = false))
+        assertEquals(ExtensionCascade(listOf("B", "ext-c"), keepData = false), model.state.value.cascade)
+        assertNull(model.state.value.error)
+        assertTrue(model.confirmCascade())
+        assertEquals(listOf(false), api.uninstalls)
+        assertEquals("uninstall cascade=true", api.cascades.last())
+        assertEquals("B、ext-c 依赖 Example Notes，会一起停用。", ExtensionText.cascade(res, ExtensionCascade(listOf("B", "ext-c")), "Example Notes"))
     }
 }

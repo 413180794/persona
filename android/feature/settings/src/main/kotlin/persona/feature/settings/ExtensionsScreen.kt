@@ -262,6 +262,19 @@ fun ExtensionPage(
             }
         }
     }
+    // Others depend on it (#5192): named, and switched off with it once agreed.
+    state.cascade?.let { ask ->
+        val name = detail?.extension?.name?.ifBlank { null } ?: extensionId
+        JDialog({ model.dismissCascade() }, title = stringResource(R.string.settings_ext_dependents_title), text = ExtensionText.cascade(res, ask, name),
+            destructive = true, confirm = stringResource(if (ask.keepData == null) R.string.settings_ext_dependents_off else R.string.settings_ext_dependents_remove) to {
+                scope.launch {
+                    if (model.confirmCascade() && ask.keepData != null) {
+                        feedback?.notice(res.getString(R.string.settings_ext_uninstalled, name))
+                        onBack()
+                    }
+                }
+            })
+    }
     choosing?.let { (field, path) ->
         val current = state.value(path)
         JActionSheet(listOf(JAction(ExtensionText.placeholder(res, field), checked = current == null, onClick = { model.edit(path, null) })) +

@@ -173,7 +173,7 @@ object MachineManagementModule {
             changed { api().setContribution(id, point, contribution, enabled) }
         override suspend fun extensions() = api().extensions()
         override suspend fun extension(id: String) = api().extension(id)
-        override suspend fun setEnabled(id: String, enabled: Boolean) = changed { api().setEnabled(id, enabled) }
+        override suspend fun setEnabled(id: String, enabled: Boolean, cascade: Boolean) = changed { api().setEnabled(id, enabled, cascade) }
         override suspend fun setConfig(id: String, config: JsonObject) = api().setConfig(id, config)
         override suspend fun setSecret(id: String, name: String, value: String) = api().setSecret(id, name, value)
         override suspend fun clearSecret(id: String, name: String) = api().clearSecret(id, name)
@@ -193,7 +193,7 @@ object MachineManagementModule {
         override suspend fun previewFromMarket(market: String, extension: String) = api().previewFromMarket(market, extension)
         override suspend fun install(preview: ExtensionPreview) = changed { api().install(preview) }
         override suspend fun upgrade(id: String, preview: ExtensionPreview) = changed { api().upgrade(id, preview) }
-        override suspend fun uninstall(id: String, keepData: Boolean) = changed { api().uninstall(id, keepData) }
+        override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean) = changed { api().uninstall(id, keepData, cascade) }
         override suspend fun startFromMarket(market: String, extension: String) = api().startFromMarket(market, extension)
         override suspend fun agree(preview: ExtensionPreview, upgradeOf: String?) = api().agree(preview, upgradeOf)
         override suspend fun startUninstall(id: String, keepData: Boolean) = api().startUninstall(id, keepData)

@@ -229,6 +229,7 @@ type Contributes struct {
 	Looks           []LookItem           `json:"looks,omitempty"`
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
 	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
+	Tunnels         []TunnelItem         `json:"tunnels,omitempty"`
 	Messaging       []MessagingItem      `json:"messaging,omitempty"`
 	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
 	AdditionalProperties map[string]json.RawMessage `json:"-"`
@@ -240,7 +241,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -272,7 +273,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -461,6 +462,13 @@ type TriageTemplateItem struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Text  string `json:"text"`
+}
+
+// TunnelItem: A tunnel the apps can reach this hub through when its own addresses do not answer (docs「App 内隧道」): an
+// in-app tunnel core built into the app, going to the configuration's target_host and target_port.
+type TunnelItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // AgentFilterItem: agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and
@@ -2438,6 +2446,7 @@ var newDef = map[string]func() any{
 	"LookDot":                   func() any { return new(LookDot) },
 	"LookItem":                  func() any { return new(LookItem) },
 	"TriageTemplateItem":        func() any { return new(TriageTemplateItem) },
+	"TunnelItem":                func() any { return new(TunnelItem) },
 	"AgentFilterItem":           func() any { return new(AgentFilterItem) },
 	"ConnectorItem":             func() any { return new(ConnectorItem) },
 	"NamedItem":                 func() any { return new(NamedItem) },

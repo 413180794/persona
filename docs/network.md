@@ -276,6 +276,46 @@ restrict,port-forwarding,permitopen="127.0.0.1:18660" ssh-ed25519 AAAA… person
 | SSH 服务器打不开到 hub 的转发（connect failed） | 从 SSH 服务器上看隧道目标不对，或 hub 没在那个端口上监听 |
 | SSH 握手失败（没有双方都支持的算法） | 服务器只有 RSA 主机密钥或只开了 chacha20：加一把 Ed25519 主机密钥、放开 AES-GCM |
 
+## 经 App 内隧道连 hub
+
+hub 在一个专用网络里（手机要先接入那个网络才能访问），而这个网络的接入能做成一个库时，iOS App 可以把它编进来，自己在进程里起隧道连 hub。只有 Persona 连 hub 的流量走它，不建系统 VPN，其他 App 不受影响。
+
+```text
+App ──HTTP / WebSocket──▶ 127.0.0.1:<端口>（隧道核心的转发，App 进程里）
+     ══隧道核心（用户态）══▶ 专用网络 ──TCP──▶ hub（target_host:target_port）
+```
+
+- **谁有这条路**：hub 上装了贡献 `tunnels` 的扩展并开着（[extensions.md](extensions.md)「App 内隧道」）。隧道的名字（设置里那一行的标题）、`target_host`、`target_port` 都来自这个扩展；App 每次收到 hello 刷新一次，存在配对信息里。
+- **核心不在仓库里**：它是构建机上的一个目录，`config.json` 的 `app.tunnel_core`（[config.md](config.md)）指向它，`scripts/persona_config.py xcconfig` 把它写进 `Config.xcconfig`，只有真机构建链接它。没设就没有这个功能：模拟器和没设的构建里 hub 的隧道页只提示「这个版本的 App 没有内网隧道核心」，选路时跳过它。
+- **选路**和 SSH 隧道一样：先直连，都不应答才走隧道，走隧道期间每 2 分钟问一次直连；打开「总是走隧道」则先走隧道。一台 hub 同时有 SSH 隧道时先试 SSH 的。
+- **只在要用时连**：核心第一次要用时才启动，从不自动连接；最后一条转发关掉就断开。iOS 进后台时断开，回到前台重新选路。
+- **登录**：账号、节点在核心自己的控制面板里（回环地址上的网页，设置 › hub › 隧道 ›「登录和选节点」）。数据在 App 的 `Application Support/tunnel`，不进备份，不上传 hub。面板把登录页送到 App 外面打开；用户在外面复制了一个链接回来时，App 把剪贴板里的文本交给核心（`PersonaTunnelOfferLink`），核心认得才收下，收下后刷新面板。
+- **安全**：hub 看到的来源是隧道那一侧网络里的地址，按内网处理（[来源判断](#来源判断与反向代理)），和在那个网络里直连一样。
+
+### 核心的目录和 C 接口
+
+`app.tunnel_core` 指的目录里要有：
+
+| 文件 | 说明 |
+| --- | --- |
+| `libpersonatunnel.a` | arm64 iOS 设备的静态库 |
+| `module.modulemap` | 定义 Swift 模块 `PersonaTunnelCore`，引用下面的头文件 |
+| 头文件 | 声明下表的函数 |
+
+链接参数是 `-lpersonatunnel -lresolv -framework Security -framework CoreFoundation`。所有函数都阻塞，App 在主线程以外调用；返回 `char *` 的由 `PersonaTunnelFree` 释放，以 `error:` 开头的表示失败。
+
+| 函数 | 说明 |
+| --- | --- |
+| `int PersonaTunnelAPIVersion(void)` | 接口版本，现在是 1；和 App 不一致时不用它 |
+| `char *PersonaTunnelStart(char *dataDir, char *probeHost, char *probePort)` | 启动核心（不连接），返回控制面板的地址（带一次性 token）。`probeHost:probePort` 是判断隧道通不通时访问的地址 |
+| `char *PersonaTunnelConnect(int timeoutSeconds)` | 连上隧道，已经连着就不动；没登录返回 `error: not signed in` |
+| `void PersonaTunnelDisconnect(void)` | 断开隧道，核心和登录信息留着 |
+| `char *PersonaTunnelStatus(void)` | JSON：`state`（`connected` 等）、`logged_in`、`has_server`、`server_name?`、`error?`、`needs_mfa?` |
+| `char *PersonaTunnelForward(char *target, int port)` | 开一个经隧道到 `host:port` 的回环转发，优先用 `port`（0：随便），返回 `127.0.0.1:<端口>` |
+| `void PersonaTunnelStopForward(char *target)` | 关掉到 `target` 的转发 |
+| `char *PersonaTunnelOfferLink(char *text)` | 用户从外面带回来的文本；核心拿它完成了登录的一步返回 `accepted`，否则 `ignored` |
+| `void PersonaTunnelFree(char *p)` | 释放上面返回的字符串 |
+
 ## 网络排查
 
 先在 hub 机器上跑 `personad hub doctor`。它只读不改：检查 hub.json 的明文 `listen`、`public.tls_listen`、`security.allow_public_plaintext` 和 TLS 证书，向正在运行的 hub 要候选地址，列出本机每个 IPv6 是可发布还是被排除（附原因），在 Linux 上看去往公网 IPv6 的路由是否走 TUN / 虚拟网卡、读 ufw / nft 规则，最后给出下一步：只放行哪个 TLS 端口、用手机蜂窝网络打开哪个地址测一次。它**不做外部可达性探测**：本机连自己的地址走环回，证明不了公网能进来。

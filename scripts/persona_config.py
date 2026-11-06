@@ -142,6 +142,23 @@ def xcconfig(cfg: dict):
         # Meta Wearables (docs/meta-glasses.md): 0 means Developer Mode (no attestation), as Meta's docs say.
         f.write("PERSONA_META_APP_ID = %s\n" % (str(get(cfg, "app.meta_wearables.app_id", "") or "") or "0"))
         f.write("PERSONA_META_CLIENT_TOKEN = %s\n" % (get(cfg, "app.meta_wearables.client_token", "") or ""))
+        # The in-app tunnel core (docs/network.md「经 App 内隧道连 hub」): linked into device builds only when set.
+        include, ldflags = tunnel_core(cfg)
+        f.write("PERSONA_TUNNEL_INCLUDE = %s\n" % include)
+        f.write("PERSONA_TUNNEL_LDFLAGS = %s\n" % ldflags)
+
+
+def tunnel_core(cfg: dict) -> tuple[str, str]:
+    """`app.tunnel_core`: a directory with libpersonatunnel.a and the module.modulemap of PersonaTunnelCore."""
+    raw = get(cfg, "app.tunnel_core", "") or ""
+    if not raw:
+        return "", ""
+    d = os.path.abspath(os.path.expanduser(raw))
+    missing = [n for n in ("libpersonatunnel.a", "module.modulemap") if not os.path.isfile(os.path.join(d, n))]
+    if missing:
+        sys.exit(f"app.tunnel_core {d}: missing {', '.join(missing)} (docs/network.md「经 App 内隧道连 hub」)")
+    q = '"%s"' % d
+    return q, f"-L{q} -lpersonatunnel -lresolv -framework Security -framework CoreFoundation"
 
 
 def export_options(cfg: dict, out: str, destination: str = "upload"):

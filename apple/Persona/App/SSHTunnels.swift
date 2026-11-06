@@ -213,55 +213,6 @@ extension SSHRoute {
 extension AppModel {
     // MARK: SSH tunnel (docs/network.md「经 SSH 隧道连 hub」)
 
-    /// The group's paired hubs with a tunnel ready to use.
-    func sshHubs(_ group: String) -> [PairedHub] {
-        registry.members(group).filter { $0.ssh?.isUsable == true }
-    }
-
-    /// Where a group's socket goes next when it has an SSH tunnel: straight to the hub when one of its addresses
-    /// answers (the tunnel closes), else through the tunnel; with Always Use SSH, the tunnel first. Nothing answering at
-    /// all: the first address, for the socket's own retries.
-    func sshRoute(_ group: String) async -> ServerConfig? {
-        let candidates = HubRoute.candidates(registry, group: group)
-        let tunneled = sshHubs(group)
-        let always = tunneled.filter { $0.ssh?.always == true }
-        for h in always {
-            if await tunnel(h) { return h.config }
-        }
-        let fallback = tunneled.filter { !always.contains($0) }
-        // Through the tunnel last time (back from the background, a dropped socket): it starts while the direct way
-        // is asked, so an address that does not answer costs no wait (up to the probe's 3 s) on top.
-        let warm = fallback.filter { SSHTunnels.shared.recent.contains($0.id) }
-        let warming: Task<PairedHub?, Never>? = warm.isEmpty ? nil : Task { @MainActor [weak self] in
-            for h in warm { if await self?.tunnel(h) == true { return h } }
-            return nil
-        }
-        if let direct = await HubRoute.answering(candidates) {
-            _ = await warming?.value
-            for h in tunneled { SSHTunnels.shared.close(h.id) }
-            return direct.config
-        }
-        if let h = await warming?.value { return through(h, group) }
-        for h in fallback where !warm.contains(h) {
-            if await tunnel(h) { return through(h, group) }
-        }
-        return candidates.first?.config
-    }
-
-    /// The group goes through `h`'s tunnel, asking the direct way again every so often.
-    private func through(_ h: PairedHub, _ group: String) -> ServerConfig {
-        SSHTunnels.shared.watchDirect(h.id, answers: { [weak self] in
-            guard let self else { return false }
-            return await HubRoute.answering(HubRoute.candidates(self.registry, group: group)) != nil
-        }, moveBack: { [weak self] in self?.link(group)?.live.reroute() })
-        return h.config
-    }
-
-    private func tunnel(_ h: PairedHub) async -> Bool {
-        guard let route = h.ssh else { return false }
-        return (try? await SSHTunnels.shared.open(h.id, route: route, hub: h.config.url)) != nil
-    }
-
     /// Settings › hub › SSH Tunnel saved (nil: removed): the hub's tunnel is made again from it, and the group's socket picks
     /// its way again.
     func setSSH(_ route: SSHRoute?, hub id: String) {

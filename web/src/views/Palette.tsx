@@ -1,7 +1,7 @@
 // ⌘K: Beautiful UI's Search, over every agent and Persona conversation — and the terminal panes of the computers
 // (lib/terminals.ts, the /terminal page's data). `>` first (or ⌘⇧P) is command mode: the registered commands with their
 // shortcuts, and whatever other modules add through registerContextCommands (lib/palette.ts). docs/web.md「快捷键」.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { enc, api } from "../lib/api";
 import { machineWithHub } from "../lib/mesh";
 import { createPortal } from "react-dom";
@@ -19,6 +19,7 @@ import { AgentMark, SessionMark } from "../ui/AgentMark";
 import { CARD_OUT, EASE, EXIT_MS, Kbd, toast, useExit } from "../ui/atoms";
 import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
+import { useModalFocus } from "../ui/overlay";
 import { copyFileMention, FilesHeading, FilesNotice, FileResultRow, openFileHit, usePaletteFiles, type FileRow } from "./palette/FilesSection";
 import { t } from "../i18n";
 import { byTime } from "../lib/times";
@@ -83,6 +84,34 @@ function GroupHeading({ children }: { children: React.ReactNode }) {
   return <div className="px-2.5 pt-2 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{children}</div>;
 }
 
+/** One row of the list as drawn: the option, and the heading above it when a group starts there. */
+interface Section {
+  key: string;
+  heading: ReactNode;
+  row: ReactNode;
+}
+
+/** The rows in their groups: a group with a heading is a role=group named by it, so a screen reader hears the
+ *  heading with the options and the listbox holds only options and groups. */
+function sections(items: Section[], listId: string): ReactNode[] {
+  const groups: { key: string; heading: ReactNode; rows: Section[] }[] = [];
+  for (const it of items) {
+    if (it.heading || !groups.length) groups.push({ key: it.key, heading: it.heading, rows: [] });
+    groups[groups.length - 1].rows.push(it);
+  }
+  return groups.map((g, n) => {
+    const rows = g.rows.map((it) => <div key={it.key} role="none">{it.row}</div>);
+    if (!g.heading) return <div key={g.key} role="none">{rows}</div>;
+    const id = `${listId}-g${n}`;
+    return (
+      <div key={g.key} role="group" aria-labelledby={id}>
+        <div id={id}>{g.heading}</div>
+        {rows}
+      </div>
+    );
+  });
+}
+
 function score(s: Session, q: string, machine: string): number {
   if (!q) return 1;
   const title = sessionTitle(s).toLowerCase();
@@ -123,6 +152,9 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
   );
   const rows = useRef<(HTMLButtonElement | null)[]>([]);
   const list = useRef<HTMLDivElement>(null);
+  // the listbox and its options, for the field's aria-controls / aria-activedescendant
+  const listId = useId();
+  const optionId = (i: number) => `${listId}-${i}`;
 
   useEffect(() => {
     if (open) setActive(0);
@@ -209,7 +241,10 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
     backdrop.current?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: EXIT_MS.card, easing: "ease-out", fill: "forwards" }),
     card.current?.animate(CARD_OUT, { duration: EXIT_MS.card, easing: EASE, fill: "forwards" }),
   ]);
-  // opened again on its way out: the field is not mounted anew, so autoFocus would not come
+  // a modal for the keyboard (ui/overlay.ts): Tab stays in, and closing gives the focus back to where it was. Called
+  // before the effect below, so it notes that place before the field takes the focus.
+  useModalFocus(card, open);
+  // the field takes the focus on every open (opened again on its way out, it is not mounted anew)
   useEffect(() => {
     if (open) input.current?.focus({ preventScroll: true });
   }, [open]);
@@ -224,17 +259,23 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
     else navigate(r.hit.to);
   };
   const command = mode === "command";
+  const label = command ? t("palette.command_palette") : t("palette.search_sessions");
 
   return createPortal(
     <div ref={backdrop} data-closing={exit.leaving || undefined} inert={exit.leaving || undefined} className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 px-4 pt-[14vh] backdrop-blur-[2px] dark:bg-black/45" style={{ animation: "fade-in 120ms ease-out both" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={card} role="dialog" data-shortcut-layer={open || undefined} aria-label={command ? t("palette.command_palette") : t("palette.search_sessions")} className="w-full max-w-[560px] overflow-hidden rounded-[14px] bg-surface shadow-overlay" style={{ animation: `slide-up 200ms ${EASE} both` }}>
+      <div ref={card} role="dialog" aria-modal="true" tabIndex={-1} data-shortcut-layer={open || undefined} aria-label={label} className="w-full max-w-[560px] overflow-hidden rounded-[14px] bg-surface shadow-overlay outline-none" style={{ animation: `slide-up 200ms ${EASE} both` }}>
         {/* on the way out it shows what it showed when open: closed, the lists below come back empty */}
         {open ? (kept.current = <>
         <label className="flex h-12 items-center gap-2.5 border-b border-line px-4">
           <Icon name="search" size={15} stroke={2} className="text-ink-3" />
           <input
             ref={input}
-            autoFocus
+            role="combobox"
+            aria-label={label}
+            aria-autocomplete="list"
+            aria-expanded={shown.length > 0}
+            aria-controls={shown.length > 0 ? listId : undefined}
+            aria-activedescendant={shown[active] ? optionId(active) : undefined}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
@@ -261,18 +302,22 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
         </label>
         <div ref={list} className="relative max-h-[52vh] overflow-y-auto p-1.5" onMouseLeave={() => {}}>
           <span aria-hidden className="pointer-events-none absolute inset-x-1.5 rounded-[8px] bg-hover" style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 180ms ${EASE}, height 180ms ${EASE}` }} />
-          {shown.map((r, i) => {
+          {shown.length > 0 && (
+          <div role="listbox" id={listId} aria-label={label}>
+          {sections(shown.map((r, i): Section => {
             const ref = (el: HTMLButtonElement | null) => {
               rows.current[i] = el;
             };
             const rowClass = "relative z-10 flex w-full items-center gap-3 rounded-[8px] px-2.5 py-2 text-left";
+            const option = { id: optionId(i), role: "option" as const, "aria-selected": i === active };
             if (r.kind === "command") {
               const c = r.cmd;
               const heading = c.section && c.section !== (shown[i - 1] as Extract<Row, { kind: "command" }> | undefined)?.cmd.section;
-              return (
-                <div key={r.key}>
-                  {heading && <div className="px-2.5 pt-2 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{c.section}</div>}
-                  <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+              return {
+                key: r.key,
+                heading: heading ? <div className="px-2.5 pt-2 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{c.section}</div> : null,
+                row: (
+                  <button ref={ref} type="button" {...option} onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
                     <span className="flex size-5 shrink-0 items-center justify-center">{c.icon && <Icon name={c.icon} size={13} className={c.danger ? "text-red" : "text-ink-3"} />}</span>
                     <span className={`min-w-0 flex-1 truncate text-[13px] ${c.danger ? "text-red" : "text-ink"}`}>{c.title}</span>
                     {c.chord && (
@@ -283,17 +328,12 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                       </span>
                     )}
                   </button>
-                </div>
-              );
+                ),
+              };
             }
             if (r.kind === "file") {
               const first = (shown[i - 1] as Row | undefined)?.kind !== "file";
-              return (
-                <div key={r.key}>
-                  {first && <FilesHeading />}
-                  <FileResultRow ref={ref} row={r} className={rowClass} onMouseMove={() => setActive(i)} onClick={() => pick(r)} />
-                </div>
-              );
+              return { key: r.key, heading: first ? <FilesHeading /> : null, row: <FileResultRow ref={ref} row={r} option={option} className={rowClass} onMouseMove={() => setActive(i)} onClick={() => pick(r)} /> };
             }
             if (r.kind === "inbox" || r.kind === "place") {
               const heading = (shown[i - 1] as Row | undefined)?.kind !== r.kind;
@@ -313,24 +353,26 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{r.hit.place.title}</span>
                   </>
                 );
-              return (
-                <div key={r.key}>
-                  {heading && <GroupHeading>{r.kind === "inbox" ? t("palette.group_inbox") : t("palette.group_places")}</GroupHeading>}
-                  <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+              return {
+                key: r.key,
+                heading: heading ? <GroupHeading>{r.kind === "inbox" ? t("palette.group_inbox") : t("palette.group_places")}</GroupHeading> : null,
+                row: (
+                  <button ref={ref} type="button" {...option} onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
                     {body}
                   </button>
-                </div>
-              );
+                ),
+              };
             }
             // the conversations and panes have a heading only after another group (收件箱 or 前往 matched better)
             const prev = (shown[i - 1] as Row | undefined)?.kind;
-            const sessionsHeading = i > 0 && prev !== "session" && prev !== "pane" && <GroupHeading>{t("palette.group_sessions")}</GroupHeading>;
+            const sessionsHeading = i > 0 && prev !== "session" && prev !== "pane" ? <GroupHeading>{t("palette.group_sessions")}</GroupHeading> : null;
             if (r.kind === "pane") {
               const h = r.hit;
-              return (
-                <div key={r.key}>
-                {sessionsHeading}
-                <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+              return {
+                key: r.key,
+                heading: sessionsHeading,
+                row: (
+                <button ref={ref} type="button" {...option} onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
                   <span className="flex size-5 shrink-0 items-center justify-center">{h.state === "shell" ? <Icon name="terminal" size={13} className="text-ink-3" /> : <StatusMark state={h.state} />}</span>
                   {h.state !== "shell" && h.agent && <AgentMark agent={h.agent} size={14} />}
                   <span className="min-w-0 flex-1">
@@ -339,16 +381,17 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                   </span>
                   <span className="shrink-0 text-[11px] text-ink-3">{t("palette.terminal")}</span>
                 </button>
-                </div>
-              );
+                ),
+              };
             }
             const h = r.hit;
             const st = stateOf(h.s);
             const meta = h.assistant ? "Persona" : [machineWithHub(h.s.machine_id, machines), h.s.space_name, tabLabel(h.s)].filter(Boolean).join(" › ");
-            return (
-              <div key={h.key}>
-              {sessionsHeading}
-              <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+            return {
+              key: h.key,
+              heading: sessionsHeading,
+              row: (
+              <button ref={ref} type="button" {...option} onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
                 <span className="flex size-5 shrink-0 items-center justify-center">{h.assistant ? <Icon name="spark" size={13} className="text-ink-3" /> : <StatusMark state={st} />}</span>
                 {!h.assistant && <SessionMark s={h.s} size={14} />}
                 <span className="min-w-0 flex-1">
@@ -357,9 +400,11 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 </span>
                 <span className="shrink-0 text-[11px] text-ink-3">{st === "offline" || h.assistant ? ago(h.s.updated_at) : STATE_LABEL[st]}</span>
               </button>
-              </div>
-            );
-          })}
+              ),
+            };
+          }), listId)}
+          </div>
+          )}
           {shown.length === 0 && command && (
             <div className="px-4 py-10 text-center">
               <p className="text-[13px] font-medium text-ink">{t("palette.no_commands")}</p>

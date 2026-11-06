@@ -222,6 +222,10 @@
     <string name="settings_ext_preview_cancel">不装了</string>
     <string name="settings_ext_uninstall_title">卸载 %1$s？</string>
     <string name="settings_ext_uninstall_text">会停掉它，删掉它的设置和密钥；它提供的连接器也一起去掉。</string>
+    <string name="settings_ext_dependents_title">一起停用依赖它的扩展？</string>
+    <string name="settings_ext_dependents_text">%1$s 依赖 %2$s，会一起停用。</string>
+    <string name="settings_ext_dependents_off">全部停用</string>
+    <string name="settings_ext_dependents_remove">停用并卸载</string>
     <string name="settings_ext_keep_data">保留它的数据</string>
     <string name="settings_ext_markets_empty_title">还没有市场</string>
     <string name="settings_ext_markets_empty_text">填一个市场的地址：https://… 的网站、github:owner/repo，或 git:&lt;地址&gt; 的 git 仓库。GitHub 市场可以填只读的 token：私有仓库要它，公开仓库填了额度更高。</string>

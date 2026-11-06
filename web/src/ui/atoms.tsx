@@ -63,9 +63,10 @@ export function useNow(every = 1000, on = true) {
   return now;
 }
 
+// role=status: a polite live region, so a screen reader reads the label when the loader appears
 export function Loading({ label = t("common.loading") }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div role="status" className="flex items-center gap-2.5">
       <PixelGrid />
       <Shimmer className="text-[13px] font-medium">{label}</Shimmer>
     </div>
@@ -183,6 +184,8 @@ export function Button({
       type={type}
       title={title}
       disabled={disabled || busy}
+      // the spinner is aria-hidden, so without this a busy button just reads as disabled
+      aria-busy={busy || undefined}
       onClick={onClick}
       className={cx(
         base,

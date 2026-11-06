@@ -1,7 +1,7 @@
 // The right-hand panel next to the page (docs/web.md「侧边面板」): one at a time, chosen in lib/panel.ts. (A session's
 // terminal is not one: it is the agent page's own view, lib/session-view.ts.)
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { directoryPanelKey, closePanel, panelOpener, usePanel, type Panel } from "../lib/panel";
 import { activeComposer } from "../lib/links";
 import { returnFocus } from "../ui/overlay";
@@ -26,6 +26,9 @@ const LinkPanel = lazy(() => import("./link/LinkPanel").then((m) => ({ default: 
 
 const WIDTH_KEY = "jarvis.panelWidth";
 const MIN = 360;
+const DEFAULT_WIDTH = 600;
+/** How far one arrow key press moves the resize handle. */
+const KEY_STEP = 16;
 
 function clampWidth(w: number) {
   return Math.round(Math.max(MIN, Math.min(w, Math.max(MIN, innerWidth * 0.72))));
@@ -37,8 +40,9 @@ export function SidePanel() {
   const maximized = useLayout().maximized;
   // narrow, it covers the page: Back closes it first (and stays on the conversation)
   useCloseOnBack(Boolean(panel), closePanel, useMedia(NARROW));
-  const [width, setWidth] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || 600));
+  const [width, setWidth] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || DEFAULT_WIDTH));
   const drag = useRef<{ x: number; w: number } | null>(null);
+  const id = useId();
   const aside = useRef<HTMLElement>(null);
   const open = Boolean(panel);
   // Closed (×, Esc, its button again): the focus goes back to the button that opened it, else to the message box, not
@@ -70,10 +74,26 @@ export function SidePanel() {
   }, []);
 
   if (!panel) return null;
+  const resize = (w: number) => {
+    const next = clampWidth(w);
+    setWidth(next);
+    localStorage.setItem(WIDTH_KEY, String(next));
+  };
   return (
     <aside
       ref={aside}
+      id={id}
       aria-label={panelLabel(panel)}
+      onKeyDown={(e) => {
+        // Esc closes the panel from inside it, unless something in it (a field, a menu) or a dialog over it took the key
+        if (e.key !== "Escape" || e.defaultPrevented || e.nativeEvent.isComposing) return;
+        if (document.querySelector("[role=menu],[role=dialog]")) return;
+        e.preventDefault();
+        // not also the conversation's Esc (it stops a running agent, ChatView)
+        e.stopPropagation();
+        // the focus goes back to the panel's button, or the message box (the close effect above, #5155)
+        closePanel();
+      }}
       // narrow: over the visible part of the page (--kb-top / --kb-h, lib/viewport.ts), so on iOS the terminal's key
       // bar sits on the keyboard instead of under it
       className={cx(
@@ -87,13 +107,30 @@ export function SidePanel() {
         aria-orientation="vertical"
         aria-label={t("sidepanel.resize_label")}
         title={t("sidepanel.resize_title")}
+        aria-controls={id}
+        aria-valuemin={MIN}
+        aria-valuemax={clampWidth(Infinity)}
+        aria-valuenow={width}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          // the panel is on the right: Left widens it, like dragging the edge left
+          const to = { ArrowLeft: width + KEY_STEP, ArrowRight: width - KEY_STEP, Home: MIN, End: Infinity }[e.key];
+          if (to !== undefined) {
+            e.preventDefault();
+            resize(to);
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            setWidth(clampWidth(DEFAULT_WIDTH));
+            localStorage.removeItem(WIDTH_KEY);
+          }
+        }}
         onPointerDown={(e) => {
           drag.current = { x: e.clientX, w: width };
           document.body.style.cursor = "col-resize";
           document.body.style.userSelect = "none";
         }}
         onDoubleClick={() => {
-          setWidth(clampWidth(600));
+          setWidth(clampWidth(DEFAULT_WIDTH));
           localStorage.removeItem(WIDTH_KEY);
         }}
         className="absolute inset-y-0 -left-1 z-10 hidden w-2 cursor-col-resize lg:block"

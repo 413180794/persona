@@ -109,3 +109,53 @@ nonisolated struct SSHRoute: Codable, Hashable, Sendable {
         always = try c.decodeIfPresent(Bool.self, forKey: .always) ?? false
     }
 }
+
+/// A paired hub's in-app tunnel (Settings › hub › the tunnel's name, docs/network.md「经 App 内隧道连 hub」): what the hub's
+/// tunnel extension says (its name, where the hub is from inside the network the tunnel reaches) and whether to go
+/// through it every time. The account the tunnel signs in with is the core's own (one per device, in the app's
+/// container), not part of the pairing.
+nonisolated struct InAppTunnelRoute: Codable, Hashable, Sendable {
+    /// The hub's address as the tunnel's network sees it: a host name (resolved by that network's DNS) or an IP.
+    var targetHost: String
+    var targetPort: Int = InAppTunnelRoute.defaultTargetPort
+    /// The name the hub's extension gives the tunnel (contributes.tunnels[].name); empty when it gave none.
+    var name: String = ""
+    /// Through the tunnel every time, not only when the hub's own addresses do not answer.
+    var always = false
+
+    static let defaultTargetPort = 18660
+
+    init(targetHost: String, targetPort: Int = InAppTunnelRoute.defaultTargetPort, name: String = "", always: Bool = false) {
+        self.targetHost = targetHost
+        self.targetPort = targetPort
+        self.name = name
+        self.always = always
+    }
+
+    var isUsable: Bool { !targetHost.trimmingCharacters(in: .whitespaces).isEmpty && (1...65535).contains(targetPort) }
+
+    /// What the app calls the tunnel: the hub's name for it, else 「内网隧道」.
+    var title: String {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? String(localized: "内网隧道") : n
+    }
+
+    /// `host:port` as the core's forward takes it (IPv6 in brackets).
+    var target: String {
+        let host = targetHost.trimmingCharacters(in: .whitespaces)
+        return (host.contains(":") ? "[\(host)]" : host) + ":\(targetPort)"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case always, name
+        case targetHost = "target_host", targetPort = "target_port"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        targetHost = try c.decode(String.self, forKey: .targetHost)
+        targetPort = try c.decodeIfPresent(Int.self, forKey: .targetPort) ?? Self.defaultTargetPort
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        always = try c.decodeIfPresent(Bool.self, forKey: .always) ?? false
+    }
+}

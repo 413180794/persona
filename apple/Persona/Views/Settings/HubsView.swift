@@ -93,6 +93,16 @@ struct HubsView: View {
                 }
                 .accessibilityIdentifier("hubs.ssh.\(h.id)")
             }
+            // Each paired hub's in-app tunnel (docs/network.md「经 App 内隧道连 hub」): only a hub whose extension
+            // contributes one has it, titled with the tunnel's name. Keyed apart like the SSH rows.
+            ForEach(members.filter { $0.inAppTunnel != nil }, id: \.inAppTunnelRowID) { h in
+                let name = h.inAppTunnel?.title ?? ""
+                NavigationLink(value: SettingsPage.inAppTunnel(h.id)) {
+                    SettingsRow(title: members.count > 1 ? String(localized: "\(name) · \(h.displayName)") : name,
+                                symbol: Theme.Icon.inAppTunnel, tint: Theme.Hue.blue, value: inAppTunnelValue(h), look: .oneLine)
+                }
+                .accessibilityIdentifier("hubs.tunnel.\(h.id)")
+            }
             #if os(macOS)
             // Standard buttons side by side at the group's trailing end, as a Mac form has them, not rows the width of
             // the form (#1221).
@@ -147,11 +157,22 @@ struct HubsView: View {
         return route.always ? String(localized: "总是") : String(localized: "后备")
     }
 
+    /// What the in-app tunnel's row says, as the SSH one does.
+    private func inAppTunnelValue(_ h: PairedHub) -> String {
+        guard let route = h.inAppTunnel, route.isUsable else { return String(localized: "未设置") }
+        guard InAppTunnel.available else { return String(localized: "这个版本没有") }
+        if InAppTunnels.shared.routed.contains(h.id) { return String(localized: "使用中") }
+        return route.always ? String(localized: "总是") : String(localized: "后备")
+    }
+
     private func footer(_ g: String) -> String {
         let n = model.registry.members(g).count + meshOnly(g).count
+        let inApp = model.inAppTunnelState(g).flatMap { $0.routed ? $0.route.title : nil }
         let routed = model.tunnel(g)?.routed == true
-        let state = model.isLive(g) ? (routed ? String(localized: "已连接（经 SSH 隧道）") : String(localized: "已连接"))
-            : model.socket(g)?.state == .connecting ? (routed ? String(localized: "连接中（经 SSH 隧道）") : String(localized: "连接中"))
+        let state = model.isLive(g)
+            ? (inApp.map { String(localized: "已连接（经\($0)）") } ?? (routed ? String(localized: "已连接（经 SSH 隧道）") : String(localized: "已连接")))
+            : model.socket(g)?.state == .connecting
+            ? (inApp.map { String(localized: "连接中（经\($0)）") } ?? (routed ? String(localized: "连接中（经 SSH 隧道）") : String(localized: "连接中")))
             : String(localized: "未连接")
         let group = n > 1 ? String(localized: "组里 \(n) 台 hub 互联，看到的是整组的机器；连着的那台掉了会换组里别的。") : ""
         let current = model.isMultiHub && model.hub?.group == g ? String(localized: "Persona、收件箱和 hub 相关的设置用这一组。") : ""
@@ -183,6 +204,7 @@ struct HubsView: View {
                     Text(h.displayName).lineLimit(1)
                     if inUse { Chip(text: String(localized: "在用"), look: .outline) }
                     if SSHTunnels.shared.routed.contains(h.id) { Chip(text: "SSH", look: .neutral) }
+                    if InAppTunnels.shared.routed.contains(h.id) { Chip(text: String(localized: "隧道"), look: .neutral) }
                 }
                 Text(h.config.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -214,4 +236,6 @@ struct HubsView: View {
 private extension PairedHub {
     /// The SSH tunnel row's identity, apart from the hub's own row in the same section.
     var sshRowID: String { "ssh." + id }
+    /// The in-app tunnel row's identity, apart from the hub's own row and its SSH row.
+    var inAppTunnelRowID: String { "tunnel." + id }
 }

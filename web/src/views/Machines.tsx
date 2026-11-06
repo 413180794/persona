@@ -1,6 +1,6 @@
 // 机器: every computer's CPU / memory / disk now and over the last hour (docs/machines.md), as Insight Cards. 添加电脑
 // (feature machines_add) adds one from here, and a computer waiting to be confirmed (trust pending) says so on its card.
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useId, useState } from "react";
 import { t as tr } from "../i18n";
 import { canAddComputer, isPending, machineErrorText, neverConnected } from "../lib/add-computer";
 import { api, enc, errorText } from "../lib/api";
@@ -287,8 +287,10 @@ function Stat({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
-// CPU over the last hour; gaps break the line.
-function Spark({ points }: { points: MetricPoint[] }) {
+// CPU over the last hour; gaps break the line. Each card draws its own Spark, so the gradient id is per instance:
+// a shared id would be a duplicate on the page and could resolve to another card's (possibly unmounted) gradient.
+export function Spark({ points }: { points: MetricPoint[] }) {
+  const fill = `cpu-fill-${useId().replace(/:/g, "")}`;
   const W = 440,
     H = 56;
   const real = points.filter((p) => !p.gap && p.cpu !== undefined);
@@ -304,9 +306,9 @@ function Spark({ points }: { points: MetricPoint[] }) {
     } else runs[runs.length - 1].push(p);
   }
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-14 w-full" aria-label={t("machines.cpu_last_hour")}>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-14 w-full" role="img" aria-label={t("machines.cpu_last_hour")}>
       <defs>
-        <linearGradient id="cpu-fill" x1="0" x2="0" y1="0" y2="1">
+        <linearGradient id={fill} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0" stopColor="var(--accent)" stopOpacity="0.18" />
           <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
         </linearGradient>
@@ -320,7 +322,7 @@ function Spark({ points }: { points: MetricPoint[] }) {
           const line = r.map((p) => `${x(p.t).toFixed(1)},${y(p.cpu!).toFixed(1)}`).join(" ");
           return (
             <g key={i}>
-              <polygon points={`${x(r[0].t)},${H} ${line} ${x(r[r.length - 1].t)},${H}`} fill="url(#cpu-fill)" />
+              <polygon points={`${x(r[0].t)},${H} ${line} ${x(r[r.length - 1].t)},${H}`} fill={`url(#${fill})`} />
               <polyline points={line} fill="none" stroke="var(--accent)" strokeWidth={1.6} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
             </g>
           );

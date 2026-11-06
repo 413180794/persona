@@ -12313,6 +12313,28 @@
         }
       }
     },
+    "hub 在隧道那一侧网络里的地址和 HTTP 端口，在 hub 上这个扩展的设置里改。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub's address and HTTP port in the network on the other side of the tunnel. Change them in this extension's settings on the hub."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネルの向こう側のネットワークでの hub のアドレスと HTTP ポートです。hub 上のこの拡張機能の設定で変更します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 在隧道那一侧网络里的地址和 HTTP 端口，在 hub 上这个扩展的设置里改。"
+          }
+        }
+      }
+    },
     "hub 尚不支持四类模型配置，请先更新服务器。": {
       "localizations": {
         "en": {
@@ -20723,6 +20745,28 @@
         }
       }
     },
+    "会连上隧道，再经隧道访问一次 hub。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connects the tunnel, then reaches the hub through it once."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネルに接続し、トンネル経由で hub に一度アクセスします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会连上隧道，再经隧道访问一次 hub。"
+          }
+        }
+      }
+    },
     "传到那台电脑，路径插进输入框": {
       "localizations": {
         "en": {
@@ -23886,6 +23930,94 @@
         }
       }
     },
+    "关闭时先直连 hub，连不上才走隧道。只有 Persona 连 hub 的流量经过它，其他 App 不受影响；Persona 进后台时隧道断开，回到前台再连上。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When off, the hub is tried directly first and the tunnel is used only if that fails. Only Persona's traffic to the hub goes through it; other apps aren't affected. The tunnel disconnects when Persona goes to the background and reconnects when it comes back."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフのときはまず hub に直接接続し、つながらない場合だけトンネルを使います。トンネルを通るのは Persona から hub への通信だけで、ほかのアプリには影響しません。Persona がバックグラウンドに入るとトンネルは切断され、フォアグラウンドに戻ると再接続します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭时先直连 hub，连不上才走隧道。只有 Persona 连 hub 的流量经过它，其他 App 不受影响；Persona 进后台时隧道断开，回到前台再连上。"
+          }
+        }
+      }
+    },
+    "内网隧道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tunnel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内网隧道"
+          }
+        }
+      }
+    },
+    "内网隧道核心的版本和 App 不匹配": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The tunnel core's version doesn't match the app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネルコアのバージョンがアプリと一致しません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内网隧道核心的版本和 App 不匹配"
+          }
+        }
+      }
+    },
+    "内网隧道核心返回了无效的地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The tunnel core returned an invalid address"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネルコアが無効なアドレスを返しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内网隧道核心返回了无效的地址"
+          }
+        }
+      }
+    },
     "告诉 AI": {
       "localizations": {
         "en": {
@@ -23904,6 +24036,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "告诉 AI"
+          }
+        }
+      }
+    },
+    "在 hub 上装好并打开提供内网隧道的扩展，再回到这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install and turn on an extension that provides a tunnel on the hub, then come back here."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub でトンネルを提供する拡張機能をインストールしてオンにしてから、ここに戻ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 hub 上装好并打开提供内网隧道的扩展，再回到这里。"
           }
         }
       }
@@ -23930,6 +24084,28 @@
         }
       }
     },
+    "好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
     "展开全部（%lld）": {
       "localizations": {
         "en": {
@@ -23948,6 +24124,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "展开全部（%lld）"
+          }
+        }
+      }
+    },
+    "已连接 hub · 经%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected to hub · via %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub に接続済み · %@ 経由"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接 hub · 经%@"
+          }
+        }
+      }
+    },
+    "已连接 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected · %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続済み · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接 · %@"
+          }
+        }
+      }
+    },
+    "已连接（经%@）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected (via %@)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続済み（%@ 経由）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接（经%@）"
           }
         }
       }
@@ -24040,6 +24282,28 @@
         }
       }
     },
+    "总是走隧道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always Use the Tunnel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常にトンネルを使う"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "总是走隧道"
+          }
+        }
+      }
+    },
     "总结": {
       "localizations": {
         "en": {
@@ -24080,6 +24344,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "有关"
+          }
+        }
+      }
+    },
+    "未启动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Started"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未起動"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未启动"
+          }
+        }
+      }
+    },
+    "正在经隧道连 hub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected to the hub through the tunnel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネル経由で hub に接続中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在经隧道连 hub"
+          }
+        }
+      }
+    },
+    "正在经隧道连接…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting through the tunnel…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネル経由で接続しています…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在经隧道连接…"
           }
         }
       }
@@ -79127,6 +79457,28 @@
         }
       }
     },
+    "登录和选节点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign In and Pick a Node"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サインインとノードの選択"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录和选节点"
+          }
+        }
+      }
+    },
     "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。": {
       "localizations": {
         "en": {
@@ -82510,6 +82862,28 @@
         }
       }
     },
+    "第一次使用时在面板里登录，再选一个节点。登录信息只存在这台设备上，不上传 hub。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The first time, sign in on the panel, then pick a node. The sign-in stays on this device and isn't uploaded to the hub."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "初回はパネルでサインインしてから、ノードを選んでください。サインイン情報はこのデバイスにだけ保存され、hub にはアップロードされません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一次使用时在面板里登录，再选一个节点。登录信息只存在这台设备上，不上传 hub。"
+          }
+        }
+      }
+    },
     "第一次运行时开一段新对话，之后每次都在这段对话里接着跑，能看到前几次的结果。": {
       "localizations": {
         "en": {
@@ -83988,6 +84362,28 @@
         }
       }
     },
+    "线路：经%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Route: via %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "経路：%@ 経由"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "线路：经%@"
+          }
+        }
+      }
+    },
     "组里 %lld 台 hub 互联，看到的是整组的机器；连着的那台掉了会换组里别的。": {
       "localizations": {
         "en": {
@@ -84568,6 +84964,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "经你的 iPhone 读取步数、睡眠、心率、体重等汇总，需要 Persona 在手机上打开并授权。"
+          }
+        }
+      }
+    },
+    "经隧道连上了 hub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reached the hub through the tunnel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネル経由で hub に接続しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "经隧道连上了 hub"
           }
         }
       }
@@ -95259,6 +95677,28 @@
         }
       }
     },
+    "这个版本没有": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not in this build"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このバージョンにはありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个版本没有"
+          }
+        }
+      }
+    },
     "这个版本没有内置 Meta 眼镜支持": {
       "localizations": {
         "en": {
@@ -95277,6 +95717,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个版本没有内置 Meta 眼镜支持"
+          }
+        }
+      }
+    },
+    "这个版本的 App 没有内网隧道核心": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This build of the app has no tunnel core"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このバージョンのアプリにはトンネルコアがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个版本的 App 没有内网隧道核心"
+          }
+        }
+      }
+    },
+    "这个版本的 App 没有内网隧道核心。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This build of the app has no tunnel core."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このバージョンのアプリにはトンネルコアがありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个版本的 App 没有内网隧道核心。"
           }
         }
       }
@@ -96051,6 +96535,28 @@
         }
       }
     },
+    "这台 hub 没有内网隧道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This hub has no tunnel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この hub にはトンネルがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 hub 没有内网隧道"
+          }
+        }
+      }
+    },
     "这台电脑上的 Persona 后台服务没在运行，打开 Persona Link 让它重新装一次。": {
       "localizations": {
         "en": {
@@ -96205,6 +96711,28 @@
         }
       }
     },
+    "连上了 %@，但它不像 hub（/api/v1/health 没有正常应答）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reached %@, but it doesn't look like a hub (/api/v1/health didn't answer properly)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ に接続しましたが、hub ではないようです（/api/v1/health が正しく応答しません）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连上了 %@，但它不像 hub（/api/v1/health 没有正常应答）"
+          }
+        }
+      }
+    },
     "连上以后这里会自己变好，不用刷新。": {
       "localizations": {
         "en": {
@@ -96223,6 +96751,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "连上以后这里会自己变好，不用刷新。"
+          }
+        }
+      }
+    },
+    "连接中（经%@）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting (via %@)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続中（%@ 経由）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接中（经%@）"
           }
         }
       }
@@ -96312,6 +96862,94 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新出链接"
+          }
+        }
+      }
+    },
+    "隧道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tunnel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隧道"
+          }
+        }
+      }
+    },
+    "隧道账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tunnel Account"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネルのアカウント"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隧道账号"
+          }
+        }
+      }
+    },
+    "隧道还没有登录：先在「登录和选节点」里登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The tunnel isn't signed in yet. Sign in under “Sign In and Pick a Node” first."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トンネルにまだサインインしていません。先に「サインインとノードの選択」でサインインしてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隧道还没有登录：先在「登录和选节点」里登录"
+          }
+        }
+      }
+    },
+    "需要二次验证": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs Two-Step Verification"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 段階認証が必要"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要二次验证"
           }
         }
       }

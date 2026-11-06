@@ -523,6 +523,9 @@ func (m *Manifest) Validate() error {
 	for _, msg := range m.agentFilterSwitches() {
 		bad("%s", msg)
 	}
+	for _, msg := range m.tunnelTargetProblems() {
+		bad("%s", msg)
+	}
 	for _, msg := range m.offByDefaultProblems() {
 		bad("%s", msg)
 	}

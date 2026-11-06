@@ -17,6 +17,7 @@ vi.mock("./session/FilesPanel", async () => {
 vi.mock("./session/GitPanel", () => {
   throw new TypeError("Failed to fetch dynamically imported module: /assets/GitPanel-abc.js");
 });
+import { registerComposer } from "../lib/links";
 import { closePanel, openPanel } from "../lib/panel";
 import { SidePanel } from "./SidePanel";
 
@@ -65,5 +66,117 @@ describe("侧边面板按需加载", () => {
     expect(alert?.textContent).toContain("重新加载");
     // the panel's frame (its resize handle) is still there: the error stays inside the panel
     expect(host.querySelector('aside [role="separator"]')).not.toBeNull();
+  });
+});
+
+// #5149: the resize handle works from the keyboard, and Esc in the panel closes it and gives focus back
+describe("侧边面板的键盘操作", () => {
+  const separator = () => host.querySelector<HTMLElement>('aside [role="separator"]')!;
+  const press = (el: Element, key: string) => {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    act(() => { el.dispatchEvent(e); });
+    return e;
+  };
+  let opener: HTMLButtonElement;
+
+  beforeEach(() => {
+    localStorage.removeItem("jarvis.panelWidth");
+    opener = document.createElement("button");
+    opener.textContent = "文件";
+    document.body.append(opener);
+    opener.focus();
+    act(() => openPanel({ kind: "files", mid: "m1", sid: "s1", cwd: "/work/demo" }));
+    act(() => root.render(<SidePanel />));
+  });
+  afterEach(() => {
+    opener.remove();
+    document.querySelectorAll("[data-test-menu]").forEach((m) => m.remove());
+  });
+
+  it("puts the resize handle in the tab order with its width", () => {
+    const sep = separator();
+    expect(sep.tabIndex).toBe(0);
+    expect(sep.getAttribute("aria-valuenow")).toBe("600");
+    expect(sep.getAttribute("aria-valuemin")).toBe("360");
+    expect(sep.getAttribute("aria-valuemax")).toBe(String(Math.round(innerWidth * 0.72)));
+    expect(sep.getAttribute("aria-controls")).toBe(host.querySelector("aside")!.id);
+  });
+
+  it("widens with ArrowLeft, narrows with ArrowRight, and remembers it", () => {
+    expect(press(separator(), "ArrowLeft").defaultPrevented).toBe(true);
+    expect(separator().getAttribute("aria-valuenow")).toBe("616");
+    expect(localStorage.getItem("jarvis.panelWidth")).toBe("616");
+    press(separator(), "ArrowRight");
+    press(separator(), "ArrowRight");
+    expect(separator().getAttribute("aria-valuenow")).toBe("584");
+    expect(localStorage.getItem("jarvis.panelWidth")).toBe("584");
+  });
+
+  it("goes to the ends with Home / End and back to the default with Enter", () => {
+    press(separator(), "End");
+    expect(separator().getAttribute("aria-valuenow")).toBe(separator().getAttribute("aria-valuemax"));
+    press(separator(), "Home");
+    expect(separator().getAttribute("aria-valuenow")).toBe("360");
+    press(separator(), "Enter");
+    expect(separator().getAttribute("aria-valuenow")).toBe("600");
+    expect(localStorage.getItem("jarvis.panelWidth")).toBeNull();
+  });
+
+  it("closes on Esc from inside the panel and gives focus back to what opened it", () => {
+    separator().focus();
+    const e = press(separator(), "Escape");
+    expect(e.defaultPrevented).toBe(true);
+    expect(host.querySelector("aside")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("keeps its Esc from the window, where the conversation's Esc stops a running agent", () => {
+    const onWindow = vi.fn();
+    addEventListener("keydown", onWindow);
+    try {
+      separator().focus();
+      press(separator(), "Escape");
+      expect(host.querySelector("aside")).toBeNull();
+      expect(onWindow).not.toHaveBeenCalled();
+    } finally {
+      removeEventListener("keydown", onWindow);
+    }
+  });
+
+  it("does not reuse an old opener: opened again with nothing focused, Esc gives focus to the message box", () => {
+    act(() => closePanel());
+    const input = document.createElement("textarea");
+    document.body.append(input);
+    const unregister = registerComposer({ key: "m1/s1", send: async () => true, focus: () => input.focus() });
+    try {
+      (document.activeElement as HTMLElement | null)?.blur();
+      expect(document.activeElement).toBe(document.body);
+      act(() => openPanel({ kind: "files", mid: "m1", sid: "s1", cwd: "/work/demo" }));
+      separator().focus();
+      press(separator(), "Escape");
+      expect(host.querySelector("aside")).toBeNull();
+      expect(document.activeElement).toBe(input);
+    } finally {
+      unregister();
+      input.remove();
+    }
+  });
+
+  it("leaves Esc to an open menu", () => {
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    menu.dataset.testMenu = "";
+    document.body.append(menu);
+    separator().focus();
+    expect(press(separator(), "Escape").defaultPrevented).toBe(false);
+    expect(host.querySelector("aside")).not.toBeNull();
+  });
+
+  it("leaves an Esc something in the panel already took", () => {
+    separator().focus();
+    const e = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    e.preventDefault();
+    act(() => { separator().dispatchEvent(e); });
+    expect(host.querySelector("aside")).not.toBeNull();
   });
 });

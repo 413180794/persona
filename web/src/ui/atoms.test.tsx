@@ -3,7 +3,7 @@ import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { stateColor, STATE_LABEL } from "../lib/format";
 import type { AgentState } from "../lib/types";
-import { copyText, Dialog, IconButton, Menu, useMenu } from "./atoms";
+import { Button, copyText, Dialog, IconButton, Loading, Menu, useMenu } from "./atoms";
 import { markOf } from "./StatusMark";
 
 vi.mock("react", async (importOriginal) => ({
@@ -118,6 +118,18 @@ describe("dialog", () => {
     const html = renderDialog(<button type="button">启动</button>);
     expect(html).toMatch(/role="dialog"[^>]*class="flex max-h-\[calc\(88vh-\(--spacing\(8\)\)\)\] [^"]*flex-col/);
     expect(html).toContain("pt-[12vh] pb-8");
+  });
+});
+
+describe("busy states for screen readers", () => {
+  it("announces a loading label as a status", () => {
+    const html = renderToStaticMarkup(<Loading label="正在读取…" />);
+    expect(html).toMatch(/^<div role="status"[^>]*>.*正在读取….*<\/div>$/);
+  });
+
+  it("marks a busy button aria-busy, and leaves an idle one alone", () => {
+    expect(renderToStaticMarkup(<Button busy>保存</Button>)).toContain('aria-busy="true"');
+    expect(renderToStaticMarkup(<Button>保存</Button>)).not.toContain("aria-busy");
   });
 });
 

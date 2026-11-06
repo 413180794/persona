@@ -84,7 +84,7 @@ extension AppModel {
             link.live.disconnect()
         }
         // iOS cuts them in the background anyway; back in front each socket picks its way again (docs/network.md).
-        SSHTunnels.shared.closeAll()
+        closeAllTunnels()
     }
 
     /// A silent push in the background: the group that sent it connects for its call (nil: every group).
@@ -149,14 +149,14 @@ extension AppModel {
     // MARK: Routes, hellos, groups changing
 
     /// What a group's socket asks before each attempt when the group has more than one place to go: the quickest
-    /// hub that answers (HubRoute), or its SSH tunnel when none does (`sshRoute`, docs/network.md
-    /// 「经 SSH 隧道连 hub」). One place and no tunnel: nil, the socket goes where it was told.
+    /// hub that answers (HubRoute), or a tunnel when none does (`tunnelRoute`, docs/network.md「经 SSH 隧道连 hub」
+    /// 「经 App 内隧道连 hub」). One place and no tunnel: nil, the socket goes where it was told.
     func routePicker(_ group: String) -> (@MainActor () async -> ServerConfig?)? {
-        let ssh = !sshHubs(group).isEmpty
-        guard ssh || HubRoute.candidates(registry, group: group).count > 1 else { return nil }
+        let tunneled = !hubTunnels(group).isEmpty
+        guard tunneled || HubRoute.candidates(registry, group: group).count > 1 else { return nil }
         return { [weak self] in
             guard let self else { return nil }
-            if !self.sshHubs(group).isEmpty { return await self.sshRoute(group) }
+            if !self.hubTunnels(group).isEmpty { return await self.tunnelRoute(group) }
             let candidates = HubRoute.candidates(self.registry, group: group)
             return await HubRoute.pick(candidates)?.config
         }
@@ -251,7 +251,7 @@ extension AppModel {
     func removeGroup(_ group: String) {
         guard links.count > 1 else { unpair(); return }
         // Before the registry changes: afterwards the group's hubs (and their tunnels' ids) are gone from it.
-        for id in Self.tunnelIDs(removing: group, from: registry) { SSHTunnels.shared.close(id) }
+        for id in Self.tunnelIDs(removing: group, from: registry) { closeTunnels(id) }
         var r = registry
         r.hubs.removeAll { $0.group == group }
         r.groupNames[group] = nil
@@ -267,7 +267,7 @@ extension AppModel {
     func removeHub(_ id: String) {
         guard let hub = registry.hubs.first(where: { $0.id == id }) else { return }
         guard registry.members(hub.group).count > 1 else { removeGroup(hub.group); return }
-        SSHTunnels.shared.close(id)
+        closeTunnels(id)
         var r = registry
         r.hubs.removeAll { $0.id == id }
         registry = r

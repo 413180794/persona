@@ -260,6 +260,7 @@ export interface Contributes {
   looks?: LookItem[];
   triage_templates?: TriageTemplateItem[];
   agent_filters?: AgentFilterItem[];
+  tunnels?: TunnelItem[];
   messaging?: MessagingItem[];
   /** Extra keys are opaque JSON; declared properties keep their own types. */
   [key: string]: unknown;
@@ -417,6 +418,15 @@ export interface TriageTemplateItem {
   id: string;
   title: string;
   text: string;
+}
+
+/**
+ * A tunnel the apps can reach this hub through when its own addresses do not answer (docs「App 内隧道」): an in-app tunnel
+ * core built into the app, going to the configuration's target_host and target_port.
+ */
+export interface TunnelItem {
+  id: string;
+  name: string;
 }
 
 /**

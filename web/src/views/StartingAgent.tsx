@@ -54,7 +54,7 @@ export function StartingAgent({ launch, onToggleSidebar }: { launch: AgentLaunch
               {launch.session && <Button tone="quiet" onClick={() => navigate({ name: "session", mid: launch.machineId, sid: launch.session!.session_id })}>{t("startingagent.view_session")}</Button>}
               {!launch.session && <Button tone="quiet" onClick={() => navigate({ name: "home" })}>{t("startingagent.view_list")}</Button>}
             </div>
-          </div> : <div role="status" aria-live="polite" className="flex flex-col gap-2"><Loading label={label} /><p className="text-[12px] text-ink-3">{t("startingagent.background")}</p></div>}
+          </div> : <div className="flex flex-col gap-2"><Loading label={label} /><p className="text-[12px] text-ink-3">{t("startingagent.background")}</p></div>}
         </div>
       </div>
     </div>

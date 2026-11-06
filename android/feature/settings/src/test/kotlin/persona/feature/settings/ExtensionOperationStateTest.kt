@@ -37,7 +37,7 @@ internal open class FakeOperations(var stepped: Boolean = true) : ExtensionApiSt
     override suspend fun catalog(query: String, market: String?, refresh: Boolean) = ExtensionCatalog(listOf(ExtensionMarket("m1", name = "Example")), catalog)
     override suspend fun previewFromMarket(market: String, extension: String): ExtensionPreview { calls += "preview"; return opPreview }
     override suspend fun install(preview: ExtensionPreview): ExtensionDetail { calls += "install"; return ExtensionDetail(HubExtension("example-notes", "Example Notes", "ui", "running")) }
-    override suspend fun uninstall(id: String, keepData: Boolean) { calls += "uninstall" }
+    override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean) { calls += "uninstall" }
     override suspend fun startFromMarket(market: String, extension: String): ExtensionOperation { calls += "start $market/$extension"; return started }
     override suspend fun agree(preview: ExtensionPreview, upgradeOf: String?): ExtensionOperation {
         calls += "agree ${preview.previewId} $upgradeOf"
