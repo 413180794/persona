@@ -30,6 +30,8 @@ struct ChatView: View {
     #endif
     /// Hide the arrow for the first moment on entry (it would flash while the list settles at the end).
     @State private var settled = false
+    /// The chat's height: the workflow section's cap is a share of it (#4532).
+    @State private var pageHeight: CGFloat = 0
     /// The pin is bringing a header up to show what opened under it (`ChatPin.onRising`): no ↓ for that moment.
     @State private var pinRising = false
     @State private var showTerminal = false
@@ -230,6 +232,7 @@ struct ChatView: View {
         // Where a message's action bar may go (MessageMenu): this chat, not the whole screen.
         .coordinateSpace(.named(MessageMenu.area))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { menu.areaWidth = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pageHeight = $0 }
         .frame(maxWidth: .infinity)
         .background(Theme.pageBackground)
         .navigationTitle(title)
@@ -277,7 +280,7 @@ struct ChatView: View {
     /// here like a subagent (its `session_id` reads as one).
     @ViewBuilder private var workflowBar: some View {
         if hasWorkflows, let session {
-            WorkflowSection(runs: session.shownWorkflows()) { a in
+            WorkflowSection(runs: session.shownWorkflows(), maxHeight: pageHeight > 0 ? pageHeight * Theme.Size.workflowShare : nil) { a in
                 guard let sid = a.sessionID else { return }
                 view(Subagent(id: a.id, sessionID: sid, type: "workflow", description: a.label, running: a.running,
                               background: true, startedAt: a.startedAt, updatedAt: a.updatedAt, lastText: a.lastText))

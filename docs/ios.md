@@ -316,9 +316,11 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 - 后台 workflow（#2935，字段见 `docs/protocol.md` 的 `workflows`）：Claude 用 Workflow 工具在后台跑多 Agent 脚本时，这一轮结束、等完成通知，
   hub 把它算成工作中（`state` 照旧决定颜色、计数、手表、待办状态）。App 里：状态字写「工作中（后台）」（`Session.stateLabel`）；
   Agents 列表的行和待办卡片在最后一句下面多一行 `WorkflowLine`：「后台 workflow「parity-audit」· Verify 2/2 · 169/185 · 14 分钟」（几个就加「等 N 个」）；
-  对话页头部（展开的页头、侧栏页头、Mac 的上方一栏）在子 Agent 条上方是「后台 workflow」区块（`WorkflowSection`），在跑的和一小时内结束的各一张卡片：
-  名字、状态 Chip（在跑 ai 色、完成 positive、失败 / 已停止 danger、没动静了 caution）、耗时、阶段横排（当前高亮，前面打勾）、「169/185 个 agent 完成 · 16 个在跑」、
-  失败 / 停止的 error，「展开 agent」列出 agent（在跑的在前），点一行按 `session_id` 像子 Agent 一样只读看。手表的列表行和会话页是一个小 Chip「workflow 169/185」。
+  对话页头部（展开的页头、侧栏页头、Mac 的上方一栏）在子 Agent 条上方是「后台 workflow」区块（`WorkflowSection`）：
+  在跑的各一张卡片（`WorkflowCard`）：名字、耗时、状态 Chip（在跑 ai 色、完成 positive、失败 / 已停止 danger、没动静了 caution）；下面一行是阶段横排（当前高亮，前面打勾）
+  和「169/185 · 16 个在跑 ⌄」，点计数展开 agent（在跑的在前），点一行按 `session_id` 像子 Agent 一样只读看。一小时内结束的收在卡片下面，一个一行（`WorkflowEndedRow`）：
+  名字、完成数 / 已开始数 · 耗时、怎么结束的，失败 / 停止的下面留一行 error，有 agent 的点一下展开。整个区块最高占对话页的 38%（`Theme.Size.workflowShare`，#4532），
+  超出在区块里面滚动，展开再多 agent 也不把对话挤出屏幕。截图：`MOCK_WORKFLOW=crowded`（3 个 workflow、在跑的有 10 个 agent）跑 `testCrowdedWorkflowsLeaveRoomForTheChat`。手表的列表行和会话页是一个小 Chip「workflow 169/185」。
   「后台 N」不重复数 `background` 里 kind 为 `workflow` 的那条（`Session.backgroundCount`）。实时活动不变（state 已是 working）。
   解析都是宽松的：旧 hub 没有 `workflows` 时和原来一样，未知 status 当完成，单个坏条目不会丢会话（`WorkflowTests`）。截图：`MOCK_WORKFLOW=1` 的假 hub 跑 `PersonaUITests/WorkflowUITests`。
 - 后台任务：Claude 用 `run_in_background` 跑的命令 / 子代理还没回报时，输入框上方显示「N 个后台任务」（轮次结束后也在），展开看描述、命令和已运行时间，

@@ -398,6 +398,8 @@ nonisolated enum Theme {
         // Faces and touch.
         static let avatar: CGFloat = 40
         static let avatarM: CGFloat = 42
+        /// The most of the page the chat header's workflow section takes before it scrolls inside (#4532).
+        static let workflowShare: CGFloat = 0.38
         /// The smallest thing a finger should hit.
         static let tapTarget: CGFloat = 44
         static let avatarL: CGFloat = 46

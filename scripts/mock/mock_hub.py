@@ -597,6 +597,40 @@ if os.environ.get("MOCK_WORKFLOW") == "1":
                            "phases": ["Scan", "Fix"], "phase": "Scan", "phase_index": 1, "agents_started": 4, "agents_done": 2, "agents_running": 0,
                            "started_at": ago(minutes=50), "ended_at": ago(minutes=40), "error": "Error: Workflow aborted"}])
 
+# MOCK_WORKFLOW=crowded (#4532): three workflows on the review agent, as a user's chat had them: one running with ten
+# agents, one stopped with its error, one completed. The chat's header must not push the conversation off the screen.
+if os.environ.get("MOCK_WORKFLOW") == "crowded":
+    _wf_agents = [{"id": "o%03d" % i, "session_id": f"{REVIEW}@o%03d" % i, "label": label, "phase": phase, "running": running,
+                   "started_at": ago(minutes=m), "updated_at": ago(minutes=max(m - 2, 0)), **({"last_text": last} if last else {})}
+                  for i, (label, phase, running, m, last) in enumerate((
+                      ("plan:steps", "Plan", False, 22, "新手引导拆成 5 步：欢迎、配对、模型、通知、完成。"),
+                      ("plan:copy", "Plan", False, 21, "文案定稿，三种语言都有。"),
+                      ("build:welcome", "Build", False, 18, "欢迎页做好了，深浅色都看过。"),
+                      ("build:pair", "Build", False, 17, "配对页改成先扫码，手动输入收进链接。"),
+                      ("build:model", "Build", True, 9, "在接模型供应商的列表"),
+                      ("build:notify", "Build", True, 8, "在写通知权限的说明页"),
+                      ("build:finish", "Build", True, 6, None),
+                      ("verify:welcome", "Verify", True, 4, "在对比欢迎页和设计稿"),
+                      ("verify:pair", "Verify", True, 3, "在跑配对的 UI 测试"),
+                      ("verify:copy", "Verify", True, 1, None)))]
+    for _s in SESSIONS:
+        if _s["session_id"] == REVIEW:
+            _s.update(status="done", state="working", state_since=ago(minutes=22), seen_at=None,
+                      title="Persona 新手引导与模型接入", last_text="新手引导交给 workflow 在后台跑了，跑完我再汇总。",
+                      background=[{"id": "wonb4", "kind": "workflow", "description": "onboarding-round4", "run_id": "wf_onb4",
+                                   "started_at": ago(minutes=22)}],
+                      workflows=[
+                          {"task_id": "wonb4", "run_id": "wf_onb4", "name": "onboarding-round4", "summary": "新手引导第四轮",
+                           "status": "running", "running": True, "phases": ["Plan", "Build", "Verify"], "phase": "Build", "phase_index": 2,
+                           "agents_started": 10, "agents_done": 4, "agents_running": 6, "started_at": ago(minutes=22),
+                           "updated_at": ago(minutes=0), "agents": _wf_agents},
+                          {"task_id": "wonb2", "run_id": "wf_onb2", "name": "onboarding-round2", "status": "killed", "running": False,
+                           "phases": ["Plan", "Build", "Verify"], "phase": "Build", "phase_index": 2, "agents_started": 6, "agents_done": 3,
+                           "agents_running": 0, "started_at": ago(minutes=55), "ended_at": ago(minutes=41), "error": "Error: Workflow aborted"},
+                          {"task_id": "wonbv", "run_id": "wf_onbv", "name": "onboarding-verify", "status": "completed", "running": False,
+                           "phases": ["Verify"], "phase": "Verify", "phase_index": 1, "agents_started": 3, "agents_done": 3,
+                           "agents_running": 0, "started_at": ago(minutes=38), "ended_at": ago(minutes=30)}])
+
 # MOCK_WORKTREES=1 (#2108): the widget agent works in a working tree of weather's own, with an idle agent beside it; an
 # idle one in a second tree; and MacBook has a repository with nothing going on: every level of the Agents list's 按仓库.
 if os.environ.get("MOCK_WORKTREES") == "1":
