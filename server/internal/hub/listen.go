@@ -95,6 +95,29 @@ func listenTCP(addr string) (net.Listener, bool, error) {
 	return ln, false, err
 }
 
+// unclaimedInherited is the addresses of the sockets systemd passed that listenTCP has not handed out: ports hub.json
+// no longer listens on (the admin UI changed listen or public.tls_listen, and jarvisd.socket still has the old one).
+func unclaimedInherited() []net.Addr {
+	inheritedListeners()
+	inherited.mu.Lock()
+	defer inherited.mu.Unlock()
+	var addrs []net.Addr
+	for _, ln := range inherited.lns {
+		addrs = append(addrs, ln.Addr())
+	}
+	return addrs
+}
+
+// logUnclaimedInherited says, once the hub's listeners are set up, which passed sockets nothing accepts on: systemd
+// keeps holding those ports, so a client there waits in the backlog until it times out instead of being refused.
+// Logging only; the sockets stay as they are.
+func logUnclaimedInherited(logf func(string, ...any)) {
+	for _, a := range unclaimedInherited() {
+		logf("hub: systemd passed a socket on %s that hub.json does not listen on; connections there hang: rerun "+
+			"personad hub setup (or scripts/deploy/hub-systemd.sh) to update jarvisd.socket", a)
+	}
+}
+
 // listen is the hub's listener for addr: the edge's socket for that port when the edge started this hub (a slot),
 // else listenTCP's.
 func (h *Hub) listen(addr string) (net.Listener, bool, error) {

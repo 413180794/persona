@@ -94,6 +94,7 @@ func Serve(ctx context.Context, b update.Build) error {
 		}
 		lns = append(lns, ln)
 	}
+	logUnclaimedInherited(logger.Printf)
 	return hubedge.Run(ctx, hubedge.Options{
 		Listeners: lns, Binary: binary, Args: []string{"hub", "slot"},
 		RunDir: edgeRunDir(), Control: ControlPath(), Version: b.Version, Logf: logger.Printf,

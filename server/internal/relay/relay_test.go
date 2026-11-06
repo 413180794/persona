@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -263,5 +265,91 @@ func TestProxySecret(t *testing.T) {
 	plain, _, _ := newTest(t)
 	if plain.clientIP(r) != "192.0.2.1" {
 		t.Fatal("trusted X-Forwarded-For without a proxy secret")
+	}
+}
+
+// TestNewRefusesBlankTopic: a blank entry in relay.json's topics matches no app and hides a config mistake.
+func TestNewRefusesBlankTopic(t *testing.T) {
+	for _, topics := range [][]string{{""}, {" "}, {topic, ""}} {
+		if _, err := New(Config{Topics: topics}, &fakeAPNs{}, bytes.Repeat([]byte{7}, 32), t.Logf); err == nil {
+			t.Fatalf("New(topics %q) succeeded, want an error", topics)
+		}
+	}
+}
+
+// startServe runs serve on a loopback port with a handler that reports entry and blocks until release is closed.
+func startServe(t *testing.T) (url string, entered, release chan struct{}, cancel context.CancelFunc, served chan error) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, release = make(chan struct{}), make(chan struct{})
+	hs := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(entered)
+		<-release
+		w.WriteHeader(http.StatusOK)
+	})}
+	ctx, cancel := context.WithCancel(context.Background())
+	served = make(chan error, 1)
+	go func() { served <- serve(ctx, ln, hs) }()
+	return "http://" + ln.Addr().String() + "/relay/v1/push", entered, release, cancel, served
+}
+
+func TestServeShutdownDrainsInFlightRequest(t *testing.T) {
+	url, entered, release, cancel, served := startServe(t)
+	defer cancel()
+	status := make(chan int, 1)
+	go func() {
+		resp, err := http.Post(url, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			status <- -1
+			return
+		}
+		resp.Body.Close()
+		status <- resp.StatusCode
+	}()
+	<-entered
+	cancel()
+	select {
+	case err := <-served:
+		close(release)
+		t.Fatalf("serve returned %v while a request was still in flight", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(release)
+	if got := <-status; got != http.StatusOK {
+		t.Fatalf("in-flight request status = %d, want 200", got)
+	}
+	select {
+	case err := <-served:
+		if err != nil {
+			t.Fatalf("serve = %v, want nil", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve did not return after the drain")
+	}
+}
+
+func TestServeShutdownGraceExceeded(t *testing.T) {
+	old := shutdownGrace
+	shutdownGrace = 50 * time.Millisecond
+	defer func() { shutdownGrace = old }()
+	url, entered, release, cancel, served := startServe(t)
+	defer close(release)
+	go func() {
+		if resp, err := http.Post(url, "application/json", strings.NewReader("{}")); err == nil {
+			resp.Body.Close()
+		}
+	}()
+	<-entered
+	cancel()
+	select {
+	case err := <-served:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("serve = %v, want a deadline error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve did not give up after the grace period")
 	}
 }

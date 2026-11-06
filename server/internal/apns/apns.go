@@ -42,8 +42,16 @@ type Client struct {
 	jwtAt time.Time
 }
 
-// New loads the .p8 key the config names ("~/" is the home directory).
+// New loads the .p8 key the config names ("~/" is the home directory). It refuses a config without key_id or
+// team_id: every token signed without them is answered 403 InvalidProviderToken.
 func New(cfg Config) (*Client, error) {
+	cfg.KeyID, cfg.TeamID = strings.TrimSpace(cfg.KeyID), strings.TrimSpace(cfg.TeamID)
+	if cfg.KeyID == "" {
+		return nil, errors.New("apns: key_id is empty")
+	}
+	if cfg.TeamID == "" {
+		return nil, errors.New("apns: team_id is empty")
+	}
 	path := cfg.KeyPath
 	if strings.HasPrefix(path, "~/") {
 		home, _ := os.UserHomeDir()

@@ -88,6 +88,9 @@ func New(cfg Config, sender Sender, secret []byte, logf func(string, ...any)) (*
 	s := &Server{apns: sender, aead: aead, topics: map[string]bool{}, proxySecret: cfg.ProxySecret, logf: logf, now: time.Now,
 		pushLimit: newLimiter(pushPerMin, pushBurst), regLimit: newLimiter(regPerMin, regBurst)}
 	for _, t := range cfg.Topics {
+		if strings.TrimSpace(t) == "" {
+			return nil, errors.New("relay.json: topics has an empty entry")
+		}
 		s.topics[t] = true
 	}
 	return s, nil
@@ -380,16 +383,40 @@ func Run(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	hs := &http.Server{Addr: cfg.Listen, Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
-		<-ctx.Done()
-		sh, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = hs.Shutdown(sh)
-	}()
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		return fmt.Errorf("relay listen: %w", err)
+	}
+	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("relay on %s (key %s, topics %v)", cfg.Listen, cfg.APNs.KeyID, cfg.Topics)
-	if err := hs.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	return serve(ctx, ln, hs)
+}
+
+// shutdownGrace is how long serve lets in-flight requests (an APNs send can take up to 15 s) finish after ctx ends.
+var shutdownGrace = 5 * time.Second
+
+// serve runs hs on ln until ctx ends, then drains in-flight requests for up to shutdownGrace. It returns only after
+// the drain, because Serve itself returns ErrServerClosed as soon as Shutdown starts and the caller exits on return.
+func serve(ctx context.Context, ln net.Listener, hs *http.Server) error {
+	done := make(chan error, 1)
+	go func() { done <- hs.Serve(ln) }()
+	select {
+	case err := <-done:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
 		return err
+	case <-ctx.Done():
+	}
+	sh, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+	defer cancel()
+	err := hs.Shutdown(sh)
+	if err != nil {
+		_ = hs.Close()
+	}
+	<-done
+	if err != nil {
+		return fmt.Errorf("relay shutdown: %w", err)
 	}
 	return nil
 }

@@ -286,6 +286,8 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 	if h.slot != nil {
 		h.logf("hub: slot %s, relayed by the hub's edge: the route moves here now", h.slot.Name)
 		h.slot.Ready()
+	} else {
+		logUnclaimedInherited(h.logf) // behind the edge, the edge took the passed sockets (hub_edge.go Serve)
 	}
 	select {
 	case <-ctx.Done():

@@ -166,9 +166,17 @@ func main() {
 		}
 		switch sub {
 		case "run":
-			err = hub.Serve(ctx, buildInfo())
+			if len(os.Args) > 3 { // a flag such as --listen would otherwise be dropped and a hub started on hub.json's port
+				err = usageError("usage: " + commandName() + " hub [run]")
+			} else {
+				err = hub.Serve(ctx, buildInfo())
+			}
 		case "slot": // the hub as its edge runs it (hub_edge.go): not for people
-			err = hub.RunSlot(ctx, buildInfo())
+			if len(os.Args) > 3 {
+				err = usageError(commandName() + " hub slot takes no arguments")
+			} else {
+				err = hub.RunSlot(ctx, buildInfo())
+			}
 		case "switch":
 			err = runHubSwitch(os.Args[3:])
 		case "doctor":
@@ -220,6 +228,10 @@ func main() {
 				err = hub.AssistantToken(ctx, os.Stdout)
 			}
 		case "tailcat-key":
+			if len(os.Args) > 3 {
+				err = usageError(commandName() + " hub tailcat-key takes no arguments")
+				break
+			}
 			var k *tunnel.HubKey
 			if k, err = tunnel.LoadOrCreateHubKey(tunnel.HubKeyPath()); err == nil {
 				fmt.Println(k.Public())
@@ -299,6 +311,10 @@ func main() {
 	case "tab-start": // a command a runtime gave to resume its session in a new tab (`pi --session …`, node/pi.go)
 		err = node.CodexStart(os.Args[2:])
 	case "relay":
+		if len(os.Args) > 3 { // only the config path: anything after it would be ignored
+			err = usageError("usage: " + commandName() + " relay [config]")
+			break
+		}
 		path := filepath.Join(identity.HomeDir(), "relay.json")
 		if len(os.Args) > 2 {
 			path = os.Args[2]
