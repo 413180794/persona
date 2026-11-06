@@ -17,6 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // managersHub is newBusHub with no install codes and no default picked.
@@ -208,6 +209,48 @@ func TestManagersPatchAndRevoke(t *testing.T) {
 	}
 	if code := managersDo(t, h, srv, "POST", bus.JoinPath, map[string]any{"code": made.Code}, nil); code != 401 {
 		t.Fatalf("a called-off code traded: %d", code)
+	}
+}
+
+// A removed manager's pending cards are withdrawn: the apps hear they are over and no longer get them; another
+// manager's stay.
+func TestManagersRevokeWithdrawsItsCards(t *testing.T) {
+	h, srv, _ := managersHub(t)
+	busToken(t, h, assistantwire.AssistantID, "助手")
+	r := dialRawBus(t, srv, busToken(t, h, "m-abc123", "家"))
+	if err := r.call("manager.hello", map[string]any{"id": "m-abc123"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.peer.Notify(assistantwire.EventFleetInteraction, assistantwire.FleetInteraction{Interaction: proto.Interaction{
+		ID: "ix-gone", MachineID: "mb", SessionID: "s1", Kind: "question", CreatedAt: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 5*time.Second, "the interaction", func() bool { return h.interactionOwner("ix-gone") == "m-abc123" })
+	h.takeFleetInteractions([]proto.Interaction{{ID: "ix-keep", MachineID: "ma", SessionID: "s2", Kind: "question", CreatedAt: time.Now()}})
+	app := wsApp(t, h)
+
+	if code := managersDo(t, h, srv, "DELETE", "/api/v1/managers/m-abc123", nil, nil); code != 200 {
+		t.Fatalf("delete: %d", code)
+	}
+	if _, ok := h.pendingInteraction("ix-gone"); ok {
+		t.Fatal("the removed manager's card is still pending")
+	}
+	if h.interactionOwner("ix-keep") != assistantwire.AssistantID {
+		t.Fatal("the assistant's card went with the removed manager")
+	}
+	deadline := time.After(5 * time.Second)
+	for heard := false; !heard; {
+		select {
+		case raw := <-app.out:
+			var m struct{ Type, ID string }
+			_ = json.Unmarshal(raw, &m)
+			if m.Type == "interaction_resolved" && m.ID == "ix-keep" {
+				t.Fatalf("the assistant's card was withdrawn: %s", raw)
+			}
+			heard = m.Type == "interaction_resolved" && m.ID == "ix-gone"
+		case <-deadline:
+			t.Fatal("the apps never heard the removed manager's card is over")
+		}
 	}
 }
 

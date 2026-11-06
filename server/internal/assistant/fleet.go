@@ -1144,7 +1144,8 @@ type stateMark struct {
 	at    time.Time
 }
 
-// markStates fills in StateSince: the time an agent's state last changed, kept until it changes again.
+// markStates fills in StateSince: the time an agent's state last changed, kept until it changes again. It drops the
+// marks and hook flags of the machine's sessions no longer listed.
 func (s *Service) markStates(machine string, list []proto.Session, now time.Time) {
 	s.fleet.mu.Lock()
 	defer s.fleet.mu.Unlock()
@@ -1159,6 +1160,19 @@ func (s *Service) markStates(machine string, list []proto.Session, now time.Time
 			s.fleet.stateSince[k] = mk
 		}
 		list[i].StateSince = mk.at
+	}
+	// The list is the node's whole list, kept across a disconnect (devices.Machine.setSessions): a session no longer
+	// in it has ended. Forget its mark and its hook flag. A hook flag for a session never listed yet (its hook came
+	// before the node's next list) has no mark and stays.
+	listed := make(map[string]bool, len(list))
+	for _, sess := range list {
+		listed[sess.SessionID] = true
+	}
+	for k := range s.fleet.stateSince {
+		if k[0] == machine && !listed[k[1]] {
+			delete(s.fleet.stateSince, k)
+			delete(s.fleet.hooked, k)
+		}
 	}
 }
 

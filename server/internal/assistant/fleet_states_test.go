@@ -1,6 +1,8 @@
 package assistant
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -260,6 +262,48 @@ func TestMarkStates(t *testing.T) {
 	s.markStates("m", list, t0.Add(2*time.Minute))
 	if !list[0].StateSince.Equal(t0.Add(2 * time.Minute)) {
 		t.Fatalf("state change kept old time: %v", list[0].StateSince)
+	}
+}
+
+// A session the node stops listing loses its state mark and its hook flag; other machines and listed sessions keep
+// theirs. A hook flag for a session not yet listed (its hook came before the list) is kept.
+func TestMarkStatesForgetsEndedSessions(t *testing.T) {
+	s := &Service{}
+	// What a non-report-only hook.event records (NodeEvent; a bare Service has no fleet to take the event).
+	hook := func(machine, sid string) {
+		if s.fleet.hooked == nil {
+			s.fleet.hooked = map[[2]string]bool{}
+		}
+		s.fleet.hooked[[2]string{machine, sid}] = true
+	}
+	t0 := time.Now()
+	s.markStates("other", []proto.Session{{SessionID: "o", State: proto.StateWorking}}, t0)
+	s.markStates("m", []proto.Session{{SessionID: "keep", State: proto.StateWorking}}, t0)
+	for i := range 500 {
+		sid := fmt.Sprintf("s%d", i)
+		s.markStates("m", []proto.Session{{SessionID: "keep", State: proto.StateWorking}, {SessionID: sid, State: proto.StateWorking}}, t0.Add(time.Second))
+		hook("m", sid)
+	}
+	hook("other", "o")
+	hook("m", "early")
+	list := []proto.Session{{SessionID: "keep", State: proto.StateWorking}}
+	s.markStates("m", list, t0.Add(time.Minute))
+	if !list[0].StateSince.Equal(t0) {
+		t.Fatalf("a listed session's mark moved: %v", list[0].StateSince)
+	}
+	if n := len(s.fleet.stateSince); n != 2 {
+		t.Fatalf("stateSince keeps %d marks, want 2 (m/keep, other/o)", n)
+	}
+	if _, ok := s.fleet.stateSince[[2]string{"other", "o"}]; !ok {
+		t.Fatal("another machine's mark was dropped")
+	}
+	for k := range s.fleet.hooked {
+		if k[0] == "m" && strings.HasPrefix(k[1], "s") {
+			t.Fatalf("hooked keeps ended session %v", k)
+		}
+	}
+	if !s.fleet.hooked[[2]string{"other", "o"}] || !s.fleet.hooked[[2]string{"m", "early"}] {
+		t.Fatalf("hooked dropped a live flag: %v", s.fleet.hooked)
 	}
 }
 

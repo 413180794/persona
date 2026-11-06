@@ -119,6 +119,7 @@ Nothing one manager reports replaces another's (`server/internal/hub/manager_sta
 | Tools (`assistant.tools`) | By manager | The assistant's are asked for when it connects (as before); another manager's the first time they are needed after it connected. |
 | Extensions' report (`extensions.report`) | By manager; only the assistant's is kept across a restart | Merged: features and looks of all, a machine's extras (Cua, ego) from its own manager, an API prefix (`/api/v1/<prefix>/`) served by the first manager that reports it, the assistant's first. |
 | Live Activity (`fleet.live`) | By manager | The default manager's, else the assistant's (the Live Activity is one per phone). |
+| Pending cards (`fleet.interaction(s)`) | By manager (each card names the manager that reported it) | Answering a card goes to its manager (`interactionOwner`). Removing a manager withdraws its cards: the apps get `interaction_resolved` for each. |
 
 There is no gate on the bus any more: every manager may call every method and publish every event.
 

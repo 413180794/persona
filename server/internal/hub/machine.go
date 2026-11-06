@@ -50,8 +50,9 @@ type Machine struct {
 	watchers  map[string]int // session id -> subscribed clients
 	// What the node was told about each session's watch (syncWatch): watchMu orders the session.watch /
 	// session.unwatch calls per session (a 1-slot channel, so a wait for it can end with the caller's ctx), nodeWatch
-	// is what the last of them left (absent: not watched).
-	watchMu   map[string]chan struct{}
+	// is what the last of them left (absent: not watched). A slot goes when no call holds or waits for it and the
+	// session is neither subscribed nor watched on the node (dropWatchSlot).
+	watchMu   map[string]*watchSlot
 	nodeWatch map[string]nodeWatchState
 	// The web panels' open folders on this machine (fswatch.go): fswMu orders the fs.watch calls, fswSent says the
 	// node was given a non-empty set, fswWarned that a failure was logged (a node without fs.watch).
@@ -260,6 +261,74 @@ func (m *Machine) removeWatcher(id string) {
 	m.syncWatch(ctx, id)
 }
 
+// setSessionList keeps list as the sessions the node has now, and drops the highest item seq of those it no longer
+// lists that no app watches and the node was not told to watch: nothing will ask for their since_seq again. A
+// session it no longer lists whose last session.watch / session.unwatch failed (nodeWatchUnknown) and that no app
+// watches gets its unwatch sent again in the background, then its watch state goes (settleEnded).
+func (m *Machine) setSessionList(list []proto.Session) {
+	m.mu.Lock()
+	m.sessions = list
+	m.lastSeen = time.Now().UTC()
+	listed := make(map[string]bool, len(list))
+	for _, s := range list {
+		listed[s.SessionID] = true
+	}
+	for id := range m.lastSeq {
+		if !listed[id] && !m.watchStateInUseLocked(id) {
+			delete(m.lastSeq, id)
+		}
+	}
+	var unsettled []string
+	for id, state := range m.nodeWatch {
+		if state == nodeWatchUnknown && !listed[id] && m.watchers[id] <= 0 {
+			unsettled = append(unsettled, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range unsettled {
+		go m.settleEnded(id)
+	}
+}
+
+// settleEnded sends the unwatch an ended session's failed call left owed (syncWatch), then drops what the hub keeps
+// for the session's watch if the node still does not list it and no app watches it: it is tried once per list that
+// leaves the session out, so a node that keeps failing the unwatch of a session it ended does not keep its state for
+// good. A call holding or waiting for the session's turn keeps it all (the next list tries again).
+func (m *Machine) settleEnded(id string) {
+	ctx, cancel := context.WithTimeout(context.Background(), watchCallTimeout)
+	defer cancel()
+	m.syncWatch(ctx, id)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.watchers[id] > 0 || m.listsLocked(id) {
+		return
+	}
+	if slot := m.watchMu[id]; slot != nil {
+		if slot.refs > 0 {
+			return
+		}
+		delete(m.watchMu, id)
+	}
+	delete(m.nodeWatch, id)
+	delete(m.lastSeq, id)
+}
+
+// listsLocked reports whether the node's last list has session id; m.mu is held.
+func (m *Machine) listsLocked(id string) bool {
+	for _, s := range m.sessions {
+		if s.SessionID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// watchStateInUseLocked reports whether an app watches session id or the node may be watching it; m.mu is held.
+func (m *Machine) watchStateInUseLocked(id string) bool {
+	_, told := m.nodeWatch[id]
+	return m.watchers[id] > 0 || told
+}
+
 // watchCallTimeout bounds each session.watch / session.unwatch call, so a node that never answers holds a session's
 // watchLock for at most this long. A variable for the tests.
 var watchCallTimeout = 10 * time.Second
@@ -273,24 +342,47 @@ const (
 	nodeWatchUnknown // the last session.watch / session.unwatch failed: either may hold, the next sync sends again
 )
 
+// watchSlot is session id's watchLock: sem is the 1-slot turn, refs the calls holding or waiting for it. The count
+// keeps a slot from being dropped while a waiter has it, which would let a second slot give out a concurrent turn.
+type watchSlot struct {
+	sem  chan struct{}
+	refs int
+}
+
 // watchLock takes the lock that orders what the node is asked about session id's watch, giving up when ctx ends
 // first (false). The returned func releases it.
 func (m *Machine) watchLock(ctx context.Context, id string) (func(), bool) {
 	m.mu.Lock()
 	if m.watchMu == nil {
-		m.watchMu = map[string]chan struct{}{}
+		m.watchMu = map[string]*watchSlot{}
 	}
-	sem := m.watchMu[id]
-	if sem == nil {
-		sem = make(chan struct{}, 1)
-		m.watchMu[id] = sem
+	slot := m.watchMu[id]
+	if slot == nil {
+		slot = &watchSlot{sem: make(chan struct{}, 1)}
+		m.watchMu[id] = slot
 	}
+	slot.refs++
 	m.mu.Unlock()
 	select {
-	case sem <- struct{}{}:
-		return func() { <-sem }, true
+	case slot.sem <- struct{}{}:
+		return func() {
+			<-slot.sem
+			m.dropWatchSlot(id, slot)
+		}, true
 	case <-ctx.Done():
+		m.dropWatchSlot(id, slot)
 		return nil, false
+	}
+}
+
+// dropWatchSlot ends one call's hold on (or wait for) session id's slot, and drops the slot when it was the last and
+// the session's watch is idle: no app subscribed and nothing told to the node.
+func (m *Machine) dropWatchSlot(id string, slot *watchSlot) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	slot.refs--
+	if slot.refs == 0 && m.watchMu[id] == slot && !m.watchStateInUseLocked(id) {
+		delete(m.watchMu, id)
 	}
 }
 

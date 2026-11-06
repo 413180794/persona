@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -17,10 +19,11 @@ import (
 // a session it already watches does nothing, an unwatch drops it. Each request runs in its own goroutine (rpc.Serve),
 // so a held watch or unwatch lets later calls overtake it, as they can on the way through the manager.
 type watchNode struct {
-	mu        sync.Mutex
-	watched   map[string]bool
-	calls     []string
-	failWatch int // the next n session.watch calls fail
+	mu          sync.Mutex
+	watched     map[string]bool
+	calls       []string
+	failWatch   int // the next n session.watch calls fail
+	failUnwatch int // the next n session.unwatch calls fail
 
 	// Held: the handler signals entered, then waits for release before it acts.
 	holdWatch, holdUnwatch bool
@@ -43,9 +46,11 @@ func newWatchNode(t *testing.T) (*watchNode, *Machine) {
 		n.mu.Lock()
 		n.calls = append(n.calls, method)
 		hold := (method == "session.watch" && n.holdWatch) || (method == "session.unwatch" && n.holdUnwatch)
-		fail := method == "session.watch" && n.failWatch > 0
-		if fail {
+		fail := (method == "session.watch" && n.failWatch > 0) || (method == "session.unwatch" && n.failUnwatch > 0)
+		if fail && method == "session.watch" {
 			n.failWatch--
+		} else if fail {
+			n.failUnwatch--
 		}
 		n.mu.Unlock()
 		if hold {
@@ -277,5 +282,187 @@ func TestHolderSendsWhatAWaiterGaveUpOn(t *testing.T) {
 
 	if !n.isWatched("s1") {
 		t.Fatalf("the subscriber that gave up waiting is left unwatched (calls %v)", n.callList())
+	}
+}
+
+// TestMachineWatchStatePrunedWithSessionList: the per-session watch state a session left behind goes once no app
+// watches it and the node no longer lists it, while a listed session keeps its since_seq and a watched one keeps all.
+func TestMachineWatchStatePrunedWithSessionList(t *testing.T) {
+	n, m := newWatchNode(t)
+	ctx := context.Background()
+	items := func(id string) json.RawMessage {
+		b, _ := json.Marshal(map[string]any{"session_id": id, "items": []map[string]any{{"seq": 3}}})
+		return b
+	}
+	for i := range 500 {
+		id := fmt.Sprintf("s%d", i)
+		m.addWatcher(ctx, id)
+		m.onEvent("session.items", items(id))
+		m.removeWatcher(id)
+	}
+	for _, id := range []string{"listed", "watched"} {
+		m.addWatcher(ctx, id)
+		m.onEvent("session.items", items(id))
+	}
+	m.removeWatcher("listed")
+
+	m.setSessionList([]proto.Session{{SessionID: "listed"}})
+
+	m.mu.Lock()
+	slots, seqs := len(m.watchMu), len(m.lastSeq)
+	listedSeq, watchedSeq := m.lastSeq["listed"], m.lastSeq["watched"]
+	_, watchedSlot := m.watchMu["watched"]
+	m.mu.Unlock()
+	if slots != 1 || !watchedSlot {
+		t.Fatalf("watchMu has %d slots (watched kept: %v), want only the watched session's", slots, watchedSlot)
+	}
+	if seqs != 2 || listedSeq != 3 || watchedSeq != 3 {
+		t.Fatalf("lastSeq has %d entries (listed %d, watched %d), want listed and watched at 3", seqs, listedSeq, watchedSeq)
+	}
+	if !n.isWatched("watched") {
+		t.Fatal("the watched session is no longer watched on the node")
+	}
+
+	// The watched session leaves nothing once its last app goes and the node lists none.
+	m.removeWatcher("watched")
+	m.setSessionList([]proto.Session{})
+	m.mu.Lock()
+	slots, seqs = len(m.watchMu), len(m.lastSeq)
+	m.mu.Unlock()
+	if slots != 0 || seqs != 0 {
+		t.Fatalf("after the last unwatch and an empty list: %d watchMu slots, %d lastSeq entries, want none", slots, seqs)
+	}
+}
+
+// A holder that ends while another call waits for the turn must not drop the slot the waiter has: a third caller
+// would make a new slot and run its call alongside the waiter's.
+func TestWatchSlotKeptForAWaiter(t *testing.T) {
+	_, m := newWatchNode(t)
+	ctx := context.Background()
+	unlockHolder, ok := m.watchLock(ctx, "s1") // idle session: no watcher, nothing told to the node
+	if !ok {
+		t.Fatal("the first watchLock failed")
+	}
+	waiterHas := make(chan func())
+	go func() {
+		unlock, _ := m.watchLock(ctx, "s1")
+		waiterHas <- unlock
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		m.mu.Lock()
+		refs := m.watchMu["s1"].refs
+		m.mu.Unlock()
+		if refs == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the waiter never queued for the turn")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	unlockHolder()
+	var unlockWaiter func()
+	select {
+	case unlockWaiter = <-waiterHas:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiter never got the turn")
+	}
+
+	third, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	if unlock, ok := m.watchLock(third, "s1"); ok {
+		unlock()
+		t.Fatal("a third caller got the turn while the waiter holds it")
+	}
+	unlockWaiter()
+	m.mu.Lock()
+	slots := len(m.watchMu)
+	m.mu.Unlock()
+	if slots != 0 {
+		t.Fatalf("%d watchMu slots after every call ended, want none", slots)
+	}
+}
+
+// waitWatchStateGone waits until the hub keeps no watch state for session id.
+func waitWatchStateGone(t *testing.T, m *Machine, id string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		m.mu.Lock()
+		_, slot := m.watchMu[id]
+		_, told := m.nodeWatch[id]
+		_, seq := m.lastSeq[id]
+		m.mu.Unlock()
+		if !slot && !told && !seq {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s keeps watch state (slot %v, nodeWatch %v, lastSeq %v)", id, slot, told, seq)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// A failed unwatch leaves the watch unknown: once the node no longer lists the session, the hub sends the unwatch
+// again and keeps nothing for it; a session still listed keeps its unknown state for the next sync.
+func TestUnknownWatchOfEndedSessionSettled(t *testing.T) {
+	n, m := newWatchNode(t)
+	ctx := context.Background()
+	for _, id := range []string{"ended", "listed"} {
+		m.addWatcher(ctx, id)
+		m.onEvent("session.items", json.RawMessage(fmt.Sprintf(`{"session_id":%q,"items":[{"seq":3}]}`, id)))
+	}
+	n.mu.Lock()
+	n.failUnwatch = 2
+	n.mu.Unlock()
+	m.removeWatcher("ended")
+	m.removeWatcher("listed")
+	m.mu.Lock()
+	ended, listed := m.nodeWatch["ended"], m.nodeWatch["listed"]
+	m.mu.Unlock()
+	if ended != nodeWatchUnknown || listed != nodeWatchUnknown {
+		t.Fatalf("after the failed unwatches: ended %v, listed %v, want both unknown", ended, listed)
+	}
+
+	m.setSessionList([]proto.Session{{SessionID: "listed"}})
+	waitWatchStateGone(t, m, "ended")
+	if n.isWatched("ended") {
+		t.Fatalf("the ended session's unwatch was not sent again (calls %v)", n.callList())
+	}
+	m.mu.Lock()
+	listed = m.nodeWatch["listed"]
+	_, listedSlot := m.watchMu["listed"]
+	m.mu.Unlock()
+	if listed != nodeWatchUnknown || !listedSlot {
+		t.Fatalf("the listed session's state is %v (slot kept: %v), want unknown and kept", listed, listedSlot)
+	}
+	if got := n.count("session.unwatch"); got != 3 {
+		t.Fatalf("session.unwatch sent %d times, want 3 (calls %v)", got, n.callList())
+	}
+}
+
+// A node that fails the unwatch again still leaves no state for a session it no longer lists, and an app watching
+// an unlisted session keeps all of its state.
+func TestUnknownWatchOfEndedSessionDroppedWhenUnwatchFailsAgain(t *testing.T) {
+	n, m := newWatchNode(t)
+	ctx := context.Background()
+	m.addWatcher(ctx, "ended")
+	m.addWatcher(ctx, "watched")
+	n.mu.Lock()
+	n.failUnwatch = 2
+	n.mu.Unlock()
+	m.removeWatcher("ended")
+
+	m.setSessionList([]proto.Session{})
+	waitWatchStateGone(t, m, "ended")
+	if got := n.count("session.unwatch"); got != 2 {
+		t.Fatalf("session.unwatch sent %d times, want 2 (calls %v)", got, n.callList())
+	}
+	m.mu.Lock()
+	watched := m.nodeWatch["watched"]
+	m.mu.Unlock()
+	if watched != nodeWatching || !n.isWatched("watched") {
+		t.Fatalf("the watched session's state is %v, want watching", watched)
 	}
 }

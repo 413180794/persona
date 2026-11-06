@@ -129,10 +129,7 @@ func (h *Hub) takeFleetSessions(p assistantwire.FleetSessions) {
 	if list == nil {
 		list = []proto.Session{}
 	}
-	m.mu.Lock()
-	m.sessions = list
-	m.lastSeen = time.Now().UTC()
-	m.mu.Unlock()
+	m.setSessionList(list)
 	f := &h.reported
 	f.mu.Lock()
 	if f.muted == nil {
