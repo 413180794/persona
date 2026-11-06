@@ -83,6 +83,11 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.RequestFromTerminal -> R.string.designsystem_core_request_from_terminal
     CoreText.Key.AlwaysAllowSession -> R.string.designsystem_core_always_allow_session
     CoreText.Key.AlwaysAgree -> R.string.designsystem_core_always_agree
+    CoreText.Key.AlwaysScopeCommands -> R.string.designsystem_core_always_scope_commands
+    CoreText.Key.AlwaysScopeReadDirectory -> R.string.designsystem_core_always_scope_read_directory
+    CoreText.Key.AlwaysScopeEditDirectory -> R.string.designsystem_core_always_scope_edit_directory
+    CoreText.Key.AlwaysScopeTool -> R.string.designsystem_core_always_scope_tool
+    CoreText.Key.AlwaysScopeApproved -> R.string.designsystem_core_always_scope_approved
     CoreText.Key.FieldRequired -> R.string.designsystem_core_field_required
     CoreText.Key.FieldInvalid -> R.string.designsystem_core_field_invalid
     CoreText.Key.ComputerFallback -> R.string.designsystem_core_computer_fallback

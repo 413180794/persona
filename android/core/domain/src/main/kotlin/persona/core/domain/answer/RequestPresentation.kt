@@ -34,6 +34,22 @@ val Interaction.needsFieldValues: Boolean get() = kind == "permission" && fields
 val Interaction.alwaysActionLabel: CoreText
     get() = CoreText.of(if (agentDisplayName == null) Key.AlwaysAllowSession else Key.AlwaysAgree)
 
+/** Describe the remembered rule, retaining the scope supplied by other agents. */
+val Interaction.alwaysScopeDetail: CoreText?
+    get() {
+        alwaysLabel?.takeIf(String::isNotBlank)?.let { return CoreText.plain(it) }
+        if (agentDisplayName != null) return null
+        val keys = alwaysKeys.orEmpty()
+        val key = when {
+            keys.isNotEmpty() && keys.all { it.startsWith("tool:Read(") && it.endsWith("/**)") } -> Key.AlwaysScopeReadDirectory
+            keys.isNotEmpty() && keys.all { it.startsWith("tool:Edit(") && it.endsWith("/**)") } -> Key.AlwaysScopeEditDirectory
+            keys.isEmpty() || keys.all { it == "tool:${toolName.orEmpty()}" } ->
+                if (toolName == "Bash") Key.AlwaysScopeCommands else Key.AlwaysScopeTool
+            else -> Key.AlwaysScopeApproved
+        }
+        return CoreText.of(key)
+    }
+
 data class RequestCommand(val requestId: String, val toolUseId: String, val command: String)
 
 /** Match the exact tool use ID within this request's session, never a nearby command. */

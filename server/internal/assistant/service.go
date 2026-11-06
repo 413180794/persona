@@ -126,6 +126,7 @@ func New(o Options) *Service {
 	}
 	s.models.secret = secretkey.New(o.SecretKey)
 	s.archiveRoutes()
+	s.alwaysRoutes()
 	s.reporterRoutes()
 	s.originRoutes()
 	s.profileRoutes()

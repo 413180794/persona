@@ -46,5 +46,13 @@
   "delete_failed": "删除失败：{error}",
   "delete_title": "删除这个对话？",
   "delete": "删除",
-  "delete_detail": "「{title}」会从各端的列表里移除。{machine} 上的对话记录不会删除，之后在电脑上用 claude --resume 继续，它会重新出现。"
+  "delete_detail": "「{title}」会从各端的列表里移除。{machine} 上的对话记录不会删除，之后在电脑上用 claude --resume 继续，它会重新出现。",
+  "always_title": "这段对话中总是允许的权限",
+  "always_hint": "这些已保存的权限仅适用于这段对话。记录只保留工具名，没有目录或命令的详细范围。",
+  "always_revoke_hint": "撤销会停止当前回复，以清除运行中的权限。发送下一条消息即可继续。",
+  "always_restart": "已撤销保存的权限，但无法重置运行中的对话。请重启这段对话后再继续，确保撤销生效。",
+  "always_empty": "没有已保存的权限。",
+  "always_unknown": "未命名权限",
+  "always_revoke": "撤销",
+  "always_retry": "重试"
 }

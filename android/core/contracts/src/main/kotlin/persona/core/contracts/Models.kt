@@ -629,6 +629,8 @@ data class Interaction(
     @SerialName("agent_label") val agentLabelHint: String? = null,
     /** What "always allow" allows here; a card from another agent offers it only with this (as on iOS). */
     @SerialName("always_label") val alwaysLabel: String? = null,
+    /** The persisted scope granted by this card; absent on older hubs and terminal-only sessions. */
+    @SerialName("always_keys") val alwaysKeys: List<String>? = null,
     /** Why the agent asks for this permission, in its own words (Codex). */
     val reason: String? = null,
     /** Filled in before approving (adding a mail account's password); the hub refuses allow without the required ones. */

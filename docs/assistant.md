@@ -248,19 +248,24 @@ Extensions can contribute `mcp_servers` (`docs/extensions.md` ("MCP servers")): 
 named denied tools are never callable; others request phone permission according to chat mode. For example, a Lark extension attaches upstream personal-Agent control tools for scheduling personal Agents and inspecting pending requests
 (approvals only forwarded to the user, never approved on their behalf; Herdr / Orca tools overlapping Persona `mcp__jarvis__agents_*` are disabled). Specific tools / switches are in extension instructions.
 
-## Always allow in this session (2026-11-05, #2202)
+## Always allow in this session (2026-11-06, #2202, #5867)
 
-Tapping "Always allow in this session" on an assistant permission card remains effective throughout the chat, even across process changes. Previously the Agent alone remembered: Claude's PermissionRequest hook returned
-`addRules … destination: session`, Codex used `acceptForSession` / permission `scope: session`, and the Lark gate kept node memory. Main chat processes change anytime
-(20-minute idle reclamation, deployment, launcher / model change, startup-only bypassPermissions); new `--resume` processes lack old session rules, and node restart forgets gate rules, causing repeated prompts.
+Tapping "Always allow in this session" on an assistant permission card remains effective throughout the conversation, including process restarts and scheduled follow-ups. The card explains the scope before approval: Claude file tools grant that tool in the file's directory; Bash grants **all commands in this conversation**, not just the displayed command. Other Claude tools grant all calls to that tool. Codex command and file approvals retain their narrower command/path scopes; runtime-provided labels describe that runtime's scope.
 
-- node states exactly what "Always allow" permits on assistant cards (`always_keys`, absent from Agents-page sessions, whose behavior is unchanged): Claude `tool:<tool name>` (whole tool, like addRules);
-  Codex `codex-command:<command>`, `codex-edit:<file>` / `codex-root:<directory>`, `codex-permissions:<permission>` (same scope as Codex's own session permission);
-  Lark gate `lark:<route>` (ids stripped; whole-command confirmations aren't remembered, unchanged).
-- hub stores approved Always keys in Postgres `assistant_always` (chat id + key sha256). If every key on a later card is remembered, hub returns "allow + always" directly,
-  without card or push; new processes receive session rules too and stop asking within that process. Also answer currently waiting covered cards in this chat (parallel tool calls produce several).
-  Such an answer carries `remembered: true` (`proto.Resolution`), so the node can tell it from the answer to a card: the sent-as-user ledger records a Lark write let through this way as `conversation_always` (`docs/connectors.md` "Sent as the user").
-- Remember only permission grants, not denials or one-time allows; any unknown key prompts normally. No revocation UI yet: create a new chat (or delete its `assistant_always` rows).
+- Node supplies `always_keys` on assistant cards (Agents-page sessions keep their existing behavior): Claude `tool:<tool name>` for a whole tool, or a directory rule such as `tool:Read(//workspace/project/**)` for file tools; Codex `codex-command:<command>`, `codex-edit:<file>` / `codex-root:<directory>`, and `codex-permissions:<permission>`; Lark `lark:<route>` with IDs stripped. Whole-command gate confirmations are not remembered.
+- The manager stores approved keys in Postgres `assistant_always` by conversation ID and key SHA-256. Every requested key must match to auto-allow a later card. Directory keys are exact matches; a subdirectory can prompt separately. Only explicit permission grants are remembered; denials, one-time allows, and unknown keys still prompt. Automatically replayed answers do not write grants back, so an in-flight answer cannot resurrect a deleted grant. A remembered grant also answers the covered cards already waiting in the conversation (parallel tool calls produce several). Such an answer carries `remembered: true` (`proto.Resolution`), so the node can tell it from the answer to a card: the sent-as-user ledger records a Lark write let through this way as `conversation_always` (`docs/connectors.md` "Sent as the user").
+- For assistant conversations, Claude no longer receives `addRules … destination: session`; Codex command/file approvals are one-shot and extended permissions use turn scope; the Lark gate consults the manager instead of keeping its own grants. The manager remains the authority across processes. Agents-page approvals are unchanged.
+
+On the web, open the conversation's **Session info → Always allowed in this conversation** to view and revoke individual grants. Each row shows the tool and approval time. The existing table stores only a key hash, so exact historical directories/commands cannot be reconstructed; the UI says the detailed scope is unavailable. No migration or wider replacement grant is required. iOS and Android have the corrected card descriptions; native list/revoke screens remain follow-up work.
+
+The full-access API is relayed by the hub to the conversation's manager:
+
+- `GET /api/v1/assistant/conversations/{id}/always` → `{"grants":[{"key_hash","tool_name","created_at"}]}`; an empty list is `[]`.
+- `DELETE /api/v1/assistant/conversations/{id}/always/{hash}` → `{"ok":true,"restart_required":false}`. Deletion is idempotent and scoped to that conversation. Extension tokens and answer-only devices cannot use these endpoints.
+
+Revocation first deletes the persisted grant, then calls node `assistant.permissions.reset` to clear cached gate rules and terminate the conversation's existing Claude/Codex process group and wait for exit. This also removes session rules installed before this change and Codex turn permissions. **Revoking stops the current response**; send another message to resume the same transcript. Work already authorized or completed cannot be undone. Unrelated stored grants remain effective when the conversation resumes; explicit bypass modes and configured allow rules are separate settings.
+
+If the node is offline, too old, fails to acknowledge the reset, or the conversation belongs to an external runtime without a permission-reset protocol, deletion still succeeds with `restart_required: true`. The web retains a warning: **revocation takes effect after the conversation restarts**. Restart the conversation's process in that runtime before continuing; merely reopening the web page does not clear process permissions. Retrying the DELETE also retries the reset even when the row is already gone.
 
 ## Assistant answers questions first (2026-11-05, #3029)
 

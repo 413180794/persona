@@ -573,7 +573,7 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 			return "deny", "这个操作按配置不允许（" + c.Method + " " + c.Path + "）。", nil
 		case "allow":
 		default:
-			if health || !n.larkAlways(session, larkPattern(c)) {
+			if health || n.isAssistantSession(session) || !n.larkAlways(session, larkPattern(c)) {
 				ask = append(ask, c)
 			} else {
 				covered = append(covered, c)
@@ -588,7 +588,7 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		return "allow", "读操作", nil
 	}
 	ix.Kind, ix.ToolName, ix.Summary = proto.IxPermission, callTitle(cfg.Gates, ask[0]), larkSummary(cfg.Gates, ask)
-	// The routes "Always allow for this session" lets through, kept by the hub too: this node's memory of them ends when it restarts.
+	// The hub remembers these routes for assistant conversations and checks them again on every call.
 	ix.AlwaysKeys = nil
 	for _, c := range ask {
 		if k := "lark:" + larkPattern(c); !health && !slices.Contains(ix.AlwaysKeys, k) {
@@ -677,7 +677,8 @@ func (n *Node) confirmLark(ctx context.Context, session string, ix proto.Interac
 		}
 		return "deny", msg, card, nil
 	}
-	if res.Always {
+	// Assistant conversations consult the hub on every call, including after revocation.
+	if res.Always && !n.isAssistantSession(session) {
 		for _, c := range ask {
 			n.rememberLarkAlways(session, larkPattern(c))
 		}

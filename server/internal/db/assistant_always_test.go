@@ -38,3 +38,39 @@ func TestAssistantAlways(t *testing.T) {
 		}
 	}
 }
+
+func TestAssistantAlwaysListAndRevoke(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	for _, session := range []string{"s1", "s2"} {
+		if err := d.AllowAlways(ctx, session, "Bash", []string{"tool:Bash", "tool:Edit"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	grants, err := d.AlwaysGrants(ctx, "s1")
+	if err != nil || len(grants) != 2 {
+		t.Fatalf("list: %+v, %v", grants, err)
+	}
+	for _, g := range grants {
+		if len(g.KeyHash) != 64 || g.ToolName != "Bash" || g.CreatedAt.IsZero() {
+			t.Fatalf("grant: %+v", g)
+		}
+	}
+	for range 2 {
+		if err := d.RevokeAlways(ctx, "s1", alwaysKeyHash("tool:Bash")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range []struct {
+		session, key string
+		want         bool
+	}{{"s1", "tool:Bash", false}, {"s1", "tool:Edit", true}, {"s2", "tool:Bash", true}} {
+		got, err := d.AlwaysAllowed(ctx, c.session, []string{c.key})
+		if err != nil || got != c.want {
+			t.Fatalf("%+v: %v, %v", c, got, err)
+		}
+	}
+	grants, err = d.AlwaysGrants(ctx, "missing")
+	if err != nil || grants == nil || len(grants) != 0 {
+		t.Fatalf("empty list: %+v, %v", grants, err)
+	}
+}

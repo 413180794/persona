@@ -37,6 +37,24 @@ extension Interaction {
         return kind.title
     }
 
+    /// Describe the actual remembered rule, not just the command or file in this request.
+    var alwaysScopeDetail: String? {
+        if let alwaysLabel, !alwaysLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return alwaysLabel }
+        guard agentName == nil else { return nil }
+        let keys = alwaysKeys ?? []
+        if !keys.isEmpty, keys.allSatisfy({ $0.hasPrefix("tool:Read(") && $0.hasSuffix("/**)") }) {
+            return String(localized: "All reads in this directory in this conversation")
+        }
+        if !keys.isEmpty, keys.allSatisfy({ $0.hasPrefix("tool:Edit(") && $0.hasSuffix("/**)") }) {
+            return String(localized: "All file edits in this directory in this conversation")
+        }
+        if keys.isEmpty || keys.allSatisfy({ $0 == "tool:" + (toolName ?? "") }) {
+            if toolName == "Bash" { return String(localized: "All commands in this conversation") }
+            return String(localized: "All uses of this tool in this conversation")
+        }
+        return String(localized: "The approved scope remains allowed in this conversation")
+    }
+
     /// The agent's name on a card not from Claude Code: one the node read off a Codex / TRAEX TUI, or an agent
     /// runtime's own ("DSH", the hub's agent_label; docs/runtimes.md). Nil for Claude's.
     var agentName: String? {
@@ -671,6 +689,9 @@ struct PermissionForm: View {
                 .minimumScaleFactor(0.8)
                 .font(Theme.Font.caption)
                 .frame(maxWidth: .infinity)
+                if let scope = interaction.alwaysScopeDetail {
+                    Text(scope).font(Theme.Font.caption).foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -1362,7 +1383,7 @@ struct BUIPermissionForm: View {
             return c
         }
         var c = [ApprovalQuestion.Choice(String(localized: "Allow [Notification Actions ce7ef2]"))]
-        if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice(String(localized: "Always Allow in Session"), detail: String(localized: "Won't ask again for the same action in this session"))) }
+        if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice(String(localized: "Always Allow in Session"), detail: interaction.alwaysScopeDetail)) }
         c.append(ApprovalQuestion.Choice(String(localized: "Deny")))
         return c
     }

@@ -578,6 +578,14 @@ use it only on the intranet / VPN, and put an HTTPS reverse proxy in front befor
   otherwise explain where to enable it. On page open, query `GET …/computer` once, and every 2 seconds during installation / authorization. The hub has no actions such as reboot (`…/computer/reboot` is 404), and neither does this section.
   Screenshots use the `MOCK_COMPUTER=permissions|missing|ready` mock hub.
 
+### Remembered conversation permissions (#5867)
+
+In a Persona conversation, **⋯ › Session info › Always allowed in this conversation** lists its saved permissions with the tool name and grant time. Each row has **Revoke**. The database stores hashed permission keys, so the list does not invent directory or command details for existing records. A failed read offers Retry; a failed revoke keeps the row. Revoking clears the saved grant and asks the node to stop the current response to remove process-local grants; the next message resumes the conversation. If that reset cannot be confirmed, the dialog keeps a restart warning, including after reopening or reloading the same browser tab.
+
+Permission cards state the actual scope before approval: Claude Bash covers every command in this conversation; directory-scoped Read/Edit keys cover that directory. Unscoped file tools say every call to the tool. Other runtimes keep their own scope description; unknown key formats get a neutral scope statement. These strings ship in English, Simplified Chinese and Japanese.
+
+For browser checks, run the mock hub with `MOCK_ALWAYS_SCOPE=1`. It adds a Bash permission card and two saved grants to the main conversation, with a working per-row DELETE endpoint. Native permission-management screens remain follow-up work.
+
 ### Unified main-chat entry (#930)
 
 The same system as iOS ([unified-entry.md](unified-entry.md)): the hub's chat activity is inserted into assistant chats (`displayLines` in `lib/feed.ts`: each item goes at the end of the turn when it happened,

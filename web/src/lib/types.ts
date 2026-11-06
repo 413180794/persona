@@ -501,6 +501,8 @@ export interface Interaction {
   agent?: string;
   /** What "always allow" allows here; another agent's card offers it only with this. */
   always_label?: string;
+  /** Permission scopes remembered by the hub for this conversation. */
+  always_keys?: string[];
   /** Why another agent asks for the permission, in its own words (a Codex and compatible variants approval read off the terminal). */
   reason?: string;
   /** An MCP form or link (kind elicitation, docs/protocol.md "MCP elicitation"): the server, where it is configured, and

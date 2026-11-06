@@ -13,6 +13,7 @@ import { Button, copyText, cx, Dialog, Loading, Menu, toast, useMenu } from "../
 import { Icon, type IconName } from "../../ui/icons";
 import { ModelEffortPopover } from "./ModelEffortPopover";
 import { t } from "../../i18n";
+import { AlwaysPermissions } from "./AlwaysPermissions";
 
 interface SessionInfo {
   session_id?: string;
@@ -90,6 +91,7 @@ export function SessionInfoDialog({ session, machineName, open, onClose }: { ses
       )}
       {error && <p className="py-4 text-[13px] text-red">{error}</p>}
       <div className="flex flex-col gap-3">
+        {open && session.assistant && <AlwaysPermissions key={session.session_id} session={session.session_id} />}
         {groups.map((g) => {
           const rows = g.rows.filter(([, v]) => v);
           if (!rows.length) return null;

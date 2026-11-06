@@ -1610,6 +1610,8 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var reason: String?
     /// What "always allow" allows for this request ("don't ask about this command again this session"); a Codex card without it offers no such button.
     var alwaysLabel: String?
+    /// The persisted scope granted by this card; absent on older hubs and terminal-only sessions.
+    var alwaysKeys: [String]?
     /// What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md).
     var agentLabelHint: String?
     /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
@@ -1642,7 +1644,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
         case id, kind, questions, plan, summary, screen, cwd, dialog, secret, fields, agent, reason
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title", taskTitle = "task_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
-             toolInput = "tool_input", alwaysLabel = "always_label", agentLabelHint = "agent_label", hubGroup = "app_hub_group",
+             toolInput = "tool_input", alwaysLabel = "always_label", alwaysKeys = "always_keys", agentLabelHint = "agent_label", hubGroup = "app_hub_group",
              mutedFlag = "muted"
     }
 }

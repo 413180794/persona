@@ -49,9 +49,10 @@ func TestPermissionHookAlwaysKeys(t *testing.T) {
 		if got := ix[len(ix)-1]; got.SessionID != c.session || !slices.Equal(got.AlwaysKeys, c.keys) {
 			t.Fatalf("%s: always keys %q, want %q", c.session[:4], got.AlwaysKeys, c.keys)
 		}
-		// Either way the process gets the session rule (the hub answers a kept grant with always too).
-		if b, _ := json.Marshal(out); !strings.Contains(string(b), `"type":"addRules"`) || !strings.Contains(string(b), `"toolName":"mcp__computer__click"`) {
-			t.Fatalf("%s: no session rule: %s", c.session[:4], b)
+		b, _ := json.Marshal(out)
+		hasRule := strings.Contains(string(b), `"type":"addRules"`)
+		if hasRule != (c.session == agent) {
+			t.Fatalf("%s: session rule present = %v: %s", c.session[:4], hasRule, b)
 		}
 	}
 }
@@ -122,8 +123,8 @@ func TestLarkGateHealthAsksEachTime(t *testing.T) {
 	}
 }
 
-// "Always allow in this session" on an assistant conversation's file read allows that file's directory only, in the session rule
-// and in the key the hub keeps (#3282); an Agents session's still allows the whole tool.
+// File grants retain their directory keys, but no process rule bypasses the hub after revocation.
+// Terminal Agents still keep their own whole-tool session rules.
 func TestPermissionHookAlwaysFileScope(t *testing.T) {
 	n := codexTestNode(t)
 	fh := withFakeHub(t, n)
@@ -156,8 +157,8 @@ func TestPermissionHookAlwaysFileScope(t *testing.T) {
 	if got := ix[len(ix)-1].AlwaysKeys; !slices.Equal(got, []string{"tool:Read(//home/me/work/**)"}) {
 		t.Fatalf("assistant's always keys %q", got)
 	}
-	if !strings.Contains(out, `"ruleContent":"//home/me/work/**"`) {
-		t.Fatalf("assistant's session rule: %s", out)
+	if strings.Contains(out, "updatedPermissions") {
+		t.Fatalf("assistant received a cached session rule: %s", out)
 	}
 	if out := read(agent); strings.Contains(out, "ruleContent") || !strings.Contains(out, `"toolName":"Read"`) {
 		t.Fatalf("an Agents session's rule changed: %s", out)
@@ -168,7 +169,7 @@ func TestPermissionHookAlwaysFileScope(t *testing.T) {
 	if got := ix[len(ix)-1].AlwaysKeys; !slices.Equal(got, []string{"tool:Edit(//home/me/work/**)"}) {
 		t.Fatalf("a write's always keys %q", got)
 	}
-	if !strings.Contains(out, `"toolName":"Edit"`) || !strings.Contains(out, `"ruleContent":"//home/me/work/**"`) {
-		t.Fatalf("a write's session rule: %s", out)
+	if strings.Contains(out, "updatedPermissions") {
+		t.Fatalf("a write received a cached session rule: %s", out)
 	}
 }

@@ -461,7 +461,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, fmt.Errorf("bad params: %w", err)
 		}
 	}
-	if n.codexBlocked(p.SessionID) && (strings.HasPrefix(method, "session.") || strings.HasPrefix(method, "terminal.") || method == "assistant.send") {
+	if n.codexBlocked(p.SessionID) && (strings.HasPrefix(method, "session.") || strings.HasPrefix(method, "terminal.") || method == "assistant.send" || method == "assistant.permissions.reset") {
 		return nil, refusal("identity_conflict", "会话 ID 与另一来源重复，不能判断操作目标；未读取或发送", nil)
 	}
 	if n.codexBlocked(p.ResumeSessionID) && method == "session.start" {
@@ -859,6 +859,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return ok(n.codexAnswer(ctx, p.SessionID, a.ID, a.Resolution))
+	case "assistant.permissions.reset":
+		restart, err := n.resetAssistantPermissions(ctx, p.SessionID)
+		return map[string]any{"ok": err == nil, "restart_required": restart}, err
 	case "session.interrupt":
 		if n.isAssistantSession(p.SessionID) {
 			return ok(n.assistantInterrupt(p.SessionID))

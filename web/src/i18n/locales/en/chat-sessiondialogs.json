@@ -47,5 +47,13 @@
   "delete_failed": "Couldn't delete: {error}",
   "delete_title": "Delete this chat?",
   "delete": "Delete",
-  "delete_detail": "“{title}” will be removed from the list on every device. The transcript on {machine} stays, and if you continue it with claude --resume on the computer, it comes back."
+  "delete_detail": "“{title}” will be removed from the list on every device. The transcript on {machine} stays, and if you continue it with claude --resume on the computer, it comes back.",
+  "always_title": "Always allowed in this conversation",
+  "always_hint": "These saved permissions apply only to this conversation. Records store the tool name, but not detailed directory or command scope.",
+  "always_revoke_hint": "Revoking stops the current response to clear its permissions. Send another message to continue.",
+  "always_restart": "The saved permission was revoked, but the running conversation could not be reset. Restart this conversation before relying on the revocation.",
+  "always_empty": "No saved permissions.",
+  "always_unknown": "Unnamed permission",
+  "always_revoke": "Revoke",
+  "always_retry": "Retry"
 }

@@ -32,7 +32,7 @@ import (
 const assistantOnRuntime = "runtime"
 
 // assistantCall are the calls about an assistant conversation on a runtime that the assistant answers (node.handle).
-var assistantCall = map[string]bool{"session.send": true, "session.interrupt": true, "session.close": true, "session.modes": true}
+var assistantCall = map[string]bool{"session.send": true, "session.interrupt": true, "session.close": true, "session.modes": true, "assistant.permissions.reset": true}
 
 // gateToolTimeout bounds one run of a gated command as a runtime's tool (ol events waits at most 300 s by its own
 // flags).

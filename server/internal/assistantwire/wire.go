@@ -600,6 +600,8 @@ type HTTPResponse struct {
 // http.request. The assistant registers exactly these (assistant.TestRoutesAreTheWireOnes).
 var Routes = []string{
 	"POST /api/v1/assistant/conversations/{id}/archive",
+	"GET /api/v1/assistant/conversations/{id}/always",
+	"DELETE /api/v1/assistant/conversations/{id}/always/{hash}",
 	"POST /api/v1/assistant/conversations/{id}/unarchive",
 	"POST /api/v1/assistant/conversations/{id}/stop",
 	"GET /api/v1/assistant/reporters",

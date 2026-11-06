@@ -22,6 +22,7 @@ import { cardFold, cardLine, nextWaiting, PLAN_MAX, showsAnswered } from "./dock
 import { cardState } from "../../lib/card-focus";
 import { href, onLinkClick, type Route } from "../../lib/router";
 import { t } from "../../i18n";
+import { alwaysScope } from "../../lib/always-scope";
 import { StatusMark } from "../../ui/StatusMark";
 import { composing } from "../../lib/send-history";
 
@@ -300,6 +301,7 @@ function PermissionCard({ ix }: { ix: Interaction }) {
       }
     >
       <PermissionBody ix={ix} />
+      {alwaysScope(ix) && <p className="mt-2 text-[12px] leading-relaxed text-ink-3">{alwaysScope(ix)}</p>}
     </Card>
   );
 }

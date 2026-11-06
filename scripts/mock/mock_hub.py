@@ -2872,6 +2872,17 @@ if os.environ.get("MOCK_OPENCODE"):
          "summary": "rm -rf build", "tool_input": {"command": "rm -rf build"}, "always_label": "总是允许 rm *"})
 
 # Keep the exported demo fixtures unchanged; only the HTTP mock serves the expanded request inbox.
+# A conversation permission and remembered grants for scope/revocation UI checks (#5867).
+ALWAYS_GRANTS = [
+    {"key_hash": "a" * 64, "tool_name": "Bash", "created_at": ago(minutes=12)},
+    {"key_hash": "b" * 64, "tool_name": "Read", "created_at": ago(minutes=8)},
+] if os.environ.get("MOCK_ALWAYS_SCOPE") == "1" else []
+if os.environ.get("MOCK_ALWAYS_SCOPE") == "1":
+    INTERACTIONS.append({"id": "ix_always_scope", "machine_id": "server", "session_id": ASK1,
+                         "kind": "permission", "tool_name": "Bash", "agent": "claude",
+                         "tool_input": {"command": "ls ./notes", "description": "List the notes folder"},
+                         "always_keys": ["tool:Bash"], "created_at": ago(minutes=1)})
+
 MOCK_INTERACTIONS = INTERACTIONS + [
     {"id": "ix_tests_build", "machine_id": "macbook", "session_id": TESTS, "session_title": "补齐网络层的单元测试",
      "cwd": "/Users/me/code/weather", "kind": "permission", "created_at": ago(minutes=4), "expires_at": later(minutes=6),
@@ -11043,6 +11054,8 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if self.token_refused(): return
+        if p == "/api/v1/assistant/conversations/" + ASK1 + "/always":
+            return self.send_json({"grants": ALWAYS_GRANTS})
         if recordings_route(self, "GET", p): return
         if managers_route(self, "GET", p): return
         if providers_route(self, "GET", p, q, b""): return
@@ -11807,6 +11820,10 @@ class H(BaseHTTPRequestHandler):
             return self.upload()
         self.last_body = self.body()
         p = urlparse(self.path).path
+        if p.startswith("/api/v1/assistant/conversations/" + ASK1 + "/always/") and self.command == "DELETE":
+            key = p.rsplit("/", 1)[-1]
+            ALWAYS_GRANTS[:] = [g for g in ALWAYS_GRANTS if g["key_hash"] != key]
+            return self.send_json({"ok": True, "restart_required": False})
         if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith(tuple(
                 "/api/v1/%s/%s/-/ui/" % (kind, lark_messaging.EXTENSION) for kind in ("extensions", "plugins")))) and \
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return

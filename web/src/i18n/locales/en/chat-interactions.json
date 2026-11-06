@@ -79,5 +79,10 @@
   "opened_continue": "Continue",
   "elicitation_decline": "Decline",
   "elicitation_cancel": "Cancel",
-  "recommended": "Recommended"
+  "recommended": "Recommended",
+  "always_scope_named": "Always allow: {scope}",
+  "always_scope_directory": "Always allow covers this directory in this conversation.",
+  "always_scope_commands": "Always allow covers every command in this conversation.",
+  "always_scope_tool": "Always allow covers every {tool} call in this conversation.",
+  "always_scope_saved": "The approved scope remains allowed in this conversation."
 }

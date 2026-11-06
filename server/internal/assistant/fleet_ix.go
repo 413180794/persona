@@ -590,7 +590,7 @@ func (s *Service) nodeInteraction(ctx context.Context, ix proto.Interaction) (pr
 	}
 	if r, ok := s.alwaysAllowed(ctx, ix); ok {
 		if ix.Resumable { // its hook's earlier attempt left the card pending: it is answered too
-			_ = s.resolve(ix.ID, r)
+			_ = s.resolveRemembered(ix.ID, r, false)
 		}
 		return r, nil
 	}
@@ -800,6 +800,11 @@ var errInvalidElicitation = errors.New("elicitation requires action accept, decl
 // resolve answers an interaction. A screen card acts right away and its error comes back (the dialog changed:
 // nothing pressed, a new card follows).
 func (s *Service) resolve(id string, r proto.Resolution) error {
+	return s.resolveRemembered(id, r, true)
+}
+
+// Automatically replayed grants must not write themselves back after a concurrent revocation.
+func (s *Service) resolveRemembered(id string, r proto.Resolution, remember bool) error {
 	s.fleet.mu.Lock()
 	p := s.fleet.interactions[id]
 	if p != nil && r.Cancel && (!p.ix.CanCancel || p.ix.Kind != proto.IxQuestion || !r.IsQuestionCancel()) {
@@ -889,7 +894,9 @@ func (s *Service) resolve(id string, r proto.Resolution) error {
 	s.recordEnd(id, status, &kept)
 	s.channelsEnded(p.ix, &r)
 	go s.InteractionResolved(context.Background(), InteractionResolved{Interaction: p.ix, Resolution: r, Status: status})
-	s.keepAlways(p.ix, r) // kept before the hook hears: its next card may follow at once
+	if remember {
+		s.keepAlways(p.ix, r) // kept before the hook hears: its next card may follow at once
+	}
 	close(p.resolved)
 	select {
 	case p.done <- r:
@@ -1034,11 +1041,9 @@ func (s *Service) askHub(ctx context.Context, ix proto.Interaction) (proto.Resol
 
 // ---- "Always allow in this session" (#2202, docs/assistant.md "Always allow in this session") ----
 
-// Claude's session rule and Codex's acceptForSession live in the agent's process, and the assistant's process is
-// replaced all the time (idle, redeploys, a launcher switch): the resumed one asked about the same tool again. The
-// node names what such a card grants (proto.Interaction.AlwaysKeys, only on assistant conversations); the manager
-// keeps the keys once a card is answered so, and answers a later card whose keys are all kept itself, with always
-// again so the new process takes its own session rule from it.
+// The node names what a card grants (proto.Interaction.AlwaysKeys, only on assistant conversations). The manager
+// remembers explicit Always answers and rechecks every later card against the stored keys, including after a
+// process restart. Nodes must not cache session grants that would bypass a subsequent revocation (#5867).
 
 // maxAlwaysKeys bounds what one card may name (a file change's paths, a gated command's calls).
 const maxAlwaysKeys = 32
@@ -1096,7 +1101,7 @@ func (s *Service) keepAlways(ix proto.Interaction, r proto.Resolution) {
 		res, ok := s.alwaysAllowed(ctx, w)
 		cancel()
 		if ok {
-			_ = s.resolve(w.ID, res)
+			_ = s.resolveRemembered(w.ID, res, false)
 		}
 	}
 }

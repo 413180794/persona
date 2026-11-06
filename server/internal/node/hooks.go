@@ -397,10 +397,11 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 
 	case in.HookEventName == "PermissionRequest":
 		ix.Kind, ix.Summary = proto.IxPermission, toolSummary(in.ToolName, in.ToolInput)
-		// The session rule "Always allow in this session" adds: the whole tool, but for an assistant conversation's file tools only the
-		// file's directory, so allowing one read does not open every file on the machine (#3282).
+		// Assistant grants live at the hub so revocation applies to the next request. File grants cover
+		// only the file's directory; terminal Agents retain Claude's own whole-tool session rules.
+		assistant := n.isAssistantSession(in.SessionID)
 		rule := map[string]any{"toolName": in.ToolName}
-		if n.isAssistantSession(in.SessionID) {
+		if assistant {
 			alwaysKey := "tool:" + in.ToolName
 			if scope := fileRuleScope(in.ToolName, in.ToolInput); scope != "" {
 				// Claude Code matches path rules on Read and Edit only; Edit(path) covers every file-editing tool,
@@ -409,10 +410,9 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 				if in.ToolName == "Read" {
 					tool = "Read"
 				}
-				rule["toolName"], rule["ruleContent"] = tool, scope
 				alwaysKey = "tool:" + tool + "(" + scope + ")"
 			}
-			// What the session rule below allows, kept by the hub past this process (a resumed one has no rules).
+			// Keep the existing keys compatible with grants made by earlier nodes.
 			ix.AlwaysKeys = []string{alwaysKey}
 		}
 		// Another hook may answer it first (hookdecided.go): then nothing is shown, or what was is withdrawn.
@@ -438,7 +438,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 		var input map[string]any
 		_ = json.Unmarshal(in.ToolInput, &input)
 		d := map[string]any{"behavior": "allow", "updatedInput": input}
-		if res.Always {
+		if res.Always && !assistant {
 			d["updatedPermissions"] = []any{map[string]any{
 				"type": "addRules", "rules": []any{rule},
 				"behavior": "allow", "destination": "session",

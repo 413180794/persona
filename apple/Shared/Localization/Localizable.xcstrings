@@ -112978,24 +112978,116 @@
       },
       "extractionState": "manual"
     },
-    "Won't ask again for the same action in this session": {
+    "All commands in this conversation": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Won't ask again for the same action in this session"
+            "value": "All commands in this conversation"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このセッションでは同じ操作を再確認しません"
+            "value": "この会話内のすべてのコマンド"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个会话里同样的操作不再问"
+            "value": "这段对话里的所有命令"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "All file edits in this directory in this conversation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All file edits in this directory in this conversation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この会話中、このディレクトリ内のすべてのファイル編集"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段对话中，这个目录里的所有文件编辑"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "All reads in this directory in this conversation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All reads in this directory in this conversation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この会話中、このディレクトリ内のすべての読み取り"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段对话中，这个目录里的所有读取操作"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "All uses of this tool in this conversation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All uses of this tool in this conversation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この会話内でのこのツールのすべての呼び出し"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段对话里对这个工具的所有调用"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The approved scope remains allowed in this conversation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The approved scope remains allowed in this conversation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "許可した範囲はこの会話中、引き続き許可されます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批准的范围在这段对话中持续有效"
           }
         }
       },

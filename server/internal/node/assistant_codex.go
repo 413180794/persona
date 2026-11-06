@@ -824,8 +824,9 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 			return map[string]any{"decision": "accept"}, nil // Claude reads its auto-memory unasked too
 		}
 		ix.Kind, ix.Summary = proto.IxPermission, withReason(command, r.Reason)
-		ix.AlwaysKeys = []string{"codex-command:" + command} // acceptForSession: this command, kept past the process
-		return c.askPhone(ctx, ix, "accept", "acceptForSession", "decline"), nil
+		ix.AlwaysKeys = []string{"codex-command:" + command} // keep the legacy command scope
+		// The hub remembers Always; accepting once keeps the next request revocable.
+		return c.askPhone(ctx, ix, "accept", "accept", "decline"), nil
 
 	case "item/fileChange/requestApproval":
 		c.mu.Lock()
@@ -848,7 +849,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 		if r.GrantRoot != "" {
 			ix.AlwaysKeys = append(ix.AlwaysKeys, "codex-root:"+r.GrantRoot)
 		}
-		return c.askPhone(ctx, ix, "accept", "acceptForSession", "decline"), nil
+		return c.askPhone(ctx, ix, "accept", "accept", "decline"), nil
 
 	case "mcpServer/elicitation/request":
 		if r.Meta.Kind != "mcp_tool_call" {
@@ -893,9 +894,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 			if err != nil || !ok || res.Allow == nil || !*res.Allow {
 				return deny, nil
 			}
-			if res.Always {
-				return map[string]any{"permissions": granted, "scope": "session"}, nil
-			}
+			// The hub remembers Always; a runtime session grant would bypass a later revocation.
 		}
 		return map[string]any{"permissions": granted, "scope": "turn"}, nil
 

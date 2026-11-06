@@ -189,8 +189,8 @@ internal fun InteractionForm(
                     more = if (interaction.offersAlways) listOf(JAction(interaction.alwaysActionLabel.text(),
                         enabled = enabled(AnswerAction.Always)) { act(AnswerAction.Always) }) else emptyList(),
                 )
-                interaction.alwaysLabel?.takeIf { interaction.agentDisplayName != null && it.isNotBlank() }?.let {
-                    Text(stringResource(R.string.chat_request_always_allows, it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                interaction.alwaysScopeDetail?.takeIf { interaction.offersAlways }?.let {
+                    Text(stringResource(R.string.chat_request_always_allows, it.text()), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                 }
                 // Allow needs its fields filled in, which this app has no form for yet (#4987).
                 if (interaction.needsFieldValues) {

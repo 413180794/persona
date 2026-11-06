@@ -74,6 +74,13 @@ class ModelsTest {
         assertTrue(JsonCodec.decodeFromString<Session>("""{"session_id":"s","agent":""}""").isClaude)
     }
 
+    @Test fun interactionRetainsRememberedPermissionScope() {
+        val bash = JsonCodec.decodeFromString<Interaction>("""{"id":"ix_scope","machine_id":"computer","session_id":"chat","kind":"permission","tool_name":"Bash","always_keys":["tool:Bash"]}""")
+        assertEquals(listOf("tool:Bash"), bash.alwaysKeys)
+        val legacy = JsonCodec.decodeFromString<Interaction>("""{"id":"ix_legacy","machine_id":"computer","session_id":"chat","kind":"permission","tool_name":"Bash"}""")
+        assertEquals(null, legacy.alwaysKeys)
+    }
+
     @Test fun interactionNamesItsAgentAndWhatAlwaysAllows() {
         val codex = JsonCodec.decodeFromString<Interaction>(
             """{"id":"cx","kind":"permission","agent":"codex","reason":"访问网络","always_label":"以后不再问这个命令"}""",

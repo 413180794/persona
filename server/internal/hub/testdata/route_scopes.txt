@@ -36,6 +36,7 @@ extensions.call:{id} /api/v1/extensions/{id}/
 -                    DELETE /api/v1/admin/peers/{hub_id}
 -                    DELETE /api/v1/admin/usage-sources/{id}
 -                    DELETE /api/v1/agents/sessions/{id}/messages/{clientId}
+-                    DELETE /api/v1/assistant/conversations/{id}/always/{hash}
 -                    DELETE /api/v1/assistant/followups/{id}
 -                    DELETE /api/v1/assistant/memory/{name}
 -                    DELETE /api/v1/assistant/tasks/{id}
@@ -92,6 +93,7 @@ agents.read          GET /api/v1/agents/sessions/{id}/messages
 -                    GET /api/v1/app/android/latest
 assistant.ask        GET /api/v1/assistant
 assistant.ask        GET /api/v1/assistant/capabilities
+-                    GET /api/v1/assistant/conversations/{id}/always
 assistant.ask        GET /api/v1/assistant/conversations/{id}/feed
 -                    GET /api/v1/assistant/followups
 -                    GET /api/v1/assistant/memory

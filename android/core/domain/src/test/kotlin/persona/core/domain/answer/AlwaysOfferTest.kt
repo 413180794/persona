@@ -18,6 +18,21 @@ class AlwaysOfferTest {
         assertEquals("本会话总是允许", (card.alwaysActionLabel).zhAny())
     }
 
+    @Test fun scopeComesFromTheRememberedRuleRatherThanTheDisplayedCommand() {
+        assertEquals("这段对话里的所有命令", card.copy(alwaysKeys = listOf("tool:Bash")).alwaysScopeDetail.zhAny())
+        assertEquals("这段对话里的所有命令", card.alwaysScopeDetail.zhAny())
+        val read = card.copy(toolName = "Read", alwaysKeys = listOf("tool:Read(//workspace/docs/**)"))
+        assertEquals("这段对话中，这个目录里的所有读取操作", read.alwaysScopeDetail.zhAny())
+        for (tool in listOf("Edit", "Write", "MultiEdit", "NotebookEdit")) {
+            val edit = card.copy(toolName = tool, alwaysKeys = listOf("tool:Edit(//workspace/docs/**)"))
+            assertEquals("这段对话中，这个目录里的所有文件编辑", edit.alwaysScopeDetail.zhAny())
+        }
+        assertEquals("这段对话里对这个工具的所有调用", read.copy(alwaysKeys = null).alwaysScopeDetail.zhAny())
+        assertEquals("批准的范围在这段对话中持续有效", read.copy(alwaysKeys = listOf("lark:POST /conversations/*/messages")).alwaysScopeDetail.zhAny())
+        assertEquals("Only this command", card.copy(agent = "codex", alwaysLabel = "Only this command").alwaysScopeDetail.zhAny())
+        assertEquals(null, card.copy(agent = "codex").alwaysScopeDetail)
+    }
+
     @Test fun otherAgentsNeedTheirTuiToNameWhatItAllows() {
         assertFalse(card.copy(agent = "codex").offersAlways)
         assertFalse(card.copy(agent = "traex", alwaysLabel = " ").offersAlways)
