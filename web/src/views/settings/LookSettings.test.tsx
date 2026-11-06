@@ -1,15 +1,9 @@
 // @vitest-environment jsdom
-/// <reference types="node" />
 // Theme color "Match avatar" (ui/look.ts): the persona store keeps the chosen persona's accent (views/assistant/Persona.tsx setPS),
 // and the picker offers "Match avatar" only while that accent is there or it is already the choice.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-vi.mock("../../styles.css?raw", async () => {
-  const { readFileSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  return { default: readFileSync(join(__dirname, "../../styles.css"), "utf8") };
-});
 const hub = vi.hoisted(() => ({ result: null as unknown, fail: false }));
 vi.mock("../../lib/api", async (orig) => {
   const real = await orig<typeof import("../../lib/api")>();

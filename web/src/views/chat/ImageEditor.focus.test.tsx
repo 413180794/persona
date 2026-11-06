@@ -32,6 +32,21 @@ let root: Root;
 const flush = async () => {
   for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); });
 };
+/**
+ * Waits inside act until `check` passes (5 s at most): a lazy chunk's import can take a while on a busy machine, and
+ * it has to finish inside an act for React to draw what it suspended on.
+ */
+const until = async (check: () => void) => {
+  for (let i = 0; i < 500; i++) {
+    await act(async () => { await new Promise((ok) => setTimeout(ok, 10)); });
+    try {
+      return check();
+    } catch {
+      // not yet
+    }
+  }
+  check();
+};
 const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === name || b.textContent?.trim() === name);
 const dialog = (label: string) => document.querySelector<HTMLElement>(`[role="dialog"][aria-label^="${label}"]`)!;
 const press = (key: string, shiftKey = false) => {
@@ -126,7 +141,9 @@ describe("the image viewer", () => {
     const opener = await open();
     const edit = button(t("chat-imageviewer.edit"))!;
     edit.focus();
-    act(() => edit.click());
+    // the viewer's editor is its own chunk (lib/lazy-page.ts): its first open waits for the import
+    await act(async () => edit.click());
+    await until(() => expect(dialog(t("chat-imageeditor.title"))).not.toBeNull());
     await flush();
     expect(document.activeElement).toBe(dialog(t("chat-imageeditor.title")));
 

@@ -29896,6 +29896,29 @@
       },
       "extractionState": "manual"
     },
+    "Couldn't read this doc, so the rows that mention you aren't shown. Open it to take a look.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read this doc, so the rows that mention you aren't shown. Open it to take a look."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このドキュメントを読み込めないため、あなたに言及している行を表示できません。直接開いて確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读不到这份文档，找不出提到你的行。可以直接打开它看看。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Couldn't read this repository": {
       "localizations": {
         "en": {

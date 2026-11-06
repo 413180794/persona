@@ -1,28 +1,73 @@
 // Language catalogs are resources, not hand-maintained TypeScript entry points. Vite bundles one client catalog
 // and one admin catalog per language from the namespace JSON beside _meta.json; adding a directory needs no code.
+//
+// The page loads only its own language's catalog (src/i18n/index.ts initI18n). t() still falls back to en, then
+// zh-Hans, for a key the language lacks (docs/i18n.md), so each catalog module also exports `fallbacks`: the entries
+// of those two languages that t() could still reach from this one, computed here at build time. With complete
+// catalogs (src/i18n/catalog.test.ts) that is almost nothing, instead of two more full catalogs on the first load.
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { Plugin } from "vite";
 import { flatten } from "./src/i18n/locales/flatten";
 
+type Kind = "client" | "admin";
+type Catalog = Record<string, string>;
+
+/** The languages t() falls back to, in order: FALLBACK_LANG and SOURCE_LANG of src/i18n/index.ts (a test checks). */
+export const FALLBACK_LANGS = ["en", "zh-Hans"] as const;
+
+const PLURAL = /_(zero|one|two|few|many|other)$/;
+
 /** The namespace JSON files of one catalog, sorted, as absolute paths. */
-export function catalogFiles(metaPath: string, kind: "client" | "admin"): string[] {
+export function catalogFiles(metaPath: string, kind: Kind): string[] {
   const dir = dirname(metaPath);
   return readdirSync(dir).filter((name) =>
     name.endsWith(".json") && !name.startsWith("_") && (name.startsWith("admin-") === (kind === "admin")),
   ).sort().map((name) => join(dir, name));
 }
 
+function readCatalog(dir: string, kind: Kind): Catalog {
+  return flatten(Object.fromEntries(catalogFiles(join(dir, "_meta.json"), kind).map((file) =>
+    [`./${basename(file)}`, JSON.parse(readFileSync(file, "utf8")) as Catalog],
+  )));
+}
+
+/**
+ * The entries of `fallback` that t() can still read when the page's catalog is `own`: everything but the keys `own`
+ * answers itself. A key `own` has answers every lookup of it; a plural form (`b_one`) is never read when `own` has the
+ * base `b` or `b_other`, because a counted lookup of `b` then stops in `own`.
+ */
+export function fallbackEntries(own: Catalog, fallback: Catalog): Catalog {
+  const out: Catalog = {};
+  for (const [key, text] of Object.entries(fallback)) {
+    if (Object.hasOwn(own, key)) continue;
+    const base = key.replace(PLURAL, "");
+    if (base !== key && (Object.hasOwn(own, base) || Object.hasOwn(own, `${base}_other`))) continue;
+    out[key] = text;
+  }
+  return out;
+}
+
+/** The other languages whose files a catalog's `fallbacks` reads: FALLBACK_LANGS without the catalog's own. */
+function fallbackLangs(dir: string): string[] {
+  return FALLBACK_LANGS.filter((l) => l !== basename(dir));
+}
+
+/** The fallback languages' entries t() may need for the language in `dir`, keyed by language. */
+export function catalogFallbacks(dir: string, kind: Kind): Record<string, Catalog> {
+  const own = readCatalog(dir, kind);
+  return Object.fromEntries(fallbackLangs(dir).map((l) => [l, fallbackEntries(own, readCatalog(join(dirname(dir), l), kind))]));
+}
+
 // The default form imports every namespace JSON, so the bundle and the dev server treat each as its own module.
 // The inline form (tests) reads and flattens them here into one module: under Vitest every test file loads the
 // catalogs, and ~300 JSON modules per language through the module runner were most of the suite's setup time.
-export function catalogModule(metaPath: string, kind: "client" | "admin", inline = false): string {
-  if (inline) {
-    const files = Object.fromEntries(catalogFiles(metaPath, kind).map((file) =>
-      [`./${basename(file)}`, JSON.parse(readFileSync(file, "utf8")) as Record<string, string>]));
-    return `export default JSON.parse(${JSON.stringify(JSON.stringify(flatten(files)))});`;
-  }
+export function catalogModule(metaPath: string, kind: Kind, inline = false): string {
   const dir = dirname(metaPath);
+  const fallbacks = `export const fallbacks = ${JSON.stringify(catalogFallbacks(dir, kind))};`;
+  if (inline) {
+    return [`export default JSON.parse(${JSON.stringify(JSON.stringify(readCatalog(dir, kind)))});`, fallbacks].join("\n");
+  }
   const namespaces = catalogFiles(metaPath, kind).map((file) => basename(file));
   const imports = namespaces.map((name, i) => `import ns${i} from ${JSON.stringify(join(dir, name).replace(/\\/g, "/"))};`);
   const entries = namespaces.map((name, i) => `${JSON.stringify(`./${name}`)}: ns${i}`);
@@ -30,6 +75,7 @@ export function catalogModule(metaPath: string, kind: "client" | "admin", inline
     ...imports,
     `import { flatten } from ${JSON.stringify(join(dir, "../flatten.ts").replace(/\\/g, "/"))};`,
     `export default flatten({${entries.join(",")}});`,
+    fallbacks,
   ].join("\n");
 }
 
@@ -50,7 +96,11 @@ export const i18nCatalogs: Plugin = {
     this.addWatchFile(path);
     const inline = Boolean(process.env.VITEST);
     // Inlined JSON is no longer an import, so watch each file for Vitest's watch mode to rerun on an edit.
-    if (inline) for (const file of catalogFiles(path, kind as "client" | "admin")) this.addWatchFile(file);
-    return catalogModule(path, kind as "client" | "admin", inline);
+    if (inline) for (const file of catalogFiles(path, kind as Kind)) this.addWatchFile(file);
+    // `fallbacks` reads the fallback languages' files: editing one rebuilds this module too. (Vite treats a watched
+    // path as an import of the module, so only files: a directory would fail import analysis.)
+    const dir = dirname(path);
+    for (const l of fallbackLangs(dir)) for (const file of catalogFiles(join(dirname(dir), l, "_meta.json"), kind as Kind)) this.addWatchFile(file);
+    return catalogModule(path, kind as Kind, inline);
   },
 };

@@ -5,22 +5,26 @@
 // section's "Load more". An unknown item is left out. Shared by an extension's pages (settings/ExtensionView.tsx, which loads them and carries out what a
 // press answers) and the assistant's cards (ui/AssistantCard.tsx, which says which actions may be pressed now, which
 // one was answered, and when the fields are locked). A tone becomes a role color.
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "../../ui/remark-gfm-parse";
+import { lazyPage } from "../../lib/lazy-page";
 import { openLink } from "../../lib/links";
 import {
   blocks, imageURL, initials, isHttps, numberProblem, percent, rowIcon, tableRows, toneOf,
   type RowIcon, type UIAction, type UIItem, type UIMore, type UISection, type UITone, type UIView,
 } from "../../lib/extension-ui";
-import { ExtensionChart } from "./ExtensionChart";
 import { t } from "../../i18n";
 import { Button, cx, EASE, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Pill, Switch } from "../settings/SettingsParts";
 import { Breadcrumb, CodeView, CommentThread, Composer, FileTree, Header } from "./CodeViews";
 import { DiffView } from "./DiffReview";
+import { ChartFrame, LABEL_H, plotHeight } from "./ChartFrame";
 import { SegmentedTrack } from "../../ui/Segmented";
+
+// Only chart items draw it: its own chunk, fetched by the idle preload or the first chart (lib/lazy-page.ts).
+const ExtensionChart = lazyPage(() => import("./ExtensionChart").then((m) => m.ExtensionChart));
 
 const TEXT: Record<UITone, string> = { neutral: "text-ink", positive: "text-green", caution: "text-orange", danger: "text-red" };
 const BAR: Record<UITone, string> = { neutral: "bg-accent", positive: "bg-green", caution: "bg-orange", danger: "bg-red" };
@@ -283,7 +287,13 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, ca
     case "composer":
       return locked ? null : <Composer item={it} {...code} />;
     case "chart":
-      return <ExtensionChart item={it} compact={compact} />;
+      return (
+        // the chart's own frame (header, detail) around an empty plot of its height while its chunk loads, so the
+        // page-level Suspense never shows and nothing jumps
+        <Suspense fallback={<ChartFrame item={it} compact={compact}><div aria-hidden data-chart-placeholder style={{ height: plotHeight(compact) + LABEL_H }} /></ChartFrame>}>
+          <ExtensionChart item={it} compact={compact} />
+        </Suspense>
+      );
     case "markdown":
       return <ViewMarkdown text={it.text ?? ""} compact={compact} />;
     case "table":

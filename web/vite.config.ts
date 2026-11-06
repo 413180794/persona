@@ -7,6 +7,7 @@ import { localeDirs, preloadScript } from "./src/startup-preload";
 import { textScale } from "./src/lib/text-scale";
 import { classicWorkerProblem } from "./src/sw-entry-check";
 import { i18nCatalogs } from "./i18n-catalogs";
+import { pageTokensPlugin } from "./page-tokens";
 
 // `npm run dev` talks to a hub through Vite's proxy: JARVIS_HUB_URL (eval "$(python3 ../scripts/jarvis_config.py env)").
 const environment = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
@@ -98,7 +99,7 @@ const classicWorker: Plugin = {
 };
 
 export default defineConfig({
-  plugins: [i18nCatalogs, react(), tailwindcss(), adminFallback, startupPreload, classicWorker],
+  plugins: [i18nCatalogs, pageTokensPlugin, react(), tailwindcss(), adminFallback, startupPreload, classicWorker],
   // Text size (src/lib/text-scale.ts): font sizes become calc(size * var(--text-scale, 1)), after Tailwind wrote them.
   css: { postcss: { plugins: [textScale()] } },
   server: {

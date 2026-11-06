@@ -42,6 +42,22 @@ struct ShellStateTests {
         #expect(model.selectedTab == .chats)
     }
 
+    /// A tap on a push or a Live Activity row while the 设置 sheet is up: the sheet goes and the chat shows (#3818).
+    @Test func openingASessionClosesTheSettingsSheet() {
+        let model = AppModel()
+        model.selectedTab = .assistant
+        let shell = ShellState()
+        shell.attach(to: model)
+        defer { shell.detach(from: model) }
+        model.selectedTab = .settings
+        #expect(model.shellSettings)
+        let key = SessionKey(machineID: "m", sessionID: "s")
+        model.open(key)
+        #expect(!model.shellSettings)
+        #expect(shell.page == 1 && model.selectedTab == .chats)
+        #expect(model.openChat == key)
+    }
+
     @Test func aDetachedShellNoLongerRoutes() {
         let model = AppModel()
         let shell = ShellState()

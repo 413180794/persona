@@ -63,12 +63,14 @@ describe("catalogModule", () => {
     expect(code).toMatch(/^export default JSON\.parse\(/);
   });
 
-  it("inlines under Vitest and watches every namespace file", () => {
+  it("inlines under Vitest and watches every namespace file, the fallback languages' too", () => {
     const watched: string[] = [];
     const load = i18nCatalogs.load as (this: { addWatchFile(file: string): void }, id: string) => string;
     const code = load.call({ addWatchFile: (file) => watched.push(file) }, `\0i18n-catalog:client:${meta}.js`);
     expect(code).toBe(catalogModule(meta, "client", true));
-    expect(watched).toEqual([meta, ...catalogFiles(meta, "client")]);
+    // en falls back only to zh-Hans: its files feed `fallbacks`
+    const zh = fileURLToPath(new URL("./src/i18n/locales/zh-Hans/_meta.json", import.meta.url));
+    expect(watched).toEqual([meta, ...catalogFiles(meta, "client"), ...catalogFiles(zh, "client")]);
   });
 
   it("splits client and admin namespaces by the admin- prefix", () => {

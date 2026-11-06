@@ -143,8 +143,12 @@ struct InboxDocDetailView: View {
                     }
                 }
                 if let error = doc?.error, !error.isEmpty {
-                    Label("Couldn't read the doc: \(error)", systemImage: Theme.Icon.error)
-                        .font(Theme.Font.caption).foregroundStyle(Theme.danger)
+                    // What it means and what to do first; the hub's own words (often an English API error) under it.
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Label("Couldn't read this doc, so the rows that mention you aren't shown. Open it to take a look.", systemImage: Theme.Icon.error)
+                            .font(Theme.Font.caption).foregroundStyle(Theme.danger)
+                        Text(error).font(Theme.Font.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
                 }
             }
             if let rows = doc?.rows, !rows.isEmpty {

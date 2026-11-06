@@ -321,7 +321,7 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 			input, _ := json.Marshal(map[string]string{"file_path": path, "diff": diff, "change": ch.Type})
 			id := fmt.Sprintf("%s-%d", it.ID, n)
 			use := mk(2*n, id, "assistant", proto.KindToolUse)
-			use.ToolUseID, use.ToolName, use.ToolInput = id, "Edit", input
+			use.ToolUseID, use.ToolName, use.ToolInput = id, "Edit", clipJSON(input) // a new file's whole content
 			res := mk(2*n+1, id, "user", proto.KindToolResult)
 			res.ToolUseID, res.Text, res.IsError = id, ch.Type+" "+path, it.Status == "failed"
 			out = append(out, use, res)
@@ -445,10 +445,11 @@ func codexWebSearch(mk func(int, string, string, string) proto.Item, it *codexIt
 	return codexTool(mk, it.ID, name, raw, strings.Join(lines, "\n"), false)
 }
 
-// codexTool is a finished tool call: Codex writes the call and its result in one line.
+// codexTool is a finished tool call: Codex writes the call and its result in one line. Its input is clipped as a
+// Claude tool_use's is (a heredoc command, an MCP call's long argument would go out whole in every page and push).
 func codexTool(mk func(int, string, string, string) proto.Item, id, name string, input json.RawMessage, result string, isErr bool) []proto.Item {
 	use := mk(0, id, "assistant", proto.KindToolUse)
-	use.ToolUseID, use.ToolName, use.ToolInput = id, name, input
+	use.ToolUseID, use.ToolName, use.ToolInput = id, name, clipJSON(input)
 	res := mk(1, id, "user", proto.KindToolResult)
 	res.ToolUseID, res.Text, res.IsError = id, clip(result), isErr
 	return []proto.Item{use, res}

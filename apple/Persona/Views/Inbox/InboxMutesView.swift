@@ -60,8 +60,16 @@ struct InboxMutesView: View {
         do {
             state = .loaded(try await api.inboxMutes().sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) })
         } catch {
-            if case .loaded = state { model.show(error) } else { state = .failed(error.localizedDescription) }
+            if error.isCancellation { return } // the sheet closed: not a failure
+            if case .loaded = state { model.show(error) } else { state = .failed(Self.said(error)) }
         }
+    }
+
+    /// A first load's failure in words: the hub's own message, else no network or no answer in the app's
+    /// language (the system's text for those follows the phone's language, not the app's).
+    private static func said(_ error: Error) -> String {
+        if let shown = error.shown { return shown }
+        return error.isOffline ? String(localized: "Can't reach the hub") : String(localized: "The hub didn't respond. Try again later.")
     }
 
     private func unmute(_ m: InboxMute) {

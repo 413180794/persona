@@ -1,13 +1,14 @@
 // Beautiful UI's Prompt Bar, wired to a session: multi-line input, / commands, @ files and sessions, image attachments
 // (paste, drop, pick; click one to mark it up), files uploaded to the session's machine, send — and stop while the
 // agent works and nothing is typed. Quotes, edits and edited images from the chat arrive as draft events (drafts.ts).
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuickPrompts } from "../../lib/extension-declared";
 import { promptCommands, type ComposerCommand as Command } from "../../lib/extension-prompts";
 import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
 import { ApiError, errorText } from "../../lib/api";
 import { composerEntryDrop, dragHasEntry, droppedEntry } from "../../lib/entry-drag";
 import { uuid } from "../../lib/format";
+import { lazyPage } from "../../lib/lazy-page";
 import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
@@ -19,7 +20,6 @@ import { cx, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ContextChips } from "../link/ContextChips";
 import { QuoteBars } from "./Quote";
-import { ImageEditor } from "./ImageEditor";
 import { MentionMenu, useMentionRows, type MentionRow, type MentionSource } from "./MentionMenu";
 import { HistorySearch } from "./HistorySearch";
 import { useSendHistory } from "./useSendHistory";
@@ -27,6 +27,8 @@ import { isModelCommand, requestModelPicker } from "../../lib/model-switch";
 import { MAX_IMAGES } from "../../lib/composer-commands";
 import { t } from "../../i18n";
 
+// Drawn only while an attached image is edited: its own chunk, fetched by the idle preload or the first edit (lib/lazy-page.ts).
+const ImageEditor = lazyPage(() => import("./ImageEditor").then((m) => m.ImageEditor));
 /** How long "Not sent yet" stays under the box after Enter was pressed while blocked. */
 const NUDGE_MS = 4000;
 
@@ -782,16 +784,18 @@ export function Composer({
         </div>
       </div>
       {editing && (
-        <ImageEditor
-          src={editing.url}
-          onCancel={() => setEditing(null)}
-          onDone={(img) => {
-            const old = editing;
-            setEditing(null);
-            setAtts((cur) => cur.map((a) => (a.id === old.id ? fromDraftImage(img, a.id) : a)));
-            URL.revokeObjectURL(old.url);
-          }}
-        />
+        <Suspense fallback={null}>
+          <ImageEditor
+            src={editing.url}
+            onCancel={() => setEditing(null)}
+            onDone={(img) => {
+              const old = editing;
+              setEditing(null);
+              setAtts((cur) => cur.map((a) => (a.id === old.id ? fromDraftImage(img, a.id) : a)));
+              URL.revokeObjectURL(old.url);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

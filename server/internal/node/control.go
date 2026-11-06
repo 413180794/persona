@@ -865,12 +865,33 @@ func (n *Node) watchFor(parent context.Context, id string, since int) error {
 			return err
 		}
 		// A session that just started has no transcript until claude writes its first line: watch once it exists,
-		// sending everything written before the watch began (the phone's backlog was empty).
+		// sending everything written before the watch began (the phone's backlog was empty). The wait is kept in
+		// n.waiting, so an unwatch meanwhile ends it and another watch does not start a second one (#5389).
+		n.mu.Lock()
+		if _, ok := n.watches[id]; ok || n.waiting[id] != nil {
+			n.mu.Unlock()
+			return nil
+		}
+		wctx, cancel := context.WithCancel(parent)
+		pw := &watch{cancel: cancel}
+		if n.waiting == nil {
+			n.waiting = map[string]*watch{}
+		}
+		n.waiting[id] = pw
+		n.mu.Unlock()
 		go func() {
+			defer func() {
+				n.mu.Lock()
+				if n.waiting[id] == pw {
+					delete(n.waiting, id)
+				}
+				n.mu.Unlock()
+			}()
 			for i := 0; i < 120; i++ {
-				time.Sleep(500 * time.Millisecond)
-				if parent.Err() != nil { // the connection ended before the transcript appeared
+				select {
+				case <-wctx.Done(): // unwatched, or the connection ended, before the transcript appeared
 					return
+				case <-time.After(500 * time.Millisecond):
 				}
 				f, err := n.file(id)
 				if err != nil {
@@ -882,9 +903,11 @@ func (n *Node) watchFor(parent context.Context, id string, since int) error {
 					since = n.catchUp(id, f, since)
 				}
 				mu.Unlock()
-				_ = n.watchFor(parent, id, since)
+				// Under wctx: an unwatch that comes before this goroutine is done still cancels the watch it installs.
+				_ = n.watchFor(wctx, id, since)
 				return
 			}
+			cancel()
 		}()
 		return nil
 	}
@@ -962,11 +985,15 @@ func (n *Node) pushLock(id string) *sync.Mutex {
 
 func (n *Node) unwatch(id string) {
 	n.mu.Lock()
-	w := n.watches[id]
+	w, pw := n.watches[id], n.waiting[id]
 	delete(n.watches, id)
+	delete(n.waiting, id)
 	n.mu.Unlock()
 	if w != nil {
 		w.cancel()
+	}
+	if pw != nil {
+		pw.cancel()
 	}
 }
 

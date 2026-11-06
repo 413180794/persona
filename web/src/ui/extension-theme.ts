@@ -1,4 +1,4 @@
-import css from "../styles.css?raw";
+import tokens from "../styles.css?page-tokens";
 
 export interface ExtensionTheme {
   extension: string;
@@ -15,10 +15,9 @@ export const MIN_ROLE_CONTRAST = 3;
 export const MIN_TEXT_CONTRAST = 4.5;
 const TINT = { light: 10, dark: 16 };
 
-/** A color token's value in styles.css's first :root / .dark block ("" when it is not a hex there). */
+/** A color token's value in styles.css's first :root / .dark block ("" when it is not a hex there; page-tokens.ts). */
 export function pageToken(role: string, scheme: "light" | "dark"): string {
-  const block = (scheme === "light" ? /:root\s*\{([^}]+)\}/ : /\.dark\s*\{([^}]+)\}/).exec(css)?.[1] ?? "";
-  return new RegExp(`--${role}:\\s*(#[0-9a-f]+)`, "i").exec(block)?.[1] ?? "";
+  return tokens[scheme][role] ?? "";
 }
 function backgroundColors(scheme: "light" | "dark"): string[] {
   return BACKGROUNDS.map((role) => pageToken(role, scheme));

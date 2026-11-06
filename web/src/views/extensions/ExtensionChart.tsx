@@ -6,10 +6,9 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { barSpans, chartExtent, compactNumber, edgeLabels, labelWidth, linear, niceTicks, pointText, seriesColors, thinLabels, type UIItem } from "../../lib/extension-ui";
 import { t } from "../../i18n";
-import { cx } from "../../ui/atoms";
+import { chartKind, ChartFrame, LABEL_H, plotHeight } from "./ChartFrame";
 
 const FONT = 10.5; // axis text, px
-const LABEL_H = 18; // the labels under the plot
 const TOP = 6;
 
 function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
@@ -39,7 +38,7 @@ function barPath(x: number, w: number, base: number, end: number, r: number, rou
 
 export function ExtensionChart({ item, compact }: { item: UIItem; compact?: boolean }) {
   const series = item.series ?? [];
-  const kind = item.kind === "line" ? "line" : "bar";
+  const kind = chartKind(item);
   const stacked = kind === "bar" && !!item.stacked && series.length > 1;
   const labels = useMemo(() => (series[0]?.points ?? []).map((p) => p.label), [series]);
   const n = labels.length;
@@ -47,7 +46,7 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
   const [box, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
 
-  const H = compact ? 60 : 148;
+  const H = plotHeight(compact);
   const [mn, mx] = useMemo(() => chartExtent(series, kind, stacked), [series, kind, stacked]);
   const axis = niceTicks(mn, mx, compact ? 2 : 4);
   // the numbers on the right take what the widest needs
@@ -98,29 +97,7 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
   const summary = title ? t("extensions-extensionchart.titled", { title, text: body }) : body;
 
   return (
-    <div className={cx(compact ? "px-4 py-2" : "px-4 pt-3 pb-2.5")}>
-      {(title || series.length > 1 || (item.unit && !compact)) && (
-        <div className="mb-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          {title && <h4 className={cx("min-w-0 truncate font-medium text-ink-2", compact ? "text-[11.5px]" : "text-[12.5px]")}>{title}</h4>}
-          {/* the axis' numbers are in the unit: say it once */}
-          {item.unit && !compact && <span className="-ml-1.5 shrink-0 truncate text-[11px] text-ink-3">{title ? `· ${item.unit}` : item.unit}</span>}
-          <span className="flex-1" />
-          {series.length > 1 && (
-            <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-              {series.map((s, i) => (
-                <span key={i} className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-ink-2">
-                  {kind === "bar" ? (
-                    <span aria-hidden className="inline-block size-2 rounded-[2px]" style={{ background: colors[i] }} />
-                  ) : (
-                    <span aria-hidden className="inline-block h-[2px] w-3 rounded-full" style={{ background: colors[i] }} />
-                  )}
-                  {s.name}
-                </span>
-              ))}
-            </span>
-          )}
-        </div>
-      )}
+    <ChartFrame item={item} compact={compact} colors={colors}>
       <div ref={box} className="relative">
         {width > 0 && (
           <svg
@@ -234,8 +211,7 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
           </table>
         </div>
       </div>
-      {item.detail && <p className={cx("mt-1 text-ink-3", compact ? "text-[11px]" : "text-[11.5px]")}>{item.detail}</p>}
-    </div>
+    </ChartFrame>
   );
 }
 

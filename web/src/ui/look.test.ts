@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-/// <reference types="node" />
-import { beforeEach, describe, expect, it, vi } from "vitest";
-vi.mock("../styles.css?raw", async () => {
-  const { readFileSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  return { default: readFileSync(join(__dirname, "../styles.css"), "utf8") };
-});
+import { beforeEach, describe, expect, it } from "vitest";
 import { contrast, pageToken } from "./extension-theme";
 import {
   ACCENT_PRESETS, accentChoice, accentCSS, accentTokens, applyLook, personaAccent, PRESET_COLORS, savedPersonaAccent, setAccentChoice,

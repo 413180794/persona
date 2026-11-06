@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
 import { useCloseOnBack } from "./lib/back-close";
@@ -26,11 +26,9 @@ import { ChatView } from "./views/chat/ChatView";
 import { Home } from "./views/Home";
 import { PersonaAssistant } from "./views/PersonaAssistant";
 import { Login } from "./views/Login";
-import { NewAgent } from "./views/NewAgent";
 import { NewWorktreeHost } from "./views/NewWorktree";
 import { onOpenNewAgent, type NewAgentPreset } from "./lib/new-agent";
 import { StartingAgent } from "./views/StartingAgent";
-import { Palette } from "./views/Palette";
 import { ShortcutHelp } from "./views/ShortcutHelp";
 import { closePalette, openPalette, usePalette } from "./lib/palette";
 import { sidebarRail, sidebarShown, useLayout } from "./lib/layout";
@@ -59,6 +57,10 @@ const Inbox = lazyPage(() => import("./views/inbox/Inbox").then((m) => m.Inbox))
 const Messages = lazyPage(() => import("./views/messages/Messages").then((m) => m.Messages));
 const Knowledge = lazyPage(() => import("./views/knowledge/Knowledge").then((m) => m.Knowledge));
 const TodosView = lazyPage(() => import("./views/Todos").then((m) => m.TodosView));
+// The command palette and the new-agent dialog are not on a first screen either: their chunks come with the idle
+// preload above, and each mounts on its first open (useOpened), so ⌘K right after start waits on the network at most once.
+const Palette = lazyPage(() => import("./views/Palette").then((m) => m.Palette));
+const NewAgent = lazyPage(() => import("./views/NewAgent").then((m) => m.NewAgent));
 
 // A link with the hub's token (`?token=…` or `#token=…`) signs in without the form. The token leaves the address bar
 // before anything else runs (history, bookmarks, a copied link), and is traded for this browser's own one.
@@ -176,6 +178,12 @@ function Shell() {
     setNewAgent(true);
   }), []);
   const openNewAgent = useCallback(() => setNewAgent(true), []);
+  const closeNewAgent = useCallback(() => {
+    setNewAgent(false);
+    setPreset(null);
+  }, []);
+  const paletteOpened = useOpened(palette.open);
+  const newAgentOpened = useOpened(newAgent);
 
   // ── the sidebar: a column on a wide screen, a drawer over the page on a narrow one (#1996) ──
   const narrow = useMedia(NARROW);
@@ -371,18 +379,60 @@ function Shell() {
         <PageBoundary page={href(route)}><Suspense fallback={<PageLoading />}>{main}</Suspense></PageBoundary>
       </main>
       <SidePanel />
-      <Palette open={palette.open} onClose={closePalette} onNewAgent={openNewAgent} pane={pane} route={route} />
+      {paletteOpened && (
+        <OverlayBoundary open={palette.open} onClose={closePalette}>
+          <Suspense fallback={null}>
+            <Palette open={palette.open} onClose={closePalette} onNewAgent={openNewAgent} pane={pane} route={route} />
+          </Suspense>
+        </OverlayBoundary>
+      )}
       <ShortcutHelp />
-      <NewAgent open={newAgent} preset={preset} onClose={() => {
-        setNewAgent(false);
-        setPreset(null);
-      }} />
+      {newAgentOpened && (
+        <OverlayBoundary open={newAgent} onClose={closeNewAgent}>
+          <Suspense fallback={null}>
+            <NewAgent open={newAgent} preset={preset} onClose={closeNewAgent} />
+          </Suspense>
+        </OverlayBoundary>
+      )}
       <NewWorktreeHost />
       {/* tab title with the "Needs you" count, favicon badge, optional sounds (#2332): a leaf, so a sessions push re-renders
           only it, not the whole shell */}
       <AttentionSignals label={title} pane={pane} />
     </div>
   );
+}
+
+/** True from the first render where `open` is, and kept so afterwards: a closed overlay stays mounted for its exit. */
+function useOpened(open: boolean): boolean {
+  const [opened, setOpened] = useState(open);
+  if (open && !opened) setOpened(true);
+  return opened || open;
+}
+
+/**
+ * Keeps a lazy overlay's failure (its chunk would not load: offline, or the hub was redeployed) from taking the shell
+ * down, since it sits outside PageBoundary: the overlay shows nothing and is closed, so the next open from any entry
+ * (shortcut, sidebar button) is a fresh open that tries again (lazyPage does not keep a failed load).
+ */
+class OverlayBoundary extends Component<{ open: boolean; onClose: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    // left open, an open request would not change the state, and the entry points would do nothing until a reload
+    this.props.onClose();
+  }
+
+  componentDidUpdate(prev: { open: boolean }) {
+    if (this.state.failed && this.props.open && !prev.open) this.setState({ failed: false });
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }
 
 // The hub was never reached (offline, or it is down): an empty state that says so and tries again on a tap, instead of

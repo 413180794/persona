@@ -3,7 +3,7 @@
 // a double click / tap zooms in there and back, + / - / 0 from the keyboard; "Edit" (box + pen, then into the composer
 // for the next message), "Copy" where the browser allows it, "Download", "Open in new tab". Esc or a click beside the picture
 // closes it (not while zoomed).
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { imageURL } from "../../lib/api";
 import { useCloseOnBack } from "../../lib/back-close";
@@ -15,9 +15,12 @@ import { cx, EASE, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { NARROW, useMedia } from "../../ui/media-query";
 import { useModalFocus } from "../../ui/overlay";
+import { lazyPage } from "../../lib/lazy-page";
 import { useChatActions } from "./chat-actions";
-import { ImageEditor } from "./ImageEditor";
 import { t } from "../../i18n";
+
+// Drawn only while an image is edited: its own chunk, fetched by the idle preload or the first edit (lib/lazy-page.ts).
+const ImageEditor = lazyPage(() => import("./ImageEditor").then((m) => m.ImageEditor));
 
 export interface ViewerImage {
   id: string;
@@ -383,15 +386,17 @@ export function ImageViewer({
       </div>
 
       {editing && attach && (
-        <ImageEditor
-          src={cur.src}
-          doneTitle={t("chat-imageviewer.add_to_composer")}
-          onCancel={() => setEditing(false)}
-          onDone={(img) => {
-            setEditing(false);
-            if (attach(img)) onClose();
-          }}
-        />
+        <Suspense fallback={null}>
+          <ImageEditor
+            src={cur.src}
+            doneTitle={t("chat-imageviewer.add_to_composer")}
+            onCancel={() => setEditing(false)}
+            onDone={(img) => {
+              setEditing(false);
+              if (attach(img)) onClose();
+            }}
+          />
+        </Suspense>
       )}
     </div>,
     document.body,

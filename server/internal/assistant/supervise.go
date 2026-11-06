@@ -338,6 +338,20 @@ func (s *Service) scheduleDigestLocked(now time.Time) {
 	b.timer = time.AfterFunc(wait, func() { s.sendDigest(context.Background()) })
 }
 
+// retryDigestLocked tries the digest again in d, unless one is due sooner (b.mu held).
+func (s *Service) retryDigestLocked(d time.Duration) {
+	b := &s.supervise
+	at := time.Now().Add(d)
+	if b.timer != nil && !b.timerAt.After(at) {
+		return
+	}
+	if b.timer != nil {
+		b.timer.Stop()
+	}
+	b.timerAt = at
+	b.timer = time.AfterFunc(d, func() { s.sendDigest(context.Background()) })
+}
+
 // watchSignals are what t and its agents show now that the supervisor should hear of, by their state alone: a task
 // waiting for review (told once per review: again after a restart of the assistant, which forgot what it told), an
 // agent waiting for an answer (at once for a quiet task), or working without progress for long. Nothing more for a
@@ -550,6 +564,29 @@ func (s *Service) sendDigest(ctx context.Context) {
 		b.mu.Unlock()
 		return
 	}
+	b.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	here := s.settings(ctx)
+	if here.Main == "" || here.MachineID == "" {
+		// Nowhere to tell them now (no main conversation yet, or no machine: the hub's hello while the bus is down).
+		// They stay pending and untold, and go out on a later try (#5420).
+		s.logf("supervise: no main conversation; trying again in %s", superviseUrgentEvery)
+		b.mu.Lock()
+		s.retryDigestLocked(superviseUrgentEvery)
+		b.mu.Unlock()
+		return
+	}
+	b.mu.Lock()
+	list = list[:0]
+	for _, g := range b.pending { // as they are now: one may have come or gone meanwhile
+		list = append(list, g)
+	}
+	if len(list) == 0 {
+		b.mu.Unlock()
+		return
+	}
 	b.pending = map[string]superviseSignal{}
 	for _, g := range list {
 		b.sent[g.id()] = g.Key
@@ -557,13 +594,6 @@ func (s *Service) sendDigest(ctx context.Context) {
 	b.last = now
 	b.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
-	here := s.settings(ctx)
-	if here.Main == "" || here.MachineID == "" {
-		s.logf("supervise: no main conversation")
-		return
-	}
 	var entries []prompts.SuperviseEntry
 	var kept []superviseSignal
 	web := s.webBase(ctx)

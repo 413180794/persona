@@ -72,16 +72,23 @@ type Catalog = Record<string, string>;
 let lang: Lang = SOURCE_LANG;
 let catalogs: Record<Lang, Catalog> = {};
 
+/** A language's catalog module (web/i18n-catalogs.ts): its own entries, and the entries of the fallback languages
+ *  (FALLBACK_LANG, SOURCE_LANG) that t() can still reach from it, keyed by language. */
+export interface CatalogModule {
+  default: Catalog;
+  fallbacks: Record<Lang, Catalog>;
+}
+
 /** One dynamic import per language, so each language stays an independent cached chunk. */
-export type CatalogLoaders = Record<Lang, () => Promise<{ default: Catalog }>>;
+export type CatalogLoaders = Record<Lang, () => Promise<CatalogModule>>;
 
 /** Language → loader, from a glob's `./locales/<lang>/<file>` keys (admin/catalog.ts uses it for admin.ts too). */
-export function byLanguage(glob: Record<string, () => Promise<{ default: Catalog }>>): CatalogLoaders {
+export function byLanguage(glob: Record<string, () => Promise<CatalogModule>>): CatalogLoaders {
   return Object.fromEntries(Object.entries(glob).map(([p, load]) => [dirOf(p), load]));
 }
 
 /** The web client's catalog. The admin UI's own namespaces (admin-*) are not in it: admin/main.tsx adds them. */
-const loaders = byLanguage(import.meta.glob<{ default: Catalog }>("./locales/*/_meta.json", { query: "?catalog=client" }));
+const loaders = byLanguage(import.meta.glob<CatalogModule>("./locales/*/_meta.json", { query: "?catalog=client" }));
 
 /**
  * Loads the client catalog of the preferred language (or `forced`, for tests), plus the `extra` catalogs of that
@@ -90,13 +97,15 @@ const loaders = byLanguage(import.meta.glob<{ default: Catalog }>("./locales/*/_
 export async function initI18n(forced?: Lang, ...extra: CatalogLoaders[]): Promise<Lang> {
   const requested = forced ?? preferredLanguage();
   const selected = loaders[requested] ? requested : FALLBACK_LANG;
-  // t() is synchronous, so the fallback catalog must be ready before the page starts. The selected language wins.
-  const languages = [...new Set([SOURCE_LANG, FALLBACK_LANG])].filter((l) => l !== selected).concat(selected);
-  const parts = await Promise.all(languages.map(async (language) => {
-    const pieces = await Promise.all([loaders, ...extra].map((l) => l[language]()));
-    return [language, Object.assign({}, ...pieces.map((p) => p.default))] as const;
-  }));
-  catalogs = Object.fromEntries(parts);
+  // t() is synchronous, so its fallbacks must be ready before the page starts. Only the selected language's modules
+  // load: each brings the en and zh-Hans entries that t() could fall back to, not those whole catalogs.
+  const modules = await Promise.all([loaders, ...extra].map((l) => l[selected]()));
+  const next: Record<Lang, Catalog> = { [selected]: {} };
+  for (const module of modules) {
+    Object.assign(next[selected], module.default);
+    for (const [language, entries] of Object.entries(module.fallbacks)) next[language] = Object.assign(next[language] ?? {}, entries);
+  }
+  catalogs = next;
   lang = selected;
   if (typeof document !== "undefined") document.documentElement.lang = lang;
   return lang;

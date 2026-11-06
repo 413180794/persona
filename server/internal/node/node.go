@@ -84,6 +84,8 @@ type Node struct {
 	paths   map[string]string           // session id -> transcript path
 	pathsAt map[string]time.Time        // when a path not told by a hook was last chosen (transcriptPath)
 	watches map[string]*watch
+	// waiting: watches of sessions with no transcript yet (watchFor), so session.unwatch finds them (#5389).
+	waiting map[string]*watch
 	agents  map[string]host.Agent // session id -> live agent
 	// onAgentsList: the parked sessions whose pane is on Claude's agents list, listed in it read-only (claudebg.go).
 	onAgentsList map[string]bool
