@@ -10,7 +10,8 @@ import { answeredLookup, answeredSession, answeredSessions } from "./answered-lo
 const s = { machine_id: "m1", session_id: "s1", title: "a", state: "needs_you", status: "blocked" } as Session;
 const other = { machine_id: "m1", session_id: "s2", title: "b", state: "needs_you", status: "blocked" } as Session;
 const ix = (sid: string, id = "ix"): Interaction => ({ id, machine_id: "m1", session_id: sid, kind: "permission" });
-const answered = (sid: string): Record<string, AnsweredCard> => ({ old: { ix: ix(sid, "old"), resolution: { allow: true }, at: Date.now() } as AnsweredCard });
+// withdrawn: the hub has taken the card away already (a card it has not is #4877's case, below)
+const answered = (sid: string): Record<string, AnsweredCard> => ({ old: { ix: ix(sid, "old"), resolution: { allow: true }, at: Date.now(), withdrawn: true } as AnsweredCard });
 const todo = { id: "t", title: "t", created_at: "", updated_at: "", agents: [{ machine_id: "m1", session_id: "s1" }] } as Todo;
 
 describe("answeredLookup", () => {
@@ -65,7 +66,7 @@ describe("the review's cases (#4186)", () => {
 describe("the answer's time (#4186 re-review)", () => {
   it("is when the page answered, so a needs_you that came later wins even if the dock mounts afterwards", () => {
     const t = Date.now() - 10_000;
-    const card = { old: { ix: ix("s1", "old"), resolution: { allow: true }, at: t } as AnsweredCard };
+    const card = { old: { ix: ix("s1", "old"), resolution: { allow: true }, at: t, withdrawn: true } as AnsweredCard };
     const later = { ...s, state_since: new Date(t + 5_000).toISOString() } as Session;
     expect(stateOf(answeredLookup([later], [], card)("m1", "s1")!)).toBe("needs_you");
     const before = { ...s, state_since: new Date(t - 5_000).toISOString() } as Session;
@@ -83,5 +84,23 @@ describe("answeredSession, one row (#4286)", () => {
   it("lets a later needs_you win", () => {
     const later = { ...s, state_since: new Date(Date.now() + 60_000).toISOString() } as Session;
     expect(answeredSession(later, false, Date.now())).toBe(later);
+  });
+});
+
+describe("a push ahead of the card's withdrawal (#4877)", () => {
+  const later = { ...s, state_since: new Date(Date.now() + 60_000).toISOString() } as Session;
+  const card = (withdrawn?: boolean): Record<string, AnsweredCard> => ({ old: { ix: ix("s1", "old"), resolution: { allow: true }, at: Date.now(), withdrawn } as AnsweredCard });
+
+  it("does not bring 等你 back before the hub has withdrawn the card", () => {
+    expect(stateOf(answeredLookup([later], [], card())("m1", "s1")!)).toBe("working");
+    expect(stateOf(answeredSessions([later], [], card())[0])).toBe("working");
+  });
+
+  it("lets it win once the hub has withdrawn the card", () => {
+    expect(stateOf(answeredLookup([later], [], card(true))("m1", "s1")!)).toBe("needs_you");
+  });
+
+  it("still waits again at once for a new card", () => {
+    expect(stateOf(answeredLookup([later], [ix("s1", "new")], card())("m1", "s1")!)).toBe("needs_you");
   });
 });

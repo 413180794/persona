@@ -113,7 +113,9 @@ extension MarkdownUI.Theme {
         }
 }
 
-/// Preview of the card, light or dark, then 保存到相册 or 分享 (the image, or the plain text).
+/// Preview of the card, light or dark, with the image viewer's bars (#4714, `ViewerTopBar` / `ViewerBottomBar`): a round
+/// close button and 浅色 / 深色 in a glass capsule on top; 分享 (the image) · 保存 and 拷贝 in a capsule · 分享文字 (the
+/// plain text) at the bottom. The card scrolls under the bars.
 struct MessageShareSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -125,65 +127,82 @@ struct MessageShareSheet: View {
     private var isDark: Bool { dark ?? (scheme == .dark) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                Group {
-                    if let image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
-                            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-                    } else {
-                        ProgressView().frame(maxWidth: .infinity, minHeight: 240)
-                    }
-                }
-                .padding(20)
-            }
-            .background(Color(.systemGroupedBackground))
-            .safeAreaInset(edge: .bottom, spacing: 0) { actions }
-            .navigationTitle("分享消息")
-            .navigationBarTitleDisplayMode(.inline)
-            .pageToolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
-                ToolbarItem(placement: .principal) {
-                    Picker("样式", selection: Binding(get: { isDark }, set: { dark = $0 })) {
-                        Text("浅色").tag(false)
-                        Text("深色").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 140)
+        ScrollView {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
+                        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+                        .accessibilityLabel("消息卡片")
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 240)
                 }
             }
-            .task(id: isDark) { image = MessageShareCard.render(message, dark: isDark) }
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.vertical, Theme.Space.l)
         }
+        .scrollIndicators(.hidden)
+        .background(Color(.systemGroupedBackground))
+        .safeAreaInset(edge: .top, spacing: 0) { topBar.padding(.vertical, Theme.Space.s) }
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar.padding(.vertical, Theme.Space.s) }
+        .task(id: isDark) { image = MessageShareCard.render(message, dark: isDark) }
         .presentationDetents([.large])
     }
 
-    private var actions: some View {
-        HStack(spacing: 12) {
-            Button { Task { await save() } } label: {
-                Label(saving ? "正在保存" : "保存图片", systemImage: Theme.Icon.save)
-                    .font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
+    private var topBar: some View {
+        ViewerTopBar {
+            Button { dismiss() } label: { ViewerIcon(symbol: Theme.Icon.close) }
+                .viewerRound()
+                .accessibilityLabel("完成")
+                .accessibilityIdentifier("share-card-close")
+                .keyboardShortcut(.cancelAction)
+        } center: {
+            Picker("样式", selection: Binding(get: { isDark }, set: { dark = $0 })) {
+                Text("浅色").tag(false)
+                Text("深色").tag(true)
             }
-            .themedButton(prominent: false)
-            .disabled(image == nil || saving)
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .accessibilityIdentifier("share-card-style")
+            .padding(Theme.Space.xs)
+            .surface(in: Capsule()) // not interactive glass: that would take the segments' taps
+        } trailing: {
+            ViewerBarSpacer()
+        }
+    }
+
+    private var bottomBar: some View {
+        ViewerBottomBar {
             if let image {
                 ShareLink(item: Image(uiImage: image), preview: SharePreview("消息卡片", image: Image(uiImage: image))) {
-                    Label("分享图片", systemImage: Theme.Icon.share)
-                        .font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
+                    ViewerIcon(symbol: Theme.Icon.share)
                 }
-                .themedButton(prominent: true)
+                .accessibilityLabel("分享")
+            } else {
+                ViewerIcon(symbol: Theme.Icon.share, enabled: false)
+                    .accessibilityLabel("分享")
+                    .accessibilityAddTraits(.isButton)
             }
-            ShareLink(item: message.text) {
-                Image(systemName: Theme.Icon.text).font(Theme.Font.heading).frame(width: 50, height: 50)
-            }
-            .themedButton(prominent: false)
-            .accessibilityLabel("分享文字")
+        } actions: {
+            Button { Task { await save() } } label: { ViewerIcon(symbol: Theme.Icon.save) }
+                .disabled(image == nil || saving)
+                .accessibilityLabel(saving ? "保存中" : "保存")
+            Button { copyImage() } label: { ViewerIcon(symbol: Theme.Icon.copy) }
+                .disabled(image == nil)
+                .accessibilityLabel("拷贝")
+        } trailing: {
+            ShareLink(item: message.text) { ViewerIcon(symbol: Theme.Icon.text) }
+                .accessibilityLabel("分享文字")
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.bar)
+    }
+
+    private func copyImage() {
+        guard let image else { return }
+        UIPasteboard.general.image = image
+        Haptics.success()
+        AppModel.shared.toast = Toast(String(localized: "已拷贝图片"), style: .success)
     }
 
     private func save() async {

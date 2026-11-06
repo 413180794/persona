@@ -1,7 +1,7 @@
 import XCTest
 
 /// Saving to the photo library for real (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB): the image viewer's 保存
-/// and the share card's 保存图片, each after allowing the system's permission alert. Photos runs the change block on its
+/// and the share card's 保存, each after allowing the system's permission alert. Photos runs the change block on its
 /// own queue; a block the compiler took for main-actor code crashed the app there (2026-10-31), so the test only
 /// passes if the app is still alive and says 已保存到相册.
 /// The conversation with the screenshot is put in by the test (GET /mock/photo?on=1) rather than by starting the mock
@@ -71,7 +71,7 @@ final class PhotoSaveTests: XCTestCase {
 
     @MainActor func testSaveTheShareCard() throws {
         let app = launch(["-showShareCard", "YES"])
-        let save = app.buttons["保存图片"]
+        let save = app.buttons["保存"]
         XCTAssertTrue(save.waitForExistence(timeout: 20), "the share card did not open:\n\(app.debugDescription)")
         _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: save)], timeout: 10)
         save.tap()

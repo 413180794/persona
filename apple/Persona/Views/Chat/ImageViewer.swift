@@ -172,17 +172,17 @@ struct ImageViewer: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: Theme.Space.m) {
+        ViewerTopBar {
             Button { dismiss() } label: { ViewerIcon(symbol: Theme.Icon.back) }
-                .buttonStyle(.plain)
-                .chromeSurface(in: Circle())
+                .viewerRound()
                 .accessibilityLabel("关闭")
                 .accessibilityIdentifier("viewer-close")
                 .keyboardShortcut(.cancelAction)
-            titleCapsule.frame(maxWidth: .infinity)
+        } center: {
+            titleCapsule
+        } trailing: {
             moreMenu
         }
-        .padding(.horizontal, Theme.Space.page)
     }
 
     private var titleCapsule: some View {
@@ -234,35 +234,25 @@ struct ImageViewer: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: Theme.Space.m) {
+        ViewerBottomBar {
             shareButton
-            Spacer(minLength: 0)
-            HStack(spacing: .zero) { // the capsule's buttons touch, as Photos' do
-                Button { Task { await save() } } label: { ViewerIcon(symbol: Theme.Icon.save) }
-                    .buttonStyle(.plain)
-                    .disabled(saving || currentImage == nil)
-                    .accessibilityLabel(saving ? "保存中" : "保存")
-                if attach != nil {
-                    Button { editing = currentImage } label: { ViewerIcon(symbol: Theme.Icon.markup) }
-                        .buttonStyle(.plain)
-                        .disabled(currentImage == nil)
-                        .accessibilityLabel("标注")
-                }
-                Button { showInfo = true } label: { ViewerIcon(symbol: Theme.Icon.info) }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("信息")
-                    .popover(isPresented: $showInfo) { info.presentationCompactAdaptation(.popover) }
+        } actions: {
+            Button { Task { await save() } } label: { ViewerIcon(symbol: Theme.Icon.save) }
+                .disabled(saving || currentImage == nil)
+                .accessibilityLabel(saving ? "保存中" : "保存")
+            if attach != nil {
+                Button { editing = currentImage } label: { ViewerIcon(symbol: Theme.Icon.markup) }
+                    .disabled(currentImage == nil)
+                    .accessibilityLabel("标注")
             }
-            .padding(.horizontal, Theme.Space.xs)
-            .chromeSurface(in: Capsule())
-            Spacer(minLength: 0)
+            Button { showInfo = true } label: { ViewerIcon(symbol: Theme.Icon.info) }
+                .accessibilityLabel("信息")
+                .popover(isPresented: $showInfo) { info.presentationCompactAdaptation(.popover) }
+        } trailing: {
             Button { if let img = currentImage { copy(img) } } label: { ViewerIcon(symbol: Theme.Icon.copy) }
-                .buttonStyle(.plain)
                 .disabled(currentImage == nil)
-                .chromeSurface(in: Circle())
                 .accessibilityLabel("拷贝")
         }
-        .padding(.horizontal, Theme.Space.page)
     }
 
     @ViewBuilder private var shareButton: some View {
@@ -270,13 +260,9 @@ struct ImageViewer: View {
             ShareLink(item: Image(uiImage: img), preview: SharePreview(current?.title ?? String(localized: "图片"), image: Image(uiImage: img))) {
                 ViewerIcon(symbol: Theme.Icon.share)
             }
-            .buttonStyle(.plain)
-            .chromeSurface(in: Circle())
             .accessibilityLabel("分享")
         } else {
-            ViewerIcon(symbol: Theme.Icon.share)
-                .foregroundStyle(.tertiary)
-                .chromeSurface(in: Circle())
+            ViewerIcon(symbol: Theme.Icon.share, enabled: false)
                 .accessibilityLabel("分享")
                 .accessibilityAddTraits(.isButton)
         }
@@ -392,19 +378,6 @@ private struct WebMarkdownImage: View {
         } else {
             DefaultImageProvider.default.makeImage(url: url)
         }
-    }
-}
-
-/// A symbol in one of the viewer's round buttons or in its capsule: the same tap-sized square everywhere.
-private struct ViewerIcon: View {
-    var symbol: String
-    var body: some View {
-        Image(systemName: symbol)
-            .font(Theme.Font.heading)
-            .fontWeight(.medium)
-            .foregroundStyle(Color.primary)
-            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-            .contentShape(.rect)
     }
 }
 

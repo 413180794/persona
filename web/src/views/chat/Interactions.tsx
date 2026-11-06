@@ -37,7 +37,9 @@ export async function resolve(ix: Interaction, body: Record<string, unknown>) {
     // Answered already (here, its event missed; or elsewhere): the hub says with what, and the card shows that.
     const already = res?.already === true;
     const r: Resolution = already ? (res.resolution ?? {}) : body;
-    endInteraction(ix.id, r.dismiss === true && !already ? undefined : { ix, resolution: r, already });
+    // Handed back now, or the hub says it was handed back already: the agent waits on the computer (#4877).
+    const handedBack = already ? res.status === "dismissed" : r.dismiss === true;
+    endInteraction(ix.id, r.dismiss === true && !already ? undefined : { ix, resolution: r, already, handedBack });
     if (already) toast(t("chat-interactions.already_answered"), "info");
     return true;
   } catch (e) {

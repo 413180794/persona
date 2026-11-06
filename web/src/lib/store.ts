@@ -31,6 +31,12 @@ export interface AnsweredCard {
   /** When this page answered it (Date.now(), set by endInteraction): views/assistant/answered-lookup.ts compares it
    *  with the agent's state_since. */
   at?: number;
+  /** Handed back to the computer (dismiss; or the hub says it was handed back already): its agent still waits there,
+   *  so answered-lookup does not count it as answered (#4877). */
+  handedBack?: boolean;
+  /** The hub has withdrawn the card (its interaction_resolved came, or it was over already): until then a sessions push
+   *  that still says needs_you may be from before the answer took (#4877). */
+  withdrawn?: boolean;
 }
 
 export interface State {
@@ -414,6 +420,7 @@ function onMessage(msg: Record<string, unknown>) {
       break;
     case "interaction_resolved":
       changeInteraction(msg.id as string, null);
+      cardWithdrawn(msg.id as string);
       break;
     case "items": {
       const e = msg as unknown as ItemsEvent;
@@ -574,15 +581,30 @@ const ANSWERED_MS = 20_000;
 export function endInteraction(id: string, answer?: AnsweredCard) {
   changeInteraction(id, null);
   if (!answer) return;
-  const card = { ...answer, at: answer.at ?? Date.now() };
+  const card = { ...answer, at: answer.at ?? Date.now(), withdrawn: answer.withdrawn || answer.already === true || resolvedSeen.has(id) };
   set({ answered: { ...state.answered, [id]: card } });
   setTimeout(() => dropAnswered(id, card), ANSWERED_MS);
 }
 
-/** Takes an answered card away (its time is up, or closed); `only` keeps a newer one for the same id. */
+// Cards the hub has withdrawn (interaction_resolved), newest last: the event often comes before the answer's own reply.
+const resolvedSeen = new Set<string>();
+const RESOLVED_KEPT = 200;
+
+/** The hub withdrew a card (interaction_resolved, on the same socket as the sessions pushes). */
+export function cardWithdrawn(id: string) {
+  resolvedSeen.delete(id);
+  resolvedSeen.add(id);
+  if (resolvedSeen.size > RESOLVED_KEPT) resolvedSeen.delete(resolvedSeen.values().next().value!);
+  const cur = state.answered[id];
+  if (!cur || cur.withdrawn) return;
+  set({ answered: { ...state.answered, [id]: { ...cur, withdrawn: true } } });
+}
+
+/** Takes an answered card away (its time is up, or closed); `only` keeps a newer one for the same id (the same answer
+ *  marked withdrawn since is still that one: compared by its time). */
 export function dropAnswered(id: string, only?: AnsweredCard) {
   const cur = state.answered[id];
-  if (!cur || (only && cur !== only)) return;
+  if (!cur || (only && cur !== only && cur.at !== only.at)) return;
   const answered = { ...state.answered };
   delete answered[id];
   set({ answered });
@@ -709,6 +731,7 @@ export function reset() {
   disconnect();
   cursor = NO_CURSOR; // another login: another stream
   ixChanges.clear();
+  resolvedSeen.clear();
   // a /todos or /assistant answer still on its way belongs to the old login
   todosAsked.forget();
   assistantAsked.forget();

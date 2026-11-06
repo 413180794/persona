@@ -398,3 +398,36 @@ describe("助手会话列表：先发的 /assistant 晚回来不盖掉新的 (#4
     expect(shown()).toEqual({ main: "second", ids: ["second", "first"] });
   });
 });
+
+describe("the hub withdrawing an answered card (#4877)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    reset();
+  });
+
+  it("marks it withdrawn and keeps it for its time", async () => {
+    const { cardWithdrawn } = await import("./store");
+    vi.useFakeTimers();
+    const ix = { id: "ix_w", machine_id: "m", session_id: "s", kind: "permission" } as const;
+    endInteraction("ix_w", { ix, resolution: { allow: true } });
+    expect(getState().answered.ix_w?.withdrawn).toBeFalsy();
+    cardWithdrawn("ix_w");
+    expect(getState().answered.ix_w?.withdrawn).toBe(true);
+    vi.advanceTimersByTime(25_000);
+    expect(getState().answered).toEqual({});
+  });
+
+  it("knows a card the hub withdrew before the answer's reply came", async () => {
+    const { cardWithdrawn } = await import("./store");
+    const ix = { id: "ix_e", machine_id: "m", session_id: "s", kind: "permission" } as const;
+    cardWithdrawn("ix_e");
+    endInteraction("ix_e", { ix, resolution: { allow: true } });
+    expect(getState().answered.ix_e?.withdrawn).toBe(true);
+  });
+
+  it("knows an already-answered card is withdrawn", () => {
+    const ix = { id: "ix_a", machine_id: "m", session_id: "s", kind: "permission" } as const;
+    endInteraction("ix_a", { ix, resolution: { allow: true }, already: true });
+    expect(getState().answered.ix_a?.withdrawn).toBe(true);
+  });
+});
