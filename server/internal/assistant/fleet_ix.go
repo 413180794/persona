@@ -643,7 +643,9 @@ func (s *Service) outcome(id string) (status string, r proto.Resolution, ended b
 	if st == nil {
 		return "", proto.Resolution{}, false
 	}
-	status, res, err := st.InteractionOutcome(context.Background(), id)
+	ctx, cancel := context.WithTimeout(context.Background(), historyTimeout)
+	defer cancel()
+	status, res, err := st.InteractionOutcome(ctx, id)
 	switch {
 	case err != nil || status == "" || status == "pending":
 		return status, proto.Resolution{}, false
@@ -654,13 +656,19 @@ func (s *Service) outcome(id string) (status string, r proto.Resolution, ended b
 	}
 }
 
-// record / recordEnd keep the interaction history in the database (best effort).
+// historyTimeout bounds each interaction history read or write. They run before the apps see a new card and before
+// a hook hears its answer, so a slow or locked database must not hold either back for longer than this.
+var historyTimeout = 5 * time.Second
+
+// record / recordEnd keep the interaction history in the database (best effort, within historyTimeout).
 func (s *Service) record(ix proto.Interaction) {
 	st := s.fleetStore()
 	if st == nil {
 		return
 	}
-	if err := st.InsertInteraction(context.Background(), ix); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), historyTimeout)
+	defer cancel()
+	if err := st.InsertInteraction(ctx, ix); err != nil {
 		s.logf("record interaction: %v", err)
 	}
 }
@@ -670,7 +678,9 @@ func (s *Service) recordEnd(id, status string, r *proto.Resolution) {
 	if st == nil {
 		return
 	}
-	if err := st.FinishInteraction(context.Background(), id, status, r); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), historyTimeout)
+	defer cancel()
+	if err := st.FinishInteraction(ctx, id, status, r); err != nil {
 		s.logf("record interaction outcome: %v", err)
 	}
 }
@@ -933,14 +943,17 @@ func (s *Service) alwaysAllowed(ctx context.Context, ix proto.Interaction) (prot
 }
 
 // keepAlways keeps what a card answered with 本会话总是允许 grants, then answers the conversation's other cards
-// waiting meanwhile that it covers now (parallel tool calls ask at once).
+// waiting meanwhile that it covers now (parallel tool calls ask at once). It runs before the hook hears the answer,
+// so each database call is bounded by historyTimeout: a grant that cannot be kept is only logged.
 func (s *Service) keepAlways(ix proto.Interaction, r proto.Resolution) {
 	st := s.fleetStore()
 	if st == nil || !alwaysCard(ix) || r.Allow == nil || !*r.Allow || !r.Always {
 		return
 	}
-	ctx := context.Background()
-	if err := st.AllowAlways(ctx, ix.SessionID, ix.ToolName, ix.AlwaysKeys); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), historyTimeout)
+	err := st.AllowAlways(ctx, ix.SessionID, ix.ToolName, ix.AlwaysKeys)
+	cancel()
+	if err != nil {
 		s.logf("[%s] keep 本会话总是允许: %v", ix.MachineID, err)
 		return
 	}
@@ -954,7 +967,10 @@ func (s *Service) keepAlways(ix proto.Interaction, r proto.Resolution) {
 	}
 	s.fleet.mu.Unlock()
 	for _, w := range waiting {
-		if res, ok := s.alwaysAllowed(ctx, w); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), historyTimeout)
+		res, ok := s.alwaysAllowed(ctx, w)
+		cancel()
+		if ok {
 			_ = s.resolve(w.ID, res)
 		}
 	}

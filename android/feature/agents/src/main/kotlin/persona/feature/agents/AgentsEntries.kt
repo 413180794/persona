@@ -182,40 +182,51 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             onOpenSession = { key -> navigator.navigate(ChatRoute(key.machineId, key.sessionId)) },
             onHandOff = { todo -> handOffTodo = todo }
         )
+        // Kept while the to-do is open, so an unconfirmed start is checked again rather than posted a second time.
+        var handOffPending by remember(route.todoId) { mutableStateOf<TodoHandOffOperation?>(null) }
+        var handOffStarting by remember { mutableStateOf(false) }
+        var handOffError by remember { mutableStateOf<AgentText?>(null) }
         handOffTodo?.let { targetTodo ->
             val todoNameHint = stringResource(R.string.agents_row_todo, targetTodo.title)
             TodoHandOffSheet(
                 todo = targetTodo,
                 machines = machines,
                 sessions = sessions,
-                onDismiss = { handOffTodo = null },
+                onDismiss = { handOffTodo = null; handOffError = null },
+                starting = handOffStarting,
+                error = handOffError?.resolve(),
                 onHandOffNew = { machineId, cwd, launcher, permissionMode, prompt ->
+                    handOffStarting = true
+                    handOffError = null
                     scope.launch {
-                        try {
-                            val opId = java.util.UUID.randomUUID().toString()
-                            val res = creationService?.start(
-                                AgentStartRequest(
-                                    machineId = machineId,
-                                    cwd = cwd,
-                                    launcher = launcher,
-                                    permissionMode = permissionMode,
-                                    prompt = null,
-                                    nameHint = todoNameHint,
-                                    async = true,
-                                    todoId = targetTodo.id
-                                ),
-                                operationId = opId
-                            )
-                            if (res is AgentStartResult.Created) {
-                                dependencies.sessions().adopt(res.session)
-                                dependencies.sender().send(res.session.key, prompt, java.util.UUID.randomUUID().toString())
+                        val request = AgentStartRequest(
+                            machineId = machineId,
+                            cwd = cwd,
+                            launcher = launcher,
+                            permissionMode = permissionMode,
+                            prompt = null,
+                            nameHint = todoNameHint,
+                            async = true,
+                            todoId = targetTodo.id
+                        )
+                        // finally: a pairing change cancels the start, and the sheet must not stay on 启动中….
+                        val outcome = try {
+                            handOffToNewAgent(creationService, request, prompt, dependencies.sender(),
+                                adopt = { dependencies.sessions().adopt(it) }, pending = handOffPending)
+                        } finally { handOffStarting = false }
+                        when (outcome) {
+                            is HandOffOutcome.Opened -> {
+                                handOffPending = null
                                 handOffTodo = null
-                                navigator.navigate(ChatRoute(res.session.machineId, res.session.sessionId))
+                                navigator.navigate(ChatRoute(outcome.session.machineId, outcome.session.sessionId))
                             }
-                        } catch (_: Exception) {}
+                            is HandOffOutcome.Failed -> { handOffPending = null; handOffError = outcome.message }
+                            is HandOffOutcome.Unconfirmed -> { handOffPending = outcome.operation; handOffError = outcome.message }
+                        }
                     }
                 },
                 onHandOffExisting = { target, prompt ->
+                    handOffStarting = true
                     scope.launch {
                         try {
                             tasksStore?.linkTodoAgent(targetTodo.id, target.machineId, target.sessionId)
@@ -223,6 +234,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
                             handOffTodo = null
                             navigator.navigate(ChatRoute(target.machineId, target.sessionId))
                         } catch (_: Exception) {}
+                        handOffStarting = false
                     }
                 }
             )

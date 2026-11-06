@@ -43,7 +43,7 @@ func (s *Service) fleetHandler(next http.Handler) http.Handler {
 		if err := s.resolve(id, res); err != nil {
 			switch {
 			case errors.Is(err, errNotPending):
-				s.writeEnded(w, id, res, err)
+				s.writeEnded(r.Context(), w, id, res, err)
 			case errors.Is(err, errInvalidElicitation):
 				apierr.Write(w, http.StatusBadRequest, err)
 			default:
@@ -99,11 +99,13 @@ func (s *Service) fleetHandler(next http.Handler) http.Handler {
 // again) it is the same outcome as the first time: 200 with already and the answer as the history keeps it, so the
 // app shows the card as answered rather than an error — the first answer's event may not have reached it. Otherwise
 // (expired, withdrawn, handed back, or unknown) 410, with how it ended when the history knows.
-func (s *Service) writeEnded(w http.ResponseWriter, id string, r proto.Resolution, err error) {
+func (s *Service) writeEnded(ctx context.Context, w http.ResponseWriter, id string, r proto.Resolution, err error) {
 	var status string
 	var kept *proto.Resolution
 	if st := s.fleetStore(); st != nil {
-		status, kept, _ = st.InteractionOutcome(context.Background(), id)
+		ctx, cancel := context.WithTimeout(ctx, historyTimeout)
+		status, kept, _ = st.InteractionOutcome(ctx, id)
+		cancel()
 	}
 	if status == "resolved" || (status == "dismissed" && r.Dismiss) {
 		out := map[string]any{"ok": true, "already": true, "status": status}

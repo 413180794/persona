@@ -35,10 +35,13 @@ fun TodoHandOffSheet(
     onDismiss: () -> Unit,
     onHandOffNew: (machineId: String, cwd: String, launcher: String, permissionMode: String?, prompt: String) -> Unit,
     onHandOffExisting: (target: SessionKey, prompt: String) -> Unit,
+    /** The caller's start is under way; it ends on every outcome but an opened chat. */
+    starting: Boolean = false,
+    /** Why the last tap didn't open a chat (a rejected or unconfirmed start). */
+    error: String? = null,
 ) {
     var mode by remember { mutableStateOf(HandOffMode.New) }
     var instruction by remember { mutableStateOf("") }
-    var starting by remember { mutableStateOf(false) }
 
     val onlineMachines = remember(machines) { machines.filter { it.online }.ifEmpty { machines } }
     var selectedMachine by remember(onlineMachines) { mutableStateOf(onlineMachines.firstOrNull()) }
@@ -230,11 +233,12 @@ fun TodoHandOffSheet(
 
             Spacer(Modifier.height(8.dp))
 
+            error?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text) }
+
             JButton(
                 text = stringResource(if (starting) R.string.agents_handoff_starting else R.string.agents_todo_hand_to_agent),
                 onClick = {
                     val prompt = todoHandOffPrompt(todo.title, todo.notes, instruction)
-                    starting = true
                     if (mode == HandOffMode.New) {
                         val m = selectedMachine ?: return@JButton
                         onHandOffNew(

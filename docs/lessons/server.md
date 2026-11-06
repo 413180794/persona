@@ -526,6 +526,10 @@ App 和网页按 `machine_id` + `session_id` 把卡放进对话；没有会话�
 
 `internal/rpc` 原来没有取消：`Peer.Call` 的 ctx 结束只在本地返回，对端照常跑。用户打断助手这一轮，node 停掉 Claude 进程，`wechat-connector_send` 报「Connection closed」，hub 那边的审批卡却挂到 15 分钟过期。这期间点「允许」会把那条过时的消息发出去，助手重试后还有第二张一样的卡。现在 node 的 `mcp.call` 会发 `rpc.cancel`。别的方法想要同样的行为，加进 `Peer.Cancels`，先确认对端在 ctx 结束时停下是对的（写库之类要做完的别加）。
 
+## 写交互历史要带超时（2026-11-05，#2937）
+
+交互队列现在在管理者里（`server/internal/assistant`，#3246 从 hub 挪过来）：先写交互历史、再把卡片发给 App 和把回答交给 hook（`fleet_ix.go`：`record` 在 `announce` 前，`resolve` 里 `recordEnd` 在 `p.done <- r` 前），测试也依赖这个顺序。这几次写库原来用 `context.Background()`，连接池也没有 `statement_timeout`：interactions 的那一行被别的会话锁着时（Docker 的 postgres:18 上用 `SELECT … FOR UPDATE` 复现），回答一直等到锁释放才到 hook，锁不放就永远等，还占着池里 8 个连接中的一个。现在 `record`、`recordEnd`、`outcome` 和 `fleet_routes.go` 的 `writeEnded`（用请求的 context）都限在 `historyTimeout`（5 秒）内，写不进只记日志。`resolve` 里 `keepAlways` 写「本会话总是允许」（assistant_always 表）也在 hook 听到回答之前，同样每次限在 `historyTimeout` 内。测试在 `assistant/history_timeout_test.go`。在用户等着的路径上同步写库，一律带超时。
+
 ## 处理器的 ctx 在回复后就结束，长期的事要挂连接的 ctx（2026-11-05，#3139）
 
 #2645 给 `rpc.Peer` 加取消时，每个请求的 ctx 改成了处理器返回就 `cancel()`。`session.watch` 的 transcript 循环原来直接 `WithCancel(ctx)` 这个 ctx，于是 watch 刚回复就被取消：hub 订阅了、node 也回了 ok，但之后一条 `session.items` 都不推，页面只剩 `sessions_delta`，要刷新才有新内容——主会话和子 Agent 一样（子 Agent 是先被用户发现的）。单测都绿，因为测试直接调 `n.watch(...)`（用 `context.Background()`），不经 `rpc.Peer`。
