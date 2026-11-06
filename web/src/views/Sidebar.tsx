@@ -33,6 +33,7 @@ import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
 import { draftLine, rowLine } from "../lib/row-line";
 import { useLeftDraft } from "../lib/drafts";
+import { planInRow, planLabel, planLine } from "../lib/plan";
 import { answeredSession, answerPending, lastAnsweredAt } from "./assistant/answered-lookup";
 import { BREATHING, connPhase, connStatus, phaseTone, type ConnPhase } from "../lib/connection";
 import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
@@ -1881,6 +1882,8 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   const detail = withDetail ? rowDetail(s, contextUsed) : [];
   const workflow = showState && !s.assistant && st !== "offline" ? workflowShortLine(s) : "";
   const workflowTitle = workflow ? workflowLine(s, now) : "";
+  // its own task list (#5302): 3/5 · the step in progress
+  const plan = showState && !s.assistant && st !== "offline" && planInRow(s, st === "working") ? planLine(s) : "";
   // what sits at the row's end steps aside for the hover ⋯; the open row leaves room for its ⋯ instead
   const aside = active ? undefined : "group-hover/row:invisible";
   // behind a prefix (a tab's name, a pane's agent) the title keeps room for a few characters: the prefix shrinks first
@@ -1913,12 +1916,18 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusMark state={st} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SessionMark s={s} size={14} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
-      {detail.length > 0 || workflow || line ? (
+      {detail.length > 0 || workflow || line || plan ? (
         <span className={cx("flex flex-1 flex-col", titleMin)}>
           <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
             {label ?? sessionTitle(s)}
           </span>
           {line && <SecondLine line={line} draft={!!draft} />}
+          {plan && (
+            <span data-plan-line title={planLabel(s)} aria-label={planLabel(s)} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-ink-3">
+              <Icon name="list" size={10} stroke={2.2} className="shrink-0" />
+              <span className="truncate tabular-nums">{plan}</span>
+            </span>
+          )}
           {/* one line high: a piece that does not fit wraps out of sight instead of squeezing the others */}
           {workflow && (
             <span data-workflow-line title={workflowTitle} aria-label={workflowTitle} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-orange">

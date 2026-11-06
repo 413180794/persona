@@ -1362,8 +1362,7 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 		if t.Supervision != nil {
 			task.DoneWhen = len(t.Supervision.DoneWhen)
 			if p := t.Supervision.Progress; p != nil {
-				task.Reported = &prompts.SnapshotReport{Kind: p.Kind, Step: p.Step, Steps: p.Steps, Text: p.Text,
-					Minutes: max(0, int(now.Sub(p.At).Minutes()))}
+				reported(&task, p, taskLead(st, agents), now)
 			}
 		}
 		all = append(all, ranked{task, rank})
@@ -1406,7 +1405,27 @@ func snapshotTask(t Todo, st string, agents []proto.Session, now time.Time) prom
 		}
 	}
 	task.Workflows = runningWorkflows(last, now)
+	task.Plan = snapshotPlan(last)
 	return task
+}
+
+// reported puts the agent's latest report p on task. A report newer than lead's plan says more than the plan's count:
+// it stands alone.
+func reported(task *prompts.SnapshotTask, p *TaskProgress, lead proto.Session, now time.Time) {
+	task.Reported = &prompts.SnapshotReport{Kind: p.Kind, Step: p.Step, Steps: p.Steps, Text: p.Text,
+		Minutes: max(0, int(now.Sub(p.At).Minutes()))}
+	if lead.Plan != nil && p.At.After(lead.Plan.At) {
+		task.Plan = nil
+	}
+}
+
+// snapshotPlan is c's own task list as the snapshot tells it, nil when it keeps none (docs/agent-goal.md "Plan").
+func snapshotPlan(c proto.Session) *prompts.SnapshotAgentPlan {
+	p := c.Plan
+	if p == nil || p.Total == 0 {
+		return nil
+	}
+	return &prompts.SnapshotAgentPlan{Done: p.Done, Total: p.Total, Current: p.Current}
 }
 
 // taskLead is the agent a task in state st is shown with: the latest of those that put it in that state (the one

@@ -47,6 +47,9 @@ func listKeyFmt(list []proto.Session) string {
 		if g := s.Goal; g != nil {
 			fmt.Fprintf(&b, "goal:%s/%q/%q\n", g.Status, g.Objective, g.Reason)
 		}
+		if p := s.Plan; p != nil {
+			fmt.Fprintf(&b, "plan:%d/%d/%q\n", p.Done, p.Total, p.Current)
+		}
 		for _, a := range s.Subagents {
 			fmt.Fprintf(&b, "%s:%v:%d,", a.ID, a.Running, a.UpdatedAt.Unix()/10)
 		}
@@ -99,6 +102,7 @@ func listKeyVariants() (proto.Session, map[string]proto.Session) {
 		Capabilities: &proto.SessionCapabilities{}, Attached: true, CodexRoute: "app_server", CodexRouteNote: "n",
 		Background: []proto.BackgroundTask{{ID: "b1"}}, Loop: &proto.LoopInfo{NextAt: at},
 		Goal:      &proto.GoalInfo{Status: "active", Objective: "o", Reason: "r"},
+		Plan:      &proto.PlanInfo{Done: 3, Total: 5, Current: "Reproducing the crash", At: at},
 		Subagents: []proto.Subagent{{ID: "a1", Running: true, UpdatedAt: at}},
 		Ports:     []proto.Port{{Port: 3000, PID: 7, Title: "dev"}}}
 	v := map[string]func(*proto.Session){
@@ -163,7 +167,18 @@ func listKeyVariants() (proto.Session, map[string]proto.Session) {
 		"goal_status":   func(s *proto.Session) { s.Goal = &proto.GoalInfo{Status: "complete", Objective: "o", Reason: "r"} },
 		"goal_reason":   func(s *proto.Session) { s.Goal = &proto.GoalInfo{Status: "active", Objective: "o", Reason: "r\n2"} },
 		"goal_none":     func(s *proto.Session) { s.Goal = nil },
-		"subagent_run":  func(s *proto.Session) { s.Subagents = []proto.Subagent{{ID: "a1", UpdatedAt: at}} },
+		"plan_done": func(s *proto.Session) {
+			s.Plan = &proto.PlanInfo{Done: 4, Total: 5, Current: "Reproducing the crash", At: at}
+		},
+		"plan_total": func(s *proto.Session) {
+			s.Plan = &proto.PlanInfo{Done: 3, Total: 6, Current: "Reproducing the crash", At: at}
+		},
+		"plan_current": func(s *proto.Session) { s.Plan = &proto.PlanInfo{Done: 3, Total: 5, Current: "Fixing it", At: at} },
+		"plan_at_churn": func(s *proto.Session) {
+			s.Plan = &proto.PlanInfo{Done: 3, Total: 5, Current: "Reproducing the crash", At: act}
+		},
+		"plan_none":    func(s *proto.Session) { s.Plan = nil },
+		"subagent_run": func(s *proto.Session) { s.Subagents = []proto.Subagent{{ID: "a1", UpdatedAt: at}} },
 		"subagent_at": func(s *proto.Session) {
 			s.Subagents = []proto.Subagent{{ID: "a1", Running: true, UpdatedAt: act.Add(9 * time.Second)}}
 		},

@@ -138,6 +138,7 @@ type quickMeta struct {
 	queue    []string
 	loop     *proto.LoopInfo
 	goal     *proto.GoalInfo        // from backgroundTasks too: a goal is often set at the start of a long transcript
+	plan     *proto.PlanInfo        // from the same scan (bgPlan): a TodoWrite is often far back in a long turn
 	bg       []proto.BackgroundTask // from backgroundTasks: the tail alone misses tasks started earlier in a long turn
 	bgWait   bool                   // bg and loop are not known yet (a big first read is running)
 	wf       []proto.Workflow       // workflow runs, as the transcript tells them (bgWorkflows)
@@ -206,6 +207,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 			m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
 			m.wf, m.wfScript = n.bgWorkflows(path)
 			m.ultracode, m.ultracodeAt = n.bgUltracode(path)
+			m.plan = n.bgPlan(path)
 			n.mu.Lock()
 			n.metas[path] = m
 			n.mu.Unlock()
@@ -222,6 +224,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
 	m.wf, m.wfScript = n.bgWorkflows(path)
 	m.ultracode, m.ultracodeAt = n.bgUltracode(path)
+	m.plan = n.bgPlan(path)
 	n.mu.Lock()
 	n.metas[path] = m
 	n.mu.Unlock()
@@ -728,7 +731,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				}
 				// Background shells keep running after the turn ends; background subagents are listed as subagents.
 				n.setBackground(&s, m)
-				s.Loop, s.Goal = m.loop, m.goal
+				s.Loop, s.Goal, s.Plan = m.loop, m.goal, m.plan
 				s.Subagents = n.subagents(id)
 			}
 		}
@@ -1957,6 +1960,12 @@ func listKeySized(list []proto.Session, size int) string {
 			w.quote(g.Objective, '/')
 			w.quote(g.Reason, '\n')
 		}
+		if p := s.Plan; p != nil { // a step done or started is pushed when it happens
+			w.b.WriteString("plan:")
+			w.int(int64(p.Done), '/')
+			w.int(int64(p.Total), '/')
+			w.quote(p.Current, '\n')
+		}
 		for _, a := range s.Subagents {
 			w.str(a.ID, ':')
 			w.str(strconv.FormatBool(a.Running), ':')
@@ -2557,6 +2566,23 @@ func (n *Node) bgWorkflows(path string) ([]proto.Workflow, map[string]string) {
 	return slices.Clone(sc.meta.Workflows), maps.Clone(sc.meta.WorkflowScripts)
 }
 
+// bgPlan is the plan the last backgroundTasks scan of path found (transcript.Meta.Plan), nil while a big first read runs.
+func (n *Node) bgPlan(path string) *proto.PlanInfo {
+	n.mu.Lock()
+	sc := n.bgScans[path]
+	n.mu.Unlock()
+	if sc == nil {
+		return nil
+	}
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if sc.pending || sc.meta.Plan == nil {
+		return nil
+	}
+	p := *sc.meta.Plan
+	return &p
+}
+
 // scanBackground reads the marker lines between *off and size into m, streamed (the first look at a 300 MB
 // transcript once held all of it in memory). A last line not complete yet is read next time.
 func scanBackground(f *os.File, off *int64, m *transcript.Meta, size int64) {
@@ -2573,7 +2599,9 @@ func scanBackground(f *os.File, off *int64, m *transcript.Meta, size int64) {
 			return
 		}
 		// api-request blobs repeat everything; skip them
-		if !long && len(line) <= 64<<10 && (containsAny(line, bgMarkers) || containsAny(line, transcript.GoalMarkers) || containsAny(line, transcript.UltracodeMarkers)) {
+		// A plan tool's result line does not name the tool: it is the line with the call's id.
+		if !long && len(line) <= 64<<10 && (containsAny(line, bgMarkers) || containsAny(line, transcript.GoalMarkers) || containsAny(line, transcript.UltracodeMarkers) ||
+			containsAny(line, transcript.PlanMarkers) || containsAny(line, m.PlanPending())) {
 			transcript.ParseLine(0, bytes.TrimSuffix(line, []byte("\n")), m)
 		}
 		long = false

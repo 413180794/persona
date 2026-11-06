@@ -146,7 +146,7 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 				continue
 			}
 			a := prompts.SnapshotAgent{Label: agentLabel(c), Machine: m.ID, Session: short(c.SessionID),
-				Link: sessionLink(web, m.ID, c.SessionID, false), Ultracode: ultracodeState(c.Ultracode)}
+				Link: sessionLink(web, m.ID, c.SessionID, false), Ultracode: ultracodeState(c.Ultracode), Plan: snapshotPlan(c)}
 			for _, w := range runningWorkflows(c, time.Now()) {
 				w.Agent, w.Machine, w.Session = a.Label, a.Machine, a.Session
 				workflows = append(workflows, w)

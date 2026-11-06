@@ -198,6 +198,8 @@ export interface Session {
   loop?: LoopInfo;
   /** The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md). */
   goal?: GoalInfo;
+  /** Its own task list (Claude Code's TodoWrite / TaskCreate): how far along it is (docs/agent-goal.md "Plan"). */
+  plan?: PlanInfo;
   background?: BackgroundTask[];
   /** Claude Code workflow runs it launched in the last day, newest first (#2935); older hubs leave it out. */
   workflows?: Workflow[];
@@ -257,6 +259,15 @@ export interface GoalInfo {
   token_budget?: number;
   seconds?: number;
   updated_at?: string;
+}
+
+/** An agent's own task list, counted (proto.PlanInfo): done of total items, and the one in progress. */
+export interface PlanInfo {
+  done: number;
+  total: number;
+  /** The item in progress (its activeForm), one line; absent when none is. */
+  current?: string;
+  at?: string;
 }
 
 /** A /loop: Claude re-runs a prompt on its own, scheduling each wakeup ("wakeup") or by cron ("cron"). */

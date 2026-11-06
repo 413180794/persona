@@ -14,5 +14,9 @@
   "chip_title": "目標（{status}）：{headline}",
   "reason_met": "達成と判断した理由",
   "reason_check": "最新のチェック",
-  "hint": "目標の設定・解除：入力欄で /goal <条件> または /goal clear を送信します（Claude Code）。"
+  "hint": "目標の設定・解除：入力欄で /goal <条件> または /goal clear を送信します（Claude Code）。",
+  "plan_count": "{done}/{total}",
+  "plan_line": "{done}/{total} · {current}",
+  "plan_label": "計画、{total} 件中 {done} 件完了",
+  "plan_label_current": "計画、{total} 件中 {done} 件完了：{current}"
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,5 +148,48 @@ func TestBackgroundTasksKeepsGoal(t *testing.T) {
 	f.Close()
 	if _, _, g, _ := n.backgroundTasks(path); g == nil || g.Status != "complete" || g.Reason != "shipped" {
 		t.Fatalf("goal after the appended check: %+v", g)
+	}
+}
+
+// The agent's plan (docs/agent-goal.md "Plan") written far before the quick tail is known, and follows the calls
+// appended later, through the result lines that do not name their tool; the session list's meta carries it.
+func TestBackgroundTasksKeepsPlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	call := func(id, tool, input string) string {
+		return `{"type":"assistant","uuid":"c` + id + `","timestamp":"2026-11-06T08:00:00Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"` + id + `","name":"` + tool + `","input":` + input + `}]}}` + "\n"
+	}
+	result := func(id, at string) string {
+		return `{"type":"user","uuid":"r` + id + `","timestamp":"` + at + `","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"` + id + `","content":"ok"}]}}` + "\n"
+	}
+	list := `{"todos":[{"content":"a","status":"completed","activeForm":"Doing a"},{"content":"b","status":"completed","activeForm":"Doing b"},` +
+		`{"content":"c","status":"completed","activeForm":"Doing c"},{"content":"d","status":"in_progress","activeForm":"Reproducing the crash"},` +
+		`{"content":"e","status":"pending","activeForm":"Doing e"}]}`
+	filler := bytes.Repeat([]byte(`{"type":"assistant","uuid":"x","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}`+"\n"), quickTail/64)
+	head := call("toolu_1", "TodoWrite", list) + result("toolu_1", "2026-11-06T08:00:01Z")
+	if err := os.WriteFile(path, append([]byte(head), filler...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	n := &Node{bgScans: map[string]*bgScan{}, metas: map[string]quickMeta{}}
+	st, _ := os.Stat(path)
+	m := n.meta(path, st)
+	if p := m.plan; p == nil || p.Done != 3 || p.Total != 5 || p.Current != "Reproducing the crash" {
+		t.Fatalf("plan from far back: %+v", p)
+	}
+
+	// The next step: the result line comes in a later write than its call, with filler between them.
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := strings.Replace(strings.Replace(list, `"d","status":"in_progress"`, `"d","status":"completed"`, 1), `"e","status":"pending"`, `"e","status":"in_progress"`, 1)
+	f.WriteString(call("toolu_2", "TodoWrite", next))
+	n.bgPlan(path) // nothing new yet
+	n.backgroundTasks(path)
+	f.Write(filler[:bytes.Index(filler[4096:], []byte("\n"))+4097]) // whole lines
+	f.WriteString(result("toolu_2", "2026-11-06T08:05:00Z"))
+	f.Close()
+	n.backgroundTasks(path)
+	if p := n.bgPlan(path); p == nil || p.Done != 4 || p.Current != "Doing e" || !p.At.Equal(time.Date(2026, 11, 6, 8, 5, 0, 0, time.UTC)) {
+		t.Fatalf("plan after the appended call: %+v", p)
 	}
 }

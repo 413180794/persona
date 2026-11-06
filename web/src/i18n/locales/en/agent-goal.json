@@ -14,5 +14,9 @@
   "chip_title": "Goal ({status}): {headline}",
   "reason_met": "Why it counts as achieved",
   "reason_check": "Latest check",
-  "hint": "To set or clear a goal, send /goal <condition> or /goal clear in the composer (Claude Code)."
+  "hint": "To set or clear a goal, send /goal <condition> or /goal clear in the composer (Claude Code).",
+  "plan_count": "{done}/{total}",
+  "plan_line": "{done}/{total} · {current}",
+  "plan_label": "Plan, {done} of {total} done",
+  "plan_label_current": "Plan, {done} of {total} done: {current}"
 }

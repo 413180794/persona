@@ -50,4 +50,12 @@ describe("an agent's sidebar row (#3195)", () => {
     expect(render({ ...base, state: "idle", last_text: "好了" })).not.toContain("data-row-line");
     expect(renderToStaticMarkup(<SessionRow {...props} s={{ ...base, state: "unread", last_text: "好了" }} showState={false} />)).not.toContain("data-row-line");
   });
+
+  it("shows its own plan while it works (#5302)", () => {
+    const plan = { done: 3, total: 5, current: "Reproducing the crash" };
+    const html = render({ ...base, state: "working", plan });
+    expect(html.match(/<span data-plan-line[^>]*>.*?<span class="truncate tabular-nums">(.*?)<\/span>/)?.[1]).toBe("3/5 · Reproducing the crash");
+    expect(render({ ...base, state: "idle", plan: { done: 2, total: 2 } })).not.toContain("data-plan-line");
+    expect(render({ ...base, state: "offline", plan })).not.toContain("data-plan-line");
+  });
 });

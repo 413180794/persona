@@ -69,10 +69,18 @@ type SnapshotMachine struct {
 }
 
 type SnapshotAgent struct {
-	Label, Machine, Session string // Session: the short id
-	Line                    string // what it waits for, or what it concluded ("" when not known)
-	Link                    string // its page in the hub's web app ("" when the hub has no public_url)
-	Ultracode               string // "on" / "off"; empty when the node does not know
+	Label, Machine, Session string             // Session: the short id
+	Line                    string             // what it waits for, or what it concluded ("" when not known)
+	Link                    string             // its page in the hub's web app ("" when the hub has no public_url)
+	Ultracode               string             // "on" / "off"; empty when the node does not know
+	Plan                    *SnapshotAgentPlan // its own task list (Session.Plan), nil when it keeps none
+}
+
+// SnapshotAgentPlan is an agent's own task list (TodoWrite / TaskCreate, docs/agent-goal.md "Plan"): Done of Total
+// items completed, and the one in progress ("" when none is).
+type SnapshotAgentPlan struct {
+	Done, Total int
+	Current     string
 }
 
 type SnapshotChat struct {
@@ -147,6 +155,8 @@ type SnapshotTask struct {
 	Delivery string
 	// Reported: what its agent last reported to the supervisor (report_to_supervisor), nil when it has not.
 	Reported *SnapshotReport
+	// Plan: its agent's own task list, nil when it keeps none or Reported is newer (a report says more).
+	Plan *SnapshotAgentPlan
 }
 
 // SnapshotReport is a supervised task's agent's latest report: its kind (progress, question, blocked, done), the step

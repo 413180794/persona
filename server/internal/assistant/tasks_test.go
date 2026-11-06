@@ -804,3 +804,37 @@ func TestSideConversationTaskFailedToStartPushes(t *testing.T) {
 		t.Fatalf("health Title = %q, want no task name", hpushed[0].Title)
 	}
 }
+
+// #5302: an agent's own task list is the task's progress in the snapshot, and the agents' too; a report to the
+// supervisor newer than the plan stands alone.
+func TestSnapshotShowsTheAgentsPlan(t *testing.T) {
+	now := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
+	planAt := now.Add(-10 * time.Minute)
+	lead := proto.Session{MachineID: "mac-a", SessionID: "e1f2a3b4-1", State: proto.StateWorking, UpdatedAt: now,
+		LastText: "先复现", Plan: &proto.PlanInfo{Done: 3, Total: 5, Current: "Reproducing the crash in landscape", At: planAt}}
+	planned := snapshotTask(Todo{ID: "todo_1", Title: "修横屏崩溃"}, "working", []proto.Session{lead}, now)
+	if p := planned.Plan; p == nil || p.Done != 3 || p.Total != 5 || p.Current != "Reproducing the crash in landscape" {
+		t.Fatalf("task plan: %+v", p)
+	}
+	older := planned
+	older.ID, older.Title = "todo_4", "修横屏布局"
+	reported(&older, &TaskProgress{Kind: "progress", Text: "在找视图", At: planAt.Add(-time.Minute)}, lead, now)
+	if older.Plan == nil || older.Reported == nil {
+		t.Fatalf("an older report hides the plan: %+v", older)
+	}
+	newer := snapshotTask(Todo{ID: "todo_2", Title: "修竖屏"}, "working", []proto.Session{lead}, now)
+	reported(&newer, &TaskProgress{Kind: "progress", Step: 4, Steps: 5, Text: "崩溃复现了，在改", At: now.Add(-2 * time.Minute)}, lead, now)
+	if newer.Plan != nil || newer.Reported == nil {
+		t.Fatalf("a newer report stands alone: %+v", newer)
+	}
+	none := snapshotTask(Todo{ID: "todo_3", Title: "没有计划"}, "working", []proto.Session{{MachineID: "mac-a", SessionID: "c1",
+		State: proto.StateWorking, UpdatedAt: now, LastText: "在看"}}, now)
+	if none.Plan != nil {
+		t.Fatalf("no plan: %+v", none.Plan)
+	}
+	idle := snapshotPlan(proto.Session{Plan: &proto.PlanInfo{Done: 2, Total: 2, At: planAt}})
+	golden(t, "assistant_snapshot.plan", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
+		Unread:  []prompts.SnapshotAgent{{Label: "整理文档", Machine: "mac-a", Session: "a9b8c7d6", Plan: idle}},
+		Working: []prompts.SnapshotAgent{{Label: "修横屏崩溃", Plan: planned.Plan}, {Label: "没有计划"}},
+		Tasks:   []prompts.SnapshotTask{planned, older, newer, none}}))
+}

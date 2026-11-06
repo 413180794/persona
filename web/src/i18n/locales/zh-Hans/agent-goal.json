@@ -14,5 +14,9 @@
   "chip_title": "目标（{status}）：{headline}",
   "reason_met": "为什么算达成",
   "reason_check": "最近一次检查",
-  "hint": "设置或清除目标：在输入框里发 /goal <条件> 或 /goal clear（Claude Code）。"
+  "hint": "设置或清除目标：在输入框里发 /goal <条件> 或 /goal clear（Claude Code）。",
+  "plan_count": "{done}/{total}",
+  "plan_line": "{done}/{total} · {current}",
+  "plan_label": "计划，已完成 {done}/{total}",
+  "plan_label_current": "计划，已完成 {done}/{total}：{current}"
 }

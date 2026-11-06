@@ -450,6 +450,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
  "goal":{"objective":"…","status":"active|paused|blocked|usage_limited|budget_limited|complete","reason":"…",   // the goal it's working on (docs/agent-goal.md)
         "tokens_used":12345,"token_budget":500000,"seconds":600,"updated_at":"..."},                              // absent when there is no goal
+ "plan":{"done":3,"total":5,"current":"Reproducing the crash in landscape","at":"..."},   // the agent's own task list (Claude Code's TodoWrite / TaskCreate / TaskUpdate; docs/agent-goal.md "Plan"): done of total items completed, current = the item in progress (its activeForm, else its subject; one line, at most 120 characters; absent when none is), at = when these last changed. Absent when it keeps no list, and for Codex and runtimes. Old nodes don't have this field
  // TCP ports the Agent's processes listen on that answer HTTP (docs/ports.md): one entry per port; title is its home page's <title> (absent if none). Old nodes don't have this field
  "ports":[{"port":5173,"addr":"127.0.0.1","pid":4242,"process":"node","title":"Vite + React"}],
  // Linked unfinished to-do (docs/todos.md): only present while currently linked (not released) and the to-do is unfinished; filled in by the hub

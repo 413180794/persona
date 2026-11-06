@@ -145,6 +145,11 @@ type Meta struct {
 	loopPending map[string]proto.LoopInfo
 	// Goal is the goal the agent works toward (Claude Code's /goal, a Codex thread goal), nil when none is set (goal.go).
 	Goal *proto.GoalInfo
+	// Plan is the agent's latest task list, counted (TodoWrite, TaskCreate / TaskUpdate; plan.go), nil when it keeps none.
+	Plan        *proto.PlanInfo
+	planItems   []planItem
+	planUses    map[string]proto.Item // tool_use_id → a plan tool's call, waiting for its result
+	planPending [][]byte              // planUses' ids (PlanPending)
 	// LastActivity is the time of the last real exchange (user input, assistant output, tool calls). Claude Code
 	// also appends recaps, titles and mode lines to idle sessions, so the file mtime is not "last used".
 	LastActivity time.Time
@@ -288,6 +293,7 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			meta.LastActivity = it.TS
 		}
 		meta.trackActivity(it)
+		meta.trackPlan(it)
 		switch {
 		case it.Wake:
 			meta.LastTurnWake = true

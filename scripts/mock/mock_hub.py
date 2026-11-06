@@ -13682,6 +13682,16 @@ def goal_mock(mode):
 
 if os.environ.get("MOCK_GOAL"):
     goal_mock(os.environ["MOCK_GOAL"])
+# MOCK_AGENT_PLANS=1: agents' own task lists (TodoWrite, docs/agent-goal.md "Plan", #5302): the widget agent is at 3/5,
+# the unit tests' at 1/4 with nothing in progress (it waits for an answer). The plans are 10 minutes old, so with
+# MOCK_TASKS_REPORTS=1 the widget task's newer report stands alone on its card.
+if os.environ.get("MOCK_AGENT_PLANS") == "1":
+    for _s in SESSIONS:
+        if _s["session_id"] == WIDGET:
+            _s["plan"] = {"done": 3, "total": 5, "current": "在横屏模拟器上复现小组件崩溃", "at": ago(minutes=10)}
+        if _s["session_id"] == TESTS:
+            _s["plan"] = {"done": 1, "total": 4, "at": ago(minutes=10)}
+    MOCK_HELP.append("MOCK_AGENT_PLANS=1  小组件的 Agent 计划 3/5（在复现崩溃），网络层测试的 Agent 1/4（#5302）")
 MOCK_HELP.append("MOCK_GOAL=1|stopped  macbook 上「给天气 App 加主屏幕小组件」有一个进行中的 goal（带最近一次检查的理由），「检查 PR #42 的改动」的 goal 已达成；stopped 时小组件那个 goal 用完了 token 预算（#2420）")
 
 # ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md "Naming and compatibility") ----------

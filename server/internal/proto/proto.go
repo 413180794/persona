@@ -870,6 +870,9 @@ type Session struct {
 	Loop *LoopInfo `json:"loop,omitempty"`
 	// Goal is the goal the agent works toward, when one is set (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
 	Goal *GoalInfo `json:"goal,omitempty"`
+	// Plan is the agent's own task list (Claude Code's TodoWrite, or TaskCreate / TaskUpdate), when it keeps one: how far
+	// along it is and the step in progress (docs/agent-goal.md "Plan"). Absent for Codex and runtimes.
+	Plan *PlanInfo `json:"plan,omitempty"`
 	// Ports are the TCP ports the agent's processes listen on that answer HTTP (docs/ports.md): the dev servers
 	// it started, which the apps open through the hub.
 	Ports     []Port    `json:"ports,omitempty"`
@@ -1557,6 +1560,16 @@ type GoalInfo struct {
 	TokenBudget int       `json:"token_budget,omitempty"` // Codex: the budget the goal may spend, 0 when there is none
 	Seconds     int       `json:"seconds,omitempty"`      // time spent on it so far
 	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+}
+
+// PlanInfo is an agent's latest task list, counted (docs/agent-goal.md "Plan"): Done of Total items completed, and
+// Current, the item in progress (its activeForm, else its subject) on one line, "" when none is. At is when the
+// counts or Current last changed.
+type PlanInfo struct {
+	Done    int       `json:"done"`
+	Total   int       `json:"total"`
+	Current string    `json:"current,omitempty"`
+	At      time.Time `json:"at"`
 }
 
 // A goal's statuses (Codex's thread_goals.status; Claude Code's goals are only active or complete).
