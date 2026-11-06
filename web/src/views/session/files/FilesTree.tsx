@@ -13,6 +13,7 @@ import { hubHas, useStore } from "../../../lib/store";
 import { useFsLive } from "../../../lib/use-fs-live";
 import { Button, copyText, cx, IconButton, Loading, Spinner } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
+import { RowCheck, rowClick, rowFrameProps, RowMore, type OpTarget, type RowOps } from "./FileOps";
 import { Empty, FileGlyph, GitBadge, GitDot } from "./parts";
 
 export function FilesTree({
@@ -26,6 +27,7 @@ export function FilesTree({
   reloads,
   onOpenFile,
   onShowHidden,
+  rowOps,
 }: {
   mid: string;
   sid: string;
@@ -40,6 +42,8 @@ export function FilesTree({
   reloads: number;
   onOpenFile: (path: string) => void;
   onShowHidden: () => void;
+  /** Selecting, a row's menu, where dropped files go (files/FileOps.tsx). */
+  rowOps?: RowOps;
 }) {
   const cache = useMemo(() => listingCache(mid, cwd), [mid, cwd]);
   const thumbs = useStore((s) => hubHas(s.features, FILE_THUMB_FEATURE));
@@ -133,7 +137,7 @@ export function FilesTree({
   return (
     <div role="tree" aria-label={t("files-tree.tree")} className="py-1" style={{ animation: "fade-in 160ms ease-out both" }}>
       {rows.map((r) => (
-        <Row key={r.key} r={r} mid={mid} cwd={cwd} thumbs={thumbs} git={git} onToggle={toggle} onOpenFile={onOpenFile} onRetry={fetchDir} />
+        <Row key={r.key} r={r} mid={mid} cwd={cwd} thumbs={thumbs} git={git} onToggle={toggle} onOpenFile={onOpenFile} onRetry={fetchDir} ops={rowOps} />
       ))}
     </div>
   );
@@ -151,6 +155,7 @@ function Row({
   onToggle,
   onOpenFile,
   onRetry,
+  ops,
 }: {
   r: TreeRow;
   mid: string;
@@ -161,6 +166,7 @@ function Row({
   onToggle: (dir: string) => void;
   onOpenFile: (path: string) => void;
   onRetry: (dir: string) => void;
+  ops?: RowOps;
 }) {
   if (r.kind === "loading") {
     return (
@@ -197,12 +203,16 @@ function Row({
   const e = r.entry;
   const mark = gitMark(git, r.path, e.dir);
   const hidden = e.name.startsWith(".");
+  const x: OpTarget = { path: r.path, name: e.name, dir: e.dir };
+  const open = () => (e.dir ? onToggle(r.path) : onOpenFile(r.path));
+  const picked = ops?.selecting && ops.isSelected(r.path);
   return (
     <div
       role="treeitem"
       aria-level={r.depth + 1}
       aria-expanded={e.dir ? r.expanded : undefined}
-      className="group/row relative flex items-center transition-colors hover:bg-hover"
+      {...rowFrameProps(ops, x, open)}
+      className={cx("group/row relative flex items-center transition-colors hover:bg-hover", picked && "bg-hover")}
       // dragged into a terminal or the chat box it becomes `@path ` (lib/entry-drag.ts)
       draggable
       onDragStart={(ev) => {
@@ -210,9 +220,10 @@ function Row({
         ev.dataTransfer.effectAllowed = "copy";
       }}
     >
+      <RowCheck ops={ops} x={x} />
       <button
         type="button"
-        onClick={() => (e.dir ? onToggle(r.path) : onOpenFile(r.path))}
+        onClick={rowClick(ops, x, open)}
         style={indent(r.depth)}
         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-2 text-left"
         title={e.ignored ? t("files-tree.gitIgnored", { path: r.path }) : r.path}
@@ -227,8 +238,9 @@ function Row({
         {mark && (e.dir ? <GitDot letter={mark} /> : <GitBadge letter={mark} />)}
       </button>
       {/* hover devices only: on a touch screen it would be an invisible target at the row's end */}
-      <span className="hidden pr-2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:block">
+      <span className="hidden items-center pr-2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:flex">
         <IconButton icon="copy" label={t("files-tree.copyPath")} onClick={() => copyText(r.path)} size={26} iconSize={13} />
+        <RowMore ops={ops} x={x} open={open} />
       </span>
     </div>
   );

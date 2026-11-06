@@ -1,0 +1,12 @@
+{
+  "name_empty": "The name can't be empty",
+  "name_dots": "The name can't be . or ..",
+  "name_slash": "The name can't contain / or \\",
+  "read_only": "This place can't be changed: only your home folder is writable, except ~/.persona, ~/.jarvis, ~/Library and where keys are kept",
+  "exists": "“{name}” already exists",
+  "node_outdated": "personad on this computer is too old to change files. Redeploy it and try again",
+  "too_large": "The file is too large: 2 GB at most",
+  "not_found": "It's no longer there: it may have been moved or deleted",
+  "unreachable": "Can't reach this computer: it may be offline",
+  "hub_outdated": "The hub is too old to change files. Update it and try again"
+}

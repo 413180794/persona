@@ -332,9 +332,17 @@ export function glyphOf(name: string): "image" | "doc" | "data" | "sheet" | "pdf
   if ([...DELIMITED_EXTS, ...WORKBOOK_EXTS].includes(ext)) return "sheet";
   if ([...OFFICE_RENDERED, ...OFFICE_CONVERTED].includes(ext)) return "doc";
   if (ext === "pdf") return "pdf";
-  if (!ext) return "file";
+  if (!ext || NOT_CODE_EXTS.includes(ext)) return "file";
   return "code";
 }
+
+/** Archives, installers, binaries, media and fonts: a plain file, not code (#4883: a .zip drew the <> glyph). */
+const NOT_CODE_EXTS = [
+  ...["zip", "gz", "tgz", "tar", "bz2", "xz", "zst", "7z", "rar", "dmg", "pkg", "iso", "deb", "rpm", "apk", "ipa", "jar", "whl"],
+  ...["exe", "bin", "dll", "so", "dylib", "a", "o", "class", "wasm", "dat", "sqlite", "db"],
+  ...["mp3", "wav", "flac", "m4a", "aac", "ogg", "opus", "mp4", "mov", "m4v", "webm", "mkv", "avi"],
+  ...["woff", "woff2", "ttf", "otf"],
+];
 
 /** Text into lines; a final newline does not make an empty last line. */
 export function splitLines(text: string): string[] {

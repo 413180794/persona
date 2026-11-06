@@ -2,7 +2,9 @@
 // breadcrumb back to any level; folders first with size, time and Git marks; hidden files off unless asked for. A
 // file opens in the viewer inside the panel (back returns to the list where it was). On a wide screen the folders
 // open in place as a tree instead (files/FilesTree.tsx, Moshi's form; the menu switches back); either view refreshes
-// itself while shown (lib/fs-live.ts).
+// itself while shown (lib/fs-live.ts). Both views change files too (files/FileOps.tsx, #4883): files dropped or chosen
+// upload into the folder, and a row's menu (right click, its ⋯) downloads, renames, moves or moves it to the trash;
+// 「选择」 picks several for one of those.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
 import { t } from "../../i18n";
@@ -14,10 +16,12 @@ import { openPanel } from "../../lib/panel";
 import { useFsLive } from "../../lib/use-fs-live";
 import { NARROW, useMedia } from "../../lib/viewport";
 import { Button, copyText, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
+import type { MenuAt } from "../../ui/menu-model";
 import { Icon } from "../../ui/icons";
 import { scrollBehavior } from "../../ui/stream/motion";
 import { PanelHeader } from "../SidePanel";
 import { FileView } from "./files/FileView";
+import { DropHint, dragHasFiles, RowCheck, rowClick, rowFrameProps, RowMore, SelectionBar, useFileOps, type OpTarget, type RowOps } from "./files/FileOps";
 import { FilesTree } from "./files/FilesTree";
 import { Empty, FileGlyph, GitDot, GitBadge, useStoredFlag } from "./files/parts";
 
@@ -53,6 +57,45 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
   const [git, setGit] = useState<GitStatus | null>(null);
   const [open, setOpen] = useState<string[]>([]); // files opened from the list, newest last
   const menu = useMenu();
+
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Map<string, OpTarget>>(() => new Map());
+  const [rowMenu, setRowMenu] = useState<{ x: OpTarget; at: MenuAt; open: () => void } | null>(null);
+  const [dropDir, setDropDir] = useState<string | null>(null);
+  const endSelect = useCallback(() => {
+    setSelecting(false);
+    setSelected(new Map());
+  }, []);
+  useEffect(() => endSelect(), [dir, tree, endSelect]); // a selection is of the folder shown
+  // Changing files: what changed is listed again (the live watch would too, a moment later), and a selection is done.
+  const ops = useFileOps({
+    mid,
+    cwd,
+    onChanged: () => {
+      setReloads((n) => n + 1);
+      endSelect();
+    },
+  });
+  const rowOps: RowOps = {
+    selecting,
+    isSelected: (p) => selected.has(p),
+    toggle: (x) => {
+      setSelecting(true);
+      setSelected((m) => {
+        const n = new Map(m);
+        if (n.has(x.path)) n.delete(x.path);
+        else n.set(x.path, x);
+        return n;
+      });
+    },
+    menu: (x, at, open) => setRowMenu({ x, at, open }),
+  };
+  useEffect(() => {
+    if (!selecting) return;
+    const key = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector("[role=dialog],[role=menu]") && endSelect();
+    addEventListener("keydown", key);
+    return () => removeEventListener("keydown", key);
+  }, [selecting, endSelect]);
 
   useEffect(() => {
     if (!dir || tree) return;
@@ -97,6 +140,8 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
   const changes = git?.is_repo ? git.files.length : 0;
   const sync = aheadBehind(git);
   const viewing = open[open.length - 1];
+  // where an upload goes when no folder row is meant: the folder shown (the tree's root)
+  const here_dir = tree ? start.root : dir;
 
   return (
     <>
@@ -120,6 +165,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
                 {sync && <span className="text-[11px] text-ink-3 tabular-nums">{sync}</span>}
                 {changes > 0 && <span className="rounded-full bg-field px-1.5 text-[11px] text-ink-2 tabular-nums">{changes}</span>}
               </button>
+              {ops.canUpload && here_dir && <IconButton icon="upload" label={t("files-ops.upload")} onClick={() => ops.choose(here_dir)} />}
               <IconButton icon="more" label={t("session-filespanel.more")} onClick={menu.open} active={Boolean(menu.anchor)} />
             </>
           }
@@ -134,10 +180,33 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
               { key: "hidden", label: t("session-filespanel.show_hidden"), checked: showHidden, onSelect: () => setShowHidden(!showHidden) },
               { key: "copy", label: t("session-filespanel.copy_path"), icon: "copy", onSelect: () => copyText(tree ? start.root : dir) },
               { key: "reload", label: t("session-filespanel.reload"), icon: "retry", onSelect: () => setReloads((n) => n + 1) },
+              ...(ops.canUpload && here_dir ? [{ key: "upload", label: t("files-ops.upload"), icon: "upload" as const, divider: true, onSelect: () => ops.choose(here_dir) }] : []),
+              { key: "select", label: t("files-ops.select"), checked: selecting, divider: !(ops.canUpload && here_dir), onSelect: () => (selecting ? endSelect() : setSelecting(true)) },
             ]}
           />
         )}
+        {rowMenu && <Menu items={ops.rowItems(rowMenu.x, rowMenu.open)} anchor={rowMenu.at.anchor ?? null} point={rowMenu.at.point} onClose={() => setRowMenu(null)} align="right" />}
+        {selecting && <SelectionBar ops={ops} selected={[...selected.values()]} onClear={endSelect} />}
         {!tree && <Crumbs root={start.root} stack={stack} go={go} />}
+        <div
+          className="relative flex min-h-0 flex-1 flex-col"
+          // files from the computer upload into the folder under the pointer (a folder row, else the one shown)
+          onDragOver={(e) => {
+            if (!ops.canUpload || !here_dir || !dragHasFiles(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            const over = (e.target as HTMLElement).closest<HTMLElement>("[data-drop-dir]")?.dataset.dropDir;
+            setDropDir(over ?? here_dir);
+          }}
+          onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDropDir(null)}
+          onDrop={(e) => {
+            if (!dropDir) return;
+            e.preventDefault();
+            ops.upload(Array.from(e.dataTransfer.files), dropDir);
+            setDropDir(null);
+          }}
+        >
+        {dropDir && <DropHint dir={dropDir} />}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" key={tree ? "tree" : dir}>
           {tree ? (
             start.root ? (
@@ -152,6 +221,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
                 reloads={reloads}
                 onOpenFile={(p) => setOpen([p])}
                 onShowHidden={() => setShowHidden(true)}
+                rowOps={rowOps}
               />
             ) : (
               <Empty icon="folder" title={t("session-filespanel.no_dir")} />
@@ -166,7 +236,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
                 />
               )}
               {entries.map((e) => (
-                <EntryRow key={e.name} mid={mid} e={e} full={joinPath(dir, e.name)} mark={gitMark(git, joinPath(dir, e.name), e.dir)} onOpen={() => enter(e)} />
+                <EntryRow key={e.name} mid={mid} e={e} full={joinPath(dir, e.name)} mark={gitMark(git, joinPath(dir, e.name), e.dir)} onOpen={() => enter(e)} ops={rowOps} />
               ))}
               {here.listing.truncated && <p className="px-4 py-2 text-[11.5px] text-ink-3">{t("session-filespanel.truncated")}</p>}
             </div>
@@ -180,6 +250,8 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
             </div>
           )}
         </div>
+        </div>
+        {ops.ui}
       </div>
       {viewing && (
         <FileView
@@ -232,11 +304,14 @@ function Crumbs({ root, stack, go }: { root: string; stack: string[]; go: (level
   );
 }
 
-function EntryRow({ mid, e, full, mark, onOpen }: { mid: string; e: FsEntry; full: string; mark: string | null; onOpen: () => void }) {
+function EntryRow({ mid, e, full, mark, onOpen, ops }: { mid: string; e: FsEntry; full: string; mark: string | null; onOpen: () => void; ops?: RowOps }) {
   const hidden = e.name.startsWith(".");
+  const x: OpTarget = { path: full, name: e.name, dir: e.dir };
+  const picked = ops?.selecting && ops.isSelected(full);
   return (
     <div
-      className="group/row relative flex items-center transition-colors hover:bg-hover"
+      {...rowFrameProps(ops, x, onOpen)}
+      className={cx("group/row relative flex items-center transition-colors hover:bg-hover", picked && "bg-hover")}
       // dragged into a terminal or the chat box it becomes `@path ` (lib/entry-drag.ts)
       draggable
       onDragStart={(ev) => {
@@ -244,7 +319,8 @@ function EntryRow({ mid, e, full, mark, onOpen }: { mid: string; e: FsEntry; ful
         ev.dataTransfer.effectAllowed = "copy";
       }}
     >
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-2 pr-2 pl-4 text-left" title={full}>
+      <RowCheck ops={ops} x={x} />
+      <button type="button" onClick={rowClick(ops, x, onOpen)} className={cx("flex min-w-0 flex-1 items-center gap-3 py-2 pr-2 text-left", ops?.selecting ? "pl-3" : "pl-4")} title={full}>
         <FileGlyph name={e.name} dir={e.dir} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1">
@@ -260,8 +336,9 @@ function EntryRow({ mid, e, full, mark, onOpen }: { mid: string; e: FsEntry; ful
         {e.dir && <Icon name="chevronRight" size={13} stroke={2.2} className="shrink-0 text-ink-3" />}
       </button>
       {/* hover devices only: on a touch screen it would be an invisible target at the row's end */}
-      <span className="hidden pr-2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:block">
+      <span className="hidden items-center pr-2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:flex">
         <IconButton icon="copy" label={t("session-filespanel.copy_path")} onClick={() => copyText(full)} size={26} iconSize={13} />
+        <RowMore ops={ops} x={x} open={onOpen} />
       </span>
     </div>
   );

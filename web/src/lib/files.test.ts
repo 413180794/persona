@@ -165,6 +165,8 @@ describe("viewer", () => {
     expect(glyphOf("export.csv")).toBe("sheet");
     expect(glyphOf("Budget.xlsx")).toBe("sheet");
     expect(glyphOf("Report.docx")).toBe("doc");
+    expect(glyphOf("build-log.zip")).toBe("file");
+    expect(glyphOf("App.dmg")).toBe("file");
   });
 
   it("counts columns with wide characters taking two", () => {

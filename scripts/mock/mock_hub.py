@@ -10113,6 +10113,154 @@ def markets_route(handler, p, body):
         handler.send_json({"view": _ui_view(parts[7], launcher)}); return True
     return False
 
+# MOCK_FILE_OPS=1 (#4883, the hub / node side is #4858): uploads into a folder (dest=dir) and rename / move / trash /
+# restore, as #4858's interface says: only home is writable, not ~/.persona, ~/.jarvis, ~/Library; a name already
+# there is 409 `exists` unless conflict=replace|keep; the trash keeps what it took to put it back.
+FILE_OPS = bool(os.environ.get("MOCK_FILE_OPS"))
+FILE_TRASH = {}  # trash id -> (tree key, {key: value} of everything moved)
+FILE_OPS_LOG = []  # what the browser asked (a test reads it from the module)
+_features_without_file_ops = features
+
+
+def features():
+    return _features_without_file_ops() + (["upload_dir", "file_edit"] if FILE_OPS else [])
+
+
+def file_ops_key(mid, path, cwd):
+    """(home, tree key without the trailing /, error (json, status) or None) of a path to change."""
+    home, ab = mock_abs(mid, path, cwd)
+    if ab != home and not ab.startswith(home + "/"):
+        return home, None, ({"error": "只有个人文件夹以内可以写", "code": "read_only"}, 409)
+    rel = ab[len(home) + 1:] if ab != home else ""
+    if rel.split("/")[0] in (".persona", ".jarvis", "Library") or rel == "":
+        return home, None, ({"error": "这个位置不能写", "code": "read_only"}, 409)
+    return home, rel, None
+
+
+def file_ops_free(dir_rel, name, conflict):
+    """The name `name` takes in folder `dir_rel` (a tree key ending in / or ""): itself, or 「名字 2.扩展名」 to keep both;
+    None when it is taken and nothing was said."""
+    taken = lambda n: dir_rel + n in MOCK_TREE or dir_rel + n + "/" in MOCK_TREE
+    if not taken(name) or conflict == "replace": return name
+    if conflict != "keep": return None
+    stem, dot, ext = name.rpartition(".")
+    if not stem: stem, dot, ext = ext, "", ""
+    for i in range(2, 1000):
+        n = "%s %d%s%s" % (stem, i, dot, ext)
+        if not taken(n): return n
+    return None
+
+
+def file_ops_dir(mid, d, cwd):
+    """(home, tree key of folder d ending in /, error or None)."""
+    home, ab = mock_abs(mid, d, cwd)
+    rel = mock_rel(home, ab)
+    if rel is None or not (rel == "" or rel.endswith("/")):
+        return home, None, ({"error": "not a directory: %s" % ab, "code": "internal"}, 502)
+    if rel.split("/")[0] in (".persona", ".jarvis", "Library") or (ab != home and not ab.startswith(home + "/")):
+        return home, None, ({"error": "这个位置不能写", "code": "read_only"}, 409)
+    return home, rel, None
+
+
+def file_ops_upload(h, q, n):
+    """POST …/files?dest=dir&dir=…: the body read slowly (MOCK_UPLOAD_KBPS), then the file put in the tree."""
+    arg = lambda k: (q.get(k) or [""])[0]
+    mid = urlparse(h.path).path.split("/")[4]
+    if not arg("dir"):
+        h.body()
+        return h.send_json({"error": "dir is required"}, 400)
+    home, rel, err = file_ops_dir(mid, arg("dir"), arg("cwd"))
+    name = re.sub(r"[/\\\x00-\x1f]", "_", arg("name") or "file")
+    if err:
+        h.body()
+        return h.send_json(*err)
+    final = file_ops_free(rel, name, arg("conflict"))
+    if final is None:
+        h.body()
+        return h.send_json({"error": "「%s」已经有了" % name, "code": "exists", "name": name}, 409)
+    kbps, left, got = int(os.environ.get("MOCK_UPLOAD_KBPS", "2048")), n, []
+    while left > 0:
+        chunk = h.rfile.read(min(left, 64 << 10))
+        if not chunk: return  # the browser cancelled: nothing is kept
+        left -= len(chunk)
+        got.append(chunk)
+        time.sleep(len(chunk) / 1024 / kbps)
+    data = b"".join(got)
+    try: MOCK_TREE[rel + final] = data.decode()
+    except UnicodeDecodeError: MOCK_TREE[rel + final] = ("application/octet-stream", base64.b64encode(data).decode())
+    FILE_OPS_LOG.append({"op": "upload", "dir": arg("dir"), "name": final, "size": n})
+    fs_changed(mid, [(home + "/" + rel).rstrip("/")], True)
+    return h.send_json({"path": arg("dir").rstrip("/") + "/" + final, "name": final, "size": n})
+
+
+def file_ops_take(rel):
+    """Every tree key at or under rel (a file's key, or a folder's without its /), removed from the tree."""
+    keys = [k for k in MOCK_TREE if k == rel or k.startswith(rel + "/")]
+    return {k: MOCK_TREE.pop(k) for k in keys}
+
+
+def file_ops_route(h, p, body):
+    """POST /api/v1/machines/{mid}/files/{rename,move,trash,restore} under MOCK_FILE_OPS."""
+    m = re.fullmatch(r"/api/v1/machines/([^/]+)/files/(rename|move|trash|restore)", p)
+    if not (FILE_OPS and m): return False
+    mid, op = m.groups()
+    req = json.loads(body or b"{}")
+    FILE_OPS_LOG.append({"op": op, **req})
+    if os.environ.get("MOCK_FILE_OPS_OLD_NODE"):
+        return h.send_json({"error": "这台电脑上的 personad 太旧", "code": "node_outdated"}, 409) or True
+    cwd, changed = req.get("cwd", ""), set()
+    def gone(key): return key not in MOCK_TREE and key + "/" not in MOCK_TREE
+    if op == "rename":
+        home, rel, err = file_ops_key(mid, req.get("path", ""), cwd)
+        if err: return h.send_json(*err) or True
+        if gone(rel): return h.send_json({"error": "不存在", "code": "not_found"}, 404) or True
+        parent = rel.rpartition("/")[0]
+        dest = (parent + "/" if parent else "") + req.get("name", "")
+        if not gone(dest): return h.send_json({"error": "已经有了", "code": "exists", "name": req.get("name", "")}, 409) or True
+        for k, v in file_ops_take(rel).items(): MOCK_TREE[dest + k[len(rel):]] = v
+        fs_changed(mid, [(home + "/" + parent).rstrip("/")], True)
+        return h.send_json({"path": req["path"].rpartition("/")[0] + "/" + req["name"]}) or True
+    if op == "move":
+        home, drel, err = file_ops_dir(mid, req.get("dir", ""), cwd)
+        if err: return h.send_json(*err) or True
+        moved = []
+        for path in req.get("paths", []):
+            _, rel, err = file_ops_key(mid, path, cwd)
+            if err: return h.send_json(*err) or True
+            if gone(rel): return h.send_json({"error": "不存在", "code": "not_found"}, 404) or True
+            name = rel.rpartition("/")[2]
+            final = file_ops_free(drel, name, req.get("conflict"))
+            if final is None: return h.send_json({"error": "已经有了", "code": "exists", "name": name}, 409) or True
+            if req.get("conflict") == "replace": file_ops_take(drel + final)
+            for k, v in file_ops_take(rel).items(): MOCK_TREE[drel + final + k[len(rel):]] = v
+            changed.update({(home + "/" + rel.rpartition("/")[0]).rstrip("/"), (home + "/" + drel).rstrip("/")})
+            moved.append({"from": path, "to": req["dir"].rstrip("/") + "/" + final})
+        fs_changed(mid, sorted(changed), True)
+        return h.send_json({"moved": moved}) or True
+    if op == "trash":
+        trashed = []
+        for path in req.get("paths", []):
+            home, rel, err = file_ops_key(mid, path, cwd)
+            if err: return h.send_json(*err) or True
+            if gone(rel): return h.send_json({"error": "不存在", "code": "not_found"}, 404) or True
+            tid = "t%d" % (len(FILE_TRASH) + 1)
+            FILE_TRASH[tid] = (path, file_ops_take(rel))
+            changed.add((home + "/" + rel.rpartition("/")[0]).rstrip("/"))
+            trashed.append({"path": path, "trash_id": tid})
+        fs_changed(mid, sorted(changed), True)
+        return h.send_json({"trashed": trashed}) or True
+    restored = []
+    for tid in req.get("trash_ids", []):
+        if tid not in FILE_TRASH: return h.send_json({"error": "不在废纸篓里了", "code": "not_found"}, 404) or True
+        path, keys = FILE_TRASH.pop(tid)
+        MOCK_TREE.update(keys)
+        home, _ = mock_abs(mid, path, cwd)
+        changed.add(path.rpartition("/")[0] if path.startswith("/") else home)
+        restored.append({"path": path})
+    fs_changed(mid, sorted(changed), True)
+    return h.send_json({"restored": restored}) or True
+
+
 _features_without_plugins = features
 
 
@@ -11231,6 +11379,8 @@ class H(BaseHTTPRequestHandler):
         if os.environ.get("MOCK_UPLOAD_OLD_NODE"):
             self.body()
             return self.send_json({"error": "MacBook 上的 jarvisd 太旧，不能接收文件，需要重新部署", "code": "node_outdated"}, 409)
+        if (q.get("dest") or [""])[0] == "dir":
+            return file_ops_upload(self, q, n)
         kbps = int(os.environ.get("MOCK_UPLOAD_KBPS", "2048"))
         left = n
         video = name.lower().rsplit(".", 1)[-1] in ("mov", "mp4", "m4v")
@@ -11257,6 +11407,7 @@ class H(BaseHTTPRequestHandler):
         if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith("/api/v1/extensions/%s/-/ui/" % lark_messaging.EXTENSION)) and \
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if pins_route(self, p): return
+        if file_ops_route(self, p, self.last_body): return
         if looks_route(self, self.command, p, self.last_body): return
         if recordings_route(self, self.command, p): return
         if managers_route(self, self.command, p): return
