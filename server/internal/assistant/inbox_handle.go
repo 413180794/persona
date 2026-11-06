@@ -414,7 +414,7 @@ func (s *Service) suggest(ctx context.Context, sessionID string, in suggestIn) (
 		link := &InboxChainLink{Type: LinkSession, MachineID: it.Agent.MachineID, SessionID: it.Agent.SessionID}
 		switch {
 		case in.Kind == SuggestConclusion:
-			b.chainAdd(it, InboxChainEntry{Kind: ChainConcluded, At: now, Text: i18n.T(l, "assistant-inbox_chain.concluded"), Detail: in.Text, Link: link})
+			b.chainAdd(it, InboxChainEntry{Kind: ChainConcluded, At: now, Text: i18n.T(l, "assistant-inbox_chain.concluded"), Detail: in.Text})
 			if in.Outcome == "done" {
 				it.Suggestion = nil
 				b.file(it, now, doneByManager)

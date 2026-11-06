@@ -259,10 +259,15 @@ func TestInboxSuggestionConclusion(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.inbox.mu.Lock()
-	st, tier, kind := it.status(), it.Tier, it.Chain[len(it.Chain)-1].Kind
+	st, tier, last := it.status(), it.Tier, it.Chain[len(it.Chain)-1]
+	// One stored with a link before is listed without it: a conclusion expands inline.
+	it.Chain = append(it.Chain, InboxChainEntry{Kind: ChainConcluded, Link: &InboxChainLink{Type: LinkSession, SessionID: "s1"}})
+	listed := it.listed().Chain
+	it.Chain = it.Chain[:len(it.Chain)-1]
 	h.inbox.mu.Unlock()
-	if st != StatusFYI || tier != TierFYI || kind != ChainConcluded {
-		t.Fatalf("fyi: %s %s %s", st, tier, kind)
+	if st != StatusFYI || tier != TierFYI || last.Kind != ChainConcluded || last.Link != nil || last.Detail != "周报里你的两项都按计划" ||
+		listed[len(listed)-1].Link != nil {
+		t.Fatalf("fyi: %s %s %+v / %+v", st, tier, last, listed[len(listed)-1])
 	}
 	if code, out := suggestionCall(t, h, it.ID, `{"version":1,"action":"confirm"}`); code != 200 || out["done_by"] != "user" {
 		t.Fatalf("知道了: %d %v", code, out)

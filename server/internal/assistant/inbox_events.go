@@ -133,12 +133,19 @@ func synthesizedChain(l i18n.Lang, it *InboxItem) []InboxChainEntry {
 }
 
 // listedChain is the chain as listed: an item from before chains gets its synthesized entries (loadInbox gives
-// them in the user's language; one made since always has a received entry).
+// them in the user's language; one made since always has a received entry). A conclusion has no link (it expands
+// inline): one stored with the conversation's link before is listed without it.
 func listedChain(it *InboxItem) []InboxChainEntry {
 	if len(it.Chain) == 0 {
 		return synthesizedChain(i18n.Default, it)
 	}
-	return slices.Clone(it.Chain)
+	out := slices.Clone(it.Chain)
+	for i := range out {
+		if out[i].Kind == ChainConcluded {
+			out[i].Link = nil
+		}
+	}
+	return out
 }
 
 func tierWord(l i18n.Lang, tier string) string {
