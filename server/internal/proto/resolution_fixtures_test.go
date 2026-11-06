@@ -155,7 +155,8 @@ func TestResolutionFixtures(t *testing.T) {
 				if ix.Dialog != nil {
 					parsed := screen.ParseDialog(ix.Screen)
 					if parsed != nil {
-						parsed.Cursor = "" // where the ❯ is: the hub's own, never on the wire
+						parsed.Cursor = ""    // where the ❯ is: the hub's own, never on the wire
+						parsed.LegacyRev = "" // the rev older hubs and nodes compute (#5961): never on the wire either (#5970)
 					}
 					if !reflect.DeepEqual(parsed, ix.Dialog) {
 						t.Fatalf("screen parser differs from fixture dialog: %+v / %+v", parsed, ix.Dialog)
