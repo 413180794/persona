@@ -333,8 +333,18 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
               error={isNew ? launcherNameProblem(f.name) : undefined} hint={t("settings-providerwizard.name_hint")} />
             {isNew && (
               <Labelled label={t("settings-providerwizard.kind")} hint={f.kind === "api" ? t("settings-providerwizard.kind_api_hint") : t("settings-providerwizard.kind_launcher_hint")}>
-                <Segmented<ProviderForm["kind"]> label={t("settings-providerwizard.kind")} value={f.kind} onChange={(v) => setF((x) => ({ ...x, kind: v, api: "messages" }))}
-                  options={[{ v: "launcher", label: "Claude Code" }, { v: "api", label: t("settings-providerwizard.direct_api") }]} />
+                <Segmented<"launcher" | "codex" | "agy" | "omp" | "api">
+                  label={t("settings-providerwizard.kind")}
+                  value={f.kind === "api" ? "api" : f.agent === "codex" ? "codex" : f.agent === "agy" ? "agy" : f.agent === "omp" ? "omp" : "launcher"}
+                  onChange={(v) => {
+                    if (v === "api") setF((x) => ({ ...x, kind: "api", agent: "claude", api: "messages" }));
+                    else if (v === "codex") setF((x) => ({ ...x, kind: "launcher", agent: "codex", api: "messages", models: x.models.length ? x.models : [formModel({ id: "gpt-5.4", name: "GPT-5.4" })], model: x.model || "gpt-5.4" }));
+                    else if (v === "agy") setF((x) => ({ ...x, kind: "launcher", agent: "agy", api: "messages", models: x.models.length ? x.models : [formModel({ id: "gemini-4-argon-high", name: "Gemini 4 Argon (High)" })], model: x.model || "gemini-4-argon-high" }));
+                    else if (v === "omp") setF((x) => ({ ...x, kind: "launcher", agent: "omp", api: "messages", models: x.models.length ? x.models : [formModel({ id: "google-antigravity/gemini-4-argon:high", name: "Gemini 4 Argon (High)" })], model: x.model || "google-antigravity/gemini-4-argon:high" }));
+                    else setF((x) => ({ ...x, kind: "launcher", agent: "claude", api: "messages" }));
+                  }}
+                  options={[{ v: "launcher", label: "Claude Code" }, { v: "codex", label: "Codex" }, { v: "agy", label: "Antigravity" }, { v: "omp", label: "omp" }, { v: "api", label: t("settings-providerwizard.direct_api") }]}
+                />
               </Labelled>
             )}
             {isNew && f.kind === "api" && (

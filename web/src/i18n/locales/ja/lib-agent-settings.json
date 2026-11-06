@@ -1,6 +1,8 @@
 {
   "claude_footer": "そのマシンの ~/.claude/settings.json の以下の項目だけを変更します。新しい Claude セッションから反映され、実行中のセッションには通常再起動が必要です。",
   "codex_footer": "そのマシンの ~/.codex/config.toml の以下の項目だけを変更します。ファイル内のほかの設定（モデルプロバイダー、プロジェクトの信頼など）はそのまま残ります。新しい Codex セッションから反映されます。",
+  "agy_footer": "そのマシンの ~/.gemini/antigravity-cli/settings.json の以下の項目だけを変更します。新しい Antigravity (agy) セッションから反映されます。",
+  "omp_footer": "そのマシンの ~/.omp/agent/config.yml の以下の項目だけを変更します。新しい omp セッションから反映されます。",
   "applied_to_other": "{count}台のマシンに適用しました",
   "saved": "保存しました",
   "failure_item": "{name}：{error}",

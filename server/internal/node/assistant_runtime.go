@@ -42,6 +42,11 @@ func (n *Node) assistantRuntime(launcher string) *runtimeConn {
 	if launcher == "" || shellLauncherNames()[launcher] {
 		return nil
 	}
+	if m, ok := n.managedLauncher(launcher); ok && m.AgentType() == "agy" {
+		if h := n.runtimes.launcherRuntime("agy"); h != nil && h.assistant() {
+			return h
+		}
+	}
 	h := n.runtimes.launcherRuntime(launcher)
 	if h == nil || !h.assistant() {
 		return nil
@@ -59,7 +64,14 @@ func (n *Node) runtimeAssistant(id string) bool {
 // there (session.start with assistant), then the message goes with the snapshot as its context, the conversation's
 // permission mode and its memory directory; a new conversation's first message also carries the instructions only a
 // runtime needs (memory, Feishu).
-func (n *Node) assistantSendRuntime(ctx context.Context, h *runtimeConn, id, cwd, launcher, text string, images []proto.Image, mode string) (string, error) {
+func (n *Node) assistantSendRuntime(ctx context.Context, h *runtimeConn, id, cwd, launcher, text string, images []proto.Image, mode string, modelAndEffort ...string) (string, error) {
+	var pickedModel, pickedEffort string
+	if len(modelAndEffort) > 0 {
+		pickedModel = modelAndEffort[0]
+	}
+	if len(modelAndEffort) > 1 {
+		pickedEffort = modelAndEffort[1]
+	}
 	st, known := n.state.get(id)
 	if cwd == "" {
 		cwd = st.Cwd
@@ -69,6 +81,11 @@ func (n *Node) assistantSendRuntime(ctx context.Context, h *runtimeConn, id, cwd
 	}
 	if launcher == "" {
 		launcher = st.Launcher
+	}
+	if pickedModel == "" {
+		if m, ok := n.managedLauncher(launcher); ok && m.Model != "" {
+			pickedModel = m.Model
+		}
 	}
 	if h == nil && id != "" { // its own runtime: the one that has the conversation
 		var label string
@@ -86,15 +103,28 @@ func (n *Node) assistantSendRuntime(ctx context.Context, h *runtimeConn, id, cwd
 	memDir := n.memoryDir(cwd)
 	turn := map[string]any{"assistant": true, "memory_dir": memDir}
 	instructions := ""
+	if pickedModel != "" {
+		turn["model"] = pickedModel
+	}
+	if pickedEffort != "" {
+		turn["effort"] = pickedEffort
+	}
 	if id == "" {
-		s, err := n.runtimeStartWith(ctx, h, map[string]any{"cwd": cwd, "assistant": true})
+		startParams := map[string]any{"cwd": cwd, "assistant": true}
+		if pickedModel != "" {
+			startParams["model"] = pickedModel
+		}
+		if pickedEffort != "" {
+			startParams["effort"] = pickedEffort
+		}
+		s, err := n.runtimeStartWith(ctx, h, startParams)
 		if err != nil {
 			return "", err
 		}
 		id = s.SessionID
 		instructions = n.runtimeInstructions(cwd, memDir)
 	}
-	n.noteModes(id, mode, "")
+	n.noteModes(id, mode, pickedEffort)
 	if m := n.assistantModeOf(id); m != "" {
 		turn["mode"] = m
 	}

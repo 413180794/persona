@@ -39,6 +39,9 @@ func (n *Node) codexArgv(launcher string) ([]string, bool) {
 	if ok {
 		return append([]string(nil), words...), true
 	}
+	if m, ok := n.managedLauncher(launcher); ok && m.AgentType() == "codex" {
+		return []string{n.bin, "launch", launcher}, true
+	}
 	if launcher == "codex" {
 		return []string{"codex"}, true
 	}

@@ -185,6 +185,13 @@ func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
 	if n.isAssistantSession(id) {
 		n.noteModes(id, mode, effort)
 		n.persistModes(id, mode, effort)
+		if n.runtimeAssistant(id) {
+			if h, _, _ := n.runtimes.belongs(id); h != nil {
+				cctx, cancel := context.WithTimeout(ctx, runtimeCallTimeout)
+				_ = h.peer.Call(cctx, "session.modes", map[string]any{"session_id": id, "permission_mode": mode, "effort": effort}, nil)
+				cancel()
+			}
+		}
 		n.mu.Lock()
 		p := n.procs[id]
 		n.mu.Unlock()

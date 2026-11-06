@@ -52,10 +52,11 @@ type storedLauncher struct {
 // LauncherView is one launcher for the app: where it comes from, which machines have it; never the key.
 type LauncherView struct {
 	Kind                   string   `json:"kind,omitempty"`
+	Agent                  string   `json:"agent,omitempty"`
 	API                    string   `json:"api,omitempty"`
 	Name                   string   `json:"name"`
 	DisplayName            string   `json:"display_name,omitempty"` // managed: the name shown, "" shows Name
-	Source                 string   `json:"source"`                 // zshrc | jarvis
+	Source                 string   `json:"source"`                 // zshrc | jarvis | agy
 	BaseURL                string   `json:"base_url,omitempty"`
 	Model                  string   `json:"model,omitempty"`
 	SmallModel             string   `json:"small_model,omitempty"`
@@ -92,7 +93,7 @@ type LauncherView struct {
 
 // launcherView is a managed launcher for the app: never the key or the headers.
 func launcherView(l storedLauncher) LauncherView {
-	return LauncherView{Kind: l.Kind, API: l.API, Name: l.Name, DisplayName: l.DisplayName, Source: "jarvis", BaseURL: l.BaseURL, Model: l.Model, SmallModel: l.SmallModel,
+	return LauncherView{Kind: l.Kind, Agent: l.Agent, API: l.API, Name: l.Name, DisplayName: l.DisplayName, Source: "jarvis", BaseURL: l.BaseURL, Model: l.Model, SmallModel: l.SmallModel,
 		SubagentModel: l.SubagentModel, CustomModel: l.CustomModel, CustomModelName: l.CustomModelName,
 		CustomModelDescription: l.CustomModelDescription, Args: l.Args, HasKey: l.KeySealed != "", Auth: l.Auth,
 		Models: l.Models, OpusModel: l.OpusModel, SonnetModel: l.SonnetModel, HaikuModel: l.HaikuModel, FableModel: l.FableModel,
@@ -285,12 +286,16 @@ func (s *Service) launcherViewsOf(ctx context.Context, zshrc []zshrcLaunchers) [
 	var names []string
 	for _, m := range zshrc {
 		for _, l := range m.Launchers {
-			if managed[l.Name] || l.Name == "claude" || (l.Source != "" && l.Source != "zshrc") {
-				continue // a runtime's launcher (DSH, node/runtimes.go) is not a model to configure here
+			if managed[l.Name] || l.Name == "claude" || (l.Source != "" && l.Source != "zshrc" && l.Agent != "agy" && l.Agent != "omp") {
+				continue // a runtime's launcher without model configuration (DSH, node/runtimes.go) is not listed here
 			}
 			v := byName[l.Name]
 			if v == nil {
-				v = &LauncherView{Name: l.Name, Source: "zshrc", BaseURL: l.BaseURL, Model: l.Model, Hidden: slices.Contains(hidden, l.Name)}
+				src := "zshrc"
+				if l.Source != "" {
+					src = l.Source
+				}
+				v = &LauncherView{Name: l.Name, Source: src, Agent: l.Agent, BaseURL: l.BaseURL, Model: l.Model, Hidden: slices.Contains(hidden, l.Name)}
 				byName[l.Name] = v
 				names = append(names, l.Name)
 			}
@@ -329,7 +334,7 @@ func (s *Service) machineLaunchers(ctx context.Context, machine string) ([]proto
 		if m.Kind == "api" {
 			continue
 		}
-		out = append(out, proto.Launcher{Name: m.Name, BaseURL: m.BaseURL, Model: m.Model, Source: "jarvis"})
+		out = append(out, proto.Launcher{Name: m.Name, BaseURL: m.BaseURL, Model: m.Model, Source: "jarvis", Agent: m.Agent, Assistant: m.Agent == "agy"})
 	}
 	return out, nil
 }
@@ -406,6 +411,7 @@ func (s *Service) askLauncherModels(ctx context.Context, machine, name string, r
 
 type launcherInput struct {
 	Kind                   string   `json:"kind"`
+	Agent                  string   `json:"agent"`
 	API                    string   `json:"api"`
 	Name                   string   `json:"name"`
 	BaseURL                string   `json:"base_url"`
@@ -588,10 +594,13 @@ func (in launcherInput) check() error {
 	if in.Kind != "" && in.Kind != "api" && in.Kind != "launcher" {
 		return i18n.Err("assistant-models_launchers.err_kind")
 	}
+	if in.Agent != "" && in.Agent != "claude" && in.Agent != "codex" && in.Agent != "agy" && in.Agent != "omp" {
+		return i18n.Err("assistant-models_launchers.err_kind")
+	}
 	if in.API != "" && in.API != "messages" && in.API != "responses" {
 		return i18n.Err("assistant-models_launchers.err_api")
 	}
-	if in.Kind != "api" && in.API == "responses" {
+	if in.Kind != "api" && (in.Agent == "" || in.Agent == "claude") && in.API == "responses" {
 		return i18n.Err("assistant-models_launchers.err_claude_messages")
 	}
 	if in.Auth != "" && in.Auth != "api_key" && in.Auth != "bearer" {
@@ -616,8 +625,10 @@ func (in launcherInput) check() error {
 			return i18n.Err("assistant-models_launchers.err_display_name")
 		}
 	}
-	if err := checkGateway(in.BaseURL); err != nil {
-		return err
+	if strings.TrimSpace(in.BaseURL) != "" || in.Kind == "api" || in.Agent == "" || in.Agent == "claude" {
+		if err := checkGateway(in.BaseURL); err != nil {
+			return err
+		}
 	}
 	if err := in.checkProvider(); err != nil {
 		return err
@@ -680,6 +691,26 @@ func (s *Service) launcherRoutes() {
 					}()
 				}
 				wg.Wait()
+			} else if v.Source == "agy" {
+				v.Details = map[string]proto.LauncherDetail{}
+				for _, id := range v.Machines {
+					models := []proto.LauncherModel{{Role: "默认主模型", Env: "agy acp", Model: v.Model}}
+					if res, err := s.askLauncherModels(ctx, id, name, false); err == nil && len(res.Models) > 0 {
+						models = nil
+						for _, am := range res.Models {
+							role := "可选模型"
+							if am.Default {
+								role = "默认主模型"
+							}
+							models = append(models, proto.LauncherModel{Role: role, Env: am.ID, Model: am.Name})
+						}
+					}
+					v.Details[id] = proto.LauncherDetail{
+						Agent:  "agy",
+						Auth:   "Antigravity OAuth (~/.gemini/antigravity-cli)",
+						Models: models,
+					}
+				}
 			}
 			apierr.WriteJSON(w, map[string]any{"launcher": v})
 			return
@@ -742,22 +773,31 @@ func (s *Service) launcherRoutes() {
 			return
 		}
 		in.Name = r.PathValue("name")
+		var old *storedLauncher
+		for _, l := range s.storedLaunchers(r.Context()) {
+			if l.Name == in.Name {
+				l := l
+				old = &l
+				break
+			}
+		}
+		if old != nil && in.Agent == "" && in.Kind != "api" {
+			in.Agent = old.Agent
+		}
 		if err := in.check(); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		for _, l := range s.storedLaunchers(r.Context()) {
-			if l.Name == in.Name {
-				saved, err := s.saveLauncher(r.Context(), in, &l)
-				if err != nil {
-					apierr.Write(w, http.StatusInternalServerError, err)
-					return
-				}
-				apierr.WriteJSON(w, map[string]any{"launcher": launcherView(saved)})
-				return
-			}
+		if old == nil {
+			apierr.Write(w, http.StatusNotFound, i18n.Err("assistant-models_launchers.err_not_managed"))
+			return
 		}
-		apierr.Write(w, http.StatusNotFound, i18n.Err("assistant-models_launchers.err_not_managed"))
+		saved, err := s.saveLauncher(r.Context(), in, old)
+		if err != nil {
+			apierr.Write(w, http.StatusInternalServerError, err)
+			return
+		}
+		apierr.WriteJSON(w, map[string]any{"launcher": launcherView(saved)})
 	})
 	s.handle("DELETE /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
 		ctx, name := r.Context(), r.PathValue("name")
@@ -940,6 +980,12 @@ func (s *Service) saveLauncher(ctx context.Context, in launcherInput, old *store
 	l.SubagentModel, l.CustomModel = strings.TrimSpace(in.SubagentModel), strings.TrimSpace(in.CustomModel)
 	l.CustomModelName, l.CustomModelDescription = strings.TrimSpace(in.CustomModelName), strings.TrimSpace(in.CustomModelDescription)
 	l.Kind, l.API = in.Kind, in.API
+	switch {
+	case in.Kind == "api" || in.Agent == "claude":
+		l.Agent = ""
+	case in.Agent != "":
+		l.Agent = in.Agent
+	} // no agent in the request (an app without it): an update keeps what is stored
 	l.Args = in.Args
 	if in.Preset != "" {
 		l.Preset = in.Preset

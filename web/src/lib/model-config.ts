@@ -13,6 +13,7 @@ export interface ModelProvider {
   id: string;
   name: string;
   kind: "api" | "launcher" | "plugin";
+  agent?: string;
   api?: "messages" | "responses";
   model?: string;
   machines?: string[];
@@ -60,13 +61,30 @@ export const RUNTIMES: { id: string; label: string }[] = [
   { id: "agentsdk", label: "Agent SDK" },
 ];
 
+/** The agent CLI/runtime a provider runs ("claude" by default). */
+export function providerAgent(provider?: ModelProvider, id?: string): string {
+  if (provider?.agent) return provider.agent;
+  const pid = provider?.id ?? id ?? "";
+  if (pid === "launcher.codex") return "codex";
+  if (pid === "launcher.agy") return "agy";
+  if (pid === "launcher.omp") return "omp";
+  if (pid === "launcher.traex") return "traex";
+  return "claude";
+}
+
 /** A runtime's name; none is the CLI, one this client does not know shows its id. */
-export function runtimeLabel(id: string | undefined): string {
+export function runtimeLabel(id: string | undefined, agent?: string): string {
+  if (agent === "codex") return "Codex CLI";
+  if (agent === "agy") return "Antigravity ACP";
+  if (agent === "omp") return "omp CLI";
+  if (agent === "traex") return "TRAEX CLI";
   return RUNTIMES.find((r) => r.id === (id || "cli"))?.label ?? id!;
 }
 
 /** "Runtime"'s options: only the ones the hub offers for this purpose (and this client knows). */
-export function runtimeChoices(p: ModelPurpose): { id: string; label: string }[] {
+export function runtimeChoices(p: ModelPurpose, agent?: string): { id: string; label: string }[] {
+  if (!p.runtimes?.length) return [];
+  if (agent && agent !== "claude") return [{ id: "cli", label: runtimeLabel("cli", agent) }];
   return RUNTIMES.filter((r) => p.runtimes?.includes(r.id));
 }
 
@@ -117,8 +135,10 @@ export function providerName(id: string | undefined, providers: ModelProvider[] 
 
 export function modelSummary(p: ModelPurpose, providers: ModelProvider[] = []): string {
   const name = providerName(p.effective?.provider, providers);
+  const effProvider = providers.find((v) => v.id === p.effective?.provider);
+  const effAgent = providerAgent(effProvider, p.effective?.provider);
   const rt = p.effective?.runtime;
-  const runtime = rt && rt !== "cli" ? runtimeLabel(rt) : ""; // the CLI is the default: not worth a word
+  const runtime = effAgent === "claude" && rt && rt !== "cli" ? runtimeLabel(rt) : ""; // the CLI is the default: not worth a word
   return [name, p.effective?.model, p.effective?.effort && t("lib-model-config.effort", { effort: p.effective.effort }), runtime].filter(Boolean).join(" · ") || t("lib-model-config.not_configured");
 }
 

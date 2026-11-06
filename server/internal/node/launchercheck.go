@@ -21,8 +21,12 @@ func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherChe
 		return proto.LauncherCheck{Error: fmt.Sprintf("invalid launcher %q", name)}
 	}
 	agent := "claude"
-	if _, managed := n.managedLauncher(name); !managed && name != "claude" {
-		if d := n.launcherProbeCached(ctx, name); d.Agent != "" {
+	if m, managed := n.managedLauncher(name); managed {
+		agent = m.AgentType()
+	} else if name != "claude" {
+		if res, ok := n.runtimeLauncherModels(name); ok && res.Agent != "" {
+			agent = res.Agent
+		} else if d := n.launcherProbeCached(ctx, name); d.Agent != "" {
 			agent = d.Agent
 		}
 	}
@@ -33,7 +37,9 @@ func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherChe
 	defer os.RemoveAll(dir)
 	prompt := prompts.RenderLauncherCheck()
 	args := ` -p ` + shellQuote(prompt) + ` --output-format json --max-turns 1`
-	if agent != "claude" { // Codex / TRAEX: one non-interactive turn
+	if agent == "agy" || agent == "omp" {
+		args = ` -p ` + shellQuote(prompt)
+	} else if agent != "claude" { // Codex / TRAEX: one non-interactive turn
 		args = ` exec --skip-git-repo-check ` + shellQuote(prompt)
 	}
 	if agent == "claude" {

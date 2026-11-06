@@ -51,12 +51,14 @@ describe("modes", () => {
   it("lets an assistant conversation switch to every mode, 全部放行 included (#2416)", () => {
     const ids = switchableModes(true).map((m) => m.id);
     expect(ids).toEqual(["default", "acceptEdits", "plan", "auto", "bypassPermissions"]);
+    expect(switchableModes(false, "agy").map((m) => m.id)).toEqual(ids);
     expect(switchableModes(true).find((m) => m.id === "bypassPermissions")?.detail).not.toContain("新开");
   });
 
   it("only Claude Code agents have the chips", () => {
     expect(hasModes(s())).toBe(true);
     expect(hasModes(s({ agent: "claude" }))).toBe(true);
+    expect(hasModes(s({ agent: "agy", source_kind: "runtime" }))).toBe(true);
     expect(hasModes(s({ agent: "codex" }))).toBe(false);
     expect(hasModes(s({ assistant: true }))).toBe(false);
     expect(hasModes(s({ source_kind: "runtime" }))).toBe(false);

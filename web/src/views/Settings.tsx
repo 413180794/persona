@@ -67,7 +67,8 @@ interface LauncherDetail {
 
 /** GET /api/v1/launchers' entry: a managed provider's fields (lib/providers.ts) plus the ~/.zshrc ones'. */
 interface LauncherView extends ProviderView {
-  source: "zshrc" | "jarvis";
+  source: "zshrc" | "jarvis" | "agy" | string;
+  agent?: "claude" | "codex" | "agy" | string;
   machines?: string[];
   hidden?: boolean;
   definitions?: Record<string, string>;
@@ -203,7 +204,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             {tab === "models" && <Models />}
             {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
             {tab === "assistant" && <AssistantSettings />}
-            {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
+            {(tab === "claude" || tab === "codex" || tab === "agy" || tab === "omp") && <AgentSettings key={tab} agent={tab} />}
             {tab === "channels" && (sub ? (
               <ChannelPage key={sub} id={sub} onBack={() => pick("channels")} onSettings={(url) => {
                 const target = settingsTarget(url);
@@ -454,6 +455,7 @@ function Models() {
         <div className="flex items-center gap-2">
           {l.display_name ? <span className="truncate text-[13px] font-medium text-ink">{l.display_name}</span> : <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>}
           {l.source === "jarvis" && <Pill tone="accent">Persona</Pill>}
+          {l.source === "agy" && <Pill>Antigravity Runtime</Pill>}
           {l.kind === "api" && <Pill>{t("settings.direct_api")}</Pill>}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-ink-3">
@@ -656,7 +658,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
       {l && (
         <div className="flex max-h-[62vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? t("settings.managed") : t("settings.zshrc_function")}</Pill>
+            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : t("settings.zshrc_function")}</Pill>
             {(l.machines ?? []).map((id) => (
               <Pill key={id}>{mname(id)}</Pill>
             ))}
@@ -664,7 +666,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
           </div>
 
           {/* how much is left comes before trying it, as in the app */}
-          {l.kind !== "api" && <LauncherQuota name={l.name} />}
+          {l.kind !== "api" && (l.source === "jarvis" || l.source === "zshrc") && <LauncherQuota name={l.name} />}
 
           {Object.keys(checks).length > 0 && (
             <KV title={t("settings.availability")}>
@@ -691,16 +693,16 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
 
           {l.source === "jarvis" && (
             <KV title={t("settings.config")}>
-              <KVRow k={t("settings.access")} v={l.kind === "api" ? t("settings.direct_api") : t("settings.launcher")} />
+              <KVRow k={t("settings.access")} v={l.kind === "api" ? t("settings.direct_api") : l.agent === "codex" ? "Codex" : l.agent === "agy" ? "Antigravity (agy)" : t("settings.launcher")} />
               {l.kind === "api" && <KVRow k={t("settings.protocol")} v={l.api === "responses" ? "Responses" : "Messages"} />}
-              <KVRow k="Base URL" v={l.base_url} mono />
+              {l.base_url && <KVRow k="Base URL" v={l.base_url} mono />}
               <KVRow k={t("settings.model")} v={l.model} mono />
-              {l.kind !== "api" && l.small_model && <KVRow k={t("settings.small_model")} v={l.small_model} mono />}
-              {l.kind !== "api" && l.subagent_model && <KVRow k={t("settings.subagent_model")} v={l.subagent_model} mono />}
-              {l.kind !== "api" && l.custom_model && <KVRow k={t("settings.custom_model")} v={l.custom_model} mono />}
-              {l.kind !== "api" && l.custom_model_name && <KVRow k={t("settings.custom_model_name")} v={l.custom_model_name} />}
+              {l.kind !== "api" && (!l.agent || l.agent === "claude") && l.small_model && <KVRow k={t("settings.small_model")} v={l.small_model} mono />}
+              {l.kind !== "api" && (!l.agent || l.agent === "claude") && l.subagent_model && <KVRow k={t("settings.subagent_model")} v={l.subagent_model} mono />}
+              {l.kind !== "api" && (!l.agent || l.agent === "claude") && l.custom_model && <KVRow k={t("settings.custom_model")} v={l.custom_model} mono />}
+              {l.kind !== "api" && (!l.agent || l.agent === "claude") && l.custom_model_name && <KVRow k={t("settings.custom_model_name")} v={l.custom_model_name} />}
               <KVRow k="API Key" v={l.has_key ? t("settings.key_set_hidden") : t("settings.not_set")} />
-              {l.api !== "responses" && <KVRow k={t("settings.auth")} v={l.auth === "bearer" ? "Bearer" : "x-api-key"} />}
+              {l.api !== "responses" && (!l.agent || l.agent === "claude") && <KVRow k={t("settings.auth")} v={l.auth === "bearer" ? "Bearer" : "x-api-key"} />}
               {l.kind !== "api" && l.args?.length ? <KVRow k={t("settings.extra_args")} v={l.args.join(" ")} mono /> : null}
               {l.models?.length ? <KVRow k={t("settings.model_list")} v={formatList(l.models.map((m) => m.id), { type: "conjunction", style: "narrow" })} mono sub={t("settings.model_count", { count: l.models.length })} /> : null}
               {([["opus_model", "Opus"], ["sonnet_model", "Sonnet"], ["haiku_model", "Haiku"], ["fable_model", "Fable"]] as const).map(([k, tier]) => l[k] && <KVRow key={k} k={t("settings.tier_model", { tier })} v={l[k]} mono />)}
@@ -768,7 +770,7 @@ function KVRow({ k, v, mono, sub }: { k: React.ReactNode; v?: React.ReactNode; m
 function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
   const titled = (s: string) => (place ? `${s} · ${place}` : s);
   if (d.error) return <KV title={titled(t("settings.run"))}><p className="py-2 text-[12px] text-ink-3">{d.error}</p></KV>;
-  const agent = d.agent === "codex" ? "Codex" : d.agent === "traex" ? "TRAEX" : "Claude Code";
+  const agent = d.agent === "codex" ? "Codex" : d.agent === "traex" ? "TRAEX" : d.agent === "agy" ? "Antigravity" : "Claude Code";
   return (
     <>
       <KV title={titled(t("settings.run"))}>

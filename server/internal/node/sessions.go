@@ -764,7 +764,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 	for _, s := range n.runtimes.sessions() { // runtimes (runtimes.go): listed as they say
 		if !seen[s.SessionID] {
 			if n.runtimeAssistant(s.SessionID) { // the assistant keeps its mode (assistant_runtime.go)
-				s.PermissionMode = n.assistantModeOf(s.SessionID)
+				if m := n.assistantModeOf(s.SessionID); m != "" {
+					s.PermissionMode = m
+				}
 			}
 			// A conversation in a Claude transcript here (runtimetranscript.go): what it says, and its own row goes.
 			if t := n.mergeRuntimeTranscript(&s); t != "" {
@@ -2014,16 +2016,19 @@ var launcherCache struct {
 const launcherScript = `_claude_launchers 2>/dev/null || true
 printf '\035'
 if [ -n "$ZSH_VERSION" ]; then
-  for __k __v in "${(@kv)aliases}"; do
-    print -rn -- "$__k"$'\x1f'
-    for __w in "${(@Q)${(z)__v}}"; do print -rn -- "$__w"$'\x1f'; done
-    print -rn -- $'\x1e'
-  done
+  eval 'for __k __v in "${(@kv)aliases}"; do
+    print -rn -- "$__k"$'\''\x1f'\''
+    for __w in "${(@Q)${(z)__v}}"; do print -rn -- "$__w"$'\''\x1f'\''; done
+    print -rn -- $'\''\x1e'\''
+  done'
 fi
 printf '\035'
+PATH="$PATH:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin"
 if [ -n "$ZSH_VERSION" ]; then whence -p codex 2>/dev/null; else command -v codex 2>/dev/null; fi
 printf '\035'
-if [ -n "$ZSH_VERSION" ]; then whence -p traex 2>/dev/null; else command -v traex 2>/dev/null; fi`
+if [ -n "$ZSH_VERSION" ]; then whence -p traex 2>/dev/null; else command -v traex 2>/dev/null; fi
+printf '\035'
+if [ -n "$ZSH_VERSION" ]; then whence -p omp 2>/dev/null; else command -v omp 2>/dev/null; fi`
 
 // launchers lists the launchers of this machine's login shell: the `_claude_launchers` helper's (claude wrapper
 // functions), then every alias that runs claude (`alias dmcc="ANTHROPIC_BASE_URL=… claude …"`), by name. A name
@@ -2059,7 +2064,8 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string, settings map[string]string) {
 	helper, rest, _ := strings.Cut(out, "\x1d")
 	aliases, rest, _ := strings.Cut(rest, "\x1d")
-	codexPath, traexPath, _ := strings.Cut(rest, "\x1d")
+	codexPath, rest, _ := strings.Cut(rest, "\x1d")
+	traexPath, ompPath, _ := strings.Cut(rest, "\x1d")
 	list = parseLaunchers(helper)
 	seen := map[string]bool{}
 	for _, l := range list {
@@ -2088,6 +2094,9 @@ func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]strin
 	}
 	if strings.TrimSpace(traexPath) != "" && !seen[traexAgent] && codex[traexAgent] == nil {
 		list = append(list, proto.Launcher{Name: traexAgent, Model: "默认", Agent: traexAgent, Source: "zshrc"})
+	}
+	if strings.TrimSpace(ompPath) != "" && !seen["omp"] && codex["omp"] == nil {
+		list = append(list, proto.Launcher{Name: "omp", Model: "默认", Agent: "omp", Source: "zshrc"})
 	}
 	return list, codex, settings
 }

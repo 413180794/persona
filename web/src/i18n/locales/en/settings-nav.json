@@ -22,6 +22,8 @@
   "hint_model_config": "Which model each feature uses",
   "hint_claude": "Claude Code on each computer",
   "hint_codex": "Codex on each computer",
+  "hint_agy": "Antigravity (agy) on each computer",
+  "hint_omp": "omp on each computer",
   "hint_channels": "Talk to Persona in WeChat, Feishu",
   "hint_connectors": "Let Persona read mail, Feishu, GitHub",
   "hint_extensions": "Add abilities: connectors, channels, voice",

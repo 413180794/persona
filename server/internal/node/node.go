@@ -991,6 +991,38 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		list, err := n.getCodexSettings()
 		return map[string]any{"settings": list}, err
+	case "agy.settings":
+		list, err := n.getAgySettings()
+		return map[string]any{"settings": list}, err
+	case "agy.settings.set":
+		var a struct {
+			Key   string `json:"key"`
+			Value any    `json:"value"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		if err := n.setAgySetting(a.Key, a.Value); err != nil {
+			return nil, err
+		}
+		list, err := n.getAgySettings()
+		return map[string]any{"settings": list}, err
+	case "omp.settings":
+		list, err := n.getOmpSettings()
+		return map[string]any{"settings": list}, err
+	case "omp.settings.set":
+		var a struct {
+			Key   string `json:"key"`
+			Value any    `json:"value"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		if err := n.setOmpSetting(a.Key, a.Value); err != nil {
+			return nil, err
+		}
+		list, err := n.getOmpSettings()
+		return map[string]any{"settings": list}, err
 	case "claude.dirs.list": // every config directory the node knows, blocked ones too (claudedirs.go)
 		return map[string]any{"dirs": n.listClaudeDirs()}, nil
 	case "claude.settings":

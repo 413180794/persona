@@ -1,6 +1,8 @@
 {
   "claude_footer": "改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。",
   "codex_footer": "改的是那台机器的 ~/.codex/config.toml，只动下面这几项，文件里别的配置（模型提供方、项目信任等）原样保留；新开的 Codex 会话生效。",
+  "agy_footer": "改的是那台机器的 ~/.gemini/antigravity-cli/settings.json，只动下面这几项；新开的 Antigravity (agy) 会话生效。",
+  "omp_footer": "改的是那台机器的 ~/.omp/agent/config.yml，只动下面这几项；新开的 omp 会话生效。",
   "applied_to_other": "已应用到 {count} 台机器",
   "saved": "已保存",
   "failure_item": "{name}：{error}",

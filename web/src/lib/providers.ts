@@ -25,6 +25,7 @@ export interface ProviderView {
   /** The name it shows, in any language (one added from a preset gets the provider's). */
   display_name?: string;
   kind?: "launcher" | "api";
+  agent?: "claude" | "codex" | "agy" | "omp" | string;
   api?: "messages" | "responses";
   base_url?: string;
   model?: string;
@@ -65,6 +66,7 @@ export interface FormModel {
 
 export interface ProviderForm {
   kind: "launcher" | "api";
+  agent: "claude" | "codex" | "agy" | "omp";
   api: "messages" | "responses";
   name: string;
   base_url: string;
@@ -99,6 +101,7 @@ export interface ProviderForm {
 export function newForm(): ProviderForm {
   return {
     kind: "launcher",
+    agent: "claude",
     api: "messages",
     name: "",
     base_url: "",
@@ -142,6 +145,7 @@ export function formFromView(v: ProviderView): ProviderForm {
   return {
     ...newForm(),
     kind: v.kind ?? "launcher",
+    agent: (v.agent as ProviderForm["agent"]) || "claude",
     api: v.api ?? "messages",
     name: v.name,
     base_url: v.base_url ?? "",
@@ -232,8 +236,13 @@ export interface FormProblems {
 }
 
 export function formProblems(f: ProviderForm, isNew: boolean, hadKey = false): FormProblems {
+  const requiresUrlAndKey = f.kind === "api" || !f.agent || f.agent === "claude";
   const connect =
-    (!f.name.trim() && t("lib-providers.name_required")) || (isNew && launcherNameProblem(f.name)) || gatewayProblem(f.base_url) || (!f.api_key.trim() && (isNew || !hadKey) && t("lib-providers.key_required")) || "";
+    (!f.name.trim() && t("lib-providers.name_required")) ||
+    (isNew && launcherNameProblem(f.name)) ||
+    ((requiresUrlAndKey || f.base_url.trim() !== "") && gatewayProblem(f.base_url)) ||
+    (requiresUrlAndKey && !f.api_key.trim() && (isNew || !hadKey) && t("lib-providers.key_required")) ||
+    "";
 
   let models = "";
   const checked = f.models.filter((m) => m.checked);
@@ -305,6 +314,7 @@ export function providerBody(f: ProviderForm, old: ProviderView | null): Record<
   const body: Record<string, unknown> = {
     name: f.name.trim(),
     kind: f.kind,
+    ...(f.kind !== "api" && f.agent && f.agent !== "claude" ? { agent: f.agent } : {}),
     api: api ? f.api : "messages",
     base_url: f.base_url.trim(),
     model: f.model.trim(),

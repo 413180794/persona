@@ -53,8 +53,11 @@ describe("主对话的运行方式", () => {
     ...purpose, id: "assistant", name: "主对话", override: { provider: "strong" }, effective: { provider: "strong" }, runtimes: ["cli", "agentsdk"],
     fields: ["provider", "model", "effort", "runtime"],
   };
-  it("offers only the runtimes the hub lists", () => {
+  it("offers only the runtimes the hub lists, and names non-Claude CLI runtimes accurately", () => {
     expect(runtimeChoices(assistant).map((r) => r.label)).toEqual(["Claude Code CLI", "Agent SDK"]);
+    expect(runtimeChoices(assistant, "codex")).toEqual([{ id: "cli", label: "Codex CLI" }]);
+    expect(runtimeChoices(assistant, "agy")).toEqual([{ id: "cli", label: "Antigravity ACP" }]);
+    expect(runtimeChoices(assistant, "omp")).toEqual([{ id: "cli", label: "omp CLI" }]);
     expect(runtimeChoices({ ...assistant, runtimes: ["agentsdk", "future"] }).map((r) => r.id)).toEqual(["agentsdk"]);
     expect(runtimeChoices(purpose)).toEqual([]);
   });

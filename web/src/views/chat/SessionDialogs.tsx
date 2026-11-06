@@ -300,7 +300,7 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
           side="top"
           width={300}
           header={t("chat-sessiondialogs.permission_mode")}
-          items={switchableModes(assistant || session.assistant).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
+          items={switchableModes(assistant || session.assistant, session.agent).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
         />
       )}
       {effortMenu.anchor && !withModel && (

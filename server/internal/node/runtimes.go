@@ -1354,6 +1354,14 @@ func rpcCode(err error) string {
 // runtimeStart starts a session in the runtime offering the launcher; nil when no runtime does.
 func (n *Node) runtimeStart(ctx context.Context, p runtimeStartParams) (*proto.Session, error, bool) {
 	h := n.runtimes.launcherRuntime(p.Launcher)
+	if h == nil {
+		if m, ok := n.managedLauncher(p.Launcher); ok && m.AgentType() == "agy" {
+			h = n.runtimes.launcherRuntime("agy")
+			if p.Model == "" {
+				p.Model = m.Model
+			}
+		}
+	}
 	if h == nil || shellLauncherNames()[p.Launcher] { // the login shell's launcher of that name runs, as the form lists
 		return nil, nil, false
 	}

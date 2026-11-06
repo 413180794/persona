@@ -25,11 +25,14 @@ func (n *Node) launcherModelCheck(ctx context.Context, name, model string) (stri
 	if err := (modelExecution{Model: model}).check(); err != nil {
 		return "", err
 	}
-	if _, managed := n.managedLauncher(name); managed {
-		return "claude", nil
+	if m, managed := n.managedLauncher(name); managed {
+		return m.AgentType(), nil
 	}
 	if _, ok := n.codexLauncher(ctx, name); ok {
 		return "codex", nil
+	}
+	if res, ok := n.runtimeLauncherModels(name); ok {
+		return res.Agent, nil
 	}
 	key := n.home + "\x00" + name + "\x00" + model
 	modelProbeCache.Lock()

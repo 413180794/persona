@@ -83,14 +83,17 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
   const [modelsFor, setModelsFor] = useState<{ name: string; options: AgentModel[]; loading: boolean } | null>(null);
   const [knownModels, setKnownModels] = useState<{ machine: string; name: string; options: AgentModel[] } | null>(null);
   const isMain = assistant?.main === session.session_id;
-  const current = effectiveLauncher({ isMain, picked, session: session.launcher, config: assistant?.launcher });
-  const { list, def, error } = useAssistantLaunchers(session.machine_id, Boolean(menu.anchor));
+  const { list, def, error } = useAssistantLaunchers(session.machine_id, isMain || Boolean(menu.anchor));
+  const current = effectiveLauncher({ isMain, picked, session: session.launcher, config: (isMain && def?.provider) || assistant?.launcher });
   // With no pick the main chat runs the model configuration's default; another conversation keeps the launcher it started with.
   const fallback = isMain ? def ?? { provider: assistant?.launcher } : { provider: session.launcher || assistant?.launcher, model: session.launcher ? session.model : undefined };
-  const modelId = pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : session.model);
+  const defaultModel = isMain
+    ? def?.model || (session.launcher === current ? session.model : list?.find((l) => l.name === current)?.model)
+    : (!session.launcher || session.launcher === current ? session.model : list?.find((l) => l.name === current)?.model);
+  const modelId = pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : defaultModel);
   const named = knownModels?.machine === session.machine_id && knownModels.name === current ? knownModels.options.find((m) => m.id === modelId) : undefined;
   const model = named ? modelName(named) : shortModel(modelId);
-  const label = [current, picked ? oneOff() : model].filter(Boolean).join(" · ");
+  const label = [current, picked ? (pickedM ? `${model} · ${oneOff()}` : oneOff()) : model].filter(Boolean).join(" · ");
 
   // Picking the launcher already applies; the submenu only offers that launcher's models.
   const openModels = (name: string) => {

@@ -1,6 +1,8 @@
 {
   "claude_footer": "Edits ~/.claude/settings.json on that machine, only the options below. New Claude sessions pick them up; running ones usually need a restart.",
   "codex_footer": "Edits ~/.codex/config.toml on that machine, only the options below; everything else in the file (model providers, trusted projects…) stays as is. New Codex sessions pick them up.",
+  "agy_footer": "Edits ~/.gemini/antigravity-cli/settings.json on that machine, only the options below. New Antigravity (agy) sessions pick them up.",
+  "omp_footer": "Edits ~/.omp/agent/config.yml on that machine, only the options below. New omp sessions pick them up.",
   "applied_to_one": "Applied to {count} machine",
   "applied_to_other": "Applied to {count} machines",
   "saved": "Saved",

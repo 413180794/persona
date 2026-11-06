@@ -5,8 +5,8 @@ import { t } from "../../i18n";
 import { settingsTab } from "../../lib/channels";
 import type { IconName } from "../../ui/icons";
 
-export type Tab = "general" | "notifications" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "shortcuts" | "devices" | "hub" | "managers";
-export const TABS: Tab[] = ["general", "notifications", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "shortcuts", "devices", "hub", "managers"];
+export type Tab = "general" | "notifications" | "assistant" | "models" | "model-config" | "claude" | "codex" | "agy" | "omp" | "channels" | "connectors" | "extensions" | "translate" | "shortcuts" | "devices" | "hub" | "managers";
+export const TABS: Tab[] = ["general", "notifications", "assistant", "models", "model-config", "claude", "codex", "agy", "omp", "channels", "connectors", "extensions", "translate", "shortcuts", "devices", "hub", "managers"];
 // The tab whose page opens one of its items, and the query parameter that names it.
 const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", channels: "channel", extensions: "extension", connectors: "connector" };
 
@@ -19,6 +19,8 @@ export const TAB_INFO: Record<Tab, { label: string; icon: IconName; hint: string
   "model-config": { label: t("settings-nav.tab_model_config"), icon: "gear", hint: t("settings-nav.hint_model_config") },
   claude: { label: "Claude Code", icon: "terminal", hint: t("settings-nav.hint_claude") },
   codex: { label: "Codex", icon: "terminal", hint: t("settings-nav.hint_codex") },
+  agy: { label: "Antigravity", icon: "terminal", hint: t("settings-nav.hint_agy") },
+  omp: { label: "omp", icon: "terminal", hint: t("settings-nav.hint_omp") },
   channels: { label: t("settings-nav.tab_channels"), icon: "chat", hint: t("settings-nav.hint_channels") },
   connectors: { label: t("settings-nav.tab_connectors"), icon: "link", hint: t("settings-nav.hint_connectors") },
   extensions: { label: t("settings-nav.tab_extensions"), icon: "extension", hint: t("settings-nav.hint_extensions") },
@@ -32,7 +34,7 @@ export const TAB_INFO: Record<Tab, { label: string; icon: IconName; hint: string
 /** The phone's list: groups of categories, in the tab bar's order. */
 export const LIST_GROUPS: { title: string; tabs: Tab[] }[] = [
   { title: t("settings-nav.group_general"), tabs: ["general", "notifications", "assistant", "translate", "shortcuts"] },
-  { title: t("settings-nav.group_models"), tabs: ["models", "model-config", "claude", "codex"] },
+  { title: t("settings-nav.group_models"), tabs: ["models", "model-config", "claude", "codex", "agy", "omp"] },
   { title: t("settings-nav.group_connections"), tabs: ["channels", "connectors", "extensions", "devices", "hub", "managers"] },
 ];
 

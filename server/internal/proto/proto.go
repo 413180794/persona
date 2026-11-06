@@ -579,8 +579,9 @@ type LauncherEnv struct {
 // ManagedLauncher is a launcher kept by the hub (Settings › Models): what `jarvisd launch <name>` sets before it runs claude.
 // The key only goes to nodes (in memory), never to the app.
 type ManagedLauncher struct {
-	Kind       string `json:"kind,omitempty"` // launcher (default) or api
-	API        string `json:"api,omitempty"`  // messages or responses for direct API providers
+	Kind       string `json:"kind,omitempty"`  // launcher (default) or api
+	Agent      string `json:"agent,omitempty"` // claude (default), codex, or agy
+	API        string `json:"api,omitempty"`   // messages or responses for direct API providers
 	Name       string `json:"name"`
 	BaseURL    string `json:"base_url"`
 	Model      string `json:"model"`
@@ -665,6 +666,14 @@ const (
 
 // BearerAuth: the launcher's key goes as Authorization: Bearer (ANTHROPIC_AUTH_TOKEN) rather than x-api-key.
 func (l ManagedLauncher) BearerAuth() bool { return l.Auth == "bearer" }
+// AgentType is the agent CLI this managed launcher runs ("claude" by default, or "codex" / "agy").
+func (l ManagedLauncher) AgentType() string {
+	if l.Agent != "" {
+		return l.Agent
+	}
+	return "claude"
+}
+
 
 type DirEntry struct {
 	Name  string `json:"name"`

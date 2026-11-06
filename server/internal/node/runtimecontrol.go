@@ -83,7 +83,18 @@ func (h *runtimeConn) launcherList() []runtimeLauncher {
 	defer h.mu.Unlock()
 	var out []runtimeLauncher
 	if h.hello.Launcher != "" {
-		out = append(out, runtimeLauncher{Name: h.hello.Launcher, Model: h.hello.LauncherModel})
+		entry := runtimeLauncher{Name: h.hello.Launcher, Model: h.hello.LauncherModel}
+		for _, l := range h.hello.Launchers {
+			if l.Name == h.hello.Launcher {
+				if l.Model != "" && entry.Model == "" {
+					entry.Model = l.Model
+				}
+				entry.Agent = l.Agent
+				entry.Models = l.Models
+				break
+			}
+		}
+		out = append(out, entry)
 	}
 	for _, l := range h.hello.Launchers {
 		if l.Name != h.hello.Launcher {

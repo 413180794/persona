@@ -50,8 +50,8 @@ export const BYPASS_WARNING = t("lib-session-actions.bypass_warning");
  * Claude with the new mode (#2416). Other agents keep SWITCHABLE_MODES. */
 const ASSISTANT_MODES = PERMISSION_MODES.map((m) => (m.id === BYPASS_MODE ? { ...m, detail: t("lib-session-actions.mode_bypass_permissions_assistant_detail") } : m));
 
-export function switchableModes(assistant: boolean | undefined): ModeOption[] {
-  return assistant ? ASSISTANT_MODES : SWITCHABLE_MODES;
+export function switchableModes(assistant: boolean | undefined, agent?: string): ModeOption[] {
+  return assistant || agent === "agy" ? ASSISTANT_MODES : SWITCHABLE_MODES;
 }
 
 export function modeTitle(id?: string): string {
@@ -64,7 +64,9 @@ export function effortTitle(id?: string): string {
 
 /** Claude Code shows the two chips (its TUI's bottom bar); Codex, TRAEX and runtimes have no such switches. */
 export function hasModes(s: Session | undefined): boolean {
-  if (!s || s.assistant || s.source_kind) return false;
+  if (!s || s.assistant) return false;
+  if (s.agent === "agy") return true;
+  if (s.source_kind) return false;
   return !s.agent || s.agent === "claude";
 }
 

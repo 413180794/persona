@@ -40,6 +40,7 @@ type ModelProvider struct {
 	ID       string        `json:"id"`
 	Name     string        `json:"name"`
 	Kind     string        `json:"kind"`
+	Agent    string        `json:"agent,omitempty"`
 	API      string        `json:"api,omitempty"`
 	Model    string        `json:"model,omitempty"`
 	Machines []string      `json:"machines,omitempty"`
@@ -312,10 +313,14 @@ func (s *Service) modelProviders(ctx context.Context) []ModelProvider {
 		if kind == "api" && apiName == "" {
 			apiName = "messages"
 		}
-		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: cmp.Or(v.DisplayName, v.Name), Kind: kind, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
+		agent := v.Agent
+		if agent == "" && kind == "launcher" && (v.Name == "codex" || v.Name == "traex" || v.Name == "agy" || v.Name == "omp") {
+			agent = v.Name
+		}
+		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: cmp.Or(v.DisplayName, v.Name), Kind: kind, Agent: agent, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
 	}
 	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
-		out = append(out, ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher"})
+		out = append(out, ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher", Agent: "claude"})
 	}
 	for _, p := range s.voicePlugins(ctx) {
 		out = append(out, ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: p.Default, Models: p.Models, Status: p.Error})
@@ -794,7 +799,7 @@ func (s *Service) validateModel(ctx context.Context, p ModelPurpose, b ModelBind
 				if err := s.call(ctx, machine, assistantwire.DeviceLaunchersModelCheck, s.launcherParams(ctx, machine, strings.TrimPrefix(b.Provider, "launcher."), map[string]any{"model": b.Model}), &result); err != nil {
 					return i18n.Err("assistant-models.err_check_model", i18n.Args{"error": i18n.Localize(err, s.requestCtxLang(ctx))})
 				}
-				if p.ID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" {
+				if p.ID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" && result.Agent != "agy" && result.Agent != "omp" {
 					return i18n.Err("assistant-models.err_agent_launcher")
 				}
 				if p.ID == "agent.new" && result.Agent == "codex" && b.Effort != "" {

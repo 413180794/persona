@@ -54,6 +54,12 @@ func (n *Node) launcherModels(ctx context.Context, name, agentType string, refre
 	if res, ok := n.runtimeLauncherModels(name); ok { // a runtime's launcher: the models it said (runtimecontrol.go)
 		return res, nil
 	}
+	if m, ok := n.managedLauncher(name); ok && m.AgentType() == "agy" {
+		if res, ok := n.runtimeLauncherModels("agy"); ok {
+			return res, nil
+		}
+		return proto.LauncherModels{Agent: "agy", Models: []proto.AgentModel{}}, nil
+	}
 	agent := n.launcherModelsAgent(ctx, name, agentType)
 	key := n.home + "\x00" + name + "\x00" + agent + "\x00" + n.executionFingerprint(name, modelExecution{})
 	launcherModelsCache.Lock()
@@ -141,8 +147,8 @@ func (n *Node) launcherModelsAgent(ctx context.Context, name, agentType string) 
 	case name == traexAgent:
 		return traexAgent
 	}
-	if _, ok := n.managedLauncher(name); ok {
-		return "claude"
+	if m, ok := n.managedLauncher(name); ok {
+		return m.AgentType()
 	}
 	if _, ok := n.codexLauncher(ctx, name); ok {
 		return "codex"

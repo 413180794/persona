@@ -359,6 +359,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		n.logger.Printf("assistant %s: resumes on %s, the kind of agent it was started on, not on %s", short(id), launcherOr(own, st.Launcher), launcher)
 		launcher, options = own, nil // the model picked for the other launcher is not this one's
 	}
+	execution := executionOption(options)
 	// An agent runtime's launcher, or a conversation one runs (assistant_runtime.go): it keeps its model; the node
 	// keeps the conversation's state, snapshot, mode and memory.
 	rl := launcherOr(launcher, st.Launcher)
@@ -368,9 +369,12 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		if id != "" && (onRuntime == nil || !runs) && !(runs && launcher == "") { // another kind of agent than its own
 			return "", errors.New("换到另一种 Agent 需要新建对话")
 		}
-		return n.assistantSendRuntime(ctx, onRuntime, id, cwd, rl, text, images, mode)
+		eff := effort
+		if eff == "" {
+			eff = execution.Effort
+		}
+		return n.assistantSendRuntime(ctx, onRuntime, id, cwd, rl, text, images, mode, execution.Model, eff)
 	}
-	execution := executionOption(options)
 	if len(options) == 0 || (execution.Fingerprint == "" && execution.Model == "") {
 		if launcher == "" || launcher == st.Launcher {
 			execution = modelExecution{Model: st.Model, Effort: st.ModelEffort, UseEffort: st.ModelFingerprint != "", Fingerprint: st.ModelFingerprint, Runtime: st.Runtime}

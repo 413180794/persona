@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import { extRoot } from "../../lib/extension-api";
 import {
-  chooseProvider, draftFor, providerName, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, runtimeChoices, runtimeLabel, saveModelPurpose, supportsField,
+  chooseProvider, draftFor, providerAgent, providerName, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, runtimeChoices, runtimeLabel, saveModelPurpose, supportsField,
   type ModelBinding, type ModelConfigurationBody, type ModelDraft, type ModelPurposeBody,
 } from "../../lib/model-config";
 import { effortChoices, providerModels, takesEffort } from "../../lib/launcher-models";
@@ -127,7 +127,10 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
   const inherited: ModelBinding = !draft.provider && !p?.override?.model && p?.effective?.model ? { model: p.effective.model } : {};
   const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
     ? effortChoices(launcherList.list, draft.model, inherited) : ["low", "medium", "high", "xhigh", "max"];
-  const runtimes = p ? runtimeChoices(p) : [];
+  const effectiveProvider = data?.providers.find((v) => v.id === p?.effective?.provider);
+  const effectiveAgent = providerAgent(effectiveProvider, p?.effective?.provider);
+  const chosenAgent = (launcherList.provider === listProvider && launcherList.list?.agent) || providerAgent(chosen, draft.provider || p?.effective?.provider);
+  const runtimes = p ? runtimeChoices(p, chosenAgent) : [];
   const listMachine = machines.find((m) => m.id === launcherList.machine)?.name ?? launcherList.machine;
   const save = async (restore = false) => {
     if (!p || busy || conflict) return;
@@ -163,7 +166,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
         <Group title={t("settings-modelconfiguration.effective")} footer={p.inherited_from ? t("settings-modelconfiguration.inherited_from", { name: sourceName(p.inherited_from) ?? "" }) : t("settings-modelconfiguration.effective_footer")}>
           <Row label={t("settings-modelconfiguration.provider")} mono><span className="max-w-[220px] truncate">{providerName(p.effective?.provider, data?.providers) ?? t("settings-modelconfiguration.not_configured")}</span></Row>
           <Row label={t("settings-modelconfiguration.model")} mono><span className="max-w-[220px] truncate">{p.effective?.model || t("settings-modelconfiguration.provider_default")}</span></Row>
-          {runtimes.length > 0 && <Row label={t("settings-modelconfiguration.runtime")}><span>{runtimeLabel(p.effective?.runtime)}</span></Row>}
+          {runtimes.length > 0 && <Row label={t("settings-modelconfiguration.runtime")}><span>{runtimeLabel(p.effective?.runtime, effectiveAgent)}</span></Row>}
           {p.status && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
         </Group>
         {supportsField(p, "provider") && <label className="block">
@@ -220,9 +223,9 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
         </label>}
         {runtimes.length > 0 && <div className="block">
           <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-modelconfiguration.runtime")}</span>
-          <Segmented label={t("settings-modelconfiguration.runtime")} value={draft.runtime} options={runtimes.map((r) => ({ v: r.id, label: r.label }))}
-            onChange={(runtime) => { if (!busy) setDraft((d) => ({ ...d, runtime })); }} />
-          <span className="mt-1 block text-[11px] text-ink-3">{t("settings-modelconfiguration.runtime_hint")}</span>
+          <Segmented label={t("settings-modelconfiguration.runtime")} value={chosenAgent === "claude" ? draft.runtime : "cli"} options={runtimes.map((r) => ({ v: r.id, label: r.label }))}
+            onChange={(runtime) => { if (!busy && chosenAgent === "claude") setDraft((d) => ({ ...d, runtime })); }} />
+          {chosenAgent === "claude" && <span className="mt-1 block text-[11px] text-ink-3">{t("settings-modelconfiguration.runtime_hint")}</span>}
         </div>}
         <p className="text-[11.5px] leading-relaxed text-ink-3">{p.kind === "plugin" ? t("settings-modelconfiguration.save_note_plugin") : t("settings-modelconfiguration.save_note")}</p>
       </div>}

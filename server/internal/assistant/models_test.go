@@ -821,3 +821,18 @@ func TestSessionLauncherTypes(t *testing.T) {
 		t.Fatalf("legacy launchers = %s", raw)
 	}
 }
+
+func TestUpdateManagedLauncherPreservesAgentWhenOmitted(t *testing.T) {
+	s, _, _ := modelService(t)
+	if w := serve(s, "POST", "/api/v1/launchers", `{"name":"my-codex","kind":"launcher","agent":"codex","model":"gpt-5.4"}`); w.Code != 200 {
+		t.Fatalf("create codex launcher: %d %s", w.Code, w.Body)
+	}
+	// An older client (such as iOS/Mac LauncherInput without an agent field) omits agent and base_url on PUT.
+	if w := serve(s, "PUT", "/api/v1/launchers/my-codex", `{"name":"my-codex","kind":"launcher","model":"gpt-5.5"}`); w.Code != 200 {
+		t.Fatalf("update codex launcher without agent: %d %s", w.Code, w.Body)
+	}
+	got := s.storedLaunchers(context.Background())
+	if len(got) != 1 || got[0].Agent != "codex" || got[0].Model != "gpt-5.5" {
+		t.Fatalf("expected agent=codex preserved, got %+v", got)
+	}
+}

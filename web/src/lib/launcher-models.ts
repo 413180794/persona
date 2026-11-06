@@ -119,8 +119,8 @@ export function launcherAgent(name: string, launchers: Launcher[], list?: Launch
   return l?.agent_type || l?.agent || "claude";
 }
 
-/** Only Claude Code starts with a thinking effort; Codex and the rest keep their own. */
-export const takesEffort = (agent: string) => agent === "claude";
+/** Claude Code and Antigravity start with a thinking effort and permission mode; Codex and the rest keep their own. */
+export const takesEffort = (agent: string) => agent === "claude" || agent === "agy";
 
 export function defaultModel(models: AgentModel[]): AgentModel | undefined {
   return models.find((m) => m.default);

@@ -5,7 +5,7 @@ import type { Machine } from "./types";
 
 // ── agent settings ──
 
-export type AgentKind = "claude" | "codex";
+export type AgentKind = "claude" | "codex" | "agy" | "omp";
 
 export type SettingValue = boolean | string | null;
 
@@ -32,6 +32,18 @@ export const AGENT_TEXT: Record<AgentKind, { name: string; path: string; file: s
     path: "codex-settings",
     file: "~/.codex/config.toml",
     footer: t("lib-agent-settings.codex_footer"),
+  },
+  agy: {
+    name: "Antigravity",
+    path: "agy-settings",
+    file: "~/.gemini/antigravity-cli/settings.json",
+    footer: t("lib-agent-settings.agy_footer"),
+  },
+  omp: {
+    name: "omp",
+    path: "omp-settings",
+    file: "~/.omp/agent/config.yml",
+    footer: t("lib-agent-settings.omp_footer"),
   },
 };
 

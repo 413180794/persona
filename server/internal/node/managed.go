@@ -78,9 +78,29 @@ func shellDirQ(p string, q func(string) string) string {
 	return q(p)
 }
 
-// managedEnv is the environment `jarvisd launch` sets for a managed launcher (an Agent on the launcher's own model):
-// providerEnv (launcherenv.go) in the order it always had.
-func managedEnv(l proto.ManagedLauncher) []string { return envList(providerEnv(l, "", "", false)) }
+func managedEnv(l proto.ManagedLauncher) []string {
+	switch l.AgentType() {
+	case "codex":
+		var env []string
+		if l.BaseURL != "" {
+			env = append(env, "OPENAI_BASE_URL="+l.BaseURL)
+		}
+		if l.APIKey != "" {
+			env = append(env, "OPENAI_API_KEY="+l.APIKey)
+		}
+		return env
+	case "agy":
+		var env []string
+		if l.BaseURL != "" {
+			env = append(env, "GOOGLE_GEMINI_BASE_URL="+l.BaseURL)
+		}
+		if l.APIKey != "" {
+			env = append(env, "GEMINI_API_KEY="+l.APIKey)
+		}
+		return env
+	}
+	return envList(providerEnv(l, "", "", false))
+}
 
 // artifactsOff turns Claude Code's Artifact tool off for a claude a managed launcher runs. Artifacts publish to
 // claude.ai, which a gateway with an API key is not. Claude Code turns the tool on by default (since 2.1.26x), and an
@@ -99,19 +119,21 @@ func managedSettingsEnv(l proto.ManagedLauncher) map[string]string {
 
 // claudeExecutable finds claude: PATH first, then the usual install spots. A node started by launchd (macOS) has a
 // minimal PATH that misses /opt/homebrew/bin, and nothing in `jarvisd launch`'s own path adds it.
-func claudeExecutable() (string, error) {
-	if p, err := exec.LookPath("claude"); err == nil {
+func agentExecutable(bin string) (string, error) {
+	if p, err := exec.LookPath(bin); err == nil {
 		return p, nil
 	}
 	home, _ := os.UserHomeDir()
-	for _, p := range []string{filepath.Join(home, ".local", "bin", "claude"), "/opt/homebrew/bin/claude",
-		"/usr/local/bin/claude", filepath.Join(home, ".claude", "local", "claude")} {
+	for _, p := range []string{filepath.Join(home, ".local", "bin", bin), "/opt/homebrew/bin/" + bin,
+		"/usr/local/bin/" + bin, filepath.Join(home, ".claude", "local", bin)} {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
 			return p, nil
 		}
 	}
-	return "", errors.New("claude not found in PATH or the usual install locations")
+	return "", fmt.Errorf("%s not found in PATH or the usual install locations", bin)
 }
+
+func claudeExecutable() (string, error) { return agentExecutable("claude") }
 
 // Launch is `jarvisd launch <name> [claude args…]`: the managed launcher's settings from the local node, then claude.
 func Launch(ctx context.Context, name string, args []string) error {
@@ -120,6 +142,8 @@ func Launch(ctx context.Context, name string, args []string) error {
 		return fmt.Errorf("jarvisd launch %s: %w", name, err)
 	}
 	var resp struct {
+		Agent string   `json:"agent"`
+		Model string   `json:"model"`
 		Env   []string `json:"env"`
 		Clear []string `json:"clear"` // what to drop from the shell's env first (envClearFor)
 		Args  []string `json:"args"`
@@ -131,25 +155,61 @@ func Launch(ctx context.Context, name string, args []string) error {
 	if resp.Error != "" {
 		return errors.New("jarvisd launch " + name + ": " + resp.Error)
 	}
-	claude, err := claudeExecutable()
+	agent := resp.Agent
+	if agent == "" {
+		agent = "claude"
+	}
+	exe, err := agentExecutable(agent)
 	if err != nil {
 		return fmt.Errorf("jarvisd launch: %w", err)
 	}
-	if len(resp.Clear) == 0 {
-		resp.Clear = legacyEnvClear
+	var env []string
+	if agent == "claude" {
+		if len(resp.Clear) == 0 {
+			resp.Clear = legacyEnvClear
+		}
+		resp.Clear, resp.Env = launchEnvFor(resp.Clear, resp.Env, os.Getenv("PERSONA_ASSISTANT") == "1")
+		env = append(withoutEnv(os.Environ(), resp.Clear), resp.Env...)
+		if err := approveClaudeAPIKey(env); err != nil { // apikeyapproval.go: else Claude asks whether to use the key, default No
+			fmt.Fprintf(os.Stderr, "jarvisd launch %s: could not mark the API key as approved for Claude Code: %v\n", name, err)
+		}
+	} else {
+		env = append(os.Environ(), resp.Env...)
 	}
-	resp.Clear, resp.Env = launchEnvFor(resp.Clear, resp.Env, os.Getenv("PERSONA_ASSISTANT") == "1")
-	env := append(withoutEnv(os.Environ(), resp.Clear), resp.Env...)
-	if err := approveClaudeAPIKey(env); err != nil { // apikeyapproval.go: else Claude asks whether to use the key, default No
-		fmt.Fprintf(os.Stderr, "jarvisd launch %s: could not mark the API key as approved for Claude Code: %v\n", name, err)
-	}
+	hasModelArg := false
+	hasSettingsArg := false
 	for _, arg := range args {
-		if arg == "--model" || strings.HasPrefix(arg, "--model=") {
+		if arg == "-m" || arg == "--model" || strings.HasPrefix(arg, "--model=") {
+			hasModelArg = true
 			resp.Args = withoutModelArgs(resp.Args)
-			break
+		}
+		if arg == "--settings" || strings.HasPrefix(arg, "--settings=") {
+			hasSettingsArg = true
 		}
 	}
-	return osproc.Exec(claude, append(append([]string{"claude"}, resp.Args...), args...), env)
+	for _, arg := range resp.Args {
+		if arg == "-m" || arg == "--model" || strings.HasPrefix(arg, "--model=") {
+			hasModelArg = true
+		}
+		if arg == "--settings" || strings.HasPrefix(arg, "--settings=") {
+			hasSettingsArg = true
+		}
+	}
+	launchArgs := append([]string{agent}, resp.Args...)
+	if agent == "codex" && resp.Model != "" && !hasModelArg {
+		launchArgs = append(launchArgs, "-m", resp.Model)
+	} else if agent == "agy" {
+		if resp.Model != "" && !hasModelArg {
+			launchArgs = append(launchArgs, "--model", resp.Model)
+		}
+		for _, kv := range resp.Env {
+			if strings.HasPrefix(kv, "GEMINI_API_KEY=") && len(kv) > len("GEMINI_API_KEY=") && !hasSettingsArg {
+				launchArgs = append(launchArgs, "--settings", `{"modelProvider":"gemini"}`)
+				break
+			}
+		}
+	}
+	return osproc.Exec(exe, append(launchArgs, args...), env)
 }
 
 // launcherEnv answers `jarvisd launch` on the local socket.
@@ -158,7 +218,7 @@ func (n *Node) launcherEnv(name string) map[string]any {
 	if !ok {
 		return map[string]any{"error": "no launcher " + name + " in Persona (设置 › 模型), or the hub has not sent it yet"}
 	}
-	return map[string]any{"env": managedEnv(l), "clear": envClearFor(l), "args": l.Args}
+	return map[string]any{"env": managedEnv(l), "clear": envClearFor(l), "args": l.Args, "agent": l.AgentType(), "model": l.Model}
 }
 
 var secretValue = regexp.MustCompile(`(?i)((?:key|token|secret|password|passwd|auth)[A-Za-z0-9_]*\s*=\s*)("[^"]*"|'[^']*'|\S+)`)

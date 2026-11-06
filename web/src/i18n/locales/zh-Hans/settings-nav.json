@@ -22,6 +22,8 @@
   "hint_model_config": "每个功能用哪个模型",
   "hint_claude": "各台电脑上 Claude Code 的设置",
   "hint_codex": "各台电脑上 Codex 的设置",
+  "hint_agy": "各台电脑上 Antigravity (agy) 的设置",
+  "hint_omp": "各台电脑上 omp 的设置",
   "hint_channels": "在微信、飞书里和 Persona 说话",
   "hint_connectors": "让 Persona 读你的邮箱、飞书、GitHub",
   "hint_extensions": "装上新能力：连接器、渠道、语音",

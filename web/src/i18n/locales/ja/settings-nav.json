@@ -22,6 +22,8 @@
   "hint_model_config": "機能ごとに使うモデル",
   "hint_claude": "各コンピュータの Claude Code 設定",
   "hint_codex": "各コンピュータの Codex 設定",
+  "hint_agy": "各コンピュータの Antigravity (agy) 設定",
+  "hint_omp": "各コンピュータの omp 設定",
   "hint_channels": "WeChat や Feishu で Persona と話す",
   "hint_connectors": "メール、Feishu、GitHub を Persona が読む",
   "hint_extensions": "機能を追加：コネクタ、チャネル、音声",
