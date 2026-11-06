@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/screen"
@@ -188,17 +189,20 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 		}
 		return nil
 	}
-	unread := false // the last read failed: it says nothing of the box
+	unread := false  // the last read failed: it says nothing of the box
+	cut := false     // … because herdr cut its every answer (herdr.ErrTruncated): it is there, the screen is not
+	colored := false // the last read had colors: only they tell Claude's grey suggestion from a draft
 	read := func() string {
-		s, err := n.readPaneANSI(ctx, pane, "visible", 60)
+		s, err := n.readPaneANSI(ctx, pane, "visible", 60) // a big one in two smaller reads (spliceRead, #6039)
+		colored = err == nil
 		if err != nil {
 			s, err = n.readPane(ctx, pane, "visible", 60) // no colors: any text in the box counts as a draft
 		}
-		unread = err != nil
+		unread, cut = err != nil, errors.Is(err, herdr.ErrTruncated)
 		return s
 	}
 	shown := read()
-	if unread && opts.readBox {
+	if unread && (opts.readBox || cut) {
 		return refusal(notDelivered, unreadBoxMessage, nil)
 	}
 	if opts.DismissNotice {
@@ -212,22 +216,26 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 	// own message a draft.
 	for wait := time.Now().Add(2 * time.Second); code == screen.InputDraft && n.typing.ours(pane, in.Text) && time.Now().Before(wait); {
 		time.Sleep(100 * time.Millisecond)
-		code, in = screen.CheckClaude(read())
+		shown = read()
+		code, in = screen.CheckClaude(shown)
 	}
 	if code == screen.InputDraft && clearDraft != "" && in.Clearable == clearDraft {
 		if err := n.sendKeys(ctx, pane, screen.ClearKeys...); err != nil {
 			return refusal(code, draftMessage(in.Text), map[string]any{"draft": in.Text})
 		}
 		time.Sleep(150 * time.Millisecond)
-		code, in = screen.CheckClaude(read())
+		shown = read()
+		code, in = screen.CheckClaude(shown)
 	}
-	if unread && opts.readBox {
+	if unread && (opts.readBox || cut) {
 		return refusal(notDelivered, unreadBoxMessage, nil)
 	}
 	switch code {
 	case screen.DialogOpen:
 		return dialogRefusal(screen.Plain(shown))
 	case screen.InputDraft:
+		// What the box was drawn with, never its text: a style the reader takes for typed words shows here.
+		n.logf("send to %s refused: text in the box, read %s: %s", pane, map[bool]string{true: "with colors", false: "without colors"}[colored], screen.BoxStyle(shown))
 		data := map[string]any{"draft": in.Text}
 		if in.Clearable != "" {
 			data["clearable"] = in.Clearable

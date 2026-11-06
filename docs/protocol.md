@@ -1395,6 +1395,13 @@ Typing into someone else's terminal is the riskiest thing this App does. Before 
 
 - Gray suggested input (Claude's predicted next line, a new session's `Try "…"`) doesn't count as a draft: telling them apart needs a colored screen read (`pane.read` with `format: ansi`) to see SGR 2 (dim);
   in plain text the two look identical. When colors can't be read, it's always treated as a draft. The rules are ported from Ovis's `claude-input.ts` (MIT). Fixtures: `server/internal/screen/testdata`.
+- herdr 0.9.4 on macOS loses an answer over 8 KB: it writes it to its socket once, and past the socket's 8192-byte buffer the rest is gone (`herdr.ErrTruncated`).
+  A wide pane with Claude Code's status bar takes more than that in 60 colored lines, so its colored read always failed. The check then went on without colors, and every send to a box showing Claude's suggestion
+  was refused, with Clear and Send failing again (#6039). Such a read is now made of two smaller ones (`node/hosts.go` `spliceRead`): the whole screen without colors,
+  and its bottom 20 (or 10) rows with colors (herdr keeps the newest), where the box and a dialog's keys are. Dialogs are judged on the whole screen; box rows above the colored ones have no colors, so they count as typed.
+  The two are lined up from their last row with something on it, the colored rows reaching past the blank ones at the bottom, and compared without trailing white space (herdr's plain read drops the no-break space after an empty box's `❯`). When the colored rows don't match the plain ones (the screen moved between the reads) they are read again once, then the read fails.
+  When herdr can't send even the plain screen whole, the read fails rather than return fewer rows taken for the whole, and the send is refused (`not_delivered`).
+  A refusal logs whether the read had colors and the box row's styles, never its text (`screen.BoxStyle`).
 - `clear_draft`: after seeing the draft in the App, the user picks **Clear and Send**, and the App resends the same message (same `client_msg_id`) with the `clearable` it received;
   the node clears it with `ctrl+k ctrl+u` only if the input box **still has that same text**, then reads again to confirm it's empty before sending. Multi-line drafts can only be handled on the computer (those two keys clear one line at a time).
 - `client_msg_id`: the App gives each pending message a UUID, and automatic resends (no response, resending after a network drop) reuse it. **Dedup is on the hub** (`hub/send.go`, Postgres table

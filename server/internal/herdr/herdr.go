@@ -56,7 +56,8 @@ func (c *Client) note(method string, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	var he *Error
-	if err == nil || errors.As(err, &he) { // an answer from herdr, even an error one, means it is reachable
+	// An answer from herdr, even an error one or one cut short (ErrTruncated), means it is reachable.
+	if err == nil || errors.As(err, &he) || errors.Is(err, ErrTruncated) {
 		if e.failing {
 			c.Log("herdr: reachable again after %s (%d failed calls)", now().Sub(e.since).Round(time.Second), e.failures)
 		}
@@ -197,12 +198,20 @@ func (c *Client) rpcOnce(ctx context.Context, method string, params any, out any
 	return decodeResponse(method, line, out)
 }
 
+// ErrTruncated: herdr's answer stopped short. herdr 0.9.4 on macOS writes an answer to its socket in one go, and
+// past the socket's 8192-byte buffer the rest is lost: a big answer (60 colored lines of a wide pane, a session
+// snapshot) never arrives whole (#6039). A caller that can do with less asks for less.
+var ErrTruncated = errors.New("answer cut short (over 8 KB)")
+
 func decodeResponse(method string, line []byte, out any) error {
 	var env struct {
 		Result json.RawMessage `json:"result"`
 		Error  *Error          `json:"error"`
 	}
 	if err := json.Unmarshal(line, &env); err != nil {
+		if strings.Contains(err.Error(), "unexpected end of JSON input") {
+			return fmt.Errorf("herdr %s: %w", method, ErrTruncated)
+		}
 		return fmt.Errorf("herdr %s: decode: %v", method, err)
 	}
 	if env.Error != nil {

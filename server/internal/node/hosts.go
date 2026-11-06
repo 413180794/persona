@@ -2,10 +2,16 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"unicode"
 
+	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // The node drives every terminal through the host its pane belongs to (internal/host). Panes are kept as PaneRef
@@ -43,13 +49,84 @@ func (n *Node) readPane(ctx context.Context, pane, source string, lines int) (st
 	return h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines})
 }
 
-// readPaneANSI reads a pane's screen with its colors.
+// readPaneANSI reads a pane's screen with its colors. One herdr loses (an answer over 8 KB, herdr.ErrTruncated) is
+// read in two smaller ones: the rows without colors, and the bottom rows with them (spliceRead).
 func (n *Node) readPaneANSI(ctx context.Context, pane, source string, lines int) (string, error) {
 	h, ref, err := n.paneHost(pane)
 	if err != nil {
 		return "", err
 	}
-	return h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines, ANSI: true})
+	s, err := h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines, ANSI: true})
+	if errors.Is(err, herdr.ErrTruncated) {
+		return spliceRead(ctx, h, ref, source, lines)
+	}
+	return s, err
+}
+
+// spliceRead is a colored read of lines rows that herdr could not send whole (#6039). herdr 0.9.4 on macOS writes an
+// answer to its socket once, and past the socket's 8192-byte buffer the rest is lost: 60 colored rows of a wide pane
+// with Claude Code's status bar are more than that, and every such read failed. So the screen is read without colors,
+// all of it (a plain read cut too is the error: a screen with fewer rows than asked for would be taken for the whole,
+// a box or a dialog's top above it unseen), and its bottom rows again with colors (herdr keeps the newest), where
+// Claude's input box and a dialog's keys are: the plain rows with the bottom ones colored. Rows higher up have no
+// colors, which only makes more of them count as typed (a box taller than the colored rows is a draft). When the
+// colored rows are not the plain read's last ones (the screen moved between the reads) they are read again once;
+// then the error.
+func spliceRead(ctx context.Context, h host.Host, ref host.PaneRef, source string, lines int) (string, error) {
+	plain, err := h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines})
+	if err != nil {
+		return "", err
+	}
+	for range 2 {
+		all := screenRows(plain)
+		rows := contentRows(all)
+		// The colored rows reach past the blank ones at the bottom (a short session in a tall pane), to the box.
+		blank := len(all) - len(rows)
+		for _, n := range []int{min(len(all), blank+20), min(len(all), blank+10)} {
+			colored, err := h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: n, ANSI: true})
+			if errors.Is(err, herdr.ErrTruncated) {
+				continue
+			}
+			if err != nil {
+				return "", err
+			}
+			// Both lined up from their last row with something on it: how many blank rows each ends in does not count.
+			crows := contentRows(screenRows(colored))
+			if len(crows) == 0 || len(crows) > len(rows) || !sameRows(rows[len(rows)-len(crows):], crows) {
+				break // the screen moved between the reads, or the colored rows show nothing to go by
+			}
+			return strings.Join(append(slices.Clone(rows[:len(rows)-len(crows)]), crows...), "\r\n") + "\r\n", nil
+		}
+		if plain, err = h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines}); err != nil {
+			return "", err
+		}
+	}
+	return "", herdr.ErrTruncated
+}
+
+// screenRows are a read's rows (\r\n or \n ends a row).
+func screenRows(s string) []string {
+	return strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+}
+
+// contentRows are rows without the blank ones they end in.
+func contentRows(rows []string) []string {
+	n := len(rows)
+	for n > 0 && strings.TrimSpace(screen.Plain(rows[n-1])) == "" {
+		n--
+	}
+	return rows[:n]
+}
+
+// sameRows: colored rows show the plain ones, trailing white space aside (herdr's plain read drops it all: the
+// no-break space after an empty box's ❯, an ideographic space).
+func sameRows(plain, colored []string) bool {
+	for i := range colored {
+		if strings.TrimRightFunc(screen.Plain(colored[i]), unicode.IsSpace) != strings.TrimRightFunc(plain[i], unicode.IsSpace) {
+			return false
+		}
+	}
+	return true
 }
 
 // plainScreen: the pane's host reads screens as plain text only (host.PlainScreen), so colored reads fail there.

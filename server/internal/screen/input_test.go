@@ -3,6 +3,7 @@ package screen
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -120,5 +121,21 @@ func TestSuggestion(t *testing.T) {
 	wrapped := rule + "\n❯\u00a0\x1b[7mr\x1b[0m\x1b[2mun the whole test suite again and then\x1b[0m\n  \x1b[2mcommit the fix\x1b[0m\n" + rule + "\n  footer"
 	if in := ClaudeInput(wrapped); in.Draft || in.Suggestion != "run the whole test suite again and then commit the fix" {
 		t.Fatalf("wrapped: %+v", in)
+	}
+}
+
+// The box's styles for a log line: SGR sequences as written, any other escape (a link's address, a title) as ⎋, and
+// counts for the characters, never the characters.
+func TestBoxStyleHasNoText(t *testing.T) {
+	rule := "\x1b[38;2;136;136;136m" + "────────────────────" + "\x1b[0m"
+	row := "❯ \x1b[7m先\x1b[0m\x1b[2m让它待命\x1b[0m\x1b]8;;https://example.com/secret?token=abc\x1b\\link\x1b]8;;\x1b\\"
+	got := BoxStyle(rule + "\r\n" + row + "\r\n" + rule + "\r\n  footer")
+	if got != "2·[7m·1·[0m·[2m·4·[0m·⎋·4·⎋" {
+		t.Fatalf("style %q", got)
+	}
+	for _, leak := range []string{"secret", "token", "先", "让", "link"} {
+		if strings.Contains(got, leak) {
+			t.Fatalf("%q in %q", leak, got)
+		}
 	}
 }

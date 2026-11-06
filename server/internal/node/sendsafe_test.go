@@ -39,6 +39,22 @@ type fakePane struct {
 	// clearAfter: after this many reads the pane moves to the next screen by itself (the TUI catching up).
 	clearAfter int
 	reads      int
+	// cutOver / plainCutOver: a colored / plain read of more lines than this gets herdr 0.9.4's cut answer (the start
+	// of it, no line end). With either set, a read is the screen's last `lines` rows, as herdr keeps the newest.
+	cutOver, plainCutOver int
+	// moved: what colored reads show instead of the screen (it changed between two reads).
+	moved string
+	// readLines: the lines each read asked for, colored ones as negative numbers.
+	readLines []int
+}
+
+// bottom is text's last n rows, blank ones included, as herdr's grid read gives them.
+func bottom(text string, n int) string {
+	rows := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+	if n > 0 && n < len(rows) {
+		rows = rows[len(rows)-n:]
+	}
+	return strings.Join(rows, "\n")
 }
 
 func (f *fakePane) serve(t *testing.T) *herdr.Client {
@@ -71,7 +87,27 @@ func (f *fakePane) serve(t *testing.T) *herdr.Client {
 			var result any = map[string]any{}
 			switch req.Method {
 			case "pane.read":
-				result = map[string]any{"read": map[string]any{"text": f.screens[f.state]}}
+				lines, _ := req.Params["lines"].(float64)
+				ansi := req.Params["format"] == "ansi"
+				f.readLines = append(f.readLines, map[bool]int{true: -int(lines), false: int(lines)}[ansi])
+				text := f.screens[f.state]
+				if f.cutOver > 0 || f.plainCutOver > 0 {
+					if ansi && f.moved != "" {
+						text = f.moved
+					}
+					if !ansi {
+						text = screen.Plain(text) // a plain read has no colors
+					}
+					text = bottom(text, int(lines))
+					if limit := map[bool]int{true: f.cutOver, false: f.plainCutOver}[ansi]; limit > 0 && int(lines) > limit {
+						b, _ := json.Marshal(map[string]any{"id": req.ID, "result": map[string]any{"read": map[string]any{"text": text}}})
+						f.mu.Unlock()
+						_, _ = c.Write(b[:len(b)/2])
+						c.Close()
+						continue
+					}
+				}
+				result = map[string]any{"read": map[string]any{"text": text}}
 				if f.reads++; f.clearAfter > 0 && f.reads >= f.clearAfter && f.state+1 < len(f.screens) {
 					f.state++
 				}
@@ -364,5 +400,69 @@ func TestStillPromptedIgnoresChips(t *testing.T) {
 		if got := stillPrompted(c.box, c.prompted); got != c.want {
 			t.Errorf("stillPrompted(%q, %q) = %v", c.box, c.prompted, got)
 		}
+	}
+}
+
+// herdr 0.9.4 loses an answer over 8 KB, so a 60-line colored read of a wide pane with a status bar never arrived and
+// the check went on without colors, where Claude's grey suggestion is a draft: every send to it was refused, and Clear
+// and Send failed again (#6039). The screen is now read without colors and its bottom rows with them (spliceRead): the
+// suggestion is told apart, a typed draft is still one, dialogs are judged on the whole screen.
+func TestCheckPaneReadsTheBoxDespiteCutAnswers(t *testing.T) {
+	ctx := context.Background()
+	check := func(f *fakePane, clear string) error {
+		t.Helper()
+		return (&Node{hosts: herdrHosts(f.serve(t))}).checkPane(ctx, "w1:p1", "claude", clear)
+	}
+	suggestion := screenFixture(t, "claude-2.1.312-suggestion-171.ansi")
+	f := &fakePane{screens: []string{suggestion}, cutOver: 20}
+	if err := check(f, ""); err != nil {
+		t.Fatalf("a suggestion refused when the big read was cut: %v (reads %v)", err, f.readLines)
+	}
+	if len(f.readLines) < 3 || f.readLines[0] != -60 || f.readLines[1] != 60 || f.readLines[2] != -20 {
+		t.Fatalf("reads %v", f.readLines)
+	}
+	// A typed draft is still one.
+	typed := screenFixture(t, "claude-2.1.312-typed-162.ansi")
+	if code, data := refusalOf(t, check(&fakePane{screens: []string{typed}, cutOver: 20}, "")); code != "input_draft" || data["clearable"] != "fix the flaky test" {
+		t.Fatalf("typed: %s %v", code, data)
+	}
+	// The box above the colored rows (a menu of ten rows under it): its rows have no colors, so it is a draft.
+	rule := strings.Repeat("─", 30)
+	menu := rule + "\r\n❯ /re\r\n" + rule + strings.Repeat("\r\n  /review   review a pull request", 12)
+	if code, _ := refusalOf(t, check(&fakePane{screens: []string{menu}, cutOver: 10}, "")); code != "input_draft" {
+		t.Fatalf("a box above the colored rows: %s", code)
+	}
+	// The screen moved between the two reads: no colors at all, the text counts as a draft.
+	if code, _ := refusalOf(t, check(&fakePane{screens: []string{suggestion}, cutOver: 20, moved: typed}, "")); code != "input_draft" {
+		t.Fatalf("moved: %s", code)
+	}
+	// A dialog is judged on the whole screen: the rewind list's cursor row is above the colored rows, yet it is no
+	// notice that Enter closes.
+	list := screenFixture(t, "claude-2.1.318-rewind-list-middle-119.txt")
+	if code, data := refusalOf(t, check(&fakePane{screens: []string{list}, cutOver: 10}, "")); code != "dialog_open" || data["notice"] == true {
+		t.Fatalf("rewind list: %s %v", code, data)
+	}
+	// The plain read is cut too: no shorter screen is taken for the whole one (a box above it unseen); nothing is
+	// known of the box, nothing is typed.
+	if code, _ := refusalOf(t, check(&fakePane{screens: []string{menu}, cutOver: 10, plainCutOver: 30}, "")); code != notDelivered {
+		t.Fatalf("plain cut: %s", code)
+	}
+	// A short session in a tall pane: the box, then many blank rows. The colored rows reach past them to the box.
+	tall := strings.Replace(typed, "\r\n", "\r\n", -1) + strings.Repeat("\r\n", 25)
+	if code, data := refusalOf(t, check(&fakePane{screens: []string{tall}, cutOver: 40}, "")); code != "input_draft" || data["clearable"] != "fix the flaky test" {
+		t.Fatalf("blank rows under a typed box: %s %v", code, data)
+	}
+	tallSuggestion := suggestion + strings.Repeat("\r\n", 25)
+	if err := check(&fakePane{screens: []string{tallSuggestion}, cutOver: 50}, ""); err != nil {
+		t.Fatalf("blank rows under a suggestion: %v", err)
+	}
+	// An idle Claude's empty box: the colored row has a no-break space after the ❯ that the plain one has not.
+	idle := screenFixture(t, "claude-2.1.318-rewind-idle-before-119.ansi")
+	g := &fakePane{screens: []string{idle}, cutOver: 20}
+	if err := check(g, ""); err != nil {
+		t.Fatalf("an empty box: %v (reads %v)", err, g.readLines)
+	}
+	if len(g.readLines) != 3 {
+		t.Fatalf("the splice did not match the first time: reads %v", g.readLines)
 	}
 }

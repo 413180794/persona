@@ -6,6 +6,7 @@ package screen
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -303,6 +304,42 @@ func suggestion(b *box, after string) string {
 	}
 	return s
 }
+
+// BoxStyle is the first row of the input box as its styles alone, for a log line that tells a style the reader does
+// not know: each SGR sequence as written (`[2m`), any other escape as `⎋`, and between them how many characters,
+// never the characters (a draft is the user's, a link's address may hold a token).
+func BoxStyle(ansi string) string {
+	b := inputBox(ansi)
+	switch {
+	case b == nil:
+		return "no box"
+	case b.clipped:
+		return "a box taller than the screen"
+	case len(b.raw) == 0:
+		return "an empty box"
+	}
+	row := b.raw[0]
+	var parts []string
+	off := 0
+	count := func(s string) {
+		if n := len([]rune(s)); n > 0 {
+			parts = append(parts, strconv.Itoa(n))
+		}
+	}
+	for _, m := range escRE.FindAllStringSubmatchIndex(row, -1) {
+		count(row[off:m[0]])
+		if m[4] >= 0 && row[m[4]:m[5]] == "m" && sgrParams.MatchString(row[m[0]:m[1]]) {
+			parts = append(parts, row[m[0]+1:m[1]])
+		} else {
+			parts = append(parts, "⎋")
+		}
+		off = m[1]
+	}
+	count(row[off:])
+	return strings.Join(parts, "·")
+}
+
+var sgrParams = regexp.MustCompile(`^\x1b\[[0-9;:]*m$`)
 
 // ClearKeys empty a one-row Claude input box: the row after the cursor, then before it (Ovis, measured on 2.1.295).
 var ClearKeys = []string{"ctrl+k", "ctrl+u"}

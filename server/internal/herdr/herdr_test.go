@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -251,5 +252,36 @@ func TestFailureEpisodesLogOnce(t *testing.T) {
 	_, _ = c.Agents(context.Background())
 	if len(lines) != 2 || !strings.Contains(lines[1], "reachable again") {
 		t.Fatalf("recovery logged once: %v", lines)
+	}
+}
+
+// herdr 0.9.4 writes an answer once: past macOS's 8192-byte socket buffer the rest is lost, and the line ends early.
+func TestCutAnswerIsErrTruncated(t *testing.T) {
+	dir, err := os.MkdirTemp("", "herdr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "h.sock")
+	ln, err := listenSocket(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = bufio.NewReader(conn).ReadBytes('\n')
+			big := `{"id":"x","result":{"read":{"text":"` + strings.Repeat("\\u001b[2mgrey", 2000) + `"}}}` + "\n"
+			_, _ = conn.Write([]byte(big[:8192]))
+			conn.Close()
+		}
+	}()
+	c := &Client{Socket: sock}
+	if _, err := c.PaneReadANSI(context.Background(), "w1:p1", "visible", 60); !errors.Is(err, ErrTruncated) {
+		t.Fatalf("err %v", err)
 	}
 }
