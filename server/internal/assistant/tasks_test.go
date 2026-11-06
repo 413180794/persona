@@ -731,3 +731,83 @@ func TestSnapshotListsPlansWaitingToStart(t *testing.T) {
 		t.Fatalf("a started plan is not waiting: %+v", plans)
 	}
 }
+
+// A task opened from a side conversation (neither quiet nor supervised) pushes a failure notification
+// when its agent cannot start, with reason and next steps, unless muted (#5081).
+func TestSideConversationTaskFailedToStartPushes(t *testing.T) {
+	old := taskStartRetryDelay
+	taskStartRetryDelay = 10 * time.Millisecond
+	t.Cleanup(func() { taskStartRetryDelay = old })
+
+	ctx := context.Background()
+	s, f := newTaskService(t)
+	f.hello.Assistant.MachineID = "box"
+	f.hello.Assistant.Machines = []string{"box"}
+	setSettings(t, s, func(v *Settings) { v.Main, v.MachineID = "main1", "box" })
+	f.failStart = errors.New("Failed to authenticate")
+
+	// 1. Normal failure push from side conversation.
+	if _, err := s.toolTaskPlan(ctx, "side1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the task to fail", func() bool { return onlyTodo(s).StartError != "" })
+	waitFor(t, "push to arrive", func() bool { return len(f.pushed()) == 1 })
+
+	pushed := f.pushed()
+	if pushed[0].SessionID != "side1" {
+		t.Fatalf("SessionID = %q, want side1", pushed[0].SessionID)
+	}
+	if pushed[0].Title != "「修登录崩溃」没开起来" {
+		t.Fatalf("Title = %q", pushed[0].Title)
+	}
+	if !strings.Contains(pushed[0].Body, "Failed to authenticate") || !strings.Contains(pushed[0].Body, "打开对话点『重试』，或换一台电脑再派") {
+		t.Fatalf("Body = %q", pushed[0].Body)
+	}
+
+	// 2. Muted side conversation pushes nothing.
+	s2, f2 := newTaskService(t)
+	f2.hello.Assistant.MachineID = "box"
+	f2.hello.Assistant.Machines = []string{"box"}
+	setSettings(t, s2, func(v *Settings) { v.Main, v.MachineID = "main1", "box" })
+	f2.failStart = errors.New("Failed to authenticate")
+	s2.fleet.mutesMu.Lock()
+	s2.fleet.mutes = &Pins{Sessions: []string{"box/side_muted"}}
+	s2.fleet.mutesMu.Unlock()
+	if _, err := s2.toolTaskPlan(ctx, "side_muted", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the task to fail", func() bool { return onlyTodo(s2).StartError != "" })
+	time.Sleep(100 * time.Millisecond)
+	if len(f2.pushed()) != 0 {
+		t.Fatalf("muted conversation pushed: %+v", f2.pushed())
+	}
+
+	// 3. Health space conversation omits task title.
+	s3, f3 := newTaskService(t)
+	f3.hello.Assistant.MachineID = "box"
+	f3.hello.Assistant.Machines = []string{"box"}
+	setSettings(t, s3, func(v *Settings) { v.Main, v.MachineID = "main1", "box" })
+	f3.setSessions("box", proto.Session{SessionID: "health1", Space: SpaceHealth})
+	f3.failStart = errors.New("Failed to authenticate")
+	if _, err := s3.toolTaskPlan(ctx, "health1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	f3.mu.Lock()
+	f3.pushes = nil
+	f3.mu.Unlock()
+
+	items, ps, _ := s3.feed(ctx, "health1", time.Time{})
+	for _, it := range items {
+		if it.Kind == feedPlan {
+			if _, err := s3.startPlan(ctx, ps[it.Ref].ID, nil, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	waitFor(t, "the task to fail", func() bool { return onlyTodo(s3).StartError != "" })
+	waitFor(t, "push to arrive", func() bool { return len(f3.pushed()) == 1 })
+	hpushed := f3.pushed()
+	if hpushed[0].Title != "任务没开起来" || strings.Contains(hpushed[0].Title, "修登录崩溃") {
+		t.Fatalf("health Title = %q, want no task name", hpushed[0].Title)
+	}
+}

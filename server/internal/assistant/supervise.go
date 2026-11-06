@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -448,6 +449,12 @@ func (s *Service) superviseWatch(ctx context.Context, now time.Time) {
 // a supervised task's supervisor gets a signal, any other quiet task's conversation its notice.
 func (s *Service) taskNotice(ctx context.Context, t Todo, machine, state, ask, text string) {
 	if t.Supervision == nil {
+		if !t.Quiet {
+			if state == "failed" && t.Origin != "" {
+				s.notifyTaskFailed(ctx, t, machine, text)
+			}
+			return
+		}
 		s.quietNotify(ctx, t, machine, state, ask, text)
 		return
 	}
@@ -1264,6 +1271,40 @@ func (s *Service) planDuplicates(ctx context.Context, tasks []PlanTask) string {
 	}
 	return "\n\nPossible duplicates (work already going on): look at them (agent_read, the todo) before this goes on; if it is the " +
 		"same work, cancel the new task (task_review cancelled, or dismiss the plan) or send what is new to the agent already on it." + b.String()
+}
+
+// notifyTaskFailed pushes a failure notification to the user's phone when a task started from a side conversation
+// (neither supervised nor quiet) could not start, so the user is informed with next steps (#5081).
+// Muted conversations send nothing; health conversations omit the task title.
+func (s *Service) notifyTaskFailed(ctx context.Context, t Todo, machine, reason string) {
+	here := s.settings(ctx).MachineID
+	if here == "" {
+		here = machine
+	}
+	if t.Origin == "" || s.muted(here, t.Origin) {
+		return
+	}
+	l := s.lang(ctx)
+	title := i18n.T(l, "assistant-tasks.task_failed_title", i18n.Args{"name": t.Title})
+	if s.inHealth(ctx, t.Origin) {
+		title = i18n.T(l, "assistant-tasks.task_failed_title_health")
+	}
+	r := strings.TrimRight(strings.TrimSpace(reason), ".。")
+	body := i18n.T(l, "assistant-tasks.task_failed_body_no_reason")
+	if r != "" {
+		body = i18n.T(l, "assistant-tasks.task_failed_body", i18n.Args{"reason": r})
+	}
+	sub := s.machineName(machine)
+	if sub == "" {
+		sub = "Persona"
+	}
+	s.push(ctx, Notification{
+		Subtitle:  sub,
+		DeviceID:  here,
+		SessionID: t.Origin,
+		Title:     title,
+		Body:      body,
+	})
 }
 
 // SetSuperviseTimings makes supervision messages gather for gather and come at most every every (urgent: urgent), and
