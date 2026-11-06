@@ -10,7 +10,7 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 
 /*
- * 拍照 (iOS CameraPicker): the system camera writes into cache/chat-captures through the chat FileProvider, the photo
+ * "Take photo" (iOS CameraPicker): the system camera writes into cache/chat-captures through the chat FileProvider, the photo
  * then goes in like a picked one. Those originals belong to one draft and are deleted when they leave it.
  */
 

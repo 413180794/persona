@@ -42,7 +42,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The running work line (web #1990): 「正在工作…」, the plan card with its Step N/M pill and the newest steps under it,
+ * The running work line (web #1990): "Working…", the plan card with its Step N/M pill and the newest steps under it,
  * in every style, light and dark. PNGs in `build/work-trace-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)

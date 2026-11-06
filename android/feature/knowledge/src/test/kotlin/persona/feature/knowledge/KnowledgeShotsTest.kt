@@ -37,7 +37,7 @@ import persona.core.navigation.Navigator
 import java.io.File
 
 /**
- * 知识库: the list and an entry's page in each of the app's languages (docs/i18n.md), Glass light and dark and the other
+ * Knowledge base: the list and an entry's page in each of the app's languages (docs/i18n.md), Glass light and dark and the other
  * styles light. Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)
@@ -56,7 +56,7 @@ class KnowledgeShotsTest {
     @Config(sdk = [35], qualifiers = "ja-w400dp-h1100dp-xhdpi")
     @Test fun japanese() = shots("ja", list = "ナレッジ", detail = "Personaに質問")
 
-    /** 录音: the kind's list and a recording still being transcribed, its bookmarks and transcript (#3235). */
+    /** "Recordings": the kind's list and a recording still being transcribed, its bookmarks and transcript (#3235). */
     @Config(sdk = [35], qualifiers = "zh-w400dp-h1700dp-xhdpi")
     @Test fun recordingChinese() = recordingShots("zh", "转写中")
 

@@ -109,7 +109,7 @@ internal fun InteractionForm(
     readOnly: Boolean = false,
     linkVisible: Boolean = false,
     blockedReason: String? = null,
-    /** False for a session without a terminal: no 终端处理说明 (there is no terminal to go to). */
+    /** False for a session without a terminal: no "handle in terminal" note (there is no terminal to go to). */
     showTerminalHelp: Boolean = true,
 ) {
     val scroll = rememberScrollState()
@@ -138,7 +138,7 @@ internal fun InteractionForm(
     }
     val expired = RequestExpiry.expired(interaction.expiresAt, now)
     LaunchedEffect(expired, uncertain) { if (expired || uncertain) password = "" }
-    // A session whose source cannot approve (blockedReason) shows the request but answers nothing, not even 交给电脑处理.
+    // A session whose source cannot approve (blockedReason) shows the request but answers nothing, not even "Handle on computer".
     val blocked = blockedReason != null
     val context = AnswerContext(state = if (expired || uncertain || readOnly || linkVisible || blocked) "unknown" else "pending", sending = busy,
         fullPlanRead = planRead)
@@ -186,7 +186,7 @@ internal fun InteractionForm(
                 DecisionButtons(
                     primary = JAction(stringResource(R.string.chat_plan_approve_edits), enabled = enabled(AnswerAction.ApproveEdits)) { act(AnswerAction.ApproveEdits) },
                     secondary = JAction(stringResource(R.string.chat_plan_reject), enabled = enabled(AnswerAction.Reject)) { act(AnswerAction.Reject) },
-                    // Web's three ways to approve (Interactions.tsx MODES): 每步确认 keeps Claude asking before each edit.
+                    // Web's three ways to approve (Interactions.tsx MODES): "Confirm each step" keeps Claude asking before each edit.
                     more = listOf(JAction(stringResource(R.string.chat_plan_approve_all), enabled = enabled(AnswerAction.ApproveAll)) { act(AnswerAction.ApproveAll) },
                         JAction(stringResource(R.string.chat_plan_approve_stepwise), enabled = enabled(AnswerAction.ApproveStepwise)) { act(AnswerAction.ApproveStepwise) }),
                 )
@@ -207,14 +207,14 @@ internal fun InteractionForm(
                 JButton(stringResource(R.string.chat_screen_submit_password), onClick = { act(AnswerAction.TerminalText, AnswerDraft(text = password)) },
                     enabled = editable && password.isNotEmpty())
             } else {
-                // The options read as "n of total"; 改在对话里说 is a separate button, not one of them.
+                // The options read as "n of total"; "Say it in the chat instead" is a separate button, not one of them.
                 val plain = options.filter { it.kind != ScreenOptionKind.Chat }
                 fun positionOf(option: ParsedScreenOption) = plain.indexOfFirst { it === option } + 1 to plain.size
                 options.forEach { option ->
                     val value = draft.copy(option = option.key)
                     val allowed = option.kind != ScreenOptionKind.Unknown &&
                         AnswerBuilder.build(interaction, AnswerAction.ScreenOption, value, context).allowed
-                    // The terminal's "chat about this" hands the question back to the conversation (iOS 改在对话里说).
+                    // The terminal's "chat about this" hands the question back to the conversation (iOS "Say it in the chat instead").
                     if (option.kind == ScreenOptionKind.Chat) JButton(stringResource(R.string.chat_screen_chat_instead), { act(AnswerAction.ScreenOption, value) },
                         kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ChatCircle, enabled = allowed)
                     else {
@@ -232,7 +232,7 @@ internal fun InteractionForm(
         if (full) Text(interactionSource(interaction, machine), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         interaction.requestSourceLabel()?.let { Text(it.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
         blockedReason?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.cautionText) }
-        // Always present (empty and sizeless when idle) so a screen reader announces 正在发送 / 没确认送达 after an answer;
+        // Always present (empty and sizeless when idle) so a screen reader announces "Sending" / "Delivery not confirmed" after an answer;
         // the countdown stays outside, or it would be read out every minute.
         Column(Modifier.testTag("request-status").semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
             if (uncertain) PendingBadge(PendingStatus.Unconfirmed)
@@ -281,7 +281,7 @@ internal fun InteractionForm(
                     }
                 }
             } else if (question != null) {
-                // The question's header and 可多选, numbered options: as the terminal shows them (iOS QuestionForm).
+                // The question's header and "Multiple choice", numbered options: as the terminal shows them (iOS QuestionForm).
                 val tags = listOfNotNull(question.header?.takeIf(String::isNotBlank), stringResource(R.string.chat_question_multi).takeIf { question.multiSelect })
                 if (tags.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) { tags.forEach { JTag(it) } }
                 ChatLinkText(question.question, style = PersonaTheme.type.body)
@@ -349,7 +349,7 @@ internal fun InteractionForm(
     if (terminalHelp) TerminalHelpDialog { terminalHelp = false }
 }
 
-/** "1. 选项": the number or key the terminal shows beside an option, when it is a short one. */
+/** "1. Option": the number or key the terminal shows beside an option, when it is a short one. */
 internal fun numberedOption(key: String, text: String): String =
     if (key.length in 1..2 && key.all(Char::isLetterOrDigit) && !text.startsWith("$key.")) "$key. $text" else text
 

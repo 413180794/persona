@@ -103,10 +103,10 @@ private enum class MarkupTool(@StringRes val labelRes: Int) { Box(R.string.desig
 private val MarkStroke = 3.5.dp
 
 /**
- * Marks up [source] before it goes to an Agent, full screen in the dark appearance: 「取消 · 编辑图片 · 完成」, a box or
+ * Marks up [source] before it goes to an Agent, full screen in the dark appearance: "Cancel · Edit image · Done", a box or
  * a pen, six colours, undo and clear. [onDone] gets the picture with the marks drawn in at [source]'s own resolution
- * ([source] itself when nothing was drawn); after that the editor waits, 完成 spinning, until its caller removes it.
- * Back and 取消 call [onCancel]. Pass a software bitmap ([decodePicture] with `software = true`).
+ * ([source] itself when nothing was drawn); after that the editor waits, "Done" spinning, until its caller removes it.
+ * Back and "Cancel" call [onCancel]. Pass a software bitmap ([decodePicture] with `software = true`).
  */
 @Composable
 fun ImageEditor(source: Bitmap, onCancel: () -> Unit, onDone: (Bitmap) -> Unit) {

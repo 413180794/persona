@@ -152,7 +152,7 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
                 onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { confirmRead = rows } })
         },
         sessionMenu = rowMenu, title = route.title,
-        // The page's list arrives a moment after it opens: no 「没有运行中的 Agent」 flash before that.
+        // The page's list arrives a moment after it opens: no "No running agents" flash before that.
         loaded = page.sessions.isNotEmpty() || page.machines.isNotEmpty(),
         onClose = { row -> closeSwipe(row, operations.busy) { operationDialog = AgentOperationDialog.Close(row.session) } })
     operationDialog?.let { dialog ->

@@ -9,7 +9,7 @@ import persona.core.contracts.api.PaneTab
 import persona.core.contracts.api.PanesResponse
 import persona.core.contracts.api.TerminalAddress
 
-// The terminal browser's tree (docs/terminal.md「独立终端」), as the web builds it (web/src/lib/terminals.ts): what a
+// The terminal browser's tree (docs/terminal.md "Standalone terminal"), as the web builds it (web/src/lib/terminals.ts): what a
 // machine's `GET /machines/{mid}/panes` lists turned into workspaces → tabs → panes, each pane with the key its
 // terminal opens by. Pure, so it is tested without Android.
 
@@ -17,7 +17,7 @@ import persona.core.contracts.api.TerminalAddress
 data class TermPane(
     /** What the terminal opens by: the agent's session when there is one (it shares that stream), else the pane's address. */
     val key: SessionKey,
-    /** The agent's session title, the shell's title or folder; empty when the host says nothing (the page says 终端). */
+    /** The agent's session title, the shell's title or folder; empty when the host says nothing (the page says "Terminal"). */
     val title: String,
     /** The line under the title: the agent, the folder. */
     val detail: String,
@@ -30,11 +30,11 @@ data class TermTab(val id: String, val label: String, val panes: List<TermPane>)
 
 data class TermSpace(
     val id: String,
-    /** The host kind the workspace belongs to: 新标签页 names it. */
+    /** The host kind the workspace belongs to: "New tab" names it. */
     val host: String,
     val label: String,
     val branch: String,
-    /** A shell tab can be opened here (新标签页). */
+    /** A shell tab can be opened here ("New tab"). */
     val canOpen: Boolean,
     val tabs: List<TermTab>,
 ) {
@@ -45,7 +45,7 @@ data class TermSpace(
 /** The page's item keys, unique across a machine's hosts (tab and pane ids are host-local too). */
 internal fun spaceItemKey(machineId: String, space: TermSpace) = "space-$machineId-${space.key}"
 internal fun tabItemKey(machineId: String, space: TermSpace, tab: TermTab) = "tab-$machineId-${space.key}/${tab.id}"
-/** 新标签页's in-flight marker: the workspace on its machine and host. */
+/** "New tab"'s in-flight marker: the workspace on its machine and host. */
 internal fun openingKey(machineId: String, space: TermSpace) = "$machineId\n${space.key}"
 internal fun paneItemKey(machineId: String, space: TermSpace, pane: TermPane) = "pane-$machineId-${space.host}/${pane.pane}"
 
@@ -99,7 +99,7 @@ internal fun pane(machineId: String, item: PaneItem, session: Session?, home: St
     }
 }
 
-/** The pane's place, for the terminal's title: 空间 › 标签页 › title (a tab named like its workspace, or a pane like its tab, once). */
+/** The pane's place, for the terminal's title: space › tab › title (a tab named like its workspace, or a pane like its tab, once). */
 fun paneTrail(space: TermSpace, tab: TermTab, pane: TermPane, untitled: String): String {
     val title = pane.title.ifEmpty { untitled }
     return listOf(space.label, tab.label.takeIf { it != space.label }, title.takeIf { it != tab.label })

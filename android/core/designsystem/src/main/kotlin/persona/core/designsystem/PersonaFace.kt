@@ -68,7 +68,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
 
-/** What the persona's face shows (docs/persona.md「状态」); the wire values are persona.json's. */
+/** What the persona's face shows (docs/persona.md "States"); the wire values are persona.json's. */
 enum class PersonaState(val wire: String, @StringRes val labelRes: Int) {
     Idle("idle", R.string.designsystem_persona_idle), Thinking("thinking", R.string.designsystem_persona_thinking),
     Working("working", R.string.designsystem_persona_working), NeedsYou("needs_you", R.string.designsystem_persona_needs_you),
@@ -81,10 +81,10 @@ enum class PersonaState(val wire: String, @StringRes val labelRes: Int) {
 }
 
 /**
- * The built-in faces (docs/persona.md「内置形象」), chosen in 设置 › 外观 › 形象; [id] is the persona id iOS and the
- * hub use. None is a download. 团子 ([Mochi], the default since 2026-11-03) keeps the app icon's colours; 面罩 (the
- * default before, id `jarvis`) and 汇流 are drawn in the theme's colour. The choice is only saved when one is tapped,
- * so a phone that never chose gets the default and one that chose 面罩 keeps it ([AppStyleStore.personaId]).
+ * The built-in faces (docs/persona.md "Built-in looks"), chosen in Settings › Appearance › Persona look; [id] is the persona id iOS and the
+ * hub use. None is a download. Mochi ([Mochi], the default since 2026-11-03) keeps the app icon's colours; Visor (the
+ * default before, id `jarvis`) and Circuit are drawn in the theme's colour. The choice is only saved when one is tapped,
+ * so a phone that never chose gets the default and one that chose Visor keeps it ([AppStyleStore.personaId]).
  */
 enum class PersonaDesign(val id: String, @StringRes val titleRes: Int, @StringRes val summaryRes: Int) {
     Mochi("persona", R.string.designsystem_face_mochi, R.string.designsystem_face_mochi_summary),
@@ -104,12 +104,12 @@ enum class PersonaDesign(val id: String, @StringRes val titleRes: Int, @StringRe
 val LocalPersonaDesign = compositionLocalOf { PersonaDesign.Default }
 
 /**
- * The persona's face (iOS `PersonaFace`), drawn from shapes so it stays sharp at any size. 团子 ([PersonaDesign.Mochi],
+ * The persona's face (iOS `PersonaFace`), drawn from shapes so it stays sharp at any size. Mochi ([PersonaDesign.Mochi],
  * the default) is the app icon's white blob waving on its paper disc (a dark disc in the dark), in the icon's colours;
- * the others are in the theme's accent. 面罩 ([PersonaDesign.Visor]) is an accent disc with a dark visor, two bright eyes and the brand's
- * sparkle on top; 汇流 ([PersonaDesign.Circuit]) is three traces running into a core with two dark eyes, a light
- * running along each trace while it works. It moves for [state] like iOS: a blink every few seconds (空闲), eyes up under a thought bubble (思考中),
- * eyes scanning (工作中), a breathing ring in 需要你's red (等你处理), gray (离线). Reduce Motion holds each
+ * the others are in the theme's accent. Visor ([PersonaDesign.Visor]) is an accent disc with a dark visor, two bright eyes and the brand's
+ * sparkle on top; Circuit ([PersonaDesign.Circuit]) is three traces running into a core with two dark eyes, a light
+ * running along each trace while it works. It moves for [state] like iOS: a blink every few seconds (idle), eyes up under a thought bubble (thinking),
+ * eyes scanning (working), a breathing ring in "Needs you"'s red (waiting for you), gray (offline). Reduce Motion holds each
  * state's still frame. Decorative: the control around it says who and what.
  */
 @Composable
@@ -128,7 +128,7 @@ fun PersonaFace(
     val context = LocalContext.current
     // Held still with Reduce Motion and in Battery Saver, like iOS (Low Power Mode) and the glass fallback.
     val still = PersonaTheme.reduceMotion || context.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
-    // 晨报 is paper and ink, its accent is the ink itself (near black / near white), where the dark visor and the white
+    // Brief is paper and ink, its accent is the ink itself (near black / near white), where the dark visor and the white
     // sparkle would vanish: there the face is the secondary ink, a mid gray, and the style keeps no other colour.
     val base = tint ?: if (PersonaTheme.style == AppStyle.Brief) palette.ink2 else palette.accent
     val accent = if (state == PersonaState.Offline) Color(0xFF9E9E9E) else base
@@ -202,7 +202,7 @@ private fun PackFace(frames: PersonaFrames, modifier: Modifier) {
     Image(bitmaps[index], contentDescription = null, modifier.clearAndSetSemantics {})
 }
 
-/** Draws 面罩 at time t; [paint] and [rect] are reused across frames for the glowing eyes. */
+/** Draws Visor at time t; [paint] and [rect] are reused across frames for the glowing eyes. */
 private fun DrawScope.visor(
     state: PersonaState, accent: Color, t: Float, moving: Boolean, open: Float, paint: Paint, rect: RectF,
 ) {
@@ -248,10 +248,10 @@ private fun DrawScope.visor(
 }
 
 /**
- * Draws 团子 at time t (iOS `PersonaFace.mochi`, the same geometry traced from the 1024 px icon): the disc, the body's
+ * Draws Mochi at time t (iOS `PersonaFace.mochi`, the same geometry traced from the 1024 px icon): the disc, the body's
  * soft shadow, the outlined body, the cheek, the gloss and the motion lines (not when [compact]), and the eyes.
- * 思考中 hides the lines (the bubble is there) and lifts the eyes; 工作中 scans the eyes, bobs, lights the lines in turn
- * and runs an orange arc around the rim; 等你处理 rocks the body (a wave); 离线 is gray with closed eyes.
+ * Thinking hides the lines (the bubble is there) and lifts the eyes; working scans the eyes, bobs, lights the lines in turn
+ * and runs an orange arc around the rim; waiting for you rocks the body (a wave); offline is gray with closed eyes.
  */
 private fun DrawScope.mochi(state: PersonaState, dark: Boolean, t: Float, moving: Boolean, open: Float, compact: Boolean, paint: Paint) {
     val s = this.size.minDimension
@@ -327,7 +327,7 @@ private fun DrawScope.mochi(state: PersonaState, dark: Boolean, t: Float, moving
     }
 }
 
-/** 团子's geometry in shares of the face's side and its colours (iOS `Mochi` / `MochiInk`): icon pixels into the disc. */
+/** Mochi's geometry in shares of the face's side and its colours (iOS `Mochi` / `MochiInk`): icon pixels into the disc. */
 internal object Mochi {
     private const val SCALE = 1.16f
     /** Below this the motion lines and the gloss go and the eyes and cheek grow, so the face still reads. */
@@ -382,7 +382,7 @@ internal object Mochi {
     }
 }
 
-/** 需要你: a ring inside the edge, breathing while moving. */
+/** "Needs you": a ring inside the edge, breathing while moving. */
 private fun DrawScope.needsYouRing(ring: Color, t: Float, moving: Boolean) {
     val s = this.size.minDimension
     val w = max(RING_MIN.toPx(), s * RING_SHARE)
@@ -390,7 +390,7 @@ private fun DrawScope.needsYouRing(ring: Color, t: Float, moving: Boolean) {
     drawCircle(ring.copy(alpha = ring.alpha * pulse), radius = (s - w) / 2, style = Stroke(w))
 }
 
-/** Draws 汇流 at time t (iOS `PersonaFace.circuit`, same geometry as shares of the side). */
+/** Draws Circuit at time t (iOS `PersonaFace.circuit`, same geometry as shares of the side). */
 private fun DrawScope.circuit(state: PersonaState, accent: Color, t: Float, moving: Boolean, open: Float) {
     val s = this.size.minDimension
     val ground = lerp(accent, Color.Black, 0.82f)
@@ -403,7 +403,7 @@ private fun DrawScope.circuit(state: PersonaState, accent: Color, t: Float, movi
         for (p in pts.drop(1)) lines.lineTo(p.x, p.y)
     }
     drawPath(lines, mark, style = Stroke(s * Circuit.TRACE, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    // 工作中: a light runs along each trace into the core, the three a third of a lap apart.
+    // Working: a light runs along each trace into the core, the three a third of a lap apart.
     if (state == PersonaState.Working) {
         traces.forEachIndexed { i, pts ->
             val f = ((t / Circuit.LAP + i / 3f) % 1f)
@@ -432,7 +432,7 @@ private fun DrawScope.circuit(state: PersonaState, accent: Color, t: Float, movi
     drawCircle(accent.copy(alpha = 0.35f), radius = (s - rim) / 2, style = Stroke(rim))
 }
 
-/** 汇流's layout in shares of the face's side (iOS `Circuit`). */
+/** Circuit's layout in shares of the face's side (iOS `Circuit`). */
 internal object Circuit {
     val ROWS = floatArrayOf(0.31f, 0.5f, 0.69f)
     const val PAD_X = 0.22f
@@ -481,7 +481,7 @@ private fun ThoughtBubble(size: Dp, accent: Color, t: Float, moving: Boolean, mo
 private const val FRAME_MS = 66L
 private const val BLINK_EVERY_MS = 3600L
 private const val BLINK_MS = 110
-/** 需要你's ring: this share of the face's side, never thinner than [RING_MIN] (iOS `ringShare` / `ringMin`). */
+/** "Needs you"'s ring: this share of the face's side, never thinner than [RING_MIN] (iOS `ringShare` / `ringMin`). */
 private const val RING_SHARE = 0.07f
 private val RING_MIN = 1.5.dp
 

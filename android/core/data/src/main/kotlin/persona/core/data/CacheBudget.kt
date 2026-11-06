@@ -156,7 +156,7 @@ internal class BudgetFileCache(
 }
 
 /**
- * 设置 › 存储空间's clearing of the caches: deletes under the cache lock, so it never races a [BudgetFileCache]
+ * Settings › Storage's clearing of the caches: deletes under the cache lock, so it never races a [BudgetFileCache]
  * write, and keeps files still in use (a pinned read, a download's `.part` file being written).
  */
 object CacheClearing {

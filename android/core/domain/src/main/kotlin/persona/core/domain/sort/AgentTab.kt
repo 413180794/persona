@@ -3,9 +3,9 @@ package persona.core.domain.sort
 import persona.core.contracts.AgentState
 import persona.core.contracts.Session
 
-// The agents of one herdr tab (#2320, docs/agent-states.md「一个 tab 里的几个 pane」): an agent that splits its tab and
+// The agents of one herdr tab (#2320, docs/agent-states.md "Several panes in one tab"): an agent that splits its tab and
 // starts more agents in the new panes works with them on one thing, so the clients show them as a group. The order and
-// the 发起者 match the web (web/src/lib/herdr-tree.ts paneOrder, launcherOf).
+// the initiator match the web (web/src/lib/herdr-tree.ts paneOrder, launcherOf).
 
 /**
  * The order herdr opened the pane in, from its id: herdr counts its panes up in base 36 ("w4R:pW", "w4R:p2E"), Herdr
@@ -25,18 +25,18 @@ val PaneOrder: Comparator<Session> = compareBy<Session> { it.paneIndex ?: Int.MA
     .thenBy { paneNumber(it) }.thenBy { it.sessionId }
 
 /**
- * The tab's 发起者: the agent in its first pane (`pane_index` 0, top left, the one the others were split from). None
+ * The tab's initiator: the agent in its first pane (`pane_index` 0, top left, the one the others were split from). None
  * when the tab has one agent, or that pane is a shell or not placed: the agents are then peers.
  */
 fun <T> launcherOf(panes: List<T>, session: (T) -> Session): T? =
     if (panes.size > 1) panes.firstOrNull { session(it).paneIndex == 0 } else null
 
-/** What a tab's row speaks for (docs/agent-states.md「排序优先级」, as the web): needs you > working > unread > seen. */
+/** What a tab's row speaks for (docs/agent-states.md "Sort priority", as the web): needs you > working > unread > seen. */
 private val TabUrgency = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread, AgentState.Idle, AgentState.Unknown, AgentState.Offline)
 
 /**
  * The tab's name as the clients show it (iOS `Session.slotLabel`, web `tabLabel`): its herdr name, `#n` for herdr's
- * default number (a bare 「2」 reads as a count); null when the host gives neither.
+ * default number (a bare "2" reads as a count); null when the host gives neither.
  */
 val Session.slotLabel: String? get() {
     val name = slotName?.takeIf(String::isNotBlank)
@@ -53,9 +53,9 @@ val Session.tabKey: String? get() = if (slotId.isNullOrEmpty() || spaceId.isNull
     else "$machineId/${spaceKind.orEmpty()}:$spaceId/$slotId"
 
 /**
- * One tab's agents as they are listed together. [members] are in pane order ([PaneOrder]); [launcher] is the 发起者
+ * One tab's agents as they are listed together. [members] are in pane order ([PaneOrder]); [launcher] is the initiator
  * when the tab says; [lead] is the most urgent, the one the tab's row speaks for and opens. [foldKey] keeps whether the
- * group is folded by 机器 / 空间名 / tab 的编号, not the tab's name: a tab is renamed (the hub names a `#2` after its
+ * group is folded by machine / space name / tab number, not the tab's name: a tab is renamed (the hub names a `#2` after its
  * task), two tabs may share a name, and herdr keeps the numbers across a restart (its ids it does not). A host without
  * numbers uses the tab's id.
  */
@@ -65,7 +65,7 @@ data class AgentTab(val key: String, val members: List<AgentSession>) {
     val foldKey: String get() = members.first().session.let { s ->
         "tab:${s.machineId}/${s.spaceName ?: s.spaceId.orEmpty()}/${s.slotIndex?.toString() ?: s.slotId.orEmpty()}"
     }
-    /** A pane the 发起者 split off: drawn under it. */
+    /** A pane the initiator split off: drawn under it. */
     fun isBranch(row: AgentSession): Boolean = launcher.let { it != null && it.id != row.id }
 }
 

@@ -68,7 +68,7 @@ internal fun routeKind(kind: String, resources: Resources): String = routeKindRe
 
 @Composable internal fun routeKindText(kind: String): String = routeKindRes(kind)?.let { stringResource(it) } ?: kind
 
-/** The rows 连接诊断 shows for the last pairing attempt: a label and its value; [stepLabel] names where it stopped. */
+/** The rows "Connection diagnostics" shows for the last pairing attempt: a label and its value; [stepLabel] names where it stopped. */
 internal fun PairingAttempt.rows(resources: Resources, stepLabel: String? = step?.let { resources.getString(it.labelRes()) }): List<Pair<String, String?>> = listOf(
     resources.getString(R.string.settings_diag_address) to address,
     resources.getString(R.string.settings_diag_result) to (step?.let { resources.getString(R.string.settings_diag_failed_at, stepLabel.orEmpty()) }

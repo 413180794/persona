@@ -22,9 +22,9 @@ class HttpAssistantManagement(
     private val base = baseUrl.toHttpUrl()
     private val http = client.newBuilder().followRedirects(false).followSslRedirects(false)
         .retryOnConnectionFailure(false).build()
-    /** 立即运行 answers once the hub has started the conversation (it allows itself two minutes), like starting an agent. */
+    /** "Run now" answers once the hub has started the conversation (it allows itself two minutes), like starting an agent. */
     private val runHttp = http.newBuilder().readTimeout(130, TimeUnit.SECONDS).build()
-    /** Compacting may start the conversation's process first, and 新建主对话 reads what the old one left: the hub allows a minute. */
+    /** Compacting may start the conversation's process first, and "New main chat" reads what the old one left: the hub allows a minute. */
     private val compactHttp = http.newBuilder().readTimeout(70, TimeUnit.SECONDS).build()
 
     private fun checkScope() { if (!isCurrent()) throw CancellationException("Pairing changed") }
@@ -94,7 +94,7 @@ class HttpAssistantManagement(
         return NewMainResult((out["archived"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
             (out["carried"] as? JsonPrimitive)?.booleanOrNull == true)
     }
-    /** A 409 with a code is the hub refusing the action for a reason it words itself (正在回答, 主对话已经换过了…). */
+    /** A 409 with a code is the hub refusing the action for a reason it words itself ("Answering", "Main chat already changed"…). */
     private inline fun <T> refusals(block: () -> T): T = try { block() } catch (failure: HubFailure) {
         val code = failure.code
         if (failure.status == 409 && !code.isNullOrBlank()) throw AssistantRefused(code, failure.message)

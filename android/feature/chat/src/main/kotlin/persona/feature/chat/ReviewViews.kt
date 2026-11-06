@@ -38,7 +38,7 @@ import persona.core.domain.tasks.latestReview
 import persona.core.domain.tasks.reviewStage
 import persona.core.domain.tasks.reviewVerdictStage
 
-// How a supervised task's review stands (#3124, docs/unified-entry.md「督办」): a tag with the criteria met on its card
+// How a supervised task's review stands (#3124, docs/unified-entry.md "Supervision"): a tag with the criteria met on its card
 // and the todo page's header, the checklist on the todo page, a line in the conversation for each review.
 
 @Composable
@@ -58,7 +58,7 @@ private val ReviewStage.tone: Tone get() = when (this) {
     ReviewStage.Ongoing, ReviewStage.Cancelled -> Tone.Neutral
 }
 
-/** The review's tag with the criteria met ("待验收 · 0/2"); nothing for a task that is not supervised. */
+/** The review's tag with the criteria met ("Awaiting review · 0/2"); nothing for a task that is not supervised. */
 @Composable
 fun ReviewTag(todo: Todo, modifier: Modifier = Modifier) {
     val stage = todo.reviewStage ?: return

@@ -133,7 +133,7 @@ fun UserBubbleFrame(modifier: Modifier = Modifier, footer: (@Composable () -> Un
                 })
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            // A deep bubble of its own (珊瑚橙…): everything written in it, links too, takes the bubble's words.
+            // A deep bubble of its own (Coral orange…): everything written in it, links too, takes the bubble's words.
             val words = palette.userBubbleText?.takeIf { own }
             if (words == null) content()
             else CompositionLocalProvider(
@@ -155,8 +155,8 @@ fun UserBubble(text: String, modifier: Modifier = Modifier, time: String? = null
 
 /**
  * A folded run of work (tools and thinking between replies). [summary] is one plain sentence such as
- * "做了 6 步，用时 7 分钟"; the steps go in [content] when [expanded]. [peek] is drawn under the header while folded:
- * a running group's latest steps (web #1990's 「正在工作…」). [trailing] sits after the summary (a ticking clock: its own
+ * "Did 6 steps in 7 minutes"; the steps go in [content] when [expanded]. [peek] is drawn under the header while folded:
+ * a running group's latest steps (web #1990's "Working…"). [trailing] sits after the summary (a ticking clock: its own
  * leaf, so the clock redraws only itself).
  */
 @Composable
@@ -209,7 +209,7 @@ fun WorkGroup(
 enum class PlanItemState { Pending, Active, Done }
 
 /**
- * The agent's plan (TodoWrite) as a card (web #1990's PlanCard): the step it is on in the header with a 「Step N/M」
+ * The agent's plan (TodoWrite) as a card (web #1990's PlanCard): the step it is on in the header with a "Step N/M"
  * pill (a check once all are done), the list open under it; folded, a thin progress bar. [live]: the active item spins;
  * [nested]: drawn inside a [WorkGroup]'s peek.
  */
@@ -294,7 +294,7 @@ fun PlanCard(
 enum class WorkState { Done, Running, Failed, Waiting, Unknown }
 
 /**
- * One step of work: a tool call, a file edit, a thought. [verb] (读取 / 编辑 / 运行) is shown on the board;
+ * One step of work: a tool call, a file edit, a thought. [verb] (Read / Edit / Run) is shown on the board;
  * [mono] sets the title in the code face (commands, paths).
  */
 @Composable
@@ -374,7 +374,7 @@ fun WorkStep(
                     else -> mark()
                 }
                 Spacer(Modifier.width(8.dp))
-                // At least the width of 读取 / 运行, so those line up; a named tool's longer words (看浏览器) are not cut.
+                // At least the width of "Read" / "Run", so those line up; a named tool's longer words ("Browse") are not cut.
                 verb?.let { Text(it, style = type.caption, color = palette.ink3, maxLines = 1, modifier = Modifier.widthIn(min = 36.dp).padding(end = 6.dp)) }
                 Column(Modifier.weight(1f)) {
                     Text(title, style = titleStyle, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -470,7 +470,7 @@ enum class SendKind { Send, Stop }
 
 /** The send (or stop) button of a composer: a filled circle, or a square on the board. */
 /**
- * The send button while nothing can be sent yet (先接上模型, 先添加电脑: docs/onboarding.md 4.4): a one-line pill in the
+ * The send button while nothing can be sent yet ("Connect a model first", "Add a computer first": docs/onboarding.md 4.4): a one-line pill in the
  * send button's place, centred on the same 48 dp row, that opens the missing step.
  */
 @Composable
@@ -530,7 +530,7 @@ fun JumpToLatest(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier)
 
 /**
  * Above the composer while the latest plan card is out of view (web `PlanPill`): a ring with how far along it is and
- * 「Step N/M」 (a check once all are done); a tap scrolls back to the card. Shaped like [JumpToLatest] in each style.
+ * "Step N/M" (a check once all are done); a tap scrolls back to the card. Shaped like [JumpToLatest] in each style.
  */
 @Composable
 fun PlanPill(step: Int, total: Int, done: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -569,7 +569,7 @@ fun PlanPill(step: Int, total: Int, done: Int, onClick: () -> Unit, modifier: Mo
     }
 }
 
-/** A thin line between turns or a dated separator ("2026-10-31", "这件事从这里开始"). */
+/** A thin line between turns or a dated separator ("2026-10-31", "This started here"). */
 @Composable
 fun TimelineMark(text: String, modifier: Modifier = Modifier, emphasized: Boolean = false) {
     val palette = PersonaTheme.palette
@@ -584,7 +584,7 @@ fun TimelineMark(text: String, modifier: Modifier = Modifier, emphasized: Boolea
 }
 
 /**
- * Someone else's message (飞书 conversations, mail threads): an optional avatar, the author and time above a
+ * Someone else's message (Lark conversations, mail threads): an optional avatar, the author and time above a
  * left-aligned bubble. The counterpart of [UserBubbleFrame].
  */
 @Composable

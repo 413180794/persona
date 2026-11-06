@@ -13,7 +13,7 @@ internal const val CLEAR_WAIT_MILLIS = 20_000L
  */
 internal data class SlashCommand(val title: String, val word: String, val detail: String, val text: String) {
     val clear: Boolean get() = word == CLEAR
-    /** /model: picking it opens the model choices (the 模式 sheet) instead of typing anything (web `isModelCommand`). */
+    /** /model: picking it opens the model choices (the "Mode" sheet) instead of typing anything (web `isModelCommand`). */
     val model: Boolean get() = word == MODEL
     /** /loop: picking it types `/loop ` to go on writing, a line under it saying what it will do (web `loopHint`). */
     val loop: Boolean get() = word == LOOP

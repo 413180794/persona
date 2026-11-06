@@ -42,8 +42,8 @@ fun buildRows(items: List<Item>, photo: String): List<Row> {
 }
 
 /**
- * A message as one plain text for previews (docs/protocol.md「消息里的标签」): what the hub / Claude Code wrap around
- * typed text unwrapped, photos as 「[图片]」. `<jarvis-context>` blocks are not what the user wrote and are left out
+ * A message as one plain text for previews (docs/protocol.md "Tags in messages"): what the hub / Claude Code wrap around
+ * typed text unwrapped, photos as "[Image]". `<jarvis-context>` blocks are not what the user wrote and are left out
  * ([parseContexts]); a message of nothing but blocks previews as empty. A conversation row draws photos as thumbnails
  * instead ([messageText]) and folds the blocks into one row.
  */
@@ -53,17 +53,17 @@ fun cleanText(s: String, photo: String): String {
     return if (shown.images.isEmpty()) shown.text else ("$photo\n" + shown.text).trim()
 }
 
-/** A tool's own name without its MCP prefix (iOS `ToolPresentation.baseName`): 「mcp__jarvis__agent_read」 → 「agent_read」. */
+/** A tool's own name without its MCP prefix (iOS `ToolPresentation.baseName`): "mcp__jarvis__agent_read" → "agent_read". */
 fun toolBaseName(name: String): String = if (name.startsWith("mcp__")) name.substringAfterLast("__") else name
 
-/** The word for a tool call (iOS `ToolPresentation.verb`): a name the table knows, else its bare name; 工具 without one. */
+/** The word for a tool call (iOS `ToolPresentation.verb`): a name the table knows, else its bare name; "tool" without one. */
 fun toolVerb(name: String?): CoreText =
     if (name == null) CoreText.of(Key.ToolGeneric) else namedToolVerb(name) ?: CoreText.plain(toolBaseName(name))
 
 /**
  * The words for a tool the table knows, null for any other (its bare name is all there is). Matched on the base name,
  * so an MCP tool reads like the bare one; Persona's own tools ([isPersonaTool]) first get their own words, and the
- * ones neither table knows read 「调用 Persona · agent read」 (iOS `PersonaToolNames`).
+ * ones neither table knows read "Call Persona · agent read" (iOS `PersonaToolNames`).
  */
 fun namedToolVerb(name: String): CoreText? {
     val n = toolBaseName(name)
@@ -72,7 +72,7 @@ fun namedToolVerb(name: String): CoreText? {
     return if (isPersonaTool(name)) CoreText.of(Key.ToolPersonaCall, n.replace('_', ' ')) else null
 }
 
-/** The MCP server of a tool's full name (「mcp__jarvis__agent_read」 → 「jarvis」), null for any other tool. */
+/** The MCP server of a tool's full name ("mcp__jarvis__agent_read" → "jarvis"), null for any other tool. */
 fun toolServer(name: String): String? {
     if (!name.startsWith("mcp__")) return null
     val rest = name.removePrefix("mcp__")
@@ -103,7 +103,7 @@ private fun genericToolVerb(n: String): Key? {
         "ToolSearch" -> Key.ToolLoadTools
         "Skill" -> Key.ToolSkill
         "Monitor" -> Key.ToolMonitor
-        // Persona managing its own conversations (docs/assistant.md「管理自己的对话」).
+        // Persona managing its own conversations (docs/assistant.md "Managing its own conversations").
         "conversations_list" -> Key.ToolConversationsList
         "conversation_read" -> Key.ToolConversationRead
         "conversation_rename" -> Key.ToolConversationRename
@@ -121,7 +121,7 @@ private fun genericToolVerb(n: String): Key? {
 }
 
 private fun personaToolVerb(n: String): Key? = when (n) {
-    // Agents on the user's computers (docs/assistant.md「Agents 与飞书工具」).
+    // Agents on the user's computers (docs/assistant.md "Agents and Lark tools").
     "agent_read" -> Key.ToolAgentRead
     "agent_send", "send_to_agent" -> Key.ToolAgentSend
     "agents_list", "list_agents" -> Key.ToolAgentsList
@@ -152,7 +152,7 @@ private fun personaToolVerb(n: String): Key? = when (n) {
 fun toolSubject(it: Item): String = CoreText.words(toolSubjectText(it))
 
 /**
- * [toolSubject] as words to resolve: computer_state without an app reads 「machine · 整个屏幕」 (iOS
+ * [toolSubject] as words to resolve: computer_state without an app reads "machine · whole screen" (iOS
  * `ToolPresentation.subject`), so that part follows the app's language.
  */
 fun toolSubjectText(it: Item): CoreText {

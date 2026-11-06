@@ -78,8 +78,8 @@ class WiredDeviceSettings @Inject constructor(
                         val hubHas = try { adapter.preferences().translate }
                         catch (error: CancellationException) { throw error }
                         catch (_: Exception) { null }
-                        // 设置 › 翻译 goes to the hub (on connect and when it changes), so it translates new mail as it
-                        // comes in for this phone (docs/android.md「翻译」).
+                        // Settings › Translation goes to the hub (on connect and when it changes), so it translates new mail as it
+                        // comes in for this phone (docs/android.md "Translation").
                         syncTranslation(translation.prefs, hubHas, adapter::saveTranslation)
                     }
                 }
@@ -90,13 +90,13 @@ class WiredDeviceSettings @Inject constructor(
     override suspend fun refreshPreferences(): DeviceNotificationPreferences? = binding.value?.deviceSettings?.preferences()
 }
 
-/** The paired hub's device settings, which also take this phone's 设置 › 翻译. */
+/** The paired hub's device settings, which also take this phone's Settings › Translation. */
 private interface TranslationSyncedSettings : DeviceSettings {
     suspend fun saveTranslation(prefs: HubTranslatePrefs): HubTranslatePrefs?
 }
 
 /**
- * Sends this phone's 设置 › 翻译 to the hub whenever it differs from what the hub was last known to have ([hubHas] at
+ * Sends this phone's Settings › Translation to the hub whenever it differs from what the hub was last known to have ([hubHas] at
  * connect, then each answer). A failed save is tried again at the next change or connection. Runs until cancelled.
  */
 internal suspend fun syncTranslation(

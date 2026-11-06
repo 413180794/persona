@@ -30,9 +30,9 @@ fun TodoPickerSheet(
     title: String = stringResource(R.string.agents_todo_link_title),
     // The todo the agent is on: marked and not picked again (linking it again would only rewrite its source, #2348).
     currentTodoId: String? = null,
-    /** 新建待办… / 创建并挂上 (iOS TodoLinkAgentSheet): a new to-do with this title, linked at once. */
+    /** "New to-do…" / "Create and link" (iOS TodoLinkAgentSheet): a new to-do with this title, linked at once. */
     onCreate: ((String) -> Unit)? = null,
-    /** 移出待办 / 解除关联 when it is on one: the label and what it does. */
+    /** "Unlink from to-do" / "Unlink" when it is on one: the label and what it does. */
     unlink: Pair<String, () -> Unit>? = null,
 ) {
     val uncompleted = todos.filter { !it.isDone }.ordered(sessionLookup)

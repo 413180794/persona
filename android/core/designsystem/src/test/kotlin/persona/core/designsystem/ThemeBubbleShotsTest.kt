@@ -26,7 +26,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * The user's own bubble under each 主题色 (#3048 review: the presets' bubbles as iOS has them), in every style, light
+ * The user's own bubble under each theme color (#3048 review: the presets' bubbles as iOS has them), in every style, light
  * and dark. Written to `build/theme-bubble-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)

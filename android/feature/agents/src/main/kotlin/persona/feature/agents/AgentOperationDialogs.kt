@@ -76,7 +76,7 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
     }
 }
 
-/** 挂到待办… / 改挂到其他待办… / 移出待办 of a project (iOS SpaceTodoMenu); [linked] when it is on a to-do. */
+/** "Link to to-do…" / "Move to another to-do…" / "Unlink from to-do" of a project (iOS SpaceTodoMenu); [linked] when it is on a to-do. */
 internal class SpaceTodoActions(val linked: Boolean, val onLink: () -> Unit, val onUnlink: (() -> Unit)?)
 
 /** The name a project goes by on a to-do: its herdr name, else its id; null outside a herdr space (iOS SpaceGroup.todoSpace). */
@@ -84,7 +84,7 @@ internal val Session.todoSpaceName: String?
     get() = spaceId?.takeIf { it.isNotBlank() }?.let { id -> spaceName?.takeIf { it.isNotBlank() } ?: id }
 
 /**
- * The actions of a space. [onOpen] adds 打开空间 (the list offers it here instead of a separate button);
+ * The actions of a space. [onOpen] adds "Open space" (the list offers it here instead of a separate button);
  * [compact] is the smaller trigger of list headings. A space without a herdr name can only be opened and read.
  */
 @Composable
@@ -113,7 +113,7 @@ internal fun AgentSpaceMenu(session: Session, pinned: Boolean, muted: Boolean, b
     }, { menu = false }, title = session.spaceName?.takeIf { it.isNotBlank() } ?: actions)
 }
 
-/** Asks before 全部标为已读 and names how many finished sessions it marks (iOS confirmReadAll). */
+/** Asks before "Mark all as read" and names how many finished sessions it marks (iOS confirmReadAll). */
 @Composable
 internal fun MarkAllReadDialog(count: Int, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     JDialog(onDismiss = onDismiss, title = pluralStringResource(R.plurals.agents_mark_all_read_confirm, count, count),

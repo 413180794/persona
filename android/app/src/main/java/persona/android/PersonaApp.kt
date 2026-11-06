@@ -37,10 +37,10 @@ class PersonaApp : Application() {
     val pairingReady = MutableStateFlow(false)
     val pairingRestoreError = MutableStateFlow(false)
 
-    /** 设置 › 界面风格; device-wide, kept across pairings. */
+    /** Settings › Interface style; device-wide, kept across pairings. */
     val appearance: persona.core.designsystem.AppStyleStore by lazy { persona.core.designsystem.AppStyleStore(this) }
 
-    /** 设置 › 外观 › 形象's hub packages; device-wide, listed again whenever the hub comes online. */
+    /** Settings › Appearance › Persona look's hub packages; device-wide, listed again whenever the hub comes online. */
     val personas: persona.core.designsystem.PersonaStore by lazy {
         persona.core.designsystem.PersonaStore(this, appearance) {
             runtime.scopedData.value?.let { persona.core.hub.HttpPersonaPacks(runtime.connectionFor(it)) }
@@ -50,7 +50,7 @@ class PersonaApp : Application() {
     private val _hub = MutableStateFlow<Hub?>(null)
     val hub: StateFlow<Hub?> = _hub.asStateFlow()
 
-    /** Notifications, the widget and the tile are built from this context: their text follows 设置 › 语言 too. */
+    /** Notifications, the widget and the tile are built from this context: their text follows Settings › Language too. */
     override fun attachBaseContext(base: android.content.Context) {
         persona.core.designsystem.AppLanguages.init(base)
         super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
@@ -72,13 +72,13 @@ class PersonaApp : Application() {
             connection.state.map { it == persona.core.contracts.api.ConnectionState.Online }.distinctUntilChanged()
                 .collect { online -> if (online) runCatching { personas.refresh() } }
         }
-        // 主题色 for the app's other windows (share, the capsule, dialogs): the main one provides the same accent itself.
+        // Theme color for the app's other windows (share, the capsule, dialogs): the main one provides the same accent itself.
         scope.launch {
             kotlinx.coroutines.flow.combine(appearance.color, personas.current) { color, pack ->
                 persona.core.designsystem.ThemeColors.accent(color, pack?.manifest?.colors)
             }.collect { persona.core.designsystem.AppAppearance.accent = it }
         }
-        // 深浅色 for what Compose does not draw (WebView pages, system dialogs) too: the app's own night mode.
+        // Light/dark for what Compose does not draw (WebView pages, system dialogs) too: the app's own night mode.
         scope.launch { appearance.scheme.collect { applyNightMode(it) } }
         // A tiered look moved to another tier: the new tier is downloaded whole before the face changes.
         scope.launch {

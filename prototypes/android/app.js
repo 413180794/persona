@@ -176,7 +176,7 @@
   const SCREENS = [];
   const add = s => SCREENS.push(s);
 
-  // 接入
+  // Onboarding
 
   add({
     id: 'welcome', group: '接入', title: '欢迎',
@@ -397,7 +397,7 @@
     render: () => agentsList(false, true),
   });
 
-  // 对话
+  // Conversation
 
   const chatBody = (tail = '') => `
     <div class="chat">
@@ -603,7 +603,7 @@
       </div>`,
   });
 
-  // 交互
+  // Interaction
 
   const needsLine = (what, detail = '4 分 02 秒') => statusline({ kind: 'needs', text: `等你处理：${what}`, detail });
   const permTail = `
@@ -773,7 +773,7 @@
       </div>`,
   });
 
-  // 通知
+  // Notifications
 
   const appIcon = `<span class="appi">${star()}</span>`;
   const fleet = (label = '已连接 hub') => `
@@ -939,7 +939,7 @@
       </div>`,
   });
 
-  // 收件箱
+  // Inbox
 
   const irow = ({ av, avCls = '', src = '', title, time, summ, meta = '', go = '' }) => `
     <div class="row irow" ${go ? `data-go="${go}"` : ''}>
@@ -1009,7 +1009,7 @@
       <div class="bottomzone">${composer({ placeholder: '回复 产品群' })}</div>`,
   });
 
-  // 设置
+  // Settings
 
   const chev = icon('chevron_right');
   add({

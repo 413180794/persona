@@ -95,7 +95,7 @@ class TerminalPortTest {
         assertFalse(preferences.drive)
         model.takeOver(); runCurrent()
         transport.events.emit(TerminalControlEvent("machine", "session", "busy")); runCurrent()
-        model.watch(remember = false) // 「接管终端？」→ 只读: this time only
+        model.watch(remember = false) // "Take over the terminal?" -> "Read-only": this time only
         assertTrue(preferences.drive)
         assertTrue(model.state.value.drive)
         run.cancelAndJoin()

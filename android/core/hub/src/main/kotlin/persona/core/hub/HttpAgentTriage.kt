@@ -9,7 +9,7 @@ import persona.core.contracts.api.AgentTriage
 import persona.core.contracts.api.TriageSwitches
 import persona.core.contracts.api.TriageUnsupported
 
-/** GET / PUT /api/v1/agents/triage (设置 › 会话分诊), on the active pairing's authenticated route. */
+/** GET / PUT /api/v1/agents/triage (Settings › Session triage), on the active pairing's authenticated route. */
 class HttpAgentTriage internal constructor(private val request: suspend (String, RequestBody?) -> Response) : AgentTriage {
     constructor(connection: OkHttpHubConnection) : this({ method, body -> connection.request(Path, method, body) })
 

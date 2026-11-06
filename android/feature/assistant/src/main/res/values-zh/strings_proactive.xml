@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 设置 › 助手 › 主动做事 -->
+    <!-- Settings › Assistant › Proactive -->
     <string name="assistant_proactive_title">主动做事</string>
     <string name="assistant_proactive_unconnected_title">还没有连上 hub</string>
     <string name="assistant_proactive_unconnected_body">连上 hub 后，可以在这里管理 Persona 的定时任务、跟进和运行记录。</string>

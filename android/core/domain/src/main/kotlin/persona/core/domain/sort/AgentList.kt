@@ -17,14 +17,14 @@ data class AgentListSettings(
     val folded: Set<String> = emptySet(),
     val expandedIdle: Set<String> = emptySet(),
     val expandedQuiet: Set<String> = emptySet(),
-    /** 状态优先 (default) or 最近更新 (iOS `AgentSort`, kept on this phone). */
+    /** "By state" (default) or "Recently updated" (iOS `AgentSort`, kept on this phone). */
     val sort: AgentSort = AgentSort.State,
-    /** botmux's sessions hidden from this list (web #2786, kept on this phone); 飞书群 shows them again. */
+    /** botmux's sessions hidden from this list (web #2786, kept on this phone); "Lark group" shows them again. */
     val hideBotmux: Boolean = false,
 )
 
 /**
- * How the list orders its agents (iOS `AgentSort`): the state first, or the latest update only. Under 按状态 the
+ * How the list orders its agents (iOS `AgentSort`): the state first, or the latest update only. Under "By state" the
  * sections stay the states; only the rows' order inside them is by time either way.
  */
 enum class AgentSort {
@@ -40,7 +40,7 @@ enum class AgentGrouping {
     Space, Machine;
 
     companion object {
-        /** A phone that never chose a grouping gets 按仓库 (#2252, as iOS #2108); any stored choice keeps its own. */
+        /** A phone that never chose a grouping gets "By repository" (#2252, as iOS #2108); any stored choice keeps its own. */
         fun fromPreference(value: String?): AgentGrouping = when (value) {
             null, Repo.name -> Repo
             State.name -> State
@@ -51,7 +51,7 @@ enum class AgentGrouping {
     }
 }
 
-/** A group's place in 按仓库: a repository, or one of its working trees (the main checkout or another). */
+/** A group's place in "By repository": a repository, or one of its working trees (the main checkout or another). */
 enum class RepoLevel { Repository, MainCheckout, Worktree }
 enum class AgentQuickFilter(val state: AgentState?, val source: AgentSource? = null) {
     All(null), NeedsYou(AgentState.NeedsYou), Unread(AgentState.Unread), Working(AgentState.Working),
@@ -61,12 +61,12 @@ enum class AgentQuickFilter(val state: AgentState?, val source: AgentSource? = n
         source != null -> session.session.agentSource == source
         else -> state == null || session.state == state
     }
-    /** 飞书群 matches botmux sessions only, so it and a hidden botmux cannot both hold (web `botmuxAndFilter`). */
+    /** "Lark group" matches botmux sessions only, so it and a hidden botmux cannot both hold (web `botmuxAndFilter`). */
     val showsBotmux: Boolean get() = this == Feishu
 
     companion object {
         /**
-         * 全部, and the filters with agents right now; the chosen one stays while it empties, so it can be left (iOS
+         * "All", and the filters with agents right now; the chosen one stays while it empties, so it can be left (iOS
          * `QuickFilterBar`, web `shownFilters`). When the rest still do not fit a row, the bar scrolls sideways.
          */
         fun shown(selected: AgentQuickFilter, counts: Map<AgentQuickFilter, Int>): List<AgentQuickFilter> =
@@ -83,7 +83,7 @@ data class AgentListGroup(
     val parent: String? = null,
     val stateCounts: Map<AgentState, Int>? = null,
     val spoken: CoreText? = null,
-    /** 按仓库: the repository or working tree this group is. */
+    /** "By repository": the repository or working tree this group is. */
     val repo: RepoLevel? = null,
     /** The group this one sits in: a working tree's repository, whose own [rows] are then empty (its trees hold them). */
     val under: String? = null,
@@ -104,7 +104,7 @@ data class AgentMachineGroup(
     val spaceCount: Int,
     val stateCounts: Map<AgentState, Int>,
     val folded: Boolean,
-    /** 按仓库: how many repositories it has. */
+    /** "By repository": how many repositories it has. */
     val repoCount: Int? = null,
 ) {
     val id: String get() = "machine/${machine.id}"
@@ -139,7 +139,7 @@ fun buildAgentList(
     val pinned = filtered.filter { it.id in pins.sessions }.sortedBy { pins.sessions.indexOf(it.id) }
     val live = filtered.filter { it.id !in pins.sessions && it.isLive }
     val quick = settings.quick != AgentQuickFilter.All
-    // Under a quick filter, or sorted by 最近更新, rows go by time only (iOS `AgentListOrder.byRank`).
+    // Under a quick filter, or sorted by "Recently updated", rows go by time only (iOS `AgentListOrder.byRank`).
     val byRank = !quick && settings.sort == AgentSort.State
     val latest = settings.sort == AgentSort.Updated
     val comparator = compareBy<AgentSession> { if (byRank) agentRank(it, mutes) else 0 }
@@ -179,14 +179,14 @@ fun buildAgentList(
                 val members = live.filter { it.session.machineId == machine.id }
                 if (members.isEmpty()) return@mapNotNull null
                 val machineFolded = "machine/${machine.id}" in settings.folded
-                // 最近更新: the busy repositories by their latest agent (iOS `RepoTree` under `AgentSort.updated`).
+                // "Recently updated": the busy repositories by their latest agent (iOS `RepoTree` under `AgentSort.updated`).
                 val repos = agentRepos(members).let { all ->
                     if (latest) all.sortedWith(compareBy<AgentRepo> { quiet(it.members) }
                         .thenByDescending { repo -> repo.members.mapNotNull { it.sortDate }.maxOrNull() }.thenBy { it.id })
                     else all.sortedBy { quiet(it.members) }
                 }
                 val groups = repos.flatMap { repo ->
-                    // A quiet repository opens to all its sessions in one list, as iOS's 空闲的仓库 does. A repository with only
+                    // A quiet repository opens to all its sessions in one list, as iOS's "Idle repositories" does. A repository with only
                     // its main checkout is drawn as one level but keeps the checkout's id, so a session opened under a quick
                     // filter stays in the same group when a second working tree appears or goes (retainOpenedRows).
                     if (repo.flat) listOf(section(repo.worktrees[0].id, repoTitle(repo.name), repo.members, RepoLevel.Repository, null, machineFolded))
@@ -238,8 +238,8 @@ fun buildAgentList(
             }
         }
         AgentGrouping.Todo -> {
-            // 项目 › 待办 › Agent (#3156, web `buildTodoTree` #2698): each todo under the project its agents work in; 手动开的
-            // and 没有待办 last, each split by project too. A heading holds no rows itself (the groups under it do).
+            // Project › To-do › Agent (#3156, web `buildTodoTree` #2698): each todo under the project its agents work in; "Opened by hand"
+            // and "No to-do" last, each split by project too. A heading holds no rows itself (the groups under it do).
             val sessionMap = sessions.associateBy { it.session.key }
             val uncompletedTodos = todos.filter { !it.isDone }.sortedWith(
                 compareBy<Todo> { it.state { k -> sessionMap[k]?.session }.rank }
@@ -255,7 +255,7 @@ fun buildAgentList(
             fun heading(id: String, title: CoreText, members: List<AgentSession>, folded: Boolean) {
                 result += AgentListGroup(id, title, emptyList(), emptyList(), folded, stateCounts = counts(members))
             }
-            /** By project: the one with an agent waiting for you first (then working), keeping the incoming order; 其他 last. */
+            /** By project: the one with an agent waiting for you first (then working), keeping the incoming order; "Other" last. */
             fun <T> byProject(items: List<T>, project: (T) -> String, members: (T) -> List<AgentSession>): List<Pair<String, List<T>>> =
                 items.groupBy(project).toList().sortedWith(compareBy<Pair<String, List<T>>> { it.first.isEmpty() }
                     .thenBy { (_, list) -> todoTreeRank(list.flatMap(members)) })
@@ -286,7 +286,7 @@ fun buildAgentList(
                     leaf("$TodoLoosePrefix$id/${project.ifEmpty { "-" }}", projectTitle(project), inProject, id)
                 }
             }
-            // Opened by hand in herdr and on no to-do: a section of its own before 没有待办, open (web todos.ts, #2608).
+            // Opened by hand in herdr and on no to-do: a section of its own before "No to-do", open (web todos.ts, #2608).
             val manual = unlinked.filter { it.session.isManualHerdr }
             if (manual.isNotEmpty()) loose(TodoManualGroup, CoreText.of(Key.AgentsManual), manual, TodoManualGroup in settings.folded)
             val rest = unlinked.filterNot { it.session.isManualHerdr }
@@ -312,7 +312,7 @@ fun buildAgentList(
             val active = spaces.filter(::leading) + if (quick) {
                 spaces.filterNot(::leading).sortedWith(compareByDescending<AgentSpace> { it.updatedAt }.thenBy { it.id })
             } else {
-                // 最近更新: the busy spaces by their latest agent, not by state (muted ones still after the rest).
+                // "Recently updated": the busy spaces by their latest agent, not by state (muted ones still after the rest).
                 val busy = if (latest) spaces.sortedWith(compareByDescending<AgentSpace> { space -> space.members.mapNotNull { it.sortDate }.maxOrNull() }
                     .thenBy { it.id }) else spaces
                 busy.filter { !it.quiet && !pinnedSpace(it) && !mutedSpace(it) } +
@@ -345,24 +345,24 @@ fun buildAgentList(
     return AgentListResult(counts, result, filtered.filter { it.state == AgentState.Unread }.map { it.id }, quietTitle)
 }
 
-/** A repository's or working tree's heading: its name, 「其他」 for sessions without a cwd ([UnnamedRepo]). */
+/** A repository's or working tree's heading: its name, "Other" for sessions without a cwd ([UnnamedRepo]). */
 private fun repoTitle(name: String): CoreText = if (name == UnnamedRepo) CoreText.of(Key.RepoOther) else CoreText.plain(name)
 
-/** 按待办's sections that are not a to-do: agents opened by hand, then those on none. */
-/** 按待办's project headings (#3156): `todo-project/<repository name>`, `-` for 其他. */
+/** "By to-do"'s sections that are not a to-do: agents opened by hand, then those on none. */
+/** "By to-do"'s project headings (#3156): `todo-project/<repository name>`, `-` for "Other". */
 const val TodoProjectPrefix = "todo-project/"
-/** A project's agents under 手动开的 or 没有待办: `todo-loose/<that group's id>/<repository name>`. */
+/** A project's agents under "Opened by hand" or "No to-do": `todo-loose/<that group's id>/<repository name>`. */
 const val TodoLoosePrefix = "todo-loose/"
 
 /**
- * The project a todo's agents work in (web `projectOf`): the repository most of their cwds sit in (按仓库's [repoOf],
+ * The project a todo's agents work in (web `projectOf`): the repository most of their cwds sit in ("By repository"'s [repoOf],
  * merged across computers), the first by name on a tie; "" when none has a cwd.
  */
 fun todoProjectOf(cwds: List<String>): String = cwds.map { repoOf(it).name }.filter(String::isNotEmpty)
     .groupingBy { it }.eachCount().entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
     .firstOrNull()?.key.orEmpty()
 
-/** 等你 before 在做 before 做完 (web `TreeState`): what the most urgent agent under a branch says. */
+/** "Waiting for you" before "Working" before "Done" (web `TreeState`): what the most urgent agent under a branch says. */
 private fun todoTreeRank(rows: List<AgentSession>): Int = when {
     rows.any { it.state == AgentState.NeedsYou } -> 0
     rows.any { it.state == AgentState.Working } -> 1
@@ -371,7 +371,7 @@ private fun todoTreeRank(rows: List<AgentSession>): Int = when {
 
 const val TodoManualGroup = "todo/manual"
 const val TodoNoneGroup = "todo/none"
-/** In `expandedIdle` once the user opened 没有待办, which is folded by default under to-dos. */
+/** In `expandedIdle` once the user opened "No to-do", which is folded by default under to-dos. */
 const val TodoNoneOpened = "todo-none"
 
 /** Opened by hand in herdr: not started by Persona (nor spawned through it), web `isManualHerdr`. */

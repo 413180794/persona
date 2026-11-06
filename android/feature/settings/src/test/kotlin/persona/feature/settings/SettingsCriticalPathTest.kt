@@ -26,7 +26,7 @@ class SettingsCriticalPathTest {
     }
 
     @Test fun malformedFingerprintOrHubIdIsAnInvalidCode() {
-        // HubPairingClient.addresses rejects these with a raw IllegalArgumentException, which showed 未知错误 (#4991).
+        // HubPairingClient.addresses rejects these with a raw IllegalArgumentException, which showed Unknown error (#4991).
         val base = "persona://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"
         for (suffix in listOf("&fp=short", "&fp=${"A".repeat(42)}B", "&hub=bad%20hub", "&hub=${"h".repeat(129)}")) {
             val error = assertThrows(PairingException::class.java) { PairingInput.parse(base + suffix) }

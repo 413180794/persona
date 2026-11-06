@@ -88,7 +88,7 @@ class HttpInboxAssistantTransport private constructor(
             })
         })
     } catch (e: HubFailure) {
-        // A hub from before /inbox/bulk: 已处理 and 移回 the old way; it has no 忽略.
+        // A hub from before /inbox/bulk: "Done" and "Move back" the old way; it has no "Dismiss".
         if (action == InboxBulkAction.Dismiss || (e.status != 404 && e.status != 405)) throw e
         setDone(items, action == InboxBulkAction.Done)
     }

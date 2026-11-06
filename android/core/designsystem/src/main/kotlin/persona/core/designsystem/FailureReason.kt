@@ -6,8 +6,8 @@ import kotlinx.serialization.SerializationException
 import java.io.IOException
 
 /**
- * Why a call failed, for the part after「失败：」: the hub's own words when it answered with a reason (409 不能开始,
- * 400 未知引擎, 503 机器离线), 连不上 hub when it did not answer, the app's usual sentence for pairing and
+ * Why a call failed, for the part after "Failed: ": the hub's own words when it answered with a reason (409 "cannot start",
+ * 400 "unknown engine", 503 "machine offline"), "cannot reach hub" when it did not answer, the app's usual sentence for pairing and
  * certificate trouble, an exception's own message for the app's typed failures.
  * Resolve it with [UiText.text] in composition or [UiText.resolve] outside it.
  */
@@ -34,7 +34,7 @@ fun hubMessage(error: Throwable): String? {
     return failure.message.takeIf { failure.status != null && it.isNotBlank() }
 }
 
-/** What 复制详情 copies for a report: the hub's message, its HTTP status and error code, or the exception as it came. */
+/** What "Copy details" copies for a report: the hub's message, its HTTP status and error code, or the exception as it came. */
 fun failureDetail(error: Throwable): String {
     val failure = generateSequence(error) { it.cause }.take(16).filterIsInstance<HubFailure>().firstOrNull()
     if (failure?.status == null) return error.message?.takeIf(String::isNotBlank) ?: error.toString()

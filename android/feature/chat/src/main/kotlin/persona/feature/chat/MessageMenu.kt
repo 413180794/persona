@@ -35,8 +35,8 @@ import persona.core.designsystem.onSecondaryClick
 import persona.core.designsystem.stableAlpha
 
 /**
- * A message the long-press menu is open for: [text] is what it says (复制 / 选择 / 引用 / 分享 / 交给 Persona / 作为上下文
- * take it), [editText] what 编辑 puts back in the composer (its photos as attachments again), [user] for your own.
+ * A message the long-press menu is open for: [text] is what it says ("Copy" / "Select" / "Quote" / "Share" / "Hand to Persona" / "Use as context"
+ * take it), [editText] what "Edit" puts back in the composer (its photos as attachments again), [user] for your own.
  */
 @Immutable
 internal data class MessageTarget(val id: String, val text: String, val user: Boolean, val editText: String = text)
@@ -79,27 +79,27 @@ internal fun Modifier.messageMenu(target: MessageTarget?): Modifier {
     return this.stableAlpha(if (menu.target?.id == target.id) 0.6f else 1f)
         .onSecondaryClick(open)
         .onLongPress(open, open)
-        // Drag it left to quote it (iOS #1058); accessibility services get 引用 as an action of the message.
+        // Drag it left to quote it (iOS #1058); accessibility services get "Quote" as an action of the message.
         .then(if (quote != null) Modifier.swipeToReply(label) { menu.close(); quote(target) } else Modifier)
 }
 
 /**
- * 回退到这里 on your messages (#2436): [block] is why the session cannot right now (shown on the disabled row), null
+ * "Rewind to here" on your messages (#2436): [block] is why the session cannot right now (shown on the disabled row), null
  * when it can; [run] asks the node to go back to before the message.
  */
 @Immutable
 internal data class RewindMenu(val block: String?, val run: (MessageTarget, RewindRestore) -> Unit)
 
 /**
- * The long-press menu as an action sheet (docs/android-design.md 2.3 rule 7): 复制, 选择 (the message as text to
- * select from), 引用, 分享, 交给 Persona, 作为上下文, and 编辑 on your own messages. [writes] false (a read-only
- * conversation) leaves out what would change the composer: 引用, 作为上下文, 编辑.
+ * The long-press menu as an action sheet (docs/android-design.md 2.3 rule 7): "Copy", "Select" (the message as text to
+ * select from), "Quote", "Share", "Hand to Persona", "Use as context", and "Edit" on your own messages. [writes] false (a read-only
+ * conversation) leaves out what would change the composer: "Quote", "Use as context", "Edit".
  */
 @Composable
 internal fun MessageMenuSheet(
     menu: MessageMenuState,
     writes: Boolean,
-    /** 引用: the message (its id and whose it is too), quoted over the composer. */
+    /** "Quote": the message (its id and whose it is too), quoted over the composer. */
     onQuote: (MessageTarget) -> Unit,
     onEdit: (String) -> Unit,
     onContext: (String) -> Unit,
@@ -132,7 +132,7 @@ internal fun MessageMenuSheet(
             MessageAction.Rewind -> rewinding = target
         }
     }, onDismiss = menu::close)
-    // 只回退对话 / 回退代码和对话 (web's submenu); the second asks again: it puts files back too.
+    // "Rewind chat only" / "Rewind code and chat" (web's submenu); the second asks again: it puts files back too.
     rewinding?.let { at ->
         JActionSheet(listOf(
             JAction(stringResource(R.string.chat_rewind_conversation), PhIcons.ArrowUUpLeft) { rewind?.run?.invoke(at, RewindRestore.Conversation) },
@@ -158,12 +158,12 @@ internal enum class MessageAction(@StringRes val label: Int) {
 }
 
 /**
- * The menu's session-wide extras (web MessageActions' ⋯): [fork] when the session can branch, [rewind] when 回退到这里
+ * The menu's session-wide extras (web MessageActions' ⋯): [fork] when the session can branch, [rewind] when "Rewind to here"
  * is offered (blocked for [rewindBlock] while it cannot).
  */
 internal data class MessageExtras(val fork: Boolean = false, val rewind: Boolean = false, val rewindBlock: String? = null)
 
-/** The menu's actions for [target]: [writes] for the composer ones, [handOff] when 交给 Persona is offered. */
+/** The menu's actions for [target]: [writes] for the composer ones, [handOff] when "Hand to Persona" is offered. */
 internal fun messageActions(target: MessageTarget, writes: Boolean, handOff: Boolean,
     extras: MessageExtras = MessageExtras()): List<MessageAction> = buildList {
     add(MessageAction.Copy)
@@ -173,7 +173,7 @@ internal fun messageActions(target: MessageTarget, writes: Boolean, handOff: Boo
     if (handOff) add(MessageAction.HandToPersona)
     if (writes) add(MessageAction.Context)
     if (writes && target.user) add(MessageAction.Edit)
-    // 分支到新聊天 on a reply that is a transcript line of its own; 回退到这里 on your messages.
+    // "Branch to new chat" on a reply that is a transcript line of its own; "Rewind to here" on your messages.
     if (extras.fork && !target.user && Rewind.forkable(target.id)) add(MessageAction.Fork)
     if (extras.rewind && writes && target.user) add(MessageAction.Rewind)
 }
@@ -199,23 +199,23 @@ private fun messageMenuActions(target: MessageTarget, writes: Boolean, handOff: 
     }
 
 /**
- * Whether the menu may touch this conversation's composer (引用 / 作为上下文 / 编辑): not in read-only ones (a sub-agent,
+ * Whether the menu may touch this conversation's composer ("Quote" / "Use as context" / "Edit"): not in read-only ones (a sub-agent,
  * history). Session capabilities (a source that cannot send) also turn it off once the session carries them.
  */
-// A session that takes no messages (a source without send, docs/protocol.md「Codex 来源与能力」) offers no quote, edit or context.
+// A session that takes no messages (a source without send, docs/protocol.md "Codex sources and capabilities") offers no quote, edit or context.
 internal fun messageMenuWrites(readOnly: Boolean, session: Session?): Boolean = !readOnly && session?.canSend != false
 
-/** 「编辑」: the message back in the composer (after a draft already there), its photos as attachments again. */
+/** "Edit": the message back in the composer (after a draft already there), its photos as attachments again. */
 internal fun ChatComposerState.edit(message: String) {
     restoreMessage(message)
     focusRequest++
 }
 
-/** What 「交给 Persona」 sends to the main conversation: the message as context from [title], then the ask. */
+/** What "Hand to Persona" sends to the main conversation: the message as context from [title], then the ask. */
 internal fun handoffMessage(title: String, text: String, resources: Resources): String =
     linkMessage(resources.getString(R.string.chat_menu_handoff_ask), listOf(messageContext(title, text, resources)), resources)
 
-/** The context 「作为上下文」 adds to the composer: the message, titled by its conversation. */
+/** The context "Use as context" adds to the composer: the message, titled by its conversation. */
 internal fun messageContext(title: String, text: String, resources: Resources): ChatLinkContext =
     ChatLinkContext("context", resources.getString(R.string.chat_menu_context_title, title), "", text)
 

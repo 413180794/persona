@@ -89,7 +89,7 @@ import persona.core.domain.answer.waitingCard
 
 // The unified entry in the assistant's conversation (docs/unified-entry.md; iOS Views/Assistant/Tasks, web
 // views/assistant/Tasks.tsx): the lines the assistant's host adds — plan cards, task cards, receipts, answered lines,
-// routed bubbles, the 今天 card, message cards, quick results, day lines — and the dock and route chip above the composer.
+// routed bubbles, the "Today" card, message cards, quick results, day lines — and the dock and route chip above the composer.
 
 /** What the assistant's chat needs to draw its tasks: the store, the sessions, and how to open an agent's chat. */
 internal class AssistantTaskHost(
@@ -101,9 +101,9 @@ internal class AssistantTaskHost(
     val onOpen: (SessionKey) -> Unit,
     val onError: (Throwable) -> Unit,
     val say: (String) -> Unit,
-    /** What is open over the conversation (a task's detail, 全部); kept by the chat page. */
+    /** What is open over the conversation (a task's detail, "All"); kept by the chat page. */
     val sheet: androidx.compose.runtime.MutableState<TaskSheet?> = mutableStateOf(null),
-    /** The hub's computers, for 改一下's computer. */
+    /** The hub's computers, for "Edit"'s computer. */
     val machines: List<persona.core.contracts.Machine> = emptyList(),
     /** The cards waiting for an answer: a waiting task says what its agent's card asks (#3964). */
     val pending: List<persona.core.contracts.Interaction> = emptyList(),
@@ -118,7 +118,7 @@ internal fun TaskState.status(): Status = when (this) {
     TaskState.Unread -> Status.Unread
     TaskState.Followup -> Status.Idle
     TaskState.Done -> Status.Offline
-    TaskState.Failed -> Status.NeedsYou // red, as the web's 没开起来
+    TaskState.Failed -> Status.NeedsYou // red, as the web's "Didn't start"
 }
 
 @Composable
@@ -192,13 +192,13 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
         }
         "today" -> TodayCard(item, host, todos)
         "message" -> if (item.ref != null && item.ref !in later) MessageCard(item, host, todos)
-        // A live card: drawn where it was created, as the hub's latest version of it (docs/assistant-views.md「活卡片」).
+        // A live card: drawn where it was created, as the hub's latest version of it (docs/assistant-views.md "Live cards").
         "view" -> item.ref?.let { id -> persona.core.designsystem.LocalViewBlocks.current?.live?.invoke(id) }
     }
 }
 
 /**
- * A card of a task's agent the user dealt with, kept as a line「✓ 任务 · 回答」. Tap it for every question with its
+ * A card of a task's agent the user dealt with, kept as a line "✓ task · answer". Tap it for every question with its
  * answer in full (#1231), selectable, and again to fold it; the task's name opens the task.
  */
 @Composable
@@ -371,7 +371,7 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
                     JButton(stringResource(R.string.chat_tasks_remove), { host.tasks.removeTask(todo, host.onError) }, kind = JButtonKind.Destructive, size = JButtonSize.Small,
                         icon = PhIcons.Trash)
                 } else {
-                    // The model service cut its turn off: 继续 tells its agent to go on, as the chat's 重试 does (#1516).
+                    // The model service cut its turn off: "Continue" tells its agent to go on, as the chat's "Retry" does (#1516).
                     if (cut?.canContinue == true) JButton(stringResource(R.string.chat_tasks_continue), { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet,
                         size = JButtonSize.Small, icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
                     JButton(stringResource(R.string.chat_tasks_say), { host.tasks.setRoute(host.conversation, todo.id) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
@@ -402,7 +402,7 @@ private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
     val failed = outcome == "failed"
     val todo = todos.firstOrNull { it.id == item.ref }
     val title = item.field("title") ?: stringResource(R.string.chat_tasks_default_title)
-    // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
+    // A failed start's banner follows its task: "Retry" while it is still failed (with its latest error), a quiet line once
     // it was started again, so no stale error stays in the conversation (#1396).
     val state = todo?.let { host.tasks.stateOf(it, host.sessions) }
     if (failed && todo != null && state != TaskState.Failed) {
@@ -454,7 +454,7 @@ private fun ReceiptSummary(md: String) {
     Text(text, style = type.callout, color = palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
 }
 
-/** A task the model service cut off (#1516): red, why in words, 继续 while it is still cut off; once its agent went on,
+/** A task the model service cut off (#1516): red, why in words, "Continue" while it is still cut off; once its agent went on,
  *  a quiet line that opens the task (a later receipt says how it ended). */
 @Composable
 private fun InterruptedReceipt(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
@@ -509,7 +509,7 @@ private fun QuickResultCard(result: QuickResult) {
     }
 }
 
-// ── 今天 ──
+// ── Today ──
 
 private fun JsonObject.list(name: String): List<JsonObject> = (this[name] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
 private fun JsonObject.str(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
@@ -629,7 +629,7 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
 // ── above the composer ──
 
 /**
- * The dock (iOS TaskDock): 全部 N for the board, held at the leading edge so it never scrolls away, then a pill for each
+ * The dock (iOS TaskDock): "All N" for the board, held at the leading edge so it never scrolls away, then a pill for each
  * task going on (waiting first) and, in the main conversation, each agent going on that no task stands for (#1113),
  * scrolling beside it; a long press on a task's pill removes it while nothing of it runs. Then the route chip.
  */

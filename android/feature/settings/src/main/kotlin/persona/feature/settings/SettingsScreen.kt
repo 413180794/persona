@@ -50,7 +50,7 @@ fun SettingsScreen(
     onExitDemo: (() -> Unit)? = null,
     onOpen: ((SettingsPage) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
-    /** Opens a page by key (one AI use of 模型配置); without it such pages open inside this one. */
+    /** Opens a page by key (one AI use of "Model configuration"); without it such pages open inside this one. */
     onNavigate: ((androidx.navigation3.runtime.NavKey) -> Unit)? = null,
 ) {
     SettingsContent(services.bound(), initialPage, onPhoneData, onDemo, onExitDemo, onOpen, onBack, onNavigate)
@@ -72,7 +72,7 @@ private fun SettingsContent(
     var extension by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var channel by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var manager by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
-    // 模型供应商's own steps when they open in place: one provider, adding one, importing from ~/.zshrc.
+    // Model providers's own steps when they open in place: one provider, adding one, importing from ~/.zshrc.
     var provider by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var providerStep by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     val desktops = services.desktops?.collectAsState()?.value.orEmpty()
@@ -83,7 +83,7 @@ private fun SettingsContent(
     val paired by services.pairing.isPaired.collectAsState()
     val deviceController = remember(services) { DeviceSettingsState(services.deviceSettings, services.disconnect) }
     val deviceState by deviceController.state.collectAsState()
-    // The signed-in Mac's row says 手机静音 when it is on: read this device's preferences once a desktop shows.
+    // The signed-in Mac's row says "Mute phone" when it is on: read this device's preferences once a desktop shows.
     LaunchedEffect(desktops.isNotEmpty(), page) {
         if (desktops.isNotEmpty() && page == "settings" && paired && services.deviceSettings != null && deviceState.preferences == null) deviceController.loadPreferences()
     }
@@ -136,7 +136,7 @@ private fun SettingsContent(
         extensionSummary = try { ExtensionText.listSummary(context.resources, extensionService.extensions()) }
         catch (error: CancellationException) { throw error } catch (_: Exception) { extensionSummary }
     }
-    // Extensions' UI slots (docs/extensions.md「UI 插槽」): read again whenever the settings list shows.
+    // Extensions' UI slots (docs/extensions.md "UI slots"): read again whenever the settings list shows.
     val slots = services.extensionSlots.takeUnless { services.demo }
     val slotsState = slots?.state?.collectAsState()?.value ?: ExtensionSlotsState()
     val slotCards = if (page == "settings" && onNavigate != null) rememberExtensionCards(slots) { onNavigate(it) } else emptyList()
@@ -146,13 +146,13 @@ private fun SettingsContent(
     val channelService = services.channels.takeUnless { services.demo }
     val channelsAvailable by remember(channelService) { channelService?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
     var channelList by remember { mutableStateOf<List<HubChannel>?>(null) }
-    // Like 扩展's: read again whenever the settings list is shown or the hub reconnects.
+    // Like "Extensions"': read again whenever the settings list is shown or the hub reconnects.
     LaunchedEffect(channelService, channelsAvailable, page, connection) {
         if (channelService == null || !channelsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         channelList = try { channelService.channels() }
         catch (error: CancellationException) { throw error } catch (_: Exception) { channelList }
     }
-    // 设置 › hub 版本's row value (iOS `hubSummary`): read when the list shows or the hub reconnects, then each push.
+    // Settings › Hub version's row value (iOS `hubSummary`): read when the list shows or the hub reconnects, then each push.
     val hubUpdates = services.hubUpdates.takeUnless { services.demo }
     var hubUpdateStatus by remember(hubUpdates) { mutableStateOf<persona.core.contracts.api.HubUpdateStatus?>(null) }
     LaunchedEffect(hubUpdates, page, connection) {
@@ -165,7 +165,7 @@ private fun SettingsContent(
         if (connectorsService == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         try {
             mailAccounts = runCatching { connectorsService.mailAccounts() }.getOrNull()
-            // 飞书's status is the Lark extension's (`/api/v1/lark/status`): only asked while the hub has it.
+            // Lark's status is the Lark extension's (`/api/v1/lark/status`): only asked while the hub has it.
             larkStatus = if (larkChats) runCatching { connectorsService.larkStatus() }.getOrNull() else null
             hubConnectors = runCatching { connectorsService.connectors(all = true) }.getOrDefault(emptyList())
         } catch (_: Exception) {}
@@ -278,7 +278,7 @@ private fun SettingsContent(
         "feishu" -> FeishuConnectorPage(connectorsService, onBack = back, onAgentModel = {
             onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("lark.agent")) ?: run { purpose = "lark.agent" }
         })
-        // 信息 has its own page, as on iOS: 交给 Persona, its steps on the Mac, 会话 (MessagesConnector.kt).
+        // "Messages" has its own page, as on iOS: "Hand to Persona", its steps on the Mac, "Conversations" (MessagesConnector.kt).
         else -> if (page == "connector/imessage") {
             MessagesConnectorPage(connectorsService, onBack = back)
         } else if (page.startsWith("connector/")) {
@@ -305,13 +305,13 @@ private fun SettingsContent(
                     modifier = Modifier.padding(top = Tokens.Space.m), onClick = { open(SettingsPage.Diagnostics) })
             }
             item { JSectionHeader(stringResource(R.string.settings_section_connection)) }
-            // The hub list is the one row a single hub group adds to settings (docs/android.md「多 hub」).
-            // hub 版本 (docs/hub-update.md「App 里」) follows it while there is a real hub (not 体验模式).
+            // The hub list is the one row a single hub group adds to settings (docs/android.md"Multiple hubs").
+            // Hub version (docs/hub-update.md"In the app") follows it while there is a real hub (not demo mode).
             val managersRow = services.managers != null && !services.demo
             val hubRows = (if (services.hubs != null) 1 else 0) + (if (hubUpdates != null) 1 else 0) + (if (managersRow) 1 else 0)
             if (services.hubs != null) item { JGroupItem(GroupPosition.of(0, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Hubs), title = stringResource(R.string.settings_row_hubs), leadingIcon = PhIcons.HardDrives, subtitle = stringResource(R.string.settings_row_hubs_subtitle), onClick = { open(SettingsPage.Hubs) }) } }
             if (hubUpdates != null) item { JGroupItem(GroupPosition.of(hubRows - 1 - (if (managersRow) 1 else 0), 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.HubUpdate), title = stringResource(R.string.settings_row_hub_update), leadingIcon = PhIcons.ArrowsClockwise, subtitle = stringResource(R.string.settings_row_hub_update_subtitle), value = HubUpdateText.summary(hubUpdateStatus), onClick = { open(SettingsPage.HubUpdate) }) } }
-            // 管理者 (docs/managers.md): the hub's roster of assistants, after its version.
+            // Managers (docs/managers.md): the hub's roster of assistants, after its version.
             if (managersRow) item { JGroupItem(GroupPosition.of(hubRows - 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Managers) || detailKey is persona.core.navigation.ManagerRoute, title = stringResource(R.string.settings_managers_title), leadingIcon = PhIcons.UserCircle, subtitle = stringResource(R.string.settings_managers_hint), onClick = { open(SettingsPage.Managers) }) } }
             item { JGroupItem(GroupPosition.of(hubRows, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Pairing), title = stringResource(R.string.settings_row_pairing), leadingIcon = PhIcons.QrCode, subtitle = stringResource(R.string.settings_row_pairing_subtitle), onClick = { open(SettingsPage.Pairing) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = stringResource(R.string.settings_devices_title), leadingIcon = PhIcons.DeviceMobile, subtitle = stringResource(R.string.settings_row_devices_subtitle), onClick = { open(SettingsPage.Devices) }) } }
@@ -323,14 +323,14 @@ private fun SettingsContent(
                     subtitle = stringResource(R.string.settings_row_capsule_subtitle), selected = detailKey == SettingsPageRoute(SettingsPage.Capsule),
                     onClick = { open(SettingsPage.Capsule) })
             } }
-            // 「Mac 上的 Persona 已登录」 while a desktop app is connected (iOS shows it over the Agents list).
+            // "Persona on Mac is signed in" while a desktop app is connected (iOS shows it over the Agents list).
             val notifyRows = if (desktops.isNotEmpty() && !services.demo) 3 else 2
             item { JGroupItem(GroupPosition.of(0, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = stringResource(R.string.settings_ready_notifications), leadingIcon = PhIcons.BellSimple, subtitle = stringResource(R.string.settings_row_notifications_subtitle), onClick = { open(SettingsPage.Notifications) }) } }
             item { JGroupItem(GroupPosition.of(1, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = stringResource(R.string.settings_row_background), leadingIcon = PhIcons.BatteryCharging, subtitle = stringResource(R.string.settings_row_background_subtitle), onClick = { open(SettingsPage.Readiness) }) } }
             if (notifyRows == 3) item { DesktopPresenceRow(desktops, deviceState.preferences?.muteWhileDesktop == true,
                 selected = detailKey == SettingsPageRoute(SettingsPage.Desktops), GroupPosition.of(2, 3), onClick = { open(SettingsPage.Desktops) }) }
             item { JSectionHeader("AI") }
-            // iOS's order: 模型供应商, 模型配置, 助手 (a page of the Persona tab, so only with a navigation host), then the uses.
+            // iOS's order: "Model providers", "Model configuration", "Assistant" (a page of the Persona tab, so only with a navigation host), then the uses.
             val assistantRow = onNavigate != null
             val aiRows = if (assistantRow) 5 else 4
             item { JGroupItem(GroupPosition.of(0, aiRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Providers), title = stringResource(R.string.settings_providers_title), leadingIcon = PhIcons.Cpu, subtitle = stringResource(R.string.settings_row_providers_subtitle), onClick = { open(SettingsPage.Providers) }) } }
@@ -464,7 +464,7 @@ private fun SettingsContent(
     }
     // Register after child pages so routed back also takes precedence over the pairing wizard's local steps.
     if (onBack != null) BackHandler(page != "settings", onBack = onBack)
-    // An AI use opened inside 模型配置 (no navigation host) closes before the page does.
+    // An AI use opened inside "Model configuration" (no navigation host) closes before the page does.
     BackHandler(page == "models" && purpose != null) { purpose = null }
     BackHandler(page == "plugins" && extension != null) { extension = null }
     BackHandler(page == "channels" && channel != null) { channel = null }
@@ -492,7 +492,7 @@ fun ReadinessScreen(
     footer: @Composable () -> Unit = {},
     /** The main conversation's steps before the phone's (docs/onboarding.md 4.5), on hubs that offer them. */
     readiness: AssistantReadinessSource? = null,
-    /** Opens a step's page (模型供应商, 机器); null during the first checklist, whose buttons then open help only. */
+    /** Opens a step's page ("Model providers", "Machines"); null during the first checklist, whose buttons then open help only. */
     onNavigate: ((androidx.navigation3.runtime.NavKey) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -514,7 +514,7 @@ fun ReadinessScreen(
         action.help?.let { mainHelp = it; return }
         if (action == ReadinessActionId.TestAssistant) { scope.launch { loadMain(probe = true) }; return }
         val destination = action.settingsDestination(step.launcher ?: main?.launcher, step.machine)
-        // The first checklist has no navigation: 添加电脑 says how instead.
+        // The first checklist has no navigation: "Add a computer" says how instead.
         if (destination != null && onNavigate != null) onNavigate(destination)
         else mainHelp = if (action == ReadinessActionId.AddComputer) ReadinessHelp.AddComputer else ReadinessHelp.HowToConnectModel
     }
@@ -553,7 +553,7 @@ fun ReadinessScreen(
                 if (records.decision(id) == null) records.record(id, "skipped")
             }
             records.pending(false)
-            // 以后再说 for the main conversation too: the hub stops offering the whole list (its card still shows).
+            // "Later" for the main conversation too: the hub stops offering the whole list (its card still shows).
             // onDone() leaves the page and cancels its scope, so the request starts now and is not cancelled with it.
             if (later && main?.ready == false && main?.dismissed == false) readiness?.let { source ->
                 scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
@@ -570,7 +570,7 @@ fun ReadinessScreen(
             item("main-header") { JSectionHeader(stringResource(R.string.settings_ready_main_header)) }
             item("main-steps") {
                 MainConversationSteps(mainSteps, probing, ::mainAction,
-                    // Without a page to go to, 确认电脑 has nothing to open; 接上模型 opens how to.
+                    // Without a page to go to, "Confirm computer" has nothing to open; "Connect a model" opens how to.
                     allowed = { onNavigate != null || it != ReadinessActionId.ConfirmComputer })
             }
             item("phone-header") { JSectionHeader(stringResource(R.string.settings_ready_phone_header)) }

@@ -6,12 +6,12 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * A compaction as the chat shows it (docs/assistant.md「手动压缩」): one divider where the context was compacted, with
+ * A compaction as the chat shows it (docs/assistant.md "Manual compaction"): one divider where the context was compacted, with
  * how it came about ([trigger]: `manual`, `auto`, `idle`; null when unknown) and the context's size before it. [notes]
  * are the notices folded into it, in transcript order.
  */
 data class Compaction(val trigger: String? = null, val preTokens: Long? = null, val notes: List<String> = emptyList()) {
-    /** 「以上内容已压缩 · 手动 · 压缩前 18.1 万 token」, leaving out what is not known. */
+    /** "Compacted above · manual · 181K tokens before", leaving out what is not known. */
     val label: CoreText get() = CoreText.joined(" · ", listOfNotNull(
         CoreText.of(Key.CompactedAbove),
         when (trigger) { "manual" -> Key.CompactManual; "auto" -> Key.CompactAuto; "idle" -> Key.CompactIdle; else -> null }?.let(CoreText::of),
@@ -22,16 +22,16 @@ data class Compaction(val trigger: String? = null, val preTokens: Long? = null, 
 /** What the hub writes for a compaction boundary without its own `compact` (Codex), and for the summary after it. */
 const val CompactedNotice = "上下文已压缩" // i18n-ignore: the hub's notice it matches
 const val ContinuedNotice = "已从压缩的上下文继续" // i18n-ignore: the hub's notice it matches
-/** A /compact sent without instructions (the app's 压缩上下文, the node's idle compaction): a notice, not a message. */
+/** A /compact sent without instructions (the app's "Compact context", the node's idle compaction): a notice, not a message. */
 const val CompactCommandNotice = "压缩上下文" // i18n-ignore: the node's notice it matches
 
 /**
- * 181000 → 「18.1 万」 (181K), 150000 → 「15 万」; under the language's unit the number itself. The unit (ten thousand
+ * 181000 → "18.1" ten-thousands (181K), 150000 → "15" ten-thousands; under the language's unit the number itself. The unit (ten thousand
  * in Chinese and Japanese, a thousand in English) is the language's: [CoreText.Key.CompactCount] carries the count.
  */
 fun tokenCount(tokens: Long): CoreText = CoreText.of(Key.CompactCount, tokens)
 
-/** [tokens] in units of [unit], one decimal at most: 181000 / 10000 → 「18.1」. */
+/** [tokens] in units of [unit], one decimal at most: 181000 / 10000 → "18.1". */
 fun compactUnits(tokens: Long, unit: Long): String =
     BigDecimal(tokens).divide(BigDecimal(unit)).setScale(1, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 
@@ -46,7 +46,7 @@ private val silent = setOf("tool_result", "turn_duration", "unknown")
 
 /**
  * A compaction is one item: the boundary keeps the notices that came with it as [Compaction.notes] — the /compact
- * before or after it (「压缩上下文」), the summary it carried on with (「已从压缩的上下文继续」) and Claude Code's line about
+ * before or after it ([CompactCommandNotice]), the summary it carried on with ([ContinuedNotice]) and Claude Code's line about
  * it — and they are no rows of their own. A summary whose boundary is on an older page stands in for it. Ids, texts and
  * the order of everything else stay as they were.
  */
@@ -54,7 +54,7 @@ fun foldCompactions(items: List<LineItem>): List<LineItem> {
     if (items.none { it.isBoundary() || it.isNotice(ContinuedNotice) }) return items
     val out = ArrayList<LineItem>(items.size)
     var open: Int? = null // the boundary in `out` the notes after it still join
-    var held: LineItem? = null // a 压缩上下文 waiting for the boundary after it
+    var held: LineItem? = null // a "Compact context" waiting for the boundary after it
     fun release() { held?.let(out::add); held = null }
     fun join(note: LineItem, idle: Boolean = false) {
         val at = open ?: return

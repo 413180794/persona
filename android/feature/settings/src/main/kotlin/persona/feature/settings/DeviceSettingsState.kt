@@ -54,7 +54,7 @@ class DeviceSettingsState(private val api: DeviceSettings?, private val unpair: 
         if (device.id == devices.currentId) cleanup()
     }
 
-    /** Revokes another device's credential by id (a desktop app's 退出): it has to pair again; the list is not needed. */
+    /** Revokes another device's credential by id (a desktop app's "Sign out"): it has to pair again; the list is not needed. */
     suspend fun revokeCredential(id: String) = perform(R.string.settings_devices_revoke_failed) {
         if (id.isBlank()) return@perform
         requireNotNull(api).revoke(id)

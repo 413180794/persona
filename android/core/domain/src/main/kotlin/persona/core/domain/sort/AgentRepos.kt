@@ -39,7 +39,7 @@ data class AgentRepo(val id: String, val machineId: String, val name: String, va
 
 /**
  * What a repository is called when its sessions have no cwd (iOS `RepoTree.unnamed`): sorts after every name; the
- * heading says 「其他」 (repoTitle).
+ * heading says "Other" (repoTitle).
  */
 const val UnnamedRepo = "\uFFFF"
 

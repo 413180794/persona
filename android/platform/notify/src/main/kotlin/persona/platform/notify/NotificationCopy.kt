@@ -32,7 +32,7 @@ internal fun actionResultCopy(result: NotificationActionResult): Pair<Int, Int>?
 
 /**
  * The line under a request notification's title and the text it expands to, in [context]'s language: what a glance at
- * the lock screen should tell. An MCP tool reads 「github · create issue」 as on the Agents list, not its raw
+ * the lock screen should tell. An MCP tool reads "github · create issue" as on the Agents list, not its raw
  * `mcp__github__create_issue`; an MCP form says what it asks for (the server's message) instead of only that one waits.
  */
 internal fun requestCopy(context: Context, ix: Interaction): Pair<String, String> {

@@ -25,7 +25,7 @@ import java.time.Instant
  * app's ShortcutText), pure so tests pin it.
  */
 object ShortcutText {
-    /** The one that has been waiting longest (docs/intents.md「选择规则」). */
+    /** The one that has been waiting longest (docs/intents.md "Selection rules"). */
     fun pending(interactions: List<Interaction>): Interaction? =
         interactions.minByOrNull { parseTime(it.createdAt) ?: Instant.MAX }
 
@@ -68,7 +68,7 @@ object ShortcutText {
         else -> R.string.shortcuts_needs_app
     })
 
-    /** 「会话 · 机器」 under the question. */
+    /** "session · machine" under the question. */
     fun where(ix: Interaction, machines: List<Machine>): String? =
         listOfNotNull(ix.sessionTitle?.takeIf { it.isNotBlank() }, machines.firstOrNull { it.id == ix.machineId }?.displayName)
             .joinToString(" · ").ifEmpty { null }
@@ -114,7 +114,7 @@ object ShortcutText {
         return if (flat.length <= limit) flat else flat.take(limit) + "…"
     }
 
-    /** The tile's second line: 「2 个需要你」, 「都处理完了」, or 「还没配对」. */
+    /** The tile's second line: "2 need you", "All done", or "Not paired". */
     fun tileSubtitle(res: Resources, paired: Boolean, fleet: FleetState): String = when {
         !paired -> res.getString(R.string.shortcuts_not_paired_short)
         FleetSummary.isEmpty(fleet) -> res.getString(R.string.shortcuts_all_done)
@@ -122,7 +122,7 @@ object ShortcutText {
     }
 }
 
-/** The launcher's recent agents after 问 Persona / 批准待处理: the most recently active live ones, Persona itself left out. */
+/** The launcher's recent agents after "Ask Persona" / "Approve pending": the most recently active live ones, Persona itself left out. */
 object RecentAgents {
     const val COUNT = 2
 

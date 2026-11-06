@@ -87,7 +87,7 @@ class VoiceProtocolTest {
     }
 
     @Test fun theModelConfigurationIsTheExtensionsPurpose() {
-        // The host opens 设置 › 模型配置 at this purpose (docs/model-config.md: extensions are plugin.<id>).
+        // The host opens Settings › Model configuration at this purpose (docs/model-config.md: extensions are plugin.<id>).
         assertEquals("plugin.voice", voicePurposeId("voice"))
     }
 }

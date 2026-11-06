@@ -14,7 +14,7 @@ import persona.core.contracts.api.UsageWindow
 import persona.core.designsystem.PersonaTheme
 import java.time.Instant
 
-/** 订阅额度 when the hub gives two accounts the same id (#5304): both are drawn, the page does not crash. */
+/** Subscription quota when the hub gives two accounts the same id (#5304): both are drawn, the page does not crash. */
 @RunWith(AndroidJUnit4::class)
 class UsageWindowsListTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()

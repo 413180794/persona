@@ -14,7 +14,7 @@ import kotlin.math.abs
 import kotlin.math.roundToLong
 
 /**
- * One sheet of a table file (docs/android.md「文件查看器」): its cells as text, row by row; rows can be shorter than
+ * One sheet of a table file (docs/android.md "File viewer"): its cells as text, row by row; rows can be shorter than
  * [columns]. The same model as iOS (`TableParsing.swift`) and the web (`lib/sheets.ts`).
  */
 internal class TableSheet(val name: String) {
@@ -36,7 +36,7 @@ internal class TableSheet(val name: String) {
 
     operator fun get(row: Int, column: Int): String = rows.getOrNull(row)?.getOrNull(column) ?: ""
 
-    /** A row as tab-separated text (what「拷贝整行」puts on the clipboard). */
+    /** A row as tab-separated text (what "Copy row" puts on the clipboard). */
     fun rowText(row: Int): String = rows.getOrNull(row).orEmpty().joinToString("\t")
 
     companion object {

@@ -10,7 +10,7 @@ import persona.feature.inbox.MailRoute
 import persona.platform.phonetools.PhoneToolsRoute
 
 /**
- * Destinations that open beside their tab's list when the window has room for two panes: what Agents, 收件箱 and 设置
+ * Destinations that open beside their tab's list when the window has room for two panes: what Agents, Inbox and Settings
  * open from their first page. The shell gives these the list-detail scene's detail role and nothing else does.
  */
 internal fun isDetailDestination(key: NavKey): Boolean = when (key) {

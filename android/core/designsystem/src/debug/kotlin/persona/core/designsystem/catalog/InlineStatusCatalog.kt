@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyListScope
 import persona.core.designsystem.*
 
-/** The inline status of the chat's 正在启动 and a machine's 重新部署 line, in its three tones. */
+/** The inline status of the chat's "Starting" and a machine's "Redeploy" line, in its three tones. */
 internal fun LazyListScope.inlineStatusSamples(onAction: (String) -> Unit) {
     item("inline-status") {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {

@@ -33,7 +33,7 @@ internal class AgentText(@StringRes val id: Int, vararg args: Any) {
         /** Text that is already in the user's words (the hub's reason, a failure message). */
         fun raw(text: String) = AgentText(R.string.agents_text_raw, text)
 
-        /** 「已允许：./gradlew test」 for an answer the hub took, in the language on screen. */
+        /** "Allowed: ./gradlew test" for an answer the hub took, in the language on screen. */
         fun receipt(receipt: AnswerReceipt) = AgentText(R.string.agents_text_raw, receipt)
     }
 }

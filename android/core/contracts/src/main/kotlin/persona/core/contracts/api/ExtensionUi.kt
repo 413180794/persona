@@ -14,7 +14,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 
 /**
- * An extension's declarative UI (docs/extensions.md「声明式 UI」): the extension never runs code in the app; it answers with a
+ * An extension's declarative UI (docs/extensions.md "Declarative UI"): the extension never runs code in the app; it answers with a
  * View of a few fixed kinds of item that each app draws with its own design system, and its buttons come back to it.
  */
 interface ExtensionUi {
@@ -22,7 +22,7 @@ interface ExtensionUi {
      * `GET /api/v1/extensions/-/ui?placement=…`: what the enabled, running extensions draw at [placement]
      * (`extension_page`, `launcher_section`, `inbox_item`); a launcher's section names the launcher (and the machine it is
      * on). An empty [placement] lists every slot but launcher sections at once (`nav_page`, `overview_card`,
-     * `machine_section`, with their badges; docs/extensions.md「UI 插槽」), only on a hub that says `extension_ui_slots`. A hub
+     * `machine_section`, with their badges; docs/extensions.md "UI slots"), only on a hub that says `extension_ui_slots`. A hub
      * that does not know a placement lists nothing there.
      */
     suspend fun uiPlaces(placement: String, launcher: String? = null, machine: String? = null): List<ExtensionUiPlace>
@@ -42,7 +42,7 @@ interface ExtensionUi {
 
 /**
  * Where an extension draws something (`{extension, extension_name, id, title, placement, size, icon?, opens?, badge?, connector?}`).
- * The slots of docs/extensions.md「UI 插槽」: a `nav_page` has an [icon] and maybe a [badge]; an `overview_card` [opens] one
+ * The slots of docs/extensions.md "UI slots": a `nav_page` has an [icon] and maybe a [badge]; an `overview_card` [opens] one
  * of the extension's pages; an `inbox_item` draws the page of its [connector]'s inbox items.
  */
 @Serializable
@@ -65,7 +65,7 @@ data class ExtensionUiPlace(
 )
 
 /**
- * Where a view is drawn and for whom (docs/extensions.md「UI 插槽」「上下文」): a launcher's page names the launcher and its
+ * Where a view is drawn and for whom (docs/extensions.md "UI slots" "Context"): a launcher's page names the launcher and its
  * machine, a machine's section the machine, an inbox item's page the [item]; [size] is `compact` for a card. The time
  * zone, language, platform and UI version are the app's: the HTTP client fills in what is left empty.
  */
@@ -143,7 +143,7 @@ data class ExtensionViewFilter(
     val action: ExtensionViewAction = ExtensionViewAction(),
 )
 
-/** A section's 加载更多 (UI version 3): reaching the end, or tapping it, sends [action] once and waits. */
+/** A section's "Load more" (UI version 3): reaching the end, or tapping it, sends [action] once and waits. */
 @Serializable
 data class ExtensionViewMore(val title: String? = null, val action: ExtensionViewAction = ExtensionViewAction())
 
@@ -380,7 +380,7 @@ data class ExtensionChartSeries(
     val points: List<ExtensionChartPoint> = emptyList(),
 )
 
-/** A value at a label (a day, a model); [display] is how to write it (「¥1.20」), else the app writes it with the unit. */
+/** A value at a label (a day, a model); [display] is how to write it ("¥1.20"), else the app writes it with the unit. */
 @Serializable
 data class ExtensionChartPoint(val label: String = "", val value: Double = 0.0, val display: String? = null)
 
@@ -423,9 +423,9 @@ data class ExtensionUiResult(
     val view: ExtensionView? = null,
     val toast: String? = null,
     @SerialName("open_url") val openUrl: String? = null,
-    /** UI version 3: draw a page on top (after a list's 新建, say). */
+    /** UI version 3: draw a page on top (after a list's "New", say). */
     val push: ExtensionViewPush? = null,
-    /** UI version 3: back to the page underneath (after 保存), which is drawn again. */
+    /** UI version 3: back to the page underneath (after "Save"), which is drawn again. */
     val pop: Boolean = false,
     /** UI version 5: lines of a file a diff's context asked for (the page is not drawn again). */
     val lines: ExtensionFileLines? = null,

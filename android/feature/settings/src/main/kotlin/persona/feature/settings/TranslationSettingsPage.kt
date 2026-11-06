@@ -22,7 +22,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * 设置 › 翻译 (docs/android.md「翻译」, the iOS TranslationSettingsView, the web's TranslationSettings): on / off, the
+ * Settings › Translation (docs/android.md "Translation", the iOS TranslationSettingsView, the web's TranslationSettings): on / off, the
  * translation model, the target language, and what gets translated: mail (on), and the Feishu chats picked here (none:
  * Feishu has too many messages to translate them all). Kept on this phone and sent to the hub, which translates new mail
  * ahead of time for it.

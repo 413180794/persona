@@ -32,7 +32,7 @@ import okio.ByteString
 import okio.ByteString.Companion.toByteString
 
 /**
- * The hub's voice extensions (docs/extensions.md「语音」) on one route of one pairing: the extension list, an extension's voices and
+ * The hub's voice extensions (docs/extensions.md "Voice") on one route of one pairing: the extension list, an extension's voices and
  * models, the model configuration of `plugin.<id>` (docs/model-config.md; the purpose kept its name) and the extension's
  * socket. A hub before #1844 ([legacy]) has these routes only under `/api/v1/plugins`. Calls after the
  * pairing changed ([isCurrent] false) fail with a cancellation, like [HttpMachineMetricsApi].
@@ -115,7 +115,7 @@ class HttpVoiceExtensions(
         val status = (purpose["status"] as? JsonPrimitive)?.contentOrNull?.trim()
         return VoiceModelChoice(
             model = model?.takeIf { it.isNotEmpty() },
-            // 未验证 means nobody paid to try it, not that it is broken (docs/model-config.md).
+            // "Unverified" means nobody paid to try it, not that it is broken (docs/model-config.md).
             status = status?.takeIf { it.isNotEmpty() && it != Unverified },
         )
     }

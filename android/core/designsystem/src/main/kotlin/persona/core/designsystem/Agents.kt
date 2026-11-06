@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
-// The Agents list (docs/android-design.md 2.4): computer chips over a tree of 电脑 → 空间 → 会话. The tree is told
+// The Agents list (docs/android-design.md 2.4): computer chips over a tree of computer → space → session. The tree is told
 // apart by indentation, type and hairlines, not by plates: the page background stays whole and only business cards
 // (requests, notices; the board's agent strips) sit on it. Lazy lists give every heading and row its own item.
 
@@ -74,7 +74,7 @@ private val markSize: Dp @Composable get() = when (PersonaTheme.style) { AppStyl
 
 /**
  * A computer in the strip above the Agents tree, as a filter chip of the active style: [icon] is the device (server,
- * desktop, laptop) and its corner dot says whether the computer is [online]. 全部机器 passes neither. [count] is how
+ * desktop, laptop) and its corner dot says whether the computer is [online]. "All machines" passes neither. [count] is how
  * many sessions the list shows while the chip is selected.
  */
 @Composable
@@ -158,11 +158,11 @@ fun HeadingAction(icon: PhIcon, label: String, onClick: () -> Unit, modifier: Mo
 }
 
 /**
- * The first level of the Agents tree: a computer, or a top-level section (置顶, a state, a history project). The
+ * The first level of the Agents tree: a computer, or a top-level section ("Pinned", a state, a history project). The
  * largest type of the tree with a rule above it ([first] has none); no plate. [icon] is the device or the section's
- * mark, [online] adds the connection dot (离线 is also written), [detail] is the line under the name, [counts] the
+ * mark, [online] adds the connection dot ("Offline" is also written), [detail] is the line under the name, [counts] the
  * sessions that need the user / work / are unread, [onMonitor] the gauge button to the computer's page. [tag] names
- * the hub group the computer belongs to, only when the phone has more than one (docs/android.md「多 hub」).
+ * the hub group the computer belongs to, only when the phone has more than one (docs/android.md "Multiple hubs").
  */
 @Composable
 fun AgentTreeHeader(
@@ -219,9 +219,9 @@ fun AgentTreeHeader(
  * The second level: a herdr workspace under its computer, indented [depth] steps (0 when the list shows one
  * computer and drops its heading) and smaller than the computer. A [quiet] space (all finished and seen) is lighter
  * and says how many [sessions] it holds instead of [counts]. [menu] is the space's ⋯ (a [HeadingAction] and its sheet).
- * Under 按仓库 the same heading is a repository or one of its working trees, told apart by [icon] (folder, ⌂ for the
+ * Under "By repository" the same heading is a repository or one of its working trees, told apart by [icon] (folder, ⌂ for the
  * main checkout, a branch for another tree) and one more [depth] step for a tree. [kind] names the level for TalkBack
- * (空间, 仓库, 主工作树, 工作树): the caret says 展开 / 折叠 it, the icon says what it is, the heading whether it is open.
+ * (space, repository, main worktree, worktree): the caret says "Expand" / "Collapse" it, the icon says what it is, the heading whether it is open.
  */
 @Composable
 fun AgentSpaceHeader(
@@ -264,7 +264,7 @@ fun AgentSpaceHeader(
     }
 }
 
-/** 还有 N 个空闲: opens the finished sessions an active space keeps tucked away. [depth] is the space's. */
+/** "N more idle": opens the finished sessions an active space keeps tucked away. [depth] is the space's. */
 @Composable
 fun AgentIdleRow(hidden: Int, onClick: () -> Unit, modifier: Modifier = Modifier, depth: Int = 1) {
     val start = Step * depth + (Caret - markSize) / 2
@@ -312,7 +312,7 @@ fun AgentRow(
     note: RowNote? = null,
     launcher: Boolean = false,
     branch: Boolean = false,
-    /** Where it was opened (飞书群 / 终端, #3132): under the time, right-aligned, so the title keeps the whole line (#3043). */
+    /** Where it was opened (Lark group / Terminal, #3132): under the time, right-aligned, so the title keeps the whole line (#3043). */
     source: RowSource? = null,
     end: (@Composable () -> Unit)? = null,
 ) {
@@ -374,7 +374,7 @@ fun AgentRow(
             )
         }
     }
-    // a branch hangs off its 发起者 one step up: a hairline down from under that row's mark
+    // a branch hangs off its initiator one step up: a hairline down from under that row's mark
     val guide = if (!branch) Modifier else Modifier.drawBehind {
         val x = (if (board) Step * (depth - 1) + Holder / 2 else (Step * (depth - 1) + (Caret - mark) / 2).coerceAtLeast(None) + mark / 2).toPx()
         drawLine(palette.line, Offset(x, 0f), Offset(x, size.height), Hairline.toPx())
@@ -421,8 +421,8 @@ private fun RowNoteLine(note: RowNote) {
 
 /**
  * A herdr tab holding several agents (#2320): drawn as the row of the most urgent of them ([title], [status], its
- * latest words) after the tab's [label] (`#2` or its name), with 「N 个 Agent」 at the end that folds and opens the
- * tab's agents ([onToggle]; they are listed under it as [AgentRow]s, the 发起者 marked as the [launcher] and the panes it
+ * latest words) after the tab's [label] (`#2` or its name), with "N Agents" at the end that folds and opens the
+ * tab's agents ([onToggle]; they are listed under it as [AgentRow]s, the initiator marked as the [launcher] and the panes it
  * split off one step further in as [branch]es). Tapping the row opens that most urgent agent ([onClick]).
  */
 @Composable
@@ -449,7 +449,7 @@ fun AgentTabRow(
     end = { TabToggle(agents, folded, onToggle) },
 )
 
-/** 「N 个 Agent」 and a caret: folds a tab's agents to its row and opens them again. */
+/** "N Agents" and a caret: folds a tab's agents to its row and opens them again. */
 @Composable
 private fun TabToggle(agents: Int, folded: Boolean, onToggle: () -> Unit) {
     val palette = PersonaTheme.palette
@@ -505,7 +505,7 @@ private fun HolderGlyph(status: Status) {
     }
 }
 
-/** An agent row's source tag ([AgentRow]'s `source`): its word, its tint and, for 飞书群 with a topic, what a tap opens. */
+/** An agent row's source tag ([AgentRow]'s `source`): its word, its tint and, for a Lark group with a topic, what a tap opens. */
 @Immutable
 data class RowSource(val label: String, val kind: SourceKind, val onClick: (() -> Unit)? = null, val clickLabel: String? = null)
 
@@ -521,7 +521,7 @@ private fun SourceTag(source: RowSource) {
 
 // ------------------------------------------------------------------ quick filters
 
-/** The narrowest a board bay gets before the board scrolls instead: room for a short label like "Terminal" or 「飞书群」. */
+/** The narrowest a board bay gets before the board scrolls instead: room for a short label like "Terminal" or "Lark group". */
 private val BoardBayMinWidth = 92.dp
 /** How much of the next bay a scrolled board shows at its edge. */
 private const val BoardBayPeek = 0.4f

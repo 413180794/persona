@@ -55,7 +55,7 @@ import java.io.File
 import java.lang.reflect.Proxy
 
 /**
- * 设置 › 手机数据 and the confirmation before a calendar write, in each language (docs/i18n.md), Glass light and dark.
+ * Settings › Phone data and the confirmation before a calendar write, in each language (docs/i18n.md), Glass light and dark.
  * PNGs go to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)

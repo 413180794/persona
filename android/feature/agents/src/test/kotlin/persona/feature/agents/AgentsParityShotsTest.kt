@@ -43,7 +43,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The Agents list's parity with iOS / the web (#3038): 飞书群 / 终端 quick filters and the 「botmux」 switch, the three
+ * The Agents list's parity with iOS / the web (#3038): "Lark groups" / "Terminal" quick filters and the "botmux" switch, the three
  * empty states (search, quick filter, none at all) and a herdr start that failed, with its reason on the row. Every
  * style in light and dark, written to `build/parity-shots/` (or `-Dpersona.shots=<dir>`).
  */

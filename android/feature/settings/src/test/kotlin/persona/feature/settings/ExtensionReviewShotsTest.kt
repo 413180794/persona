@@ -38,7 +38,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * UI version 5's code review (#3136) drawn from the 组件展示 page code-review-v5 on the JVM, every style light and dark,
+ * UI version 5's code review (#3136) drawn from the component showcase page code-review-v5 on the JVM, every style light and dark,
  * and what pressing it sends: a line picked and widened to a range sent as a draft, hidden lines asked for as lines, a
  * file marked viewed. Written to `build/extension-review-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */

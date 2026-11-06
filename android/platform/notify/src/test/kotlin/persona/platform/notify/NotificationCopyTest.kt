@@ -60,7 +60,7 @@ class NotificationCopyTest {
     private val form = Interaction("f", kind = "elicitation", summary = "Pick a repository",
         elicitation = Elicitation(message = "Pick a repository"))
 
-    /** A glance at the lock screen says which tool and what form: no raw mcp__ names, not only 「MCP 表单等你填写」 (#4354). */
+    /** A glance at the lock screen says which tool and what form: no raw mcp__ names, not only "An MCP form is waiting for you" (#4354). */
     @Test fun requestNotificationsNameTheToolAndTheForm() {
         assertEquals("请求使用 github · create issue：Fix login" to "请求使用 github · create issue：Fix login", requestCopy(context, mcpPermission))
         assertEquals("请求使用 Persona · mail send", requestCopy(context, personaPermission).first)

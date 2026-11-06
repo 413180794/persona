@@ -23,7 +23,7 @@ import persona.core.contracts.api.MachineManagement
 import persona.core.designsystem.*
 
 /**
- * The pure part of 屏蔽的配置目录 (iOS `ClaudeDirsLogic`, web `lib/agent-settings.ts`): what a row says, and the rules
+ * The pure part of "Blocked config directories" (iOS `ClaudeDirsLogic`, web `lib/agent-settings.ts`): what a row says, and the rules
  * after a change. Blocking a row adds its path; unblocking lifts the rule that blocks it (a glob lifts every directory
  * it covers).
  */
@@ -73,7 +73,7 @@ internal data class ClaudeDirsUiState(
     val error: ResText? = null,
     /** The row being saved (a path, a rule, or "+" for the typed one). */
     val busy: String? = null,
-    /** The connection has no such call (体验模式, a test's fake): the section is left out. */
+    /** The connection has no such call (demo mode, a test's fake): the section is left out. */
     val unsupported: Boolean = false,
 )
 
@@ -112,8 +112,8 @@ internal class ClaudeDirsModel(private val api: MachineManagement) {
 }
 
 /**
- * 设置 › Claude Code › 屏蔽的配置目录 (iOS `ClaudeDirsSection`): the shown machine's Claude Code config directories,
- * each with 屏蔽 / 取消屏蔽, and rules typed by hand (a path, or a glob: `~/.automation/` followed by a `*`). A blocked directory is
+ * Settings › Claude Code › Blocked config directories (iOS `ClaudeDirsSection`): the shown machine's Claude Code config directories,
+ * each with "Block" / "Unblock", and rules typed by hand (a path, or a glob: `~/.automation/` followed by a `*`). A blocked directory is
  * not scanned or remembered and its sessions leave Agents; the files are not touched.
  */
 internal fun LazyListScope.claudeDirsSection(

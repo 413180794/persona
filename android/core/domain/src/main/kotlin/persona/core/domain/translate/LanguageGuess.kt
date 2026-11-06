@@ -1,7 +1,7 @@
 package persona.core.domain.translate
 
 /**
- * Whether a text needs translating (设置 › 翻译). iOS asks the system's language recognizer; Android has none built in,
+ * Whether a text needs translating (Settings › Translation). iOS asks the system's language recognizer; Android has none built in,
  * so this looks at the scripts a text is written in and, for Latin script, at common words: the same rules as the
  * web's `lib/translate.ts`, so the two decide alike.
  */

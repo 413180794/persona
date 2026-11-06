@@ -33,7 +33,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * The 组件展示 extension's pages (#1852: schema/extension/examples/showcase, copied from the extension's snapshots/) drawn
+ * The component showcase extension's pages (#1852: schema/extension/examples/showcase, copied from the extension's snapshots/) drawn
  * on the JVM with Robolectric's native graphics, to compare with the web's, iOS's and the Mac's screenshots of the same
  * views. Every page in every style, light and dark. Written to
  * `build/extension-showcase-shots/` (or `-Dpersona.shots=<dir>`) to look at.

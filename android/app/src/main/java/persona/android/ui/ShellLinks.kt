@@ -26,14 +26,14 @@ import java.util.UUID
  * Links for the whole shell: the link sheet over pages outside a conversation (the knowledge base, the Persona home's
  * own links), `jarvis://` links tapped in any conversation (they open a conversation or a tab, nothing else), links to
  * the hub's own web pages (the assistant's `/s/…`, `/j/…`, `/todos?id=…`: the same screens in the app), and
- * text picked on a page with no conversation behind it (those pages, and the inbox's): 交给 Persona puts it in Persona's
- * main conversation and shows the Persona tab, as the inbox's own 交给 Persona does.
+ * text picked on a page with no conversation behind it (those pages, and the inbox's): "Hand to Persona" puts it in Persona's
+ * main conversation and shows the Persona tab, as the inbox's own "Hand to Persona" does.
  */
 @Composable
 internal fun ShellLinkHost(session: ShellSession, navigator: Navigator, feedback: AppFeedback, content: @Composable () -> Unit) {
     // The paired sender is the connection's forwarding wrapper, not the outbox itself, so it is no
     // MainConversationSender: the main conversation comes from the pairing's chat wiring, as in a chat (ShellChat).
-    // Before, 交给 Persona never showed on these pages (only 体验模式's sender is one).
+    // Before, "Hand to Persona" never showed on these pages (only demo mode's sender is one).
     val activeWiring by chatWiringSource().current.collectAsStateWithLifecycle()
     val main = session.sender as? MainConversationSender
         ?: activeWiring?.takeIf { it.scope.path == session.identity }?.mainSender

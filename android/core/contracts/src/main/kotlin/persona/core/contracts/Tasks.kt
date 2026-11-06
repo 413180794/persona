@@ -13,7 +13,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
 
-// Tasks dispatched from an assistant conversation (docs/unified-entry.md; docs/protocol.md「任务和对话动态」): the plans the
+// Tasks dispatched from an assistant conversation (docs/unified-entry.md; docs/protocol.md "Tasks and conversation activity"): the plans the
 // assistant hands the user, the todos that are tasks, and the items the hub inserts into a conversation (its feed).
 
 @KeepGeneratedSerializer
@@ -49,7 +49,7 @@ data class TaskPlan(
 /** A message card's reply that went out: when, and what it said. */
 data class SentReply(val at: String, val text: String)
 
-/** A blank a draft leaves to fill in (【预计几点前】, {{链接}}): it would go out as it is. Null when it has none. */
+/** A blank a draft leaves to fill in (a full-width-bracketed note, {{link}}): it would go out as it is. Null when it has none. */
 fun draftPlaceholder(text: String): String? = Regex("【[^】\n]*】|\\{\\{[^}\n]*\\}\\}").find(text)?.value // i18n-ignore: the blank marks drafts use
 
 /** An item the hub inserted into an assistant conversation, drawn among the transcript's lines by [at]. */
@@ -147,9 +147,9 @@ data class Todo(
     @SerialName("done_by") val doneBy: String? = null,
     @SerialName("done_reason") val doneReason: String? = null,
     @WireTime @SerialName("reopened_at") val reopenedAt: String? = null,
-    /** Why the task's agent did not start (#1077): the hub ended the todo with it; 重试 clears it (#1396). */
+    /** Why the task's agent did not start (#1077): the hub ended the todo with it; "Retry" clears it (#1396). */
     @SerialName("start_error") val startError: String? = null,
-    /** Opened from the main conversation while 主对话派的任务只在主对话里通知 was on (#1731): not in the 待办 badge. */
+    /** Opened from the main conversation while "Notify main-chat tasks only in the main chat" was on (#1731): not in the to-dos badge. */
     val quiet: Boolean = false,
     val agents: List<TodoAgent> = emptyList(),
     val spaces: List<TodoSpace>? = null,
@@ -168,7 +168,7 @@ data class Todo(
 }
 
 /**
- * How far a task's finished work went out (#3306, docs/todos.md「交付」): [state] live, pr, merged, off or none (kept as
+ * How far a task's finished work went out (#3306, docs/todos.md"Delivery"): [state] live, pr, merged, off or none (kept as
  * the hub sent it), [gate] what holds it, [unblock] who can unhold it (user, agent, other).
  */
 @KeepGeneratedSerializer
@@ -201,7 +201,7 @@ data class TaskReview(
 )
 
 /**
- * A supervised task's ledger (#3124, docs/unified-entry.md「督办」): its supervisor (the conversation that handed it
+ * A supervised task's ledger (#3124, docs/unified-entry.md "Supervision"): its supervisor (the conversation that handed it
  * out), what done means, how long it should take, and its review: [state] "" while it goes on, then pending_review,
  * rework ([round] counts them), needs_user, accepted or cancelled.
  */
@@ -218,8 +218,8 @@ data class Supervision(
 )
 
 /**
- * Todo states in order of rank (umbrella.final.md / docs/todos.md「状态计算规则」):
- * 已完成 -> 等你 -> 待查看 -> 进行中 -> 待跟进 -> 未开始
+ * Todo states in order of rank (umbrella.final.md / docs/todos.md "State rules"):
+ * Done -> Needs you -> To review -> In progress -> To follow up -> Not started
  */
 enum class TodoState(val title: CoreText, val rank: Int) {
     Done(CoreText.of(CoreText.Key.TodoDone), 0),
@@ -301,7 +301,7 @@ data class FeedResponse(
     val items: List<FeedItem> = emptyList(),
     val plans: Map<String, TaskPlan> = emptyMap(),
     /**
-     * The conversation's live cards by id, each a whole AssistantView (docs/assistant-views.md「活卡片」): the full set
+     * The conversation's live cards by id, each a whole AssistantView (docs/assistant-views.md "Live cards"): the full set
      * on every read, kept raw so one card this app cannot read does not drop the others ([AssistantViewWire]).
      */
     val views: Map<String, JsonElement> = emptyMap(),

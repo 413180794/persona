@@ -35,9 +35,9 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 待办 as iOS shows it (#3034): the list's line under each open to-do (red while an agent waits, the notes, 还没交给 Agent),
- * finished ones with the auto-done reason, the empty list's 新建待办, the detail's 「N 个 Agent · X 创建」, projects and
- * where each agent came from, and 新建待办… / 创建并挂上 when picking a to-do. Every style, light and dark.
+ * To-dos as iOS shows them (#3034): the list's line under each open to-do (red while an agent waits, the notes, "Not handed to an agent yet"),
+ * finished ones with the auto-done reason, the empty list's "New to-do", the detail's "N agents · created X", projects and
+ * where each agent came from, and "New to-do…" / "Create and link" when picking a to-do. Every style, light and dark.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

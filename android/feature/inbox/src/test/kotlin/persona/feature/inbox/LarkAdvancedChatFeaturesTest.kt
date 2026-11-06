@@ -13,7 +13,7 @@ import persona.core.contracts.api.InboxAssistantTransport
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class LarkAdvancedChatFeaturesTest {
-    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    /** The app's strings; Robolectric runs in Simplified Chinese (robolectric.properties). */
     private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
     private fun json(value: String) = Json.parseToJsonElement(value).jsonObject
 
@@ -30,7 +30,7 @@ class LarkAdvancedChatFeaturesTest {
         override suspend fun media(ref: String): ByteArray = ByteArray(0)
     }
 
-    // --- 1. Reactions (表情回应) ---
+    // --- 1. Reactions ---
 
     @Test
     fun messageParsesReactionsWithCountAndMineFlag() {
@@ -82,7 +82,7 @@ class LarkAdvancedChatFeaturesTest {
         assertEquals("CUSTOM_EMOJI", LarkEmojiHelper.label(res, "CUSTOM_EMOJI"))
     }
 
-    // --- 2. Rich Text Syntax Rendering (富文本语法渲染) ---
+    // --- 2. Rich Text Syntax Rendering ---
 
     @Test
     fun rawPartsBuildStructuredRichNodesWithHeadingsListsAndQuotes() {
@@ -163,7 +163,7 @@ class LarkAdvancedChatFeaturesTest {
         assertEquals("普通文本", lines[5].text)
     }
 
-    // --- 3. Merge Forward, Audio & Media (合并转发、语音与媒体) ---
+    // --- 3. Merge Forward, Audio & Media ---
 
     @Test
     fun messageParsesMergeForwardWithNestedMessages() {
@@ -247,7 +247,7 @@ class LarkAdvancedChatFeaturesTest {
         assertEquals(240, stickerPart.height)
     }
 
-    // --- 4. Card Button Callbacks (卡片按钮交互) ---
+    // --- 4. Card Button Callbacks ---
 
     @Test
     fun cardButtonParsesActionIdActionMethodAndUrl() {
@@ -277,7 +277,7 @@ class LarkAdvancedChatFeaturesTest {
         assertEquals(1, btnLink.actionMethod)
     }
 
-    // --- 5. Sender Profile Card (发送者名片) ---
+    // --- 5. Sender Profile Card ---
 
     @Test
     fun profileParserExtractsLeaderDepartmentEmployeeTypeAndStatus() {

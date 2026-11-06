@@ -178,7 +178,7 @@ fun TodoDetailScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 待办标题与备注卡片
+            // To-do title and notes card
             item(key = "title-notes") {
                 JCard(Modifier.fillMaxWidth()) {
                     Column(
@@ -203,7 +203,7 @@ fun TodoDetailScreen(
                             } else {
                                 JTag(state.label)
                             }
-                            // iOS: 「状态 · N 个 Agent · X 创建」.
+                            // iOS: "Status · N agents · created X".
                             Text(
                                 listOfNotNull(
                                     pluralStringResource(R.plurals.agents_todo_agents, todo.currentAgents.size, todo.currentAgents.size),
@@ -303,7 +303,7 @@ fun TodoDetailScreen(
                 }
             }
 
-            // 项目（整组挂上的工作区，iOS TodoSpacesSection）
+            // Projects (workspaces linked as a whole, iOS TodoSpacesSection)
             val spaces = todo.spaces.orEmpty().takeIf { tasks?.spacesSupported != false }.orEmpty()
             if (spaces.isNotEmpty()) {
                 item(key = "spaces-header") {
@@ -337,7 +337,7 @@ fun TodoDetailScreen(
                 }
             }
 
-            // 正在做的 Agents
+            // Agents working on it
             item(key = "active-header") {
                 JSectionHeader(stringResource(R.string.agents_todo_active_agents), count = todo.currentAgents.size)
             }
@@ -351,7 +351,7 @@ fun TodoDetailScreen(
                     val session = sessionLookup(agent.key)
                     val machineName = machines.firstOrNull { it.id == agent.machineId }?.displayName ?: agent.machineId
                     val title = session?.displayTitle ?: agent.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.agents_todo_session_short, agent.sessionId.take(8))
-                    // iOS: 电脑 · 空间 · tab, where it came from, then what it says now.
+                    // iOS: computer · space · tab, where it came from, then what it says now.
                     val place = listOf(machineName, session?.spaceName, session?.slotLabel).filterNot { it.isNullOrBlank() }.joinToString(" · ")
                         .ifBlank { stringResource(R.string.agents_todo_location, machineName, session?.folderName ?: agent.cwd?.substringAfterLast('/').orEmpty()) }
                     val source = agentSource(agent, sessionLookup)
@@ -409,7 +409,7 @@ fun TodoDetailScreen(
                 }
             }
 
-            // 参与过的 Agents 折叠区
+            // Folded section of agents that took part
             if (todo.releasedAgents.isNotEmpty()) {
                 item(key = "past-header") {
                     Row(

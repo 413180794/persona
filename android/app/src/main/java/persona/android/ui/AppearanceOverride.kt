@@ -6,7 +6,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 
-/** 设置 › 外观 › 深浅色, or a debug capture, pins light or dark; nested PersonaTheme calls read the same configuration. */
+/** Settings › Appearance › Light/Dark, or a debug capture, pins light or dark; nested PersonaTheme calls read the same configuration. */
 @Composable
 internal fun AppearanceOverride(dark: Boolean?, content: @Composable () -> Unit) {
     if (dark == null) return content()

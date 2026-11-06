@@ -70,8 +70,8 @@ internal fun UpcomingRow(item: Upcoming, now: Instant, zone: ZoneId, position: G
 }
 
 /**
- * A repeating task: its rule in words, the next and last run, what it runs with when that is not the default, 只在提醒时推送
- * when 跑完推送 is only its alerts, who set it up, and its switch. The picture carries a mark when the last run failed (danger) or when Persona made it.
+ * A repeating task: its rule in words, the next and last run, what it runs with when that is not the default, "Push alerts only"
+ * when "Push when done" is only its alerts, who set it up, and its switch. The picture carries a mark when the last run failed (danger) or when Persona made it.
  */
 @Composable
 internal fun TaskRow(
@@ -112,7 +112,7 @@ internal fun TaskRow(
     }
 }
 
-/** A one-off Persona scheduled (or the user did): when, where it goes, what it will do. ⋯ holds 立即运行 and 删除. */
+/** A one-off Persona scheduled (or the user did): when, where it goes, what it will do. ⋯ holds "Run now" and "Delete". */
 @Composable
 internal fun OneOffRow(
     task: ScheduledTask, machines: List<Machine>, say: ProactiveText, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
@@ -167,7 +167,7 @@ internal fun RunRow(
     }
 }
 
-/** A row that leads somewhere else in the page ("全部 5 个跟进"). */
+/** A row that leads somewhere else in the page ("All 5 follow-ups"). */
 @Composable
 internal fun MoreRow(title: String, position: GroupPosition, onClick: () -> Unit) {
     JGroupItem(position) { JRow(title, onClick = onClick) }
@@ -239,7 +239,7 @@ private fun Wheel(count: Int, value: Int, description: String, onValue: (Int) ->
     }
 }
 
-/** 一 … 日 as round buttons (squares on the board) plus 每天 / 工作日 / 周末. The last day cannot be turned off. */
+/** Mon … Sun as round buttons (squares on the board) plus "Every day" / "Weekdays" / "Weekends". The last day cannot be turned off. */
 @Composable
 internal fun WeekdayPicker(days: List<Int>, onDaysChange: (List<Int>) -> Unit, modifier: Modifier = Modifier) {
     val palette = PersonaTheme.palette
@@ -288,7 +288,7 @@ internal fun IntervalPicker(minutes: Int, onChange: (Int) -> Unit, modifier: Mod
 /** How many days ahead a one-off can be put on its chips; further ones the hub made stay as they are. */
 private const val OnceDays = 14
 
-/** The day of a one-off as chips (今天、明天、周三…) over the clock wheel; a past time is not offered. */
+/** The day of a one-off as chips (Today, Tomorrow, Wed…) over the clock wheel; a past time is not offered. */
 @Composable
 internal fun OncePicker(at: Instant?, now: Instant, zone: ZoneId, onChange: (Instant) -> Unit, modifier: Modifier = Modifier) {
     val say = rememberProactiveText()

@@ -170,7 +170,7 @@ class DemoHub(
 
     /**
      * The user's message keeps its client message id as its item id, as the hub records it: the chat hides the outbox
-     * copy once the transcript has that id, so a random id left a second 「已送达，等待对话记录」 bubble for ever.
+     * copy once the transcript has that id, so a random id left a second "Delivered, waiting for the transcript" bubble for ever.
      */
     private suspend fun append(key: SessionKey, text: String?, id: String? = null) {
         val old = list(key)

@@ -7,7 +7,7 @@ import org.junit.Test
 import persona.core.contracts.Interaction
 import persona.core.contracts.Resolution
 
-/** 批准，每步确认 on a conversation's plan: approve in the default mode, never with feedback or while rejecting. */
+/** "Approve, confirm each step" on a conversation's plan: approve in the default mode, never with feedback or while rejecting. */
 class ApproveStepwiseTest {
     private val plan = Interaction(id = "example_request", machineId = "example_machine", sessionId = "example_session", kind = "plan")
 

@@ -10,7 +10,7 @@ import persona.core.contracts.Session
 import persona.core.contracts.api.DeliveryState
 import persona.core.contracts.api.RewindTarget
 
-/** 回退到这里's target and when it is off (web lib/rewind.test.ts). */
+/** "Rewind to here"'s target and when it is off (web lib/rewind.test.ts). */
 class RewindTest {
     private fun user(id: String, text: String?, kind: String = "text") = Item(id, role = "user", kind = kind, text = text)
 

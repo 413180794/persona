@@ -48,7 +48,7 @@ internal fun Machine.herdrStopped(state: HerdrState?): Boolean =
 
 /**
  * Why a start failed, kept on the row until the next start (iOS `HerdrFailure`): [text] in words, [detail] the hub's own
- * words and status for a report (复制详情).
+ * words and status for a report ("Copy details").
  */
 internal data class HerdrFailure(val text: AgentText, val detail: String) {
     companion object {
@@ -151,7 +151,7 @@ internal fun HerdrNotice(machineName: String, starting: Boolean, onStart: () -> 
             actionLabel = if (starting) null else stringResource(R.string.agents_herdr_start),
             onAction = if (starting) null else onStart,
         )
-        // 没启动：<why> stays on the row until the next start (iOS HerdrNoticeRow); long press copies the hub's own words.
+        // "Didn't start: <why>" stays on the row until the next start (iOS HerdrNoticeRow); long press copies the hub's own words.
         if (!starting && failure != null) {
             val clipboard = LocalClipboardManager.current
             var menu by remember { mutableStateOf(false) }

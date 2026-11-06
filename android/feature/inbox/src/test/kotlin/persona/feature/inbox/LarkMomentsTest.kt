@@ -14,7 +14,7 @@ import persona.core.domain.inbox.InboxItem
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class LarkMomentsTest {
-    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    /** The app's strings; Robolectric runs in Simplified Chinese (robolectric.properties). */
     private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
 
     @Test

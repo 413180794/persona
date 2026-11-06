@@ -200,7 +200,7 @@ internal fun ConnectionState.label(): String = stringResource(when (this) {
     ConnectionState.Revoked -> R.string.settings_connection_revoked
 })
 
-/** The result of 准备清单's cellular test, kept as a code (older builds kept the sentence itself). */
+/** The result of "Checklist"'s cellular test, kept as a code (older builds kept the sentence itself). */
 internal object CellularTest {
     const val Confirmed = "confirmed"
 

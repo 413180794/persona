@@ -48,9 +48,9 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * 设置 › 管理者 drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark: the
+ * Settings › Managers drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark: the
  * settings row among its neighbours, the list (the hub's own default, one on a Mac, one offline, one installing), a
- * manager's page (another computer's, the hub's own with 删除 off, one installing), the install code sheet with the
+ * manager's page (another computer's, the hub's own with Delete off, one installing), the install code sheet with the
  * hub's commands and an expired one without, and a hub from before the roster. Each is checked to draw something and
  * written as a PNG to `build/managers-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
@@ -92,7 +92,7 @@ class ManagersShotsTest {
                 val palette = PersonaTheme.palette
                 Box(Modifier.testTag("shot").width(400.dp).then(if (shot.tall) Modifier.height(900.dp) else Modifier).background(palette.background)) {
                     when (shot) {
-                        // The real settings list (docs/lessons/android.md: not hand-drawn rows), its 连接 section on top.
+                        // The real settings list (docs/lessons/android.md: not hand-drawn rows), its Connection section on top.
                         Shot.Settings -> SettingsScreen(services, onOpen = {})
                         Shot.List -> ManagersContent(loaded, ManagersNow, {}, {}, {}, {}, selected = { it == "m-3fa21c" })
                         Shot.Detail -> ManagerContent(loaded, "m-3fa21c", ManagersNow, {}, {}, {}, {}, {}, {})
@@ -148,7 +148,7 @@ class ManagersShotsTest {
     }
 
     /**
-     * 换个地方装 warns first, then shows the new code with the hub's commands; 完成 closes it. (The name dialogs are
+     * Install elsewhere warns first, then shows the new code with the hub's commands; Done closes it. (The name dialogs are
      * not driven here: a focused text field in a dialog never lets Robolectric's compose go idle. The model's test
      * covers making one.)
      */
@@ -177,7 +177,7 @@ class ManagersShotsTest {
         assertTrue(rule.onAllNodes(hasText("mi_fedcba9876543210fedcba9876543210")).fetchSemanticsNodes().isEmpty())
     }
 
-    /** The hub's own manager offers neither 换个地方装 nor 删除, and says why. */
+    /** The hub's own manager offers neither Install elsewhere nor Delete, and says why. */
     @Test fun theHubsOwnManagerCannotBeMovedOrDeleted() {
         val fake = FakeManagers()
         rule.setContent {
@@ -192,7 +192,7 @@ class ManagersShotsTest {
         assertTrue(rule.onAllNodes(hasText("设为默认")).fetchSemanticsNodes().isEmpty())
     }
 
-    /** 管理者 sits in 连接 above 配对, opens its page, and is left out where there is no hub (体验模式). */
+    /** Managers sits in Connection above Pairing, opens its page, and is left out where there is no hub (demo mode). */
     @Test fun theSettingsRowOpensTheManagers() {
         var opened: SettingsPage? = null
         var services by mutableStateOf(settingsServices(FakeManagers()))

@@ -16,7 +16,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.engines.Engines
 
-/** What the machine card says about its personad build, with 重新部署 while it differs from the hub's (iOS `DeployRow`). */
+/** What the machine card says about its personad build, with "Redeploy" while it differs from the hub's (iOS `DeployRow`). */
 @Composable
 internal fun MachineDeployLine(machine: Machine, starting: Boolean, onDeploy: (() -> Unit)?) {
     val busy = machine.deploying || starting
@@ -38,8 +38,8 @@ internal fun MachineDeployLine(machine: Machine, starting: Boolean, onDeploy: ((
 internal fun showsDeploy(machine: Machine?): Boolean = machine != null && (machine.nodeMismatch == true || machine.deploying)
 
 /**
- * The machine page's controls: its engine (opens the choice), 同时显示 botmux 会话 right under it when the hub has the
- * switch ([botmux] non-null; flipped in place, like the web page's header pill, #2842) and 重新连接, with how the hub
+ * The machine page's controls: its engine (opens the choice), "Also show botmux sessions" right under it when the hub has the
+ * switch ([botmux] non-null; flipped in place, like the web page's header pill, #2842) and "Reconnect", with how the hub
  * reaches it.
  */
 internal fun LazyListScope.machineControls(
@@ -79,7 +79,7 @@ internal fun LazyListScope.machineControls(
 }
 
 /**
- * 启动器 N: each launcher's name and the model it runs (the last part of a provider path). With [onLauncher] (the hub
+ * "Launchers N": each launcher's name and the model it runs (the last part of a provider path). With [onLauncher] (the hub
  * manages extensions) a row opens the launcher's page, where extensions may draw a section for its gateway.
  */
 internal fun LazyListScope.machineLaunchers(online: Boolean, state: MachineActionsState, onLauncher: ((String) -> Unit)? = null) {

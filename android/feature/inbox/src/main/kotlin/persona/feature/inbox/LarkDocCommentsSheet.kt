@@ -27,7 +27,7 @@ import persona.core.designsystem.icons.PhIcons
 /**
  * Every comment thread of a document: the quoted text and its replies; open threads on one tab, resolved ones on the
  * other (iOS FeishuDocsCommentsView, web DocComments). Where the hub's Feishu plugin can write comments ([writes],
- * `lark_doc_comments`) each thread has 回复 and 解决 / 重新打开, and the box at the bottom comments on the whole
+ * `lark_doc_comments`) each thread has "Reply" and "Resolve" / "Reopen", and the box at the bottom comments on the whole
  * document, answers the thread picked, or comments on the passage the reader sent here; typing @ finds people.
  */
 @Composable
@@ -129,7 +129,7 @@ private fun LarkDocReplyRow(reply: LarkDocCommentReply) {
     }
 }
 
-/** The box: where it goes (回复 某某 / 评论这段, × back to the whole document), @ suggestions, what went wrong. */
+/** The box: where it goes ("Reply to <name>" / "Comment on this passage", × back to the whole document), @ suggestions, what went wrong. */
 @Composable
 internal fun LarkDocCommentComposer(model: LarkDocCommentsModel, run: (suspend () -> Unit) -> Unit) {
     val palette = PersonaTheme.palette

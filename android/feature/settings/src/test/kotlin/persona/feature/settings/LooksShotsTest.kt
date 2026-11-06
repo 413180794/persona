@@ -57,9 +57,9 @@ import persona.core.designsystem.Tokens
 import java.io.File
 
 /**
- * 设置 › 外观 › 形象 with a hub that keeps the choice and has the example extension's looks (#3200,
+ * Settings › Appearance › Avatar with a hub that keeps the choice and has the example extension's looks (#3200,
  * schema/extension/examples/example-looks), drawn on the JVM (no emulator) light and dark: a built-in look, the
- * extension's 极光 (its dark avatar on the dark page, its five states) and 石子 (an avatar only). Written as PNGs to
+ * extension's Aurora (its dark avatar on the dark page, its five states) and Pebble (an avatar only). Written as PNGs to
  * `build/looks-shots/` (or `-Dpersona.shots=<dir>`). The store's sync with the hub is checked on the way.
  */
 @RunWith(AndroidJUnit4::class)
@@ -126,7 +126,7 @@ class LooksShotsTest {
         val hub = FakeHub(LookCurrent(null, "persona"))
         val store = PersonaStore(context, style) { hub }
         runBlocking { store.refresh() }
-        // This phone's old choice (面罩) moved up to a hub that had none.
+        // This phone's old choice ("Visor") moved up to a hub that had none.
         assertEquals(listOf("jarvis" to true), hub.chosen)
         assertEquals(listOf("aurora", "pebble"), store.offered.value.map { it.id })
 

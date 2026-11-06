@@ -17,7 +17,7 @@ enum class InlineTone { Busy, Caution, Failed, Done }
 
 /**
  * A short status set inside a card or above the composer, up to three lines: a spinner while [tone] is busy, a mark
- * otherwise, on a soft tint (the chat's 正在启动, a machine's 重新部署 line). [action] sits at the end, for one small
+ * otherwise, on a soft tint (the chat's "Starting", a machine's "Redeploy" line). [action] sits at the end, for one small
  * button that acts on it.
  */
 @Composable

@@ -12,7 +12,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 
-/** 设置 › 模型供应商's calls (#3048): the list, one provider, hide / restore / delete, 测试可用性, 从 ~/.zshrc 导入. */
+/** Settings › Model providers' calls (#3048): the list, one provider, hide / restore / delete, "Test availability", "Import from ~/.zshrc". */
 class HttpProviderListTest {
     private fun <T> withHub(block: suspend (MockWebServer, HttpProviderSetup) -> T): T = runBlocking {
         MockWebServer().use { server ->

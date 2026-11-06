@@ -12,7 +12,7 @@ class PhoneToolsRuntime(
     private val connection: HubConnection, private val transport: PhoneToolsTransport,
     parentScope: CoroutineScope, private val simulator: Boolean = false,
     private val automation: Boolean = false,
-    /** What the hub and settings call this phone (register_phone device_name): 「厂商 型号」, as the old app sent. */
+    /** What the hub and settings call this phone (register_phone device_name): "manufacturer model", as the old app sent. */
     private val deviceName: String = listOf(android.os.Build.MANUFACTURER, android.os.Build.MODEL)
         .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Android" },
 ) : AutoCloseable {

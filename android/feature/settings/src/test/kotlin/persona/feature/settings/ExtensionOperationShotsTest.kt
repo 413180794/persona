@@ -27,7 +27,7 @@ import java.io.File
 
 /**
  * A market extension's install in steps (#3277): downloading with its bytes, stuck at the download with the reason and
- * 重试, syncing to the computers, and the permissions it waits for. Every style, light and dark; the PNGs are in
+ * "Retry", syncing to the computers, and the permissions it waits for. Every style, light and dark; the PNGs are in
  * build/extension-operation-shots.
  */
 @RunWith(AndroidJUnit4::class)
@@ -91,7 +91,7 @@ class ExtensionOperationShotsTest {
             }
             style = AppStyle.Glass; dark = false
         }
-        // 重试 goes on from the download.
+        // "Retry" goes on from the download.
         api.latest.tryEmit(stuck.copy(updatedAt = "2026-11-06T08:00:59Z"))
         rule.waitUntil { rule.onAllNodesWithText("重试").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("重试").performClick()

@@ -19,7 +19,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 
-// 设置 › 管理者 (docs/managers.md): the words of the list and a manager's page (the same as the web's), and the model
+// Settings › Managers (docs/managers.md): the words of the list and a manager's page (the same as the web's), and the model
 // both pages share. The pages are in ManagersScreen.kt.
 
 /** What the roster says about a manager, in the words the web uses too. */
@@ -33,7 +33,7 @@ internal object ManagerText {
         else -> value
     }
 
-    /** How it runs, in words; the hub's own assistant is 「hub 自己的」 whatever it said. */
+    /** How it runs, in words; the hub's own assistant is "the hub's own" whatever it said. */
     fun deploy(res: Resources, m: HubManager): String? {
         val value = m.deploy?.trim()?.takeIf { it.isNotEmpty() }
         if (m.builtin) return res.getString(R.string.settings_managers_deploy_hub)
@@ -66,7 +66,7 @@ internal object ManagerText {
         return ((left.seconds + 59) / 60).toInt().coerceAtLeast(1)
     }
 
-    /** The list's status line: 在线; 离线 · 最后同步于 …; 安装中 · 码 n 分钟后过期 / 码已过期. */
+    /** The list's status line: Online; Offline · Last synced at …; Installing · Code expires in n minutes / Code expired. */
     fun statusLine(res: Resources, m: HubManager, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String = when {
         m.isInstalling -> minutesLeft(m.installing, now)?.let { res.getQuantityString(R.plurals.settings_managers_installing, it, it) }
             ?: res.getString(R.string.settings_managers_installing_expired)
@@ -75,7 +75,7 @@ internal object ManagerText {
             ?: res.getString(R.string.settings_managers_offline)
     }
 
-    /** A manager's page: 连上于 … (online) or 最后同步于 … (offline), as a label and its value; null without a time. */
+    /** A manager's page: Connected at … (online) or Last synced at … (offline), as a label and its value; null without a time. */
     fun seen(res: Resources, m: HubManager, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): Pair<String, String>? = when {
         m.isInstalling -> null
         m.online -> parseTime(m.since)?.let { res.getString(R.string.settings_managers_row_since) to agoText(res, it, now, zone) }
@@ -140,7 +140,7 @@ internal data class ManagersState(
     fun manager(id: String): HubManager? = managers.firstOrNull { it.id == id }
 }
 
-/** 设置 › 管理者: the roster, and making, renaming, moving and deleting managers. One model per page. */
+/** Settings › Managers: the roster, and making, renaming, moving and deleting managers. One model per page. */
 internal class ManagersModel(private val api: HubManagers) {
     private val mutable = MutableStateFlow(ManagersState())
     val state = mutable.asStateFlow()
@@ -163,7 +163,7 @@ internal class ManagersModel(private val api: HubManagers) {
         } finally { mutable.update { it.copy(loading = false) } }
     }
 
-    /** 新建管理者: the code sheet opens on success. */
+    /** New manager: the code sheet opens on success. */
     suspend fun create(name: String): Boolean {
         if (!ManagerText.validName(name)) { mutable.update { it.copy(failure = ResText.of(R.string.settings_managers_err_name)) }; return false }
         return change {
@@ -175,7 +175,7 @@ internal class ManagersModel(private val api: HubManagers) {
         }
     }
 
-    /** 换个地方装 / 新的安装码: a new code, on the sheet. */
+    /** Install elsewhere / New installation code: a new code, on the sheet. */
     suspend fun newCode(id: String): Boolean = change {
         val code = api.newCode(id)
         val name = state.value.manager(id)?.name ?: state.value.code?.takeIf { it.managerId == id }?.name.orEmpty()
@@ -190,7 +190,7 @@ internal class ManagersModel(private val api: HubManagers) {
 
     suspend fun makeDefault(id: String): Boolean = change {
         api.makeDefault(id)
-        // Every manager's 默认 changes: the whole list again.
+        // Every manager's Default changes: the whole list again.
         load()
     }
 

@@ -15,7 +15,7 @@ internal data class TriageSettingsState(
     val loading: Boolean = false,
     /** A change is on its way: the switches wait. */
     val busy: Boolean = false,
-    /** Why the switches could not be read; the page offers 重试读取 with it unless the hub has no triage at all. */
+    /** Why the switches could not be read; the page offers "Try again" with it unless the hub has no triage at all. */
     val readError: ResText? = null,
     /** The hub predates triage: reading again will not help. */
     val unsupported: Boolean = false,
@@ -23,7 +23,7 @@ internal data class TriageSettingsState(
     val saveError: ResText? = null,
 )
 
-/** 设置 › 会话分诊: reads the switches (again on 重试读取) and saves a change, going back when the hub refuses it. */
+/** Settings › Session triage: reads the switches (again on "Try again") and saves a change, going back when the hub refuses it. */
 internal class TriageSettingsModel(private val api: AgentTriage) {
     private val mutable = MutableStateFlow(TriageSettingsState())
     val state = mutable.asStateFlow()

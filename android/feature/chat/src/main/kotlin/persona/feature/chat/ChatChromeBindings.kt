@@ -38,14 +38,14 @@ data class ChatChromeBindings(
      * it names one; null: paths are not offered.
      */
     val onOpenPath: ((path: String, line: Int?) -> Unit)? = null,
-    /** 「交给 Persona」 on a message: hands the given text to the main Persona conversation; null: not offered. */
+    /** "Hand to Persona" on a message: hands the given text to the main Persona conversation; null: not offered. */
     val onHandToPersona: ((String) -> Unit)? = null,
     /** The assistant conversation's tasks (docs/unified-entry.md); null for an agent's chat. */
     val tasks: persona.core.domain.tasks.TasksStore? = null,
     val onOpenTodo: ((String) -> Unit)? = null,
 )
 
-/** Where a branch made by 分支到新聊天 opens: an assistant's branch is an assistant conversation, an agent's an agent chat. */
+/** Where a branch made by "Branch to new chat" opens: an assistant's branch is an assistant conversation, an agent's an agent chat. */
 internal fun ChatChromeBindings.forkOpener(style: ChatRenderStyle): ((SessionKey) -> Unit)? =
     if (style == ChatRenderStyle.Assistant) onOpenAssistant else onOpenSession
 

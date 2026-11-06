@@ -7,7 +7,7 @@ import org.junit.Test
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 
-/** Comments in the Feishu document reader (#2964, iOS FeishuDocsCommentsTests): the JSON, where 发送 goes, retries and resolving. */
+/** Comments in the Feishu document reader (#2964, iOS FeishuDocsCommentsTests): the JSON, where "Send" goes, retries and resolving. */
 class LarkDocCommentsTest {
     private val doc = "https://example.feishu.cn/docx/D1"
 

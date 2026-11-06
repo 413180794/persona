@@ -24,7 +24,7 @@ internal fun machineLabel(machines: List<Machine>, id: String): String =
     machines.firstOrNull { it.id == id || GroupKeys.raw(it.id) == id }?.displayName?.takeIf { it.isNotBlank() } ?: id
 
 /**
- * 设置 › AI › 模型供应商 (iOS `ModelLaunchersView`, docs/launchers.md): every provider the machines can start, kept by
+ * Settings › AI › Model providers (iOS `ModelLaunchersView`, docs/launchers.md): every provider the machines can start, kept by
  * Persona or found in a machine's ~/.zshrc (read again each time this opens), and the hidden ones, folded. A row's
  * menu (long press) hides a ~/.zshrc one or brings it back, without asking: it only changes what Persona lists; a
  * Persona one is deleted, key and all, so that one asks first. + adds a provider or imports from ~/.zshrc.
@@ -162,7 +162,7 @@ private fun LauncherRow(l: HubLauncher, machineName: (String) -> String, selecte
 }
 
 /**
- * One provider (iOS `ModelLauncherDetailView`): what it sets, 测试可用性 (on each of its online machines; a Persona one
+ * One provider (iOS `ModelLauncherDetailView`): what it sets, "Test availability" (on each of its online machines; a Persona one
  * and a direct API on the hub's), a ~/.zshrc one's function on each machine (keys masked), and hide / restore / delete.
  */
 @Composable
@@ -203,7 +203,7 @@ internal fun ProviderDetailPage(providers: ProviderSetup?, name: String, machine
                     SettingsCaption(if (l.isApi) stringResource(R.string.settings_providers_api_note) else stringResource(R.string.settings_providers_launch_note, l.name),
                         Modifier.padding(horizontal = Tokens.Space.xs, vertical = Tokens.Space.s))
                 }
-                // 测试可用性: a ~/.zshrc one on each of its online machines, the others on the hub's.
+                // "Test availability": a ~/.zshrc one on each of its online machines, the others on the hub's.
                 val targets: List<String?> = if (l.managed || l.isApi) listOf(null)
                     else l.machines.filter { id -> machines.any { (it.id == id || GroupKeys.raw(it.id) == id) && it.online } }
                 item("check-header") { JSectionHeader(stringResource(R.string.settings_providers_check)) }
@@ -271,12 +271,12 @@ private fun providerFacts(l: HubLauncher, machineName: (String) -> String): List
     if (l.args.isNotEmpty()) add(stringResource(R.string.settings_providers_args) to l.args.joinToString(" "))
     if (l.machines.isNotEmpty()) add(stringResource(R.string.settings_providers_machines) to l.machines.joinToString(stringResource(R.string.settings_providers_list_sep), transform = machineName))
 }.map { (title, value) ->
-    // Addresses, model ids and arguments read as code; the words (来源, 已设置) do not.
+    // Addresses, model ids and arguments read as code; the words ("Source", "Set") do not.
     Triple(title, value, value.startsWith("http") || value == l.model || value == l.smallModel || value == l.subagentModel ||
         value == l.customModel || l.args.isNotEmpty() && value == l.args.joinToString(" ") || title == "Base URL")
 }
 
-/** One machine's 测试可用性: not run, running, or the answer (or why it failed). */
+/** One machine's "Test availability": not run, running, or the answer (or why it failed). */
 @Composable
 private fun CheckRow(place: String, asked: Boolean, check: LauncherCheck?, failure: UiText? = null) {
     val subtitle = when {
@@ -297,7 +297,7 @@ private fun CheckRow(place: String, asked: Boolean, check: LauncherCheck?, failu
 }
 
 /**
- * 从 ~/.zshrc 导入 (iOS `LauncherImportModel`): pick a machine, see what its claude aliases come to (merged by gateway
+ * "Import from ~/.zshrc" (iOS `LauncherImportModel`): pick a machine, see what its claude aliases come to (merged by gateway
  * and key), tick the ones to keep and import them; the hub reads the keys on the machine again itself, so none passes
  * through the phone.
  */

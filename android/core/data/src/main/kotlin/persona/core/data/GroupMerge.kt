@@ -6,7 +6,7 @@ import kotlinx.coroutines.withContext
 
 /*
  * When two hub groups merge (their hubs joined one mesh), the absorbed group's data must not take unsent messages
- * and drafts with it (docs/android.md「多 hub」). Its storage stays as a PendingMove; what it still owes moves into the
+ * and drafts with it (docs/android.md "Multiple hubs"). Its storage stays as a PendingMove; what it still owes moves into the
  * group it merged into, then the storage goes. Caches stay behind: they are fetched again.
  */
 

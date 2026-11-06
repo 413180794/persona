@@ -19,7 +19,7 @@ import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 
 /*
- * Hub groups in the Agents list (docs/android.md「多 hub」). The list merges every group; with more than one, each
+ * Hub groups in the Agents list (docs/android.md "Multiple hubs"). The list merges every group; with more than one, each
  * computer says which group it belongs to and a row of group chips filters by group. With a single group none of
  * this is drawn, so the page looks exactly as before groups existed.
  */
@@ -41,11 +41,11 @@ internal fun List<HubGroupInfo>.stateFor(machineId: String, fallback: Connection
     if (size > 1) GroupKeys.namespaceOf(machineId).let { namespace -> firstOrNull { it.namespace == namespace }?.state } ?: fallback
     else fallback
 
-/** Computer names for rows and request cards; with more than one group a name says its group, as 「MacBook（家里）」. */
+/** Computer names for rows and request cards; with more than one group a name says its group, as "MacBook (Home)". */
 internal fun List<HubGroupInfo>.machineNames(machines: List<Machine>, withGroup: String): Map<String, String> =
     machines.associate { machine -> machine.id to (tagFor(machine.id)?.let { withGroup.format(machine.displayName, it) } ?: machine.displayName) }
 
-/** 全部 hub and each group, side by side above the computers; only drawn with more than one group. */
+/** "All hubs" and each group, side by side above the computers; only drawn with more than one group. */
 @Composable
 internal fun GroupFilterRow(groups: List<HubGroupInfo>, counts: Map<String?, Int>, selected: GroupFilter?, onSelect: (GroupFilter?) -> Unit) {
     Row(

@@ -13,14 +13,14 @@ import kotlinx.coroutines.flow.*
 /** One machine's listing: what was last read (kept when a later read fails, so the list does not blink out) and why the last read failed. */
 data class MachinePanes(val response: PanesResponse? = null, val error: String? = null)
 
-/** A machine of the 终端 page with its tree; [listing] is null until its first read came back. */
+/** A machine of the "Terminal" page with its tree; [listing] is null until its first read came back. */
 data class TerminalMachine(val machine: Machine, val listing: MachinePanes?, val spaces: List<TermSpace>)
 
 data class TerminalPanesUiState(
     val machines: List<TerminalMachine> = emptyList(),
-    /** A read is on the way (the first one, 刷新 or a pull). */
+    /** A read is on the way (the first one, "Refresh" or a pull). */
     val busy: Boolean = false,
-    /** The workspace a 新标签页 is being opened in ("machine\nworkspace"). */
+    /** The workspace a "New tab" is being opened in ("machine\nworkspace"). */
     val opening: String? = null,
 )
 
@@ -31,8 +31,8 @@ sealed interface TerminalPanesEvent {
 }
 
 /**
- * 终端 (docs/terminal.md「独立终端」): every online machine's panes, read when the page is in front and every few seconds
- * while it stays (like the web, agents' states are live from the sessions already), and 新标签页 in a workspace.
+ * "Terminal" (docs/terminal.md "Standalone terminal"): every online machine's panes, read when the page is in front and every few seconds
+ * while it stays (like the web, agents' states are live from the sessions already), and "New tab" in a workspace.
  */
 class TerminalPanesViewModel(private val panes: TerminalPanes, private val sessions: SessionsRepository) : ViewModel() {
     private val listing = MutableStateFlow<Map<String, MachinePanes>>(emptyMap())
@@ -59,7 +59,7 @@ class TerminalPanesViewModel(private val panes: TerminalPanes, private val sessi
 
     fun refresh() { viewModelScope.launch { load(showBusy = true) } }
 
-    /** 新标签页: a shell tab in [space], opened as a terminal once the hub answers. */
+    /** "New tab": a shell tab in [space], opened as a terminal once the hub answers. */
     fun newTab(machineId: String, space: TermSpace) {
         val id = openingKey(machineId, space)
         if (opening.value != null) return

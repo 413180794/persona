@@ -12,7 +12,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Installing in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277): the routes, their bodies and the pushed event. */
+/** Installing in steps (docs/protocol.md "Extension install, upgrade and uninstall progress", #3277): the routes, their bodies and the pushed event. */
 class HttpExtensionOperationsTest {
     private fun <T> withHub(block: suspend (MockWebServer, HttpExtensionManagement) -> T): T = runBlocking {
         MockWebServer().use { server ->

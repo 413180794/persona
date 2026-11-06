@@ -115,7 +115,7 @@ class AssistantCardsShotsTest {
         json("""{"key":"$key","action":"$action","values":$values,"client_msg_id":"m","status":"$status","revision":2,
             ${error?.let { "\"error\":\"$it\"," } ?: ""}"at":"2026-11-05T10:00:00Z"}""")
 
-    // A list card with its search box, filter and 加载更多 (each a reply of the card).
+    // A list card with its search box, filter and "Load more" (each a reply of the card).
     private val searchCard = """{"title":"挑一篇笔记","fallback":"回复要看的笔记，或换个文件夹、再来一批。",
         "search":{"placeholder":"搜笔记","value":"周报","action":{"id":"find","reply":"按这个搜"}},
         "filter":{"name":"folder","title":"文件夹","choices":[{"value":"all","title":"全部"},{"value":"work","title":"工作"}],"value":"work",
@@ -124,7 +124,7 @@ class AssistantCardsShotsTest {
             {"type":"row","title":"周报 10-27","subtitle":"工作","action":{"id":"n2","reply":"看周报 10-27"}}],
             "more":{"title":"再来一批","action":{"id":"more","reply":"再来一批"}}}]}"""
 
-    // Only a search box: the search is sent on a tap of 搜索.
+    // Only a search box: the search is sent on a tap of "Search".
     private val searchOnlyCard = """{"title":"找联系人","fallback":"回复要找的人名。",
         "search":{"placeholder":"输入名字","action":{"id":"who","reply":"找这个人"}},
         "sections":[{"items":[{"type":"text","text":"输入名字后点搜索，助手会接着找。","style":"secondary"}]}]}"""
@@ -232,7 +232,7 @@ class AssistantCardsShotsTest {
         assertEquals(listOf(3L, 4L), api.sent.map { it.second.expectedVersion })
     }
 
-    /** The dialog's own 删除 (the last of the card's button, the dialog's title and its button). */
+    /** The dialog's own "Delete" (the last of the card's button, the dialog's title and its button). */
     private fun confirmDialog() {
         val all = rule.onAllNodesWithText("删除")
         all[all.fetchSemanticsNodes().size - 1].performClick()

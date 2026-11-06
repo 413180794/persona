@@ -55,7 +55,7 @@ internal fun claudeSettingsMachine(remembered: String, online: List<Machine>): S
     remembered.takeIf { id -> online.any { it.id == id } } ?: (online.firstOrNull { it.kind == "local" } ?: online.firstOrNull())?.id
 
 /**
- * 设置 › Claude Code 设置 / Codex 设置 (iOS `ClaudeSettingsView`): the whitelisted options of one machine's [kind],
+ * Settings › Claude Code settings / Codex settings (iOS `ClaudeSettingsView`): the whitelisted options of one machine's [kind],
  * written to every online machine at once unless that is switched off.
  */
 internal class ClaudeSettingsModel(

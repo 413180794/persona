@@ -25,7 +25,7 @@ import persona.core.designsystem.AppStyle
 import java.io.File
 
 /**
- * 批准第一个待处理 in each language (docs/i18n.md), every state, Glass light and dark; the widget and the tile are drawn by
+ * "Approve first pending" in each language (docs/i18n.md), every state, Glass light and dark; the widget and the tile are drawn by
  * the launcher and the shade, so their words are checked instead. PNGs go to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`).
  */

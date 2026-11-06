@@ -19,7 +19,7 @@ fun Interaction.requestSourceLabel(): CoreText? = listOfNotNull(
 ).takeIf { it.isNotEmpty() }?.let { CoreText.joined("\n", it) }
 
 /**
- * "Always allow" for this card: Claude's offers it (本会话总是允许); another agent's card (Codex, TRAEX, a runtime's)
+ * "Always allow" for this card: Claude's offers it ("Always allow this session"); another agent's card (Codex, TRAEX, a runtime's)
  * only when its TUI names what it would allow ([Interaction.alwaysLabel]), as on iOS.
  */
 val Interaction.offersAlways: Boolean get() = agentDisplayName == null || !alwaysLabel.isNullOrBlank()
@@ -30,7 +30,7 @@ val Interaction.offersAlways: Boolean get() = agentDisplayName == null || !alway
  */
 val Interaction.needsFieldValues: Boolean get() = kind == "permission" && fields.orEmpty().any { !it.optional }
 
-/** The button for it: Claude's 本会话总是允许, another agent's 总是同意 (what it allows is shown beside it). */
+/** The button for it: Claude's "Always allow this session", another agent's "Always allow" (what it allows is shown beside it). */
 val Interaction.alwaysActionLabel: CoreText
     get() = CoreText.of(if (agentDisplayName == null) Key.AlwaysAllowSession else Key.AlwaysAgree)
 

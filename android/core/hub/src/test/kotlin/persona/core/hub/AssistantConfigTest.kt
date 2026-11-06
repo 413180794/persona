@@ -8,7 +8,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
-/** 设置 › 助手: where the assistant runs, read and written through GET / PUT /api/v1/assistant. */
+/** Settings › Assistant: where the assistant runs, read and written through GET / PUT /api/v1/assistant. */
 class AssistantConfigTest {
     @Test fun readsWhereTheAssistantRunsAndIgnoresTheConversations() = runBlocking {
         MockWebServer().use { server ->
@@ -50,7 +50,7 @@ class AssistantConfigTest {
             assertEquals("""{"launcher":"example_launcher"}""", (server.takeRequest().body.readUtf8()).zhAny())
             api.updateConfig(AssistantConfigUpdate(timezone = "Europe/Paris"))
             assertEquals("""{"timezone":"Europe/Paris"}""", (server.takeRequest().body.readUtf8()).zhAny())
-            // An empty 关于我 is a choice (tell the assistant nothing), not a missing field.
+            // An empty "About me" is a choice (tell the assistant nothing), not a missing field.
             api.updateConfig(AssistantConfigUpdate(notes = ""))
             assertEquals("""{"notes":""}""", (server.takeRequest().body.readUtf8()).zhAny())
         }

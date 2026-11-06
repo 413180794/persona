@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- phone_health_summary (设置 › 手机数据 › 健康): read only, granted in Health Connect's own dialog. -->
+    <!-- phone_health_summary (Settings › Phone data › Health): read only, granted in Health Connect's own dialog. -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />

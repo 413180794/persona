@@ -16,7 +16,7 @@ import android.content.res.Resources
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalResources
 
-/** What 设置 › 连接器 says on each row (iOS `ConnectorText`). Pure given [Resources]: unit-tested. */
+/** What Settings › Connectors says on each row (iOS `ConnectorText`). Pure given [Resources]: unit-tested. */
 object ConnectorText {
     fun mail(res: Resources, accounts: List<MailAccount>?): String = when {
         accounts == null -> ""
@@ -88,12 +88,12 @@ internal class ConnectorSignInModel(
     private val mutable = MutableStateFlow(ConnectorSignIn())
     val state = mutable.asStateFlow()
 
-    /** 登录: the first step. */
+    /** "Sign in": the first step. */
     suspend fun start(): Boolean = step("", emptyMap())
 
     fun setValue(name: String, value: String) = update { it.copy(values = it.values + (name to value)) }
 
-    /** 下一步: the step's fields as typed (trimmed; empty ones left out). */
+    /** "Next": the step's fields as typed (trimmed; empty ones left out). */
     suspend fun submit(): Boolean {
         val bind = state.value.bind
         val prompt = bind.prompt ?: return false
@@ -102,7 +102,7 @@ internal class ConnectorSignInModel(
         return step(prompt.step.orEmpty(), values)
     }
 
-    /** 取消: the step goes away. */
+    /** "Cancel": the step goes away. */
     fun cancel() = update { BindState() }
 
     /**
@@ -120,7 +120,7 @@ internal class ConnectorSignInModel(
         }
     }
 
-    /** 退出登录; why it did not go, null when it did. */
+    /** "Sign out"; why it did not go, null when it did. */
     suspend fun logout(): ResText? = try {
         logoutCall()
         update { BindState() }
@@ -152,17 +152,17 @@ internal class ConnectorSignInModel(
     }
 }
 
-/** A row of 设置 › 连接器, in order (iOS `ConnectorRow`). */
+/** A row of Settings › Connectors, in order (iOS `ConnectorRow`). */
 internal sealed interface ConnectorRow {
     data object Phone : ConnectorRow
     data object Mail : ConnectorRow
-    /** 飞书: its page reads `/api/v1/lark/…`, the Lark extension's (`LarkFeatures`, #1530). */
+    /** Lark: its page reads `/api/v1/lark/...`, the Lark extension's (`LarkFeatures`, #1530). */
     data object Lark : ConnectorRow
     data class Hub(val connector: HubConnector) : ConnectorRow
 }
 
 /**
- * 设置 › 连接器's rows: this phone, mail, 飞书 while the hub has Feishu chats ([lark], `LarkFeatures.chats`), then the
+ * Settings › Connectors' rows: this phone, mail, Lark while the hub has Feishu chats ([lark], `LarkFeatures.chats`), then the
  * hub's other connectors (mail and Feishu have rows of their own).
  */
 internal fun connectorRows(hubConnectors: List<HubConnector>, lark: Boolean): List<ConnectorRow> =

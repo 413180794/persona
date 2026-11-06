@@ -231,7 +231,7 @@ class OutboxMessageSenderTest {
         restarted.close()
     }
 
-    /** 新建主对话: once the old main conversation is put away, the next message starts a new one, not the archived one. */
+    /** "New main chat": once the old main conversation is put away, the next message starts a new one, not the archived one. */
     @Test fun aReplacedMainConversationIsForgottenAndTheNextMessageStartsANewOne() = runTest {
         val store = FakeStore()
         val transport = FakeTransport(online = true)
@@ -264,7 +264,7 @@ class OutboxMessageSenderTest {
     }
 
     /**
-     * 设置 › 助手 换机器 clears the hub's main conversation (`PUT {"machine_id","main":"-"}`); a binding kept from before
+     * Settings › Assistant "Change machine" clears the hub's main conversation (`PUT {"machine_id","main":"-"}`); a binding kept from before
      * (the app restarted, another device moved it) must not send the next main message to the old machine's
      * conversation, which is an ordinary one now.
      */
@@ -584,7 +584,7 @@ class OutboxMessageSenderTest {
         runCurrent()
         assertEquals(OutboxState.Shown, store.state("compact"))
 
-        // The copy tagged for the second "继续" shows that one, not the older one with the same words.
+        // The copy tagged for the second "continue" shows that one, not the older one with the same words.
         sender.observeTranscript(session, listOf(user("claude-uuid-2", "继续", "again-2")))
         runCurrent()
         assertEquals(OutboxState.Sent, store.state("again-1"))

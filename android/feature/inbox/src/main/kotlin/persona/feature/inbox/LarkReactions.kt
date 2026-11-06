@@ -43,7 +43,7 @@ val DEFAULT_QUICK_REACTIONS = listOf(
     "THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LAUGH", "SURPRISED"
 )
 
-/** The picker's own group when the hub sends none, titled 默认表情 (inbox_lark_emoji_default). */
+/** The picker's own group when the hub sends none, titled "Default emoji" (inbox_lark_emoji_default). */
 val DEFAULT_EMOJI_KEYS = listOf(
         "THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LAUGH", "SURPRISED",
         "CRY", "CLAP", "FIRE", "PARTY", "THINKING", "MUSCLE", "SOB",
@@ -210,7 +210,7 @@ fun LarkMessageActionMenu(
             }
         )
 
-        // 添加 Pin, where the chat can pin it
+        // "Add pin", where the chat can pin it
         if (onAddPin != null) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.inbox_lark_pin_add), style = PersonaTheme.type.callout, color = palette.ink) },

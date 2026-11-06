@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-/** The purposes grouped by their hub group (empty: 其他), in the hub's order, matching [query] by name, group, id or model. */
+/** The purposes grouped by their hub group (empty: "Other"), in the hub's order, matching [query] by name, group, id or model. */
 internal fun modelPurposeGroups(res: Resources, purposes: List<ModelPurpose>, providers: List<ModelProvider>, query: String): List<Pair<String, List<ModelPurpose>>> {
     val q = query.trim()
     return purposes.filter { purpose ->
@@ -35,7 +35,7 @@ internal fun purposeSubtitle(res: Resources, purpose: ModelPurpose, catalog: Mod
 
 internal data class ProviderOption(val id: String, val label: String)
 
-/** 跟随默认, then the providers the purpose can use (hidden ones marked), and a reference the hub no longer offers. */
+/** "Use default", then the providers the purpose can use (hidden ones marked), and a reference the hub no longer offers. */
 internal fun providerOptions(res: Resources, purpose: ModelPurpose, providers: List<ModelProvider>, chosen: String): List<ProviderOption> {
     val candidates = purpose.providersFrom(providers)
     return listOf(ProviderOption("", res.getString(R.string.settings_src_model_follow_default))) +
@@ -72,7 +72,7 @@ internal class ModelCatalogModel(private val api: ModelConfiguration) {
     }
 }
 
-/** A launcher provider's /model list for 具体模型 (#943); [loaded] with no [list]: the hub has none for it. */
+/** A launcher provider's /model list for "Model" (#943); [loaded] with no [list]: the hub has none for it. */
 internal data class ProviderModelsState(
     val provider: String = "",
     val list: ProviderModels? = null,
@@ -95,15 +95,15 @@ internal data class ModelPurposeState(
     val provider: ModelProvider? get() = detail?.providers?.firstOrNull { it.id == (draft.provider.ifEmpty { purpose?.effective?.provider }) }
     val changed: Boolean get() = purpose?.let { draft != ModelConfigurationDraft.from(it) } == true
 
-    /** The launcher provider whose /model list 具体模型 picks from; "": an extension's, an API's, none. */
+    /** The launcher provider whose /model list "Model" picks from; "": an extension's, an API's, none. */
     val listProvider: String get() = provider?.takeIf { it.kind == "launcher" && purpose?.kind != "plugin" && purpose?.supports("model") == true }?.id.orEmpty()
     /** The list for [listProvider] once it is in (the state may still hold another provider's). */
     val modelList: ProviderModels? get() = models.list?.takeIf { models.provider == listProvider && listProvider.isNotEmpty() }
-    /** 具体模型 is a pick from the list (or one coming); otherwise the plain field (an older hub, a failure, no list). */
+    /** "Model" is a pick from the list (or one coming); otherwise the plain field (an older hub, a failure, no list). */
     val picksModel: Boolean get() = listProvider.isNotEmpty() && models.provider == listProvider &&
         (modelList?.models?.isNotEmpty() == true || (models.loading && !models.loaded))
 
-    /** What an empty 具体模型 runs: the model inherited while the provider is too, else the provider's default. */
+    /** What an empty "Model" runs: the model inherited while the provider is too, else the provider's default. */
     val defaultModelDetail: String? get() {
         val inherited = purpose?.effective?.model?.takeIf { draft.provider.isEmpty() && purpose?.override?.model.isNullOrBlank() && it.isNotBlank() }
         if (inherited != null) return inherited
@@ -131,7 +131,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
     fun edit(draft: ModelConfigurationDraft) = mutable.update { if (it.busy) it else it.copy(draft = draft) }
 
     /**
-     * A provider was just added (新增模型供应商 from the provider sheet): the providers are read again, the edit kept, and
+     * A provider was just added ("New model provider" from the provider sheet): the providers are read again, the edit kept, and
      * the new one picked when this use can take it.
      */
     suspend fun providerAdded(providerId: String) {

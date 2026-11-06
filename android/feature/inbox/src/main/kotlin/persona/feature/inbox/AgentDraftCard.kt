@@ -9,8 +9,8 @@ import persona.core.navigation.Navigator
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * The AI 分身's work on an item, in its row and on its page: busy or failed as a status line, and an AI draft (the AI
- * 分身's, or one from AI 草拟) as a card with 改一改 and 发送. 发送 always asks first — 「以你的身份发送？」, where it
+ * The AI twin's work on an item, in its row and on its page: busy or failed as a status line, and an AI draft (the AI
+ * twin's, or one from "AI draft") as a card with "Revise" and "Send". "Send" always asks first ("Send as you?"), where it
  * goes and the whole text (the old app's ConfirmSend). [onEdit] / [onSend] let a page use its own sheet and send path
  * (the mail page checks the newest message); by default the card opens [InboxDraftSheet] and sends to the item.
  */
@@ -20,10 +20,10 @@ internal fun AgentDraftCard(record: InboxRecord, composers: ReplyComposers, navi
     repository: InboxRepository? = null,
     onEdit: (() -> Unit)? = null,
     onSend: (() -> Unit)? = null,
-    /** An item's own page keeps its reply around, so a draft from AI 草拟 shows as soon as it comes. */
+    /** An item's own page keeps its reply around, so a draft from "AI draft" shows as soon as it comes. */
     keepComposer: Boolean = false,
 ) {
-    // From a hub with events (inbox phase 1) the suggestion and the processing state take the AI 分身's place (the hub
+    // From a hub with events (inbox phase 1) the suggestion and the processing state take the AI twin's place (the hub
     // mirrors a reply suggestion into `agent` for older apps): the event page draws them, not this card.
     val agent = record.agent?.takeIf { record.event.suggestion == null && record.event.handling == null }
     val drafted = agent != null && agent.state == "drafted" && agent.draft.isNotBlank()
@@ -52,7 +52,7 @@ private fun DraftCardBody(
     onEdit: (() -> Unit)?,
     onSend: (() -> Unit)?,
 ) {
-    // A page that opened before the item came in made the reply empty: the AI 分身's draft fills it now.
+    // A page that opened before the item came in made the reply empty: the AI twin's draft fills it now.
     LaunchedEffect(composer, agentDraft) { agentDraft?.let(composer::offerAiDraft) }
     val state by composer.state.collectAsStateWithLifecycle()
     var editing by rememberSaveable(record.item.id) { mutableStateOf(false) }

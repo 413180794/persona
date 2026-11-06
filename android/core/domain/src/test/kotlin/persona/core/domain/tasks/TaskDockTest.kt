@@ -30,7 +30,7 @@ import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.TasksApi
 import persona.core.contracts.forSpace
 
-/** The dock's agents (#1113), a project on a to-do (#1616) and 改一下 (iOS TasksStore / TodoStore). */
+/** The dock's agents (#1113), a project on a to-do (#1616) and "Edit" (iOS TasksStore / TodoStore). */
 class TaskDockTest {
     private fun session(id: String, state: String, since: String = "2026-11-04T10:00:00Z", todo: String? = null, assistant: Boolean = false) =
         Session(machineId = "mac", sessionId = id, state = state, stateSince = since, assistant = assistant,
@@ -97,7 +97,7 @@ class TaskDockTest {
         store.loadTodayIfMain("A")
         assertEquals(listOf("today A"), api.calls)
         assertEquals("A", store.mainConversation.value)
-        // 新建主对话, a move to another machine or another device: the hub's main is B now (#4690).
+        // "New main chat", a move to another machine or another device: the hub's main is B now (#4690).
         api.main = "B"
         store.loadTodayIfMain("B")
         assertEquals(listOf("today A", "today B"), api.calls)

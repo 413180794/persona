@@ -41,7 +41,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 飞书群 / 终端 on an agent's row (#3132, iOS #2698), under its time (#3043), in every style and appearance, the detailed
+ * "Lark groups" / "Terminal" on an agent's row (#3132, iOS #2698), under its time (#3043), in every style and appearance, the detailed
  * and the compact list. Written as PNGs to `build/source-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)

@@ -37,7 +37,7 @@ internal data class KnowledgeSearchGroup(
 /** Every kind the app knows: all conversations, private ones too (docs/redesign/parity.md 3.1). */
 internal fun KnowledgeEntry.inScope(): Boolean = KnowledgeKind.fromWire(kind) != null
 
-/** Projects as iOS groups them: 重点 (P0 / P1), 其他进行中, 已完成, then 不是项目 folded with a word on why. */
+/** Projects as iOS groups them: "Focus" (P0 / P1), "Other active", "Done", then "Not projects" folded with a word on why. */
 internal fun projectSections(entries: List<KnowledgeEntry>): List<KnowledgeSection> {
     val (ignored, visible) = entries.partition { it.projectStatus == "ignored" }
     val (done, active) = visible.partition { it.projectStatus == "done" }
@@ -62,7 +62,7 @@ internal val KnowledgeEntry.projectStatus: String
     get() = extra.orEmpty().split(" · ").getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() } ?: "active"
 internal val KnowledgeEntry.isProject: Boolean get() = kind == KnowledgeKind.Projects.wire
 
-/** 暂停 / 已完成 / 不是项目: a project's status when it is not the usual 进行中. */
+/** "Paused" / "Done" / "Not a project": a project's status when it is not the usual "Active". */
 @get:StringRes
 internal val KnowledgeEntry.projectStatusLabel: Int?
     get() = if (!isProject) null else when (projectStatus) {
@@ -116,7 +116,7 @@ internal val KnowledgeHit.text: String
     }
 
 /**
- * Hits grouped by the entry they are in, in the order found, each line once; 档案 and 时间线 lines before 资料
+ * Hits grouped by the entry they are in, in the order found, each line once; "Profile" and "Timeline" lines before "Details"
  * (iOS `KBSearchGroup`). Hits outside any entry (the directory's README) are no result. [index] names the entries
  * a list has shown; the others are named by their kind until one does.
  */
@@ -166,7 +166,7 @@ internal fun queryRanges(text: String, query: String): List<IntRange> {
     return ranges
 }
 
-/** A timeline line, `- 2026-10-30 23:16 · Agent · 标题 · 机器 · 说了什么`: when, from where, what. */
+/** A timeline line, `- 2026-10-30 23:16 · Agent · title · machine · what was said`: when, from where, what. */
 internal data class KnowledgeLogLine(val whenText: String, val source: String, val text: String) {
     /** "2026-10-30 23:16" → "10-30 23:16"; the year only when it is not this one. */
     fun shortWhen(today: LocalDate = LocalDate.now()): String {
@@ -194,7 +194,7 @@ internal fun dropTitle(markdown: String): String = if (!markdown.startsWith("# "
 
 /**
  * The profile without what the header already shows: its title, the one line, and the line of a person's generated
- * profile that only repeats the tagging (「重要级 P0 · 与我相关性 95 · …」). Blank when nothing else is left.
+ * profile that only repeats the tagging ("importance P0 · relevance to me 95 · ..."). Blank when nothing else is left.
  */
 internal fun profile(markdown: String?, oneLine: String?): String {
     val one = oneLine?.trim().orEmpty()
@@ -283,7 +283,7 @@ internal sealed interface RecordingLength {
 }
 
 /**
- * What a recording's page shows above its transcript, read from its meta.json (docs/knowledge.md「录音」). A meta
+ * What a recording's page shows above its transcript, read from its meta.json (docs/knowledge.md "Recordings"). A meta
  * without `complete` is from a finished recording; a missing `duration` is measured from `ended_at`.
  */
 internal data class RecordingFacts(
@@ -376,7 +376,7 @@ internal fun knowledgeContext(detail: KnowledgeDetail, kindName: String): String
     return "<jarvis-context kind=\"context\" title=\"${attribute(title)}\" url=\"\">\n$text\n</jarvis-context>"
 }
 
-/** What 开 Agent hands the new-Agent page: where to start (a project's first code directory) and the first message. */
+/** What "Start agent" hands the new-Agent page: where to start (a project's first code directory) and the first message. */
 data class KnowledgeAgentStart(val machineId: String?, val cwd: String?, val prompt: String)
 
 internal fun agentStart(detail: KnowledgeDetail, kindName: String): KnowledgeAgentStart {

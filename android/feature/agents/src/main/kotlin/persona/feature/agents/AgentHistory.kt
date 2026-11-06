@@ -36,7 +36,7 @@ private fun AgentListSettings.admitsHistory(s: persona.core.contracts.Session): 
         (query.isEmpty() || listOf(s.displayTitle, s.cwd, s.lastText).any { it?.contains(query, true) == true })
 
 /**
- * The botmux sessions the 显示 botmux switch counts: what [scopedAgentList] would count under 飞书群 with botmux shown,
+ * The botmux sessions the "Show botmux" switch counts: what [scopedAgentList] would count under "Lark groups" with botmux shown,
  * without building the list again (it runs on every push).
  */
 internal fun botmuxCount(rows: List<AgentSession>, preferences: AgentsPreferencesSnapshot, settings: AgentListSettings): Int =

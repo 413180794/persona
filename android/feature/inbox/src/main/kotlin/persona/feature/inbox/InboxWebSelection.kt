@@ -14,16 +14,16 @@ import org.json.JSONTokener
 data class InboxWebSelection(val title: String, val url: String, val text: String)
 
 /**
- * Supplied by the app shell: 交给 Persona for text picked on a page opened from the inbox. The inbox has no
+ * Supplied by the app shell: "Hand to Persona" for text picked on a page opened from the inbox. The inbox has no
  * conversation of its own to send it to, so the shell asks what Persona is to do and puts it in the main conversation.
  * Without it the page's selection menu is the system's own.
  */
 val LocalInboxWebSelection = staticCompositionLocalOf<((InboxWebSelection) -> Unit)?> { null }
 
 /**
- * A WebView whose text selection menu starts with 交给 Persona while [onPick] is set. Chromium fills the menu in
+ * A WebView whose text selection menu starts with "Hand to Persona" while [onPick] is set. Chromium fills the menu in
  * onPrepareActionMode, each time the selection changes, with items that ask to be action buttons; ours asks the same
- * in its group with the lowest order, so it comes before 复制 (the chat's link sheet does the same).
+ * in its group with the lowest order, so it comes before "Copy" (the chat's link sheet does the same).
  */
 internal class InboxSelectionWebView(context: Context) : WebView(context) {
     var onPick: ((InboxWebSelection) -> Unit)? = null

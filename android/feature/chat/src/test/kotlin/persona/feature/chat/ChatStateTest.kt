@@ -115,7 +115,7 @@ class ChatStateTest {
         for (status in listOf("working", "blocked", "offline")) assertFalse(awaitingTurn(awaited, status, false, soon))
         // A failed start says so; it does not look worked on.
         assertFalse(awaitingTurn(awaited, "idle", true, soon))
-        // Its work line is live, and the status line says 正在工作, before the hub's push.
+        // Its work line is live, and the status line says "Working", before the hub's push.
         val session = Session(sessionId = "session", status = "idle")
         val work = ChatTimeline().lines(items, isLiveStatus(session.status) || awaitingTurn(awaited, session.status, false, soon), emptySet())
             .lines.filterIsInstance<ChatLine.Work>()

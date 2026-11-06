@@ -35,7 +35,7 @@ enum class AttachmentState { Ready, Uploading, Waiting, Failed, Invalid }
 val AttachmentThumbSize = 64.dp
 
 /**
- * A photo waiting in the composer: a square thumbnail with a remove button in its corner ([onRemove], "移除这张").
+ * A photo waiting in the composer: a square thumbnail with a remove button in its corner ([onRemove], "Remove this one").
  * While it uploads it dims under a spinner; a failed upload shows a retry mark and a red rim and retries when tapped
  * ([onRetry]); an invalid one (the file is gone) shows a warning and can only be removed. A null [image] draws a
  * placeholder: still decoding, unreadable, or a photo that only exists on the computer (restored from a sent message).

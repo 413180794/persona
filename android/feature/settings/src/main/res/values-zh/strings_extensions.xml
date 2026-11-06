@@ -268,7 +268,7 @@
     <string name="settings_ext_connector_open_subtitle">登录、状态和更多收件箱设置</string>
     <string name="settings_ext_connector_inbox_on">%1$s 的新条目进收件箱。和连接器页上的「进收件箱」是同一个开关。</string>
     <string name="settings_ext_connector_inbox_off">不进收件箱：不再收新的，已有的条目留着。</string>
-    <!-- 自动升级（docs/extensions.md「自动升级」） -->
+    <!-- Auto-upgrade (docs/extensions.md "Auto-upgrade") -->
     <string name="settings_ext_upgrade_title">升级</string>
     <string name="settings_ext_upgrade_footer">扩展市场里出了新版本，扩展空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。</string>
     <string name="settings_ext_auto_upgrade">自动升级</string>
@@ -301,10 +301,10 @@
     <string name="settings_ext_auto_upgrades_failed">没有改：%1$s</string>
     <string name="settings_ext_auto_upgrades_footer_on">从这些市场装的扩展出了新版本，扩展空闲时 hub 自动装上；要的权限变多时先问你。每个扩展也可以在自己的页面里单独关掉。</string>
     <string name="settings_ext_auto_upgrades_footer_off">关着：有新版本时只在扩展的页面里提示，你自己去升级。</string>
-    <!-- 在扩展自己的页面里卸载 -->
+    <!-- Removing from the extension's own page -->
     <string name="settings_ext_market_installed_note">这个扩展是从扩展市场装的：卸载后可以在市场里重新安装。</string>
     <string name="settings_ext_keep_data_hint">以后重装能接着用。</string>
-    <!-- 机器列表（format machine） -->
+    <!-- The machine list (format machine) -->
     <string name="settings_ext_machine_online">在线</string>
     <string name="settings_ext_machine_offline">离线</string>
     <string name="settings_ext_cua_missing">Cua 没装</string>

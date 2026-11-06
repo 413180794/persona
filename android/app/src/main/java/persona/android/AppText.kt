@@ -6,7 +6,7 @@ import androidx.annotation.VisibleForTesting
 
 /**
  * Text for code without a Context of its own: the data layer's exceptions, whose message a page or a toast shows. The
- * application installs its resources, already pinned to 设置 › 语言 by AppLanguages.wrap (docs/android.md「国际化」).
+ * application installs its resources, already pinned to Settings › Language by AppLanguages.wrap (docs/android.md "Internationalization").
  */
 internal object AppText {
     @Volatile private var lookup: ((Int, Array<out Any>) -> String)? = null

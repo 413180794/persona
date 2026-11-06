@@ -8,7 +8,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import persona.core.contracts.api.*
 
-/** 设置 › 设备 › 连接新设备: the code, its countdown, and the device that took it. */
+/** Settings › Devices › Connect a new device: the code, its countdown, and the device that took it. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class ConnectDeviceModelTest {

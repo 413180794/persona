@@ -18,11 +18,11 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * How a connector's sign-in step or a channel's binding step is drawn (docs/connectors.md「登录」, #4488): fields to fill
+ * How a connector's sign-in step or a channel's binding step is drawn (docs/connectors.md "Sign-in", #4488): fields to fill
  * in, a QR code, the link a QR code encodes when its modules did not come, a code to enter or send; or one it cannot
  * draw: a kind it does not know ([Unknown], a newer hub's) or a known one without what it shows ([Incomplete]: a QR code
  * with neither, a code step with neither the code nor a page to open, a form with no fields). Those two say so with
- * 重新开始, never an empty form whose 下一步 can never light up.
+ * "Start again", never an empty form whose "Next" can never light up.
  */
 internal enum class StepView {
     Fields, QrCode, QrLink, Code, Unknown, Incomplete;
@@ -38,7 +38,7 @@ internal enum class StepView {
                 isWebLink(p.url) -> QrLink
                 else -> Incomplete
             }
-            // An extension's device code may come with the page alone (docs/extensions.md「登录」).
+            // An extension's device code may come with the page alone (docs/extensions.md "Sign-in").
             "device_code" -> if (!p.userCode.isNullOrBlank() || isWebLink(p.url)) Code else Incomplete
             "pair_code" -> if (p.userCode.isNullOrBlank()) Incomplete else Code
             else -> Unknown
@@ -68,8 +68,8 @@ internal fun QrLinkStep(url: String, app: String) {
 }
 
 /**
- * A step this app cannot draw ([StepView.Unknown] or [StepView.Incomplete]): what to do, 重新开始 (asks the hub for the
- * first step again) and 取消: a kind it does not know needs a newer app; a known one that came without what it shows is
+ * A step this app cannot draw ([StepView.Unknown] or [StepView.Incomplete]): what to do, "Start again" (asks the hub for the
+ * first step again) and "Cancel": a kind it does not know needs a newer app; a known one that came without what it shows is
  * the hub's to send again. A step that only carries the hub's [BindPrompt.error] (GitHub's sign-in that did not check
  * out) is not missing anything: the error above says what happened, so only the buttons stay.
  */

@@ -35,8 +35,8 @@ import persona.core.designsystem.PersonaTheme
 import java.io.File
 
 /**
- * A document's comments (#2964) in every style, light and dark: the open threads with 回复 / 解决, the box answering
- * one; the resolved tab with 重新打开; and read only, where the plugin cannot write. Written as PNGs to
+ * A document's comments (#2964) in every style, light and dark: the open threads with "Reply" / "Resolve", the box answering
+ * one; the resolved tab with "Reopen"; and read only, where the plugin cannot write. Written as PNGs to
  * `build/doc-comments-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)

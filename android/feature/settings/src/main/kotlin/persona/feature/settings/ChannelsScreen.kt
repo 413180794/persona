@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 设置 › 渠道 (docs/channels.md「界面」): every way of talking to Persona in three sections — Persona's own
+ * Settings › Channels (docs/channels.md "UI"): every way of talking to Persona in three sections - Persona's own
  * apps, the ones installed (connected or not), and the ones an extension market offers (opening the market's page).
  */
 @Composable
@@ -114,7 +114,7 @@ private fun ChannelStateMark(channel: HubChannel) =
 private fun ChannelNote(text: String) = SettingsCaption(text, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
 
 /**
- * 设置 › 渠道 › one: how it is doing; its switch; binding it (a step at a time: fields, a QR code to scan, a
+ * Settings › Channels › one: how it is doing; its switch; binding it (a step at a time: fields, a QR code to scan, a
  * code to send to the bot) or undoing that; where its messages go; its features; a test message; and its own fuller
  * page when Android has one ([onOpen]). Persona's own apps, /agent in Feishu and voice are set up elsewhere: only shown.
  */
@@ -250,7 +250,7 @@ private fun LazyListScope.binding(
 }
 
 /**
- * One binding step: its hint and the hub's word on it, then a QR code, a code, or fields to fill in. 重新开始 runs in
+ * One binding step: its hint and the hub's word on it, then a QR code, a code, or fields to fill in. "Start again" runs in
  * [pageScope], the page's: this list item's goes away when it scrolls out and would leave it spinning.
  */
 @Composable
@@ -285,7 +285,7 @@ private fun BindStep(channel: HubChannel, prompt: BindPrompt, bind: BindState, m
             }
             StepView.Code -> {
                 val code = prompt.userCode.orEmpty()
-                // No code: the page to open is the step (StepView.of); no empty box with a grey 复制.
+                // No code: the page to open is the step (StepView.of); no empty box with a grey "Copy".
                 if (code.isNotEmpty()) Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                     JCodeDisplay(code, Modifier.weight(1f))

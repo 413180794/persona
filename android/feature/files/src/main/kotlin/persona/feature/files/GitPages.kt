@@ -83,11 +83,11 @@ internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesContro
     }
 }
 
-/** 拉取 (N behind) on the branch heading: a fast-forward pull only; 拉取中 and off while it runs. */
+/** "Pull" (N behind) on the branch heading: a fast-forward pull only; "Pulling" and off while it runs. */
 @Composable
 private fun PullButton(behind: Int, state: FilesState, controller: FilesController) {
     val label = if (behind > 0) stringResource(R.string.files_git_pull_behind, behind) else stringResource(R.string.files_git_pull)
-    // The visible label is what TalkBack reads; the state says 拉取中 or how far behind, like iOS's accessibilityValue.
+    // The visible label is what TalkBack reads; the state says "Pulling" or how far behind, like iOS's accessibilityValue.
     val pullState = if (state.pulling) stringResource(R.string.files_git_pulling)
         else pluralStringResource(R.plurals.files_git_behind_commits, behind, behind)
     JButton(label, controller::pull, Modifier.semantics { stateDescription = pullState }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
@@ -115,7 +115,7 @@ internal fun GitLetter(file: SessionGitFile, stage: Boolean = true) {
 
 /**
  * A changed file: its name and folder (← the old path of a rename), the letter, where it stands ([stage]: the
- * working tree's changes, not a commit's), ± lines or 二进制.
+ * working tree's changes, not a commit's), ± lines or "Binary".
  */
 @Composable
 private fun ChangeRow(file: SessionGitFile, stage: Boolean, onClick: () -> Unit) {

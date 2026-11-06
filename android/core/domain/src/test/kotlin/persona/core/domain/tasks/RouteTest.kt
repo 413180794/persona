@@ -19,7 +19,7 @@ import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.TasksApi
 
-/** 对「xx」说 to a to-do that is gone (#4691): the message goes to Persona instead of a refused /route. */
+/** "Say to 'xx'" to a to-do that is gone (#4691): the message goes to Persona instead of a refused /route. */
 class RouteTest {
     private class Api : TasksApi {
         var list = emptyList<Todo>()

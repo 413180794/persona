@@ -227,7 +227,7 @@ class HubEndpointSettingsTest {
             settings.reorder(emptyList())
             assertEquals(saves, fixture.saves)
 
-            // 恢复默认顺序.
+            // "Restore default order".
             settings.resetOrder()
             assertNull(fixture.stored.value.order)
             state = fixture.awaitState { !it.customOrder }

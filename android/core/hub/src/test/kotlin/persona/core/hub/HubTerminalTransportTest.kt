@@ -25,7 +25,7 @@ class HubTerminalTransportTest {
             terminalMessage("terminal_unsubscribe", key))
     }
 
-    // docs/protocol.md「终端流」: a pane with no session goes by `pane:<pane id>` where the session id goes.
+    // docs/protocol.md "Terminal stream": a pane with no session goes by `pane:<pane id>` where the session id goes.
     @Test fun aPaneWithoutASessionIsAddressedByPane() {
         val key = TerminalAddress.key("desk", "pane:w1:p2")
         assertEquals(TerminalAddress.key("desk", "w1:p2"), key)

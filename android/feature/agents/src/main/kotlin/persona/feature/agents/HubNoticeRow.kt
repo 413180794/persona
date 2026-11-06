@@ -15,7 +15,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * The one quiet line over the Agents list about the hub (docs/hub-update.md「10. App 里」, iOS `HubNoticeRow`):
+ * The one quiet line over the Agents list about the hub (docs/hub-update.md "10. In the app", iOS `HubNoticeRow`):
  * app/hub too old, updating, rolled back, auto-update notice, or newer version/image.
  * A tap opens the hub version settings page; buttons inside handle notice-specific actions.
  */

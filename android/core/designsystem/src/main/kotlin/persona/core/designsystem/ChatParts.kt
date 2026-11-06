@@ -33,7 +33,7 @@ val ChatPictureMaxHeight: Dp = 280.dp
 /**
  * The frame of a picture in a conversation (iOS `Base64Image`): it holds the picture's [ratio] (width / height, known
  * from the page) while the picture loads, so the list does not jump; at most [ChatPictureMaxHeight] tall and as wide as
- * that allows. [onClick] opens it (the image viewer). [failed] shows 「加载失败，点一下重试」 and a tap calls [onRetry].
+ * that allows. [onClick] opens it (the image viewer). [failed] shows "Failed to load, tap to retry" and a tap calls [onRetry].
  * [alignEnd] puts a narrow picture on the right (the user's side).
  */
 @Composable
@@ -135,13 +135,13 @@ fun PhotoRow(modifier: Modifier = Modifier, alignEnd: Boolean = true, content: @
 /** How an [ErrorTag] reads: plain, the error's red, or caution (someone has to act). */
 enum class ErrorTagTone { Plain, Danger, Caution }
 
-/** One fact under an error card's reason: the status code, 临时故障 / 要处理, 连续 N 次. */
+/** One fact under an error card's reason: the status code, "Temporary" / "Needs action", "N times in a row". */
 @Immutable
 data class ErrorTag(val text: String, val tone: ErrorTagTone = ErrorTagTone.Plain)
 
 /**
  * A model API error in a conversation (iOS `APIErrorCard`): a warning mark and [reason], [tags] under it, a tap on the
- * header shows or hides [details] (ids, time, the raw text), [action] (重试) at the end. A red-tinted panel in glass and
+ * header shows or hides [details] (ids, time, the raw text), [action] ("Retry") at the end. A red-tinted panel in glass and
  * brief, a strip with a red holder on the board.
  */
 @Composable
@@ -200,7 +200,7 @@ private fun ErrorTagLabel(tag: ErrorTag) {
     )
 }
 
-/** A named value inside a card's details (请求 ID, Session, 时间): the name in a fixed column, [trailing] at the end. */
+/** A named value inside a card's details ("Request ID", Session, "Time"): the name in a fixed column, [trailing] at the end. */
 @Composable
 fun DetailField(name: String, value: String, modifier: Modifier = Modifier, mono: Boolean = true, trailing: (@Composable () -> Unit)? = null) {
     val palette = PersonaTheme.palette
@@ -212,7 +212,7 @@ fun DetailField(name: String, value: String, modifier: Modifier = Modifier, mono
     }
 }
 
-/** A quiet capsule for a note in the flow of a conversation (离开期间回顾 · 21 分钟前 ›): [onClick] opens what it stands for. */
+/** A quiet capsule for a note in the flow of a conversation ("While you were away · 21 minutes ago ›"): [onClick] opens what it stands for. */
 @Composable
 fun ChatNoteChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val palette = PersonaTheme.palette
@@ -235,7 +235,7 @@ fun ChatNoteChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modi
 
 /**
  * A line the chat shows in place of a message Persona typed in for the model (a task's notice, a scheduled run…;
- * docs/protocol.md「Persona 注入的消息」): centered, the look of [ChatNoteChip], an icon in [tint], one line. Tappable
+ * docs/protocol.md "Messages Persona injects"): centered, the look of [ChatNoteChip], an icon in [tint], one line. Tappable
  * (with a caret) only when [onClick] is set.
  */
 @Composable

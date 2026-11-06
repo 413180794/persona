@@ -19,7 +19,7 @@ data class InboxItem(
     val tier: String? = null,
     val updatedAt: String? = null,
     val doneAt: String? = null,
-    /** What the item holds as listed (the hub's `version`): a bulk 已处理 sends it back. */
+    /** What the item holds as listed (the hub's `version`): a bulk "Done" sends it back. */
     val version: String? = null,
     val notice: String? = null,
     /**
@@ -27,21 +27,21 @@ data class InboxItem(
      * which sections by [tier] as before. [tier] keeps its meaning, so a working item still says what it was triaged as.
      */
     val status: String? = null,
-    /** 急事: someone is waiting or a deadline is near (it stays in 需要你 while the AI prepares a suggestion). */
+    /** Urgent: someone is waiting or a deadline is near (it stays in Needs you while the AI prepares a suggestion). */
     val urgent: Boolean = false,
 ) {
     val triage: InboxTier get() = InboxTier.entries.firstOrNull { it.wire == tier } ?: InboxTier.Action
     val isTriaged: Boolean get() = !tier.isNullOrEmpty()
     val isDone: Boolean get() = doneAt != null
-    /** The hub says the AI or an Agent is on it, or it waits for the other side (进行中). */
+    /** The hub says the AI or an Agent is on it, or it waits for the other side (In progress). */
     val isWorking: Boolean get() = status == WORKING
     /** The section of an open item: [status] when the hub sent a known one, else the [triage] tier. */
     val section: String get() = status?.takeIf { it in SECTIONS } ?: triage.wire
-    /** Open and the user's to decide (需要你). */
+    /** Open and the user's to decide (Needs you). */
     val needsYou: Boolean get() = !isDone && section == InboxTier.Action.wire
 
     companion object {
-        /** The id of the 进行中 section, between 需要你 and 知悉即可. */
+        /** The id of the In progress section, between Needs you and FYI. */
         const val WORKING = "working"
         private val SECTIONS = setOf("action", WORKING, "fyi", "noise")
     }
@@ -132,11 +132,11 @@ fun buildInboxList(
     val groups = mutableListOf<InboxGroup>()
     fun addGroup(id: String, title: CoreText, rows: List<InboxRow>) {
         if (rows.isEmpty()) return
-        // 进行中 is the AI's, not the user's to sort through: it always shows what is in it, as the app always has.
+        // In progress is the AI's, not the user's to sort through: it always shows what is in it, as the app always has.
         val folded = id != InboxItem.WORKING && id !in settings.expanded
         groups += InboxGroup(id, title, rows, if (folded) emptyList() else rows, folded)
     }
-    // 需要你 · 进行中 · 知悉即可 · 已折叠 by each open item's section; 进行中 has items only from a hub that sends `status`.
+    // Needs you · In progress · FYI · Collapsed by each open item's section; In progress has items only from a hub that sends `status`.
     val sections = listOf(InboxTier.Action.wire to InboxTier.Action.title, InboxItem.WORKING to CoreText.of(Key.InboxWorking),
         InboxTier.Fyi.wire to InboxTier.Fyi.title, InboxTier.Noise.wire to InboxTier.Noise.title)
     for ((id, title) in sections) {

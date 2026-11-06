@@ -7,7 +7,7 @@ enum class AnswerEntry(val wire: String) {
 
 enum class ApprovalAction(val wire: String) {
     ApproveAll("approve_all"), ApproveEdits("approve_edits"),
-    /** Approve the plan and keep confirming each step (mode `default`, web's 批准，每步确认). */
+    /** Approve the plan and keep confirming each step (mode `default`, web's "Approve, confirm each step"). */
     ApproveStepwise("approve_stepwise"), Reject("reject"),
     Allow("allow"), Deny("deny"), Always("always"), Answer("answer"),
     ScreenAnswer("screen_answer"), ChooseOption("choose_option"), OpenApp("open_app"), Dismiss("dismiss"),

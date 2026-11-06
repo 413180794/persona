@@ -27,7 +27,7 @@ class PersonaManifestTest {
         assertEquals(false, p.copy(id = "other", rev = "0123456789abcdef").usable)
     }
 
-    /** A tier of a tiered look (奶蛙): a plain manifest whose files sit under the tier, and the words for its card. */
+    /** A tier of a tiered look (Milk Frog): a plain manifest whose files sit under the tier, and the words for its card. */
     @Test fun readsATierWithAbout() {
         val body = """{"format":1,"id":"nwverse","name":"奶蛙","subtitle":"蝌蚪","about":"NWVERSE 等级",
             "avatar":{"sizes":{"64":"tiers/tadpole/avatar/64.png"}},"dot":{"size":144,"states":{"idle":{"file":"tiers/tadpole/dot/idle.png"}}}}"""

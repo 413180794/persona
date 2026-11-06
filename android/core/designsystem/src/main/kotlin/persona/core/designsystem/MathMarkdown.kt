@@ -4,7 +4,7 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
- * Formulas in Markdown (docs/android.md「文件查看器」的「公式和图」, iOS `MathMarkdown.swift`), rewritten into what the Markdown
+ * Formulas in Markdown (docs/android.md "File viewer" › "Formulas and diagrams", iOS `MathMarkdown.swift`), rewritten into what the Markdown
  * renderer can carry before it parses:
  * - display math — `$$…$$` and `\[…\]` on lines of their own, or a line that is one formula — becomes a ```math fence
  *   (drawn by [RenderedFence]);
@@ -126,7 +126,7 @@ object MathMarkdown {
     }
 
     /**
-     * A formula has no Chinese or Japanese words in it (outside `\text{…}`): between "$10 一个月：" and the next `$` is
+     * A formula has no Chinese or Japanese words in it (outside `\text{…}`): between "$10 a month" written in Chinese and the next `$` is
      * prose with two dollars in it.
      */
     private fun plausible(tex: String): Boolean {

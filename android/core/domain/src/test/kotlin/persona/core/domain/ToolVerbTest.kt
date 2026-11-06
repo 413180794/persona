@@ -77,7 +77,7 @@ class ToolVerbTest {
             assertEquals(name, words, verb("mcp__persona__$name"))
             assertEquals(name, words, verb("mcp__plugin_jarvis__$name"))
         }
-        // ask_user outside Persona's server is the question tool's 提问, as iOS's generic table has it.
+        // ask_user outside Persona's server is the question tool's "Ask", as iOS's generic table has it.
         assertEquals("提问", verb("ask_user"))
     }
 

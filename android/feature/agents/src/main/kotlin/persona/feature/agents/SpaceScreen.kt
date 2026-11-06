@@ -46,7 +46,7 @@ internal fun SpaceScreen(
                     JRow(stringResource(R.string.agents_directory), subtitle = space.cwd, leadingIcon = PhIcons.FolderSimple)
                     if (busy) JLinearProgress(null)
                 }
-                // the agents of one tab follow each other in pane order: the 发起者 marked, the panes it split off under it (#2320)
+                // the agents of one tab follow each other in pane order: the launcher marked, the panes it split off under it (#2320)
                 val tabs = agentTabs(space.members)
                 itemsIndexed(space.members, key = { _, row -> row.id }) { index, row ->
                     val requests = pending.count { it.sessionKey == row.session.key }
@@ -59,7 +59,7 @@ internal fun SpaceScreen(
                         launcher = tab?.launcher?.id == row.id, branch = branch,
                         onOpen = { onOpen(row) }, menuItems = { sessionMenu(row) },
                         slotLabel = row.session.slotName?.takeIf { it.isNotBlank() && it != row.session.displayTitle }
-                            // herdr's default tab names are numbers; a bare 「1」 reads as a count, so say #1.
+                            // herdr's default tab names are numbers; a bare "1" reads as a count, so say #1.
                             ?.let { if (it.all(Char::isDigit)) "#$it" else it }
                             ?: stringResource(R.string.agents_space_tab, row.session.slotIndex ?: 0), requestCount = requests, onClose = onClose(row), card = card)
                 }

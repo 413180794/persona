@@ -96,11 +96,11 @@ internal object AskUserAnswers {
 }
 
 /**
- * What a tool that operates a computer does, in words (iOS `ComputerSteps`, #1323): 「点 AC → 6 → × → 7 → =」 rather
+ * What a tool that operates a computer does, in words (iOS `ComputerSteps`, #1323): "Click AC → 6 → × → 7 → =" rather
  * than its JSON.
  */
 internal object ComputerSteps {
-    /** A computer_run's subject when it says what it does (steps or a script): 「MacBook · 点 AC → 6 → ×」; null otherwise. */
+    /** A computer_run's subject when it says what it does (steps or a script): "MacBook · Click AC → 6 → ×"; null otherwise. */
     fun subject(res: Resources, name: String, input: JsonObject?): String? {
         if (PersonaTools.base(name) != "computer_run" || input == null) return null
         val what = describe(res, input) ?: return null
@@ -119,7 +119,7 @@ internal object ComputerSteps {
         }
     }
 
-    /** Steps in a line, clicks after a click joined by → alone (点 AC → 6 → ×). */
+    /** Steps in a line, clicks after a click joined by → alone (Click AC → 6 → ×). */
     private fun join(res: Resources, words: List<Pair<String, String?>>): String {
         var clicking = false
         return words.joinToString(" → ") { (word, clicked) ->

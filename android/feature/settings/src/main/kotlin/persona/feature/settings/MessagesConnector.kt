@@ -22,9 +22,9 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * 设置 › 连接器 › 信息 (iOS `MessagesConnectorView`): one Mac's Messages, read through the hub. Which Mac and whether it
- * may read (with the numbered steps there and 重新检查 when it may not), 交给 Persona and deleting what the hub kept
- * (only with it off), and 会话: every conversation, read straight from the Mac. Nothing is marked read, nothing is sent.
+ * Settings › Connectors › Messages (iOS `MessagesConnectorView`): one Mac's Messages, read through the hub. Which Mac and whether it
+ * may read (with the numbered steps there and "Check again" when it may not), "Hand to Persona" and deleting what the hub kept
+ * (only with it off), and "Conversations": every conversation, read straight from the Mac. Nothing is marked read, nothing is sent.
  */
 @Composable
 internal fun MessagesConnectorPage(connectors: ConnectorsManagement?, onBack: () -> Unit) {
@@ -145,7 +145,7 @@ private fun MessagesStatusPage(connectors: ConnectorsManagement?, onBack: () -> 
             }
             item("delete") {
                 JGroupItem(GroupPosition.of(1, 2)) {
-                    // Deleting what the hub kept asks for 交给 Persona off first: on, the next sync would bring it back.
+                    // Deleting what the hub kept asks for "Hand to Persona" off first: on, the next sync would bring it back.
                     JRow(stringResource(R.string.settings_src_messages_delete), leadingIcon = PhIcons.Trash, destructive = true,
                         enabled = !ai && !saving, chevron = false, onClick = { confirmingDelete = true })
                 }
@@ -186,7 +186,7 @@ internal fun messagesStatusDot(status: MessagesStatus?): Status = when (status?.
     else -> Status.NeedsYou
 }
 
-/** 会话: the Mac's conversations, newest first, a page at a time (iOS `MessagesChatListView`). */
+/** "Conversations": the Mac's conversations, newest first, a page at a time (iOS `MessagesChatListView`). */
 @Composable
 private fun MessagesChatsPage(connectors: ConnectorsManagement?, onBack: () -> Unit, onOpen: (MessagesChat) -> Unit) {
     val scope = rememberCoroutineScope()
@@ -390,14 +390,14 @@ private fun messagesSeparator(at: Instant): String {
     }
 }
 
-/** A separator's date and time before yesterday, in the app's language: 2026年11月5日 14:30 · Nov 5, 2026, 2:30 PM. */
+/** A separator's date and time before yesterday, in the app's language: Nov 5, 2026, 2:30 PM in English. */
 internal fun messagesDayTime(at: Instant, locale: java.util.Locale, zone: ZoneId = ZoneId.systemDefault()): String =
     LocalizedFormats.format(at, LocalizedFormats.DATE_TIME, locale, zone)
 
 @Composable
 private fun messagesShortTime(text: String): String? = messagesShortTime(text, currentLocale)
 
-/** A chat row's last time in the app's language: 14:30 today, 11月5日 this year, else 2025年11月5日. */
+/** A chat row's last time in the app's language: 14:30 today, the month and day this year, else the full date. */
 internal fun messagesShortTime(text: String, locale: java.util.Locale, zone: ZoneId = ZoneId.systemDefault(),
                                today: java.time.LocalDate = java.time.LocalDate.now(zone)): String? {
     val at = parseInstant(text) ?: return null

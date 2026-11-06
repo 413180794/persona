@@ -10,7 +10,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UnlockSettleTest {
-    /** 允许 on the lock screen comes as soon as the PIN is accepted; the keyguard reports unlocked a moment later. */
+    /** "Allow" on the lock screen comes as soon as the PIN is accepted; the keyguard reports unlocked a moment later. */
     @Test fun anUnlockThatLetAllowThroughIsWaitedFor() = runTest {
         var reads = 0
         assertFalse(lockedAfterUnlockSettles({ ++reads <= 3 }))

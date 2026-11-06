@@ -72,10 +72,10 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         items = items, interactions = snapshot.interactions, sessions = snapshot.sessions, mutes = snapshot.mutes, settings = settings,
     )
     val result = list(InboxListSettings(source, kind, query, expanded.toSet() + section))
-    // 进行中: the hub says so (`status`, inbox phase 1), or, from an older hub, the AI 分身 is drafting a reply.
+    // In progress: the hub says so (`status`, inbox phase 1), or, from an older hub, the AI twin is drafting a reply.
     fun working(row: InboxRow) = row.type == InboxRowType.Item &&
         records[row.id]?.let { it.item.isWorking || it.agent?.state in setOf("running", "queued") } == true
-    // A hub that sends `status` calls the section 进行中; an older hub's is the AI 分身's 「Persona 在办」 as before.
+    // A hub that sends `status` calls the section In progress; an older hub's is the AI twin's "Persona is working on it" as before.
     val eventHub = snapshot.records.any { it.item.status != null }
     // The summary speaks for the whole inbox, so it reads the unfiltered list.
     val overall = if (query.isEmpty() && source.isEmpty() && kind.isEmpty()) result else list(InboxListSettings())
@@ -129,8 +129,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             finally { pending.remove(id) }
         }
     }
-    // 全部清理 / 全部看过 / 全部清除, and their 撤销: one request for them all (the hub skips the ones that took new
-    // messages since this list), shown at once, then a notice with 撤销 when something was filed.
+    // Clean up all / Mark all as seen / Clear all, and their Undo: one request for them all (the hub skips the ones that took new
+    // messages since this list), shown at once, then a notice with Undo when something was filed.
     fun markAll(targets: List<persona.core.contracts.api.InboxDoneTarget>, action: InboxBulkAction, undoable: Boolean = true) {
         val done = action != InboxBulkAction.Reopen
         val asked = targets.filter { it.id !in pending }
@@ -154,7 +154,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             finally { asked.forEach { pending.remove(it.id) } }
         }
     }
-    // 静音这个仓库 / 会话 / 发件人 from a row's menu (iOS `InboxStore.mute`): what it covers is filed at once.
+    // "Mute this repository / chat / sender" from a row's menu (iOS `InboxStore.mute`): what it covers is filed at once.
     fun mute(record: InboxRecord, option: InboxMuteOption) {
         scope.launch {
             try {
@@ -168,13 +168,13 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     var showMutes by remember { mutableStateOf(false) }
     if (showMutes) InboxMutesSheet(repository, onDismiss = { showMutes = false })
     LaunchedEffect(repository) { refresh(collectNow = false) }
-    // The title while the hub is out of reach opens why, since when and 立即重试 in place (iOS ConnectionTitle).
+    // The title while the hub is out of reach opens why, since when and "Retry now" in place (iOS ConnectionTitle).
     val connectionDetails = rememberConnectionDetails(shownConnection, { navigator.navigate(ConnectionSettingsRoute) }, onRetry = { refresh(collectNow = false) })
     val bulk = bulkTargets(groups, records)
     val scopeText = bulkScope(res, section, sources.firstOrNull { it.first == source && source.isNotEmpty() }?.second,
         if (kind == "agent") "Agent" else kindLabel(res, kind), query)
     var showMore by remember { mutableStateOf(false) }
-    // 全部清理 files every open item of the current view (filters and search) in one request, recorded as dismissed
+    // Clean up all files every open item of the current view (filters and search) in one request, recorded as dismissed
     // (done_by=dismissed); over BULK_CONFIRM_AT items or more it asks first, for the items shown when it was asked.
     var confirmBulk by remember { mutableStateOf<List<persona.core.contracts.api.InboxDoneTarget>?>(null) }
     fun cleanAll() {
@@ -363,7 +363,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
                 ?: record.doc?.let { listOf(docTypeName(res, it.type), item.preview).filter { s -> s.isNotBlank() }.joinToString(" · ") } ?: item.preview,
             status = when { done -> null; item.isWorking || record.agent?.state in setOf("running", "queued") -> Status.Working
                 item.section == InboxTier.Action.wire -> Status.NeedsYou; else -> null },
-            // The hub names its own sources 飞书 and 邮件; the row already shows those as its source.
+            // The hub names its own sources Lark and Mail; the row already shows those as its source.
             tags = listOfNotNull(kindLabel(res, record).takeIf { it.isNotBlank() },
                 record.sourceLabel.takeIf { !record.isConnector && it.isNotBlank() && it !in setOf("飞书", "邮件") }, // i18n-ignore: hub source labels it matches
                 pluralStringResource(R.plurals.inbox_messages_count, record.count, record.count).takeIf { record.count > 0 }),
@@ -404,7 +404,7 @@ internal fun StatusText(text: String, isError: Boolean = false) {
 
 /**
  * The page's one line, for the whole inbox: give it the unfiltered list, since a search or a filter that shows nothing
- * is not 「都处理完了」. Rows an agent is working on are Persona's, not the user's to answer.
+ * is not "All caught up". Rows an agent is working on are Persona's, not the user's to answer.
  */
 internal fun inboxSummary(res: Resources, inbox: InboxListResult, working: (InboxRow) -> Boolean): String {
     val open = inbox.groups.filter { it.id != "done" }
@@ -419,9 +419,9 @@ private fun kindLabel(res: Resources, kind: String) = when (kind) {
     "mail" -> res.getString(R.string.inbox_source_mail); "moment" -> res.getString(R.string.inbox_moments); else -> ""
 }
 
-/** The row's kind: an @ of everyone is 「@所有人」, a mail the user was only copied on is 「抄送」 (the old app's labels). */
+/** The row's kind: an @ of everyone is "@all", a mail the user was only copied on is "Cc" (the old app's labels). */
 internal fun kindLabel(res: Resources, record: InboxRecord): String = when {
-    // A connector names its own kinds (私聊, @我, 转账, 通知…): its label, never one this app guesses from the kind.
+    // A connector names its own kinds ("Direct message", "@me", "Transfer", "Notice"…): its label, never one this app guesses from the kind.
     record.isConnector -> record.connector?.label.orEmpty()
     record.item.kind == "mention" && record.read -> res.getString(R.string.inbox_kind_group)
     record.item.kind == "mention" && record.atAll -> res.getString(R.string.inbox_kind_at_all)
@@ -432,7 +432,7 @@ internal fun kindLabel(res: Resources, record: InboxRecord): String = when {
     else -> kindLabel(res, record.item.kind)
 }
 
-/** A row's time in the language the app is in: 11月5日 14:30 · Nov 5, 2:30 PM. */
+/** A row's time in the language the app is in: "Nov 5, 2:30 PM" in English, the same in each language's own form. */
 internal fun displayTime(value: String, locale: java.util.Locale, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
     runCatching { LocalizedFormats.format(java.time.Instant.parse(value), LocalizedFormats.MONTH_DAY_TIME, locale, zone) }.getOrDefault("")
 
@@ -488,5 +488,5 @@ internal fun ReplyStatus(state: ReplyComposerState) {
     state.error?.let { JNotice(androidx.compose.ui.res.stringResource(it.text), status = Status.NeedsYou) }
 }
 
-/** As iOS InboxStore: filing an item as 已处理 buzzes success at once, putting it back a light tap. */
+/** As iOS InboxStore: filing an item as "Done" buzzes success at once, putting it back a light tap. */
 internal fun doneHaptic(done: Boolean): Haptic = if (done) Haptic.Success else Haptic.Tap

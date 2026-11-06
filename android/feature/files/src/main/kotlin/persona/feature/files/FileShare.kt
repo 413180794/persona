@@ -17,7 +17,7 @@ internal object FileShare {
     /** Text this long goes as a file: a chooser carries its extras through a binder transaction that caps near 1 MB. */
     private const val INLINE_TEXT = 100_000
 
-    /** Whether ⋯ offers 分享: text, bytes that are whole (a cut image or PDF would not open), or a streamed file. */
+    /** Whether ⋯ offers "Share": text, bytes that are whole (a cut image or PDF would not open), or a streamed file. */
     fun canShare(file: SessionFileContent) = file.text != null || file.stream || (file.data != null && !file.truncated)
 
     /**

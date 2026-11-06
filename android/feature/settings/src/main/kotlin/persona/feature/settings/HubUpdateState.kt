@@ -31,7 +31,7 @@ internal data class HubUpdateState(
 )
 
 /**
- * 设置 › hub 版本 (iOS `HubUpdateModel`, the web's `HubSettings`): reads the status and the history, applies every newer
+ * Settings › Hub version (iOS `HubUpdateModel`, the web's `HubSettings`): reads the status and the history, applies every newer
  * status (an answer here or a `hub_update` push), and reads the history again when an update ends.
  */
 internal class HubUpdateModel(private val api: HubUpdates) {
@@ -80,12 +80,12 @@ internal class HubUpdateModel(private val api: HubUpdates) {
         finally { mutable.update { it.copy(checking = false) } }
     }
 
-    /** Starts the update; [now] is the confirmation's 现在就更新 (it does not wait for idle). */
+    /** Starts the update; [now] is the confirmation's "Update now" (it does not wait for idle). */
     suspend fun update(now: Boolean) = send(R.string.settings_hub_update_start_failed) { api.start(now) }
 
     suspend fun setAuto(on: Boolean) = send(R.string.settings_hub_update_save_failed) { api.settings(auto = on) }
 
-    /** 「自动更新已开启」 seen: not shown again. */
+    /** "Auto-update is on" seen: not shown again. */
     suspend fun noticeSeen() = send(R.string.settings_hub_update_save_failed) { api.settings(noticeSeen = true) }
 
     /** [failed] is a string resource taking the reason. */
@@ -98,7 +98,7 @@ internal class HubUpdateModel(private val api: HubUpdates) {
     }
 }
 
-/** What the 更新 group shows (the web's `updateView`). */
+/** What the "Update" group shows (the web's `updateView`). */
 internal sealed interface HubUpdateView {
     data object Docker : HubUpdateView
     data class Cannot(val why: String) : HubUpdateView
@@ -192,7 +192,7 @@ internal object HubUpdateText {
     fun recordTime(r: HubUpdateRecord, resources: Resources, now: Instant = Instant.now()): String? =
         parseTime(r.ended ?: r.started)?.let { ChannelText.ago(resources, it, now) }
 
-    /** 「3 小时前发布」 under a newer release. */
+    /** "Released 3 hours ago" under a newer release. */
     fun released(s: HubUpdateStatus, resources: Resources, now: Instant = Instant.now()): String? =
         parseTime(s.latest?.released)?.let { resources.getString(R.string.settings_hub_update_released, ChannelText.ago(resources, it, now)) }
 

@@ -12,7 +12,7 @@ import persona.core.contracts.api.ConnectionState
 
 /**
  * The desktop apps signed in to each hub group (its `desktops` event), and the selected group's list for
- * 设置 › 通知 › 已登录的电脑. The event carries no group, so each group's list is kept apart: another hub's Mac must not
+ * Settings › Notifications › "Signed-in computers". The event carries no group, so each group's list is kept apart: another hub's Mac must not
  * show up (or be revoked) on the selected hub. A group's list is unknown while it is not connected.
  */
 internal class GroupDesktops(scope: CoroutineScope, selected: StateFlow<String?>) {

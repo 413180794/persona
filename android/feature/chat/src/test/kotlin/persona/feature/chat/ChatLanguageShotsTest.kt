@@ -84,7 +84,7 @@ import java.time.Instant
 
 /**
  * The chat's part-a pages in each of the app's languages (docs/i18n.md): work lines with tool calls, the assistant's
- * task, plan and 今天 cards, 会话状态, 会话信息, 会话内搜索 and the image viewer's chrome, Glass light and dark (the work
+ * task, plan and "Today" cards, "Session status", "Session info", "Search in session" and the image viewer's chrome, Glass light and dark (the work
  * page in every style). The demo data is English, so the English pages must show no Chinese at all. PNGs in
  * `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
  */
@@ -185,7 +185,7 @@ class ChatLanguageShotsTest {
         val OURS: List<Regex> by lazy {
             val xml = File("src/main/res/values-zh/strings_a.xml").readText()
             Regex(">([^<]*)</(?:string|item)>").findAll(xml).map { it.groupValues[1].trim('"').replace("\\'", "'") }
-                // Three Chinese characters at least outside the placeholders: shorter ones (关闭, %1$d 秒) are words other
+                // Three Chinese characters at least outside the placeholders: shorter ones ("Close", "%1$d s") are words other
                 // modules draw too.
                 .filter { value -> value.replace(Regex("%\\d\\$[sd]"), "").count { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN } >= 3 }
                 .map { value -> Regex(value.split(Regex("%\\d\\$[sd]")).joinToString(".*") { Regex.escape(it) }) }

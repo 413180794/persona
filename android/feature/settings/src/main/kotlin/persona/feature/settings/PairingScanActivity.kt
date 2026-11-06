@@ -8,7 +8,7 @@ import com.journeyapps.barcodescanner.DecoratedBarcodeView
 
 /** Keeps ZXing capture behavior while providing pairing-specific instructions and actions. */
 class PairingScanActivity : CaptureActivity() {
-    // The app's language, as in every other activity (docs/android.md「国际化」).
+    // The app's language, as in every other activity (docs/android.md "Internationalization").
     override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
 
     override fun initializeContent(): DecoratedBarcodeView {

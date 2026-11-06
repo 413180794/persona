@@ -8,7 +8,7 @@ import persona.core.contracts.CoreText
 import persona.core.domain.tasks.DayLabel
 import java.time.ZoneId
 
-/** A day divider's words: 「今天 · 11月3日周二」, "Yesterday · Tue, Nov 2", the date with its year when not this year. */
+/** A day divider's words: "Today · Tue, Nov 3", "Yesterday · Tue, Nov 2", the date with its year when not this year. */
 fun DayLabel.resolve(resources: Resources): String {
     val locale = resources.configuration.locales[0]
     val skeleton = if (kind == DayLabel.Kind.OtherYear) "yMMMdEEE" else "MMMdEEE"

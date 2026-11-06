@@ -106,7 +106,7 @@ class ShortcutTextTest {
         assertEquals(1, WidgetLayout.rows(160f))
         assertEquals(2, WidgetLayout.rows(234f))
         assertEquals(3, WidgetLayout.rows(351f))
-        // Nothing is cut off: an agent fits only with room for 「+N 个」 below it.
+        // Nothing is cut off: an agent fits only with room for "+N more" below it.
         assertEquals(0, WidgetLayout.rows(150f))
         assertEquals(1, WidgetLayout.rows(202f))
         assertEquals(2, WidgetLayout.rows(247f))
@@ -117,7 +117,7 @@ class ShortcutTextTest {
         assertTrue(WidgetLayout.mark(100f))
         assertFalse(WidgetLayout.mark(84f))
         assertFalse(WidgetLayout.mark(100f, fontScale = 1.3f))
-        // Unpaired, the hint under 还没配对 may wrap: one launcher row high (about 109dp) keeps it whole without the mark.
+        // Unpaired, the hint under "Not paired" may wrap: one launcher row high (about 109dp) keeps it whole without the mark.
         assertTrue(WidgetLayout.mark(109f))
         assertFalse(WidgetLayout.mark(109f, captionLines = 2))
         assertTrue(WidgetLayout.mark(120f, captionLines = 2))

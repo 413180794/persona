@@ -20,7 +20,7 @@ internal val SessionGitFile.tone: Status get() = when {
     else -> Status.Unknown
 }
 
-/** Where a change stands: 有冲突, 未跟踪, 部分已暂存, 已暂存 or 未暂存. */
+/** Where a change stands: "Conflict", "Untracked", "Partially staged", "Staged" or "Unstaged". */
 @get:StringRes
 internal val SessionGitFile.stage: Int get() = when {
     conflicted -> R.string.files_git_conflicted
@@ -45,7 +45,7 @@ internal fun remoteOf(upstream: String?) = upstream?.substringBefore('/')?.takeI
 
 internal val SessionGitCommit.shortHash: String get() = short.ifEmpty { hash.take(7) }
 
-/** How the branch stands against its upstream: 已同步, or ↑ ahead ↓ behind; the stash when there is one. */
+/** How the branch stands against its upstream: "In sync", or ↑ ahead ↓ behind; the stash when there is one. */
 internal fun gitSync(resources: Resources, git: SessionGitStatus): String? {
     val sync = when {
         git.upstream == null -> null
@@ -87,6 +87,6 @@ internal object GitDiffs {
         return Part(key?.let { parts[it] }, key != null && key == parts.keys.lastOrNull())
     }
 
-    /** Added and deleted lines of the working tree's changes, for the 改动 heading. */
+    /** Added and deleted lines of the working tree's changes, for the "Changes" heading. */
     fun totals(files: List<SessionGitFile>): Pair<Int, Int> = files.sumOf { it.added } to files.sumOf { it.deleted }
 }

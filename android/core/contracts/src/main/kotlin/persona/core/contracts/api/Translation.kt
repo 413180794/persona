@@ -3,7 +3,7 @@ package persona.core.contracts.api
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 
-// 设置 › 翻译 (docs/android.md「翻译」, the iOS Translator.swift, the web's lib/translate.ts): when it is on, content not
+// Settings › Translation (docs/android.md "Translation", the iOS Translator.swift, the web's lib/translate.ts): when it is on, content not
 // in the target language is translated by the hub's translation model: mail (on by default) and the Feishu chats picked
 // in settings (none by default: there are too many messages).
 
@@ -51,7 +51,7 @@ data class TranslationPrefs(
 @Serializable
 data class HubTranslatePrefs(val enabled: Boolean = false, val target: String = "", val mail: Boolean = false)
 
-/** 设置 › 翻译 on this phone: kept on the device (not per hub, like iOS), sent to the paired hub (the selected group's). */
+/** Settings › Translation on this phone: kept on the device (not per hub, like iOS), sent to the paired hub (the selected group's). */
 interface TranslationSettings {
     val prefs: StateFlow<TranslationPrefs>
     fun update(transform: (TranslationPrefs) -> TranslationPrefs)

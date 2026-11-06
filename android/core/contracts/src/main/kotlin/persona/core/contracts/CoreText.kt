@@ -400,10 +400,10 @@ data class CoreText(val key: Key, val args: List<Any> = emptyList()) {
         /** Words that are already final (a name, the hub's own reason), shown as they are. */
         fun plain(text: String): CoreText = CoreText(Key.Verbatim, listOf(text))
 
-        /** [parts] in a row with [separator] between them (「3 个在工作 · 1 个做完了」); empty parts are left out. */
+        /** [parts] in a row with [separator] between them ("3 working · 1 done"); empty parts are left out. */
         fun joined(separator: String, parts: List<CoreText>): CoreText = CoreText(Key.Joined, listOf<Any>(separator) + parts)
 
-        /** [joined] with a separator that differs by language (「，」, ", "). */
+        /** [joined] with a separator that differs by language (a full-width comma, ", "). */
         fun joined(separator: CoreText, parts: List<CoreText>): CoreText = CoreText(Key.Joined, listOf<Any>(separator) + parts)
     }
 }

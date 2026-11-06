@@ -19,7 +19,7 @@ object MessageEcho {
         Regex("\\s+"),
     )
 
-    /** The words the hub adds where it cut a long text for the page (`…（已截断，共 N 字节）`). */
+    /** The words the hub adds where it cut a long text for the page (`…(truncated, N bytes total)` in Chinese, [CUT_MARK]). */
     private const val CUT_MARK = "\n…（已截断" // i18n-ignore: the hub's cut mark it strips
 
     /** Comparable form: the phone's image note, pasted wrappers and Claude's "[Image #21]" placeholders removed, no whitespace. */
@@ -30,8 +30,8 @@ object MessageEcho {
 
     /**
      * The transcript's copy of a message sent from here: equal once normalized, or one containing the other (Claude
-     * adds placeholders, the phone adds notes). Containing only counts for longer texts, or a pending "好" would be
-     * taken for any message with 好 in it.
+     * adds placeholders, the phone adds notes). Containing only counts for longer texts, or a pending single-character
+     * Chinese acknowledgement would be taken for any message with that character in it.
      */
     fun same(a: String, b: String): Boolean {
         val x = normalize(a)
@@ -57,7 +57,7 @@ object MessageEcho {
      * [item] is the message [text] written at [createdAt] (epoch millis): an untagged user message (a tagged one is
      * matched by [carries] only) that arrived after it was written (with [CLOCK_SLACK_MILLIS] for the computer's
      * clock), with its words — when the page cut a long one, its start. An older message with the same words (a second
-     * "继续") is not it.
+     * "continue") is not it.
      */
     fun arrived(text: String, createdAt: Long, item: Item): Boolean {
         if (tag(item) != null || item.role != "user" || item.kind != "text") return false

@@ -42,7 +42,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** What the 「批准第一个待处理」 dialog shows. */
+/** What the "Approve first pending" dialog shows. */
 sealed interface ApproveState {
     data object Loading : ApproveState
     data object NotPaired : ApproveState
@@ -54,7 +54,7 @@ sealed interface ApproveState {
 }
 
 /**
- * 「批准第一个待处理」 (iOS ApproveFirstIntent): reads the pending requests fresh from the hub, shows the oldest and settles
+ * "Approve first pending" (iOS ApproveFirstIntent): reads the pending requests fresh from the hub, shows the oldest and settles
  * it after one tap. Nothing is sent twice: the button is off while a send runs, and a send whose result is unknown is
  * not retried (the user checks it in the app).
  */
@@ -113,11 +113,11 @@ class ApproveFirstModel(
 }
 
 /**
- * The launcher's 「批准待处理」. Not exported: only the shortcut the app published, started on its behalf, reaches it, so a
+ * The launcher's "Approve pending". Not exported: only the shortcut the app published, started on its behalf, reaches it, so a
  * link from another app can never approve anything. Only its dialog shows, over whatever was on screen.
  */
 class ApproveFirstActivity : ComponentActivity() {
-    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    /** Text in the language of Settings › Language (docs/i18n.md). */
     override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -4,7 +4,7 @@ import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
 
 /**
- * Whether this app and the hub go together (docs/hub-update.md「兼容」, iOS `HubCompat`).
+ * Whether this app and the hub go together (docs/hub-update.md "Compatibility", iOS `HubCompat`).
  */
 enum class HubCompat {
     Ok,
@@ -32,7 +32,7 @@ enum class HubCompat {
 }
 
 /**
- * The one quiet line over the Agents list about the hub (docs/hub-update.md「App 里」, iOS `HubNotice`),
+ * The one quiet line over the Agents list about the hub (docs/hub-update.md "In the app", iOS `HubNotice`),
  * the most pressing first.
  */
 sealed interface HubNotice {

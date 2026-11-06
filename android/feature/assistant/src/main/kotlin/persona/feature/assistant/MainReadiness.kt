@@ -20,7 +20,7 @@ import persona.core.navigation.SettingsPageRoute
 
 /**
  * The main conversation's readiness on this screen (docs/onboarding.md 4.4): asked when the tab opens, when the machines
- * change and after a refused start; [probe] is 试一句. An old hub's 404 leaves it null for good, and the page as before.
+ * change and after a refused start; [probe] is "Try a message". An old hub's 404 leaves it null for good, and the page as before.
  */
 @Stable
 internal class MainReadiness(private val load: suspend (probe: Boolean) -> AssistantReadiness) {
@@ -50,7 +50,7 @@ internal class MainReadiness(private val load: suspend (probe: Boolean) -> Assis
     val chatOnly: Boolean get() = readiness?.mode == AssistantReadiness.CHAT_ONLY
 }
 
-/** Where a readiness button goes on the phone; null for one that opens help in place or runs here (试一句). */
+/** Where a readiness button goes on the phone; null for one that opens help in place or runs here ("Try a message"). */
 internal fun ReadinessActionId.destination(launcher: String?, machine: String? = null): NavKey? = when (this) {
     ReadinessActionId.AddComputer -> AddComputerRoute()
     ReadinessActionId.ConfirmComputer -> AddComputerRoute(confirm = machine.orEmpty())

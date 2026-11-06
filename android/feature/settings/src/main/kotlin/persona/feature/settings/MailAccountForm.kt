@@ -4,7 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.saveable.Saver
 import persona.core.contracts.api.AddMailAccountRequest
 
-/** The 添加邮箱 form (iOS `AddMailAccountView` state) and what it sends. Pure: unit-tested in MailAccountFormTest. */
+/** The "Add mail account" form (iOS `AddMailAccountView` state) and what it sends. Pure: unit-tested in MailAccountFormTest. */
 data class MailAccountForm(
     val kind: Kind = Kind.GMAIL,
     val email: String = "",
@@ -19,7 +19,7 @@ data class MailAccountForm(
         FEISHU(R.string.settings_src_mail_kind_feishu), IMAP(R.string.settings_src_mail_kind_imap),
     }
 
-    /** 连接 is possible: address and password typed (Gmail only through the app-password fallback; Outlook signs in with Microsoft). */
+    /** "Connect" is possible: address and password typed (Gmail only through the app-password fallback; Outlook signs in with Microsoft). */
     fun canConnect(gmailPasswordAllowed: Boolean): Boolean =
         kind != Kind.OUTLOOK && email.contains('@') && password.isNotEmpty() && (kind != Kind.GMAIL || gmailPasswordAllowed)
 

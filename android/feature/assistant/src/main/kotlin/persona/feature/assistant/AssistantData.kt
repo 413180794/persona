@@ -58,7 +58,7 @@ internal fun conversationGroups(
                 it.lastText.orEmpty().contains(query.trim(), ignoreCase = true))
     }.sortedWith(compareByDescending<Session> { it.updated }.thenBy { it.key.path })
     val others = matches.filter { it.key != snapshot.mainSession && it.key !in pinned }
-    // A search finds every conversation, wherever it comes from; otherwise 最近 is the user's own.
+    // A search finds every conversation, wherever it comes from; otherwise "Recent" is the user's own.
     val searching = query.isNotBlank()
     // The main conversation is the drawer's first row, above the search: a search does not take it away.
     return ConversationGroups(snapshot.conversations.firstOrNull { it.key == snapshot.mainSession && !it.archived },
@@ -67,7 +67,7 @@ internal fun conversationGroups(
         if (searching) emptyList() else others.filter { it.autoOrigin() != null })
 }
 
-/** How many recent conversations the history lists before folding the rest into 「查看全部 N 个」. */
+/** How many recent conversations the history lists before folding the rest into "See all N". */
 internal const val RecentShown = 30
 
 internal data class RecentRows(val shown: List<Session>, val hidden: Int)
@@ -144,8 +144,8 @@ internal class DemoAssistantRepository(private val words: DemoWords) : Assistant
 
 /**
  * A conversation's name in the history: its title, else the first line of its last message (30 characters), else
- * 对话. A conversation started from 交给 Persona begins with a `<jarvis-context … title="X">` tag, and Claude names it
- * after that message: it reads 「交给 Persona：X」 instead of the raw tag.
+ * "Chat". A conversation started from "Hand to Persona" begins with a `<jarvis-context … title="X">` tag, and Claude names it
+ * after that message: it reads "Hand to Persona: X" instead of the raw tag.
  */
 internal fun Session.conversationTitle(words: ConversationWords): String {
     title.takeIf { it.isNotBlank() && it != "Claude Code" }?.let { return handoffTitle(it, words) ?: it }
@@ -153,7 +153,7 @@ internal fun Session.conversationTitle(words: ConversationWords): String {
     return handoffTitle(line, words) ?: line.take(30)
 }
 
-/** The words a conversation's name falls back to: 对话, 交给 Persona and 交给 Persona：X ([handoffNamed] has `%1$s`). */
+/** The words a conversation's name falls back to: "Chat", "Hand to Persona" and "Hand to Persona: X" ([handoffNamed] has `%1$s`). */
 internal data class ConversationWords(val untitled: String, val handoff: String, val handoffNamed: String) {
     fun handoff(title: String): String = String.format(handoffNamed, title)
 }
@@ -164,7 +164,7 @@ internal fun conversationWords() = ConversationWords(stringResource(R.string.ass
 
 private val handoffTag = Regex("""<(?:jarvis|persona)-context\b[^>]*?\btitle="([^"]*)"""")
 
-/** 「交给 Persona：X」 for text that is a `<persona-context title="X">` tag (or the older `<jarvis-context>`) (attributes decoded), null for any other text. */
+/** "Hand to Persona: X" for text that is a `<persona-context title="X">` tag (or the older `<jarvis-context>`) (attributes decoded), null for any other text. */
 internal fun handoffTitle(text: String, words: ConversationWords): String? {
     handoffTag.find(text)?.let { match ->
         val title = match.groupValues[1].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">")

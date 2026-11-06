@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * 新增模型供应商 (docs/launchers.md「从扩展添加」): typed in, or — when the hub's extensions offer presets — taken from one,
+ * "New model provider" (docs/launchers.md "From extension"): typed in, or - when the hub's extensions offer presets - taken from one,
  * where only the name, the key and maybe another of its models are filled in and the hub adds the rest.
  */
 internal data class NewProviderDraft(
@@ -44,9 +44,9 @@ internal data class NewProviderDraft(
 )
 
 /**
- * Where 新增模型供应商 is on a hub with built-in presets (docs/onboarding.md 4.3「三条路」B): [Pick] a provider, paste its
+ * Where "New model provider" is on a hub with built-in presets (docs/onboarding.md 4.3 "Three paths" B): [Pick] a provider, paste its
  * [Key] (tested by itself) and see what now runs on it ([Done]); a gateway typed in is the [Form]. An older hub opens on the
- * [Form] with its 自己填写 / 从扩展添加 switch.
+ * [Form] with its "Fill in" / "From extension" switch.
  */
 internal enum class WizardStep { Pick, Key, Done, Form }
 
@@ -68,14 +68,14 @@ internal data class NewProviderState(
     /** Why the presets could not be read (the pick list still offers the gateway typed in). */
     val presetsError: ResText? = null,
     val keyTest: KeyTest? = null,
-    /** 主对话和新开的 Agent 都用它; null: not touched, so it follows the readiness (off while Claude Code already answers). */
+    /** "Use it for the main conversation and new Agents"; null: not touched, so it follows the readiness (off while Claude Code already answers). */
     val assignSet: Boolean? = null,
     /** The main conversation's readiness, asked when the page opens and again after saving; null without it. */
     val readiness: AssistantReadiness? = null,
-    /** The first readiness answer has not come: the switch and 保存 wait for it. */
+    /** The first readiness answer has not come: the switch and "Save" wait for it. */
     val readinessPending: Boolean = false,
     val added: WizardAdded? = null,
-    /** 测试连接 / 获取模型列表 of the form. */
+    /** "Test connection" / "Fetch models" of the form. */
     val probing: Boolean = false,
     val probe: ProviderTest? = null,
     /** The hub could not be asked (not the gateway's answer, which is in [probe] / [found]). */
@@ -95,7 +95,7 @@ internal data class NewProviderState(
         return nameProblem == null
     }
 
-    /** What 测试连接 / 获取模型列表 send for the form: the gateway, the key and the auth typed in. */
+    /** What "Test connection" / "Fetch models" send for the form: the gateway, the key and the auth typed in. */
     val formProbe: ProviderProbe? get() {
         val d = draft
         if (d.baseUrl.isBlank() || d.apiKey.isBlank()) return null
@@ -140,14 +140,14 @@ internal fun providerNameProblem(name: String): ResText? {
     }
 }
 
-/** "直接 API · api.example.com", "Claude Code 启动器 · gateway.example.com". */
+/** "Direct API · api.example.com", "Claude Code launcher · gateway.example.com". */
 internal fun presetSubtitle(res: Resources, preset: ProviderPreset): String {
     val kind = res.getString(if (preset.kind == "api") R.string.settings_src_provider_kind_api else R.string.settings_src_provider_kind_launcher)
     val host = runCatching { java.net.URI(preset.baseUrl).host }.getOrNull()
     return if (host.isNullOrBlank()) kind else res.getString(R.string.settings_src_provider_kind_host, kind, host)
 }
 
-/** 模型配置's id of a provider added under [name]. */
+/** "Model configuration"'s id of a provider added under [name]. */
 internal fun providerId(name: String) = "launcher.${name.trim()}"
 
 /** The main conversation answers on a computer's Claude Code: its computer, Claude Code and model steps are all ok. */
@@ -174,7 +174,7 @@ internal fun testableKey(key: String) = key.trim().length >= 8
 
 internal class NewProviderModel(
     private val api: ProviderSetup,
-    /** The main conversation's readiness (null: the hub has none, or 体验模式). */
+    /** The main conversation's readiness (null: the hub has none, or demo mode). */
     private val readiness: (suspend () -> AssistantReadiness?)? = null,
 ) {
     private val mutable = MutableStateFlow(NewProviderState())
@@ -183,7 +183,7 @@ internal class NewProviderModel(
     private var testSeq = 0
 
     /**
-     * The presets; the first is picked, and [preferPreset] opens on 从扩展添加 when there are any. [hubNames]: the hub has
+     * The presets; the first is picked, and [preferPreset] opens on "From extension" when there are any. [hubNames]: the hub has
      * built-in presets, so the page opens on the list to pick from (the readiness is asked meanwhile).
      */
     suspend fun load(preferPreset: Boolean = false, hubNames: Boolean = false) {
@@ -197,7 +197,7 @@ internal class NewProviderModel(
                     else s.draft.copy(preset = first.id, presetModel = first.defaultModel, fromPreset = preferPreset || s.draft.fromPreset))
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        // 自己填写 still works without them.
+        // "Fill in" still works without them.
         catch (error: Exception) {
             mutable.update { it.copy(loaded = true, presetsError = if (hubNames) ResText.of(R.string.settings_onb_presets_failed, failureReasonText(error)) else null) }
         }
@@ -282,7 +282,7 @@ internal class NewProviderModel(
         finally { mutable.update { it.copy(busy = false) } }
     }
 
-    /** The form's 测试连接: one request to the gateway typed in. */
+    /** The form's "Test connection": one request to the gateway typed in. */
     suspend fun probeForm() {
         val probe = state.value.formProbe ?: return
         if (state.value.probing) return
@@ -294,7 +294,7 @@ internal class NewProviderModel(
         catch (error: Exception) { mutable.update { it.copy(probing = false, probeFailure = failureReasonText(error)) } }
     }
 
-    /** The form's 获取模型列表: the gateway's models; the first fills an empty default model. */
+    /** The form's "Fetch models": the gateway's models; the first fills an empty default model. */
     suspend fun discoverForm() {
         val probe = state.value.formProbe ?: return
         if (state.value.discovering) return
@@ -316,7 +316,7 @@ internal class NewProviderModel(
         if (s.busy) s else s.copy(draft = s.draft.copy(preset = id, presetModel = preset.defaultModel))
     }
 
-    /** The added provider's 模型配置 id; null (with the reason in [NewProviderState.error]) when the hub refused it. */
+    /** The added provider's "Model configuration" id; null (with the reason in [NewProviderState.error]) when the hub refused it. */
     suspend fun save(): String? {
         val current = state.value
         val request = current.request ?: return null

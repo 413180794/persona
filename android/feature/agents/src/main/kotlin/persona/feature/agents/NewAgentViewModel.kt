@@ -19,12 +19,12 @@ import java.util.UUID
 internal data class AgentSpacePreset(val machineId: String, val workspaceId: String, val cwd: String, val name: String)
 
 /**
- * What a caller fills in ahead (the knowledge base's 开 Agent): [machineId] and [cwd] are picked when that machine is
+ * What a caller fills in ahead (the knowledge base's "Open Agent"): [machineId] and [cwd] are picked when that machine is
  * online, [prompt] starts the first message; all of it can still be changed.
  */
 internal data class NewAgentPrefill(val machineId: String? = null, val cwd: String? = null, val prompt: String? = null)
 
-/** The hub's 新建 Agent model use (docs/model-config.md), read once per form. */
+/** The hub's "New Agent" model use (docs/model-config.md), read once per form. */
 internal sealed interface NewAgentModelConfig {
     /** Still reading. */
     data object Unknown : NewAgentModelConfig
@@ -37,7 +37,7 @@ internal sealed interface NewAgentModelConfig {
 }
 
 /**
- * The model list of the launcher that will run ([launcher] on [machineId]), for the 模型 row. [list] stays while it
+ * The model list of the launcher that will run ([launcher] on [machineId]), for the "Model" row. [list] stays while it
  * is asked again; null while the first answer is on its way, after a failure, and from hubs without the list.
  */
 internal data class NewAgentModels(
@@ -75,12 +75,12 @@ internal data class NewAgentState(
     val follow: ModelPurposeDetail? get() = (modelConfig as? NewAgentModelConfig.Follow)?.detail
     /** An empty launcher follows the model configuration, when the hub has one. */
     val following: Boolean get() = follow != null && selection.launcher.isEmpty()
-    /** The launcher the 新建 Agent configuration resolves to on this machine, when it is one of its launchers. */
+    /** The launcher the "New Agent" configuration resolves to on this machine, when it is one of its launchers. */
     val configuredLauncher: AgentLauncher? get() = follow?.purpose?.effective?.provider?.removePrefix("launcher.")
         ?.let { name -> launchers.firstOrNull { it.name == name } }
     val agentType: String get() = if (following) configuredLauncher?.agentType ?: "claude"
         else launchers.firstOrNull { it.name == selection.launcher }?.agentType ?: "claude"
-    /** The launcher that will run, whose models the 模型 row lists: the one picked, or the configuration's. */
+    /** The launcher that will run, whose models the "Model" row lists: the one picked, or the configuration's. */
     val modelLauncher: String get() = if (following) configuredLauncher?.name.orEmpty() else selection.launcher
     /** [modelLauncher]'s models, once there are some to show. */
     val modelList: LauncherModels? get() = models.list?.takeIf {
@@ -92,7 +92,7 @@ internal data class NewAgentState(
         ?.let { id -> modelList?.models?.firstOrNull { it.id == id } }
     /** The `model` a start sends: only a picked one that is not the default (picking the default is picking none). */
     val sentModel: String? get() = pickedModel?.takeUnless { it.isDefault }?.id
-    /** 模型配置 › 新建 Agent's model: what runs with no pick when its launcher is the one that runs. */
+    /** Model configuration › New Agent's model: what runs with no pick when its launcher is the one that runs. */
     val configuredModel: String get() = follow?.takeIf { configuredLauncher?.name == modelLauncher }
         ?.purpose?.effective?.model.orEmpty()
     /** The thinking efforts the model that will run takes, weakest first; null: not known, every level is offered. */
@@ -106,7 +106,7 @@ internal data class NewAgentState(
 
 /**
  * The form kept consistent with the model list: a pick the list no longer has goes back to the default, and an
- * effort the model that will run does not take back to 跟随启动器.
+ * effort the model that will run does not take back to "Follow launcher".
  */
 private fun NewAgentState.settled(): NewAgentState {
     var next = this
@@ -193,7 +193,7 @@ internal class NewAgentViewModel(
                 val (launchers, dirs, config) = coroutineScope {
                     val l = async { service.launchers(id) }
                     val d = async { service.directories(id) }
-                    // The 新建 Agent configuration is the hub's, not the machine's: read once per form.
+                    // The "New Agent" configuration is the hub's, not the machine's: read once per form.
                     val c = async { known ?: modelConfig() }
                     Triple(l.await(), d.await(), c.await())
                 }
@@ -327,7 +327,7 @@ internal class NewAgentViewModel(
         }
     }
     /**
-     * Claude starts in the background (docs/protocol.md「新建会话」): the hub answers with a starting session, which
+     * Claude starts in the background (docs/protocol.md "New session"): the hub answers with a starting session, which
      * opens at once, and the first message goes as an ordinary message (on screen at once, sent once Claude is ready),
      * its id kept with the operation so it is sent once whatever happens to this process. Codex takes its first message
      * with the start, and so does any start without a sender.
@@ -398,7 +398,7 @@ internal class NewAgentViewModel(
 }
 
 /**
- * The launcher a machine starts with: none (follow the 新建 Agent configuration) when the hub has one, so a remembered
+ * The launcher a machine starts with: none (follow the "New Agent" configuration) when the hub has one, so a remembered
  * launcher never overrides it (docs/model-config.md); nothing when that configuration could not be read; otherwise the
  * machine's remembered launcher or its first.
  */

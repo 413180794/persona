@@ -18,7 +18,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-/** 设置 › 管理者 over the pairing's connection (docs/managers.md, `/api/v1/managers*`, answered by the hub itself). */
+/** Settings › Managers over the pairing's connection (docs/managers.md, `/api/v1/managers*`, answered by the hub itself). */
 class HttpHubManagers internal constructor(
     private val request: suspend (path: String, method: String, body: RequestBody?) -> Response,
 ) : HubManagers {

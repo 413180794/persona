@@ -30,8 +30,8 @@ import persona.core.designsystem.PersonaTheme
 import java.io.File
 
 /**
- * A sign-in step (设置 › 连接器) or a binding step (设置 › 渠道) the app cannot draw says so, with 重新开始, never an
- * empty form whose 下一步 stays grey forever; a QR step without its modules shows the link it encodes (#4488, #1693).
+ * A sign-in step (Settings › Connectors) or a binding step (Settings › Channels) the app cannot draw says so, with "Start again", never an
+ * empty form whose "Next" stays grey forever; a QR step without its modules shows the link it encodes (#4488, #1693).
  * In English; the pictures of each style, light and dark, are in build/signin-shots.
  */
 @RunWith(AndroidJUnit4::class)
@@ -96,7 +96,7 @@ class SignInStepsTest {
         rule.onNodeWithText("Update the app", substring = true).assertExists()
         rule.onNode(hasText("Start over") and hasClickAction()).performClick()
         rule.waitForIdle()
-        // 重新开始 asks for the first step again; nothing asked again by itself.
+        // "Start again" asks for the first step again; nothing asked again by itself.
         assertEquals(listOf("", ""), hub.steps)
     }
 
@@ -161,7 +161,7 @@ class SignInStepsTest {
         assertEquals(listOf("", "qr"), hub.steps)
     }
 
-    /** A pair code on 设置 › 连接器 is sent to the bot from the chat app: the page waits for that, not for an authorization (#4983). */
+    /** A pair code on Settings › Connectors is sent to the bot from the chat app: the page waits for that, not for an authorization (#4983). */
     @Test fun aPairCodeWaitsForItToBeSent() {
         val prompt = BindPrompt(step = "pair", kind = "pair_code", userCode = "482913", interval = 3)
         rule.setContent {
@@ -183,7 +183,7 @@ class SignInStepsTest {
                 ConnectorSignInStep("Example", prompt, BindState(prompt), ConnectorSignInModel({ _, _ -> prompt }, {}))
             }
         }
-        // Long press at the start selects; dragging to the end takes the whole link; Ctrl+C copies it, as 复制 does.
+        // Long press at the start selects; dragging to the end takes the whole link; Ctrl+C copies it, as Copy does.
         val link = rule.onNodeWithText("https://example.com/q")
         link.performTouchInput {
             down(centerLeft + androidx.compose.ui.geometry.Offset(2f, 0f))

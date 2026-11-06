@@ -6,8 +6,8 @@ import kotlin.math.sin
 
 /**
  * Debug builds only: `--es debug.voiceAudio fake` makes the voice page use [FakeVoiceAudio] instead of the phone's
- * audio, so an emulator started with `-no-audio` (no microphone to open) still shows 在听 and 正在说 for captures.
- * Release has neither this nor the fake (docs/android.md「语音对话」).
+ * audio, so an emulator started with `-no-audio` (no microphone to open) still shows "Listening" and "Speaking" for captures.
+ * Release has neither this nor the fake (docs/android.md "Voice chat").
  */
 object VoiceDebug {
     fun useFakeAudio() {

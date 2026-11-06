@@ -34,9 +34,9 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * 设置 › 扩展 in each of the app's languages (docs/i18n.md): the list, an extension's page (switch, form, secrets,
+ * Settings › Extensions in each of the app's languages (docs/i18n.md): the list, an extension's page (switch, form, secrets,
  * contributions, sandbox, permissions, about), the market, one of its extensions, the markets, and the settings home's
- * 「扩展」section with a card that failed. Every style light and dark, written as PNGs to `build/i18n-shots/` (or
+ * "Extensions" section with a card that failed. Every style light and dark, written as PNGs to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`). The extensions' own words (names, form labels) are data and stay as the hub sends them.
  */
 @RunWith(AndroidJUnit4::class)
@@ -146,7 +146,7 @@ class ExtensionLanguagesShotsTest {
         }
     }
 
-    /** The settings home's「扩展」section: a card whose view could not be read (重试), a nav page. */
+    /** The settings home's "Extensions" section: a card whose view could not be read ("Retry"), a nav page. */
     @Composable
     private fun SlotsSection() {
         val failed = ExtensionViewState(error = ExtensionFailure(R.string.settings_ext_load_failed, "hub"))

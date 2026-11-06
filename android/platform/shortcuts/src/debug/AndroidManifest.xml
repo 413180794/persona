@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <!-- Debug builds only: the 「批准第一个待处理」 dialog in a fixed state, for captures (ApproveFirstPreviewActivity.kt). -->
+        <!-- Debug builds only: the "Approve first pending" dialog in a fixed state, for captures (ApproveFirstPreviewActivity.kt). -->
         <activity
             android:name="persona.platform.shortcuts.ApproveFirstPreviewActivity"
             android:exported="true"

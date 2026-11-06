@@ -34,11 +34,11 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * 设置 › 助手 › 主动做事: the assistant's 定时任务 (once, daily, every N minutes, docs/assistant.md「定时任务」) and the
+ * Settings › Assistant › Proactive: the assistant's scheduled tasks (once, daily, every N minutes, docs/assistant.md "Scheduled tasks") and the
  * history of runs. The screen keeps its own sub-pages (a task, a new one, all one-offs, all runs) and back.
  *
  * [onOpenConversation] opens an assistant conversation: the one a run started, the one a follow-up continues, or the
- * new one 立即运行 started. [onModelConfiguration] opens 设置 › 模型 for a purpose (`schedule`, `task.<id>`); without
+ * new one "Run now" started. [onModelConfiguration] opens Settings › Models for a purpose (`schedule`, `task.<id>`); without
  * it the editor leaves the row out. [management] and [machines] default to the paired hub's (the Persona tab's host).
  * [initialPage] opens a sub-page directly, for debug captures: `routine:<id>`, `new`, `new:<template>`, `followups`,
  * `runs`, `runs:<routine id>`.
@@ -121,7 +121,7 @@ internal fun ProactiveScreen(
     LaunchedEffect(store) { store.refresh() }
     LaunchedEffect(store, feedback) { store.messages.collect { message -> if (feedback?.notice(message) != true) notice = message } }
     LaunchedEffect(notice) { if (notice != null) { delay(5_000); notice = null } }
-    // Relative times ("25 分钟后") stay true while the page is open.
+    // Relative times ("in 25 min") stay true while the page is open.
     val now by produceState(Instant.now()) { while (true) { delay(30_000); value = Instant.now() } }
     val zone = remember { ZoneId.systemDefault() }
     // Once the soonest thing is due, read again: it moves into the history and the routine's next run moves on.

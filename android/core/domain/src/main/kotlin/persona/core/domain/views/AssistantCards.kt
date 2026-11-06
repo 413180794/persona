@@ -16,7 +16,7 @@ import persona.core.contracts.generated.ExtensionView as WireView
 import persona.core.contracts.api.ExtensionView
 import java.net.URI
 
-// An assistant's card (docs/assistant-views.md「卡片复用扩展的 View」「动作与多页」): the extensions' View with the
+// An assistant's card (docs/assistant-views.md "Cards reuse extension Views" "Actions and multiple pages"): the extensions' View with the
 // assistant's own fields. Read with the generated wire types and checked as `CheckAssistantView` does in
 // `sdk/go/wire/assistantview.go`; a card that fails is drawn as its fallback, never half.
 
@@ -136,7 +136,7 @@ object AssistantCards {
         return AssistantCard(root, drawn, fallback.take(ReplyMost), actions, html)
     }
 
-    /** Every action a page declares: rows', buttons', segmented controls', an empty state's, the search, filter and 加载更多. */
+    /** Every action a page declares: rows', buttons', segmented controls', an empty state's, the search, filter and "Load more". */
     private fun actionsOf(page: WireView): List<ExtensionAction> = buildList {
         page.search?.action?.let(::add)
         page.filter?.action?.let(::add)

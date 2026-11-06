@@ -34,7 +34,7 @@ import persona.core.contracts.api.HubChannel
  * drawn as a monogram of its name ([JSourceMark]).
  */
 enum class Brand(@DrawableRes internal val drawable: Int, @StringRes val labelRes: Int) {
-    /** 飞书 / Lark's bird: the Feishu bot and /agent in Feishu. */
+    /** Lark (Feishu)'s bird: the Feishu bot and /agent in Feishu. */
     Lark(R.drawable.brand_lark, R.string.designsystem_brand_lark);
 
     val label: String @Composable get() = stringResource(labelRes)
@@ -42,7 +42,7 @@ enum class Brand(@DrawableRes internal val drawable: Int, @StringRes val labelRe
 
 /** How large a source mark is drawn: in a line of text, at a list row's front, on top of a page. */
 enum class MarkSize(internal val box: Dp) {
-    /** Beside a line of caption text (「来自 微信」, a conversation's title). */
+    /** Beside a line of caption text ("From WeChat", a conversation's title). */
     Inline(14.dp),
     /** A row's leading mark, the size of the rows' icons with their room. */
     Row(30.dp),
@@ -92,12 +92,12 @@ fun channelBrand(id: String): Brand? = when (id) {
     else -> null
 }
 
-/** A channel's mark (docs/channels.md「界面」): its product's own, else the first character of its name. */
+/** A channel's mark (docs/channels.md "UI"): its product's own, else the first character of its name. */
 @Composable
 fun JChannelMark(channel: HubChannel, modifier: Modifier = Modifier, size: MarkSize = MarkSize.Row) =
     JSourceMark(channel.label, modifier, channelBrand(channel.id), size)
 
-/** 「来自 微信」: the line under a message that came from a channel, its mark and its name in the secondary colour. */
+/** "From WeChat": the line under a message that came from a channel, its mark and its name in the secondary colour. */
 @Composable
 fun JChannelSource(channel: HubChannel, modifier: Modifier = Modifier) {
     val text = stringResource(R.string.designsystem_channel_source, channel.label)
@@ -108,7 +108,7 @@ fun JChannelSource(channel: HubChannel, modifier: Modifier = Modifier) {
 }
 
 /**
- * The selected hubs' channels, for the marks on messages and conversations that came from one (「来自 微信」). The
+ * The selected hubs' channels, for the marks on messages and conversations that came from one ("From WeChat"). The
  * App's shell provides it from its per-hub cache; empty without a hub that has channels.
  */
 val LocalChannels = compositionLocalOf<List<HubChannel>> { emptyList() }

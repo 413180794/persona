@@ -70,7 +70,7 @@ internal class EncryptedCredentials(context: Context) {
 
     val groupsFile: File get() = File(root, "groups.enc")
 
-    /** Route choices are optional: data that cannot be read falls back to 自动 instead of blocking the pairing. */
+    /** Route choices are optional: data that cannot be read falls back to "Automatic" instead of blocking the pairing. */
     fun endpoints(path: String, scope: CoroutineScope): DataStore<EndpointOverridesDocument> = store(
         File(root, "$path/endpoints.enc"), scope, EndpointOverridesDocument(), EndpointOverridesDocument.serializer(),
         { it.version }, ReplaceFileCorruptionHandler { EndpointOverridesDocument() },

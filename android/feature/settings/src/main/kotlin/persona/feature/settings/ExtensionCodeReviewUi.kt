@@ -171,7 +171,7 @@ internal fun ReviewToolbar(view: ExtensionView, state: ExtensionViewState, handl
     }
 }
 
-/** The pending review's bar at the page's foot: how many drafts, and 提交. */
+/** The pending review's bar at the page's foot: how many drafts, and "Submit". */
 @Composable
 internal fun ReviewBar(view: ExtensionView, state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier = Modifier) {
     val r = view.review?.takeIf { it.count > 0 && it.buttons.isNotEmpty() } ?: return
@@ -186,7 +186,7 @@ internal fun ReviewBar(view: ExtensionView, state: ExtensionViewState, handle: E
     }
 }
 
-/** 提交 and its sheet: a summary, the review's buttons, 放弃草稿. */
+/** "Submit" and its sheet: a summary, the review's buttons, "Discard drafts". */
 @Composable
 private fun ReviewSubmit(view: ExtensionView, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val r = view.review ?: return

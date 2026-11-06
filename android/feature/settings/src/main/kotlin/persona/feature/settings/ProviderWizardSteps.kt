@@ -16,7 +16,7 @@ import persona.core.contracts.api.ProviderPreset
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
-// 新增模型供应商's wizard on a hub with built-in presets (docs/onboarding.md 4.3「三条路」B, the web's ProviderWizard):
+// "New model provider"'s wizard on a hub with built-in presets (docs/onboarding.md 4.3 "Three paths" B, the web's ProviderWizard):
 // ① the providers to pick from, ② the key, ③ what now runs on it. The state is NewProviderModel.
 
 /** ①: the hub's providers in its order (a built-in one says who it is for; an extension's its kind and host), the gateway typed in last. */
@@ -39,7 +39,7 @@ internal fun LazyListScope.pickStep(res: Resources, state: NewProviderState, onP
     state.presetsError?.let { error -> item("pick-error") { JInlineStatus(error.text(), Modifier.padding(top = Tokens.Space.m), tone = InlineTone.Caution) } }
 }
 
-/** ②: only the key, tested by itself; whether the main conversation takes it; the name and another model under 更多选项. */
+/** (2): only the key, tested by itself; whether the main conversation takes it; the name and another model under "More options". */
 internal fun LazyListScope.keyStep(
     state: NewProviderState, preset: ProviderPreset, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, onAssign: (Boolean) -> Unit,
     onRetest: () -> Unit, onModel: () -> Unit, more: Boolean, onMore: () -> Unit,
@@ -158,7 +158,7 @@ internal fun LazyListScope.doneStep(state: NewProviderState, added: WizardAdded)
     }
 }
 
-/** What 「现在用它：主对话、新开的 Agent」 and each kept category say; [assigned] null when none was asked (or an older hub). */
+/** What "Now using it: main conversation, new Agents" and each kept category say; [assigned] null when none was asked (or an older hub). */
 internal data class AssignSummary(val assigned: ResText?, val kept: List<ResText>)
 
 internal fun assignSummary(result: ProviderAdded, asked: Boolean): AssignSummary {

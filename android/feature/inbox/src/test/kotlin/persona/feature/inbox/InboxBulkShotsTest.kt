@@ -36,7 +36,7 @@ import persona.core.navigation.Navigator
 import java.io.File
 
 /**
- * The inbox's 更多 sheet with its one bulk entry 全部清理 (#5114), and the confirmation it asks for over
+ * The inbox's More sheet with its one bulk entry Clean up all (#5114), and the confirmation it asks for over
  * [BULK_CONFIRM_AT] items, on the JVM with Robolectric's native graphics, light and dark. Confirming files every open
  * item as dismissed in one request. The PNGs go to `build/inbox-bulk-shots/` (or `-Dpersona.shots=<dir>`).
  */

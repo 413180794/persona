@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import persona.core.contracts.api.MicrosoftFinish
 
-/** The hub calls behind #3045: inbox mutes, a chat's pins and read receipts, 风灵月影, 信息 and Outlook sign-in. */
+/** The hub calls behind #3045: inbox mutes, a chat's pins and read receipts, Lark message display (anti-recall, edit history), Messages and Outlook sign-in. */
 class ParityInboxTransportTest {
     @Test fun inboxAndLarkCallsUseTheHubsRoutes() = runBlocking {
         MockWebServer().use { server ->

@@ -23,7 +23,7 @@ import persona.core.domain.sort.deleteConfirmation
 import java.io.File
 
 /**
- * 删除对话's confirmation (issue #1749), as the chat's menu and the Agents list show it, drawn on the JVM with
+ * "Delete chat"'s confirmation (issue #1749), as the chat's menu and the Agents list show it, drawn on the JVM with
  * Robolectric's native graphics in every style, light and dark. PNGs in `build/delete-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)

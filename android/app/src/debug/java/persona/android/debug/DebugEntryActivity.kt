@@ -24,7 +24,7 @@ class DebugEntryActivity : ComponentActivity() {
 
     private fun forward(source: Intent) {
         // Captures of several hub groups: `--es debug.addMockAddress http://<loopback>:<port>` pairs one more mock hub
-        // next to the existing ones (settings › hub › 添加 hub does the same with a real pairing link).
+        // next to the existing ones (settings › hub › "Add hub" does the same with a real pairing link).
         source.getStringExtra("debug.addMockAddress")?.let { address ->
             source.removeExtra("debug.addMockAddress")
             val uri = URI(address)

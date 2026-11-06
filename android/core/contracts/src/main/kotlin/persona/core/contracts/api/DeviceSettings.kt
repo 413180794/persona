@@ -31,9 +31,9 @@ data class DeviceNotificationPreferences(
     val longTurnSeconds: Int? = null,
     val doneDelaySeconds: Int? = null,
     val liveActivity: Boolean = true,
-    /** What the hub has of this device's 设置 › 翻译; null from a hub without it. */
+    /** What the hub has of this device's Settings › Translation; null from a hub without it. */
     val translate: HubTranslatePrefs? = null,
-    /** 手机静音: no 需要你 / 做完 pushes while a desktop app is connected; null from a hub without it. */
+    /** "Silence phone": no "Needs you" / "Done" pushes while a desktop app is connected; null from a hub without it. */
     val muteWhileDesktop: Boolean? = null,
 )
 
@@ -45,7 +45,7 @@ interface DeviceSettings {
     suspend fun savePreferences(preferences: DeviceNotificationPreferences): DeviceNotificationPreferences
 
     /**
-     * 设置 › 设备 › 连接新设备: `POST /api/v1/auth/pair-codes` with the page address of this hub (docs/protocol.md「临时配对」),
+     * Settings › Devices › "Connect a new device": `POST /api/v1/auth/pair-codes` with the page address of this hub (docs/protocol.md "Temporary pairing"),
      * a one-time code for another app (its QR rows) and the browser sign-in link.
      */
     suspend fun pairCode(): AppPairCode = throw UnsupportedOperationException("pair-codes")

@@ -5,7 +5,7 @@ import persona.core.contracts.CoreText
 
 /**
  * A model API error in a chat (iOS `APIErrorInfo`), read from the text Claude Code writes when it gives up
- * ("API Error: 502 …", an answer) or from the hub's notice for a retry ("API 错误：Overloaded（正在重试）"): why, in
+ * ("API Error: 502 …", an answer) or from the hub's notice for a retry (its Chinese "API error: Overloaded (retrying)"): why, in
  * words, the status, and whether it is likely to pass by itself; the ids and the raw text fold under it.
  */
 data class ApiErrorInfo(
@@ -24,7 +24,7 @@ data class ApiErrorInfo(
     /** Two errors are "the same" for folding when these match. */
     val signature: String get() = "${status ?: 0}|${reason.key}"
 
-    /** Someone has to act (a login, a bad request): sending 继续 again would not help. */
+    /** Someone has to act (a login, a bad request): sending "continue" again would not help. */
     val needsAction: Boolean get() = transient == false
 
     companion object {
@@ -67,7 +67,7 @@ data class ApiErrorInfo(
 
 private val retryWords = setOf("继续", "重试", "再试一次", "continue", "retry", "go on") // i18n-ignore: what a user types to retry
 
-/** A bare 「继续」 between two of the same error: the user retrying, folded into the error's count. */
+/** A bare "continue" between two of the same error: the user retrying, folded into the error's count. */
 internal fun isRetry(line: ChatLine): Boolean {
     val row = (line as? ChatLine.Row)?.row ?: return false
     return row.type == "user" && row.item?.text.orEmpty().trim().lowercase() in retryWords
@@ -75,7 +75,7 @@ internal fun isRetry(line: ChatLine): Boolean {
 
 /**
  * Answers and notices that are API errors become [ChatLine.ApiError] cards; the same error again right after, with
- * nothing but a retry (「继续」) between, folds into the first with a count (iOS `ChatLines.foldAPIErrors`). Only
+ * nothing but a retry ("continue") between, folds into the first with a count (iOS `ChatLines.foldAPIErrors`). Only
  * top-level lines: a notice inside a work line stays a step of it.
  */
 fun foldApiErrors(lines: List<ChatLine>): List<ChatLine> {

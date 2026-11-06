@@ -90,7 +90,7 @@ internal object MetricFormat {
     fun lastSeen(value: String?, locale: Locale): String? = parseTime(value)?.let {
         LocalizedFormats.format(it, LocalizedFormats.MONTH_DAY_TIME, locale)
     }
-    /** When the machine started, as 2026年11月2日 08:30 in the phone's zone. */
+    /** When the machine started, as Nov 2, 2026, 08:30 in the phone's zone (in the app's language). */
     fun boot(boot: Double?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String? = boot?.takeIf { it.isFinite() && it > 0 }?.let {
         LocalizedFormats.format(Instant.ofEpochSecond(it.toLong()), LocalizedFormats.DATE_TIME, locale, zone)
     }
@@ -98,7 +98,7 @@ internal object MetricFormat {
     fun uptimeMinutes(boot: Double?, now: Long): Long? = boot?.takeIf { it.isFinite() && it > 0 && it <= now }?.let { (now - it.toLong()) / 60 }
 }
 
-/** How long it has been up: 3 天 4 小时 · 3d 4h · 3日4時間. */
+/** How long it has been up: 3d 4h in English, the Chinese or Japanese form otherwise. */
 @Composable
 internal fun uptimeText(boot: Double?, now: Long): String? = MetricFormat.uptimeMinutes(boot, now)?.let { minutes ->
     when {

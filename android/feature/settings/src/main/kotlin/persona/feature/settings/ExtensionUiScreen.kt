@@ -23,12 +23,12 @@ import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-// The places an extension's View is drawn (docs/extensions.md「声明式 UI」): a page of its own (extension_page, from the
-// extension's page in 设置 › 扩展; nav_page, from the「扩展」section of the settings home) and a section on a launcher's
+// The places an extension's View is drawn (docs/extensions.md "Declarative UI"): a page of its own (extension_page, from the
+// extension's page in Settings › Extensions; nav_page, from the "Extensions" section of the settings home) and a section on a launcher's
 // page (launcher_section). The UI slots of the settings home and a machine's page are in ExtensionSlots.kt.
 
 /**
- * 设置 › 扩展 › one › a page it draws, or a nav page opened from the settings home; or (UI version 3) a page the
+ * Settings › Extensions › one › a page it draws, or a nav page opened from the settings home; or (UI version 3) a page the
  * extension pushed on another, first drawn with [initialState]. A push opens the next page through [onPush]; a pop goes
  * back, and the page underneath is drawn again when it shows.
  */
@@ -48,7 +48,7 @@ fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId:
         ExtensionViewText.pushed(extensionId, uiId, title, depth, push)?.let { model.covered(); onPush(it) }
     }, onPop = onBack)
     LaunchedEffect(model) { model.load() }
-    // A view with refresh_after is drawn again while this page is on screen (docs/extensions.md「UI 插槽」「刷新」),
+    // A view with refresh_after is drawn again while this page is on screen (docs/extensions.md "UI slots" "Refresh"),
     // one the extension invalidated (ui.invalidate) at once or when it shows again, and one back from a page pushed on it.
     KeepFresh(model, extensions.uiEvents)
     val view = state.view
@@ -63,7 +63,7 @@ fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId:
     }
 }
 
-/** Loading, an error with 重试 when there is nothing to show yet, or the error above what is shown. */
+/** Loading, an error with "Retry" when there is nothing to show yet, or the error above what is shown. */
 private fun LazyListScope.viewStatus(key: String, state: ExtensionViewState, onRetry: () -> Unit) {
     when {
         state.view == null && state.error != null -> item("$key-error") {
@@ -92,7 +92,7 @@ internal fun LazyListScope.extensionPages(pages: List<ExtensionUiPlace>, onOpen:
 }
 
 /**
- * A launcher of a machine (opened from its row on the machine's page): what it runs, its 额度 at its gateway, and the
+ * A launcher of a machine (opened from its row on the machine's page): what it runs, its "Quota" at its gateway, and the
  * sections extensions draw for the gateway. A section whose extension says the gateway is not its own is left out without a word.
  * [machineName] names the machine that read the quota.
  */

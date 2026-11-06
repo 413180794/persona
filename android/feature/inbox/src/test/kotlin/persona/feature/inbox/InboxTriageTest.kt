@@ -9,11 +9,11 @@ import persona.core.contracts.JsonCodec
 import org.junit.Assert.*
 import org.junit.Test
 
-// New items waiting for triage (#1773): the banner's words and its 去配置, the same as on the web and iOS.
+// New items waiting for triage (#1773): the banner's words and its "Set up", the same as on the web and iOS.
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class InboxTriageTest {
-    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    /** The app's strings; Robolectric runs in Simplified Chinese (robolectric.properties). */
     private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
     private fun triage(state: String, waiting: Int, reason: String? = null, vararg sources: InboxTriageSource) =
         InboxTriage(state, reason, waiting, sources.toList())

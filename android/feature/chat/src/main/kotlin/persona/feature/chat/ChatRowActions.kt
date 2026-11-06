@@ -29,9 +29,9 @@ internal class ChatRowActions(
     val openImages: (images: List<ViewerImage>, index: Int) -> Unit,
     /** The long-press menu of messages; null where messages have none. */
     val menu: MessageMenuState?,
-    /** The one API error card that offers 重试 (the newest line, see [retryLine]); null: none does. */
+    /** The one API error card that offers "Retry" (the newest line, see [retryLine]); null: none does. */
     val retryLineId: String?,
-    /** What 重试 does: send 「继续」. */
+    /** What "Retry" does: send "Continue". */
     val onRetry: () -> Unit,
     /** What a picture of the conversation is called to accessibility services, in the page's language. */
     val imageDescription: String = "",
@@ -51,7 +51,7 @@ internal val LocalChatRowActions = compositionLocalOf<ChatRowActions?> { null }
 
 /**
  * The session's sub-agents by the Task / Agent call that started them ([keys], running or done) and how to open one:
- * what 「查看子 Agent」 under those steps needs. Null where they cannot be opened (a read-only conversation, no navigation).
+ * what "View sub-agent" under those steps needs. Null where they cannot be opened (a read-only conversation, no navigation).
  */
 @androidx.compose.runtime.Immutable
 internal data class ChatSubagents(val keys: Map<String, SessionKey>, val open: (SessionKey) -> Unit)
@@ -60,7 +60,7 @@ internal val LocalChatSubagents = compositionLocalOf<ChatSubagents?> { null }
 
 /**
  * A picture of the conversation for the viewer: its bytes come inline with the page when the hub sent them, else
- * from the repository by item id (pages drop picture bytes, docs/android.md「缓存体积预算」).
+ * from the repository by item id (pages drop picture bytes, docs/android.md "Cache size budget").
  */
 internal fun chatViewerImage(session: SessionKey, item: Item, repository: ChatRepository?, description: String = ""): ViewerImage {
     val image = item.image

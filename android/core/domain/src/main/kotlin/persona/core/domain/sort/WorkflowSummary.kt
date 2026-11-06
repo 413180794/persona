@@ -11,16 +11,16 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * The words for an agent's background Workflow runs (docs/agent-states.md「后台 workflow、Monitor」, #2935): the one line
+ * The words for an agent's background Workflow runs (docs/agent-states.md "Background workflow, Monitor", #2935): the one line
  * the Agents list and the task cards add under an agent, and the parts of a run's card in the chat's details. The same
- * as iOS and the web: 「后台 workflow「parity-audit」· Verify 2/2 · 169/185 · 14 分」.
+ * as iOS and the web: "Background workflow 'parity-audit' · Verify 2/2 · 169/185 · 14 min".
  */
 object WorkflowSummary {
     private const val SEPARATOR = " · "
 
     /**
-     * The line for [session]'s running workflows: the newest one, then 「等 N 个」 for the others. An older hub that sends
-     * no workflows but has one in its background says 「后台运行中」. Null when no workflow runs.
+     * The line for [session]'s running workflows: the newest one, then "and N others" for the others. An older hub that sends
+     * no workflows but has one in its background says "Running in background". Null when no workflow runs.
      */
     fun line(session: Session?, now: Instant): CoreText? {
         session ?: return null
@@ -38,7 +38,7 @@ object WorkflowSummary {
         elapsed(workflow, now),
     ))
 
-    /** 「Verify 2/2」 where the hub knows its place among the phases, else the phase's name alone. */
+    /** "Verify 2/2" where the hub knows its place among the phases, else the phase's name alone. */
     fun phase(workflow: Workflow): CoreText? {
         val index = workflow.currentPhase
         val phases = workflow.phases.orEmpty()
@@ -54,7 +54,7 @@ object WorkflowSummary {
         return Duration.between(start, end).seconds.coerceAtLeast(0)
     }
 
-    /** [elapsedSeconds] in whole minutes (it is redrawn once a minute): at least 1 分, then hours and minutes. */
+    /** [elapsedSeconds] in whole minutes (it is redrawn once a minute): at least 1 min, then hours and minutes. */
     fun elapsed(workflow: Workflow, now: Instant): CoreText? = elapsedSeconds(workflow, now)?.let { s ->
         when {
             s < 3600 -> CoreText.of(Key.DurationMinutes, (s / 60).coerceAtLeast(1))
@@ -63,7 +63,7 @@ object WorkflowSummary {
         }
     }
 
-    /** The status chip's words: 在跑, 完成, 失败, 已停止, 没动静了. */
+    /** The status chip's words: "Running", "Done", "Failed", "Stopped", "Stalled". */
     fun status(workflow: Workflow): CoreText = CoreText.of(when (workflow.state) {
         WorkflowStatus.Running -> Key.WorkflowRunning
         WorkflowStatus.Completed -> Key.WorkflowCompleted
@@ -72,7 +72,7 @@ object WorkflowSummary {
         WorkflowStatus.Stalled -> Key.WorkflowStalled
     })
 
-    /** 「169/185 个 agent 完成 · 16 个在跑」; the running part only while some are. Null before it started any. */
+    /** "169/185 agents done · 16 running"; the running part only while some are. Null before it started any. */
     fun progress(workflow: Workflow): CoreText? {
         if (workflow.agentsStarted <= 0) return null
         return CoreText.joined(SEPARATOR, listOfNotNull(

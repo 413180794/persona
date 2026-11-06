@@ -14,7 +14,7 @@ import java.util.UUID
 // Comments on a Feishu document in the reader (#1290 / #2964; iOS FeishuDocsCommentsModel, web lib/doc-comments): the
 // threads from the hub's read-only Lark gateway window and, when the plugin says `lark_doc_comments`, the user's own
 // writes from this phone: a comment on the whole document or on a passage, a reply to a thread, resolve and reopen.
-// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol.md 飞书 API.
+// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol.md Lark API.
 
 data class LarkDocCommentSegment(val kind: String, val text: String, val href: String? = null)
 
@@ -43,7 +43,7 @@ data class LarkDocCommentThread(
 /** Someone to @ in a comment (the plugin's people search, the shape of a group's members). */
 data class LarkDocPerson(val userId: String, val name: String)
 
-/** Where 发送 goes: a new comment on the whole document, a reply to a thread, or a new comment on a passage. */
+/** Where "Send" goes: a new comment on the whole document, a reply to a thread, or a new comment on a passage. */
 sealed interface LarkDocCommentTarget {
     data object Document : LarkDocCommentTarget
     data class Thread(val id: String, val name: String, val text: String) : LarkDocCommentTarget
@@ -109,7 +109,7 @@ data class LarkDocCommentFailure(@StringRes val action: Int, val reason: String?
 
 /**
  * A document's comment threads and what the user is writing (docs/android.md: the logic beside the page): loading
- * them, 发送 to where [target] says, resolving and reopening. A write's answer carries the threads as Feishu has them
+ * them, "Send" to where [target] says, resolving and reopening. A write's answer carries the threads as Feishu has them
  * afterwards; when it cannot, they are read again.
  */
 class LarkDocCommentsModel(val url: String, private val api: LarkDocCommentsApi, target: LarkDocCommentTarget = LarkDocCommentTarget.Document,
@@ -208,7 +208,7 @@ class LarkDocCommentsModel(val url: String, private val api: LarkDocCommentsApi,
 
     private fun failureOf(@StringRes action: Int, e: Exception): LarkDocCommentFailure {
         val hub = runCatching { HubFailure.from(e) }.getOrNull()
-        // The hub's words (the plugin's: 「飞书网关未登录飞书」…); a bare error kind says nothing to the user.
+        // The hub's words (the plugin's: "The Lark gateway is not signed in to Lark"…); a bare error kind says nothing to the user.
         val said = hub?.message?.takeIf { it.isNotBlank() && it != hub.kind.name }
         return LarkDocCommentFailure(action, said, unsupported = hub?.code == "comment_unsupported")
     }

@@ -9,8 +9,8 @@ import androidx.core.graphics.drawable.IconCompat
 import persona.core.contracts.Session
 
 /**
- * The launcher shortcuts (long-press the Persona icon; iOS App Intents `PersonaShortcuts`): 「问 Persona」, 「批准待处理」,
- * 「新建待办」 (iOS AddTodoIntent) and the two most recently active agents. Published at runtime: a static shortcut's intent would have to spell out the
+ * The launcher shortcuts (long-press the Persona icon; iOS App Intents `PersonaShortcuts`): "Ask Persona", "Approve pending",
+ * "New to-do" (iOS AddTodoIntent) and the two most recently active agents. Published at runtime: a static shortcut's intent would have to spell out the
  * application id, which is personal configuration (docs/config.md).
  */
 internal object ShortcutPublisher {

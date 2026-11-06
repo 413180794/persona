@@ -11,7 +11,7 @@ import kotlinx.serialization.json.intOrNull
 import java.util.Locale
 
 /**
- * Jupyter notebooks for the file viewer (docs/android.md「文件查看器」; web `lib/notebook.ts`, iOS `Notebook.swift`):
+ * Jupyter notebooks for the file viewer (docs/android.md "File viewer"; web `lib/notebook.ts`, iOS `Notebook.swift`):
  * nbformat 4 (and 3's worksheets) into cells, each output reduced to the one representation the viewer shows. Pure.
  */
 internal object Notebooks {
@@ -142,7 +142,7 @@ internal object Notebooks {
 
     /**
      * A notebook's JSON into cells; throws [Invalid] with a readable reason for what is not one. [more] says how many
-     * lines of a long output were left out (「… 还有 3 行没有显示」).
+     * lines of a long output were left out ("… 3 more lines not shown").
      */
     fun parse(text: String, more: (Int) -> String): Notebook {
         val nb = try {

@@ -6,7 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * 设置 › 管理者 (docs/managers.md, docs/protocol.md「管理者」): the selected hub's roster of managers, each a whole
+ * Settings › Managers (docs/managers.md, docs/protocol.md"Managers"): the selected hub's roster of managers, each a whole
  * assistant, and the one-time install codes that put a new one (or one moved elsewhere) on a computer. The hub answers
  * these itself (`/api/v1/managers`). Bound to the active pairing's selected hub.
  */
@@ -60,7 +60,7 @@ data class HubManager(
     val version: String? = null,
     /** Connected since (online only). */
     val since: String? = null,
-    /** Last connected (offline: 最后同步于). */
+    /** Last connected (offline: Last synced at). */
     @SerialName("last_seen") val lastSeen: String? = null,
     /** Made in the app, its install code not traded yet: when that code runs out. */
     val installing: String? = null,

@@ -36,7 +36,7 @@ import java.io.File
 
 /**
  * The onboarding pages in Settings (docs/onboarding.md 4.2 / 4.3): the provider wizard's three steps and the gateway's
- * test, and 连接新设备, in every style, light and dark. Written to `build/onboarding-shots/`.
+ * test, and "Connect a new device", in every style, light and dark. Written to `build/onboarding-shots/`.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

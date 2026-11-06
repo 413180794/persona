@@ -14,8 +14,8 @@ import persona.core.designsystem.*
 import persona.core.hub.HubFailure
 
 /**
- * 设置 › 飞书 › 风灵月影 (iOS `LarkMessageDisplaySettingsView`): 防撤回, 编辑历史 and, from an extension that has it,
- * [removed]编码, shared with the Lark gateway's web for the signed-in account. A switch changes from what it was read as; anything
+ * Settings › Lark › Message display (iOS `LarkMessageDisplaySettingsView`): "Keep recalled messages", "Edit history" and, from an extension that has it,
+ * "Brave Climb encoding", shared with the Lark gateway's web for the signed-in account. A switch changes from what it was read as; anything
  * unclear reads the settings again instead of guessing.
  */
 @Composable

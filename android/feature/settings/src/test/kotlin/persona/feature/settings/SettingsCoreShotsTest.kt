@@ -40,8 +40,8 @@ import java.io.File
 
 /**
  * The settings pages this lane translated (#2453) in each of the app's languages, Glass light and dark (the list also
- * in the other styles): the list (体验模式 and paired), 界面风格, 形象, 连接诊断, 设备, 通知, 准备清单, 悬浮胶囊, 翻译,
- * 会话分诊, 关于 and 手机数据. Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at; text
+ * in the other styles): the list (demo mode and paired), "Interface style", "Avatar", "Connection diagnostics", "Devices", "Notifications", "Checklist", "Floating capsule", "Translation",
+ * "Session triage", "About" and "Phone data". Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at; text
  * still in Chinese on an English or Japanese page is printed.
  */
 @RunWith(AndroidJUnit4::class)

@@ -148,7 +148,7 @@ private fun ChatPage(
             queued = null, loop = null, background = null, workflows = null, pendingInteractions = 0)
     } ?: lastSession
     SideEffect { if (session != null) lastSession = session }
-    // What the session's source lets the phone do (docs/protocol.md「Codex 来源与能力」). Older sessions, and one whose
+    // What the session's source lets the phone do (docs/protocol.md "Codex sources and capabilities"). Older sessions, and one whose
     // metadata has not arrived, can do everything: the hub and the node refuse what is not allowed anyway.
     val canSend = session?.canSend ?: true
     val canApprove = session?.canApprove ?: true
@@ -190,9 +190,9 @@ private fun ChatPage(
     var linkContexts by rememberSaveable(stateSaver = ChatLinkContextsSaver) { mutableStateOf(emptyList<ChatLinkContext>()) }
     var submittedContexts by remember { mutableStateOf(emptyList<ChatLinkContext>()) }
     var notice by remember { mutableStateOf<String?>(null) }
-    // /model in the "/" list asked for the 模式 sheet: a one-off, cleared once the sheet opened (not replayed when the bar returns).
+    // /model in the "/" list asked for the "Mode" sheet: a one-off, cleared once the sheet opened (not replayed when the bar returns).
     var openModes by remember { mutableStateOf(false) }
-    // The host's failure notice whose 重试 went out: hidden until the list catches up; back if that send failed.
+    // The host's failure notice whose "Retry" went out: hidden until the list catches up; back if that send failed.
     var hostRetried by rememberSaveable(key.path) { mutableStateOf<String?>(null) }
     val deliveryActions = remember(sender) { ChatDeliveryActions(sender) }
     var statusSheet by remember { mutableStateOf(false) }
@@ -361,7 +361,7 @@ private fun ChatPage(
         if (readOnly || !canSend) return false
         if (sending || submittedDraft != null) return false
         if (command == null && ((!composer.hasContent && linkContexts.isEmpty()) || !composer.ready)) return false
-        // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+        // Routed to a task ("Say to "xx""): straight to its agent, not to Persona (docs/unified-entry.md "Who it points to").
         if (command == null && tasks != null && linkContexts.isEmpty() && composer.attachments.isEmpty() &&
             tasks.sendRouted(key.sessionId, composer.value.text.trim()) { notice = operationFeedback(it).text.resolve(res) }) {
             composer.clearIfUnchanged(composer.draft)
@@ -390,7 +390,7 @@ private fun ChatPage(
     }
     // Chat content (group A): the message menu, the image viewer, photos and paths in messages, the API error retry.
     val messageMenu = remember { MessageMenuState() }
-    // A swipe to the left quotes (iOS #1058) wherever the long-press menu's 引用 is offered.
+    // A swipe to the left quotes (iOS #1058) wherever the long-press menu's "Quote" is offered.
     val quoteTarget: (MessageTarget) -> Unit = { target ->
         // Over the box as a quote that goes with the next message, the draft left as it is (iOS #986).
         linkContexts = withQuote(linkContexts, messageQuote(target.text, target.user, session?.agentLabel ?: "Claude", target.id))
@@ -399,7 +399,7 @@ private fun ChatPage(
     val swipeQuote by rememberUpdatedState(quoteTarget)
     val menuWrites = messageMenuWrites(readOnly, session)
     LaunchedEffect(menuWrites) { messageMenu.quote = if (menuWrites) ({ target: MessageTarget -> swipeQuote(target) }) else null }
-    // 分支到新聊天 (#2137) from a reply, 回退到这里 (#2436) on your message: the menu's session-wide extras (web ⋯).
+    // "Branch to new chat" (#2137) from a reply, "Rewind to here" (#2436) on your message: the menu's session-wide extras (web ⋯).
     var forking by remember { mutableStateOf(false) }
     var rewindBusy by remember { mutableStateOf(false) }
     val actionsService = chrome.actions
@@ -463,7 +463,7 @@ private fun ChatPage(
                 }
             }
         }) else null
-    // 「查看子 Agent」 under Task / Agent steps (iOS): the session's sub-agents by the call that started them, done ones too.
+    // "View sub-agent" under Task / Agent steps (iOS): the session's sub-agents by the call that started them, done ones too.
     val subagentLinks = remember(session?.subagents, chrome.onOpenSession, readOnly, key.machineId) {
         val open = chrome.onOpenSession
         if (readOnly || open == null) null
@@ -473,7 +473,7 @@ private fun ChatPage(
     }
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
     val photos = remember(chrome.files, key, session?.cwd) { chrome.files?.let { AttachedPhotos(it, key.machineId, session?.cwd.orEmpty()) } }
-    // A 「继续」 already on its way counts as working: the card offers no second one.
+    // A "Continue" already on its way counts as working: the card offers no second one.
     val retryId = retryLine(projection.lines, session?.status == "working" || messages.isNotEmpty(), !readOnly && canSend)
     val currentOpenPath by rememberUpdatedState(chrome.onOpenPath)
     // Paths in messages link only when there on the machine (PathLinks.kt): asked of the session's directory.
@@ -499,7 +499,7 @@ private fun ChatPage(
                 ({ path -> "${key.machineId}\n$cwd\n$path" to { pixels: Int -> files.thumbnail(key.machineId, cwd, path, pixels) } })
             })
     }
-    // A task's detail or the dock's 全部, open over the conversation; kept across the host being made again.
+    // A task's detail or the dock's "All", open over the conversation; kept across the host being made again.
     val taskSheet = remember(key) { mutableStateOf<TaskSheet?>(null) }
     // the cards still to answer: one just answered here no longer says what it asked
     val taskCards = remember(allRequests, resolved) { allRequests.filter { it.id !in resolved } }
@@ -524,7 +524,7 @@ private fun ChatPage(
     LaunchedEffect(interactionFeedback) {
         if (interactionFeedback != null) { delay(3_000); interactionFeedback = null }
     }
-    // As long as the web shows its 已回答 receipts (20 s); never moves on by itself.
+    // As long as the web shows its "Answered" receipts (20 s); never moves on by itself.
     LaunchedEffect(answeredHere) {
         if (answeredHere > 0) { offerNext = true; delay(NEXT_WAITING_MILLIS); offerNext = false }
     }
@@ -573,7 +573,7 @@ private fun ChatPage(
     val replacement = if (snapshot.replaced) sessionList.firstOrNull { candidate ->
         session != null && candidate.key != key && SessionRuntimeState.map(session, listOf(candidate), true).replaced
     } else null
-    // The machine this conversation runs on, for its port links (docs/ports.md「识别回答里的链接」).
+    // The machine this conversation runs on, for its port links (docs/ports.md "Recognizing links in replies").
     val portPresence = remember(chrome.ports, key.machineId) {
         chrome.ports?.let { opener -> PortPresence(scope, { port -> opener.probe(key.machineId, port).let { it.listening to it.title } }) }
     }
@@ -728,7 +728,7 @@ private fun ChatPage(
                                     }, onOverlay = { composerOverlay = it }, agentName = session?.agentLabel ?: "Claude",
                                     canInterrupt = session?.canInterrupt ?: true,
                                     mentions = mentions, onMention = { ref -> linkContexts = linkContexts + ref },
-                                    // /model opens the 模式 sheet's model choices; both need Claude in a pane (as the sheet does).
+                                    // /model opens the "Mode" sheet's model choices; both need Claude in a pane (as the sheet does).
                                     onModel = if (claudeCommands && session?.canChangeModes == true) ({ openModes = true }) else null,
                                     loop = claudeCommands)
                             }
@@ -801,7 +801,7 @@ private fun ChatPage(
                                 JEmptyState(stringResource(R.string.chat_screen_empty_title),
                                     stringResource(if (readOnly) R.string.chat_screen_empty_read_only else R.string.chat_screen_empty_hint),
                                     Modifier.align(Alignment.Center).padding(padding).padding(horizontal = horizontalPadding))
-                            // The newest plan card scrolled out of view: 「Step N/M」 above the composer brings it back (web PlanPill).
+                            // The newest plan card scrolled out of view: "Step N/M" above the composer brings it back (web PlanPill).
                             val anchor = remember(lines, contentPlans, renderStyle) { latestPlanLine(lines, contentPlans, renderStyle.compactToolSummary) }
                             val planOut by remember(anchor) { derivedStateOf {
                                 anchor != null && list.layoutInfo.totalItemsCount > 0 &&

@@ -29,7 +29,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * 连接诊断 after a pairing that failed at TLS, before any connection exists, drawn on the JVM in every style, light
+ * "Connection diagnostics" after a pairing that failed at TLS, before any connection exists, drawn on the JVM in every style, light
  * and dark. Written as PNGs to `build/diagnostics-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)

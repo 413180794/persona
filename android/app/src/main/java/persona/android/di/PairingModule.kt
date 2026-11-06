@@ -31,7 +31,7 @@ object PairingModule {
     @Provides @Singleton fun pairing(service: persona.android.platform.PlatformPairing): PairingService = service
     @Provides @Singleton fun diagnostics(service: persona.android.platform.LockScreenTests): SettingsDiagnostics = service
     @Provides @Singleton fun updates(service: WiredPairingService): AppUpdates = service
-    /** The last pairing attempt, in memory, for 连接诊断 before (or without) a working connection. */
+    /** The last pairing attempt, in memory, for "Connection diagnostics" before (or without) a working connection. */
     @Provides @Singleton fun attempts(): PairingAttempts = PairingAttempts()
 
     @Provides @Singleton fun settings(
@@ -68,7 +68,7 @@ class WiredPairingService @Inject constructor(application: Application, private 
     // Storage discards the old pairings, including when pairing with the same hub again.
     override suspend fun pair(request: PairingRequest, progress: (PairingProgress) -> Unit) = pair(request, progress) { runtime.pair(it) }
 
-    /** Pairs one more hub next to the existing ones (settings › hub › 添加 hub); the same checks as [pair]. */
+    /** Pairs one more hub next to the existing ones (settings › hub › "Add hub"); the same checks as [pair]. */
     suspend fun addHub(request: PairingRequest, progress: (PairingProgress) -> Unit) = pair(request, progress) { runtime.addHub(it) }
 
     private suspend fun pair(request: PairingRequest, progress: (PairingProgress) -> Unit, save: suspend (HubCredentials) -> Unit) = lock.withLock {

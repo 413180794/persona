@@ -4,7 +4,7 @@ import persona.core.contracts.GroupKeys
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** One paired or mesh-learned hub of a group (docs/android.md「多 hub」). */
+/** One paired or mesh-learned hub of a group (docs/android.md "Multiple hubs"). */
 data class HubMemberInfo(
     val hubId: String,
     /** The hub's own name (`hub_name`), else a short form of its id. */

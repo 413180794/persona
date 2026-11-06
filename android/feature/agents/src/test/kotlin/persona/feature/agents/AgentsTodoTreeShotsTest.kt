@@ -41,7 +41,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 按待办 as 项目 › 待办 › Agent (#3156, web #2698), in every style and appearance. Written as PNGs to `build/todo-tree-shots/`
+ * "By to-do" as project › to-do › Agent (#3156, web #2698), in every style and appearance. Written as PNGs to `build/todo-tree-shots/`
  * (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)

@@ -16,7 +16,7 @@ import persona.core.designsystem.icons.PhIcons
 internal fun AppLanguage.ownName(): String =
     if (this == AppLanguage.System) stringResource(R.string.settings_language_system) else ownName
 
-/** 设置 › 外观 › 语言: the row, with the choice as its value. */
+/** Settings › Appearance › Language: the row, with the choice as its value. */
 @Composable
 internal fun LanguageRow(selected: Boolean, onClick: () -> Unit) {
     val choice by AppLanguages.choice.collectAsState()
@@ -25,7 +25,7 @@ internal fun LanguageRow(selected: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * 设置 › 外观 › 语言 (docs/i18n.md): follow the phone, or one of the app's catalog languages. Choosing one restarts
+ * Settings › Appearance › Language (docs/i18n.md): follow the phone, or one of the app's catalog languages. Choosing one restarts
  * the screens in it at once; on Android 13 and later the phone's App language page shows and changes the same choice.
  */
 @Composable

@@ -12,7 +12,7 @@ import persona.core.domain.inbox.InboxGroup
 import persona.core.domain.inbox.InboxRowType
 
 /**
- * What a bulk 全部清理 / 全部看过 / 全部清除 / 移回 (`POST /api/v1/inbox/bulk`) did: [changed] moved (撤销 sends these back), [unchanged] were already
+ * What a bulk Clean up all / Mark all as seen / Clear all / Move back (`POST /api/v1/inbox/bulk`) did: [changed] moved (Undo sends these back), [unchanged] were already
  * so, [changedSince] took new messages after the list was drawn and stay open, [missing] are gone from the hub, [failed]
  * the hub could not write and stay as they were.
  */
@@ -37,7 +37,7 @@ data class InboxBulkResult(
 }
 
 /**
- * The open hub items of what the page shows, each with the version it was listed at: 全部清理 over the current
+ * The open hub items of what the page shows, each with the version it was listed at: Clean up all over the current
  * filter, section and search. Agents waiting for an answer are not the inbox's to file, and folded sections count (their header
  * says how many they hold).
  */
@@ -48,7 +48,7 @@ internal fun bulkTargets(groups: List<InboxGroup>, records: Map<String, InboxRec
         .distinctBy { it.id }
         .map { InboxDoneTarget(it.id, it.version) }
 
-/** The current view in words, for saying what 全部清理 covers; null for the whole inbox. */
+/** The current view in words, for saying what Clean up all covers; null for the whole inbox. */
 internal fun bulkScope(res: Resources, section: String, sourceLabel: String?, kindLabel: String?, query: String): String? =
     listOfNotNull(
         when (section) {
@@ -60,10 +60,10 @@ internal fun bulkScope(res: Resources, section: String, sourceLabel: String?, ki
         query.trim().takeIf { it.isNotEmpty() }?.let { res.getString(R.string.inbox_bulk_search, it) },
     ).joinToString(" · ").ifEmpty { null }
 
-/** From this many items on, 全部清理 asks first (「将清理 N 件」); fewer go at once, with 撤销. */
+/** From this many items on, Clean up all asks first ("Will clean up N items"); fewer go at once, with Undo. */
 internal const val BULK_CONFIRM_AT = 10
 
-/** The menu entry 全部清理: the count, and whether it is the whole inbox or the filter. */
+/** The menu entry Clean up all: the count, and whether it is the whole inbox or the filter. */
 internal fun bulkLabel(res: Resources, count: Int, scope: String?): String =
     res.getQuantityString(if (scope == null) R.plurals.inbox_bulk_clean_all else R.plurals.inbox_bulk_clean_filtered, count, count)
 
@@ -72,7 +72,7 @@ internal fun bulkConfirmText(res: Resources, count: Int, scope: String?): String
     res.getQuantityString(R.plurals.inbox_bulk_confirm_body, count, count, scope ?: res.getString(R.string.inbox_bulk_scope_all))
 
 /**
- * What the notice says after a bulk 全部看过 / 全部清除 (or 全部清理 when [cleaned]); null when nothing moved and nothing
+ * What the notice says after a bulk Mark all as seen / Clear all (or Clean up all when [cleaned]); null when nothing moved and nothing
  * needs saying.
  */
 internal fun bulkNotice(res: Resources, result: InboxBulkResult, cleaned: Boolean = false): String? {

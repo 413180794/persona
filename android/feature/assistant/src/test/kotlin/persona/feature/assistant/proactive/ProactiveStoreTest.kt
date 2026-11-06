@@ -222,7 +222,7 @@ class ProactiveStoreTest {
         assertEquals(120, written.everyMinutes)
         assertNull(written.time)
         assertTrue(written.weekdays.isEmpty())
-        // 一次 picks the next full hour an hour away.
+        // "Once" picks the next full hour an hour away.
         val once = morning.draft().repeating(TaskRepeat.Once, now, zone)
         assertEquals(Instant.parse("2026-11-02T03:00:00Z"), once.at)
         assertTrue(store.save(TaskChange.Edit("morning", store.state.value.task("morning")!!.draft(), once)).isSuccess)
@@ -271,7 +271,7 @@ class ProactiveStoreTest {
         assertEquals("", hub.writes.single().editable()["session_id"].toString().trim('"'))
     }
 
-    /** 只在它自己提醒时 is written, leaves 接着原来的对话 (the hub runs it in its own conversation), and can be turned back. */
+    /** "Only when it alerts" is written, leaves "Continue the original chat" (the hub runs it in its own conversation), and can be turned back. */
     @Test fun pushOnlyAskedIsWrittenAndLeavesTheOriginalConversation() = runTest {
         val hub = FakeHub(listOf(review))
         val store = ProactiveStore(hub, this, say)
@@ -292,7 +292,7 @@ class ProactiveStoreTest {
         assertEquals("", hub.writes.last().push)
     }
 
-    /** A task that never had 跑完推送 does not send it, so a hub without `task_push` is never sent one. */
+    /** A task that never had "Push when done" does not send it, so a hub without `task_push` is never sent one. */
     @Test fun pushStaysUnsetUntilItIsChosen() = runTest {
         val hub = FakeHub(listOf(morning))
         val store = ProactiveStore(hub, this, say)
@@ -303,7 +303,7 @@ class ProactiveStoreTest {
         assertFalse(hub.writes.single().editable().containsKey("push"))
     }
 
-    /** Persona set 只在它自己提醒时 from a conversation while the page was open; the person's other edit keeps it. */
+    /** Persona set "Only when it alerts" from a conversation while the page was open; the person's other edit keeps it. */
     @Test fun pushSetMeanwhileStaysWhenThePersonEditsSomethingElse() = runTest {
         val hub = FakeHub(listOf(morning))
         val store = ProactiveStore(hub, this, say)
@@ -484,7 +484,7 @@ class ProactiveTextTest {
         assertEquals("上次 今天 09:00 已运行", noHistory.lastRunOf(morning)!!.line(say, now, zone))
         assertEquals(SessionKey("server", "conversation-2"), noHistory.lastRunOf(morning)!!.conversation)
         assertNull(noHistory.lastRunOf(ScheduledTask()))
-        // 立即运行 does not move the hub's last_run: the history knows better.
+        // "Run now" does not move the hub's last_run: the history knows better.
         val manual = Run(id = "m", kind = "routine", refId = "morning", at = "2026-11-02T01:30:00Z", status = "failed",
             error = "assistant machine is offline", manual = true, machineId = "laptop", sessionId = "")
         val withHistory = ProactiveState(runs = Loadable(listOf(manual)), assistantMachine = "server")

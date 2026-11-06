@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Text picked on a page and what to do with it: the first 120 characters of the selection, a line that may stay empty
- * (the message then says a default), 发送. [onSend] closes the dialog when it is done; a failure stays here to retry.
+ * (the message then says a default), "Send". [onSend] closes the dialog when it is done; a failure stays here to retry.
  */
 @Composable
 internal fun LinkPickDialog(
@@ -59,8 +59,8 @@ internal fun LinkPickDialog(
 }
 
 /**
- * 交给 Persona for text picked on a page with no conversation behind it (the knowledge base, the inbox's pages): the
- * selection as a `<jarvis-context>` and what Persona is to do with it (「看看上面这段。」 when nothing is written) go to
+ * "Hand to Persona" for text picked on a page with no conversation behind it (the knowledge base, the inbox's pages): the
+ * selection as a `<jarvis-context>` and what Persona is to do with it ("Take a look at the above." when nothing is written) go to
  * [send], the app's main conversation.
  */
 @Composable

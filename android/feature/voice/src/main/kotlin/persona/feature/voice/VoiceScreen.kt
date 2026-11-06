@@ -35,7 +35,7 @@ import persona.core.navigation.Navigator
 import persona.core.navigation.VoiceRoute
 
 /**
- * 语音对话 (docs/extensions.md「语音」, docs/android.md「语音对话」): full duplex with the hub's voice extension. It listens
+ * Voice chat (docs/extensions.md "Voice", docs/android.md "Voice chat"): full duplex with the hub's voice extension. It listens
  * all the time this page is open, and only then; talking over an answer stops it. The bar says the extension, the model
  * and the voice; the menu opens the model configuration (when the host has it) and the voices.
  */
@@ -221,7 +221,7 @@ private fun Problem(title: String, text: String, padding: PaddingValues, onRetry
     }
 }
 
-/** 音色: the extension's voices for this model as one group, the current one checked; a tap picks it and closes. */
+/** "Voice": the extension's voices for this model as one group, the current one checked; a tap picks it and closes. */
 @Composable
 private fun VoiceSheet(state: VoicePageState, onPick: (String) -> Unit, onDismiss: () -> Unit) {
     val palette = PersonaTheme.palette

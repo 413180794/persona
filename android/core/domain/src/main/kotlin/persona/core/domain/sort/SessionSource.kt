@@ -5,7 +5,7 @@ import persona.core.contracts.CoreText
 import persona.core.contracts.Session
 
 /*
- * Where a session comes from and what the phone may do with it (docs/protocol.md「Codex 来源与能力」, the same rules
+ * Where a session comes from and what the phone may do with it (docs/protocol.md "Codex sources and capabilities", the same rules
  * as iOS `Session`). Older sources carry no source_kind and can do everything; a session with a source only gets
  * what its capabilities explicitly allow, so a missing field is a refusal. The hub and the node refuse the same
  * operations: these only keep the phone from offering what would fail.
@@ -52,14 +52,14 @@ val Session.source: SessionSourceInfo?
             "runtime" -> CoreText.plain(agentLabel)
             else -> sourceKind?.takeIf(String::isNotEmpty)?.let(CoreText::plain)
         } ?: return null
-        // The node writes some reasons with their own "仅查看：", which the subtitle adds already.
+        // The node writes some reasons with their own Chinese "Read-only: " prefix, which the subtitle adds already.
         val reason = readOnlyReason?.removePrefix(READ_ONLY_PREFIX)?.trim()?.takeIf(String::isNotEmpty)
         return SessionSourceInfo(label,
             agentName.takeIf { sourceKind != "identity_conflict" }?.takeIf(String::isNotEmpty),
             if (canSend) null else reason?.let(CoreText::plain) ?: CoreText.of(Key.SourceNoSend))
     }
 
-/** "Codex 历史 · <agent> · 仅查看：<reason>", as iOS writes it, for notices that are one line of text. */
+/** "Codex history · <agent> · Read-only: <reason>", as iOS writes it, for notices that are one line of text. */
 val Session.sourceSubtitle: CoreText?
     get() = source?.let { source ->
         val named = CoreText.joined(" · ", listOfNotNull(source.label, source.agentName?.let(CoreText::plain)))

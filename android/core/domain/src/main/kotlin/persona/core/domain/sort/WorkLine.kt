@@ -17,7 +17,7 @@ val WorkState.hubWaits: Boolean
     get() = phase == "blocked" && on != "user" && (wakeAt != null || on == "external" && wait.isNullOrBlank() && agent == null)
 
 /**
- * The row's line for a stopped session the hub triaged: 「✓ 结论」 when done, what it waits for when blocked (with when the
+ * The row's line for a stopped session the hub triaged: "✓ Conclusion" when done, what it waits for when blocked (with when the
  * hub acts next); null while it works or before the hub triaged its turn.
  */
 fun Session.workLine(now: Instant): CoreText? {

@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
 
-// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the words, the catalog, one extension of it (preview, then install,
+// Settings › Extensions › Extension market (docs/extensions.md "Extension market"): the words, the catalog, one extension of it (preview, then install,
 // upgrade or remove) and the markets. The pages are in ExtensionMarketScreen.kt.
 
 /** Where a catalog extension stands on this hub. */
@@ -28,7 +28,7 @@ internal enum class CatalogAction { Install, Upgrade, Uninstall }
 
 /**
  * A GitHub market read without a token: GitHub allows 60 reads an hour per address, shared by every device on the
- * same network, so offering it a read-only token is what gets the market read again (docs/extensions.md「扩展市场」).
+ * same network, so offering it a read-only token is what gets the market read again (docs/extensions.md "Extension market").
  */
 internal fun wantsGitHubToken(market: ExtensionMarket): Boolean =
     !market.hasToken && market.spec.trim().startsWith("github:", ignoreCase = true)
@@ -130,7 +130,7 @@ internal data class CatalogState(
 }
 
 /**
- * The official market reads 官方扩展 in the app's language (#5017), whatever its index (or an older hub) calls it; its
+ * The official market reads "Official extensions" in the app's language (#5017), whatever its index (or an older hub) calls it; its
  * catalog extensions say so as their market too. Other markets keep the names their indexes give.
  */
 internal object OfficialMarket {
@@ -146,7 +146,7 @@ internal object OfficialMarket {
     }
 }
 
-/** 扩展市场: the catalog, searched and narrowed to a market by the hub. */
+/** "Extension market": the catalog, searched and narrowed to a market by the hub. */
 internal class CatalogModel(private val api: ExtensionMarkets, private val res: Resources) {
     private val mutable = MutableStateFlow(CatalogState())
     val state = mutable.asStateFlow()
@@ -417,12 +417,12 @@ internal data class MarketsState(
     val addError: String? = null,
     /** Why the last refresh, removal or token change did not happen. */
     val actionError: String? = null,
-    /** The auto-upgrade switch for all market extensions (docs/extensions.md「自动升级」); null: a hub without it. */
+    /** The auto-upgrade switch for all market extensions (docs/extensions.md "Auto-upgrade"); null: a hub without it. */
     val autoUpgrade: Boolean? = null,
     val savingAuto: Boolean = false,
 )
 
-/** 管理市场: the markets the hub reads. */
+/** "Manage markets": the markets the hub reads. */
 internal class MarketsModel(private val api: ExtensionMarkets, private val res: Resources) {
     private val mutable = MutableStateFlow(MarketsState())
     val state = mutable.asStateFlow()

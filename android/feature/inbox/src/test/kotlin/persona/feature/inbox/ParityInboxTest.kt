@@ -86,10 +86,10 @@ class ParityInboxTest {
     @Test fun readMarksFollowTheChatsKindAndTheCounts() {
         assertEquals(null, LarkReadMark.of(null, false))
         assertEquals(null, LarkReadMark.of(LarkReadState("m", 0, 0), true))
-        // One-to-one: 已读 / 未读.
+        // One-to-one: "Read" / "Unread".
         assertEquals(LarkReadMark.Read, LarkReadMark.of(LarkReadState("m", 1, 0), false))
         assertEquals(LarkReadMark.Unread, LarkReadMark.of(LarkReadState("m", 0, 1), false))
-        // A group, even of two: 全部已读 / how many have not, as iOS.
+        // A group, even of two: "Read by all" / how many have not, as iOS.
         assertEquals(LarkReadMark.AllRead, LarkReadMark.of(LarkReadState("m", 1, 0), true))
         assertEquals(LarkReadMark.Progress(0, 1), LarkReadMark.of(LarkReadState("m", 0, 1), true))
         assertEquals(LarkReadMark.AllRead, LarkReadMark.of(LarkReadState("m", 4, 0), true))

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 设置 › 连接器 / 渠道 / 模型配置 / 新增模型供应商 / Claude Code 设置 / 额度 (docs/i18n.md). Same keys in values, values-zh and values-ja. -->
+<!-- Settings › Connectors / Channels / Model configuration / New model provider / Claude Code settings / Quota (docs/i18n.md). Same keys in values, values-zh and values-ja. -->
 <resources>
     <string name="settings_src_just_now">刚刚</string>
     <plurals name="settings_src_minutes_ago">

@@ -42,7 +42,7 @@ import persona.core.navigation.Navigator
 import java.io.File
 
 /**
- * 机器 › 添加电脑 (docs/onboarding.md 4.2): the form, the Mac and Linux instructions while waiting, 是我的电脑, and the machine
+ * Machines › Add a computer (docs/onboarding.md 4.2): the form, the Mac and Linux instructions while waiting, "It's mine", and the machine
  * list with a computer that waits to be confirmed and one offline with a known error_code, in every style, light and dark.
  * Written to `build/onboarding-shots/`.
  */

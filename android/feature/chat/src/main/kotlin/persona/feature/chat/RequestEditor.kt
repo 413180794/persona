@@ -89,7 +89,7 @@ fun RequestEditor(
     linkVisible: Boolean = false,
     /** Why this session's requests cannot be answered from the phone (its source does not approve). */
     blockedReason: String? = null,
-    /** False for a session without a terminal (a Codex thread, an agent runtime's): no 终端处理说明. */
+    /** False for a session without a terminal (a Codex thread, an agent runtime's): no "handle in terminal" note. */
     terminalHelp: Boolean = true,
     onAnswer: (AnswerAction, AnswerDraft, Boolean) -> Unit,
 ) {

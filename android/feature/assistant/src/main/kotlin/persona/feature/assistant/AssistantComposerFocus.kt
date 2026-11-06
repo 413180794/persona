@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Asks the Persona page to put the cursor in its composer and bring up the keyboard (the launcher's 「问 Persona」,
+ * Asks the Persona page to put the cursor in its composer and bring up the keyboard (the launcher's "Ask Persona",
  * `jarvis://open?target=tab&tab=jarvis&focus=composer`). The app raises a request when it opens the Persona tab for that
  * link; [AssistantScreen] takes it once. A request nobody takes in time (not paired yet, the tab never shown) lapses,
  * so the keyboard cannot pop up long after the tap.

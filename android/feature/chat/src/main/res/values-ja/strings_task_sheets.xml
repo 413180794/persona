@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 任务详情、全部、改一下（#3034，iOS TaskSheets / PlanEditSheet） -->
+    <!-- Task detail, "All", "Edit" (#3034, iOS TaskSheets / PlanEditSheet) -->
     <string name="chat_task_detail_gone">このタスクはもうありません</string>
     <string name="chat_task_detail_gone_body">削除された可能性があります。</string>
     <string name="chat_task_detail_more">その他</string>

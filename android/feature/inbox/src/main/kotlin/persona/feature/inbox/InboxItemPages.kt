@@ -13,11 +13,11 @@ import persona.core.designsystem.Status
 import persona.core.designsystem.Tokens
 import persona.core.navigation.InboxItemUiRoute
 
-// An inbox item's page drawn by an extension (docs/extensions.md「UI 插槽」`inbox_item`, #1683): an extension's connector (the
+// An inbox item's page drawn by an extension (docs/extensions.md "UI slots" `inbox_item`, #1683): an extension's connector (the
 // Feishu extension's `lark`) may draw the body of the items it brings in. Opening such an item shows the app's header of
 // the item over the extension's view (InboxItemExtensionScreen); every other item, and every item on a hub that lists no
 // such page, opens its own page as before. When the extension cannot draw an item, its own page opens instead, saying so
-// in a line with 重试 when the extension broke rather than declined.
+// in a line with "Retry" when the extension broke rather than declined.
 
 /**
  * The `inbox_item` pages the hub lists, by the connector whose items each draws; [failures] are the items whose page
@@ -63,11 +63,11 @@ data class InboxItemPages(
     }
 }
 
-/** The shell's list of `inbox_item` pages; none in 体验模式 and on a hub without them. */
+/** The shell's list of `inbox_item` pages; none in demo mode and on a hub without them. */
 val LocalInboxItemPages = compositionLocalOf { InboxItemPages() }
 
 /**
- * The item's own page: a 公司圈 post, its Feishu chat at the item's first message, the mail, a hub connector's thread
+ * The item's own page: a Moments post, its Feishu chat at the item's first message, the mail, a hub connector's thread
  * (any connector, #2726), or else its detail page (a Feishu document's notice, and any item of a shape this app does not
  * know: the mail page could only fail for it, #2323).
  */
@@ -87,7 +87,7 @@ fun inboxOpenPage(record: InboxRecord, pages: InboxItemPages): NavKey = pages.ro
 fun inboxSourcePage(itemId: String, records: List<InboxRecord>): NavKey? = records.firstOrNull { it.item.id == itemId }?.let(::inboxItemPage)
 
 /**
- * On an item's own page opened because its extension's page broke: the one line saying so, with 重试 (the extension's page
+ * On an item's own page opened because its extension's page broke: the one line saying so, with "Retry" (the extension's page
  * again, in place of [from]). Nothing otherwise.
  */
 @Composable

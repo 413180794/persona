@@ -59,9 +59,9 @@ data class Machine(
     @SerialName("engine") val engine: String = "herdr",
     /** What the node found there; empty from older hubs and nodes, and while the machine is offline. */
     @SerialName("engines") val engines: List<DetectedEngine> = emptyList(),
-    /** The hub is installing its own jarvisd build there (重新部署). */
+    /** The hub is installing its own jarvisd build there ("Redeploy"). */
     @SerialName("deploying") val deploying: Boolean = false,
-    /** Why the last 重新部署 did not work. */
+    /** Why the last "Redeploy" did not work. */
     @SerialName("deploy_error") val deployError: String? = null,
     /** ego lite on a Mac while the hub's browser plugin is on (docs/plan-ego-browser.md); absent otherwise. */
     @SerialName("browser") val browser: MachineBrowser? = null,
@@ -125,7 +125,7 @@ data class MachineComputer(
     val note: String? = null,
 )
 
-/** One engine the node looked for on its machine (docs/protocol.md「引擎」); [name] and [note] are shown as given. */
+/** One engine the node looked for on its machine (docs/protocol.md "Engines"); [name] and [note] are shown as given. */
 @KeepGeneratedSerializer
 @Serializable(with = DetectedEngineSerializer::class)
 data class DetectedEngine(
@@ -210,7 +210,7 @@ data class BackgroundTask(
     val isWorkflow: Boolean get() = kind == "workflow"
 }
 
-/** What a session with a [Session.sourceKind] allows; a missing field is a refusal (docs/protocol.md「Codex 来源与能力」). */
+/** What a session with a [Session.sourceKind] allows; a missing field is a refusal (docs/protocol.md "Codex sources and capabilities"). */
 @KeepGeneratedSerializer
 @Serializable(with = SessionCapabilitiesSerializer::class)
 data class SessionCapabilities(
@@ -275,7 +275,7 @@ data class Session(
     @SerialName("slot_id") val slotId: String? = null,
     @WireTime @SerialName("state_since") val stateSince: String? = null,
     val subagents: List<Subagent>? = null,
-    /** The ports the agent's processes serve over HTTP (docs/ports.md「发现端口」): a dev server it started. */
+    /** The ports the agent's processes serve over HTTP (docs/ports.md "Discovering ports"): a dev server it started. */
     val ports: List<ListeningPort>? = null,
     @SerialName("pane_id") val paneId: String? = null,
     @SerialName("agent") val agent: String? = null,
@@ -283,7 +283,7 @@ data class Session(
     @SerialName("agent_label") val agentLabelHint: String? = null,
     /**
      * Where a session comes from when it is not an agent in a terminal engine: codex_app_server, codex_history,
-     * identity_conflict, runtime (docs/protocol.md「Codex 来源与能力」). Absent on older sources, which can do everything;
+     * identity_conflict, runtime (docs/protocol.md "Codex sources and capabilities"). Absent on older sources, which can do everything;
      * a session with a source can only do what [capabilities] explicitly allows (core:domain SessionSource).
      */
     @SerialName("source_kind") val sourceKind: String? = null,
@@ -303,7 +303,7 @@ data class Session(
     /** An assistant conversation put away (POST /api/v1/assistant/conversations/{id}/archive): kept, not listed. */
     @SerialName("archived") val archived: Boolean = false,
     /**
-     * Who opened an assistant conversation (docs/protocol.md「助手对话的来源」, #3264): user, channel, inbox, task, spawned,
+     * Who opened an assistant conversation (docs/protocol.md "Origin of assistant conversations", #3264): user, channel, inbox, task, spawned,
      * lark_agent, extension, or one this app doesn't know yet; null is the user's (older hubs never say).
      */
     @SerialName("origin") val origin: String? = null,
@@ -314,8 +314,8 @@ data class Session(
     @SerialName("slot_name") val slotName: String? = null,
     @SerialName("slot_index") val slotIndex: Int? = null,
     /**
-     * The pane's place in its tab (#2320; docs/agent-states.md「一个 tab 里的几个 pane」): 0 is the top-left pane, the one
-     * the others were split from (the tab's 发起者). Absent when the host gives no layout.
+     * The pane's place in its tab (#2320; docs/agent-states.md "Several panes in one tab"): 0 is the top-left pane, the one
+     * the others were split from (the tab's initiator). Absent when the host gives no layout.
      */
     @SerialName("pane_index") val paneIndex: Int? = null,
     @WireEnum("needs_you", "unread", "working", "idle", "offline", "unknown")
@@ -324,7 +324,7 @@ data class Session(
     @SerialName("queued") val queued: List<String>? = null,
     @SerialName("background") val background: List<BackgroundTask>? = null,
     /**
-     * Its Workflow runs of the last day, newest first (docs/agent-states.md「后台 workflow、Monitor」): a running one is
+     * Its Workflow runs of the last day, newest first (docs/agent-states.md "Background workflow, Monitor"): a running one is
      * in [background] too, as kind `workflow`. Older hubs never send it (null).
      */
     val workflows: List<Workflow>? = null,
@@ -333,7 +333,7 @@ data class Session(
     val goal: GoalInfo? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
-    /** Its latest step when that is a tool call no text came after (「在跑测试」「在读 tasks.go」), and when it started. */
+    /** Its latest step when that is a tool call no text came after ("running tests", "reading tasks.go"), and when it started. */
     @SerialName("activity") val activity: String? = null,
     @WireTime @SerialName("activity_at") val activityAt: String? = null,
     /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
@@ -345,32 +345,32 @@ data class Session(
      * (docs/protocol.md). The chat offers a retry over the composer; it is not a wait for the user.
      */
     @SerialName("failure_reason") val failureReason: String? = null,
-    /** Where its host shows it (a botmux session's Feishu topic, docs/engines.md「botmux」); opened only as [externalLink]. */
+    /** Where its host shows it (a botmux session's Feishu topic, docs/engines.md "botmux"); opened only as [externalLink]. */
     @SerialName("external_url") val externalUrl: String? = null,
     /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
     val work: WorkState? = null,
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
-    /** 分支到新聊天 works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
+    /** "Branch to new chat" works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
     @SerialName("can_fork") val canFork: Boolean = false,
     @SerialName("rev") val rev: Long? = null,
     @SerialName("suggestion") val suggestion: String? = null,
-    /** Persona is still opening its tab and starting the agent (docs/protocol.md「新建会话」); sends wait for it. */
+    /** Persona is still opening its tab and starting the agent (docs/protocol.md "New session"); sends wait for it. */
     @SerialName("starting") val starting: Boolean = false,
     /** Why starting it failed; the session is offline and sends get the same error. */
     @SerialName("start_error") val startError: String? = null,
     /**
      * The channels messages came into this conversation from, newest first (`wechat`, `feishu`; docs/channels.md
-     * 「来源标记」): the conversation list draws the latest's mark. Older hubs never send it.
+     * "Source marks"): the conversation list draws the latest's mark. Older hubs never send it.
      */
     @SerialName("channels") val channels: List<String> = emptyList(),
     val todo: SessionTodo? = null,
     /**
-     * The last compaction the user asked for in an assistant conversation (POST …/compact, docs/assistant.md「手动压缩」):
+     * The last compaction the user asked for in an assistant conversation (POST …/compact, docs/assistant.md "Manual compaction"):
      * running, then done or failed. Kept until the next one; older hubs never send it.
      */
     val compaction: SessionCompaction? = null,
     /**
-     * Works (or worked) for a quiet task (#1731): the main conversation opened it while 主对话派的任务只在主对话里通知
+     * Works (or worked) for a quiet task (#1731): the main conversation opened it while "Notify main-chat tasks only in the main chat"
      * was on. No alerts or global badges for it; the main conversation tells the user. Older hubs never send it.
      */
     val quiet: Boolean = false,
@@ -414,7 +414,7 @@ data class Session(
         else -> null
     }
     /**
-     * 删除对话 is offered: not running (offline, finished or unknown), not still starting, not the assistant's (those
+     * "Delete conversation" is offered: not running (offline, finished or unknown), not still starting, not the assistant's (those
      * archive). The hub accepts and then hides exactly these (server/internal/hub/deleted_sessions.go `stillDeleted`).
      */
     val canDelete: Boolean get() = !assistant && !starting && status in setOf("offline", "done", "unknown")
@@ -494,7 +494,7 @@ data class Item(
     /** On a notice: the context was compacted here (Claude Code's compact_boundary); the chat draws it as a divider. */
     val compact: CompactBoundary? = null,
     /** A message Persona typed in for the model (a task's notice, a scheduled run…), not by the user; the hub marks it
-     *  (docs/protocol.md「Persona 注入的消息」), older hubs do not (core/domain `injectedOf`). */
+     *  (docs/protocol.md "Messages Persona injects"), older hubs do not (core/domain `injectedOf`). */
     val injected: Injected? = null,
 )
 
@@ -635,7 +635,7 @@ data class Interaction(
             "elicitation" -> CoreText.of(Key.HeadlineElicitation)
             "plan" -> CoreText.of(Key.FleetPlanWaiting)
             "permission" -> {
-                // An MCP tool reads 「github · create issue」, not its raw mcp__github__create_issue (#4806).
+                // An MCP tool reads "github · create issue", not its raw mcp__github__create_issue (#4806).
                 val tool: Any = toolDisplayName(toolName) ?: CoreText.of(Key.ToolGeneric)
                 val detail = summary?.takeIf { it.isNotBlank() }
                 val agent = agentDisplayName

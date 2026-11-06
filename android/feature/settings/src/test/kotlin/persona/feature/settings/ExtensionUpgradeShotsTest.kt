@@ -27,8 +27,8 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * A market extension's page aligned with the web (#3049): its 升级 group (auto-upgrade switch, the newer version waiting
- * for a yes), a machine list drawn as a switch per Mac, 卸载 at the end with 保留数据 ticked; and 管理市场's switch for all.
+ * A market extension's page aligned with the web (#3049): its "Upgrades" group (auto-upgrade switch, the newer version waiting
+ * for a yes), a machine list drawn as a switch per Mac, "Remove" at the end with "Keep data" ticked; and "Manage markets"' switch for all.
  * Every style, light and dark; the PNGs are in build/extension-upgrade-shots.
  */
 @RunWith(AndroidJUnit4::class)
@@ -118,7 +118,7 @@ class ExtensionUpgradeShotsTest {
         rule.waitUntil { configs.isNotEmpty() }
         assertEquals(buildJsonObject { putJsonArray("machines") { add("mac-a"); add("mac-b") } }, configs.single())
 
-        // 卸载 keeps the data unless unticked.
+        // "Remove" keeps the data unless unticked.
         for (s in AppStyle.entries) for (d in listOf(false, true)) {
             style = s; dark = d
             rule.waitForIdle()

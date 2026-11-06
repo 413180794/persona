@@ -21,7 +21,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 设置 › 渠道 (docs/channels.md) and the channels' marks in conversations. The settings pages are hub-level:
+ * Settings › Channels (docs/channels.md) and the channels' marks in conversations. The settings pages are hub-level:
  * the selected group's hub, in its own ids. The marks come from every open group's list.
  */
 @Module
@@ -34,7 +34,7 @@ object ChannelsModule {
             override val available: Flow<Boolean> = (application as PersonaApp).hub
                 .flatMapLatest { hub -> hub?.connection?.serverFeatures ?: flowOf(emptySet()) }
                 .map { "channels" in it }.distinctUntilChanged()
-            // 消息发到 picks one of the selected hub's assistant conversations, in that hub's own ids.
+            // "Send messages to" picks one of the selected hub's assistant conversations, in that hub's own ids.
             override val conversations: Flow<List<persona.core.contracts.Session>> = stacks.selected
                 .flatMapLatest { stack -> stack?.repositories?.sessions?.sessions ?: flowOf(emptyList()) }
                 .map { list -> list.filter { it.assistant } }

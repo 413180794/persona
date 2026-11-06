@@ -52,7 +52,7 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun actOnSuggestion(request: SuggestionRequest): SuggestionOutcome =
         error("建议尚未接入") // i18n-ignore: developer error for a repository without the hub
 
-    /** 交给 AI: the item as context with what to do, queued for Persona's main conversation or a running Agent. */
+    /** "Hand to AI": the item as context with what to do, queued for Persona's main conversation or a running Agent. */
     suspend fun handOff(request: InboxHandOffRequest): Unit = error("交给 AI 尚未接入") // i18n-ignore: developer error for a repository without the hub
     fun replyUpdates(target: ReplyTarget): Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
     suspend fun replyStatus(target: ReplyTarget, clientId: String): ReplyDelivery = ReplyDelivery.Ready
@@ -65,12 +65,12 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun markVisible(feedId: String, messages: List<LarkMessage>) = Unit
     suspend fun setDone(itemId: String, done: Boolean)
     /**
-     * 全部看过 / 全部清除 and their 撤销: [items] done (or back) in one request, each as listed, so one
+     * Mark all as seen / Clear all and their Undo: [items] done (or back) in one request, each as listed, so one
      * that took new messages since stays open ([InboxBulkResult.changedSince]).
      */
     suspend fun setDone(items: List<persona.core.contracts.api.InboxDoneTarget>, done: Boolean): InboxBulkResult =
         bulk(items, if (done) persona.core.contracts.api.InboxBulkAction.Done else persona.core.contracts.api.InboxBulkAction.Reopen)
-    /** 全部清理 (dismiss) / 全部看过 / 全部清除 (done) / 移回 (reopen) over [items] in one request ([setDone] is its done / reopen). */
+    /** Clean up all (dismiss) / Mark all as seen / Clear all (done) / Move back (reopen) over [items] in one request ([setDone] is its done / reopen). */
     suspend fun bulk(items: List<persona.core.contracts.api.InboxDoneTarget>, action: persona.core.contracts.api.InboxBulkAction): InboxBulkResult =
         error("批量处理尚未接入") // i18n-ignore: developer error for a repository without the hub
     suspend fun readDraft(target: ReplyTarget): ReplyDraft?
@@ -95,21 +95,21 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun quickReactions(): List<String> = emptyList()
     suspend fun emojis(): kotlinx.serialization.json.JsonObject? = null
 
-    /** 已静音 (docs/inbox.md「静音」): what the user muted, in every source, newest first. */
+    /** "Muted" (docs/inbox.md "Mute"): what the user muted, in every source, newest first. */
     suspend fun inboxMutes(): List<InboxMute> = error("静音尚未接入") // i18n-ignore: developer error for a repository without the hub
-    /** 静音这个仓库 / 会话 / 发件人: the item and the open ones of its source it covers are done at once; a failure puts them back. */
+    /** "Mute this repository / chat / sender": the item and the open ones of its source it covers are done at once; a failure puts them back. */
     suspend fun mute(record: InboxRecord, option: InboxMuteOption): Unit = error("静音尚未接入") // i18n-ignore: developer error
     suspend fun unmute(id: String): Unit = error("静音尚未接入") // i18n-ignore: developer error
 
-    /** A chat's Pin 消息, a page at a time ([accountId] null: the hub's current account, which the page names). */
+    /** A chat's "Pinned messages", a page at a time ([accountId] null: the hub's current account, which the page names). */
     suspend fun larkChatPins(feedId: String, accountId: String?, cursor: String?): LarkChatPinsPage = error("Chat pins unavailable")
-    /** Where a pin's message is: the message itself, and the thread's root when it is a reply in one ([topic]: a 话题群). */
+    /** Where a pin's message is: the message itself, and the thread's root when it is a reply in one ([topic]: a topic group). */
     suspend fun larkPinTarget(feedId: String, messageId: String, accountId: String, topic: Boolean): LarkPinTarget = error("Chat pins unavailable")
-    /** 添加 Pin ([pinId] null) or 移除 Pin; throws [LarkPinFailure] when the hub answers otherwise. */
+    /** "Add pin" ([pinId] null) or "Remove pin"; throws [LarkPinFailure] when the hub answers otherwise. */
     suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String?): Unit = error("Chat pins unavailable")
     /** Read receipts of my messages; ones the Lark gateway has none for are left out. */
     suspend fun larkReadStates(feedId: String, messageIds: List<String>): List<LarkReadState> = emptyList()
-    /** The account''t be read (then kept content stays hidden and nothing is decoded). */
+    /** The account's message display settings ("Keep recalled messages", "Edit history", Brave Climb, #882); null when they can't be read (then kept content stays hidden and nothing is decoded). */
     suspend fun larkMessageDisplay(): LarkMessageDisplay? = null
 }
 
@@ -140,27 +140,27 @@ data class InboxRecord(
     val localDelivery: persona.core.contracts.api.DeliveryState? = null,
     /** lark | mail (also lark for documents and posts without a chat). */
     val source: String = "",
-    /** A Feishu mention of everyone (@所有人) rather than of the user. */
+    /** A Feishu mention of everyone (@all) rather than of the user. */
     val atAll: Boolean = false,
     val mail: InboxMailRef? = null,
-    /** A saved reply that AI wrote (AI 草拟): its row shows it as a draft card, not as 「草稿 · …」. */
+    /** A saved reply that AI wrote ("AI draft"): its row shows it as a draft card, not as "Draft · …". */
     val aiDraft: Boolean = false,
     /** A Feishu chat's picture (the group's, or the other person's), at the thumbnail size. */
     val avatar: AuthenticatedLarkImage? = null,
     val read: Boolean = false,
     val moment: InboxMomentRef? = null,
-    /** The hub's translations of a mail item, by target language, done as it came in (设置 › 翻译). */
+    /** The hub's translations of a mail item, by target language, done as it came in (Settings › Translation). */
     val translations: Map<String, persona.core.contracts.api.ItemTranslation> = emptyMap(),
     /** A Feishu document's notice (`doc`): no chat behind it, its own page (InboxDocDetail.kt). */
     val doc: InboxDocRef? = null,
     /** A hub connector's item (GitHub, Telegram, an extension's): its thread opens as a conversation (ConnectorThread.kt). */
     val connector: InboxConnectorRef? = null,
-    /** What it can be muted by (the row's menu: 静音这个仓库 / 会话 / 发件人); an older hub sends none. */
+    /** What it can be muted by (the row's menu: "Mute this repository / chat / sender"); an older hub sends none. */
     val mutes: List<InboxMuteOption> = emptyList(),
     /** A Feishu chat's kind (`lark.is_group` / `is_topic`); null for one listed or cached before the hub said. */
     val isGroup: Boolean? = null,
     val isTopic: Boolean? = null,
-    /** Inbox phase 1: 总结, the processing conversation, the suggestion, the 处理链条; none from an older hub. */
+    /** Inbox phase 1: Recap, the processing conversation, the suggestion, the Handling chain; none from an older hub. */
     val event: persona.core.contracts.InboxEventFields = persona.core.contracts.InboxEventFields.None,
 ) {
     /** A hub connector's item (not Feishu's, not mail): it opens as its connector's thread. */
@@ -172,8 +172,8 @@ data class InboxRecord(
 }
 
 /**
- * An item's `connector` block (docs/protocol.md「收件箱」): the [thread] its connector reads it as, the [label] the
- * connector gave it (the row's tag, its words: 私聊, @我, 转账…), and whether and where a reply goes.
+ * An item's `connector` block (docs/protocol.md "Inbox"): the [thread] its connector reads it as, the [label] the
+ * connector gave it (the row's tag, its words: "Direct message", "@me", "Transfer"…), and whether and where a reply goes.
  */
 @Serializable
 data class InboxConnectorRef(
@@ -183,7 +183,7 @@ data class InboxConnectorRef(
     val replyTo: String? = null,
 )
 
-/** A 公司圈 post reference on an inbox item. */
+/** A Moments post reference on an inbox item. */
 data class InboxMomentRef(
     val postId: String,
     val notice: String? = null,
@@ -192,7 +192,7 @@ data class InboxMomentRef(
     val postText: String? = null,
 )
 
-/** Where a mail item's messages are: what 交给 AI tells the agent so it can read them with its mail tools. */
+/** Where a mail item's messages are: what "Hand to AI" tells the agent so it can read them with its mail tools. */
 data class InboxMailRef(
     val accountId: String,
     val mailbox: String = "INBOX",
@@ -221,9 +221,28 @@ sealed interface ReplyTarget {
 data class ReplyRequest(val text: String, @SerialName("client_id") val clientId: String,
     val mailTarget: persona.core.contracts.api.MailReplyTarget? = null)
 
-/** [ai]: the text came from AI (the AI 分身, or AI 草拟); sending it asks first, sending the user''s kind, from its inbox row; null when the inbox does not list it (read receipts go by the counts then). */
+/** [ai]: the text came from AI (the AI twin, or "AI draft"); sending it asks first, sending the user's own words does not. */
+@Serializable
+data class ReplyDraft(val text: String, val clientId: String = UUID.randomUUID().toString(), val ai: Boolean = false,
+    /** Sent as Brave Climb words (#882): [text] is the words typed, encoded only when it goes. */
+    val braveClimb: Boolean = false)
+
+data class LarkConversation(
+    val title: String = "",
+    val messages: List<LarkMessage> = emptyList(),
+    val loading: Boolean = false,
+    val hasOlder: Boolean = false,
+    val loadingOlder: Boolean = false,
+    val error: String? = null,
+    /** A failure the Lark window itself ran into, worded by the page. */
+    val failure: LarkFailure? = null,
+    val hasNewer: Boolean = false,
+    val loadingNewer: Boolean = false,
+    val verified: Boolean = false,
+    val windowRevision: Long = 0,
+    /** The chat's kind, from its inbox row; null when the inbox does not list it (read receipts go by the counts then). */
     val isGroup: Boolean? = null,
-    /** A topic group (话题群): Pin 消息 resolves threads with it. */
+    /** A topic group: "Pinned messages" resolves threads with it. */
     val isTopic: Boolean = false,
 )
 
@@ -256,7 +275,78 @@ data class LarkMessage(
     val replyCount: Long = 0,
     val thread: LarkThreadSource? = null,
     val reactions: List<LarkReaction> = emptyList(),
-    /** False for what is not the sender''s main conversation. [operationId] stays the same while the same
+    /** False for what is not the sender's own text (recalled, encrypted): Settings › Translation leaves it alone. */
+    val translatable: Boolean = true,
+    /** Recalled by its sender: it reads "Message recalled", unless "Keep recalled messages" shows what the Lark gateway kept ([retained], its parts). */
+    val recalled: Boolean = false,
+    /** A recalled message whose words the Lark gateway kept (shown only with message display › "Keep recalled messages" on). */
+    val retained: Boolean = false,
+    /** Its earlier versions, oldest first (shown only with message display › "Edit history" on). */
+    val editHistory: List<LarkEditVersion> = emptyList(),
+    /** The chat can pin it ("Add pin"), and unpin it. */
+    val canPin: Boolean = false,
+    val canUnpin: Boolean = false,
+    /** Shown decoded from Brave Climb words ([LarkMessage.shown]): the bubble says so under them. */
+    val braveClimb: Boolean = false,
+)
+
+/** One earlier version of an edited message. */
+data class LarkEditVersion(val editedAt: String, val text: String)
+
+data class LarkQuote(val id: String, val sender: String, val text: String, val recalled: Boolean = false)
+
+data class LarkForwardedMessage(
+    val id: String = "",
+    val senderName: String = "",
+    val senderAvatar: AuthenticatedLarkImage? = null,
+    val time: String = "",
+    val text: String = "",
+    val parts: List<LarkPart> = emptyList(),
+)
+
+sealed interface LarkPart {
+    data class Text(val text: String, val source: LarkContentSource? = null) : LarkPart
+    data class Card(val content: LarkCardContent, val source: LarkContentSource, val messageId: String? = null) : LarkPart
+    // Models may carry an authenticated Coil ImageRequest supplied by the data layer.
+    data class Image(val model: Any, val description: String = "", val width: Int = 1, val height: Int = 1) : LarkPart
+    data class File(val ref: String, val name: String, val mimeType: String = "application/octet-stream") : LarkPart
+    data class External(val title: String, val larkUrl: String, val kind: String, val duration: String = "", val cover: Image? = null) : LarkPart
+    data class Code(val code: String, val language: String = "") : LarkPart
+    data class Audio(val ref: String, val durationMs: Long, val source: LarkContentSource? = null) : LarkPart
+    data class Video(val ref: String, val durationMs: Long, val cover: Image? = null, val source: LarkContentSource? = null) : LarkPart
+    data class Sticker(val model: Any, val description: String = "", val width: Int = 1, val height: Int = 1) : LarkPart
+    data class MergeForward(val title: String, val messages: List<LarkForwardedMessage>, val source: LarkContentSource? = null) : LarkPart
+}
+
+internal fun startsInboxItem(message: LarkMessage, previous: LarkMessage?, start: Long?): Boolean =
+    start != null && message.position != null && message.position >= start &&
+        (previous?.position == null || previous.position < start)
+
+internal fun showsSender(message: LarkMessage, previous: LarkMessage?, boundary: Boolean): Boolean =
+    boundary || previous == null || previous.senderId != message.senderId || previous.mine != message.mine
+
+@Serializable
+data class InboxPreferences(
+    val source: String = "",
+    val kind: String = "",
+    val query: String = "",
+    val section: String = "",
+    val expanded: List<String> = listOf("action", "fyi"),
+)
+
+enum class InboxAiAction { Summarize, DraftReply, Handoff }
+@Serializable
+data class InboxPersonaRequest(
+    val itemId: String,
+    val action: InboxAiAction,
+    val operationId: String = UUID.randomUUID().toString(),
+    val context: String? = null,
+)
+@Serializable
+enum class ReplyDelivery { Ready, Queued, WaitingForNetwork, Sending, Unknown, Verifying, Refused, NeedsConfirmation, Sent }
+
+/**
+ * One "Hand to AI". No [machineId] / [sessionId]: Persona's main conversation. [operationId] stays the same while the same
  * text goes to the same place, so a retry after an unclear failure is not queued twice.
  */
 @Serializable

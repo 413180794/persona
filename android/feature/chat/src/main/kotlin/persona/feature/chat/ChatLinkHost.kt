@@ -46,8 +46,8 @@ private enum class LinkDetent { Full, Peek, Hidden }
  * Shared URI boundary for Agent, assistant, and other conversation surfaces. http(s) opens in the sheet (the hub's own
  * pages the app has a screen for navigate instead, [LocalChatHubLinks]), `jarvis://` links navigate ([LocalChatAppLinks]), mailto: / tel: / other apps' links go out after asking, the rest is refused.
  *
- * In a conversation ([onContext], [onEdit]) text picked on a page becomes 作为上下文 or AI 修改; with [onHandToPersona]
- * (pages with no conversation behind them: the app shell, the knowledge base) it is 交给 Persona instead.
+ * In a conversation ([onContext], [onEdit]) text picked on a page becomes "Use as context" or "AI edit"; with [onHandToPersona]
+ * (pages with no conversation behind them: the app shell, the knowledge base) it is "Hand to Persona" instead.
  */
 @Composable
 fun ChatLinkHost(
@@ -72,7 +72,7 @@ fun ChatLinkHost(
     val hubLinks by rememberUpdatedState(LocalChatHubLinks.current)
     val lark = LocalLarkFeatures.current
     var url by remember { mutableStateOf<String?>(null) }
-    /** "机器名 :端口" while the sheet shows one of the machine's ports (docs/ports.md「转发」). */
+    /** "machine name :port" while the sheet shows one of the machine's ports (docs/ports.md "Forwarding"). */
     var forwarded by remember { mutableStateOf<String?>(null) }
     val ports by rememberUpdatedState(LocalChatPorts.current)
     var unsupported by remember { mutableStateOf(false) }
@@ -139,7 +139,7 @@ fun ChatLinkHost(
             delay(600)
             pool.warmUp()
             // A machine's port is never preloaded: it would load the phone's own localhost (docs/ports.md). Nor is a
-            // Feishu link the card shows natively: its page loads only on 切换网页 (its document is read ahead below).
+            // Feishu link the card shows natively: its page loads only on "Switch to web page" (its document is read ahead below).
             preloadUrls.mapNotNull { ChatLinks.webUrl(it) }
                 .filter { PortLinks.link(it, ports?.hostnames.orEmpty()) == null && larkNativeLink(it, lark) == null }
                 .take(3).forEach { pool.preload(it) }
@@ -177,10 +177,10 @@ fun ChatLinkHost(
             url?.let { target ->
                 // A page whose renderer went away is loaded anew (a new view) when the user asks.
                 var generation by remember(target) { mutableIntStateOf(0) }
-                // A Feishu link the hub shows natively (the Lark extension, #1530): a document's reader or a 公司圈 post.
+                // A Feishu link the hub shows natively (the Lark extension, #1530): a document's reader or a Moments post.
                 val native = remember(target, lark) { larkNativeLink(target, lark) }
-                // Whether that native view switched to the web page (切换网页, or a read that failed): then the card's
-                // 刷新, progress and crash row are the page's again.
+                // Whether that native view switched to the web page ("Switch to web page", or a read that failed): then the card's
+                // "Refresh", progress and crash row are the page's again.
                 var nativeWebpage by remember(target) { mutableStateOf(false) }
                 val nativeShown = native != null && !nativeWebpage
                 // The WebView is only taken (and loaded) once a page shows it: a native view reads without it.
@@ -196,7 +196,7 @@ fun ChatLinkHost(
                         ChatLinkPick.HandToPersona -> { handing = selected }
                     }
                 }
-                // What the native view read: its title and the text 作为上下文 sends for the whole of it (G184).
+                // What the native view read: its title and the text "Use as context" sends for the whole of it (G184).
                 var nativeTitle by remember(target) { mutableStateOf<String?>(null) }
                 var nativeWhole by remember(target) { mutableStateOf<String?>(null) }
                 var nativeRefresh by remember(target) { mutableIntStateOf(0) }
@@ -244,7 +244,7 @@ fun ChatLinkHost(
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             // The whole of a native page as context (iOS LinkSheet, web ContextButton): a document goes
-                            // by its link and the 「（整篇）」 marker (the agent reads it), a post with its text once it is read.
+                            // by its link and the whole-document marker (the agent reads it), a post with its text once it is read.
                             val whole = ChatLinkContext.whole(native, nativeWhole)
                             if (whole != null && onContext != null) JIconButton(PhIcons.Quotes,
                                 stringResource(if (native is LarkNativeLink.Document) R.string.chat_link_context_doc else R.string.chat_link_context_post), {
@@ -292,8 +292,8 @@ fun ChatLinkHost(
                         }
                     }
                     if (native != null) {
-                        // Feishu documents and 公司圈 posts in their native views while the hub has them (#1530); each can
-                        // still switch to the page, which takes the WebView then (a crashed one is gone: 重新打开 above).
+                        // Feishu documents and Moments posts in their native views while the hub has them (#1530); each can
+                        // still switch to the page, which takes the WebView then (a crashed one is gone: "Reopen" above).
                         val page: @Composable () -> Unit = {
                             if (view != null && !view.gone) key(view) {
                                 AndroidView(factory = { view }, modifier = Modifier.fillMaxSize(), onRelease = { pool.release(it) })
@@ -342,7 +342,7 @@ fun ChatLinkHost(
 }
 
 /**
- * The machine a conversation runs on, for its port links (docs/ports.md「识别回答里的链接」): its id and name, the names
+ * The machine a conversation runs on, for its port links (docs/ports.md "Recognizing links in replies"): its id and name, the names
  * it goes by in links, the ports its agents list (the hub allows those without asking), and how to open one.
  */
 internal data class ChatPorts(

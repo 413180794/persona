@@ -34,7 +34,7 @@ import persona.core.contracts.api.OutboxMessage
 import persona.core.designsystem.AppStyle
 import persona.core.designsystem.PersonaTheme
 
-/** 丢弃 under a message whose delivery is unknown, in the timeline (beside 重试 / 核对消息) and in 核对消息's sheet. */
+/** "Discard" under a message whose delivery is unknown, in the timeline (beside "Retry" / "Check message") and in "Check message"'s sheet. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35], qualifiers = "zh")
 class OutboxStatusTest {
@@ -60,7 +60,7 @@ class OutboxStatusTest {
 
     @Test fun theCheckSheetOffersDiscardToo() {
         val actions = mutableListOf<DeliveryAction>()
-        // The sheet draws the same status without 核对消息 (it is that page).
+        // The sheet draws the same status without "Check message" (it is that page).
         show(DeliveryState.Unknown, details = false, actions)
         rule.onAllNodesWithText("核对消息").assertCountEquals(0)
         rule.onNodeWithText("丢弃").performClick()

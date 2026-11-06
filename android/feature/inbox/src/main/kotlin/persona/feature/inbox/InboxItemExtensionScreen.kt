@@ -39,7 +39,7 @@ internal fun inboxSourceTags(res: Resources, record: InboxRecord): List<String> 
 
 /**
  * An inbox item whose body its connector's extension draws (inbox_item, #1683): the app's own header of the item (its
- * title, tier and source line, 已处理, AI 摘要, AI 草拟 / 交给 AI and the AI 分身's draft), then [body], the extension's
+ * title, tier and source line, "Done", "AI summary", "AI draft" / "Hand to AI" and the AI twin's draft), then [body], the extension's
  * view, which does not repeat them.
  * The shell builds the body (feature:settings draws extensions' views) and opens the item's own page instead when the
  * extension cannot draw it. [title] is the view's, used only when the item has none; [loading] is the body's first read.

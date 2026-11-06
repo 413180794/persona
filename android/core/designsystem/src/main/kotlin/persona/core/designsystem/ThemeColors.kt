@@ -13,7 +13,7 @@ import androidx.compose.ui.res.stringResource
 import persona.core.contracts.api.PersonaManifest
 
 /**
- * 设置 › 外观 › 深浅色 (iOS `ColorSchemeChoice`): follow the system (the default), or always light or dark, on this phone.
+ * Settings › Appearance › Light/Dark (iOS `ColorSchemeChoice`): follow the system (the default), or always light or dark, on this phone.
  * [dark] is null while it follows the system.
  */
 enum class ColorSchemeChoice(val key: String, @StringRes val labelRes: Int, val dark: Boolean?) {
@@ -30,9 +30,9 @@ enum class ColorSchemeChoice(val key: String, @StringRes val labelRes: Int, val 
 }
 
 /**
- * 设置 › 外观 › 主题色 (iOS `ThemeColor`): each style's own colors (the default, every style exactly as before), the
+ * Settings › Appearance › Theme color (iOS `ThemeColor`): each style's own colors (the default, every style exactly as before), the
  * persona's (only offered when its package brings colors), or one of five fixed accents on any style. An extension's
- * role theme (扩展主题), when one is chosen, still goes over all of these.
+ * role theme (extension theme), when one is chosen, still goes over all of these.
  */
 enum class ThemeColor(val key: String, @StringRes val labelRes: Int) {
     Style("style", R.string.designsystem_color_style),
@@ -79,7 +79,7 @@ data class LightDark(val light: Color, val dark: Color) {
 }
 
 /**
- * What a 主题色 lays over the style: the [accent] (what can be tapped, the selection), and the user's own [bubble] with
+ * What a theme color lays over the style: the [accent] (what can be tapped, the selection), and the user's own [bubble] with
  * its [bubbleText] (null: the page's ink). Without a bubble the bubble is a pale wash of the accent; without an accent
  * (a package that only brings a bubble) the style's accent stays.
  */
@@ -92,26 +92,26 @@ data class ThemeAccent(val accent: LightDark?, val bubble: LightDark? = null, va
     fun swatch(dark: Boolean): Color? = of(dark) ?: bubble?.of(dark)
 }
 
-/** The accent the chosen 主题色 lays over the style's palette; null: the style's own (跟随界面风格, or a persona without colors). */
+/** The accent the chosen theme color lays over the style's palette; null: the style's own ("Follow interface style", or a persona without colors). */
 val LocalThemeAccent = staticCompositionLocalOf<ThemeAccent?> { null }
 
 /**
- * 深浅色 and 主题色 for every window of the app, not only the main one: the share sheet, the floating capsule, the
+ * Light/dark and theme color for every window of the app, not only the main one: the share sheet, the floating capsule, the
  * approve dialog and the permission pages draw with [PersonaTheme]'s defaults, which read these. The app sets [accent]
- * from the chosen 主题色 and package; [AppStyleStore] sets [scheme].
+ * from the chosen theme color and package; [AppStyleStore] sets [scheme].
  */
 object AppAppearance {
     var scheme by mutableStateOf(ColorSchemeChoice.Default)
     var accent by mutableStateOf<ThemeAccent?>(null)
 }
 
-/** Dark or not as 设置 › 外观 › 深浅色 says, the system's while it follows the system. */
+/** Dark or not as Settings › Appearance › Light/Dark says, the system's while it follows the system. */
 @Composable
 fun appDarkTheme(): Boolean = AppAppearance.scheme.dark ?: androidx.compose.foundation.isSystemInDarkTheme()
 
 object ThemeColors {
     private val hex = Regex("#[0-9a-fA-F]{6}")
-    /** The floor an accent holds as a link on every style's page (docs/persona.md「对比度底线」). */
+    /** The floor an accent holds as a link on every style's page (docs/persona.md "Contrast floor"). */
     private const val AccentFloor = 3.0
     /** Words on the user's own bubble. */
     private const val TextFloor = 4.5
@@ -123,7 +123,7 @@ object ThemeColors {
     private fun parse(value: String?): Color? =
         value?.takeIf { it.matches(hex) }?.let { Color(0xFF000000L or it.drop(1).toLong(16)) }
 
-    /** What [choice] lays over the style; [persona] is the chosen package's colors (跟随形象 without them: the style's). */
+    /** What [choice] lays over the style; [persona] is the chosen package's colors ("Follow persona" without them: the style's). */
     fun accent(choice: ThemeColor, persona: PersonaManifest.Colors?): ThemeAccent? = when (choice) {
         ThemeColor.Style -> null
         ThemeColor.Persona -> persona(persona)

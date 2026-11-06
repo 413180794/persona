@@ -17,16 +17,16 @@ import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 
 /**
- * An item the selection menu of a native Feishu view adds (AI 修改, 作为上下文, 交给 Persona): its label and what
+ * An item the selection menu of a native Feishu view adds ("AI edit", "Use as context", "Hand to Persona"): its label and what
  * becomes of the picked text. The link card supplies them; elsewhere the menu is the system's own.
  */
 data class LarkTextPick(val label: String, val onPick: (String) -> Unit)
 
 /**
  * The picks a native view in a link card offers, and what it reports back: whether it shows the web page instead
- * ([onWebpage]: then the card's 刷新, progress and crash row are the page's), and once it has read its page the title
- * and the text the card's 作为上下文 button sends for the whole of it (empty for a document: the card sends the
- * 「（整篇）」 marker and the agent reads it itself; a 公司圈 post's own text). Supplied by the conversation's link
+ * ([onWebpage]: then the card's "Refresh", progress and crash row are the page's), and once it has read its page the title
+ * and the text the card's "Use as context" button sends for the whole of it (empty for a document: the card sends the
+ * "whole document" marker and the agent reads it itself; a Moments post's own text). Supplied by the conversation's link
  * card; null everywhere else.
  */
 class LarkLinkPicks(
@@ -36,9 +36,9 @@ class LarkLinkPicks(
 )
 
 /**
- * Text the user may select (the document allows copying), with [picks] in its selection menu after 复制. Compose
- * gives no read of a selection, so a pick runs the menu's own 复制 into a clipboard that keeps the text instead of
- * putting it on the system's ([PickingClipboard]); 复制 itself still copies.
+ * Text the user may select (the document allows copying), with [picks] in its selection menu after "Copy". Compose
+ * gives no read of a selection, so a pick runs the menu's own "Copy" into a clipboard that keeps the text instead of
+ * putting it on the system's ([PickingClipboard]); "Copy" itself still copies.
  */
 @Composable
 internal fun LarkSelectable(enabled: Boolean, picks: List<LarkTextPick>, content: @Composable () -> Unit) {

@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
-/** Whether the drawer's 自动对话 is open (#3264), kept on this phone: folded until the user opens it. */
+/** Whether the drawer's "Automatic chats" is open (#3264), kept on this phone: folded until the user opens it. */
 internal class AssistantPreferences(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("jarvis-assistant", Context.MODE_PRIVATE)
 
@@ -18,7 +18,7 @@ internal class AssistantPreferences(context: Context) {
     private companion object { const val AUTO_OPEN = "auto_conversations_open" }
 }
 
-/** 自动对话's open state as Compose state: read once, written through on every change. */
+/** "Automatic chats"'s open state as Compose state: read once, written through on every change. */
 @Composable
 internal fun rememberAutoOpen(): MutableState<Boolean> {
     val context = LocalContext.current

@@ -50,7 +50,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 
-// ------------------------------------------------------------------ voice conversation (语音对话)
+// ------------------------------------------------------------------ voice conversation (voice chat)
 
 /** What the orb of a voice conversation shows. */
 enum class VoiceOrbMode { Connecting, Listening, Speaking, Muted, Ended }
@@ -205,11 +205,11 @@ private fun BoardOrb(mode: VoiceOrbMode, core: Dp, level: () -> Float, turn: () 
 
 private val MeterProfile = listOf(0.55f, 0.8f, 1f, 0.8f, 0.55f)
 
-/** How a [VoiceControl] stands out: plain, filled with the action colour (on, or the way on), or destructive (挂断). */
+/** How a [VoiceControl] stands out: plain, filled with the action colour (on, or the way on), or destructive ("Hang up"). */
 enum class VoiceControlKind { Plain, Filled, Danger }
 
 /**
- * A round control of the voice page with its label underneath (静音, 打断, 挂断): a glass circle, a wash disc, or a
+ * A round control of the voice page with its label underneath ("Mute", "Interrupt", "Hang up"): a glass circle, a wash disc, or a
  * bordered square; [VoiceControlKind.Filled] fills it with the action colour, [VoiceControlKind.Danger] with red.
  * The label is one line; the whole thing is one button for touch and TalkBack.
  */
@@ -293,7 +293,7 @@ fun VoiceCaption(text: String, fromUser: Boolean, final: Boolean, modifier: Modi
     }
 }
 
-/** What the voice conversation is doing (在听, 正在说…), centred under the orb, and what went wrong under it. */
+/** What the voice conversation is doing ("Listening", "Speaking…"), centred under the orb, and what went wrong under it. */
 @Composable
 fun VoiceStatus(text: String, modifier: Modifier = Modifier, error: String? = null) {
     val palette = PersonaTheme.palette

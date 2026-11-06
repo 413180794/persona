@@ -50,8 +50,8 @@ import java.time.Instant
 
 /**
  * The conversation link card's native Feishu views (G184 G185 G187), on the JVM with Robolectric's native graphics, in
- * every style, light and dark: a document with who edited it and when, its counts, the AI summary, 目录 and 在飞书中打开;
- * a 公司圈 post with its comments. Written as PNGs to `build/lark-link-shots/` (or `-Dpersona.shots=<dir>`).
+ * every style, light and dark: a document with who edited it and when, its counts, the AI summary, "Contents" and "Open in Lark";
+ * a Moments post with its comments. Written as PNGs to `build/lark-link-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -192,7 +192,7 @@ class LarkLinkReaderShotsTest {
         rule.onNodeWithText("网页内容").assertExists()
     }
 
-    /** A pick runs the menu's own 复制 into [PickingClipboard]: that one copy goes to the pick, every other to the system. */
+    /** A pick runs the menu's own "Copy" into [PickingClipboard]: that one copy goes to the pick, every other to the system. */
     @Test fun aPickTakesTheOneCopyItAskedForAndLeavesTheSystemClipboardAlone() = kotlinx.coroutines.runBlocking {
         val written = mutableListOf<String>()
         val system = object : androidx.compose.ui.platform.Clipboard {

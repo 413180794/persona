@@ -34,7 +34,7 @@ internal data class MachineHealthState(
     val browserSaving: Boolean = false,
     val browserAsking: Boolean = false,
     val browserChecking: Boolean = false,
-    /** The selected hub's subscription accounts (订阅额度); empty until it answers, and when it has none. */
+    /** The selected hub's subscription accounts ("Subscription limits"); empty until it answers, and when it has none. */
     val usage: List<UsageAccount> = emptyList(),
 )
 
@@ -55,8 +55,8 @@ internal sealed interface HealthNotice {
 }
 
 /**
- * A machine page's 这台电脑能做什么 (the node's self-check, 重新检查, 修复) and 浏览器 (ego lite: the switch, install,
- * first-run setup), and the overview's 订阅额度 (web UsageBars, polled once a minute while the page is in front).
+ * A machine page's "What this computer can do" (the node's self-check, "Check again", "Fix") and "Browser" (ego lite: the switch, install,
+ * first-run setup), and the overview's "Subscription limits" (web UsageBars, polled once a minute while the page is in front).
  */
 internal class MachineHealthViewModel(private val management: MachineManagement) : ViewModel() {
     private val mutable = MutableStateFlow(MachineHealthState())
@@ -109,7 +109,7 @@ internal class MachineHealthViewModel(private val management: MachineManagement)
         }
     }
 
-    // ── 浏览器 (ego lite)
+    // ── Browser (ego lite)
 
     /**
      * The machine list's own until the node is asked; a newer answer from the node stays. Gone from the list (the hub's
@@ -165,7 +165,7 @@ internal class MachineHealthViewModel(private val management: MachineManagement)
         }
     }
 
-    // ── 订阅额度
+    // ── Subscription limits
 
     /** Once a minute while the overview is in front (the route starts it only then). */
     suspend fun pollUsage() {

@@ -55,7 +55,7 @@ enum class DecisionKind(@StringRes val labelRes: Int, val icon: PhIcon) {
  * Something that needs the user, in a list (the Agents page). Glass shows a frosted card with an amber glow;
  * brief a wash card where Persona's advice is highlighted; the board a strip in an amber holder that expands in
  * place — collapsed it shows [summary] and [quickActions], tapping it opens the [body] and [actions].
- * [onOpen] opens the conversation (glass and brief: tapping the card; board: the 打开看 action).
+ * [onOpen] opens the conversation (glass and brief: tapping the card; board: the "Open" action).
  */
 @Composable
 fun DecisionCard(
@@ -375,7 +375,7 @@ fun DecisionButtons(primary: JAction, modifier: Modifier = Modifier, secondary: 
             secondary?.let { JButton(it.label, it.onClick, Modifier.weight(1f), kind = if (it.destructive) JButtonKind.Destructive else JButtonKind.Secondary, enabled = it.enabled && !busy) }
             JButton(primary.label, primary.onClick, Modifier.weight(wide), kind = if (primary.destructive) JButtonKind.Destructive else JButtonKind.Primary, enabled = primary.enabled, loading = busy)
         }
-        // Several secondary choices (a plan's 批准并自动执行 and 每步确认) wrap to a second line instead of squeezing.
+        // Several secondary choices (a plan's "Approve and run automatically" and "Confirm each step") wrap to a second line instead of squeezing.
         if (more.isNotEmpty()) FlowRow(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
             more.forEach { JTextButton(it.label, it.onClick, enabled = it.enabled && !busy) }
         }

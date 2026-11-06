@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget, the tile, the launcher shortcuts and 批准第一个待处理 (docs/android.md「桌面入口」). English is the fallback (docs/i18n.md). -->
+<!-- The widget, the tile, the launcher shortcuts and "Approve first pending" (docs/android.md "Home screen entries"). English is the fallback (docs/i18n.md). -->
 <resources>
     <string name="shortcuts_widget_label" translatable="false">Persona</string>
     <string name="shortcuts_tile_label" translatable="false">Persona</string>

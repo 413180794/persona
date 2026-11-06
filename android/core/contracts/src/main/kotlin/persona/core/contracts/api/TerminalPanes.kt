@@ -6,12 +6,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * The terminal browser (docs/terminal.md「独立终端」): a machine's terminal hosts with their workspaces, tabs and panes,
+ * The terminal browser (docs/terminal.md "Standalone terminal"): a machine's terminal hosts with their workspaces, tabs and panes,
  * agent or plain shell, and a new shell tab in a workspace. Hubs with the feature `terminal_panes` only; both calls
  * need a full device. Machine ids are the merged lists' (the app routes each call to the machine's hub group).
  */
 interface TerminalPanes {
-    /** Whether a paired hub lists panes (feature `terminal_panes`): the 终端 entry shows only then. */
+    /** Whether a paired hub lists panes (feature `terminal_panes`): the Terminal entry shows only then. */
     val available: Flow<Boolean>
 
     /** Whether the hub of [machineId] lists panes; machines of a hub without the feature are not asked. */
@@ -22,7 +22,7 @@ interface TerminalPanes {
 
     /**
      * `POST /api/v1/machines/{mid}/panes {workspace_id, kind?}`: a shell tab in that workspace, in the workspace's own
-     * directory (the request cannot name one). Only called when the user taps 新标签页.
+     * directory (the request cannot name one). Only called when the user taps "New tab".
      */
     suspend fun newTab(machineId: String, workspaceId: String, kind: String? = null): NewPaneTab
 }
@@ -37,9 +37,9 @@ data class PaneHost(
     val kind: String = "",
     /** The host streams a pane's terminal; without it a pane is read once a second. */
     val stream: Boolean = false,
-    /** A phone can drive a pane at its own size (接管). */
+    /** A phone can drive a pane at its own size ("Take over"). */
     val control: Boolean = false,
-    /** A shell tab can be opened in a workspace (新标签页). */
+    /** A shell tab can be opened in a workspace ("New tab"). */
     @SerialName("new_tab") val newTab: Boolean = false,
     val workspaces: List<PaneSpace> = emptyList(),
     val tabs: List<PaneTab> = emptyList(),
@@ -91,7 +91,7 @@ data class NewPaneTab(
 )
 
 /**
- * A terminal opened by pane instead of by session (docs/protocol.md「终端流」): a pane with no agent has no session id,
+ * A terminal opened by pane instead of by session (docs/protocol.md "Terminal stream"): a pane with no agent has no session id,
  * so `terminal_subscribe` / `terminal_input` / `terminal_unsubscribe` and the `/screen` read take `pane:<pane id>` in
  * the place of the session id. Such a key is a [SessionKey] whose session id is the address; nothing else of a
  * session (`/keys`, sending, closing) takes it.

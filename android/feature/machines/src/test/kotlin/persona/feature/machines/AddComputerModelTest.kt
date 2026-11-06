@@ -16,7 +16,7 @@ import persona.core.contracts.api.ComputerPairing
 import persona.core.contracts.api.HubCodedFailure
 import persona.core.designsystem.UiText
 
-/** 机器 › 添加电脑 (docs/onboarding.md 4.2): the code, the wait, 是我的电脑 on the same screen, and the refusals in words. */
+/** Machines › Add a computer (docs/onboarding.md 4.2): the code, the wait, "It's mine" on the same screen, and the refusals in words. */
 class AddComputerModelTest {
     private class Refused(override val status: Int?, override val code: String?) : Exception("refused"), HubCodedFailure
 

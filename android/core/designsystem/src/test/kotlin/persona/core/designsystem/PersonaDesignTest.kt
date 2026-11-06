@@ -11,7 +11,7 @@ class PersonaDesignTest {
         listOf(null, "", "doudou", "JARVIS").forEach { assertEquals(PersonaDesign.Mochi, PersonaDesign.fromId(it)) }
     }
 
-    /** 团子 became the default on 2026-11-03: nothing saved means it; a saved 面罩 (`jarvis`) stays 面罩. */
+    /** Mochi became the default on 2026-11-03: nothing saved means it; a saved Visor (`jarvis`) stays Visor. */
     @Test fun mochiIsTheDefaultAndASavedVisorStays() {
         assertEquals(PersonaDesign.Mochi, PersonaDesign.Default)
         assertEquals(PersonaDesign.Visor, PersonaDesign.fromId("jarvis"))

@@ -48,9 +48,9 @@ import java.io.File
 
 /**
  * Inbox phase 1 on the JVM with Robolectric's native graphics, in every style, light and dark, from the shared fixture
- * with every state: the list (需要你 · 进行中 · 知悉即可 · 已折叠 · 已处理 and the rows' marks) and the event pages (the
- * suggestion of each kind, 进行中, 急事, failed, the chain folded and open), plus the 修改 sheet. PNGs go to
- * `build/inbox-event-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md「收件箱：事件、建议、处理链条」.
+ * with every state: the list (Needs you · In progress · FYI · Collapsed · Done and the rows' marks) and the event pages (the
+ * suggestion of each kind, In progress, Urgent, failed, the chain folded and open), plus the Edit sheet. PNGs go to
+ * `build/inbox-event-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md"Inbox: events, suggestions, and handling chains".
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -123,7 +123,7 @@ class InboxEventShotsTest {
                 assertTrue(words, rule.onAllNodes(hasText(words, substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
             }
         }
-        // A row with event fields opens its event page; the old AI 分身 draft card is not drawn under its suggestion.
+        // A row with event fields opens its event page; the old AI twin draft card is not drawn under its suggestion.
         rule.onNodeWithText("张三问周五前能否给客户报价").performClick()
         assertEquals(InboxEventRoute("lark:oc_demo1:100"), opened.last())
         assertEquals(0, rule.onAllNodes(hasText("改一改")).fetchSemanticsNodes().size)
@@ -166,12 +166,12 @@ class InboxEventShotsTest {
                 }
             }
         }
-        // 发送 runs it exactly as shown: the version, no text.
+        // Send runs it exactly as shown: the version, no text.
         rule.onNode(hasText("发送") and hasClickAction()).performClick()
         rule.waitForIdle()
         assertEquals(SuggestionRequest("lark:oc_demo1:100", 2, SuggestionAction.Confirm, null, inbox.answers.last().clientId), inbox.answers.last())
 
-        // Stale: the hub had a newer suggestion; the page redraws with it and says 「建议已更新」.
+        // Stale: the hub had a newer suggestion; the page redraws with it and says "Suggestion updated".
         inbox.answer = { request ->
             inbox.snapshot.update { snap -> snap.copy(records = snap.records.map { r ->
                 if (r.item.id != request.itemId) r else r.copy(event = r.event.copy(suggestion = InboxSuggestion(3, "reply", "可以，周四前发你。")))
@@ -185,7 +185,7 @@ class InboxEventShotsTest {
         rule.onNodeWithText("可以，周四前发你。").assertExists()
         for (d in listOf(false, true)) { dark = d; capture("inbox-event-stale-glass-${mode(d)}") }
 
-        // 修改: the edited text goes with confirm; 「说一句话」 goes as instruct.
+        // Edit: the edited text goes with confirm; "Say something" goes as instruct.
         inbox.answer = { SuggestionOutcome.Done }
         rule.onNode(hasText("修改") and hasClickAction()).performClick()
         rule.waitForIdle()

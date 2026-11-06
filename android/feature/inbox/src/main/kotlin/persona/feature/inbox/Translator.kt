@@ -17,11 +17,11 @@ import persona.core.contracts.api.TranslationPrefs
 import persona.core.contracts.api.TranslationTransport
 import persona.core.domain.translate.LanguageGuess
 
-/** 设置 › 翻译 for the inbox; null where nothing is translated (体验模式, previews). */
+/** Settings › Translation for the inbox; null where nothing is translated (demo mode, previews). */
 val LocalTranslator = staticCompositionLocalOf<Translator?> { null }
 
 /**
- * The translations the app has (docs/android.md「翻译」, the iOS Translator): Feishu messages asked for while they show
+ * The translations the app has (docs/android.md "Translation", the iOS Translator): Feishu messages asked for while they show
  * (batched, [batch] at a time), mails by message. Kept for this run; the hub keeps its own copy, so the next is quick.
  * [transport] is the selected hub's (null while there is none).
  */

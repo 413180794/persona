@@ -92,8 +92,8 @@ class Notifier @Inject constructor(
     internal fun ongoing(status: OngoingStatus): Notification {
         val icon = persona.core.designsystem.R.drawable.ic_stat
         val title = status.titleRes?.let(context::getString) ?: status.title
-        // The lock screen's version: counts and 「有个授权等你」 only, never an agent's name or what it asks. The private one
-        // names agents only with 锁屏显示详情 (OngoingStatus.from: a phone may show it on the lock screen too), and the system
+        // The lock screen's version: counts and "An approval is waiting" only, never an agent's name or what it asks. The private one
+        // names agents only with "Show details on lock screen" (OngoingStatus.from: a phone may show it on the lock screen too), and the system
         // shows it there only where the user lets sensitive content show; elsewhere this one.
         val public = NotificationCompat.Builder(context, CH_STATUS).setSmallIcon(icon)
             .setContentTitle(title).setContentText(status.publicText)
@@ -104,7 +104,7 @@ class Notifier @Inject constructor(
             .setContentText(status.text)
             .setSubText(status.subText)
             .apply { status.lines?.let { setStyle(NotificationCompat.BigTextStyle().bigText(it)) } }
-            // Never public: with 锁屏显示详情 on, a public notification put names on lock screens set to hide sensitive content.
+            // Never public: with "Show details on lock screen" on, a public notification put names on lock screens set to hide sensitive content.
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(public)
             .setCategory(when {
@@ -152,7 +152,7 @@ class Notifier @Inject constructor(
 
     /**
      * A button of the ongoing notification. Answers go through ActionReceiver and NotificationActionExecutor like the
-     * 需要你处理 notification's (refresh, expiry, unlock, one durable claim per request); 查看 opens the conversation.
+     * "Needs you" notification's (refresh, expiry, unlock, one durable claim per request); "View" opens the conversation.
      * Each PendingIntent is immutable and told apart by its data URI, so a later redraw can never point a token the
      * system holds while the user unlocks at another request.
      */
@@ -269,7 +269,7 @@ class Notifier @Inject constructor(
             .forEach { manager.cancel(it.tag, it.id) }
     }
 
-    /** Tags of the 做完了 notifications showing now, with when each was posted (#4088). Empty when the system cannot be asked. */
+    /** Tags of the "Finished" notifications showing now, with when each was posted (#4088). Empty when the system cannot be asked. */
     fun showingDone(): Map<String, Long> = showing(StaleDoneNotifications.DONE_PREFIX)
 
     /** Tags of the assistant notifications showing now, with when each was posted (#4805). */
@@ -286,12 +286,12 @@ class Notifier @Inject constructor(
         if (showingAssistant()[tag]?.let { it < before } == true) manager.cancel(tag, EVENT_ID)
     }
 
-    /** Cancels a 做完了 notification only if the one showing was posted before [before]: a fresh one under the same tag stays. */
+    /** Cancels a "Finished" notification only if the one showing was posted before [before]: a fresh one under the same tag stays. */
     fun retractDone(tag: String, before: Long) {
         if (showingDone()[tag]?.let { it < before } == true) manager.cancel(tag, EVENT_ID)
     }
 
-    /** Takes away a session's 做完了 / assistant notifications once its result has been seen (#3567). */
+    /** Takes away a session's "Finished" / assistant notifications once its result has been seen (#3567). */
     fun retractSeen(session: SessionKey) = NotificationPolicy.resultTags(session).forEach { manager.cancel(it, EVENT_ID) }
 
     private fun NotificationCompat.Builder.forSession(session: SessionKey?) = apply {

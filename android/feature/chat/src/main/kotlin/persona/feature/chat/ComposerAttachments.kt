@@ -122,7 +122,7 @@ internal fun decodePhoto(context: Context, uri: Uri): Bitmap =
 /**
  * Sends [attachment] to [session]'s computer and returns its path there: staged locally (photos as JPEG), then
  * uploaded. Back from the camera or a picker the connection is often still catching up (the app was in the
- * background): it waits for it a little instead of failing at once with 「连接恢复后重试上传」.
+ * background): it waits for it a little instead of failing at once with "Retry the upload once reconnected".
  */
 internal suspend fun uploadAttachment(context: Context, service: ChatComposerService, session: SessionKey, attachment: ComposerAttachment): String {
     (service as? MessageTransport)?.readyToSend?.let { ready ->
@@ -171,7 +171,7 @@ internal fun ComposerAttachment.thumbnailState(service: ChatComposerService?): A
 }
 
 /**
- * Photos as a row of thumbnails (iOS); files keep one row each with their name, state, 重试 and ✕. A tap on a photo
+ * Photos as a row of thumbnails (iOS); files keep one row each with their name, state, "Retry" and ✕. A tap on a photo
  * that is on the computer goes to [onEdit] (marked up before sending); one still uploading or failed is not offered.
  */
 @Composable

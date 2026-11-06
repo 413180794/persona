@@ -4,7 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import persona.core.contracts.Session
 
-/** The agents of one herdr tab (#2320): pane order, the 发起者, the group (as web/src/lib/herdr-tree.ts). */
+/** The agents of one herdr tab (#2320): pane order, the initiator, the group (as web/src/lib/herdr-tree.ts). */
 class AgentTabTest {
     private fun s(id: String, pane: String? = null, place: Int? = null, slot: String? = "t1", state: String = "idle",
                   space: String = "w1", index: Int? = 2, machine: String = "mac") =
@@ -30,7 +30,7 @@ class AgentTabTest {
     @Test fun theLauncherIsTheTopLeftAgentOfATabOfSeveral() {
         val lead = s("a", place = 0)
         assertEquals(lead, launcherOf(listOf(s("b", place = 1), lead)) { it })
-        // one agent: no group, no 发起者
+        // one agent: no group, no initiator
         assertNull(launcherOf(listOf(lead)) { it })
         // the top left pane is a shell: the agents are peers
         assertNull(launcherOf(listOf(s("b", place = 1), s("c", place = 2))) { it })

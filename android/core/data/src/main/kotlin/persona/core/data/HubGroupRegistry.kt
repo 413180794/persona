@@ -7,7 +7,7 @@ import java.util.UUID
 import kotlinx.serialization.Serializable
 
 /*
- * The phone's hub groups (docs/android.md「多 hub」), stored encrypted in `hub-data/groups.enc`.
+ * The phone's hub groups (docs/android.md "Multiple hubs"), stored encrypted in `hub-data/groups.enc`.
  *
  * Every paired hub keeps its own pairing scope (`hub-data/<hub>/<generation>/credentials.enc`, `endpoints.enc`).
  * A group's data (databases, caches, preferences) lives in its storage scope: for a group that started with a

@@ -18,9 +18,9 @@ import persona.core.contracts.generated.ExtensionPersonaCard
 import persona.core.designsystem.ViewBlocks
 import kotlin.math.abs
 
-// An assistant's reply drawn with the extensions' components (docs/extensions.md「声明式 UI」, #1850): a ```persona-view
+// An assistant's reply drawn with the extensions' components (docs/extensions.md "Declarative UI", #1850): a ```persona-view
 // block is a view (or one component), the older ```persona-card is turned into components. Nothing in them acts: no
-// buttons, fields, search or 加载更多 (links open as anywhere in a reply).
+// buttons, fields, search or "Load more" (links open as anywhere in a reply).
 
 object PersonaViewBlocks {
     const val View = "persona-view"
@@ -28,7 +28,7 @@ object PersonaViewBlocks {
 
     /**
      * The view in a block, or null: another language, JSON that is not whole yet (still streaming) or not a view. A
-     * card's own words (合计, 其他…) are [words]: the reference's by default, the shown language's where it is drawn.
+     * card's own words ("Total", "Other"...) are [words]: the reference's by default, the shown language's where it is drawn.
      */
     fun parse(language: String, code: String, words: CardWords = CardWords.Reference): ExtensionView? = when (language.trim().lowercase()) {
         View -> view(code)
@@ -52,7 +52,7 @@ object PersonaViewBlocks {
      * A ```persona-card as components, by the rules every app shares (the reference is `sdk/go/wire/personacard.go`, the
      * cases `schema/extension/examples/persona-card/`): one section titled with the card's title (a stat's goes on its
      * number), its subtitle first; `stat` a number; `stacked_bar` the total, a stacked bar of the parts (past four: three
-     * and 其他) and a row per part; `line` / `bar` the current value (if any) over a chart of the last 120 points. A card
+     * and "Other") and a row per part; `line` / `bar` the current value (if any) over a chart of the last 120 points. A card
      * it cannot draw is null (and stays the code it is).
      */
     fun fromCard(card: ExtensionPersonaCard, words: CardWords = CardWords.Reference): ExtensionView? {
@@ -102,7 +102,7 @@ object PersonaViewBlocks {
     /** [value] as [number] writes it, then the unit after a space: 2,250 kcal. */
     private fun amount(value: Double, unit: String): String = number(value) + if (unit.isNotEmpty()) " $unit" else ""
 
-    /** Nothing in a reply acts: buttons, fields, segmented controls, search and 加载更多 go, rows lose their action. */
+    /** Nothing in a reply acts: buttons, fields, segmented controls, search and "Load more" go, rows lose their action. */
     fun quiet(view: ExtensionView): ExtensionView = view.copy(search = null, filter = null, refreshAfter = null, state = null,
         sections = view.sections.map { section ->
             section.copy(more = null, items = section.items.filter { it.type !in setOf("button", "field", "segmented") }

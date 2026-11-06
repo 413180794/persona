@@ -4,13 +4,13 @@ import persona.core.contracts.Machine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
-/** A signed-in device adds a computer: `POST /api/v1/auth/pair-codes {"add"}` (docs/protocol.md「电脑的配对码」). */
+/** A signed-in device adds a computer: `POST /api/v1/auth/pair-codes {"add"}` (docs/protocol.md "Computer pairing codes"). */
 const val MachinesAddFeature = "machines_add"
 
-/** Machines carry `trust` / `error_code` and take `…/confirm` / `…/reject` (docs/protocol.md「电脑的信任」). */
+/** Machines carry `trust` / `error_code` and take `…/confirm` / `…/reject` (docs/protocol.md "Computer trust"). */
 const val MachineTrustFeature = "machine_trust"
 
-/** The systems 添加电脑 has instructions for; the hub takes the same words (`add.os`). */
+/** The systems "Add computer" has instructions for; the hub takes the same words (`add.os`). */
 enum class ComputerOs(val wire: String) {
     Mac("mac"), Linux("linux"), Windows("windows");
 
@@ -46,7 +46,7 @@ data class ComputerCode(
 )
 
 /**
- * 机器 › 添加电脑 and 确认电脑 (docs/onboarding.md 4.2「你的电脑 ↔ hub」). Adding goes to the selected hub; a machine id
+ * Machines › "Add computer" and "Confirm computer" (docs/onboarding.md 4.2 "Your computer <-> hub"). Adding goes to the selected hub; a machine id
  * (a code for one again, confirm, reject) goes to the hub its id names.
  */
 interface ComputerPairing {

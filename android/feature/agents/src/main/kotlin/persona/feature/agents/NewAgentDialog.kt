@@ -40,7 +40,7 @@ internal fun NewAgentDialog(model: NewAgentViewModel, machines: List<Machine>, o
 
 /**
  * The same form as a page (`NewAgentRoute`), for callers outside Agents that fill some of it in ahead (the knowledge
- * base's 开 Agent). Back closes the folder browser first.
+ * base's "Open Agent"). Back closes the folder browser first.
  */
 @Composable
 internal fun NewAgentPage(
@@ -153,7 +153,7 @@ private fun LazyListScope.newAgentItems(
         launcher.agentType == (selectedType ?: "claude") &&
             (query.isBlank() || launcher.name.contains(query, true) || launcher.model.orEmpty().contains(query, true))
     }
-    // Models are configured by use (设置 › 模型配置): a new agent follows it unless a launcher is picked for this start.
+    // Models are configured by use (Settings › Model configuration): a new agent follows it unless a launcher is picked for this start.
     val follow = state.follow
     val rows = launchers.size + if (follow != null) 1 else 0
     if (follow != null) item("launcher:follow") {

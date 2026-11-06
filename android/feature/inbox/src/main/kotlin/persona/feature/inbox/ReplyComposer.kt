@@ -61,7 +61,7 @@ enum class ReplyError(@StringRes val text: Int) {
 
 /**
  * Serialize draft writes and preserve the request ID when a send needs retrying. [initialText] fills an empty reply
- * that has no saved draft; [initialAi] says it came from AI (the AI 分身's draft), which sending then confirms.
+ * that has no saved draft; [initialAi] says it came from AI (the AI twin's draft), which sending then confirms.
  */
 class ReplyComposer(
     private val repository: InboxRepository,
@@ -100,7 +100,7 @@ class ReplyComposer(
     }
 
     /**
-     * The AI 分身's draft, known only once the inbox item is: it fills the reply if the user has neither a saved
+     * The AI twin's draft, known only once the inbox item is: it fills the reply if the user has neither a saved
      * draft nor typed anything (a page that opened before the list came in); otherwise the user's text stays.
      */
     fun offerAiDraft(text: String) {
@@ -119,7 +119,7 @@ class ReplyComposer(
     }
 
     /**
-     * Replaces the reply with a draft AI wrote (AI 草拟 / AI 改), under a new request ID. Refused while a send is
+     * Replaces the reply with a draft AI wrote ("AI draft" / "AI edit"), under a new request ID. Refused while a send is
      * on its way or its result is unclear: that request keeps its text and ID.
      */
     fun replaceWithAi(text: String): Boolean {
@@ -156,7 +156,7 @@ class ReplyComposer(
         save(draft)
     }
 
-    /** Whether the words go as [removed] words (#882), kept with the draft; the page offers it while the switch is on. */
+    /** Whether the words go as Brave Climb words (#882), kept with the draft; the page offers it while the switch is on. */
     fun setBraveClimb(on: Boolean) {
         val current = state.value
         if (!current.canEdit || current.draft.braveClimb == on) return
@@ -184,7 +184,7 @@ class ReplyComposer(
         if (current.loading || current.sending || current.draft.text.isBlank()) return
         if (current.delivery in setOf(ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork, ReplyDelivery.Verifying)) return
         if (current.delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.NeedsConfirmation)) { verify(); return }
-        // [removed] words go encoded, as the web sends them; the draft keeps the words typed.
+        // Brave Climb words go encoded, as the web sends them; the draft keeps the words typed.
         val text = if (!current.draft.braveClimb) current.draft.text else try { LarkBraveClimbCodec.encode(current.draft.text) }
             catch (_: LarkBraveClimbCodec.TooLong) { mutableState.value = current.copy(error = ReplyError.BraveClimbTooLong); return }
         mutableState.value = current.copy(sending = true, error = null, sent = false, delivery = ReplyDelivery.Sending, targetChanged = false)

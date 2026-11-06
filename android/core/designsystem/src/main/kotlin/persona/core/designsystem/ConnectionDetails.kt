@@ -38,7 +38,7 @@ import java.text.DateFormat
 import java.time.Instant
 
 /**
- * What the connection details read besides the state the page already has (docs/android.md「连接详情」): the
+ * What the connection details read besides the state the page already has (docs/android.md "Connection details"): the
  * transport's observations (last failure, next try, last message from the hub), the messages waiting to go out, and
  * a way to try the hub again now. The app provides it for the selected hub; without it the sheet shows only the state.
  */
@@ -60,7 +60,7 @@ sealed interface ConnectionFact {
     data class Waiting(val count: Int) : ConnectionFact
 }
 
-/** The states 立即重试 can help: the others wait for the user (a permission, a certificate, a new pairing). */
+/** The states "Retry now" can help: the others wait for the user (a permission, a certificate, a new pairing). */
 val ConnectionState.retryable: Boolean
     get() = this == ConnectionState.Connecting || this == ConnectionState.Updating || this == ConnectionState.WaitingForNetwork
 
@@ -74,7 +74,7 @@ fun connectionFacts(state: ConnectionState, diagnostics: ConnectionDiagnostics?,
     // As iOS (`.failed(why)`): only the latest attempt's failure, cleared once a connection got through.
     if (connecting) diagnostics?.lastAttemptFailure?.let { add(ConnectionFact.LastFailure(it)) }
     if (connecting) diagnostics?.nextRetryAt?.let(::instantOrNull)?.let { next ->
-        // Rounded up, as iOS: "1 秒后重试" until the moment it tries.
+        // Rounded up, as iOS: "Retrying in 1 s" until the moment it tries.
         val millis = next.toEpochMilli() - now.toEpochMilli()
         add(ConnectionFact.RetryIn(if (millis <= 0) 0 else (millis + 999) / 1000))
     }
@@ -86,8 +86,8 @@ private fun instantOrNull(text: String): Instant? = runCatching { Instant.parse(
 
 /**
  * What a page's connection title opens while the hub is out of reach: returns the tap action (pass it as the title's
- * `onTitleClick`) and shows [ConnectionDetailsSheet] once tapped. [onSettings] is the page's way to 连接设置;
- * [onRetry] refreshes the page after 立即重试 asks the connection to try again.
+ * `onTitleClick`) and shows [ConnectionDetailsSheet] once tapped. [onSettings] is the page's way to "Connection settings";
+ * [onRetry] refreshes the page after "Retry now" asks the connection to try again.
  */
 @Composable
 fun rememberConnectionDetails(state: ConnectionState, onSettings: (() -> Unit)?, onRetry: () -> Unit = {}): () -> Unit {
@@ -98,7 +98,7 @@ fun rememberConnectionDetails(state: ConnectionState, onSettings: (() -> Unit)?,
     return remember(haptics) { { haptics(Haptic.Tap); shown = true } }
 }
 
-/** Why the title says what it says, since when, and 立即重试 (iOS's `ConnectionDetails`), as a sheet. */
+/** Why the title says what it says, since when, and "Retry now" (iOS's `ConnectionDetails`), as a sheet. */
 @Composable
 fun ConnectionDetailsSheet(
     state: ConnectionState,
@@ -112,7 +112,7 @@ fun ConnectionDetailsSheet(
     val outbox = source?.outbox?.collectAsState()?.value.orEmpty()
     val currentClock by rememberUpdatedState(clock)
     var now by remember { mutableStateOf(clock()) }
-    // The countdown and "N 秒前" move on by the second while the sheet is open.
+    // The countdown and "N s ago" move on by the second while the sheet is open.
     LaunchedEffect(Unit) { while (true) { delay(1_000); now = currentClock() } }
     val haptics = rememberHaptics()
     val palette = PersonaTheme.palette
@@ -162,7 +162,7 @@ private fun factText(fact: ConnectionFact, now: Instant): String = when (fact) {
     is ConnectionFact.Waiting -> pluralStringResource(R.plurals.designsystem_connection_waiting_messages, fact.count, fact.count)
 }
 
-/** "12 秒前", "3 分钟前", then the time of day (or the date, before today). */
+/** "12 s ago", "3 min ago", then the time of day (or the date, before today). */
 @Composable
 private fun ago(at: Instant, now: Instant): String {
     val seconds = maxOf(0L, (now.toEpochMilli() - at.toEpochMilli()) / 1000).toInt()

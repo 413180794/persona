@@ -13,8 +13,8 @@ data class PathRef(val start: Int, val end: Int, val path: String, val line: Int
  * - `~/x`, `/x/y` (two parts at least: `/tmp` alone is a word), or relative with a folder and an extension
  *   (`src/a.kt`; a letter-led extension, so `deepseek/v4.1` is not a file).
  * - A line: `path:12`, `path:12:5`, `path:12-20`, `path#L12`.
- * - Outside backticks a path is ASCII: Chinese text or full-width punctuation right after it ends it (`/tmp/a.md里`).
- *   A path in backticks is whole, whatever it is written in: `` `~/报告/第四季度.docx` ``.
+ * - Outside backticks a path is ASCII: Chinese text or full-width punctuation right after it ends it (`/tmp/a.md` + a Chinese word).
+ *   A path in backticks is whole, whatever it is written in: a home path with Chinese folder and file names.
  * - Not inside a URL or a longer word; a sentence's full stop after it is not part of it.
  */
 object PathRefs {
@@ -32,7 +32,7 @@ object PathRefs {
 
     /**
      * The paths in plain text, in order, at most [limit]. A code span is a candidate whole and also for the ASCII
-     * paths in it (`` `/a.md 和 /b.md` ``): [split] takes the first that is there, the longer one at the same place.
+     * paths in it (`` `/a.md and /b.md` `` with a Chinese "and"): [split] takes the first that is there, the longer one at the same place.
      */
     fun find(text: String, limit: Int = 40): List<PathRef> {
         val out = ArrayList<PathRef>()
@@ -51,7 +51,7 @@ object PathRefs {
     /** Only the ASCII paths, outside any notion of code spans (Markdown, where code spans are their own nodes). */
     fun findAscii(text: String): List<PathRef> = ascii.findAll(text).mapNotNull { fromMatch(it, it.range.first) }.toList()
 
-    /** The path a whole code span is (`/tmp/a.md`, `src/a.kt:12`, `~/报告/第四季度.docx`), or null. */
+    /** The path a whole code span is (`/tmp/a.md`, `src/a.kt:12`, a home path with Chinese names), or null. */
     fun codePath(code: String): PathRef? {
         val lead = code.length - code.trimStart().length
         val t = code.trim()

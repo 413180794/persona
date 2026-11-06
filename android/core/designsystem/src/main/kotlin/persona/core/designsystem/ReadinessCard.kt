@@ -14,7 +14,7 @@ import persona.core.domain.FailureAction
 
 /**
  * The buttons a readiness step or a coded refusal can have on Android (docs/onboarding.md 5.1 `action.id`). An id the
- * app does not know is text only (docs/onboarding.md 5「总规矩」); `enable_tls` / `open_admin` have no page on the phone.
+ * app does not know is text only (docs/onboarding.md 5 "General rules"); `enable_tls` / `open_admin` have no page on the phone.
  */
 enum class ReadinessActionId(val wire: String, @StringRes val label: Int) {
     AddComputer("add_computer", R.string.designsystem_readiness_action_add_computer),
@@ -26,7 +26,7 @@ enum class ReadinessActionId(val wire: String, @StringRes val label: Int) {
     EditProvider("edit_provider", R.string.designsystem_readiness_action_edit_provider),
     TestAssistant("test_assistant", R.string.designsystem_readiness_action_test_assistant);
 
-    /** The help this button opens in place, when it has no page of its own on the phone (添加电脑 has one: 机器 › 添加电脑). */
+    /** The help this button opens in place, when it has no page of its own on the phone ("Add computer" has one: Machines › "Add computer"). */
     val help: ReadinessHelp? get() = when (this) {
         WakeComputer -> ReadinessHelp.WakeComputer
         InstallClaude -> ReadinessHelp.InstallClaude
@@ -51,7 +51,7 @@ fun FailureAction.readinessAction(): ReadinessActionId? = when (this) {
     else -> null
 }
 
-/** What the send button says while the main conversation cannot answer (docs/onboarding.md 4.4: 先接上模型 / 先添加电脑). */
+/** What the send button says while the main conversation cannot answer (docs/onboarding.md 4.4: "Connect a model first" / "Add a computer first"). */
 @StringRes
 fun blockedSendLabel(step: ReadinessStep): Int = when {
     step.id != ReadinessStep.COMPUTER -> R.string.designsystem_readiness_send_connect_model
@@ -66,7 +66,7 @@ fun ReadinessStep.primaryAction(): ReadinessActionId? = ReadinessActionId.of(act
 
 /**
  * The card for one step the main conversation still needs: the hub's title and sentence, its button and the other
- * ways ([ReadinessStep.altActions]). [busy] spins that button (试一句 while the hub tries).
+ * ways ([ReadinessStep.altActions]). [busy] spins that button ("Try a message" while the hub tries).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -75,7 +75,7 @@ fun ReadinessStepCard(
     onAction: (ReadinessActionId) -> Unit,
     modifier: Modifier = Modifier,
     busy: ReadinessActionId? = null,
-    /** Shown under the sentence: 试一句's answer or why it failed. */
+    /** Shown under the sentence: "Try a message"'s answer or why it failed. */
     note: String? = null,
 ) {
     val status = when (step.state) {
@@ -125,7 +125,7 @@ enum class ReadinessHelp { AddComputer, WakeComputer, InstallClaude, LoginClaude
 
 /**
  * The help dialog. [machine] is the computer's name when the hub gave one; [onAction] runs a follow-up the dialog
- * offers (改用 API Key → 接上模型), after it closes. Without [canConnectModel] (no 模型供应商 page to open, as in the
+ * offers ("Use an API key instead" → "Connect a model"), after it closes. Without [canConnectModel] (no model providers page to open, as in the
  * first checklist after pairing) those follow-ups are not offered: they would only reopen this help.
  */
 @Composable

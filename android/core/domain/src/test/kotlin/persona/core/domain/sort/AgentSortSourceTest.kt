@@ -5,7 +5,7 @@ import persona.core.contracts.Session
 import org.junit.Assert.*
 import org.junit.Test
 
-/** 状态优先 / 最近更新 (iOS AgentSort), 飞书群 / 终端 (#2526) and the botmux switch (web #2786). */
+/** "By state" / "Recently updated" (iOS AgentSort), "Lark group" / "Terminal" (#2526) and the botmux switch (web #2786). */
 class AgentSortSourceTest {
     private fun row(id: String, state: String = "working", date: Int = 1, pane: String? = "w1:p$id", space: String = "space", cwd: String = "") =
         AgentSession(Session(machineId = "m", sessionId = id, spaceId = space, spaceName = space, state = state, title = id,

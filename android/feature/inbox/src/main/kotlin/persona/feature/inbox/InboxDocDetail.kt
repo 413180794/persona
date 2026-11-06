@@ -32,12 +32,12 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.InboxItemUiRoute
 import persona.core.navigation.Navigator
 
-// A Feishu document's notice in the inbox (docs/inbox.md「云文档」, #2323): a sheet / Base / docx that @'d the user or
+// A Feishu document's notice in the inbox (docs/inbox.md "Cloud documents", #2323): a sheet / Base / docx that @'d the user or
 // commented to them. It has no chat behind it, so it opens its own page: what happened, the rows about the user, and
-// 「打开文档」 in the app's Feishu document reader. The same page is where an item of a shape this app does not know opens,
+// "Open document" in the app's Feishu document reader. The same page is where an item of a shape this app does not know opens,
 // instead of the mail page (which can only fail for it).
 
-/** An item's `doc` block; [reply] is where a reply goes (`reply.label`: 「评论这一行」…), [error] why the hub could not read it. */
+/** An item's `doc` block; [reply] is where a reply goes (`reply.label`: "Comment on this row"…), [error] why the hub could not read it. */
 @Serializable
 data class InboxDocRef(
     val url: String,
@@ -99,11 +99,11 @@ internal fun docIcon(type: String?): PhIcon = when (type) {
     else -> PhIcons.FileText
 }
 
-/** @我 or 评论, as the web and iOS tag a document's notice. */
+/** "@me" or "Comment", as the web and iOS tag a document's notice. */
 internal fun docKindLabel(res: Resources, doc: InboxDocRef?): String =
     res.getString(if (doc?.notice in setOf("comment", "reply")) R.string.inbox_doc_comment else R.string.inbox_mention_me)
 
-/** The item's own page when it is neither a chat, a 公司圈 post nor a mail: a document's notice, or an unknown item. */
+/** The item's own page when it is neither a chat, a Moments post nor a mail: a document's notice, or an unknown item. */
 @Composable
 fun InboxItemDetailScreen(repository: InboxRepository, route: InboxItemDetailRoute, navigator: Navigator) {
     val inbox by repository.snapshot.collectAsStateWithLifecycle()

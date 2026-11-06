@@ -187,7 +187,7 @@ private fun ConnectorChat(record: InboxRecord, model: ConnectorThreadModel, stat
     }
 }
 
-/** The line under the title: 群聊 · 12 人, 频道 · 340 位订阅者; null for a one-to-one chat (the title says who). */
+/** The line under the title: "Group · 12 people", "Channel · 340 subscribers"; null for a one-to-one chat (the title says who). */
 @Composable
 private fun chatHeadline(chat: ConnectorThreadChat): String? {
     val n = chat.members

@@ -617,7 +617,7 @@ class InboxRepositoryTest {
             assertEquals(mapOf("a" to (true to "va"), "b" to (false to "vb2"), "c" to (false to "vc")), after)
 
             assertEquals(listOf(InboxBulkAction.Done), transport.actions)
-            // 全部清理 is the same request with action dismiss; c is filed.
+            // Clean up all is the same request with action dismiss; c is filed.
             transport.onBulk = { _, _ -> buildJsonObject {
                 put("changed", JsonArray(listOf(buildJsonObject {
                     put("id", "c"); put("source", "mail"); put("kind", "mail"); put("title", "c"); put("version", "vc")
@@ -627,7 +627,7 @@ class InboxRepositoryTest {
             assertEquals(listOf("c"), repository.bulk(listOf(InboxDoneTarget("c", "vc")), InboxBulkAction.Dismiss).changed)
             assertEquals(InboxBulkAction.Dismiss, transport.actions.last())
             assertTrue(repository.snapshot.value.records.first { it.item.id == "c" }.item.isDone)
-            // 撤销 is reopen.
+            // "Undo" is reopen.
             transport.onBulk = { _, _ -> buildJsonObject { put("changed", JsonArray(listOf(item("c", "vc")))) } }
             repository.bulk(listOf(InboxDoneTarget("c")), InboxBulkAction.Reopen)
             assertEquals(InboxBulkAction.Reopen, transport.actions.last())
@@ -730,7 +730,7 @@ class InboxRepositoryTest {
             repository.refresh()
             fun done() = repository.snapshot.value.records.filter { it.item.isDone }.map { it.item.id }.toSet()
             val records = repository.snapshot.value.records.associateBy { it.item.id }
-            // A Feishu row carries its chat's kind (read receipts, Pin 消息 in a topic group).
+            // A Feishu row carries its chat's kind (read receipts, pinned messages in a topic group).
             assertEquals(true to true, records.getValue("l").isGroup to records.getValue("l").isTopic)
             assertEquals(null, records.getValue("a").isGroup)
 

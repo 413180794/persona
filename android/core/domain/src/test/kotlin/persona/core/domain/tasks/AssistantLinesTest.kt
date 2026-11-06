@@ -71,7 +71,7 @@ class AssistantLinesTest {
         assertEquals(TaskState.Working, TaskState.of(todo, listOf(AgentState.Working, AgentState.Idle)))
         assertEquals(TaskState.Followup, TaskState.of(todo, listOf(AgentState.Idle)))
         assertEquals(TaskState.Done, TaskState.of(todo.copy(doneAt = ago(1)), listOf(AgentState.NeedsYou)))
-        // Its agent did not start (#1077): failed, not done, until 重试 reopens it without the error (#1396).
+        // Its agent did not start (#1077): failed, not done, until "Retry" reopens it without the error (#1396).
         val failed = todo.copy(doneAt = ago(1), startError = "claude did not become ready within 1m0s")
         assertEquals(TaskState.Failed, TaskState.of(failed, emptyList()))
         assertEquals("没开起来", (TaskState.Failed.label).zhAny())

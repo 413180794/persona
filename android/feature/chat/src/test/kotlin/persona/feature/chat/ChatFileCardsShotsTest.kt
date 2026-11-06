@@ -99,7 +99,7 @@ class ChatFileCardsShotsTest {
             }
         }
         rule.waitForIdle()
-        // No tag text left in the bubble; the cards say name and 「size · length」.
+        // No tag text left in the bubble; the cards say name and "size · length".
         rule.onNodeWithText("jarvis-file", substring = true).assertDoesNotExist()
         rule.onNodeWithText("24.1 MB · 1:12").assertExists()
         rule.onNodeWithText("录屏 11-05.mov").performClick()

@@ -54,9 +54,9 @@ data class PersonaPalette(
     val positiveRole: StatusColors? = null,
     val cautionRole: StatusColors? = null,
     val customRoles: Boolean = false,
-    /** The user's own messages: iOS 液态玻璃's pale blue (ColorSpec.blue), the same in every style (#2643). */
+    /** The user's own messages: iOS Liquid Glass's pale blue (ColorSpec.blue), the same in every style (#2643). */
     val userBubble: Color = if (dark) Tokens.Semantic.Glass.Dark.userBubble else Tokens.Semantic.Glass.Light.userBubble,
-    /** The words on [userBubble] when it is a deep colour of its own (a 主题色 like 珊瑚橙); null: the page's ink. */
+    /** The words on [userBubble] when it is a deep colour of its own (a theme color like Coral orange); null: the page's ink. */
     val userBubbleText: Color? = null,
     /** Where an agent was opened (#3132, iOS `Theme.sourceFeishu` / `sourceTerminal`): a Feishu group's topic, a terminal pane. */
     val sourceFeishu: StatusColors = if (dark) StatusColors(Color(0xFF82AAFF), Color(0xFF82AAFF), Color(0x2982AAFF))
@@ -81,7 +81,7 @@ data class PersonaPalette(
 }
 
 internal object Palettes {
-    // 玻璃: night blue with three status lights; panels are frosted white.
+    // Glass: night blue with three status lights; panels are frosted white.
     val GlassDark = PersonaPalette(
         background = Color(0xFF060A14), surface = Color(0x14FFFFFF), surfaceOpaque = Color(0xFF151C2C),
         surfaceStrong = Color(0x24FFFFFF), sunken = Color(0x47000000), line = Color(0x17FFFFFF),
@@ -117,7 +117,7 @@ internal object Palettes {
         terminalBackground = Color(0xFF0D121D), terminalText = Color(0xFFE6E3DA), scrim = Color(0x590B1222), dark = false,
     )
 
-    // 晨报: paper and ink; the highlighter is the only colour and only marks advice and what needs you.
+    // Brief: paper and ink; the highlighter is the only colour and only marks advice and what needs you.
     val BriefLight = PersonaPalette(
         background = Color(0xFFFFFFFF), surface = Color(0xFFF4F5F7), surfaceOpaque = Color(0xFFF4F5F7),
         surfaceStrong = Color(0xFFE9ECF0), sunken = Color(0xFFF4F5F7), line = Color(0xFFE6E8EC),
@@ -158,7 +158,7 @@ internal object Palettes {
         sourceTerminal = StatusColors(Color(0xFF9CA4B3), Color(0xFF9CA4B3), Color(0xFF242934)),
     )
 
-    // 看板: a grey board with white strips; the strip holder colour is the state.
+    // Board: a grey board with white strips; the strip holder colour is the state.
     val BoardLight = PersonaPalette(
         background = Color(0xFFE6E9ED), surface = Color(0xFFFFFFFF), surfaceOpaque = Color(0xFFFFFFFF),
         surfaceStrong = Color(0xFFF3F5F7), sunken = Color(0xFFEEF1F4), line = Color(0xFFD5DAE0),
@@ -226,7 +226,7 @@ internal fun PersonaPalette.legacy() = PersonaColors(
 
 /**
  * A role colour for something that is not an agent's state: good, needs a look, broken, or plain. Extensions' views
- * (docs/extensions.md「声明式 UI」) name these four and never a colour.
+ * (docs/extensions.md "Declarative UI") name these four and never a colour.
  */
 enum class Tone { Neutral, Positive, Caution, Danger }
 

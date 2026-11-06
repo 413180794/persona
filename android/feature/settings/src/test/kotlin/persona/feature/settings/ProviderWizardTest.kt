@@ -13,8 +13,8 @@ import org.robolectric.annotation.Config
 import persona.core.contracts.api.*
 
 /**
- * 新增模型供应商 on a hub with built-in presets (docs/onboarding.md 4.3 B / 5.4): pick, paste the key (tested by itself),
- * assign that follows the readiness, what ③ says; and 测试连接 / 获取模型列表 of a gateway typed in.
+ * "New model provider" on a hub with built-in presets (docs/onboarding.md 4.3 B / 5.4): pick, paste the key (tested by itself),
+ * assign that follows the readiness, what step (3) says; and "Test connection" / "Fetch models" of a gateway typed in.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])

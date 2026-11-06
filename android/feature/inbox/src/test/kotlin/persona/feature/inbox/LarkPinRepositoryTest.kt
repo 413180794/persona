@@ -12,7 +12,7 @@ import persona.core.contracts.api.LarkInvalidation
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 
-/** Pin 消息 through [LarkInboxRepository]: what each hub answer turns into (iOS `LarkChatPinsModel`). */
+/** "Pinned messages" through [LarkInboxRepository]: what each hub answer turns into (iOS `LarkChatPinsModel`). */
 class LarkPinRepositoryTest {
     private class PinTransport : LarkConversationTransport {
         override val scope = "pins"
@@ -108,10 +108,10 @@ class LarkPinRepositoryTest {
     @Test fun changesAreConfirmedByTheHubsAnswer() = runTest {
         val t = PinTransport()
         val repo = repository(t)
-        // 添加 Pin from a message reads the account from the chat's pins.
+        // "Pin" from a message reads the account from the chat's pins.
         assertNull(kindOf { repo.larkChangePin("f", "m1", null, null) })
         assertEquals(listOf("acct"), t.changes)
-        // 移除 Pin answered as still pinned: unknown.
+        // "Unpin" answered as still pinned: unknown.
         assertEquals(LarkPinFailure.Kind.ResultUnknown, kindOf { repo.larkChangePin("f", "m1", "p1", "acct") })
         t.changeBody = buildJsonObject { put("account_id", "other"); put("pinned", false) }
         assertEquals(LarkPinFailure.Kind.AccountChanged, kindOf { repo.larkChangePin("f", "m1", "p1", "acct") })

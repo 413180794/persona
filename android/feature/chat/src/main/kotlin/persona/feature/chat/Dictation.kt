@@ -15,7 +15,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 
 /**
- * 语音输入 (iOS Dictation): the phone's own voice input screen (RecognizerIntent), so it works with whichever recognizer
+ * Voice input (iOS Dictation): the phone's own voice input screen (RecognizerIntent), so it works with whichever recognizer
  * the phone has (Xiaomi's, Google's…) and needs no Google services; the app neither records nor asks for the microphone.
  * What was heard goes to [onHeard]. Null when the phone has no recognizer: the button is not shown at all. Android 11+
  * only finds one because the module's manifest declares the RECOGNIZE_SPEECH query.

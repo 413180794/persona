@@ -268,7 +268,7 @@
     <string name="settings_ext_connector_open_subtitle">サインイン、状態、受信トレイのその他の設定</string>
     <string name="settings_ext_connector_inbox_on">%1$s の新しい項目が受信トレイに届きます。コネクタのページの「受信トレイに追加」と同じスイッチです。</string>
     <string name="settings_ext_connector_inbox_off">受信トレイに入れない：新しいものは届かず、既存の項目は残ります。</string>
-    <!-- 自動アップグレード（docs/extensions.md「自动升级」） -->
+    <!-- Auto-upgrade (docs/extensions.md "Auto-upgrade") -->
     <string name="settings_ext_upgrade_title">アップグレード</string>
     <string name="settings_ext_upgrade_footer">マーケットに新しいバージョンが出ると、拡張機能がアイドル状態のときに自動でインストールされます。必要な権限が増える場合は先に確認します。インストール後に起動できない場合は元のバージョンに戻ります。</string>
     <string name="settings_ext_auto_upgrade">自動アップグレード</string>
@@ -301,10 +301,10 @@
     <string name="settings_ext_auto_upgrades_failed">変更できませんでした：%1$s</string>
     <string name="settings_ext_auto_upgrades_footer_on">これらのマーケットからインストールした拡張機能に新しいバージョンが出ると、拡張機能がアイドルのときにハブが自動でインストールします。必要な権限が増える場合は先に確認します。拡張機能ごとに、それぞれのページでオフにすることもできます。</string>
     <string name="settings_ext_auto_upgrades_footer_off">オフ：新しいバージョンは拡張機能のページで知らせるだけなので、ご自身でアップデートしてください。</string>
-    <!-- 拡張機能のページからアンインストール -->
+    <!-- Removing from the extension's own page -->
     <string name="settings_ext_market_installed_note">この拡張機能はマーケットからインストールされました。アンインストール後もマーケットから再インストールできます。</string>
     <string name="settings_ext_keep_data_hint">再インストールしたときに続きから使えます。</string>
-    <!-- マシンの一覧（format machine） -->
+    <!-- The machine list (format machine) -->
     <string name="settings_ext_machine_online">オンライン</string>
     <string name="settings_ext_machine_offline">オフライン</string>
     <string name="settings_ext_cua_missing">Cua未インストール</string>

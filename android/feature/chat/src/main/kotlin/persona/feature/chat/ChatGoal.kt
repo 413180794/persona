@@ -28,7 +28,7 @@ internal fun goalStatusLabel(res: Resources, goal: GoalInfo): String = when (goa
     else -> goal.status
 }
 
-/** What it has spent so far (「12.3k / 500.0k tokens · 42 分钟」), null when nothing is known (iOS `GoalInfo.usage`). */
+/** What it has spent so far ("12.3k / 500.0k tokens · 42 min"), null when nothing is known (iOS `GoalInfo.usage`). */
 internal fun goalUsage(res: Resources, goal: GoalInfo): String? = buildList {
     goal.tokensUsed?.takeIf { it > 0 }?.let { used ->
         val budget = goal.tokenBudget?.takeIf { it > 0 }

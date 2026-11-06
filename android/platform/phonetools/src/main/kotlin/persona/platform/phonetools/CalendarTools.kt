@@ -36,7 +36,7 @@ internal data class CalendarArguments(
         fun time(date: ZonedDateTime) = LocalizedFormats.formatter(LocalizedFormats.TIME, locale, zone).format(date)
         val span = buildString {
             if (allDay) {
-                // The end date is exclusive: an event on 11月1日 ends at 11月2日 00:00.
+                // The end date is exclusive: an event on Nov 1 ends at Nov 2 00:00.
                 val last = to.minusDays(1).takeIf { it.toLocalDate().isAfter(from.toLocalDate()) }
                 append(day(from))
                 last?.let { append(" → ").append(day(it)) }

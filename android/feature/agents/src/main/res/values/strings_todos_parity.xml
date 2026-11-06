@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 待办对齐 iOS（#3034）：列表动态、项目、新建并挂上、来源 -->
+    <!-- To-dos parity with iOS (#3034): list activity, projects, create and link, sources -->
     <string name="agents_todo_not_handed">Not handed to an agent yet</string>
     <string name="agents_todo_created_at">created %1$s</string>
     <string name="agents_todo_spaces">Projects</string>

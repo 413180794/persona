@@ -12,12 +12,12 @@ interface MainConversationSender {
     /** Commits locally before returning; a failed call must leave the editor intact. */
     suspend fun sendToMain(text: String, clientMessageId: String, draft: DraftSnapshot? = null)
     /**
-     * The hub put the main conversation [previous] away (新建主对话): forget it as the main conversation, so the next
+     * The hub put the main conversation [previous] away ("New main chat"): forget it as the main conversation, so the next
      * message to the main conversation starts a new one instead of going to the archived one.
      */
     suspend fun mainReplaced(previous: SessionKey) = Unit
     /**
-     * The hub's main conversation may have changed elsewhere (设置 › 助手 moved the assistant to another machine, another
+     * The hub's main conversation may have changed elsewhere (Settings › Assistant moved the assistant to another machine, another
      * device started a new one): ask the hub, and forget the local one when the hub names another or none, so the next
      * message goes where the hub says instead of to a conversation that is an ordinary one now.
      */

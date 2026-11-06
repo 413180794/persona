@@ -32,7 +32,7 @@ import persona.core.designsystem.*
 import persona.core.domain.sort.*
 import java.io.File
 
-/** 按仓库: computer → repository → working tree → sessions, drawn with the Agents components in every style and appearance. */
+/** "By repository": computer → repository → working tree → sessions, drawn with the Agents components in every style and appearance. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "zh-w400dp-h800dp-xhdpi")

@@ -42,8 +42,8 @@ import java.io.File
 
 /**
  * A Feishu document's notice opened from the inbox (#2323), on the JVM with Robolectric's native graphics, in every
- * style, light and dark: its type and what happened, 「打开表格」, where a reply goes, and the rows about the user with
- * their fields and status. Written as PNGs to `build/inbox-doc-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md「收件箱」.
+ * style, light and dark: its type and what happened, "Open sheet", where a reply goes, and the rows about the user with
+ * their fields and status. Written as PNGs to `build/inbox-doc-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md "Inbox".
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

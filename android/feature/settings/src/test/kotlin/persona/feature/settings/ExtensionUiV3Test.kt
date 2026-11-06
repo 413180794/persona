@@ -9,7 +9,7 @@ import org.junit.Test
 import persona.core.contracts.ExtensionUiEvent
 import persona.core.contracts.api.*
 
-// UI version 3 (docs/extensions.md「声明式 UI」, #1850 / #1851): push / pop, search / filter / 加载更多, ui.invalidate.
+// UI version 3 (docs/extensions.md "Declarative UI", #1850 / #1851): push / pop, search / filter / "Load more", ui.invalidate.
 
 private class ListUi : ExtensionApiStub() {
     var view = ExtensionView(title = "笔记", state = "page=1",
@@ -68,7 +68,7 @@ class ExtensionUiV3Test {
         assertEquals("已保存", outcome.toast)
         assertEquals("note=n1", api.actions.single().second)
         assertEquals(1, api.renders.size)
-        // An action may push too (新建 → the new note's page).
+        // An action may push too ("Create" -> the new note's page).
         api.answer = { _, _ -> ExtensionUiResult(push = ExtensionViewPush("note=new")) }
         assertEquals("note=new", model.press(ExtensionViewAction("new")).push!!.state)
         assertEquals(1, api.renders.size)

@@ -8,7 +8,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
  * The feedback iOS plays through `Haptics` (AppModel.swift): a light [Tap] on a press that opens or undoes something,
- * [Success] when an answer, approval or 已处理 went through, [Attention] when what the user acted on changed or must
+ * [Success] when an answer, approval or "Done" went through, [Attention] when what the user acted on changed or must
  * wait (the terminal's dialog moved on, the hub is out of reach), [Error] when an operation failed.
  */
 enum class Haptic { Tap, Success, Attention, Error }

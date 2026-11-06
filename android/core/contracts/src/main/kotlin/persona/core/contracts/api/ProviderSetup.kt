@@ -5,15 +5,15 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** The hub's hello feature for built-in presets, a name it makes up and `assign` (docs/launchers.md「内置预设」). */
+/** The hub's hello feature for built-in presets, a name it makes up and `assign` (docs/launchers.md "Built-in presets"). */
 const val BuiltinPresetsFeature = "builtin_presets"
 
 /** The categories a provider added from the wizard takes over while they are still at their default (docs/onboarding.md 5.4). */
 val AssignPurposes = listOf("assistant", "agent.new")
 
 /**
- * 新增模型供应商 (docs/launchers.md「接口」「从扩展添加」): a provider kept by the hub (gateway, key sealed there, models),
- * typed in or taken from an extension's preset. Bound to the active pairing, like 模型配置.
+ * "Add model provider" (docs/launchers.md "API" "Adding from an extension"): a provider kept by the hub (gateway, key sealed there, models),
+ * typed in or taken from an extension's preset. Bound to the active pairing, like model configuration.
  */
 interface ProviderSetup {
     /** `GET /api/v1/launchers/presets`: the providers the hub's extensions offer; none from a hub without them (404). */
@@ -65,7 +65,7 @@ interface ProviderSetup {
     suspend fun import(machine: String, providers: List<String>): LauncherImportResult = throw UnsupportedOperationException()
 }
 
-/** One provider of 设置 › 模型供应商 (the hub's `LauncherView`): never its key or headers, only whether it has them. */
+/** One provider of Settings › Model providers (the hub's `LauncherView`): never its key or headers, only whether it has them. */
 @Serializable
 data class HubLauncher(
     @SerialName("name") val name: String,
@@ -97,7 +97,7 @@ data class HubLauncher(
     val isApi: Boolean get() = kind == "api"
 }
 
-/** What 测试可用性 answered: [machine] it ran on (none for a direct API), and the result. */
+/** What "Test availability" answered: [machine] it ran on (none for a direct API), and the result. */
 data class LauncherCheckAnswer(val machine: String?, val check: LauncherCheck)
 
 @Serializable
@@ -110,7 +110,7 @@ data class LauncherCheck(
     @SerialName("error") val error: String? = null,
 )
 
-/** One provider 从 ~/.zshrc 导入 found: merged from [aliases]; [existing] is the stored one it would add models to. */
+/** One provider "Import from ~/.zshrc" found: merged from [aliases]; [existing] is the stored one it would add models to. */
 @Serializable
 data class ImportedProvider(
     @SerialName("name") val name: String,
@@ -151,7 +151,7 @@ data class ProviderPreset(
     @SerialName("auth") val auth: String? = null,
     /** Where to open an account or get a key (built-in presets); opened in the app. */
     @SerialName("signup_url") val signupUrl: String? = null,
-    /** The name in the request's language (「智谱 GLM」); [name] stays the plain one. */
+    /** The name in the request's language ("Zhipu GLM"); [name] stays the plain one. */
     @SerialName("display_name") val displayName: String? = null,
 ) {
     /** What it is called in the list. */
@@ -163,7 +163,7 @@ data class ProviderPreset(
     /** The hub's test speaks Messages only: a Responses API cannot be tested. */
     val testable: Boolean get() = !(kind == "api" && api == "responses")
 
-    /** 「Key 从哪拿」: the signup page when it is a web address. */
+    /** "Where to get a key": the signup page when it is a web address. */
     val signupLink: String? get() = signupUrl?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
 
     /** The model a launcher gets when none is picked: the declared default, else the first listed. */
@@ -228,7 +228,7 @@ data class ProviderAdded(
 data class KeptPurpose(@SerialName("purpose") val purpose: String, @SerialName("reason") val reason: String = "")
 
 /**
- * What 测试连接 / 获取模型列表 send: a [preset] with the key (the hub fills in its address and default model), or a
+ * What "Test connection" / "Fetch model list" send: a [preset] with the key (the hub fills in its address and default model), or a
  * gateway typed in. Blank fields are left out.
  */
 @Serializable

@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * What AI 草拟 / AI 改 asks the hub for (the old app's wording): the user's request, then 「在这版上改：<当前草稿>」
+ * What "AI draft" / "AI revise" asks the hub for (the old app's wording): the user's request, then "Revise this version: <current draft>"
  * when there is a draft to revise; either may be missing.
  */
 fun draftInstruction(request: String, draft: String): String = listOfNotNull(
@@ -34,7 +34,7 @@ internal val ReplyComposerState.checksResult: Boolean
     get() = delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.NeedsConfirmation)
 
 /**
- * A request and AI 草拟 (no draft yet) or AI 改 (a draft to revise). The hub's text replaces the reply as an AI draft
+ * A request and "AI draft" (no draft yet) or "AI revise" (a draft to revise). The hub's text replaces the reply as an AI draft
  * (sending it asks first); a failure says why and keeps what was there.
  */
 @Composable
@@ -70,8 +70,8 @@ internal fun InboxAiDraftRow(repository: InboxRepository, itemId: String, compos
 }
 
 /**
- * The reply to an item, AI-assisted (the old app's detail, the AI 分身 draft's 改一改): why the AI 分身 drafted it and
- * its conversation, the reply itself, and AI 草拟 / AI 改. Sending an AI draft asks first ([SendAsYouDialog]); the
+ * The reply to an item, AI-assisted (the old app's detail, the AI twin draft's "Revise"): why the AI twin drafted it and
+ * its conversation, the reply itself, and "AI draft" / "AI revise". Sending an AI draft asks first ([SendAsYouDialog]); the
  * user's own words go as typed. Feishu items reply in their chat, mail items to the newest message (POST …/reply).
  */
 @Composable

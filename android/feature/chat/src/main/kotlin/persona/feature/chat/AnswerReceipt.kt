@@ -11,7 +11,7 @@ import persona.core.domain.plainMarkdown
  * What the app says right after an answer reached the hub (#4740, web #4356): which command was allowed, which option
  * was picked, which plan was approved and how (#5121), so a glance confirms it without opening the conversation.
  * [text] is null when there is nothing of its own to say (handed back, a form, a dialog answered only with keys);
- * the caller then keeps its plain 「已回传你的选择」.
+ * the caller then keeps its plain "Your choice was sent back".
  */
 data class AnswerReceipt(val interaction: Interaction, val resolution: Resolution) {
     fun text(res: Resources): String? {

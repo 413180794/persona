@@ -46,7 +46,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」): every extension of the hub's (built in, from hub.json, installed on
+ * Settings › Extensions (docs/extensions.md "App: Settings › Extensions"): every extension of the hub's (built in, from hub.json, installed on
  * the hub's machine), its state, and the way to its page. Extensions are installed on the hub's machine only.
  */
 @Composable
@@ -62,7 +62,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
     LaunchedEffect(model) { model.load() }
     // The page beside it (a wide window) removed or changed one: the list follows without a pull.
     LaunchedEffect(model) { ExtensionChanges.of(extensions).collect { model.load() } }
-    // Signed in or out somewhere else: 「· 未登录」 follows.
+    // Signed in or out somewhere else: " · Not signed in" follows.
     LaunchedEffect(model) { model.watchAuth() }
     val list = state.extensions
     val detail = LocalDetailKey.current
@@ -73,7 +73,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
                     actionLabel = stringResource(R.string.settings_ext_retry), onAction = { scope.launch { model.load() } })
             }
         }
-        // 扩展市场 only when the hub has markets (docs/extensions.md「扩展市场」): the one way a phone installs an extension.
+        // "Extension market" only when the hub has markets (docs/extensions.md "Extension market"): the one way a phone installs an extension.
         if (state.markets && onMarket != null) item("market") {
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
                 JRow(stringResource(R.string.settings_ext_market), subtitle = stringResource(R.string.settings_ext_market_subtitle), leadingIcon = PhIcons.Cube,
@@ -113,16 +113,16 @@ private fun ExtensionStateMark(extension: HubExtension?) {
 }
 
 /**
- * 设置 › 扩展 › one: what it is and how it is doing, its switch, its settings as a form drawn from its schema, its
+ * Settings › Extensions › one: what it is and how it is doing, its switch, its settings as a form drawn from its schema, its
  * secrets (set here, never shown again), what it contributes and what it may do. An extension written in hub.json is only
  * looked at here.
  */
 @Composable
 fun ExtensionPage(
     extensions: ExtensionManagement?, extensionId: String, onBack: () -> Unit, onPage: ((ExtensionUiPlace) -> Unit)? = null,
-    /** Opens one of the channels it contributes (设置 › 渠道); without it the line is left out. */
+    /** Opens one of the channels it contributes (Settings › Channels); without it the line is left out. */
     onChannel: ((String) -> Unit)? = null,
-    /** The connectors it contributes, for their 进收件箱 switch (the hub's own, as on 设置 › 连接器); null leaves it out. */
+    /** The connectors it contributes, for their "Send to Inbox" switch (the hub's own, as on Settings › Connectors); null leaves it out. */
     connectors: ConnectorsManagement? = null,
     /** Opens one of those connectors' page; without it the link is left out. */
     onConnector: ((String) -> Unit)? = null,
@@ -183,7 +183,7 @@ fun ExtensionPage(
         catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() } // the connector's page says what is wrong
     }
     val hasForm = detail != null && !detail.readOnly && detail.form.isNotEmpty()
-    // A form of machine lists only saves each switch at once: nothing waits for 保存.
+    // A form of machine lists only saves each switch at once: nothing waits for "Save".
     val waitsForSave = hasForm && detail.form.flatMap { if (it.type == "object") it.fields.orEmpty() else listOf(it) }.any { it.items?.machines != true }
     JListPage(title = detail?.extension?.name?.ifBlank { null } ?: stringResource(R.string.settings_ext_title), onBack = onBack, largeTitle = false,
         refreshing = state.loading && detail != null, onRefresh = { scope.launch { model.load() } },
@@ -233,7 +233,7 @@ fun ExtensionPage(
             sandbox(detail.extension.sandbox)
             permissions(detail)
             about(detail, res)
-            // From a market: removed here too, as in the market (docs/extensions.md「扩展市场」), read-only config or not.
+            // From a market: removed here too, as in the market (docs/extensions.md "Extension market"), read-only config or not.
             if (detail.fromMarket) uninstallRow(state.busy) { removing = true }
         }
     }
@@ -318,7 +318,7 @@ private fun LazyListScope.header(id: String, state: ExtensionState, res: Resourc
 }
 
 /**
- * An extension that is a way of talking to Persona (it contributes a `channel`, docs/channels.md「界面」) says where that is
+ * An extension that is a way of talking to Persona (it contributes a `channel`, docs/channels.md "UI") says where that is
  * set up: binding, its switch and where its messages go are on the channel's page; this page keeps working as before.
  */
 private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (String) -> Unit) {
@@ -331,8 +331,8 @@ private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (Strin
 }
 
 /**
- * The connectors an extension contributes (persona#3178): each one's 进收件箱 switch, the hub's own switch (the same as on
- * 设置 › 连接器 › …), and the way to the connector's page for the rest. A connector without an inbox is left out.
+ * The connectors an extension contributes (persona#3178): each one's "Send to Inbox" switch, the hub's own switch (the same as on
+ * Settings › Connectors › ...), and the way to the connector's page for the rest. A connector without an inbox is left out.
  */
 private fun LazyListScope.connectorInbox(list: List<HubConnector>, onOpen: ((String) -> Unit)?, onInbox: (HubConnector, Boolean) -> Unit) {
     list.filter { it.inbox != null }.forEach { c ->
@@ -355,7 +355,7 @@ private fun LazyListScope.connectorInbox(list: List<HubConnector>, onOpen: ((Str
 }
 
 /**
- * A market extension's upgrades (docs/extensions.md「自动升级」): its own switch, its newer version (opening the market's
+ * A market extension's upgrades (docs/extensions.md "Auto-upgrade"): its own switch, its newer version (opening the market's
  * upgrade when it waits for the user) or what happened last.
  */
 private fun LazyListScope.upgrades(

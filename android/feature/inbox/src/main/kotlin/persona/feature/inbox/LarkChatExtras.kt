@@ -20,14 +20,14 @@ import persona.core.designsystem.icons.PhIcons
 import java.time.Instant
 import java.time.ZoneId
 
-// A Feishu chat's extras that iOS has (LarkChatPins, LarkReadReceipts, LarkMessageDisplay): Pin 消息, the read receipt
-// beside my messages, and 风灵月影 (防撤回, 编辑历史) applied to the rows.
+// A Feishu chat's extras that iOS has (LarkChatPins, LarkReadReceipts, LarkMessageDisplay): "Pinned messages", the read receipt
+// beside my messages, and message display ("Keep recalled messages", "Edit history") applied to the rows.
 
-/** A recalled message's kept words show with 防撤回 on; a message never recalled always shows. */
+/** A recalled message's kept words show with "Keep recalled messages" on; a message never recalled always shows. */
 fun LarkMessageDisplay.showsBody(message: LarkMessage): Boolean =
     !message.recalled || (antiRecall && message.retained && message.parts.isNotEmpty())
 
-/** 已编辑 opens the earlier versions with 编辑历史 on, when the Lark gateway kept any. */
+/** "Edited" opens the earlier versions with "Edit history" on, when the Lark gateway kept any. */
 fun LarkMessageDisplay.showsHistory(message: LarkMessage): Boolean =
     showEditHistory && showsBody(message) && message.editHistory.isNotEmpty()
 
@@ -56,7 +56,7 @@ data class LarkChatPinsPage(val accountId: String, val items: List<LarkChatPin>,
 /** Where a pin's message is: [root] is the thread it replies in (it opens there), else the chat around it. */
 data class LarkPinTarget(val message: LarkMessage, val root: LarkMessage? = null)
 
-/** What a pin change could not say: the account changed, the result is unknown, or the hub has no Pin 消息 yet. */
+/** What a pin change could not say: the account changed, the result is unknown, or the hub has no "Pinned messages" yet. */
 class LarkPinFailure(val kind: Kind) : Exception(kind.name) {
     enum class Kind { AccountChanged, ResultUnknown, UpgradeRequired }
 }
@@ -93,12 +93,12 @@ internal fun larkPinSummary(pin: LarkChatPin, display: LarkMessageDisplay): Stri
 }
 
 /**
- * Pin 消息 (the chat's ⋯ menu): the chat's pins with who wrote each, a tap opens the message where it is, ⋯ 移除 Pin
+ * "Pinned messages" (the chat's ⋯ menu): the chat's pins with who wrote each, a tap opens the message where it is, ⋯ "Remove pin"
  * where the chat allows it. Opened only on request: it never loads from the inbox (iOS `LarkChatPinsView`).
  */
 @Composable
 internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: (LarkPinTarget) -> Unit, onDismiss: () -> Unit,
-    /** A topic group (话题群): the hub resolves a pin's thread with it. */
+    /** A topic group: the hub resolves a pin's thread with it. */
     topic: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
@@ -113,7 +113,7 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
     var menu by remember { mutableStateOf<LarkChatPin?>(null) }
     // The Feishu account changed under the sheet: the old account's pins are gone and nothing in it acts any more.
     var blocked by remember { mutableStateOf(false) }
-    // A change whose result is unknown (or just made): 移除 Pin waits for a list loaded after it (iOS `requiresRecheck`).
+    // A change whose result is unknown (or just made): "Remove pin" waits for a list loaded after it (iOS `requiresRecheck`).
     var requiresRecheck by remember { mutableStateOf(false) }
     fun failureText(e: Exception): String = res.getString(when ((e as? LarkPinFailure)?.kind) {
         LarkPinFailure.Kind.AccountChanged -> R.string.inbox_lark_pin_account_changed
@@ -154,7 +154,7 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
                 JEmptyState(stringResource(R.string.inbox_lark_pins_empty_title), stringResource(R.string.inbox_lark_pins_empty_text), icon = PhIcons.PushPin)
             p != null && p.items.isNotEmpty() -> {
                 JSectionHeader(pluralStringResource(R.plurals.inbox_lark_pins_count, p.total, p.total))
-                // Kept recalled words only under the 防撤回 of the account these pins answer for.
+                // Kept recalled words only under the "Keep recalled messages" of the account these pins answer for.
                 val policy = larkPinPolicy(display, p.accountId)
                 val removable = !blocked && !requiresRecheck
                 JGroup(rows = p.items.map { pin -> {
@@ -209,7 +209,7 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
                     try { repository.larkChangePin(feedId, pin.messageId, pin.id, account); load() }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
-                        // Only a hub answer that says it did not happen lets 移除 Pin act again before a reload; a timeout or
+                        // Only a hub answer that says it did not happen lets "Remove pin" act again before a reload; a timeout or
                         // an unknown result may have removed it.
                         requiresRecheck = when (val failure = e) {
                             is LarkPinFailure -> failure.kind == LarkPinFailure.Kind.ResultUnknown
@@ -223,11 +223,11 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
     }
 }
 
-/** The 风灵月影 to read pins with: the chat's, when it is for the account the pins answer for; else kept content stays hidden. */
+/** The message display settings to read pins with: the chat's, when it is for the account the pins answer for; else kept content stays hidden. */
 internal fun larkPinPolicy(display: LarkMessageDisplay, pinsAccountId: String): LarkMessageDisplay =
     if (display.accountId.isNotBlank() && display.accountId == pinsAccountId) display else LarkMessageDisplay.Hidden
 
-/** A pin's or edit's date and time in the language the app is in: 2026年11月5日 14:30 · Nov 5, 2026, 2:30 PM. */
+/** A pin's or edit's date and time in the language the app is in: "Nov 5, 2026, 2:30 PM" in English, the same in each language's own form. */
 internal fun larkPinTime(text: String, locale: java.util.Locale, zone: ZoneId = ZoneId.systemDefault()): String? = runCatching {
     LocalizedFormats.format(Instant.parse(text), LocalizedFormats.DATE_TIME, locale, zone)
 }.getOrNull()
@@ -246,7 +246,7 @@ internal fun larkReadStates(body: JsonObject): List<LarkReadState> =
         LarkReadState(id, s.number("read_count")?.toInt() ?: 0, s.number("unread_count")?.toInt() ?: 0)
     }
 
-/** What sits beside a message of mine: 已读 / 未读 with one reader, else how many have not read it, or 全部已读. */
+/** What sits beside a message of mine: "Read" / "Unread" with one reader, else how many have not read it, or "All read". */
 sealed interface LarkReadMark {
     data object Read : LarkReadMark
     data object Unread : LarkReadMark
@@ -256,7 +256,7 @@ sealed interface LarkReadMark {
     companion object {
         /**
          * Null without a receipt or with nobody to read it: nothing is shown rather than a state never reported.
-         * [isGroup] as iOS: a one-to-one chat reads 已读 / 未读, a group 全部已读 or how many have not; null (a chat the
+         * [isGroup] as iOS: a one-to-one chat reads "Read" / "Unread", a group "All read" or how many have not; null (a chat the
          * inbox does not list, so its kind is unknown here) goes by the count.
          */
         fun of(state: LarkReadState?, isGroup: Boolean?): LarkReadMark? {
@@ -321,7 +321,7 @@ internal fun LarkReadMarkView(mark: LarkReadMark) {
 
 // MARK: Edit history
 
-/** 编辑历史 of a message (iOS `LarkEditHistoryView`): its earlier versions with when each was replaced. */
+/** "Edit history" of a message (iOS `LarkEditHistoryView`): its earlier versions with when each was replaced. */
 @Composable
 internal fun LarkEditHistorySheet(message: LarkMessage, onDismiss: () -> Unit) {
     val display = LocalLarkMessageDisplay.current

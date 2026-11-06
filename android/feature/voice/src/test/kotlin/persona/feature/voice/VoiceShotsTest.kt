@@ -41,7 +41,7 @@ import persona.core.navigation.VoiceRoute
 import java.io.File
 
 /**
- * 语音: asking for the microphone, a conversation going on, and a model that cannot be used, in each of the app's
+ * Voice: asking for the microphone, a conversation going on, and a model that cannot be used, in each of the app's
  * languages (docs/i18n.md); Glass light and dark, the other styles light. PNGs go to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`).
  */

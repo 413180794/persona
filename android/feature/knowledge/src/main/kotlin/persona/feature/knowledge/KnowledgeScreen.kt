@@ -62,7 +62,7 @@ import androidx.annotation.StringRes
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 
-/** Timeline lines shown before 显示全部, related entries of one kind before 全部 (as iOS and the old app). */
+/** Timeline lines shown before "Show all", related entries of one kind before "All" (as iOS and the old app). */
 private const val LOG_SHOWN = 6
 private const val LINKS_SHOWN = 4
 
@@ -236,14 +236,14 @@ private fun EntryMetadata(entry: KnowledgeEntry, allTags: Boolean = false) {
     updated?.let { Text(stringResource(if (entry.isRecording) R.string.knowledge_recorded else R.string.knowledge_updated, it), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
 }
 
-/** P0 in the 需要你 tone, P1 in the 工作中 tone (iOS `ImportanceBadge`); P2 and P3 quiet. */
+/** P0 in the "Needs you" tone, P1 in the "Working" tone (iOS `ImportanceBadge`); P2 and P3 quiet. */
 internal fun importanceStatus(importance: String?): Status? = when (importance) {
     "P0" -> Status.NeedsYou
     "P1" -> Status.Working
     else -> null
 }
 
-/** 与我相关: high in the 需要你 tone, middling in the 工作中 tone, low quiet (iOS `RelevanceMeter`). */
+/** Relevance to me: high in the "Needs you" tone, middling in the "Working" tone, low quiet (iOS `RelevanceMeter`). */
 private fun relevanceStatus(relevance: Int): Status? = when {
     relevance >= 70 -> Status.NeedsYou
     relevance >= 40 -> Status.Working
@@ -294,7 +294,7 @@ internal fun KnowledgeDetailScreen(
     fun startAgent(detail: KnowledgeDetail) {
         val start = agentStart(detail, kindName)
         if (onNewAgent != null) { onNewAgent(start); return }
-        // Until the shell can open 新建会话 with these filled in: the context goes on the clipboard and Agents opens.
+        // Until the shell can open "New session" with these filled in: the context goes on the clipboard and Agents opens.
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(resources.getString(R.string.knowledge_clip_label), start.prompt))
         navigator.selectTab(AppTab.Agents)
         feedback?.notice(start.cwd?.let { resources.getString(R.string.knowledge_context_copied_dir, pathTail(it)) }
@@ -389,7 +389,7 @@ internal fun KnowledgeDetailScreen(
     if (editing && entry != null) KnowledgeTagEditor(entry, tagging, onSave = model::saveTags, onDismiss = { editing = false })
 }
 
-/** 在做这个项目的 Agent: the hub's live sessions in the project's code directories; a tap opens the conversation. */
+/** "Agents on this project": the hub's live sessions in the project's code directories; a tap opens the conversation. */
 private fun LazyListScope.agents(agents: List<Session>, navigator: Navigator) {
     if (agents.isEmpty()) return
     item("agents-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_agents), count = agents.size) }
@@ -411,7 +411,7 @@ private fun AgentState.status(): Status = when (this) {
     AgentState.Offline -> Status.Offline
 }
 
-/** Newest first; the newest in the accent; 显示全部 past the first few. */
+/** Newest first; the newest in the accent; "Show all" past the first few. */
 private fun LazyListScope.timeline(lines: List<KnowledgeLogLine>, all: Boolean, toggle: () -> Unit) {
     if (lines.isEmpty()) return
     val more = lines.size > LOG_SHOWN
@@ -451,7 +451,7 @@ private fun TimelineLine(line: KnowledgeLogLine, newest: Boolean) {
     }
 }
 
-/** 录音信息: when it started, how long, on which device, in which language; 转写中 until the transcript is done. */
+/** "Recording": when it started, how long, on which device, in which language; "Transcribing" until the transcript is done. */
 private fun LazyListScope.recordingFacts(facts: RecordingFacts) {
     item("recording-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_recording_info)) }
     item("recording-facts", contentType = "facts") {
@@ -477,7 +477,7 @@ private fun LazyListScope.recordingFacts(facts: RecordingFacts) {
     }
 }
 
-/** 标记: the marks set while recording, at the time they were set. */
+/** "Bookmarks": the marks set while recording, at the time they were set. */
 private fun LazyListScope.recordingBookmarks(facts: RecordingFacts) {
     if (facts.bookmarks.isEmpty()) return
     item("bookmarks-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_recording_bookmarks), count = facts.bookmarks.size) }
@@ -523,7 +523,7 @@ private fun clockText(facts: RecordingFacts, offset: Double): String? {
     }
 }
 
-/** A BCP 47 tag (zh-CN) in the page's language (中文（中国）); the tag itself when the phone has no name for it. */
+/** A BCP 47 tag (zh-CN) in the page's language (Chinese (China)); the tag itself when the phone has no name for it. */
 private fun languageName(tag: String, locale: java.util.Locale): String? {
     val trimmed = tag.trim().takeIf { it.isNotEmpty() } ?: return null
     return java.util.Locale.forLanguageTag(trimmed).getDisplayName(locale).takeIf { it.isNotBlank() } ?: trimmed
@@ -542,7 +542,7 @@ private fun RecordingLength.label(): String = when (this) {
     is RecordingLength.Seconds -> stringResource(R.string.knowledge_duration_seconds, seconds.toInt())
 }
 
-/** Related entries by kind, a few each with 全部 for the rest. */
+/** Related entries by kind, a few each with "All" for the rest. */
 private fun LazyListScope.links(groups: List<Pair<KnowledgeKind, List<KnowledgeEntry>>>, open: List<String>, toggle: (String) -> Unit, navigator: Navigator) {
     groups.forEach { (kind, entries) ->
         val all = kind.wire in open
@@ -648,7 +648,7 @@ private val KnowledgeKind.words: KindWords
             R.string.knowledge_empty_tag_recordings, R.string.knowledge_linked_recordings, icon = PhIcons.Microphone)
     }
 
-/** The kind's name in the page's language (项目 · Projects · プロジェクト). */
+/** The kind's name in the page's language ("Projects" in English, the Chinese or Japanese word otherwise). */
 @Composable
 internal fun KnowledgeKind.label(): String = stringResource(words.name)
 

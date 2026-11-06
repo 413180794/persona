@@ -219,7 +219,7 @@ fun JRow(
  * Everything else is the row's own (the style's side padding, height, click and long press, selection, the dimmed
  * disabled state, [trailing] and the chevron), so it lines up with the rows around it in every style. [content] gets
  * the width left of [trailing], centred vertically like a title; give a mark `Modifier.align(Alignment.Top)` to keep
- * it on the first of several lines. [onClickLabel] names the click for accessibility (更多操作).
+ * it on the first of several lines. [onClickLabel] names the click for accessibility ("More actions").
  */
 @Composable
 fun JRow(
@@ -390,7 +390,7 @@ fun JDivider(modifier: Modifier = Modifier, inset: Dp = 0.dp) {
 }
 
 /**
- * A person, group or source. [badge] is a small corner mark (飞书 / 邮件). [image] is their picture, filling the same
+ * A person, group or source. [badge] is a small corner mark (Lark / mail). [image] is their picture, filling the same
  * shape; without one (none, still loading, failed) the initial or [icon] stands in.
  */
 @Composable
@@ -428,7 +428,7 @@ fun JAvatar(
 }
 
 /**
- * A swipe gesture on a row. The row springs back; the data change removes it. [destructive] ones (关闭) are drawn in the
+ * A swipe gesture on a row. The row springs back; the data change removes it. [destructive] ones ("Close") are drawn in the
  * danger colour instead of the status's.
  */
 @Immutable

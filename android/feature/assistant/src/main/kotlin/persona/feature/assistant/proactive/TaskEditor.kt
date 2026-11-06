@@ -43,9 +43,9 @@ private val DraftSaver = Saver<TaskDraft?, Any>(
 private const val HistoryShown = 5
 
 /**
- * One 定时任务 (iOS AssistantTaskEditor): name, on / off, when (一次 / 每天 / 每隔), what to do, 运行方式 (model and
- * permission mode, 全部放行 asks first), 对话 (接着原来的对话, the task's own conversation, 下次开新对话), and for an
- * existing one 立即运行, its last result, its history and 删除. Nothing reaches the hub until 保存 / 添加; leaving with
+ * One scheduled task (iOS AssistantTaskEditor): name, on / off, when ("Once" / "Daily" / "Every"), what to do, "Run with" (model and
+ * permission mode, "Allow all" asks first), "Chat" ("Continue the original chat", the task's own conversation, "New chat next time"), and for an
+ * existing one "Run now", its last result, its history and "Delete". Nothing reaches the hub until "Save" / "Add"; leaving with
  * changes asks first.
  */
 @Composable
@@ -69,7 +69,7 @@ internal fun TaskEditorPage(
     var known by remember { mutableStateOf<ScheduledTask?>(null) }
     LaunchedEffect(found) { if (found != null) known = found }
     var closing by remember { mutableStateOf(false) }
-    // After 删除 the page slides away showing what it showed, not "already gone".
+    // After "Delete" the page slides away showing what it showed, not "already gone".
     val task = found ?: known.takeIf { closing }
     val baseline = task?.draft() ?: template ?: BlankTask
     var edited by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<TaskDraft?>(null) }
@@ -228,7 +228,7 @@ internal fun TaskEditorPage(
                 supportingText = stringResource(R.string.assistant_proactive_prompt_note))
         }
         runsWithSection(draft, isNew, task, busy, onModelConfiguration, onChooseMode = { choosingMode = true })
-        // A hub without 跑完推送 would not keep it; one already set on the task still shows, to be turned back.
+        // A hub without "Push when done" would not keep it; one already set on the task still shows, to be turned back.
         if (ScheduledTask.PUSH_FEATURE in features || task?.pushesOnlyAsked == true) pushSection(draft, busy, onPush = { edit(draft.pushing(it)) })
         conversationSection(draft, task, busy, state, store, onOpenConversation, onContinues = { edit(draft.copy(continues = it)) })
         if (task == null && !isNew) return@JListPage
@@ -312,7 +312,7 @@ internal fun TaskEditorPage(
     )
 }
 
-/** 运行方式: the task's model (设置 › 模型, when the app can open it) and its permission mode. */
+/** "Run with": the task's model (Settings › Models, when the app can open it) and its permission mode. */
 private fun androidx.compose.foundation.lazy.LazyListScope.runsWithSection(
     draft: TaskDraft, isNew: Boolean, task: ScheduledTask?, busy: Boolean, onModelConfiguration: ((String) -> Unit)?, onChooseMode: () -> Unit,
 ) {
@@ -341,8 +341,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.runsWithSection(
 }
 
 /**
- * 跑完推送 (docs/assistant.md「跑完推送」, iOS pushSection): every run, or only what a run sends with notify_user. Only its
- * alerts runs the task in its own conversation, so 接着原来的对话 goes.
+ * "Push when done" (docs/assistant.md "Push when done", iOS pushSection): every run, or only what a run sends with notify_user. Only its
+ * alerts runs the task in its own conversation, so "Continue the original chat" goes.
  */
 private fun androidx.compose.foundation.lazy.LazyListScope.pushSection(draft: TaskDraft, busy: Boolean, onPush: (String) -> Unit) {
     val choices = listOf("", ScheduledTask.PUSH_ASKED)
@@ -359,8 +359,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.pushSection(draft: Ta
 }
 
 /**
- * 对话 (docs/assistant.md「定时任务」): the conversation it came from (接着原来的对话), else the task's own one, which
- * the first run starts and the next ones continue; 下次开新对话 lets the next run start over.
+ * "Chat" (docs/assistant.md "Scheduled tasks"): the conversation it came from ("Continue the original chat"), else the task's own one, which
+ * the first run starts and the next ones continue; "New chat next time" lets the next run start over.
  */
 private fun androidx.compose.foundation.lazy.LazyListScope.conversationSection(
     draft: TaskDraft, task: ScheduledTask?, busy: Boolean, state: ProactiveState, store: ProactiveStore,

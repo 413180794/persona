@@ -20,11 +20,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** How long 「交给 Persona」 waits for the main conversation to be known before it stops following the message. */
+/** How long "Hand to Persona" waits for the main conversation to be known before it stops following the message. */
 private const val BIND_TIMEOUT_MILLIS = 60_000L
 
 /**
- * 「交给 Persona」 from a message (R4, decided: into the main conversation, as everywhere else): queues [text] for the
+ * "Hand to Persona" from a message (R4, decided: into the main conversation, as everywhere else): queues [text] for the
  * main Persona conversation through the outbox ([operationId] keeps a retry from sending twice), calls [onQueued] (the
  * Persona tab), then [onBound] with the conversation once the outbox knows which it is, so the page can open it.
  * Returns that conversation, or null when it was not known in time.
@@ -47,7 +47,7 @@ suspend fun handToPersona(
 }
 
 /**
- * The 「交给 Persona」 a chat page offers on its messages: queue the message for the main conversation, switch to the
+ * The "Hand to Persona" a chat page offers on its messages: queue the message for the main conversation, switch to the
  * Persona tab and open it there. Null without a [sender] (the page then leaves the action out).
  */
 @Composable

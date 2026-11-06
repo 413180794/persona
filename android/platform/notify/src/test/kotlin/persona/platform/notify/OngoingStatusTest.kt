@@ -43,7 +43,7 @@ class OngoingStatusTest {
         assertEquals("💬4", status.criticalText)
         assertNull(status.workingSince)
         assertNull(status.open)
-        // The first plan gets 查看 / 批准; approving needs an unlocked phone, looking does not.
+        // The first plan gets "View" / "Approve"; approving needs an unlocked phone, looking does not.
         val action = status.action!!
         assertEquals("ix_photos", action.interaction)
         assertEquals(SessionKey("studio", "photos"), action.session)
@@ -53,7 +53,7 @@ class OngoingStatusTest {
             stats = FleetStats(tpm = 1234), assistant = true, left = "tpm"), details = true))
     }
 
-    /** A card with fields to fill in (a password) cannot be allowed from here: only 拒绝 (#4987). */
+    /** A card with fields to fill in (a password) cannot be allowed from here: only Deny (#4987). */
     @Test fun permissionWithRequiredFieldsGetsOnlyDeny() {
         val card = persona.core.contracts.JsonCodec.decodeFromString<persona.core.contracts.Interaction>(
             """{"id":"ix_build","kind":"permission","fields":[{"key":"password","label":"Password","secret":true}]}""")
@@ -74,7 +74,7 @@ class OngoingStatusTest {
     }
 
     @Test fun theBodyAboveTheButtonsIsTheRequestTheySettle() {
-        // The hub puts the oldest request first: an older question must not stand above another agent's 拒绝 / 允许.
+        // The hub puts the oldest request first: an older question must not stand above another agent's "Deny" / "Allow".
         val fleet = FleetState("needsYou", needsYou = 2, items = listOf(question, permission))
         val status = OngoingStatus.from(ConnectionState.Online, fleet, details = true)
         assertEquals("ix_build", status.action!!.interaction)
@@ -118,7 +118,7 @@ class OngoingStatusTest {
 
     @Test fun withoutLockScreenDetailsNoNameOrRequestShowsAnywhere() {
         // A phone set to show all notification content on its lock screen shows the private version there: with
-        // 锁屏显示详情 off (the default) it says what kind of thing waits and how many, nothing more.
+        // "Show details on lock screen" off (the default) it says what kind of thing waits and how many, nothing more.
         val fleet = FleetState("needsYou", needsYou = 4, working = 2, unread = 1, items = listOf(plan, permission, question))
         val status = OngoingStatus.from(ConnectionState.Online, fleet)
         assertEquals("4 个需要你", status.title)
@@ -130,7 +130,7 @@ class OngoingStatusTest {
             for (secret in listOf(item.title, item.place, item.detail)) assertFalse(secret, shown.contains(secret))
         }
         assertFalse(shown.contains("MacBook"))
-        // The buttons stay: 查看 / 批准 say nothing about the request.
+        // The buttons stay: "View" / "Approve" say nothing about the request.
         assertEquals(listOf(OngoingButton(R.string.notify_action_view, null, false), OngoingButton(R.string.notify_action_approve, "approve_edits", true)), status.action!!.buttons)
         // Requests of one kind are counted, not listed.
         val two = OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 2,

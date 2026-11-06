@@ -10,7 +10,7 @@ import org.junit.runner.RunWith
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.core.app.ApplicationProvider
 
-/** AI 草拟 / AI 改 and the confirmation an AI draft needs before it goes out in the user's name. */
+/** "AI draft" / "AI edit" and the confirmation an AI draft needs before it goes out in the user's name. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 @org.robolectric.annotation.Config(sdk = [35])
@@ -65,7 +65,7 @@ class InboxDraftTest {
     @Test fun theAgentsDraftFillsOnlyAnUntouchedReply() = runTest {
         val repository = FakeInboxRepository()
         val target = ReplyTarget.Inbox("item")
-        // A page opened before the list: the reply starts empty, then the AI 分身's draft comes.
+        // A page opened before the list: the reply starts empty, then the AI twin's draft comes.
         val late = ReplyComposer(repository, target, backgroundScope)
         late.offerAiDraft("AI 分身的草稿") // while the saved draft is still being read
         runCurrent()
@@ -86,7 +86,7 @@ class InboxDraftTest {
         cleared.offerAiDraft("AI 分身的草稿")
         assertEquals("", cleared.state.value.draft.text)
 
-        // An AI 分身 draft given up front is an AI draft from the start.
+        // An AI twin draft given up front is an AI draft from the start.
         val upFront = ReplyComposer(FakeInboxRepository(), target, backgroundScope, "AI 分身的草稿")
         runCurrent()
         assertTrue(upFront.state.value.draft.ai)

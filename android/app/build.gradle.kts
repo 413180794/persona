@@ -13,7 +13,7 @@ val appId = providers.gradleProperty("personaApplicationId")
 val appLabel = providers.gradleProperty("personaAppLabel")
     .orElse(providers.gradleProperty("jarvisAppLabel"))
     .getOrElse("Persona")
-// Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (docs/mail.md「Android」).
+// Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (docs/mail.md "Android").
 val googleOAuthScheme = providers.gradleProperty("personaGoogleOAuthScheme")
     .orElse(providers.gradleProperty("jarvisGoogleOAuthScheme"))
     .orNull?.takeIf { it.isNotBlank() }

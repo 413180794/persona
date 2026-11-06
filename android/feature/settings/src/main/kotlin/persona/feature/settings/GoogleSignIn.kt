@@ -19,7 +19,7 @@ import persona.core.contracts.api.MailAccount
 import persona.core.contracts.api.MicrosoftFinish
 
 /**
- * Gmail's 「使用 Google 账号登录」 on Android (docs/mail.md「Android」).
+ * Gmail's "Sign in with Google" on Android (docs/mail.md "Android").
  *
  * The hub's OAuth client is an iOS client (no secret, PKCE, reversed client ID as a custom redirect scheme).
  * [OAuthRedirectActivity] declares the scheme from the build (${googleOAuthScheme}).
@@ -113,7 +113,7 @@ object GoogleSignIn {
     suspend fun signIn(ctx: Context, connectors: ConnectorsManagement, loginHint: String? = null) =
         run(ctx, connectors, Provider.Google, connectors.googleSignInStart(loginHint))
 
-    /** Outlook's 使用 Microsoft 账号登录 (docs/mail.md「Outlook 接入方式」): the same flow on Microsoft's page. */
+    /** Outlook's "Sign in with a Microsoft account" (docs/mail.md "Connecting Outlook"): the same flow on Microsoft's page. */
     suspend fun signInMicrosoft(ctx: Context, connectors: ConnectorsManagement) =
         run(ctx, connectors, Provider.Microsoft, connectors.microsoftSignInStart())
 

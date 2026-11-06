@@ -32,10 +32,10 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * Extensions' UI slots drawn on the JVM with Robolectric's native graphics (no emulator): the「扩展」section of the
+ * Extensions' UI slots drawn on the JVM with Robolectric's native graphics (no emulator): the "Extensions" section of the
  * settings home (a card, nav pages with badges) and a nav page (segmented, number grid, stacked bars, lines, a chart
  * with a picked point), in every style, light and dark. Each is checked to draw something and written as a PNG to
- * `build/extension-ui-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「扩展画的界面和扩展市场」).
+ * `build/extension-ui-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Extension UI and the extension market").
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

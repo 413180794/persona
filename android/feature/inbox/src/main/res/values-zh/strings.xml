@@ -173,7 +173,7 @@
     <string name="inbox_unmute_failed">没能取消静音，已恢复</string>
     <string name="inbox_muted_notice">已静音「%1$s」，以后不再进收件箱</string>
 
-    <!-- Inbox phase 1: events, suggestions, the 处理链条 (InboxEvents.kt). -->
+    <!-- Inbox phase 1: events, suggestions, the Handling chain (InboxEvents.kt). -->
     <string name="inbox_section_working">进行中</string>
     <string name="inbox_handling_looking">AI 正在看</string>
     <string name="inbox_handling_agent">Agent 在做</string>

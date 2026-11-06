@@ -57,9 +57,9 @@ import java.io.File
 
 /**
  * The chat page's parity batch with iOS / the web (#2967), in every style, light and dark: Persona's own tools in
- * words, ask_user opened with what was picked, 「查看子 Agent」 under a Task step, a fenced block coloured by its
- * language, the 「Step N/M」 pill, a message dragged left to quote, the plan card's three approvals, and the message
- * menu's 分支到新聊天 / 回退到这里. PNGs in `build/chat-parity-shots/` (or `-Dpersona.shots=<dir>`).
+ * words, ask_user opened with what was picked, "View sub-agent" under a Task step, a fenced block coloured by its
+ * language, the "Step N/M" pill, a message dragged left to quote, the plan card's three approvals, and the message
+ * menu's "Branch to new chat" / "Rewind to here". PNGs in `build/chat-parity-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -191,7 +191,7 @@ class ChatParityShotsTest {
         assertEquals("往左拖这条消息就能引用它。", quoted)
     }
 
-    /** A screen reader focuses the message as one node, and 引用 is an action on it that quotes the message. */
+    /** A screen reader focuses the message as one node, and "Quote" is an action on it that quotes the message. */
     @Test fun aScreenReaderQuotesWithTheMessagesAction() {
         var quoted = ""
         rule.setContent {
@@ -218,7 +218,7 @@ class ChatParityShotsTest {
         assertEquals("听这条消息，再引用它。", quoted)
     }
 
-    /** The menu's extras: 分支到新聊天 on a reply, 回退到这里 on yours (with the reason while it cannot), then its two choices. */
+    /** The menu's extras: "Branch to new chat" on a reply, "Rewind to here" on yours (with the reason while it cannot), then its two choices. */
     @Test fun theMessageMenuOffersForkAndRewind() {
         val menu = MessageMenuState()
         var forked = ""

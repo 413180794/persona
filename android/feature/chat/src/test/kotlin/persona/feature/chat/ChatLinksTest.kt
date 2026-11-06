@@ -23,7 +23,7 @@ class ChatLinksTest {
         listOf("javascript:alert(1)", "file:///page", "intent://page", "https://", "https://user@example.com").forEach { assertNull(ChatLinks.webUrl(it)) }
     }
 
-    /** A whole native document goes as iOS and web send it: the 「（整篇）」 marker iOS's quote row keys on. */
+    /** A whole native document goes as iOS and web send it: the whole-document marker iOS's quote row keys on. */
     @Test fun aWholeDocumentPickCarriesTheWholeMarker() {
         val doc = persona.feature.inbox.LarkNativeLink.Document("https://example.feishu.cn/docx/a")
         val text = requireNotNull(ChatLinkContext.whole(doc, ""))

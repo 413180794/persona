@@ -28,7 +28,7 @@ internal sealed interface MachineNotice {
     data class NotYet(val reason: UiText?) : MachineNotice
     data class ReconnectFailed(val reason: UiText) : MachineNotice
     data class DeployFailed(val reason: UiText) : MachineNotice
-    /** 同时显示 botmux 会话 was not saved; the switch is back where it was. */
+    /** "Also show botmux sessions" was not saved; the switch is back where it was. */
     data class BotmuxFailed(val reason: UiText) : MachineNotice
 
     fun text(resources: Resources): String = when (this) {
@@ -55,19 +55,19 @@ internal data class MachineActionsState(
     /** The machine's launchers; null until read (offline machines have none to list). */
     val launchers: List<AgentLauncher>? = null,
     val launchersLoading: Boolean = false,
-    /** Why the launchers could not be read (the hub's reason), shown as 读不到启动器：… */
+    /** Why the launchers could not be read (the hub's reason), shown as "Couldn't read launchers: ..." */
     val launchersError: UiText? = null,
     val reconnecting: Boolean = false,
-    /** Machines whose 重新部署 was sent and not answered yet; the hub's `deploying` takes over after that. */
+    /** Machines whose "Redeploy" was sent and not answered yet; the hub's `deploying` takes over after that. */
     val deployStarting: Set<String> = emptySet(),
-    /** 同时显示 botmux 会话 (#2575); null until the hub answered, and on an older hub without the route: no switch. */
+    /** "Also show botmux sessions" (#2575); null until the hub answered, and on an older hub without the route: no switch. */
     val botmux: Boolean? = null,
     val botmuxSaving: Boolean = false,
 )
 
 /**
- * What the machine pages change on a machine (iOS `MachineDetailView`): its launchers, 同时显示 botmux 会话, 重新连接 (waits up to
- * [reconnectWaitMillis] for it to come online and says how it went) and 重新部署. Results are short notices.
+ * What the machine pages change on a machine (iOS `MachineDetailView`): its launchers, "Also show botmux sessions", "Reconnect" (waits up to
+ * [reconnectWaitMillis] for it to come online and says how it went) and "Redeploy". Results are short notices.
  */
 internal class MachineActionsViewModel(
     private val management: MachineManagement,
@@ -81,7 +81,7 @@ internal class MachineActionsViewModel(
     val notices = noticeChannel.receiveAsFlow()
     private var launchersJob: Job? = null
 
-    /** Again when it comes online (after 重新连接): an offline machine has no launchers to list. */
+    /** Again when it comes online (after "Reconnect"): an offline machine has no launchers to list. */
     fun loadLaunchers(machineId: String, online: Boolean) {
         launchersJob?.cancel()
         if (!online) {
@@ -100,7 +100,7 @@ internal class MachineActionsViewModel(
         }
     }
 
-    /** Reads 同时显示 botmux 会话; a hub that cannot answer leaves it null, so the page draws no switch (iOS `BotmuxSwitchModel`). */
+    /** Reads "Also show botmux sessions"; a hub that cannot answer leaves it null, so the page draws no switch (iOS `BotmuxSwitchModel`). */
     fun loadBotmux(machineId: String) {
         viewModelScope.launch {
             val on = try { management.botmux(machineId) }

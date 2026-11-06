@@ -28,7 +28,7 @@ import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.TasksApi
 import persona.core.contracts.draftPlaceholder
 
-/** The card 「按任务进度起草的回复」 (#1519): sent is what the hub records on it, and it goes out once. */
+/** The "Reply drafted from task progress" card (#1519): sent is what the hub records on it, and it goes out once. */
 class MessageCardTest {
     private fun card(id: String = "m1", extra: Map<String, String> = emptyMap()) = FeedItem(id, "c1", "2026-11-04T10:00:00Z", "message", "example:1",
         buildJsonObject { put("draft", "在修了"); extra.forEach { (k, v) -> put(k, v) } })

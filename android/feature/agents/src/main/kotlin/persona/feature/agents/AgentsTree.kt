@@ -15,7 +15,7 @@ import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.*
 
-// The Agents tree (电脑 → 空间 → 会话, or 电脑 → 仓库 → 工作树 → 会话 under 按仓库) as lazy list lines. The lines are drawn by the design system's Agents components
+// The Agents tree (computer → space → session, or computer → repository → worktree → session under "By repository") as lazy list lines. The lines are drawn by the design system's Agents components
 // (AgentTreeHeader, AgentSpaceHeader, AgentRow, AgentIdleRow, MachineChip; docs/android-design.md 2.4).
 
 /** One line of the flattened tree, in list order. [key] is the lazy item key. */
@@ -28,7 +28,7 @@ internal data class TreeMachineEntry(val machine: AgentMachineGroup, val first: 
 
 /**
  * A group heading. [space] groups are herdr workspaces of a computer (or its repositories and their working trees
- * under 按仓库); the others (置顶, states, history projects) are top-level sections. [depth] 1 sits under a computer
+ * under "By repository"); the others ("Pinned", states, history projects) are top-level sections. [depth] 1 sits under a computer
  * heading, a working tree one step further in. Quiet spaces (every agent finished and seen)
  * come after the active ones of their computer, folded by default and drawn weaker.
  */
@@ -39,7 +39,7 @@ internal data class TreeGroupEntry(val group: AgentListGroup, val space: Boolean
 
 /**
  * A session. [located] rows sit outside the computer tree and show where they run. A row under a [TreeTabEntry] says
- * whether it is its tab's [launcher] (发起者) or a [branch] the 发起者 split off, drawn one step further in.
+ * whether it is its tab's [launcher] (the one that started it) or a [branch] the launcher split off, drawn one step further in.
  */
 internal data class TreeRowEntry(
     val row: AgentSession, val depth: Int, val first: Boolean, val last: Boolean, val located: Boolean,
@@ -49,7 +49,7 @@ internal data class TreeRowEntry(
 }
 
 /**
- * A herdr tab holding several agents of the space (#2320, docs/agent-states.md「一个 tab 里的几个 pane」): its row
+ * A herdr tab holding several agents of the space (#2320, docs/agent-states.md "Several panes in one tab"): its row
  * speaks for the most urgent of them and says how many there are; its agents follow it in pane order unless [folded].
  * Open by default (the point is to see which agents belong together); folded by hand it stays folded ([AgentTab.foldKey]).
  */
@@ -65,8 +65,8 @@ internal data class TreeIdleEntry(val group: AgentListGroup, val hidden: Int, va
 private const val QUIET = "quiet"
 
 /**
- * Flattens the list into tree lines: 置顶 first, then every computer with its spaces, then any other groups. With
- * [tabs] (按机器, as the web's sidebar) a space's agents that share a herdr tab are one [TreeTabEntry] with its agents
+ * Flattens the list into tree lines: "Pinned" first, then every computer with its spaces, then any other groups. With
+ * [tabs] ("By machine", as the web's sidebar) a space's agents that share a herdr tab are one [TreeTabEntry] with its agents
  * under it, listed where its most urgent agent would be; a tab is shown whole once one of its agents is, and the
  * tabs in [foldedTabs] ([AgentTab.foldKey]) are folded to their row.
  */
@@ -111,7 +111,7 @@ internal fun agentTreeEntries(
     list.groups.filter { it.id == "pinned" }.forEach { group(it, space = false, depth = 0, first = entries.isEmpty()) }
     val headed = machineFilter.isEmpty() || list.machines.size > 1
     list.machines.forEach { machine ->
-        // A computer whose sessions are all pinned has nothing left to hold here; 置顶 says where they run.
+        // A computer whose sessions are all pinned has nothing left to hold here; "Pinned" says where they run.
         if (machine.groups.none(byId::containsKey)) return@forEach
         if (headed) entries += TreeMachineEntry(machine, first = entries.isEmpty())
         if (headed && machine.folded) return@forEach
@@ -121,7 +121,7 @@ internal fun agentTreeEntries(
             group(it, space = true, depth = (if (headed) 1 else 0) + (if (it.under != null) 1 else 0), first = index == 0)
         }
     }
-    // Sections outside the computer tree; one [AgentListGroup.under] another (按待办's todos under their project, #3156)
+    // Sections outside the computer tree; one [AgentListGroup.under] another ("By to-do"'s todos under their project, #3156)
     // sits one step in and is gone while that one is folded.
     list.groups.filter { it.id != "pinned" && it.id !in treeIds }.forEach {
         if (it.under != null && byId[it.under]?.folded != false) return@forEach
@@ -148,7 +148,7 @@ internal val Machine.deviceIcon: PhIcon get() = when (icon) {
 
 // ------------------------------------------------------------------ filter strip
 
-/** 全部机器 and every computer, side by side; tapping the selected computer goes back to all of them. */
+/** "All machines" and every computer, side by side; tapping the selected computer goes back to all of them. */
 @Composable
 internal fun MachineFilterRow(machines: List<MachineCount>, total: Int, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     Row(

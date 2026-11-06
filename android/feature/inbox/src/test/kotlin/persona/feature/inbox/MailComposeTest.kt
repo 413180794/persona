@@ -31,7 +31,7 @@ class MailComposeTest {
 
     @Test
     fun replyToNameWithComma() {
-        // #5076: 「Doe, John」 must stay one recipient, and plain lists still split.
+        // #5076: "Doe, John" must stay one recipient, and plain lists still split.
         val sender = MailAddress("Doe, John", "john@example.com")
         val original = MailMessage(accountId = "acc-1", uid = 1, subject = "Hi", from = sender, to = listOf(MailAddress("Me", "me@example.com")), cc = listOf(MailAddress("Roe; \"Rich\"", "rich@example.com")))
         val draft = MailCompose.reply(res, original, "acc-1", me = "me@example.com", all = true, zone = ZoneId.of("UTC"))
@@ -89,7 +89,7 @@ class MailComposeTest {
             references = listOf("<root@example.com>"),
         )
 
-        // 单人回复
+        // Reply to one
         val draftSingle = MailCompose.reply(res, original, "acc-1", me = "me@example.com", all = false, zone = zone)
         assertEquals("Boss <boss@example.com>", draftSingle.to)
         assertEquals("", draftSingle.cc)
@@ -101,7 +101,7 @@ class MailComposeTest {
         // The quote line is in the app's language, with the date in its own order.
         assertTrue(draftSingle.body, draftSingle.body.contains("2026年11月4日 18:00，Boss <boss@example.com> 写道：\n> 今天"))
 
-        // 全部回复（应排除我自己的邮箱 me@example.com）
+        // Reply all (leaves out my own address me@example.com)
         val draftAll = MailCompose.reply(res, original, "acc-1", me = "me@example.com", all = true, zone = zone)
         assertEquals("Boss <boss@example.com>, Alice <alice@example.com>", draftAll.to)
         assertEquals("Bob <bob@example.com>", draftAll.cc)

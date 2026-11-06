@@ -4,8 +4,8 @@ package persona.core.contracts
 fun mcpServerLabel(server: String): String = server.removePrefix("plugin_").let { if (it == "jarvis") "Persona" else it }
 
 /**
- * A tool's name for a sentence (a permission card): an MCP tool as 「Persona · mail send」, others as written; null
- * without a name (the card says 工具, [CoreText.Key.ToolGeneric]).
+ * A tool's name for a sentence (a permission card): an MCP tool as "Persona · mail send", others as written; null
+ * without a name (the card says "tool", [CoreText.Key.ToolGeneric]).
  */
 fun toolDisplayName(name: String?): String? {
     if (name.isNullOrEmpty()) return null

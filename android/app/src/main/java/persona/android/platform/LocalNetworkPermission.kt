@@ -101,7 +101,7 @@ class PlatformPairing @Inject constructor(
             throw error
         }
     }
-    /** The same flow, adding a hub instead of replacing the pairing (settings › hub › 添加 hub). */
+    /** The same flow, adding a hub instead of replacing the pairing (settings › hub › "Add hub"). */
     val adding: PairingService = object : PairingService by this {
         private val none = kotlinx.coroutines.flow.MutableStateFlow(false)
         // The pairing page warns that a new pairing replaces the current one while paired; adding replaces nothing.

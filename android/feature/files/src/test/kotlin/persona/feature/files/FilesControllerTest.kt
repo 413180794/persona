@@ -358,7 +358,7 @@ class FilesControllerTest {
         assertEquals("unreachable", files.state.value.directoryError)
         assertTrue(files.state.value.gitError)
 
-        // Back online: both are read again without a tap on 重试.
+        // Back online: both are read again without a tap on "Retry".
         machine.failing = null
         machine.gitFailing = null
         online.value = ConnectionState.Online

@@ -19,7 +19,7 @@ import persona.core.navigation.ModelPurposeRoute
 import kotlinx.coroutines.launch
 
 /**
- * 设置 › 模型配置 (docs/model-config.md): each AI use of the hub with what is in effect for it. The hub owns the
+ * Settings › Model configuration (docs/model-config.md): each AI use of the hub with what is in effect for it. The hub owns the
  * catalog; a row opens that use's page.
  */
 @Composable
@@ -32,7 +32,7 @@ internal fun ModelConfigurationPage(models: ModelConfiguration?, onBack: () -> U
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
-    // 新增模型供应商 opens over this page (`debug.newProvider` opens it for captures).
+    // "New model provider" opens over this page (`debug.newProvider` opens it for captures).
     var adding by remember { mutableStateOf<String?>(if (providers != null) NewProviderPreview.take() else null) }
     LaunchedEffect(model) { model.load() }
     if (adding != null && providers != null) {
@@ -185,7 +185,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.form(
     }
     if (purpose.supports("model")) item("model") {
         if (state.picksModel) {
-            // A launcher's /model list (#943): the pick, 默认, or an id the list does not have.
+            // A launcher's /model list (#943): the pick, "Default", or an id the list does not have.
             val list = state.modelList
             val picked = list?.models?.firstOrNull { it.id == draft.model }
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {

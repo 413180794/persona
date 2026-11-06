@@ -12,7 +12,7 @@ sealed interface ChatAction {
     data object Close : ChatAction
     /** Join a Codex app-server thread live (POST …/attach); only for a session whose capabilities offer it. */
     data object Attach : ChatAction
-    /** 删除对话 (DELETE /sessions/{mid}/{sid}): out of every app's list, the transcript stays; only for `Session.canDelete`. */
+    /** "Delete conversation" (DELETE /sessions/{mid}/{sid}): out of every app's list, the transcript stays; only for `Session.canDelete`. */
     data object Delete : ChatAction
 }
 
@@ -37,14 +37,14 @@ interface ChatActions {
         throw UnsupportedOperationException("Queued message management unavailable")
 
     /**
-     * 分支到新聊天 (#2137, POST …/fork): the node copies the conversation up to the end of [atItemId]'s turn (a reply's
+     * "Branch to new chat" (#2137, POST …/fork): the node copies the conversation up to the end of [atItemId]'s turn (a reply's
      * transcript item, `<uuid>#<n>`) into a new session on the same machine; returns its session id. Only for
      * `Session.canFork`. Not idempotent: a failure is reported, never retried.
      */
     suspend fun fork(session: Session, atItemId: String): String = throw UnsupportedOperationException("Fork unavailable")
 
     /**
-     * 回退到这里 (#2436, POST …/rewind): the node drives Claude Code's own /rewind to before [target], restoring
+     * "Rewind to here" (#2436, POST …/rewind): the node drives Claude Code's own /rewind to before [target], restoring
      * [restore]. Up to a minute and a half (the node walks the TUI). Not idempotent: a failure is reported, never retried.
      */
     suspend fun rewind(session: Session, target: RewindTarget, restore: RewindRestore): RewindResult =
@@ -54,7 +54,7 @@ interface ChatActions {
     suspend fun info(session: Session): SessionInfo = throw UnsupportedOperationException("Session info unavailable")
 }
 
-/** What 回退到这里 restores: the conversation alone, or the files changed after the message too. */
+/** What "Rewind to here" restores: the conversation alone, or the files changed after the message too. */
 enum class RewindRestore(val wire: String) { Conversation("conversation"), CodeAndConversation("code_and_conversation") }
 
 /**

@@ -31,7 +31,7 @@ import kotlin.math.abs
 
 /**
  * How the page says things, in the language the page is in (docs/i18n.md): the schedule, times, runs and failures.
- * Rules read like Reminders; a clock says the part of the day the way the language does (「上午 9:00」, "9:00 AM").
+ * Rules read like Reminders; a clock says the part of the day the way the language does (a Chinese day-part prefix, "9:00 AM").
  */
 internal class ProactiveText(private val res: Resources, val locale: Locale) {
     constructor(context: Context) : this(context.resources, LocalizedFormats.locale(context))
@@ -42,13 +42,13 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
         res.getQuantityString(id, count.toInt(), *args)
 
     private val dayParts = res.getStringArray(R.array.assistant_proactive_day_parts)
-    /** Whether a list of days uses the narrow names (一、三、五 · 月・水・金) or the short ones (Mon, Wed, Fri). */
+    /** Whether a list of days uses the narrow names (one character each in Chinese and Japanese) or the short ones (Mon, Wed, Fri). */
     private val narrowDayLists = res.getBoolean(R.bool.assistant_proactive_narrow_day_lists)
 
-    /** A day's name on its button: 一 · M · 月 ([day] is 1 for Monday … 7 for Sunday). */
+    /** A day's name on its button: one character in Chinese and Japanese, M in English ([day] is 1 for Monday … 7 for Sunday). */
     fun dayName(day: Int): String = DayOfWeek.of(day).getDisplayName(TextStyle.NARROW, locale)
 
-    /** A day on its own: 周三 · Wed · 水曜日. */
+    /** A day on its own: Wed in English, a weekday word in Chinese and Japanese. */
     fun weekday(day: Int): String =
         string(R.string.assistant_proactive_weekday, DayOfWeek.of(day).getDisplayName(TextStyle.SHORT, locale))
 
@@ -57,7 +57,7 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
             DayOfWeek.of(it).getDisplayName(if (narrowDayLists) TextStyle.NARROW else TextStyle.SHORT, locale)
         })
 
-    /** "每天" / "工作日" / "周末" / "每周一、三、五". */
+    /** "Every day" / "Weekdays" / "Weekends" / "Every Mon, Wed, Fri". */
     fun repeats(days: List<Int>): String = when (val d = normalizeDays(days)) {
         emptyList<Int>() -> string(R.string.assistant_proactive_every_day)
         Workdays -> string(R.string.assistant_proactive_weekdays)
@@ -65,7 +65,7 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
         else -> dayList(d)
     }
 
-    /** The rule in words: "每个工作日 上午 9:00", "每天 晚上 9:30", "每周五 下午 5:00". */
+    /** The rule in words: "Every weekday 9:00 AM", "Every day 9:30 PM", "Every Friday 5:00 PM". */
     fun sentence(time: String, days: List<Int>): String {
         val when_ = when (val d = normalizeDays(days)) {
             emptyList<Int>() -> string(R.string.assistant_proactive_every_day)
@@ -76,28 +76,28 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
         return string(R.string.assistant_proactive_rule, when_, clock(time))
     }
 
-    /** "每 30 分钟" / "每 2 小时" / "每 1 小时 30 分钟". */
+    /** "Every 30 min" / "Every 2 hr" / "Every 1 hr 30 min". */
     fun every(minutes: Int): String = when {
         minutes < 60 -> plural(R.plurals.assistant_proactive_every_minutes, minutes.toLong(), minutes)
         minutes % 60 == 0 -> plural(R.plurals.assistant_proactive_every_hours, (minutes / 60).toLong(), minutes / 60)
         else -> string(R.string.assistant_proactive_every_hours_minutes, minutes / 60, minutes % 60)
     }
 
-    /** An interval on its own, for its chip: "30 分钟" / "2 小时" / "1 小时 30 分钟". */
+    /** An interval on its own, for its chip: "30 min" / "2 hr" / "1 hr 30 min". */
     fun interval(minutes: Int): String = when {
         minutes < 60 -> plural(R.plurals.assistant_proactive_interval_minutes, minutes.toLong(), minutes)
         minutes % 60 == 0 -> plural(R.plurals.assistant_proactive_interval_hours, (minutes / 60).toLong(), minutes / 60)
         else -> string(R.string.assistant_proactive_interval_hours_minutes, minutes / 60, minutes % 60)
     }
 
-    /** A task's rule in words: "每个工作日 上午 9:00", "每 30 分钟", or for a one-off when it runs ("明天 09:00"). */
+    /** A task's rule in words: "Every weekday 9:00 AM", "Every 30 min", or for a one-off when it runs ("Tomorrow 09:00"). */
     fun rule(task: ScheduledTask, now: Instant, zone: ZoneId): String = when (task.repeat) {
         TaskRepeat.Daily -> sentence(task.time.orEmpty().ifBlank { "09:00" }, task.weekdays)
         TaskRepeat.Interval -> every(task.everyMinutes.takeIf { it > 0 } ?: DefaultInterval)
         TaskRepeat.Once -> parseTime(task.at)?.let { moment(it, now, zone) } ?: string(R.string.assistant_proactive_repeat_once)
     }
 
-    /** "09:00" → "上午 9:00" / "9:00 AM", "21:30" → "晚上 9:30", "00:15" → "凌晨 12:15". */
+    /** "09:00" → "9:00 AM", "21:30" → "9:30 PM", "00:15" → "12:15 AM" (Chinese splits the day into more parts). */
     fun clock(time: String): String {
         val parts = time.split(":").mapNotNull { it.toIntOrNull() }
         if (parts.size != 2 || parts[0] !in 0..23 || parts[1] !in 0..59) return time
@@ -116,7 +116,7 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
     /** A time of day in the language's habit: "17:05" · "5:05 PM". */
     fun hm(at: Instant, zone: ZoneId): String = LocalizedFormats.format(at, LocalizedFormats.TIME, locale, zone)
 
-    /** "今天" / "明天" / "昨天" / "周三" (within a week either way) / "11月12日" / "2025年12月1日". */
+    /** "Today" / "Tomorrow" / "Yesterday" / "Wed" (within a week either way) / "Nov 12" / "Dec 1, 2025". */
     fun day(at: Instant, now: Instant, zone: ZoneId): String {
         val date = at.atZone(zone).toLocalDate()
         val today = now.atZone(zone).toLocalDate()
@@ -131,10 +131,10 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
         }
     }
 
-    /** "今天 15:30" / "明天 09:00" / "周三 09:00" / "11月2日 09:00". */
+    /** "Today 15:30" / "Tomorrow 09:00" / "Wed 09:00" / "Nov 2 09:00". */
     fun moment(at: Instant, now: Instant, zone: ZoneId) = string(R.string.assistant_proactive_moment, day(at, now, zone), hm(at, zone))
 
-    /** A future moment, roughly: "马上" / "25 分钟后" / "2 小时 30 分钟后" / "5 小时后" / "3 天后"; "已过时间" when late. */
+    /** A future moment, roughly: "Now" / "in 25 min" / "in 2 hr 30 min" / "in 5 hr" / "in 3 days"; "Overdue" when late. */
     fun until(at: Instant, now: Instant, zone: ZoneId): String {
         val seconds = Duration.between(now, at).seconds
         return when {
@@ -152,7 +152,7 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
         }
     }
 
-    /** "准时" / "晚了 21 秒" / "晚了 3 分钟" / "晚了 2 小时"; null without both times. */
+    /** "On time" / "21 s late" / "3 min late" / "2 hr late"; null without both times. */
     fun lateness(due: Instant?, at: Instant?): String? {
         if (due == null || at == null) return null
         val late = Duration.between(due, at).seconds
@@ -192,7 +192,7 @@ internal fun outcomeOf(status: String?) = when (status) {
 
 internal val Run.outcome: RunOutcome get() = outcomeOf(status)
 
-/** What happened, in a few words: "准时", "手动运行", or why it did not run. */
+/** What happened, in a few words: "On time", "Run by hand", or why it did not run. */
 internal fun Run.detail(say: ProactiveText): String = when (outcome) {
     RunOutcome.Ran -> if (manual) say.string(R.string.assistant_proactive_run_manually)
         else say.lateness(parseTime(due), parseTime(at)) ?: say.string(outcome.word)
@@ -236,7 +236,7 @@ internal fun loadFailure(say: ProactiveText, error: Throwable): String {
     }
 }
 
-/** Why an action failed, short enough to follow "没保存上：". */
+/** Why an action failed, short enough to follow "Couldn't save: ". */
 internal fun failureReason(say: ProactiveText, error: Throwable): String {
     if (error is TaskGoneException) return say.string(R.string.assistant_proactive_routine_gone)
     // The transport gives up on a request when the pairing or the route to the hub changed under it.
@@ -249,7 +249,7 @@ internal fun failureReason(say: ProactiveText, error: Throwable): String {
     }
 }
 
-/** "上次 今天 09:00 已运行" / "上次 10月26日 17:00 没跑起来：助手所在的机器离线". */
+/** "Last: today 09:00, ran" / "Last: Oct 26 17:00, didn't run: the assistant's machine is offline". */
 internal fun LastRun.line(say: ProactiveText, now: Instant, zone: ZoneId): String {
     val word = when {
         outcome == RunOutcome.Ran && manual -> say.string(R.string.assistant_proactive_run_manually)
@@ -265,7 +265,7 @@ internal fun LastRun.line(say: ProactiveText, now: Instant, zone: ZoneId): Strin
 internal val LastRun.failed: Boolean get() = outcome == RunOutcome.Failed
 internal val ScheduledTask.byAssistant: Boolean get() = createdBy == "assistant"
 
-/** "下次 明天 09:00，15 小时后" / "已关闭"; null when the hub has not worked out the next run. */
+/** "Next: tomorrow 09:00, in 15 hr" / "Off"; null when the hub has not worked out the next run. */
 internal fun ScheduledTask.nextLine(say: ProactiveText, now: Instant, zone: ZoneId): String? {
     if (!enabled) return say.string(R.string.assistant_proactive_off_line)
     val next = parseTime(nextRun) ?: return null
@@ -293,7 +293,7 @@ internal fun ScheduledTask.displayTitle(say: ProactiveText): String =
 internal fun machineName(id: String?, machines: List<Machine>): String? =
     id?.takeIf { it.isNotBlank() }?.let { machine -> machines.firstOrNull { it.id == machine }?.displayName ?: machine }
 
-/** "在 服务器 上接着原来的对话" / "在同一个对话里运行" / "开一段新对话". */
+/** "Continue the original chat on Server" / "Run in the same chat" / "Start a new chat". */
 internal fun ScheduledTask.whereLine(say: ProactiveText, machines: List<Machine>): String {
     val origin = origin
     return when {
@@ -304,7 +304,7 @@ internal fun ScheduledTask.whereLine(say: ProactiveText, machines: List<Machine>
     }
 }
 
-/** What runs with when it is not the default: "自动", "全部放行"; null for the default. */
+/** What runs with when it is not the default: "Auto", "Allow all"; null for the default. */
 internal fun ScheduledTask.runsWith(say: ProactiveText): String? =
     permissionMode?.takeIf { it.isNotBlank() && it != "default" }?.let { say.string(permissionModeTitle(it)) }
 
@@ -344,7 +344,7 @@ internal fun summaryLine(say: ProactiveText, tasks: List<ScheduledTask>?, now: I
     }
 }
 
-/** A permission mode's name ("" is 默认). */
+/** A permission mode's name ("" is "Default"). */
 @StringRes internal fun permissionModeTitle(mode: String): Int = when (mode) {
     "acceptEdits" -> R.string.assistant_proactive_mode_accept_edits
     "plan" -> R.string.assistant_proactive_mode_plan

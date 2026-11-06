@@ -5,7 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-// The cards in an assistant's reply (docs/assistant-views.md「卡片身份」): the same fence rules as the hub's
+// The cards in an assistant's reply (docs/assistant-views.md "Card identity"): the same fence rules as the hub's
 // `sdk/go/wire/assistantblocks.go`, checked against `schema/extension/examples/assistant-text/fences.json`.
 
 /**

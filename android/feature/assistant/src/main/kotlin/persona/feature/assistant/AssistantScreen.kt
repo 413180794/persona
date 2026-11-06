@@ -84,21 +84,21 @@ fun AssistantScreen(
     draftRepository: DraftRepository? = LocalAssistantHost.current?.drafts,
     draftScope: CoroutineScope? = LocalAssistantHost.current?.coroutineScope,
     composerService: ChatComposerService? = assistantComposerService(),
-    /** The launcher's 「问 Persona」: put the cursor in the composer and bring up the keyboard. */
+    /** The launcher's "Ask Persona": put the cursor in the composer and bring up the keyboard. */
     composerFocus: ComposerFocusRequests = AssistantComposerFocus,
-    /** 现在要你处理的事 over the home's suggestions; [onOpenNeed] opens a line where it lives (none: not shown). */
+    /** "Needs you now" over the home's suggestions; [onOpenNeed] opens a line where it lives (none: not shown). */
     needsYou: NeedsYou = NeedsYou(),
     onOpenNeed: ((NeedsYouLine) -> Unit)? = null,
-    /** 「还有 N 件在收件箱」: the inbox tab when not given. */
+    /** "N more in the inbox": the inbox tab when not given. */
     onOpenInbox: (() -> Unit)? = null,
     /** Pins or unpins a conversation (the hub's pins); none: the history offers no pinning. */
     onTogglePin: (suspend (SessionKey) -> Unit)? = null,
-    /** 语音对话 in the title menu, when the hub runs a voice extension. */
+    /** "Voice chat" in the title menu, when the hub runs a voice extension. */
     onVoice: (() -> Unit)? = null,
     onTodos: (() -> Unit)? = null,
     todoCount: Int = 0,
     showTodos: Boolean = true,
-    /** A new conversation on a launcher picked for it alone (the home composer's 启动器 chip); null: no chip. */
+    /** A new conversation on a launcher picked for it alone (the home composer's "Launcher" chip); null: no chip. */
     startConversationWith: (suspend (String) -> SessionKey)? =
         (repository as? persona.core.contracts.api.AssistantConversations)?.let { conversations -> { launcher -> conversations.startConversation(launcher) } },
 ) = PersonaTheme {
@@ -150,7 +150,7 @@ fun AssistantScreen(
     var menu by remember { mutableStateOf(false) }
     var info by rememberSaveable { mutableStateOf<AssistantInfo?>(null) }
     var showAllRecent by rememberSaveable { mutableStateOf(false) }
-    var autoOpen by rememberAutoOpen() // 自动对话, folded until opened (kept on this phone)
+    var autoOpen by rememberAutoOpen() // "Automatic chats", folded until opened (kept on this phone)
     var pinning by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val resources = androidx.compose.ui.platform.LocalResources.current
@@ -178,7 +178,7 @@ fun AssistantScreen(
         }
     }
     val active = activeSession?.let { SessionKey(activeMachine.orEmpty(), it) }
-    // 压缩上下文 and 新建主对话 (#1727): the main conversation's menu, on hubs that offer them.
+    // "Compact context" and "New main chat" (#1727): the main conversation's menu, on hubs that offer them.
     val mainActions = if (management != null && !demo) MainActions.of(LocalHubFeatures.current) else MainActions(false, false)
     // What the main conversation still needs (docs/onboarding.md 4.4), on hubs that work it out: asked when the tab
     // shows, when a computer comes or goes and after the hub refused to start it.
@@ -332,7 +332,7 @@ fun AssistantScreen(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                // A coded refusal (no computer, Claude Code missing…) says what is missing instead of 暂时无法新建对话.
+                // A coded refusal (no computer, Claude Code missing…) says what is missing instead of "Can't start a chat right now".
                 val coded = persona.core.designsystem.operationFeedback(error).takeIf { it.action.readinessAction() != null }
                 scope.launch { snackbar.showSnackbar(coded?.text?.resolve(context) ?: resources.getString(R.string.assistant_new_conversation_failed)) }
                 if (coded != null && readinessOn) mainReadiness.refresh()
@@ -412,7 +412,7 @@ fun AssistantScreen(
         }
     }
     // The chip's default and list: read when the page shows and again on each open (the default may have changed in
-    // 设置; a list that could not be read is tried again), as the web reads them each time its menu opens.
+    // Settings; a list that could not be read is tried again), as the web reads them each time its menu opens.
     suspend fun loadStarterLaunchers() {
         val api = management ?: return
         if (startConversationWith == null || demo || assistantMachine.isBlank()) return
@@ -603,12 +603,12 @@ fun AssistantScreen(
             }
         }
     }
-    // A run or a follow-up opened from 主动做事 (here or inside the settings page) shows its conversation in place.
+    // A run or a follow-up opened from "Proactive" (here or inside the settings page) shows its conversation in place.
     val openFromSchedule: (SessionKey) -> Unit = {
         proactiveOpen = false; settingsOpen = false; openedMain = true; openConversation(it)
         scope.launch { assistantAttempt { repository.refresh() } }
     }
-    // A task's model is set on 设置 › 模型 (iOS ModelConfigurationLink); back from it returns here.
+    // A task's model is set on Settings › Models (iOS ModelConfigurationLink); back from it returns here.
     val openModelConfiguration: (String) -> Unit = { purpose -> navigator.navigate(ModelPurposeRoute(purpose)) }
     if (settingsOpen && management != null) {
         AssistantSettingsScreen(management, machines, onBack = { settingsOpen = false }, inPlace = true, onMoved = {
@@ -708,7 +708,7 @@ fun AssistantScreen(
     }
 }
 
-/** What the drawer's 更多 rows and the title menu explain when there is nothing to open (the demo, a missing hub). */
+/** What the drawer's "More" rows and the title menu explain when there is nothing to open (the demo, a missing hub). */
 internal enum class AssistantInfo(@androidx.annotation.StringRes val title: Int) {
     Schedule(R.string.assistant_info_schedule),
     Knowledge(R.string.assistant_info_knowledge),
@@ -826,11 +826,11 @@ internal fun AssistantDrawer(
     autoOpen: Boolean = false, onAutoOpen: (Boolean) -> Unit = {},
     onTodos: (() -> Unit)? = null, todoCount: Int = 0, showTodos: Boolean = true,
 ) {
-    // The origin 自动对话 lists when open (the first one there is, until another is picked).
+    // The origin "Automatic chats" lists when open (the first one there is, until another is picked).
     var autoPicked by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxHeight().padding(horizontal = 12.dp)) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
-            // The first row is the main conversation, as 「Persona」 with the app's mark, then a line (#2004, the same on
+            // The first row is the main conversation, as "Persona" with the app's mark, then a line (#2004, the same on
             // every platform): it is listed nowhere else, has no pin of its own, and is on show whatever the search.
             // Its session keeps its id and title; only the row reads differently.
             item(key = "persona") {
@@ -873,7 +873,7 @@ internal fun AssistantDrawer(
                     DrawerItem(pluralStringResource(R.plurals.assistant_show_all_recent, groups.recent.size, groups.recent.size), PhIcons.ChatsCircle, onShowAllRecent)
                 }
             }
-            // 自动对话 (#3264): what the hub opened by itself, one row folded by default; open, a chip per origin and that
+            // "Automatic chats" (#3264): what the hub opened by itself, one row folded by default; open, a chip per origin and that
             // origin's conversations. Folded, the row still shows what waits for the user and what runs.
             if (groups.auto.isNotEmpty()) {
                 val origins = autoGroups(groups.auto)
@@ -965,7 +965,7 @@ private fun ConversationRow(
     )
 }
 
-/** The history row's menu: 置顶 / 取消置顶 (when it can be pinned), 拷贝会话 ID, 归档 (when it can be), then 结束对话 while it runs. */
+/** The history row's menu: "Pin" / "Unpin" (when it can be pinned), "Copy session ID", "Archive" (when it can be), then "End chat" while it runs. */
 internal fun conversationActions(
     resources: android.content.res.Resources, pinned: Boolean, live: Boolean, onPin: (() -> Unit)?, onCopy: () -> Unit,
     onEnd: (() -> Unit)?, onArchive: (() -> Unit)? = null,
@@ -1003,7 +1003,7 @@ private fun OriginTally.status(): Status? = when {
     else -> null
 }
 
-/** 自动对话's row: its count, and while folded what waits for the user (their count) or a dot while some run. */
+/** "Automatic chats"'s row: its count, and while folded what waits for the user (their count) or a dot while some run. */
 @Composable
 private fun AutoConversationsRow(total: OriginTally, open: Boolean, onToggle: () -> Unit) {
     val needs = pluralStringResource(R.plurals.assistant_auto_needs_you, total.needsYou, total.needsYou)
@@ -1021,7 +1021,7 @@ private fun AutoConversationsRow(total: OriginTally, open: Boolean, onToggle: ()
         })
 }
 
-/** The origins 自动对话 has, one chip each with its count and state; [onPick] lists that origin's conversations. */
+/** The origins "Automatic chats" has, one chip each with its count and state; [onPick] lists that origin's conversations. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AutoOriginChips(origins: List<OriginTally>, picked: AutoOrigin?, onPick: (AutoOrigin) -> Unit) {

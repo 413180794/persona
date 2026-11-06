@@ -32,7 +32,7 @@ import persona.core.designsystem.UserBubbleFrame
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * The catalog's 对话里的附件和报错 section: the parts a conversation draws beyond its bubbles (ChatParts.kt) — photos
+ * The catalog's "Attachments and errors in a conversation" section: the parts a conversation draws beyond its bubbles (ChatParts.kt) — photos
  * sent with a message (loading, failed), a picture's frame, file chips, the recap line and an API error card. Nothing
  * loads or leaves the page.
  */

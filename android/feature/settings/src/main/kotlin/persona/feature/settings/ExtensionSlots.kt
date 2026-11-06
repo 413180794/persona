@@ -41,7 +41,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// Extensions' UI slots (docs/extensions.md「UI 插槽」) on Android: the「扩展」section at the top of the settings home (the
+// Extensions' UI slots (docs/extensions.md "UI slots") on Android: the "Extensions" section at the top of the settings home (the
 // cards first, then a row per nav page with its icon and badge), the settings tab's badge (the nav pages' badges added
 // up), the sections extensions draw on a machine's page, and the pages they draw for their connectors' inbox items
 // (ExtensionInboxItem.kt). A hub without extension_ui_slots has none of them.
@@ -76,7 +76,7 @@ internal object ExtensionSlotText {
     }
 
     /**
-     * The settings tab's badge from the nav pages': the numbers added up; when there are only words (「新」), a dot.
+     * The settings tab's badge from the nav pages': the numbers added up; when there are only words ("New"), a dot.
      */
     fun tabBadge(places: List<ExtensionUiPlace>): SlotBadge {
         val texts = places.filter { it.placement == NavPage }.mapNotNull { it.badge?.text?.trim()?.takeIf(String::isNotEmpty) }
@@ -177,7 +177,7 @@ class ExtensionSlots internal constructor(
     }
 }
 
-/** The shell's slots for the selected hub's extensions, running while the shell is composed; null in 体验模式. */
+/** The shell's slots for the selected hub's extensions, running while the shell is composed; null in demo mode. */
 @Composable
 fun rememberExtensionSlots(extensions: ExtensionManagement?, connection: StateFlow<ConnectionState>): ExtensionSlots? {
     val slots = remember(extensions) { extensions?.let(::ExtensionSlots) } ?: return null
@@ -204,7 +204,7 @@ internal fun KeepFresh(model: ExtensionViewModel, events: Flow<ExtensionUiEvent>
 }
 
 /**
- * The「扩展」section at the top of the settings home: each card an extension draws (`overview_card`, compact; tapping it
+ * The "Extensions" section at the top of the settings home: each card an extension draws (`overview_card`, compact; tapping it
  * opens the page it names), then a row per nav page with its icon and badge. Nothing when no extension draws there.
  */
 internal fun LazyListScope.extensionSlotItems(
@@ -265,7 +265,7 @@ private fun ExtensionCard(place: ExtensionUiPlace, state: ExtensionViewState, ha
     }
 }
 
-/** A card of the settings home as drawn now: where it is, its view, its buttons, and reading it again (重试). */
+/** A card of the settings home as drawn now: where it is, its view, its buttons, and reading it again ("Retry"). */
 internal class ExtensionCardSlot(val place: ExtensionUiPlace, val state: ExtensionViewState, val handle: ExtensionViewHandle, val reload: () -> Unit)
 
 /** The cards of the settings home, each drawn compact and kept fresh while settings is on screen. */
@@ -291,7 +291,7 @@ internal fun rememberExtensionCards(slots: ExtensionSlots?, onOpen: (persona.cor
 /**
  * The sections extensions draw on machine [machineId]'s page (`machine_section`, after the machine's own), as a lazy
  * list's items: each with its title, kept fresh while the page is resumed. An extension whose hub does not know the
- * machine (one of another hub) draws nothing; a failure shows with 重试.
+ * machine (one of another hub) draws nothing; a failure shows with "Retry".
  */
 @Composable
 fun rememberMachineExtensionSections(slots: ExtensionSlots?, machineId: String,

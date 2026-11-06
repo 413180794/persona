@@ -7,7 +7,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ContentPresentationTest {
-    // A card's answer reads as the user's words 「来自卡片」; only the hub's exact trailing tag, only on the user's message.
+    // A card's answer reads as the user's words "From card"; only the hub's exact trailing tag, only on the user's message.
     @Test fun aCardsAnswerHidesItsTagOnlyOnTheUsersMessage() {
         val text = "选 B：队列去重\n<persona-action view=\"i#0/0\" action=\"choose-b\">{\"values\":{}}</persona-action>"
         val user = messageModel(text, user = true)

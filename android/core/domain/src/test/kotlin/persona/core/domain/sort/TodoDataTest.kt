@@ -38,31 +38,31 @@ class TodoDataTest {
         )
         val lookup: (SessionKey) -> Session? = { sessions[it] }
 
-        // 1. 已完成
+        // 1. Done
         val tDone = Todo(id = "1", title = "T1", doneAt = "2026-11-02T10:00:00Z", agents = listOf(todoAgent("needs")))
         assertEquals(TodoState.Done, tDone.state(lookup))
 
-        // 2. 等你 (有挂着的 Agent 需要你)
+        // 2. Needs you (an attached Agent needs you)
         val tNeeds = Todo(id = "2", title = "T2", agents = listOf(todoAgent("working"), todoAgent("needs")))
         assertEquals(TodoState.NeedsYou, tNeeds.state(lookup))
 
-        // 3. 待查看 (有挂着的 Agent 完成了你还没看)
+        // 3. To review (an attached Agent finished and you have not viewed it)
         val tUnread = Todo(id = "3", title = "T3", agents = listOf(todoAgent("working"), todoAgent("unread")))
         assertEquals(TodoState.Unread, tUnread.state(lookup))
 
-        // 4. 进行中 (有挂着的 Agent 在工作或正在启动)
+        // 4. In progress (an attached Agent is working or starting)
         val tWorking = Todo(id = "4", title = "T4", agents = listOf(todoAgent("seen"), todoAgent("working")))
         assertEquals(TodoState.Working, tWorking.state(lookup))
         val tStarting = Todo(id = "4b", title = "T4b", agents = listOf(todoAgent("seen"), todoAgent("starting")))
         assertEquals(TodoState.Working, tStarting.state(lookup))
 
-        // 5. 待跟进 (挂着的 Agent 都停着: 已看、未运行、启动失败)
+        // 5. To follow up (all attached Agents are stopped: seen, not running, or failed to start)
         val tFollowUpSeen = Todo(id = "5", title = "T5", agents = listOf(todoAgent("seen")))
         assertEquals(TodoState.FollowUp, tFollowUpSeen.state(lookup))
         val tFollowUpFailed = Todo(id = "5b", title = "T5b", agents = listOf(todoAgent("failed", startError = "crash")))
         assertEquals(TodoState.FollowUp, tFollowUpFailed.state(lookup))
 
-        // 6. 未开始 (没有挂着的 Agent 或挂着的都已 released)
+        // 6. Not started (no attached Agent, or all attached Agents are released)
         val tNotStartedEmpty = Todo(id = "6", title = "T6", agents = emptyList())
         assertEquals(TodoState.NotStarted, tNotStartedEmpty.state(lookup))
         val tNotStartedReleased = Todo(id = "6b", title = "T6b", agents = listOf(todoAgent("needs", released = true)))
@@ -88,13 +88,13 @@ class TodoDataTest {
         val t7 = Todo(id = "not_started", title = "Not Started", createdAt = "2026-11-02T09:00:00Z")
 
         val sorted = listOf(t1, t7, t6, t5, t4, t2, t3).ordered(lookup)
-        // 顺序应为: 等你(新->旧) -> 待查看 -> 进行中 -> 待跟进 -> 未开始 -> 已完成
+        // Expected order: Needs you (new -> old) -> To review -> In progress -> To follow up -> Not started -> Done
         assertEquals(listOf("needs_new", "needs_old", "unread", "working", "followup", "not_started", "done"), (sorted.map { it.id }).zhAny())
     }
 
     @Test
     fun byTodoGrouping() {
-        // 置顶: server/pin1; 屏蔽: server/mute1
+        // Pinned: server/pin1; muted: server/mute1
         val pins = AgentPreferences(sessions = listOf("server/pin1"))
         val mutes = AgentPreferences(sessions = listOf("server/mute1"))
 
@@ -120,26 +120,26 @@ class TodoDataTest {
             todos = todos
         )
 
-        // 项目 › 待办 › Agent (#3156): sessions without a cwd are in the project 其他 ("-"); the headings hold no rows
+        // Project › To-do › Agent (#3156): sessions without a cwd are in the project "Other" ("-"); the headings hold no rows
         assertEquals(listOf("todo-project/-", "todo/t2", "todo/t1", TodoNoneGroup, "todo-loose/todo/none/-"),
             result.groups.filter { it.id != "pinned" }.map { it.id })
-        // 置顶在前，然后应该有两个待办段，加最后一个「没有待办」段（里面按项目）
+        // Pinned first, then two to-do sections, and a final "No to-do" section (grouped by project inside).
         val nonPinnedGroups = result.groups.filter { it.id != "pinned" && it.rows.isNotEmpty() }
         assertEquals(3, nonPinnedGroups.size)
 
-        // t1 (包含 a1 idle) vs t2 (包含 a2 unread, mute1 working)
-        // Todo 状态 Unread 排在 FollowUp 前面，所以 t2 段在前，t1 在后
+        // t1 (contains a1 idle) vs t2 (contains a2 unread, mute1 working)
+        // Todo state Unread ranks before FollowUp, so section t2 comes before t1.
         assertEquals("todo/t2", (nonPinnedGroups[0].id).zhAny())
         assertEquals("todo/t1", (nonPinnedGroups[1].id).zhAny())
         assertEquals("todo-loose/todo/none/-", (nonPinnedGroups[2].id).zhAny())
 
-        // 在 t2 段中: a2 (unread) vs mute1 (muted working). Rank: Unread < Muted -> a2 在前
+        // In section t2: a2 (unread) vs mute1 (muted working). Rank: Unread < Muted -> a2 first
         assertEquals(listOf("a2", "mute1"), (nonPinnedGroups[0].rows.map { it.session.sessionId }).zhAny())
 
-        // 在 t1 段中: a1 (idle) -> sPin1 在 pinned 组
+        // In section t1: a1 (idle) -> sPin1 is in the pinned group
         assertEquals(listOf("a1"), (nonPinnedGroups[1].rows.map { it.session.sessionId }).zhAny())
 
-        // 在「没有待办」段中: sFree (needs_you) vs sDone (seen). NeedsYou < Seen -> free 在前
+        // In the "No to-do" section: sFree (needs_you) vs sDone (seen). NeedsYou < Seen -> free first
         assertEquals(listOf("free", "a_done"), (nonPinnedGroups[2].rows.map { it.session.sessionId }).zhAny())
     }
 
@@ -158,14 +158,14 @@ class TodoDataTest {
         assertEquals(listOf("todo-project/-", "todo/t1", TodoManualGroup, loose(TodoManualGroup), TodoNoneGroup, loose(TodoNoneGroup)), list.map { it.id })
         assertEquals(listOf("manual"), list.of(loose(TodoManualGroup)).rows.map { it.session.sessionId })
         assertFalse(list.of(TodoManualGroup).folded)
-        // 没有待办 is folded under to-dos while nothing in it needs you…
+        // "No to-do" is folded under to-dos while nothing in it needs you…
         assertEquals(true, list.of(TodoNoneGroup).folded)
         assertEquals(listOf("orca", "started"), list.of(loose(TodoNoneGroup)).rows.map { it.session.sessionId })
         // …open once the user opened it, or when something in it waits, or with no to-do above it.
         assertFalse(groups(AgentListSettings(grouping = AgentGrouping.Todo, expandedIdle = setOf(TodoNoneOpened))).of(TodoNoneGroup).folded)
         assertFalse(groups(sessions = listOf(onTodo, AgentSession(s("waits", "needs_you")))).of(TodoNoneGroup).folded)
         assertFalse(groups(sessions = listOf(elsewhere)).of(TodoNoneGroup).folded)
-        // 手动开的 is not a to-do: with only it above, 没有待办 stays open (web: groups with a todoId).
+        // "Opened by hand" is not a to-do: with only it above, "No to-do" stays open (web: groups with a todoId).
         val manualOnly = groups(sessions = listOf(manual, elsewhere))
         assertEquals(listOf(TodoManualGroup, loose(TodoManualGroup), TodoNoneGroup, loose(TodoNoneGroup)), manualOnly.map { it.id })
         assertFalse(manualOnly.of(TodoNoneGroup).folded)

@@ -21,13 +21,13 @@ import persona.core.navigation.*
 @Composable
 internal fun MachinesScreen(
     machineId: String?, model: MachinesViewModel, navigator: Navigator, actions: MachineActionsViewModel? = null, launcherPages: Boolean = false,
-    /** What extensions draw on this machine's page, after its own sections (docs/extensions.md「UI 插槽」). */
+    /** What extensions draw on this machine's page, after its own sections (docs/extensions.md "UI slots"). */
     extensionSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
-    /** 这台电脑能做什么, 浏览器 and 订阅额度; null in 体验模式. */
+    /** "What this computer can do", "Browser" and "Subscription limits"; null in demo mode. */
     health: MachineHealthViewModel? = null,
-    /** The phone adds and confirms computers (添加电脑); false in 体验模式. */
+    /** The phone adds and confirms computers ("Add a computer"); false in demo mode. */
     adds: Boolean = false,
-    /** The hub adds computers from the phone (machines_add): the + and 添加电脑 open its page, else the help dialog. */
+    /** The hub adds computers from the phone (machines_add): the + and "Add a computer" open its page, else the help dialog. */
     canAdd: Boolean = false,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -35,11 +35,11 @@ internal fun MachinesScreen(
     val sessions by model.sessions.sessions.collectAsStateWithLifecycle()
     val machine = machines.firstOrNull { it.id == machineId }
     val acting = actions?.state?.collectAsStateWithLifecycle()?.value ?: MachineActionsState()
-    // An offline machine has no launchers; they are read again when it comes online (after 重新连接).
+    // An offline machine has no launchers; they are read again when it comes online (after "Reconnect").
     if (actions != null && machineId != null) LaunchedEffect(actions, machineId, machine?.online) {
         actions.loadLaunchers(machineId, machine?.online == true)
     }
-    // 同时显示 botmux 会话: read once per machine page; an older hub leaves it unanswered and the page draws no switch.
+    // "Also show botmux sessions": read once per machine page; an older hub leaves it unanswered and the page draws no switch.
     if (actions != null && machineId != null) LaunchedEffect(actions, machineId) { actions.loadBotmux(machineId) }
     val deployLine: @Composable (Machine?) -> Unit = { info ->
         if (info != null && showsDeploy(info)) MachineDeployLine(info, info.id in acting.deployStarting, actions?.let { { it.deploy(info.id) } })
@@ -212,7 +212,7 @@ internal fun MachinesScreen(
 private fun MachineCard(
     machine: Machine?, metrics: MachineMetrics, sessions: List<Session>, now: Long, step: Int,
     deploy: (@Composable (Machine?) -> Unit)? = null,
-    /** 确认电脑 for a computer that waits to be confirmed; null where the phone cannot (体验模式). */
+    /** "Confirm computer" for a computer that waits to be confirmed; null where the phone cannot (demo mode). */
     onConfirm: ((String) -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {

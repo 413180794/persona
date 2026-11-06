@@ -390,7 +390,7 @@ fun JSegmented(options: List<JSegment>, selected: Int, onSelect: (Int) -> Unit, 
                 Box(
                     Modifier.weight(1f, fill = false)
                         // The selected one's underline is drawn, not laid out: a fillMaxWidth line widened that segment to
-                        // its whole share of the row (the image editor's 画笔 took the row's width, 框选 stayed small).
+                        // its whole share of the row (the image editor's "Pen" took the row's width, "Box" stayed small).
                         .drawWithContent {
                             drawContent()
                             if (on) drawRect(accent, Offset(0f, size.height - 2.dp.toPx()), Size(size.width, 2.dp.toPx()))
@@ -464,13 +464,13 @@ fun JBadge(count: Int, modifier: Modifier = Modifier, text: String? = null) {
     ) { Text(label, style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.Bold, fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp), lineHeight = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp)), color = palette.needsYou.onDot, maxLines = 1) }
 }
 
-/** A small static label such as 草稿, 体验, 只读. */
+/** A small static label such as "Draft", "Demo", "Read-only". */
 @Composable
 fun JTag(text: String, modifier: Modifier = Modifier, status: Status? = null) =
     JTagColored(text, modifier, status?.let { PersonaTheme.palette.status(it) })
 
 /**
- * A small label in a role colour ([Tone]): an extension's badge (有效, 快过期). [animated]: drawn again with another tone
+ * A small label in a role colour ([Tone]): an extension's badge ("Valid", "Expiring soon"). [animated]: drawn again with another tone
  * its colours go over to the new ones and a new text fades in (an extension's row badge, #2811).
  */
 @Composable

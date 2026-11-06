@@ -26,7 +26,7 @@ import okhttp3.tls.HeldCertificate
 import org.junit.Assert.*
 import org.junit.Test
 
-/** One connection for a group of hubs (docs/android.md「多 hub」): route across the hubs, each with its own credential. */
+/** One connection for a group of hubs (docs/android.md "Multiple hubs"): route across the hubs, each with its own credential. */
 class HubGroupConnectionTest {
     private val homeToken = "home-token"
 

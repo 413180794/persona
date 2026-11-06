@@ -28,7 +28,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-/** 新增模型供应商 over the pairing's connection (docs/launchers.md「接口」). */
+/** "Add model provider" over the pairing's connection (docs/launchers.md "API"). */
 class HttpProviderSetup internal constructor(
     /** The last argument is the read timeout in seconds; null keeps the client's 15. */
     private val request: suspend (String, String, RequestBody?, Long?) -> Response,
@@ -131,9 +131,9 @@ class HttpProviderSetup internal constructor(
         }
 
     private companion object {
-        /** 测试连接 / 获取模型列表: the hub gives the gateway 30 s. */
+        /** "Test connection" / "Fetch model list": the hub gives the gateway 30 s. */
         const val PROBE_READ_TIMEOUT_SECONDS = 40L
-        /** 测试可用性: the hub gives the launcher's CLI 100 s to answer (as iOS). */
+        /** "Test availability": the hub gives the launcher's CLI 100 s to answer (as iOS). */
         const val CHECK_READ_TIMEOUT_SECONDS = 110L
         /** ~/.zshrc preview and import: the hub gives each call to the machine 30 s (as iOS). */
         const val IMPORT_READ_TIMEOUT_SECONDS = 45L

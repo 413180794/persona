@@ -7,7 +7,7 @@ import persona.core.hub.HubFailure
 import java.io.IOException
 
 /**
- * Why something did not go through, for 「没草拟出来：…」「没交过去：…」: the hub's own words when it gave a reason
+ * Why something did not go through, for "Couldn't draft: …", "Couldn't hand off: …": the hub's own words when it gave a reason
  * (a draft the model could not write), the usual operation feedback for the connection, the local reason otherwise;
  * in the page's language once resolved.
  */

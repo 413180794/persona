@@ -4,7 +4,7 @@ package persona.core.terminal
  * A pane's grid fed frame by frame (whole frames reset it, diffs run on), keeping what scrolls off its top while the
  * phone drives the terminal. herdr keeps no scrollback at the phone's size and redraws the grid in place, so what
  * scrolled off is only what the phone noticed moving up between two frames ([TerminalGrid.scrolled]; docs/terminal.md
- * 第十一节「手机上的滚动历史」). At most [limit] rows are kept, the oldest go first.
+ * section 11 "Scrollback on the phone"). At most [limit] rows are kept, the oldest go first.
  */
 class ScrollbackGrid(private val limit: Int = LIMIT) {
     private val grid = TerminalGrid(1, 1)
@@ -66,7 +66,7 @@ class ScrollbackGrid(private val limit: Int = LIMIT) {
     }
 }
 
-/** The terminal as text: what 选择文本 shows and what is drawn of a mirrored screen. */
+/** The terminal as text: what "Select text" shows and what is drawn of a mirrored screen. */
 object TerminalText {
     /**
      * How many of [rows] to show: down to the last one with something on it, or the cursor's. A shell after `clear`

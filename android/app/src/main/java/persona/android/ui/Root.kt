@@ -126,7 +126,7 @@ private fun PersonaRootContent(
         shell.feedback.notices.collect { notice ->
             snackbar.currentSnackbarData?.dismiss()
             notice.haptic?.let { haptics.play(it) }
-            // A notice with 撤销 waits its own few seconds; collecting the next one dismisses it, as for the others.
+            // A notice with "Undo" waits its own few seconds; collecting the next one dismisses it, as for the others.
             launch {
                 val result = snackbar.showSnackbar(notice.message, actionLabel = notice.action?.label, duration = SnackbarDuration.Short)
                 if (result == SnackbarResult.ActionPerformed) notice.action?.run?.invoke()
@@ -205,7 +205,7 @@ private fun PersonaRootContent(
 
 @Composable
 private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((Router) -> ResolvedRoute?)?>, shellServices: SettingsServices, shell: AppServices) {
-    // Where the selected hub's extensions draw (docs/extensions.md「UI 插槽」): the settings home, the settings tab's badge and
+    // Where the selected hub's extensions draw (docs/extensions.md "UI slots"): the settings home, the settings tab's badge and
     // machines' pages share one list, read while the hub is online.
     val extensionSlots = persona.feature.settings.rememberExtensionSlots(shellServices.extensions?.takeUnless { shellServices.demo }, session.connection.state)
     val services = remember(shellServices, extensionSlots) { shellServices.copy(extensionSlots = extensionSlots) }
@@ -341,7 +341,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         stacks.values.forEach { stack -> stack.indexOf(from).takeIf { it >= 0 }?.let { stack[it] = to } }
     }
     // The pages extensions draw for their connectors' inbox items (inbox_item, #1683): the inbox list and inbox links
-    // open those. An item whose page broke opens its own page, which says so until 重试 tries the extension's page again.
+    // open those. An item whose page broke opens its own page, which says so until "Retry" tries the extension's page again.
     val itemPagePlaces = slotsState?.inboxItems.orEmpty()
     val itemPageFailures = remember(session.identity) { mutableStateMapOf<String, String>() }
     val currentItemPlaces by rememberUpdatedState(itemPagePlaces)
@@ -367,7 +367,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     }
     // An extension enabled since the hub was last read draws its items as soon as the inbox shows.
     LaunchedEffect(selected, extensionSlots) { if (selected == AppTab.Inbox) extensionSlots?.loadInboxItems() }
-    // The inbox's triage banner (#1773): 去配置 opens 设置 › 模型 › 信息筛选, offered only when this device can read that
+    // The inbox's triage banner (#1773): "Configure" opens Settings › Models › "Message filtering", offered only when this device can read that
     // model use (a device that may only read and answer cannot, nor a hub without it). Asked once per hub when the
     // banner wants it; a yes is kept.
     val triageSetup = remember(services.models, services.demo, session.identity) {
@@ -404,15 +404,15 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     }
     // Settings carries the extensions' nav page badges added up (a dot when they are words).
     val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Jarvis to assistantRequests.size, AppTab.Inbox to inboxNeeds, AppTab.Settings to slotBadge.count)
-    // 现在要你处理的事 on the Persona home: the agents waiting (not Persona's own, not muted), then the inbox's 需要你.
+    // "Needs you now" on the Persona home: the agents waiting (not Persona's own, not muted), then the inbox's "Needs you".
     val needsYou = remember(agentRequests, sessions, preferences.mutes, inbox.records) {
         persona.feature.assistant.needsYou(agentRequests, sessions, preferences.mutes,
             inbox.records.map { persona.feature.assistant.NeedsYouMessage(it.item, lark = it.feedId != null) })
     }
-    // 语音对话 is offered while the hub runs a voice extension: asked each time the Persona tab shows while connected.
+    // Voice chat is offered while the hub runs a voice extension: asked each time the Persona tab shows while connected.
     val voiceExtension = persona.feature.voice.rememberVoiceExtension(session.voice,
         active = selected == AppTab.Jarvis && connection == ConnectionState.Online)
-    // Links over the whole shell, jarvis:// links from conversations, 交给 Persona from pages (ShellLinks.kt).
+    // Links over the whole shell, jarvis:// links from conversations, "Hand to Persona" from pages (ShellLinks.kt).
     ShellLinkHost(session, navigator, shell.feedback) {
         val uriHandler = LocalUriHandler.current
         // Each page shows the connection state in its own title, so the shell adds no banner above it.
@@ -439,7 +439,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         // Lists sit beside their details when expanded, and on medium widths with room for both (a tablet in portrait).
         // Panes share the window's one background; between them only a little space, no second surface or rule.
         // The scaffold must not move focus into the pane it shows (its default): focus entered the list pane's first
-        // focusable, the search field, and with a hardware keyboard Agents and 收件箱 opened with the input method up.
+        // focusable, the search field, and with a hardware keyboard Agents and Inbox opened with the input method up.
         val directive = (if (!expanded && windowWidth >= 760.dp) calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth(adaptive)
             else calculatePaneScaffoldDirective(adaptive)).let {
                 PaneScaffoldDirective(
@@ -576,7 +576,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         LaunchedEffect(selected) { if (selected !in visited) visited += selected }
         // The tab left behind stays composed: it must not keep the field's focus, the keyboard or a paste menu (#894).
         ReleaseTextInputOnChange(selected)
-        // Back on the first page of Agents, 收件箱 or 设置 goes to Persona; back on the Persona home leaves the app
+        // Back on the first page of Agents, Inbox or Settings goes to Persona; back on the Persona home leaves the app
         // (2026-11-01, the user's call; it used to go back through the tabs shown before).
         BackHandler(selected != AppTab.Jarvis && stacks.getValue(selected).size <= 1) { navigator.selectTab(AppTab.Jarvis) }
         // Turned on its side, a phone's camera cutout or its three-button navigation bar sits on the left or right: the
@@ -594,7 +594,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             Row(Modifier.fillMaxSize().windowInsetsPadding(sides)) {
               if (expanded) {
                   // The extensions' own pages (nav_page) sit in the rail under the four tabs: one tap opens one beside
-                  // the settings list (#2951); on a phone they are at the top of 设置.
+                  // the settings list (#2951); on a phone they are at the top of Settings.
                   val pages = slotsState?.navPages.orEmpty()
                   val top = settingsStack.lastOrNull() as? ExtensionUiRoute
                   val railKey = if (selected == AppTab.Settings && top != null && pages.any { it.extension == top.extensionId && it.id == top.uiId })
@@ -620,7 +620,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                         val back = rememberNavigationEventDispatcherOwner(enabled = shown)
                         // The row of what the detail pane shows is marked in the list, however the page was opened.
                         val detail = detailOf(stacks.getValue(tab))
-                        // Agents may close its list beside an open conversation; 收件箱 and 设置 keep theirs (as the old app did).
+                        // Agents may close its list beside an open conversation; Inbox and Settings keep theirs (as the old app did).
                         val listDetail = rememberShellListDetail(tab, directive, maxWidth, paneHinges, detailOpen = detail != null,
                             store = paneStore, collapsible = tab == AppTab.Agents)
                         CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides back, LocalDetailKey provides detail) {
@@ -660,7 +660,7 @@ private fun pretendFold(real: androidx.compose.material3.adaptive.WindowAdaptive
 }
 
 /**
- * Which pane each destination takes when the window has room for two: the first page of Agents, 收件箱 and 设置 is
+ * Which pane each destination takes when the window has room for two: the first page of Agents, Inbox and Settings is
  * a list, what they open is its detail. Everything else (the Persona home, its knowledge base) stays one page.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
@@ -735,7 +735,7 @@ private fun InboxLink(route: NavKey, inbox: InboxRepository, navigator: Navigato
 /**
  * An inbox item whose connector's extension draws its body (inbox_item, #1683): the inbox's header of the item over the
  * extension's view. When the extension cannot draw it, the item's own page takes its place: quietly when the extension declines
- * (a read-only device, 404, unsupported, nothing drawn), with a line and 重试 there when it broke ([failures]). The
+ * (a read-only device, 404, unsupported, nothing drawn), with a line and "Retry" there when it broke ([failures]). The
  * extension's `persona://inbox/<id>/source` opens that item's own page on top.
  */
 @Composable

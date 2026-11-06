@@ -61,7 +61,7 @@ import persona.core.domain.views.AssistantCard
 import persona.core.domain.views.AssistantCards
 import java.util.concurrent.atomic.AtomicInteger
 
-// An assistant's `html` component (docs/assistant-views.md「HTML 自由绘制」「各端必须验证的安全边界」).
+// An assistant's `html` component (docs/assistant-views.md "Free-form HTML" "Security boundaries every client must verify").
 //
 // Android has not passed the security acceptance yet: the cases the spec lists (fetch, XHR, images, CSS, iframes,
 // WebSocket, beacons, redirects, meta refresh, popups, forms, cookies / storage, forged bridge messages, confirm floods,
@@ -81,7 +81,7 @@ internal object AssistantHtmlSandbox {
     /** Whether Android's HTML sandbox passed the security acceptance. Not yet: pages show their card's fallback. */
     const val Accepted = false
 
-    /** At most this many pages run at once; the others wait for 运行. */
+    /** At most this many pages run at once; the others wait for "Run". */
     const val MostRunning = 2
 
     /**
@@ -226,7 +226,7 @@ internal class HtmlBridgePolicy {
 
 /**
  * An `html` item of a card: its fallback until the sandbox is accepted; then the page in its own WebView, run while on
- * screen (at most [AssistantHtmlSandbox.MostRunning] at once), destroyed when it leaves, with 停止 and 重试 outside it.
+ * screen (at most [AssistantHtmlSandbox.MostRunning] at once), destroyed when it leaves, with "Stop" and "Retry" outside it.
  */
 @Composable
 internal fun AssistantHtmlItem(item: ExtensionViewItem, card: AssistantCard, modifier: Modifier, bridge: HtmlBridgeHost?) {

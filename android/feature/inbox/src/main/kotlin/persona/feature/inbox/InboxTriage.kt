@@ -34,7 +34,7 @@ data class InboxTriage(
     val sources: List<InboxTriageSource> = emptyList(),
 ) {
     companion object {
-        /** The model use 去配置 opens: 信息筛选, the one that sorts the inbox (设置 › 模型). */
+        /** The model use "Set up" opens: "Inbox triage", the one that sorts the inbox (Settings › Models). */
         const val Purpose = "inbox.triage"
 
         /** The response's `triage`; anything else (missing, not an object, unreadable) is none. */
@@ -54,7 +54,7 @@ data class InboxTriageSource(
     val waiting: Int = 0,
 )
 
-/** The banner's words, and whether it offers 去配置 (the model is not set up). */
+/** The banner's words, and whether it offers "Set up" (the model is not set up). */
 data class InboxTriageBanner(val text: String, val configure: Boolean)
 
 internal object InboxTriageText {
@@ -69,7 +69,7 @@ internal object InboxTriageText {
 
     /**
      * The banner while new items wait; null when none wait, triage is ok, or the hub is older. One source waiting
-     * names it (「有 3 条飞书消息在等分拣：…」), several do not; the reason is the hub's, else the state's words (an
+     * names it ("3 Lark messages waiting for triage: …"), several do not; the reason is the hub's, else the state's words (an
      * unknown state without a reason says only how many wait).
      */
     fun banner(res: Resources, triage: InboxTriage?): InboxTriageBanner? {
@@ -85,7 +85,7 @@ internal object InboxTriageText {
 }
 
 /**
- * Where 去配置 goes (设置 › 模型 › 信息筛选) and whether this device may change it ([mayConfigure]: a device that may
+ * Where "Set up" goes (Settings › Models › Inbox triage) and whether this device may change it ([mayConfigure]: a device that may
  * only read and answer may not, nor a hub without that model use). The shell provides it; none: text only.
  */
 class InboxTriageSetup(val mayConfigure: suspend () -> Boolean, val configure: () -> Unit)
@@ -94,7 +94,7 @@ val LocalInboxTriageSetup = staticCompositionLocalOf<InboxTriageSetup?> { null }
 
 /**
  * The banner over the list while new items wait for triage: the design system's notice in the warning tone, not
- * dismissable, gone once triage is ok. 去配置 only when the model is not set up and this device may set it up.
+ * dismissable, gone once triage is ok. "Set up" only when the model is not set up and this device may set it up.
  */
 @Composable
 internal fun InboxTriageNotice(banner: InboxTriageBanner, modifier: Modifier = Modifier.padding(top = Tokens.Space.s)) {

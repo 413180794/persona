@@ -17,7 +17,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AssistantManagementTest {
-    /** 跑完推送 travels both ways; a task without it never sends it, so a hub without `task_push` is not sent it. */
+    /** "Push when done" travels both ways; a task without it never sends it, so a hub without `task_push` is not sent it. */
     @Test fun taskPushIsReadAndSentOnlyWhenSet() = runBlocking {
         MockWebServer().use { server ->
             val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient()) { true }

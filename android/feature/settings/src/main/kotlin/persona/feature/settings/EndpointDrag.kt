@@ -41,7 +41,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * The finger and the list during a drag in 连接诊断's candidate list. The order itself lives in [EndpointEditorState]
+ * The finger and the list during a drag in "Connection diagnostics"' candidate list. The order itself lives in [EndpointEditorState]
  * (it is what gets stored); this keeps the pixels: where the picked-up row is drawn, its lift, scrolling while it is
  * held near an edge, and its glide into place after a drop.
  */
@@ -224,7 +224,7 @@ internal fun Modifier.dragHandle(state: EndpointDragState, url: String): Modifie
 
 /**
  * A long press anywhere on the row picks it up. Goes after the row's click in the modifier chain, so it sees the
- * down first; downs the handle or the 测试 button took are theirs.
+ * down first; downs the handle or the "Test" button took are theirs.
  */
 internal fun Modifier.dragAfterLongPress(state: EndpointDragState, url: String): Modifier = pointerInput(state, url) {
     awaitEachGesture {

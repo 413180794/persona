@@ -6,7 +6,7 @@ import org.junit.Test
 import kotlin.math.pow
 
 /**
- * The readability floors of the three styles (玻璃 / 晨报 / 看板) in light and dark, by WCAG contrast (the old app's
+ * The readability floors of the three styles (Glass / Brief / Board) in light and dark, by WCAG contrast (the old app's
  * StylesTest, iOS's StyleSpecTests). Glass draws translucent fills: they are laid over the page background before
  * the contrast is measured.
  *

@@ -5,7 +5,7 @@ import persona.core.domain.sort.*
 import org.junit.Assert.*
 import org.junit.Test
 
-/** The 按电脑和空间 tree these tests were written for (the default grouping is now 按仓库). */
+/** The "By computer and space" tree these tests were written for (the default grouping is now "By repository"). */
 private val MachineSpaceTree = AgentListSettings(grouping = AgentGrouping.MachineSpace)
 
 class AgentsTreeTest {
@@ -85,7 +85,7 @@ class AgentsTreeTest {
         val entries = agentTreeEntries(list, "")
         assertTrue(entries.none { it is TreeMachineEntry })
         val groups = entries.filterIsInstance<TreeGroupEntry>()
-        // 项目 › 待办 › Agent (#3156): sessions without a cwd are in the project 其他; 没有待办 is open (one there needs you)
+        // project › to-do › Agent (#3156): sessions without a cwd are in the project "Other"; "No to-do" is open (one there needs you)
         assertEquals(listOf("todo-project/-", "todo/todo_1", "todo/none", "todo-loose/todo/none/-"), groups.map { it.group.id })
         assertEquals(listOf(0, 1, 0, 1), groups.map { it.depth })
         assertEquals("其他", groups[0].group.title.shown)
@@ -107,7 +107,7 @@ class AgentsTreeTest {
         fun ids(folded: Set<String> = emptySet()) = agentTreeEntries(buildAgentList(sessions, machines,
             settings = AgentListSettings(grouping = AgentGrouping.Todo, folded = folded), todos = todos), "")
             .filterIsInstance<TreeGroupEntry>().map { it.group.id }
-        // the project with an agent waiting for you first; a worktree belongs to its repository; 没有待办 folded under to-dos
+        // the project with an agent waiting for you first; a worktree belongs to its repository; "No to-do" folded under to-dos
         assertEquals(listOf("todo-project/api", "todo/t2", "todo-project/app", "todo/t1", "todo/none"), ids())
         assertEquals(listOf("todo-project/api", "todo-project/app", "todo/t1", "todo/none"), ids(setOf("todo-project/api")))
     }
@@ -139,7 +139,7 @@ class AgentsTreeTest {
         assertEquals(listOf("group:repo/mac//code/app", "group:tree/mac//code/notes"), folded.take(2).map { it.key })
     }
 
-    // #2320: a herdr tab holding the 发起者 and two panes it split off, beside a tab of one agent and a tab of two peers
+    // #2320: a herdr tab holding the launcher and two panes it split off, beside a tab of one agent and a tab of two peers
     private fun pane(id: String, state: String, slot: String, place: Int?, index: Int, at: String = "2026-01-01T00:00:00Z") =
         AgentSession(Session(machineId = "mac", sessionId = id, state = state, spaceId = "w1", spaceName = "app", slotId = slot,
             slotIndex = index, paneId = "w1:$id", paneIndex = place, updatedAt = at))
@@ -162,10 +162,10 @@ class AgentsTreeTest {
         assertEquals(1, rows.getValue("lead").depth)
         assertEquals(listOf(true, true), listOf("review", "tests").map { rows.getValue(it).branch })
         assertEquals(listOf(2, 2), listOf("review", "tests").map { rows.getValue(it).depth })
-        // peers (the top left pane is a shell): no 发起者, side by side under their tab
+        // peers (the top left pane is a shell): no launcher, side by side under their tab
         assertEquals(listOf(false, false), listOf("peerA", "peerB").map { rows.getValue(it).launcher || rows.getValue(it).branch })
         assertEquals(listOf(1, 1), listOf("peerA", "peerB").map { rows.getValue(it).depth })
-        // the idle peer is shown with its tab, so nothing is left for 还有 N 个空闲
+        // the idle peer is shown with its tab, so nothing is left for "N more idle"
         assertTrue(entries.none { it is TreeIdleEntry })
         assertTrue(rows.getValue("deps").last)
         assertEquals(0, rows.getValue("deps").depth)
@@ -177,10 +177,10 @@ class AgentsTreeTest {
         val folded = agentTreeEntries(list, "mac", tabs = true, foldedTabs = setOf(tab.foldKey))
         assertEquals(listOf("group:mac/w1", "tab:mac/:w1/t1", "tab:mac/:w1/t3"), folded.take(3).map { it.key })
         assertTrue(folded.filterIsInstance<TreeTabEntry>().first().folded)
-        // without tabs (按仓库, 按状态, 按待办, the way the web lists them too) every agent is a row of its own
+        // without tabs ("By repository", "By status", "By to-do", the way the web lists them too) every agent is a row of its own
         val flat = agentTreeEntries(list, "mac")
         assertTrue(flat.none { it is TreeTabEntry })
-        assertEquals(panes.size - 1, flat.count { it is TreeRowEntry }) // the seen peer is tucked under 还有 1 个空闲
+        assertEquals(panes.size - 1, flat.count { it is TreeRowEntry }) // the seen peer is tucked under "1 more idle"
         // one agent of the tab left under a quick filter: a row of its own
         val needs = agentTreeEntries(buildAgentList(panes, machines, settings = MachineSpaceTree.copy(quick = AgentQuickFilter.NeedsYou)), "mac", tabs = true)
         assertTrue(needs.none { it is TreeTabEntry })

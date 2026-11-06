@@ -48,8 +48,8 @@ import persona.core.navigation.Navigator
 import java.io.File
 
 /**
- * The inbox and Feishu chat additions of #3045 in every style, light and dark: a row's 静音 options, 已静音, Pin 消息,
- * and my messages with their read receipts beside a recalled message 防撤回 kept and an edited one with 编辑历史.
+ * The inbox and Feishu chat additions of #3045 in every style, light and dark: a row's "Mute" options, "Muted", "Pinned messages",
+ * and my messages with their read receipts beside a recalled message "Keep recalled messages" kept and an edited one with "Edit history".
  * Written as PNGs to `build/parity-shots/` to look at.
  */
 @RunWith(AndroidJUnit4::class)
@@ -98,7 +98,7 @@ class ParityInboxShotsTest {
 
     private enum class Shot { RowMenu, Mutes, Pins, Bubbles, Thread }
 
-    // A thread whose reply was recalled and kept: 防撤回 shows it there too.
+    // A thread whose reply was recalled and kept: "Keep recalled messages" shows it there too.
     private val threadRoot = message("t", "周四评审的议程", mine = false).copy(replyCount = 1, thread = LarkThreadSource {
         LarkThreadPage(listOf(message("r1", "这条回复撤回了但留着", mine = false).copy(recalled = true, retained = true, system = true)), false, null)
     })

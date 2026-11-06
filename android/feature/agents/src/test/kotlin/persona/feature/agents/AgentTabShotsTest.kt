@@ -36,8 +36,8 @@ import java.io.File
 import java.time.Instant
 
 /**
- * A herdr tab of three agents (#2320; the mock hub's MOCK_TAB_PANES): the 发起者 working, a Codex pane it split off
- * waiting on a dialog, a Claude pane done; beside it a tab of one agent and a tab of two peers. The Agents list (按机器)
+ * A herdr tab of three agents (#2320; the mock hub's MOCK_TAB_PANES): the launcher working, a Codex pane it split off
+ * waiting on a dialog, a Claude pane done; beside it a tab of one agent and a tab of two peers. The Agents list ("By machine")
  * and the space page in every style, light and dark; PNGs in `build/tab-shots/`.
  */
 @RunWith(AndroidJUnit4::class)

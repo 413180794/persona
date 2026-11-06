@@ -224,7 +224,7 @@ fun HubCard(
 // ------------------------------------------------------------------ app navigation
 
 /**
- * A top-level destination. [badge] counts things waiting for the user; [badgeText] replaces it (体验); [dot] is a
+ * A top-level destination. [badge] counts things waiting for the user; [badgeText] replaces it ("Demo"); [dot] is a
  * mark without a number (extensions' badges that are words, not counts).
  */
 @Immutable

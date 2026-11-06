@@ -61,7 +61,7 @@ class EndpointOverridesStoreTest {
         }
         withStore(file) { store ->
             assertEquals(listOf(manual, ipv6, pairing), store.value.value.order)
-            // 恢复默认顺序 is stored as no order at all.
+            // "Restore default order" is stored as no order at all.
             assertEquals(EndpointOverrides(manual = listOf(manual)), store.update { it.copy(disabled = emptySet(), order = null) })
         }
         withStore(file) { assertEquals(EndpointOverrides(manual = listOf(manual)), it.value.value) }

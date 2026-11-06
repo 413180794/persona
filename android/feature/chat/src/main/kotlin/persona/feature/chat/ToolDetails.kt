@@ -181,7 +181,7 @@ private fun AskUserChoice(label: String, picked: Boolean) {
 }
 
 /**
- * 「查看子 Agent」 under a Task / Agent step (iOS `WorkStepView`): its sub-agent's read-only conversation, running or
+ * "View sub-agent" under a Task / Agent step (iOS `WorkStepView`): its sub-agent's read-only conversation, running or
  * done; nothing when the session does not list a sub-agent for the call.
  */
 @Composable

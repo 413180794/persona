@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 「批准第一个待处理」: only its dialog shows, over whatever was on screen. -->
+    <!-- "Approve first pending": only its dialog shows, over whatever was on screen. -->
     <style name="Theme.Jarvis.Shortcut" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>

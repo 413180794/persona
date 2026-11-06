@@ -13,9 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The three interface styles (设置 › 界面风格). Pages are written once against the components in this module;
+ * The three interface styles (Settings › Interface style). Pages are written once against the components in this module;
  * each style supplies its own tokens, component skins and app chrome. Light and dark follow the system unless
- * 深浅色 ([ColorSchemeChoice]) pins one; the accent can be another 主题色 ([ThemeColor]).
+ * Light/dark ([ColorSchemeChoice]) pins one; the accent can be another theme color ([ThemeColor]).
  */
 enum class AppStyle(val key: String, @StringRes val labelRes: Int, @StringRes val summaryRes: Int) {
     Glass("glass", R.string.designsystem_style_glass, R.string.designsystem_style_glass_summary),
@@ -58,17 +58,17 @@ class AppStyleStore(context: Context) {
         currentTheme.value = key
     }
     private val currentPersona = MutableStateFlow(preferences.getString(KEY_PERSONA, null) ?: PersonaDesign.Default.id)
-    /** 设置 › 外观 › 形象: a built-in's id or a hub package's ([PersonaStore]), kept while the package is away. */
+    /** Settings › Appearance › Persona look: a built-in's id or a hub package's ([PersonaStore]), kept while the package is away. */
     val personaId: StateFlow<String> = currentPersona.asStateFlow()
     private val currentFace = MutableStateFlow(PersonaDesign.fromId(currentPersona.value))
     /** The built-in face to draw: the chosen one, or the default while a package is chosen (it shows over this). */
     val face: StateFlow<PersonaDesign> = currentFace.asStateFlow()
 
     private val currentScheme = MutableStateFlow(ColorSchemeChoice.fromKey(preferences.getString(KEY_SCHEME, null)))
-    /** 设置 › 外观 › 深浅色: the system's (the default), or always light or dark. */
+    /** Settings › Appearance › Light/Dark: the system's (the default), or always light or dark. */
     val scheme: StateFlow<ColorSchemeChoice> = currentScheme.asStateFlow()
     private val currentColor = MutableStateFlow(ThemeColor.fromKey(preferences.getString(KEY_COLOR, null)))
-    /** 设置 › 外观 › 主题色: the style's own (the default), the persona's, or a fixed accent. */
+    /** Settings › Appearance › Theme color: the style's own (the default), the persona's, or a fixed accent. */
     val color: StateFlow<ThemeColor> = currentColor.asStateFlow()
 
     init {

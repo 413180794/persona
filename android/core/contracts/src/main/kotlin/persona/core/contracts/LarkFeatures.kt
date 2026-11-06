@@ -3,7 +3,7 @@ package persona.core.contracts
 /**
  * What the hub offers of Feishu through the Lark extension (#1530; iOS `LarkFeatures`, web `larkOn`). That path is an extension's:
  * the hub has `/api/v1/lark/…` only while the extension is installed, and the extension adds `lark` (the chats, the native
- * readers of Feishu documents and company-feed posts, 设置 › 连接器 › 飞书, every `/api/v1/lark/…` route) and
+ * readers of Feishu documents and company-feed posts, Settings › Connectors › Lark, every `/api/v1/lark/…` route) and
  * `lark_moments` (the company feed) to the hello's features. Without them nothing that needs those routes shows:
  * Feishu links open as ordinary web pages. Inbox items with `lark` / `doc` / `moment` blocks come from the extension only,
  * so they are drawn as they come.
@@ -12,7 +12,7 @@ package persona.core.contracts
  * served Feishu itself and said so with `lark_attachments` but not `lark`.
  */
 data class LarkFeatures(
-    /** `lark`: the chats, the Feishu account in 设置, the native document reader. */
+    /** `lark`: the chats, the Feishu account in Settings, the native document reader. */
     val chats: Boolean,
     /** `lark_moments`: company-feed posts open in the native reader (only with [chats]). */
     val moments: Boolean,

@@ -34,7 +34,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.launch
 
-// Draws an extension's View (docs/extensions.md「声明式 UI」「UI 插槽」) with this app's design system: each kind of item as
+// Draws an extension's View (docs/extensions.md "Declarative UI" "UI slots") with this app's design system: each kind of item as
 // a component of the style in use (charts and number grids from the design system's), tones as role colours. The
 // extension gives no colour, size or icon. A kind this app does not know is skipped.
 
@@ -158,7 +158,7 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
         if (title != null && showTitles) item("$key-s$s-title") { JSectionHeader(title) }
         else if (s > 0) item("$key-s$s-gap") { Spacer(Modifier.padding(top = Tokens.Space.l)) }
         val items = section.items.filter(ExtensionViewText::drawable)
-        // The extension's keys keep a list's place when it is drawn again (a page's 加载更多, a search).
+        // The extension's keys keep a list's place when it is drawn again (a page's "Load more", a search).
         val keys = ExtensionViewText.itemKeys(items)
         var i = 0
         while (i < items.size) {

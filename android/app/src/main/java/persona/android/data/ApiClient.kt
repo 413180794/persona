@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 class HubException(val status: Int, override val message: String, val code: String? = null, val fields: JsonObject? = null) :
     Exception(message)
 
-/** REST calls to the hub (docs/protocol.md「REST」). One instance per paired hub. */
+/** REST calls to the hub (docs/protocol.md "REST"). One instance per paired hub. */
 class ApiClient(
     val baseUrl: String,
     val token: String,

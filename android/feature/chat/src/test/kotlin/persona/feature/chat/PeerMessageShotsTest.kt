@@ -28,7 +28,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * A message another Claude session sent (「来自 名字」) draws its words as Markdown: a teammate's status note (which the
+ * A message another Claude session sent ("From <name>") draws its words as Markdown: a teammate's status note (which the
  * hub turns from JSON into Markdown) and a plain report. Drawn on the JVM with Robolectric's native graphics in every
  * style, light and dark. PNGs in `build/peer-shots/` (or `-Dpersona.shots=<dir>`).
  */

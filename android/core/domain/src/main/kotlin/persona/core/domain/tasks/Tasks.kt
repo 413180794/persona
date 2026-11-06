@@ -54,20 +54,20 @@ data class DayLabel(val date: LocalDate, val kind: Kind) {
     enum class Kind { Today, Yesterday, ThisYear, OtherYear }
 }
 
-/** A draft still holding a blank to fill in ([placeholder], 「【对方姓名】」) is not sent. */
+/** A draft still holding a blank to fill in ([placeholder], a full-width-bracketed recipient name) is not sent. */
 class DraftPlaceholderLeft(val placeholder: String) : IllegalStateException("draft still has a blank: $placeholder"), CoreTextFailure {
     override val text: CoreText get() = CoreText.of(Key.DraftPlaceholderLeft, placeholder)
     override val message: String get() = CoreText.words(text)
 }
 
-/** Where a task is, from its todo and its agents' states (docs/todos.md「状态计算规则」). */
+/** Where a task is, from its todo and its agents' states (docs/todos.md "State rules"). */
 enum class TaskState(val label: CoreText, val rank: Int) {
     NeedsYou(CoreText.of(Key.TaskNeedsYou), 0),
-    /** An agent's turn was cut off by the model service (#1516): not done; 继续 tells it to go on. */
+    /** An agent's turn was cut off by the model service (#1516): not done; "Continue" tells it to go on. */
     Interrupted(CoreText.of(Key.TaskInterrupted), 0),
     Working(CoreText.of(Key.TaskWorking), 1), NotStarted(CoreText.of(Key.TaskStarting), 1), Unread(CoreText.of(Key.TaskUnread), 2),
     Followup(CoreText.of(Key.TaskStopped), 3), Done(CoreText.of(Key.TaskDone), 4),
-    /** Its agent did not start (#1077): the hub ended it with why; 重试 starts it again (#1396). */
+    /** Its agent did not start (#1077): the hub ended it with why; "Retry" starts it again (#1396). */
     Failed(CoreText.of(Key.TaskFailed), 4);
 
     companion object {
@@ -92,7 +92,7 @@ fun receiptState(item: FeedItem): String = when (val st = item.field("state")) {
     else -> if (ApiErrorInfo.parse(item.field("summary")) != null) "interrupted" else "done"
 }
 
-/** Why the model service cut the agent off (#1516), in words, and whether 继续 can help; null when it was not. */
+/** Why the model service cut the agent off (#1516), in words, and whether "Continue" can help; null when it was not. */
 data class Interruption(val reason: CoreText, val canContinue: Boolean) {
     companion object {
         fun of(s: Session?): Interruption? {
@@ -103,7 +103,7 @@ data class Interruption(val reason: CoreText, val canContinue: Boolean) {
     }
 }
 
-/** What a task's lead agent says or does now (iOS TaskNow, web taskNow; docs/unified-entry.md「任务卡片的进度」, #1583). */
+/** What a task's lead agent says or does now (iOS TaskNow, web taskNow; docs/unified-entry.md "Task card progress", #1583). */
 sealed interface TaskNow {
     val text: String
 
@@ -235,7 +235,7 @@ object AssistantLines {
 
     fun time(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
-    /** 今天 · 11月3日 周二, 昨天 · …, or the date: which one, and whether the year shows (the app words it). */
+    /** "Today · Tue, Nov 3", "Yesterday · …", or the date: which one, and whether the year shows (the app words it). */
     fun dayLabel(date: LocalDate, today: LocalDate = LocalDate.now()): DayLabel = DayLabel(date, when (date) {
         today -> DayLabel.Kind.Today
         today.minusDays(1) -> DayLabel.Kind.Yesterday
@@ -266,14 +266,14 @@ val TaskState.isRemovable: Boolean get() = this != TaskState.Working && this != 
 
 /**
  * The to-dos last read from this pairing's hub, kept on the phone (iOS TodoStore's StateCache): a cold start or an open
- * without the hub shows them instead of 暂无待办 until the hub answers.
+ * without the hub shows them instead of "No to-dos" until the hub answers.
  */
 interface TodoCache {
     suspend fun read(): List<Todo>?
     suspend fun write(todos: List<Todo>)
 }
 
-/** How long a 今天 card is held before an open asks the hub again whether its day has moved on (#5194). */
+/** How long a Today card is held before an open asks the hub again whether its day has moved on (#5194). */
 private val todayRecheck = Duration.ofMinutes(10)
 
 class TasksStore(
@@ -299,12 +299,12 @@ class TasksStore(
     val feeds: StateFlow<Map<String, List<FeedItem>>> = _feeds.asStateFlow()
     /** Conversations whose whole feed has been read once: a live item alone does not make a later load incremental (#4689). */
     private val loaded = MutableStateFlow<Set<String>>(emptySet())
-    /** Conversation → the task the next message goes straight to (「对「xx」说」). */
+    /** Conversation → the task the next message goes straight to ("Say to 'xx'"). */
     val routes = MutableStateFlow<Map<String, String>>(emptyMap())
     val busy = MutableStateFlow<Set<String>>(emptySet())
-    /** Message cards (inbox item ids) put off with 稍后. */
+    /** Message cards (inbox item ids) put off with "Later". */
     val later = MutableStateFlow<Set<String>>(emptySet())
-    /** Conversation → when the 今天 card was last asked for, and the day of the card the hub gave (null while asking). */
+    /** Conversation → when the Today card was last asked for, and the day of the card the hub gave (null while asking). */
     private val todayAsked = HashMap<String, Pair<Instant, LocalDate?>>()
     /** This hub's assistant cards (docs/assistant-views.md): live cards, answers and registered reply blocks. */
     val cards = AssistantViewStore()
@@ -424,7 +424,7 @@ class TasksStore(
 
     /** A read of the to-dos has answered: until then nothing tells whether the hub knows projects. */
     @Volatile private var todosLoaded = false
-    /** The hub answered 挂到待办 with its router's 404: it has no such route (iOS TodosLogic.isLegacySpacesRoute). */
+    /** The hub answered "Attach to to-do" with its router's 404: it has no such route (iOS TodosLogic.isLegacySpacesRoute). */
     @Volatile private var legacySpaces = false
 
     /**
@@ -435,7 +435,7 @@ class TasksStore(
         get() = todosLoaded && !legacySpaces && _todos.value.let { list -> list.isEmpty() || list.any { it.spaces != null } }
 
     /**
-     * 挂到待办 / 移出待办 a whole project. A project is on one todo at a time: linking it takes it, and the agents it
+     * "Attach to to-do" / "Remove from to-do" a whole project. A project is on one todo at a time: linking it takes it, and the agents it
      * brought, off any other first. The change shows at once; the hub then supplies the agents it attached.
      */
     suspend fun setTodoSpace(todoId: String, machineId: String, space: String, linked: Boolean) {
@@ -482,8 +482,8 @@ class TasksStore(
     val mainConversation = MutableStateFlow<String?>(null)
 
     /**
-     * The 今天 card, for the main conversation only (as iOS). A conversation that isn't the one held asks the hub again:
-     * 新建主对话, a move to another machine or another device replaces the main (#4690).
+     * The "Today" card, for the main conversation only (as iOS). A conversation that isn't the one held asks the hub again:
+     * "New main chat", a move to another machine or another device replaces the main (#4690).
      */
     fun loadTodayIfMain(conversation: String) {
         scope.launch {
@@ -545,7 +545,7 @@ class TasksStore(
         agentsOf(todo, sessions).minWithOrNull(compareBy<Session>({ it.agentState != AgentState.NeedsYou }, { !it.interrupted },
             { it.agentState.priority }).thenByDescending { it.updatedAt.orEmpty() })
 
-    /** [edits] is 改一下: the plan's tasks as the user changed them, by index (null: as planned). */
+    /** [edits] is "Edit": the plan's tasks as the user changed them, by index (null: as planned). */
     fun startPlan(plan: TaskPlan, remember: Boolean, onError: (Throwable) -> Unit, edits: List<PlanTask>? = null) = act(plan.id, onError) {
         val p = if (edits == null) api.startPlan(plan.id, remember) else api.startPlan(plan.id, remember, edits)
         _plans.update { it + (p.id to p) }; reloadTodos()
@@ -556,10 +556,10 @@ class TasksStore(
     }
 
     /**
-     * 重试 on a task whose agent did not start (#1396): the hub starts the same task again in the same todo, which it
+     * "Retry" on a task whose agent did not start (#1396): the hub starts the same task again in the same todo, which it
      * answers reopened — put in at once, so its card shows it starting where it was. Taps while one is on its way do
      * nothing ([busy] under [retryKey]); the hub starts one agent however many arrive. On a task the model service cut
-     * off (#1516) it is 继续: the hub tells its agent to go on, once.
+     * off (#1516) it is "Continue": the hub tells its agent to go on, once.
      */
     fun retryTask(todo: Todo, onError: (Throwable) -> Unit) = act(retryKey(todo.id), onError) {
         val t = api.retryTask(todo.id)
@@ -598,7 +598,7 @@ class TasksStore(
     }
 
     /**
-     * 发送 on a message card: the (edited) draft goes out through the inbox; the hub records it on the card, whose
+     * "Send" on a message card: the (edited) draft goes out through the inbox; the hub records it on the card, whose
      * `assistant_feed` event draws it sent (put in at once here too). Taps while one is on its way, and on a card
      * already sent or dealt with elsewhere (`filed_at`, #5095), do nothing ([busy] under the card's id); a draft with a
      * blank to fill in is not sent.
@@ -622,14 +622,14 @@ class TasksStore(
     fun putOff(itemId: String) = later.update { it + itemId }
 
     companion object {
-        /** The [busy] key of a task's 重试. */
+        /** The [busy] key of a task's "Retry". */
         fun retryKey(todoId: String) = "retry:$todoId"
     }
 }
 
 /**
  * A 404 from the hub's router rather than its handler (iOS TodosLogic.isLegacySpacesRoute): no code at all, or the
- * generic `not_found` with「Not Found」. A missing to-do is a 404 with its own message, and keeps the action.
+ * generic `not_found` with "Not Found". A missing to-do is a 404 with its own message, and keeps the action.
  */
 internal fun isLegacySpacesRoute(error: Throwable): Boolean {
     fun read(name: String): Any? = runCatching { error::class.java.methods.firstOrNull { it.name == name && it.parameterCount == 0 }?.invoke(error) }.getOrNull()

@@ -29,8 +29,8 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 
 /**
- * 设置 › 管理者 (docs/managers.md): the hub's managers, each a whole assistant, where each runs and whether it is
- * connected; 新建管理者 gives an install code. The list follows the hub's `managers` pushes while it is open.
+ * Settings › Managers (docs/managers.md): the hub's managers, each a whole assistant, where each runs and whether it is
+ * connected; New manager gives an install code. The list follows the hub's `managers` pushes while it is open.
  */
 @Composable
 internal fun ManagersPage(
@@ -93,7 +93,7 @@ internal fun ManagersContent(
     }
 }
 
-/** A manager's name with 默认, its status with the dot, and where it runs (its page has a row for that instead). */
+/** A manager's name with Default, its status with the dot, and where it runs (its page has a row for that instead). */
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.ManagerSummary(manager: HubManager, now: Instant, where: Boolean = true) {
     val res = LocalResources.current
@@ -115,8 +115,8 @@ private fun androidx.compose.foundation.layout.RowScope.ManagerSummary(manager: 
 private enum class ManagerAsk { Rename, Move, Delete }
 
 /**
- * 设置 › 管理者 › one: its status, where it runs, its version and when it was last connected; 改名, 设为默认, 换个地方装
- * (新的安装码 while installing) and 删除 (取消安装), each only where the hub would take it.
+ * Settings › Managers › one: its status, where it runs, its version and when it was last connected; Rename, Set as default, Install elsewhere
+ * (New installation code while installing) and Delete (Cancel installation), each only where the hub would take it.
  */
 @Composable
 internal fun ManagerPage(managers: HubManagers?, managerId: String, onBack: () -> Unit, ticking: Boolean = true) {
@@ -231,7 +231,7 @@ internal fun ManagerContent(
     }
 }
 
-/** 新建管理者 / 改名: a name, 1 to 40 characters; the hub's refusal shows under the field. */
+/** New manager / Rename: a name, 1 to 40 characters; the hub's refusal shows under the field. */
 @Composable
 private fun NameDialog(
     title: String, confirm: String, initial: String, busy: Boolean, failure: ResText?, onDismiss: () -> Unit, onConfirm: (String) -> Unit,
@@ -257,8 +257,8 @@ private fun ManagerCodeSheetHost(state: ManagersState, now: Instant, model: Mana
 }
 
 /**
- * 安装码: the code to copy and its countdown (a new one once it ran out), and the hub's install commands when it
- * gives them, else what to do with the code; 完成.
+ * Installation code: the code to copy and its countdown (a new one once it ran out), and the hub's install commands when it
+ * gives them, else what to do with the code; Done.
  */
 @Composable
 internal fun ColumnScope.ManagerCodeBody(sheet: ManagerCodeSheet, now: Instant, busy: Boolean, failure: ResText?, onNewCode: () -> Unit, onDone: () -> Unit) {
@@ -289,7 +289,7 @@ internal fun ColumnScope.ManagerCodeBody(sheet: ManagerCodeSheet, now: Instant, 
     }
 }
 
-/** A label with 复制 on its right, over the text in the code face. */
+/** A label with Copy on its right, over the text in the code face. */
 @Composable
 private fun CopyBlock(label: String, text: String, small: Boolean = false) {
     val context = LocalContext.current

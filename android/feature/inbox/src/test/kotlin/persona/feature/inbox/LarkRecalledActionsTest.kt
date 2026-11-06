@@ -25,7 +25,7 @@ import persona.core.contracts.api.InboxEntry
 import persona.core.designsystem.PersonaTheme
 
 /**
- * #5306: a recalled message 防撤回 kept is shown in full, yet it takes no reactions, replies or card writes
+ * #5306: a recalled message Keep recalled messages kept is shown in full, yet it takes no reactions, replies or card writes
  * (docs/protocol.md, `retained`), as on iOS. A live message beside it keeps them, so the checks can fail.
  */
 @RunWith(AndroidJUnit4::class)

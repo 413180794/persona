@@ -19,9 +19,9 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.terminal.TerminalText
 
 /**
- * 选择文本: the terminal (the rows kept while driving it, then the screen) as plain text over the whole screen. Rows
+ * "Select text": the terminal (the rows kept while driving it, then the screen) as plain text over the whole screen. Rows
  * stay rows (monospaced, never folded, scrolled both ways) so columns and frames line up as on screen; a long press
- * selects any part, 全部拷贝 copies everything. iOS selects on the grid itself; Android borrows a text page, as the old
+ * selects any part, "Copy all" copies everything. iOS selects on the grid itself; Android borrows a text page, as the old
  * Android app did.
  */
 @Composable
@@ -43,7 +43,7 @@ internal fun TerminalSelectText(text: String, onDismiss: () -> Unit) {
             if (text.isEmpty()) Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 JEmptyState(stringResource(R.string.terminal_select_empty_title), stringResource(R.string.terminal_select_empty_body), icon = PhIcons.TerminalWindow)
             } else SelectionContainer(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
-                // Shown with glyphs the monospaced face has (⏵ was an empty box); 全部拷贝 copies the terminal's own text.
+                // Shown with glyphs the monospaced face has (⏵ was an empty box); "Copy all" copies the terminal's own text.
                 val shown = remember(text) { TerminalText.readable(text) }
                 Text(shown, style = PersonaTheme.type.code, color = palette.ink, softWrap = false,
                     modifier = Modifier.padding(start = pagePadding, end = pagePadding,

@@ -46,8 +46,8 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * A model API error as a card (D6, iOS `APIErrorCard`): the reason in words with its status, 临时故障 or 要处理 and
- * 连续 N 次; tapped, the request id and session to copy, the time and the raw text. 重试 (sends 「继续」) only on the
+ * A model API error as a card (D6, iOS `APIErrorCard`): the reason in words with its status, "Temporary" or "Needs action" and
+ * "N times in a row"; tapped, the request id and session to copy, the time and the raw text. "Retry" (sends "Continue") only on the
  * newest card while the agent is idle and the error may pass by itself ([retryLine]).
  */
 @Composable
@@ -90,13 +90,13 @@ internal fun apiErrorTags(info: ApiErrorInfo, count: Int, resources: Resources):
     if (count > 1) add(ErrorTag(resources.getQuantityString(R.plurals.chat_api_error_repeated, count, count)))
 }
 
-/** 「11月2日 08:01:05」 for an item's time, in the phone's zone; null without one. */
+/** "Nov 2 08:01:05" for an item's time, in the phone's zone; null without one. */
 internal fun apiErrorTime(ts: String?, resources: Resources, zone: ZoneId = ZoneId.systemDefault()): String? = parseTime(ts)?.let {
     LocalizedFormats.format(it, LocalizedFormats.MONTH_DAY + LocalizedFormats.TIME_SECONDS, resources.configuration.locales[0], zone)
 }
 
 /**
- * The card that offers 重试: the conversation's newest line when it is an API error that may pass by itself, the agent
+ * The card that offers "Retry": the conversation's newest line when it is an API error that may pass by itself, the agent
  * is not working and the page can send. [lines] are in reading order (oldest first).
  */
 internal fun retryLine(lines: List<ChatLine>, working: Boolean, canSend: Boolean): String? {
@@ -105,7 +105,7 @@ internal fun retryLine(lines: List<ChatLine>, working: Boolean, canSend: Boolean
 }
 
 /**
- * Claude Code's "while you were away" recap (several in a row are one line): 「离开期间回顾 · 21 分钟前 ›」; tapped,
+ * Claude Code's "while you were away" recap (several in a row are one line): "While you were away · 21 min ago ›"; tapped,
  * the recaps in full in a sheet, newest first (iOS `RecapDrawer`).
  */
 @Composable
@@ -129,7 +129,7 @@ internal fun RecapLine(items: List<Item>) {
     }
 }
 
-/** 「离开期间回顾 · 21 分钟前」, with how many when there are several. */
+/** "While you were away · 21 min ago", with how many when there are several. */
 internal fun recapLabel(count: Int, newest: Instant?, now: Instant, resources: Resources): String {
     val title = if (count > 1) resources.getQuantityString(R.plurals.chat_recap_count, count, count)
         else resources.getString(R.string.chat_recap_title)

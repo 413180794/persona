@@ -16,7 +16,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * What the app changes on a machine (docs/protocol.md「REST」): its launchers, reconnecting and redeploying its node,
+ * What the app changes on a machine (docs/protocol.md "REST"): its launchers, reconnecting and redeploying its node,
  * its terminal engine, whether botmux's sessions are listed, and its whitelisted Claude Code and Codex settings. Bound to the active pairing; every call goes to the
  * hub that is paired when it is made.
  */
@@ -46,7 +46,7 @@ interface MachineManagement {
     suspend fun setEngine(machineId: String, engine: String): Machine
 
     /**
-     * `GET /api/v1/machines/{id}/botmux`: whether 同时显示 botmux 会话 is on for the machine (#2575; on unless hub.json's
+     * `GET /api/v1/machines/{id}/botmux`: whether "Also show botmux sessions" is on for the machine (#2575; on unless hub.json's
      * `machines[].botmux` or the switch turned it off). Null when the hub has no such route (an older hub): no switch.
      */
     suspend fun botmux(machineId: String): Boolean? = null
@@ -93,7 +93,7 @@ interface MachineManagement {
     suspend fun usageWindows(): List<UsageAccount> = emptyList()
 }
 
-/** One Claude Code config directory of a machine (设置 › Claude Code › 屏蔽的配置目录, docs/claude-integration.md). */
+/** One Claude Code config directory of a machine (Settings › Claude Code › "Hidden config directories", docs/claude-integration.md). */
 @Serializable
 data class ClaudeDir(
     /** As Claude Code was given it ("~/…" or absolute). */

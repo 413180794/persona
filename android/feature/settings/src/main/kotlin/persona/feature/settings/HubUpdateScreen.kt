@@ -32,8 +32,8 @@ import persona.core.navigation.MachineDetailRoute
 import kotlinx.coroutines.launch
 
 /**
- * 设置 › hub 版本 (docs/hub-update.md「App 里」, iOS `HubSettingsPage`, the web's `HubSettings`): the hub's version and
- * channel, checking for and installing a release, what an update waits for (with 现在就更新), a Docker hub's commands,
+ * Settings › Hub version (docs/hub-update.md "In the app", iOS `HubSettingsPage`, the web's `HubSettings`): the hub's version and
+ * channel, checking for and installing a release, what an update waits for (with "Update now"), a Docker hub's commands,
  * auto-update, the personad on each computer, and the history. Follows the hub's `hub_update` pushes.
  */
 @Composable
@@ -41,7 +41,7 @@ internal fun HubUpdatePage(
     updates: HubUpdates?, machines: List<Machine>, onBack: () -> Unit,
     /** The hub's connection is up: read again each time it comes back (after a restart the pushes may have been missed). */
     online: Boolean = true,
-    /** Opens a computer's page (重新部署 lives there); null where there is no navigation host. */
+    /** Opens a computer's page ("Redeploy" lives there); null where there is no navigation host. */
     onMachine: ((NavKey) -> Unit)? = null,
 ) {
     if (updates == null) {
@@ -71,7 +71,7 @@ internal fun HubUpdateContent(
                 state.actionError?.let { item("action-error") { JInlineStatus(it.text(), Modifier.padding(top = Tokens.Space.m), tone = InlineTone.Failed) } }
                 // Told once that it updates itself (the hub forgets the line once seen or once auto-update was chosen).
                 if (s.autoNotice) item("auto-notice") {
-                    // Like the web's line: 关闭 turns auto-update off, 知道了 only hides this (both tell the hub it was seen).
+                    // Like the web's line: "Turn off" turns auto-update off, "Got it" only hides this (both tell the hub it was seen).
                     JCard(Modifier.padding(top = Tokens.Space.m)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                             JIcon(PhIcons.Info, null, tint = PersonaTheme.palette.accent, decorative = true)
@@ -166,7 +166,7 @@ private fun LazyListScope.update(s: HubUpdateStatus, state: HubUpdateState, reso
     if (s.canUpdate) item("update-footer") { Note(stringResource(R.string.settings_hub_update_footer)) }
 }
 
-/** The update under way, and while it waits for idle what it waits for, with 现在就更新. */
+/** The update under way, and while it waits for idle what it waits for, with "Update now". */
 @Composable
 private fun Progress(s: HubUpdateStatus, onNow: () -> Unit) {
     val waiting = s.state == "waiting_idle" && s.busy.isNotEmpty()

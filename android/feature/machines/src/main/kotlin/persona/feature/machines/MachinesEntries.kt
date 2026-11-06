@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.flowOf
 
 /**
  * Supply the same hub-scoped repositories used by Agents; replacing a pairing replaces this identity. Without
- * [management] (体验模式) the pages only watch: no launchers, 重新连接, 重新部署 or engine choice.
+ * [management] (demo mode) the pages only watch: no launchers, "Reconnect", "Redeploy" or engine choice.
  */
 fun EntryProviderScope<NavKey>.machinesEntries(
     navigator: Navigator,
@@ -30,11 +30,11 @@ fun EntryProviderScope<NavKey>.machinesEntries(
     /** Whether a launcher's row opens its page (the hub manages extensions, which may draw a section there). */
     launcherPages: Flow<Boolean> = flowOf(false),
     /**
-     * The sections extensions draw on a machine's page (`machine_section`, docs/extensions.md「UI 插槽」), as the page's
+     * The sections extensions draw on a machine's page (`machine_section`, docs/extensions.md "UI slots"), as the page's
      * list items after the machine's own; built by the settings module, which draws extensions' views.
      */
     extensionSections: (@Composable (String) -> (LazyListScope.() -> Unit))? = null,
-    /** 添加电脑 and 确认电脑 (docs/onboarding.md 4.2); null in 体验模式. */
+    /** "Add a computer" and "Confirm computer" (docs/onboarding.md 4.2); null in demo mode. */
     computers: ComputerPairing? = null,
 ) {
     entry<MachinesRoute> { MachinesRouteContent(null, navigator, metrics, sessions, management, launcherPages, null, computers) }
@@ -48,7 +48,7 @@ private fun MachinesRouteContent(
     launcherPages: Flow<Boolean>, extensionSections: (@Composable (String) -> (LazyListScope.() -> Unit))?, computers: ComputerPairing?,
 ) {
     val launchers by launcherPages.collectAsState(false)
-    // 添加电脑 opens its page only on a hub with machines_add; an older one keeps the help dialog.
+    // "Add a computer" opens its page only on a hub with machines_add; an older one keeps the help dialog.
     val canAdd by remember(computers) { computers?.canAdd ?: flowOf(false) }.collectAsState(false)
     key(api, sessions, management) {
         val model = viewModel(key = "machines:${System.identityHashCode(api)}:${id.orEmpty()}") {
@@ -66,7 +66,7 @@ private fun MachinesRouteContent(
         val resources = LocalResources.current
         LaunchedEffect(actions, feedback, resources) { actions?.notices?.collect { feedback?.notice(it.text(resources)) } }
         LaunchedEffect(health, feedback, resources) { health?.notices?.collect { feedback?.notice(it.text(resources)) } }
-        // 订阅额度 on the overview, once a minute while it is in front.
+        // "Subscription limits" on the overview, once a minute while it is in front.
         if (id == null && health != null) LaunchedEffect(health, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { health.pollUsage() } }
         val extensions = if (id != null && extensionSections != null) extensionSections(id) else null
         MachinesScreen(id, model, navigator, actions, launcherPages = launchers, extensionSections = extensions, health = health, adds = computers != null, canAdd = canAdd)

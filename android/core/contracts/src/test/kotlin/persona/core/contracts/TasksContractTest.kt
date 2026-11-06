@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The unified entry's wire shapes (docs/protocol.md「任务和对话动态」) decode, and its events enter the stream. */
+/** The unified entry's wire shapes (docs/protocol.md "Tasks and conversation activity") decode, and its events enter the stream. */
 class TasksContractTest {
     @Test fun eventsDecode() {
         assertTrue(ServerEvent.decode("""{"type":"todos"}""") is TodosEvent)

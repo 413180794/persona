@@ -43,9 +43,9 @@ import java.time.Instant
 
 /**
  * The settings pages of the and-settings parity batch (#3048), drawn on the JVM with Robolectric's native graphics in
- * every style, light and dark: the settings home (模型供应商, 助手, 存储空间, the signed-in Mac), 界面风格 with 主题色 and
- * 深浅色, 通知 with 手机静音, 已登录的 Mac, 模型供应商 and one provider, 从 ~/.zshrc 导入, 存储空间, and Claude Code 设置 with
- * 屏蔽的配置目录. Written to `build/parity-shots/` (or `-Dpersona.shots=<dir>`) to look at.
+ * every style, light and dark: the settings home ("Model providers", "Assistant", "Storage", the signed-in Mac), "Interface style" with "Theme color" and
+ * "Appearance", "Notifications" with "Mute phone", the signed-in Macs, "Model providers" and one provider, "Import from ~/.zshrc", "Storage", and "Claude Code settings" with
+ * "Blocked config directories". Written to `build/parity-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -153,7 +153,7 @@ class SettingsParityShotsTest {
     @Test fun drawsTheParityPagesInEveryStyle() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val store = AppStyleStore(context)
-        // Something to measure on 存储空间.
+        // Something to measure on "Storage".
         fun seed(path: String, bytes: Int) = File(context.cacheDir, path).apply { parentFile!!.mkdirs(); writeBytes(ByteArray(bytes)) }
         seed("hub-data/h/1/images/a.png", 3_400_000); seed("hub-data/h/1/inbox-media/b.jpg", 1_200_000)
         seed("hub-data/h/1/items.db", 2_100_000); seed("markdown-render/c.png", 400_000)

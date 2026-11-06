@@ -23,16 +23,16 @@ internal fun spaceCompanions(session: Session?, sessions: List<Session>): List<S
         other.machineId == session.machineId && other.key != session.key && !other.assistant &&
             if (space != null) (other.spaceId?.takeIf(String::isNotBlank) ?: other.workspaceId) == space
             else !session.spaceName.isNullOrBlank() && other.spaceName == session.spaceName
-    // tab by tab, a tab's agents together by their place in it (#2515, as the web's tab groups): the 发起者 first
+    // tab by tab, a tab's agents together by their place in it (#2515, as the web's tab groups): the launcher first
     }.sortedWith(compareBy<Session> { it.slotIndex ?: Int.MAX_VALUE }.thenBy { it.slotId.orEmpty() }.then(PaneOrder))
 }
 
-/** How a companion sits in its tab's group (#2515): the 发起者, one of the panes it split off, or alone. */
+/** How a companion sits in its tab's group (#2515): the launcher, one of the panes it split off, or alone. */
 internal enum class CompanionPlace { Launcher, Branch, Alone }
 
 /**
  * Each companion's place, counting the open session too: a tab of two agents, this one and a companion, still has its
- * 发起者 (launcherOf). Without a launcher (the top-left pane is a shell) the tab's agents are peers, all [Alone].
+ * launcher (launcherOf). Without a launcher (the top-left pane is a shell) the tab's agents are peers, all [Alone].
  */
 internal fun companionPlaces(session: Session?, companions: List<Session>): Map<SessionKey, CompanionPlace> {
     val all = (listOfNotNull(session) + companions).filter { it.tabKey != null }
@@ -84,7 +84,7 @@ internal class ChatChromeState(
         }
     }
 
-    /** 会话信息 (GET …/info); fails when the actions are not wired, which the sheet says. */
+    /** "Session info" (GET …/info); fails when the actions are not wired, which the sheet says. */
     suspend fun info(session: Session): SessionInfo =
         actions?.info(session) ?: throw UnsupportedOperationException(res.getString(R.string.chat_action_info_unavailable))
 

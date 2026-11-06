@@ -15,7 +15,7 @@ import persona.core.contracts.Machine
 import persona.core.contracts.api.*
 import java.time.Instant
 
-/** 这台电脑能做什么 as features (web lib/node-health.ts) and 订阅额度's arithmetic (web lib/usage-windows.ts). */
+/** "What this computer can do" as features (web lib/node-health.ts) and "Subscription limits"'s arithmetic (web lib/usage-windows.ts). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MachineHealthTest {
     @Before fun main() = kotlinx.coroutines.Dispatchers.setMain(UnconfinedTestDispatcher())

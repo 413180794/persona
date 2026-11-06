@@ -124,7 +124,7 @@ internal fun parsePhotoId(id: String): Pair<String, Long>? {
     return match.groupValues[2].toLongOrNull()?.let { match.groupValues[1] to it }
 }
 
-/** A photo in a screenshots folder (Screenshots, or the 截屏 / 截图 folders some Chinese ROMs use). */
+/** A photo in a screenshots folder (Screenshots, or the Chinese-named screenshot folders some Chinese ROMs use). */
 internal fun isScreenshot(path: String?): Boolean =
     path != null && (path.contains("screenshot", true) || path.contains("截屏") || path.contains("截图"))  // i18n-ignore: matches folder names of Chinese phones
 

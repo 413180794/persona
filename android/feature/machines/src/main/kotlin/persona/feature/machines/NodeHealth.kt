@@ -6,7 +6,7 @@ import persona.core.contracts.api.DoctorCheck
 import persona.core.contracts.api.DoctorReport
 
 /*
- * 这台电脑能做什么 (docs/machines.md「自检」, the web's lib/node-health.ts): what `personad node doctor` finds on a computer,
+ * "What this computer can do" (docs/machines.md "Self-check", the web's lib/node-health.ts): what `personad node doctor` finds on a computer,
  * read as features. Each feature stands on a set of the node's checks and takes the worst state among them; the raw
  * list stays one tap away.
  */
@@ -21,9 +21,9 @@ private class FeatureSpec(
     @StringRes val name: Int,
     @StringRes val detail: Int,
     val checks: List<String>,
-    /** Something a computer may well not use: a warning alone means 未启用. */
+    /** Something a computer may well not use: a warning alone means "Off". */
     val optional: Boolean = false,
-    /** For an optional one: whether this computer needs it, which turns the warning into 有问题. */
+    /** For an optional one: whether this computer needs it, which turns the warning into "Broken". */
     val needed: ((engine: String) -> Boolean)? = null,
 )
 
@@ -41,7 +41,7 @@ private val Features = listOf(
     FeatureSpec("runtimes", R.string.machines_health_runtimes, R.string.machines_health_runtimes_detail, listOf("runtime.sock"), optional = true),
 )
 
-/** Why a feature is not ready: a resource (a generated file 修复 rewrites) or the node's own words. */
+/** Why a feature is not ready: a resource (a generated file "Fix" rewrites) or the node's own words. */
 internal sealed interface HealthNote {
     data class Res(@StringRes val id: Int) : HealthNote
     data class Plain(val text: String) : HealthNote
@@ -61,7 +61,7 @@ private fun rank(status: String) = when (status) { "fail" -> 2; "warn" -> 1; els
 private fun worst(checks: List<DoctorCheck>): DoctorCheck? =
     checks.filter { it.status != "ok" }.maxByOrNull { rank(it.status) }
 
-/** A stale or missing generated file has a fix here (修复), so the node's hint, which names the command line, is not repeated. */
+/** A stale or missing generated file has a fix here ("Fix"), so the node's hint, which names the command line, is not repeated. */
 private fun noteOf(check: DoctorCheck?): HealthNote? = when {
     check == null -> null
     check.state == "stale" -> HealthNote.Res(R.string.machines_health_note_stale)
@@ -71,7 +71,7 @@ private fun noteOf(check: DoctorCheck?): HealthNote? = when {
 
 /**
  * The report as features, in a fixed order. A feature none of whose checks the report has (an older node reports fewer)
- * is left out; a check no feature covers and that is not fine makes 其他检查, so nothing hides.
+ * is left out; a check no feature covers and that is not fine makes "Other checks", so nothing hides.
  */
 internal fun deriveFeatures(report: DoctorReport, engine: String = "herdr"): List<FeatureView> {
     val byName = report.checks.associateBy { it.name }
@@ -93,10 +93,10 @@ internal fun deriveFeatures(report: DoctorReport, engine: String = "herdr"): Lis
         if (w.status == "fail") FeatureState.Broken else FeatureState.Partial, rest, noteOf(w))
 }
 
-/** Features that are broken or partly working (一切正常 / N 项功能需要处理), and the ones not set up. */
+/** Features that are broken or partly working ("Everything works" / N features need attention), and the ones not set up. */
 internal fun attentionCount(features: List<FeatureView>) = features.count { it.state == FeatureState.Broken || it.state == FeatureState.Partial }
 
-/** The checks 修复 would put right: Persona's own generated files that are stale or missing. */
+/** The checks "Fix" would put right: Persona's own generated files that are stale or missing. */
 internal fun fixableChecks(report: DoctorReport) = report.checks.filter { it.state == "stale" || it.state == "missing" }
 
 /** The user's own settings the node only looks at: a row of information, not a feature. */

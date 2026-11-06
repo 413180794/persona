@@ -16,7 +16,7 @@ import persona.core.contracts.ClientLanguage
 import java.util.Locale
 
 /**
- * 设置 › 语言 (docs/i18n.md): follow the phone, or always Simplified Chinese, English or Japanese.
+ * Settings › Language (docs/i18n.md): follow the phone, or always Simplified Chinese, English or Japanese.
  *
  * On Android 13 and later the choice is the system's per-app language ([LocaleManager]), so it also shows in the
  * phone's own App language settings, which may change it; earlier the app keeps it itself. Either way every
@@ -28,7 +28,7 @@ object AppLanguages {
     private const val KEY = "language"
 
     private val chosen = MutableStateFlow(AppLanguage.System)
-    /** What 设置 › 语言 says; [AppLanguage.System] follows the phone. */
+    /** What Settings › Language says; [AppLanguage.System] follows the phone. */
     val choice: StateFlow<AppLanguage> = chosen.asStateFlow()
 
     /** Reads the choice; the application calls this before anything shows text. */
@@ -113,5 +113,5 @@ object AppLanguages {
     }
 }
 
-/** The activity that 设置 › 语言 recreates; null in previews and tests, where the page shows no choices. */
+/** The activity that Settings › Language recreates; null in previews and tests, where the page shows no choices. */
 val LocalLanguageHost = staticCompositionLocalOf<Activity?> { null }

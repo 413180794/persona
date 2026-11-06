@@ -37,7 +37,7 @@ data class FilesState(
     val moreLoading: Boolean = false,
     val moreError: Boolean = false,
     val noMore: Boolean = false,
-    /** A fast-forward pull is running (拉取中): the button is off and status / history loads wait for it. */
+    /** A fast-forward pull is running ("Pulling"): the button is off and status / history loads wait for it. */
     val pulling: Boolean = false,
     /** The last pull's line under the branch: brought new commits / already up to date, or the hub's reason. */
     val pullMessage: String? = null,
@@ -54,7 +54,7 @@ data class FilesState(
     /** The browser is in a folder below its top: back goes up a level before it leaves. */
     val belowRoot: Boolean get() = here.isNotEmpty() && here.trimEnd('/') != root.trimEnd('/')
     val crumbs: List<Pair<String, String>> get() = FilesPaths.crumbs(root, here)
-    /** The folder above the browser's, if any: the ⋯ menu's 上一级文件夹, which may go above the session's folder. */
+    /** The folder above the browser's, if any: the ⋯ menu's "Parent folder", which may go above the session's folder. */
     val parent: String? get() = FilesPaths.parent(here)
 }
 
@@ -66,7 +66,7 @@ class FilesController(
     private val scope: CoroutineScope,
     /** Why a load failed, in words for the page (the hub's message when the machine said why). */
     private val describe: (Throwable) -> String = { it.message.orEmpty() },
-    /** A pull's success line: 已拉取最新代码 when it brought commits, 已经是最新代码 otherwise. */
+    /** A pull's success line: "Pulled the latest code" when it brought commits, "Already up to date" otherwise. */
     private val pulled: (updated: Boolean) -> String = { if (it) "updated" else "up to date" },
     /** The hub connection: coming back online reads again what failed while it was away. */
     private val connection: StateFlow<ConnectionState>? = null,
@@ -148,7 +148,7 @@ class FilesController(
 
     /**
      * Back online: reads again whatever failed or is still on its way (the folder, Git's status or its older history,
-     * the page on top), so a dropped network does not leave the page on its error until the user taps 重试. A read
+     * the page on top), so a dropped network does not leave the page on its error until the user taps "Retry". A read
      * started while offline may still fail after this, so it is started again too. A pull is not run again.
      */
     private fun recover() {

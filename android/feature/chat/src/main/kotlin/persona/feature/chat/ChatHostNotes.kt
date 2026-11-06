@@ -38,10 +38,10 @@ internal fun hostNote(session: Session?, retried: String?): HostNote? {
 
 /**
  * Over the composer: why the host says it waits for you (caution), or that it stopped on an error it will not retry by
- * itself (iOS FailureNote) with 重试, which sends 「继续」 alone (not what is in the box). [onRetry] says whether that
+ * itself (iOS FailureNote) with "Retry", which sends "Continue" alone (not what is in the box). [onRetry] says whether that
  * message was taken (false while another is still on its way: nothing went, the note stays); the caller then hides the
  * note for this notice ([retried], kept by the chat so a send that fails can bring it back). A session its host shows
- * elsewhere (a botmux topic) offers 在飞书打开 on both, as iOS FeishuLink.
+ * elsewhere (a botmux topic) offers "Open in Lark" on both, as iOS FeishuLink.
  */
 @Composable
 internal fun ChatHostNote(

@@ -44,9 +44,9 @@ import java.io.File
 
 /**
  * The inbox while new items wait for triage (#1773), on the JVM with Robolectric's native graphics (no emulator), in
- * every style, light and dark: a model not set up (with 去配置), the model behind, and several sources. The banner sits
+ * every style, light and dark: a model not set up (with "Set up"), the model behind, and several sources. The banner sits
  * under the filters, over the first item. Each is checked to draw something and written as a PNG to
- * `build/inbox-triage-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「收件箱」).
+ * `build/inbox-triage-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Inbox").
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -133,7 +133,7 @@ class InboxTriageShotsTest {
         assertEquals(1, configured)
     }
 
-    // A device that may not change settings (it may only read and answer) reads the same words without 去配置; triage
+    // A device that may not change settings (it may only read and answer) reads the same words without "Set up"; triage
     // back to ok, or an older hub: no banner at all.
     @Test fun textOnlyWhereTheDeviceMayNotConfigureAndNothingWhenOk() {
         var triage by mutableStateOf<InboxTriage?>(Shot.Unconfigured.triage)

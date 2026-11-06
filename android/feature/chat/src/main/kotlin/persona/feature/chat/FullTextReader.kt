@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The opening value is retained until dismissal, independently of streaming updates. [plain] sets it as body text
- * rather than code (a message to select from: the long-press menu's 「选择」).
+ * rather than code (a message to select from: the long-press menu's "Select").
  */
 @Composable
 internal fun FullTextReader(text: String, onDismiss: () -> Unit, title: String = stringResource(R.string.chat_reader_full_text), plain: Boolean = false) {

@@ -35,7 +35,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 设置 › 助手 in each of the app's languages (docs/i18n.md): the page, 关于我, 记忆 and one memory file, the machine and
+ * Settings › Assistant in each of the app's languages (docs/i18n.md): the page, "About me", "Memory" and one memory file, the machine and
  * time zone sheets and the move warning, Glass light and dark (the page in every style). Written as PNGs to
  * `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */

@@ -4,7 +4,7 @@ import persona.core.contracts.Session
 import org.junit.Assert.*
 import org.junit.Test
 
-/** The 按电脑和空间 tree these tests were written for (the default grouping is now 按仓库). */
+/** The "By machine and space" tree these tests were written for (the default grouping is now "By repository"). */
 private val MachineSpaceTree = AgentListSettings(grouping = AgentGrouping.MachineSpace)
 
 class AgentSpaceTest {

@@ -37,10 +37,10 @@ internal object SurfaceLinks {
 
     fun agents(context: Context): Intent = view(context, NotificationRoute(AppTab.Agents).uri())
 
-    /** The Persona tab with the cursor in its composer (「问 Persona」). */
+    /** The Persona tab with the cursor in its composer ("Ask Persona"). */
     fun ask(context: Context): Intent = view(context, Uri.parse(AskPersonaLink))
 
-    /** Agents › 待办 with 新建待办 open (「新建待办」). */
+    /** Agents › To-dos with "New to-do" open ("New to-do"). */
     fun newTodo(context: Context): Intent = view(context, Uri.parse(NewTodoLink))
 
     /** The app as the launcher opens it (the pairing page when not paired). */

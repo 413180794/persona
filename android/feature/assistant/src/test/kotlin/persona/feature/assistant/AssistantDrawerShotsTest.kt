@@ -37,7 +37,7 @@ import java.time.Instant
 
 /**
  * The Persona tab's history drawer drawn on the JVM with Robolectric's native graphics (no emulator), in every style,
- * light and dark: the main conversation first, as 「Persona」 with Persona's face, and 更多 without 资料页.
+ * light and dark: the main conversation first, as "Persona" with Persona's face, and "More" without "Profile".
  * Assistant details remain available from the Persona toolbar, not settings. Each is written as a PNG to `build/drawer-shots/` (or
  * `-Dpersona.shots=<dir>`) to look at.
  */
@@ -86,11 +86,11 @@ class AssistantDrawerShotsTest {
                 }
             }
         }
-        // The main conversation reads 「Persona」 (the session keeps its own title), and 资料页 is gone.
+        // The main conversation reads "Persona" (the session keeps its own title), and "Profile" is gone.
         rule.onAllNodesWithText("主对话").assertCountEquals(0)
         rule.onAllNodesWithText("资料页").assertCountEquals(0)
         rule.onAllNodesWithText("认识 Persona").assertCountEquals(0)
-        // #2004 on every platform: the first row is the main conversation as 「Persona」 with the app's mark, then a
+        // #2004 on every platform: the first row is the main conversation as "Persona" with the app's mark, then a
         // line; Persona is not listed again (no header of its own, no second main row).
         rule.onAllNodesWithText("Persona").assertCountEquals(1)
         val persona = rule.onNodeWithText("Persona").fetchSemanticsNode().boundsInRoot
@@ -157,7 +157,7 @@ class AssistantDrawerShotsTest {
         rule.onAllNodesWithText("工作中").assertCountEquals(1)
     }
 
-    // #3264: 自动对话 folded (its count, the red count of those waiting for the user) and open (a chip per origin, the
+    // #3264: Automatic chats folded (its count, the red count of those waiting for the user) and open (a chip per origin, the
     // picked origin's conversations), in every style, light and dark.
     @Test fun drawsTheAutomaticConversations() {
         var style by mutableStateOf(AppStyle.Glass)
@@ -194,7 +194,7 @@ class AssistantDrawerShotsTest {
             style = s; dark = d
             capture("drawer-auto-open-${s.name.lowercase()}-${if (d) "dark" else "light"}")
         }
-        rule.onAllNodesWithText("定时任务")[0].performClick() // the chip (更多 has a 定时任务 row too)
+        rule.onAllNodesWithText("定时任务")[0].performClick() // the chip ("More" has a "Scheduled tasks" row too)
         rule.onNodeWithText("1106 | 定时 | 早报").assertExists()
     }
 }

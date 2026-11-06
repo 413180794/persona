@@ -23,7 +23,7 @@ import java.io.File
 import java.util.UUID
 
 /**
- * Saving, sharing and copying a chat picture (the image viewer's 保存 / 分享 / 拷贝), and writing a marked-up one
+ * Saving, sharing and copying a chat picture (the image viewer's "Save" / "Share" / "Copy"), and writing a marked-up one
  * for the composer. Shared and copied pictures are files in `cache/shared/`, handed out through the chat's
  * FileProvider (`<package>.chat.files`, res/xml/chat_file_paths.xml); edited ones go to `cache/chat-captures/` like
  * camera photos. Each call reports whether it worked; the caller words the notice.

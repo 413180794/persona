@@ -73,7 +73,7 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
     suspend fun foldTab(key: String, folded: Boolean) {
         store.edit { it[foldedTabsKey] = it[foldedTabsKey].orEmpty().let { keys -> if (folded) keys + key else keys - key } }
     }
-    /** 全部展开 opens every tab group too, as it opens every space (#2792). */
+    /** "Expand all" opens every tab group too, as it opens every space (#2792). */
     suspend fun openAllTabs() { store.edit { it.remove(foldedTabsKey) } }
     suspend fun togglePin(id: String) = hub.togglePin(id)
     suspend fun toggleMute(id: String) = hub.toggleMute(id)
@@ -136,7 +136,7 @@ internal fun retainOpenedRows(
 ): AgentListResult {
     if (previous == null || kept.isEmpty()) return current
     val currentRows = current.groups.flatMap { it.rows }.associateBy { it.id }
-    // 按仓库: a repository with working trees takes no rows of its own, and a repository or tree group that is gone is
+    // "By repository": a repository with working trees takes no rows of its own, and a repository or tree group that is gone is
     // not brought back as a stray section outside its computer; such a row stays where the list put it now.
     val currentIds = current.groups.map { it.id }.toSet()
     val parents = current.groups.mapNotNull { it.under }.toSet()

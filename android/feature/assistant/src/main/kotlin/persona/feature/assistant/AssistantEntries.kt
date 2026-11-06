@@ -15,7 +15,7 @@ fun EntryProviderScope<NavKey>.assistantEntries(
     content: @Composable () -> Unit = { ConnectedAssistant(navigator) },
 ) {
     entry<AssistantRoute> { AssistantAppHost(navigator) { content() } }
-    // 设置 › AI › 助手: the same page the Persona tab opens in place, as a page of its own.
+    // Settings › AI › Assistant: the same page the Persona tab opens in place, as a page of its own.
     entry<AssistantSettingsRoute> { AssistantAppHost(navigator) { AssistantSettingsPage(navigator) } }
 }
 

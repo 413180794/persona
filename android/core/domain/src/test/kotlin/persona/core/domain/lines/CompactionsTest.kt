@@ -33,7 +33,7 @@ class CompactionsTest {
         assertEquals("87.5 万", (tokenCount(874_639)).zhAny())
     }
 
-    /** The phone's 压缩上下文 after an answer: one divider, the command and the summary folded into it. */
+    /** The phone's "Compact context" after an answer: one divider, the command and the summary folded into it. */
     @Test fun aManualCompactionAfterAnAnswerIsOneDivider() {
         val items = listOf(item(1, "text", "看一下", "user"), item(2, "text", "看完了"),
             notice(3, CompactCommandNotice), notice(4, CompactedNotice, CompactBoundary("manual", 180_902)),
@@ -73,7 +73,7 @@ class CompactionsTest {
         assertNull(dividers(codex).single().trigger)
     }
 
-    /** Compacted while idle: Claude Code's note makes the trigger 空闲时. */
+    /** Compacted while idle: Claude Code's note makes the trigger "While idle". */
     @Test fun anIdleNoteMarksTheTrigger() {
         val lines = chatLines(listOf(item(1, "text", "a", "user"), item(2, "text", "b"),
             notice(3, CompactedNotice, CompactBoundary("manual")), notice(4, ContinuedNotice),
@@ -93,7 +93,7 @@ class CompactionsTest {
         assertTrue((work.steps[1] as WorkItem.Thought).item.compaction != null)
     }
 
-    /** A 压缩上下文 still waiting for its boundary (the compaction is running) stays the notice it is. */
+    /** A "Compact context" still waiting for its boundary (the compaction is running) stays the notice it is. */
     @Test fun aCommandWithoutABoundaryStaysANotice() {
         val items = listOf(item(1, "text", "a", "user"), item(2, "text", "b"), notice(3, CompactCommandNotice))
         val folded = foldCompactions(items)

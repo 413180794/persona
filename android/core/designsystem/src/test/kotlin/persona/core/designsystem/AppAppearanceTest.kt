@@ -13,7 +13,7 @@ import org.robolectric.annotation.Config
 
 /**
  * A window other than the main one (share, the capsule, the approve dialog) draws with [PersonaTheme]'s defaults:
- * 深浅色 and 主题色 reach it through [AppAppearance] (#3048 review), on a phone left in light mode.
+ * Light/dark and theme color reach it through [AppAppearance] (#3048 review), on a phone left in light mode.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35], qualifiers = "notnight")

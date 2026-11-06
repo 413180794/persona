@@ -109,7 +109,7 @@ class NotificationPolicyTest {
         assertEquals("assistant:machine/session", NotificationPolicy.tag(alert.copy(kind = "assistant")))
     }
 
-    /** A card with fields to fill in has no 允许 button (#4987): the hub refuses allow without their values. */
+    /** A card with fields to fill in has no Allow button (#4987): the hub refuses allow without their values. */
     @Test fun permissionWithRequiredFieldsHasNoAllow() {
         val card = persona.core.contracts.JsonCodec.decodeFromString<Interaction>(
             """{"id":"request","kind":"permission","fields":[{"key":"password","label":"Password","secret":true}]}""")

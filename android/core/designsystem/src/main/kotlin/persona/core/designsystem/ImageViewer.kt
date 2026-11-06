@@ -86,13 +86,13 @@ import kotlin.math.abs
 
 /**
  * One picture for [ImageViewer]. [load] returns its encoded bytes (PNG, JPEG, WebP…); a throw or empty bytes means it
- * failed, and the viewer offers 重试. [key] identifies the picture: two with the same key are the same picture (the
+ * failed, and the viewer offers "Retry". [key] identifies the picture: two with the same key are the same picture (the
  * viewer keeps its bytes once). [width] and [height], when known, shape the placeholder while it loads.
  */
 @Immutable
 class ViewerImage(
     val key: String,
-    /** What TalkBack reads for the picture; empty reads 图片. */
+    /** What TalkBack reads for the picture; empty reads "Image". */
     val description: String = "",
     val width: Int? = null,
     val height: Int? = null,
@@ -121,8 +121,8 @@ data class ViewerAction(
  * Full-screen pictures over the current page, always in the dark appearance (light system bar icons): swipe through
  * [images] from [initialIndex]; pinch 1–6×, double tap zooms to 2.5× at the finger and back, drag while zoomed, a tap
  * shows or hides the controls; at 1× drag up or down to pull the picture away (past about 120dp it closes, the
- * background fades while pulling). Top: ✕ and 「n / m」 (more than one picture). Bottom: [actions], one line each,
- * icons only when the labels do not fit. Pictures load with a spinner, a failed one says 图片加载失败 with 重试; decoding
+ * background fades while pulling). Top: ✕ and "n / m" (more than one picture). Bottom: [actions], one line each,
+ * icons only when the labels do not fit. Pictures load with a spinner, a failed one says "Image failed to load" with "Retry"; decoding
  * runs off the main thread, sampled for the screen. Back and ✕ call [onDismiss].
  */
 @Composable

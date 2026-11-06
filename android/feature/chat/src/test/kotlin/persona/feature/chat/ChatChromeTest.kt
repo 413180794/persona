@@ -69,7 +69,7 @@ class ChatChromeTest {
     }
 
     @Test fun companionsListATabsAgentsTogetherWithTheLauncherFirst() {
-        // tab 1: this session (pane 1) split off from the 发起者 (pane 0), plus a third pane; tab 2: one agent
+        // tab 1: this session (pane 1) split off from the launcher (pane 0), plus a third pane; tab 2: one agent
         fun pane(id: String, slot: Int, index: Int?, state: String = "idle") = Session(machineId = "machine",
             sessionId = id, spaceId = "space", slotId = "t$slot", slotIndex = slot, paneId = "w1:p$id", paneIndex = index, state = state)
         val current = pane("b", 1, 1)

@@ -50,7 +50,209 @@ import kotlinx.coroutines.launch
 /** The host sets this while an in-app sheet or overlay covers the conversation. */
 val LocalLarkReadOccluded = staticCompositionLocalOf { false }
 
-/** The account''s thread, read with the chat''s).
+/** The account's message display settings (Brave Climb, #882) for the bubbles under it; hidden until read. */
+internal val LocalLarkMessageDisplay = staticCompositionLocalOf { LarkMessageDisplay.Hidden }
+
+@Composable
+fun LarkScreen(repository: InboxRepository, route: LarkRoute, navigator: Navigator) {
+    val inbox by repository.snapshot.collectAsStateWithLifecycle()
+    val source = inbox.contentSource
+    key(source, route) {
+        val opening by produceState<Pair<LarkReadingStore?, LarkListNavigation>?>(null, source) {
+            val store = source?.let { repository.readingStore() }
+            val navigation = try { source?.let { larkListNavigation(it.transport, route.feedId) } ?: LarkListNavigation() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { LarkListNavigation() }
+            value = store to navigation
+        }
+        LarkLinkHost(repository) {
+            val loaded = opening
+            if (loaded == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { JLoading() }
+            else key(source?.scope, route) {
+                val readingKey = source?.let { ChatReadingKey(it.scope, "lark:${route.feedId}") }
+                val store = loaded.first
+                var target by remember {
+                    mutableStateOf(larkListTarget(loaded.second, route.startPosition,
+                        readingKey?.let { store?.read(it) }, readingKey?.let { store?.around(it) }))
+                }
+                key(target) {
+                    LarkConversationScreen(repository, route, navigator, target, loaded.second, readingKey, store) { position ->
+                        target = LarkListTarget(position, position, request = target.request + 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A chat's thread, read with the chat's message display settings (a pin that replies in a thread opens here too, iOS `LarkThreadView`). */
+@Composable
+internal fun LarkChatThreadSheet(root: LarkMessage, repository: InboxRepository, display: LarkMessageDisplay,
+    onDismiss: () -> Unit) {
+    CompositionLocalProvider(LocalLarkMessageDisplay provides display) { LarkThreadSheet(root, repository, onDismiss = onDismiss) }
+}
+
+@Composable
+private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute, navigator: Navigator,
+    target: LarkListTarget, navigation: LarkListNavigation, readingKey: ChatReadingKey?, store: LarkReadingStore?,
+    jumpTo: (Long) -> Unit,
+) {
+    val flow = remember(repository, route.feedId, target.around) { repository.conversation(route.feedId, target.around) }
+    val conversation by flow.collectAsStateWithLifecycle(LarkConversation(loading = true))
+    val inbox by repository.snapshot.collectAsStateWithLifecycle()
+    val record = inbox.records.firstOrNull { it.item.id == route.itemId }
+    val feedback = persona.core.designsystem.LocalAppFeedback.current
+    val scope = rememberCoroutineScope()
+    val composers = rememberReplyComposers(repository)
+    val composer = composers.get(ReplyTarget.Lark(route.feedId))
+    val reply by composer.state.collectAsStateWithLifecycle()
+    val chatList = key(conversation.windowRevision) { rememberChatListState(readingKey, store) }
+    val scroll = chatList.list
+    val positioned = chatList.restored
+    val timeline = remember(target, conversation.windowRevision) { larkListWindow() }
+    var timelineVersion by remember(target, conversation.windowRevision) { mutableIntStateOf(0) }
+    val liveMessages by rememberUpdatedState(conversation.messages)
+    val displayed = remember(conversation.messages, timelineVersion, timeline) { timeline.items(conversation.messages) }
+    SideEffect { store?.observe(displayed) }
+    var thread by remember(route.feedId) { mutableStateOf<LarkMessage?>(null) }
+    var more by remember { mutableStateOf(false) }
+    var profilePerson by remember { mutableStateOf<LarkPersonRef?>(null) }
+    var reactionPickerMessage by remember { mutableStateOf<LarkMessage?>(null) }
+    var forwardedDetail by remember { mutableStateOf<LarkPart.MergeForward?>(null) }
+    var videoPlayerUrl by remember { mutableStateOf<String?>(null) }
+    // A picture tapped in the conversation: the viewer over all of its pictures (iOS LarkImageGallery).
+    var viewer by remember { mutableStateOf<Pair<List<LarkPart.Image>, Int>?>(null) }
+    val customEmojis by produceState<JsonObject?>(null, repository) {
+        value = runCatching { repository.emojis() }.getOrNull()
+    }
+    // Read once per chat; unreadable settings decode nothing and offer no Brave Climb mode.
+    val display by produceState<LarkMessageDisplay?>(null, repository) {
+        value = try { repository.larkMessageDisplay() } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+    }
+    val climbs = display?.climbs == true
+    var editingDraft by remember { mutableStateOf(false) }
+    // Message display ("Keep recalled messages", "Edit history", Brave Climb) for the chat and its sheets: hidden until read, and when it cannot be.
+    val shownDisplay = display ?: LarkMessageDisplay.Hidden
+    var showingPins by remember { mutableStateOf(false) }
+    var addingPin by remember { mutableStateOf<LarkMessage?>(null) }
+    var changingPin by remember { mutableStateOf(false) }
+    // Read receipts of my messages (iOS LarkReadReceipts): asked again when the chat changes, a batch every few seconds.
+    val receipts = remember(route.feedId) { LarkReadReceipts() }
+    var readStates by remember(route.feedId) { mutableStateOf<Map<String, LarkReadState>>(emptyMap()) }
+    var drafting by remember { mutableStateOf(false) }
+    var handingOff by remember { mutableStateOf(false) }
+    var readPosition by remember { mutableStateOf(navigation.readPosition) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val res = LocalResources.current
+    var markingDone by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+    var loadingOlder by remember { mutableStateOf(false) }
+    val retrying = remember { mutableStateMapOf<String, Boolean>() }
+    val messages by rememberUpdatedState(displayed)
+    val latestConversation by rememberUpdatedState(conversation)
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val focused = LocalWindowInfo.current.isWindowFocused
+    val occluded = LocalLarkReadOccluded.current || thread != null || more || editingDraft || drafting || handingOff ||
+        profilePerson != null || reactionPickerMessage != null || forwardedDetail != null || videoPlayerUrl != null ||
+        showingPins || addingPin != null ||
+        viewer != null || chatList.programmaticScroll
+    val dragged by scroll.interactionSource.collectIsDraggedAsState()
+    var interacted by remember(route) { mutableStateOf(false) }
+    var viewport by remember { mutableStateOf(Rect.Zero) }
+    val bounds = remember(route) { mutableStateMapOf<String, Rect>() }
+    LaunchedEffect(dragged) { if (dragged) interacted = true }
+    val entry = larkListEntry(displayed, target.entry)
+    ChatListEffects(chatList, displayed.asReversed().map { it.listKey() },
+        ready = !conversation.loading, entry = entry, canFollowEnd = !conversation.hasNewer,
+        hasOlder = conversation.hasOlder, loadingOlder = conversation.loadingOlder || loadingOlder,
+        onFreeze = { if (liveMessages.isNotEmpty()) timeline.freeze(liveMessages); timelineVersion++ },
+        onFollow = {
+            timeline.follow(); timelineVersion++
+            if (latestConversation.hasNewer) scope.launch {
+                try { repository.latestConversation(route.feedId) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { chatList.holdPosition(); error = res.getString(R.string.inbox_lark_latest_failed) }
+            }
+        },
+        loadOlder = {
+            try { repository.loadOlder(route.feedId) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_older_failed) }
+        })
+
+    LaunchedEffect(repository, route, chatList, positioned, lifecycle, focused, occluded, conversation.verified, messages) {
+        snapshotFlow {
+            if (!larkReadAllowed(lifecycle == Lifecycle.State.RESUMED, focused, positioned, occluded,
+                    scroll.isScrollInProgress, conversation.verified)) emptyList()
+            else larkSeen(messages, bounds, viewport)
+        }.distinctUntilChanged().collectLatest { visible ->
+            if (visible.isNotEmpty()) {
+                delay(450)
+                try {
+                    repository.markVisible(route.feedId, visible)
+                    visible.mapNotNull { it.position }.maxOrNull()?.let { read ->
+                        readPosition = maxOf(readPosition ?: Long.MIN_VALUE, read)
+                    }
+                }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { /* Retry on the next viewport or verified-window change. */ }
+            }
+        }
+    }
+    LaunchedEffect(repository, route, chatList, positioned, interacted, conversation.hasNewer, conversation.loadingNewer, messages, lifecycle) {
+        if (lifecycle != Lifecycle.State.RESUMED) return@LaunchedEffect
+        snapshotFlow {
+            val keys = scroll.layoutInfo.visibleItemsInfo.map { it.key }.toSet()
+            positioned && interacted && !chatList.programmaticScroll &&
+                messages.lastOrNull()?.let { it.listKey() in keys } == true
+        }.distinctUntilChanged().collect { atNewerEdge ->
+            if (atNewerEdge && latestConversation.hasNewer && !latestConversation.loadingNewer) try {
+                repository.loadNewer(route.feedId)
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_messages_failed) }
+        }
+    }
+    // Not keyed on the list: a change while a request is out must not cancel it (its answer would be lost and the next
+    // one wait the gap again). Each change since the last request is asked about once the gap is over.
+    LaunchedEffect(repository, route.feedId, conversation.verified) {
+        if (!conversation.verified) return@LaunchedEffect
+        var asked: List<LarkMessage>? = null
+        while (!receipts.unsupported) {
+            snapshotFlow { messages }.first { it !== asked }
+            delay(receipts.wait(System.currentTimeMillis()))
+            val shown = messages
+            asked = shown
+            val ids = receipts.due(shown, System.currentTimeMillis())
+            if (ids.isEmpty()) continue
+            try { receipts.record(repository.larkReadStates(route.feedId, ids)); readStates = receipts.states }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { receipts.failed((e as? persona.core.hub.HubFailure)?.status) }
+        }
+    }
+    LaunchedEffect(chatList, conversation.windowRevision) {
+        if (conversation.windowRevision > 0) chatList.returnToLatest()
+    }
+    LaunchedEffect(reply.sent) {
+        if (reply.sent) {
+            try { repository.latestConversation(route.feedId); chatList.returnToLatest() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_sent_refresh_failed) }
+        }
+    }
+    fun retry(message: LarkMessage) {
+        val clientId = message.clientId ?: return
+        if (retrying[clientId] == true) return
+        retrying[clientId] = true
+        scope.launch {
+            try {
+                val result = repository.verifyReply(ReplyTarget.Lark(route.feedId), clientId)
+                error = if (result == ReplyDelivery.Sent) null else res.getString(R.string.inbox_lark_unconfirmed)
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_check_unfinished) }
+            finally { retrying.remove(clientId) }
+        }
+    }
+    // Pictures in a thread or a forwarded bundle open in the same viewer (alone when they are not the conversation's).
     val openImage: (LarkPart.Image) -> Unit = remember { { image -> viewer = larkGallery(larkImages(messages), image) } }
     thread?.let { root -> CompositionLocalProvider(LocalLarkImageOpener provides openImage) {
         LarkChatThreadSheet(root, repository, shownDisplay, onDismiss = { thread = null })
@@ -87,8 +289,92 @@ val LocalLarkReadOccluded = staticCompositionLocalOf { false }
         val pictures = remember(images, description) { images.mapIndexed { i, image -> larkViewerImage(context, image, i, description) } }
         ImageViewer(pictures, index, onDismiss = { viewer = null })
     }
-    // AI 草拟 writes the reply to the item (sent with POST …/reply, confirmed first); the composer below stays the
-    // user''s extension page, which broke: one line with 重试 (inbox_item, #1683).
+    // "AI draft" writes the reply to the item (sent with POST …/reply, confirmed first); the composer below stays the
+    // user's own words for the chat, sent as typed.
+    if (drafting && record != null) InboxDraftSheet(repository, record,
+        composers.get(ReplyTarget.Inbox(record.item.id), record.agent?.takeIf { it.state == "drafted" }?.draft.orEmpty()),
+        navigator, onDismiss = { drafting = false })
+    if (handingOff && record != null) InboxHandOffSheet(repository, record, navigator, onDismiss = { handingOff = false })
+    val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
+    val onlineSince = rememberOnlineSince(connection)
+    fun refreshConversation() {
+        if (refreshing) return
+        refreshing = true
+        scope.launch {
+            try { repository.refreshConversation(route.feedId); error = null }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { if (feedback?.failure(e) != true) error = res.getString(R.string.inbox_lark_refresh_failed) }
+            finally { refreshing = false }
+        }
+    }
+    if (showingPins) CompositionLocalProvider(LocalLarkMessageDisplay provides shownDisplay) {
+        LarkPinsSheet(repository, route.feedId, topic = conversation.isTopic, onDismiss = { showingPins = false }, onOpen = { target ->
+            showingPins = false
+            // A reply in a thread opens there; any other message in the chat, around it.
+            val root = target.root
+            if (root != null) thread = root else target.message.position?.let(jumpTo)
+        })
+    }
+    addingPin?.let { message ->
+        JDialog(onDismiss = { addingPin = null }, title = stringResource(R.string.inbox_lark_pin_add_title),
+            text = stringResource(R.string.inbox_lark_pin_add_text),
+            confirm = stringResource(R.string.inbox_lark_pin_add) to {
+                addingPin = null
+                changingPin = true
+                scope.launch {
+                    try {
+                        repository.larkChangePin(route.feedId, message.id, null, null)
+                        feedback?.notice(res.getString(R.string.inbox_lark_pin_added))
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) {
+                        error = res.getString(when ((e as? LarkPinFailure)?.kind) {
+                            LarkPinFailure.Kind.AccountChanged -> R.string.inbox_lark_pin_account_changed
+                            LarkPinFailure.Kind.ResultUnknown -> R.string.inbox_lark_pin_unknown
+                            LarkPinFailure.Kind.UpgradeRequired -> R.string.inbox_lark_pin_upgrade
+                            null -> R.string.inbox_lark_pin_add_failed
+                        })
+                    } finally { changingPin = false }
+                }
+            })
+    }
+    if (more) JActionSheet(title = stringResource(R.string.inbox_lark_actions), onDismiss = { more = false }, actions = buildList {
+        navigation.mention?.let { mention -> add(JAction(res.getString(R.string.inbox_lark_jump_mention), PhIcons.At) { jumpTo(mention) }) }
+        add(JAction(res.getString(R.string.inbox_lark_pins_title), PhIcons.PushPin) { showingPins = true })
+        add(JAction(res.getString(R.string.inbox_lark_refresh), PhIcons.ArrowClockwise, enabled = !refreshing) { refreshConversation() })
+    })
+    val title = conversation.title.ifBlank { stringResource(R.string.inbox_lark_conversation) }
+    val connectionDetails = rememberConnectionDetails(connection, { navigator.navigate(ConnectionSettingsRoute) }, onRetry = { refreshConversation() })
+    val haptics = rememberHaptics()
+    JPage(title = title, topBar = {
+        ChatTopBar(title = title, onBack = navigator::back,
+            statusText = if (connection == ConnectionState.Online) stringResource(R.string.inbox_source_lark) else inboxTitle(connection),
+            busy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
+            onTitleClick = if (connection == ConnectionState.Online) null else connectionDetails,
+            actions = {
+                if (record != null) JIconButton(PhIcons.CheckCircle, stringResource(if (record.item.isDone) R.string.inbox_move_back else R.string.inbox_done),
+                    enabled = !markingDone, onClick = {
+                        markingDone = true
+                        haptics(doneHaptic(!record.item.isDone))
+                        scope.launch {
+                            try { repository.setDone(record.item.id, !record.item.isDone); error = null; navigator.back() }
+                            catch (e: CancellationException) { throw e }
+                            catch (e: Exception) { if (feedback?.failure(e, operation = true) != true) error = res.getString(R.string.inbox_failed_retry) }
+                            finally { markingDone = false }
+                        }
+                    })
+                JIconButton(PhIcons.DotsThree, stringResource(R.string.inbox_more), { more = true })
+            })
+    }, bottomBar = {
+        ReplyComposerField(reply, composer::update, onSend = {
+                // The Lark gateway refuses Brave Climb words while the switch is off; say so and keep the draft.
+                if (reply.draft.braveClimb && !climbs) error = res.getString(R.string.inbox_lark_brave_climb_off)
+                else composer.send()
+            }, stringResource(R.string.inbox_lark_reply_to, title),
+            modifier = Modifier.imePadding(), accessory = {
+                if (climbs || reply.draft.braveClimb) JChip(stringResource(R.string.inbox_lark_brave_climb_mode),
+                    modifier = Modifier.testTag("lark.braveClimb.mode"), selected = reply.draft.braveClimb,
+                    onClick = { composer.setBraveClimb(!reply.draft.braveClimb) }, icon = PhIcons.ShieldCheck)
+                // Opened in place of the item's extension page, which broke: one line with "Retry" (inbox_item, #1683).
                 InboxExtensionNotice(route.itemId, route, Modifier)
                 record?.let { InboxAiActions(onDraft = { drafting = true }, onHandOff = { handingOff = true }) }
                 record?.item?.summary?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis) }
@@ -190,18 +476,18 @@ internal fun LarkBubble(
     feedId: String? = null,
     /** The read receipt beside a message of mine, once there is one. */
     readMark: LarkReadMark? = null,
-    /** 添加 Pin, where the chat can pin. */
+    /** "Add pin", where the chat can pin. */
     onAddPin: ((LarkMessage) -> Unit)? = null,
 ) {
     val display = LocalLarkMessageDisplay.current
     val message = remember(original, display) { original.shown(display) }
-    // 防撤回 shows what the Lark gateway kept of a recalled message, marked 已撤回; otherwise it is one line.
+    // "Keep recalled messages" shows what the Lark gateway kept of a recalled message, marked "Recalled"; otherwise it is one line.
     if (message.system && !(message.recalled && display.showsBody(message))) {
         TimelineMark(if (message.recalled) stringResource(R.string.inbox_lark_recalled)
             else message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)
         return
     }
-    // A recalled message 防撤回 kept takes no reaction, reply or card write (docs/protocol.md, `retained`), as on iOS.
+    // A recalled message Keep recalled messages kept takes no reaction, reply or card write (docs/protocol.md, `retained`), as on iOS.
     val react = onReact.takeUnless { message.recalled }
     val openReactionPicker = onOpenReactionPicker.takeUnless { message.recalled }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -238,7 +524,7 @@ internal fun LarkBubble(
                     Text(stringResource(R.string.inbox_lark_brave_climb_decoded), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1)
                 }
                 if (message.recalled) Text(stringResource(R.string.inbox_lark_recalled_mark), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
-                // 编辑历史 on and old versions kept: 已编辑 opens them.
+                // "Edit history" on and old versions kept: "Edited" opens them.
                 if (message.edited) {
                     if (display.showsHistory(message)) Text(stringResource(R.string.inbox_lark_edited), style = PersonaTheme.type.micro,
                         color = PersonaTheme.palette.ink2, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button,
@@ -268,7 +554,7 @@ internal fun LarkBubble(
     }
     val footer: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            // 设置 › 翻译: under the bubble, as on iOS.
+            // Settings › Translation: under the bubble, as on iOS.
             LarkTranslationLine(message, feedId)
             if (message.reactions.isNotEmpty() && react != null && openReactionPicker != null) {
                 LarkReactionRow(

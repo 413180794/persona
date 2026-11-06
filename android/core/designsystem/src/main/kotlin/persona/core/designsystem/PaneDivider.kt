@@ -59,10 +59,10 @@ val PaneDividerTouch: Dp = 24.dp
 /**
  * The handle between a wide window's two panes (the list and what it opened): a small grip on the line between them, a
  * finger's width to grab, the resize cursor under a mouse or trackpad. Dragging reports [onDrag] in pixels; the owner
- * moves the panes and decides where they settle in [onDragStopped]. TalkBack gets 左栏变宽 / 左栏变窄, and 收起左栏 /
- * 展开左栏 when the owner allows them; tapping the collapsed handle brings the list back.
+ * moves the panes and decides where they settle in [onDragStopped]. TalkBack gets "Widen left pane" / "Narrow left pane", and "Collapse left pane" /
+ * "Expand left pane" when the owner allows them; tapping the collapsed handle brings the list back.
  *
- * Glass: a soft pill of the page's ink; 晨报: a thin ink rule; 看板: a bordered grip like a board strip's edge.
+ * Glass: a soft pill of the page's ink; Brief: a thin ink rule; Board: a bordered grip like a board strip's edge.
  */
 @Composable
 fun PaneDivider(

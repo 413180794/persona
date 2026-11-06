@@ -52,7 +52,7 @@ class InboxDataOwner @Inject constructor(
     private data class Repositories(val data: ScopedHubData, val inbox: persona.feature.inbox.InboxRepository,
         val assistant: AssistantConversations, val mail: StateFlow<MailTransport?>,
         val composers: ReplyComposers, val reading: LarkReadingStore, val names: GroupNames)
-    // The inbox and Persona are the selected group's (docs/android.md「多 hub」): its own transports speak its plain
+    // The inbox and Persona are the selected group's (docs/android.md "Multiple hubs"): its own transports speak its plain
     // ids, which are moved into the merged lists' ids on the way out. Agent requests in the inbox stay merged.
     private val current = runtime.scopedData.mapLatest { data ->
         data?.coroutineScope?.async {
@@ -99,7 +99,7 @@ class InboxDataOwner @Inject constructor(
                 },
                 sendThread = { root, request -> transport.replyInThread(root, request.text, request.clientId) },
                 download = media::download,
-                // 交给 AI to an Agent uses the same outbox as the Agents tab, and its targets come from the merged list:
+                // "Hand to AI" to an Agent uses the same outbox as the Agents tab, and its targets come from the merged list:
                 // the app-wide sender takes the session to its own group (by the merged id's suffix).
                 messageSender = runtime.messages)
             val lark = socket.route.map { route -> route?.let {
@@ -113,7 +113,7 @@ class InboxDataOwner @Inject constructor(
             data.messages.connectReconciler(OutboxReconciler { realInbox.reconcilePendingReplies() })
             val reading = LarkReadingStore.open(InboxReadingStorage(data), data.scope.path, data.coroutineScope)
             // Persona' own transport gives plain ids, so it reads the group's own sessions and preferences; the sessions
-            // as the pages show them, so a card just answered here stops saying 需要你 on the Persona tab too (#4525).
+            // as the pages show them, so a card just answered here stops saying "Needs you" on the Persona tab too (#4525).
             val assistant = RealAssistantRepository(connection, stack.repositories.shownRepository, data.coroutineScope, snapshots,
                 stack.repositories.preferences ?: preferences.takeIf { names.plain })
             Repositories(data, wrapped, assistant.inGroup(names, data.coroutineScope), mail,

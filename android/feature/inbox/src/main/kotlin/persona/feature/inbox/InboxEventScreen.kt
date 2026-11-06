@@ -30,9 +30,9 @@ import persona.core.domain.inbox.InboxTier
 import persona.core.navigation.Navigator
 
 /**
- * An inbox event's page (inbox phase 1): the item's tags and 「看原文」 (its source page as the list opened it before),
- * ✦ 摘要, 总结, where the processing stands, the suggestion with its buttons right under them, then the 处理链条 (the
- * newest entry, 「展开全部（N）」) and the items it is 有关. Only items with event fields open here ([inboxRowPage]).
+ * An inbox event's page (inbox phase 1): the item's tags and "View original" (its source page as the list opened it before),
+ * ✦ Summary, Recap, where the processing stands, the suggestion with its buttons right under them, then the Handling chain (the
+ * newest entry, "Expand all (N)") and the items it is Related. Only items with event fields open here ([inboxRowPage]).
  */
 @Composable
 fun InboxEventScreen(repository: InboxRepository, route: InboxEventRoute, navigator: Navigator) {
@@ -108,7 +108,7 @@ fun InboxEventScreen(repository: InboxRepository, route: InboxEventRoute, naviga
         if (!record.item.isDone) eventMark(record)?.takeIf { it !is EventMark.Suggests }?.let { mark ->
             item("event-state") { EventStateLine(mark, Modifier.padding(bottom = Tokens.Space.s)) }
         }
-        // 「建议已更新」 stays over the new suggestion until the user answers again (the card is drawn anew for it).
+        // "Suggestion updated" stays over the new suggestion until the user answers again (the card is drawn anew for it).
         if (stale && !record.item.isDone) item("event-stale") {
             JNotice(stringResource(R.string.inbox_suggestion_stale), Modifier.padding(bottom = Tokens.Space.s), icon = PhIcons.ArrowsClockwise)
         }
@@ -133,11 +133,11 @@ fun InboxEventScreen(repository: InboxRepository, route: InboxEventRoute, naviga
     }
 }
 
-/** The page's first tag: the section the event is in (进行中 says who is on it), none for a done one. */
+/** The page's first tag: the section the event is in (In progress says who is on it), none for a done one. */
 @Composable
 private fun eventTag(record: InboxRecord): Pair<String, Status?>? {
     val item = record.item
-    // The manager filed it (looked and found nothing for the user): it says so rather than a bare 已处理.
+    // The manager filed it (looked and found nothing for the user): it says so rather than a bare Done.
     if (item.isDone) return stringResource(if (record.event.doneBy == "manager") R.string.inbox_done_by_manager else R.string.inbox_done) to null
     return when (item.section) {
         "working" -> stringResource(R.string.inbox_section_working) to Status.Working
@@ -148,7 +148,7 @@ private fun eventTag(record: InboxRecord): Pair<String, Status?>? {
     }
 }
 
-/** Where the processing stands, as one line: who is on it, 「AI 正在准备建议」, or that it failed. */
+/** Where the processing stands, as one line: who is on it, "AI is preparing a suggestion", or that it failed. */
 @Composable
 internal fun EventStateLine(mark: EventMark, modifier: Modifier = Modifier) {
     when (mark) {
@@ -177,14 +177,14 @@ internal fun EventRowMark(mark: EventMark) {
 }
 
 /**
- * The suggestion and its buttons. 修改 opens [SuggestionEditor]; a stale suggestion (the hub has a newer one) says
- * 「建议已更新」 and the page redraws from the item the hub answers with. A retry of the same answer keeps its client id.
+ * The suggestion and its buttons. Edit opens [SuggestionEditor]; a stale suggestion (the hub has a newer one) says
+ * "Suggestion updated" and the page redraws from the item the hub answers with. A retry of the same answer keeps its client id.
  */
 @Composable
 internal fun SuggestionCard(repository: InboxRepository, itemId: String, suggestion: InboxSuggestion, modifier: Modifier = Modifier,
-    /** In 需要你 the card is marked as the user's to decide; a conclusion in 知悉即可 is just read. */
+    /** In Needs you the card is marked as the user's to decide; a conclusion in FYI is just read. */
     needsYou: Boolean = true,
-    /** True when the answer found a newer suggestion (the page says 「建议已更新」), false when the user answers again. */
+    /** True when the answer found a newer suggestion (the page says "Suggestion updated"), false when the user answers again. */
     onStale: (Boolean) -> Unit = {},
 ) {
     val palette = PersonaTheme.palette
@@ -241,7 +241,7 @@ internal fun SuggestionCard(repository: InboxRepository, itemId: String, suggest
         onDismiss = { if (busy == null) editing = false })
 }
 
-/** 修改: the suggestion's text to change and confirm, or 「说一句话」 to tell the processing conversation instead. */
+/** Edit: the suggestion's text to change and confirm, or "Say something" to tell the processing conversation instead. */
 @Composable
 private fun SuggestionEditor(
     suggestion: InboxSuggestion,
@@ -267,7 +267,7 @@ private fun SuggestionEditor(
     }
 }
 
-/** The 处理链条: a header, the newest entry (all of them once expanded), each tapping where its link goes or opening in place. */
+/** The Handling chain: a header, the newest entry (all of them once expanded), each tapping where its link goes or opening in place. */
 private fun LazyListScope.eventChain(record: InboxRecord, go: (ChainTarget) -> Unit) {
     val chain = record.event.chain
     if (chain.isEmpty()) return

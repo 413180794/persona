@@ -34,7 +34,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * 额度 on a launcher's page drawn on the JVM with Robolectric's native graphics: a full report (a budget, an account
+ * "Quota" on a launcher's page drawn on the JVM with Robolectric's native graphics: a full report (a budget, an account
  * cooling down with a used-up window, a provider's models unfolded, the key's use) and the other states (reading, no
  * extension knows the gateway, the read failed), in every style, light and dark. Written as PNGs to
  * `build/launcher-quota-shots/` (or `-Dpersona.shots=<dir>`) to look at. The gateways are the mock hub's made-up ones.

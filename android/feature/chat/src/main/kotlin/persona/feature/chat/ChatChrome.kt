@@ -55,7 +55,7 @@ internal fun ChatHeader(
     DisposableEffect(Unit) { onDispose { onOverlay(false) } }
     val line = resolveStatusLine(statusState)
     val status = line?.status ?: Status.entries.firstOrNull { it.name == session?.agentState?.name } ?: Status.Unknown
-    // While the hub is out of reach the status line under the title says so (等待网络 / 连接中… / 更新中…) instead of
+    // While the hub is out of reach the status line under the title says so ("Waiting for network" / "Connecting…" / "Updating…") instead of
     // the session's state, which may be stale; it is back the moment the connection is.
     ChatTopBar(
         title = session?.displayTitle ?: stringResource(R.string.chat_chrome_title_default), onBack = onBack,
@@ -88,7 +88,7 @@ internal fun ChatHeader(
         onGit?.let { add(JAction(gitLabel, onClick = it)) }
         add(JAction(stringResource(R.string.chat_chrome_details), onClick = onDetails))
         add(JAction(stringResource(R.string.chat_chrome_info), PhIcons.Info, enabled = session != null) { dialog = "info" })
-        // A Codex app-server thread the phone may join live (iOS 实时接入); joined, it can answer its approvals.
+        // A Codex app-server thread the phone may join live (iOS "Join live"); joined, it can answer its approvals.
         session?.takeIf { it.canAttach }?.let { target ->
             add(JAction(stringResource(R.string.chat_chrome_attach), PhIcons.PlugsConnected, enabled = canAct) { state.run(target, ChatAction.Attach) })
         }
@@ -158,7 +158,7 @@ internal fun ChatHeader(
                 items(peers, key = { it.key.path }) { peer ->
                     val place = places[peer.key]
                     val where = peer.slotName ?: peer.agentLabel
-                    // the 发起者 says so; the panes it split off sit one step in, as on the Agents list (#2515)
+                    // the launcher says so; the panes it split off sit one step in, as on the Agents list (#2515)
                     JRow(peer.displayTitle,
                         modifier = if (place == CompanionPlace.Branch) Modifier.padding(start = Tokens.Space.l) else Modifier,
                         subtitle = if (place == CompanionPlace.Launcher) stringResource(R.string.chat_tabs_launcher_subtitle, where) else where,

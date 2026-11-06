@@ -49,8 +49,8 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
-// The UI version 3 parts of an extension's view (docs/extensions.md「声明式 UI」): markdown, a table, a row's icon /
-// avatar / thumbnail, the search box and filter over a list, a section's 加载更多. Drawn with the design system only.
+// The UI version 3 parts of an extension's view (docs/extensions.md "Declarative UI"): markdown, a table, a row's icon /
+// avatar / thumbnail, the search box and filter over a list, a section's "Load more". Drawn with the design system only.
 
 /** The fixed icons an extension may name, as this app's; one it does not know is the extension icon. */
 internal object ExtensionIcons {
@@ -235,7 +235,7 @@ internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, 
 internal class SearchSubmit(val label: String, val sending: Boolean, val send: (String) -> Unit)
 
 /**
- * A section's 加载更多: coming on screen asks for more once (the list composes it as it nears the end), tapping asks
+ * A section's "Load more": coming on screen asks for more once (the list composes it as it nears the end), tapping asks
  * again after a failure; it spins while the answer is on its way.
  */
 @Composable
@@ -276,7 +276,7 @@ internal fun ExtensionTabs(tabs: persona.core.contracts.api.ExtensionViewTabs, v
 }
 
 /**
- * A split view's side pane on a phone (UI version 4): a bar on top (「文件 · 12」) that opens in place, the pane's
+ * A split view's side pane on a phone (UI version 4): a bar on top ("Files · 12") that opens in place, the pane's
  * sections in it; picking a file closes it.
  */
 @Composable

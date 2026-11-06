@@ -69,7 +69,7 @@ class AgentsFoldAllTest {
         runCurrent()
     }
 
-    // 全部展开 opens a tab group folded by hand, as it opens every space (#2792); 全部折叠 leaves tab groups alone
+    // "Expand all" opens a tab group folded by hand, as it opens every space (#2792); "Collapse all" leaves tab groups alone
     @Test fun expandAllOpensATabGroupFoldedByHand() = runTest {
         startModel()
         model.machine("shown")

@@ -186,8 +186,8 @@ internal fun WorkflowRunCard(workflow: Workflow, expanded: Boolean, onToggle: ()
 }
 
 /**
- * "循环 · 每 30 分钟 · 下次 14:05": the cadence the hub reports, in the phone's time zone, its parts joined by
- * [separator] (the language's own 「 · 」 when not given).
+ * "Loop · every 30 min · next 14:05": the cadence the hub reports, in the phone's time zone, its parts joined by
+ * [separator] (the language's own " · " when not given).
  */
 internal fun loopSummary(
     res: Resources, loop: LoopInfo, zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),

@@ -62,7 +62,7 @@ fun ChatComposer(
     modeHint: String? = null,
     onOverlay: (Boolean) -> Unit = {},
     visible: Boolean = true,
-    /** Who /clear restarts, for its confirmation ("Claude 会开一个新会话…"). */
+    /** Who /clear restarts, for its confirmation ("Claude will start a new session…"). */
     agentName: String = "Claude",
     /** False for a session whose source does not let the phone interrupt it: no stop while it works. */
     canInterrupt: Boolean = true,
@@ -75,7 +75,7 @@ fun ChatComposer(
     /** /loop in the "/" list, with a line under the box saying what it will do (Claude Code only, web `hasLoop`). */
     loop: Boolean = false,
     /**
-     * What has to happen before anything can be sent (先接上模型, 先添加电脑: docs/onboarding.md 4.4): the send button says
+     * What has to happen before anything can be sent ("Connect a model first", "Add a computer first": docs/onboarding.md 4.4): the send button says
      * it and [onBlocked] opens that step. The box still takes typing and keeps the draft; nothing is queued.
      */
     blockedLabel: String? = null,
@@ -164,7 +164,7 @@ fun ChatComposer(
         try { action() } catch (_: Exception) { onNotice(resources.getString(R.string.chat_composer_picker_failed)) }
     }
 
-    // A tap on a photo that is on the computer: the editor opens on it, and 完成 puts the marked-up copy in its place.
+    // A tap on a photo that is on the computer: the editor opens on it, and "Done" puts the marked-up copy in its place.
     fun editPhoto(photo: ComposerAttachment) {
         if (editing != null || editOpening || sending) return
         editOpening = true
@@ -176,7 +176,7 @@ fun ChatComposer(
             finally { editOpening = false }
         }
     }
-    // 完成: the editor spins while the new photo is written (JPEG like a picked photo) and uploaded, then closes. Only an
+    // "Done": the editor spins while the new photo is written (JPEG like a picked photo) and uploaded, then closes. Only an
     // upload that worked replaces the original; the old path leaves the message with it.
     fun finishEdit(edit: ComposerPhotoEdit, result: Bitmap) {
         if (result === edit.source) { editing = null; return } // nothing drawn
@@ -239,7 +239,7 @@ fun ChatComposer(
     editing?.let { edit ->
         key(edit) { ImageEditor(edit.source, onCancel = { if (editing === edit) editing = null }, onDone = { finishEdit(edit, it) }) }
     }
-    // 语音输入: what the phone's recognizer heard goes at the end of the draft, to edit before sending.
+    // Voice input: what the phone's recognizer heard goes at the end of the draft, to edit before sending.
     val dictation = rememberDictation(onHeard = { state.appendDictation(it) }, onError = onNotice)
     if (!visible) return
     LaunchedEffect(state.focusRequest) { if (state.focusRequest > 0) focusRequester.requestFocus() }

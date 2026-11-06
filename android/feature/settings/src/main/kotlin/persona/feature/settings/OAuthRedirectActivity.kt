@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 
 /**
- * Catches Google's redirect after 「使用 Google 账号登录」 (`<scheme>:/oauth2redirect?code&state`),
+ * Catches Google's redirect after "Sign in with Google" (`<scheme>:/oauth2redirect?code&state`),
  * hands it to [GoogleSignIn] and brings the app back to the front.
  */
 class OAuthRedirectActivity : Activity() {

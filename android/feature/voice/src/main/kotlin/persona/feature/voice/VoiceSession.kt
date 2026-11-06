@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * One voice conversation with the hub's voice extension (docs/extensions.md「语音」). Full duplex: once the extension is
+ * One voice conversation with the hub's voice extension (docs/extensions.md "Voice"). Full duplex: once the extension is
  * ready the microphone goes up all the time, silence and muted frames too (the model decides when a turn ends), the
  * extension's voice comes down and plays at once, and a `clear` drops what has not been played. [start] once, [stop]
  * when the page goes away; everything after [stop] is ignored.

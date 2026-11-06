@@ -38,7 +38,7 @@ class SessionSourceTest {
         assertEquals(SessionSourceInfo(CoreText.of(CoreText.Key.SourceCodexHistory), readOnlyReason = CoreText.plain("外部进程正在使用此会话")), history.source)
         assertEquals("Codex 历史 · 仅查看：外部进程正在使用此会话", (history.readOnlyNotice.zh()).zhAny())
         assertEquals("Codex", (history.agentLabel).zhAny())
-        // A reason the node already starts with "仅查看：" is not prefixed twice.
+        // A reason the node already starts with the Chinese "Read-only: " prefix is not prefixed twice.
         assertEquals("Codex 历史 · 仅查看：未发现可共享的 app-server 入口",
             (history.copy(readOnlyReason = "仅查看：未发现可共享的 app-server 入口").sourceSubtitle).zhAny())
         // Only a session in a terminal can be resumed there.

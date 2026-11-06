@@ -15,7 +15,7 @@ import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.*
 import org.junit.Test
 
-/** A card answered on the phone stops its agent's rows saying 需要你 before the hub's next sessions push (#4525). */
+/** A card answered on the phone stops its agent's rows saying "Needs you" before the hub's next sessions push (#4525). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnsweredSessionsTest {
     private val waiting = Session("mac", "a", status = "blocked", state = "needs_you", stateSince = "2026-11-06T08:00:00Z",
@@ -104,7 +104,7 @@ class AnsweredSessionsTest {
 
     @Test fun aCardHandedBackToTheComputerLeavesItsAgentWaiting() = runTest {
         val f = fixture()
-        // 交给电脑处理: the agent now waits on the computer, so its rows keep saying 需要你.
+        // "Hand to the computer": the agent now waits on the computer, so its rows keep saying "Needs you".
         f.center.resolve(card.id, Resolution(dismiss = true))
         runCurrent()
         assertTrue(f.center.answered.value.isEmpty())

@@ -15,11 +15,11 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
 
-// Inbox phase 1 (docs/inbox.md「事件、处理链条、建议」, docs/android.md「收件箱：事件、建议、处理链条」): the pure parts of
+// Inbox phase 1 (docs/inbox.md"Events, handling chains, and suggestions", docs/android.md"Inbox: events, suggestions, and handling chains"): the pure parts of
 // how an event reads in the list and on its page. An item from an older hub has no event fields and none of this applies:
 // its row and its page are what they were.
 
-/** An event's own page: 摘要, 总结, the suggestion with its buttons, the 处理链条; 「看原文」 opens the item's source page. */
+/** An event's own page: Summary, Recap, the suggestion with its buttons, the Handling chain; "View original" opens the item's source page. */
 @Serializable @SerialName("persona.feature.inbox.InboxEventRoute")
 data class InboxEventRoute(val itemId: String) : NavKey
 
@@ -27,7 +27,7 @@ data class InboxEventRoute(val itemId: String) : NavKey
 fun inboxRowPage(record: InboxRecord, pages: InboxItemPages): NavKey =
     if (record.event.present) InboxEventRoute(record.item.id) else pages.open(record)
 
-/** The words for a processing conversation that is on it (进行中): AI 正在看, Agent 在做, 等对方回复. */
+/** The words for a processing conversation that is on it (In progress): AI is reviewing, Agent is working, Waiting for reply. */
 @StringRes
 internal fun handlingWord(handling: InboxHandling?): Int? = when (handling?.state) {
     "looking" -> R.string.inbox_handling_looking
@@ -38,13 +38,13 @@ internal fun handlingWord(handling: InboxHandling?): Int? = when (handling?.stat
 
 /** What an open event's row says under its preview, besides its status mark. */
 internal sealed interface EventMark {
-    /** In 进行中: who is on it ([word]). */
+    /** In In progress: who is on it ([word]). */
     data class Working(@StringRes val word: Int) : EventMark
-    /** 急事 in 需要你 while the manager prepares its suggestion. */
+    /** Urgent in Needs you while the manager prepares its suggestion. */
     data object Preparing : EventMark
     /** The suggestion's kind and the first line of its text. */
     data class Suggests(@StringRes val kind: Int, val line: String) : EventMark
-    /** The manager failed or timed out: back in 需要你 without a suggestion. */
+    /** The manager failed or timed out: back in Needs you without a suggestion. */
     data class Failed(val reason: String?) : EventMark
 }
 
@@ -73,8 +73,8 @@ internal fun suggestionKindLabel(suggestion: InboxSuggestion): Int = when {
 }
 
 /**
- * The card's buttons: [confirm]'s label, and whether it can be changed (修改 opens the editor with the text and
- * 「说一句话」). reply 发送 · 修改 · 驳回, agent 开始 · 修改 · 驳回, conclusion 知道了 · 驳回, handback 确认 · 修改 · 驳回.
+ * The card's buttons: [confirm]'s label, and whether it can be changed (Edit opens the editor with the text and
+ * "Say something"). reply Send · Edit · Reject, agent Start · Edit · Reject, conclusion Got it · Reject, handback Confirm · Edit · Reject.
  */
 internal data class SuggestionButtons(@StringRes val confirm: Int, val editable: Boolean)
 
@@ -88,7 +88,7 @@ internal fun suggestionButtons(suggestion: InboxSuggestion): SuggestionButtons =
 
 /**
  * The confirm request for [suggestion] with the text the user leaves in the editor: the edited text only when it
- * differs from the suggestion's (the hub records 改过 then), else none (run exactly as shown).
+ * differs from the suggestion's (the hub records Edited then), else none (run exactly as shown).
  */
 internal fun confirmText(suggestion: InboxSuggestion, edited: String?): String? =
     edited?.trim()?.takeIf { it.isNotEmpty() && it != suggestion.text.trim() }
@@ -100,7 +100,7 @@ internal fun shownChain(chain: List<InboxChainEntry>, expanded: Boolean): List<I
 /** What tapping a chain entry does. */
 internal sealed interface ChainTarget {
     data class Page(val key: NavKey) : ChainTarget
-    /** The item's own source page (Feishu chat, mail, connector thread, the extension's page): what 「看原文」 opens. */
+    /** The item's own source page (Feishu chat, mail, connector thread, the extension's page): what "View original" opens. */
     data object Source : ChainTarget
     /** A connector's link, opened in the in-app browser. */
     data class Url(val url: String) : ChainTarget
@@ -145,7 +145,7 @@ internal fun chainIcon(kind: String, record: InboxRecord): PhIcon = when (kind) 
     "self_replied" -> PhIcons.ArrowBendUpLeft
     "failed" -> PhIcons.WarningCircle
     "concluded" -> PhIcons.Lightbulb
-    // Filed (已处理) by the manager or the user; not in the contract table, drawn like iOS does.
+    // Filed (Done) by the manager or the user; not in the contract table, drawn like iOS does.
     "done" -> PhIcons.Checks
     else -> PhIcons.Info
 }

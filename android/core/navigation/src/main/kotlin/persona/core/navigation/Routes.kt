@@ -29,7 +29,7 @@ sealed interface RouteSource {
 @Serializable @SerialName("jarvis.core.navigation.InboxItemRoute") data class InboxItemRoute(val itemId: String) : NavKey
 
 /**
- * An inbox item drawn by the extension of the connector it comes from (its `inbox_item` UI, docs/extensions.md「UI 插槽」):
+ * An inbox item drawn by the extension of the connector it comes from (its `inbox_item` UI, docs/extensions.md "UI slots"):
  * [extensionId]'s [uiId] for item [itemId]; [title] is the item's until the extension's view has one. When the extension cannot
  * draw it, the item's own page opens instead.
  */
@@ -39,7 +39,7 @@ data class InboxItemUiRoute(val itemId: String, val extensionId: String, val uiI
 @Serializable @SerialName("jarvis.core.navigation.InteractionRoute") data class InteractionRoute(val chat: ChatRoute, val requestId: String) : NavKey
 @Serializable @SerialName("jarvis.core.navigation.PairingRoute") data object PairingRoute : NavKey
 @Serializable @SerialName("jarvis.core.navigation.TodosRoute") data object TodosRoute : NavKey
-/** The to-do list with 新建待办 open: the launcher's 「新建待办」 shortcut ([NewTodoLink], iOS AddTodoIntent). */
+/** The to-do list with "New to-do" open: the launcher's "New to-do" shortcut ([NewTodoLink], iOS AddTodoIntent). */
 @Serializable @SerialName("jarvis.core.navigation.NewTodoRoute") data object NewTodoRoute : NavKey
 @Serializable @SerialName("jarvis.core.navigation.TodoDetailRoute") data class TodoDetailRoute(val todoId: String) : NavKey
 @Serializable enum class SettingsPage { Diagnostics, Readiness, Notifications, PhoneData, Appearance, Devices, About, Pairing, ClaudeCode, ModelConfig, Hubs, Persona, Extensions, Mail, Feishu, Channels, HubUpdate, Translation, Triage, Capsule, Language, Codex, Providers, Storage, Desktops, Managers }

@@ -12,7 +12,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
-/** 新增模型供应商's calls: presets (none from an older hub), and the body that adds one, blank fields left out. */
+/** "Add model provider"'s calls: presets (none from an older hub), and the body that adds one, blank fields left out. */
 class HttpProviderSetupTest {
     private fun <T> withHub(block: suspend (MockWebServer, HttpProviderSetup) -> T): T = runBlocking {
         MockWebServer().use { server ->

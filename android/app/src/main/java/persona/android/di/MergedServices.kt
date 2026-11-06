@@ -16,7 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 
 /*
- * The services the pages use, over every hub group (docs/android.md「多 hub」). Lists are concatenated in the
+ * The services the pages use, over every hub group (docs/android.md "Multiple hubs"). Lists are concatenated in the
  * registry's order with each group's machine ids as GroupKeys shows them; a call goes to the group its id names and
  * reaches that group's own services with plain ids. With one group every list is that group's own flow and every
  * call goes straight to it, so a phone paired with a single hub behaves as before groups existed.
@@ -105,13 +105,13 @@ internal fun mergedPreferences(stacks: GroupStacks): HubPreferences = object : H
 }
 
 /**
- * Machine management (机器页, 引擎, Claude Code / Codex 设置) over every group (#634): each call goes to the group its machine id
+ * Machine management (machines page, engine, Claude Code / Codex settings) over every group (#634): each call goes to the group its machine id
  * names ([routes]: that group's service, already speaking merged ids), so another group's machine is no longer asked of the
- * selected group's hub. Hub-level services (模型配置, 语音) stay with the selected group, like the other hub-level pages.
+ * selected group's hub. Hub-level services (model configuration, voice) stay with the selected group, like the other hub-level pages.
  */
 internal fun mergedMachineManagement(
     routes: MachineRoutes,
-    /** The selected group's own, for what belongs to a hub rather than a machine (订阅额度). */
+    /** The selected group's own, for what belongs to a hub rather than a machine (subscription quota). */
     selected: (suspend () -> MachineManagement)? = null,
 ): MachineManagement = object : MachineManagement {
     override suspend fun launchers(machineId: String) = routes.on(machineId) { it.launchers(machineId) }
@@ -160,7 +160,7 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
         if (GroupKeys.namespaceOf(machineId) == null) null else stacks.of(machineId)?.mergedTerminal
 
     /**
-     * 终端's pane lists and new tabs (docs/terminal.md「独立终端」): each call goes to the machine's group with its plain
+     * Terminal's pane lists and new tabs (docs/terminal.md "Standalone terminal"): each call goes to the machine's group with its plain
      * id. What comes back names no machine (host-local ids, session ids, `pane:` addresses), so it needs no translating.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -300,7 +300,7 @@ internal fun mergedAgentsState(list: List<GroupNames>, states: List<AgentsWiring
         override suspend fun operation(operationId: String) = creation(started[operationId] ?: chosen).operation(operationId)
         // The machine names the hub that took the start: [started] is lost when the wiring is rebuilt or the process dies.
         override suspend fun operation(operationId: String, machineId: String) = creation(of(machineId)).operation(operationId)
-        // 跟随模型配置 reads the selected group's agent.new purpose.
+        // "Follow model configuration" reads the selected group's agent.new purpose.
         override suspend fun newAgentModel() = creations.getOrNull(chosen)?.newAgentModel()
         override suspend fun launcherModels(machineId: String, launcher: String, refresh: Boolean) =
             creation(of(machineId)).launcherModels(machineId, launcher, refresh)

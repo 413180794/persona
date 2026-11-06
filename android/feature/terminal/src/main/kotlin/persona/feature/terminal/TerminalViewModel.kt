@@ -33,7 +33,7 @@ data class TerminalUiState(
     val wheel: Boolean = false,
     /** The terminal's font size in dp ([TerminalFontSize]). */
     val fontSize: Float = TerminalFontSize.DEFAULT,
-    /** What the user chose last: 接管 or 只读 (kept on the phone, [TerminalPreferences.drive]). */
+    /** What the user chose last: "Take over" or "Read-only" (kept on the phone, [TerminalPreferences.drive]). */
     val drive: Boolean = true,
 ) {
     /** The phone drives the pane at its own size (or is about to): keys go straight into the stream. */
@@ -96,8 +96,8 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
                         val lines = withContext(parserDispatcher) {
                             TerminalGrid.rows(screen.text).let { rows -> rows.take(TerminalText.shownRows(rows)) }
                         }
-                        // Reading the screen is said under the title (每秒读一次屏幕), as iOS does: a card above the terminal
-                        // with a 重试 that only brought it back said it a second time, and changed the terminal's height.
+                        // Reading the screen is said under the title ("Updates every second"), as iOS does: a card above the terminal
+                        // with a "Retry" that only brought it back said it a second time, and changed the terminal's height.
                         if (version == revision) _state.update { it.copy(lines = lines, cols = lines.maxOfOrNull { row -> row.size } ?: 0,
                             rows = lines.size, cursor = null, screenStart = 0, loaded = true,
                             note = if (screen.status == "offline") TerminalNote.NoTerminal else null) }
@@ -133,8 +133,8 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
     }
 
     /**
-     * Only watch: mirror the pane at the computer's size. [remember] keeps the choice for the next terminal (the 只读
-     * of the top bar); the 只读 of the 「接管终端？」 prompt is for this time only.
+     * Only watch: mirror the pane at the computer's size. [remember] keeps the choice for the next terminal (the "Read-only"
+     * of the top bar); the "Read-only" of the "Take over the terminal?" prompt is for this time only.
      */
     fun watch(remember: Boolean = true) {
         if (remember) remember(false)
@@ -188,7 +188,7 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
         if (canDrive() && "terminal_click" in transport.features.value && !transport.input(key, click = at)) disconnectedInput()
     }
 
-    /** What the 选择文本 page shows: the rows kept while driving and the screen, as plain text. */
+    /** What the "Select text" page shows: the rows kept while driving and the screen, as plain text. */
     fun screenText(): String = TerminalText.plain(_state.value.lines)
 
     /** Typing works whenever the hub is reachable: into the stream while driving, through `/keys` otherwise. */

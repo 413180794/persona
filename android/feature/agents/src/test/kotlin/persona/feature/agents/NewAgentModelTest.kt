@@ -18,7 +18,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.IOException
 
-/** 新建 Agent's model picker: the list of the launcher that will run, the pick sent once, efforts it takes. */
+/** "New Agent"'s model picker: the list of the launcher that will run, the pick sent once, efforts it takes. */
 /** Robolectric for the strings: Simplified Chinese, the language the expected text is in. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -130,7 +130,7 @@ class NewAgentModelTest {
             assertEquals(all, model.state.value.modelEfforts)
             assertEquals("xhigh", model.state.value.selection.effort)
             assertEquals(listOf("", "low", "medium", "high", "xhigh", "max"), effortChoices(model.state.value.modelEfforts).map { it.first })
-            // Sonnet does not take xhigh: back to 跟随启动器, and its levels only.
+            // Sonnet does not take xhigh: back to "Follow launcher", and its levels only.
             model.pickModel("sonnet")
             assertEquals("", model.state.value.selection.effort)
             assertEquals(listOf("", "low", "medium", "high", "max"), effortChoices(model.state.value.modelEfforts).map { it.first })
@@ -270,7 +270,7 @@ class NewAgentModelTest {
             assertTrue(state.following)
             assertEquals("claude", state.modelLauncher)
             assertEquals(claude, state.modelList)
-            // With no pick 模型配置's model runs, so its efforts are the ones offered.
+            // With no pick "Model configuration"'s model runs, so its efforts are the ones offered.
             assertEquals("模型配置：sonnet", defaultModelDetail(res, state))
             assertEquals(listOf("low", "medium", "high", "max"), state.modelEfforts)
             // A launcher picked for this start runs its own default.

@@ -6,7 +6,7 @@ import kotlinx.coroutines.CancellationException
 
 /**
  * Whether a tap on this attachment opens the image editor (iOS ComposerImages, web AttachmentTray): a photo still on
- * the phone and already on the computer. One uploading or failed keeps its spinner / 重试 until it has gone up; one
+ * the phone and already on the computer. One uploading or failed keeps its spinner / "Retry" until it has gone up; one
  * restored from a sent message has no local copy to draw on.
  */
 internal val ComposerAttachment.editable: Boolean

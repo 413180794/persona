@@ -36,7 +36,7 @@ class RealInboxRepository(
     private val lookupReply: suspend (ReplyTarget, String) -> InboxReplyReceipt? = { _, _ -> null },
     private val classifyReplyFailure: (Exception) -> OutboxState = { OutboxState.Unknown },
     private val sendThread: (suspend (String, ReplyRequest) -> JsonObject)? = null,
-    /** The ordinary sessions' outbox (the one Agents uses): 交给 AI to an Agent queues its message there. */
+    /** The ordinary sessions' outbox (the one Agents uses): "Hand to AI" to an Agent queues its message there. */
     private val messageSender: MessageSender? = null,
     /** How long a burst of hub inbox events is collected before the one refresh it causes. */
     private val refreshWindowMillis: Long = 1_000,
@@ -265,7 +265,7 @@ class RealInboxRepository(
     override suspend fun inboxMutes(): List<persona.feature.inbox.InboxMute> =
         persona.feature.inbox.inboxMutes(requireTransport().inboxMutes())
 
-    // 静音这个仓库 / 会话 / 发件人: the items it covers are done at once (the hub files them too), back if it fails.
+    // "Mute this repository / chat / sender": the items it covers are done at once (the hub files them too), back if it fails.
     override suspend fun mute(record: InboxRecord, option: persona.feature.inbox.InboxMuteOption) {
         val transport = requireTransport()
         val covered = refreshLock.withLock {
@@ -329,7 +329,7 @@ class RealInboxRepository(
             else ReplyDraft(text, clientId)
         return document.drafts[target.storageKey()]?.let { restored(it.text, it.clientId).copy(ai = it.ai, braveClimb = it.braveClimb) }
             ?: document.outbox.lastOrNull { it.target == target && it.state != "sent" }?.let {
-                // [removed] words go back as the words typed, in that mode; encoding them again gives the same request.
+                // Brave Climb words go back as the words typed, in that mode; encoding them again gives the same request.
                 val words = LarkBraveClimbCodec.decodeMessage(it.request.text)
                 if (words != null) restored(words, it.request.clientId).copy(braveClimb = true)
                 else restored(it.request.text, it.request.clientId)
@@ -359,7 +359,7 @@ class RealInboxRepository(
             e.item to SuggestionOutcome.Stale
         }
         if (!owns(transport)) throw CancellationException("Pairing changed")
-        // The hub answers with the item as it now is (a new suggestion, 等对方回, or filed): the page redraws from it.
+        // The hub answers with the item as it now is (a new suggestion, Waiting for reply, or filed): the page redraws from it.
         (item?.obj("item") ?: item)?.takeIf { it.optional("id") == request.itemId }?.let { data ->
             refreshLock.withLock {
                 versions[request.itemId] = data.obj("agent")?.toString().orEmpty()
@@ -905,7 +905,7 @@ class RealInboxRepository(
             pending?.state == "verifying" -> DataText.of(Key.ReplyVerifying)
             pending?.state == "refused" -> DataText.of(Key.ReplyRefused)
             pending != null -> DataText.of(Key.ReplyFailed)
-            // An AI draft shows as its card; only the user's own words read 「草稿 · …」.
+            // An AI draft shows as its card; only the user's own words read "Draft · …".
             draft != null && !draft.ai -> DataText.of(Key.ReplyDraft, draft.text)
             else -> null
         }

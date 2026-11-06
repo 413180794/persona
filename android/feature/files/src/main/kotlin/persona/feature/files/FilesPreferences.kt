@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
-/** The browser's 显示隐藏文件, kept on this phone (not with the pairing): it is how you like to browse, on any hub. */
+/** The browser's "Show hidden files", kept on this phone (not with the pairing): it is how you like to browse, on any hub. */
 internal class FilesPreferences(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("jarvis-files", Context.MODE_PRIVATE)
 
@@ -18,7 +18,7 @@ internal class FilesPreferences(context: Context) {
     private companion object { const val SHOW_HIDDEN = "show_hidden" }
 }
 
-/** 显示隐藏文件 as Compose state: read once, written through on every change. */
+/** "Show hidden files" as Compose state: read once, written through on every change. */
 @Composable
 internal fun rememberShowHidden(): MutableState<Boolean> {
     val context = LocalContext.current

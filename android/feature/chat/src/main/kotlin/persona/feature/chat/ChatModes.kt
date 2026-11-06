@@ -105,7 +105,7 @@ internal fun chatModeHint(session: Session?, includeModes: Boolean = true): Stri
     chatModeHint(session, LocalResources.current, includeModes)
 
 /**
- * The composer's 模式 button (iOS SessionModeBar): permission mode and effort change on the running session; for
+ * The composer's "Mode" button (iOS SessionModeBar): permission mode and effort change on the running session; for
  * Claude in a terminal pane the model too, which goes out as `/model <alias>` ([onPickModel], the same path as the
  * quick messages). Claude's sessions get it (callers check [canChangeModes]), and a Codex thread on its app-server
  * with its effort alone, among its own levels ([canChangeEffortOnly]); all-allow, which a running session cannot pick,

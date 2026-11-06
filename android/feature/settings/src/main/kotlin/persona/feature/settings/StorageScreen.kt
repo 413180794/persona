@@ -108,7 +108,7 @@ private fun StorageKind.color(): Color {
 }
 
 /**
- * 设置 › 存储空间 (iOS `StorageView`): how much the app keeps on this phone, by kind, with one bar like the system's,
+ * Settings › Storage (iOS `StorageView`): how much the app keeps on this phone, by kind, with one bar like the system's,
  * and clearing one kind or every cache; settings and the pairing stay.
  */
 @Composable
@@ -192,7 +192,7 @@ private fun StorageBar(sizes: Map<StorageKind, Long>?, total: Long) {
     }
 }
 
-/** 设置's 存储空间 row, with how much the app takes (measured each time the list shows). */
+/** Settings' "Storage" row, with how much the app takes (measured each time the list shows). */
 @Composable
 internal fun StorageRow(selected: Boolean, onClick: () -> Unit) {
     val context = LocalContext.current

@@ -34,7 +34,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * The terminal's chrome (title, subtitle, read-only chip, key bar, the notice above it, 显示 sheet) in each of the
+ * The terminal's chrome (title, subtitle, read-only chip, key bar, the notice above it, "Display" sheet) in each of the
  * app's languages, light and dark (docs/i18n.md). Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)
@@ -84,7 +84,7 @@ class TerminalShotsTest {
             val bitmap = rule.onRoot().captureToImage().asAndroidBitmap()
             File(out(), "terminal-$name-$language-glass-${if (dark) "dark" else "light"}.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
-        // The first opening of the 显示 sheet stays below the window under Robolectric: a warm-up round, not saved.
+        // The first opening of the "Display" sheet stays below the window under Robolectric: a warm-up round, not saved.
         for ((round, d) in listOf(false, false, true).withIndex()) {
             dark = d
             transport.connection.value = ConnectionState.Online

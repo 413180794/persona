@@ -20,7 +20,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import java.time.Instant
 
-// ───────────────────────────── 这台电脑能做什么
+// ───────────────────────────── What this computer can do
 
 private val FeatureState.tone: Tone get() = when (this) {
     FeatureState.Ready -> Tone.Positive
@@ -40,8 +40,8 @@ private fun checkLabel(status: String) = stringResource(when (status) {
 private fun HealthNote.text(): String = when (this) { is HealthNote.Res -> stringResource(id); is HealthNote.Plain -> text }
 
 /**
- * 这台电脑能做什么 on a machine's page (the web's NodeHealth): the features with 就绪 / 部分可用 / 有问题 / 未启用, 重新检查,
- * 修复 after one confirmation, and every check behind 查看全部检查. A node too old for it says so, with 重新部署 when the
+ * "What this computer can do" on a machine's page (the web's NodeHealth): the features with "Ready" / "Partly working" / "Broken" / "Off", "Check again",
+ * "Fix" after one confirmation, and every check behind "Show all checks". A node too old for it says so, with "Redeploy" when the
  * hub can update it.
  */
 internal fun LazyListScope.machineHealth(
@@ -140,7 +140,7 @@ private fun CheckRow(check: DoctorCheck) {
     }
 }
 
-/** 修复's one confirmation: which of Persona's own files it rewrites; the user's Claude Code settings stay. */
+/** "Fix"'s one confirmation: which of Persona's own files it rewrites; the user's Claude Code settings stay. */
 @Composable
 internal fun FixDialog(state: MachineHealthState, onDismiss: () -> Unit, onFix: () -> Unit) {
     val report = (state.doctor as? DoctorLoad.Report)?.report ?: return
@@ -149,12 +149,12 @@ internal fun FixDialog(state: MachineHealthState, onDismiss: () -> Unit, onFix: 
         confirm = stringResource(R.string.machines_health_fix) to { onDismiss(); onFix() })
 }
 
-// ───────────────────────────── 浏览器（ego lite）
+// ───────────────────────────── Browser (ego lite)
 
 /**
- * 浏览器 on a Mac's page while the hub's ego plugin is on (iOS BrowserSection): the switch that lets the assistant drive
- * its ego lite, 安装 ego lite when it is not there, the first-run setup as steps (open it on the Mac, import a browser's
- * data, finish), and 就绪 with what is left. The phone has no live screen of the Mac: the setup is done at the Mac.
+ * "Browser" on a Mac's page while the hub's ego plugin is on (iOS BrowserSection): the switch that lets the assistant drive
+ * its ego lite, "Install ego lite" when it is not there, the first-run setup as steps (open it on the Mac, import a browser's
+ * data, finish), and "Ready" with what is left. The phone has no live screen of the Mac: the setup is done at the Mac.
  */
 internal fun LazyListScope.machineBrowser(
     machine: Machine,
@@ -261,7 +261,7 @@ private fun BrowserSteps(steps: List<Pair<Boolean, String>>) {
     }
 }
 
-// ───────────────────────────── 订阅额度
+// ───────────────────────────── Subscription limits
 
 private fun shown(percent: Double) = "${percent.coerceIn(0.0, 100.0).toInt()}%"
 
@@ -288,7 +288,7 @@ private fun sampleAge(iso: String, now: Instant): String {
 }
 
 /**
- * 订阅额度 on the machines overview (the web's sidebar bars and their popover in one): every live account, the fullest
+ * "Subscription limits" on the machines overview (the web's sidebar bars and their popover in one): every live account, the fullest
  * first, each window with how much is used, when it starts over and whether use is ahead of an even pace. Hidden
  * entirely while the hub has no data.
  */

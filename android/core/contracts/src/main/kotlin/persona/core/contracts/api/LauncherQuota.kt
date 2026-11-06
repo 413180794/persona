@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * `GET /api/v1/launchers/{name}/quota` (docs/launchers.md「额度」): what a launcher's key may still spend at its gateway, as
+ * `GET /api/v1/launchers/{name}/quota` (docs/launchers.md "Quota"): what a launcher's key may still spend at its gateway, as
  * a quota extension read it. [error] when there is nothing to read ([unsupported]: no extension knows the gateway) or the gateway
  * said no; [machine] is the machine that read it (a ~/.zshrc launcher's key stays there).
  */
@@ -35,7 +35,7 @@ data class LauncherQuota(
 
 @Serializable
 data class QuotaWindow(
-    /** 5 小时 / 每周 / 每月 / 累计预算… */
+    /** 5 hours / weekly / monthly / total budget… */
     @SerialName("label") val label: String = "",
     @SerialName("used_ratio") val usedRatio: Double? = null,
     @SerialName("used") val used: Double? = null,
@@ -65,7 +65,7 @@ data class QuotaModelWindows(
 
 @Serializable
 data class QuotaUsage(
-    /** 今日 / 本周 / 本月 */
+    /** Today / this week / this month */
     @SerialName("label") val label: String = "",
     @SerialName("requests") val requests: Long = 0,
     @SerialName("tokens") val tokens: Long = 0,

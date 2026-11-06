@@ -27,7 +27,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * An extension's command-line tools and sign-in (#4507): the install's 安装命令行 step, the detail's 登录 section signed
+ * An extension's command-line tools and sign-in (#4507): the install's "Install command-line tools" step, the detail's "Sign in" section signed
  * out and signed in, and the device-code sign-in sheet. Every style, light and dark; the PNGs are in
  * build/extension-auth-shots.
  */

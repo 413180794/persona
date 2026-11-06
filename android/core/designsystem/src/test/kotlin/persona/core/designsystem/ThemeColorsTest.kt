@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import persona.core.contracts.api.PersonaManifest
 
-/** 设置 › 外观 › 主题色 and 深浅色 (#3048): the defaults change nothing, every accent reads on every style's page. */
+/** Settings › Appearance › Theme color and Light/Dark (#3048): the defaults change nothing, every accent reads on every style's page. */
 class ThemeColorsTest {
     @Test fun defaultsAreTheOldLook() {
         assertEquals(ThemeColor.Style, ThemeColor.fromKey(null))
@@ -16,7 +16,7 @@ class ThemeColorsTest {
         assertEquals(ColorSchemeChoice.System, ColorSchemeChoice.fromKey(null))
         assertNull(ColorSchemeChoice.System.dark)
         assertNull(ThemeColors.accent(ThemeColor.Style, null))
-        // 跟随形象 without a package's colours is the style's own.
+        // "Follow persona" without a package's colours is the style's own.
         assertNull(ThemeColors.accent(ThemeColor.Persona, null))
         assertNull(ThemeColors.accent(ThemeColor.Persona, PersonaManifest.Colors(light = mapOf("primary" to "#F2C230"))))
     }
@@ -52,7 +52,7 @@ class ThemeColorsTest {
             assertEquals(Color.White, p.userBubbleText)
             assertTrue(ExtensionThemeColors.contrast(Color.White, p.userBubble) >= 4.5)
         }
-        // 系统蓝 is iOS's pale blue with the page's own ink.
+        // "System blue" is iOS's pale blue with the page's own ink.
         val blue = ThemeColors.palette(Palettes.of(AppStyle.Glass, false), ThemeColor.Blue.preset!!)
         assertEquals(Tokens.Semantic.Glass.Light.userBubble, blue.userBubble)
         assertNull(blue.userBubbleText)

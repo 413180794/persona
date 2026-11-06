@@ -32,11 +32,11 @@ import okhttp3.Request
 import java.net.URI
 
 /**
- * Debug builds only: 设置 › 助手 › 主动做事 on its own, against a fake hub (`scripts/mock/mock_hub.py`), for captures before
+ * Debug builds only: Settings › Assistant › "Proactive" on its own, against a fake hub (`scripts/mock/mock_hub.py`), for captures before
  * the page is reached from settings. Not in the release manifest or bytecode.
  *
- *     adb shell am start -n <包名>/persona.android.debug.ProactiveDebugActivity --es debug.mockAddress http://<回环地址>:<端口> \
- *       [--es debug.theme light|dark] [--es debug.style glass|brief|board] [--es debug.page routine:<id>|new|new:<模板>|followups|runs]
+ *     adb shell am start -n <package>/persona.android.debug.ProactiveDebugActivity --es debug.mockAddress http://<loopback address>:<port> \
+ *       [--es debug.theme light|dark] [--es debug.style glass|brief|board] [--es debug.page routine:<id>|new|new:<template>|followups|runs]
  */
 class ProactiveDebugActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

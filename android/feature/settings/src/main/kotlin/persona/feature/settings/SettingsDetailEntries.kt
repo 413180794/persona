@@ -21,9 +21,9 @@ import persona.core.navigation.ExtensionUiRoute
 
 /**
  * Settings pages opened by key rather than from the settings list: a machine's engine (from its page in Agents) and
- * one AI use of 模型配置 (from that list, or from the voice page for its extension's model), one extension of 扩展 and the
- * pages it draws, 扩展市场 with its extensions and markets, a launcher of a machine (from the machine's page), and one channel
- * of 渠道.
+ * one AI use of "Model configuration" (from that list, or from the voice page for its extension's model), one extension of "Extensions" and the
+ * pages it draws, "Extension market" with its extensions and markets, a launcher of a machine (from the machine's page), and one channel
+ * of "Channels".
  */
 fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, services: SettingsServices) {
     val demo = services.demo
@@ -69,7 +69,7 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
         ProviderDetailPage(services.providers.takeUnless { demo }, route.name, machines, onBack = navigator::back)
     }
     entry<LauncherRoute> { route ->
-        // Only the machines' names (for 额度's footer): their live metrics change all the time and would redraw the page.
+        // Only the machines' names (for "Quota"'s footer): their live metrics change all the time and would redraw the page.
         val names by remember(services.sessions) {
             services.sessions.machines.map { list -> list.associate { it.id to it.name } }.distinctUntilChanged()
         }.collectAsState(emptyMap())

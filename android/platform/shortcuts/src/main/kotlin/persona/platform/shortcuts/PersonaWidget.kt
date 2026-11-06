@@ -136,7 +136,7 @@ class PersonaWidget : GlanceAppWidget() {
             Spacer(GlanceModifier.width(Tokens.Space.s))
             Column(GlanceModifier.defaultWeight()) {
                 Text(item.title, style = look.itemTitle, maxLines = 1)
-                // What it is doing, then which computer it runs on (「工作中 · MacBook · weather」).
+                // What it is doing, then which computer it runs on ("Working · MacBook · weather").
                 Text(listOf(FleetText.line(item).resolve(context), item.place).filter { it.isNotEmpty() }.joinToString(" · "),
                     style = look.micro, maxLines = 1)
             }
@@ -163,16 +163,16 @@ class PersonaWidgetReceiver : GlanceAppWidgetReceiver() {
 /**
  * What fits in the widget's height, measured on the launcher at the system's default font size: the padding and spacers
  * take 32dp, the mark, headline and other counts about 64dp of text (a caption line about 19dp of it), each agent 8dp of
- * padding and about 37dp of text, 「+N 个」 about 17dp. Text grows with the system font size; whatever does not fit would
+ * padding and about 37dp of text, "+N more" about 17dp. Text grows with the system font size; whatever does not fit would
  * be cut off at the bottom.
  */
 internal object WidgetLayout {
-    /** How many agents to list under the summary, room left for 「+N 个」: none on the smallest widget, at most three. */
+    /** How many agents to list under the summary, room left for "+N more": none on the smallest widget, at most three. */
     fun rows(heightDp: Float, fontScale: Float = 1f): Int =
         ((heightDp - summary(fontScale) - MORE * fontScale) / (ROW_PADDING + ROW * fontScale)).toInt().coerceIn(0, 3)
 
     /**
-     * Whether the 「Persona」 mark fits above the headline and the [captionLines] under it; a widget squeezed below that
+     * Whether the "Persona" mark fits above the headline and the [captionLines] under it; a widget squeezed below that
      * keeps those and drops the mark.
      */
     fun mark(heightDp: Float, fontScale: Float = 1f, captionLines: Int = 1): Boolean =

@@ -22,7 +22,7 @@ internal fun DevicesPage(
     available: Boolean,
     onBack: () -> Unit,
     footer: @Composable () -> Unit = {},
-    /** 连接新设备's hub calls (a code for another device); null where it cannot be made (体验模式). */
+    /** "Connect a new device"'s hub calls (a code for another device); null where it cannot be made (demo mode). */
     connect: DeviceSettings? = null,
 ) {
     val state by controller.state.collectAsState()
@@ -95,7 +95,7 @@ internal fun NotificationPreferences(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     LaunchedEffect(controller) { if (available) controller.loadPreferences() }
-    // The system's switch for the whole app (iOS: 通知没有打开 first): read again whenever the page comes back.
+    // The system's switch for the whole app (iOS: "Notifications are off" first): read again whenever the page comes back.
     var systemOff by remember { mutableStateOf(false) }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
         systemOff = !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()

@@ -56,7 +56,7 @@ internal class EndpointsSnapshot(
     val resources: Resources,
 )
 
-/** Null where the connection cannot change its routes (体验模式); 连接诊断 then stays read-only as before. */
+/** Null where the connection cannot change its routes (demo mode); "Connection diagnostics" then stays read-only as before. */
 @Composable
 internal fun rememberEndpointsSnapshot(endpoints: ConnectionEndpoints?, probes: List<ConnectionCandidate>, list: LazyListState): EndpointsSnapshot? {
     endpoints ?: return null
@@ -70,7 +70,7 @@ internal fun rememberEndpointsSnapshot(endpoints: ConnectionEndpoints?, probes: 
     return EndpointsSnapshot(editor, routes, ui, rows, drag, resources)
 }
 
-/** 「当前连接」 with the url in use; replaces the read-only 当前路径 row. */
+/** "Current connection" with the url in use; replaces the read-only "Current path" row. */
 internal fun LazyListScope.editableCurrentConnection(snapshot: EndpointsSnapshot, data: ConnectionDiagnostics, connection: ConnectionState) {
     val active = activeRoute(snapshot.resources, snapshot.routes, data.currentPath, connection)
     item { JSectionHeader(stringResource(R.string.settings_endpoint_current_header)) }
@@ -84,8 +84,8 @@ internal fun LazyListScope.editableCurrentConnection(snapshot: EndpointsSnapshot
 }
 
 /**
- * 「候选地址」: one row per candidate in the order the connection tries them, top first, disabled ones in their place.
- * Dragging a row (its handle, or a long press anywhere on it) or 上移 / 下移 in its actions changes that order.
+ * "Candidate addresses": one row per candidate in the order the connection tries them, top first, disabled ones in their place.
+ * Dragging a row (its handle, or a long press anywhere on it) or "Move up" / "Move down" in its actions changes that order.
  */
 internal fun LazyListScope.editableCandidates(snapshot: EndpointsSnapshot, scope: CoroutineScope) {
     val editor = snapshot.editor
@@ -218,7 +218,7 @@ private fun EndpointRowView(
 
 /**
  * The leading handle: the row's turn in the order tried (none for a disabled row, which is skipped) over a grip.
- * Touching it picks the row up at once; it is its own accessibility element, with 上移 / 下移 as actions.
+ * Touching it picks the row up at once; it is its own accessibility element, with "Move up" / "Move down" as actions.
  */
 @Composable
 private fun DragHandle(row: EndpointRow, drag: EndpointDragState, moves: List<CustomAccessibilityAction>) {
@@ -248,7 +248,7 @@ private fun moveActions(row: EndpointRow, onMoveUp: () -> Unit, onMoveDown: () -
     CustomAccessibilityAction(stringResource(R.string.settings_endpoint_move_down)) { onMoveDown(); true }.takeIf { row.canMoveDown },
 )
 
-/** 「第 2 个尝试」, or that a disabled row is skipped. */
+/** "Tried 2nd", or that a disabled row is skipped. */
 @Composable
 private fun turn(row: EndpointRow): String =
     row.rank?.let { stringResource(R.string.settings_endpoint_turn, it) } ?: stringResource(R.string.settings_endpoint_skipped)

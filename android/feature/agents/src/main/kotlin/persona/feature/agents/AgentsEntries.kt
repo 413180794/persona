@@ -77,7 +77,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
     // Retained for source compatibility; the migrated route owns its screen now.
     agentsContent: @Composable () -> Unit = {},
     connectionSettingsContent: @Composable () -> Unit = { PlaceholderScreen(stringResource(R.string.agents_connection_settings)) },
-    /** Whether a hub lists terminal panes (feature terminal_panes): the list menu then opens 终端. */
+    /** Whether a hub lists terminal panes (feature terminal_panes): the list menu then opens "Terminal". */
     terminalPanes: kotlinx.coroutines.flow.Flow<Boolean> = flowOf(false),
 ) {
     entry<AgentsRoute> {
@@ -134,7 +134,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
     }
     entry<ConnectionSettingsRoute> { connectionSettingsContent() }
     entry<NewAgentRoute> { NewAgentDestination(it, navigator, dependenciesOverride) }
-    // 新建待办 from the launcher shortcut is the same page with its sheet open.
+    // "New to-do" from the launcher shortcut is the same page with its sheet open.
     val todosPage: @Composable (Boolean) -> Unit = { creating ->
         val context = LocalContext.current.applicationContext
         val dependencies = remember(context, dependenciesOverride) {
@@ -209,7 +209,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
                             async = true,
                             todoId = targetTodo.id
                         )
-                        // finally: a pairing change cancels the start, and the sheet must not stay on 启动中….
+                        // finally: a pairing change cancels the start, and the sheet must not stay on "Starting…".
                         val outcome = try {
                             handOffToNewAgent(creationService, request, prompt, dependencies.sender(),
                                 adopt = { dependencies.sessions().adopt(it) }, pending = handOffPending)

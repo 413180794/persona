@@ -60,7 +60,7 @@ class InboxEventsTest {
         assertEquals(listOf("lark:oc_demo1:100", "lark:oc_demo2:200", "mail:a1:contract:88", "lark:oc_demo6:600"),
             list.groups.first().rows.map { it.id })
         assertEquals(listOf("lark:oc_demo3:300", "mail:a1:ci:77"), list.groups[1].rows.map { it.id })
-        // Working items were triaged 需要你 but are the AI's now: the badge counts only what needs the user.
+        // Working items were triaged Needs you but are the AI's now: the badge counts only what needs the user.
         assertEquals(4, list.actionCount)
     }
 
@@ -74,7 +74,7 @@ class InboxEventsTest {
         assertEquals(EventMark.Suggests(R.string.inbox_suggestion_conclusion, "周报里你负责的两项都按计划，不用回复。"), eventMark(record("lark:oc_demo7:700")))
         assertNull(eventMark(record("mail:a1:news:99")))
         assertNull(eventMark(record("lark:oc_demo9:900")))
-        // Not urgent and still looking: only the section says so (需要你 without a mark).
+        // Not urgent and still looking: only the section says so (Needs you without a mark).
         val looking = record("lark:oc_demo2:200").let { it.copy(item = it.item.copy(urgent = false)) }
         assertNull(eventMark(looking))
         assertEquals("第一行", firstLine("\n  第一行  \n第二行"))
@@ -88,7 +88,7 @@ class InboxEventsTest {
         assertEquals(SuggestionButtons(R.string.inbox_suggestion_confirm, true), suggestionButtons(s("reply", handback = true)))
         assertEquals(SuggestionButtons(R.string.inbox_suggestion_confirm, true), suggestionButtons(s("unknown")))
         assertEquals(R.string.inbox_suggestion_handback, suggestionKindLabel(s("agent", handback = true)))
-        // 修改 sends the text only when it was changed.
+        // Edit sends the text only when it was changed.
         assertNull(confirmText(s("reply"), " 示例 "))
         assertNull(confirmText(s("reply"), "  "))
         assertEquals("改过的", confirmText(s("reply"), "改过的 "))

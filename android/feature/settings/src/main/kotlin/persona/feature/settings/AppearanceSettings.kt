@@ -42,7 +42,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * 设置 › 界面风格: three styles, applied at once and remembered on this phone, then 主题色 (iOS `ThemeColor`) and 深浅色
+ * Settings › Interface style: three styles, applied at once and remembered on this phone, then "Theme color" (iOS `ThemeColor`) and "Appearance"
  * (iOS `ColorSchemeChoice`); both default to what the app always did (the style's own colors, the system's appearance).
  * Each style option shows a small live preview drawn with the real components of that style.
  */
@@ -100,7 +100,7 @@ private fun StyleOption(style: AppStyle, selected: Boolean, onClick: () -> Unit)
     }
 }
 
-/** A selectable option card: the whole card is the radio button, outlined in the accent (ink in 晨报) when chosen. */
+/** A selectable option card: the whole card is the radio button, outlined in the accent (ink in Brief) when chosen. */
 @Composable
 private fun Modifier.option(selected: Boolean, onClick: () -> Unit): Modifier {
     val palette = PersonaTheme.palette
@@ -172,7 +172,7 @@ private fun StylePreview(style: AppStyle) {
 }
 
 /**
- * 设置 › 外观 › 形象 (docs/persona.md): the built-in faces, the default first, then the hub's packages (a package is
+ * Settings › Appearance › Avatar (docs/persona.md): the built-in faces, the default first, then the hub's packages (a package is
  * downloaded when chosen and kept on the phone), applied at once and remembered on this phone, with the chosen one
  * in each state under them. Demo mode has only the default.
  */
@@ -270,7 +270,7 @@ private fun PersonaOption(
 }
 
 /**
- * 主题色: 跟随界面风格 (the default), 跟随形象 (only while the chosen package brings colors, or while it is chosen), then
+ * "Theme color": "Match style" (the default), "Match avatar" (only while the chosen package brings colors, or while it is chosen), then
  * the five fixed accents, each with its swatch in this appearance. Choosing one drops an extension's role theme, which
  * would otherwise go over it.
  */
@@ -320,7 +320,7 @@ private fun ColorSwatch(color: androidx.compose.ui.graphics.Color?) {
         .border(Tokens.Space.xxs / 2, if (color == null) palette.accent else palette.line, CircleShape))
 }
 
-/** 深浅色: 跟随系统 (the default), 浅色, 深色, on this phone. */
+/** "Appearance": "Match system" (the default), "Light", "Dark", on this phone. */
 @Composable
 private fun SchemeOptions(store: AppStyleStore) {
     val scheme by store.scheme.collectAsState()

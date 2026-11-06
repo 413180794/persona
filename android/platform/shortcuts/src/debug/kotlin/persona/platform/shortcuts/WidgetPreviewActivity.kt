@@ -16,8 +16,8 @@ import kotlin.math.ceil
  * Debug builds only: the home-screen widget hosted the way a launcher hosts it (AppWidgetHost, RemoteViews), at a few
  * sizes over the wallpaper, for captures without dragging it onto a home screen. Needs the bind permission once:
  *
- *     adb shell appwidget grantbind --package <包名> --user 0
- *     adb shell am start -n <包名>/persona.platform.shortcuts.WidgetPreviewActivity
+ *     adb shell appwidget grantbind --package <package> --user 0
+ *     adb shell am start -n <package>/persona.platform.shortcuts.WidgetPreviewActivity
  */
 class WidgetPreviewActivity : Activity() {
     private lateinit var host: AppWidgetHost

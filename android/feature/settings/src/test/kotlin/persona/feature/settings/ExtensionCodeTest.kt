@@ -7,7 +7,7 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.Tone
 import java.io.File
 
-// UI version 4's code hosting components (#2951): what the app reads from the 组件展示 pages, the logic they are drawn
+// UI version 4's code hosting components (#2951): what the app reads from the component showcase pages, the logic they are drawn
 // with, and what pressing them sends.
 class ExtensionCodeTest {
     private fun page(name: String): ExtensionView =

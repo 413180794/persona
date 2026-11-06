@@ -22,7 +22,7 @@ import persona.core.domain.mediaClock
 
 /**
  * The files a sent message carries (`<jarvis-file>`, iOS `AttachedFileCards`, web `FileCards`), above its bubble: one
- * card each with the name and 「size · length」. A tap opens the file on the session's machine (the file viewer plays
+ * card each with the name and "size · length". A tap opens the file on the session's machine (the file viewer plays
  * videos and recordings); a long press copies its path.
  */
 @Composable
@@ -44,7 +44,7 @@ internal fun AttachedFileCards(files: List<AttachedFile>, alignEnd: Boolean = tr
     }
 }
 
-/** 「24.1 MB · 0:12」; what it is when the tag says neither. */
+/** "24.1 MB · 0:12"; what it is when the tag says neither. */
 internal fun attachedDetail(file: AttachedFile, resources: Resources): String {
     val parts = listOfNotNull(file.size.takeIf { it > 0 }?.let { formatBytes(it, resources) }, file.duration?.let(::mediaClock))
     if (parts.isNotEmpty()) return parts.joinToString(" · ")

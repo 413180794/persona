@@ -27,7 +27,7 @@ import persona.core.designsystem.AppStyle
 import persona.core.designsystem.PersonaTheme
 import java.io.File
 
-/** 全部标为已读 asks first and names how many it marks, as on iOS (#3045), in every style, light and dark. */
+/** "Mark all as read" asks first and names how many it marks, as on iOS (#3045), in every style, light and dark. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "zh-w400dp-h700dp-xhdpi")

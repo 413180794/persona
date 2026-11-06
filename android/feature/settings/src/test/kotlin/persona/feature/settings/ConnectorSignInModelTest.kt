@@ -51,7 +51,7 @@ class ConnectorSignInModelTest {
         assertNull(model.state.value.signedInAs)
     }
 
-    /** A step this app cannot draw is not asked again by itself and has no 下一步; 重新开始 is the first step again (#4488). */
+    /** A step this app cannot draw is not asked again by itself and has no "Next"; "Start again" is the first step again (#4488). */
     @Test fun stepsItCannotDrawAreNotAskedAgain() = runBlocking {
         for (p in listOf(BindPrompt(step = "auth", kind = "open_url", url = "https://example.com/auth"),
                          BindPrompt(step = "scan", kind = "qr", interval = 1),
@@ -65,7 +65,7 @@ class ConnectorSignInModelTest {
                          BindPrompt(step = "scan", kind = "qr", url = "https://example.com/q"),
                          BindPrompt(step = "device", kind = "device_code", userCode = "ABCD-1234"),
                          BindPrompt(step = "pair", kind = "pair_code", userCode = "482913"),
-                         // An extension's device code may come with its page alone (docs/extensions.md「登录」).
+                         // An extension's device code may come with its page alone (docs/extensions.md "Sign-in").
                          BindPrompt(step = "device", kind = "device_code", url = "HTTPS://example.com/device"))) assertTrue("$p", BindState(p).polled)
 
         val hub = Hub(BindPrompt(step = "auth", kind = "open_url"), BindPrompt(step = "phone", fields = listOf(BindField("phone", "Phone"))))

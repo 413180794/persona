@@ -21,7 +21,7 @@ private class FakeProviders(var presets: List<ProviderPreset> = emptyList()) : P
     override suspend fun add(provider: NewProvider) { added += provider; refuse?.let { throw it } }
 }
 
-/** 新增模型供应商 (docs/launchers.md「从扩展添加」): what is sent from each form, the name check, a refusal, older hubs. */
+/** "New model provider" (docs/launchers.md "From extension"): what is sent from each form, the name check, a refusal, older hubs. */
 // Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -66,7 +66,7 @@ class NewProviderStateTest {
         val hub = FakeProviders()
         val model = NewProviderModel(hub)
         model.load(preferPreset = true)
-        // No presets (or an older hub): only 自己填写.
+        // No presets (or an older hub): only "Fill in".
         assertFalse(model.state.value.usesPreset)
         model.edit(NewProviderDraft(name = "jv_strong", apiKey = "k", baseUrl = " https://gateway.example.com ", model = "opus",
             smallModel = "haiku", subagentModel = "", args = " --verbose  -x "))

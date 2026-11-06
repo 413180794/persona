@@ -19,7 +19,7 @@ import persona.core.contracts.generated.ExtensionAssistantHTMLActionKind
 import persona.core.contracts.generated.ExtensionViewAction
 import persona.core.contracts.generated.ExtensionViewActionInput
 
-// The cards of one hub's assistant conversations (docs/assistant-views.md「活卡片」「持久化提交」): the live cards, the
+// The cards of one hub's assistant conversations (docs/assistant-views.md "Live cards" "Persisted submissions"): the live cards, the
 // answers and the registered reply blocks, from the feed's full snapshots and the hub's events. One store per hub
 // (TasksStore is), and within it everything is kept per conversation: a card of one never shows in another.
 

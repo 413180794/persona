@@ -25,7 +25,7 @@ interface KnowledgeSendingEntryPoint {
 
 /**
  * The host must route links to its in-app reader, never to an external ACTION_VIEW intent. [onNewAgent] opens
- * 新建会话 with a project's directory and context filled in (开 Agent); without it the page copies the context and
+ * "New session" with a project's directory and context filled in ("Start agent"); without it the page copies the context and
  * switches to Agents, where the user starts the session.
  */
 fun EntryProviderScope<NavKey>.knowledgeEntries(

@@ -25,8 +25,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// 设置 › 设备 › 连接新设备 (docs/onboarding.md 4.2, after the web's #2731 and iOS's #3278): a one-time pairing code from the
-// hub (POST /api/v1/auth/pair-codes, docs/protocol.md「临时配对」) for another app (its QR code and the pairing link,
+// Settings › Devices › Connect a new device (docs/onboarding.md 4.2, after the web's #2731 and iOS's #3278): a one-time pairing code from the
+// hub (POST /api/v1/auth/pair-codes, docs/protocol.md "Temporary pairing") for another app (its QR code and the pairing link,
 // which the Mac and Android paste) or for a browser (the sign-in link and its QR code, which a phone's camera opens).
 // The code lasts ten minutes and is traded once; the page says which device took it.
 
@@ -49,7 +49,7 @@ internal data class ConnectDeviceState(val phase: ConnectPhase = ConnectPhase.Lo
     val live: Boolean get() = code != null && secondsLeft > 0
 }
 
-/** A code lasts ten minutes (docs/protocol.md「临时配对」). */
+/** A code lasts ten minutes (docs/protocol.md "Temporary pairing"). */
 internal const val PairCodeLifeMs = 10 * 60_000L
 
 /**
@@ -106,7 +106,7 @@ internal class ConnectDeviceModel(private val api: DeviceSettings, private val c
     }
 }
 
-/** 连接新设备: the target, its QR code, the link to copy, the countdown; then which device took it. */
+/** "Connect a new device": the target, its QR code, the link to copy, the countdown; then which device took it. */
 @Composable
 internal fun ConnectDevicePage(api: DeviceSettings, onBack: () -> Unit, onPaired: () -> Unit) {
     val model = remember(api) { ConnectDeviceModel(api) }

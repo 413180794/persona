@@ -5,7 +5,7 @@ import persona.core.contracts.CoreText
 import persona.core.contracts.Session
 
 /**
- * What 删除对话 asks, the same from the Agents list and the chat's menu (the web's DeleteSessionDialog, iOS
+ * What "Delete conversation" asks, the same from the Agents list and the chat's menu (the web's DeleteSessionDialog, iOS
  * DeleteSessionText): it only leaves every app's list; the record on the computer stays and brings it back once used.
  */
 fun Session.deleteConfirmation(machineName: String?): CloseConfirmation {

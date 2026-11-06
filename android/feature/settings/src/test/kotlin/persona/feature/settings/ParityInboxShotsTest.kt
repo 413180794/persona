@@ -32,7 +32,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 设置 › 连接器 › 信息 (its steps on the Mac, 交给 Persona, 会话 and a conversation), 设置 › 飞书 › 风灵月影 and 添加邮箱 ›
+ * Settings › Connectors › Messages (its steps on the Mac, "Hand to Persona", "Conversations" and a conversation), Settings › Lark › Message display and "Add mail account" ›
  * Outlook, in the three styles, light and dark (#3045). Written as PNGs to `build/parity-shots/` to look at.
  */
 @RunWith(AndroidJUnit4::class)

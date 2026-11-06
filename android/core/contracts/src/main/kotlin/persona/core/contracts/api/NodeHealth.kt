@@ -15,7 +15,7 @@ data class DoctorCheck(
     @SerialName("items") val items: List<String> = emptyList(),
 )
 
-/** `GET /api/v1/machines/{id}/doctor` and `POST …/doctor/fix` (docs/machines.md「自检」). */
+/** `GET /api/v1/machines/{id}/doctor` and `POST …/doctor/fix` (docs/machines.md "Self-check"). */
 @Serializable
 data class DoctorReport(
     @SerialName("ok") val ok: Boolean = false,

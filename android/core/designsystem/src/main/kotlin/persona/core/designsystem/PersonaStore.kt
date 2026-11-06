@@ -25,9 +25,9 @@ import persona.core.contracts.api.PersonaPacksUnsupported
 import java.io.File
 
 /**
- * The hub's persona packages on this phone (docs/persona.md「手机上」), as on iOS: what the hub offers (kept across
+ * The hub's persona packages on this phone (docs/persona.md "On the phone"), as on iOS: what the hub offers (kept across
  * launches in index.json), the packages downloaded, one directory per rev under files/personas/<id>/<rev>, and a
- * thumbnail each for 设置's cards. A package is used only once all of it is there (it is downloaded beside and moved
+ * thumbnail each for Settings' cards. A package is used only once all of it is there (it is downloaded beside and moved
  * in whole); the chosen one shows from disk at launch, before the hub answers or without it. The choice itself is
  * [AppStyleStore.personaId], kept when its package leaves the hub, so it comes back with it.
  *
@@ -52,7 +52,7 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
     private val _downloading = MutableStateFlow(emptySet<String>())
     val downloading: StateFlow<Set<String>> = _downloading.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
-    /** Why the last list or download failed (设置 › 形象 shows it). */
+    /** Why the last list or download failed (Settings › Persona look shows it). */
     val error: StateFlow<String?> = _error.asStateFlow()
     private val _pictures = MutableStateFlow(0)
     /** Bumped when pictures land on disk: the views that asked for one before ask again. */
@@ -101,7 +101,7 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
             onPhone(chosen) -> chosen
             else -> _current.value?.takeIf { it.id == id && onPhone(it) }
         }
-        // The others' faces for 设置's cards, one small picture each (the package itself comes when chosen).
+        // The others' faces for Settings' cards, one small picture each (the package itself comes when chosen).
         for (p in list) if (!onPhone(p) && !thumbnail(p).exists()) {
             val file = p.manifest.avatarFile(THUMBNAIL_PX) ?: continue
             val bytes = try { api.file(p.id, file) } catch (e: CancellationException) { throw e } catch (_: Exception) { continue }
@@ -231,7 +231,7 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
     }
 
     companion object {
-        /** 设置's cards show faces 64 dp wide, at up to 3 pixels a dp. */
+        /** Settings' cards show faces 64 dp wide, at up to 3 pixels a dp. */
         const val THUMBNAIL_PX = 192
     }
 }

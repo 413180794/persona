@@ -94,7 +94,7 @@ fun rollingText(value: String): String {
 
 /**
  * A value's text that counts its numbers to a new value ([rollingText]) and fades in any other change (a new shape:
- * 在做 → 等你). The first draw and reduced motion show it at once.
+ * "Working" → "Waiting for you"). The first draw and reduced motion show it at once.
  */
 @Composable
 fun JChangingText(value: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, maxLines: Int = 1,

@@ -7,7 +7,7 @@ import persona.core.contracts.AgentState
 import persona.core.contracts.Session
 
 /**
- * Takes down 做完了 notifications left by an earlier process (the app force-stopped or killed by the system) whose
+ * Takes down "Finished" notifications left by an earlier process (the app force-stopped or killed by the system) whose
  * session has been seen since (#4088). [SeenSessions] only notices unread turning idle, so after a restart a session
  * already idle in the first list kept its old notification. Only lists verified against the current connection count,
  * never a restored cache: while online it looks every [settle] for [window] (verification can land late, and it does
@@ -15,7 +15,7 @@ import persona.core.contracts.Session
  * one still unread is [SeenSessions]' once it turns idle, as are the notifications this process posts.
  */
 internal class StaleDoneNotifications(
-    /** Tags of the 做完了 notifications showing now, with the wall-clock time each was posted. */
+    /** Tags of the "Finished" notifications showing now, with the wall-clock time each was posted. */
     private val showing: () -> Map<String, Long>,
     /** The sessions in lists verified against the current connection. */
     private val verified: () -> List<Session>,

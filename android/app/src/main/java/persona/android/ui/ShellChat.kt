@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.flow
 @Composable
 internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navigator, feedback: AppFeedback, requestId: String? = null,
     onSessionClosed: (SessionKey) -> Unit = {}) {
-    // The services of the session's own hub group, which need not be the selected one (docs/android.md「多 hub」).
+    // The services of the session's own hub group, which need not be the selected one (docs/android.md "Multiple hubs").
     val source = chatWiringSource()
     val activeWiring by remember(source, route.machineId) { source.bindingsFor(SessionKey(route.machineId, route.sessionId)) }
         .collectAsStateWithLifecycle()
@@ -120,7 +120,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
 }
 
 /**
- * The cards agents wait on you with, as the Persona home's 现在要你处理的事 lists them (the same `needsYou`, all of
+ * The cards agents wait on you with, as the Persona home's "Needs you now" lists them (the same `needsYou`, all of
  * them): a chat that has just answered its last card offers the first one of another chat (#4325).
  */
 @Composable
@@ -140,7 +140,7 @@ private fun rememberWaitingRequests(session: ShellSession, sessions: List<person
 
 /**
  * The session's hub group went away under the page: it merged into another group (its machines lost their suffix)
- * or was disconnected (docs/android.md「多 hub」). The page moves to the same session under its new id, else goes back.
+ * or was disconnected (docs/android.md "Multiple hubs"). The page moves to the same session under its new id, else goes back.
  */
 @Composable
 private fun GroupGoneRedirect(route: ChatRoute, session: ShellSession, navigator: Navigator) {

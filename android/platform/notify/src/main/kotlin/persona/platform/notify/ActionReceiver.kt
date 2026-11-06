@@ -17,7 +17,7 @@ open class ActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         if (intent.action == RESUME) {
-            // 恢复 needs an unlock, which the system reports a moment after it let the button through.
+            // "Resume" needs an unlock, which the system reports a moment after it let the button through.
             val pending = goAsync()
             CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
                 try { if (!lockedAfterUnlockSettles({ keyguard.isDeviceLocked })) Notify.resume(context) }
@@ -36,8 +36,8 @@ open class ActionReceiver : BroadcastReceiver() {
                 intent.getStringExtra(EXTRA_SESSION)?.let { persona.core.contracts.SessionKey(machine, it) }
             }
             val assistant = if (intent.hasExtra(EXTRA_ASSISTANT)) intent.getBooleanExtra(EXTRA_ASSISTANT, false) else null
-            // Taps on the ongoing notification: no 核对中 / 发送中 notice of its own (that would pop a new heads-up when no
-            // 需要你处理 notification is showing); results and failures still get one.
+            // Taps on the ongoing notification: no "Checking" / "Sending" notice of its own (that would pop a new heads-up when no
+            // "Needs you" notification is showing); results and failures still get one.
             val quiet = intent.getBooleanExtra(EXTRA_QUIET, false)
             // Nothing goes to the hub before the claim: a failure up to then (hub unreachable, the timeout) was not sent.
             var claimed = false

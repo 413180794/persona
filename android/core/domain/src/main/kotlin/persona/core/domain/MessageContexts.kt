@@ -7,10 +7,10 @@ import persona.core.contracts.CoreText
  * One `<jarvis-context kind="…" title="…" url="…">body</jarvis-context>` block of a message: a piece of a page picked on
  * the phone, or part of what a Feishu `/agent` request hands its agent (instructions, where it was asked, the chat
  * before it, a document). [kind] is `context`, `edit`, `instructions`, `doc`…; [url] is null when missing or blank;
- * [body] may be empty, and the hub may have cut it (it then ends with 「…（已截断，共 N 字节）」).
+ * [body] may be empty, and the hub may have cut it (it then ends with the Chinese "…(truncated, N bytes total)" mark).
  */
 data class MessageContext(val kind: String, val title: String, val url: String?, val body: String) {
-    /** What a row calls it: the title, else the link, else 「引用」. */
+    /** What a row calls it: the title, else the link, else "Quote". */
     val label: CoreText get() = (title.takeIf(String::isNotBlank) ?: url)?.let(CoreText::plain) ?: CoreText.of(Key.ContextQuote)
 }
 
@@ -48,7 +48,7 @@ fun decodeXmlEntities(value: String): String = value
     .replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
 
 /**
- * What a folded context row says: 「上下文 · N 项」 for several, 「上下文 · 标题」 for one (「要改的内容 · 标题」 when it
+ * What a folded context row says: "Context · N items" for several, "Context · title" for one ("To change · title" when it
  * is a selection to edit).
  */
 fun contextSummary(contexts: List<MessageContext>): CoreText = when (contexts.size) {

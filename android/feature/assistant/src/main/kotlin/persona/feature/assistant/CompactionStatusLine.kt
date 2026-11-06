@@ -11,7 +11,7 @@ import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 import persona.core.designsystem.pagePadding
 
-/** The main conversation's compaction (正在压缩上下文…, 已压缩, 压缩失败：…) as one line over it; a failure closes by hand. */
+/** The main conversation's compaction ("Compacting context…", "Compacted", "Compaction failed: …") as one line over it; a failure closes by hand. */
 @Composable
 internal fun CompactionStatusLine(line: CompactionLine, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     JInlineStatus(
@@ -26,7 +26,7 @@ internal fun CompactionStatusLine(line: CompactionLine, onDismiss: () -> Unit, m
     )
 }
 
-/** The line's words: 正在压缩上下文…, 已压缩, 压缩失败 or 压缩失败：<the hub's reason>. */
+/** The line's words: "Compacting context…", "Compacted", "Compaction failed" or "Compaction failed: <the hub's reason>". */
 @Composable
 internal fun CompactionLine.text(): String = when (this) {
     CompactionLine.Running -> stringResource(R.string.assistant_compaction_running)

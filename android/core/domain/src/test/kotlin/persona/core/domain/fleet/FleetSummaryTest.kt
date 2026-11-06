@@ -54,7 +54,7 @@ class FleetSummaryTest {
         val st = FleetState("needsYou", needsYou = 3, working = 2, unread = 1, items = listOf(question, permission, screen))
         assertEquals(permission, FleetSummary.firstActionable(st))
         assertNull(FleetSummary.firstActionable(st.copy(items = listOf(question, permission.copy(interaction = null)))))
-        assertEquals(4, FleetSummary.hidden(st, 2)) // 6 agents, 2 drawn ⇒ 「+4 个」
+        assertEquals(4, FleetSummary.hidden(st, 2)) // 6 agents, 2 drawn ⇒ "+4"
         assertEquals(3, FleetSummary.hidden(st, 5))
         assertNull(FleetSummary.single(st))
         val one = FleetState("working", working = 1, items = listOf(FleetItem("m/s/x", kind = "working")))

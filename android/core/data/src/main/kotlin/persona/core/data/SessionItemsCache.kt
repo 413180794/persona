@@ -28,7 +28,7 @@ class SessionItemsCache(
 
     override suspend fun release(session: SessionKey) {
         // A group's data can close while a page still watches one of its chats (the group merged into another or was
-        // disconnected, docs/android.md「多 hub」): the cache is gone with it, there is nothing left to release.
+        // disconnected, docs/android.md "Multiple hubs"): the cache is gone with it, there is nothing left to release.
         if (!database.isOpen) return
         try {
             database.withTransaction {

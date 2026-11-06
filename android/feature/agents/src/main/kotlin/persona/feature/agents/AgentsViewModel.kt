@@ -22,11 +22,11 @@ internal data class AgentsPageState(
     val allCount: Int = 0,
     /** Every computer for the filter strip, with how many sessions the list would show for it. */
     val machineCounts: List<MachineCount> = emptyList(),
-    /** What the list would show for all computers (the 全部机器 chip). */
+    /** What the list would show for all computers (the "All machines" chip). */
     val machineTotal: Int = 0,
     /** Sessions of each hub group by its namespace, whichever group the list shows (AgentGroups.kt). */
     val groupCounts: Map<String?, Int> = emptyMap(),
-    /** botmux's sessions in the list's range, hidden or not: the 「botmux」 switch shows while there are any (#2786). */
+    /** botmux's sessions in the list's range, hidden or not: the "botmux" switch shows while there are any (#2786). */
     val botmuxCount: Int = 0,
     /**
      * False only for the placeholder before the first build: the sessions and the local preferences arrive
@@ -177,7 +177,7 @@ internal class AgentsViewModel(
             .groups.flatMap { it.rows }
         AgentsPageState(sessions, knownMachines, prefs, effective, result, all.groups.sumOf { it.rows.size },
             machineCounts(knownMachines, everywhere), everywhere.size, groupCounts(everySession, everyMachine, prefs, effective, ops),
-            // With botmux shown, 全部's own 飞书群 count is it; hidden, counted without a fourth list.
+            // With botmux shown, "All"'s own "Lark groups" count is it; hidden, counted without a fourth list.
             botmuxCount = if (effective.hideBotmux) botmuxCount(rows, prefs, effective)
                 else all.counts[AgentQuickFilter.Feishu] ?: 0, loaded = true)
     }.flowOn(listContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentsPageState())
@@ -236,11 +236,11 @@ internal class AgentsViewModel(
     fun filter(filter: AgentQuickFilter) {
         previous = null
         settings.update { it.copy(quick = filter, kept = emptySet()) }
-        // Choosing 飞书群 shows botmux again (web `botmuxAndFilter`).
+        // Choosing "Lark groups" shows botmux again (web `botmuxAndFilter`).
         if (filter.showsBotmux && page.value.preferences.hideBotmux) localChange { preferences.hideBotmux(false) }
     }
     fun sort(sort: AgentSort) = localChange { previous = null; preferences.sort(sort) }
-    /** The botmux show / hide switch (#2786); hiding it under 飞书群 goes back to 全部. */
+    /** The botmux show / hide switch (#2786); hiding it under "Lark groups" goes back to "All". */
     fun toggleBotmux() = localChange {
         val hide = !page.value.preferences.hideBotmux
         previous = null
@@ -299,7 +299,7 @@ internal class AgentsViewModel(
         it.session(session, AgentSessionEdit(closed = true))
         bindings?.onSessionClosed?.invoke(session.key)
     }
-    /** 删除对话: out of every app's list (the transcript stays); a chat open on it goes. */
+    /** "Delete chat": out of every app's list (the transcript stays); a chat open on it goes. */
     fun delete(session: Session) = change(session.machineId, R.string.agents_notice_deleted) {
         it.session(session, AgentSessionEdit(deleted = true))
         bindings?.onSessionClosed?.invoke(session.key)
@@ -310,7 +310,7 @@ internal class AgentsViewModel(
     /** Still running in a terminal pane (not closed elsewhere since a confirmation opened). */
     fun closable(session: Session): Boolean = page.value.sessions.firstOrNull { it.key == session.key }
         ?.let { it.isLive && it.canTerminal } ?: page.value.sessions.isEmpty()
-    /** 实时接入: join a Codex app-server thread live; the list refreshes after it. */
+    /** "Join live": join a Codex app-server thread live; the list refreshes after it. */
     fun attach(session: Session) = change(session.machineId, R.string.agents_notice_attached) { it.attach(session) }
     fun stopLoop(session: Session) = sendOperation("loop:${session.key.path}") {
         if (hubGroups.groups.value.stateFor(session.machineId, connection.state.value) != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_stop_loop_offline); return@sendOperation }
@@ -390,7 +390,7 @@ internal class AgentsViewModel(
                 expandedQuiet = if (group.folded) current.expandedQuiet + group.id else current.expandedQuiet - group.id,
                 folded = if (group.folded) current.folded - group.id else current.folded + group.id,
             )
-            // 没有待办 is folded by default under to-dos: opening it is remembered, folding it again forgets that.
+            // "No to-do" is folded by default under to-dos: opening it is remembered, folding it again forgets that.
             else if (group.id == TodoNoneGroup) current.copy(
                 folded = current.folded - group.id + if (group.folded) emptySet() else setOf(group.id),
                 expandedIdle = if (group.folded) current.expandedIdle + TodoNoneOpened else current.expandedIdle - TodoNoneOpened,
@@ -430,7 +430,7 @@ internal class AgentsViewModel(
         }
     }
 
-    /** 创建并挂上 (iOS TodoLinkAgentSheet): a new to-do named [title], then this agent on it. */
+    /** "Create and link" (iOS TodoLinkAgentSheet): a new to-do named [title], then this agent on it. */
     fun createAndLinkTodo(title: String, session: Session) {
         viewModelScope.launch {
             val store = tasks ?: return@launch
@@ -446,7 +446,7 @@ internal class AgentsViewModel(
         }
     }
 
-    /** 挂到待办 a whole project (#1616): its agents, now and later, are on [todoId]; null [todoId] makes one named [newTitle]. */
+    /** "Link to to-do" a whole project (#1616): its agents, now and later, are on [todoId]; null [todoId] makes one named [newTitle]. */
     fun linkSpace(todoId: String?, machineId: String, space: String, newTitle: String? = null) {
         viewModelScope.launch {
             val store = tasks ?: return@launch

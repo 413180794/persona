@@ -77,7 +77,7 @@ class ChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()) {
         check(ready)
         val images = attachments.filter { it.image }.mapNotNull { it.path }
         val files = attachments.filterNot { it.image }.mapNotNull { it.path }.map(::quoteComposerPath)
-        // Photos alone still say something to the agent (iOS and the old app send 「请看图片」), in the app's language.
+        // Photos alone still say something to the agent (iOS and the old app send "Please look at the images"), in the app's language.
         val words = if (value.text.isBlank() && files.isEmpty() && images.isNotEmpty()) photosOnlyText else value.text
         val text = (listOf(words) + files).filter(String::isNotBlank).joinToString(" ")
         return text + if (images.isEmpty()) "" else "\n\n<attached_images>\n${images.joinToString("\n")}\n</attached_images>"
@@ -107,7 +107,7 @@ class ChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()) {
     }
 
     /**
-     * A queued message pulled back (排队条「撤回编辑」): the draft if empty, else after it on a new line (iOS); photos it
+     * A queued message pulled back (the queue strip's "Pull back to edit"): the draft if empty, else after it on a new line (iOS); photos it
      * carried come back as attachments rather than as their tag.
      */
     internal fun restoreQueued(text: String) {
@@ -148,7 +148,7 @@ internal fun quoteComposerPath(path: String): String =
 
 private val composerImageTags = Regex("<attached_images>([\\s\\S]*?)</attached_images>")
 
-/** [text] with its photos as one [photo] mark (「[图片]」). */
+/** [text] with its photos as one [photo] mark ("[Image]"). */
 internal fun composerMessagePreview(text: String, photo: String): String = text.replace(composerImageTags, photo).trim()
 
 @Composable

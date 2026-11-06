@@ -32,7 +32,7 @@ import java.io.File
 
 /**
  * UI version 3's components (#1851) drawn on the JVM with Robolectric's native graphics: a list page with its search
- * box, filter, rows with an icon, an avatar and a thumbnail, 加载更多, markdown, a table, an empty state and a loading
+ * box, filter, rows with an icon, an avatar and a thumbnail, "Load more", markdown, a table, an empty state and a loading
  * one; and an assistant's ```persona-card / ```persona-view in a reply. Every style, light and dark, written to
  * `build/extension-v3-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */

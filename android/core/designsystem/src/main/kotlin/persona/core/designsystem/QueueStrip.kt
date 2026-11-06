@@ -35,7 +35,7 @@ import persona.core.designsystem.icons.PhIcons
 /**
  * Messages typed while the agent works and not taken yet, right above the composer (iOS QueueStrip): [title] says how
  * many and that they go in order, then each one numbered, at most two lines. Tapping one hands its index to [onItem]
- * (撤回编辑 / 拷贝 / 删除). While an edit runs ([busy]) a spinner shows and nothing can be tapped; [enabled] false shows
+ * ("Recall to edit" / "Copy" / "Delete"). While an edit runs ([busy]) a spinner shows and nothing can be tapped; [enabled] false shows
  * the queue without actions. A long queue scrolls under the title. Glass floats like the composer, brief is a paper
  * card, the board a bordered ticket.
  */

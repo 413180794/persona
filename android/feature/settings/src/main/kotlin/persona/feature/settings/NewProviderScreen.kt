@@ -20,7 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-/** Debug builds open 新增模型供应商 directly for captures (`debug.newProvider`: manual | preset); release never sets it. */
+/** Debug builds open "New model provider" directly for captures (`debug.newProvider`: manual | preset); release never sets it. */
 object NewProviderPreview {
     @Volatile var open: String? = null
 
@@ -29,12 +29,12 @@ object NewProviderPreview {
 }
 
 /**
- * 新增模型供应商. On a hub with built-in presets (docs/onboarding.md 4.3「三条路」B) it is a wizard: ① 选择供应商 (the
- * hub's providers, then 自定义兼容网关), ② 粘贴 Key (tested by itself; 主对话和新开的 Agent 都用它 follows the main
- * conversation's readiness; the name and another model under 更多选项) and ③ what now runs on it. A gateway typed in is
- * the form, with 测试连接 and 获取模型列表. An older hub opens on the form: 自己填写 — the name, the kind, the gateway and
- * key, the models and flags — or 从扩展添加: a preset, then the name, the key and maybe another of its models.
- * [onSaved] gets the new provider's 模型配置 id.
+ * "New model provider". On a hub with built-in presets (docs/onboarding.md 4.3 "Three paths" B) it is a wizard: (1) pick a provider (the
+ * hub's providers, then "Custom compatible gateway"), (2) paste the key (tested by itself; "Use it for the main conversation and new Agents" follows the main
+ * conversation's readiness; the name and another model under "More options") and (3) what now runs on it. A gateway typed in is
+ * the form, with "Test connection" and "Fetch models". An older hub opens on the form: "Fill in" - the name, the kind, the gateway and
+ * key, the models and flags - or "From extension": a preset, then the name, the key and maybe another of its models.
+ * [onSaved] gets the new provider's "Model configuration" id.
  */
 @Composable
 internal fun NewProviderPage(
@@ -148,7 +148,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.keyField(state: NewPr
     }
 }
 
-/** 从扩展添加: the presets to pick from, the name, the key and the model. */
+/** "From extension": the presets to pick from, the name, the key and the model. */
 private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
     res: Resources, state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, onPick: (String) -> Unit, onModel: () -> Unit,
 ) {
@@ -185,7 +185,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
     }
 }
 
-/** 自己填写: the name, the kind, the gateway, its auth and key (测试连接, 获取模型列表), the models, the flags. */
+/** "Fill in": the name, the kind, the gateway, its auth and key ("Test connection", "Fetch models"), the models, the flags. */
 private fun androidx.compose.foundation.lazy.LazyListScope.manualForm(
     state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit,
     onProbe: () -> Unit, onDiscover: () -> Unit, onPickFound: () -> Unit,
@@ -242,7 +242,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.manualForm(
     }
 }
 
-/** 测试连接 and 获取模型列表 of a gateway typed in, with what each answered. */
+/** "Test connection" and "Fetch models" of a gateway typed in, with what each answered. */
 @OptIn(ExperimentalLayoutApi::class)
 @androidx.compose.runtime.Composable
 private fun FormProbe(state: NewProviderState, onProbe: () -> Unit, onDiscover: () -> Unit, onPickFound: () -> Unit) {

@@ -14,7 +14,7 @@ fun handoffPresets(res: Resources): List<String> = listOf(R.string.inbox_handoff
 /** Where a mail is, so the agent can read and answer it with its own mail tools. */
 data class HandOffMail(val accountId: String, val mailbox: String, val uid: Long)
 
-/** What 交给 AI tells about an item: its title, its text (the hub's context, else who said what) and where it lives. */
+/** What "Hand to AI" tells about an item: its title, its text (the hub's context, else who said what) and where it lives. */
 data class HandOffItem(
     val lark: Boolean,
     val title: String,
@@ -51,7 +51,7 @@ internal fun contextTag(title: String, text: String, url: String = ""): String {
         contextBody(text) + "\n</jarvis-context>"
 }
 
-/** An agent 交给 AI can send to: the most recently active live ones, never Persona itself (iOS: eight). */
+/** An agent "Hand to AI" can send to: the most recently active live ones, never Persona itself (iOS: eight). */
 data class HandOffTarget(val machineId: String, val sessionId: String, val title: String, val machine: String) {
     val key: String get() = "$machineId/$sessionId"
 }
@@ -61,7 +61,7 @@ data class HandOffTarget(val machineId: String, val sessionId: String, val title
  * from other runtimes) drop out once sessions say so; until then being live is the test.
  */
 fun handOffTargets(sessions: List<Session>, machines: Map<String, String> = emptyMap(), limit: Int = 8): List<HandOffTarget> =
-    // Only agents that take messages: a read-only session (Codex 历史, an attached source without send) is left out.
+    // Only agents that take messages: a read-only session (Codex history, an attached source without send) is left out.
     sessions.filter { !it.assistant && it.isLive && it.canSend }
         .sortedWith(compareByDescending<Session> { it.updated ?: Instant.EPOCH }.thenBy { it.key.path })
         .take(limit)

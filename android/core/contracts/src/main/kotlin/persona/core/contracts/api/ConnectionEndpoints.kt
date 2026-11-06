@@ -6,7 +6,7 @@ import persona.core.contracts.CoreText
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Route choices made on this phone for one pairing (docs/android.md「连接地址」). The hub's endpoint list never
+ * Route choices made on this phone for one pairing (docs/android.md "Connection addresses"). The hub's endpoint list never
  * overwrites them, and they are erased together with the pairing (unpair, revocation, pairing again).
  */
 data class EndpointOverrides(
@@ -40,7 +40,7 @@ data class EndpointEntry(
 data class EndpointTestResult(
     val url: String,
     val passed: Boolean,
-    /** What it found (「已通过身份校验」「连接超时」…). */
+    /** What it found ("Identity verified", "Connection timed out"…). */
     val result: CoreText,
     val elapsedMillis: Long,
     /** ISO-8601 UTC. */
@@ -55,7 +55,7 @@ data class ConnectionEndpointsState(
     val entries: List<EndpointEntry> = emptyList(),
     /** The candidate in use; null while connecting, offline or unpaired. */
     val activeUrl: String? = null,
-    /** The user arranged the order; false while the default rule applies (恢复默认顺序 has nothing to do). */
+    /** The user arranged the order; false while the default rule applies ("Restore default order" has nothing to do). */
     val customOrder: Boolean = false,
     /**
      * https addresses can be added and verified: the pairing pinned the hub's TLS key, or it had none and https is

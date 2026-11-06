@@ -236,7 +236,7 @@ internal fun AssistantViewCard(key: String, version: Long, card: AssistantCard, 
         val searchAction = page.search?.action?.id?.let { card.actions[it] }?.takeIf { it.reply != null }
         val searchLabel = stringResource(R.string.settings_card_search)
         if (AssistantCardPresentation.searchable(presented)) key(pageName) {
-            // The search is the card's answer like any reply: sent on one tap of 搜索 with what the box holds, never
+            // The search is the card's answer like any reply: sent on one tap of "Search" with what the box holds, never
             // on a pause in typing.
             ExtensionSearchBar(presented, state, handle, submit = searchAction?.let { action ->
                 SearchSubmit(searchLabel, sending = busy && sending == action.id) { query ->

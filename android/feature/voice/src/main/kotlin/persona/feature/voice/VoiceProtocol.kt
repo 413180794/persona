@@ -10,7 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
-/** What the extension says on the voice socket (docs/extensions.md「语音」), its JSON frames decoded. */
+/** What the extension says on the voice socket (docs/extensions.md "Voice"), its JSON frames decoded. */
 internal sealed interface VoiceEvent {
     /** The session is set up: record at [inputRate], play at [outputRate] (the extension's, never assumed). */
     data class Ready(val inputRate: Int, val outputRate: Int) : VoiceEvent
@@ -21,7 +21,7 @@ internal sealed interface VoiceEvent {
     /** A caption: the whole text so far of line [id]; a [final] line does not change any more. */
     data class Transcript(val id: String, val user: Boolean, val text: String, val final: Boolean) : VoiceEvent
 
-    /** A tool in use (查知识库…) or, [done], finished. Several can be open at once. */
+    /** A tool in use ("Search knowledge"...) or, [done], finished. Several can be open at once. */
     data class Tool(val id: String, val label: String?, val done: Boolean) : VoiceEvent
 
     /** Something went wrong; after a [fatal] one the extension closes the socket. */

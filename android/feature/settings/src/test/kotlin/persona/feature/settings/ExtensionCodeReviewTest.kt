@@ -7,7 +7,7 @@ import persona.core.contracts.api.*
 import java.io.File
 
 // UI version 5's code review (#3136): the same cases as the web's lib/code-review.test.ts, and what the app reads from
-// the 组件展示 page code-review-v5.
+// the component showcase page code-review-v5.
 class ExtensionCodeReviewTest {
     private val r = ExtensionCodeReview
     private fun cut(s: String, spans: List<CharSpan>) = spans.map { s.substring(it.start, it.end) }

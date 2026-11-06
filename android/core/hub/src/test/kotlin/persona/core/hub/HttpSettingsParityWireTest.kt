@@ -16,7 +16,7 @@ import org.junit.Test
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.AssistantConfigUpdate
 
-/** The wire of #3048's settings: 手机静音 (`mute_while_desktop`), 屏蔽的配置目录, 只在主对话里通知 (`main_tasks_quiet`). */
+/** The wire of #3048's settings: "Mute phone" (`mute_while_desktop`), "Blocked config directories", "Notify only in main chat" (`main_tasks_quiet`). */
 class HttpSettingsParityWireTest {
     @Test fun muteWhileDesktopRoundTripsAndStaysOutOfThePutWhenUnknown() = runBlocking {
         MockWebServer().use { server ->

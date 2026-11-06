@@ -72,7 +72,7 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
                 JSegmented(listOf(JSegment(stringResource(R.string.files_git_unstaged)), JSegment(stringResource(R.string.files_git_staged))), if (selection.staged) 1 else 0,
                     { controller.preview(selection.copy(staged = it == 1)) }, Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
             }
-            // A picture, PDF, video or document fetched whole is not 「only the first 2 MB」.
+            // A picture, PDF, video or document fetched whole is not "only the first 2 MB".
             if (file != null) item("size") { FileMeta(file.size, file.truncated && !fetchedWhole(file)) }
             if (diff?.truncated == true) item("truncated") { Notice(stringResource(R.string.files_diff_truncated)) }
         }

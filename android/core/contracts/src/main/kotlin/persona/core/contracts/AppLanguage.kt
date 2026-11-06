@@ -29,8 +29,8 @@ data class AppLanguage internal constructor(val tag: String?, val ownName: Strin
 
 /**
  * The language the app shows right now, resolved (never [AppLanguage.System]); the hub client sends it as
- * `Accept-Language` with every request and as `client_hello.locale` (docs/i18n.md「协议」). Set by the app at start
- * and whenever 设置 › 语言 or the phone's language changes; [changes] tells the socket to say hello again.
+ * `Accept-Language` with every request and as `client_hello.locale` (docs/i18n.md "Protocol"). Set by the app at start
+ * and whenever Settings › Language or the phone's language changes; [changes] tells the socket to say hello again.
  */
 object ClientLanguage {
     private val state = kotlinx.coroutines.flow.MutableStateFlow(AppLanguage.En)

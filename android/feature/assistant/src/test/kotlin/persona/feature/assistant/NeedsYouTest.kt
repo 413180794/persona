@@ -10,7 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 现在要你处理的事 on the Persona home (the old app's ShellNeedsYou, iOS's). */
+/** "Needs you now" on the Persona home (the old app's ShellNeedsYou, iOS's). */
 class NeedsYouTest {
     private fun request(id: String, session: String, kind: String = "plan", title: String? = null, cwd: String? = null) =
         Interaction(id, machineId = "m", sessionId = session, sessionTitle = title, cwd = cwd, kind = kind)
@@ -81,7 +81,7 @@ class NeedsYouTest {
             listOf(message("m1", "2026-11-02T08:00:00Z", title = "", summary = "要你\n回复", lark = false)),
             shown = 4,
         )
-        // A mail without a title or sender has no name of its own: the row reads 邮件 (needsYouWho).
+        // A mail without a title or sender has no name of its own: the row reads "Mail" (needsYouWho).
         assertEquals(listOf("博客迁移", "weather", "Agent", ""), needs.lines.map { it.who })
         assertEquals("先迁移 哪一篇？", needs.lines[0].what)
         assertEquals("计划等你批准", needs.lines[1].what)

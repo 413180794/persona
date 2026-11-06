@@ -11,7 +11,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * 模型: what the launcher that will run starts with, picked from the list its agent shows in /model (the sheet).
+ * "Model": what the launcher that will run starts with, picked from the list its agent shows in /model (the sheet).
  * Nothing when that launcher has no list (TRAEX, a runtime's, older hubs); starting never waits for it.
  */
 internal fun LazyListScope.newAgentModelItems(state: NewAgentState, editable: Boolean, onOpen: () -> Unit, onRetry: () -> Unit) {
@@ -40,7 +40,7 @@ internal fun LazyListScope.newAgentModelItems(state: NewAgentState, editable: Bo
     }
 }
 
-/** The list behind the 模型 row (the design system's [JModelSheet]): only for this start. */
+/** The list behind the "Model" row (the design system's [JModelSheet]): only for this start. */
 @Composable
 internal fun NewAgentModelSheet(
     state: NewAgentState,
@@ -65,18 +65,18 @@ internal fun NewAgentModelSheet(
 /** A model's second line (the design system's [detailLine]). */
 internal fun modelDetail(model: AgentModel): String? = model.detailLine()
 
-/** What runs with no pick: 模型配置's model, else the one the agent defaults to. */
+/** What runs with no pick: "Model configuration"'s model, else the one the agent defaults to. */
 internal fun defaultModelDetail(res: android.content.res.Resources, state: NewAgentState): String? {
     if (state.configuredModel.isNotEmpty()) return res.getString(R.string.agents_model_configured, state.configuredModel)
     val default = state.modelList?.models?.firstOrNull { it.isDefault } ?: return null
     return default.resolved?.takeIf { it.isNotBlank() } ?: default.label
 }
 
-/** The thinking efforts offered: 跟随启动器, then the levels the model that will run takes (all when not known). */
+/** The thinking efforts offered: "Follow launcher", then the levels the model that will run takes (all when not known). */
 internal fun effortChoices(efforts: List<String>?): List<Pair<String, Int>> =
     effortLevels.filter { (id, _) -> id.isEmpty() || efforts == null || id in efforts }
 
-/** For captures (debug builds): steps the 新建会话 page takes once loaded, see `NewAgentPreview.steps`. */
+/** For captures (debug builds): steps the "New session" page takes once loaded, see `NewAgentPreview.steps`. */
 object NewAgentPreview {
     /**
      * Comma separated: `launcher:<name>` picks a launcher, `effort:<level>` an effort, `model:<id>` a model, and

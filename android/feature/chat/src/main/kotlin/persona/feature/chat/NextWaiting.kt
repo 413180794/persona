@@ -13,7 +13,7 @@ import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * One card an agent waits on you with, as the Persona home's 现在要你处理的事 lists it (the app maps its `needsYou`
+ * One card an agent waits on you with, as the Persona home's "Needs you now" lists it (the app maps its `needsYou`
  * lines): the conversation, the card, the conversation's name and what the card asks (`Interaction.headline`).
  */
 data class WaitingRequest(val session: SessionKey, val requestId: String, val who: String, val what: String)
@@ -21,12 +21,12 @@ data class WaitingRequest(val session: SessionKey, val requestId: String, val wh
 /** What other chats still wait on you with (#4325, web #4091): the first in the list's order, and how many there are. */
 internal data class NextWaiting(val request: WaitingRequest, val count: Int)
 
-/** How long the line stays after an answer here: as long as the web shows its 已回答 receipts. */
+/** How long the line stays after an answer here: as long as the web shows its "Answered" receipts. */
 internal const val NEXT_WAITING_MILLIS = 20_000L
 
 /**
  * Whether this reply puts the next card on offer: only an answer that went through (not one handing the card back to
- * the computer) or one the hub had already (as the web's 已回答 receipt). A changed screen, an expired, withdrawn or
+ * the computer) or one the hub had already (as the web's "Answered" receipt). A changed screen, an expired, withdrawn or
  * handed-back card is not: a changed screen brings a new card here at once.
  */
 internal fun InteractionReply.offersNext(resolution: persona.core.contracts.Resolution): Boolean =
@@ -47,7 +47,7 @@ internal fun nextWaiting(waiting: List<WaitingRequest>, here: SessionKey): NextW
     return others.firstOrNull()?.let { NextWaiting(it, others.size) }
 }
 
-/** 还有 N 件等你 · 下一件：<agent> · <what it asks> ›, under the answer's notice; a tap opens that chat with that card first. */
+/** "N more waiting for you · Next: <agent> · <what it asks> ›", under the answer's notice; a tap opens that chat with that card first. */
 @Composable
 internal fun NextWaitingRow(next: NextWaiting, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val text = pluralStringResource(R.plurals.chat_next_waiting, next.count, next.count, next.request.who, next.request.what)

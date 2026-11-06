@@ -103,7 +103,7 @@ internal fun awaitedMessage(items: List<Item>): Item? =
 /**
  * [message] ([awaitedMessage]) is unanswered while the session's status still says it is not at work (#3909, web #3654):
  * the transcript has the message before the node's next sessions push says working, and in between the chat showed
- * neither the work line nor 正在工作. True for [AWAIT_TURN_MILLIS] after the message's time, which a phone clock behind
+ * neither the work line nor "Working". True for [AWAIT_TURN_MILLIS] after the message's time, which a phone clock behind
  * the hub's can stretch by up to as much again; never while the hub says working, waiting on you or offline, nor
  * after a failed start. Like the web, any message counts (typed in the terminal too): it starts a turn all the same.
  */
@@ -115,7 +115,7 @@ internal fun awaitingTurn(message: Item?, status: String?, startFailed: Boolean,
 }
 
 /**
- * Delivered but not in the transcript yet, while the session's status may still say idle: the status line says 正在工作
+ * Delivered but not in the transcript yet, while the session's status may still say idle: the status line says "Working"
  * for it too. No clock of its own: OutboxMessageSender drops a sent bubble after its grace (a minute, longer only
  * while the session is at work), and this goes with it.
  */

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 設定のハブ接続まわり：ペアリング、ハブ、ハブのバージョン、候補アドレス、エンジン（docs/i18n.md）。 -->
+<!-- The hub connection parts of Settings: pairing, hubs, hub version, candidate addresses, engine (docs/i18n.md). -->
 <resources>
     <!-- Pairing -->
     <string name="settings_pairing_title">ペアリング</string>
@@ -208,7 +208,7 @@
     <string name="settings_engine_must_choose">続けるにはエンジンを1つ選んでください。ネットワークを確認してから、もう一度確認をタップしてください。</string>
     <string name="settings_engine_save_failed">保存に失敗しました：%1$s</string>
 
-    <!-- Candidate addresses (接続診断) -->
+    <!-- Candidate addresses (Connection diagnostics) -->
     <string name="settings_endpoint_hint_unchanged">アドレスは変更されていません</string>
     <string name="settings_endpoint_hint_will_save">%1$s（%2$s）として保存します</string>
     <string name="settings_endpoint_save_failed">保存できませんでした。もう一度お試しください。</string>

@@ -13,7 +13,7 @@ import org.junit.Test
 import persona.core.contracts.HubDesktop
 import persona.core.contracts.api.ConnectionState
 
-/** 已登录的电脑 with two hub groups: only the selected group's `desktops` list shows (#3048 review). */
+/** "Signed-in computers" with two hub groups: only the selected group's `desktops` list shows (#3048 review). */
 class GroupDesktopsTest {
     private val mine = listOf(HubDesktop("d1", "Mac A"))
     private val theirs = listOf(HubDesktop("d2", "Mac B"))

@@ -109,7 +109,7 @@ class ExtensionModelShotsTest {
         assertEquals(JsonPrimitive(template.text), current.config["triage_rules"])
     }
 
-    // 管理市场 with the official market (#2351): first, as the hub lists it, with its 官方 tag; the owner's own after it.
+    // "Manage markets" with the official market (#2351): first, as the hub lists it, with its "Official" tag; the owner's own after it.
     @Test fun officialMarketFirstWithItsTagInEveryStyle() {
         var style by mutableStateOf(AppStyle.Glass)
         var dark by mutableStateOf(false)

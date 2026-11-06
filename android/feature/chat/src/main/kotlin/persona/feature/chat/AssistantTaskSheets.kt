@@ -57,7 +57,7 @@ import persona.core.domain.tasks.TaskNow
 import persona.core.domain.tasks.TaskState
 import persona.core.domain.tasks.isRemovable
 
-// A task's detail, the dock's 全部 and the plan's 改一下 (iOS TaskSheets.swift / PlanEditSheet; web TaskPanel): what a
+// A task's detail, the dock's "All" and the plan's "Edit" (iOS TaskSheets.swift / PlanEditSheet; web TaskPanel): what a
 // tap on a task opens instead of leaving the conversation for its agent's page.
 
 /** What the assistant's chat has open over the conversation. */
@@ -65,7 +65,7 @@ internal sealed interface TaskSheet {
     data class Task(val todoId: String) : TaskSheet
     /** An agent no task stands for (the main conversation's dock, #1113). */
     data class Agent(val key: SessionKey) : TaskSheet
-    /** 全部: the conversation's tasks by where they are. */
+    /** "All": the conversation's tasks by where they are. */
     data object Board : TaskSheet
 }
 
@@ -81,9 +81,9 @@ internal fun AssistantTaskSheets(host: AssistantTaskHost) {
 }
 
 /**
- * A task: its mark, title and state, 移除 while nothing of it runs, and its agents (a switcher when there are several).
- * The agent shows where it runs and what it is on now, with 打开对话 for its whole page and 说一句 to talk to it from
- * here; a task whose agent is still starting, or did not start, says so (with 重试 / 移除任务).
+ * A task: its mark, title and state, "Remove" while nothing of it runs, and its agents (a switcher when there are several).
+ * The agent shows where it runs and what it is on now, with "Open chat" for its whole page and "Say something" to talk to it from
+ * here; a task whose agent is still starting, or did not start, says so (with "Retry" / "Remove task").
  */
 @Composable
 private fun TaskDetailSheet(todoId: String, host: AssistantTaskHost, onDismiss: () -> Unit) {
@@ -189,7 +189,7 @@ private fun AgentSummary(session: Session, host: AssistantTaskHost, routeTo: Str
     }
 }
 
-/** 全部 (iOS TaskBoardSheet): the conversation's tasks by where they are, then the agents no task stands for. */
+/** "All" (iOS TaskBoardSheet): the conversation's tasks by where they are, then the agents no task stands for. */
 @Composable
 private fun TaskBoardSheet(host: AssistantTaskHost, onDismiss: () -> Unit) {
     val todos by host.tasks.todos.collectAsStateWithLifecycle()
@@ -243,7 +243,7 @@ private val Todo.startFailure: String?
     get() = startError?.takeIf(String::isNotBlank) ?: agents.firstOrNull { !it.startError.isNullOrBlank() }?.startError
 
 /**
- * A task's row in 全部 (iOS TaskBoardSheet.subtitle): where it runs, then what its card [asks] while it waits for you,
+ * A task's row in "All" (iOS TaskBoardSheet.subtitle): where it runs, then what its card [asks] while it waits for you,
  * why it did not start, or what it is on now. A waiting task's card comes first: an agent that once failed to start
  * must not hide what the one now waiting asks (as the task card).
  */
@@ -252,12 +252,12 @@ private fun boardSubtitle(todo: Todo, state: TaskState, host: AssistantTaskHost,
     return listOfNotNull(todo.place(host, lead), after).filter(String::isNotBlank).joinToString(" · ")
 }
 
-/** An agent's row in 全部 (iOS agentSubtitle): computer · folder · agent · its last words. */
+/** An agent's row in "All" (iOS agentSubtitle): computer · folder · agent · its last words. */
 private fun agentSubtitle(session: Session, host: AssistantTaskHost): String =
     listOfNotNull(host.machineName(session.machineId), session.folderName, session.agentLabel, session.lastText?.trim())
         .filter(String::isNotBlank).joinToString(" · ")
 
-/** 改一下 (iOS PlanEditSheet): each task's title, computer, folder, model, permission and first message before it starts. */
+/** "Edit" (iOS PlanEditSheet): each task's title, computer, folder, model, permission and first message before it starts. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PlanEditSheet(plan: TaskPlan, host: AssistantTaskHost, onDismiss: () -> Unit, onStart: (List<PlanTask>) -> Unit) {

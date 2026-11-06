@@ -38,8 +38,8 @@ private enum class SettingsPart { Home, Notes, Memory, MemoryFile, Proactive, Sk
 private enum class SettingsSheet { Machine, Zone }
 
 /**
- * Where the assistant runs (machine, directory, and what lives where; its model is 模型配置 › 主对话, #1291), what it knows about the user
- * (关于我, memory) and its time zone. Opened in place from the Persona tab; sub-pages keep their own back handling.
+ * Where the assistant runs (machine, directory, and what lives where; its model is Model configuration › Main chat, #1291), what it knows about the user
+ * ("About me", memory) and its time zone. Opened in place from the Persona tab; sub-pages keep their own back handling.
  */
 @Composable
 internal fun AssistantSettingsScreen(
@@ -49,9 +49,9 @@ internal fun AssistantSettingsScreen(
     onMoved: suspend () -> Unit = {},
     /** Shown in place of another page (the Persona tab) rather than as a navigation destination: back closes it here. */
     inPlace: Boolean = false,
-    /** Opens an assistant conversation (one a run of 主动做事 started, or a follow-up continues). */
+    /** Opens an assistant conversation (one a run of "Proactive" started, or a follow-up continues). */
     onOpenConversation: (SessionKey) -> Unit = {},
-    /** Opens 设置 › 模型 for a purpose (a task's model); null leaves those rows out. */
+    /** Opens Settings › Models for a purpose (a task's model); null leaves those rows out. */
     onModelConfiguration: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -530,5 +530,5 @@ private fun ZoneRow(zone: String, current: String?, phoneZone: String, onPick: (
         leading = { JRadio(zone == current, null) }, chevron = false, onClick = { onPick(zone) })
 }
 
-/** What 关于我 opens with: what the user saved in the app, else what the assistant is told from hub.json. */
+/** What "About me" opens with: what the user saved in the app, else what the assistant is told from hub.json. */
 internal fun AssistantConfig.notesShown(): String = notes ?: notesEffective

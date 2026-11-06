@@ -29,7 +29,7 @@ class KnowledgePresentationTest {
         assertEquals(listOf("d"), sections[3].entries.map { it.id })
         assertTrue(sections[3].collapsed)
         assertNotNull(sections[3].note)
-        // Without anything important the rest is just 进行中.
+        // Without anything important the rest is just "Active".
         assertEquals(R.string.knowledge_section_active, projectSections(projects.filter { it.id == "b" }).single().title)
         assertEquals("long", projects[1].projectKind)
         assertEquals("short", projects[0].projectKind)

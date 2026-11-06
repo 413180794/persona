@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 
-// An inbox item's page drawn by its connector's extension (docs/extensions.md「UI 插槽」inbox_item, #1683): which pages the
+// An inbox item's page drawn by its connector's extension (docs/extensions.md "UI slots" inbox_item, #1683): which pages the
 // hub lists, drawing and pressing with the item in the context, and when the item's own page opens instead.
 /** Robolectric for the words: the app's strings in Simplified Chinese (robolectric.properties). */
 @RunWith(AndroidJUnit4::class)
@@ -136,7 +136,7 @@ class ExtensionInboxItemTest {
         assertEquals(ExtensionUiContext(item = "lark:F1:1051", size = "full"), extension.renders.single().first)
         assertNull(InboxItemPageText.fallback(res, model.state.value))
 
-        // A button's toast (接着《…》 on an event that is gone); the view stays.
+        // A button's toast ("Continuing <...>" on an event that is gone); the view stays.
         extension.result = { ExtensionUiResult(toast = "上周的评审已经不在信箱里了") }
         val pressed = model.press(ExtensionViewAction("continues"))
         assertEquals("上周的评审已经不在信箱里了", pressed.toast)
@@ -152,7 +152,7 @@ class ExtensionInboxItemTest {
         assertEquals("replied", extension.renders.last().second)
     }
 
-    // 在会话里看: the one app link the hub lets this slot open comes through to the page; https as anywhere.
+    // "View in conversation": the one app link the hub lets this slot open comes through to the page; https as anywhere.
     @Test fun aButtonOpensTheItemsSource() = runTest {
         val extension = FakeExtension()
         val model = itemModel(extension)
@@ -200,7 +200,7 @@ class ExtensionInboxItemTest {
         }
     }
 
-    // It broke (502 extension_failed) or the hub is out of reach: the own page, saying so with 重试.
+    // It broke (502 extension_failed) or the hub is out of reach: the own page, saying so with "Retry".
     @Test fun theItemsOwnPageSaysWhenTheExtensionBroke() = runTest {
         val broken = itemModel(FakeExtension().apply { view = { throw HubFailure(HubError.Server, "扩展出错了", status = 502, code = "plugin_failed") } })
         broken.load()
@@ -231,7 +231,7 @@ class ExtensionInboxItemTest {
     companion object {
         /**
          * The Feishu extension's body of an event, as the contract describes it (people, time span, the event it continues,
-         * the messages, reply, 在会话里看); the title, tier, summary and 已处理 are the app's header.
+         * the messages, reply, "View in conversation"); the title, tier, summary and "Done" are the app's header.
          */
         val eventView = ExtensionView(title = "周四的评审", state = "s1", sections = listOf(
             ExtensionViewSection(items = listOf(

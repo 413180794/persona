@@ -27,7 +27,7 @@ object TranslationModule {
     @Provides @Singleton fun translation(app: Application): TranslationSettings =
         StoredTranslationSettings(app.getSharedPreferences(StoredTranslationSettings.FILE, Context.MODE_PRIVATE))
 
-    /** The inbox's translations, on the selected group's hub (null while there is none, as for 模型配置). */
+    /** The inbox's translations, on the selected group's hub (null while there is none, as for model configuration). */
     @Provides @Singleton fun translator(app: Application, settings: TranslationSettings, runtime: ConnectionRuntime): Translator =
         Translator(settings.prefs, transport = {
             runtime.scopedData.value?.let { HttpTranslationTransport(runtime.connectionFor(it)) }
@@ -35,7 +35,7 @@ object TranslationModule {
 }
 
 /**
- * 设置 › 翻译 kept on this phone, like the iOS app's `translate.*` defaults: not tied to a hub, so it survives
+ * Settings › Translation kept on this phone, like the iOS app's `translate.*` defaults: not tied to a hub, so it survives
  * re-pairing (the picked chats keep their names for the list).
  */
 class StoredTranslationSettings(private val stored: SharedPreferences) : TranslationSettings {

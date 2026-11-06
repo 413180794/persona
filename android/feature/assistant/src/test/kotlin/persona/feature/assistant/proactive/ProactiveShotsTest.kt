@@ -37,7 +37,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 设置 › 助手 › 主动做事 in each of the app's languages (docs/i18n.md): the overview, a routine, a new one from a
+ * Settings › Assistant › Proactive in each of the app's languages (docs/i18n.md): the overview, a routine, a new one from a
  * template, all follow-ups and all runs, Glass light and dark (the overview in every style). The data is fake and
  * written in the language of the shot, as a person would. Written as PNGs to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`) to look at.
@@ -129,7 +129,7 @@ class ProactiveShotsTest {
             style = s; dark = d
             capture("overview-${s.name.lowercase()}-${if (d) "dark" else "light"}")
         }
-        // 跑完推送 (服务巡检 is only its alerts): the list's mark and the editor's choice in every style, light and dark.
+        // "Push when done" (the service check is only its alerts): the list's mark and the editor's choice in every style, light and dark.
         for (target in listOf<String?>(null, "routine:patrol")) {
             page = target
             for (s in AppStyle.entries) for (d in listOf(false, true)) {

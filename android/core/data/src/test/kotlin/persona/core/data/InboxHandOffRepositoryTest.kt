@@ -11,7 +11,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.nio.file.Files
 
-/** The data side of AI 草拟, 交给 AI and the row labels. */
+/** The data side of "AI draft", "Hand to AI" and the row labels. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InboxHandOffRepositoryTest {
     @Test fun recordsCarryLabelsMailAndWhoWroteTheDraft() = runTest {
@@ -48,7 +48,7 @@ class InboxHandOffRepositoryTest {
             assertEquals("INBOX", records.getValue("mail:a1:t:9").mail!!.mailbox)
             repository.snapshot.first { it.machines["laptop"] == "我的笔记本" }
 
-            // A draft AI wrote shows as its card; the user's own reads 「草稿 · …」.
+            // A draft AI wrote shows as its card; the user's own reads "Draft · …".
             repository.saveDraft(ReplyTarget.Inbox("mail:a1:t:7"), ReplyDraft("AI 写的", ai = true))
             repository.saveDraft(ReplyTarget.Inbox("mail:a1:t:9"), ReplyDraft("自己写的"))
             val drafted = repository.snapshot.value.records.associateBy { it.item.id }

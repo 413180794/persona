@@ -15,7 +15,7 @@ import persona.core.contracts.api.TranslationPrefs
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
-/** 设置 › 翻译 on a mail row: the hub's translation of its subject and preview, while mail is translated. */
+/** Settings › Translation on a mail row: the hub's translation of its subject and preview, while mail is translated. */
 @Composable
 internal fun rememberItemTranslation(record: InboxRecord): ItemTranslation? {
     val translator = LocalTranslator.current ?: return null
@@ -56,7 +56,7 @@ internal fun MailTranslationBar(target: String, translating: Boolean, translated
 }
 
 /**
- * Under a Feishu message from someone else, in a chat picked in 设置 › 翻译, when it is in another language: its
+ * Under a Feishu message from someone else, in a chat picked in Settings › Translation, when it is in another language: its
  * translation in a grey line. Asked for as the bubble shows (in batches); nothing shows until it comes back.
  */
 @Composable

@@ -36,7 +36,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * 还有 N 件等你 · 下一件：… › under the answer's notice (#4325), in every style, light and dark, and in English and
+ * "N more waiting for you · Next: … ›" under the answer's notice (#4325), in every style, light and dark, and in English and
  * Japanese: one line, a long name cut at the end, the caret kept, a click TalkBack names. PNGs in
  * `build/next-waiting-shots/` (or `-Dpersona.shots=<dir>`).
  */

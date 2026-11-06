@@ -52,7 +52,7 @@ fun PairingScreen(
     machines: MachineManagement? = null,
     /** Start at the connect step instead of the welcome page (adding another hub). */
     skipWelcome: Boolean = false,
-    /** Where the last attempt is kept for 连接诊断, which has nothing else to show before a pairing succeeds. */
+    /** Where the last attempt is kept for "Connection diagnostics", which has nothing else to show before a pairing succeeds. */
     attempts: PairingAttempts? = null,
     /** The main conversation's steps on the checklist that follows a pairing (docs/onboarding.md 4.5). */
     mainReadiness: AssistantReadinessSource? = null,
@@ -110,8 +110,8 @@ fun PairingScreen(
         records.finishing(false)
         if (engine != null) engineStep = engine.id else readiness = true
     }
-    // Re-pairing from Settings › 配对 replaces the shell that page sits in, and the root's pairing page comes up at
-    // 欢迎使用 instead: it takes over the steps the other page did not get to.
+    // Re-pairing from Settings › Pairing replaces the shell that page sits in, and the root's pairing page comes up at
+    // "Welcome to Persona" instead: it takes over the steps the other page did not get to.
     LaunchedEffect(paired) {
         if (!paired || running || credentialsSaved || engineStep != null || readiness || !records.finishing()) return@LaunchedEffect
         welcome = false; confirm = null; manual = false; failure = null; notice = null
@@ -440,5 +440,5 @@ private fun LazyListScope.pairingProgress(progress: List<PairingProgress>, runni
     }
 }
 
-/** The hub's own command for a new pairing code, under 其他方式 only. */
+/** The hub's own command for a new pairing code, under "Other ways" only. */
 private const val PairCommand = "personad hub pair"

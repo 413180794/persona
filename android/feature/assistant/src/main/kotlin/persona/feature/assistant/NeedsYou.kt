@@ -28,7 +28,7 @@ internal const val NeedsYouShown = 3
 
 /**
  * What needs the user now, over the Persona home's suggestions (iOS's ShellNeedsYou): the agents waiting on an answer,
- * an approval or a plan, then the inbox's 需要你, newest first. [lines] are the first few; [more] says how many
+ * an approval or a plan, then the inbox's "Needs you", newest first. [lines] are the first few; [more] says how many
  * are left (the agents beyond the first ones count too, like on iOS).
  */
 data class NeedsYou(val lines: List<NeedsYouLine> = emptyList(), val more: Int = 0) {
@@ -54,8 +54,8 @@ sealed interface NeedsYouLine {
         override val key: String get() = "agent:$requestId"
     }
 
-    /** An inbox item the hub sorted into 需要你; [lark] tells a 飞书 message from a mail. [who] is blank when the item
-     *  has neither a title nor a sender: the row then reads 飞书 or 邮件 ([needsYouWho]). */
+    /** An inbox item the hub sorted into "Needs you"; [lark] tells a Lark message from a mail. [who] is blank when the item
+     *  has neither a title nor a sender: the row then reads "Lark" or "Mail" ([needsYouWho]). */
     data class Inbox(
         val itemId: String,
         val lark: Boolean,
@@ -67,13 +67,13 @@ sealed interface NeedsYouLine {
     }
 }
 
-/** An inbox record as the home needs it: its item, and whether it came from 飞书 (it has a feed) or is a mail. */
+/** An inbox record as the home needs it: its item, and whether it came from Lark (it has a feed) or is a mail. */
 data class NeedsYouMessage(val item: InboxItem, val lark: Boolean)
 
 /**
  * The lines of [NeedsYou]: requests of agents that are not Persona's own conversations ([isAssistant], or a session
  * marked assistant) and not muted (by session, or by space unless the session is let through), in the order the hub
- * gives them; then the inbox items still to do in 需要你, newest first. The first [shown] are lines, the rest a count.
+ * gives them; then the inbox items still to do in "Needs you", newest first. The first [shown] are lines, the rest a count.
  */
 fun needsYou(
     requests: List<Interaction>,
@@ -103,7 +103,7 @@ fun needsYou(
     return NeedsYou(all.take(shown), (all.size - shown).coerceAtLeast(0))
 }
 
-/** The conversation's name as the lists show it: its title, else its folder, else 「Agent」. */
+/** The conversation's name as the lists show it: its title, else its folder, else "Agent". */
 private fun agentName(request: Interaction, session: Session?): String =
     request.sessionTitle?.trim()?.takeIf { it.isNotEmpty() && it != "Claude Code" }
         ?: session?.title?.trim()?.takeIf { it.isNotEmpty() && it != "Claude Code" }
@@ -130,8 +130,8 @@ internal fun needsYouIcon(line: NeedsYouLine): PhIcon = when (line) {
 }
 
 /**
- * 现在要你处理的事 on the Persona home: one row per thing (its mark, who, what), a tap opens it where it lives; then
- * 「还有 N 件在收件箱」 when there are more. Nothing at all when nothing needs the user.
+ * "Needs you now" on the Persona home: one row per thing (its mark, who, what), a tap opens it where it lives; then
+ * "N more in the inbox" when there are more. Nothing at all when nothing needs the user.
  */
 @Composable
 internal fun NeedsYouSection(needs: NeedsYou, onOpen: (NeedsYouLine) -> Unit, onMore: () -> Unit, modifier: Modifier = Modifier) {
@@ -158,7 +158,7 @@ internal fun NeedsYouSection(needs: NeedsYou, onOpen: (NeedsYouLine) -> Unit, on
     }
 }
 
-/** Who a line is from as the row reads it: an inbox item without a title or sender is 飞书 or 邮件. */
+/** Who a line is from as the row reads it: an inbox item without a title or sender is "Lark" or "Mail". */
 @Composable
 internal fun needsYouWho(line: NeedsYouLine): String = when {
     line.who.isNotBlank() -> line.who

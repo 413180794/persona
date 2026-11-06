@@ -12,14 +12,14 @@ import persona.core.contracts.HubDesktop
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
-/** 「Mac 上的 Persona 已登录」(iOS `DesktopDevice.bannerTitle`): one line however many there are. */
+/** "Persona on Mac is signed in" (iOS `DesktopDevice.bannerTitle`): one line however many there are. */
 @Composable
 internal fun desktopsTitle(list: List<HubDesktop>): String =
     if (list.size > 1) pluralStringResource(R.plurals.settings_desktops_banner_n, list.size, list.size) else stringResource(R.string.settings_desktops_banner)
 
 /**
  * The settings list's row while a desktop app is connected (iOS `DesktopPresenceRow`, after WeChat's line over its
- * chats): which ones, 手机静音 beside it when on. It opens [DesktopsPage].
+ * chats): which ones, "Mute phone" beside it when on. It opens [DesktopsPage].
  */
 @Composable
 internal fun DesktopPresenceRow(desktops: List<HubDesktop>, muted: Boolean, selected: Boolean, position: GroupPosition, onClick: () -> Unit) {
@@ -31,8 +31,8 @@ internal fun DesktopPresenceRow(desktops: List<HubDesktop>, muted: Boolean, sele
 }
 
 /**
- * 手机静音 at the top of 设置 › 通知 (iOS `DesktopPresenceSheet`'s switch): while a desktop app is connected this phone
- * gets no 需要你 / 做完 pushes. Only from a hub that keeps the setting.
+ * "Mute phone" at the top of Settings › Notifications (iOS `DesktopPresenceSheet`'s switch): while a desktop app is connected this phone
+ * gets no "Needs you" / "Done" pushes. Only from a hub that keeps the setting.
  */
 internal fun LazyListScope.desktopMuteItems(controller: DeviceSettingsState, desktops: List<HubDesktop>, onDesktops: (() -> Unit)?) {
     item("desktops-header") { JSectionHeader(stringResource(R.string.settings_desktops_header)) }
@@ -58,7 +58,7 @@ internal fun LazyListScope.desktopMuteItems(controller: DeviceSettingsState, des
 }
 
 /**
- * 已登录的电脑 (iOS `DesktopPresenceSheet`): which desktop apps are signed in and since when, 手机静音, and 退出 for each
+ * Signed-in computers (iOS `DesktopPresenceSheet`): which desktop apps are signed in and since when, "Mute phone", and "Sign out" for each
  * (it revokes that computer's device token; the hub closes its connection and it has to pair again).
  */
 @Composable

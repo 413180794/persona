@@ -32,7 +32,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The words the hub adds where it cut a long text for the page (`…（已截断，共 N 字节）`). */
+/** The words the hub adds where it cut a long text for the page (a Chinese "…(truncated, N bytes in all)" suffix). */
 private const val CUT_MARK = "\n…（已截断" // i18n-ignore: the hub's cut mark, matched
 
 /** [text] without the hub's cut mark: the part a page carries of a text with `full_size`. */
@@ -41,7 +41,7 @@ internal fun cutText(text: String): String {
     return if (at >= 0) text.substring(0, at) else text
 }
 
-/** 「12 KB」「3.4 MB」: decimal units, like iOS `ByteCountFormatter`. */
+/** "12 KB", "3.4 MB": decimal units, like iOS `ByteCountFormatter`. */
 internal fun formatBytes(bytes: Long, resources: Resources): String = when {
     bytes >= 1_000_000_000 -> String.format(Locale.ROOT, "%.1f GB", bytes / 1e9)
     bytes >= 1_000_000 -> String.format(Locale.ROOT, "%.1f MB", bytes / 1e6)
@@ -49,7 +49,7 @@ internal fun formatBytes(bytes: Long, resources: Resources): String = when {
     else -> resources.getQuantityString(R.plurals.chat_bytes, bytes.toInt(), bytes.toInt())
 }
 
-/** 「刚刚」「5 分钟前」「3 小时前」「昨天 17:05」「10月3日」, in the language of [resources]. */
+/** "Just now", "5 min ago", "3 hr ago", "Yesterday 17:05", "Oct 3", in the language of [resources]. */
 internal fun relativeTime(time: Instant, now: Instant, resources: Resources, zone: ZoneId = ZoneId.systemDefault()): String {
     val seconds = Duration.between(time, now).seconds.coerceAtLeast(0)
     val locale = resources.configuration.locales[0]
@@ -72,8 +72,8 @@ internal fun rememberNow(periodMillis: Long, enabled: Boolean = true): State<Ins
 }
 
 /**
- * 「看全文（12 KB）」 under a text the hub cut (`full_size`): loads the whole text and hands it to [onLoaded], which
- * shows it in place of the cut one; 「加载中…」 meanwhile, 「加载失败，点一下重试」 when it fails.
+ * "Show full text (12 KB)" under a text the hub cut (`full_size`): loads the whole text and hands it to [onLoaded], which
+ * shows it in place of the cut one; "Loading…" meanwhile, "Couldn't load, tap to retry" when it fails.
  */
 @Composable
 internal fun FullTextButton(item: Item, onLoaded: (String) -> Unit) {
@@ -110,8 +110,8 @@ internal fun FullTextButton(item: Item, onLoaded: (String) -> Unit) {
 
 /**
  * The next message Claude suggests (X1, grey in its own input box): a chip over the empty composer of an idle session;
- * a tap puts it in the composer to edit or send. With [onSend], a long press (iOS SuggestionPill's menu) offers 直接发送
- * and 填入输入框, and 直接发送 is an accessibility action too.
+ * a tap puts it in the composer to edit or send. With [onSend], a long press (iOS SuggestionPill's menu) offers "Send now"
+ * and "Fill in composer", and "Send now" is an accessibility action too.
  */
 @Composable
 internal fun ComposerSuggestion(session: Session?, composer: ChatComposerState, onSend: ((String) -> Unit)? = null) {

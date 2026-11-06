@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-// The hub's trailing tag on a card's answer is read only when it is exactly that (docs/assistant-views.md「持久化提交」).
+// The hub's trailing tag on a card's answer is read only when it is exactly that (docs/assistant-views.md "Persisted submissions").
 class PersonaActionTagTest {
     @Test fun theHubsTag() {
         val text = "选 B：队列去重\n优先级：高\n<persona-action view=\"item#0/1\" action=\"choose-b\">{\"values\":{\"priority\":\"high\",\"note\":\"a\\u003cb\"}}</persona-action>"

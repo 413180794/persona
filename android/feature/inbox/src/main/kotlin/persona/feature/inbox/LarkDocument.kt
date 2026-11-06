@@ -20,7 +20,7 @@ fun isLarkDocumentUrl(value: String): Boolean = runCatching {
 sealed interface LarkNativeLink {
     /** A Feishu document: the native reader (`/api/v1/lark/raw/documents/…`). */
     data class Document(val url: String) : LarkNativeLink
-    /** A company-feed (公司圈) share link: the post and its comments (`/api/v1/lark/moments/…`). */
+    /** A company-feed (Moments) share link: the post and its comments (`/api/v1/lark/moments/…`). */
     data class MomentsPost(val postId: String) : LarkNativeLink
 }
 
@@ -91,12 +91,12 @@ fun parseLarkDocument(data: JsonObject): LarkDocument {
         (authority?.get("copy") as? JsonPrimitive)?.booleanOrNull != false)
 }
 
-/** The document's headings, for 目录: each with its index in [LarkDocument.blocks]. */
+/** The document's headings, for "Contents": each with its index in [LarkDocument.blocks]. */
 fun LarkDocument.outline(): List<Pair<Int, LarkDocumentBlock>> =
     blocks.withIndex().filter { it.value.kind == "heading" && it.value.text.isNotBlank() }.map { it.index to it.value }
 
 /**
- * What the reader shows around the text (iOS FeishuDocReader's title block, AI 摘要): who owns it, who edited it last
+ * What the reader shows around the text (iOS FeishuDocReader's title block, "AI summary"): who owns it, who edited it last
  * and when, how often it was read, and Feishu's cached summary. Every part may be missing; none holds up the text.
  */
 data class LarkDocumentDetails(

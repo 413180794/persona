@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /**
- * 添加电脑 / 确认电脑 ([confirm]: the computer to confirm, "" for the first one waiting). Without [api] (体验模式) or on a
+ * "Add a computer" / "Confirm computer" ([confirm]: the computer to confirm, "" for the first one waiting). Without [api] (demo mode) or on a
  * hub that cannot add computers from a device yet, it says where to add one instead.
  */
 @Composable
@@ -187,7 +187,7 @@ private fun Command(line: String, label: String, onCopy: (String) -> Unit) {
     }
 }
 
-/** A hub that cannot add computers from a device yet (or 体验模式): where to add one instead. */
+/** A hub that cannot add computers from a device yet (or demo mode): where to add one instead. */
 @Composable
 private fun OlderHub(onBack: () -> Unit) {
     JListPage(title = stringResource(R.string.machines_onb_title), onBack = onBack, largeTitle = false) {

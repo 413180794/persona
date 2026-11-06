@@ -13,17 +13,17 @@ import java.util.Locale
 
 /**
  * Dates, times and numbers in the language the text is in (docs/i18n.md). Formats come from skeletons (which fields
- * to show) and the locale picks order and words: `MMMd` is 「11月5日」, "Nov 5" and 「11月5日」. Never write a
- * pattern with words in it (`M月d日`) in a page.
+ * to show) and the locale picks order and words: `MMMd` is "Nov 5" in English and month-then-day with the CJK unit characters in Chinese and Japanese. Never write a
+ * pattern with words in it (Chinese month / day characters, say) in a page.
  */
 object LocalizedFormats {
-    /** A month and day: 11月5日 · Nov 5. */
+    /** A month and day: Nov 5. */
     const val MONTH_DAY = "MMMd"
-    /** A month, day and weekday: 11月5日星期四 · Thursday, November 5. */
+    /** A month, day and weekday: Thursday, November 5. */
     const val MONTH_DAY_WEEKDAY = "MMMMdEEEE"
-    /** A month, day and time: 11月5日 14:30 · Nov 5, 2:30 PM. */
+    /** A month, day and time: Nov 5, 2:30 PM. */
     const val MONTH_DAY_TIME = "MMMdjmm"
-    /** A full date: 2026年11月5日 · Nov 5, 2026. */
+    /** A full date: Nov 5, 2026. */
     const val DATE = "yMMMd"
     /** A full date and time. */
     const val DATE_TIME = "yMMMdjmm"
@@ -31,7 +31,7 @@ object LocalizedFormats {
     const val TIME = "jmm"
     /** A time with seconds. */
     const val TIME_SECONDS = "jmmss"
-    /** A month, day and time with seconds: 11月5日 14:30:05 · Nov 5, 2:30:05 PM. */
+    /** A month, day and time with seconds: Nov 5, 2:30:05 PM. */
     const val MONTH_DAY_TIME_SECONDS = "MMMdjmmss"
 
     /** A formatter for [skeleton] in [locale] and [zone]. */

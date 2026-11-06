@@ -6,11 +6,11 @@ import persona.core.contracts.Session
 import persona.core.designsystem.PersonaState
 
 /**
- * What Persona's face shows for the conversation on screen (iOS `AppModel.personaState`, docs/persona.md「状态」):
- * 离线 when the hub or Persona's machine is out of reach (the conversation's, or [assistantMachine] on the
- * new-conversation page, where [session] is null), 等你处理 when the conversation waits on the user, 工作中 while a
- * turn runs, else 空闲. iOS tells 思考中 from 工作中 by the chat's last item, which this page does not hold: a
- * running turn is 工作中 here.
+ * What Persona's face shows for the conversation on screen (iOS `AppModel.personaState`, docs/persona.md "States"):
+ * "Offline" when the hub or Persona's machine is out of reach (the conversation's, or [assistantMachine] on the
+ * new-conversation page, where [session] is null), "Needs you" when the conversation waits on the user, "Working" while a
+ * turn runs, else "Idle". iOS tells "Thinking" from "Working" by the chat's last item, which this page does not hold: a
+ * running turn is "Working" here.
  */
 internal fun personaState(session: Session?, hubOnline: Boolean, machines: List<Machine>, assistantMachine: String = ""): PersonaState = when {
     !hubOnline -> PersonaState.Offline

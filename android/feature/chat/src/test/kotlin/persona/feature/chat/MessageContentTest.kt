@@ -50,7 +50,7 @@ class MessageContentTest {
         val model = messageModel(composer.message())
         assertEquals(listOf("/u/a.jpg"), model.images)
         assertEquals("看图", model.plain)
-        // 编辑 puts the words and the (uploaded) photo back.
+        // "Edit" puts the words and the (uploaded) photo back.
         val editing = ChatComposerState()
         editing.edit(model.editText())
         assertEquals("看图", editing.value.text)
@@ -104,7 +104,7 @@ class MessageContentTest {
         assertEquals(2, edit.added)
         assertEquals(1, edit.removed)
         assertEquals("/w/x.kt", toolPath(tool("Edit", "file_path" to "/w/x.kt", "diff" to patch)))
-        // One change (old line 11 replaced): 上一处 / 下一处 jump to it.
+        // One change (old line 11 replaced): "Previous" / "Next" jump to it.
         assertEquals(listOf(2), diffChangeStarts(edit))
     }
 

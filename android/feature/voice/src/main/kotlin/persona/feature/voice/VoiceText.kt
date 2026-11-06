@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalResources
 
-/** The voice page's words (docs/android.md「语音对话」), in the language of [resources]. */
+/** The voice page's words (docs/android.md "Voice chat"), in the language of [resources]. */
 internal class VoiceText(private val resources: Resources) {
     private fun get(@StringRes id: Int, vararg args: Any): String = resources.getString(id, *args)
 
@@ -59,7 +59,7 @@ internal fun rememberVoiceText(): VoiceText {
 internal data class VoiceState(
     val phase: Phase = Phase.Connecting,
     val lines: List<Line> = emptyList(),
-    /** The tool being used right now (查知识库), said in place of the status. */
+    /** The tool being used right now ("Search knowledge"), said in place of the status. */
     val tool: String? = null,
     /** Persona's voice is playing. */
     val speaking: Boolean = false,
@@ -80,7 +80,7 @@ internal fun statusText(state: VoiceState, text: VoiceText): String = when {
     else -> text.listening
 }
 
-/** How a voice reads in the 音色 sheet: 女声 · 中文、英文 · 默认. */
+/** How a voice reads in the "Voice" sheet: "Female · Chinese, English · Default". */
 internal fun voiceDetail(voice: VoiceOption, isDefault: Boolean, text: VoiceText): String? = listOfNotNull(
     when (voice.gender) { "female" -> text.string(R.string.voice_female); "male" -> text.string(R.string.voice_male); else -> null },
     voice.languages.mapNotNull { Languages[it] }.joinToString(text.string(R.string.voice_list_separator)) { text.string(it) }.ifEmpty { null },
@@ -120,7 +120,7 @@ internal fun loadFailure(error: Throwable, text: VoiceText): String {
     }
 }
 
-/** Why the voices could not be read, to follow 音色列表没拿到：. */
+/** Why the voices could not be read, to follow "Couldn't load voices: ". */
 internal fun voicesFailure(error: Throwable, text: VoiceText): String {
     val feedback = operationFeedback(error)
     return when {
@@ -156,7 +156,7 @@ internal sealed interface VoiceSetup {
     /** The model configuration says the voice model cannot be used as it stands: [reason] says why. */
     data class Unavailable(val reason: String) : VoiceSetup
 
-    /** The configuration could not be read: not the same as having none (docs/model-config.md「生效边界」). */
+    /** The configuration could not be read: not the same as having none (docs/model-config.md "Where it takes effect"). */
     data class Failed(val message: String) : VoiceSetup
 
     /** Ready to talk with [model]; null: the extension's own default. */

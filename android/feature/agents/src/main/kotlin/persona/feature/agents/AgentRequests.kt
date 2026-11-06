@@ -151,7 +151,7 @@ internal fun RequestDetail(
     readOnly: Boolean = false, onTerminal: (() -> Unit)?, machine: Machine? = null,
     /** Why this session's requests cannot be answered from the phone (its source does not approve). */
     blockedReason: String? = null,
-    /** False for a session without a terminal: no 终端处理说明 in the request. */
+    /** False for a session without a terminal: no "handle in terminal" note in the request. */
     terminalHelp: Boolean = true,
 ) {
     var linkVisible by remember(request) { mutableStateOf(false) }
@@ -166,7 +166,7 @@ internal fun RequestDetail(
                 onVisibilityChanged = { linkVisible = it }) { inset ->
                 Column(Modifier.fillMaxSize().padding(bottom = inset).imePadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     JRow(request.headline.text(), subtitle = request.sessionTitle, leadingIcon = request.decisionKind.icon)
-                    // The editor below announces 正在发送 itself; announcing it here too would say it twice.
+                    // The editor below announces "Sending" itself; announcing it here too would say it twice.
                     delivery?.let { RequestDeliveryStatus(it, live = false) }
                     if (!online && !readOnly) Text(stringResource(R.string.agents_request_offline), style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText)
                     Box(Modifier.weight(1f)) {
@@ -188,7 +188,7 @@ internal fun RequestDetail(
 
 @Composable
 private fun RequestDeliveryStatus(delivery: RequestDelivery, live: Boolean = true) {
-    // A live region, so a screen reader hears 发送中 / 已回传 after an answer without looking for it.
+    // A live region, so a screen reader hears "Sending" / "Delivered" after an answer without looking for it.
     Box(if (live) Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite } else Modifier) {
         when (delivery) {
             RequestDelivery.Sending -> PendingBadge(PendingStatus.Sending)

@@ -22,7 +22,7 @@ import kotlinx.serialization.json.*
 import java.io.File
 
 /**
- * 设置 › 扩展 › GitHub (persona#3178): the connector it contributes gets its 进收件箱 switch (the hub's own) and a link to
+ * Settings › Extensions › GitHub (persona#3178): the connector it contributes gets its "Send to Inbox" switch (the hub's own) and a link to
  * its page; the extension's inbox group (repositories, kinds) is its schema form, drawn as any other.
  */
 @RunWith(AndroidJUnit4::class)

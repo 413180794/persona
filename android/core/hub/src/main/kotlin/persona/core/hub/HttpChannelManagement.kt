@@ -28,7 +28,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /**
- * 设置 › 扩展 › 渠道 over the pairing's connection (docs/channels.md「接口」). The hub answers a binding step and a test
+ * Settings › Extensions › Channels over the pairing's connection (docs/channels.md "API"). The hub answers a binding step and a test
  * message only after asking the chat app (a QR code to fetch, a message to send): those two wait longer than the
  * client's usual read timeout.
  */

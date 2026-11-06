@@ -45,10 +45,10 @@ import java.io.File
 /**
  * An inbox item whose body its connector's extension draws (inbox_item, #1683), on the JVM with Robolectric's native
  * graphics (no emulator), in every style, light and dark: the inbox's header of the item (title, tier and source
- * line, 已处理, AI 摘要, AI 草拟 / 交给 AI) over the Feishu extension's body of an event (people, time span, the event it
- * continues, the messages, a reply field, 在会话里看). Each is checked to draw something and written as a PNG to
- * `build/inbox-item-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「扩展的 UI 插槽」). Pressing
- * 在会话里看 brings the item's source link back to the shell.
+ * line, "Done", "AI summary", "AI draft" / "Hand to AI") over the Feishu extension's body of an event (people, time span, the event it
+ * continues, the messages, a reply field, "View in conversation"). Each is checked to draw something and written as a PNG to
+ * `build/inbox-item-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Extension UI slots"). Pressing
+ * "View in conversation" brings the item's source link back to the shell.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

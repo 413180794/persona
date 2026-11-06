@@ -31,7 +31,7 @@ import persona.core.designsystem.icons.PhIcons
 
 /**
  * An agent's words (a reply, or narration inside a work line): Markdown, its file paths as chips, a long press for the
- * message menu. A text the hub cut (`full_size`) shows the part the page carries and 「看全文（N KB）」, which loads the
+ * message menu. A text the hub cut (`full_size`) shows the part the page carries and "Show full text (N KB)", which loads the
  * rest in place (R3).
  */
 @Composable

@@ -14,7 +14,7 @@ fun agentSpaces(sessions: List<AgentSession>): List<AgentSpace> = sessions
     .filter { it.isLive && !it.session.assistant }
     .groupBy { "${it.session.machineId}/${it.session.spaceId ?: "-"}" }
     .map { (id, members) -> AgentSpace(id, members.first().session.let { it.spaceName ?: it.folderName },
-        // the tabs in order, a tab's agents by their place in it (#2320: the 发起者 first)
+        // the tabs in order, a tab's agents by their place in it (#2320: the initiator first)
         members.sortedWith(compareBy<AgentSession> { it.session.slotIndex ?: 0 }.thenBy { it.session.slotId.orEmpty() }.thenBy(PaneOrder) { it.session })) }
     .sortedWith(compareBy<AgentSpace> { it.priority }.thenByDescending { it.updatedAt }.thenBy { it.id })
 

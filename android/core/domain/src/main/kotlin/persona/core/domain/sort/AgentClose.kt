@@ -8,7 +8,7 @@ import persona.core.contracts.Session
 data class CloseConfirmation(val title: CoreText, val message: CoreText)
 
 /**
- * Says which agent goes and where: its title, then 「机器 / 空间 › 标签」, then what happens (the agent quits, its tab
+ * Says which agent goes and where: its title, then "machine / space › tab", then what happens (the agent quits, its tab
  * closes, work in progress stops) and that the conversation stays for later.
  */
 fun Session.closeConfirmation(machineName: String?): CloseConfirmation {

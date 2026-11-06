@@ -35,7 +35,7 @@ import persona.feature.settings.detectedPhoneSystem
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 /**
- * Owns platform hooks and every hub group's connection (docs/android.md「多 hub」). The single-hub API the app was
+ * Owns platform hooks and every hub group's connection (docs/android.md "Multiple hubs"). The single-hub API the app was
  * written against stays as it was and stands for the selected group: [scopedData], [state], [connectionFor],
  * [activeCredentials], [endpoints], [pair] (replaces everything) and [unpair] (forgets everything). [events] and
  * [messages] cover every group, with the ids of all but the primary group suffixed (GroupKeys). [hubGroups], [addHub]

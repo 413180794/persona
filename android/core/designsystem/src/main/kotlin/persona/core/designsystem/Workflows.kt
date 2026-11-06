@@ -24,7 +24,7 @@ import persona.core.contracts.WorkflowStatus
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
-// A Claude Code Workflow run (#2935; docs/agent-states.md「后台 workflow、Monitor」): the card in an agent's details and
+// A Claude Code Workflow run (#2935; docs/agent-states.md "Background workflow, Monitor"): the card in an agent's details and
 // the icon its one line on the Agents list and the task cards starts with. Words come from the page (core:domain
 // WorkflowSummary); this draws them the same in every style.
 
@@ -41,8 +41,8 @@ data class WorkflowAgentLine(
 /**
  * A run: [title] and the [status] chip ([statusText]; running breathes in the AI colour, done is positive, failed and
  * stopped are danger, gone quiet caution) with how long it ran ([elapsed]); its [phases] in a row, the [current] one
- * (1-based) lit and the ones before it done; [progress] (「169/185 个 agent 完成 · 16 个在跑」); [error] on one line;
- * then 展开 agent, which lists [agents] while [expanded].
+ * (1-based) lit and the ones before it done; [progress] ("169/185 agents done · 16 running"); [error] on one line;
+ * then "Show agents", which lists [agents] while [expanded].
  */
 @Composable
 fun JWorkflowCard(

@@ -14,12 +14,12 @@ import persona.core.contracts.api.ExtensionAuth
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
-// An extension's sign-in (#4507): the 登录 section of its page and the sheet that signs it in, a step at a time. The
+// An extension's sign-in (#4507): the "Sign in" section of its page and the sheet that signs it in, a step at a time. The
 // steps are a connector's (fields, a device code, a QR code), drawn by ConnectorSignInStep and driven by
 // ConnectorSignInModel over the extension's own routes.
 
 internal object ExtensionAuthText {
-    /** 未登录 / 等待确认 / 已登录：<账号> / 已过期 / 出错：<原因> / 扩展没在运行. */
+    /** Not signed in / Waiting for confirmation / Signed in: <account> / Expired / Error: <reason> / Extension not running. */
     fun state(res: Resources, auth: ExtensionAuth): String = when (auth.state) {
         ExtensionAuth.SignedOut -> res.getString(R.string.settings_ext_auth_signed_out)
         ExtensionAuth.Pending -> res.getString(R.string.settings_ext_auth_pending)
@@ -40,14 +40,14 @@ internal object ExtensionAuthText {
 
     fun title(res: Resources, auth: ExtensionAuth): String = auth.title.ifBlank { res.getString(R.string.settings_ext_auth_default_title) }
 
-    /** 重新登录 once it has been signed in (now, or before it expired); 登录 otherwise. */
+    /** "Sign in again" once it has been signed in (now, or before it expired); "Sign in" otherwise. */
     fun signInLabel(res: Resources, auth: ExtensionAuth): String = res.getString(
         if (auth.state == ExtensionAuth.SignedIn || auth.state == ExtensionAuth.Expired) R.string.settings_ext_auth_sign_in_again
         else R.string.settings_ext_auth_sign_in)
 }
 
 /**
- * 登录 under the extension's state: how its sign-in is, 登录 (重新登录) and, signed in, 退出登录. [starting] is the first
+ * "Sign in" under the extension's state: how its sign-in is, "Sign in" ("Sign in again") and, signed in, "Sign out". [starting] is the first
  * step on its way; [error] why it did not come.
  */
 internal fun LazyListScope.extensionSignIn(

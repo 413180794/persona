@@ -21,7 +21,7 @@ import java.time.ZoneId
 import java.util.Locale
 import java.util.TimeZone
 
-/** The calls 设置 › 助手 makes: narrower than [AssistantManagement], so it stays put while that one grows. */
+/** The calls Settings › Assistant makes: narrower than [AssistantManagement], so it stays put while that one grows. */
 internal interface AssistantSettingsApi {
     suspend fun config(): AssistantConfig
     suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig
@@ -83,7 +83,7 @@ internal fun machineMoveWarning(resources: Resources, from: String, to: String, 
 
 /**
  * Text the state hands the page: a string resource and its arguments, resolved in the page's language. An argument
- * may itself be a [SettingsText] (a fallback name such as 原来那台机器).
+ * may itself be a [SettingsText] (a fallback name such as "the original machine").
  */
 internal class SettingsText(@StringRes val id: Int, vararg val args: Any) {
     fun resolve(resources: Resources): String =
@@ -209,7 +209,7 @@ internal class AssistantSettingsState(
         }
     }
 
-    /** 只在主对话里通知: moves at once; a failure puts it back and says so. */
+    /** "Notify only in main chat": moves at once; a failure puts it back and says so. */
     suspend fun setMainTasksQuiet(on: Boolean) {
         val config = state.value.config ?: return
         if (config.mainTasksQuiet == null || config.mainTasksQuiet == on) return
@@ -321,7 +321,7 @@ internal fun memoryEntries(files: List<MemoryFile>): Pair<List<MemoryEntry>, Mem
     return entries to index
 }
 
-/** The index's lines `- [标题](file.md) — 说明`, by file. */
+/** The index's lines `- [title](file.md) — description`, by file. */
 internal fun memoryIndexLines(content: String): Map<String, Pair<String, String?>> = buildMap {
     for (line in content.lines()) {
         val open = line.indexOf('[').takeIf { it >= 0 } ?: continue
@@ -374,7 +374,7 @@ internal fun zoneOffset(zone: String, at: Instant = Instant.now()): String? = ru
     "UTC$sign$hours" + if (minutes != 0) String.format(Locale.ROOT, ":%02d", minutes) else ""
 }.getOrNull()
 
-/** The zone's name in [locale] ("中国标准时间", "China Standard Time"), when the system has one. */
+/** The zone's name in [locale] ("China Standard Time" in English, its own name in Chinese), when the system has one. */
 internal fun zoneName(zone: String, locale: Locale): String? = runCatching {
     TimeZone.getTimeZone(ZoneId.of(zone)).getDisplayName(locale).takeIf { it.isNotBlank() && !it.startsWith("GMT") }
 }.getOrNull()

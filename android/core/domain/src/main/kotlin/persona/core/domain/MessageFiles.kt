@@ -1,7 +1,7 @@
 package persona.core.domain
 
 /**
- * One `<jarvis-file kind="video" path="…" name="…" size="…" duration="…"/>` tag of a message (docs/protocol.md「发送视频」,
+ * One `<jarvis-file kind="video" path="…" name="…" size="…" duration="…"/>` tag of a message (docs/protocol.md "Sending video",
  * iOS `AttachedFile`, web `parseUserText`): a file the phone uploaded to the session's machine. [kind] is `video`,
  * `audio` or `file`; [size] 0 and [duration] null when the tag does not say.
  */
@@ -37,7 +37,7 @@ fun parseAttachedFiles(text: String): Pair<List<AttachedFile>, String> {
     return files to fileTag.replace(text, "\n").trim()
 }
 
-/** 「0:13」「1:05:03」: a length as players show it, to the nearest second (iOS `RecordingFormat.clock(duration.rounded())`). */
+/** "0:13", "1:05:03": a length as players show it, to the nearest second (iOS `RecordingFormat.clock(duration.rounded())`). */
 fun mediaClock(seconds: Double): String {
     val s = Math.round(seconds).coerceAtLeast(0)
     return if (s >= 3600) "%d:%02d:%02d".format(java.util.Locale.ROOT, s / 3600, s / 60 % 60, s % 60)

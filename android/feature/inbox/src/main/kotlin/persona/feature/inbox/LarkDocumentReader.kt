@@ -120,7 +120,7 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
 
 /**
  * The shared conversation link host can use the current inbox pairing without changing the app shell. [picks] puts
- * the card's AI 修改 / 作为上下文 in the selection menu and hears the title; [refresh] counts the card's 刷新.
+ * the card's "AI edit" / "Use as context" in the selection menu and hears the title; [refresh] counts the card's "Refresh".
  */
 @Composable
 fun LarkDocumentLink(url: String, modifier: Modifier = Modifier, picks: LarkLinkPicks? = null, refresh: Int = 0,
@@ -153,7 +153,7 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
     var document by remember(url, source?.scope) { mutableStateOf<LarkDocument?>(null) }
     var details by remember(url, source?.scope) { mutableStateOf(LarkDocumentDetails()) }
     var webpage by remember(url, source?.scope) { mutableStateOf(!isLarkDocumentUrl(url) || source == null) }
-    // The first read may come from the cache; a 刷新 after it reads again.
+    // The first read may come from the cache; a "Refresh" after it reads again.
     val firstRefresh = remember(url, source?.scope) { refresh }
     LaunchedEffect(url, source?.scope, refresh) {
         if (!webpage && source != null) {
@@ -163,7 +163,7 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
             catch (_: Exception) { webpage = true }
         }
     }
-    // What is shown around the text is read on every open and 刷新 (never cached: its counts move), as on web and iOS.
+    // What is shown around the text is read on every open and "Refresh" (never cached: its counts move), as on web and iOS.
     LaunchedEffect(url, source?.scope, refresh, webpage) {
         if (!webpage && source != null) details = try { source.details(url) } catch (e: CancellationException) { throw e } catch (_: Exception) { LarkDocumentDetails() }
     }
@@ -185,7 +185,7 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
     val unnamed = stringResource(R.string.inbox_lark_doc_comments_unnamed)
     val comments = remember(url, source?.scope) { source?.let { LarkDocCommentsModel(url, LarkDocCommentsTransport(it.transport), unnamed = unnamed) } }
     var commentsShown by remember(url, source?.scope) { mutableStateOf(false) }
-    // 评论这段 (#2964, iOS #1729): the comments open with the box on that passage (its text, the block it is in when known).
+    // "Comment on this passage" (#2964, iOS #1729): the comments open with the box on that passage (its text, the block it is in when known).
     val commentOn: ((String, String?) -> Unit)? = if (comments == null || !lark.docComments) null else { quote, block ->
         comments.target = LarkDocCommentTarget.Passage(quote, block)
         commentsShown = true
@@ -256,12 +256,12 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
                     item(key = "footer") { LarkDocumentFooter(url) }
                 }
             }
-            // Outside a conversation the app shell's 交给 Persona, as on the inbox's web pages (LocalInboxWebSelection).
+            // Outside a conversation the app shell's "Hand to Persona", as on the inbox's web pages (LocalInboxWebSelection).
             val hand = LocalInboxWebSelection.current
             val handLabel = stringResource(R.string.inbox_hand_to_persona)
             val title = loaded.title.ifBlank { stringResource(R.string.inbox_lark_doc) }
             val commentLabel = stringResource(R.string.inbox_lark_doc_comment_selection)
-            // Text the document lets be selected: 评论 in the selection menu comments on the words picked (the long
+            // Text the document lets be selected: "Comment" in the selection menu comments on the words picked (the long
             // press selects them; the plugin finds their block). Text it does not: a long press on a paragraph.
             val selectionPicks = (picks?.picks ?: hand?.let { listOf(LarkTextPick(handLabel) { text -> it(InboxWebSelection(title, url, text)) }) }.orEmpty()) +
                 listOfNotNull(commentOn?.let { comment -> LarkTextPick(commentLabel) { text -> comment(text, null) } })
@@ -306,7 +306,7 @@ private fun LarkDocumentMeta(details: LarkDocumentDetails) {
     if (stats.isNotEmpty()) Text(stats, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
-/** Feishu's cached AI summary: a few lines, the rest on 展开 (iOS summaryCard). */
+/** Feishu's cached AI summary: a few lines, the rest on "Expand" (iOS summaryCard). */
 @Composable
 private fun LarkDocumentSummary(summary: String) {
     var expanded by rememberSaveable(summary) { mutableStateOf(false) }
@@ -322,7 +322,7 @@ private fun LarkDocumentSummary(summary: String) {
     }
 }
 
-/** The end of the text: 在飞书中打开 (iOS footer, web 在新标签页打开). */
+/** The end of the text: "Open in Lark" (iOS footer, web "Open in new tab"). */
 @Composable
 private fun LarkDocumentFooter(url: String) {
     val context = LocalContext.current
@@ -343,7 +343,7 @@ internal fun openInLark(context: android.content.Context, url: String) {
     }
 }
 
-/** 14:05 today, else 11月4日 this year, else 2025年11月4日 (in the language the app is in). */
+/** 14:05 today, else Nov 4 this year, else Nov 4, 2025 (in the language the app is in). */
 internal fun larkShortDate(at: java.time.Instant, locale: java.util.Locale, now: java.time.Instant = java.time.Instant.now(),
                            zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
     val day = at.atZone(zone)

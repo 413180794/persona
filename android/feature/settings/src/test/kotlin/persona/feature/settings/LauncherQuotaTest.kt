@@ -21,7 +21,7 @@ import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
 
-/** 额度 on a launcher's page (docs/launchers.md「额度」): numbers read as on iOS and the web; reading, ↻ and a failed ↻. */
+/** "Quota" on a launcher's page (docs/launchers.md "Quota"): numbers read as on iOS and the web; reading, ↻ and a failed ↻. */
 // Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])

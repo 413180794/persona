@@ -10,7 +10,7 @@
     <string name="designsystem_status_unknown">Unknown</string>
     <string name="designsystem_status_waiting">Waiting</string>
     <string name="designsystem_status_muted">Muted</string>
-    <!-- Interface styles (设置 › 外观 › 界面风格) and glass -->
+    <!-- Interface styles (Settings › Appearance › Interface style) and glass -->
     <string name="designsystem_style_glass">Glass</string>
     <string name="designsystem_style_glass_summary">Frosted glass floats over the status light and glows amber when something is waiting for you</string>
     <string name="designsystem_style_brief">Brief</string>
@@ -19,7 +19,7 @@
     <string name="designsystem_style_board_summary">Each agent gets a job ticket, with status colors you can read at a glance</string>
     <string name="designsystem_glass_auto">Auto</string>
     <string name="designsystem_glass_reduced">Reduce transparency</string>
-    <!-- The persona's face: its states and the built-in avatars (形象 = avatar) -->
+    <!-- The persona's face: its states and the built-in avatars (persona look = avatar) -->
     <string name="designsystem_persona_idle">Idle</string>
     <string name="designsystem_persona_thinking">Thinking</string>
     <string name="designsystem_persona_working">Working</string>
@@ -32,7 +32,7 @@
     <string name="designsystem_face_visor_summary">Follows the theme color</string>
     <string name="designsystem_face_circuit">Circuit</string>
     <string name="designsystem_face_circuit_summary">Traces flow into the core, in the theme color</string>
-    <!-- The hub's avatar packages (设置 › 外观 › 形象) -->
+    <!-- The hub's avatar packages (Settings › Appearance › Persona look) -->
     <string name="designsystem_avatars_list_failed">Couldn\'t get the avatar list: %1$s</string>
     <string name="designsystem_avatars_missing_file">Missing %1$s</string>
     <string name="designsystem_avatars_not_saved">Couldn\'t save it on the phone</string>

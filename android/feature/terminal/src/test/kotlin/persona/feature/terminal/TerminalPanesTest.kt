@@ -95,7 +95,7 @@ class TerminalPanesTest {
             space.tabs.flatMap { tab -> listOf(tabItemKey("desk", space, tab)) + tab.panes.map { paneItemKey("desk", space, it) } } }
         assertEquals(keys.size, keys.toSet().size)
         assertTrue("pane-desk-orca/w1:p1" in keys && "pane-desk-herdr/w1:p1" in keys)
-        // 新标签页's spinner marks one workspace, not every host's w1.
+        // "New tab"'s spinner marks one workspace, not every host's w1.
         assertNotEquals(openingKey("desk", tree[0]), openingKey("desk", tree[3]))
     }
 

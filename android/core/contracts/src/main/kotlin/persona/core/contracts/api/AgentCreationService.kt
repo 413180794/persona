@@ -17,14 +17,14 @@ interface AgentCreationService {
     suspend fun operation(operationId: String, machineId: String): AgentStartResult = operation(operationId)
 
     /**
-     * The hub's 新建 Agent model use (`agent.new`, docs/model-config.md): when it has one, a new agent follows it unless
+     * The hub's "New Agent" model use (`agent.new`, docs/model-config.md): when it has one, a new agent follows it unless
      * a launcher is picked for this start (the request then carries an empty launcher). Null from hubs without
      * unified model configuration.
      */
     suspend fun newAgentModel(): ModelPurposeDetail? = null
 
     /**
-     * The models [launcher]'s agent offers in its own /model menu, for 新建 Agent's model picker: the node keeps the
+     * The models [launcher]'s agent offers in its own /model menu, for "New Agent"'s model picker: the node keeps the
      * list a while, [refresh] asks the CLI again. Null from hubs without the list (404).
      */
     suspend fun launcherModels(machineId: String, launcher: String, refresh: Boolean = false): LauncherModels? = null
@@ -96,7 +96,7 @@ data class AgentDirectories(
 data class AgentStartRequest(
     @SerialName("machine_id") val machineId: String,
     val cwd: String,
-    /** Empty: the hub picks the launcher from the 新建 Agent model configuration. */
+    /** Empty: the hub picks the launcher from the "New Agent" model configuration. */
     val launcher: String,
     val prompt: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,

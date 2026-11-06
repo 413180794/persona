@@ -50,7 +50,7 @@ fun mapOperationFailure(
         "rate_limited" -> result(FailureReason.RateLimited, if (retryable) FailureAction.Retry else FailureAction.None)
         "no_machine" -> result(FailureReason.NoMachine, FailureAction.AddComputer)
         "machine_pending" -> result(FailureReason.MachinePending, FailureAction.ConfirmComputer)
-        // The computer is asleep or its Persona Link is off: the hub itself answered, so never 连不上 hub.
+        // The computer is asleep or its Persona Link is off: the hub itself answered, so never "cannot reach hub".
         "node_unreachable" -> result(FailureReason.ComputerOffline, FailureAction.WakeComputer)
         "claude_missing" -> result(FailureReason.ClaudeMissing, FailureAction.InstallClaude)
         "launcher_missing" -> result(FailureReason.LauncherMissing, FailureAction.ConnectModel)

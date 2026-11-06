@@ -92,8 +92,8 @@ fun JStatusMark(status: Status, modifier: Modifier = Modifier, animated: Boolean
 }
 
 /**
- * A state in words with the style's dot before it (已连接, 未连接, 已停用), for a row's trailing side. [problem] puts a
- * warning mark and the words in the danger colour instead (出错).
+ * A state in words with the style's dot before it ("Connected", "Not connected", "Disabled"), for a row's trailing side. [problem] puts a
+ * warning mark and the words in the danger colour instead ("Error").
  */
 @Composable
 fun JStateLabel(text: String, status: Status, modifier: Modifier = Modifier, problem: Boolean = false) {
@@ -206,7 +206,7 @@ fun resolveStatusLine(state: StatusLineState): StatusLineContent? = with(state) 
 }
 
 /**
- * One line of session state above the composer. Extra facts (循环, 后台 2, 排队 1) ride along as [chips] instead
+ * One line of session state above the composer. Extra facts ("Loop", "Background 2", "Queued 1") ride along as [chips] instead
  * of stacking more rows.
  */
 @Composable

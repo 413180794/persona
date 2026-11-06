@@ -9,12 +9,12 @@ import persona.core.navigation.InboxItemUiRoute
 import org.junit.Assert.*
 import org.junit.Test
 
-// docs/extensions.md「UI 插槽」inbox_item (#1683): an item whose connector's extension draws its page opens that page; every
+// docs/extensions.md "UI slots" inbox_item (#1683): an item whose connector's extension draws its page opens that page; every
 // other item, and every item on a hub that lists no such page, opens its own page as before.
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class InboxItemPagesTest {
-    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    /** The app's strings; Robolectric runs in Simplified Chinese (robolectric.properties). */
     private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
     private val lark = InboxRecord(InboxItem("lark:F1:1051", kind = "group", title = "周四的评审"), feedId = "F1", startPosition = 1051, source = "lark")
     private val mail = InboxRecord(InboxItem("mail-1", kind = "mail", title = "订单"), source = "mail")
@@ -25,7 +25,7 @@ class InboxItemPagesTest {
         val pages = InboxItemPages(listOf(event))
         assertEquals(InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审"), pages.route(lark))
         assertEquals(InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审"), inboxOpenPage(lark, pages))
-        // Every item of the connector: a 公司圈 post from it too.
+        // Every item of the connector: a Moments post from it too.
         assertEquals("moment-1", pages.route(moment)?.itemId)
         // Another connector's items keep their own page.
         assertNull(pages.route(mail))
@@ -131,7 +131,7 @@ class InboxItemPagesTest {
     }
 
     // #2323: a Feishu document's notice (the Lark extension's `doc` block, no chat behind it) opened the mail page, which failed
-    // with 「邮件加载失败」. Only a mail opens the mail page; a document, and an item of a shape the app does not know,
+    // with "Couldn't load the mail". Only a mail opens the mail page; a document, and an item of a shape the app does not know,
     // open the item's detail page.
     @Test fun aDocumentsNoticeOpensItsOwnPageAndOnlyMailOpensTheMailPage() {
         val wire = kotlinx.serialization.json.Json.parseToJsonElement("""{"url":"https://example.larkoffice.com/wiki/W1",

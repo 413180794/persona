@@ -56,7 +56,7 @@ internal fun mainStepStateLabel(state: String): Int = when (state) {
     else -> R.string.settings_ready_state_unknown
 }
 
-/** Where a step's button goes from Settings; null for help shown in place or 试一句, which runs here. */
+/** Where a step's button goes from Settings; null for help shown in place or "Try it", which runs here. */
 internal fun ReadinessActionId.settingsDestination(launcher: String?, machine: String? = null): NavKey? = when (this) {
     ReadinessActionId.AddComputer -> AddComputerRoute()
     ReadinessActionId.ConfirmComputer -> AddComputerRoute(confirm = machine.orEmpty())
@@ -81,7 +81,7 @@ internal fun MainConversationSteps(
         SettingsCaption(stringResource(R.string.settings_ready_main_about))
         MainStepIds.forEach { id ->
             val step = readiness.step(id) ?: return@forEach
-            // 试一句 not tried yet never blocks anything (5.1): a neutral "not tried", not 需要设置.
+            // "Try it" not tried yet never blocks anything (5.1): a neutral "not tried", not "Needs setup".
             val untried = id == ReadinessStep.FIRST_MESSAGE && step.state == ReadinessStep.TODO
             val status = if (untried) Status.Unknown else mainStepStatus(step.state)
             val missing = step.state == ReadinessStep.TODO || step.state == ReadinessStep.PROBLEM

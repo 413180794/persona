@@ -55,11 +55,11 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    /** Text in the language of Settings › Language (docs/i18n.md). */
     override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
 
     @Inject lateinit var settingsServices: SettingsServices
-    /** The hubs' channels, for the 「来自 微信」 marks on messages and conversations (docs/channels.md「来源标记」). */
+    /** The hubs' channels, for the "From WeChat" marks on messages and conversations (docs/channels.md "Source marks"). */
     @Inject lateinit var channelDirectory: persona.core.contracts.api.ChannelDirectory
     @Inject lateinit var connection: HubConnection
     @Inject lateinit var shell: AppServices
@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
         persona.android.platform.GlassFrameMonitor.attach(this) { !shell.automation }
         setContent {
             val scheme by app.appearance.scheme.collectAsStateWithLifecycle()
-            // A debug capture's pin, else 设置 › 外观 › 深浅色 (null: the system's).
+            // A debug capture's pin, else Settings › Appearance › Light/Dark (null: the system's).
             val forced = darkTheme.value ?: scheme.dark
             val style by app.appearance.style.collectAsStateWithLifecycle()
             val themeColor by app.appearance.color.collectAsStateWithLifecycle()
@@ -218,7 +218,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 「问 Persona」 (`focus=composer`): the Persona page focuses its composer once the link is applied; a notification's
+     * "Ask Persona" (`focus=composer`): the Persona page focuses its composer once the link is applied; a notification's
      * card outside any session opens on Agents.
      */
     private fun focusing(resolve: (Router) -> ResolvedRoute?): (Router) -> ResolvedRoute? = { router ->

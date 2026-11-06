@@ -50,7 +50,7 @@ class FleetFeed @Inject constructor(
     /** The latest fleet of the current pairing; empty when there is none. */
     val state: StateFlow<FleetState> = mutable.asStateFlow()
 
-    /** Whether a hub is paired: the widget and the tile say 「还没配对」 otherwise. */
+    /** Whether a hub is paired: the widget and the tile say "Not paired" otherwise. */
     val paired: StateFlow<Boolean> get() = pairing.isPaired
 
     /**

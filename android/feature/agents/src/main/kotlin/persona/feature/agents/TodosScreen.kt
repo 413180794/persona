@@ -77,7 +77,7 @@ fun TodosScreen(
     onOpenTodo: (String) -> Unit,
     now: Instant = Instant.now(),
     onError: (String) -> Unit = {},
-    /** Opens with 新建待办 up (the launcher's shortcut). */
+    /** Opens with "New to-do" up (the launcher's shortcut). */
     startCreating: Boolean = false,
     /** The cards waiting for an answer: a waiting agent's line says what its card asks (#3964). */
     pending: List<Interaction> = emptyList(),
@@ -288,7 +288,7 @@ fun TodosScreen(
                                         TodoHoldLine(it, Modifier.padding(start = Tokens.Space.xxxl))
                                     }
 
-                                    // 底部相对时间与挂靠 Agent 数量
+                                    // Relative time and linked agent count at the bottom
                                     Row(
                                         Modifier.fillMaxWidth().padding(start = 32.dp, top = 2.dp),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -309,7 +309,7 @@ fun TodosScreen(
                     }
                 }
 
-                // 底部可折叠已完成分组
+                // Foldable finished group at the bottom
                 if (completed.isNotEmpty()) {
                     item(key = "completed-header") {
                         Row(
@@ -400,7 +400,7 @@ fun TodosScreen(
     }
 }
 
-/** Where a task's finished work is held short of live, in a line (iOS `TodoHold.line`): 停在 PR · 卡在「…」 · 要你点头. */
+/** Where a task's finished work is held short of live, in a line (iOS `TodoHold.line`): Held at PR · Blocked by"…" · Needs your approval. */
 @Composable
 internal fun TodoHoldLine(hold: TodoHold, modifier: Modifier = Modifier) {
     val step = stringResource(when (hold.step) {
@@ -440,7 +440,7 @@ internal sealed interface TodoUrgentSummary {
 /**
  * iOS mostUrgentSummary: a failed start with its error; else what its [card] asks while it waits for you; else the
  * session's last words as plain text, or its title; else the agent's own title. Nothing when none of them says
- * anything, so the notes or 还没交给 Agent show instead.
+ * anything, so the notes or "Not handed to an agent yet" show instead.
  */
 internal fun mostUrgentSummary(urgent: TodoMostUrgent?, card: Interaction? = null): TodoUrgentSummary? {
     urgent ?: return null
@@ -454,7 +454,7 @@ internal fun mostUrgentSummary(urgent: TodoMostUrgent?, card: Interaction? = nul
     return urgent.agent.title?.takeIf(String::isNotBlank)?.let(TodoUrgentSummary::Words)
 }
 
-/** The open row's line under the title: the auto-done reason, the most urgent agent, the notes, or 还没交给 Agent. */
+/** The open row's line under the title: the auto-done reason, the most urgent agent, the notes, or "Not handed to an agent yet". */
 @Composable
 private fun TodoActivityLine(todo: Todo, urgent: TodoMostUrgent?, card: Interaction?) {
     val palette = PersonaTheme.palette

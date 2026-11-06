@@ -30,7 +30,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-// 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」): the words, the draft of an extension's configuration, and the two
+// Settings › Extensions (docs/extensions.md "App: Settings › Extensions"): the words, the draft of an extension's configuration, and the two
 // pages' models. The pages are in ExtensionsScreen.kt.
 
 /** What an extension is called and says in the settings. */
@@ -102,7 +102,7 @@ internal object ExtensionText {
     fun stateLine(res: Resources, p: HubExtension): String =
         listOfNotNull(state(res, p), p.version?.takeIf { it.isNotBlank() }, source(res, p.source)).joinToString(" · ")
 
-    /** 设置's row: how many, and how many need the user; null before the list is in. */
+    /** Settings' row: how many, and how many need the user; null before the list is in. */
     fun listSummary(res: Resources, list: List<HubExtension>?): String? {
         list ?: return null
         if (list.isEmpty()) return res.getString(R.string.settings_ext_summary_none)
@@ -116,7 +116,7 @@ internal object ExtensionText {
     fun fieldTitle(res: Resources, field: persona.core.contracts.api.ExtensionField): String =
         if (field.required == true && field.fallback == null) res.getString(R.string.settings_ext_field_required, field.label) else field.label
 
-    /** What an empty field shows: the default it falls back to, or 未设置. */
+    /** What an empty field shows: the default it falls back to, or "Not set". */
     fun placeholder(res: Resources, field: persona.core.contracts.api.ExtensionField): String {
         val fallback = field.fallback ?: return res.getString(R.string.settings_ext_not_set)
         val text = field.enum?.firstOrNull { it.value == fallback }?.label ?: (fallback as? JsonPrimitive)?.content
@@ -139,7 +139,7 @@ internal object ExtensionText {
         res.getString(R.string.settings_ext_auth_signed_out).takeIf { p.auth?.needsSignIn == true },
     ).joinToString(res.getString(R.string.settings_ext_dot_separator))
 
-    /** The 升级 group's line under a newer version: what happens to it (the web's upgradeDetail). */
+    /** The "Upgrades" group's line under a newer version: what happens to it (the web's upgradeDetail). */
     fun upgradeDetail(res: Resources, u: ExtensionUpgrade): String = when (u.state) {
         "needs_permission" -> morePermissions(res, u.addedPermissions.orEmpty())
         "waiting_idle" -> res.getString(R.string.settings_ext_upgrade_waiting_idle)
@@ -288,7 +288,7 @@ internal object ExtensionDraft {
 
 internal data class ExtensionListState(
     val extensions: List<HubExtension>? = null,
-    /** The hub has extension markets (`markets: true`): the list opens 扩展市场. */
+    /** The hub has extension markets (`markets: true`): the list opens "Extension market". */
     val markets: Boolean = false,
     val loading: Boolean = false,
     val error: String? = null,
@@ -307,7 +307,7 @@ internal object ExtensionChanges {
     fun of(api: ExtensionManagement): Flow<Unit> = changes.filter { it === api }.map { }
 }
 
-/** 设置 › 扩展: the list. */
+/** Settings › Extensions: the list. */
 internal class ExtensionListModel(private val api: ExtensionManagement, private val res: Resources) {
     private val mutable = MutableStateFlow(ExtensionListState())
     val state = mutable.asStateFlow()
@@ -359,7 +359,7 @@ internal data class ExtensionState(
 /** The dependents named by `has_dependents`; [keepData] is the removal asked about, null switching it off. */
 internal data class ExtensionCascade(val names: List<String>, val keepData: Boolean? = null)
 
-/** 设置 › 扩展 › one: its switch, its form (a draft saved as a whole), its secrets. */
+/** Settings › Extensions › one: its switch, its form (a draft saved as a whole), its secrets. */
 internal class ExtensionModel(private val api: ExtensionManagement, private val id: String, private val res: Resources) {
     private val mutable = MutableStateFlow(ExtensionState())
     val state = mutable.asStateFlow()
@@ -427,7 +427,7 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
 
     suspend fun clearSecret(name: String): Boolean = busy { run { api.clearSecret(id, name) } }
 
-    /** A market extension's own auto-upgrade switch (docs/extensions.md「自动升级」). */
+    /** A market extension's own auto-upgrade switch (docs/extensions.md "Auto-upgrade"). */
     suspend fun setAutoUpgrade(on: Boolean): Boolean = busy {
         run(failed = if (on) R.string.settings_ext_auto_upgrade_on_failed else R.string.settings_ext_auto_upgrade_off_failed) { api.setAutoUpgrade(id, on) }
     }

@@ -39,8 +39,8 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The machine pages' parity with the web / iOS (#3038): 订阅额度 on the overview, 这台电脑能做什么 (features, 修复, all checks)
- * and 浏览器 (ego lite's first-run setup) on a Mac's page. Every style in light and dark, to `build/parity-shots/`.
+ * The machine pages' parity with the web / iOS (#3038): "Subscription limits" on the overview, "What this computer can do" (features, "Fix", all checks)
+ * and "Browser" (ego lite's first-run setup) on a Mac's page. Every style in light and dark, to `build/parity-shots/`.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

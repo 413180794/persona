@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Without a 模型供应商 page to open (the first checklist after pairing), the help never offers 接上模型 / 改用 API Key:
+ * Without a model providers page to open (the first checklist after pairing), the help never offers "Connect a model" / "Use an API key instead":
  * those buttons used to call back into the same help and reopen it.
  */
 @RunWith(AndroidJUnit4::class)

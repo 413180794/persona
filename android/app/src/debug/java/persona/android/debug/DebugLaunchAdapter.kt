@@ -64,14 +64,14 @@ class DebugLaunchAdapter : LaunchAdapter {
         val catalog = arguments.remove("debug.openCatalog") == "true"
         val link = arguments.remove("debug.openLink")
         val page = arguments.remove("debug.openPage")?.let { requireNotNull(pages[it] ?: managementPage(it)) { "Unknown debug page" } }
-        // 设置 › 助手 opens one of its parts for captures: notes, memory, memory-file, memory-edit, memory-delete, machine, launcher, timezone, move.
+        // Settings › Assistant opens one of its parts for captures: notes, memory, memory-file, memory-edit, memory-delete, machine, launcher, timezone, move.
         arguments.remove("debug.assistantSettings")?.let { persona.feature.assistant.settings.AssistantSettingsPreview.open = it }
-        // 模型配置 opens 新增模型供应商 (manual | preset) with jarvis://open?target=settings&page=modelconfig.
+        // "Model configuration" opens "Add model provider" (manual | preset) with jarvis://open?target=settings&page=modelconfig.
         arguments.remove("debug.newProvider")?.let { persona.feature.settings.NewProviderPreview.open = it }
         arguments.remove("debug.translateChats")?.let { persona.feature.settings.TranslationPreview.picking = it == "1" }
-        // 新建会话 (debug.openPage new-agent) takes steps once loaded: launcher:<name>, effort:<level>, model:<id>, models[:<query>].
+        // "New session" (debug.openPage new-agent) takes steps once loaded: launcher:<name>, effort:<level>, model:<id>, models[:<query>].
         arguments.remove("debug.newAgent")?.let { persona.feature.agents.NewAgentPreview.steps = it }
-        // 语音对话 on an emulator without audio (-no-audio): silence up, nothing played, a made-up level for the orb.
+        // "Voice chat" on an emulator without audio (-no-audio): silence up, nothing played, a made-up level for the orb.
         if (arguments.remove("debug.voiceAudio") == "fake") persona.feature.voice.VoiceDebug.useFakeAudio()
         return LaunchInput(
             resolve = { router ->

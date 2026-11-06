@@ -22,8 +22,8 @@ import persona.core.navigation.TerminalRoute
 interface TerminalServices { fun terminal(): TerminalTransport }
 
 /**
- * The terminal page, and with [panes] and [sessions] the 终端 page that lists every machine's panes (docs/terminal.md
- * 「独立终端」). A pane's terminal comes with its own title in the route; a session's is [title]'s. [routed] gives the
+ * The terminal page, and with [panes] and [sessions] the "Terminal" page that lists every machine's panes (docs/terminal.md
+ * "Standalone terminal"). A pane's terminal comes with its own title in the route; a session's is [title]'s. [routed] gives the
  * terminal of a machine in another hub group (its own hub, its own features); others use [transport].
  */
 fun EntryProviderScope<NavKey>.terminalEntries(navigator: Navigator, transport: TerminalTransport? = null, title: (SessionKey) -> String? = { null },

@@ -10,7 +10,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
-/** New agents follow the 新建 Agent model configuration and start in the background (docs/protocol.md「新建会话」). */
+/** New agents follow the "New Agent" model configuration and start in the background (docs/protocol.md "New session"). */
 class AgentCreationModelTest {
     @Test fun anAsyncStartWithoutLauncherFollowsTheConfigurationAndCarriesTheNameHint() = runBlocking {
         MockWebServer().use { server ->

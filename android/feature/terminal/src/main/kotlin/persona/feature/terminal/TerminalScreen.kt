@@ -119,7 +119,7 @@ private fun terminalSubtitle(state: TerminalUiState): String? = when {
     else -> null
 }
 
-/** 显示: the font size (a step at a time, the sheet stays open) and folding what is only watched. */
+/** "Display": the font size (a step at a time, the sheet stays open) and folding what is only watched. */
 @Composable
 private fun TerminalDisplaySheet(
     fontSize: Float, onFont: (Boolean) -> Unit, wrap: Boolean, onWrap: (Boolean) -> Unit, wrapEnabled: Boolean, onDismiss: () -> Unit,

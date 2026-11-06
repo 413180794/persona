@@ -16,7 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * 设置 › 模型配置 (docs/model-config.md「接口」): the hub owns the catalog of model uses ("purposes"); a purpose is a
+ * Settings › Model configuration (docs/model-config.md "API"): the hub owns the catalog of model uses ("purposes"); a purpose is a
  * real model consumer, never something the app invents. Bound to the active pairing.
  */
 interface ModelConfiguration {
@@ -38,7 +38,7 @@ interface ModelConfiguration {
     suspend fun providerModels(provider: String, refresh: Boolean = false, machine: String? = null): ProviderModels?
 }
 
-/** [LauncherModels] for 模型配置, and the machine whose CLI answered. */
+/** [LauncherModels] for model configuration, and the machine whose CLI answered. */
 @Serializable
 data class ProviderModels(
     val agent: String = "",
@@ -157,7 +157,7 @@ data class ModelConfigurationDraft(
     }
 
     companion object {
-        /** 恢复默认: every override of the purpose cleared, the runtime set elsewhere too (#5077). */
+        /** Reset to defaults: every override of the purpose cleared, the runtime set elsewhere too (#5077). */
         val Restore = ModelConfigurationDraft(clearsRuntime = true)
 
         fun from(purpose: ModelPurpose) = ModelConfigurationDraft(

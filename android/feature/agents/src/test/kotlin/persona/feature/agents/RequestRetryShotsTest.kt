@@ -64,7 +64,7 @@ class RequestRetryShotsTest {
             }
         }
         rule.onNodeWithText("上次没确认，可以再点一次").assertExists()
-        // Each card has its 允许 twice (full actions and quick actions): the unconfirmed card's are disabled, the retry card's are not.
+        // Each card has its "Allow" twice (full actions and quick actions): the unconfirmed card's are disabled, the retry card's are not.
         val allow = rule.onAllNodesWithText("允许")
         val nodes = allow.fetchSemanticsNodes()
         assertTrue("Both cards draw 允许", nodes.size >= 2)

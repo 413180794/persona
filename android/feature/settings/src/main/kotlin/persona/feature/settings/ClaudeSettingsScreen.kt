@@ -26,7 +26,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * 设置 › Claude Code 设置 / Codex 设置: the common options of each computer's Claude Code or Codex ([kind]), written to
+ * Settings › Claude Code settings / Codex settings: the common options of each computer's Claude Code or Codex ([kind]), written to
  * one or all online machines.
  */
 @Composable
@@ -49,7 +49,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
     val drafts = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(online.map { it.id }) { model.follow(online) }
     LaunchedEffect(state.machineId) { drafts.clear(); model.load() }
-    // 屏蔽的配置目录 is Claude Code's alone.
+    // "Blocked config directories" is Claude Code's alone.
     val (dirs, dirsState) = rememberClaudeDirs(management, if (kind == AgentSettingsKind.Claude) state.machineId else "")
     var dirInput by remember { mutableStateOf("") }
     val saveDirs = claudeDirsSaver(dirs) { dirInput = "" }
@@ -116,7 +116,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
     }
 }
 
-/** An option's title, 默认 while it is unset, and what it does. */
+/** An option's title, "Default" while it is unset, and what it does. */
 @Composable
 private fun SettingTitle(setting: ClaudeSetting) {
     Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {

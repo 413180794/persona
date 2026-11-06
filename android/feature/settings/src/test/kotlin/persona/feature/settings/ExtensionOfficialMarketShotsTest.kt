@@ -30,7 +30,7 @@ import persona.core.designsystem.AppStyle
 import persona.core.designsystem.PersonaTheme
 import java.io.File
 
-// #5017: 设置 › 扩展 puts 扩展市场 above the installed extensions, and the official market reads 官方扩展 whatever its
+// #5017: Settings › Extensions puts Extension market above the installed extensions, and the official market reads Official extensions whatever its
 // index calls itself.
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

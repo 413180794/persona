@@ -26,7 +26,7 @@ import persona.core.contracts.api.ProviderSetup
 import java.io.File
 import java.nio.file.Files
 
-/** The pure parts of the and-settings parity pages (#3048): 屏蔽的配置目录, 模型供应商, 从 ~/.zshrc 导入, 存储空间. */
+/** The pure parts of the and-settings parity pages (#3048): "Blocked config directories", "Model providers", "Import from ~/.zshrc", "Storage". */
 class ParityLogicTest {
     private val home = "/home/me"
     private val dirs = ClaudeDirsState(

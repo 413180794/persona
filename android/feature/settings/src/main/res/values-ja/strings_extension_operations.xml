@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- An extension's install, upgrade or removal in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277); 日本語. -->
+<!-- An extension's install, upgrade or removal in steps (docs/protocol.md "Extension install, upgrade and removal progress", #3277); Japanese. -->
 <resources>
     <string name="settings_ext_op_title">インストールの進み具合</string>
     <string name="settings_ext_op_title_upgrade">アップグレードの進み具合</string>

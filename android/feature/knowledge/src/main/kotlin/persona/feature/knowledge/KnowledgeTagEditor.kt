@@ -14,7 +14,7 @@ import persona.core.designsystem.*
 import kotlin.math.roundToInt
 
 /**
- * 打标 (iOS `KBTagEditor`): importance, relevance, tags and, for a project, its kind and status, set by hand. The hub
+ * "Tag" (iOS `KBTagEditor`): importance, relevance, tags and, for a project, its kind and status, set by hand. The hub
  * keeps them over its automatic tagging. Saving closes the sheet once the hub has them; a failure stays here.
  */
 @Composable

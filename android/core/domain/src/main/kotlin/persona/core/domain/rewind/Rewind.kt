@@ -7,7 +7,7 @@ import persona.core.contracts.api.DeliveryState
 import persona.core.contracts.api.RewindTarget
 
 /**
- * 回退到这里 (#2436, web `lib/rewind.ts`): go back in a Claude session to before one of your messages. The node drives
+ * "Rewind to here" (#2436, web `lib/rewind.ts`): go back in a Claude session to before one of your messages. The node drives
  * Claude Code's own /rewind in the session's terminal (node/rewind.go), so what the app says is which message: its
  * text, which of the messages with that text it is counting from the end, and how many came after it. Both Claude's
  * list and the transcript are read from the end, so older pages not loaded yet change nothing; the node checks all
@@ -50,7 +50,7 @@ object Rewind {
         return RewindTarget(all[at].raw, 1 + all.drop(at + 1).count { squash(it.raw) == same }, all.size - 1 - at)
     }
 
-    /** Why 回退到这里 is off for a session right now. */
+    /** Why "Rewind to here" is off for a session right now. */
     enum class Block { ClaudeOnly, Offline, NeedsYou, Working }
 
     /** Whether any of these outbox messages is still on its way: a failed one (refused, rejected) waits for you, not the session (web `outgoing`). */
@@ -70,7 +70,7 @@ object Rewind {
     }
 
     /**
-     * 分支到新聊天 is offered on a reply that is a transcript line of its own (`<uuid>#<n>`): lines without a uuid are
+     * "Branch to new chat" is offered on a reply that is a transcript line of its own (`<uuid>#<n>`): lines without a uuid are
      * `line<seq>`, which the node cannot find (web `moreActions`).
      */
     fun forkable(itemId: String): Boolean = itemId.contains('#') && !itemId.startsWith("line")

@@ -42,7 +42,7 @@ internal data class ResText(val id: Int, val args: List<Any> = emptyList(), val 
 internal fun ResText.text(): String = resolve(LocalResources.current)
 
 /**
- * 「刚刚」「3 分钟前」「5 小时前」, then the day (11月2日 · Nov 2) or, with [days], 「2 天前」 — how settings say when
+ * "Just now", "3 minutes ago", "5 hours ago", then the day (Nov 2) or, with [days], "2 days ago" - how settings say when
  * something last happened.
  */
 internal fun agoText(res: Resources, at: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault(), days: Boolean = false): String {

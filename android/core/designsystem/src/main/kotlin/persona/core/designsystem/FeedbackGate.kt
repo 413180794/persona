@@ -17,7 +17,7 @@ class FeedbackGate(
     private val localize: (UiText) -> String,
 ) : AppFeedback {
     private val queue = MutableSharedFlow<FeedbackNotice>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    /** What to show, with its button (撤销) when it has one. */
+    /** What to show, with its button ("Undo") when it has one. */
     val notices = queue.asSharedFlow()
     val messages = notices.map { it.message }
     private val lastOffline = mutableMapOf<String, Long>()
@@ -50,7 +50,7 @@ class FeedbackGate(
         return true
     }
 
-    /** Never folded into an earlier one: each carries its own 撤销. */
+    /** Never folded into an earlier one: each carries its own "Undo". */
     @Synchronized
     override fun notice(message: String, action: FeedbackAction): Boolean {
         queue.tryEmit(FeedbackNotice(message, action))

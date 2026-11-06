@@ -69,7 +69,7 @@ class AssistantTest {
         assertNull(handoffTitle("早报 <persona-context", words))
     }
 
-    // #3264: the hub's own conversations leave 最近 for 自动对话 (a search still finds them), pinned ones stay pinned.
+    // #3264: the hub's own conversations leave "Recent" for "Automatic chats" (a search still finds them), pinned ones stay pinned.
     @Test fun automaticConversationsFoldAwayFromRecent() {
         val mine = Session(machineId = "demo", sessionId = "mine", title = "周报", origin = "user")
         val old = Session(machineId = "demo", sessionId = "old", title = "旧的")

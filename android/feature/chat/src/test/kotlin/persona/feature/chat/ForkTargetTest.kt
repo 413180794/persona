@@ -7,7 +7,7 @@ import persona.core.contracts.SessionKey
 import persona.core.navigation.ChatRoute
 import persona.core.navigation.ConversationKind
 
-/** 分支到新聊天 opens an assistant's branch as an assistant conversation (web `forkAt`), an agent's as an agent chat. */
+/** "Branch to new chat" opens an assistant's branch as an assistant conversation (web `forkAt`), an agent's as an agent chat. */
 class ForkTargetTest {
     private val key = SessionKey("box", "branch-1")
 

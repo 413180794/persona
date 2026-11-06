@@ -5,7 +5,7 @@ import persona.feature.inbox.ReplyTarget
 import kotlinx.serialization.Serializable
 
 /**
- * [ai]: AI wrote the text (sending it asks first); [braveClimb]: it goes as [removed] words (#882). Both omitted on
+ * [ai]: AI wrote the text (sending it asks first); [braveClimb]: it goes as Brave Climb words (#882). Both omitted on
  * disk when false, so older journals read the same.
  */
 @Serializable

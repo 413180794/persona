@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * 设置 › 扩展 › 渠道 (docs/channels.md「接口」「界面」): every way of talking to Persona — its own apps, the Feishu bot,
+ * Settings › Extensions › Channels (docs/channels.md "API" "UI"): every way of talking to Persona — its own apps, the Feishu bot,
  * WeChat, /agent in Feishu, voice, the chat app bots extensions contribute — with each one's switch, its binding (a step
  * at a time), where its messages go, what it does and a test message. Bound to the active pairing's selected hub.
  */
@@ -22,7 +22,7 @@ interface ChannelManagement {
     val available: Flow<Boolean>
 
     /**
-     * The assistant's conversations of the selected hub, in that hub's own ids: what 「消息发到」 can pick. Empty
+     * The assistant's conversations of the selected hub, in that hub's own ids: what "Send messages to" can pick. Empty
      * where there is no hub to ask.
      */
     val conversations: Flow<List<Session>> get() = flowOf(emptyList())
@@ -46,7 +46,7 @@ interface ChannelManagement {
     suspend fun test(id: String)
 }
 
-/** The channels the conversations know (names and marks for 「来自 微信」), cached per hub and read again on reconnect. */
+/** The channels the conversations know (names and marks for "From WeChat"), cached per hub and read again on reconnect. */
 interface ChannelDirectory {
     val channels: StateFlow<List<HubChannel>>
 }
@@ -109,7 +109,7 @@ data class HubChannel(
 @Serializable
 data class ChannelAccount(val id: String? = null, val name: String = "")
 
-/** What a channel can do (docs/channels.md「能力」); taking text is a given. */
+/** What a channel can do (docs/channels.md "Capabilities"); taking text is a given. */
 @Serializable
 data class ChannelCapabilities(
     @SerialName("images_in") val imagesIn: Boolean = false,
@@ -225,7 +225,7 @@ data class BindField(val name: String = "", val label: String = "", val secret: 
 @Serializable
 data class BindQrCode(val size: Int = 0, val rows: List<String> = emptyList())
 
-/** Which channel a message or a conversation came from (docs/channels.md「来源标记」). */
+/** Which channel a message or a conversation came from (docs/channels.md "Source marks"). */
 object ChannelSources {
     /**
      * The channel a message came from, by its `client_msg_id`: `<channel id>-<message id>`. The app's own messages

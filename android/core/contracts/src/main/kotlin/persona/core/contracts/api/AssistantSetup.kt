@@ -22,7 +22,7 @@ data class AssistantConfig(
     /** The main conversation's session id; it lives on [machineId]. */
     val main: String? = null,
     /**
-     * 只在主对话里通知: tasks the main conversation sends out stay out of pushes and the badge (the main conversation
+     * "Notify only in the main chat": tasks the main conversation sends out stay out of pushes and the badge (the main conversation
      * tells you instead); null from a hub without the setting.
      */
     @SerialName("main_tasks_quiet") val mainTasksQuiet: Boolean? = null,

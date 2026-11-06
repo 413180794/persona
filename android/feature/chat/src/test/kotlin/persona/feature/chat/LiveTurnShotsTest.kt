@@ -38,7 +38,7 @@ import java.time.Instant
 
 /**
  * #3350: the chat's lines as `ChatTimeline` builds them while the agent works, for a turn that took a queued message
- * in and for a recap at the end; each has its 「正在工作…」 line. Glass light and dark, PNGs in `build/live-turn-shots/`
+ * in and for a recap at the end; each has its "Working…" line. Glass light and dark, PNGs in `build/live-turn-shots/`
  * (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)

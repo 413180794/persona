@@ -10,7 +10,7 @@ import android.service.quicksettings.TileService
 import persona.core.domain.fleet.FleetSummary
 
 /**
- * The Quick Settings tile (iOS 「Persona 状态」): 「2 个需要你」 / 「3 个在工作」 at a glance, lit while something needs you or
+ * The Quick Settings tile (iOS "Persona status"): "2 need you" / "3 working" at a glance, lit while something needs you or
  * works. A tap opens the only agent when there is one, otherwise Agents.
  */
 class PersonaTileService : TileService() {

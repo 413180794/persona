@@ -46,17 +46,17 @@ class ShellSession(
     val phone: PhoneToolsRuntime? = null,
     val demo: DemoHub? = null,
     val agentsWiring: persona.feature.agents.AgentsWiring = persona.feature.agents.AgentsWiring.Empty,
-    /** Launchers, 重新连接, 重新部署 and the engine of the hub's machines; null in 体验模式. */
+    /** Launchers, "Reconnect", "Redeploy" and the engine of the hub's machines; null in demo mode. */
     val machines: MachineManagement? = null,
-    /** The hub's voice extensions (语音对话); null in demo mode. */
+    /** The hub's voice extensions (voice chat); null in demo mode. */
     val voice: VoiceExtensions? = null,
     /** The phone's hub groups; a demo has none. */
     val groups: HubGroups = HubGroups.None,
     val tasks: persona.core.domain.tasks.TasksStore? = null,
     val hubUpdates: persona.core.contracts.api.HubUpdates? = null,
-    /** The addresses the selected group's hubs go by (their links open in the app, ShellLinks.kt); none in 体验模式. */
+    /** The addresses the selected group's hubs go by (their links open in the app, ShellLinks.kt); none in demo mode. */
     val hubAddresses: () -> List<String> = { emptyList() },
-    /** 添加电脑 and 确认电脑 (docs/onboarding.md 4.2); null in 体验模式. */
+    /** "Add computer" and "Confirm computer" (docs/onboarding.md 4.2); null in demo mode. */
     val computers: ComputerPairing? = null,
 ) {
     val agents = object : AgentsDependencies {
@@ -93,11 +93,11 @@ class AppServices @Inject constructor(
     private val computers: ComputerPairing,
 ) {
     private val app = application as PersonaApp
-    /** Terminal, files, chat actions and machine metrics of every hub group (docs/android.md「多 hub」). */
+    /** Terminal, files, chat actions and machine metrics of every hub group (docs/android.md "Multiple hubs"). */
     private val shell = persona.android.di.MergedShellServices(stacks)
-    /** 终端's pane lists of every hub group (feature terminal_panes). */
+    /** Terminal's pane lists of every hub group (feature terminal_panes). */
     val terminalPanes: TerminalPanes get() = shell.panes
-    /** The terminal of another hub group's machine (`~group` ids, as 终端 lists them); null for this hub's own. */
+    /** The terminal of another hub group's machine (`~group` ids, as Terminal lists them); null for this hub's own. */
     fun groupTerminal(key: SessionKey): TerminalTransport? = if (mutableSession.value?.demo != null) null else shell.groupTerminal(key.machineId)
     private val mergedMetrics = shell.metrics { stack ->
         val route = stack.connection.route.value ?: return@metrics null
@@ -224,8 +224,8 @@ class AppServices @Inject constructor(
         }
         val database = Room.inMemoryDatabaseBuilder(app, PersistentDatabase::class.java).build()
         val messages = OutboxMessageSender(demo.hubScope, RoomOutboxStore(database, demo.hubScope), demo, scope)
-        // 交给 Persona and the Persona tab write to the main conversation: without a resolver such a message waits for
-        // ever and holds every message queued after it (连上后自动发送), the Agents' included.
+        // "Hand to Persona" and the Persona tab write to the main conversation: without a resolver such a message waits for
+        // ever and holds every message queued after it ("send automatically once connected"), the Agents' included.
         messages.connectMainConversation(AssistantMainConversationResolver(demo))
         val directory = File(app.noBackupFilesDir, "demo/${demo.hubScope.path}")
         val snapshots = ListSnapshotStore(File(directory, "lists"))

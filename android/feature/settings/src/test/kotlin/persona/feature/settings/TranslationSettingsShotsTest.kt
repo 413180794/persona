@@ -44,9 +44,9 @@ import persona.core.designsystem.pagePadding
 import java.io.File
 
 /**
- * 设置 › 翻译 drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark: off,
+ * Settings › Translation drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark: off,
  * on with two chats picked, and the chat picker. Each is checked to draw something and written as a PNG to
- * `build/translation-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「翻译」). The interaction tests
+ * `build/translation-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Translation"). The interaction tests
  * drive the page as a user would and check what is kept.
  */
 @RunWith(AndroidJUnit4::class)

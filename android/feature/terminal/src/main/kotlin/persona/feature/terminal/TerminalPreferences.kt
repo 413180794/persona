@@ -8,7 +8,7 @@ import java.util.Locale
  * when the pairing changes.
  */
 interface TerminalPreferences {
-    /** 接管 (the phone drives the pane at its own size) or 只读 (mirror it at the computer's size) when a terminal opens. */
+    /** "Take over" (the phone drives the pane at its own size) or "Read-only" (mirror it at the computer's size) when a terminal opens. */
     var drive: Boolean
     /** The terminal's font size in dp ([TerminalFontSize]): a new size is a new grid, so a driven pane lays itself out again. */
     var fontSize: Float
@@ -27,7 +27,7 @@ object TerminalFontSize {
     fun valid(size: Float): Float =
         if (size.isNaN()) DEFAULT else (Math.round(size / STEP) * STEP).coerceIn(MIN, MAX)
 
-    /** 「15」「12.5」. */
+    /** "15", "12.5". */
     fun label(size: Float): String =
         if (size % 1f == 0f) String.format(Locale.ROOT, "%.0f", size) else String.format(Locale.ROOT, "%.1f", size)
 }

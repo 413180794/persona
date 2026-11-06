@@ -22,7 +22,7 @@ import persona.core.domain.mapOperationFailure
 internal fun AssistantPendingConversation(
     messages: List<OutboxMessage>, session: Session?, modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(), demo: Boolean = false,
-    /** A refused start's button (添加电脑, 接上模型…), and 重试 once the step is done. */
+    /** A refused start's button ("Add computer", "Connect a model…"), and "Retry" once the step is done. */
     onRefusal: (ReadinessActionId) -> Unit = {},
     onRetry: ((OutboxMessage) -> Unit)? = null,
 ) {

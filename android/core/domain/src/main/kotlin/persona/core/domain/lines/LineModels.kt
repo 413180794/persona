@@ -158,7 +158,7 @@ sealed interface ChatLine {
     }
     /**
      * An answer or a notice that is a model API error, drawn as a card ([foldApiErrors]); [count] is how many times
-     * the same error came in a row, the user's 「继续」 between them folded in. Keeps the first error's id.
+     * the same error came in a row, the user's "continue" between them folded in. Keeps the first error's id.
      */
     data class ApiError(val item: LineItem, val info: ApiErrorInfo, val count: Int) : ChatLine {
         override val id get() = item.id

@@ -54,7 +54,7 @@ object Engines {
     fun canSelect(id: String, machine: Machine): Boolean =
         known.any { it.id == id } || machine.engines.any { it.id == id && it.available }
 
-    /** The detection line under an option; missing detection is not reported as 没检测到. */
+    /** The detection line under an option; missing detection is not reported as "Not detected". */
     fun detection(id: String, machine: Machine): CoreText {
         if (!machine.online) return CoreText.of(Key.EngineOffline)
         val found = machine.engines.firstOrNull { it.id == id } ?: return CoreText.of(Key.EngineUnknown)
@@ -68,6 +68,6 @@ object Engines {
     /** The note under the options. */
     fun footer(machine: Machine): CoreText = CoreText.of(if (machine.online) Key.EngineFooter else Key.EngineFooterOffline)
 
-    /** What 保存 says once the hub took the choice. */
+    /** What "Save" says once the hub took the choice. */
     fun saved(machine: Machine): CoreText = CoreText.of(if (machine.online) Key.EngineSwitched else Key.EngineSavedOffline)
 }

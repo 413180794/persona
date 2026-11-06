@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 設定 › アシスタント › 自動実行 -->
+    <!-- Settings › Assistant › Proactive -->
     <string name="assistant_proactive_title">自動実行</string>
     <string name="assistant_proactive_unconnected_title">まだハブに接続していません</string>
     <string name="assistant_proactive_unconnected_body">ハブに接続すると、ここでPersonaの定期タスク、フォローアップ、実行履歴を管理できます。</string>

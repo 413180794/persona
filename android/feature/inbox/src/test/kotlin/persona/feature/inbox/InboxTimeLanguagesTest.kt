@@ -10,7 +10,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.Locale
 
-/** Inbox, Feishu and 公司圈 times follow the app's language, never a fixed `MM-dd HH:mm` (#4043). */
+/** Inbox, Feishu and Moments times follow the app's language, never a fixed `MM-dd HH:mm` (#4043). */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class InboxTimeLanguagesTest {

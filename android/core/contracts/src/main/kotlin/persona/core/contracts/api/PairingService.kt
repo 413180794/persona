@@ -37,7 +37,7 @@ interface PairingService {
     suspend fun unpair()
 }
 
-/** Where a pairing attempt stopped, for 连接诊断 (the running connection's probes only exist once paired). */
+/** Where a pairing attempt stopped, for "Connection diagnostics" (the running connection's probes only exist once paired). */
 enum class PairingAttemptStep { Parse, Network, Tls, Http, Auth, Protocol }
 
 /**
@@ -54,7 +54,7 @@ data class PairingAttempt(
     val failed: Boolean get() = step != null
 }
 
-/** The last pairing attempt, shared by the pairing page (which records it) and 连接诊断 (which shows it). */
+/** The last pairing attempt, shared by the pairing page (which records it) and "Connection diagnostics" (which shows it). */
 class PairingAttempts {
     private val mutable = kotlinx.coroutines.flow.MutableStateFlow<PairingAttempt?>(null)
     val last: StateFlow<PairingAttempt?> = mutable

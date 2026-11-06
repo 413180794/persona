@@ -186,7 +186,7 @@
     <string name="inbox_unmute_failed">Couldn\'t unmute; restored</string>
     <string name="inbox_muted_notice">Muted “%1$s”; it won\'t come into the Inbox again</string>
 
-    <!-- Inbox phase 1: events, suggestions, the 处理链条 (InboxEvents.kt). -->
+    <!-- Inbox phase 1: events, suggestions, the Handling chain (InboxEvents.kt). -->
     <string name="inbox_section_working">In progress</string>
     <string name="inbox_handling_looking">AI is on it</string>
     <string name="inbox_handling_agent">An agent is working</string>

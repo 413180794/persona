@@ -26,10 +26,10 @@ internal data class VoicePageState(
     /** The voice a conversation uses: the picked one while the extension still offers it; null is the extension's default. */
     val chosenVoice: String? get() = voice?.takeIf { picked -> voices == null || voices.voices.any { it.id == picked } }
 
-    /** The voice the 音色 sheet checks. */
+    /** The voice the "Voice" sheet checks. */
     val checkedVoice: String? get() = chosenVoice ?: voices?.default
 
-    /** The bar's subtitle: 模型 · 音色, each when known. */
+    /** The bar's subtitle: model · voice, each when known. */
     val subtitle: String? get() {
         val model = (setup as? VoiceSetup.Ready)?.model?.let { id -> models.models.firstOrNull { it.id == id }?.label ?: id }
         val voice = voices?.voices?.firstOrNull { it.id == checkedVoice }?.name?.takeIf { it.isNotBlank() }
@@ -58,7 +58,7 @@ internal class VoicePage(
     val session: StateFlow<VoiceSession?> = current.asStateFlow()
     private var loading: Job? = null
 
-    /** Reads the model configuration and the voices, then starts a conversation. Also 重新开始 and 重试. */
+    /** Reads the model configuration and the voices, then starts a conversation. Also "Start again" and "Retry". */
     fun begin() {
         loading?.cancel()
         current.value?.stop()

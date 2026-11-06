@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
-// An extension's declarative UI (docs/extensions.md「声明式 UI」): drawing a view, its fields' values, its buttons. The
+// An extension's declarative UI (docs/extensions.md "Declarative UI"): drawing a view, its fields' values, its buttons. The
 // renderer is in ExtensionViewContent.kt; the pages that hold one are in ExtensionUiScreen.kt.
 
 internal object ExtensionViewText {
@@ -49,7 +49,7 @@ internal object ExtensionViewText {
 
     /**
      * The inbox item an inbox item's page asks to see at its source (`open_url: persona://inbox/<id>/source`, the one
-     * app link the hub lets that slot open, docs/extensions.md「UI 插槽」): the item's id, else null.
+     * app link the hub lets that slot open, docs/extensions.md "UI slots"): the item's id, else null.
      */
     fun inboxSource(url: String?): String? {
         val uri = runCatching { java.net.URI(url ?: return null) }.getOrNull() ?: return null
@@ -131,7 +131,7 @@ internal object ExtensionViewText {
     }
 
     /**
-     * Markdown an extension may write (docs/extensions.md「声明式 UI」): headings, paragraphs, lists, emphasis, code,
+     * Markdown an extension may write (docs/extensions.md "Declarative UI"): headings, paragraphs, lists, emphasis, code,
      * quotes and https links. Pictures become their words, other links their words; HTML is drawn as the text it is
      * (the renderer has no HTML).
      */
@@ -148,7 +148,7 @@ internal object ExtensionViewText {
     /** Fields aren't drawn on a card (the hub refuses them there too): it opens a page for that. */
     fun drawableOnCard(item: ExtensionViewItem): Boolean = item.type != "field" && item.type != "table" && item.type != "html" && drawable(item)
 
-    /** How deep pages pushed on each other may go (docs/extensions.md「页面跳转」). */
+    /** How deep pages pushed on each other may go (docs/extensions.md "Page navigation"). */
     const val MaxDepth = 8
 
     /**
@@ -211,7 +211,7 @@ internal object ExtensionViewText {
     /** A confirm dialog's title: what is about to happen. */
     fun confirmTitle(res: Resources, item: ExtensionViewItem): String = item.title?.takeIf { it.isNotBlank() } ?: res.getString(R.string.settings_ext_confirm_title)
 
-    /** Its button: the pressed button's own words, so 停用 reads 停用. */
+    /** Its button: the pressed button's own words, so "Disable" reads "Disable". */
     fun confirmLabel(res: Resources, item: ExtensionViewItem): String = item.title?.takeIf { it.isNotBlank() && it.length <= 8 } ?: res.getString(R.string.settings_ext_confirm_ok)
 
     /** A gateway's host for a line of text (`https://gw.example.com/v1` → `gw.example.com`). */
@@ -230,7 +230,7 @@ internal data class ExtensionViewState(
     val loading: Boolean = false,
     /** The action on its way (its id): its button spins, the others wait. */
     val acting: String? = null,
-    /** Reading the view failed: the page shows it with 重试. */
+    /** Reading the view failed: the page shows it with "Retry". */
     val error: ExtensionFailure? = null,
     /** Why reading it last failed (an inbox item's page tells a refusal from a breakdown); none once drawn. */
     val failure: Throwable? = null,
@@ -243,7 +243,7 @@ internal data class ExtensionViewState(
     val drawnAt: Long? = null,
     /** What the search box holds now (UI version 3); null: as the view says. */
     val query: String? = null,
-    /** A section's 加载更多 on its way (the section's index): its row spins, the page stays usable. */
+    /** A section's "Load more" on its way (the section's index): its row spins, the page stays usable. */
     val loadingMore: Int? = null,
 ) {
     val busy: Boolean get() = loading || acting != null
@@ -305,7 +305,7 @@ internal class ExtensionViewModel(
     }
 
     /**
-     * The extension's data changed (`ui.invalidate`, docs/extensions.md「声明式 UI」): drawn again if on screen, else when it
+     * The extension's data changed (`ui.invalidate`, docs/extensions.md "Declarative UI"): drawn again if on screen, else when it
      * comes back.
      */
     suspend fun invalidate() {
@@ -324,7 +324,7 @@ internal class ExtensionViewModel(
         }
     }
 
-    /** A page of the extension was pushed on this one: it is drawn again when it shows (docs/extensions.md「页面跳转」). */
+    /** A page of the extension was pushed on this one: it is drawn again when it shows (docs/extensions.md "Page navigation"). */
     fun covered() { stale = true }
 
     /**
@@ -357,7 +357,7 @@ internal class ExtensionViewModel(
     fun edit(name: String, value: String) = mutable.update { it.copy(values = it.values + (name to value)) }
 
     /**
-     * An action that does not hold the page (search, filter, 加载更多): sent with [values]; a new view replaces this one,
+     * An action that does not hold the page (search, filter, "Load more"): sent with [values]; a new view replaces this one,
      * keeping what is being typed into its fields; [before] marks the state while it goes, [loadingMore] the section
      * spinning. An answer that a later one has overtaken is dropped.
      */
@@ -457,7 +457,7 @@ internal suspend fun ExtensionViewModel.filter(value: String): ExtensionActionOu
     return quietly(filter.action.id, values) { it }
 }
 
-/** The end of section [index] came on screen, or its 加载更多 was tapped: its action, once until the answer is back. */
+/** The end of section [index] came on screen, or its "Load more" was tapped: its action, once until the answer is back. */
 internal suspend fun ExtensionViewModel.more(index: Int, section: ExtensionViewSection): ExtensionActionOutcome {
     val action = section.more?.action?.takeIf { it.id.isNotEmpty() } ?: return ExtensionActionOutcome()
     if (state.value.loadingMore != null || state.value.loading) return ExtensionActionOutcome()

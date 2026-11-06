@@ -25,7 +25,7 @@ import androidx.annotation.StringRes
 import java.time.Instant
 import java.time.ZoneId
 
-// 设置 › 扩展 › 渠道 (docs/channels.md「界面」): the words, the list's sections, where messages go, and the models of the
+// Settings › Extensions › Channels (docs/channels.md "UI"): the words, the list's sections, where messages go, and the models of the
 // list, a channel's page and its binding a step at a time. The pages are in ChannelsScreen.kt.
 
 /** What a channel is called and says in the settings (the same words as the web's lib/channels.ts). */
@@ -56,7 +56,7 @@ internal object ChannelText {
         else -> c.description?.takeIf { it.isNotBlank() }
     }
 
-    /** 设置's row: how many are connected (the apps are always), and how many went wrong; null before the list is in. */
+    /** Settings' row: how many are connected (the apps are always), and how many went wrong; null before the list is in. */
     fun listSummary(res: Resources, list: List<HubChannel>?): String? {
         list ?: return null
         val on = list.count { it.kind != "app" && it.state == "connected" }
@@ -78,7 +78,7 @@ internal object ChannelText {
 
     /** What the channel can do, in a few words each for its page. */
     fun capabilities(res: Resources, c: ChannelCapabilities): List<String> = buildList {
-        // What comes in, in the language's list: 文字、图片 · text, images.
+        // What comes in, in the language's list: "text, images" in English, with the Chinese list separator in Chinese.
         val kinds = listOfNotNull(R.string.settings_src_channel_in_text, R.string.settings_src_channel_in_images.takeIf { c.imagesIn },
             R.string.settings_src_channel_in_files.takeIf { c.filesIn }, R.string.settings_src_channel_in_voice.takeIf { c.voiceIn })
             .map(res::getString).joinToString(res.getString(R.string.settings_src_list_separator))
@@ -107,11 +107,11 @@ internal object ChannelText {
 
     fun isBound(c: HubChannel): Boolean = c.state == "connected" || (c.state == "error" && !c.account?.name.isNullOrBlank())
 
-    /** The page offers 绑定: it binds here, it is on, and it is not bound. */
+    /** The page offers "Link": it binds here, it is on, and it is not bound. */
     fun canBind(c: HubChannel): Boolean = binds(c) && c.enabled && !isBound(c)
 
     /**
-     * The page the hub links to (`settings_url`), where Android has it: an extension's page, 模型配置. The Feishu bot's own
+     * The page the hub links to (`settings_url`), where Android has it: an extension's page, "Model configuration". The Feishu bot's own
      * settings page is iOS's and the web's only; without a page here the row is left out.
      */
     fun settingsDestination(url: String?): NavKey? {
@@ -135,7 +135,7 @@ internal object ChannelText {
 
     fun ago(res: Resources, at: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String = agoText(res, at, now, zone)
 
-    /** 最近's 在等 line: the answers and questions the channel waits on; null when it waits on nothing. */
+    /** Recent's Waiting line: the answers and questions the channel waits on; null when it waits on nothing. */
     fun waiting(res: Resources, d: ChannelDetail): String? = listOfNotNull(
         d.waiting.answers.takeIf { it > 0 }?.let { res.getQuantityString(R.plurals.settings_src_channel_waiting_answers, it, it) },
         d.waiting.asks.takeIf { it > 0 }?.let { res.getQuantityString(R.plurals.settings_src_channel_waiting_asks, it, it) },
@@ -158,11 +158,11 @@ internal fun channelSections(list: List<HubChannel>): List<ChannelSection> = lis
         list.filter { it.source == "market" }),
 ).filter { it.channels.isNotEmpty() }
 
-/** One choice of 「消息发到」; [label] null: the target's own words ([ChannelText.targetText]). */
+/** One choice of "Send messages to"; [label] null: the target's own words ([ChannelText.targetText]). */
 internal data class TargetOption(val target: ChannelTarget, val label: String?, val selected: Boolean)
 
 /**
- * 「消息发到」's choices: the main conversation, a new one, then the conversations this channel's messages went to
+ * "Send messages to"'s choices: the main conversation, a new one, then the conversations this channel's messages went to
  * lately, then the assistant's other ones (newest first, [limit] in all). [assistant] is in the hub's own ids.
  */
 internal fun targetOptions(detail: ChannelDetail, assistant: List<Session>, limit: Int = 20): List<TargetOption> {
@@ -196,7 +196,7 @@ internal data class ChannelListState(
     val sections: List<ChannelSection> get() = channelSections(channels.orEmpty())
 }
 
-/** 设置 › 扩展 › 渠道: the list. */
+/** Settings › Extensions › Channels: the list. */
 internal class ChannelListModel(private val api: ChannelManagement) {
     private val mutable = MutableStateFlow(ChannelListState())
     val state = mutable.asStateFlow()
@@ -251,7 +251,7 @@ internal data class ChannelState(
     val editable: Boolean get() = channel?.let(ChannelText::editable) == true
 }
 
-/** 设置 › 扩展 › 渠道 › one: its switch, its binding, where its messages go, its features, a test message. */
+/** Settings › Extensions › Channels › one: its switch, its binding, where its messages go, its features, a test message. */
 internal class ChannelModel(private val api: ChannelManagement, private val id: String) {
     private val mutable = MutableStateFlow(ChannelState())
     val state = mutable.asStateFlow()
@@ -298,14 +298,14 @@ internal class ChannelModel(private val api: ChannelManagement, private val id: 
         finally { mutable.update { it.copy(busy = null) } }
     }
 
-    // ---- binding (docs/channels.md「接口」: POST …/bind, a connector.Prompt a step at a time)
+    // ---- binding (docs/channels.md "API": POST .../bind, a connector.Prompt a step at a time)
 
-    /** 绑定: the first step. */
+    /** "Link": the first step. */
     suspend fun startBind(): Boolean = step(null, null)
 
     fun setValue(name: String, value: String) = mutable.update { it.copy(bind = it.bind.copy(values = it.bind.values + (name to value))) }
 
-    /** 下一步: the step's fields as typed (trimmed; empty ones left out). */
+    /** "Next": the step's fields as typed (trimmed; empty ones left out). */
     suspend fun submit(): Boolean {
         val bind = state.value.bind
         if (!bind.canSubmit) return false
@@ -317,7 +317,7 @@ internal class ChannelModel(private val api: ChannelManagement, private val id: 
     /** The page has said that binding finished. */
     fun boundShown() = mutable.update { it.copy(boundAs = null) }
 
-    /** 取消: the step goes away (the hub forgets a pairing code by itself when it expires). */
+    /** "Cancel": the step goes away (the hub forgets a pairing code by itself when it expires). */
     fun cancelBind() = mutable.update { it.copy(bind = BindState()) }
 
     /**

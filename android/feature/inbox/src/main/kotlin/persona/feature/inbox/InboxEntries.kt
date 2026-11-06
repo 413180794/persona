@@ -20,7 +20,7 @@ data class LarkRoute(val feedId: String, val itemId: String? = null, val startPo
 fun EntryProviderScope<NavKey>.inboxEntries(
     navigator: Navigator,
     repository: InboxRepository? = null,
-    /** The hub's connectors (their threads and replies); null in 体验模式: a connector's item opens its detail page. */
+    /** The hub's connectors (their threads and replies); null in demo mode: a connector's item opens its detail page. */
     connectors: persona.core.contracts.api.ConnectorsManagement? = null,
     mailTransport: persona.core.contracts.api.MailTransport? = null,
     onMailAskAi: ((MailAiContext) -> Unit)? = null,
@@ -80,7 +80,7 @@ data class MailRoute(val itemId: String) : NavKey
 @Serializable @SerialName("jarvis.feature.inbox.LarkMomentRoute")
 data class LarkMomentRoute(val postId: String, val itemId: String? = null) : NavKey
 
-/** The own page of an item that is neither a chat, a 公司圈 post nor a mail: a Feishu document's notice, or an unknown item. */
+/** The own page of an item that is neither a chat, a Moments post nor a mail: a Feishu document's notice, or an unknown item. */
 @Serializable @SerialName("persona.feature.inbox.InboxItemDetailRoute")
 data class InboxItemDetailRoute(val itemId: String) : NavKey
 

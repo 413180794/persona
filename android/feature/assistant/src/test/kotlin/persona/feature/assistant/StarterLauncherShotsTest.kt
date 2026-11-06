@@ -34,7 +34,7 @@ import persona.feature.chat.ChatComposer
 import persona.feature.chat.rememberChatComposerState
 import java.io.File
 
-/** The home composer's 启动器 chip (#2976, iOS StarterComposer): what a new conversation starts with, and the pick. */
+/** The home composer's "Launcher" chip (#2976, iOS StarterComposer): what a new conversation starts with, and the pick. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "zh-w400dp-h900dp-xhdpi")

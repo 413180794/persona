@@ -15,7 +15,7 @@ import kotlinx.coroutines.sync.withLock
 
 internal data class AgentSessionEdit(
     val title: String? = null, val tab: String? = null, val closed: Boolean = false,
-    /** 删除对话: hidden until the hub's list no longer has it. */
+    /** "Delete chat": hidden until the hub's list no longer has it. */
     val deleted: Boolean = false,
 ) {
     fun matches(session: Session?) = when {

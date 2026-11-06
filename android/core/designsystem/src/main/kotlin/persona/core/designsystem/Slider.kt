@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /**
- * One value from a range (与我相关 0–100 in steps of 5). Glass: a soft well lit in the accent with a white disc;
+ * One value from a range ("Relevant to me" 0–100 in steps of 5). Glass: a soft well lit in the accent with a white disc;
  * brief: an ink rule with an ink disc; board: a ruled bar filled in the accent with a square handle. [step] snaps
  * the value (and makes it a list of stops for accessibility); without it the value is continuous. Dragging and
  * tapping come from Material's slider; only the look is the style's.

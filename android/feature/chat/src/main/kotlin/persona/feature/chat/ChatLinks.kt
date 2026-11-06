@@ -159,12 +159,12 @@ data class ChatLinkContext(
     companion object {
         /**
          * The text of a whole page picked as context: the agent reads the page itself. The same marker as iOS
-         * (`LinkSheet.pick`) and web (`links.ts` WHOLE); iOS's quote row keys on it to show 「引用 <title>」.
+         * (`LinkSheet.pick`) and web (`links.ts` WHOLE); iOS's quote row keys on it to show "Quote <title>".
          */
         const val WHOLE = "（整篇）" // i18n-ignore: the wire marker iOS and web send and match
 
         /**
-         * What the link card's 作为上下文 sends for the whole of a native Feishu view: a document by [WHOLE], a 公司圈 post
+         * What the link card's "Use as context" sends for the whole of a native Feishu view: a document by [WHOLE], a Moments post
          * by its text once [read] (null until then: no button); null for any other page.
          */
         internal fun whole(native: persona.feature.inbox.LarkNativeLink?, read: String?): String? = when (native) {
@@ -172,9 +172,9 @@ data class ChatLinkContext(
             is persona.feature.inbox.LarkNativeLink.MomentsPost -> read?.ifBlank { WHOLE }
             null -> null
         }
-        /** 引用 on a message of this chat (iOS `ContextRef.quote`): [title] is who wrote it, 「我」 for the user's own. */
+        /** "Quote" on a message of this chat (iOS `ContextRef.quote`): [title] is who wrote it, [QUOTE_ME] for the user's own. */
         const val QUOTE = "quote"
-        /** The author of the user's own quoted message on the wire, whatever the app's language (iOS writes and reads 「我」). */
+        /** The author of the user's own quoted message on the wire, whatever the app's language (iOS writes and reads the Chinese "me"). */
         const val QUOTE_ME = "我" // i18n-ignore: on the wire in every language, iOS writes and reads it
         fun quote(text: String, from: String, msg: String) = ChatLinkContext(QUOTE, from, "", text.trim(), msg = msg)
 
@@ -193,14 +193,14 @@ data class ChatLinkContext(
             return refs to tags.replace(text, "").trim()
         }
 
-        /** 「AI 修改」: the selection and what to do with it, one message to the agent (iOS `LinkSheet`). */
+        /** "AI edit": the selection and what to do with it, one message to the agent (iOS `LinkSheet`). */
         fun editMessage(selection: ChatLinkContext, instruction: String, resources: Resources): String {
             val ask = instruction.trim()
             return selection.copy(kind = "edit").xml() + "\n\n" +
                 if (ask.isEmpty()) resources.getString(R.string.chat_links_edit_default) else resources.getString(R.string.chat_links_edit_ask, ask)
         }
 
-        /** 「交给 Persona」 from a page with no conversation behind it: the selection and what Persona is to do with it. */
+        /** "Hand to Persona" from a page with no conversation behind it: the selection and what Persona is to do with it. */
         fun handToPersonaMessage(selection: ChatLinkContext, instruction: String, resources: Resources): String =
             selection.copy(kind = "context").xml() + "\n\n" + instruction.trim().ifEmpty { resources.getString(R.string.chat_links_hand_default) }
     }
@@ -208,7 +208,7 @@ data class ChatLinkContext(
 
 /**
  * A message with the picked contexts in front of it, as iOS sends it: the tags a line apart, then a blank line and
- * what was typed (「参考上面的内容。」 when only contexts go).
+ * what was typed ("See the content above." when only contexts go).
  */
 internal fun linkMessage(draft: String, contexts: List<ChatLinkContext>, resources: Resources): String =
     if (contexts.isEmpty()) draft
@@ -232,6 +232,6 @@ private const val CONTEXTS_V2 = "contexts-v2"
 internal fun withQuote(contexts: List<ChatLinkContext>, quote: ChatLinkContext): List<ChatLinkContext> =
     if (quote.msg.isNotEmpty() && contexts.any { it.kind == ChatLinkContext.QUOTE && it.msg == quote.msg }) contexts else contexts + quote
 
-/** 引用 on a message of this chat: the user's own is by [ChatLinkContext.QUOTE_ME] in every language, else by [agent]. */
+/** "Quote" on a message of this chat: the user's own is by [ChatLinkContext.QUOTE_ME] in every language, else by [agent]. */
 internal fun messageQuote(text: String, user: Boolean, agent: String, msg: String): ChatLinkContext =
     ChatLinkContext.quote(text, if (user) ChatLinkContext.QUOTE_ME else agent, msg)

@@ -26,7 +26,7 @@ data class MailAccount(
 ) {
     val isError: Boolean get() = status == "error"
 
-    /** The line under the address in 邮箱 (iOS `MailAccountsView`). */
+    /** The line under the address in Mail (iOS `MailAccountsView`). */
     val detail: CoreText
         get() = when {
             isError -> error?.takeIf { it.isNotBlank() }?.let(CoreText::plain) ?: CoreText.of(Key.MailError)
@@ -67,7 +67,7 @@ data class GoogleStart(
 @Serializable
 data class GoogleFinish(val state: String, val code: String? = null, val error: String? = null)
 
-/** `GET /api/v1/lark/status` (设置 › 连接器 › 飞书): whether the hub reaches the Lark gateway and who is signed in there. */
+/** `GET /api/v1/lark/status` (Settings › Connectors › Lark): whether the hub reaches the Lark gateway and who is signed in there. */
 @Serializable
 data class LarkStatus(
     val configured: Boolean = false,
@@ -96,7 +96,7 @@ data class LarkAccounts(
 )
 
 /**
- * One of `GET /api/v1/connectors`: a source the hub reads (GitHub…) and how it is doing (docs/protocol.md「连接器 API」).
+ * One of `GET /api/v1/connectors`: a source the hub reads (GitHub…) and how it is doing (docs/protocol.md "Connector API").
  */
 @Serializable
 data class HubConnector(
@@ -125,7 +125,7 @@ data class ConnectorDataDeleted(
 )
 
 /**
- * 设置 › 连接器 (docs/connectors.md, docs/mail.md): managing mail accounts, Google OAuth,
+ * Settings › Connectors (docs/connectors.md, docs/mail.md): managing mail accounts, Google OAuth,
  * Lark gateway Feishu connection status and accounts, and general hub connectors.
  */
 interface ConnectorsManagement {
@@ -156,10 +156,10 @@ interface ConnectorsManagement {
     suspend fun larkStatus(): LarkStatus
     suspend fun larkAccounts(): LarkAccounts?
 
-    /** 设置 › 翻译's chat picker: `GET /api/v1/lark/pinned` (when the hub has it), then `/api/v1/lark/conversations?scope=chats`. */
+    /** Settings › Translation's chat picker: `GET /api/v1/lark/pinned` (when the hub has it), then `/api/v1/lark/conversations?scope=chats`. */
     suspend fun larkChatChoices(): List<LarkChatChoice>
 
-    // Any connector with `login` / `threads` (docs/protocol.md「连接器 API」): what the hub hands down, nothing per source.
+    // Any connector with `login` / `threads` (docs/protocol.md "Connector API"): what the hub hands down, nothing per source.
 
     /**
      * `POST /api/v1/connectors/{id}/login` `{step, values}`: one sign-in step ([step] empty starts over). The answer has
@@ -183,7 +183,7 @@ interface ConnectorsManagement {
     suspend fun connectorThreadReply(id: String, thread: String, action: String, text: String, replyTo: String?): ConnectorReplyOutcome =
         throw UnsupportedOperationException("Connector replies unavailable")
 
-    // Outlook's 使用 Microsoft 账号登录 (docs/mail.md「Outlook 接入方式」): the client ID the user registered lives on the hub.
+    // Outlook's "Sign in with Microsoft" (docs/mail.md "Connecting Outlook"): the client ID the user registered lives on the hub.
 
     /** `GET /api/v1/mail/oauth/microsoft/config`. */
     suspend fun microsoftConfig(): MicrosoftConfig = throw UnsupportedOperationException("Outlook sign-in unavailable")
@@ -197,7 +197,7 @@ interface ConnectorsManagement {
     /** `POST /api/v1/mail/oauth/microsoft/finish`: the callback as it came (an error too: the hub says what to do). */
     suspend fun microsoftSignInFinish(finish: MicrosoftFinish): MailAccount = throw UnsupportedOperationException("Outlook sign-in unavailable")
 
-    // 设置 › 飞书 › 风灵月影 (iOS `LarkMessageDisplay`): shared with the Lark gateway's web for the signed-in account.
+    // Settings › Lark › "Message display" (iOS `LarkMessageDisplay`): shared with the Lark gateway's web for the signed-in account.
 
     /** `GET /api/v1/lark/message-display`. */
     suspend fun larkMessageDisplay(): LarkMessageDisplay = throw UnsupportedOperationException("Message display unavailable")
@@ -206,12 +206,12 @@ interface ConnectorsManagement {
     suspend fun setLarkMessageDisplay(current: LarkMessageDisplay, key: String, value: Boolean): LarkMessageDisplay =
         throw UnsupportedOperationException("Message display unavailable")
 
-    // 设置 › 连接器 › 信息 (iOS `MessagesConnectorView`): one Mac's Messages, read through the hub.
+    // Settings › Connectors › Messages (iOS `MessagesConnectorView`): one Mac's Messages, read through the hub.
 
     /** `GET /api/v1/imessage`. */
     suspend fun messagesStatus(): MessagesStatus = throw UnsupportedOperationException("Messages unavailable")
 
-    /** `PUT /api/v1/imessage/settings` `{ai}`: 交给 Persona. */
+    /** `PUT /api/v1/imessage/settings` `{ai}`: "Hand to Persona". */
     suspend fun setMessagesAi(on: Boolean): MessagesStatus = throw UnsupportedOperationException("Messages unavailable")
 
     /** `DELETE /api/v1/imessage/data`: what the hub kept (knowledge base, inbox); the Mac's messages stay. */
@@ -241,7 +241,100 @@ data class MicrosoftFinish(
 )
 
 /**
- * 风灵月影 for the signed-in Feishu account: 防撤回 (a recalled message's kept words), 编辑历史 and the Lark gateway''s thread. */
+ * "Message display" for the signed-in Feishu account: "Keep recalled messages" (a recalled message's kept words), "Edit history" and the Lark gateway's
+ * "Brave Climb" (null from an extension without it: not offered). An unknown account hides kept content ([Hidden]).
+ */
+@Serializable
+data class LarkMessageDisplay(
+    @SerialName("account_id") val accountId: String = "",
+    @SerialName("anti_recall") val antiRecall: Boolean = false,
+    @SerialName("show_edit_history") val showEditHistory: Boolean = false,
+    @SerialName("brave_climb_codec") val braveClimb: Boolean? = null,
+) {
+    /** The switch behind a key of `POST /api/v1/lark/message-display`. */
+    fun value(key: String): Boolean? = when (key) {
+        "anti_recall" -> antiRecall
+        "show_edit_history" -> showEditHistory
+        "brave_climb_codec" -> braveClimb
+        else -> null
+    }
+
+    companion object {
+        val Hidden = LarkMessageDisplay()
+    }
+}
+
+/** `GET /api/v1/imessage`: which Mac, whether it may read, the steps there when it may not, "Hand to Persona" (null: an older hub). */
+@Serializable
+data class MessagesStatus(
+    val machine: String = "",
+    /** ok | no_permission | not_configured | … */
+    val status: String = "",
+    val error: String? = null,
+    val guide: List<String>? = null,
+    val via: String? = null,
+    val ai: Boolean? = null,
+)
+
+@Serializable
+data class MessagesPerson(val handle: String = "", val name: String? = null) {
+    val shown: String get() = name?.takeIf { it.isNotEmpty() } ?: handle
+}
+
+@Serializable
+data class MessagesChat(
+    val id: String,
+    val name: String = "",
+    val group: Boolean? = null,
+    val members: List<MessagesPerson> = emptyList(),
+    val services: List<String> = emptyList(),
+    /** RFC 3339. */
+    val last: String = "",
+    val preview: String? = null,
+    @SerialName("from_me") val fromMe: Boolean? = null,
+    val unread: Int? = null,
+) {
+    val isGroup: Boolean get() = group == true
+}
+
+@Serializable
+data class MessagesAttachment(
+    /** image | video | audio | file */
+    val kind: String = "",
+    val name: String? = null,
+    val mime: String? = null,
+    val size: Long? = null,
+)
+
+@Serializable
+data class MessagesMessage(
+    val id: String,
+    /** RFC 3339. */
+    val at: String = "",
+    /** message | event */
+    val kind: String = "message",
+    @SerialName("from_me") val fromMe: Boolean? = null,
+    val sender: MessagesPerson? = null,
+    val text: String? = null,
+    val service: String? = null,
+    val attachments: List<MessagesAttachment>? = null,
+    @SerialName("reply_to") val replyTo: String? = null,
+    val edited: Boolean? = null,
+    val unsent: Boolean? = null,
+    val unread: Boolean? = null,
+    val undecoded: Boolean? = null,
+) {
+    val isMine: Boolean get() = fromMe == true
+    val isEvent: Boolean get() = kind == "event"
+}
+
+@Serializable
+data class MessagesChatsPage(val chats: List<MessagesChat> = emptyList(), val more: Boolean? = null, val before: String? = null)
+
+@Serializable
+data class MessagesPage(val chat: MessagesChat? = null, val messages: List<MessagesMessage> = emptyList(), val more: Boolean? = null, val before: String? = null)
+
+/** A person in a connector's thread. */
 @Serializable
 data class ConnectorThreadPerson(val id: String? = null, val name: String = "", val avatar: String? = null)
 

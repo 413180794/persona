@@ -16,7 +16,7 @@ import persona.core.navigation.Navigator
 import persona.core.navigation.NewAgentRoute
 
 /**
- * The new agent page opened by key (`NewAgentRoute`, the knowledge base's 开 Agent): the form of Agents' 新建会话,
+ * The new agent page opened by key (`NewAgentRoute`, the knowledge base's "Open Agent"): the form of Agents' "New session",
  * prefilled. Once the hub answers, the page closes and the new conversation opens in Agents.
  */
 @Composable

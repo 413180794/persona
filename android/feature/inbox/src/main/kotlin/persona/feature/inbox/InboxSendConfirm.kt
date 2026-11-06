@@ -15,11 +15,11 @@ import persona.core.designsystem.*
 
 /**
  * Sending in the user's name asks first, the way the old app did: where it goes and every word of it. Every AI draft
- * (the AI 分身's, AI 草拟) goes through this; a reply the user typed is sent as typed (2026-11-02, settled for the port).
+ * (the AI twin's, "AI draft") goes through this; a reply the user typed is sent as typed (2026-11-02, settled for the port).
  */
 data class SendConfirmation(val destination: String, val text: String, val warning: String? = null)
 
-/** 发到飞书「标题」 for Feishu (chats, documents, posts), 回复邮件「标题」 for mail. */
+/** "Send to Lark "title"" for Feishu (chats, documents, posts), "Reply to mail "title"" for mail. */
 fun sendConfirmation(res: Resources, record: InboxRecord, text: String): SendConfirmation =
     SendConfirmation(res.getString(if (record.isLark) R.string.inbox_reply_to_lark else R.string.inbox_reply_to_mail, record.item.title),
         text.trim())

@@ -59,7 +59,7 @@ data class ChatAppBindings(
 
 interface ChatWiringSource {
     val current: StateFlow<ChatAppBindings?>
-    /** The services of the hub group [session] belongs to (docs/android.md「多 hub」); a single hub has only [current]. */
+    /** The services of the hub group [session] belongs to (docs/android.md "Multiple hubs"); a single hub has only [current]. */
     fun bindingsFor(session: SessionKey): StateFlow<ChatAppBindings?> = current
 }
 

@@ -68,12 +68,12 @@ internal data class EndpointEditorUi(
     val drag: EndpointDrag? = null,
     /** An order handed to the connection that it has not reported yet. */
     val pending: PendingOrder? = null,
-    /** 恢复默认顺序 waits for confirmation. */
+    /** "Reset order" waits for confirmation. */
     val resetting: Boolean = false,
 )
 
 /**
- * Edits to the candidate list of Settings › 连接诊断 (docs/android.md「连接地址」). Calls come from the UI
+ * Edits to the candidate list of Settings › Connection diagnostics (docs/android.md "Connection addresses"). Calls come from the UI
  * dispatcher; changes run one at a time in the order asked, tests run alongside them. The list's order is the
  * order the connection tries: dragging a row or moving it up and down stores the order shown.
  */
@@ -210,7 +210,7 @@ internal class EndpointEditorState(
         if (after == before) mutable.update { it.copy(drag = null) } else commit(after)
     }
 
-    /** 上移 / 下移 in the row's actions, for people who cannot or would rather not drag. */
+    /** "Move up" / "Move down" in the row's actions, for people who cannot or would rather not drag. */
     suspend fun moveUp(url: String) = move(url, -1)
     suspend fun moveDown(url: String) = move(url, 1)
 
@@ -222,7 +222,7 @@ internal class EndpointEditorState(
         commit(urls.moved(from, from + by))
     }
 
-    /** 恢复默认顺序 waits for [confirmResetOrder]; there is nothing to reset while the default rule applies. */
+    /** "Reset order" waits for [confirmResetOrder]; there is nothing to reset while the default rule applies. */
     fun askResetOrder() {
         if (!endpoints.state.value.customOrder) return
         mutable.update { it.copy(resetting = true, actions = null) }
@@ -355,7 +355,7 @@ internal val EndpointSource.label: Int get() = when (this) {
     EndpointSource.Pairing -> R.string.settings_endpoint_source_pairing
 }
 
-/** 「内网，手动添加」: what kind of address it is and where it came from. */
+/** "LAN, added by hand": what kind of address it is and where it came from. */
 internal fun EndpointEntry.origin(resources: Resources): String =
     resources.getString(R.string.settings_endpoint_origin, routeKind(kind, resources), resources.getString(source.label))
 
@@ -370,7 +370,7 @@ internal enum class EndpointTag(@StringRes val label: Int, val status: Status?) 
  */
 internal data class EndpointOutcome(val text: String, val failed: Boolean, val label: String = "")
 
-/** One candidate row of 连接诊断. */
+/** One candidate row of "Connection diagnostics". */
 internal data class EndpointRow(
     val entry: EndpointEntry,
     val origin: String,
@@ -471,7 +471,7 @@ private fun instant(value: String?): Instant? = value?.takeIf(String::isNotBlank
     runCatching { Instant.parse(it) }.getOrNull() ?: runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull()
 }
 
-/** 「正在使用」: [label] goes in the value slot (the kind, or why there is no url), [url] under the title. */
+/** "In use": [label] goes in the value slot (the kind, or why there is no url), [url] under the title. */
 internal data class ActiveRoute(val url: String?, val label: String?)
 
 /** The url in use: what the connection reports, else the last path it observed (`kind · url`). */

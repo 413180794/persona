@@ -73,7 +73,7 @@ internal val LocalChatMarkdownCache = staticCompositionLocalOf<ChatMarkdownCache
 
 /**
  * Markdown in a conversation. A message's words pass [selectable] false: a long press on a message opens its menu (whose
- * 选择 shows the text to select from), and a SelectionContainer would take the press (docs/android.md, the old App's
+ * "Select" shows the text to select from), and a SelectionContainer would take the press (docs/android.md, the old App's
  * lessons). Text without that menu (thinking, a plan, a recap) stays selectable.
  */
 @Composable
@@ -85,7 +85,7 @@ internal fun ChatMarkdown(text: String, id: String = text,
 }
 
 /**
- * [text] with its card blocks (docs/assistant-views.md「卡片身份」, the hub's fence rules): the Markdown around them as
+ * [text] with its card blocks (docs/assistant-views.md "Card identity", the hub's fence rules): the Markdown around them as
  * Markdown, each ```persona-view as a card under its key ([viewKeys] maps its number in the text to `<item id>/<n>`;
  * none: a local one, which only draws), each ```persona-card as it always was. A card shown inside another code block
  * is an example and stays code.
@@ -165,7 +165,7 @@ private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, col
 }
 
 /**
- * A code block with its caption ([language]) and 复制. [syntax]: [language] is a fence's language, so the code is
+ * A code block with its caption ([language]) and "Copy". [syntax]: [language] is a fence's language, so the code is
  * coloured by it (web highlights fenced blocks that name one, no guessing); tool output and inputs stay plain.
  */
 @Composable
@@ -275,7 +275,7 @@ internal fun ChatLineContent(
             line.images.forEach { ChatPicture(session, it.item, loader, alignEnd = true) }
         }
         is ChatLine.Work -> {
-            // While it runs, the plan and the newest steps show under 「正在工作…」 and a ticking clock (web #1990); done,
+            // While it runs, the plan and the newest steps show under "Working…" and a ticking clock (web #1990); done,
             // it folds to its summary. Persona's own chat keeps one sentence that counts its time up every second (R1).
             val trace = line.live && !style.compactToolSummary
             val now by rememberNow(1_000, enabled = line.live && !trace)
@@ -338,7 +338,7 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
             }
             val presentation = toolPresentation(LocalResources.current, call.use.item)
             Column(Modifier.fillMaxWidth()) {
-                // A named tool with nothing to name (「读 Agent 对话」) is its title already: no verb tag saying it twice.
+                // A named tool with nothing to name ("Read agent chat") is its title already: no verb tag saying it twice.
                 TimelineStep(toolCategory(call.name), presentation.title, verb = presentation.verb.takeUnless { it == presentation.title },
                     detail = listOfNotNull(presentation.detail, if (call.running) stringResource(if (running) R.string.chat_content_tool_running else R.string.chat_content_tool_no_result) else null)
                         .joinToString(stringResource(R.string.chat_status_clause_separator)).ifBlank { null },
@@ -362,7 +362,7 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                         toolPath(call.use.item)?.let { DiffHeader(it, diff.added, diff.removed) }
                         DiffView(diff, call.id)
                     } else if (todos == null) ToolInputDetail(call.use.item, call.result?.item)
-                    // A truncated output opens in full from 原始输出 below. An edit's own result only says it worked; an
+                    // A truncated output opens in full from "Raw output" below. An edit's own result only says it worked; an
                     // answered ask_user's result repeats the ticked choices above in the model's words (iOS ToolViews).
                     call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed) && (!PersonaTools.isAskUser(call.name) || call.failed)) CodeText(result.text.orEmpty(), stringResource(R.string.chat_content_output)) }
                     // A dev server saying where it listens (docs/ports.md).

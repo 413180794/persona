@@ -55,8 +55,8 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The assistant chat's dock with 全部 and an agent of its own, a task's detail (with two agents; still starting), 全部,
- * an agent's detail and 改一下 (#3034, iOS TaskSheets / PlanEditSheet): every style, light and dark. A sheet keeps its
+ * The assistant chat's dock with "All" and an agent of its own, a task's detail (with two agents; still starting), "All",
+ * an agent's detail and "Edit" (#3034, iOS TaskSheets / PlanEditSheet): every style, light and dark. A sheet keeps its
  * first frame after a theme change, so each look of a sheet is a test of its own. PNGs in `build/i18n-shots/`.
  */
 @RunWith(AndroidJUnit4::class)

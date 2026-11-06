@@ -21,7 +21,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** 额度 on a launcher's page: the hub's last answer, a read in flight, or why it could not be read. */
+/** "Quota" on a launcher's page: the hub's last answer, a read in flight, or why it could not be read. */
 internal data class LauncherQuotaState(
     val answer: LauncherQuotaAnswer? = null,
     val loading: Boolean = false,
@@ -29,7 +29,7 @@ internal data class LauncherQuotaState(
 )
 
 /**
- * Reads a launcher's quota at its gateway (docs/launchers.md「额度」) on the machine whose page it is. Read once when the
+ * Reads a launcher's quota at its gateway (docs/launchers.md "Quota") on the machine whose page it is. Read once when the
  * page opens (the hub keeps an answer a minute); [load] with refresh reads again. A failed read keeps the last answer.
  */
 internal class LauncherQuotaModel(private val api: MachineManagement, private val machineId: String, private val name: String) {
@@ -59,7 +59,7 @@ internal class LauncherQuotaModel(private val api: MachineManagement, private va
 
 /** How quota numbers read, the same as on iOS (QuotaText) and the web (lib/quota.ts), in the language of [Resources]. */
 internal object QuotaText {
-    /** 额度 · <the gateway's name>; the hub's name for it, else its id. */
+    /** "Quota · <the gateway's name>"; the hub's name for it, else its id. */
     fun title(res: Resources, q: LauncherQuota?): String = q?.let {
         res.getString(R.string.settings_src_quota_title_named,
             it.gatewayName?.trim()?.takeIf(String::isNotEmpty) ?: it.gateway.ifBlank { res.getString(R.string.settings_src_quota_gateway) })
@@ -75,7 +75,7 @@ internal object QuotaText {
         else -> Tone.Neutral
     }
 
-    /** 1.2 万 and 3.4 亿 in Chinese and Japanese (their numbers group by 10⁴), 12K and 340M otherwise. */
+    /** Units of 10^4 and 10^8 in Chinese and Japanese (their numbers group by 10⁴), 12K and 340M otherwise. */
     fun count(res: Resources, v: Double): String {
         fun short(x: Double) = String.format(Locale.ROOT, "%.1f", x).removeSuffix(".0")
         val language = res.configuration.locales[0].language
@@ -93,7 +93,7 @@ internal object QuotaText {
 
     fun money(v: Double): String = if (v >= 100) String.format(Locale.ROOT, "%.0f", v) else String.format(Locale.ROOT, "%.2f", v)
 
-    /** "已用 64%", "6401 / 1 万", "$496 / $800", "已用完". */
+    /** "64% used", "6401 / 10K", "$496 / $800", "Used up". */
     fun amount(res: Resources, w: QuotaWindow): String {
         if (w.exhausted && (w.usedRatio ?: 1.0) >= 1) return res.getString(R.string.settings_src_quota_used_up)
         val used = w.used
@@ -114,7 +114,7 @@ internal object QuotaText {
         res.getQuantityString(R.plurals.settings_src_quota_usage, u.requests.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
             count(res, u.requests.toDouble()), count(res, u.tokens.toDouble())) + (u.costUsd?.let { " · $${money(it)}" } ?: "")
 
-    /** "11月6日 15:00 重置", or "已重置" once it is past; empty when the time does not read. */
+    /** "Resets Nov 6, 15:00", or "Reset" once it is past; empty when the time does not read. */
     fun reset(res: Resources, iso: String, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
         val at = parseTime(iso) ?: return ""
         if (!at.isAfter(now)) return res.getString(R.string.settings_src_quota_reset_done)

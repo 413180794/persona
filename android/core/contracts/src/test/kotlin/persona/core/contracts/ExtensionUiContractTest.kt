@@ -9,7 +9,7 @@ import persona.core.contracts.api.ExtensionCatalog
 import persona.core.contracts.api.ExtensionMarket
 import persona.core.contracts.api.ExtensionUiPlace
 
-// docs/extensions.md「UI 插槽」「角标」: the hub pushes a nav page's badge as an extension_ui event (plugin_ui before #1844,
+// docs/extensions.md "UI slots" "Badges": the hub pushes a nav page's badge as an extension_ui event (plugin_ui before #1844,
 // both since); null clears it.
 class ExtensionUiContractTest {
     @Test fun aBadgeEventDecodes() {
@@ -30,7 +30,7 @@ class ExtensionUiContractTest {
         assertNull(ServerEvent.decode("""{"type":"extension_ui","extension":"notes","badge":{"text":"1"}}"""))
     }
 
-    // UI version 3's parts of a view (#1850): search, filter, 加载更多, a push on an action, pop / push in an answer.
+    // UI version 3's parts of a view (#1850): search, filter, "Load more", a push on an action, pop / push in an answer.
     @Test fun aVersionThreeView() {
         val json = Json(JsonCodec) {}
         val view = json.decodeFromString(persona.core.contracts.api.ExtensionView.serializer(), """{"title":"笔记",

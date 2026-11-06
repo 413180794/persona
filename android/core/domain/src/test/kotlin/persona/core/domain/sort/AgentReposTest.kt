@@ -8,7 +8,7 @@ import persona.core.contracts.Session
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Mirrors web/src/lib/agent-repos.test.ts, plus how 按仓库 folds on Android. */
+/** Mirrors web/src/lib/agent-repos.test.ts, plus how "By repository" folds on Android. */
 class AgentReposTest {
     private fun session(id: String, cwd: String, state: String = "idle", machine: String = "machine-a", hour: Int = 1) =
         AgentSession(Session(machineId = machine, sessionId = id, title = id, cwd = cwd, state = state,

@@ -23,7 +23,7 @@ import persona.core.domain.answer.AnswerAction
 
 /**
  * An answer whose result is unknown on the Agents page is checked against the hub, and the card is not left
- * showing 「未确认」 with its buttons disabled (#3791).
+ * showing "Unconfirmed" with its buttons disabled (#3791).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentsUnconfirmedAnswerTest {

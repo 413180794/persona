@@ -36,7 +36,7 @@ import persona.core.designsystem.icons.PhIcons
 import java.time.Instant
 
 /**
- * 设置 › 连接器 › 邮箱 (iOS `MailAccountsView`): list all accounts on the hub,
+ * Settings › Connectors › Mail (iOS `MailAccountsView`): list all accounts on the hub,
  * test connection, delete account, and link to add account.
  */
 @Composable
@@ -191,7 +191,7 @@ internal fun MailAccountsPage(
 }
 
 /**
- * 设置 › 连接器 › 添加邮箱 (iOS `AddMailAccountView`, docs/mail.md).
+ * Settings › Connectors › Add mail account (iOS `AddMailAccountView`, docs/mail.md).
  * Supports Gmail (Google OAuth or app password), Feishu (fixed servers), and other IMAP.
  */
 @Composable
@@ -438,7 +438,7 @@ internal fun AddMailAccountPage(
 }
 
 /**
- * 设置 › 连接器 › 飞书 (iOS `FeishuConnectorView`): connection state of the Lark gateway on the hub,
+ * Settings › Connectors › Lark (iOS `FeishuConnectorView`): connection state of the Lark gateway on the hub,
  * signed-in accounts, and features powered by Feishu.
  */
 @Composable
@@ -597,7 +597,7 @@ internal fun FeishuConnectorPage(
 }
 
 /**
- * 设置 › 连接器 › 通用连接器 (iOS `HubConnectorView`, e.g. GitHub, Telegram).
+ * Settings › Connectors › generic connector (iOS `HubConnectorView`, e.g. GitHub, Telegram).
  */
 @Composable
 internal fun HubConnectorPage(
@@ -806,7 +806,7 @@ internal fun HubConnectorPage(
 }
 
 /**
- * 登录 on a connector's page: who it is signed in as with 退出登录, or 登录, or the step the hub asks for now (the same
+ * "Sign in" on a connector's page: who it is signed in as with "Sign out", or "Sign in", or the step the hub asks for now (the same
  * shapes as a channel's binding: fields, a QR code, a device code).
  */
 private fun LazyListScope.connectorSignIn(
@@ -846,7 +846,7 @@ private fun LazyListScope.connectorSignIn(
 /**
  * One sign-in step: its hint and the hub's word on it, then a QR code, a code to enter elsewhere, or fields to fill in.
  * [deviceLink] (an extension's sign-in, #4507) also shows a device code's page as a link to tap and its QR code (the hub
- * draws it) to scan with another phone. [name] is what is signed in to. 重新开始 runs in [pageScope] (the page's, not this
+ * draws it) to scan with another phone. [name] is what is signed in to. "Start again" runs in [pageScope] (the page's, not this
  * list item's, which goes away when the item scrolls out and would leave it spinning).
  */
 @Composable
@@ -909,7 +909,7 @@ internal fun ConnectorSignInStep(
             }
             view == StepView.Code -> {
                 val code = prompt.userCode.orEmpty()
-                // No code: the page to open is the step (StepView.of); no empty box with a grey 复制.
+                // No code: the page to open is the step (StepView.of); no empty box with a grey "Copy".
                 if (code.isNotEmpty()) Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                     JCodeDisplay(code, Modifier.weight(1f))
@@ -919,7 +919,7 @@ internal fun ConnectorSignInStep(
                         feedback?.notice(res.getString(R.string.settings_src_copied))
                     })
                 }
-                // A pair code is sent to the bot from the chat app, not authorized on a page (as on 设置 › 渠道).
+                // A pair code is sent to the bot from the chat app, not authorized on a page (as on Settings › Channels).
                 SignInWaiting(if (prompt.kind == "pair_code") stringResource(R.string.settings_src_channel_waiting_send, name)
                     else stringResource(R.string.settings_src_channel_waiting_authorize))
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {

@@ -43,7 +43,7 @@ internal fun AgentsScreen(
     creationModel: NewAgentViewModel? = null,
     onMachineSelected: (String) -> Unit = {},
     groups: List<persona.core.contracts.api.HubGroupInfo> = emptyList(),
-    /** The hub lists terminal panes (feature terminal_panes): the menu offers 终端 under 机器, as the web's sidebar does. */
+    /** The hub lists terminal panes (feature terminal_panes): the menu offers "Terminal" under "Machines", as the web's sidebar does. */
     terminalPanes: Boolean = false,
     /** A notification's card to open once it is listed (#4808). */
     cardRequests: CardOpenRequests = AgentsCardOpen,
@@ -67,9 +67,9 @@ internal fun AgentsScreen(
     val operations by model.operationState.collectAsStateWithLifecycle()
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
     var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
-    // 全部标为已读 asks first and names how many it marks (iOS confirmReadAll).
+    // "Mark all as read" asks first and names how many it marks (iOS confirmReadAll).
     var confirmRead by remember { mutableStateOf<List<AgentSession>?>(null) }
-    /** A project being put on a to-do (挂到待办…): its machine and its name as the hub keys it. */
+    /** A project being put on a to-do ("Link to to-do…"): its machine and its name as the hub keys it. */
     var pickingTodoForSpace by remember { mutableStateOf<Pair<String, String>?>(null) }
     val todos by (model.tasks?.todos ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -140,7 +140,7 @@ internal fun AgentsScreen(
     fun reachable(request: Interaction) = groups.stateFor(request.machineId, connection) == ConnectionState.Online
     fun open(session: SessionKey) { navigator.navigate(ChatRoute(session.machineId, session.sessionId)) }
     fun connectionSettings() { navigator.navigate(ConnectionSettingsRoute) }
-    // The title while the hub is out of reach opens why, since when and 立即重试 in place (iOS ConnectionTitle).
+    // The title while the hub is out of reach opens why, since when and "Retry now" in place (iOS ConnectionTitle).
     val haptics = persona.core.designsystem.rememberHaptics()
     LaunchedEffect(model) { model.haptics.collect { haptics(it) } }
     val connectionDetails = persona.core.designsystem.rememberConnectionDetails(connection, ::connectionSettings, onRetry = model::refresh)
@@ -167,7 +167,7 @@ internal fun AgentsScreen(
                 })
             },
             onClose = { operationDialog = AgentOperationDialog.Close(row.session) },
-            // A Codex app-server thread the phone may join live (iOS 实时接入).
+            // A Codex app-server thread the phone may join live (iOS "Join live").
             onAttach = if (row.session.canAttach) ({ model.attach(row.session) }) else null,
             onLinkTodo = { pickingTodoForSession = row.session },
             onUnlinkTodo = row.session.todo?.let { todo -> { model.unlinkTodo(todo.id, row.session) } },
@@ -190,7 +190,7 @@ internal fun AgentsScreen(
                     onUnlink = linked?.let { todo -> { model.unlinkSpace(todo.id, session.machineId, name) } })
             })
     }
-    // 按机器 shows a herdr tab's agents as a group (#2320), as the web's sidebar; the other groupings list one agent a row
+    // "By machine" shows a herdr tab's agents as a group (#2320), as the web's sidebar; the other groupings list one agent a row
     val tabs = page.preferences.grouping == AgentGrouping.MachineSpace
     val tree = remember(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs) {
         agentTreeEntries(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs)
@@ -253,13 +253,13 @@ internal fun AgentsScreen(
                 MachineFilterRow(chips, page.machineTotal, page.settings.machineFilter, { id -> model.machine(id); onMachineSelected(id) })
             }
             item("quick-filters") {
-                // 飞书群 / 终端 (#2526) only while they have agents (or are chosen), as iOS and the web.
+                // "Lark groups" / "Terminal" (#2526) only while they have agents (or are chosen), as iOS and the web.
                 val shown = AgentQuickFilter.shown(page.settings.quick, page.list.counts)
                 QuickFilterBar(shown.map { filter ->
                     Bay(filter.label, if (filter == AgentQuickFilter.All) page.allCount else page.list.counts[filter] ?: 0, filter.state?.designStatus)
                 }, shown.indexOf(page.settings.quick), { model.filter(shown[it]) }, Modifier.padding(vertical = Tokens.Space.s))
             }
-            // 「botmux」 (web #2786): show or hide botmux's sessions in this list, kept on this phone.
+            // "botmux" (web #2786): show or hide botmux's sessions in this list, kept on this phone.
             if (page.botmuxCount > 0 || page.preferences.hideBotmux) item("botmux") {
                 val shownBotmux = !page.settings.hideBotmux
                 JChip(stringResource(R.string.agents_botmux), Modifier.padding(bottom = Tokens.Space.s).semantics {
@@ -316,8 +316,8 @@ internal fun AgentsScreen(
                     chevron = false, onClick = { confirmRead = unread })
             }
             if (page.loaded && page.list.groups.isEmpty()) item("empty") {
-                // Three cases, as iOS: a search with no result (no 新建会话, which read as if the agents were gone), no
-                // sessions at all, and a quick filter with nothing left (看全部).
+                // Three cases, as iOS: a search with no result (no New session, which read as if the agents were gone), no
+                // sessions at all, and a quick filter with nothing left (Show all).
                 when {
                     page.allCount == 0 && page.settings.query.isNotEmpty() -> JEmptyState(
                         stringResource(R.string.agents_empty_search_title, page.settings.query),
@@ -370,14 +370,14 @@ internal fun AgentsScreen(
                             }, menu = space?.let { { spaceMenu(it, true) } }, icon = group.repo?.icon,
                             kind = group.repo?.kind ?: stringResource(R.string.agents_kind_space))
                         else if (group.id.startsWith("todo/") && group.id != TodoNoneGroup && group.id != TodoManualGroup) {
-                            // 按待办: a todo under its project (#3156), one step in; the arrow opens the todo.
+                            // "By to-do": a todo under its project (#3156), one step in; the arrow opens the todo.
                             val todoId = group.id.removePrefix("todo/")
                             AgentSpaceHeader(groupTitle, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
                                 counts = group.headingCounts, icon = PhIcons.ListChecks, kind = stringResource(R.string.agents_kind_todo),
                                 menu = { HeadingAction(PhIcons.CaretRight, stringResource(R.string.agents_view_todo),
                                     { navigator.navigate(persona.core.navigation.TodoDetailRoute(todoId)) }) })
                         } else if (group.id.startsWith(TodoLoosePrefix)) {
-                            // 手动开的 / 没有待办's agents of one project
+                            // "Started by hand" / "No to-do" agents of one project
                             AgentSpaceHeader(groupTitle, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
                                 counts = group.headingCounts, icon = PhIcons.Folder, kind = stringResource(R.string.agents_kind_project))
                         } else if (group.id.startsWith(TodoProjectPrefix)) {
@@ -425,7 +425,7 @@ internal fun AgentsScreen(
         add(JAction(stringResource(R.string.agents_menu_detailed), checked = !page.preferences.compact, onClick = { if (page.preferences.compact) model.compact() }))
         add(JAction(stringResource(R.string.agents_menu_collapse_all), checked = page.list.groups.isNotEmpty() && page.list.groups.all { it.folded } && page.list.machines.all { it.folded }, onClick = { model.foldAll(true) }))
         add(JAction(stringResource(R.string.agents_menu_expand_all), checked = page.list.groups.isNotEmpty() && page.list.groups.none { it.folded } && page.list.machines.none { it.folded } &&
-            // under 按机器 a tab group folded by hand is not expanded either (#2792)
+            // under "By machine" a tab group folded by hand is not expanded either (#2792)
             (page.preferences.grouping != AgentGrouping.MachineSpace || page.preferences.foldedTabs.isEmpty()), onClick = { model.foldAll(false) }))
         add(JAction(stringResource(R.string.agents_menu_machines), icon = PhIcons.Gauge, onClick = { navigator.navigate(MachinesRoute) }))
         if (terminalPanes) add(JAction(stringResource(R.string.agents_menu_terminals), icon = PhIcons.TerminalWindow,
@@ -560,9 +560,9 @@ internal fun SlotRow(
     row: AgentSession, machine: String?, metadata: AgentRowMetadata, now: Instant, compact: Boolean, pinned: Boolean, muted: Boolean,
     depth: Int, position: GroupPosition, located: Boolean, onOpen: () -> Unit, menuItems: @Composable () -> List<JAction>,
     slotLabel: String? = null, requestCount: Int = 0,
-    /** Swiping the row left offers 关闭 (iOS); null where the agent cannot be closed from here ([closeSwipe]). */
+    /** Swiping the row left offers "Close" (iOS); null where the agent cannot be closed from here ([closeSwipe]). */
     onClose: (() -> Unit)? = null,
-    /** Under its herdr tab (#2320): the tab's 发起者, or a pane it split off. */
+    /** Under its herdr tab (#2320): the tab's launcher, or a pane it split off. */
     launcher: Boolean = false, branch: Boolean = false,
     /** The card this agent waits on, first of its own ([firstBySession]): what it asks is the row's line while it needs you. */
     card: Interaction? = null,
@@ -571,7 +571,7 @@ internal fun SlotRow(
     val session = row.session
     val source = session.source
     val links = androidx.compose.ui.platform.LocalUriHandler.current
-    // 飞书群 / 终端 under the time (#3132, #3043); a botmux session's tag opens its Feishu topic when it has one.
+    // "Lark groups" / "Terminal" under the time (#3132, #3043); a botmux session's tag opens its Feishu topic when it has one.
     val origin = session.agentSource?.takeIf { !session.assistant }?.let { kind ->
         val link = session.externalLink.takeIf { kind == AgentSource.Feishu }
         RowSource(stringResource(if (kind == AgentSource.Feishu) R.string.agents_source_feishu else R.string.agents_filter_terminal),
@@ -618,7 +618,7 @@ internal fun SlotRow(
             if (muted) add(RowFlag(stringResource(R.string.agents_row_muted), PhIcons.Prohibit))
         },
         launcher = launcher, branch = branch, source = origin,
-        // Its running Workflows (#2935): 「后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分」.
+        // Its running Workflows (#2935): "Background workflow "parity-audit" · Verify 2/2 · 169/185 · 14 min".
         note = WorkflowSummary.line(session, now)?.let { RowNote(it.text(), WorkflowIcon) },
     )
     }
@@ -626,10 +626,10 @@ internal fun SlotRow(
 }
 
 /**
- * A herdr tab with several agents (#2320), as the web's overview row: its `#N` or name and the task (the 发起者's
+ * A herdr tab with several agents (#2320), as the web's overview row: its `#N` or name and the task (the launcher's
  * title, else the first pane's), then the most urgent agent's state and latest words, after its name when it is not the
- * one the title is from; tapping it opens that agent, 「N 个 Agent」 folds its agents to this row and opens them again.
- * Time and agent kind stay on the agents' own rows: the tab's row has 「N 个 Agent」 at its end instead.
+ * one the title is from; tapping it opens that agent, "N agents" folds its agents to this row and opens them again.
+ * Time and agent kind stay on the agents' own rows: the tab's row has "N agents" at its end instead.
  */
 @Composable
 internal fun AgentTabEntryRow(entry: TreeTabEntry, now: Instant, compact: Boolean, onOpen: () -> Unit, onToggle: () -> Unit, card: Interaction? = null) {
@@ -642,7 +642,7 @@ internal fun AgentTabEntryRow(entry: TreeTabEntry, now: Instant, compact: Boolea
         label = titled.session.slotLabel.orEmpty(), title = titled.session.displayTitle, status = lead.state.designStatus,
         agents = entry.tab.members.size, folded = entry.folded, onToggle = onToggle, onClick = onOpen,
         depth = entry.depth, position = GroupPosition(entry.first, entry.last),
-        // 「Codex · 需要授权：…」: the card's own words already have a colon
+        // "Codex · Needs approval: …": the card's own words already have a colon
         preview = words?.let { if (lead.id == titled.id) it else stringResource(if (asks != null) R.string.agents_tab_lead_asks else R.string.agents_tab_lead_words, session.agentLabel, it) },
         statusText = lead.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label, compact = compact,
         // folded, the tab's row stands for its agents: it is the one lit while one of them is open
@@ -702,7 +702,7 @@ private val ConnectionState.title: String @Composable get() = when (this) {
     ConnectionState.CertificateMismatch -> stringResource(R.string.agents_connection_certificate)
     ConnectionState.Revoked -> stringResource(R.string.agents_connection_revoked)
 }
-/** What TalkBack calls the level (iOS WorktreeRow: 主工作树 / 工作树). */
+/** What TalkBack calls the level (iOS WorktreeRow: "Main worktree" / "Worktree"). */
 internal val RepoLevel.kind: String @Composable get() = stringResource(when (this) {
     RepoLevel.Repository -> R.string.agents_repo_repository
     RepoLevel.MainCheckout -> R.string.agents_repo_main_checkout

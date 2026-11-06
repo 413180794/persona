@@ -99,7 +99,7 @@ class LarkInboxRepository(
     private fun transport() = requireNotNull(transports.value) { "Not paired" }
 
     /**
-     * A hub without Pin 消息 answers 404 / 405 with no code of its own: it needs an update (iOS `chatPinRequest`).
+     * A hub without "Pinned messages" answers 404 / 405 with no code of its own: it needs an update (iOS `chatPinRequest`).
      * The hub's own codes for a switched account and an unknown result read as those failures.
      */
     private suspend fun <T> pinRequest(block: suspend () -> T): T = try { block() } catch (e: Exception) {
@@ -133,7 +133,7 @@ class LarkInboxRepository(
 
     override suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String?) {
         val transport = transport()
-        // 添加 Pin from a message: the account is the one the chat's pins answer for.
+        // "Add pin" from a message: the account is the one the chat's pins answer for.
         val account = accountId ?: larkChatPins(feedId, null, null).accountId
         val body = pinRequest { transport.larkChangePin(feedId, messageId, pinId, account) }
         if (body.text("account_id") != account) throw LarkPinFailure(LarkPinFailure.Kind.AccountChanged)

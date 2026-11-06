@@ -91,7 +91,7 @@ class HttpDeviceSettings(
             data.text("web_url")?.takeIf(String::isNotBlank), qr(data["web_qr"]), loopbackOnly(base.host))
     }
 
-    /** Tells the hub this device's 设置 › 翻译 (only that field: the rest of its prefs stay as they are). */
+    /** Tells the hub this device's Settings › Translation (only that field: the rest of its prefs stay as they are). */
     suspend fun saveTranslatePrefs(prefs: HubTranslatePrefs): HubTranslatePrefs? {
         require(preferenceDeviceId.isNotBlank())
         return decode(request("devices", preferenceDeviceId, "prefs", method = "PUT", body = buildJsonObject {

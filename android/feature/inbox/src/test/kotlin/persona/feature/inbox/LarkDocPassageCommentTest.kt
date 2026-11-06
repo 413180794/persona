@@ -58,7 +58,7 @@ import persona.core.designsystem.PersonaTheme
 import java.io.File
 
 /**
- * 评论这段 (#2964, iOS #1729): a long press on a paragraph of a document whose text cannot be selected opens the
+ * "Comment on this passage" (#2964, iOS #1729): a long press on a paragraph of a document whose text cannot be selected opens the
  * comments with the box on that passage, and the comment carries its quote and block. Also the box on a passage in
  * every style, light and dark, as PNGs in `build/doc-comments-shots/` (or `-Dpersona.shots=<dir>`).
  */
@@ -130,7 +130,7 @@ class LarkDocPassageCommentTest {
         rule.waitForIdle()
         rule.onNodeWithText("评论这段").performClick()
         rule.waitUntilAtLeastOneExists(hasTestTag("docComments.box"), 5_000)
-        // The box says where it goes: 评论这段 over the passage.
+        // The box says where it goes: "Comment on this passage" over the passage.
         assertEquals(1, rule.onAllNodesWithText(paragraph, useUnmergedTree = true).fetchSemanticsNodes().size - 1)
         rule.onNodeWithTag("docComments.box").performTextInput("这里要写清楚负责人")
         rule.onNodeWithTag("docComments.send").performClick()

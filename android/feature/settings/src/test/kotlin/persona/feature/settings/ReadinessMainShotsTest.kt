@@ -40,7 +40,7 @@ import persona.core.navigation.SettingsPageRoute
 import java.io.File
 
 /**
- * 准备清单 with the main conversation's four steps (docs/onboarding.md 4.5): a new hub with no computer, and one whose
+ * "Checklist" with the main conversation's four steps (docs/onboarding.md 4.5): a new hub with no computer, and one whose
  * Claude Code is not signed in, in every style, light and dark. Written to `build/onboarding-shots/`.
  */
 @RunWith(AndroidJUnit4::class)
@@ -119,7 +119,7 @@ class ReadinessMainShotsTest {
         rule.waitForIdle()
         rule.onNodeWithText("接上模型").performClick()
         assertEquals(SettingsPageRoute(SettingsPage.Providers), opened.last())
-        // 试一句 runs the hub's one-word check and shows its answer.
+        // "Try it" runs the hub's one-word check and shows its answer.
         rule.onAllNodesWithText("试一句").onLast().performClick()
         rule.waitForIdle()
         assertEquals(1, current.probes)

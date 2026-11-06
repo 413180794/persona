@@ -20,20 +20,20 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 
 /**
- * The ongoing notification (the iPhone Live Activity's counterpart, docs/android.md「常驻汇总通知」): the hub's fleet
+ * The ongoing notification (the iPhone Live Activity's counterpart, docs/android.md "Ongoing summary notification"): the hub's fleet
  * summed up when there is something to show, otherwise the connection line. Only visible content takes part in
  * equality, so the throttled updates skip anything the user would not see change.
  */
 internal data class OngoingStatus(
     /** The fleet's headline; empty when [titleRes] says the connection's state instead. */
     val title: String,
-    /** The first agent, or the request [action] settles: 「名字 · 在做什么」; without lock screen details only 「有个授权等你」. */
+    /** The first agent, or the request [action] settles: "name · what it is doing"; without lock screen details only "An approval is waiting". */
     val text: String? = null,
-    /** The other counts: 「3 个在工作 · 1 个做完了」. */
+    /** The other counts: "3 working · 1 finished". */
     val subText: String? = null,
-    /** Expanded: up to three agents with where they run, then 「+N 个」; without lock screen details, kinds and counts. */
+    /** Expanded: up to three agents with where they run, then "+N more"; without lock screen details, kinds and counts. */
     val lines: String? = null,
-    /** The lock screen's version: counts and 「有个授权等你」, never names or content. */
+    /** The lock screen's version: counts and "An approval is waiting", never names or content. */
     val publicText: String? = null,
     val criticalText: String? = null,
     val needsYou: Int = 0,
@@ -58,10 +58,10 @@ internal data class OngoingStatus(
     companion object {
         /**
          * [quiet]: only finished agents have been left for a while (hub fleetDoneLinger): back to the connection line.
-         * [details]: the device's 锁屏显示详情. Off (the default), the body and the expanded list say only what kinds of
+         * [details]: the device's "Show details on lock screen". Off (the default), the body and the expanded list say only what kinds of
          * requests wait and how many, never an agent's name, place or what it asks: a phone set to show all notification
          * content on its lock screen shows the private version there too.
-         * [pending]: the open cards, to tell a permission with fields to fill in (no 允许, #4987).
+         * [pending]: the open cards, to tell a permission with fields to fill in (no Allow, #4987).
          */
         fun from(
             state: ConnectionState, fleet: FleetState, quiet: Boolean = false, details: Boolean = false,
@@ -129,12 +129,12 @@ internal data class OngoingStatus(
 internal data class OngoingButton(@StringRes val label: Int, val key: String?, val authenticationRequired: Boolean)
 
 /**
- * The first permission or plan and its buttons, from the lock screen entry of the shared policy: 拒绝 / 允许 for a
- * permission, 查看 / 批准 for a plan (acceptEdits). Saying yes needs an unlocked phone; saying no does not.
+ * The first permission or plan and its buttons, from the lock screen entry of the shared policy: "Deny" / "Allow" for a
+ * permission, "View" / "Approve" for a plan (acceptEdits). Saying yes needs an unlocked phone; saying no does not.
  */
 internal data class OngoingAction(val kind: String, val interaction: String, val session: SessionKey?, val buttons: List<OngoingButton>) {
     companion object {
-        /** [needsFieldValues]: allowing needs values this app has no form for, so only 拒绝 (#4987). */
+        /** [needsFieldValues]: allowing needs values this app has no form for, so only Deny (#4987). */
         fun of(kind: String, interaction: String, session: SessionKey?, needsFieldValues: Boolean = false): OngoingAction? {
             if (interaction.isEmpty()) return null
             val policy = ApprovalPolicy.actions(AnswerEntry.LockScreen, kind, locked = true).associateBy { it.id }

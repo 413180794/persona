@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 定时任务：一次 / 每天 / 每隔、运行方式、对话（iOS AssistantTaskEditor） -->
+    <!-- Scheduled tasks: once / daily / interval, run with, chat (iOS AssistantTaskEditor) -->
     <string name="assistant_proactive_repeat_once">一次</string>
     <string name="assistant_proactive_repeat_interval">每隔</string>
     <plurals name="assistant_proactive_every_minutes">

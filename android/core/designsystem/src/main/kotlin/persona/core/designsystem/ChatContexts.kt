@@ -44,8 +44,8 @@ fun contextIcon(kind: String): PhIcon = when (kind) {
 /**
  * What a message carries besides what the user wrote (`<jarvis-context>` blocks: page excerpts picked on the phone,
  * everything a Feishu `/agent` request hands its agent), as one quiet folded row beside the bubble:
- * 「上下文 · N 项」 or 「上下文 · 标题」. Open, it lists the titles; a title opens to its text and, when it has a link,
- * 「打开」 ([onOpen]). With one context the row opens straight to its text. [id] keeps what is open across scrolling.
+ * "Context · N items" or "Context · title". Open, it lists the titles; a title opens to its text and, when it has a link,
+ * "Open" ([onOpen]). With one context the row opens straight to its text. [id] keeps what is open across scrolling.
  */
 @Composable
 fun MessageContextGroup(
@@ -98,7 +98,7 @@ fun MessageContextGroup(
     }
 }
 
-/** One context in the opened list: its icon and title on one line (「空」 when it has no text); a tap shows the text. */
+/** One context in the opened list: its icon and title on one line ("Empty" when it has no text); a tap shows the text. */
 @Composable
 private fun ContextEntry(context: MessageContext, id: String, onOpen: (String) -> Unit) {
     val palette = PersonaTheme.palette
@@ -128,7 +128,7 @@ private fun ContextEntry(context: MessageContext, id: String, onOpen: (String) -
     }
 }
 
-/** A context's text (selectable, scrolling past [ChatContextBodyMaxHeight]) and 「打开」 for its link. */
+/** A context's text (selectable, scrolling past [ChatContextBodyMaxHeight]) and "Open" for its link. */
 @Composable
 private fun ContextBody(context: MessageContext, onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
     val palette = PersonaTheme.palette

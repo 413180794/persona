@@ -42,8 +42,8 @@ import kotlinx.serialization.json.JsonObject
 import javax.inject.Singleton
 
 /**
- * Machine management (机器页, 引擎, Claude Code 设置), 模型配置, 扩展 and hub 版本. Machine management goes to the hub group of the
- * machine it names; 模型配置 and 扩展 to the selected group. Either way the connection waits for its route, adds the device token
+ * Machine management (machines page, engine, Claude Code settings), model configuration, extensions and hub version. Machine management goes to the hub group of the
+ * machine it names; model configuration and extensions to the selected group. Either way the connection waits for its route, adds the device token
  * and drops calls of a pairing that has gone.
  */
 @Module
@@ -55,14 +55,14 @@ object MachineManagementModule {
     }
 
     // The machine ids come from the merged lists: each call goes to the group the id names, on that group's connection.
-    // 订阅额度 belongs to a hub: the selected group's, like the other hub-level pages.
+    // Subscription quota belongs to a hub: the selected group's, like the other hub-level pages.
     @Provides @Singleton fun machines(stacks: GroupStacks, runtime: ConnectionRuntime): MachineManagement = mergedMachineManagement(object : MachineRoutes {
         override suspend fun <T> on(machineId: String, call: suspend (MachineManagement) -> T): T =
             stacks.use(GroupKeys.namespaceOf(machineId)) { call(HttpMachineManagement(it.connection).inGroup(it.names)) }
     }, selected = { HttpMachineManagement(runtime.connection()) })
 
-    // A hub-level page: the selected group's hub, whose own plain ids it reads and sends back (docs/android.md「多 hub」).
-    // Bound to the pairing at each call, like 模型配置: switching hubs reads the new hub's switches.
+    // A hub-level page: the selected group's hub, whose own plain ids it reads and sends back (docs/android.md "Multiple hubs").
+    // Bound to the pairing at each call, like model configuration: switching hubs reads the new hub's switches.
     @Provides @Singleton fun triage(runtime: ConnectionRuntime): AgentTriage = object : AgentTriage {
         override suspend fun switches() = HttpAgentTriage(runtime.connection()).switches()
         override suspend fun put(value: TriageSwitches) = HttpAgentTriage(runtime.connection()).put(value)
@@ -76,7 +76,7 @@ object MachineManagementModule {
         override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?) = api().providerModels(provider, refresh, machine)
     }
 
-    // 准备清单's main-conversation steps: the selected group's hub, while its hello says assistant_readiness.
+    // The setup checklist's main-conversation steps: the selected group's hub, while its hello says assistant_readiness.
     @OptIn(ExperimentalCoroutinesApi::class)
     @Provides @Singleton fun readiness(runtime: ConnectionRuntime, application: Application): AssistantReadinessSource = object : AssistantReadinessSource {
         override val available: Flow<Boolean> = (application as PersonaApp).hub
@@ -93,7 +93,7 @@ object MachineManagementModule {
         override suspend fun dismiss(dismissed: Boolean) = api().dismissReadiness(dismissed)
     }
 
-    // 新增模型供应商 from 模型配置: the selected group's hub keeps the provider.
+    // "Add model provider" from model configuration: the selected group's hub keeps the provider.
     @OptIn(ExperimentalCoroutinesApi::class)
     @Provides @Singleton fun providers(runtime: ConnectionRuntime, application: Application): ProviderSetup = object : ProviderSetup {
         private fun api() = HttpProviderSetup(runtime.connection())
@@ -114,7 +114,7 @@ object MachineManagementModule {
         override suspend fun import(machine: String, providers: List<String>) = api().import(machine, providers)
     }
 
-    // 机器 › 添加电脑 (docs/onboarding.md 4.2): a new computer on the selected group's hub; a code again, the machine list
+    // Machines › "Add computer" (docs/onboarding.md 4.2): a new computer on the selected group's hub; a code again, the machine list
     // and confirm / reject on the hub the machine's id names, with its plain id (the answers carry the merged one).
     @OptIn(ExperimentalCoroutinesApi::class)
     @Provides @Singleton fun computers(stacks: GroupStacks): ComputerPairing = object : ComputerPairing {
@@ -148,7 +148,7 @@ object MachineManagementModule {
         private val features = (application as PersonaApp).hub
             .flatMapLatest { hub -> hub?.connection?.serverFeatures ?: flowOf(emptySet()) }
         override val available: Flow<Boolean> = features.map { "extension_manager" in it || "plugin_manager" in it }.distinctUntilChanged()
-        // Extensions' UI slots (docs/extensions.md「UI 插槽」) and the badge events of the selected hub.
+        // Extensions' UI slots (docs/extensions.md "UI slots") and the badge events of the selected hub.
         override val slotsAvailable: Flow<Boolean> = features.map { "extension_ui_slots" in it || "plugin_ui_slots" in it }.distinctUntilChanged()
         override val uiEvents: Flow<ExtensionUiEvent> = (application as PersonaApp).hub
             .flatMapLatest { hub -> hub?.connection?.events ?: emptyFlow() }.filterIsInstance<ExtensionUiEvent>()
@@ -156,7 +156,7 @@ object MachineManagementModule {
         // a newer one under both.
         private fun api() = runtime.connection().let { HttpExtensionManagement(it, available, legacy = "extensions" !in it.serverFeatures.value) }
         private val updates = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-        // Installs in steps (docs/protocol.md「扩展的安装、升级、卸载进度」): the hub's pushes, and each hello (null: list
+        // Installs in steps (docs/protocol.md "Extension install, upgrade and uninstall progress"): the hub's pushes, and each hello (null: list
         // them again, what was missed is not replayed).
         override val operationsAvailable: Flow<Boolean> = features.map { "extension_operations" in it }.distinctUntilChanged()
         override val operationUpdates: Flow<ExtensionOperation?> = (application as PersonaApp).hub
@@ -210,7 +210,7 @@ object MachineManagementModule {
         override suspend fun authLogout(id: String) = api().authLogout(id)
     }
 
-    // 设置 › hub 版本 (docs/hub-update.md「App 里」): the selected group's hub, following its `hub_update` pushes.
+    // Settings › Hub version (docs/hub-update.md "In the app"): the selected group's hub, following its `hub_update` pushes.
     @OptIn(ExperimentalCoroutinesApi::class)
     @Provides @Singleton fun hubUpdates(runtime: ConnectionRuntime, application: Application): HubUpdates = object : HubUpdates {
         override val events: Flow<HubUpdateStatus> = (application as PersonaApp).hub
@@ -223,7 +223,7 @@ object MachineManagementModule {
         override suspend fun history() = api().history()
     }
 
-    // 设置 › 管理者 (docs/managers.md): the selected group's hub, reading the list again on its `managers` pushes.
+    // Settings › Managers (docs/managers.md): the selected group's hub, reading the list again on its `managers` pushes.
     @OptIn(ExperimentalCoroutinesApi::class)
     @Provides @Singleton fun managers(runtime: ConnectionRuntime, application: Application): HubManagers = object : HubManagers {
         override val changes: Flow<Unit> = (application as PersonaApp).hub

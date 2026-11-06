@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** The hub feature behind GET /api/v1/assistant/readiness (docs/protocol.md「主对话就绪度」). */
+/** The hub feature behind GET /api/v1/assistant/readiness (docs/protocol.md "Main chat readiness"). */
 const val AssistantReadinessFeature = "assistant_readiness"
 
 /**
@@ -33,8 +33,8 @@ data class AssistantReadiness(
 
     /**
      * The step the card over the composer shows and the send button names: in `setup`, the first of computer / Claude
-     * Code / model that is to do or a problem. A rate limit passes by itself and never blocks; 试一句 never blocks; a step
-     * a newer hub adds counts through [next] (docs/onboarding.md 5「总规矩」). Null when nothing blocks sending.
+     * Code / model that is to do or a problem. A rate limit passes by itself and never blocks; "Try a message" never blocks; a step
+     * a newer hub adds counts through [next] (docs/onboarding.md 5 "General rules"). Null when nothing blocks sending.
      */
     fun blockingStep(): ReadinessStep? {
         if (mode != SETUP) return null
@@ -115,13 +115,13 @@ data class ReadinessProbe(
 )
 
 /**
- * The selected hub's readiness for pages outside the assistant tab (设置 › 准备清单). [available] follows the hub's
+ * The selected hub's readiness for pages outside the assistant tab (Settings › Setup checklist). [available] follows the hub's
  * features; an old hub never offers it and the pages stay as they were.
  */
 interface AssistantReadinessSource {
     val available: Flow<Boolean> get() = flowOf(false)
     suspend fun readiness(probe: Boolean = false): AssistantReadiness
-    /** 以后再说 (true) or undoing it (false): POST /api/v1/assistant/readiness/dismiss. */
+    /** "Later" (true) or undoing it (false): POST /api/v1/assistant/readiness/dismiss. */
     suspend fun dismiss(dismissed: Boolean)
 }
 

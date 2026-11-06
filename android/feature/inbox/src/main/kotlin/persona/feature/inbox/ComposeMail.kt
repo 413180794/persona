@@ -26,7 +26,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * Full-screen mail compose dialog (写邮件 / 回复 / 回复全部 / 转发 / mailto:).
+ * Full-screen mail compose dialog (Compose / Reply / Reply all / Forward / mailto:).
  */
 @Composable
 fun ComposeMailDialog(

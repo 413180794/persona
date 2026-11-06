@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * The voice (音色) picked on this phone for each voice extension, kept with the pairing: one small file in the pairing's
+ * The voice picked on this phone for each voice extension, kept with the pairing: one small file in the pairing's
  * own directory (`hub-data/<pairing>/voice.json`), erased with it when the phone is unpaired or paired again. The
  * model is not here: it belongs to the hub's model configuration (docs/model-config.md).
  */

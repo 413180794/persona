@@ -27,7 +27,7 @@ class MainConversationActionsTest {
         assertEquals(MainActions(compact = false, newMain = false), MainActions.of(emptySet()))
     }
 
-    /** Seen running here: 正在压缩, then 已压缩 once, not again on the next update. */
+    /** Seen running here: "Compacting", then "Compacted" once, not again on the next update. */
     @Test fun aCompactionSeenRunningAnnouncesItsEndOnce() {
         var status = CompactionStatus().observe(running())
         assertEquals(CompactionLine.Running, status.line)
@@ -52,7 +52,7 @@ class MainConversationActionsTest {
         assertNull(status.dismissed().line)
     }
 
-    /** Asked for here: 正在压缩 at once; the old compaction still on the session is not this one's end. */
+    /** Asked for here: "Compacting" at once; the old compaction still on the session is not this one's end. */
     @Test fun askingShowsRunningAndWaitsForItsOwnCompaction() {
         var status = CompactionStatus().observe(done()).asked(done())
         assertEquals(CompactionLine.Running, status.line)
@@ -74,7 +74,7 @@ class MainConversationActionsTest {
         assertEquals(CompactionLine.Running, CompactionStatus().asked(null).refused(running(second)).line)
     }
 
-    /** 正在压缩 does not close by hand, and goes when the session no longer says it runs. */
+    /** "Compacting" does not close by hand, and goes when the session no longer says it runs. */
     @Test fun runningStaysUntilTheSessionSaysOtherwise() {
         val status = CompactionStatus().observe(running())
         assertEquals(CompactionLine.Running, status.dismissed().line)

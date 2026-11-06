@@ -22,7 +22,7 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
     val id = data.text("id")
     val external = "https://applink.feishu.cn/client/chat/open?chatId=${URLEncoder.encode(feed, "UTF-8")}&messageId=${URLEncoder.encode(id, "UTF-8")}"
     val recalled = data.flag("recalled")
-    // A recalled message's kept words come along for 防撤回 (shown only with it on: LarkMessageDisplay.showsBody).
+    // A recalled message's kept words come along for "Keep recalled messages" (shown only with it on: LarkMessageDisplay.showsBody).
     val retained = recalled && data.flag("retained") && data.text("type") != "SYSTEM"
     val parts = if (recalled && !retained) emptyList() else
         (data["parts"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { part ->
@@ -133,7 +133,7 @@ internal fun larkMessageDisplay(data: JsonObject): LarkMessageDisplay =
         antiRecall = data.flag("anti_recall"), showEditHistory = data.flag("show_edit_history"))
 
 /**
- * The message as the chat shows it: [removed] words decoded while the switch is on, as they came otherwise (#882).
+ * The message as the chat shows it: Brave Climb words decoded while the switch is on, as they came otherwise (#882).
  * Rich text can split one envelope over several runs: a run of text parts is joined first, and its slots go so
  * later parts keep their order. A quote and forwarded messages read decoded too.
  */
@@ -143,7 +143,7 @@ internal fun LarkMessage.shown(display: LarkMessageDisplay): LarkMessage {
     val shownQuote = quote?.takeUnless { it.recalled }?.let { q -> LarkBraveClimbCodec.decodeText(q.text)?.let { q.copy(text = it) } }
     if (decoded == null && shownQuote == null) return this
     return copy(parts = decoded ?: parts, quote = shownQuote ?: quote, braveClimb = decoded != null,
-        // Decoded words are not what the wire carries: 设置 › 翻译 would translate the envelope.
+        // Decoded words are not what the wire carries: Settings › Translation would translate the envelope.
         translatable = translatable && decoded == null)
 }
 

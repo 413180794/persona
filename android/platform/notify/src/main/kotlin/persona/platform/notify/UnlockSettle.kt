@@ -6,7 +6,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Whether the phone is still locked once an unlock in progress has had [settleMillis] to land. SystemUI sends a
  * notification button that needs authentication as soon as the user's PIN is accepted, a moment before KeyguardManager
- * stops reporting the device as locked: read at once, every approval made from the lock screen came back 「请先解锁」
+ * stops reporting the device as locked: read at once, every approval made from the lock screen came back "Unlock first"
  * (docs/lessons/android.md). A phone still locked after that (a system that did not ask for the unlock) is locked.
  */
 internal suspend fun lockedAfterUnlockSettles(

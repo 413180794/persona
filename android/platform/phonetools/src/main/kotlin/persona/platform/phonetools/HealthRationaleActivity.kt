@@ -13,12 +13,12 @@ import androidx.compose.ui.unit.dp
 import persona.core.designsystem.*
 
 /**
- * Health Connect's 「why does this app want health data」 page. Its permission dialog does not open at all for an app
+ * Health Connect's "why does this app want health data" page. Its permission dialog does not open at all for an app
  * without one (`androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE`; Android 14+ looks for the
  * `VIEW_PERMISSION_USAGE` alias in the manifest instead).
  */
 class HealthRationaleActivity : ComponentActivity() {
-    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    /** Text in the language of Settings › Language (docs/i18n.md). */
     override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
 
     override fun onCreate(savedInstanceState: Bundle?) {

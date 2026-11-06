@@ -66,14 +66,14 @@ class InboxEvent : ServerEvent
 class PersonasEvent : ServerEvent
 
 /**
- * The desktop apps (the Mac app) connected to the hub now, like WeChat's「Mac 微信已登录」(server/internal/hub/desktops.go):
+ * The desktop apps (the Mac app) connected to the hub now, like WeChat's "WeChat for Mac signed in" (server/internal/hub/desktops.go):
  * sent on connecting and whenever one comes or goes.
  */
 @KeepGeneratedSerializer
 @Serializable(with = DesktopsEventSerializer::class)
 data class DesktopsEvent(val desktops: List<HubDesktop> = emptyList()) : ServerEvent
 
-/** One connected desktop: [device] is its device token's id (what 退出 revokes), empty when it used the pairing token. */
+/** One connected desktop: [device] is its device token's id (what "Sign out" revokes), empty when it used the pairing token. */
 @Serializable
 data class HubDesktop(val device: String = "", val name: String = "", val since: String? = null)
 
@@ -118,7 +118,7 @@ data class TerminalControlEvent(
 data class ErrorEvent(
     @SerialName("machine_id") val machineId: String? = null,
     @SerialName("session_id") val sessionId: String? = null,
-    /** The hub's words; empty when it sent none (the app says 未知错误). */
+    /** The hub's words; empty when it sent none (the app says "Unknown error"). */
     val error: String = "",
     val code: String? = null,
     val retryable: Boolean? = null,

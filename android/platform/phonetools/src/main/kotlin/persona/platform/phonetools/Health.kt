@@ -47,7 +47,7 @@ object Health {
         "weight" to WeightRecord::class,
     )
 
-    /** What 设置 › 手机数据 › 健康 asks for: read access to every metric, nothing to write. */
+    /** What Settings › Phone data › Health asks for: read access to every metric, nothing to write. */
     val permissions: Set<String> by lazy { recordTypes.values.map { HealthPermission.getReadPermission(it) }.toSet() }
 
     /** The schema's enum (iOS builds it from a dictionary, so its order differs run to run; the set is the same). */

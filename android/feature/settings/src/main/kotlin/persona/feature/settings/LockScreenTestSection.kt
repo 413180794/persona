@@ -119,7 +119,7 @@ internal object LockTestFeedback {
     }
 }
 
-/** The hub's 24-hour disconnect summary, as 准备清单 and 连接诊断 show it. */
+/** The hub's 24-hour disconnect summary, as "Checklist" and "Connection diagnostics" show it. */
 @Composable
 internal fun disconnectSummaryText(summary: DeviceDisconnectSummary): String {
     val seconds = LocalizedFormats.number(summary.longestGapSeconds.roundToLong(), currentLocale)

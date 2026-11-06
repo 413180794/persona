@@ -26,7 +26,7 @@ import kotlinx.coroutines.withContext
  * Create one application-wide instance. Pairing networking stays in core:hub.
  *
  * Two ways to use it. The single-pairing API ([pair], [unpair], [restore]) keeps one active scope behind `active.enc`.
- * The hub-group API ([registry], [storeHub], [openGroup], [publish] …, docs/android.md「多 hub」) keeps any number of
+ * The hub-group API ([registry], [storeHub], [openGroup], [publish] …, docs/android.md "Multiple hubs") keeps any number of
  * pairings and opens one data scope per group; the first [registry] read turns the single pairing into the primary
  * group without moving a file. Once the registry exists, [restore] returns what was last [publish]ed (the selected
  * group) and waits for the first [publish] instead of opening a scope itself, so the two never open one scope twice.

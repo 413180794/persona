@@ -34,7 +34,7 @@ object FleetSummary {
 
     fun total(state: FleetState): Int = state.needsYou.coerceAtLeast(0) + state.working.coerceAtLeast(0) + state.unread.coerceAtLeast(0)
 
-    /** Agents left out when only the first [showing] items are drawn (「+2 个」). */
+    /** Agents left out when only the first [showing] items are drawn ("+2"). */
     fun hidden(state: FleetState, showing: Int): Int = maxOf(0, total(state) - minOf(showing, state.items.size))
 
     /** The one agent to open on a tap, when there is exactly one; otherwise the tap opens the Agents list. */
@@ -66,7 +66,7 @@ object FleetText {
         else -> CoreText.of(Key.FleetAllDone)
     }
 
-    /** The other counts after the headline: 「3 个在工作 · 1 个做完了」; empty when there are none. */
+    /** The other counts after the headline: "3 working · 1 done"; empty when there are none. */
     fun rest(state: FleetState): CoreText {
         val phase = FleetSummary.phase(state)
         return CoreText.joined(" · ", buildList {
@@ -75,7 +75,7 @@ object FleetText {
         })
     }
 
-    /** What one agent is doing: 「授权：Bash: go test」/「计划等你批准」/ the question … */
+    /** What one agent is doing: "Permission: Bash: go test" / "Plan waiting for your approval" / the question … */
     fun line(item: FleetItem): CoreText = when (item.kind) {
         "permission" -> if (item.detail.isEmpty()) CoreText.of(Key.FleetPermissionWaiting) else CoreText.of(Key.FleetPermissionDetail, item.detail)
         "plan" -> if (item.detail.isEmpty()) CoreText.of(Key.FleetPlanWaiting) else CoreText.of(Key.FleetPlanDetail, item.detail)
@@ -85,11 +85,11 @@ object FleetText {
         else -> if (item.detail.isEmpty()) CoreText.of(Key.FleetScreenWaiting) else CoreText.plain(item.detail)
     }
 
-    /** 「名字 · 在做什么」 */
+    /** "Name · what it is doing" */
     fun row(item: FleetItem): CoreText =
         if (item.title.isEmpty()) line(item) else CoreText.joined(" · ", listOf(CoreText.plain(item.title), line(item)))
 
-    /** 「名字 · 在做什么（机器 · 空间 › 标签）」 */
+    /** "Name · what it is doing (machine · space › tab)" */
     fun rowWithPlace(item: FleetItem): CoreText =
         if (item.place.isEmpty()) row(item) else CoreText.of(Key.Parenthesized, row(item), item.place)
 
@@ -101,13 +101,13 @@ object FleetText {
     }
 
     /**
-     * Requests without names or content, for a notification that may show on the lock screen (锁屏显示详情 off):
-     * 「有个授权等你」, 「2 个计划等你批准」 …, one line per kind in the order they came.
+     * Requests without names or content, for a notification that may show on the lock screen ("Show details on lock screen" off):
+     * "A permission is waiting for you", "2 plans waiting for your approval" …, one line per kind in the order they came.
      */
     fun anonymousRequests(items: List<FleetItem>): List<CoreText> =
         items.filter(FleetSummary::needsYou).groupBy { requestKind(it.kind) }.map { (kind, group) -> anonymousCount(kind, group.size) }
 
-    /** 「有个授权等你」 for one, 「3 个授权等你」 for more. */
+    /** "A permission is waiting for you" for one, "3 permissions waiting for you" for more. */
     fun anonymousCount(kind: String, count: Int): CoreText = when (requestKind(kind)) {
         "permission" -> if (count == 1) CoreText.of(Key.FleetOnePermission) else CoreText.of(Key.FleetPermissions, count)
         "plan" -> if (count == 1) CoreText.of(Key.FleetOnePlan) else CoreText.of(Key.FleetPlans, count)

@@ -34,7 +34,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * The catalog's 看图 section: the image viewer on three pictures drawn here (the third never loads, for the error
+ * The catalog's "Image viewer" section: the image viewer on three pictures drawn here (the third never loads, for the error
  * state; each takes a moment, for the spinner) and the markup editor on the first. Nothing leaves the page: the
  * viewer's actions only say what they would do.
  */

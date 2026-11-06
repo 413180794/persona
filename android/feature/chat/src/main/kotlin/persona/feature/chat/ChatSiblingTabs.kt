@@ -40,14 +40,14 @@ internal fun spaceTabs(session: Session?, sessions: List<Session>): List<Session
                 (other.key != session.key && (had.updated ?: Instant.EPOCH) >= (other.updated ?: Instant.EPOCH)))) continue
         byPane[pane] = other
     }
-    // the tabs in order, a tab's agents by their place in it (#2320: the 发起者 first)
+    // the tabs in order, a tab's agents by their place in it (#2320: the launcher first)
     return (byPane.values + rest).sortedWith(compareBy<Session> { it.slotIndex ?: Int.MAX_VALUE }.thenBy { it.slotId.orEmpty() }.then(PaneOrder))
 }
 
 /**
  * What a chip says (#2320): a tab of one agent by its name; the agents sharing a tab add who they are, and the tab's
- * 发起者 (the pane the others were split from) wears a short mark on its chip (as the web's pane strip:「发起」), so
- * that 「#2」 three times reads as one tab of three agents.
+ * launcher (the pane the others were split from) wears a short mark on its chip (as the web's pane strip: "Launcher"), so
+ * that "#2" three times reads as one tab of three agents.
  */
 internal data class SiblingTab(val session: Session, val name: String, val launcher: Boolean)
 

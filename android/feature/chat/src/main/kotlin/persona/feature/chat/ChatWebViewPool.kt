@@ -201,7 +201,7 @@ internal class ChatWebViewPool(private val context: Context) {
     fun destroy() { popups.forEach { it.destroy() }; popups.clear(); pages.values.forEach { (it.parent as? ViewGroup)?.removeView(it); it.destroy() }; pages.clear(); speculative.clear(); active = null; startupExecutor.shutdown() }
 }
 
-/** What text picked on a page can become: in a conversation AI 修改 and 作为上下文, elsewhere 交给 Persona. */
+/** What text picked on a page can become: in a conversation "AI edit" and "Use as context", elsewhere "Hand to Persona". */
 internal enum class ChatLinkPick(@StringRes val label: Int) {
     Edit(R.string.chat_web_pick_edit), Context(R.string.chat_web_pick_context), HandToPersona(R.string.chat_web_pick_hand),
 }
@@ -226,7 +226,7 @@ internal class ChatSelectionWebView(context: Context) : WebView(context) {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean = delegate.onCreateActionMode(mode, menu)
         // Chromium fills the menu here, each time the selection changes, with items that ask to be action buttons (the
         // floating toolbar puts those first). Ours ask the same in Chromium's group with the lowest order, so they come
-        // before 复制, as on iOS; added in onCreateActionMode they ended up after it or in the overflow.
+        // before "Copy", as on iOS; added in onCreateActionMode they ended up after it or in the overflow.
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
             val changed = delegate.onPrepareActionMode(mode, menu)
             ChatLinkPick.entries.forEach { menu.removeItem(it.id) }

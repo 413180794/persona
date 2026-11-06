@@ -41,9 +41,9 @@ import persona.core.domain.inbox.InboxItem
 import java.io.File
 
 /**
- * 设置 › 翻译 in the inbox drawn on the JVM with Robolectric's native graphics, in every style, light and dark: a mail row
+ * Settings › Translation in the inbox drawn on the JVM with Robolectric's native graphics, in every style, light and dark: a mail row
  * with the hub's translation (and one without), the bar above a translated mail, and the grey line under a Feishu
- * message. PNGs go to `build/translation-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md「翻译」.
+ * message. PNGs go to `build/translation-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md "Translation".
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

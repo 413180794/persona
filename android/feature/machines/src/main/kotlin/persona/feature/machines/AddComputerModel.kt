@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// 机器 › 添加电脑 (docs/onboarding.md 4.2「你的电脑 ↔ hub」, after the web's AddComputer): pick the system, name it, and the
+// Machines › Add a computer (docs/onboarding.md 4.2 "Your computer <-> hub", after the web's AddComputer): pick the system, name it, and the
 // hub adds the computer and gives its Persona Link a pairing link (POST /api/v1/auth/pair-codes {"add"}, feature
 // machines_add). The page then says how to use the link on that system, waits for the computer to come online and asks,
 // on the same screen, whether it is yours (…/confirm | …/reject). Opened to confirm one, it starts at that question.
@@ -25,7 +25,7 @@ internal enum class AddStage {
     /** The name and the system (the code being made, or why the hub refused, with them). */
     Form,
     Waiting, Expired,
-    /** Online and waiting to be confirmed: 是我的电脑 / 不是，删掉. */
+    /** Online and waiting to be confirmed: "It's mine" / "No, remove". */
     Joined,
     /** Confirmed (here or elsewhere). */
     Connected,
@@ -41,9 +41,9 @@ internal data class AddComputerState(
     val os: ComputerOs = ComputerOs.Mac,
     val name: String = "",
     val code: ComputerCode? = null,
-    /** The computer being confirmed (opened from 确认电脑 or a pending machine's row), when no code was made here. */
+    /** The computer being confirmed (opened from "Confirm computer" or a pending machine's row), when no code was made here. */
     val confirming: String? = null,
-    /** Opened as 确认电脑: never the add form, even while no waiting computer has been found yet. */
+    /** Opened as "Confirm computer": never the add form, even while no waiting computer has been found yet. */
     val confirmOnly: Boolean = false,
     val busy: Boolean = false,
     val answering: AddOutcome? = null,
@@ -91,7 +91,7 @@ internal fun AddComputerState.stage(listed: List<Machine>): AddStage {
     return if (m.pending) AddStage.Joined else AddStage.Connected
 }
 
-/** The computer 确认电脑 opens: [preferred] while it waits, else the first waiting one online, else the first waiting. */
+/** The computer "Confirm computer" opens: [preferred] while it waits, else the first waiting one online, else the first waiting. */
 internal fun pendingToConfirm(machines: List<Machine>, preferred: String?): Machine? {
     val waiting = machines.filter { it.pending }
     return waiting.firstOrNull { preferred != null && it.id == preferred } ?: waiting.firstOrNull { it.online } ?: waiting.firstOrNull()
@@ -126,13 +126,13 @@ internal fun windowsCommand(pairUrl: String): String = ".\\jarvis-link.exe insta
 // A pairing link in single quotes for sh and PowerShell; it has none of its own (it is URL-encoded).
 private fun quoted(s: String) = "'${s.replace("'", "%27")}'"
 
-/** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md 拍板 1). */
+/** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md decision 1). */
 internal const val PersonaLinkInstallDoc = "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md"
 
 /** How to install jarvis-link on a headless Linux when the hub has no install script (docs/link.md). */
 internal const val LinkLinuxDoc = "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless"
 
-/** A computer's code lasts ten minutes, like the app's (docs/protocol.md「电脑的配对码」). */
+/** A computer's code lasts ten minutes, like the app's (docs/protocol.md "Computer pairing code"). */
 internal const val ComputerCodeLifeMs = 10 * 60_000L
 
 /**
@@ -142,7 +142,7 @@ internal const val ComputerCodeLifeMs = 10 * 60_000L
 internal fun localExpiry(expiresAt: Long, now: Long): Long =
     if (expiresAt <= now || expiresAt - now > ComputerCodeLifeMs) now + ComputerCodeLifeMs else expiresAt
 
-/** The hub caps a computer's name at 40 characters (docs/protocol.md「电脑的配对码」). */
+/** The hub caps a computer's name at 40 characters (docs/protocol.md "Computer pairing code"). */
 internal const val ComputerNameMax = 40
 
 internal class AddComputerModel(
@@ -166,7 +166,7 @@ internal class AddComputerModel(
     fun setOs(os: ComputerOs) = mutable.update { it.copy(os = os) }
     fun setName(name: String) = mutable.update { it.copy(name = name.take(ComputerNameMax), error = null) }
 
-    /** 下一步: the hub adds the computer and gives its code. */
+    /** "Next": the hub adds the computer and gives its code. */
     suspend fun add() {
         val s = state.value
         if (s.busy || s.name.isBlank()) return
@@ -191,7 +191,7 @@ internal class AddComputerModel(
         catch (error: Exception) { if (mine == seq) mutable.update { it.copy(busy = false, error = addErrorText(error)) } }
     }
 
-    /** 是我的电脑 / 不是，删掉 (and 删掉 for one that never came). */
+    /** "It's mine" / "No, remove" (and "Remove" for one that never came). */
     suspend fun answer(confirm: Boolean) {
         val id = state.value.machineId ?: return
         if (state.value.answering != null) return
@@ -205,7 +205,7 @@ internal class AddComputerModel(
     }
 
     fun tick() = mutable.update { s ->
-        // 确认电脑 with no computer named: the list may have had none yet when the page opened.
+        // "Confirm computer" with no computer named: the list may have had none yet when the page opened.
         val found = if (s.confirmOnly && s.confirming == null && s.code == null) pendingToConfirm(listed.value, null) else null
         val t = if (found == null) s else s.copy(confirming = found.id, os = ComputerOs.of(found.os ?: found.system?.os) ?: s.os)
         val m = t.machine(listed.value)

@@ -28,12 +28,12 @@ internal fun formatTokens(count: Long): String = when {
     else -> "$count"
 }
 
-/** One fact of 会话信息; a null value reads as —. [copy] names what tapping it copies. */
+/** One fact of "Session info"; a null value reads as —. [copy] names what tapping it copies. */
 internal data class SessionInfoRow(val label: String, val value: String?, val copy: String? = null, val onClick: (() -> Unit)? = null)
 internal data class SessionInfoSection(val title: String, val rows: List<SessionInfoRow>)
 
 /**
- * 会话信息 (iOS SessionInfoSheet), from GET …/info: what it runs, how far it has got, where its files are, and what to
+ * "Session info" (iOS SessionInfoSheet), from GET …/info: what it runs, how far it has got, where its files are, and what to
  * copy. The resume command only for a session in a terminal (an agent runtime's is picked up in its own UI); a Codex
  * thread resumes by its own thread id.
  */

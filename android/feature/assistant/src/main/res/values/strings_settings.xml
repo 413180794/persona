@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 设置 › 助手 (settings/). English is the fallback; values-zh and values-ja hold the same keys. -->
+<!-- Settings › Assistant (settings/). English is the fallback; values-zh and values-ja hold the same keys. -->
 <resources>
     <!-- A name the user or the hub gave, shown as it is. -->
     <string name="assistant_settings_plain" translatable="false">%1$s</string>

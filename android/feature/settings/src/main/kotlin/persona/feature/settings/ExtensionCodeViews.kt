@@ -49,13 +49,13 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import java.time.Instant
 
-// UI version 4's code hosting components (docs/extensions.md「UI 版本 4」, #2951) with this app's design system: a detail
+// UI version 4's code hosting components (docs/extensions.md "UI version 4", #2951) with this app's design system: a detail
 // page's header, a breadcrumb, a file tree, a file's code, a file's diff (one column: a phone has no room for two;
 // threads under their lines, a comment box at any line, hidden lines to show), a discussion and a comment box with its
 // buttons; the diff is ExtensionCodeReviewUi.kt. What they send goes through ExtensionViewHandle.act: the action with the component's own values. Logic in
 // ExtensionCodeText.kt.
 
-/** How many lines of a file or a diff are drawn before 「显示全部」: a long one costs nothing until asked for. */
+/** How many lines of a file or a diff are drawn before "Show all": a long one costs nothing until asked for. */
 internal const val LinesShown = 400
 
 @Composable
@@ -289,7 +289,7 @@ internal fun CommentLine(c: ExtensionViewComment) {
     }
 }
 
-/** A text box and one button (a reply, a comment at a line), with 取消 when it can close. */
+/** A text box and one button (a reply, a comment at a line), with "Cancel" when it can close. */
 @Composable
 internal fun MiniComposer(placeholder: String, busy: Boolean, enabled: Boolean, onCancel: (() -> Unit)?, send: (String) -> Unit) {
     var body by rememberSaveable { mutableStateOf("") }

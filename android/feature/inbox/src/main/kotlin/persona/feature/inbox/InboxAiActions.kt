@@ -12,9 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 
 /**
- * What can be done with an item besides replying by hand (iOS `InboxActionBar`, the old app's detail): AI 草拟 — a
- * reply in the user's voice, edited and confirmed here — and 交给 AI, the item handed to Persona or an Agent with a
- * request ([InboxHandOffSheet]). With [primaryAction] (the mail page's 回复) they sit beside it as decision buttons.
+ * What can be done with an item besides replying by hand (iOS `InboxActionBar`, the old app's detail): "AI draft" — a
+ * reply in the user's voice, edited and confirmed here — and "Hand to AI", the item handed to Persona or an Agent with a
+ * request ([InboxHandOffSheet]). With [primaryAction] (the mail page's "Reply") they sit beside it as decision buttons.
  */
 @Composable
 internal fun InboxAiActions(

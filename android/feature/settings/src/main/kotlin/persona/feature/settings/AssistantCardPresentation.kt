@@ -7,7 +7,7 @@ import persona.core.contracts.generated.ExtensionViewAction
 import persona.core.contracts.generated.ExtensionViewActionStatus
 import persona.core.domain.views.AssistantCard
 
-// How an assistant's card reads in each state (docs/assistant-views.md「动作与多页」「持久化提交」): what can be tapped,
+// How an assistant's card reads in each state (docs/assistant-views.md "Actions and pages" "Persistent submits"): what can be tapped,
 // what was chosen, what was sent. The renderer stays the extensions' (ExtensionViewContent.kt); only the page it is given
 // changes.
 
@@ -22,7 +22,7 @@ internal object AssistantCardPresentation {
      * [page] as the card shows it. Open, push and pop always work. While the card can still be answered ([locked]
      * false) its replies and fields are as declared; once it is answered, or where it cannot answer (a reply still
      * coming in, a block the hub has not registered, a read-only device), the replies cannot be tapped: the chosen one
-     * says 已选, a field reads as a line with what was sent. A section's 加载更多 is a reply like any other, so it
+     * says "Selected", a field reads as a line with what was sent. A section's "Load more" is a reply like any other, so it
      * is drawn as its button (tapped, never sent by scrolling to it); the search box and filter are drawn by the card
      * above the page while it can answer ([searchable]).
      */

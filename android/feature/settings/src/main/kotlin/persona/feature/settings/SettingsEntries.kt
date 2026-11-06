@@ -39,42 +39,42 @@ data class SettingsServices(
     val disconnect: suspend () -> Unit = { pairing.unpair() },
     val liveDiagnostics: ConnectionDiagnosticsSource? = connection as? ConnectionDiagnosticsSource,
     val binding: kotlinx.coroutines.flow.StateFlow<SettingsBinding?>? = null,
-    /** Manual candidates and route choices; null where the connection cannot change them (体验模式). */
+    /** Manual candidates and route choices; null where the connection cannot change them (demo mode). */
     val endpoints: ConnectionEndpoints? = connection as? ConnectionEndpoints,
-    /** Engine choice and Claude Code settings on the paired hub's machines; null in 体验模式. */
+    /** Engine choice and Claude Code settings on the paired hub's machines; null in demo mode. */
     val machines: MachineManagement? = null,
-    /** 设置 › 模型配置 on the paired hub; null in 体验模式. */
+    /** Settings › Model configuration on the paired hub; null in demo mode. */
     val models: ModelConfiguration? = null,
-    /** 新增模型供应商 (from 模型配置) on the paired hub; null in 体验模式. */
+    /** "New model provider" (from "Model configuration") on the paired hub; null in demo mode. */
     val providers: ProviderSetup? = null,
-    /** 设置 › 扩展 on the paired hub; null in 体验模式. */
+    /** Settings › Extensions on the paired hub; null in demo mode. */
     val extensions: ExtensionManagement? = null,
     /** Where the selected hub's extensions draw (nav pages, cards, machine sections), kept by the shell; null without. */
     val extensionSlots: ExtensionSlots? = null,
-    /** 设置 › 渠道 on the paired hub; null in 体验模式. */
+    /** Settings › Channels on the paired hub; null in demo mode. */
     val channels: ChannelManagement? = null,
-    /** The phone's hub groups (settings › hub); null where there is no real pairing (体验模式). */
+    /** The phone's hub groups (settings › hub); null where there is no real pairing (demo mode). */
     val hubs: HubGroups? = null,
-    /** Pairs one more hub instead of replacing the pairing (settings › hub › 添加 hub). */
+    /** Pairs one more hub instead of replacing the pairing (settings › hub › "Add hub"). */
     val addHub: PairingService? = null,
-    /** 设置 › 连接器 on the paired hub; null in 体验模式. */
+    /** Settings › Connectors on the paired hub; null in demo mode. */
     val connectors: ConnectorsManagement? = null,
-    /** 设置 › hub 版本 (the hub's version and its updating itself) on the paired hub; null in 体验模式. */
+    /** Settings › Hub version (the hub's version and its updating itself) on the paired hub; null in demo mode. */
     val hubUpdates: HubUpdates? = null,
-    /** 设置 › 管理者 (the hub's roster of managers and their install codes) on the paired hub; null in 体验模式. */
+    /** Settings › Managers (the hub's roster of managers and their install codes) on the paired hub; null in demo mode. */
     val managers: HubManagers? = null,
-    /** 设置 › 翻译, kept on this phone; null in 体验模式. */
+    /** Settings › Translation, kept on this phone; null in demo mode. */
     val translation: TranslationSettings? = null,
-    /** 设置 › 会话分诊 on the paired hub (docs/agent-work.md「开关」); null in 体验模式. */
+    /** Settings › Session triage on the paired hub (docs/agent-work.md "Switches"); null in demo mode. */
     val triage: AgentTriage? = null,
     val capsule: FloatingCapsuleSettings? = null,
-    /** The last pairing attempt (recorded by the pairing page, shown in 连接诊断); null in 体验模式. */
+    /** The last pairing attempt (recorded by the pairing page, shown in "Connection diagnostics"); null in demo mode. */
     val pairingAttempts: PairingAttempts? = null,
-    /** The main conversation's steps on 准备清单 (docs/onboarding.md 4.5); null or unavailable: the phone's items only. */
+    /** The main conversation's steps on "Checklist" (docs/onboarding.md 4.5); null or unavailable: the phone's items only. */
     val readiness: AssistantReadinessSource? = null,
-    /** The desktop apps connected to the selected hub now (its `desktops` event); null in 体验模式. */
+    /** The desktop apps connected to the selected hub now (its `desktops` event); null in demo mode. */
     val desktops: kotlinx.coroutines.flow.StateFlow<List<persona.core.contracts.HubDesktop>>? = null,
-    /** 设置 › 存储空间's deleting of cache files, keeping the ones the data layer has open; null deletes them directly. */
+    /** Settings › Storage's deleting of cache files, keeping the ones the data layer has open; null deletes them directly. */
     val clearCacheFiles: ((List<java.io.File>) -> Unit)? = null,
 )
 

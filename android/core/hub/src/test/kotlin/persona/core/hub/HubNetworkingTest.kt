@@ -172,7 +172,7 @@ class HubNetworkingTest {
 
     /**
      * A restarting hub behind a port proxy (Docker Desktop, adb reverse) takes the TCP connection and drops it in the
-     * middle of the handshake: a network error to retry, not 「hub 的证书变了」 (#1250). A wrong pin still is.
+     * middle of the handshake: a network error to retry, not "the hub's certificate changed" (#1250). A wrong pin still is.
      */
     @Test fun aHandshakeCutShortIsRetriedNotACertificateChange() = runBlocking {
         val certificate = HeldCertificate.Builder().commonName("example.com").build()

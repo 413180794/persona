@@ -17,8 +17,8 @@ import java.time.Instant
 private const val AskMax = 160
 
 /**
- * What a card asks, in one line for a row that waits on it (#3964; the web's `taskAsk` / `rowLine`): 「在问你：用哪个框架？」,
- * 「需要授权：swift test」, 「计划待批准」, 「终端对话框：…」, 「MCP 请求：…」; the kind alone when the card carries no
+ * What a card asks, in one line for a row that waits on it (#3964; the web's `taskAsk` / `rowLine`): "Asking you: which framework?",
+ * "Needs permission: swift test", "Plan awaiting approval", "Terminal dialog: …", "MCP request: …"; the kind alone when the card carries no
  * words. Null for a card of a kind this app does not know with nothing to say.
  */
 fun Interaction.askLine(): CoreText? {
@@ -39,7 +39,7 @@ fun Interaction.askLine(): CoreText? {
             if (text.key != Key.Verbatim) text
             else text.args.first().toString().replace(Whitespace, " ").trim().takeIf(String::isNotEmpty)?.take(AskMax)?.let(CoreText::plain)
         }
-        // as the web's: the kind alone, the plan's own first line is often 「## Context」 or a table row
+        // as the web's: the kind alone, the plan's own first line is often "## Context" or a table row
         "plan" -> words(summary)
         "screen" -> words(dialog?.question?.takeIf(String::isNotBlank) ?: summary)
         "elicitation" -> words(elicitation?.message?.takeIf(String::isNotBlank) ?: summary)

@@ -11,10 +11,10 @@ import persona.core.designsystem.AppStyle
 import persona.core.designsystem.AppStyleStore
 
 /**
- * Debug builds only: the 「批准第一个待处理」 dialog in one fixed state with made-up data, for captures of every state ×
+ * Debug builds only: the "Approve first pending" dialog in one fixed state with made-up data, for captures of every state ×
  * style × light / dark without a hub (the real one is not exported):
  *
- *     adb shell am start -n <包名>/persona.platform.shortcuts.ApproveFirstPreviewActivity \
+ *     adb shell am start -n <package>/persona.platform.shortcuts.ApproveFirstPreviewActivity \
  *       --es debug.approveState plan --es debug.style board --es debug.theme dark
  *
  * States: loading, nothing, unpaired, question, screen, permission, plan, sending, error. Buttons only close it.

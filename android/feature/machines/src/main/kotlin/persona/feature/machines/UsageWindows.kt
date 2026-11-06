@@ -8,7 +8,7 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /*
- * 订阅额度 (#2432, docs/usage-windows.md, the web's lib/usage-windows.ts): the accounts the machines' agents are signed in
+ * "Subscription limits" (#2432, docs/usage-windows.md, the web's lib/usage-windows.ts): the accounts the machines' agents are signed in
  * to, with how much of each window (5h, 7d …) is used, when it starts over and whether use is ahead of an even pace.
  */
 

@@ -79,12 +79,12 @@ class SettingsConnectorsTest {
             HubConnector(id = "github", name = "GitHub"),
         )
         val github = ConnectorRow.Hub(hub[2])
-        // With the Lark extension (or a hub from before it): 飞书 between mail and the hub's own connectors.
+        // With the Lark extension (or a hub from before it): Lark between mail and the hub's own connectors.
         assertEquals(listOf(ConnectorRow.Phone, ConnectorRow.Mail, ConnectorRow.Lark, github),
             connectorRows(hub, lark = persona.core.contracts.LarkFeatures.of(setOf("lark", "lark_moments")).chats))
         assertEquals(listOf(ConnectorRow.Phone, ConnectorRow.Mail, ConnectorRow.Lark, github),
             connectorRows(hub, lark = persona.core.contracts.LarkFeatures.of(setOf("lark_attachments")).chats))
-        // Without it there is no 飞书 row (its page reads /api/v1/lark/…), even if the hub still lists one.
+        // Without it there is no Lark row (its page reads /api/v1/lark/...), even if the hub still lists one.
         assertEquals(listOf(ConnectorRow.Phone, ConnectorRow.Mail, github),
             connectorRows(hub, lark = persona.core.contracts.LarkFeatures.of(setOf("client_ops")).chats))
     }

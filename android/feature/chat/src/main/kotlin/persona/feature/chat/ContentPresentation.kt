@@ -41,13 +41,13 @@ private val attribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
 
 /**
  * A message as a row draws it: its [parts] in order, the photos it carries (`<attached_images>` and the older notes,
- * thumbnails above the text; never 「[图片]」, R3), the file paths in its text (chips under it, at most six), and its
+ * thumbnails above the text; never "[Image]", R3), the file paths in its text (chips under it, at most six), and its
  * `<jarvis-context>` blocks ([contexts]), which are not what the user wrote: one folded row beside the bubble (#876).
  */
 internal data class MessageModel(
     val parts: List<MessagePart>, val images: List<String>, val files: List<String>,
     val contexts: List<MessageContext> = emptyList(),
-    /** The user's answer from an assistant's card: the hub's trailing `<persona-action>` tag, not shown (「来自卡片」). */
+    /** The user's answer from an assistant's card: the hub's trailing `<persona-action>` tag, not shown ("From card"). */
     val fromCard: Boolean = false,
     /** Files sent with it as `<jarvis-file>` tags (a video, a recording…): cards above the bubble, not tag text. */
     val attached: List<AttachedFile> = emptyList(),
@@ -86,7 +86,7 @@ internal fun messageModel(raw: String, from: String? = null, user: Boolean = fal
         }
         plain(text.substring(offset))
     }.let { parts ->
-        // A message the hub knows came from another session: all of it is that session's words, one 「来自」 card.
+        // A message the hub knows came from another session: all of it is that session's words, one "From" card.
         if (!from.isNullOrBlank() && parts.none { it is MessagePart.Source })
             listOf(MessagePart.Source(from, parts.joinToString("\n\n") { (it as MessagePart.Text).text })) else parts
     }
@@ -123,7 +123,7 @@ internal fun markdownPrewarm(items: List<Item>, limit: Int = 80): Pair<List<Mark
 }
 
 /**
- * What 编辑 puts back in the composer for a message: its words, and its photos as `<attached_images>` again, which the
+ * What "Edit" puts back in the composer for a message: its words, and its photos as `<attached_images>` again, which the
  * composer turns back into (already uploaded) attachments.
  */
 internal fun MessageModel.editText(): String =
@@ -265,7 +265,7 @@ internal data class PlanAnchor(val lineId: String, val plan: LinePlan)
 
 /**
  * The newest plan card the list draws ([lines] newest first, as the page lists them): an open work line's plan step,
- * or a running line's peek ([compact]: Persona's own chat draws no peek). What the 「Step N/M」 pill scrolls back to.
+ * or a running line's peek ([compact]: Persona's own chat draws no peek). What the "Step N/M" pill scrolls back to.
  */
 internal fun latestPlanLine(lines: List<ChatLine>, plans: Map<String, LinePlan?>, compact: Boolean): PlanAnchor? {
     for (line in lines) {
@@ -311,7 +311,7 @@ internal fun workPeek(steps: List<WorkItem>, limit: Int = 5): WorkPeek {
 /** A thought as one line in a running line's peek (web ThinkingLine): its words with the line breaks folded; [empty] when it has none. */
 internal fun thoughtLine(text: String, empty: String): String = text.trim().replace(Regex("\\s+"), " ").ifEmpty { empty }
 
-/** What a tool call does, as the word on its step ([label]) and as the running line's 「正在读取 x」 ([running], with the title). */
+/** What a tool call does, as the word on its step ([label]) and as the running line's "Reading x" ([running], with the title). */
 internal enum class ToolVerb(@StringRes val label: Int, @StringRes val running: Int) {
     Read(R.string.chat_tool_read, R.string.chat_tool_running_read),
     Edit(R.string.chat_tool_edit, R.string.chat_tool_running_edit),
@@ -327,10 +327,10 @@ internal enum class ToolVerb(@StringRes val label: Int, @StringRes val running: 
 
 internal data class ToolPresentation(
     val title: String, val verb: String, val detail: String? = null, val mono: Boolean = false, val kind: ToolVerb = ToolVerb.Use,
-    /** A tool with words of its own (「操控电脑」, `namedToolVerb`): the running line says them, not 「正在执行 x」. */
+    /** A tool with words of its own ("Operate computer", `namedToolVerb`): the running line says them, not "Running x". */
     val named: Boolean = false,
 ) {
-    /** The running line's words for this call: 「正在读取 x」, or a named tool's 「操控电脑 x」. */
+    /** The running line's words for this call: "Reading x", or a named tool's "Operate computer x". */
     fun running(res: Resources): String = when {
         !named -> res.getString(kind.running, title)
         title == verb -> verb
@@ -366,7 +366,7 @@ internal fun toolPresentation(res: Resources, item: Item): ToolPresentation {
         val command = input?.string("command")?.lineSequence()?.firstOrNull().orEmpty()
         return ToolPresentation(command.ifBlank { res.getString(R.string.chat_tool_command) }, verb, input?.string("description"), mono = true, kind = kind)
     }
-    // A computer_run with steps or a script says what it does (iOS ComputerSteps): 「MacBook · 点 AC → 6 → ×」.
+    // A computer_run with steps or a script says what it does (iOS ComputerSteps): "MacBook · Click AC → 6 → ×".
     val subject = ComputerSteps.subject(res, name, input) ?: persona.core.domain.toolSubjectText(item).resolve(res).trim()
     return ToolPresentation(subject.ifBlank { when (name) {
         "TodoWrite" -> res.getString(R.string.chat_tool_todo_list)
@@ -376,15 +376,15 @@ internal fun toolPresentation(res: Resources, item: Item): ToolPresentation {
 }
 
 /**
- * The steps a fold stands for, counted the way its work line counts them once open (and the 收起 line and iOS do): each
- * tool call and each thought. `fold.items` also counts every tool result, so a fold of three calls read 「做了 6 步」.
+ * The steps a fold stands for, counted the way its work line counts them once open (and the "Collapse" line and iOS do): each
+ * tool call and each thought. `fold.items` also counts every tool result, so a fold of three calls read "6 steps".
  */
 internal fun WorkItem.Folded.stepCount(): Int = item.fold?.let { it.tools + it.thoughts } ?: 1
 
 /**
  * The words on a work line. A running one says what it is doing and, given [now], how long it has run (R1, ticking
- * every second like iOS's 「正在工作 39 秒」). With [peek] its latest steps show under it, so it only says
- * 「正在工作…」; the time is a leaf of its own beside it (web #1990).
+ * every second like iOS's "Working 39 s"). With [peek] its latest steps show under it, so it only says
+ * "Working…"; the time is a leaf of its own beside it (web #1990).
  */
 internal fun workSummary(res: Resources, line: ChatLine.Work, recordedDuration: Long?, now: Instant? = null, peek: Boolean = false): String {
     val count = line.steps.sumOf { if (it is WorkItem.Folded) it.stepCount() else 1 }

@@ -26,7 +26,7 @@ internal val ManagersSample = listOf(
     HubManager("m-c1e9f0", "测试", installing = "2026-11-05T06:07:00Z"),
 )
 
-/** A hub answering 设置 › 管理者 from memory, as the mock hub does. */
+/** A hub answering Settings › Managers from memory, as the mock hub does. */
 internal class FakeManagers(list: List<HubManager> = ManagersSample) : HubManagers {
     var list = list.toMutableList()
     var fail: Exception? = null

@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 
-// Inbox phase 1 (docs/inbox.md「事件、处理链条、建议」): an inbox item grows into an event. Every field is optional and an
+// Inbox phase 1 (docs/inbox.md"Events, handling chains, and suggestions"): an inbox item grows into an event. Every field is optional and an
 // older hub sends none of them, so an item without them reads exactly as before.
 
 /** The processing conversation bound to an event (`handling`). */
@@ -26,7 +26,7 @@ data class InboxHandling(
     @WireTime val since: String? = null,
     val error: String? = null,
 ) {
-    /** The manager, a sub-session or the other side is on it: the event is 进行中. */
+    /** The manager, a sub-session or the other side is on it: the event is In progress. */
     val working: Boolean get() = state in setOf("looking", "agent", "waiting")
 }
 
@@ -68,7 +68,7 @@ data class InboxChainLink(
     val positionValue: Long? get() = position?.contentOrNull?.toLongOrNull()
 }
 
-/** One key call of the 处理链条; a [kind] this app does not know is drawn from [text] with a generic icon. */
+/** One key call of the Handling chain; a [kind] this app does not know is drawn from [text] with a generic icon. */
 @KeepGeneratedSerializer
 @Serializable(with = InboxChainEntrySerializer::class)
 data class InboxChainEntry(
@@ -84,7 +84,7 @@ data class InboxChainEntry(
     val link: InboxChainLink? = null,
 )
 
-/** Another item this one is 有关 (`related`): each goes its own way, tapping one opens it. */
+/** Another item this one is Related (`related`): each goes its own way, tapping one opens it. */
 @KeepGeneratedSerializer
 @Serializable(with = InboxRelatedSerializer::class)
 data class InboxRelated(val id: String = "", val title: String = "", val source: String = "")
@@ -102,7 +102,7 @@ data class InboxEventFields(
     /** Who filed a done item (`done_by`: user, replied, dismissed, manager…); an existing field, read here for the event page. */
     val doneBy: String? = null,
 ) {
-    /** The hub sent any of them: the item opens as an event (摘要, 总结, 建议, 处理链条) rather than straight into its source. */
+    /** The hub sent any of them: the item opens as an event (Summary, Recap, Suggestion, Handling chain) rather than straight into its source. */
     val present: Boolean get() = status != null || recap != null || handling != null || suggestion != null || chain.isNotEmpty()
 
     companion object {

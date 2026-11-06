@@ -16,7 +16,7 @@ import persona.core.domain.inbox.buildInboxList
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class InboxBulkTest {
-    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    /** The app's strings; Robolectric runs in Simplified Chinese (robolectric.properties). */
     private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
     private val items = listOf(
         InboxItem("dm", account = "feishu", kind = "dm", tier = "action", updatedAt = "2026-11-04T10:00:00Z", version = "v1"),
@@ -60,7 +60,7 @@ class InboxBulkTest {
         assertEquals("已将 2 件标为已处理", bulkNotice(res, result.copy(changedSince = emptyList())))
         assertEquals("有新消息进来，1 件没有标记", bulkNotice(res, result.copy(changed = emptyList())))
         assertNull(bulkNotice(res, InboxBulkResult(unchanged = listOf("c"))))
-        // 全部清理 says it in its own words.
+        // Clean up all says it in its own words.
         assertEquals("已清理 2 件，1 件有新消息没动", bulkNotice(res, result, cleaned = true))
         assertEquals("已清理 2 件", bulkNotice(res, result.copy(changedSince = emptyList()), cleaned = true))
     }

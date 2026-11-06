@@ -68,7 +68,7 @@ internal object NotificationPolicy {
         }
 
     /**
-     * Saying no on the left, yes on the right (拒绝 / 允许, 打回 / 批准), as in Android's dialogs and on the ongoing
+     * Saying no on the left, yes on the right ("Deny" / "Allow", "Send back" / "Approve"), as in Android's dialogs and on the ongoing
      * notification; a question's or a terminal dialog's options keep their own order. The policy's order only keeps its
      * fixtures stable.
      */

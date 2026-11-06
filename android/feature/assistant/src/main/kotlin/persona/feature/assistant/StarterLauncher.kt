@@ -23,7 +23,7 @@ internal fun launcherModel(launcher: AgentLauncher): String? = launcher.model?.s
 
 /**
  * The new conversation's launcher (iOS StarterComposer's model menu, web StarterLauncherChip): a chip over the home's
- * composer with what it starts with, 「默认：X」 until one is [picked] for this conversation alone (「X · 仅这一次」). A
+ * composer with what it starts with, "Default: X" until one is [picked] for this conversation alone ("X · This time only"). A
  * tap lists the default and the assistant machine's [launchers] (null while they load; [failed] when they could not).
  */
 @Composable

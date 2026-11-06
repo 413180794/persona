@@ -31,7 +31,7 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /**
- * What 主动做事 needs from the hub (docs/protocol.md, the assistant's tasks and runs). A seam of its own, so the page
+ * What "Proactive" needs from the hub (docs/protocol.md, the assistant's tasks and runs). A seam of its own, so the page
  * and its tests do not follow every change of the wider [AssistantManagement].
  */
 internal interface ProactiveApi {
@@ -90,7 +90,7 @@ internal val TaskPermissionModes = listOf("", "acceptEdits", "plan", "auto", Byp
 
 /**
  * The fields a person edits (iOS AssistantTaskEditor). Everything else on a task belongs to the hub and is never
- * changed here. [continues] is 接着原来的对话: runs go into the conversation the task came from. [push] is 跑完推送
+ * changed here. [continues] is "Continue the original chat": runs go into the conversation the task came from. [push] is "Push when done"
  * ("" every run, [ScheduledTask.PUSH_ASKED] only what a run sends); such a task always runs in its own conversation.
  */
 internal data class TaskDraft(
@@ -107,7 +107,7 @@ internal data class TaskDraft(
     val push: String = "",
 ) {
     val pushesOnlyAsked: Boolean get() = push == ScheduledTask.PUSH_ASKED
-    /** 跑完推送 set to [value]: only its alerts leaves 接着原来的对话 (the hub runs such a task in its own conversation). */
+    /** "Push when done" set to [value]: only its alerts leaves "Continue the original chat" (the hub runs such a task in its own conversation). */
     fun pushing(value: String) = copy(push = value, continues = continues && value != ScheduledTask.PUSH_ASKED)
 
     /** A one-off may go without a title (its prompt names it); a repeating one needs one. */
@@ -131,7 +131,7 @@ internal data class TaskDraft(
     /** Same schedule and words, ignoring surrounding spaces, "9:00" against "09:00" and how "every day" is spelled. */
     fun sameAs(other: TaskDraft) = key() == other.key()
 
-    /** Switching to 一次 picks the next full hour an hour from now; to 每隔, half an hour (iOS does the same). */
+    /** Switching to "Once" picks the next full hour an hour from now; to "Every", half an hour (iOS does the same). */
     fun repeating(next: TaskRepeat, now: Instant, zone: ZoneId): TaskDraft = copy(
         repeat = next,
         at = if (next == TaskRepeat.Once && (at == null || at.isBefore(now))) nextHour(now, zone) else at,
@@ -144,7 +144,7 @@ internal fun nextHour(now: Instant, zone: ZoneId): Instant =
     now.plusSeconds(3600).atZone(zone).truncatedTo(ChronoUnit.HOURS).toInstant()
 
 internal val ScheduledTask.repeat: TaskRepeat get() = TaskRepeat.of(repeats)
-/** The conversation it came from, which its runs continue (接着原来的对话). */
+/** The conversation it came from, which its runs continue ("Continue the original chat"). */
 internal val ScheduledTask.origin: SessionKey? get() {
     val session = sessionId?.takeIf { it.isNotBlank() } ?: return null
     val machine = machineId?.takeIf { it.isNotBlank() } ?: return null
@@ -165,8 +165,8 @@ internal fun ScheduledTask.draft() = TaskDraft(
 )
 
 /**
- * [draft] written onto the task; turning 接着原来的对话 off clears the conversation (the hub only lets it be cleared). A
- * task that never had 跑完推送 keeps it unset while it pushes every run, so a hub without it is never sent one.
+ * [draft] written onto the task; turning "Continue the original chat" off clears the conversation (the hub only lets it be cleared). A
+ * task that never had "Push when done" keeps it unset while it pushes every run, so a hub without it is never sent one.
  */
 internal fun ScheduledTask.applying(draft: TaskDraft): ScheduledTask = draft.normalized().let {
     copy(
@@ -232,7 +232,7 @@ internal data class Loadable<T>(val value: T? = null, val error: String? = null)
 
 internal data class PendingChange(val token: Long, val change: TaskChange.Toggle)
 
-/** A task's last run, from the history when there is one (the hub's 立即运行 does not move `last_run`). */
+/** A task's last run, from the history when there is one (the hub's "Run now" does not move `last_run`). */
 internal data class LastRun(
     val at: Instant?, val outcome: RunOutcome, val error: String?, val conversation: SessionKey?, val manual: Boolean = false,
 )
@@ -242,7 +242,7 @@ internal data class ProactiveState(
     val runs: Loadable<List<Run>> = Loadable(),
     /** Switches flipped on screen whose write has not come back yet. */
     val pending: List<PendingChange> = emptyList(),
-    /** Actions in flight: `task:<id>` (a write), `run:<id>` (立即运行), `fresh:<id>` (下次开新对话). */
+    /** Actions in flight: `task:<id>` (a write), `run:<id>` ("Run now"), `fresh:<id>` ("New chat next time"). */
     val busy: Set<String> = emptySet(),
     val refreshing: Boolean = false,
     val assistantMachine: String? = null,
@@ -253,9 +253,9 @@ internal data class ProactiveState(
     val shownTasks: List<ScheduledTask>? get() = tasks.value?.let { list ->
         pending.fold(list) { tasks, pending -> tasks.map { if (it.id == pending.change.id) it.copy(enabled = pending.change.enabled) else it } }
     }
-    /** 定时任务: daily and interval ones, in the hub's order. */
+    /** Scheduled tasks: daily and interval ones, in the hub's order. */
     val repeating: List<ScheduledTask>? get() = shownTasks?.filter { it.repeat != TaskRepeat.Once }
-    /** 一次性跟进: soonest first. */
+    /** One-off follow-ups: soonest first. */
     val oneOff: List<ScheduledTask>? get() = shownTasks?.filter { it.repeat == TaskRepeat.Once }
         ?.sortedWith(compareBy<ScheduledTask> { parseTime(it.at) }.thenBy { it.id })
     val runList: List<Run>? get() = runs.value?.sortedWith(compareByDescending<Run> { parseTime(it.at) })
@@ -409,7 +409,7 @@ internal class ProactiveStore(
         return result
     }
 
-    /** 下次开新对话: the hub forgets the task's own conversation, so the next run starts one. */
+    /** "New chat next time": the hub forgets the task's own conversation, so the next run starts one. */
     suspend fun fresh(id: String): Result<ScheduledTask> {
         mutable.update { it.copy(busy = it.busy + "fresh:$id") }
         val result = try { attempt { api.freshTask(id) } } finally { mutable.update { it.copy(busy = it.busy - "fresh:$id") } }
@@ -420,7 +420,7 @@ internal class ProactiveStore(
         return result
     }
 
-    /** [what] is a sentence with the reason as `%1$s` ("没保存上：%1$s"). */
+    /** [what] is a sentence with the reason as `%1$s` ("Couldn't save: %1$s"). */
     private fun report(@StringRes what: Int, error: Throwable) {
         notices.tryEmit(say.string(what, failureReason(say, error)))
     }

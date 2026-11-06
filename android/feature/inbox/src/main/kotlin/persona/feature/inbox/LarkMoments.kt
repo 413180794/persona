@@ -41,7 +41,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
 
-/** 公司圈 share links (`…/client/moments/detail?postId=…`). */
+/** Moments share links (`…/client/moments/detail?postId=…`). */
 object LarkMoments {
     fun postId(link: String?): String? {
         link ?: return null
@@ -56,13 +56,13 @@ object LarkMoments {
     }
 }
 
-/** A post's or comment's time in the language the app is in: 11月5日 14:30 · Nov 5, 2:30 PM. */
+/** A post's or comment's time in the language the app is in: "Nov 5, 2:30 PM" in English, the same in each language's own form. */
 internal fun formatMomentTime(ms: Double?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String = runCatching {
     if (ms == null) return ""
     LocalizedFormats.format(Instant.ofEpochMilli(ms.toLong()), LocalizedFormats.MONTH_DAY_TIME, locale, zone)
 }.getOrDefault("")
 
-/** A shared 公司圈 post in a chat. */
+/** A shared Moments post in a chat. */
 @Composable
 internal fun LarkMomentsCard(
     postId: String,
@@ -98,7 +98,7 @@ internal fun LarkMomentsCard(
     }
 }
 
-/** One 公司圈 post page opened from an inbox item. */
+/** One Moments post page opened from an inbox item. */
 @Composable
 fun LarkMomentsScreen(
     repository: InboxRepository,
@@ -269,7 +269,7 @@ fun LarkMomentsScreen(
     }
 }
 
-/** Bottom sheet for a 公司圈 post opened from a share link inside a conversation. */
+/** Bottom sheet for a Moments post opened from a share link inside a conversation. */
 @Composable
 internal fun LarkMomentsSheet(
     postId: String,
@@ -508,8 +508,8 @@ private fun reactionLabel(type: String): String = when (type.uppercase()) {
 }
 
 /**
- * A 公司圈 share link opened in a conversation's link card (iOS LarkMomentsPostView in LinkSheet, web MomentsPanel):
- * the post and its comments, text selectable for [picks]; a read that fails offers 重试 and the web page.
+ * A Moments share link opened in a conversation's link card (iOS LarkMomentsPostView in LinkSheet, web MomentsPanel):
+ * the post and its comments, text selectable for [picks]; a read that fails offers "Retry" and the web page.
  */
 @Composable
 fun LarkMomentsLink(postId: String, url: String, modifier: Modifier = Modifier, picks: LarkLinkPicks? = null, refresh: Int = 0,

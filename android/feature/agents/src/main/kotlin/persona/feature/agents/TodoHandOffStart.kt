@@ -9,7 +9,7 @@ import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * A to-do's 新开一个 start that isn't confirmed yet: the next tap checks it, it never posts a second start.
+ * A to-do's "Start a new one" start that isn't confirmed yet: the next tap checks it, it never posts a second start.
  * [scope] is the hub it was posted to; another hub doesn't know the id.
  */
 internal data class TodoHandOffOperation(val scope: String, val id: String, val messageId: String)
@@ -23,7 +23,7 @@ internal sealed interface HandOffOutcome {
 }
 
 /**
- * 交给 Agent → 新开一个 (#4703): starts [request], or checks [pending] instead when the last tap on this hub wasn't confirmed, and
+ * "Hand to Agent" → "Start a new one" (#4703): starts [request], or checks [pending] instead when the last tap on this hub wasn't confirmed, and
  * queues [prompt] as the first message under the operation's own id, so a retry never sends it twice.
  */
 internal suspend fun handOffToNewAgent(

@@ -259,7 +259,7 @@ class HttpExtensionManagementTest {
         assertNull(result.view)
     }
 
-    // docs/extensions.md「UI 插槽」: without a placement the hub lists every slot but launcher sections, with badges.
+    // docs/extensions.md "UI slots": without a placement the hub lists every slot but launcher sections, with badges.
     @Test fun listsTheSlotsAtOnce() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"ui":[
             {"plugin":"example-gateway","plugin_name":"Example 网关面板","id":"usage","title":"用量","placement":"nav_page","size":"full",
@@ -311,7 +311,7 @@ class HttpExtensionManagementTest {
         }
         assertEquals("周四的评审", (view.title).zhAny())
 
-        // 在会话里看: the item's source, the one app link the hub lets this slot answer.
+        // "View in session": the item's source, the one app link the hub lets this slot answer.
         server.enqueue(MockResponse().setBody("""{"open_url":"persona://inbox/lark:F1:1051/source"}"""))
         assertEquals("persona://inbox/lark:F1:1051/source",
             (api.uiAction("larkext", "event", "open_chat", ExtensionUiContext(item = "lark:F1:1051"), state = "s").openUrl).zhAny())

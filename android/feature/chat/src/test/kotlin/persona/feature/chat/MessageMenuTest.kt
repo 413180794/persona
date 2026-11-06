@@ -33,7 +33,7 @@ import org.junit.Test
 import java.time.Instant
 import java.time.ZoneOffset
 
-/** The long-press menu (R4), 交给 Persona, the API error card's rules (D6), recaps and Claude's suggestion (X1). */
+/** The long-press menu (R4), "Hand to Persona", the API error card's rules (D6), recaps and Claude's suggestion (X1). */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,7 +46,7 @@ class MessageMenuTest {
         assertEquals(listOf(Copy, Select, Share), messageActions(mine, writes = false, handOff = false))
         // An agent's reply cannot be edited.
         assertEquals(listOf(Copy, Select, Quote, Share, Context), messageActions(MessageTarget("a", "回复", user = false), true, false))
-        // 分支到新聊天 on a reply that is a transcript line; 回退到这里 on yours, only where the composer is the user's.
+        // "Branch to new chat" on a reply that is a transcript line; "Rewind to here" on yours, only where the composer is the user's.
         val extras = MessageExtras(fork = true, rewind = true)
         assertEquals(listOf(Copy, Select, Quote, Share, Context, Fork), messageActions(MessageTarget("u#1", "回复", user = false), true, false, extras))
         assertEquals(listOf(Copy, Select, Quote, Share, Context), messageActions(MessageTarget("line3", "回复", user = false), true, false, extras))
@@ -62,7 +62,7 @@ class MessageMenuTest {
     }
 
     @Test fun aQuoteGoesOverTheBoxAndLeavesTheDraft() {
-        // 引用 is a context over the composer now (iOS #986, ComposerParityTest): the words are not typed into the draft.
+        // "Quote" is a context over the composer now (iOS #986, ComposerParityTest): the words are not typed into the draft.
         val quotes = withQuote(emptyList(), ChatLinkContext.quote("第一行\n第二行", "我", "m"))
         assertEquals("<jarvis-context kind=\"quote\" title=\"我\" url=\"\" msg=\"m\">\n第一行\n第二行\n</jarvis-context>\n\nmine",
             linkMessage("mine", quotes, res))

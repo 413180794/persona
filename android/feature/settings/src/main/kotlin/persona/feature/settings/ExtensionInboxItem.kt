@@ -10,7 +10,7 @@ import persona.core.designsystem.*
 import persona.core.navigation.InboxItemUiRoute
 import kotlinx.coroutines.launch
 
-// The body of an inbox item's page drawn by the extension of the connector it comes from (docs/extensions.md「UI 插槽」
+// The body of an inbox item's page drawn by the extension of the connector it comes from (docs/extensions.md "UI slots"
 // `inbox_item`, #1683): the extension's view of the item, drawn with the same renderer as its other pages, the item's id
 // in the context. The inbox keeps its own header above it (feature:inbox's InboxItemExtensionScreen); the shell puts the
 // two together and opens the item's own page when the extension cannot draw it.
@@ -20,7 +20,7 @@ sealed interface InboxItemFallback {
     /** The extension does not draw this item here: a device that may only read (403), 404, `unsupported`, nothing drawn. */
     data object Quiet : InboxItemFallback
 
-    /** Drawing it broke (502 `extension_failed`, the hub out of reach): the item's own page says so in a line, with 重试. */
+    /** Drawing it broke (502 `extension_failed`, the hub out of reach): the item's own page says so in a line, with "Retry". */
     data class Notice(val message: String) : InboxItemFallback
 }
 
@@ -64,7 +64,7 @@ class InboxItemBody internal constructor(
  * Item [route]'s body as its connector's extension draws it, refreshed while on screen when the view asks
  * (`refresh_after`) and drawn again whenever the item changes ([revision]: new messages, done). A button that answers
  * `persona://inbox/<id>/source` calls [onSource] with that item's id; other links are https and open in the app. No
- * extensions here (体验模式): the item's own page, quietly.
+ * extensions here (demo mode): the item's own page, quietly.
  */
 @Composable
 fun rememberInboxItemBody(slots: ExtensionSlots?, route: InboxItemUiRoute, revision: Any? = null, onSource: (String) -> Unit): InboxItemBody {

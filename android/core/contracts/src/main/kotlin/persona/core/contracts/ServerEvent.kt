@@ -150,7 +150,7 @@ data class NotifyEvent(
 ) : ServerEvent
 
 /**
- * An extension changed the badge of its entry on the navigation (`nav_page`, docs/extensions.md「UI 插槽」「角标」): `null`
+ * An extension changed the badge of its entry on the navigation (`nav_page`, docs/extensions.md "UI slots" "Badges"): `null`
  * clears it. The event is `extension_ui`; a hub before #1844 says `plugin_ui`, and a newer one sends both (the same badge
  * twice is no change). The app changes the badge without reading the list again.
  */
@@ -168,13 +168,13 @@ data class ExtensionUiEvent(
     val invalidate: Boolean = false,
 ) : ServerEvent
 
-/** The hub's update status changed (docs/hub-update.md「App 里」): `update` is what GET /api/v1/hub/update answers. */
+/** The hub's update status changed (docs/hub-update.md "In the app"): `update` is what GET /api/v1/hub/update answers. */
 @KeepGeneratedSerializer
 @Serializable(with = HubUpdateEventSerializer::class)
 data class HubUpdateEvent(val update: persona.core.contracts.api.HubUpdateStatus) : ServerEvent
 
 /**
- * An extension's install, upgrade or uninstall moved on (docs/protocol.md「扩展的安装、升级、卸载进度」): only to a client
+ * An extension's install, upgrade or uninstall moved on (docs/protocol.md "Extension install, upgrade and uninstall progress"): only to a client
  * that says `extension_operations`, and not replayed after a reconnect (the page lists them again).
  */
 @KeepGeneratedSerializer

@@ -10,7 +10,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
 
-/** A mail being written (写邮件 / 回复 / 转发): addresses as typed, the quote already in [body]. */
+/** A mail being written ("New mail" / "Reply" / "Forward"): addresses as typed, the quote already in [body]. */
 data class MailDraft(
     val accountId: String,
     val to: String = "",
@@ -38,7 +38,7 @@ object MailCompose {
     const val QUOTE_LINES = 40
 
     /**
-     * Addresses typed into 收件人 / 抄送 / 密送: split on commas, semicolons (half and full width) and new lines, but not
+     * Addresses typed into To / Cc / Bcc: split on commas, semicolons (half and full width) and new lines, but not
      * inside a `"quoted name"` or `<…>` (#5076: `"Doe, John" <a@b>`); `Name <a@b>` keeps the name, unquoted. A line
      * with an unclosed quote or bracket splits on every separator, as before. Empty pieces are dropped.
      */
@@ -129,7 +129,7 @@ object MailCompose {
     fun replyReferences(original: MailMessage): List<String> =
         (original.references + listOfNotNull(original.messageId.takeIf { it.isNotBlank() })).distinct()
 
-    /** A full date and time in [locale]'s own order (2026年11月4日 18:00 · Nov 4, 2026, 6:00 PM). */
+    /** A full date and time in [locale]'s own order (Nov 4, 2026, 6:00 PM in English; year-month-day in Chinese). */
     fun formatDate(t: Instant?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String =
         t?.let { LocalizedFormats.format(it, LocalizedFormats.DATE_TIME, locale, zone) }.orEmpty()
 
@@ -145,7 +145,7 @@ object MailCompose {
     }
 
     /**
-     * 「\n\n<date>，<sender> 写道：\n> …」 (first [QUOTE_LINES] lines), in the language of [res]: it goes into the mail
+     * "\n\n<date>, <sender> wrote:\n> ..." (first [QUOTE_LINES] lines), in the language of [res]: it goes into the mail
      * the user sends.
      */
     fun quote(res: Resources, m: MailMessage, zone: ZoneId = ZoneId.systemDefault()): String {
@@ -163,8 +163,8 @@ object MailCompose {
     }
 
     /**
-     * 回复 / 回复全部. [me] = the receiving account's address (left out of reply-all). Reply-all sends to the sender plus
-     * the original 收件人, and copies the original 抄送.
+     * "Reply" / "Reply all". [me] = the receiving account's address (left out of reply-all). Reply-all sends to the sender plus
+     * the original "To", and copies the original "Cc".
      */
     fun reply(res: Resources, m: MailMessage, accountId: String, me: String?, all: Boolean, zone: ZoneId = ZoneId.systemDefault()): MailDraft {
         val mine = me?.lowercase()?.trim()
@@ -190,7 +190,7 @@ object MailCompose {
         )
     }
 
-    /** 转发: no recipients, the original's header block and full text below. */
+    /** "Forward": no recipients, the original's header block and full text below. */
     fun forward(res: Resources, m: MailMessage, accountId: String, zone: ZoneId = ZoneId.systemDefault()): MailDraft {
         val instant = parseDate(m.date)
         val dateText = if (instant != null) formatDate(instant, res.mailLocale, zone) else m.date

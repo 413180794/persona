@@ -128,7 +128,7 @@ internal fun fileTime(value: String?): Instant? {
     return runCatching { OffsetDateTime.parse(value.trim()).toInstant() }.getOrNull()
 }
 
-/** 刚刚 / 5 分钟前 / 3 小时前 / 2 天前, then the date (the year only when it is not this one), in [resources]' language. */
+/** "Just now" / "5 min ago" / "3 hr ago" / "2 days ago", then the date (the year only when it is not this one), in [resources]' language. */
 internal fun relativeTime(resources: Resources, time: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
     val seconds = Duration.between(time, now).seconds
     return when {
@@ -147,6 +147,6 @@ internal fun relativeTime(resources: Resources, time: Instant, now: Instant = In
 internal fun fileDate(resources: Resources, value: String?, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String? =
     fileTime(value)?.let { relativeTime(resources, it, now, zone) }
 
-/** The whole date of a commit: 2026年10月31日 13:58 · Oct 31, 2026, 1:58 PM. */
+/** The whole date of a commit: "Oct 31, 2026, 1:58 PM" in English, the same in each language's own form. */
 internal fun fullDate(value: String?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String? =
     fileTime(value)?.let { LocalizedFormats.format(it, LocalizedFormats.DATE_TIME, locale, zone) }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 设置 › 扩展 and the extensions' pages (English is the fallback, docs/i18n.md); values-zh and values-ja hold the same keys. -->
+<!-- Settings › Extensions and the extensions' pages (English is the fallback, docs/i18n.md); values-zh and values-ja hold the same keys. -->
 <resources>
     <string name="settings_ext_dep_ok">Met</string>
     <string name="settings_ext_dep_missing">Not installed</string>
@@ -275,7 +275,7 @@
     <string name="settings_ext_connector_open_subtitle">Sign-in, status and more Inbox settings</string>
     <string name="settings_ext_connector_inbox_on">New %1$s items come into the Inbox. This is the same switch as Send to Inbox on the connector\'s page.</string>
     <string name="settings_ext_connector_inbox_off">Not in the Inbox: nothing new comes in; existing items stay.</string>
-    <!-- Auto-upgrades (docs/extensions.md「自动升级」) -->
+    <!-- Auto-upgrades (docs/extensions.md "Auto-upgrade") -->
     <string name="settings_ext_upgrade_title">Upgrades</string>
     <string name="settings_ext_upgrade_footer">When the market has a new version, it\'s installed while the extension is idle. If it asks for more permissions, you\'re asked first. A version that fails to start rolls back to the previous one.</string>
     <string name="settings_ext_auto_upgrade">Auto-upgrade</string>

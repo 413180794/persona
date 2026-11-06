@@ -37,7 +37,7 @@ data class InboxMute(
     val name: String,
     val createdAt: String? = null,
 ) {
-    /** What kind of thing it is, for people: 仓库 / 会话 / 发件人. */
+    /** What kind of thing it is, for people: "Repository" / "Chat" / "Sender". */
     @get:StringRes val tagName: Int get() = when (tag) {
         "repo" -> R.string.inbox_mute_tag_repo
         "chat" -> R.string.inbox_mute_tag_chat
@@ -64,7 +64,7 @@ fun mutedBy(records: List<InboxRecord>, record: InboxRecord, option: InboxMuteOp
         .map { it.item.id }.toSet() + record.item.id
 
 /**
- * 已静音 (the inbox's ⋯ menu): the repositories, chats and senders muted from an item's menu, in every source, newest
+ * "Muted" (the inbox's ⋯ menu): the repositories, chats and senders muted from an item's menu, in every source, newest
  * first. A tap takes one back; nothing it covered comes back, only what comes in later (iOS `InboxMutesView`).
  */
 @Composable

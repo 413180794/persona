@@ -28,10 +28,10 @@ class ResolvedRoute(
     val card: RequestRef? = null,
 )
 
-/** The launcher's 「问 Persona」: the Persona tab with the cursor in its composer, cold start or not. */
+/** The launcher's "Ask Persona": the Persona tab with the cursor in its composer, cold start or not. */
 const val AskPersonaLink = "jarvis://open?target=tab&tab=jarvis&focus=composer"
 
-/** Agents › 待办 with a new to-do being written ([NewTodoRoute]). */
+/** Agents › To-dos with a new to-do being written ([NewTodoRoute]). */
 const val NewTodoLink = "jarvis://open?target=new-todo"
 
 class Router(

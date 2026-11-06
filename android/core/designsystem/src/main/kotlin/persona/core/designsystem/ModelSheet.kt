@@ -13,9 +13,9 @@ import persona.core.contracts.api.modelName
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * A launcher's /model list to pick from (#794, #943): 默认 first, then every model the agent offers, searchable by name,
- * id, the model an alias stands for and description. Picking one closes it; 刷新 asks the CLI again. [custom] also takes
- * an id the list does not have (模型配置): the one in use stays shown, and what is typed can be used as is.
+ * A launcher's /model list to pick from (#794, #943): "Default" first, then every model the agent offers, searchable by name,
+ * id, the model an alias stands for and description. Picking one closes it; "Refresh" asks the CLI again. [custom] also takes
+ * an id the list does not have (model configuration): the one in use stays shown, and what is typed can be used as is.
  */
 @Composable
 fun JModelSheet(
@@ -35,7 +35,7 @@ fun JModelSheet(
     val shown = remember(models, query) { models.filter { !it.isDefault && it.matches(query) } }
     val unlisted = selected.takeIf { custom && it.isNotEmpty() && models.none { m -> m.id == it } }
     val typed = if (custom) customModelId(models, query) else null
-    // Results start from the top: the list would otherwise keep the row it was at, and 默认 coming back in front of it
+    // Results start from the top: the list would otherwise keep the row it was at, and "Default" coming back in front of it
     // once the query is cleared would stay above the viewport.
     val scroll = rememberLazyListState()
     LaunchedEffect(query) { scroll.scrollToItem(0) }

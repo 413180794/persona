@@ -18,7 +18,7 @@ interface AssistantManagement {
      */
     suspend fun readiness(probe: Boolean = false): AssistantReadiness = throw UnsupportedOperationException("Readiness unavailable")
     suspend fun dismissReadiness(dismissed: Boolean): Unit = throw UnsupportedOperationException("Readiness unavailable")
-    // Where the assistant runs (设置 › 助手). Defaults keep transports and fakes written before the page compiling.
+    // Where the assistant runs (Settings › Assistant). Defaults keep transports and fakes written before the page compiling.
     suspend fun config(): AssistantConfig = throw UnsupportedOperationException("Assistant settings unavailable")
     suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig = throw UnsupportedOperationException("Assistant settings unavailable")
     /** The launchers a machine offers (GET /api/v1/machines/{id}/launchers). */
@@ -43,14 +43,14 @@ interface AssistantManagement {
      */
     suspend fun newMainConversation(carrySummary: Boolean, expect: String?): NewMainResult =
         throw UnsupportedOperationException("New main chat unavailable")
-    /** 定时任务 (GET /api/v1/assistant/tasks): one table of once / daily / interval tasks, docs/assistant.md「定时任务」. */
+    /** Scheduled tasks (GET /api/v1/assistant/tasks): one table of once / daily / interval tasks, docs/assistant.md "Scheduled tasks". */
     suspend fun tasks(): List<ScheduledTask>
     /** Creates [task] (no id yet, POST) or saves what the user edits on it (PUT); returns it as the hub has it. */
     suspend fun saveTask(task: ScheduledTask): ScheduledTask
     suspend fun deleteTask(id: String)
-    /** 立即运行: the conversation the run went to. */
+    /** "Run now": the conversation the run went to. */
     suspend fun runTask(id: String): SessionKey
-    /** 下次开新对话: the next run starts a conversation of its own (POST tasks/{id}/fresh). */
+    /** "New conversation next time": the next run starts a conversation of its own (POST tasks/{id}/fresh). */
     suspend fun freshTask(id: String): ScheduledTask
     suspend fun runs(): List<Run>
     suspend fun notes(): AssistantNotes
@@ -66,7 +66,7 @@ interface AssistantManagement {
 }
 
 /**
- * One 定时任务 (docs/protocol.md `Task`). Read in full from the hub; [editable] is what the app writes back, so the
+ * One scheduled task (docs/protocol.md `Task`). Read in full from the hub; [editable] is what the app writes back, so the
  * hub's own fields (last / next run, its own conversation, who made it) are never sent.
  */
 @Serializable
@@ -101,7 +101,7 @@ data class ScheduledTask(
     @SerialName("run_machine_id") val runMachineId: String? = null,
     @SerialName("run_session_id") val runSessionId: String? = null,
     /**
-     * 跑完推送: "" (or absent) = push after every run, [PUSH_ASKED] = only what a run sends with notify_user. The hub
+     * "Push when done": "" (or absent) = push after every run, [PUSH_ASKED] = only what a run sends with notify_user. The hub
      * offers it with the [PUSH_FEATURE] hello feature; an older one leaves it out.
      */
     val push: String? = null,
@@ -131,7 +131,7 @@ data class ScheduledTask(
         const val ONCE = "once"
         const val DAILY = "daily"
         const val INTERVAL = "interval"
-        /** 只在它自己提醒时 (docs/assistant.md「跑完推送」). */
+        /** "Only when it asks to" (docs/assistant.md "Push when done"). */
         const val PUSH_ASKED = "asked"
         /** The hello feature of a hub that reads and writes [push]. */
         const val PUSH_FEATURE = "task_push"
@@ -165,7 +165,7 @@ data class AssistantNotes(
 @Serializable
 data class MemoryFile(val name: String = "", val content: String = "", @SerialName("updated_at") val updatedAt: String? = null)
 
-/** What 新建主对话 did: the conversation put away ([archived], empty when there was none) and whether any of it carries over. */
+/** What "New main chat" did: the conversation put away ([archived], empty when there was none) and whether any of it carries over. */
 data class NewMainResult(val archived: String = "", val carried: Boolean = false)
 
 /** The hub refused an assistant action (409 with a `code`); [message] is the hub's own words, fit to show as they are. */

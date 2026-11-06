@@ -4,8 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * An extension of the hub (`GET /api/v1/extensions`, docs/extensions.md「hub 的接口」): the voice page looks for a running
- * `kind == "voice"` one; 设置 › 扩展 shows them all. Hubs from before the extension base send only the first five fields.
+ * An extension of the hub (`GET /api/v1/extensions`, docs/extensions.md "Hub API"): the voice page looks for a running
+ * `kind == "voice"` one; Settings › Extensions shows them all. Hubs from before the extension base send only the first five fields.
  */
 @Serializable
 data class HubExtension(
@@ -28,7 +28,7 @@ data class HubExtension(
     val warnings: List<String>? = null,
     val sandbox: ExtensionSandbox? = null,
     /**
-     * An extension from a market on a hub with auto-upgrades (docs/extensions.md「自动升级」): its own switch (null: not
+     * An extension from a market on a hub with auto-upgrades (docs/extensions.md "Auto-upgrade"): its own switch (null: not
      * from a market, or an older hub), its newer version and what happened last with an upgrade.
      */
     @SerialName("auto_upgrade") val autoUpgrade: Boolean? = null,
@@ -44,7 +44,7 @@ data class HubExtension(
     val isRunningVoice: Boolean get() = kind == "voice" && status == "running"
 }
 
-/** A market extension's newer version and where it stands (docs/extensions.md「自动升级」). */
+/** A market extension's newer version and where it stands (docs/extensions.md "Auto-upgrade"). */
 @Serializable
 data class ExtensionUpgrade(
     val id: String = "",
@@ -68,7 +68,7 @@ data class ExtensionUpgradeNote(
     val at: String? = null,
 )
 
-/** An extension's program on one machine (docs/extensions.md「在电脑上运行的程序」). */
+/** An extension's program on one machine (docs/extensions.md "Programs that run on computers"). */
 @Serializable
 data class ExtensionNodeState(
     @SerialName("machine_id") val machineId: String = "",
@@ -78,7 +78,7 @@ data class ExtensionNodeState(
     val error: String? = null,
 )
 
-/** A voice (音色) a voice extension offers for one model (`GET /api/v1/extensions/{id}/voices?model=`). */
+/** A voice (timbre) a voice extension offers for one model (`GET /api/v1/extensions/{id}/voices?model=`). */
 @Serializable
 data class VoiceOption(
     val id: String = "",
@@ -103,7 +103,7 @@ data class VoiceModelOptions(val models: List<VoiceModelOption> = emptyList(), v
 
 /**
  * What the hub's model configuration says for a voice extension (the purpose `plugin.<id>`, docs/model-config.md): the
- * effective model, if one is set, and the purpose's status when it is not usable as it stands (`未验证` is usable).
+ * effective model, if one is set, and the purpose's status when it is not usable as it stands (the hub's "unverified" status is usable).
  */
 data class VoiceModelChoice(val model: String? = null, val status: String? = null)
 
@@ -134,7 +134,7 @@ interface VoiceExtensions {
     fun connect(extensionId: String, listener: VoiceSocketListener): VoiceSocket
 }
 
-/** One open voice conversation's socket: JSON text frames and PCM16 binary frames (docs/extensions.md「语音」). */
+/** One open voice conversation's socket: JSON text frames and PCM16 binary frames (docs/extensions.md "Voice"). */
 interface VoiceSocket {
     fun send(text: String): Boolean
     fun send(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size): Boolean

@@ -4,7 +4,7 @@ import persona.core.contracts.api.ExtensionDiffHunk
 import persona.core.contracts.api.ExtensionView
 import persona.core.contracts.api.ExtensionViewItem
 
-// UI version 5's code review (docs/extensions.md「UI 版本 5」, #3136) without the looks, as the web's lib/code-review.ts:
+// UI version 5's code review (docs/extensions.md "UI version 5", #3136) without the looks, as the web's lib/code-review.ts:
 // which words of a changed line changed, a change that is only whitespace drawn as unchanged, generated files and
 // lockfiles, the lines hidden between hunks and those shown of them, an id for a viewed mark kept on the device,
 // ```suggestion blocks in a comment, a range of lines picked for a comment, and an action's components put in place.
@@ -294,7 +294,7 @@ internal object ExtensionCodeReview {
         return out
     }
 
-    /** The block 建议修改 inserts: the lines picked, to edit into what they should be. */
+    /** The block "Suggest" inserts: the lines picked, to edit into what they should be. */
     fun suggestionBlock(lines: List<String>): String = "```suggestion\n" + lines.joinToString("\n") + "\n```\n"
 
     /** The lines from [anchor] to [to] on one side; a spot on the other side (or none) starts afresh. */

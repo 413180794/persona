@@ -29,7 +29,7 @@ import java.io.File
 
 /**
  * The chat's strip of its space's agents with a herdr tab of three (#2320): the tab's agents side by side in pane order,
- * the 发起者 marked, then a tab of one. Every style, light and dark; PNGs in `build/sibling-shots/`.
+ * the launcher marked, then a tab of one. Every style, light and dark; PNGs in `build/sibling-shots/`.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

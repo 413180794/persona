@@ -15,7 +15,7 @@ import persona.core.designsystem.UiText
 import persona.core.designsystem.failureReasonText
 import persona.core.hub.HubFailure
 
-/** The three groups of 设置 › 模型供应商 (iOS `ModelLaunchersView`): kept by Persona, from ~/.zshrc, hidden. */
+/** The three groups of Settings › Model providers (iOS `ModelLaunchersView`): kept by Persona, from ~/.zshrc, hidden. */
 internal data class ProviderGroups(val managed: List<HubLauncher>, val zshrc: List<HubLauncher>, val hidden: List<HubLauncher>) {
     val isEmpty: Boolean get() = managed.isEmpty() && zshrc.isEmpty() && hidden.isEmpty()
 
@@ -43,7 +43,7 @@ internal data class ProvidersUiState(
     val notice: ResText? = null,
 )
 
-/** 设置 › 模型供应商: the hub's providers; hide, restore and delete move the row at once and put it back on failure. */
+/** Settings › Model providers: the hub's providers; hide, restore and delete move the row at once and put it back on failure. */
 internal class ProvidersModel(private val api: ProviderSetup) {
     private val mutable = MutableStateFlow(ProvidersUiState())
     val state = mutable.asStateFlow()
@@ -90,7 +90,7 @@ internal data class ProviderDetailUiState(
     val launcher: HubLauncher? = null,
     val error: ResText? = null,
     val busy: Boolean = false,
-    /** 测试可用性 by machine id ("" for a direct API, the hub's machine when none was picked): null while it runs. */
+    /** "Test availability" by machine id ("" for a direct API, the hub's machine when none was picked): null while it runs. */
     val checks: Map<String, LauncherCheck?> = emptyMap(),
     /** Why a machine's check did not come back, in the page's language (keyed like [checks]). */
     val checkFailures: Map<String, UiText> = emptyMap(),
@@ -99,7 +99,7 @@ internal data class ProviderDetailUiState(
     val gone: Boolean = false,
 )
 
-/** One provider: its settings, 测试可用性 on each machine, and hide / restore / delete. */
+/** One provider: its settings, "Test availability" on each machine, and hide / restore / delete. */
 internal class ProviderDetailModel(private val api: ProviderSetup, private val name: String) {
     private val mutable = MutableStateFlow(ProviderDetailUiState())
     val state = mutable.asStateFlow()
@@ -148,7 +148,7 @@ internal class ProviderDetailModel(private val api: ProviderSetup, private val n
     }
 }
 
-/** 从 ~/.zshrc 导入 (iOS `LauncherImportModel`): pick a machine, tick what its aliases come to, import. */
+/** "Import from ~/.zshrc" (iOS `LauncherImportModel`): pick a machine, tick what its aliases come to, import. */
 internal enum class ImportPhase { Machine, Loading, Preview, Importing, Done }
 
 internal data class ProviderImportUiState(

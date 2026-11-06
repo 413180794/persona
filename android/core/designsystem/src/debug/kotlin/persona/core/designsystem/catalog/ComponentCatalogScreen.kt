@@ -92,7 +92,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             }
             Text("一次：着色加描边；按住、锁定：实底；锁定另有下划线", style = PersonaTheme.type.caption, color = palette.ink3)
         }
-        // A stepped slider (知识库 › 打标: 与我相关 0–100 in steps of 5), enabled and not.
+        // A stepped slider (Knowledge › Tagging: "Relevant to me" 0–100 in steps of 5), enabled and not.
         section("滑杆") {
             Text("与我相关 ${relevance.toInt()}", style = PersonaTheme.type.callout, color = palette.ink2)
             JSlider(relevance, { relevance = it }, valueRange = 0f..100f, step = 5f, contentDescription = "与我相关")
@@ -129,7 +129,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
                 },
             )
         }
-        // The Agents list, line by line as on the Agents tab: computer chips, then 电脑 → 空间 → 会话.
+        // The Agents list, line by line as on the Agents tab: computer chips, then computer → space → session.
         item { JSectionHeader("Agents") }
         item("agents-chips") {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -168,7 +168,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
         }
         item("agents-idle") { AgentIdleRow(2, onClick = { feedback = "展开空闲的会话" }) }
         item("agents-tab") {
-            // a herdr tab of three agents (#2320): the tab's row, its 发起者 and two panes it split off
+            // a herdr tab of three agents (#2320): the tab's row, its initiator and two panes it split off
             var folded by remember { mutableStateOf(false) }
             val (lead, branch, done) = rows
             Column {
@@ -201,7 +201,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             )
         }
         item { JSectionHeader("形象") }
-        // Each built-in face in each state, as iOS's PersonaGallery shows its dot (docs/persona.md「状态」).
+        // Each built-in face in each state, as iOS's PersonaGallery shows its dot (docs/persona.md "States").
         items(PersonaDesign.entries) { design ->
             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PersonaState.entries.forEach { state ->
@@ -286,7 +286,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             )
             QueueStrip("排队中 1 条，Codex 忙完会依次处理", listOf("先别提交，等我看完 diff"), onItem = {}, busy = true)
         }
-        // 语音对话: the orb in each state, the status under it, captions and the controls (feature:voice).
+        // Voice chat: the orb in each state, the status under it, captions and the controls (feature:voice).
         section("语音对话") {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 listOf(VoiceOrbMode.Connecting to "连接中", VoiceOrbMode.Listening to "在听", VoiceOrbMode.Speaking to "正在说",

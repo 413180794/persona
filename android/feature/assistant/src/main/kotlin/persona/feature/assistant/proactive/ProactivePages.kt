@@ -28,12 +28,12 @@ internal class ProactiveActions(
     val allRuns: (String?) -> Unit,
 )
 
-/** How many one-offs and runs the overview shows before "全部 …". */
+/** How many one-offs and runs the overview shows before "All …". */
 private const val FollowupsShown = 3
 private const val RunsShown = 3
 
 /**
- * 主动做事: what runs next, the repeating tasks with their switches, the one-offs, and the latest runs (iOS
+ * "Proactive": what runs next, the repeating tasks with their switches, the one-offs, and the latest runs (iOS
  * AssistantRoutinesView). Each part opens a page of its own.
  */
 @Composable

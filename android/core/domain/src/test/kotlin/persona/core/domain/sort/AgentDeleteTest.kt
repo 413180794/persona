@@ -8,7 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 删除对话 (issue #1749): which conversations offer it, and what the confirmation says. */
+/** "Delete conversation" (issue #1749): which conversations offer it, and what the confirmation says. */
 class AgentDeleteTest {
     @Test fun onlyConversationsThatAreNotRunningCanBeDeleted() {
         // What the hub accepts and then hides (server/internal/hub/deleted_sessions.go stillDeleted).

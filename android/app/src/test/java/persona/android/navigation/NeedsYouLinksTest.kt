@@ -7,7 +7,7 @@ import persona.feature.assistant.NeedsYouLine
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The Persona home's 现在要你处理的事 opens a request in its conversation and an inbox item in the inbox. */
+/** The Persona home's "Needs you now" opens a request in its conversation and an inbox item in the inbox. */
 class NeedsYouLinksTest {
     private val stacks = mapOf<AppTab, MutableList<NavKey>>(
         AppTab.Jarvis to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),

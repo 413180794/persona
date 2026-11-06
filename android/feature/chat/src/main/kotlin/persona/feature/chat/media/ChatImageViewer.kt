@@ -27,21 +27,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The image viewer of a conversation: [ImageViewer] with 保存, 编辑 (only with [onEdited]), 分享 and 拷贝.
+ * The image viewer of a conversation: [ImageViewer] with "Save", "Edit" (only with [onEdited]), "Share" and "Copy".
  *
- * 编辑 opens the markup editor on the current picture; 完成 makes it a photo for the composer (long side 1600, JPEG
- * 75, in `cache/chat-captures/`), hands it to [onEdited], says 「已加到输入框，补一句话就能发」 and closes the viewer
- * through [onDismiss]. With [photoLimitReached] (the composer already holds 4 photos) 编辑 says 「一次最多 4 张」
- * instead. Results of 保存 / 分享 / 拷贝 show inside the viewer, which stays open.
+ * "Edit" opens the markup editor on the current picture; "Done" makes it a photo for the composer (long side 1600, JPEG
+ * 75, in `cache/chat-captures/`), hands it to [onEdited], says "Added to the composer, add a line to send" and closes the viewer
+ * through [onDismiss]. With [photoLimitReached] (the composer already holds 4 photos) "Edit" says "Up to 4 photos at a time"
+ * instead. Results of "Save" / "Share" / "Copy" show inside the viewer, which stays open.
  */
 @Composable
 fun ChatImageViewer(
     images: List<ViewerImage>,
     initialIndex: Int,
     onDismiss: () -> Unit,
-    /** null: no 编辑 button. Gets the marked-up photo as a composer attachment; the viewer closes after. */
+    /** null: no "Edit" button. Gets the marked-up photo as a composer attachment; the viewer closes after. */
     onEdited: ((ComposerAttachment) -> Unit)? = null,
-    /** The composer already holds 4 photos: 编辑 says 「一次最多 4 张」 instead of opening the editor. */
+    /** The composer already holds 4 photos: "Edit" says "Up to 4 photos at a time" instead of opening the editor. */
     photoLimitReached: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -53,7 +53,7 @@ fun ChatImageViewer(
     val dismiss by rememberUpdatedState(onDismiss)
     val limitReached by rememberUpdatedState(photoLimitReached)
 
-    // Runs as the 编辑 action: the action stays busy while the editor is open, and what it returns shows in the viewer.
+    // Runs as the "Edit" action: the action stays busy while the editor is open, and what it returns shows in the viewer.
     suspend fun edit(bytes: ByteArray): String? {
         val source = try {
             withContext(Dispatchers.Default) { decodePicture(bytes, MediaShare.EditedMaxSide, atMost = false, software = true) }
@@ -95,7 +95,7 @@ fun ChatImageViewer(
     }
 }
 
-/** One open editor: the picture it works on and what 完成 / 取消 gave (null: cancelled). */
+/** One open editor: the picture it works on and what "Done" / "Cancel" gave (null: cancelled). */
 private class EditRequest(val source: Bitmap) {
     val result = CompletableDeferred<Bitmap?>()
 }
@@ -118,8 +118,8 @@ internal class AndroidChatMedia(private val context: Context) : ChatMedia {
 private const val MAX_PHOTOS = 4
 
 /**
- * The viewer's actions in order: 保存, 编辑 (when [edit] is given), 分享, 拷贝. Each returns the notice the viewer
- * shows; a successful share shows none (the share sheet is the answer). 编辑 checks [limitReached] first.
+ * The viewer's actions in order: "Save", "Edit" (when [edit] is given), "Share", "Copy". Each returns the notice the viewer
+ * shows; a successful share shows none (the share sheet is the answer). "Edit" checks [limitReached] first.
  */
 internal fun chatViewerActions(
     res: Resources,

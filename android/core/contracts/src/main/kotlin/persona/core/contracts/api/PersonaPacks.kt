@@ -7,7 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * The persona packages on the hub (docs/persona.md「包格式」): GET /api/v1/personas lists the ones that check out,
+ * The persona packages on the hub (docs/persona.md "Package format"): GET /api/v1/personas lists the ones that check out,
  * and each file of a package comes from GET /api/v1/personas/<id>/<file>.
  */
 interface PersonaPacks {
@@ -16,7 +16,7 @@ interface PersonaPacks {
     suspend fun file(id: String, file: String): ByteArray
 
     /**
-     * GET /api/v1/looks (#3200, docs/extensions.md「形象」): the built-in looks, the hub's packages and the extensions'
+     * GET /api/v1/looks (#3200, docs/extensions.md "Persona looks"): the built-in looks, the hub's packages and the extensions'
      * in one list, and the look the user chose, kept on the hub for every device. Throws [PersonaPacksUnsupported] on
      * a hub without it.
      */
@@ -69,8 +69,8 @@ data class PersonaInfo(val id: String, val rev: String, val bytes: Long = 0, val
 // written to index.json), which a private companion refuses.
 private val PERSONA_REV = Regex("^[0-9a-f]{16}$")
 
-/** persona.json, format 1. [colors] feed 主题色「跟随形象」 (docs/persona.md「色系」); an extension's look adds names in
- *  other languages, a dark avatar and where it comes from (docs/extensions.md「形象」). */
+/** persona.json, format 1. [colors] feed the "Follow persona" theme color (docs/persona.md "Color scheme"); an extension's look adds names in
+ *  other languages, a dark avatar and where it comes from (docs/extensions.md "Persona looks"). */
 @Serializable
 data class PersonaManifest(
     val format: Int,
@@ -78,7 +78,7 @@ data class PersonaManifest(
     val name: String,
     val names: Map<String, String> = emptyMap(),
     val subtitle: String? = null,
-    /** A few words for the look's card in 设置 › 外观 › 形象, before the subtitle (奶蛙: where its level comes from). */
+    /** A few words for the look's card in Settings › Appearance › Persona look, before the subtitle (Milk Frog: where its level comes from). */
     val about: String? = null,
     val avatar: Avatar,
     val dot: Dot,
@@ -88,7 +88,7 @@ data class PersonaManifest(
 ) {
     /** `colors.light` / `colors.dark`: `accent`, `bubble`, `bubble_text`, `primary`, `secondary` (each optional). */
     @Serializable data class Colors(val light: Map<String, String> = emptyMap(), val dark: Map<String, String> = emptyMap()) {
-        /** Brings an accent in both appearances: the only colours 跟随形象 lays over the style. */
+        /** Brings an accent in both appearances: the only colours "Follow persona" lays over the style. */
         val hasAccent: Boolean get() = "accent" in light || "accent" in dark
     }
     /** PNGs by side; [dark]: the same for dark mode (an SVG is the web's, not read here). */

@@ -42,7 +42,7 @@ internal data class CachedInboxRecord(
     val startPosition: Long?,
     val count: Int,
     val agent: InboxAgent?,
-    /** The hub's `version` as listed (a bulk 已处理 sends it back); absent in records cached before it. */
+    /** The hub's `version` as listed (a bulk "Done" sends it back); absent in records cached before it. */
     val version: String? = null,
     /** lark / mail…, and a document's notice: what opening the item shows; absent in records cached before them. */
     val source: String = "",

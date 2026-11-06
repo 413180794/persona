@@ -42,7 +42,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 open class HubService : Service() {
-    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    /** Text in the language of Settings › Language (docs/i18n.md). */
     override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
 
     @Inject lateinit var connection: HubConnection
@@ -97,7 +97,7 @@ open class HubService : Service() {
                         emit(false)
                         if (done) { delay(FleetSummary.DONE_LINGER_MILLIS); emit(true) }
                     }.stateIn(this, SharingStarted.Eagerly, false)
-                // 锁屏显示详情 decides whether names show at all (OngoingStatus.from); any other preference may change how
+                // "Show details on lock screen" decides whether names show at all (OngoingStatus.from); any other preference may change how
                 // the same content is drawn (visibility, promotion), so a change redraws.
                 launch {
                     notificationPreferences.preferences.collect { preferences ->
@@ -132,7 +132,7 @@ open class HubService : Service() {
                     .run(interactions.pending, connection.state.map { it == ConnectionState.Online },
                         sessions.machines.map { list -> list.mapTo(HashSet()) { GroupKeys.namespaceOf(it.id) } })
             }
-            // 做完了 notifications left by an earlier process, for sessions seen meanwhile (#4088).
+            // "Finished" notifications left by an earlier process, for sessions seen meanwhile (#4088).
             (sessions as? VerifiedSessionsRepository)?.let { verified ->
                 scope.launch(Dispatchers.Default) {
                     // Process start on the wall clock (postTime's clock); a clock change since then only shifts the cut-off.
@@ -154,7 +154,7 @@ open class HubService : Service() {
     /**
      * Redraws the ongoing notification, unless the pairing is gone and the service is on its way out. Unpairing changes
      * the connection state and the preferences just before the service stops, and the system may handle a post that
-     * late after stopForeground has taken the notification away: it stayed, 「等待网络」, ongoing and impossible to
+     * late after stopForeground has taken the notification away: it stayed, "Waiting for network", ongoing and impossible to
      * dismiss (2026-11-02 on the emulator).
      */
     private fun show(status: OngoingStatus) {

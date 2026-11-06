@@ -17,7 +17,7 @@ import persona.core.domain.sort.canSend
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** 「排队中 2 条，Claude 忙完会依次处理」: how many wait, and for whom. */
+/** "2 queued, Claude will handle them in order": how many wait, and for whom. */
 internal fun queueTitle(count: Int, agent: String, resources: Resources): String =
     resources.getQuantityString(R.plurals.chat_queue_title, count, count, agent)
 
@@ -25,8 +25,8 @@ internal fun queueTitle(count: Int, agent: String, resources: Resources): String
 internal fun queueKeep(size: Int, index: Int): List<Int> = (0 until size).filter { it != index }
 
 /**
- * 排队条 (iOS QueueStrip): what was typed while the agent works and not taken yet, right above the composer. Tapping one
- * offers 撤回编辑 (back into the box, after the draft on a new line), 拷贝 and 删除. Editing goes through the node's
+ * Queue strip (iOS QueueStrip): what was typed while the agent works and not taken yet, right above the composer. Tapping one
+ * offers "Pull back to edit" (back into the box, after the draft on a new line), "Copy" and "Delete". Editing goes through the node's
  * session.queue.edit (POST …/queue {keep}): it pulls the whole queue out of the agent and puts the rest back in order,
  * and answers with what was queued, so the pulled-back message is read from that answer. Only for a session the phone
  * may send to.

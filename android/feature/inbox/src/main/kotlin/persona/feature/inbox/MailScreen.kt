@@ -25,7 +25,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Heard after a mail was handed to Persona (交给 AI): the host may show the assistant with it. The message is already
+ * Heard after a mail was handed to Persona ("Hand to AI"): the host may show the assistant with it. The message is already
  * queued, so the host must not send it again, nor send any mail.
  */
 data class MailAiContext(val itemId: String, val message: MailMessage, val text: String)
@@ -74,7 +74,7 @@ private fun MailDetail(
     val composers = rememberReplyComposers(repository)
     val composer = composers.get(ReplyTarget.Inbox(route.itemId))
     val reply by composer.state.collectAsStateWithLifecycle()
-    // 设置 › 翻译: a mail not in the target language shows translated, with the way back to the original.
+    // Settings › Translation: a mail not in the target language shows translated, with the way back to the original.
     val translator = LocalTranslator.current
     val translatePrefs = translator?.prefs?.collectAsStateWithLifecycle()?.value
     var translation by remember { mutableStateOf<MailTranslation?>(null) }
@@ -160,7 +160,7 @@ private fun MailDetail(
             val uid = selected?.takeIf { it in ref.uids } ?: ref.uids.last()
             val loaded = transport.message(ref, uid)
             message = loaded
-            // 打开即已读
+            // Opening it marks it read
             if (!loaded.seen) {
                 scope.launch {
                     try {
@@ -264,7 +264,7 @@ private fun MailDetail(
                     )
                 }
             }
-            // The hub's AI summary and the AI 分身's draft come first: they are what to act on.
+            // The hub's AI summary and the AI twin's draft come first: they are what to act on.
             record?.item?.summary?.takeIf { it.isNotBlank() }?.let { summary ->
                 item("summary") { JNotice(summary, Modifier.padding(top = Tokens.Space.m), title = stringResource(R.string.inbox_ai_summary), icon = PhIcons.Sparkle) }
             }
@@ -420,7 +420,7 @@ internal fun mailRecord(itemId: String, mail: MailMessage) = InboxRecord(
     source = "mail", mail = InboxMailRef(mail.accountId, mail.mailbox, listOf(mail.uid)),
 )
 
-/** The message as 交给 AI's context: its headers, its text and what is attached (never the attachments themselves). */
+/** The message as "Hand to AI"'s context: its headers, its text and what is attached (never the attachments themselves). */
 internal fun mailContextText(mail: MailMessage): String = buildString {
     appendLine("主题：${mail.subject}") // i18n-ignore: context for the model
     appendLine("发件人：${mail.from.display()}") // i18n-ignore: context for the model

@@ -173,7 +173,7 @@
     <string name="inbox_unmute_failed">ミュートを解除できませんでした。元に戻しました</string>
     <string name="inbox_muted_notice">「%1$s」をミュートしました。今後は受信トレイに入りません</string>
 
-    <!-- Inbox phase 1: events, suggestions, the 处理链条 (InboxEvents.kt). -->
+    <!-- Inbox phase 1: events, suggestions, the Handling chain (InboxEvents.kt). -->
     <string name="inbox_section_working">進行中</string>
     <string name="inbox_handling_looking">AIが確認中</string>
     <string name="inbox_handling_agent">Agentが作業中</string>
