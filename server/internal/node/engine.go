@@ -194,7 +194,9 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	// longer than the hub's 30 s for engine.use, and the app's engine picker waits on that call (#635). Built outside
 	// n.eng.use, so a list finished after a later switch is dropped: it would cover the newer engine's until the next
 	// poll (the hub would see sessions vanish and finish).
+	n.engLists.Add(1)
 	go func() {
+		defer n.engLists.Done()
 		list := n.sessionList(ctx, true)
 		n.mu.Lock()
 		current := n.engEpoch == epoch

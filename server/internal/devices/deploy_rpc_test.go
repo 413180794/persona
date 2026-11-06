@@ -125,6 +125,7 @@ func linkedDeployFixture(t *testing.T, kind string) (*Devices, *Machine, *updati
 	h := newTestDevices(t)
 	h.cfg.HubVersion = "new-build"
 	m := newMachine(h, MachineConfig{ID: "example-node", Name: "Example node", Kind: kind})
+	m.deployRetry = 10 * time.Millisecond // a busy node is asked again at once, not after production's 2s
 	m.online = true
 	m.info = proto.NodeInfo{OS: "linux", Arch: "amd64", Version: "old-build", NodeUpdate: true}
 	h.addEntry(m)

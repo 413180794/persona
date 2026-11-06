@@ -82,6 +82,9 @@ class ExtensionUiContractTest {
         assertEquals(1, json.decodeFromString(ExtensionCatalog.serializer(), catalog).extensions.size)
         val signed = json.decodeFromString(ExtensionMarket.serializer(), """{"id":"m","signature":{"state":"verified","key_id":"32ed46cdbe349656"}}""")
         assertTrue(signed.signature!!.verified)
+        // The hub says `signed` (server/internal/extension/market_sig.go, #4812); `verified` stays accepted.
+        val hubSigned = json.decodeFromString(ExtensionMarket.serializer(), """{"id":"m","signature":{"state":"signed"}}""").signature!!
+        assertTrue(hubSigned.verified && !hubSigned.failed)
         assertTrue(json.decodeFromString(ExtensionMarket.serializer(), """{"id":"m","signature":{"state":"key_changed"}}""").signature!!.failed)
     }
 }

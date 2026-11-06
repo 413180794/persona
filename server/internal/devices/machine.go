@@ -90,6 +90,7 @@ type Machine struct {
 	directFailed, switchedBack time.Time
 	flaps                      int
 	timings                    tailcatTimings
+	deployRetry                time.Duration // how long a node update waits before asking a busy node again (tests: shorter)
 	engineMu                   sync.Mutex
 	link                       *mgrLink      // kind link: the link Persona Link keeps open, nil while there is none
 	linkDown                   error         // why the last link went away
@@ -130,7 +131,7 @@ type Machine struct {
 
 func newMachine(d *Devices, cfg MachineConfig) *Machine {
 	m := &Machine{cfg: cfg, d: d, watched: map[string]bool{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1),
-		timings: defaultTailcatTimings, linkUp: make(chan struct{}, 1), first: make(chan struct{})}
+		timings: defaultTailcatTimings, deployRetry: 2 * time.Second, linkUp: make(chan struct{}, 1), first: make(chan struct{})}
 	if dial := d.opts.DialNode; dial != nil {
 		m.dialNode = dial(cfg.ID)
 	}

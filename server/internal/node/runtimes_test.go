@@ -133,6 +133,9 @@ func runtimeNodeOn(t *testing.T, shared *RuntimeHost) (*Node, *runtimeHub) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
+	// Runs first, while the hub still reads: an engine switch's list, still being built, goes to it and reads package
+	// state (botmuxBin) that later tests swap.
+	t.Cleanup(n.engLists.Wait)
 	return n, end
 }
 

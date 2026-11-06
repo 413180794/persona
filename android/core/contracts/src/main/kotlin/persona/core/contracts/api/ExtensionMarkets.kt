@@ -118,9 +118,10 @@ data class ExtensionMarket(
 }
 
 /**
- * A market's signature (docs/extensions.md「签名」): `verified` (signed with the key the hub trusts), `unsigned` (an
- * older market: still usable), or anything else (the signature fails or the key changed): the hub then neither refreshes
- * nor installs from it until its owner trusts the new key on the hub's machine. [detail] says why, for people.
+ * A market's signature (docs/extensions.md「签名」): `signed` (signed with the key the hub trusts; `verified` counts too,
+ * #4812), `unsigned` (an older market: still usable), or anything else (the signature fails or the key changed): the hub
+ * then neither refreshes nor installs from it until its owner trusts the new key on the hub's machine. [detail] says why,
+ * for people.
  */
 @Serializable
 data class MarketSignature(
@@ -128,7 +129,7 @@ data class MarketSignature(
     @SerialName("key_id") val keyId: String? = null,
     val detail: String? = null,
 ) {
-    val verified: Boolean get() = state == "verified"
+    val verified: Boolean get() = state == "signed" || state == "verified"
     val unsigned: Boolean get() = state.isEmpty() || state == "unsigned"
     val failed: Boolean get() = !verified && !unsigned
 }

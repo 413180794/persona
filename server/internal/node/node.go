@@ -102,6 +102,7 @@ type Node struct {
 	driving   map[string]bool            // session id -> Persona is working its TUI (a picker it opened is not "blocked")
 	dialogs   paneDialogs                // pane -> the dialog its last screen read showed (dialogstatus.go)
 	firstWait sync.WaitGroup             // first messages being checked (firstprompt.go)
+	engLists  sync.WaitGroup             // new engines' session lists being built in the background (useEngine)
 	lostFirst lostPrompts                // session id -> why its first message did not go in (firstprompt.go)
 	events    *herdrEvents               // herdr's event stream (herdrevents.go)
 	hostSig   map[string]*watcherSignals // change signals of the registered watcher hosts, by host kind (herdrevents.go)

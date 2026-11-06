@@ -515,6 +515,8 @@ func botmuxNode(t *testing.T) (*Node, *fakeBotmux) {
 	f := newFakeBotmux(t)
 	f.herdr, f.home = hf, home
 	stubBotmux(t, f)
+	// Runs before stubBotmux puts botmuxBin back: an engine switch's list, still being built, reads it (publish).
+	t.Cleanup(n.engLists.Wait)
 	f.rows = []map[string]any{bmxRow(sidA, "claude-code", "alive", "working", false, "a")}
 	writeTranscript(t, home, bmxCwd, sidA, time.Now().Add(-time.Minute), `{"type":"user","message":{"role":"user","content":"hi"}}`)
 	return n, f

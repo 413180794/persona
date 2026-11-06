@@ -316,6 +316,7 @@ func herdrNode(t *testing.T) (*Node, *fakeHerdr, string) {
 	t.Cleanup(resetGlobalCaches)
 	withFirstPromptWaits(t, 400*time.Millisecond, 3*time.Second)
 	t.Cleanup(n.firstWait.Wait) // before the waits are put back: a check still going reads them
+	t.Cleanup(n.engLists.Wait)  // before the caches are reset: an engine switch's list, still being built, reads them
 	return n, f, home
 }
 

@@ -158,7 +158,7 @@ func (m *Machine) performRPCDeployment(ctx context.Context, bin string, record *
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(2 * time.Second):
+			case <-time.After(m.deployRetry):
 			}
 			continue
 		}
@@ -197,7 +197,7 @@ func (m *Machine) waitNodeIdle(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(m.deployRetry):
 		}
 	}
 }
