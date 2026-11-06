@@ -240,3 +240,19 @@ func TestClaudeUltracodeSparseAndUntrustedRecords(t *testing.T) {
 		}
 	}
 }
+
+// The version comes with when it was written: a node only trusts one written by the process it asks about (#5510).
+func TestVersionAtIsTheLineThatSaidIt(t *testing.T) {
+	var m Meta
+	for _, line := range []string{
+		`{"type":"user","timestamp":"2026-01-01T00:00:00Z","version":"2.1.283","message":{"role":"user","content":"hi"}}`,
+		`{"type":"system","subtype":"turn_duration","timestamp":"2026-01-01T00:01:00Z","durationMs":1}`,
+		`{"type":"user","timestamp":"2026-01-02T00:00:00Z","version":"2.1.318","message":{"role":"user","content":"again"}}`,
+		`{"type":"system","subtype":"turn_duration","timestamp":"2026-01-02T00:01:00Z","durationMs":1}`,
+	} {
+		ParseLine(0, []byte(line), &m)
+	}
+	if m.Version != "2.1.318" || m.VersionAt.Format(time.RFC3339) != "2026-01-02T00:00:00Z" {
+		t.Fatalf("version %q at %v", m.Version, m.VersionAt)
+	}
+}

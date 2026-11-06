@@ -201,6 +201,9 @@ func (h *botmuxHost) PaneEnv() string   { return botmuxPaneEnv }
 func (h *botmuxHost) PlainScreen() bool { return true }
 func (h *botmuxHost) CanTypeText() bool { return false }
 
+// CanDriveScreen: botmux owns its sessions' terminals (errBotmuxScreen).
+func (h *botmuxHost) CanDriveScreen() bool { return false }
+
 func (h *botmuxHost) Version(context.Context) string { return "" }
 
 // botmuxRow is one session of `botmux observe --include-raw` (schema 1): the canonical fields, and from the raw row

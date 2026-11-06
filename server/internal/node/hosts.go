@@ -59,6 +59,12 @@ func (n *Node) plainScreen(pane string) bool {
 	return ok && p.PlainScreen()
 }
 
+// drivesScreen: the host reads its panes' screens and presses keys in them (host.ScreenDriver).
+func drivesScreen(h host.Host) bool {
+	d, ok := h.(host.ScreenDriver)
+	return !ok || d.CanDriveScreen()
+}
+
 // canTypeText: the pane's host can type text without submitting it (host.TextTyper).
 func (n *Node) canTypeText(pane string) bool {
 	h, _ := n.hosts.Pane(pane)

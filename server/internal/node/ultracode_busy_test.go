@@ -53,11 +53,13 @@ func TestUltracodeBusyUsesClaudeStatus(t *testing.T) {
 	}
 }
 
-func TestUltracodeBusyWaitsForWorkflow(t *testing.T) {
+// Only the foreground turn holds a switch back (#5510): a dynamic workflow that runs on after the turn ended, or a
+// background read not done yet, leaves the input box free, and a message must not wait tens of minutes behind it.
+func TestUltracodeBusyIgnoresBackgroundWork(t *testing.T) {
 	for _, ended := range []bool{false, true} {
 		name := "running after foreground turn"
 		if ended {
-			name = "ended workflow allows switch"
+			name = "ended workflow"
 		}
 		t.Run(name, func(t *testing.T) {
 			n, id, sess := workflowSession(t)
@@ -78,19 +80,29 @@ func TestUltracodeBusyWaitsForWorkflow(t *testing.T) {
 			if err := os.WriteFile(n.paths[id], []byte(body), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if got := n.ultracodeBusy(id); got != !ended {
-				t.Fatalf("busy = %v, ended = %v", got, ended)
+			if !ended {
+				running := false
+				m := n.ultracodeMeta(id)
+				for _, w := range n.workflows(id, m.wf, m.wfScript) {
+					running = running || w.Running
+				}
+				if !running {
+					t.Fatal("fixture: the workflow should still run")
+				}
+			}
+			if n.ultracodeBusy(id) {
+				t.Fatalf("a background workflow (ended = %v) held the switch back", ended)
 			}
 		})
 	}
 }
 
-func TestUltracodeBusyWaitsForBackgroundScan(t *testing.T) {
+func TestUltracodeBusyIgnoresBackgroundScan(t *testing.T) {
 	n, id, _ := workflowSession(t)
 	n.metas = map[string]quickMeta{}
 	n.bgScans = map[string]*bgScan{n.paths[id]: {pending: true}}
 	n.agents = map[string]host.Agent{id: {Agent: "claude", AgentStatus: proto.StatusIdle}}
-	if !n.ultracodeBusy(id) {
-		t.Fatal("unknown background work must keep the switch queued")
+	if n.ultracodeBusy(id) {
+		t.Fatal("a background read not done yet held the switch back")
 	}
 }

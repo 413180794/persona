@@ -31,11 +31,16 @@ import (
 )
 
 // stateFile remembers which sessions Persona started and with which launcher. It lives in the hub's Postgres:
-// loaded with `state.load` when the node starts and written through with `state.put` events.
+// loaded with `state.load` when the node starts and written through with `state.put` events. A session in Sessions
+// is Persona's (takesReport, close and decorate's StartedByJarvis go by that): what the node only observes of the
+// user's own sessions never goes in (ultracode.go keeps that in memory, #5510).
 type stateFile struct {
 	mu       sync.Mutex
 	Sessions map[string]sessionState `json:"sessions"`
 	persist  func(id string, v sessionState)
+	// loading: the hub's copy has yet to come (Serve opens it before loadState runs, which closes it). Until then a
+	// session missing from Sessions may still be Persona's. Nil once loaded.
+	loading chan struct{}
 }
 
 type sessionState struct {
@@ -57,7 +62,9 @@ type sessionState struct {
 	Compaction *proto.Compaction `json:"compaction,omitempty"`
 	// Guest: a guest conversation's tools (assistant_guest.go): every process it runs in has no built-in tools and
 	// only these of Persona's. Nil is an ordinary conversation.
-	Guest     []string         `json:"guest,omitempty"`
+	Guest []string `json:"guest,omitempty"`
+	// Ultracode: what was last seen of ultracode in the process Persona runs this session in (ultracode.go). Written
+	// by setUltracode only, which never makes a record for a session that has none.
 	Ultracode *ultracodeRecord `json:"ultracode_process,omitempty"`
 }
 
@@ -79,10 +86,98 @@ func (s *stateFile) merge(m map[string]sessionState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, v := range m {
+		if observationOnly(v) {
+			continue // not Persona's, and what it says of the user's session is not kept either (observationOnly)
+		}
 		if _, ok := s.Sessions[id]; !ok {
 			s.Sessions[id] = v
 		}
 	}
+}
+
+// observationOnly: a record holding nothing but an ultracode observation, as a node of #3782 wrote for a session the
+// user started. Persona's own records always have a directory and a launcher (checkStart fills both in), and the hub
+// gives back a zero start time only for a record stored without one next to an ultracode observation
+// (db.PutNodeSession's started_at_unknown). Such a record is dropped when loaded, observation and all: nothing would
+// ever write it again (the user's sessions get no record), so a resume notice dismissed now, or a value of a process
+// long gone, would come back from it with every node restart. What the node sees of the session from then on stays in
+// memory, as for any session the user started.
+func observationOnly(v sessionState) bool {
+	return v.Ultracode != nil && v.StartedAt.IsZero() && v.Launcher == "" && v.Cwd == ""
+}
+
+// beginLoad and endLoad bracket loading the hub's copy (loading).
+func (s *stateFile) beginLoad() {
+	s.mu.Lock()
+	if s.loading == nil {
+		s.loading = make(chan struct{})
+	}
+	s.mu.Unlock()
+}
+
+func (s *stateFile) endLoad() {
+	s.mu.Lock()
+	if s.loading != nil {
+		close(s.loading)
+		s.loading = nil
+	}
+	s.mu.Unlock()
+}
+
+func (s *stateFile) isLoading() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loading != nil
+}
+
+// loaded waits until the hub's copy is loaded (or failed to load: loadState gives up after 20 seconds).
+func (s *stateFile) loaded(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	ch := s.loading
+	s.mu.Unlock()
+	if ch == nil {
+		return nil
+	}
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// ultracode is the stored ultracode observation of a session Persona started.
+func (s *stateFile) ultracode(id string) (ultracodeRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.Sessions[id]
+	if !ok || v.Ultracode == nil {
+		return ultracodeRecord{}, false
+	}
+	return *v.Ultracode, true
+}
+
+// setUltracode changes the ultracode observation of a session Persona started and nothing else of its record, under
+// the lock, so a copy read before another writer's change is never written back over it. A session without a record
+// is not Persona's, or not loaded yet: nothing is written for it (false).
+func (s *stateFile) setUltracode(id string, rec ultracodeRecord) bool {
+	s.mu.Lock()
+	v, ok := s.Sessions[id]
+	if !ok {
+		s.mu.Unlock()
+		return false
+	}
+	v.Ultracode = &rec
+	s.Sessions[id] = v
+	persist := s.persist
+	s.mu.Unlock()
+	if persist != nil {
+		persist(id, v)
+	}
+	return true
 }
 
 func (s *stateFile) get(id string) (sessionState, bool) {
@@ -162,6 +257,7 @@ type quickMeta struct {
 	effort      string
 	effortAt    time.Time
 	version     string
+	versionAt   time.Time // when the line that said version was written: a resumed process has written none yet
 	ultracode   *bool
 	ultracodeAt time.Time
 	sandbox     string // Codex: the turn's sandbox, which with mode (its approval policy) gives the app's mode back
@@ -334,7 +430,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	m.claudeTurn = !tm.Codex && tm.TurnOpen
 	m.turnError, m.turnErrorKind = tm.TurnError, tm.TurnErrorKind
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
-	m.version, m.ultracode, m.ultracodeAt = tm.Version, tm.Ultracode, tm.UltracodeAt
+	m.version, m.versionAt, m.ultracode, m.ultracodeAt = tm.Version, tm.VersionAt, tm.Ultracode, tm.UltracodeAt
 	m.contextTokens, m.contextWindow = tm.ContextTokens, tm.ContextWindow
 	if m.contextTokens == 0 && prev.size > 0 && prev.size <= st.Size() {
 		m.contextTokens, m.contextWindow = prev.contextTokens, prev.contextWindow // no reply in the tail: the last read's stands
@@ -1003,7 +1099,7 @@ func (n *Node) decorate(s *proto.Session) {
 		s.Host = host.ParsePane(s.PaneID).Kind // the host it runs in (#2576)
 	}
 	if st, ok := n.state.get(s.SessionID); ok {
-		s.StartedByJarvis = st.Ultracode == nil || !st.StartedAt.IsZero()
+		s.StartedByJarvis = true
 		s.Launcher = st.Launcher
 		s.Compaction = st.Compaction
 		if s.Cwd == "" {

@@ -72,6 +72,9 @@ type sendOpts struct {
 	Model            string `json:"model"`
 	Effort           string `json:"effort"`
 	ModelFingerprint string `json:"model_fingerprint"`
+	// readBox: a screen that cannot be read refuses (unreadBoxMessage) instead of passing for an empty box. After a
+	// command that may still sit in the box (ultracode.go), not knowing is not enough to type after it.
+	readBox bool
 }
 
 // resumeLauncher is the launcher an offline session is resumed with to take a message, and the model to run it
@@ -132,6 +135,9 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 	// same there), any other agent: only the numbered approvals and pickers.
 	if kind != "claude" || n.plainScreen(pane) {
 		text, err := n.readPane(ctx, pane, "visible", 60)
+		if err != nil && opts.readBox {
+			return refusal(notDelivered, unreadBoxMessage, nil)
+		}
 		if err == nil && opts.DismissNotice {
 			if text, err = n.closeNotices(ctx, pane, text, false); err != nil {
 				return err
@@ -142,14 +148,19 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 		}
 		return nil
 	}
+	unread := false // the last read failed: it says nothing of the box
 	read := func() string {
 		s, err := n.readPaneANSI(ctx, pane, "visible", 60)
 		if err != nil {
-			s, _ = n.readPane(ctx, pane, "visible", 60) // no colors: any text in the box counts as a draft
+			s, err = n.readPane(ctx, pane, "visible", 60) // no colors: any text in the box counts as a draft
 		}
+		unread = err != nil
 		return s
 	}
 	shown := read()
+	if unread && opts.readBox {
+		return refusal(notDelivered, unreadBoxMessage, nil)
+	}
 	if opts.DismissNotice {
 		var err error
 		if shown, err = n.closeNotices(ctx, pane, shown, true); err != nil {
@@ -169,6 +180,9 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 		}
 		time.Sleep(150 * time.Millisecond)
 		code, in = screen.CheckClaude(read())
+	}
+	if unread && opts.readBox {
+		return refusal(notDelivered, unreadBoxMessage, nil)
 	}
 	switch code {
 	case screen.DialogOpen:
@@ -191,6 +205,7 @@ const (
 	shellOnlyMessage    = "这个会话的 Agent 已经退出，终端回到了命令行，这条消息没有发出去（什么都没输入）：在电脑上重新打开它再发。"
 	cannotType          = "cannot_type"
 	cannotTypeMessage   = "电脑上的这个终端只能整条发送（粘贴后回车），不能只输入文字，这次什么都没按：在电脑上回答，或者直接发消息。"
+	unreadBoxMessage    = "读不到电脑上终端的画面，不知道刚才输入的命令是不是还停在输入框里，这条消息没有发出去（什么都没输入）：稍后再发。"
 )
 
 // deliveryRefusal is the refusal for a host's error that typed nothing (host.ErrNotDelivered), nil for any other.
@@ -316,6 +331,68 @@ func draftMessage(draft string) string {
 		return "电脑上的输入框里有没发出去的内容，这条消息没有发出去，免得拼在一起。"
 	}
 	return "电脑上的输入框里有没发出去的内容：「" + draft + "」。这条消息没有发出去，免得拼在一起。"
+}
+
+// sendQueue lines a session's sends (and ultracode switches) up in the order they came while they wait for its start
+// (startLog.wait), which may not hold the input lock: the start types its first prompt under it. Woken together when
+// the start is done, they would otherwise race for the lock, and a later message could go in first.
+type sendQueue struct {
+	mu   sync.Mutex
+	tail map[string]chan struct{} // session id -> closed when its last send in line got the input lock (or gave up)
+}
+
+// enter waits until the session's earlier sends have the input lock and returns leave, which the caller calls once it
+// has the lock (or gives up) to let the next one go. An ended ctx gives up the place in line, never the order behind.
+func (q *sendQueue) enter(ctx context.Context, id string) (func(), error) {
+	mine := make(chan struct{})
+	q.mu.Lock()
+	if q.tail == nil {
+		q.tail = map[string]chan struct{}{}
+	}
+	ahead := q.tail[id]
+	q.tail[id] = mine
+	q.mu.Unlock()
+	var once sync.Once
+	leave := func() {
+		once.Do(func() {
+			q.mu.Lock()
+			if q.tail[id] == mine {
+				delete(q.tail, id)
+			}
+			q.mu.Unlock()
+			close(mine)
+		})
+	}
+	if ahead == nil {
+		return leave, nil
+	}
+	select {
+	case <-ahead:
+		return leave, nil
+	case <-ctx.Done():
+		go func() { // the ones behind still go after the ones ahead
+			<-ahead
+			leave()
+		}()
+		return nil, fmt.Errorf("这个 Agent 前面的消息还在等着输入，没等到: %w", ctx.Err())
+	}
+}
+
+// inputTurn waits for the session's start, if it is starting (what is written meanwhile goes in once Claude is ready),
+// then takes its input lock, both in the order the callers came (sendQueue). It returns the unlock.
+func (n *Node) inputTurn(ctx context.Context, id string) (unlock func(), err error) {
+	leave, err := n.sendOrder.enter(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Outside the input lock: the start takes it for its first prompt.
+	if err := n.starts.wait(ctx, id); err != nil {
+		leave()
+		return nil, err
+	}
+	unlock = n.typing.lock(id)
+	leave()
+	return unlock, nil
 }
 
 // typingLocks makes the sends to one session take turns, and remembers what was last typed into each pane.

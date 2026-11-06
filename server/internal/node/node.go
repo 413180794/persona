@@ -128,6 +128,7 @@ type Node struct {
 	sends     sentLog         // recent client_msg_ids (sendsafe.go)
 	echoes    echoLog         // sends tied to their transcript lines (echo.go)
 	typing    typingLocks     // one send at a time per session (sendsafe.go)
+	sendOrder sendQueue       // sends waiting for a start, in the order they came (sendsafe.go)
 	cx        codexCards      // Codex questions and approvals listed to the hub (codexask.go)
 	kept      map[string]bool // sessions always listed (node.configure keep_sessions)
 	forked    map[string]bool // sessions "Branch to new chat" made (fork.go): listed however short they are
@@ -302,6 +303,8 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		adopted = n.keeper.adopt(n)
 	}
 	n.stateReady = make(chan struct{})
+	// Before anything lists or takes a hook: nothing is written or cached on a guess about a session not loaded yet.
+	n.state.beginLoad()
 	go func() {
 		n.loadState(ctx)
 		close(n.stateReady)
@@ -337,8 +340,10 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	return n.peer.Serve(ctx, r)
 }
 
-// loadState pulls this machine's session state from the hub (Postgres) and uploads a legacy sessions.json once.
+// loadState pulls this machine's session state from the hub (Postgres) and uploads a legacy sessions.json once. Loaded
+// or not, it ends the loading (stateFile.loading): what is not there by then is not Persona's.
 func (n *Node) loadState(ctx context.Context) {
+	defer n.ultracodeStateLoaded()
 	n.state.mu.Lock()
 	n.state.persist = func(id string, v sessionState) {
 		_ = n.peer.Notify("state.put", map[string]any{"session_id": id, "state": v})
@@ -701,6 +706,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.useBotmux(true, true) // and one that lists without saying botmux keeps it, as before (hostbotmux.go)
 		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
 	case "session.start":
+		if !wantsUltracode(p.Ultracode) {
+			p.Ultracode = nil // off is what a new process is anyway: as if left out (no checks, no command)
+		}
 		if p.Ultracode != nil {
 			kind := p.AgentType
 			if kind == "" {

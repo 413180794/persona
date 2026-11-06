@@ -109,8 +109,10 @@ type block struct {
 // Meta is session-level information collected while parsing.
 type Meta struct {
 	// Developer info for the chat header (all from fields Claude Code writes on each line).
-	GitBranch      string
-	Version        string
+	GitBranch string
+	Version   string
+	// VersionAt is when the line that said Version was written (zero when it had no timestamp).
+	VersionAt      time.Time
 	PermissionMode string
 	// ModeAt / Effort / EffortAt: when the permission mode was last seen, and the effort level of the latest reply.
 	ModeAt   time.Time
@@ -341,7 +343,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		meta.GitBranch = e.GitBranch
 	}
 	if e.Version != "" {
-		meta.Version = e.Version
+		meta.Version, meta.VersionAt = e.Version, e.Timestamp
 	}
 	if meta.StartedAt.IsZero() && !e.Timestamp.IsZero() {
 		meta.StartedAt = e.Timestamp

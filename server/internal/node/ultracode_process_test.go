@@ -76,6 +76,7 @@ func TestUltracodeProcessResumeAndStateReload(t *testing.T) {
 	n, _ := ultracodeProcessNode(t)
 	before := time.Date(2026, 1, 1, 8, 0, 0, 0, time.UTC)
 	started := before.Add(time.Hour)
+	n.state.put(ultraProcessTestID, sessionState{Launcher: "claude", Cwd: "/work/project", Model: "opus", StartedAt: before}) // Persona's
 	n.mu.Lock()
 	u := n.ultracodeLocked(ultraProcessTestID)
 	u.Value, u.At = ultraBool(true), before
@@ -91,6 +92,9 @@ func TestUltracodeProcessResumeAndStateReload(t *testing.T) {
 	st, ok := n.state.get(ultraProcessTestID)
 	if !ok || st.Ultracode == nil {
 		t.Fatal("resume boundary was not persisted")
+	}
+	if st.Launcher != "claude" || st.Cwd != "/work/project" || st.Model != "opus" || !st.StartedAt.Equal(before) {
+		t.Fatalf("writing the observation changed the rest of the record: %+v", st)
 	}
 	encoded, err := json.Marshal(st)
 	if err != nil {

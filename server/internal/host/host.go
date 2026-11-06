@@ -77,6 +77,13 @@ type PlainScreen interface {
 	PlainScreen() bool
 }
 
+// ScreenDriver is a host that may not drive its panes' terminals at all: when CanDriveScreen is false, Read, SendText
+// and SendKeys fail (ErrUnsupported) and only Prompt reaches the agent, as a message of its own (botmux). The node
+// then offers nothing that has to read a screen back or type a command (ultracode). A host without it can.
+type ScreenDriver interface {
+	CanDriveScreen() bool
+}
+
 // TextTyper is a host that may not type text without submitting it: when CanTypeText is false, SendText fails
 // (ErrUnsupported) and the node submits text followed by enter with Prompt instead, and refuses other typing before
 // pressing anything. A host without it can type.

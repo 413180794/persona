@@ -40,10 +40,13 @@ const (
 	HerdrServer = "herdr_server"
 	// PluginNodeCall: plugin.node.call for the programs in node.info's builtin_programs.
 	PluginNodeCall = "plugin_node_call"
+	// Ultracode: session.start takes ultracode and session.ultracode switches it (docs/protocol.md "Claude Code
+	// ultracode"). A node without it would start a session and drop the field without a word.
+	Ultracode = "ultracode"
 )
 
 // Required are the capabilities a manager built from this code cannot drive a node without.
 var Required = []string{Sessions}
 
 // Announced is what a node built from this code announces.
-var Announced = []string{Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall}
+var Announced = []string{Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode}

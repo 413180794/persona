@@ -141,6 +141,51 @@ func TestMachineCallGatesOnCompatibilityNotBuild(t *testing.T) {
 	}
 }
 
+// A start that asks for ultracode goes only to a node that announces it: an older one would start the session and
+// drop the field without a word (#5510). Asking for it off is asking for nothing, and goes anywhere.
+func TestMachineCallGatesUltracodeStarts(t *testing.T) {
+	d := newTestDevices(t)
+	m := newMachine(d, MachineConfig{ID: "box", Name: "Box", Kind: "ssh", SSHHost: "box.invalid"})
+	set := func(info proto.NodeInfo) {
+		m.mu.Lock()
+		m.info, m.online = info, true
+		m.mu.Unlock()
+	}
+	code := func(method string, params any) string {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		var re *rpc.Error
+		if err := m.call(ctx, method, params, nil); errors.As(err, &re) {
+			return re.Code
+		}
+		return ""
+	}
+	on, off := map[string]any{"cwd": "/x", "ultracode": true}, map[string]any{"cwd": "/x", "ultracode": false}
+
+	set(current("b1"))
+	if c := code("session.start", on); c == proto.CodeNodeOutdated {
+		t.Fatal("a node announcing ultracode was refused")
+	}
+	without := current("b1")
+	without.Capabilities = slices.DeleteFunc(slices.Clone(without.Capabilities), func(c string) bool { return c == nodeproto.Ultracode })
+	set(without)
+	if c := code("session.start", on); c != proto.CodeNodeOutdated {
+		t.Fatalf("ultracode on a node without it: code %q", c)
+	}
+	for _, p := range []map[string]any{off, {"cwd": "/x"}} {
+		if c := code("session.start", p); c == proto.CodeNodeOutdated {
+			t.Fatalf("%v refused on a node without ultracode", p)
+		}
+	}
+	if c := code("session.send", on); c == proto.CodeNodeOutdated {
+		t.Fatal("only session.start carries the start's switch")
+	}
+	set(proto.NodeInfo{Version: "b1", ModelConfiguration: true}) // from before the handshake
+	if c := code("session.start", on); c != proto.CodeNodeOutdated {
+		t.Fatalf("ultracode on a node from before the handshake: code %q", c)
+	}
+}
+
 func TestNodeInfoHandshakeIsOptionalOnTheWire(t *testing.T) {
 	// An old node's node.info (no handshake fields) still decodes, and an old manager's decoder ignores the new ones.
 	var info proto.NodeInfo

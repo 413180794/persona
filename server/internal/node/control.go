@@ -16,6 +16,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
@@ -143,7 +144,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	cmd := withHerdrAgent(typedHerdrAgent(launch, "claude", paneShells(ctx)...), n.claudeCommandLine(spec, args+modeFlags(mode, effort), shellQuote))
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), Model: execution.Model, ModelFingerprint: execution.Fingerprint}
 	if prev, ok := n.state.get(id); ok && resume != "" {
-		st.StartedAt = prev.StartedAt
+		if !prev.StartedAt.IsZero() { // a branch (fork.go) has none: it starts now
+			st.StartedAt = prev.StartedAt
+		}
 		st.Ultracode = prev.Ultracode
 	}
 	n.state.put(id, st)
@@ -173,8 +176,19 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	n.bindPane(pane, id)
 	_ = launch.NameAgent(ctx, created.Pane, "j-"+id[:6])
 	n.holdResume(ctx, launch, pane, id, spec) // herdr's restore resumes it through the launcher (herdrresume.go)
-	if err := n.startUltracode(ctx, id, pane, execution.Ultracode); err != nil {
-		return nil, err
+	// Before the first prompt; never a failed start: Claude is up, and ultracode_note says why it is not on.
+	if n.startUltracode(ctx, id, pane, execution.Ultracode) && prompt != "" {
+		// The command may still sit in the input box: the first prompt would be typed after it and sent with it. Left
+		// to the user as one held back by a dialog is (firstPrompt).
+		if err := n.ultracodeBoxClear(ctx, pane); err != nil {
+			why := lostUltracode
+			if rpcCode(err) == screen.DialogOpen {
+				why = lostDialog
+			}
+			log.Printf("start %s: first message held back after ultracode: %v", id, err)
+			n.lostFirst.set(id, why, time.Now())
+			prompt = ""
+		}
 	}
 	if prompt != "" {
 		// Checked against the transcript and typed again when it was dropped; one that never goes in leaves the
@@ -572,13 +586,13 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 }
 
 func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, opts sendOpts) error {
-	// A start's first-prompt confirmation takes the input lock too.
-	if err := n.starts.wait(ctx, id); err != nil {
+	// Two sends at once (quick taps, two phones) would both find the box empty and type into each other, or the second
+	// would see the first still in the box and be refused as a draft: one at a time, in the order they came.
+	unlock, err := n.inputTurn(ctx, id)
+	if err != nil {
 		return err
 	}
-	// Two sends at once (quick taps, two phones) would both find the box empty and type into each other, or the second
-	// would see the first still in the box and be refused as a draft: one at a time.
-	defer n.typing.lock(id)()
+	defer unlock()
 	if n.externalCodex(id) {
 		if n.codexResumable(id) { // nothing runs it: resumed in a new tab with the message (codex_resume.go)
 			return n.resumeCodexThread(ctx, id, opts.Launcher, text, images) // a refusal says nothing was sent
@@ -639,15 +653,14 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		}
 	}
 	if kind == "claude" {
-		if err := n.applyPendingUltracode(ctx, id, pane); err != nil {
-			return err
-		}
-		// A busy agent may accept a queued prompt, but it must not overtake the pending switch.
-		n.mu.Lock()
-		pending := n.ultracodeLocked(id).pending != nil
-		n.mu.Unlock()
-		if pending {
-			return refusal("ultracode_pending", "ultracode 等这一轮结束后生效，请稍后再发送消息", nil)
+		// A queued ultracode switch goes in before this message while Claude rests; at work, the message joins Claude's
+		// own queue and the switch waits for the turn to end (ultracode.go). Whatever becomes of the switch (its
+		// ultracode_note says), the message is sent: only a command that may still sit in the input box is not typed
+		// over.
+		if typed, err := n.applyUltracode(ctx, id, pane); typed && err != nil {
+			if err := n.ultracodeBoxClear(ctx, pane); err != nil {
+				return err
+			}
 		}
 	}
 	paths, err := n.saveImages(images)

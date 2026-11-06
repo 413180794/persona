@@ -123,8 +123,15 @@ func TestHerdrUltracodeQueuesUntilBeforeTheNextMessage(t *testing.T) {
 	if !s.UltracodePending || s.Ultracode != nil {
 		t.Fatalf("queued=%+v", s)
 	}
-	if err := n.send(context.Background(), sidA, "next task", nil, sendOpts{}); err == nil {
-		t.Fatal("a message overtook the queued switch")
+	// A queued switch holds back only its command (#5510): at work, the message joins Claude's own queue.
+	if err := n.send(context.Background(), sidA, "while it works", nil, sendOpts{}); err != nil {
+		t.Fatalf("a message was held back by the queued switch: %v", err)
+	}
+	if got := f.trace("agent.prompt"); len(got) != 1 || !strings.Contains(got[0], "while it works") {
+		t.Fatalf("typed while at work: %v", got)
+	}
+	if s := byID(listSessions(t, n))[sidA]; !s.UltracodePending {
+		t.Fatalf("the message took the queued switch away: %+v", s)
 	}
 	// The latest request wins; none of the superseded values gets typed.
 	if err := requestUltra(t, n, false); err != nil {

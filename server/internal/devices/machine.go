@@ -396,6 +396,16 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(i18n.From(ctx), "hub-machine.node_no_model_config")}
 		}
 	}
+	if method == "session.start" && !nodeHas(info, nodeproto.Ultracode) {
+		raw, _ := json.Marshal(params)
+		var fields struct {
+			Ultracode *bool `json:"ultracode"`
+		}
+		_ = json.Unmarshal(raw, &fields)
+		if fields.Ultracode != nil && *fields.Ultracode { // off is a new process's default: nothing to refuse
+			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(i18n.From(ctx), "hub-ultracode.node_outdated")}
+		}
+	}
 	if p == nil && (m.waitWarm(ctx) || m.waitFirst(ctx)) { // the manager just started: its node is on its way (warm.go)
 		m.mu.Lock()
 		p = m.peer

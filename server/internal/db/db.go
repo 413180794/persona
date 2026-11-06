@@ -461,8 +461,10 @@ func (d *DB) PhoneTools(ctx context.Context) ([]PhoneToolRegistration, error) {
 
 // ---- node sessions ----
 
-// NodeSession is what a node remembers about its sessions, including observations
-// of external Claude processes that Persona did not start (see internal/node).
+// NodeSession is what a node remembers about a session it started (see internal/node).
+// Nodes of #3782 also wrote ultracode observations of sessions the user started, as
+// rows without a launcher or directory; newer nodes ignore those rows when loading
+// and write no rows for sessions they did not start (#5510).
 type NodeSession struct {
 	Model            string    `json:"model,omitempty"`
 	ModelFingerprint string    `json:"model_fingerprint,omitempty"`
@@ -480,8 +482,9 @@ type NodeSession struct {
 }
 
 func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSession) error {
-	// The table needs a timestamp for retention, but an external process observation
-	// must return its unknown start time: node uses that to identify its own starts.
+	// The table needs a timestamp for retention, but a row stored without a start time
+	// next to an ultracode observation returns without one: the node tells the rows
+	// #3782 wrote for sessions the user started by that (node.observationOnly).
 	unknownStart := s.StartedAt.IsZero() && len(s.UltracodeProcess) > 0
 	if s.StartedAt.IsZero() {
 		s.StartedAt = time.Now()
@@ -523,7 +526,8 @@ type nodeModel struct {
 	ModelEffort      string `json:"model_effort"`
 	AppMode          string `json:"app_mode"`
 	AppEffort        string `json:"app_effort"`
-	// UltracodeProcess and StartedAtUnknown: an external Claude process's ultracode observation (see PutNodeSession).
+	// UltracodeProcess and StartedAtUnknown: the ultracode observation of the session's process, and a row stored
+	// without a start time (see PutNodeSession).
 	UltracodeProcess json.RawMessage `json:"ultracode_process"`
 	StartedAtUnknown bool            `json:"started_at_unknown"`
 }
