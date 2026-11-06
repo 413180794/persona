@@ -10,6 +10,8 @@ const hub = vi.hoisted(() => ({
   current: { id: null, effective: "persona" } as { id: string | null; effective: string },
   puts: [] as unknown[],
   listeners: new Map<string, (m: Record<string, unknown>) => void>(),
+  /** When set, GET /looks waits for it (a read still on its way). */
+  hold: null as Promise<void> | null,
 }));
 vi.mock("../../lib/api", async (orig) => {
   const real = await orig<typeof import("../../lib/api")>();
@@ -17,7 +19,11 @@ vi.mock("../../lib/api", async (orig) => {
     ...real,
     getToken: () => "",
     api: vi.fn((path: string, init?: { method?: string; json?: { id: string; if_unset?: boolean } }) => {
-      if (path === "/looks") return Promise.resolve({ looks: hub.looks, current: hub.current });
+      if (path === "/looks") {
+        // the answer is what the hub had when the request left
+        const answer = { looks: hub.looks, current: hub.current };
+        return (hub.hold ?? Promise.resolve()).then(() => answer);
+      }
       if (path === "/looks/current" && init?.method === "PUT") {
         hub.puts.push(init.json);
         const body = init.json!;
@@ -54,6 +60,7 @@ describe("the look the hub keeps", () => {
     hub.looks = [...builtins, aurora];
     hub.current = { id: null, effective: "persona" };
     hub.puts = [];
+    hub.hold = null;
   });
   afterEach(() => localStorage.clear());
 
@@ -90,5 +97,79 @@ describe("the look the hub keeps", () => {
     expect(localStorage.getItem("jarvis.persona")).toBe("aurora");
     hub.listeners.get("look")!({ type: "look", id: "persona", effective: "persona" });
     expect(localStorage.getItem("jarvis.persona")).toBeNull();
+  });
+
+  // #4682
+  const holdReads = () => {
+    let release!: () => void;
+    hub.hold = new Promise<void>((r) => (release = r));
+    return () => {
+      hub.hold = null;
+      release();
+    };
+  };
+
+  it("keeps a choice made while the list is being read", async () => {
+    hub.current = { id: "aurora", effective: "aurora" };
+    const p = await load();
+    await p.refreshPersonas();
+    const release = holdReads();
+    const reading = p.refreshPersonas(); // the picker opens
+    p.choosePersona("jarvis");
+    expect(hub.current.id).toBe("jarvis");
+    release();
+    await reading;
+    expect(localStorage.getItem("jarvis.persona")).toBe("jarvis");
+  });
+
+  it("keeps another device's choice pushed while the list is being read", async () => {
+    hub.current = { id: "aurora", effective: "aurora" };
+    const p = await load();
+    await p.refreshPersonas();
+    const release = holdReads();
+    const reading = p.refreshPersonas();
+    hub.current = { id: "jarvis-circuit", effective: "jarvis-circuit" };
+    hub.listeners.get("look")!({ type: "look", id: "jarvis-circuit", effective: "jarvis-circuit" });
+    release();
+    await reading;
+    expect(localStorage.getItem("jarvis.persona")).toBe("jarvis-circuit");
+  });
+
+  it("sends a choice made before the first answer once it comes", async () => {
+    hub.current = { id: "aurora", effective: "aurora" };
+    const p = await load();
+    const release = holdReads();
+    const reading = p.refreshPersonas(); // the page's first read
+    p.choosePersona("jarvis");
+    expect(hub.puts).toEqual([]); // not known yet whether this hub keeps it
+    release();
+    await reading;
+    expect(hub.puts).toEqual([{ id: "jarvis" }]);
+    expect(hub.current.id).toBe("jarvis");
+    expect(localStorage.getItem("jarvis.persona")).toBe("jarvis");
+  });
+
+  it("keeps the look a push confirms while the list is being read, even one this page already shows", async () => {
+    hub.current = { id: "jarvis", effective: "jarvis" };
+    localStorage.setItem("jarvis.persona", "aurora");
+    const p = await load();
+    const release = holdReads();
+    const reading = p.refreshPersonas(); // its answer will say jarvis
+    hub.current = { id: "aurora", effective: "aurora" };
+    hub.listeners.get("look")!({ type: "look", id: "aurora", effective: "aurora" });
+    release();
+    await reading;
+    expect(localStorage.getItem("jarvis.persona")).toBe("aurora");
+  });
+
+  it("sends a choice made before the first answer once, when the hub has none yet", async () => {
+    const p = await load();
+    const release = holdReads();
+    const reading = p.refreshPersonas();
+    p.choosePersona("jarvis");
+    release();
+    await reading;
+    expect(hub.puts).toEqual([{ id: "jarvis" }]);
+    expect(hub.current.id).toBe("jarvis");
   });
 });

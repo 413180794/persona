@@ -192,3 +192,100 @@ func TestFenceLine(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitLongLineSafeBoundaries(t *testing.T) {
+	link := "[docs](https://example.com/a/" + strings.Repeat("p", 20) + ")"
+	code := "`short code inside here`"
+	tag := "<https://example.com/" + strings.Repeat("p", 22) + ">"
+	cases := []struct {
+		name      string
+		text      string
+		n         int
+		keep      string // must appear unbroken inside one piece
+		punct     rune   // every non-final piece must end after this boundary
+		joinExact bool   // expect the pieces to reassemble the text, compared newline-stripped
+		minPieces int
+	}{
+		{"link intact", strings.Repeat("a", 40) + link + " tail\nend", 60, link, 0, true, 2},
+		{"inline code intact", strings.Repeat("a", 30) + code + " " + strings.Repeat("y", 30) + "\nend", 60, code, 0, true, 2},
+		{"triple-backtick code intact", strings.Repeat("a", 40) + "```code here``` tail\nend", 60, "```code here```", 0, true, 2},
+		{"triple-backtick span longer than piece", "a```" + strings.Repeat("x", 200) + "```\nend", 60, "", 0, true, 3},
+		{"tag intact", strings.Repeat("a", 40) + tag + "\nend", 60, tag, 0, true, 2},
+		{"entity intact", strings.Repeat("a", 40) + "&" + strings.Repeat("e", 30) + "; tail\nend", 60, "&" + strings.Repeat("e", 30) + ";", 0, true, 2},
+		// markup quoted inside an inline code span is literal and must not be parsed or split as a link
+		{"markup inside code", strings.Repeat("a", 40) + "`[x y](u)`" + strings.Repeat("q", 200) + "\nend", 60, "`[x y](u)`", 0, true, 2},
+		{"cjk punctuation", strings.Repeat("这是一句话。", 20) + "\nend", 60, "", '。', true, 2},
+		{"whitespace", strings.Repeat("word ", 30) + "tail\nend", 60, "", ' ', true, 2},
+		{"no boundary token", strings.Repeat("x", 300) + "\nend", 60, "", 0, true, 5},
+		{"span longer than piece", "`" + strings.Repeat("x", 200) + "`\nend", 60, "", 0, true, 3},
+		// an inner run of another length is content: only an exact-length run can close the span
+		{"inner run not a closer", strings.Repeat("a", 30) + "`" + strings.Repeat("x", 10) + "``" + strings.Repeat("x", 30) + "` tail\nend", 60, "`" + strings.Repeat("x", 10) + "``" + strings.Repeat("x", 30) + "`", 0, true, 2},
+		// a punctuation boundary inside a tag before a later link must not shove the cut into the link
+		{"link after tag and cjk", tag + strings.Repeat("界", 16) + link + "长句" + strings.Repeat("界", 120) + "\nend", 60, link, 0, true, 2},
+		// hard-cutting a doomed over-long link earlier in the line must not swallow a later code span
+		{"code after doomed link", "[d](https://example.com/" + strings.Repeat("p", 22) + ") word go `" + strings.Repeat("c", 19) + "` tail\nend", 30, "`" + strings.Repeat("c", 19) + "`", 0, true, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parts := Split(tc.text, tc.n)
+			if len(parts) < tc.minPieces {
+				t.Fatalf("got %d pieces, want at least %d", len(parts), tc.minPieces)
+			}
+			// a flush at a line end trims that newline, so the content invariant is newline-stripped
+			if tc.joinExact && strings.ReplaceAll(strings.Join(parts, ""), "\n", "") != strings.ReplaceAll(tc.text, "\n", "") {
+				t.Fatalf("pieces do not reassemble the source")
+			}
+			if tc.keep != "" {
+				found := false
+				for _, p := range parts {
+					if runes := []rune(p); len(runes) <= tc.n && strings.Contains(p, tc.keep) {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("span %q was not kept whole in one within-limit piece: %q", tc.keep, parts)
+				}
+			}
+			for i, p := range parts {
+				if l := len([]rune(p)); l > tc.n {
+					t.Fatalf("piece %d has %d runes, limit is %d", i, l, tc.n)
+				}
+				if tc.punct != 0 && i < len(parts)-1 {
+					if r := []rune(p); len(r) == 0 || r[len(r)-1] != tc.punct {
+						t.Fatalf("piece %d ends with %q, want a cut right after %q", i, p, tc.punct)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestSafeCutBoundaryPrecedence(t *testing.T) {
+	// whitespace exactly at the fixed limit is a real boundary and wins over earlier punctuation
+	spaceAtLimit := []rune("abc。" + strings.Repeat("w", 7) + " " + strings.Repeat("z", 40))
+	if k, _ := safeCut(spaceAtLimit, 12, 12, true, 0, 0); k != 12 {
+		t.Fatalf("space right at the limit: cut %d, want 12", k)
+	}
+	// without whitespace, the cut backs off to the nearest preceding punctuation
+	punctEarlier := []rune("abc。" + strings.Repeat("w", 20))
+	if k, _ := safeCut(punctEarlier, 12, 12, true, 0, 0); k != 4 {
+		t.Fatalf("punctuation fallback: cut %d, want 4 (right after the 。)", k)
+	}
+}
+
+func TestSplitTrivialInputs(t *testing.T) {
+	cases := []struct {
+		text string
+		n    int
+	}{
+		{"", 10},
+		{"a", 10},
+		{strings.Repeat("字", 10), 10},
+	}
+	for _, tc := range cases {
+		got := Split(tc.text, tc.n)
+		if len(got) != 1 || got[0] != tc.text {
+			t.Fatalf("Split(%q, %d) = %q, want the input unchanged as one piece", tc.text, tc.n, got)
+		}
+	}
+}

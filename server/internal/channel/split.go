@@ -70,14 +70,22 @@ func Split(s string, n int) []string {
 			if curLen+len(runes) > room {
 				flush()
 			}
+			danglingN := 0                 // opener run length of a backtick span a previous cut entered
+			prefixRun := 0                 // trailing backtick run length of the previous piece, joining this one's lead
 			for curLen+len(runes) > room { // one line longer than a piece: cut it
 				cut := room - curLen
 				if cut <= 0 {
 					degrade()
+					danglingN, prefixRun = 0, 0
 					continue
 				}
+				cut, danglingN = safeCut(runes, cut, room, fenceMark == "", danglingN, prefixRun) // prose spans are kept whole; code blocks stay as-is
 				cur.WriteString(string(runes[:cut]))
 				curLen += cut
+				prefixRun = 0 // a run ending at the seam joins this fragment's leading run
+				for t := cut - 1; t >= 0 && runes[t] == '`'; t-- {
+					prefixRun++
+				}
 				runes = runes[cut:]
 				flush()
 			}
@@ -137,4 +145,199 @@ func fenceLine(line string) (marker, head string, bare bool) {
 	}
 	rest := strings.TrimRight(line[i:], " \r") // CommonMark: only spaces may follow the run; CR comes from CRLF
 	return line[start:i], strings.TrimSpace(line[start:]), rest == ""
+}
+
+// safeCut chooses how many leading runes of an over-long line the current piece takes (1 <= k <= max),
+// backing off the fixed limit to whitespace then punctuation (CJK included). In prose it keeps inline
+// spans (backtick code, [...] links, <...> tags, &...; entities) whole when they fit a fresh piece
+// (room), otherwise hard-cuts at the fixed limit. The returned int is the opener length still open.
+func safeCut(line []rune, max, room int, spans bool, danglingN, prefixRun int) (k, nextDangling int) {
+	k, foundSpace := max, false
+	for i := max; i >= 1; i-- { // prefer a boundary right after whitespace
+		if c := line[i-1]; c == ' ' || c == '\t' {
+			k, foundSpace = i, true
+			break
+		}
+	}
+	if !foundSpace { // otherwise right after punctuation
+		for i := max; i >= 1; i-- {
+			if boundaryPunct(line[i-1]) {
+				k = i
+				break
+			}
+		}
+	}
+	if !spans {
+		return k, 0
+	}
+	closed, open, _ := scanSpans(line, max, danglingN, prefixRun)
+	for _, sp := range closed { // a boundary inside a complete span must not cut it
+		if sp.start < k && k < sp.start+sp.length {
+			if sp.start >= 1 {
+				k = sp.start // move before the span so it starts one piece whole
+			} else {
+				k = max // the span leads the remainder and cannot be pulled
+			}
+			break
+		}
+	}
+	for _, sp := range open { // the cut enters a span whose closing rune is beyond it
+		if sp.start < k && k < sp.start+sp.length {
+			if sp.start >= 1 && sp.length <= room {
+				k = sp.start // start the next piece with the whole span; else hard-cut at the fixed limit
+			}
+			break
+		}
+	}
+	// backtick state is replayed at the real cut (not the limit), so a closer the cut leaves behind
+	// cannot be consumed early.
+	_, _, nextDangling = scanSpans(line, k, danglingN, prefixRun)
+	return k, nextDangling
+}
+
+type spanRange struct {
+	start  int
+	length int
+}
+
+// scanSpans replays the inline-span grammar over line[:lim], returning spans fully inside it, spans
+// closing beyond it (both ordered by start), and the backtick opener length still open after it. Code
+// spans never nest, so '[', '<', '&' and other-length runs inside one are literal. danglingN names a
+// doomed span a previous cut entered (only a same-length run closes it); prefixRun joins the previous
+// piece's trailing run onto this fragment's lead run; a run crossing the cut stays undecided.
+func scanSpans(line []rune, lim, danglingN, prefixRun int) (closed, open []spanRange, pending int) {
+	btStart, btN := -1, 0 // the single active backtick span in this fragment
+	for i := 0; i < lim; {
+		switch r := line[i]; {
+		case r == '`':
+			j := i + 1
+			for j < len(line) && line[j] == '`' {
+				j++
+			}
+			if j > lim { // the run crosses the cut: the next fragment measures it whole
+				i = lim
+				continue
+			}
+			n := j - i
+			if i == 0 {
+				n += prefixRun
+			}
+			switch {
+			case danglingN > 0 && n == danglingN:
+				danglingN = 0 // closer of the doomed span cut in a previous piece
+			case danglingN > 0:
+				// a different-length run is literal content of that open doomed span
+			case btStart >= 0 && n == btN:
+				closed = append(closed, spanRange{btStart, j - btStart})
+				btStart, btN = -1, 0
+			case btStart < 0:
+				btStart, btN = i, n
+			}
+			i = j
+		case btStart >= 0 || danglingN > 0:
+			i++ // markup inside a code span is literal
+		case r == '[':
+			if e, ok := linkEnd(line, i); ok && e <= lim {
+				closed = append(closed, spanRange{i, e - i})
+				i = e
+			} else if ok {
+				open = append(open, spanRange{i, e - i})
+				i++
+			} else {
+				open = append(open, spanRange{i, len(line) - i})
+				i++
+			}
+		case r == '<':
+			if e := indexRune(line, '>', i+1); e >= 0 && e+1 <= lim {
+				closed = append(closed, spanRange{i, e + 1 - i})
+				i = e + 1
+			} else if e >= 0 {
+				open = append(open, spanRange{i, e + 1 - i})
+				i++
+			} else {
+				open = append(open, spanRange{i, len(line) - i})
+				i++
+			}
+		case r == '&':
+			if e := indexRune(line, ';', i+1); e >= 0 && e+1 <= lim {
+				closed = append(closed, spanRange{i, e + 1 - i})
+				i = e + 1
+			} else if e >= 0 {
+				open = append(open, spanRange{i, e + 1 - i})
+				i++
+			} else {
+				i++ // a bare '&' with no ';' is literal text
+			}
+		default:
+			i++
+		}
+	}
+	if btStart >= 0 { // an opener with no mate inside the limit: measure the real mate anywhere in line
+		sp := spanRange{btStart, len(line) - btStart}
+		if e := closeBacktickRun(line, btStart+btN, btN); e >= 0 {
+			sp.length = e - btStart
+		}
+		pos := 0 // keep open ordered by start
+		for pos < len(open) && open[pos].start < sp.start {
+			pos++
+		}
+		open = append(open, spanRange{})
+		copy(open[pos+1:], open[pos:])
+		open[pos] = sp
+	}
+	return closed, open, danglingN + btN // exactly one of danglingN and btN is nonzero when pending
+}
+
+// closeBacktickRun returns the index past the first later run of exactly n backticks, else -1; runs are atomic.
+func closeBacktickRun(line []rune, from, n int) int {
+	for i := from; i < len(line); {
+		if line[i] != '`' {
+			i++
+			continue
+		}
+		j := i
+		for j < len(line) && line[j] == '`' {
+			j++
+		}
+		if j-i == n {
+			return j
+		}
+		i = j
+	}
+	return -1
+}
+
+// linkEnd returns the exclusive end of a [...] or [...](...) link starting at i, or ok=false if it never closes.
+func linkEnd(line []rune, i int) (end int, ok bool) {
+	j := indexRune(line, ']', i+1)
+	if j < 0 {
+		return -1, false
+	}
+	if j+1 < len(line) && line[j+1] == '(' {
+		e := indexRune(line, ')', j+2)
+		if e < 0 {
+			return -1, false
+		}
+		return e + 1, true
+	}
+	return j + 1, true
+}
+
+func indexRune(line []rune, want rune, from int) int {
+	for i := from; i < len(line); i++ {
+		if line[i] == want {
+			return i
+		}
+	}
+	return -1
+}
+
+func boundaryPunct(r rune) bool {
+	switch r {
+	case '.', ',', '!', '?', ';', ':', ')', ']', '}', '…', '—':
+		return true
+	case '。', '，', '、', '；', '：', '！', '？', '）', '】', '》', '」', '』', '．', '–':
+		return true
+	}
+	return false
 }

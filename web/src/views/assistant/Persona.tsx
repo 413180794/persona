@@ -40,6 +40,10 @@ const listeners = new Set<() => void>();
 let loading: Promise<void> | null = null;
 /** Whether the hub keeps the choice (it answered /looks): then choosing goes there. */
 let synced = false;
+/** Counts the choices made on this page and pushed from other devices: a list read that left before one keeps it. */
+let choices = 0;
+/** A choice made before the hub was known to keep it (no /looks answer yet): it is sent once one comes. */
+let unsent = false;
 
 function readChosen() {
   try {
@@ -81,6 +85,8 @@ function setPS(patch: Partial<PersonaStoreState>) {
 /** The choice to keep given the hub's: the hub's once it has one; else this browser's moves up (once, if unset there). */
 async function settleChoice(cur: LookCurrent): Promise<string> {
   if (cur.id) return cur.id;
+  // one chosen on this page before this answer is sent as it is once the answer is in (refreshPersonas)
+  if (unsent) return BUILTIN_PERSONA;
   const mine = choseHere();
   if (!mine) return BUILTIN_PERSONA;
   try {
@@ -95,6 +101,8 @@ async function settleChoice(cur: LookCurrent): Promise<string> {
 /** What the hub offers now (each time the picker opens, once per page load, and when the hub says the list changed). */
 export function refreshPersonas(): Promise<void> {
   if (loading) return loading;
+  // the hub's `current` is its choice when the request left: one made since (here, or another device's push) stays
+  const asked = choices;
   loading = api<{ looks: LookView[]; current: LookCurrent }>("/looks")
     .then(async (r) => {
       synced = true;
@@ -106,12 +114,20 @@ export function refreshPersonas(): Promise<void> {
       const r = await api<{ personas: PersonaInfo[] }>("/personas");
       return { list: usablePersonas(r.personas), looks: null, chosen: ps.chosen };
     })
-    .then(async ({ list, looks, chosen }) => {
+    .then(async ({ list, looks, chosen: answered }) => {
+      const pick = () => (choices === asked && !unsent ? answered : ps.chosen);
+      const chosen = pick();
       const next = list.find((p) => p.id === chosen);
       const shown = ps.list.find((p) => p.id === chosen);
       const ready = !next || !shown || next.rev === shown.rev || (await preload(next));
-      saveChosen(chosen);
-      setPS({ list: withChosenReady(list, ps.list, chosen, ready), looks, chosen, loaded: true, error: "" });
+      const now = pick(); // chosen again while the files loaded: that one was not waited for, it shows as it comes
+      if (now === answered) saveChosen(now);
+      setPS({ list: withChosenReady(list, ps.list, now, now === chosen ? ready : true), looks, chosen: now, loaded: true, error: "" });
+      // chosen before the hub was known to keep the choice: it goes now
+      if (unsent) {
+        unsent = false;
+        if (synced) void api("/looks/current", { method: "PUT", json: { id: now } }).catch(() => undefined);
+      }
     })
     .catch((e) => setPS({ loaded: true, error: e instanceof ApiError && e.status === 404 ? t("assistant-persona.hub_unsupported") : t("assistant-persona.load_failed", { error: errorText(e) }) }))
     .finally(() => {
@@ -141,7 +157,9 @@ onHubEvent("personas", () => void refreshPersonas());
 // Another device chose a look (or the hub went back to the default when its extension went).
 onHubEvent("look", (m) => {
   const id = typeof m.id === "string" ? m.id : "";
-  if (!id || id === ps.chosen) return;
+  if (!id) return;
+  choices++; // the hub's choice now, even when this page already shows it: a list read that left before is older
+  if (id === ps.chosen) return;
   saveChosen(id);
   if (!isBuiltinPersona(id) && !ps.list.some((p) => p.id === id)) void refreshPersonas();
   setPS({ chosen: id });
@@ -150,9 +168,11 @@ onHubEvent("look", (m) => {
 /** Choosing one keeps it when its package leaves the hub (the built-in shows meanwhile), as on the phone; on a hub that
  *  keeps the choice, every device follows. */
 export function choosePersona(id: string) {
+  choices++;
   saveChosen(id);
   setPS({ chosen: id });
   if (synced) void api("/looks/current", { method: "PUT", json: { id } }).catch(() => undefined);
+  else unsent = true; // the list being read says whether this hub keeps it
 }
 
 function subscribe(l: () => void) {
