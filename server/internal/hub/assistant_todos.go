@@ -53,11 +53,11 @@ func (h *Hub) todoStartText(ctx context.Context, p assistantwire.TodoHandoff) st
 // injected.go); replaced, never written into.
 type todoLinks struct {
 	mu    sync.RWMutex
-	links map[[2]string]assistantwire.TodoLink // every manager's, merged (the assistant's win a clash)
+	links map[[2]string]assistantwire.TodoLink // every manager's, merged (the session owner's wins a clash)
 	by    map[string]map[[2]string]assistantwire.TodoLink
 }
 
-// takeTodoReport keeps the assistant's report (nil: it could not read the todos; the last one stands).
+// takeTodoReport keeps a manager's report (nil: it could not read the todos; the last one stands).
 func (h *Hub) takeTodoReport(from string, r *assistantwire.TodoReport) {
 	if r == nil {
 		return
@@ -74,11 +74,18 @@ func (h *Hub) takeTodoReport(from string, r *assistantwire.TodoReport) {
 	}
 	tl.by[from] = links
 	merged := map[[2]string]assistantwire.TodoLink{}
-	for id, m := range tl.by {
+	for _, m := range tl.by {
 		for k, l := range m {
-			if _, has := merged[k]; !has || id == assistantwire.AssistantID {
-				merged[k] = l
+			if _, has := merged[k]; has {
+				continue
 			}
+			// The session owner's link wins, then the built-in assistant's, then the first encountered.
+			if owned, ok := tl.by[h.sessionOwner(k[0], k[1])][k]; ok {
+				l = owned
+			} else if fallback, ok := tl.by[assistantwire.AssistantID][k]; ok {
+				l = fallback
+			}
+			merged[k] = l
 		}
 	}
 	tl.links = merged

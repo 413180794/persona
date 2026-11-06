@@ -123,6 +123,8 @@ Nothing one manager reports replaces another's (`server/internal/hub/manager_sta
 | Live Activity (`fleet.live`) | By manager | The default manager's, else the assistant's (the Live Activity is one per phone). |
 | Pending cards (`fleet.interaction(s)`) | By manager (each card names the manager that reported it) | Answering a card goes to its manager (`interactionOwner`). Removing a manager withdraws its cards: the apps get `interaction_resolved` for each. |
 
+When several managers report a to-do link for the same machine/session pair, the hub uses the session owner's link (`sessionOwner`: conversation owner, else machine owner). If that owner has no link, it uses the built-in assistant's link, then the first link encountered from another manager; ties among those other managers have no guaranteed order. Each non-nil report rebuilds the merged links using current ownership. A nil report keeps the manager's previous links, while an empty report withdraws them. A single manager's behavior is unchanged.
+
 There is no gate on the bus any more: every manager may call every method and publish every event.
 
 ## Moving a machine or a source
