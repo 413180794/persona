@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -380,25 +381,125 @@ var submitGrace = 2 * time.Second
 // `[Image #n]` chip sat in the box, the agent `done`, until Enter was pressed on the computer; 42 tries in an
 // isolated herdr did not repeat it, so the cause is unknown. Only the box after the grace counts: right after the
 // paste it can show something else for a moment (the first version gave up on that and missed one). A box that
-// emptied by then (Claude took it, or queued it while working) or shows anything else is left alone.
-func (n *Node) ensureSubmitted(ctx context.Context, pane, text string) {
+// emptied by then (Claude took it, or queued it while working) or shows anything else is left alone. It returns the
+// screen it read after the grace ("" when none), for afterPrompt.
+func (n *Node) ensureSubmitted(ctx context.Context, pane, text string) string {
 	select {
 	case <-ctx.Done():
-		return
+		return ""
 	case <-time.After(submitGrace):
 	}
 	s, err := n.readPaneANSI(ctx, pane, "visible", 60)
 	if err != nil {
-		return
+		return ""
 	}
 	in := screen.ClaudeInput(s)
 	if !in.Box || !in.Draft || !stillPrompted(in.Text, text) {
-		return
+		return s
 	}
 	if n.logger != nil {
 		n.logger.Printf("prompt still in the input box after %s, pressing enter", submitGrace)
 	}
 	_ = n.sendKeys(ctx, pane, "enter")
+	return s
+}
+
+// A guide of Claude Code's own (screen.Guide) can open the moment a message is submitted: 2.1.318's "Teach auto mode
+// about your environment?" took the typed text and its Enter, the transcript never got the message, and the send still
+// answered 200 (#5504). The check before typing cannot see it (it was not there yet), so afterPrompt looks at the
+// screen ensureSubmitted reads once the prompt has had submitGrace (no extra read): a guide at the bottom is declined
+// with Esc (never Enter, which would start what it offers), and the message counts as delivered only once the
+// transcript has it. Otherwise it is typed again into the emptied box, once; still not in, or no transcript to tell
+// (typing again could run it twice), the send fails with delivered "unknown" instead of succeeding.
+
+// guideTries is how many times a message a guide took is typed in all.
+const guideTries = 2
+
+// afterPrompt follows a prompt typed into Claude in pane at typedAt: ensureSubmitted, then the guide check above.
+func (n *Node) afterPrompt(ctx context.Context, id, pane, text string, typedAt time.Time) error {
+	for try := 1; ; try++ {
+		plain := screen.Plain(n.ensureSubmitted(ctx, pane, text)) // no screen: as before, nothing says it was lost
+		guide := screen.Guide(plain)
+		if guide == "" {
+			return nil
+		}
+		head := screen.DialogHead(plain)
+		if n.logger != nil {
+			n.logger.Printf("a guide opened in %s as a message was submitted, declining it: %s", pane, head)
+		}
+		if err := n.declineGuide(ctx, pane); err != nil {
+			return uncertain(fmt.Errorf(guideStuckMessage, clipDialog(head, 120)))
+		}
+		if n.promptedSinceNow(id, typedAt) {
+			return nil // it went in before the guide opened
+		}
+		if n.transcriptPath(id) == "" || try == guideTries {
+			return uncertain(fmt.Errorf(guideLostMessage, clipDialog(head, 120)))
+		}
+		s, err := n.readPaneANSI(ctx, pane, "visible", 60)
+		if err != nil {
+			return uncertain(fmt.Errorf(guideLostMessage, clipDialog(head, 120)))
+		}
+		if code, _ := screen.CheckClaude(s); code != "" {
+			return uncertain(fmt.Errorf(guideLostMessage, clipDialog(head, 120))) // the box is not empty: not typed again
+		}
+		if n.logger != nil {
+			n.logger.Printf("the message did not reach the transcript of %s, typing it again", id)
+		}
+		typedAt = time.Now()
+		if err := n.prompt(ctx, pane, text); err != nil {
+			if r := deliveryRefusal(err); r != nil {
+				return r
+			}
+			return uncertain(err)
+		}
+		n.typing.typed(pane, text)
+	}
+}
+
+const (
+	guideLostMessage  = "电脑上的 Claude Code 在收这条消息时弹出了它自己的引导对话框（「%s」），消息被它吞掉了，已经按 Esc 关掉，但没能确认消息进了对话：看看电脑上的终端，需要的话再发一次。"
+	guideStuckMessage = "电脑上的 Claude Code 在收这条消息时弹出了它自己的引导对话框（「%s」），按 Esc 没有关掉，消息可能没进对话：在电脑上关掉它再发。"
+)
+
+// promptedSinceNow is promptedSince read from the transcript as it is now: the cached meta can be up to
+// metaMinInterval old, and would miss the message that just went in (typing it again would run it twice).
+func (n *Node) promptedSinceNow(id string, since time.Time) bool {
+	p := n.transcriptPath(id)
+	if p == "" {
+		return false
+	}
+	st, err := os.Stat(p)
+	if err != nil {
+		return false
+	}
+	n.mu.Lock()
+	prev := n.metas[p]
+	n.mu.Unlock()
+	at := readQuickMetaSince(p, st, prev).lastPromptAt
+	return !at.IsZero() && !at.Before(since.Add(-time.Second))
+}
+
+// declineGuide presses Esc once on the guide at the bottom of pane and waits up to noticeSettle for it to go; an
+// error when it is still there (Esc is not pressed again) or the screen cannot be read.
+func (n *Node) declineGuide(ctx context.Context, pane string) error {
+	if err := n.sendKeys(ctx, pane, screen.GuideKeys...); err != nil {
+		return err
+	}
+	n.forgetDialog(pane)
+	for end := time.Now().Add(noticeSettle); ; {
+		time.Sleep(noticeSettle / 10)
+		s, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+		if err != nil {
+			return err
+		}
+		if screen.Guide(s) == "" {
+			return nil
+		}
+		if time.Now().After(end) {
+			return errors.New("the guide is still open")
+		}
+	}
 }
 
 var boxChips = regexp.MustCompile(`\[(Image|Pasted text) #\d+[^\]]*\]`)

@@ -361,6 +361,13 @@ Persona only checked herdr and hooks, so 3 blocked Agents appeared "Unread" for 
 node now periodically reads stopped Claude screens and marks dialogs "Needs you" (`node/dialogstatus.go`); Enter-only notices can be dismissed with `dismiss_notice` before sending.
 This notice appears in gateway sessions (base URLs outside anthropic.com); Claude Code has no setting to disable it. Enter records `autoModeClassifierBillingNoticeAcknowledgedAt`, and it reappears after 24 hours.
 
+## A guide that opens on submit takes the message, and the send still succeeds (2026-11-06, #5504, 2.1.318)
+
+Claude Code's "Teach auto mode about your environment?" (the confirm step of its auto mode setup: `How you use Claude here` / `Also scan shell history` / `Continue`, `Enter to continue · Esc to cancel`) opened right as a message from the phone was submitted.
+It took the text and the Enter (its bundled code drops key presses that come right after it opens), the transcript never got the message, and since the node only checked the screen before typing, the hub answered 200 and voice waited for a reply.
+Esc declines the guide with nothing chosen; Enter would start its scan of the project, shell history or other repositories. After a prompt the node now looks for a guide, declines it, and checks the transcript read fresh (the cached meta can be 3 s old and miss the message, which would type it twice);
+the message is typed again once, or the send reports `delivered: "unknown"`. Only Esc-safe guides go into `screen.guides`; permissions, logins, trust and paid options stay the user's.
+
 ## A background workflow runs, but the Agent is judged done and the to-do auto-closes (#2935)
 
 2026-11-05: an Agent used Workflow for a background multi-Agent audit, ended its main turn, and waited for notification. hub marked it "Unread", marked the to-do done, and pushed "Finished"; #1696 could also auto-close it and kill the workflow.

@@ -643,6 +643,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		// In a tag so it never mixes with what the user typed; the phone shows these as thumbnails.
 		text = strings.TrimSpace(text) + "\n\n<attached_images>\n" + strings.Join(paths, "\n") + "\n</attached_images>"
 	}
+	typedAt := time.Now()
 	err = n.prompt(ctx, pane, text)
 	if errors.Is(err, host.ErrAgentBlocked) && (kind == "codex" || kind == traexAgent) {
 		// herdr refuses to prompt a Codex with an async question open; its box (checked above) takes the message.
@@ -656,7 +657,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		n.typing.typed(pane, text)
 		n.lostFirst.clear(id) // the message the start could not deliver went in now, or another one
 		if kind == "claude" {
-			n.ensureSubmitted(ctx, pane, text)
+			return n.afterPrompt(ctx, id, pane, text, typedAt) // sendsafe.go
 		}
 	}
 	return uncertain(err)
