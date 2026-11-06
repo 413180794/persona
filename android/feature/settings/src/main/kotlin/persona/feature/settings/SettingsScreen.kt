@@ -627,8 +627,8 @@ fun ReadinessScreen(
                     JGroupItem(GroupPosition.of(index, machines.size)) {
                         val missing = stringResource(R.string.settings_not_provided)
                         JRow(machine.displayName, value = stringResource(if (machine.online) R.string.settings_online else R.string.settings_offline))
-                        JRow("node", value = machine.nodeVersion ?: missing)
-                        JRow("herdr", value = machine.herdrVersion ?: missing)
+                        JRow(stringResource(R.string.settings_ready_row_persona_version), value = machine.nodeVersion ?: missing)
+                        JRow(stringResource(R.string.settings_ready_row_terminal), value = machine.herdrVersion ?: missing)
                         JRow("Claude", value = machine.claudeVersion ?: missing)
                         if (machine.nodeMismatch == true) SettingsCaption(stringResource(R.string.settings_ready_node_mismatch), Modifier.padding(Tokens.Space.m))
                     }

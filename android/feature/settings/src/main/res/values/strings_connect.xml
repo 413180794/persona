@@ -53,7 +53,7 @@
     <string name="settings_pairing_detail_identity">Hub identity</string>
     <string name="settings_pairing_detail_fingerprint">Key fingerprint</string>
     <string name="settings_pairing_detail_missing">Not provided</string>
-    <string name="settings_pairing_detail_tls_port">TLS port</string>
+    <string name="settings_pairing_detail_tls_port">Secure port</string>
     <string name="settings_pairing_fingerprint_probe">The QR code has a key fingerprint, so connecting will find and verify an encrypted address.</string>
     <string name="settings_pairing_https_no_fingerprint">The QR code has no key fingerprint, so this HTTPS address is checked against the certificates and domain the system trusts.</string>
     <string name="settings_pairing_candidates">Candidate addresses</string>
@@ -70,7 +70,7 @@
     <string name="settings_pairing_failure_dns">Can\'t find this address. Check the domain or scan again.</string>
     <string name="settings_pairing_failure_refused">The hub isn\'t listening on this port. Make sure the hub is running.</string>
     <string name="settings_pairing_failure_unreachable">The hub can\'t be reached from this network. Switch networks and try again.</string>
-    <string name="settings_pairing_failure_timeout">Can\'t reach the hub. Away from home, check that your router allows inbound IPv6 on the TLS port; at home, check that you\'re on the same network.</string>
+    <string name="settings_pairing_failure_timeout">Can\'t reach the hub. At home, check that your phone and the computer running the hub are on the same network; away from home, check that your home router lets connections in from outside.</string>
     <string name="settings_pairing_failure_local">To connect to the hub at home, allow Persona to access the local network.</string>
     <string name="settings_pairing_failure_certificate">The certificate or hub identity doesn\'t match. If you reinstalled the hub, make a new code on a signed-in device and scan again.</string>
     <string name="settings_pairing_failure_expired">This code has expired or was already used. Make a new one on a signed-in device.</string>
@@ -82,7 +82,7 @@
     <string name="settings_pairing_recovery_update">Update and retry</string>
     <string name="settings_pairing_step_parse">Reading the pairing link</string>
     <string name="settings_pairing_step_network">Connecting to the address</string>
-    <string name="settings_pairing_step_tls">TLS certificate</string>
+    <string name="settings_pairing_step_tls">Security certificate</string>
     <string name="settings_pairing_step_http">HTTP request</string>
     <string name="settings_pairing_step_auth">Pairing code check</string>
     <string name="settings_pairing_step_protocol">Hub\'s response</string>

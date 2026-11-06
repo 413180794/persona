@@ -1,4 +1,5 @@
 {
   "no_text": "（这一轮没有文字回答）",
-  "no_text_stopped": "这一轮没有文字回答就停了：{reason}"
+  "no_text_stopped": "这一轮没有文字回答就停了：{reason}",
+  "not_delivered": "没能确认消息送达，请重发一次。"
 }

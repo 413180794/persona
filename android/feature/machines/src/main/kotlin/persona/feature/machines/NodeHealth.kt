@@ -1,6 +1,7 @@
 package persona.feature.machines
 
 import androidx.annotation.StringRes
+import persona.core.contracts.Machine
 import persona.core.contracts.api.DoctorCheck
 import persona.core.contracts.api.DoctorReport
 
@@ -115,5 +116,36 @@ internal enum class DoctorUnavailable(@StringRes val text: Int) {
             status == 403 -> Forbidden
             else -> null
         }
+    }
+}
+
+private val AuthFailed = Regex(
+    """permission denied|publickey|authentication|unauthori[sz]ed|invalid[ _]token|forbidden|host key verification|access denied|\b40[13]\b|配对|认证""", // i18n-ignore: the hub's own words it matches
+    RegexOption.IGNORE_CASE)
+private val VersionDiffers = Regex("""version mismatch|protocol version|unknown method|incompatible|不是同一版|版本""", RegexOption.IGNORE_CASE) // i18n-ignore: the hub's own words it matches
+private val TimedOut = Regex("""timed out|timeout|deadline exceeded|no pong""", RegexOption.IGNORE_CASE)
+private val Unreachable = Regex(
+    """refused|no route|unreachable|could not resolve|name or service|no such host|network is|connection (reset|closed|lost)|broken pipe|\beof\b|node exited|waiting for|lookup |dial """,
+    RegexOption.IGNORE_CASE)
+
+/**
+ * Why an offline machine is not connected and what to do, read from the error the hub keeps (the web's
+ * `classifyConnection`, same kinds, patterns and order; offline, so a version mismatch is always upgraded there): null when the error does not say, so nothing is guessed and
+ * the hub's own words are shown alone. A machine being redeployed is expected to drop, so it is not read as a failure.
+ * Order matters: "connection timed out" is a timeout, not "connection …".
+ */
+@StringRes
+internal fun connectionFailureText(machine: Machine): Int? {
+    val text = machine.error.orEmpty()
+    if (machine.online || machine.deploying || text.isBlank()) return null
+    val link = machine.kind == "link" || machine.kind == "service"
+    return when {
+        AuthFailed.containsMatchIn(text) -> if (link) R.string.machines_offline_auth_link else R.string.machines_offline_auth_ssh
+        // The hub cannot redeploy a computer it cannot reach (the web's can_deploy is false while offline), so the node
+        // is upgraded on that computer.
+        VersionDiffers.containsMatchIn(text) || machine.nodeMismatch == true -> R.string.machines_offline_version_local
+        TimedOut.containsMatchIn(text) -> R.string.machines_offline_timeout
+        Unreachable.containsMatchIn(text) -> if (link) R.string.machines_offline_unreachable_link else R.string.machines_offline_unreachable_ssh
+        else -> null
     }
 }

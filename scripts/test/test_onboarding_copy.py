@@ -114,10 +114,6 @@ ALLOW = {
 
 # (scope, key) → who is fixing it (the issue or the design's work item). Each must still be wrong somewhere.
 PENDING = {
-    ("android/settings-pairing", "settings_pairing_failure_timeout"): "#4444（Android 配对和准备清单的剩余文案）",
-    ("android/settings-pairing", "settings_pairing_detail_tls_port"): "#4444（Android 配对和准备清单的剩余文案）",
-    ("android/settings-pairing", "settings_pairing_step_tls"): "#4444（Android 配对和准备清单的剩余文案）",
-    ("android/settings-ready", "settings_ready_node_mismatch"): "#4444（Android 配对和准备清单的剩余文案）",
     ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接"): "#4195（首屏，命令收进「其他方式」）",
     ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair` 显示二维码"): "#4195（首屏，命令收进「其他方式」）",
     ("apple/welcome", "你的每台电脑，herdr 里的同一个会话"): "#4195（首屏）",

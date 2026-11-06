@@ -569,3 +569,39 @@ func TestTodayCardListsEachTaskOnce(t *testing.T) {
 		t.Fatalf("done = %v, want each finished task once (todo_b was cut off after)", ids)
 	}
 }
+
+// A start that uses up all its time (a busy machine's shell never ran claude) still ends the task: recording the
+// failure gets its own time. On the start's spent context the store refused the write and the task showed 「正在开」 with
+// no agent for ever (#4510).
+func TestTaskStartTimingOutStillEndsTheTask(t *testing.T) {
+	old := taskStartTimeout
+	taskStartTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { taskStartTimeout = old })
+	todoStores(t, func(t *testing.T, _ *todoEnv, database *db.DB) {
+		ctx := context.Background()
+		f := newFakeHub()
+		f.sessions["box"] = nil
+		f.settings = &Settings{Timezone: "Asia/Shanghai"}
+		f.slowStart = true
+		s := newStorelessService(t, f)
+		if database != nil {
+			s = newServiceOn(t, f, database)
+		}
+		todo, err := s.createTodo(ctx, "清理旧名字", "全仓清理", "conv1", "plan_x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.startPlanTask("plan_x", "conv1", 0, PlanTask{Title: todo.Title, Prompt: "全仓清理", Machine: "box", Cwd: "/code/app",
+			TodoID: todo.ID}, false)
+		got := todoNow(s, todo.ID)
+		if got.DoneAt == nil || !strings.Contains(got.StartError, "deadline") {
+			t.Fatalf("the timed-out start left the task open: done %v, error %q", got.DoneAt, got.StartError)
+		}
+		if database != nil {
+			row, err := database.GetTodo(ctx, todo.ID)
+			if err != nil || row == nil || row.DoneAt == nil || row.StartError == "" {
+				t.Fatalf("the store did not record the failed start: %+v %v", row, err)
+			}
+		}
+	})
+}

@@ -1,4 +1,5 @@
 {
   "no_text": "(No text answer this turn)",
-  "no_text_stopped": "This turn stopped without a text answer: {reason}"
+  "no_text_stopped": "This turn stopped without a text answer: {reason}",
+  "not_delivered": "I couldn't confirm that the message was delivered. Please send it again."
 }

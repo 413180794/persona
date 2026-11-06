@@ -21,6 +21,13 @@
     <string name="machines_unknown">Unknown</string>
     <string name="machines_card_sessions">Running %1$d · Working %2$d · Needs you %3$d</string>
     <string name="machines_node_mismatch">Persona on this computer isn\'t from the same deploy as the hub</string>
+    <!-- An offline machine: why, read from the hub's error, and what to do (#4463) -->
+    <string name="machines_offline_auth_ssh">Authentication failed. Check that this computer\'s SSH key and account are still valid, then reconnect</string>
+    <string name="machines_offline_auth_link">Authentication failed. Pair Persona Link again on this computer, then reconnect</string>
+    <string name="machines_offline_version_local">Version mismatch. Upgrade the node on this computer so it matches the hub</string>
+    <string name="machines_offline_timeout">Connection timed out. The network is unstable or the computer is asleep. Wait for it to wake up or switch networks, then reconnect</string>
+    <string name="machines_offline_unreachable_ssh">Can\'t reach this computer. Make sure it\'s on, the network is up and the node is running, then reconnect</string>
+    <string name="machines_offline_unreachable_link">Can\'t reach this computer. Make sure it\'s on and Persona Link is running, then reconnect</string>
     <string name="machines_computer">Computer</string>
     <plurals name="machines_cores">
         <item quantity="one">%d core</item>

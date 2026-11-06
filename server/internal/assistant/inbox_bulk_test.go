@@ -264,12 +264,22 @@ func TestInboxBulkBadRequests(t *testing.T) {
 // batch (batchFail), so production takes its batch-fails -> one-by-one path and the failures surface per id.
 type inboxPutFailStore struct {
 	*inboxBatchMemStore
-	failAll bool
-	fail    map[string]bool
+	failAll  bool
+	fail     map[string]bool
+	failOnce map[string]bool // the next single write of the id fails once
+	failHook func(id string) // runs inside the failing write (b.saving held, b.mu free)
 }
 
 func (s *inboxPutFailStore) PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error {
-	if s.failAll || s.fail[id] {
+	fail := s.failAll || s.fail[id]
+	if s.failOnce[id] {
+		delete(s.failOnce, id)
+		fail = true
+	}
+	if fail {
+		if s.failHook != nil {
+			s.failHook(id)
+		}
 		return errMuteStoreDown
 	}
 	return s.inboxBatchMemStore.PutInboxItem(ctx, id, data, updatedAt, doneAt)

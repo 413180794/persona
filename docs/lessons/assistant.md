@@ -95,3 +95,7 @@
 - 把用户的话认成提问的某个选项时，拿不准就原样交给 Agent（2026-11-06，#3497 评审）：第一版「句子里有选项名、多说不超过三个词」就算选中，
   「备份后删除」成了「删除」、「SQLite，加密」成了「SQLite」，条件被丢掉；「all」按子串认成「Small fix」，选项是 1 / 3 / 5 时「3」成了第三个「5」。
   认错一个选项比交一段原话给 Agent 糟得多：选项名之外只许虚词、英文从词首算、带问号和撞了数字的都不认（`channel.MatchOption`，`docs/channels.md`「提问和批准」）。
+- 任务的 Agent 干完、Claude 退出后，任务会一直显示「正在开 Agent」（2026-11-06，#4510）：node 只列整台机器最近的 80 个已退出的 transcript，
+  开发机上一天上千个别的 transcript 很快把它挤出列表，hub 的会话列表里没有它，客户端就当成「有 Agent 还没会话」。未完成的待办挂着的 Agent 现在进 profile 的 `keep`，
+  node 不管多久没动都列出来。同一次还发现：任务的 Agent 启动用满 5 分钟后，记「没开起来」也用的是同一个已超时的 context，写库失败，任务没有 Agent、也不算失败，
+  一样一直是「正在开」；超时之后的善后要另给时间（`taskFailTimeout`）。查「正在开」先对比 `todo_agents` 和 `GET /api/v1/sessions`，再看 hub 日志里 `task <id>: start:`。

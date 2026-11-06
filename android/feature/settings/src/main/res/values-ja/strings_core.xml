@@ -325,7 +325,9 @@
     <string name="settings_ready_no_machines_detail">あとでAgentsで確認できます。</string>
     <string name="settings_online">オンライン</string>
     <string name="settings_offline">オフライン</string>
-    <string name="settings_ready_node_mismatch">nodeとハブのバージョンが一致しません</string>
+    <string name="settings_ready_row_persona_version">Persona のバージョン</string>
+    <string name="settings_ready_row_terminal">ターミナル</string>
+    <string name="settings_ready_node_mismatch">このパソコンの Persona とハブのバージョンが一致しません。このパソコンがオンラインのときに Agents で開き、「再デプロイ」をタップしてください。</string>
     <string name="settings_ready_skip_machines">コンピューターの確認をスキップ</string>
     <string name="settings_ready_skipped_machines">コンピューターの確認をスキップしました。オンライン状態とバージョンはあとでAgentsで確認できます。</string>
     <string name="settings_ready_skip_lock">ロック画面のテストをスキップ</string>

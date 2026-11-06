@@ -199,7 +199,7 @@ func TestKBOwnerLiveMailAndEditableAliases(t *testing.T) {
 	if err != nil || len(owner.Aliases) != 0 {
 		t.Fatalf("aliases not cleared: %+v %v", owner, err)
 	}
-	p, _ := json.Marshal(s.profile(context.Background(), []TaskView{}))
+	p, _ := json.Marshal(s.profile(context.Background(), []TaskView{}, &TodoReport{}))
 	if bytes.Contains(p, []byte("mail@example.com")) {
 		t.Fatal("profile exposes raw identity")
 	}

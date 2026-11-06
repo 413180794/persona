@@ -495,7 +495,10 @@ func applyPlanEdit(t *PlanTask, e PlanTask) {
 
 // taskStartTimeout bounds one start of a task's agent: a busy machine's shell can take minutes to run claude
 // (node's claudeStartWait, #1396).
-const taskStartTimeout = 5 * time.Minute
+var taskStartTimeout = 5 * time.Minute
+
+// taskFailTimeout bounds recording a failed start (the todo, the plan, the receipt), after the start's own time.
+const taskFailTimeout = 30 * time.Second
 
 // startPlanTask starts one task's agent and links it to the task's todo. A failed start ends the task: the todo is
 // done with why (so nothing shows it as going on, #1077), the plan keeps the error, and the conversation gets a
@@ -541,6 +544,10 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 		return
 	}
 	s.logf("task %s: start: %v", t.TodoID, err)
+	// The start may have used up ctx (a busy machine's shell taking all of taskStartTimeout): recording the failure
+	// on it failed too, and the task stayed 「正在开」 with no agent for ever (#4510). The bookkeeping gets its own time.
+	ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), taskFailTimeout)
+	defer cancel()
 	reason := clip(oneLine(err.Error()), 200)
 	if ferr := s.failTodo(ctx, t.TodoID, reason); ferr != nil {
 		s.logf("task %s: fail: %v", t.TodoID, ferr)

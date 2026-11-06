@@ -49,9 +49,16 @@ struct BrowserLoginsSection: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .card()
-            Text("只列网站和条数，不显示 cookie 的内容。导入的文件在手机上解析，只把你勾选的网站经 hub 直接发给这台 Mac，hub 不保存；助手看不到也导不了。")
-                .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, Theme.Space.xs)
+            Group {
+                #if os(macOS)
+                // read(_:) runs on this machine on every platform, so on the Mac the file is parsed locally, not on a phone.
+                Text("只列网站和条数，不显示 cookie 的内容。导入的文件就在本机解析，只把你勾选的网站经 hub 直接发给目标机器，hub 不保存；助手看不到也导不了。")
+                #else
+                Text("只列网站和条数，不显示 cookie 的内容。导入的文件在手机上解析，只把你勾选的网站经 hub 直接发给这台 Mac，hub 不保存；助手看不到也导不了。")
+                #endif
+            }
+            .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Theme.Space.xs)
         }
         .task(id: online) {
             await load()

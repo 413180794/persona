@@ -64,7 +64,7 @@ class DiagnosticsShotsTest {
             style = s; dark = d
             rule.waitForIdle()
             rule.onNodeWithText("最近一次配对").assertExists()
-            rule.onNodeWithText("失败，停在「TLS 证书」").assertExists()
+            rule.onNodeWithText("失败，停在「安全证书」").assertExists()
             val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
             val background = bitmap.getPixel(1, 1)
             var other = 0

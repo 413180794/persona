@@ -124,7 +124,11 @@ struct SSHTunnelForm<Status: View>: View {
                 Toggle(isOn: $always) { Text("总是走 SSH").lineLimit(1) }
                     .accessibilityIdentifier("ssh.always")
             } footer: {
+                #if os(macOS)
+                Text("关闭时先直连 hub，连不上才走 SSH 隧道。隧道断开后会自动重试。")
+                #else
                 Text("关闭时先直连 hub，连不上才走 SSH 隧道。iPhone 回到前台时隧道会重新建立。")
+                #endif
             }
             if let problem {
                 Section {

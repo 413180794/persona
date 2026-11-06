@@ -1,10 +1,27 @@
 package proto
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 // QuestionAnswer is one question of a card and what the user answered.
 type QuestionAnswer struct {
 	Question, Answer string
+}
+
+// HasDuplicateQuestionText reports whether two questions have the same text after trimming surrounding whitespace.
+// Answers are keyed by the question text (Resolution.Answers), so alike-worded questions could not each carry one.
+func HasDuplicateQuestionText(qs []Question) bool {
+	seen := make(map[string]bool, len(qs))
+	for _, q := range qs {
+		t := strings.TrimSpace(q.Question)
+		if seen[t] {
+			return true
+		}
+		seen[t] = true
+	}
+	return false
 }
 
 // QuestionAnswers pairs a question card's questions with the answers, in the card's order; answers keyed by a

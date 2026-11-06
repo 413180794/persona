@@ -142,10 +142,21 @@ func (s *Service) setInboxParent(ctx context.Context, id string, p *InboxParent)
 		}
 		p = &InboxParent{Kind: p.Kind, ID: p.ID, By: ParentByUser}
 	}
+	// Keep the old parent so a failed write puts it back: the answer must not say moved while the row did not.
+	prevParent := it.Parent
 	it.Parent = p
+	gen := b.touched(id)
 	out := it.listed()
 	b.mu.Unlock()
-	s.saveInbox(ctx, []*InboxItem{it})
+	if failed := s.saveInbox(ctx, []*InboxItem{it}); failed[id] {
+		b.mu.Lock()
+		// Restore only when no concurrent move (even a same-valued unlink) landed; otherwise leave it.
+		if b.items[id] == it && b.mark[id] == gen && it.Parent == p {
+			it.Parent = prevParent
+		}
+		b.mu.Unlock()
+		return InboxItem{}, http.StatusInternalServerError, errInboxNotPersisted
+	}
 	return out, http.StatusOK, nil
 }
 

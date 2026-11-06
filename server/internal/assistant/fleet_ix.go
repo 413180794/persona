@@ -508,6 +508,10 @@ func (s *Service) show(ix proto.Interaction) {
 // nodeInteraction is a node's interaction.create: allowed right away when 本会话总是允许 already covers it, else
 // shown and waited for.
 func (s *Service) nodeInteraction(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
+	// Defense behind the node hook: question-text-keyed answers could not be kept apart on a duplicate card.
+	if ix.Kind == proto.IxQuestion && proto.HasDuplicateQuestionText(ix.Questions) {
+		return proto.Resolution{}, i18n.Err("hub-hub.duplicate_question")
+	}
 	if r, ok := s.alwaysAllowed(ctx, ix); ok {
 		if ix.Resumable { // its hook's earlier attempt left the card pending: it is answered too
 			_ = s.resolve(ix.ID, r)

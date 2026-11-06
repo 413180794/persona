@@ -303,7 +303,7 @@ final class AgentsListTests: XCTestCase {
     }
 
     /// Under 未读 an opened agent stays where it was (seen now), so going down the list one by one works; switching
-    /// filters drops it. 全部标为已读 empties the filter after asking.
+    /// filters drops it. 全部标为已读 empties the filter at once (no confirmation).
     @MainActor func testWorkingThroughUnread() throws {
         launch()
         filter("unread").tap()
@@ -325,7 +325,6 @@ final class AgentsListTests: XCTestCase {
         gone(text(title), "a seen agent leaves once the filter is chosen again")
 
         button("全部标为已读").tap()
-        see(app.buttons["全部标为已读（47）"], "the confirmation").tap()
         wait("the hub hears of every one (\(seen().count))") { seen().count == 48 }
         see(text("没有完成未看的会话"), "the empty filter")
         XCTAssertEqual(filter("unread").label, "未读 0")

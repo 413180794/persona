@@ -1,4 +1,5 @@
 {
   "pick_or_answer": "Pick at least one option, or write your own answer",
-  "fill_in": "Fill in {field} first"
+  "fill_in": "Fill in {field} first",
+  "duplicate_question": "Two questions in this card have exactly the same text, so the two answers could not be kept apart. Ask again with each question worded differently, or combine them into one multi-select question."
 }

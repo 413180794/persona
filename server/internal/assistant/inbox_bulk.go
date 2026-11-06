@@ -126,6 +126,8 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 	res := inboxBulkResult{Changed: []InboxItem{}, Unchanged: []string{}, Skipped: []inboxBulkSkip{}, Failed: []string{}}
 	var changed []*InboxItem
 	var previous []doneState // previous[i] is what changed[i] held before this request
+	var applied []doneState  // applied[i] is what this request wrote onto changed[i]
+	var gens []uint64        // gens[i] is changed[i]'s mutation generation this request stamped
 	seen := map[string]bool{}
 	b := &s.inbox
 	b.mu.Lock()
@@ -163,6 +165,8 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 			} else {
 				it.DoneAt, it.DoneBy = nil, ""
 			}
+			applied = append(applied, doneState{DoneAt: it.DoneAt, DoneBy: it.DoneBy})
+			gens = append(gens, b.touched(it.ID))
 			changed = append(changed, it)
 			res.Changed = append(res.Changed, it.listed())
 		}
@@ -180,7 +184,13 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 				kept = append(kept, it)
 				continue
 			}
-			it.DoneAt, it.DoneBy = previous[i].DoneAt, previous[i].DoneBy
+			// Replaced or forgotten while the writes were out: leave the newer item alone and let the client
+			// refresh. Same pointer but another state on it, or a same-valued concurrent request, means a concurrent
+			// file/reopen: its successful answer must not be rewound by our failed write. Otherwise restore the
+			// state our request overwrote.
+			if b.items[it.ID] == it && b.mark[it.ID] == gens[i] && it.DoneAt == applied[i].DoneAt && it.DoneBy == applied[i].DoneBy {
+				it.DoneAt, it.DoneBy = previous[i].DoneAt, previous[i].DoneBy
+			}
 			rolled[it.ID] = true
 			res.Failed = append(res.Failed, it.ID)
 		}

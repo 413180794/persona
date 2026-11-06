@@ -99,7 +99,7 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 
 - 手机发给主对话的消息认出主对话（`isMainOn`），模型配置「主对话」用途跑在哪台、它的默认启动器（`launcher`：助手自己的，没有就是 hub.json 的，再没有是 claude），收件箱 AI 分身默认的机器，`/api/v1/skills`、启动器测试和额度挑的机器，`assistant.lark` 只给助手那台。
 - 用户的时区（`userLocation`，`hub/usertz.go`）：hub 读时间都按它。
-- `keep`：各台 node 不管多久没动都要列出的会话（主对话、换下来的旧主对话、定时任务自己的对话）。2026-11-04 起电脑是助手的进程连的（[machines.md](machines.md)「谁连电脑」）：
+- `keep`：各台 node 不管多久没动都要列出的会话（主对话、换下来的旧主对话、定时任务自己的对话、未完成的待办挂着的 Agent，#4510）。2026-11-04 起电脑是助手的进程连的（[machines.md](machines.md)「谁连电脑」）：
   助手报快照时，它的设备那一层（`internal/devices` 的 `SetKeep`）对和上一份不一样的机器发一次 `node.configure keep_sessions`，第一份来时每台都发；node 连上时也带上（`configureNode`）。hub 只留着这一份。
 - **hub 重启后、助手还没报的那一两秒**：hub 按自己存的那份（`loadAssistantProfile`，在插件、连接器起来之前读）。开机就起的插件要用户的时区，
   只在内存里留的话这几秒是 hub 自己的时区：插件一直用 hub 的时区到它重启。

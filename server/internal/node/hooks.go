@@ -350,6 +350,10 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 		for _, qq := range q.Questions {
 			ix.Questions = append(ix.Questions, proto.Question{Question: qq.Question, Header: qq.Header, MultiSelect: qq.MultiSelect, Options: qq.Options})
 		}
+		// Answers are keyed by question text: refuse alike-worded questions instead of silently dropping one answer.
+		if proto.HasDuplicateQuestionText(ix.Questions) {
+			return preToolDecision("deny", duplicateQuestionReason), nil
+		}
 		res, ok, err := n.ask(ctx, ix)
 		if err != nil || !ok || len(res.Answers) == 0 {
 			return nil, err
@@ -510,6 +514,10 @@ func (n *Node) takesReport(in hookInput) bool {
 func permissionDecision(d map[string]any) any {
 	return map[string]any{"hookSpecificOutput": map[string]any{"hookEventName": "PermissionRequest", "decision": d}}
 }
+
+// duplicateQuestionReason goes back to the model when two questions share one text, telling it how to ask again.
+const duplicateQuestionReason = "这次提问里有两道题的题干完全一样，我没法把两道题的答案分别交给你。" +
+	"请把每道题改成不同的问法，或者合并成一道多选题，然后重新调用 AskUserQuestion。"
 
 // agentWatch is how often a hook waiting on the phone looks whether the claude it runs under still lives.
 var agentWatch = 2 * time.Second

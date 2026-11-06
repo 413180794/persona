@@ -52,17 +52,20 @@ class MachinesShotsTest {
     @Config(sdk = [35], qualifiers = "zh-w400dp-h5200dp-xhdpi")
     @Test fun simplifiedChinese() {
         assertEquals("2026年11月2日 08:30", MetricFormat.boot(1_793_579_400.0, Locale.SIMPLIFIED_CHINESE, ZoneOffset.ofHours(8)))
-        shots("zh", listTitle = "机器监控", detail = "引擎与连接", botmux = "同时显示 botmux 会话")
+        shots("zh", listTitle = "机器监控", detail = "引擎与连接", botmux = "同时显示 botmux 会话",
+            offline = "连不上这台电脑。确认它开着、网络通、node 在运行，然后重新连接")
     }
 
     @Config(sdk = [35], qualifiers = "en-w400dp-h5200dp-xhdpi")
     @Test fun english() {
         assertTrue(MetricFormat.boot(1_793_579_400.0, Locale.ENGLISH, ZoneOffset.ofHours(8))!!.startsWith("Nov 2, 2026"))
-        shots("en", listTitle = "Machines", detail = "Engine and connection", botmux = "Also show botmux sessions")
+        shots("en", listTitle = "Machines", detail = "Engine and connection", botmux = "Also show botmux sessions",
+            offline = "Can't reach this computer. Make sure it's on, the network is up and the node is running, then reconnect")
     }
 
     @Config(sdk = [35], qualifiers = "ja-w400dp-h5200dp-xhdpi")
-    @Test fun japanese() = shots("ja", listTitle = "マシン", detail = "エンジンと接続", botmux = "botmux のセッションも表示")
+    @Test fun japanese() = shots("ja", listTitle = "マシン", detail = "エンジンと接続", botmux = "botmux のセッションも表示",
+        offline = "このコンピューターに接続できません。電源が入っていて、ネットワークがつながり、ノードが動作していることを確認してから、再接続してください")
 
     private val now = 1_793_600_000L
     private val lab = Machine("lab", name = "Lab", kind = "ssh", sshHost = "lab.example.com", online = true, hostname = "lab.local",
@@ -114,7 +117,8 @@ class MachinesShotsTest {
         override fun selectTab(tab: AppTab) = Unit
     }
 
-    private fun shots(language: String, listTitle: String, detail: String, botmux: String) {
+    /** [offline]: what the offline MacBook's card says first instead of the hub's raw error (#4463). */
+    private fun shots(language: String, listTitle: String, detail: String, botmux: String, offline: String) {
         val list = MachinesViewModel(api, repository, null) { now }
         val page = MachinesViewModel(api, repository, "lab") { now }
         runBlocking { list.load(MetricRange.Hour); page.load(MetricRange.Hour) }
@@ -139,6 +143,10 @@ class MachinesShotsTest {
             File(out(), name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             rule.onNodeWithText(if (d) detail else listTitle).assertExists()
             if (d) rule.onNodeWithText(botmux).assertExists()
+            else {
+                rule.onNodeWithText(offline).assertExists()
+                rule.onNodeWithText(mac.error!!).assertExists() // the hub's own words stay, after the plain ones
+            }
         }
     }
 }

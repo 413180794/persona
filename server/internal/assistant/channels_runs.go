@@ -670,11 +670,12 @@ func (s *Service) checkChannelRun(id string) {
 		if look.Now.Sub(snap.Started) < channel.QueuedMost {
 			return // the message waits behind the turn that just ended: it starts the next one
 		}
-		s.logf("channels: %s: the message never showed in the conversation; answering with its last words", r.ID)
-		snap.MsgIDs, snap.Probe = nil, ""
-		if rd, err = s.readTurn(ctx, &snap); err != nil {
-			return
-		}
+		// The message never reached the conversation even past QueuedMost. Reading the whole tail would answer with
+		// the previous turn's last words, and the run's deletion would leave the real answer (when the message does
+		// start) unclaimed: give up and ask the owner to resend instead (#4455).
+		s.logf("channels: %s: the message never showed in the conversation; asking for a resend", r.ID)
+		s.finishChannelRun(r, &channel.Result{Note: i18n.T(look.Lang, "assistant-channels_runs.not_delivered"), End: channel.EndGaveUp})
+		return
 	}
 	if rd.Stopped == "" && !look.Working {
 		rd.Stopped = channel.StopReason(sess.TurnError) // a Codex turn the model service failed writes no line of it

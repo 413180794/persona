@@ -160,6 +160,8 @@ struct ChatView: View {
     @State private var actions = ChatActions()
     /// The line a quote just led back to, lit up for a moment (`QuoteFlash`).
     @State private var quoteFlash: QuoteFlashMark?
+    /// Offered once this chat's pending card was answered and another conversation needs you (#4348); nil until then.
+    @State private var offeredNext: SessionKey?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         // Built again for the same path (a tree swap): the agent its header switched to, not the one it opened with.
@@ -580,6 +582,8 @@ struct ChatView: View {
         // ⌘I (聚焦输入框) goes to the chat's composer: the chat comes back first.
         .onChange(of: model.composerFocus) { _, k in if k == key, pane == .terminal { pane = .chat } }
         #endif
+        // A different chat shown in place: its own cards decide whether another conversation needs you (#4348).
+        .onChange(of: key) { _, _ in offeredNext = nil }
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         // One stack: the chat takes the whole screen. Beside the list (split) the tab bar stays, or there is no way out.
         .hidesTabBarWhenShown(style == .dev && split == nil)
@@ -1819,6 +1823,22 @@ struct ChatView: View {
         return cards
     }
 
+    /// The conversation the post-resolution entry points at: another one, still needing you, not muted or quiet (#4348).
+    /// `pendingCards.isEmpty` is the display-side half of "a new card takes the entry back": it is evaluated on every
+    /// render, so a card that arrives while mainFooter is removed (viewing a subagent transcript) still hides the strip
+    /// when the footer comes back — the onChange observer is not attached then to clear offeredNext.
+    private var nextNeedsYouSession: Session? {
+        guard pendingCards.isEmpty, let k = offeredNext, k != key, let s = model.session(k), s.state == .needsYou,
+              !model.isMuted(s), !model.isQuiet(s) else { return nil }
+        return s
+    }
+
+    /// Opens it: another agent in place (like the sibling menu), anything else through the model.
+    private func openNext(_ s: Session) {
+        offeredNext = nil
+        if style == .dev, !s.assistant { switchTo(s.key) } else { Haptics.tap(); model.open(s.key) }
+    }
+
     private var mainFooter: some View {
             VStack(spacing: Theme.Space.m) {
                 if style == .assistant, viewing == nil { taskFooter }
@@ -1828,6 +1848,12 @@ struct ChatView: View {
                 }
                 if !pendingCards.isEmpty {
                     PendingCards(cards: pendingCards, room: footerRoom)
+                }
+                // The last card was answered: one low-key entry to the next conversation that needs you (#4348).
+                if let next = nextNeedsYouSession {
+                    NextNeedsYouStrip(title: next.assistant ? (next.title.isEmpty ? model.persona.name : next.title) : next.displayTitle) {
+                        openNext(next)
+                    }
                 }
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
@@ -1853,6 +1879,18 @@ struct ChatView: View {
             .padding(.bottom, Theme.Space.s)
             .animation(Theme.Motion.standard, value: status)
             .animation(Theme.Motion.standard, value: model.interactions(for: key).map(\.id))
+            // The last card answered: offer the next conversation that needs you; a new card takes the entry back (#4348).
+            // Key and ids are one observed value: on an in-place chat switch the ids flip for a different conversation,
+            // and SwiftUI does not order this against onChange(of: key), so a cross-key change is ignored here on purpose.
+            .onChange(of: NextNeedsYouTrigger(key: key, ids: model.interactions(for: key).map(\.id))) { old, new in
+                guard new.key == old.key else { return } // a different chat shown in place: onChange(of: key) clears it
+                if new.ids.isEmpty, !old.ids.isEmpty {
+                    offeredNext = NextNeedsYou.next(after: key, in: model.sessionsNow,
+                                                    muted: { model.isMuted($0) || model.isQuiet($0) })
+                } else if !new.ids.isEmpty {
+                    offeredNext = nil
+                }
+            }
             .onChange(of: model.drafts[key] ?? "") { _, draft in
                 if !draft.isEmpty, let recap = pendingRecap { dismissRecap(recap) } // typing closes it
             }
@@ -3268,6 +3306,37 @@ struct AttentionNote: View {
         .surface(tint: Theme.caution.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.attention")
+    }
+}
+
+/// What the post-resolution offer watches (#4348): the open chat and its pending-card ids together. An in-place chat
+/// switch changes the key and ids in one value, so that transition can be told apart from the same chat's last card
+/// disappearing without relying on the order of separate `onChange` modifiers in the same transaction.
+private struct NextNeedsYouTrigger: Equatable {
+    let key: SessionKey
+    let ids: [String]
+}
+
+/// After this chat's card was answered, the next conversation that needs you: one tap goes there, nothing jumps by
+/// itself (#4348). Same caution look as `AttentionNote`; it goes when this chat asks again or the other one stops.
+struct NextNeedsYouStrip: View {
+    var title: String
+    var open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.needsYou).font(Theme.Font.labelStrong).foregroundStyle(Theme.caution)
+                Text("下一个需要你的").font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
+                Text(title).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 0)
+                Image(systemName: Theme.Icon.forward).font(Theme.Font.label).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
+            .surface(tint: Theme.caution.opacity(0.06), interactive: true, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contentShape(.rect(cornerRadius: Theme.Radius.card))
+        }
+        .buttonStyle(.plain).accessibilityElement(children: .combine).accessibilityIdentifier("chat.nextNeedsYou")
     }
 }
 

@@ -85,7 +85,7 @@ class DiagnosticsStateTest {
         assertTrue(attempt.error!!.contains("PKIX path building failed"))
         assertFalse(attempt.error!!.contains("secret-code"))
         assertEquals(listOf("地址", "结果", "错误", "时间"), attempt.rows(resources).map { it.first })
-        assertEquals("失败，停在「TLS 证书」", attempt.rows(resources)[1].second)
+        assertEquals("失败，停在「安全证书」", attempt.rows(resources)[1].second)
         attempts.record(pairingAttempt(request, null))
         assertFalse(controller.pairing.value!!.failed)
         assertEquals("成功", controller.pairing.value!!.rows(resources)[1].second)

@@ -418,7 +418,6 @@ private struct AgentsList: View {
     /// Under a quick filter, the agents it showed stay until it is chosen again: one opened from 未读 is seen now
     /// but keeps its place, so the next one is still right below it.
     @State private var kept = Set<SessionKey>()
-    @State private var confirmReadAll = false
     @State private var expandedQuiet = Set<String>()
     @State private var expandedIdle = Set<String>()
     #if os(macOS)
@@ -689,7 +688,10 @@ private struct AgentsList: View {
 
             if quick == .unread && !unreadShown.isEmpty {
                 Section {
-                    Button { confirmReadAll = true } label: {
+                    Button {
+                        model.markSeen(unreadShown)
+                        kept = []
+                    } label: {
                         if compact {
                             HStack(spacing: CompactList.gap) {
                                 Image(systemName: Theme.Icon.success).font(CompactList.metaStrong).scaledFrame(width: CompactList.mark)
@@ -715,12 +717,6 @@ private struct AgentsList: View {
                     .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.capsuleInsets : nil)
                     .listRowBackground(capsules ? Color.clear : nil)
                     .listRowSeparator(capsules ? .hidden : .automatic)
-                    .confirmationDialog("把 \(unreadShown.count) 个完成未看的会话标为已读？", isPresented: $confirmReadAll, titleVisibility: .visible) {
-                        Button("全部标为已读（\(unreadShown.count)）") {
-                            model.markSeen(unreadShown)
-                            kept = []
-                        }
-                    }
                 }
             }
 

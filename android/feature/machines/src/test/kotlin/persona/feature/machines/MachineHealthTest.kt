@@ -131,4 +131,31 @@ class MachineHealthTest {
         assertNull(model.state.value.browser)
         assertFalse(model.watchesBrowser(online = true))
     }
+
+    /** An offline machine's card says why and what to do, read from the hub's error (web classifyConnection, #4463). */
+    @Test fun offlineErrorsSayWhyAndWhatToDo() {
+        fun off(error: String?, kind: String = "ssh", mismatch: Boolean? = null, deploying: Boolean = false) =
+            connectionFailureText(Machine("a", kind = kind, online = false, error = error, nodeMismatch = mismatch, deploying = deploying))
+        assertEquals(R.string.machines_offline_timeout, off("ssh: connect to host x port 22: Operation timed out"))
+        assertEquals(R.string.machines_offline_timeout, off("connector: no pong within 30s: context deadline exceeded", kind = "service"))
+        assertEquals(R.string.machines_offline_auth_ssh, off("Permission denied (publickey)"))
+        assertEquals(R.string.machines_offline_auth_link, off("Permission denied", kind = "link"))
+        assertEquals(R.string.machines_offline_auth_link, off("连接器不认这台 hub 的凭据：重新配对", kind = "service"))
+        assertEquals(R.string.machines_offline_unreachable_ssh, off("ssh: connect to host x port 22: Connection refused"))
+        assertEquals(R.string.machines_offline_unreachable_ssh, off("node exited: bash: personad: command not found"))
+        assertEquals(R.string.machines_offline_unreachable_link, off("waiting for Persona Link", kind = "link"))
+        // Offline, the hub cannot redeploy it: always upgraded on that computer.
+        assertEquals(R.string.machines_offline_version_local, off("node exited: unknown method"))
+        assertEquals(R.string.machines_offline_version_local, off("version mismatch", kind = "local"))
+        assertEquals(R.string.machines_offline_version_local, off("protocol version 3, want 4", kind = "link"))
+        // Order: a dial that timed out is a timeout; a refusal that names a version is about the credentials.
+        assertEquals(R.string.machines_offline_timeout, off("dial tcp 192.0.2.1:22: i/o timeout"))
+        assertEquals(R.string.machines_offline_auth_ssh, off("401 Unauthorized: protocol version 3"))
+        // Not read: words that do not say, no words, a machine that is online or being redeployed.
+        assertNull(off("something odd happened"))
+        assertNull(off(""))
+        assertNull(off(null))
+        assertNull(off("ssh: connect to host x port 22: Connection refused", deploying = true))
+        assertNull(connectionFailureText(Machine("a", online = true, error = "Permission denied")))
+    }
 }

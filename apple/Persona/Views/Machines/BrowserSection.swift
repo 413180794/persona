@@ -223,8 +223,15 @@ struct BrowserSection: View {
 /// ego lite's first-run setup and what is left once it is ready, as steps (checked on 0.6.2, 2026-11-04).
 nonisolated enum BrowserGuide {
     static func setUpSteps(_ b: MachineBrowser) -> [GrantGuide.Step] {
-        [
-            GrantGuide.Step(id: "open", done: false, text: String(localized: "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在手机上操作）")),
+        // Build the platform-specific line first: a conditional compilation directive can't sit
+        // between elements of an array literal (it is only valid in statement or result-builder position).
+        #if os(macOS)
+        let open = String(localized: "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在这台 Mac 上远程操作）")
+        #else
+        let open = String(localized: "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在手机上操作）")
+        #endif
+        return [
+            GrantGuide.Step(id: "open", done: false, text: open),
             GrantGuide.Step(id: "import", done: false, text: String(localized: "首次设置里选从 Chrome（或别的浏览器）导入数据：网站的登录状态会一起带过来。macOS 会多次要钥匙串密码，每次都输那台 Mac 的登录密码。不想导入可以跳过")),
             GrantGuide.Step(id: "finish", done: false, text: String(localized: "做完首次设置，它会装上 ego-browser 命令")),
             GrantGuide.Step(id: "recheck", done: false, text: String(localized: "回到这里点「再检查一次」")),

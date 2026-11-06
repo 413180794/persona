@@ -152,9 +152,11 @@ struct TranslationChatPicker: View {
         guard let api = model.api else { return }
         defer { loading = false }
         do {
-            var list = try await api.larkPinned()
-            let page = try await api.larkConversations()
-            list += page.conversations.filter { c in !list.contains { $0.id == c.id } }
+            // The pinned list and the conversation page are independent GETs; run them together.
+            async let pinned = api.larkPinned()
+            async let page = api.larkConversations()
+            var list = try await pinned
+            list += try await page.conversations.filter { c in !list.contains { $0.id == c.id } }
             conversations = list
         } catch {
             self.error = error.shown

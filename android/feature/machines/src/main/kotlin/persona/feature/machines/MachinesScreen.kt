@@ -248,9 +248,15 @@ private fun MachineCard(
                 Modifier.padding(top = Tokens.Space.s), kind = JButtonKind.Secondary, size = JButtonSize.Small)
         } else if (!metrics.online) {
             Text(stringResource(R.string.machines_last_seen, MetricFormat.lastSeen(machine?.lastSeen, locale) ?: stringResource(R.string.machines_unknown)), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-            // A known error_code in plain words, the hub's own error for any other.
-            val reason = machineErrorText(machine?.errorCode)?.let { stringResource(it) } ?: machine?.error
-            reason?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
+            // A known error_code in plain words; else why and what to do as read from the hub's error, its own words
+            // after in a quieter colour; else the hub's error alone (#4463).
+            val coded = machineErrorText(machine?.errorCode)
+            val plain = if (coded == null && machine != null) connectionFailureText(machine) else null
+            (coded ?: plain)?.let { Text(stringResource(it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
+            // A computer being redeployed drops on purpose: its error is not news (the deploy line says what is going on).
+            if (coded == null && machine?.deploying != true) machine?.error?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = PersonaTheme.type.caption, color = if (plain != null) PersonaTheme.palette.ink3 else PersonaTheme.palette.ink2)
+            }
         } else {
             Text(stringResource(R.string.machines_card_sessions, sessions.size, sessions.count { it.agentState == AgentState.Working },
                 sessions.count { it.agentState == AgentState.NeedsYou }),

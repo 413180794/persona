@@ -325,7 +325,9 @@
     <string name="settings_ready_no_machines_detail">可稍后在 Agents 中检查。</string>
     <string name="settings_online">在线</string>
     <string name="settings_offline">离线</string>
-    <string name="settings_ready_node_mismatch">node 与 hub 部署版本不一致</string>
+    <string name="settings_ready_row_persona_version">Persona 版本</string>
+    <string name="settings_ready_row_terminal">终端</string>
+    <string name="settings_ready_node_mismatch">这台电脑上的 Persona 和 hub 版本不一致。等这台电脑在线时，到 Agents 里打开它，点「重新部署」。</string>
     <string name="settings_ready_skip_machines">跳过电脑检查</string>
     <string name="settings_ready_skipped_machines">已跳过电脑检查，稍后可在 Agents 查看在线状态和版本。</string>
     <string name="settings_ready_skip_lock">跳过锁屏测试</string>

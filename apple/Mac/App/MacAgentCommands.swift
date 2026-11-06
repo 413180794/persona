@@ -40,13 +40,9 @@ enum MacAgentCommands {
     }
 
     /// ⌃⌘N: the next agent or Persona conversation that needs you, longest waiting first, wrapping around.
+    /// The picking is shared with the iPhone chat's post-resolution entry (`NextNeedsYou`, #4348).
     static func nextNeedsYou(after current: SessionKey?, in sessions: [Session], muted: (Session) -> Bool) -> SessionKey? {
-        let order = sessions.filter { $0.state == .needsYou && !muted($0) }
-            .sorted { ($0.stateSince ?? .distantPast) < ($1.stateSince ?? .distantPast) }
-            .map(\.key)
-        guard !order.isEmpty else { return nil }
-        guard let current, let i = order.firstIndex(of: current) else { return order[0] }
-        return order[(i + 1) % order.count]
+        NextNeedsYou.next(after: current, in: sessions, muted: muted)
     }
 }
 

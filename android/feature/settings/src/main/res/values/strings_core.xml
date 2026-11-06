@@ -326,7 +326,9 @@
     <string name="settings_ready_no_machines_detail">You can check later in Agents.</string>
     <string name="settings_online">Online</string>
     <string name="settings_offline">Offline</string>
-    <string name="settings_ready_node_mismatch">node and hub versions differ</string>
+    <string name="settings_ready_row_persona_version">Persona version</string>
+    <string name="settings_ready_row_terminal">Terminal</string>
+    <string name="settings_ready_node_mismatch">Persona on this computer and the hub are on different versions. When this computer is online, open it in Agents and tap Redeploy.</string>
     <string name="settings_ready_skip_machines">Skip computer check</string>
     <string name="settings_ready_skipped_machines">Computer check skipped. You can see online status and versions in Agents later.</string>
     <string name="settings_ready_skip_lock">Skip lock screen test</string>

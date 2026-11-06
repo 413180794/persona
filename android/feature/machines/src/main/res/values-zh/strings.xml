@@ -18,6 +18,12 @@
     <string name="machines_unknown">未知</string>
     <string name="machines_card_sessions">运行中 %1$d 个会话，%2$d 个工作中，%3$d 个需要你</string>
     <string name="machines_node_mismatch">这台电脑上的 Persona 和 hub 不是同一次部署</string>
+    <string name="machines_offline_auth_ssh">认证没通过。检查这台电脑的 SSH 密钥和账号是否还有效，然后重新连接</string>
+    <string name="machines_offline_auth_link">认证没通过。在这台电脑上重新配对 Persona Link，然后重新连接</string>
+    <string name="machines_offline_version_local">版本不一致。在这台电脑上本地升级 node，和 hub 保持同一版</string>
+    <string name="machines_offline_timeout">连接超时。网络不稳或电脑在休眠：等它醒来或换个网络，然后重新连接</string>
+    <string name="machines_offline_unreachable_ssh">连不上这台电脑。确认它开着、网络通、node 在运行，然后重新连接</string>
+    <string name="machines_offline_unreachable_link">连不上这台电脑。确认它开着，Persona Link 在运行，然后重新连接</string>
     <string name="machines_computer">电脑</string>
     <plurals name="machines_cores">
         <item quantity="other">%d 核</item>

@@ -25,14 +25,26 @@ struct HubUpdateDeps {
     private(set) var checking = false
     private(set) var error: String?
     @ObservationIgnored private let deps: HubUpdateDeps
+    /// Monotonic tag for history writes: a slower, earlier GET must not overwrite a newer reload's snapshot.
+    @ObservationIgnored private var historyGeneration = 0
 
     init(deps: HubUpdateDeps = .live) { self.deps = deps }
 
     func load() async {
         guard let api = deps.api() else { return }
+        // Claim this load's write generation before the requests fly; a finished status below makes reloadHistory
+        // claim a newer one, so a delayed inline snapshot is dropped instead of covering the fresher reload.
+        let gen = historyGeneration + 1
+        historyGeneration = gen
+        // Status and history are independent GETs: issue both at once instead of making history wait for status.
+        async let respStatus = api.hubUpdate()
+        // try? here (not on respStatus): only the status request's 404 may mark the hub unsupported, never history's.
+        async let respHistory = (try? api.hubUpdateHistory()) ?? []
         do {
-            apply(try await api.hubUpdate())
-            history = (try? await api.hubUpdateHistory()) ?? []
+            // apply before assigning history, as before: it may spawn reloadHistory, which claims the last word.
+            apply(try await respStatus)
+            let h = await respHistory
+            if gen == historyGeneration { history = h }
             error = nil
         } catch let e as APIError where e.status == 404 {
             unsupported = true
@@ -52,7 +64,9 @@ struct HubUpdateDeps {
 
     private func reloadHistory() async {
         guard let api = deps.api() else { return }
-        if let h = try? await api.hubUpdateHistory() { history = h }
+        let gen = historyGeneration + 1
+        historyGeneration = gen
+        if let h = try? await api.hubUpdateHistory(), gen == historyGeneration { history = h }
     }
 
     func check() async {

@@ -278,3 +278,28 @@ func TestSettingsTool(t *testing.T) {
 		t.Fatalf("quiet: %s", out)
 	}
 }
+
+// The agents of open todos are kept listed however long they have been quiet (#4510): a busy machine's newest
+// transcripts crowded a finished, exited task agent out of the list and its task showed 「正在开 Agent」 for ever. A
+// done todo's or a released agent is not kept.
+func TestProfileKeepsOpenTodoAgents(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeHub().withMachine()
+	s := newTestService(t, f)
+	setSettings(t, s, func(v *Settings) { v.Main = "main-1" })
+	f.setSessions("box", proto.Session{SessionID: "a1", Status: proto.StatusIdle}, proto.Session{SessionID: "a2", Status: proto.StatusIdle},
+		proto.Session{SessionID: "a3", Status: proto.StatusIdle})
+	e := &todoEnv{t: t, s: s, f: f}
+	open, done, released := e.create("Open"), e.create("Done"), e.create("Released")
+	e.must("PUT", "/api/v1/todos/"+open.ID+"/agents/box/a1", "")
+	e.must("PUT", "/api/v1/todos/"+done.ID+"/agents/box/a2", "")
+	e.must("PUT", "/api/v1/todos/"+released.ID+"/agents/box/a3", "")
+	e.must("PATCH", "/api/v1/todos/"+done.ID, `{"done":true}`)
+	e.must("DELETE", "/api/v1/todos/"+released.ID+"/agents/box/a3", "")
+	s.publish(ctx)
+	p := f.lastSnapshot().Profile
+	want := []SessionRef{{MachineID: "server", SessionID: "main-1"}, {MachineID: "box", SessionID: "a1"}}
+	if p == nil || !slices.Equal(p.Keep, want) {
+		t.Fatalf("keep: %+v", p)
+	}
+}

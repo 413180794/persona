@@ -24126,6 +24126,28 @@
         }
       }
     },
+    "关闭时先直连 hub，连不上才走 SSH 隧道。隧道断开后会自动重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When off, the app connects to the hub directly first and only uses the SSH tunnel if that fails. The tunnel retries automatically after it disconnects."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフのときはまずハブに直接接続し、つながらない場合だけSSHトンネルを使います。トンネルが切断されると自動で再試行します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭时先直连 hub，连不上才走 SSH 隧道。隧道断开后会自动重试。"
+          }
+        }
+      }
+    },
     "关闭查找": {
       "localizations": {
         "en": {
@@ -30611,6 +30633,28 @@
         }
       }
     },
+    "只列网站和条数，不显示 cookie 的内容。导入的文件就在本机解析，只把你勾选的网站经 hub 直接发给目标机器，hub 不保存；助手看不到也导不了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only sites and counts are listed, never cookie contents. Imported files are read on this machine, and only the sites you check go through the hub straight to the target machine. The hub keeps nothing, and the assistant can't see or import them."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイトと件数のみを表示し、Cookieの内容は表示しません。インポートしたファイルはこのマシン上で解析され、選択したサイトだけがハブ経由で対象のマシンに直接送られます。ハブには保存されず、アシスタントが閲覧やインポートをすることもできません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只列网站和条数，不显示 cookie 的内容。导入的文件就在本机解析，只把你勾选的网站经 hub 直接发给目标机器，hub 不保存；助手看不到也导不了。"
+          }
+        }
+      }
+    },
     "只卸载合集": {
       "localizations": {
         "en": {
@@ -32363,6 +32407,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "同时显示 herdr 和 Herdr App 里的会话；从手机新建的会话仍开在 herdr 里。随时可在设置 › 机器里修改。"
+          }
+        }
+      }
+    },
+    "同时显示 herdr 和 Herdr App 里的会话；从这台 Mac 新建的会话仍开在 herdr 里。随时可在设置 › 机器里修改。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows sessions from both herdr and Herdr App. Sessions you start from this Mac still open in herdr. You can change this anytime in Settings › Machines."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "herdrとHerdr Appの両方のセッションを表示します。このMacから作成したセッションはherdrで開きます。設定 › マシンでいつでも変更できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同时显示 herdr 和 Herdr App 里的会话；从这台 Mac 新建的会话仍开在 herdr 里。随时可在设置 › 机器里修改。"
           }
         }
       }
@@ -52398,40 +52464,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "抄送"
-          }
-        }
-      }
-    },
-    "把 %lld 个完成未看的会话标为已读？": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Mark %lld unread session as read?"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Mark %lld unread sessions as read?"
-                }
-              }
-            }
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未確認の%lld件のセッションを既読にしますか？"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "把 %lld 个完成未看的会话标为已读？"
           }
         }
       }
@@ -73966,6 +73998,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在手机上操作）"
+          }
+        }
+      }
+    },
+    "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在这台 Mac 上远程操作）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap Open ego lite and it opens on that Mac (with Screen Sharing on, you can use VNC to control it remotely from this Mac)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ego liteを開く」をタップすると、そのMacで開きます（画面共有がオンなら「VNC」でこのMacからリモート操作できます）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在这台 Mac 上远程操作）"
           }
         }
       }

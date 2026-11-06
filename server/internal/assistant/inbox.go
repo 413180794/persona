@@ -160,6 +160,16 @@ type InboxMail struct {
 
 func (it *InboxItem) open() bool { return it.DoneAt == nil }
 
+// touched stamps a new per-id parent/done mutation generation under b.mu: a rollback checks its stamp to tell its
+// own write apart from a concurrent same-valued one (two reopens, two unlinks), which value equality cannot.
+func (b *inboxBook) touched(id string) uint64 {
+	if b.mark == nil {
+		b.mark = map[string]uint64{}
+	}
+	b.mark[id]++
+	return b.mark[id]
+}
+
 // conversationOf is where a chat item opens in its messaging source: the source is the connector's id ("lark", the
 // Lark extension's source of the same id), the account the one the apps would pass as ol_account.
 func conversationOf(it *InboxItem) *wire.MessagingConversationRef {
@@ -226,11 +236,12 @@ type inboxBook struct {
 	mu          sync.Mutex
 	items       map[string]*InboxItem
 	once        sync.Once
-	loadMu      sync.Mutex  // one load at a time
-	loaded      atomic.Bool // what the database keeps was read: until then nothing is taken or written
-	running     sync.Mutex  // one collection applied at a time
-	saving      sync.Mutex  // snapshots and writes in the same order
-	epoch       string      // the hub's run and its last round applied (InboxRound.Epoch, Seq), under running
+	loadMu      sync.Mutex        // one load at a time
+	loaded      atomic.Bool       // what the database keeps was read: until then nothing is taken or written
+	running     sync.Mutex        // one collection applied at a time
+	saving      sync.Mutex        // snapshots and writes in the same order
+	mark        map[string]uint64 // bumped on each user parent/done mutation of an id, under mu: a rollback's identity check
+	epoch       string            // the hub's run and its last round applied (InboxRound.Epoch, Seq), under running
 	seq         uint64
 	triaging    sync.Mutex // one triage pass at a time (inbox_triage.go)
 	handing     sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
@@ -1176,11 +1187,17 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 	} else {
 		it.DoneAt, it.DoneBy = nil, ""
 	}
+	newDoneAt, newDoneBy := it.DoneAt, it.DoneBy
+	gen := b.touched(id)
 	out := it.listed()
 	b.mu.Unlock()
 	if failed := s.saveInbox(ctx, []*InboxItem{it}); failed[id] {
 		b.mu.Lock()
-		it.DoneAt, it.DoneBy = prevDoneAt, prevDoneBy
+		// Restore only when the item is still ours, still holds the state this request wrote and no same-valued
+		// mutation (a concurrent reopen) landed: a concurrent file/reopen must not be rewound by our failed write.
+		if b.items[id] == it && b.mark[id] == gen && it.DoneAt == newDoneAt && it.DoneBy == newDoneBy {
+			it.DoneAt, it.DoneBy = prevDoneAt, prevDoneBy
+		}
 		b.mu.Unlock()
 		return InboxItem{}, errInboxNotPersisted
 	}

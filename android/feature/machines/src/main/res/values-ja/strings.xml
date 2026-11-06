@@ -18,6 +18,12 @@
     <string name="machines_unknown">不明</string>
     <string name="machines_card_sessions">実行中のセッション%1$d件、作業中%2$d件、要対応%3$d件</string>
     <string name="machines_node_mismatch">このコンピューターのPersonaはハブと同じデプロイではありません</string>
+    <string name="machines_offline_auth_ssh">認証に失敗しました。このコンピューターの SSH キーとアカウントが有効か確認してから、再接続してください</string>
+    <string name="machines_offline_auth_link">認証に失敗しました。このコンピューターで Persona Link をペアリングし直してから、再接続してください</string>
+    <string name="machines_offline_version_local">バージョンが一致しません。このコンピューターでノードをアップグレードして、ハブと同じバージョンにしてください</string>
+    <string name="machines_offline_timeout">接続がタイムアウトしました。ネットワークが不安定か、コンピューターがスリープ中です。復帰を待つかネットワークを変えてから、再接続してください</string>
+    <string name="machines_offline_unreachable_ssh">このコンピューターに接続できません。電源が入っていて、ネットワークがつながり、ノードが動作していることを確認してから、再接続してください</string>
+    <string name="machines_offline_unreachable_link">このコンピューターに接続できません。電源が入っていて Persona Link が動作していることを確認してから、再接続してください</string>
     <string name="machines_computer">コンピューター</string>
     <plurals name="machines_cores">
         <item quantity="other">%dコア</item>

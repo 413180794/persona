@@ -341,7 +341,7 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	snap.Partial = snap.Partial || snap.Tasks == nil
 	snap.Todos = s.todoReport(ctx)
 	snap.Partial = snap.Partial || snap.Todos == nil
-	snap.Profile = s.profile(ctx, snap.Tasks)
+	snap.Profile = s.profile(ctx, snap.Tasks, snap.Todos)
 	snap.Partial = snap.Partial || snap.Profile == nil
 	snap.Channels = s.channelsReport()
 	snap.Partial = snap.Partial || snap.Channels == nil

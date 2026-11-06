@@ -52,7 +52,7 @@
     <string name="settings_pairing_detail_identity">ハブの識別子</string>
     <string name="settings_pairing_detail_fingerprint">公開鍵フィンガープリント</string>
     <string name="settings_pairing_detail_missing">なし</string>
-    <string name="settings_pairing_detail_tls_port">TLSポート</string>
+    <string name="settings_pairing_detail_tls_port">暗号化ポート</string>
     <string name="settings_pairing_fingerprint_probe">QRコードに公開鍵フィンガープリントがあるため、接続時に暗号化アドレスを探して検証します。</string>
     <string name="settings_pairing_https_no_fingerprint">QRコードに公開鍵フィンガープリントがないため、このHTTPSアドレスはシステムが信頼する証明書とドメインで検証します。</string>
     <string name="settings_pairing_candidates">候補アドレス</string>
@@ -69,7 +69,7 @@
     <string name="settings_pairing_failure_dns">このアドレスが見つかりません。ドメインを確認するか、もう一度スキャンしてください。</string>
     <string name="settings_pairing_failure_refused">ハブがこのポートで待ち受けていません。ハブが動いているか確認してください。</string>
     <string name="settings_pairing_failure_unreachable">今のネットワークからハブに届きません。ネットワークを切り替えてもう一度お試しください。</string>
-    <string name="settings_pairing_failure_timeout">ハブに接続できません。外出先ではルーターがTLSポートへのIPv6着信を許可しているか、自宅では同じネットワークにつながっているかを確認してください。</string>
+    <string name="settings_pairing_failure_timeout">ハブに接続できません。自宅では、スマートフォンとハブのあるパソコンが同じネットワークにつながっているか確認してください。外出先では、自宅のルーターが外部からの接続を許可しているか確認してください。</string>
     <string name="settings_pairing_failure_local">自宅でハブに接続するには、Personaにローカルネットワークへのアクセスを許可してください。</string>
     <string name="settings_pairing_failure_certificate">証明書かハブの身元が一致しません。ハブを入れ直した場合は、ログイン済みのデバイスで新しいコードを出してもう一度読み取ってください。</string>
     <string name="settings_pairing_failure_expired">このコードは期限切れか、すでに使われています。ログイン済みのデバイスで新しいコードを出してください。</string>
@@ -81,7 +81,7 @@
     <string name="settings_pairing_recovery_update">更新して再試行</string>
     <string name="settings_pairing_step_parse">ペアリングリンクの解析</string>
     <string name="settings_pairing_step_network">アドレスへの接続</string>
-    <string name="settings_pairing_step_tls">TLS証明書</string>
+    <string name="settings_pairing_step_tls">セキュリティ証明書</string>
     <string name="settings_pairing_step_http">HTTPリクエスト</string>
     <string name="settings_pairing_step_auth">ペアリングコードの確認</string>
     <string name="settings_pairing_step_protocol">ハブの応答</string>

@@ -227,26 +227,29 @@ func (s *Service) launcherNow(ctx context.Context) string {
 	return s.settings(ctx).Launcher
 }
 
-// profile is what the hub's features need of the settings (Snapshot.Profile); tasks are the scheduled tasks as
-// reported (nil: unreadable, and Keep is left out). nil when the settings could not be read.
-func (s *Service) profile(ctx context.Context, tasks []TaskView) *Profile {
+// profile is what the hub's features need of the settings (Snapshot.Profile); tasks are the scheduled tasks and todos
+// the open todos' agents as reported (either nil: unreadable, and Keep is left out, so the nodes keep what they list).
+// nil when the settings could not be read.
+func (s *Service) profile(ctx context.Context, tasks []TaskView, todos *TodoReport) *Profile {
 	saved, ok := s.savedSettings(ctx)
 	if !ok {
 		return nil
 	}
 	v := s.effective(ctx, saved)
 	p := &Profile{MachineID: v.MachineID, Main: v.Main, Launcher: v.Launcher, Timezone: v.Timezone}
-	if tasks != nil {
-		p.Keep = keptSessions(v, tasks)
+	if tasks != nil && todos != nil {
+		p.Keep = keptSessions(v, tasks, todos.Links)
 	}
 	return p
 }
 
 // keptSessions are the conversations their machines list however long they have been quiet: the main conversation,
-// the main ones it replaced, and scheduled tasks' own. Otherwise a busy machine's 80 newest transcripts crowd them out
-// of the list and the Persona tab has no 主对话 (2026-11-01: the main one, quiet for two days, was gone), and a weekly
-// task's conversation drops out in between, with the app's link to it and the check that its last run still goes.
-func keptSessions(v Settings, tasks []TaskView) []SessionRef {
+// the main ones it replaced, scheduled tasks' own, and the agents of open todos. Otherwise a busy machine's 80 newest
+// transcripts crowd them out of the list and the Persona tab has no 主对话 (2026-11-01: the main one, quiet for two
+// days, was gone), a weekly task's conversation drops out in between, with the app's link to it and the check that its
+// last run still goes, and an open task whose agent finished and exited shows 「正在开 Agent」 for ever: its todo
+// names a session the list no longer has (#4510).
+func keptSessions(v Settings, tasks []TaskView, links []TodoLink) []SessionRef {
 	out := []SessionRef{}
 	add := func(machine, id string) {
 		if machine != "" && id != "" && !slices.Contains(out, SessionRef{MachineID: machine, SessionID: id}) {
@@ -259,6 +262,9 @@ func keptSessions(v Settings, tasks []TaskView) []SessionRef {
 	}
 	for _, t := range tasks {
 		add(t.RunMachineID, t.RunSessionID)
+	}
+	for _, l := range links {
+		add(l.MachineID, l.SessionID)
 	}
 	return out
 }
