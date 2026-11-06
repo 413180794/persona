@@ -603,6 +603,8 @@ data class Interaction(
     @WireTime @SerialName("created_at") val createdAt: String? = null,
     @SerialName("tool_name") val toolName: String? = null,
     @SerialName("questions") val questions: List<Question>? = null,
+    /** The runtime can discard this question without answering or interrupting the task. */
+    @SerialName("can_cancel") val canCancel: Boolean? = null,
     @SerialName("plan") val plan: String? = null,
     @SerialName("tool_input") val toolInput: JsonElement? = null,
     @SerialName("summary") val summary: String? = null,
@@ -671,6 +673,7 @@ data class Resolution(
     @SerialName("keys") val keys: List<String>? = null,
     @SerialName("text") val text: String? = null,
     @SerialName("dismiss") val dismiss: Boolean? = null,
+    @SerialName("cancel") val cancel: Boolean? = null,
     @SerialName("pre_keys") val preKeys: List<String>? = null,
     @SerialName("option") val option: String? = null,
     /** A multi-select dialog's checked option keys. */

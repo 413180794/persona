@@ -550,8 +550,17 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
 {"allow":true,"always":false} / {"allow":false,"message":"…"}                // permission
 {"keys":["down","enter"],"text":""}                                         // screen: keys / text sent to the pane
 {"dismiss":true}                                                            // any: give up, hand back to the computer's TUI
+{"cancel":true}                                                             // question with can_cancel:true: discard without an answer
 {"answers":{"…":"…"},"answered_by":"assistant"}                               // answered by the assistant (#1602): question only; App replies don't carry answered_by
 ```
+
+### Closing a question without an answer
+
+A question advertises `can_cancel:true` only when its runtime can discard that request and release its waiter without interrupting the task. Clients hide the close action when the field is absent or false. Send only `{"cancel":true}` to the existing resolve endpoint; mixing cancellation with answers, dismissal, approvals, keys, or other actions returns 400 and leaves the card pending. Approvals cannot be cancelled through this action. Folding a card remains local UI state.
+
+The manager records `cancelled` with the cancellation resolution, removes the pending card, and releases its waiter once. Repeated HTTP cancellation returns the recorded result, and a reconnecting resumable hook receives the same cancellation instead of a new question. Claude `AskUserQuestion` hooks deny only that tool call without `updatedInput.answers`; Codex owned and joined app-server `item/tool/requestUserInput` requests receive `{"answers":{}}` on the original request, with no user message or `turn/interrupt`. The assistant's `ask_user` tool also releases its wait with an explicit no-answer result. Existing `dismiss` still hands control back to the computer.
+
+Terminal-only Codex questions (including asynchronous rollout questions) do not advertise cancellation: sending Escape may fold a pane, clear notes, or stop a turn. Upgrade the hub, manager, and the node running the supported runtime before expecting the button; older components omit the capability. Existing questions created before the upgrade keep their original capability.
 
 ### MCP elicitation
 

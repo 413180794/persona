@@ -900,7 +900,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 		return map[string]any{"permissions": granted, "scope": "turn"}, nil
 
 	case "item/tool/requestUserInput":
-		ix.Kind, ix.ToolName = proto.IxQuestion, "request_user_input"
+		ix.Kind, ix.ToolName, ix.CanCancel = proto.IxQuestion, "request_user_input", true
 		for _, q := range r.Questions {
 			qq := proto.Question{Question: q.Question, Header: q.Header}
 			for _, o := range q.Options {
@@ -910,7 +910,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 		}
 		answers := map[string]any{}
 		res, ok, err := n.ask(ctx, ix)
-		if err == nil && ok {
+		if err == nil && ok && !res.Cancel {
 			for _, q := range r.Questions {
 				if a, ok := res.Answers[q.Question]; ok {
 					answers[q.ID] = map[string]any{"answers": []string{a}}

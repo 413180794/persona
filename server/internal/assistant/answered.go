@@ -91,6 +91,8 @@ func interactionQuestion(l i18n.Lang, ix proto.Interaction) string {
 // resolutionAnswer is the user's answer, in a line (never a typed secret: the hub keeps those nowhere).
 func resolutionAnswer(l i18n.Lang, ix proto.Interaction, r proto.Resolution) string {
 	switch {
+	case r.Cancel:
+		return answeredT(l, "not_answered")
 	case r.Dismiss:
 		return answeredT(l, "dismissed")
 	case len(r.Answers) > 0:

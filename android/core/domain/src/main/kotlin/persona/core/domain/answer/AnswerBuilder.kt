@@ -6,7 +6,7 @@ import persona.core.contracts.Resolution
 
 enum class AnswerAction(val wire: String) {
     ApproveAll("approve_all"), ApproveEdits("approve_edits"), ApproveStepwise("approve_stepwise"), Reject("reject"), Allow("allow"),
-    Deny("deny"), Always("always"), Dismiss("dismiss"), PickOption("pick_option"),
+    Deny("deny"), Always("always"), CancelQuestion("cancel_question"), Dismiss("dismiss"), PickOption("pick_option"),
     Advance("advance"), Submit("submit"), ScreenOption("screen_option"),
     TerminalText("terminal_text"), TerminalKeys("terminal_keys"), SubmitElicitation("submit_elicitation"),
     DeclineElicitation("decline_elicitation"), CancelElicitation("cancel_elicitation"),
@@ -80,6 +80,11 @@ object AnswerBuilder {
                 }
             }
         }
+        if (action == AnswerAction.CancelQuestion) {
+            if (interaction.kind != "question" || interaction.canCancel != true ||
+                context.entry != AnswerEntry.Conversation || context.locked) return blocked()
+            return resolved(Resolution(cancel = true))
+        }
         val policyId = when (action) {
             AnswerAction.PickOption, AnswerAction.Advance, AnswerAction.Submit ->
                 if (context.entry == AnswerEntry.Notification) ApprovalAction.ChooseOption else ApprovalAction.Answer
@@ -133,6 +138,7 @@ object AnswerBuilder {
                 if (policy.input == "none" && draft.message.isNotEmpty()) return blocked()
                 resolved(Resolution(allow = false, message = draft.message.takeIf { it.isNotEmpty() }))
             }
+            AnswerAction.CancelQuestion -> blocked() // handled before the answer policy
             AnswerAction.Dismiss -> resolved(Resolution(dismiss = true))
             AnswerAction.PickOption, AnswerAction.Advance, AnswerAction.Submit -> question(interaction.questions.orEmpty(), action, draft)
             AnswerAction.ScreenOption -> {

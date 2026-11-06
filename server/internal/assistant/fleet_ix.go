@@ -32,6 +32,9 @@ import (
 type pending struct {
 	ix   proto.Interaction
 	done chan proto.Resolution
+	// resolved broadcasts a claimed answer to every overlapping resumable waiter.
+	resolved   chan struct{}
+	resolution *proto.Resolution
 	// local is set for interactions the manager resolves itself (screen dialogs, Codex cards): it acts on the answer,
 	// and an error goes back to whoever answered (prompt_changed: nothing was pressed).
 	local func(proto.Resolution) error
@@ -663,30 +666,53 @@ func (s *Service) waitInteraction(ctx context.Context, ix proto.Interaction) (pr
 // await blocks on a registered interaction. When ctx ends — the node's connection is gone — a resumable
 // interaction stays pending for its hook to claim again.
 func (s *Service) await(ctx context.Context, p *pending) (proto.Resolution, error) {
+	s.fleet.mu.Lock()
+	if p.resolved == nil {
+		p.resolved = make(chan struct{})
+	}
+	resolved := p.resolved
+	s.fleet.mu.Unlock()
 	id := p.ix.ID
 	timer := time.NewTimer(time.Until(p.ix.ExpiresAt))
 	defer timer.Stop()
+	status := "cancelled"
 	select {
+	case <-resolved:
+		s.finishInteraction(id)
+		return *p.resolution, nil
 	case r := <-p.done:
 		s.finishInteraction(id)
 		return r, nil
 	case <-timer.C:
-		s.recordEnd(id, "expired", nil)
-		s.finishInteraction(id)
-		return proto.Resolution{Dismiss: true}, nil
+		status = "expired"
 	case <-ctx.Done():
-		if p.ix.Resumable {
-			s.fleet.mu.Lock()
-			kept := s.fleet.interactions[id] == p && s.orphanLocked(p)
-			s.fleet.mu.Unlock()
-			if kept {
-				return proto.Resolution{Dismiss: true}, nil // nobody reads it: the node is gone
-			}
+	}
+	// Decide under the same lock as resolve: an answer already claimed must be
+	// persisted before any waiter can record a competing timeout or disconnect.
+	s.fleet.mu.Lock()
+	if p.claimed {
+		hasAnswer := p.resolution != nil
+		s.fleet.mu.Unlock()
+		if hasAnswer {
+			<-resolved
+			s.finishInteraction(id)
+			return *p.resolution, nil
 		}
-		s.recordEnd(id, "cancelled", nil)
-		s.finishInteraction(id)
 		return proto.Resolution{Dismiss: true}, nil
 	}
+	if s.fleet.interactions[id] != p {
+		s.fleet.mu.Unlock()
+		return proto.Resolution{Dismiss: true}, nil
+	}
+	if status == "cancelled" && p.ix.Resumable && s.orphanLocked(p) {
+		s.fleet.mu.Unlock()
+		return proto.Resolution{Dismiss: true}, nil // disconnected hook; a new one can resume
+	}
+	p.claimed, p.graceEnded = true, true
+	s.fleet.mu.Unlock()
+	s.recordEnd(id, status, nil)
+	s.finishInteraction(id)
+	return proto.Resolution{Dismiss: true}, nil
 }
 
 // orphanLocked starts p's grace period: it ends (cancelled) unless its hook claims it again first. Callers hold
@@ -730,7 +756,7 @@ func (s *Service) outcome(id string) (status string, r proto.Resolution, ended b
 	switch {
 	case err != nil || status == "" || status == "pending":
 		return status, proto.Resolution{}, false
-	case status == "resolved" && res != nil:
+	case res != nil && (status == "resolved" || status == "cancelled" && res.Cancel):
 		return status, *res, true
 	default:
 		return status, proto.Resolution{Dismiss: true}, true
@@ -776,6 +802,10 @@ var errInvalidElicitation = errors.New("elicitation requires action accept, decl
 func (s *Service) resolve(id string, r proto.Resolution) error {
 	s.fleet.mu.Lock()
 	p := s.fleet.interactions[id]
+	if p != nil && r.Cancel && (!p.ix.CanCancel || p.ix.Kind != proto.IxQuestion || !r.IsQuestionCancel()) {
+		s.fleet.mu.Unlock()
+		return errInvalidQuestionCancel
+	}
 	if p != nil && p.ix.Kind == proto.IxElicitation && !r.Dismiss &&
 		r.Action != "accept" && r.Action != "decline" && r.Action != "cancel" {
 		s.fleet.mu.Unlock()
@@ -810,6 +840,10 @@ func (s *Service) resolve(id string, r proto.Resolution) error {
 		}
 	} else if p != nil {
 		p.claimed = true
+		p.resolution = &r
+		if p.resolved == nil {
+			p.resolved = make(chan struct{})
+		}
 	}
 	if p != nil {
 		p.answeredBy, p.answeredReason = r.AnsweredBy, r.Reason // read by finished(), under this lock
@@ -822,7 +856,9 @@ func (s *Service) resolve(id string, r proto.Resolution) error {
 		return fmt.Errorf("interaction %s is %w", id, errNotPending)
 	}
 	status := "resolved"
-	if r.Dismiss {
+	if r.Cancel {
+		status = "cancelled"
+	} else if r.Dismiss {
 		status = "dismissed"
 	}
 	if p.local != nil {
@@ -854,6 +890,7 @@ func (s *Service) resolve(id string, r proto.Resolution) error {
 	s.channelsEnded(p.ix, &r)
 	go s.InteractionResolved(context.Background(), InteractionResolved{Interaction: p.ix, Resolution: r, Status: status})
 	s.keepAlways(p.ix, r) // kept before the hook hears: its next card may follow at once
+	close(p.resolved)
 	select {
 	case p.done <- r:
 	default:

@@ -15,6 +15,7 @@ import persona.core.domain.plainMarkdown
  */
 data class AnswerReceipt(val interaction: Interaction, val resolution: Resolution) {
     fun text(res: Resources): String? {
+        if (resolution.cancel == true) return res.getString(R.string.chat_question_closed)
         if (resolution.dismiss == true) return null
         return when (interaction.kind) {
             "permission" -> {

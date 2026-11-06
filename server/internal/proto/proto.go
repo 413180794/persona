@@ -1301,6 +1301,8 @@ type Interaction struct {
 	MCPServerName   string          `json:"mcp_server_name,omitempty"`
 	MCPConfigSource string          `json:"mcp_config_source,omitempty"`
 	Elicitation     *Elicitation    `json:"elicitation,omitempty"`
+	// CanCancel is advertised only by runtimes supporting question-only cancellation.
+	CanCancel bool `json:"can_cancel,omitempty"`
 	// Dialog is the screen's dialog read on the hub (screen interactions); answers name an option and are checked
 	// against Dialog.Rev before any key is pressed. Absent when the screen shows no dialog it could read.
 	Dialog *dialogwire.Dialog `json:"dialog,omitempty"`
@@ -1372,6 +1374,8 @@ type Elicitation struct {
 }
 
 type Resolution struct {
+	// Cancel discards only this question, without supplying answers or interrupting the task.
+	Cancel   bool              `json:"cancel,omitempty"`
 	Action   string            `json:"action,omitempty"`
 	Content  map[string]any    `json:"content,omitempty"`
 	Answers  map[string]string `json:"answers,omitempty"`

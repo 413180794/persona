@@ -69,6 +69,17 @@ internal fun InteractionPanel(
     val now by produceState(Instant.now(), request.expiresAt) {
         while (true) { value = Instant.now(); delay(1_000) }
     }
+    val closeQuestion: @Composable () -> Unit = {
+        if (request.kind == "question" && request.canCancel == true) {
+            val canClose = busyId == null && request.id !in uncertainIds && blockedReason == null &&
+                !linkVisible && !RequestExpiry.expired(request.expiresAt, now)
+            JIconButton(PhIcons.X, stringResource(R.string.chat_question_close), {
+                if (canClose && !RequestExpiry.expired(request.expiresAt, Instant.now())) {
+                    AnswerBuilder.build(request, AnswerAction.CancelQuestion).resolution?.let { onResolve(request, it) }
+                }
+            }, enabled = canClose)
+        }
+    }
     DecisionDock(
         kind = when (request.kind) {
             "permission" -> if (request.toolName == "Bash") DecisionKind.Command else DecisionKind.Tool
@@ -82,12 +93,16 @@ internal fun InteractionPanel(
         modifier = Modifier.heightIn(max = maxHeight), position = index + 1 to requests.size,
         onPrevious = { selected = index - 1 }, onNext = { selected = index + 1 }, onList = { all = true },
         collapsed = collapsed, onCollapsedChange = onCollapsedChange, onExpand = { full = true },
+        headerActions = closeQuestion,
     ) {
         if (!full && !all) body(false)
     }
     if (full) JSheet(onDismiss = { full = false }, title = request.headline.text()) {
         Column(Modifier.fillMaxHeight().imePadding()) {
-            JTextButton(stringResource(R.string.chat_request_collapse_full), { full = false })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                JTextButton(stringResource(R.string.chat_request_collapse_full), { full = false })
+                closeQuestion()
+            }
             body(true)
         }
     }

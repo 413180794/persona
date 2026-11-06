@@ -424,7 +424,7 @@ func (s *Service) toolAskUser(ctx context.Context, machine, sessionID string, ar
 		return "", fmt.Errorf("questions are required")
 	}
 	ix := proto.Interaction{
-		ID: "ix_" + randomHex(6), MachineID: machine, SessionID: sessionID, SessionTitle: "Persona", Kind: proto.IxQuestion,
+		ID: "ix_" + randomHex(6), MachineID: machine, SessionID: sessionID, SessionTitle: "Persona", Kind: proto.IxQuestion, CanCancel: true,
 		ToolName: "ask_user", ToolInput: args, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(30 * time.Minute).UTC(),
 	}
 	if c, ok := s.session(ctx, machine, sessionID); ok {
@@ -443,6 +443,9 @@ func (s *Service) toolAskUser(ctx context.Context, machine, sessionID string, ar
 	r, err := s.ask(ctx, ix)
 	if err != nil {
 		return "", err
+	}
+	if r.Cancel {
+		return prompts.RenderQuestionCancelled(), nil
 	}
 	if r.Dismiss || len(r.Answers) == 0 {
 		return "The user did not answer (dismissed or timed out). Don't go ahead with what you asked about; say what is waiting for them.", nil
@@ -514,6 +517,9 @@ func (s *Service) Action(ctx context.Context, a Action) (ActionResult, error) {
 	s.questions.mu.Unlock()
 	if q == nil {
 		return ActionResult{}, errGone(a.InteractionID)
+	}
+	if r.Cancel && (q.ix.Kind != proto.IxQuestion || !q.ix.CanCancel || !r.IsQuestionCancel()) {
+		return ActionResult{}, errInvalidQuestionCancel
 	}
 	select {
 	case q.answer <- r:

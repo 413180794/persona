@@ -66,6 +66,7 @@ func TestMissingFieldPanics(t *testing.T) {
 
 func TestSmallPrompts(t *testing.T) {
 	for got, want := range map[string]string{
+		RenderQuestionCancelled():          "The user closed this question without answering. Continue without an answer; do not repeat this question.",
 		RenderRefused("他说不行"):              "（没有执行）他说不行",
 		RenderLauncherCheck():              "Reply with exactly one word: ok",
 		RenderJSONOnly("system"):           "system\n\nReply with a single JSON object only, no prose, no code fences.",

@@ -30,8 +30,8 @@ internal const val NEXT_WAITING_MILLIS = 20_000L
  * handed-back card is not: a changed screen brings a new card here at once.
  */
 internal fun InteractionReply.offersNext(resolution: persona.core.contracts.Resolution): Boolean =
-    submission == InteractionSubmission.AlreadyAnswered ||
-        submission == InteractionSubmission.Answered && resolution.dismiss != true
+    (submission == InteractionSubmission.AlreadyAnswered && effective?.cancel != true) ||
+        (submission == InteractionSubmission.Answered && resolution.dismiss != true && resolution.cancel != true)
 
 /**
  * Whether the line shows now: offered after an answer here, this chat has no card left, the page can answer and open

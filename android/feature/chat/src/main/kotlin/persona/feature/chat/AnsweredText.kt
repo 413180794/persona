@@ -14,6 +14,7 @@ internal object AnsweredText {
 
     fun lines(res: Resources, interaction: Interaction, resolution: Resolution): List<Line> {
         fun one(id: Int, vararg args: Any) = listOf(Line("", res.getString(id, *args)))
+        if (resolution.cancel == true) return one(R.string.chat_question_closed)
         if (resolution.dismiss == true) return one(R.string.chat_answered_dismissed)
         if (resolution.answeredBy == "assistant" && interaction.kind != "question") return one(R.string.chat_answered_by_assistant)
         return when (interaction.kind) {

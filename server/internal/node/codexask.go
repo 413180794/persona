@@ -452,6 +452,9 @@ func (n *Node) codexApprovalOn(ctx context.Context, pane string) (d *screen.Code
 // codexAnswer answers a card from the phone: only into the question or approval it was made from, as it is on screen
 // and in the rollout now. A refusal (rpc error with a code) typed nothing.
 func (n *Node) codexAnswer(ctx context.Context, session, id string, r proto.Resolution) error {
+	if r.Cancel {
+		return fmt.Errorf("question cancellation is unavailable for terminal-only questions")
+	}
 	if r.Dismiss {
 		n.cx.dismiss(session, id)
 		return nil

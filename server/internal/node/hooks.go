@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/nodeclient"
+	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -328,7 +330,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 		if json.Unmarshal(in.ToolInput, &q) != nil || len(q.Questions) == 0 {
 			return nil, nil
 		}
-		ix.Kind = proto.IxQuestion
+		ix.Kind, ix.CanCancel = proto.IxQuestion, true
 		for _, qq := range q.Questions {
 			ix.Questions = append(ix.Questions, proto.Question{Question: qq.Question, Header: qq.Header, MultiSelect: qq.MultiSelect, Options: qq.Options})
 		}
@@ -337,6 +339,9 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 			return preToolDecision("deny", duplicateQuestionReason), nil
 		}
 		res, ok, err := n.ask(ctx, ix)
+		if err == nil && ok && res.Cancel {
+			return preToolDecision("deny", prompts.RenderQuestionCancelled()), nil
+		}
 		if err != nil || !ok || len(res.Answers) == 0 {
 			return nil, err
 		}
@@ -600,6 +605,9 @@ func (n *Node) askOnce(ctx context.Context, ix proto.Interaction) (proto.Resolut
 		}
 		_ = n.peer.Notify("interaction.cancel", map[string]any{"id": ix.ID})
 		return res, false, nil
+	}
+	if res.Cancel && (ix.Kind != proto.IxQuestion || !ix.CanCancel || !res.IsQuestionCancel()) {
+		return proto.Resolution{}, false, fmt.Errorf("invalid question cancellation")
 	}
 	if res.Dismiss {
 		return res, false, nil

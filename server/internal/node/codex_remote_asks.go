@@ -89,7 +89,7 @@ func (c *codexRemote) request(m codexMessage) {
 			return map[string]any{"permissions": p, "scope": scope}, true
 		}
 	case "item/tool/requestUserInput":
-		ix.Kind, ix.ToolName = proto.IxQuestion, "request_user_input"
+		ix.Kind, ix.ToolName, ix.CanCancel = proto.IxQuestion, "request_user_input", true
 		for _, q := range r.Questions {
 			qq := proto.Question{Question: q.Question, Header: q.Header}
 			for _, o := range q.Options {
@@ -99,6 +99,9 @@ func (c *codexRemote) request(m codexMessage) {
 		}
 		response = func(res proto.Resolution) (any, bool) {
 			answers := map[string]any{}
+			if res.Cancel {
+				return map[string]any{"answers": answers}, true
+			}
 			for _, q := range r.Questions {
 				a, ok := res.Answers[q.Question]
 				if !ok {

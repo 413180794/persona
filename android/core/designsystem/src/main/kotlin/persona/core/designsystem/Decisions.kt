@@ -201,6 +201,7 @@ fun DecisionDock(
     collapsed: Boolean = false,
     onCollapsedChange: ((Boolean) -> Unit)? = null,
     onExpand: (() -> Unit)? = null,
+    headerActions: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = PersonaTheme.palette
@@ -222,6 +223,7 @@ fun DecisionDock(
             expires?.let { Text(it, style = type.micro, color = palette.ink3, maxLines = 1); Spacer(Modifier.width(4.dp)) }
             onExpand?.let { JIconButton(PhIcons.ArrowSquareOut, stringResource(R.string.designsystem_decision_open_full), it, tint = palette.ink2) }
             onCollapsedChange?.let { change -> JIconButton(if (collapsed) PhIcons.CaretUp else PhIcons.CaretDown, stringResource(if (collapsed) R.string.designsystem_expand else R.string.designsystem_collapse), { change(!collapsed) }, tint = palette.ink2) }
+            headerActions?.invoke()
         }
         position?.takeIf { it.second > 1 }?.let { (current, total) ->
             Row(verticalAlignment = Alignment.CenterVertically) {

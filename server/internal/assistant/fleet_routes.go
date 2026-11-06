@@ -44,7 +44,7 @@ func (s *Service) fleetHandler(next http.Handler) http.Handler {
 			switch {
 			case errors.Is(err, errNotPending):
 				s.writeEnded(r.Context(), w, id, res, err)
-			case errors.Is(err, errInvalidElicitation):
+			case errors.Is(err, errInvalidElicitation), errors.Is(err, errInvalidQuestionCancel):
 				apierr.Write(w, http.StatusBadRequest, err)
 			default:
 				apierr.Call(w, err) // prompt_changed: 409, nothing pressed
@@ -107,7 +107,8 @@ func (s *Service) writeEnded(ctx context.Context, w http.ResponseWriter, id stri
 		status, kept, _ = st.InteractionOutcome(ctx, id)
 		cancel()
 	}
-	if status == "resolved" || (status == "dismissed" && r.Dismiss) {
+	if status == "resolved" || (status == "dismissed" && r.Dismiss) ||
+		(status == "cancelled" && r.IsQuestionCancel() && kept != nil && kept.Cancel) {
 		out := map[string]any{"ok": true, "already": true, "status": status}
 		if kept != nil {
 			out["resolution"] = kept
