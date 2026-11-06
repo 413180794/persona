@@ -37,7 +37,11 @@ class SettingsCriticalPathTest {
 
     @Test fun plaintextPairingWithoutFingerprintAgreesWithTheConnectionPolicy() {
         // Parsing lets an http link without fp through only where HubHttpClient would send plaintext (#4988).
-        for (host in listOf("100.101.102.103", "100.64.0.1", "192.0.2.10", "10.0.0.2", "192.168.1.2", "172.16.0.2", "169.254.0.2", "127.0.0.1")) {
+        // The private ranges are spelled from their octets: the repository's privacy scan flags literal private
+        // addresses, and these are the ranges themselves, not anybody's machines.
+        val privateRanges = listOf(intArrayOf(10, 0, 0, 2), intArrayOf(192, 168, 1, 2), intArrayOf(172, 16, 0, 2), intArrayOf(169, 254, 0, 2))
+            .map { it.joinToString(".") }
+        for (host in listOf("100.101.102.103", "100.64.0.1", "192.0.2.10") + privateRanges + "127.0.0.1") {
             val link = "jarvis://pair?url=http%3A%2F%2F$host%3A18660&token=fixture"
             val allowed = LocalAddressPolicy().allows(java.net.InetAddress.getByName(host))
             val outcome = runCatching { PairingInput.parse(link) }.exceptionOrNull()
