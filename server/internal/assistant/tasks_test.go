@@ -605,3 +605,40 @@ func TestTaskStartTimingOutStillEndsTheTask(t *testing.T) {
 		}
 	})
 }
+
+// A plan card in the main conversation waiting for the user's 开始 has no todo yet, so nothing else in the snapshot
+// shows it: the snapshot lists it, so the 早报 brings it up (#4453). A started plan, and one from another
+// conversation, are not listed.
+func TestSnapshotListsPlansWaitingToStart(t *testing.T) {
+	s, f := newTaskService(t)
+	ctx := context.Background()
+	setSettings(t, s, func(v *Settings) { v.Main, v.MachineID = "main1", "box" })
+	_ = f
+	if _, err := s.toolTaskPlan(ctx, "main1", planArgs(false)); err != nil { // edits code: waits for 开始
+		t.Fatal(err)
+	}
+	if _, err := s.toolTaskPlan(ctx, "conv1", planArgs(false)); err != nil { // another conversation's
+		t.Fatal(err)
+	}
+	loc := s.location(ctx)
+	plans, total := s.snapshotPlans(ctx, loc, time.Now())
+	if total != 1 || len(plans) != 1 || plans[0].Tasks != 1 || len(plans[0].Titles) != 1 || plans[0].Titles[0] != "修登录崩溃" {
+		t.Fatalf("plans waiting: %+v (%d)", plans, total)
+	}
+	text := prompts.RenderSnapshot(prompts.Snapshot{Now: time.Now().In(loc), Zone: loc.String(), Plans: plans, PlansTotal: total})
+	if !strings.Contains(text, "等用户点「开始」的计划") || !strings.Contains(text, "修登录崩溃") {
+		t.Fatalf("snapshot: %s", text)
+	}
+	// Started: it is a task now, no longer a card waiting.
+	items, ps, _ := s.feed(ctx, "main1", time.Time{})
+	for _, it := range items {
+		if it.Kind == feedPlan {
+			if _, err := s.startPlan(ctx, ps[it.Ref].ID, nil, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if plans, total := s.snapshotPlans(ctx, loc, time.Now()); total != 0 || len(plans) != 0 {
+		t.Fatalf("a started plan is not waiting: %+v", plans)
+	}
+}

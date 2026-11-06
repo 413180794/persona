@@ -107,6 +107,7 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 	snap.Tasks = s.snapshotTasks(ctx, web)
 	snap.Approvals = s.snapshotApprovals(ctx, web)
 	snap.Unaccepted, snap.UnacceptedTotal = s.snapshotUnaccepted(ctx, loc)
+	snap.Plans, snap.PlansTotal = s.snapshotPlans(ctx, loc, now)
 	if e, err := s.kbGet(ctx); err == nil {
 		snap.KB = e.Prompt(6, 8)
 	}
@@ -299,4 +300,41 @@ func (s *Service) snapshotSchedule(ctx context.Context, loc *time.Location, now 
 		all = all[:6]
 	}
 	return follow, routines, routinesTotal, all, missed
+}
+
+// snapshotPlans are the plan cards in the main conversation still waiting for the user's 开始 (#4453), newest first:
+// at most five (total: all of them), of the last seven days. A plan has no todo until it starts, so nothing else in
+// the snapshot shows it, and the 早报 could not bring it up.
+func (s *Service) snapshotPlans(ctx context.Context, loc *time.Location, now time.Time) ([]prompts.SnapshotPlan, int) {
+	main := s.settings(ctx).Main
+	if main == "" {
+		return nil, 0
+	}
+	items, plans, err := s.feed(ctx, main, now.Add(-7*24*time.Hour))
+	if err != nil {
+		return nil, 0
+	}
+	var out []prompts.SnapshotPlan
+	seen := map[string]bool{}
+	for i := len(items) - 1; i >= 0; i-- { // newest first
+		it := items[i]
+		p := plans[it.Ref]
+		if it.Kind != feedPlan || seen[it.Ref] || p == nil || p.State != planOpen {
+			continue
+		}
+		seen[it.Ref] = true
+		sp := prompts.SnapshotPlan{At: p.CreatedAt.In(loc), Tasks: len(p.Tasks)}
+		for _, t := range p.Tasks {
+			if len(sp.Titles) == 3 {
+				break
+			}
+			sp.Titles = append(sp.Titles, clip(oneLine(t.Title), 30))
+		}
+		out = append(out, sp)
+	}
+	total := len(out)
+	if len(out) > 5 {
+		out = out[:5]
+	}
+	return out, total
 }

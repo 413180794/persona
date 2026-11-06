@@ -11,6 +11,7 @@
 {{end}}{{with .Tasks}}- 从对话开的任务（task_plan；用 agent_send 对它的 Agent 说话）：
 {{range .}}{{$t := .}}  - {{.Title}}（{{.ID}}{{with .Link}}，链接 {{.}}{{end}}）：{{.State}}{{with .Health}}；督办：{{.}}{{if $t.DoneWhen}}，验收标准 {{$t.DoneWhen}} 条{{else}}，没写验收标准{{end}}{{end}}{{with .Machine}}，{{.}}{{end}}{{with .Session}} session_id={{.}}{{end}}{{with .Last}}：{{.}}{{end}}{{with .Doing}}{{if $t.Last}}；{{else}}：{{end}}现在{{.}}{{with $t.DoingFor}}（{{.}}了）{{end}}{{end}}{{with .Subagents}}；子 Agent 在跑：{{join . "、"}}{{end}}{{with .Workflows}}；后台 workflow 在跑（在等它的结果，没做完）：{{range $i, $w := .}}{{if $i}}、{{end}}{{template "assistant/snapshot_workflow" $w}}{{end}}{{end}}{{with .Delivery}}；交付：{{.}}{{end}}
 {{end}}{{end}}{{with .Approvals}}- 等用户点头才能上线的（{{len .}} 件；合到一起一次列给用户批，别一件件问）：{{range $i, $a := .}}{{if $i}}；{{end}}「{{$a.Title}}」（{{$a.ID}}{{with $a.Link}}，链接 {{.}}{{end}}）{{$a.Stage}}，{{$a.Gate}}{{end}}
+{{end}}{{with .Plans}}- 等用户点「开始」的计划（主对话里的卡片，用户点了才开工；汇报时要说）：{{range $i, $p := .}}{{if $i}}；{{end}}{{$p.At.Format "01-02 15:04"}} {{join $p.Titles "、"}}{{if gt $p.Tasks (len $p.Titles)}} 等 {{$p.Tasks}} 件{{end}}{{end}}{{if gt $.PlansTotal (len .)}} 等 {{$.PlansTotal}} 张{{end}}
 {{end}}{{with .Unaccepted}}- 等用户验收的（已部署，飞书里发过「请验收」，还没回「通过」）：{{range $i, $a := .}}{{if $i}}；{{end}}「{{$a.Title}}」：{{$a.Changed}}{{with $a.Link}}（{{.}}）{{end}}，{{$a.Since.Format "01-02"}} 起{{end}}{{if gt $.UnacceptedTotal (len .)}} 等 {{$.UnacceptedTotal}} 个{{end}}
 {{end}}{{if .PhoneOnline}}- iPhone：App 在线，phone_* 工具可用
 {{else}}- iPhone：App 不在前台，phone_* 工具会先尝试在后台唤醒 App，失败就请他打开 App

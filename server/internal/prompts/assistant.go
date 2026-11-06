@@ -91,6 +91,14 @@ type SnapshotFollowup struct {
 	Every string // "30 分钟" for a repeating one
 }
 
+// SnapshotPlan is a plan card in the main conversation still waiting for the user's 开始 (#4453): nothing of it has
+// started, and it shows nowhere else.
+type SnapshotPlan struct {
+	At     time.Time // when it was put up, in the user's zone
+	Titles []string  // its tasks' titles (at most three)
+	Tasks  int       // how many tasks it has
+}
+
 // SnapshotRoutine is a daily scheduled task (早报, 晚报…): its rule, and how its last run went (LastAt zero: it never
 // ran). LastStatus is the run's status (ok / failed / skipped), LastWhy why it failed or was skipped, in short.
 type SnapshotRoutine struct {
@@ -159,6 +167,8 @@ type Snapshot struct {
 	Missed        []SnapshotMiss    // scheduled runs that failed or were skipped since yesterday 18:00, newest first
 	MissedTotal   int               // all of them (Missed is the newest six)
 	Tasks         []SnapshotTask    // tasks opened from assistant conversations (task_plan), newest first
+	Plans         []SnapshotPlan    // plan cards in the main conversation waiting for 开始, newest first (at most five)
+	PlansTotal    int
 	// Unaccepted: deployed tasks whose 请验收 card the user has not passed yet (#2768), oldest first; the morning
 	// briefing brings them up again.
 	Unaccepted      []SnapshotAccept
