@@ -32,6 +32,7 @@ class SettingsNavigationTest {
             SettingsPage.Providers to "providers",
             SettingsPage.Storage to "storage",
             SettingsPage.Desktops to "desktops",
+            SettingsPage.Managers to "managers",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)
         assertEquals(pages.size, pages.values.toSet().size)

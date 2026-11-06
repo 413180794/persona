@@ -8,6 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.GroupKeys
 import persona.core.contracts.HubUpdateEvent
+import persona.core.contracts.ManagersEvent
 import persona.core.contracts.ExtensionUiEvent
 import persona.core.contracts.ExtensionOperationEvent
 import persona.core.contracts.ExtensionAuthEvent
@@ -16,6 +17,7 @@ import persona.core.contracts.api.*
 import persona.core.hub.HttpConnectorsManagement
 import persona.core.hub.HttpComputerPairing
 import persona.core.hub.HttpHubUpdates
+import persona.core.hub.HttpHubManagers
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpAgentTriage
 import persona.core.hub.HttpModelConfiguration
@@ -219,6 +221,20 @@ object MachineManagementModule {
         override suspend fun start(now: Boolean) = api().start(now)
         override suspend fun settings(auto: Boolean?, noticeSeen: Boolean?) = api().settings(auto, noticeSeen)
         override suspend fun history() = api().history()
+    }
+
+    // 设置 › 管理者 (docs/managers.md): the selected group's hub, reading the list again on its `managers` pushes.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Provides @Singleton fun managers(runtime: ConnectionRuntime, application: Application): HubManagers = object : HubManagers {
+        override val changes: Flow<Unit> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.events ?: emptyFlow() }.filterIsInstance<ManagersEvent>().map { }
+        private fun api() = HttpHubManagers(runtime.connection())
+        override suspend fun roster() = api().roster()
+        override suspend fun create(name: String) = api().create(name)
+        override suspend fun newCode(id: String) = api().newCode(id)
+        override suspend fun rename(id: String, name: String) = api().rename(id, name)
+        override suspend fun makeDefault(id: String) = api().makeDefault(id)
+        override suspend fun delete(id: String) = api().delete(id)
     }
 
     // A hub-level page: the selected group's connectors (docs/connectors.md).

@@ -5,8 +5,8 @@ import { t } from "../../i18n";
 import { settingsTab } from "../../lib/channels";
 import type { IconName } from "../../ui/icons";
 
-export type Tab = "general" | "notifications" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "shortcuts" | "devices" | "hub";
-export const TABS: Tab[] = ["general", "notifications", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "shortcuts", "devices", "hub"];
+export type Tab = "general" | "notifications" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "shortcuts" | "devices" | "hub" | "managers";
+export const TABS: Tab[] = ["general", "notifications", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "shortcuts", "devices", "hub", "managers"];
 // The tab whose page opens one of its items, and the query parameter that names it.
 const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", channels: "channel", extensions: "extension", connectors: "connector" };
 
@@ -26,13 +26,14 @@ export const TAB_INFO: Record<Tab, { label: string; icon: IconName; hint: string
   shortcuts: { label: t("settings-nav.tab_shortcuts"), icon: "keyboard", hint: t("settings-nav.hint_shortcuts") },
   devices: { label: t("settings-nav.tab_devices"), icon: "key", hint: t("settings-nav.hint_devices") },
   hub: { label: "hub", icon: "hub", hint: t("settings-nav.hint_hub") },
+  managers: { label: t("settings-nav.tab_managers"), icon: "person", hint: t("settings-nav.hint_managers") },
 };
 
 /** The phone's list: groups of categories, in the tab bar's order. */
 export const LIST_GROUPS: { title: string; tabs: Tab[] }[] = [
   { title: t("settings-nav.group_general"), tabs: ["general", "notifications", "assistant", "translate", "shortcuts"] },
   { title: t("settings-nav.group_models"), tabs: ["models", "model-config", "claude", "codex"] },
-  { title: t("settings-nav.group_connections"), tabs: ["channels", "connectors", "extensions", "devices", "hub"] },
+  { title: t("settings-nav.group_connections"), tabs: ["channels", "connectors", "extensions", "devices", "hub", "managers"] },
 ];
 
 /** The category and item a URL's query names; `tab` is null when it names none (the phone's list). */

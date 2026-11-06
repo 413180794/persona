@@ -42,7 +42,7 @@ data class InboxItemUiRoute(val itemId: String, val extensionId: String, val uiI
 /** The to-do list with 新建待办 open: the launcher's 「新建待办」 shortcut ([NewTodoLink], iOS AddTodoIntent). */
 @Serializable @SerialName("jarvis.core.navigation.NewTodoRoute") data object NewTodoRoute : NavKey
 @Serializable @SerialName("jarvis.core.navigation.TodoDetailRoute") data class TodoDetailRoute(val todoId: String) : NavKey
-@Serializable enum class SettingsPage { Diagnostics, Readiness, Notifications, PhoneData, Appearance, Devices, About, Pairing, ClaudeCode, ModelConfig, Hubs, Persona, Extensions, Mail, Feishu, Channels, HubUpdate, Translation, Triage, Capsule, Language, Codex, Providers, Storage, Desktops }
+@Serializable enum class SettingsPage { Diagnostics, Readiness, Notifications, PhoneData, Appearance, Devices, About, Pairing, ClaudeCode, ModelConfig, Hubs, Persona, Extensions, Mail, Feishu, Channels, HubUpdate, Translation, Triage, Capsule, Language, Codex, Providers, Storage, Desktops, Managers }
 @Serializable @SerialName("jarvis.core.navigation.SettingsPageRoute") data class SettingsPageRoute(val page: SettingsPage) : NavKey
 
 enum class AppTab { Jarvis, Agents, Inbox, Settings }

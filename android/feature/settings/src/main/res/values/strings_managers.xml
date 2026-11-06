@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_managers_title">Managers</string>
+    <string name="settings_managers_hint">Each manager is a whole assistant, running wherever you choose</string>
+    <string name="settings_managers_unsupported">This hub\'s version doesn\'t support managers yet. Update the hub and come back</string>
+    <string name="settings_managers_demo">There are no managers in demo mode. Connect your own hub first</string>
+    <string name="settings_managers_default">Default</string>
+    <string name="settings_managers_online">Online</string>
+    <string name="settings_managers_offline">Offline</string>
+    <string name="settings_managers_offline_since">Offline · last synced %1$s</string>
+    <string name="settings_managers_installing_expired">Installing · code expired</string>
+    <string name="settings_managers_deploy_hub">The hub\'s own</string>
+    <string name="settings_managers_deploy_service">Service</string>
+    <string name="settings_managers_deploy_container">Container</string>
+    <string name="settings_managers_deploy_external">Standalone</string>
+    <string name="settings_managers_row_where">Runs on</string>
+    <string name="settings_managers_row_version">Version</string>
+    <string name="settings_managers_row_since">Connected</string>
+    <string name="settings_managers_row_last_seen">Last synced</string>
+    <string name="settings_managers_rename">Rename</string>
+    <string name="settings_managers_name_placeholder">For example: Work</string>
+    <string name="settings_managers_save">Save</string>
+    <string name="settings_managers_make_default">Make default</string>
+    <string name="settings_managers_move">Install elsewhere</string>
+    <string name="settings_managers_move_confirm">Installing elsewhere gives you a new install code. Once it\'s installed with that code, the manager where it ran before stops working right away.</string>
+    <string name="settings_managers_new_code">New install code</string>
+    <string name="settings_managers_delete">Delete</string>
+    <string name="settings_managers_delete_confirm">Delete “%1$s”? Its token stops working right away and its connections are closed.</string>
+    <string name="settings_managers_cancel_install">Cancel install</string>
+    <string name="settings_managers_cancel_install_confirm">Cancel installing “%1$s”? Its install code will stop working.</string>
+    <string name="settings_managers_keep">Keep</string>
+    <string name="settings_managers_delete_builtin">The manager the hub runs itself can\'t be deleted</string>
+    <string name="settings_managers_delete_default">The default manager can\'t be deleted. Make another one the default first</string>
+    <string name="settings_managers_new">New manager</string>
+    <string name="settings_managers_create">Create</string>
+    <string name="settings_managers_code_title">Install code</string>
+    <string name="settings_managers_copy">Copy</string>
+    <string name="settings_managers_expires_in">Expires in %1$s</string>
+    <string name="settings_managers_expired">Expired</string>
+    <string name="settings_managers_install_service">As a service</string>
+    <string name="settings_managers_install_docker">With Docker</string>
+    <string name="settings_managers_code_note">Install the manager with this code on the computer that will run it. Once installed, it shows up in the list.</string>
+    <string name="settings_managers_done">Done</string>
+    <string name="settings_managers_err_default">This is the default manager. Make another one the default before deleting it</string>
+    <string name="settings_managers_err_builtin">The hub runs this manager itself. It can\'t be deleted or installed elsewhere</string>
+    <string name="settings_managers_err_gone">This manager is no longer there</string>
+    <string name="settings_managers_err_installing">It isn\'t installed yet. Rename it or make it the default once it is</string>
+    <string name="settings_managers_err_name">Names are 1 to 40 characters</string>
+    <string name="settings_managers_err_forbidden">This device isn\'t allowed to make changes</string>
+    <plurals name="settings_managers_installing">
+        <item quantity="one">Installing · code expires in %1$d minute</item>
+        <item quantity="other">Installing · code expires in %1$d minutes</item>
+    </plurals>
+</resources>

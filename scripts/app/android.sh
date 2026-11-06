@@ -317,6 +317,10 @@ SHOTS_PY
       capture "$theme" diagnostics --es debug.openDiagnostics true
       for page in notifications readiness; do capture "$theme" "settings-$page" --es debug.openLink "'jarvis://open?target=settings&page=$page'"; done
       for page in machines knowledge phone catalog; do capture "$theme" "$page" --es debug.openPage "$page"; done
+      # 设置 › 管理者 (docs/managers.md): the mock's roster, a manager on another computer and the hub's own (删除 off).
+      # The install code sheet is drawn by ManagersShotsTest (feature/settings, build/managers-shots/).
+      capture "$theme" settings-managers --es debug.openPage managers
+      for id in m-3fa21c assistant; do capture "$theme" "manager-$id" --es debug.openPage "manager:$id"; done
       # 设置 › 模型配置 and 新增模型供应商, typed in and from a plugin's preset (the mock offers two example presets).
       capture "$theme" settings-modelconfig --es debug.openLink "'jarvis://open?target=settings&page=modelconfig'"
       for mode in manual preset; do

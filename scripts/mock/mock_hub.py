@@ -1677,6 +1677,100 @@ RECORDING_PUTS = [0]  # every PUT, stored or refused
 RECORDING_DAYS = int(os.environ.get("MOCK_RECORDING_DAYS", "14"))
 
 
+# The managers' roster (docs/managers.md): the hub's own assistant (the default), one on another computer, one offline,
+# one still installing. MOCK_MANAGER_COMMANDS=1 adds the install commands to a new code's answer; MOCK_MANAGERS=0 is a
+# hub from before the roster (404).
+def _managers_seed():
+    return [
+        {"id": "assistant", "name": "助手", "online": True, "builtin": True, "host": "server", "os": "linux", "arch": "amd64",
+         "deploy": "child", "version": "1.0.0", "since": ago(hours=5)},
+        {"id": "m-3fa21c", "name": "工作", "online": True, "host": "MacBook", "os": "darwin", "arch": "arm64",
+         "deploy": "service", "version": "1.0.0", "since": ago(minutes=42)},
+        {"id": "m-8b04d2", "name": "家里", "online": False, "host": "NAS", "os": "linux", "arch": "amd64",
+         "deploy": "docker", "version": "0.9.8", "last_seen": ago(hours=3)},
+        {"id": "m-c1e9f0", "name": "测试", "online": False,
+         "installing": (datetime.now(timezone.utc) + timedelta(minutes=7)).isoformat().replace("+00:00", "Z")},
+    ]
+
+
+MANAGERS = {"list": _managers_seed(), "default": "assistant"}
+
+
+def _managers_changed():
+    with FAULT_LOCK:
+        targets = [c["send"] for c in CLIENTS.values() if "managers" in c["features"]]
+    for send in targets:
+        try: send({"type": "managers"})
+        except OSError: pass
+
+
+def _manager_code(h, mid):
+    code = "mi_" + uuid.uuid4().hex[:20]
+    until = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+    out = {"code": code, "expires_at": until}
+    if os.environ.get("MOCK_MANAGER_COMMANDS") == "1":
+        base = "http://" + (h.headers.get("Host") or "<hub 地址>")
+        out["commands"] = {"service": "curl -fsSL %s/i/%s | sh" % (base, code),
+                           "docker": "docker run -d --name persona-%s --restart unless-stopped -e PERSONA_INSTALL=%s/i/%s "
+                                     "ghcr.io/example/personad:latest manager" % (mid, base, code)}
+    return out, until
+
+
+def managers_route(h, method, p):
+    """GET/POST /api/v1/managers, POST …/{id}/code, PATCH / DELETE …/{id} (hub/managers.go)."""
+    if not (p == "/api/v1/managers" or p.startswith("/api/v1/managers/")): return False
+    if os.environ.get("MOCK_MANAGERS") == "0":
+        return h.send_json({"error": "not found"}, 404) or True
+    ms, dflt = MANAGERS["list"], MANAGERS["default"]
+    if p == "/api/v1/managers" and method == "GET":
+        out = [dict(m, default=True) if m["id"] == dflt else m for m in ms]
+        out.sort(key=lambda m: (m["id"] != dflt, bool(m.get("installing"))))
+        return h.send_json({"managers": out, "default": dflt}) or True
+    body = json.loads(getattr(h, "last_body", b"") or b"{}")
+    if p == "/api/v1/managers" and method == "POST":
+        name = str(body.get("name") or "").strip()
+        if not name or len(name) > 40:
+            return h.send_json({"error": "name must be 1-40 characters"}, 400) or True
+        mid = "m-" + uuid.uuid4().hex[:6]
+        out, until = _manager_code(h, mid)
+        m = {"id": mid, "name": name, "online": False, "installing": until}
+        ms.append(m); _managers_changed()
+        return h.send_json({"manager": m, **out}, 201) or True
+    parts = p.split("/")
+    m = next((x for x in ms if x["id"] == parts[4]), None)
+    if m is None:
+        return h.send_json({"error": "no manager %r" % parts[4], "code": "no_manager"}, 404) or True
+    if len(parts) == 6 and parts[5] == "code" and method == "POST":
+        if m.get("builtin"):
+            return h.send_json({"error": "the hub runs this manager itself", "code": "builtin_manager"}, 409) or True
+        out, until = _manager_code(h, m["id"])
+        if m.get("installing"): m["installing"] = until
+        _managers_changed()
+        return h.send_json(out) or True
+    if len(parts) != 5: return h.send_json({"error": "not found"}, 404) or True
+    if method == "PATCH":
+        if m.get("installing"):
+            return h.send_json({"error": "this manager is not installed yet", "code": "installing"}, 409) or True
+        if "name" in body:
+            name = str(body.get("name") or "").strip()
+            if not name or len(name) > 40:
+                return h.send_json({"error": "name must be 1-40 characters"}, 400) or True
+            m["name"] = name
+        if body.get("default") is True: MANAGERS["default"] = m["id"]
+        elif body.get("default") is False:
+            return h.send_json({"error": "make another manager the default instead"}, 400) or True
+        _managers_changed()
+        return h.send_json({"manager": dict(m, default=True) if m["id"] == MANAGERS["default"] else m}) or True
+    if method == "DELETE":
+        if m.get("builtin"):
+            return h.send_json({"error": "the hub runs this manager itself", "code": "builtin_manager"}, 409) or True
+        if m["id"] == dflt:
+            return h.send_json({"error": "make another manager the default first", "code": "default_manager"}, 409) or True
+        ms.remove(m); _managers_changed()
+        return h.send_json({"ok": True}) or True
+    return h.send_json({"error": "method"}, 405) or True
+
+
 def recordings_route(h, method, p):
     """The hub's recording sync, and its copy in the knowledge base (KB["recordings"])."""
     if p == "/mock/recordings" and method == "GET":
@@ -10419,6 +10513,7 @@ class H(BaseHTTPRequestHandler):
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if self.token_refused(): return
         if recordings_route(self, "GET", p): return
+        if managers_route(self, "GET", p): return
         if providers_route(self, "GET", p, q, b""): return
         if MOCK_MESSAGING and p.startswith("/api/v1/messaging") and lark_messaging.route(self, "GET", p, q, b""): return
         if net_control(p, q): return self.send_json({"ok": True, **NET})
@@ -11164,6 +11259,7 @@ class H(BaseHTTPRequestHandler):
         if pins_route(self, p): return
         if looks_route(self, self.command, p, self.last_body): return
         if recordings_route(self, self.command, p): return
+        if managers_route(self, self.command, p): return
         if providers_route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if doctor_route(self, p, "POST"): return
@@ -12433,7 +12529,8 @@ class H(BaseHTTPRequestHandler):
                 self.wfile.write(bytes([0x88, len(body)]) + body); self.wfile.flush()
             self.connection.shutdown(socket.SHUT_RDWR)
 
-        client = {"send": send, "features": set(), "close": close_going_away}
+        # ?features=managers: the roster event (hub/managers.go); the rest of ?features= keeps its old meaning here
+        client = {"send": send, "features": {"managers"} if "managers" in asked else set(), "close": close_going_away}
         ws_token = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if MOCK_PAIR_TOKEN: print("mock: ws open host=%s token=%s" % (self.headers.get("Host"), ws_token[:9]), flush=True)
         if MOCK_PAIR_TOKEN and ws_token == MOCK_PAIR_TOKEN:
@@ -12863,6 +12960,7 @@ def features():
 
 
 MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_PLUGINS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
+MOCK_HELP.append("MOCK_MANAGER_COMMANDS=1  设置 › 管理者：新建 / 换个地方装的回答带安装命令（commands.service / docker）；MOCK_MANAGERS=0 是还没有名册的旧 hub（/api/v1/managers 404）")
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
 MOCK_HELP.append("MOCK_INBOX_SOURCES=none  还没接任何消息来源：收件箱空、没有邮箱账号、飞书没设置、GitHub 没登录（#4480）")
 MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试「全部清理」的「将清理 N 件」确认")

@@ -61,6 +61,8 @@ data class SettingsServices(
     val connectors: ConnectorsManagement? = null,
     /** 设置 › hub 版本 (the hub's version and its updating itself) on the paired hub; null in 体验模式. */
     val hubUpdates: HubUpdates? = null,
+    /** 设置 › 管理者 (the hub's roster of managers and their install codes) on the paired hub; null in 体验模式. */
+    val managers: HubManagers? = null,
     /** 设置 › 翻译, kept on this phone; null in 体验模式. */
     val translation: TranslationSettings? = null,
     /** 设置 › 会话分诊 on the paired hub (docs/agent-work.md「开关」); null in 体验模式. */

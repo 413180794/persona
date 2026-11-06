@@ -71,6 +71,7 @@ private fun SettingsContent(
     var purpose by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var extension by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var channel by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    var manager by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     // 模型供应商's own steps when they open in place: one provider, adding one, importing from ~/.zshrc.
     var provider by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var providerStep by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
@@ -238,6 +239,9 @@ private fun SettingsContent(
         }
         "devices" -> DevicesPage(deviceController, paired && services.deviceSettings != null, back, deviceFeedback,
             connect = services.deviceSettings.takeUnless { services.demo })
+        "managers" -> manager?.let { id -> ManagerPage(services.managers.takeUnless { services.demo }, id, onBack = { manager = null }) }
+            ?: ManagersPage(services.managers.takeUnless { services.demo }, back,
+                onManager = { id -> onNavigate?.invoke(persona.core.navigation.ManagerRoute(id)) ?: run { manager = id } })
         "hub-update" -> HubUpdatePage(hubUpdates, machines, back, online = connection == ConnectionState.Online, onMachine = onNavigate)
         "hubs" -> HubsScreen(services.hubs ?: HubGroups.None, services.addHub?.let { { page = "hubs-add" } }, back, deviceFeedback)
         // Adding a hub is the pairing page with an adding service; it returns to the hub list.
@@ -303,9 +307,12 @@ private fun SettingsContent(
             item { JSectionHeader(stringResource(R.string.settings_section_connection)) }
             // The hub list is the one row a single hub group adds to settings (docs/android.md「多 hub」).
             // hub 版本 (docs/hub-update.md「App 里」) follows it while there is a real hub (not 体验模式).
-            val hubRows = (if (services.hubs != null) 1 else 0) + (if (hubUpdates != null) 1 else 0)
+            val managersRow = services.managers != null && !services.demo
+            val hubRows = (if (services.hubs != null) 1 else 0) + (if (hubUpdates != null) 1 else 0) + (if (managersRow) 1 else 0)
             if (services.hubs != null) item { JGroupItem(GroupPosition.of(0, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Hubs), title = stringResource(R.string.settings_row_hubs), leadingIcon = PhIcons.HardDrives, subtitle = stringResource(R.string.settings_row_hubs_subtitle), onClick = { open(SettingsPage.Hubs) }) } }
-            if (hubUpdates != null) item { JGroupItem(GroupPosition.of(hubRows - 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.HubUpdate), title = stringResource(R.string.settings_row_hub_update), leadingIcon = PhIcons.ArrowsClockwise, subtitle = stringResource(R.string.settings_row_hub_update_subtitle), value = HubUpdateText.summary(hubUpdateStatus), onClick = { open(SettingsPage.HubUpdate) }) } }
+            if (hubUpdates != null) item { JGroupItem(GroupPosition.of(hubRows - 1 - (if (managersRow) 1 else 0), 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.HubUpdate), title = stringResource(R.string.settings_row_hub_update), leadingIcon = PhIcons.ArrowsClockwise, subtitle = stringResource(R.string.settings_row_hub_update_subtitle), value = HubUpdateText.summary(hubUpdateStatus), onClick = { open(SettingsPage.HubUpdate) }) } }
+            // 管理者 (docs/managers.md): the hub's roster of assistants, after its version.
+            if (managersRow) item { JGroupItem(GroupPosition.of(hubRows - 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Managers) || detailKey is persona.core.navigation.ManagerRoute, title = stringResource(R.string.settings_managers_title), leadingIcon = PhIcons.UserCircle, subtitle = stringResource(R.string.settings_managers_hint), onClick = { open(SettingsPage.Managers) }) } }
             item { JGroupItem(GroupPosition.of(hubRows, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Pairing), title = stringResource(R.string.settings_row_pairing), leadingIcon = PhIcons.QrCode, subtitle = stringResource(R.string.settings_row_pairing_subtitle), onClick = { open(SettingsPage.Pairing) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = stringResource(R.string.settings_devices_title), leadingIcon = PhIcons.DeviceMobile, subtitle = stringResource(R.string.settings_row_devices_subtitle), onClick = { open(SettingsPage.Devices) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 2, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Diagnostics), title = stringResource(R.string.settings_diag_title), leadingIcon = PhIcons.Gauge, subtitle = stringResource(R.string.settings_row_diag_subtitle), onClick = { open(SettingsPage.Diagnostics) }) } }
@@ -461,6 +468,7 @@ private fun SettingsContent(
     BackHandler(page == "models" && purpose != null) { purpose = null }
     BackHandler(page == "plugins" && extension != null) { extension = null }
     BackHandler(page == "channels" && channel != null) { channel = null }
+    BackHandler(page == "managers" && manager != null) { manager = null }
     BackHandler(page == "providers" && (provider != null || providerStep != null)) { if (providerStep != null) providerStep = null else provider = null }
     BackHandler(page == "hubs-add") { page = "hubs" }
     if (confirmDisconnect) JDialog(

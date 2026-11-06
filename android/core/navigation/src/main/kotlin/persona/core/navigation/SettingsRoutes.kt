@@ -40,6 +40,9 @@ data class LauncherRoute(val machineId: String, val name: String) : NavKey
 /** One channel of 设置 › 渠道 (docs/channels.md「界面」), by the hub's channel id. */
 @Serializable @SerialName("persona.core.navigation.ChannelRoute") data class ChannelRoute(val channelId: String) : NavKey
 
+/** One manager of 设置 › 管理者 (docs/managers.md), by the hub's manager id. */
+@Serializable @SerialName("persona.core.navigation.ManagerRoute") data class ManagerRoute(val managerId: String) : NavKey
+
 /** 设置 › AI › 助手 (iOS `SettingsPage.assistant`): the assistant's settings, which the Persona tab also opens in place. */
 @Serializable @SerialName("persona.core.navigation.AssistantSettingsRoute") data object AssistantSettingsRoute : NavKey
 

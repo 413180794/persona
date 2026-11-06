@@ -29,6 +29,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Providers -> "providers"
     SettingsPage.Storage -> "storage"
     SettingsPage.Desktops -> "desktops"
+    SettingsPage.Managers -> "managers"
 }
 
 /** The root and unknown page names have no detail destination. */

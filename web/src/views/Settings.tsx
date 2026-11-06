@@ -36,6 +36,7 @@ import { ConnectDevice } from "./settings/ConnectDevice";
 import { settingsTarget } from "../lib/channels";
 import { routeSub } from "../lib/extension-market";
 import { HubSettings } from "./settings/HubSettings";
+import { ManagersSettings } from "./settings/ManagersSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
 import { LauncherExtensionSections } from "./settings/ExtensionView";
 import { hubHasExt } from "../lib/extension-api";
@@ -213,6 +214,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             {tab === "shortcuts" && <ShortcutSettings />}
             {tab === "devices" && <Devices />}
             {tab === "hub" && <HubSettings />}
+            {tab === "managers" && <ManagersSettings />}
           </div>
         )}
       </div>

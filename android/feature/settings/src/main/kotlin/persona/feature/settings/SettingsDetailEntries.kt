@@ -58,6 +58,9 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
             onInstalled = { navigator.navigate(ExtensionRoute(it)) }, onSignIn = { navigator.navigate(ExtensionRoute(it, signIn = true)) })
     }
     entry<ExtensionMarketsRoute> { ExtensionMarketsPage(services.extensions.takeUnless { demo }, onBack = navigator::back) }
+    entry<persona.core.navigation.ManagerRoute> { route ->
+        ManagerPage(services.managers.takeUnless { demo }, route.managerId, onBack = navigator::back)
+    }
     entry<ChannelRoute> { route ->
         ChannelPage(services.channels.takeUnless { demo }, route.channelId, onBack = navigator::back, onOpen = navigator::navigate)
     }

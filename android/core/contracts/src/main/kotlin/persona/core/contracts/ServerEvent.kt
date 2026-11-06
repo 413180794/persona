@@ -184,6 +184,12 @@ data class ExtensionOperationEvent(val operation: persona.core.contracts.api.Ext
 @Serializable(with = ExtensionAuthEventSerializer::class)
 data class ExtensionAuthEvent(val extension: String, val auth: persona.core.contracts.api.ExtensionAuth) : ServerEvent
 
+/**
+ * The managers' roster changed (docs/managers.md: made, renamed, connected, gone): only to an app that asks for the
+ * `managers` feature, and not replayed after a reconnect (the page reads the list again).
+ */
+data object ManagersEvent : ServerEvent
+
 data object UnknownEvent : ServerEvent
 
 object ServerEventSerializer : KSerializer<ServerEvent> {
@@ -211,6 +217,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
                 require(it.invalidate || !it.id.isNullOrEmpty()) { "A badge names its UI" }
             }
             "hub_update" -> input.json.decodeFromJsonElement<HubUpdateEvent>(obj)
+            "managers" -> ManagersEvent
             "extension_operation" -> input.json.decodeFromJsonElement<ExtensionOperationEvent>(obj).also {
                 require(it.operation.id.isNotEmpty()) { "An operation has its id" }
             }
@@ -265,6 +272,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is NotifyEvent -> "notify" to output.json.encodeToJsonElement(value)
             is ExtensionUiEvent -> "extension_ui" to output.json.encodeToJsonElement(value)
             is HubUpdateEvent -> "hub_update" to output.json.encodeToJsonElement(value)
+            ManagersEvent -> "managers" to JsonObject(emptyMap())
             is ExtensionOperationEvent -> "extension_operation" to output.json.encodeToJsonElement(value)
             is ExtensionAuthEvent -> "extension_auth" to output.json.encodeToJsonElement(value)
             is LockTestEvent -> "lock_test" to output.json.encodeToJsonElement(value)

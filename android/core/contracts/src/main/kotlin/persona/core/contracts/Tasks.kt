@@ -59,7 +59,7 @@ data class FeedItem(
     val id: String,
     val conversation: String = "",
     @WireTime val at: String? = null,
-    @WireEnum("plan", "task", "answered", "receipt", "routed", "today", "message", "view", "unknown")
+    @WireEnum("plan", "task", "answered", "receipt", "review", "routed", "today", "message", "view", "unknown")
     val kind: String = "unknown",
     val ref: String? = null,
     val body: JsonElement? = null,

@@ -33,6 +33,13 @@ class TasksContractTest {
         assertTrue(ServerEvent.decode("""{"type":"assistant_view","conversation":"c","view":{"id":"v"}}""") is AssistantViewEvent)
     }
 
+    // A supervised task's verdict (#5190): kept as "review", not folded into "unknown", so the conversation draws it.
+    @Test fun aReviewKeepsItsKind() {
+        val item = JsonCodec.decodeFromString<FeedItem>("""{"id":"f1","kind":"review","ref":"t1","body":{"verdict":"accepted"}}""")
+        assertEquals("review", item.kind)
+        assertEquals("accepted", item.field("verdict"))
+    }
+
     @Test fun unknownKindsAndTodosDecode() {
         val res = JsonCodec.decodeFromString<FeedResponse>("""{"items":[{"id":"f","conversation":"c","at":"2026-11-03T10:00:00Z","kind":"new_kind"}],
             "plans":{"p":{"id":"p","state":"started","tasks":[]}}}""")

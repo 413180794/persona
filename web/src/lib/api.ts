@@ -46,7 +46,8 @@ export function handleUnauthorized(fn: () => void) {
 export const CLIENT_PLATFORM = "web";
 export const CLIENT_VERSION = "1";
 /** What this page can render beyond the basics (client_hello `features`). */
-export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth"];
+/** `managers`: the hub pushes {"type":"managers"} when its roster changes (设置 › 管理者, lib/managers.ts). */
+export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth", "managers"];
 
 // A read the hub has not answered by then fails instead of loading forever (#4492): a restarting hub, a stuck node or a
 // half-dead network. Longer than the hub's own cut-offs for asking a computer (30–40 s), so when the hub has an error
