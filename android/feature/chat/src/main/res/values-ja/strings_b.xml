@@ -138,6 +138,7 @@
     <string name="chat_request_allow">許可</string>
     <string name="chat_request_deny">拒否</string>
     <string name="chat_request_always_allows">常に許可すると次を通します：%1$s</string>
+    <string name="chat_request_fields_elsewhere">このリクエストは許可する前に入力が必要です。Web または iPhone で許可してください。ここでは拒否のみできます。</string>
     <string name="chat_plan_approve_edits">編集を承認</string>
     <string name="chat_plan_reject">差し戻し</string>
     <string name="chat_plan_approve_all">承認して自動実行</string>

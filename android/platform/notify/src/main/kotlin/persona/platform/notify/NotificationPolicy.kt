@@ -15,6 +15,7 @@ import persona.core.domain.answer.AnswerContext
 import persona.core.domain.answer.AnswerDraft
 import persona.core.domain.answer.AnswerRetry
 import persona.core.domain.answer.RequestExpiry
+import persona.core.domain.answer.needsFieldValues
 import androidx.annotation.StringRes
 import java.time.Instant
 import java.util.UUID
@@ -44,7 +45,9 @@ internal object NotificationPolicy {
                     answer, draft, policy.retry, labelRes,
                 )
             when (policy.id) {
-                ApprovalAction.Allow -> listOf(action(policy.id.wire, null, AnswerAction.Allow, labelRes = R.string.notify_action_allow))
+                // A card with fields to fill in opens the app instead (#4987).
+                ApprovalAction.Allow -> if (ix.needsFieldValues) emptyList()
+                    else listOf(action(policy.id.wire, null, AnswerAction.Allow, labelRes = R.string.notify_action_allow))
                 ApprovalAction.Deny -> listOf(action(policy.id.wire, null, AnswerAction.Deny, labelRes = R.string.notify_action_deny))
                 ApprovalAction.ApproveEdits -> listOf(action(policy.id.wire, null, AnswerAction.ApproveEdits, labelRes = R.string.notify_action_approve))
                 ApprovalAction.Reject -> listOf(action(policy.id.wire, null, AnswerAction.Reject, labelRes = R.string.notify_action_reject))

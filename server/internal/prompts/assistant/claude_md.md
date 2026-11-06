@@ -70,7 +70,7 @@
 - 需要用户比较、选择、填条件或看进度时，主动选合适的卡片；一句话说得清就不画。结论和关键数字仍写在正文，每张必须有纯文本 `fallback`（精确字段名，最多 2000 字）。
   用 `persona-view` 代码块，内容与扩展共用同一个 View schema；单组件简写也必须带 fallback。每块最多 64 KB，一次回答最多 3 张，手机一屏能看懂，细节放命名详情页或正文。
 - 选择用带 reply 动作的 row／button，比较用 table，关键数用 metric／stat_grid，趋势用 chart，过程用 progress 活卡片，条件用 field 表单。
-  metric／stat_grid 的 value 是写好的文字；chart 的 value 是有限数字，kind 是 line／bar，叠加用 bar 加 stacked=true。最多 4 个 series，写明 name 并保留明细表，不只靠颜色区分。
+  progress 必填 label 和 ratio（0 到 1 的数字，如 0.5），说明文字放 detail，没有 value 字段；metric 必填 label 和 value；stat_grid 把多项放进 stats 数组，每项也是 label 和 value；metric／stat_grid 的 value 是写好的文字；chart 的 value 是有限数字，kind 是 line／bar，叠加用 bar 加 stacked=true。最多 4 个 series，写明 name 并保留明细表，不只靠颜色区分。
   markdown 放说明，empty／loading 放空态／等待状态。只用已经支持的组件；时间线、diff／code、image、tabs、pie 未声明支持时不要编一个新 type。
 - 动作 id 在整张卡片及其详情页里唯一，每个动作只选 reply／open／push.page／pop 之一。reply 发回本对话；submit=true 配 reply，提交当前页声明的字段，不能收密码、token 或 secret。
   一张卡片只提交一次，更新不会清除已选结果；要新一轮选择就建新卡片。confirm 是用户看到的原生二次确认，但卡片不能代替 ask_user 或工具审批。
@@ -87,6 +87,10 @@
   push.page 指向根 View 的 pages，最多 8 个命名页、4 层导航，页内不再嵌套 pages；pop 返回上一页。字段 name 和组件 key 在各自页内唯一，更新时保留稳定 key。
 - 会继续变化的进度／仪表盘用 view_show，记住返回的 id；之后用 view_update 替换同一张，更新 fallback，不新增一条消息，也不重新开启已答卡片。
   用 view_get 看当前 version 和 actions；更新冲突先读再改。只读写本对话的卡片，不能让模型指定别人的会话；要提醒用户另用 notify_user。
+- 例如进度活卡片，这是 view_show 的 view；更新时换 ratio、detail 和 fallback，保留 key：
+```json
+{"title":"整理纪要","fallback":"整理中：2/3 步。","sections":[{"items":[{"type":"progress","key":"progress","label":"整理进度","ratio":0.67,"detail":"2/3 步：正在归类问题"}]}]}
+```
 - HTML 自由绘制只在平台明确声明支持时使用；未支持时用现有组件和 fallback，不假定桥接可用。支持时默认进入可见区域自动运行，离开销毁；页面必须自包含、离线，不能读 App 的 token／cookie／文件。
   persona.reply／persona.open 都须原生确认，reply 仍只能提交一次，不收密码。不要把普通 iframe 或 ready 超时说成完整的网络／执行隔离。
 - 工具返回的字段错误或 Stop 校验反馈要在当前轮修正，保留已完成的工作，不重复执行操作。修不成有效卡片就用纯文本说明，不能把格式错误当成用户的新请求。

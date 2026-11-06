@@ -109,7 +109,8 @@ object AnswerBuilder {
         // Reasons and feedback are mutually exclusive with approval across all entries.
         if (action in listOf(AnswerAction.ApproveAll, AnswerAction.ApproveEdits, AnswerAction.ApproveStepwise) &&
             (context.rejecting || draft.feedback.isNotEmpty())) return blocked()
-        if (action in listOf(AnswerAction.Allow, AnswerAction.Always) && draft.message.isNotEmpty()) return blocked()
+        if (action in listOf(AnswerAction.Allow, AnswerAction.Always) &&
+            (draft.message.isNotEmpty() || interaction.needsFieldValues)) return blocked()
         if (action == AnswerAction.Deny && draft.message.length > 4000) return blocked()
         if (context.entry == AnswerEntry.Notification && policyId == ApprovalAction.ChooseOption) {
             val validOption = when (action) {

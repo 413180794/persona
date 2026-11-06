@@ -24,6 +24,12 @@ fun Interaction.requestSourceLabel(): CoreText? = listOfNotNull(
  */
 val Interaction.offersAlways: Boolean get() = agentDisplayName == null || !alwaysLabel.isNullOrBlank()
 
+/**
+ * A permission card that needs its fields filled in (a password) before it can be allowed. This app has no form for
+ * them yet, so allow is not offered anywhere (as web's quick answers); deny still is (#4987).
+ */
+val Interaction.needsFieldValues: Boolean get() = kind == "permission" && fields.orEmpty().any { !it.optional }
+
 /** The button for it: Claude's 本会话总是允许, another agent's 总是同意 (what it allows is shown beside it). */
 val Interaction.alwaysActionLabel: CoreText
     get() = CoreText.of(if (agentDisplayName == null) Key.AlwaysAllowSession else Key.AlwaysAgree)

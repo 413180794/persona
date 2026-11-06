@@ -177,6 +177,10 @@ internal fun InteractionForm(
                 interaction.alwaysLabel?.takeIf { interaction.agentDisplayName != null && it.isNotBlank() }?.let {
                     Text(stringResource(R.string.chat_request_always_allows, it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                 }
+                // Allow needs its fields filled in, which this app has no form for yet (#4987).
+                if (interaction.needsFieldValues) {
+                    Text(stringResource(R.string.chat_request_fields_elsewhere), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                }
             }
             "plan" -> {
                 DecisionButtons(

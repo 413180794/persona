@@ -109,6 +109,14 @@ class NotificationPolicyTest {
         assertEquals("assistant:machine/session", NotificationPolicy.tag(alert.copy(kind = "assistant")))
     }
 
+    /** A card with fields to fill in has no 允许 button (#4987): the hub refuses allow without their values. */
+    @Test fun permissionWithRequiredFieldsHasNoAllow() {
+        val card = persona.core.contracts.JsonCodec.decodeFromString<Interaction>(
+            """{"id":"request","kind":"permission","fields":[{"key":"password","label":"Password","secret":true}]}""")
+        assertEquals(listOf("deny"), NotificationPolicy.actions(card).map { it.key })
+        assertNull(NotificationPolicy.resolution(card, "allow", null))
+    }
+
     private fun interaction(kind: String) = Interaction("request", kind = kind,
         questions = listOf(Question(question = "选择", options = List(4) { QuestionOption("选项 $it") })),
         dialog = ScreenDialog(options = listOf(DialogOption("input", "输入", kind = "type_something")) +

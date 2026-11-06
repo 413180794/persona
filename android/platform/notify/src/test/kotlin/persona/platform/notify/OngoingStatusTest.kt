@@ -53,6 +53,15 @@ class OngoingStatusTest {
             stats = FleetStats(tpm = 1234), assistant = true, left = "tpm"), details = true))
     }
 
+    /** A card with fields to fill in (a password) cannot be allowed from here: only 拒绝 (#4987). */
+    @Test fun permissionWithRequiredFieldsGetsOnlyDeny() {
+        val card = persona.core.contracts.JsonCodec.decodeFromString<persona.core.contracts.Interaction>(
+            """{"id":"ix_build","kind":"permission","fields":[{"key":"password","label":"Password","secret":true}]}""")
+        val status = OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 1, items = listOf(permission)),
+            pending = listOf(card))
+        assertEquals(listOf(OngoingButton(R.string.notify_action_deny, "deny", false)), status.action!!.buttons)
+    }
+
     @Test fun permissionsGetDenyAndAllowAndOneAgentOpensItself() {
         val fleet = FleetState("needsYou", needsYou = 1, items = listOf(permission))
         val status = OngoingStatus.from(ConnectionState.Online, fleet, details = true)

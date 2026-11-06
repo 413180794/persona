@@ -3,12 +3,14 @@ package persona.platform.notify
 import android.os.Build
 import androidx.annotation.StringRes
 import persona.core.contracts.FleetState
+import persona.core.contracts.Interaction
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ConnectionState
 import persona.core.domain.answer.AnswerEntry
 import persona.core.domain.answer.ApprovalAction
 import persona.core.domain.answer.ApprovalPolicy
 import persona.core.domain.answer.Authentication
+import persona.core.domain.answer.needsFieldValues
 import persona.core.domain.fleet.FleetSummary
 import persona.core.domain.fleet.FleetText
 import kotlinx.coroutines.delay
@@ -59,8 +61,12 @@ internal data class OngoingStatus(
          * [details]: the device's 锁屏显示详情. Off (the default), the body and the expanded list say only what kinds of
          * requests wait and how many, never an agent's name, place or what it asks: a phone set to show all notification
          * content on its lock screen shows the private version there too.
+         * [pending]: the open cards, to tell a permission with fields to fill in (no 允许, #4987).
          */
-        fun from(state: ConnectionState, fleet: FleetState, quiet: Boolean = false, details: Boolean = false): OngoingStatus {
+        fun from(
+            state: ConnectionState, fleet: FleetState, quiet: Boolean = false, details: Boolean = false,
+            pending: List<Interaction> = emptyList(),
+        ): OngoingStatus {
             // A disconnected snapshot must not look like current work or expose an old request.
             if (state != ConnectionState.Online || FleetSummary.isEmpty(fleet) || quiet) return connection(state)
             val needsYou = fleet.needsYou.coerceAtLeast(0)
@@ -68,7 +74,10 @@ internal data class OngoingStatus(
             val unread = fleet.unread.coerceAtLeast(0)
             val shown = fleet.items.take(MAX_ITEMS)
             val actionable = FleetSummary.firstActionable(fleet)
-            val action = actionable?.let { OngoingAction.of(it.kind, it.interaction.orEmpty(), FleetSummary.key(it)) }
+            val action = actionable?.let { item ->
+                OngoingAction.of(item.kind, item.interaction.orEmpty(), FleetSummary.key(item),
+                    needsFieldValues = pending.any { it.id == item.interaction && it.needsFieldValues })
+            }
             // With buttons, the body is the request they settle (like iOS), not an older question above it.
             val first = if (action != null) actionable else shown.firstOrNull()
             val firstRequest = (if (action != null) actionable else shown.firstOrNull(FleetSummary::needsYou))
@@ -125,14 +134,16 @@ internal data class OngoingButton(@StringRes val label: Int, val key: String?, v
  */
 internal data class OngoingAction(val kind: String, val interaction: String, val session: SessionKey?, val buttons: List<OngoingButton>) {
     companion object {
-        fun of(kind: String, interaction: String, session: SessionKey?): OngoingAction? {
+        /** [needsFieldValues]: allowing needs values this app has no form for, so only 拒绝 (#4987). */
+        fun of(kind: String, interaction: String, session: SessionKey?, needsFieldValues: Boolean = false): OngoingAction? {
             if (interaction.isEmpty()) return null
             val policy = ApprovalPolicy.actions(AnswerEntry.LockScreen, kind, locked = true).associateBy { it.id }
             fun answer(id: ApprovalAction, @StringRes label: Int) = policy[id]?.let {
                 OngoingButton(label, id.wire, it.authentication != Authentication.None)
             }
             val buttons = when (kind) {
-                "permission" -> listOfNotNull(answer(ApprovalAction.Deny, R.string.notify_action_deny), answer(ApprovalAction.Allow, R.string.notify_action_allow))
+                "permission" -> listOfNotNull(answer(ApprovalAction.Deny, R.string.notify_action_deny),
+                    if (needsFieldValues) null else answer(ApprovalAction.Allow, R.string.notify_action_allow))
                 "plan" -> listOfNotNull(policy[ApprovalAction.OpenApp]?.let { OngoingButton(R.string.notify_action_view, null, false) },
                     answer(ApprovalAction.ApproveEdits, R.string.notify_action_approve))
                 else -> emptyList()

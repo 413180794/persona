@@ -72,7 +72,7 @@ open class HubService : Service() {
         // this start was pending) is what crashed the app (ForegroundStarts). stopSelf(startId) leaves a newer start alone.
         try {
             val status = shown ?: OngoingStatus.from(connection.state.value, fleet.state.value,
-                details = notificationPreferences.preferences.value?.lockDetails == true)
+                details = notificationPreferences.preferences.value?.lockDetails == true, pending = interactions.pending.value)
             ServiceCompat.startForeground(this, Notifier.ONGOING_ID, notifier.ongoing(status),
                 if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
             shown = status
@@ -102,11 +102,12 @@ open class HubService : Service() {
                 launch {
                     notificationPreferences.preferences.collect { preferences ->
                         show(OngoingStatus.from(connection.state.value, fleet.state.value, quiet.value,
-                            details = preferences?.lockDetails == true))
+                            details = preferences?.lockDetails == true, pending = interactions.pending.value))
                     }
                 }
-                combine(connection.state, fleet.state, quiet, notificationPreferences.preferences) { state, snapshot, done, preferences ->
-                    OngoingStatus.from(state, snapshot, done, details = preferences?.lockDetails == true)
+                // The open cards say whether the first permission may be allowed from here (#4987).
+                combine(connection.state, fleet.state, quiet, notificationPreferences.preferences, interactions.pending) { state, snapshot, done, preferences, pending ->
+                    OngoingStatus.from(state, snapshot, done, details = preferences?.lockDetails == true, pending = pending)
                 }.throttleOngoing().collect { status ->
                     if (status != shown) show(status)
                 }

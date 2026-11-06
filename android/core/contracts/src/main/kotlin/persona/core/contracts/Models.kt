@@ -566,6 +566,17 @@ data class ScreenDialog(
     @SerialName("rev") val rev: String = "",
 )
 
+/** Something a permission card asks to fill in before approving (`proto.Field`, a password); see [Interaction.fields]. */
+@KeepGeneratedSerializer
+@Serializable(with = InteractionFieldSerializer::class)
+data class InteractionField(
+    val key: String = "",
+    val label: String = "",
+    val placeholder: String? = null,
+    val secret: Boolean = false,
+    val optional: Boolean = false,
+)
+
 @KeepGeneratedSerializer
 @Serializable(with = InteractionSerializer::class)
 data class Interaction(
@@ -603,6 +614,8 @@ data class Interaction(
     @SerialName("always_label") val alwaysLabel: String? = null,
     /** Why the agent asks for this permission, in its own words (Codex). */
     val reason: String? = null,
+    /** Filled in before approving (adding a mail account's password); the hub refuses allow without the required ones. */
+    val fields: List<InteractionField>? = null,
 ) {
     val sessionKey: SessionKey get() = SessionKey(machineId, sessionId)
 
@@ -695,3 +708,4 @@ object QuestionSerializer : WireSerializer<Question>(Question.generatedSerialize
 object DialogOptionSerializer : WireSerializer<DialogOption>(DialogOption.generatedSerializer())
 object ScreenDialogSerializer : WireSerializer<ScreenDialog>(ScreenDialog.generatedSerializer())
 object InteractionSerializer : WireSerializer<Interaction>(Interaction.generatedSerializer())
+object InteractionFieldSerializer : WireSerializer<InteractionField>(InteractionField.generatedSerializer())

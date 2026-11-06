@@ -77,16 +77,19 @@ internal fun RequestCard(
                     style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
                 if (!approvable && !readOnly) Text(stringResource(R.string.agents_approve_blocked),
                     style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText)
+                if (request.needsFieldValues && approvable && !readOnly) Text(stringResource(R.string.agents_request_fields_elsewhere),
+                    style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                 delivery?.let { RequestDeliveryStatus(it) }
             }
         },
         actions = if (readOnly) null else ({
             when (request.kind) {
                 "permission" -> DecisionButtons(
-                    primary = JAction(stringResource(R.string.agents_request_allow), enabled = enabled, onClick = { answer(AnswerAction.Allow) }),
+                    // A card with fields to fill in cannot be allowed here yet (#4987).
+                    primary = JAction(stringResource(R.string.agents_request_allow), enabled = enabled && !request.needsFieldValues, onClick = { answer(AnswerAction.Allow) }),
                     secondary = JAction(stringResource(R.string.agents_request_deny), enabled = enabled, onClick = { answer(AnswerAction.Deny) }),
                     more = if (request.offersAlways) listOf(JAction(request.alwaysActionLabel.text(),
-                        enabled = enabled && request.sessionId.isNotEmpty(), onClick = { answer(AnswerAction.Always) })) else emptyList())
+                        enabled = enabled && request.sessionId.isNotEmpty() && !request.needsFieldValues, onClick = { answer(AnswerAction.Always) })) else emptyList())
                 // The full editor owns feedback, draft persistence and the plan-read gate.
                 "plan" -> DecisionButtons(JAction(stringResource(R.string.agents_request_review_plan), enabled = enabled, onClick = onOpen),
                     secondary = JAction(stringResource(R.string.agents_request_send_back), enabled = enabled, onClick = onOpen))
@@ -95,7 +98,7 @@ internal fun RequestCard(
             }
         }),
         quickActions = {
-            if (request.kind == "permission" && !readOnly) {
+            if (request.kind == "permission" && !readOnly && !request.needsFieldValues) {
                 JButton(stringResource(R.string.agents_request_deny), { answer(AnswerAction.Deny) }, Modifier.weight(1f), kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = enabled)
                 JButton(stringResource(R.string.agents_request_allow), { answer(AnswerAction.Allow) }, Modifier.weight(1f), size = JButtonSize.Small, enabled = enabled)
             } else if (question != null && !readOnly) {
