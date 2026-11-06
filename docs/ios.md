@@ -80,6 +80,7 @@ Chat page:
     - Bubble follows finger, reply icon revealed right; past `MessageSwipe.threshold` light haptic and accent-filled icon; farther motion rubber-bands.
     - Release springs back, adds quote strip, focuses input; below threshold does nothing.
     - UIKit `LeftDragRecognizer` immediately fails unless initial motion is horizontal left; outer scroll views (list, shell paging) wait for failure, preserving vertical scroll and left-edge right-swipe Back.
+    - It also fails when the finger lands on something that scrolls sideways and still has room to the right (a wide table or code block, #5737, `DrawerPan.Coordinator.sidewaysScroller`): that scrolls; at its right end, on a table that fits, or on a plain reply the drag quotes (`SwipeWideContentTests`, `MOCK_WIDE=1`).
     - Not enabled for assistant chats, whose left swipe belongs to shell paging.
   - **Above input**: long-press Quote, website Add as context and @session become strips inside input above text.
     Each has accent vertical line, title ("Quote Claude", "Quote your message", "Selected text · Page", "Session …"), summary, right ×.

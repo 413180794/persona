@@ -1155,3 +1155,10 @@ but UIKit still had a page with only Agents Back and empty content.
 - `insetGrouped` cells have a 26 pt `cornerConfiguration` and clip: whatever the first row draws to the cell's edge (the field's rounded corners) is cut. For a row without a background turn the cell's `clipsToBounds` off (the list turns it on again when it configures the cell: watch it with KVO, restore on leaving).
 - Faded out, the shell's top bar was still in the accessibility tree over the risen field (☰ found and tappable): it leaves the tree once the list takes its searching layout. And the list at rest with the field folded sits a band down from its top: `ReaderAnchor` must count that as the top, or a change at launch keeps a row and throws the list ~350 pt down.
 - Measuring: resting states pixel by pixel against master (screenshots of each state, diffed); motion from the app writing each block's place every frame (`SearchTrace`, a CADisplayLink reading presentation layers). The simulator's home indicator strip differs from one screenshot to the next (~6400 px): leave it out.
+
+## On an iPad the chat's sideways scroll views are inset by the sidebar (2026-11-06, #5737)
+
+- A wide table in the iPad's chat column: bounds 788 pt, content 751 pt, `adjustedContentInset.left` 372 pt (the sidebar's width; the scroll view runs on under it). "Wider than its bounds" said it did not scroll, so a drag to the left on it quoted the reply; on an iPhone (no inset) the same check was right. Compare against what shows: `bounds.width − insets`.
+- SwiftUI's `ScrollGeometry` there: `containerSize` 416 (insets left out), `contentOffset.x` from −372 to −37. `contentOffset.x + containerSize.width` never reaches the content's width, so the table's "more to the right" fade never went away at the end. `visibleRect.maxX` does (−37…751).
+- XCUITest frames of a flipped chat list differ between an iPhone and an iPad, and between rows: mirror a frame against a text drawn just above it in the same block, not against the first and last messages.
+

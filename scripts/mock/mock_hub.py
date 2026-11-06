@@ -6685,6 +6685,32 @@ if os.environ.get("MOCK_RICH") == "1":
 参考：https://en.wikipedia.org/wiki/Weather_(disambiguation)。"""
     ITEMS[RICH] = [it("user", "text", 5, text="还有哪些要我拍板？"), it("assistant", "text", 2, text=_rich)]
 
+# MOCK_WIDE=1: an Agents chat whose reply has a table that fits, one that does not and a code block with a long line,
+# then a short reply in a turn of its own (SwipeWideContentTests, #5737: a drag to the left scrolls what scrolls sideways, else quotes).
+WIDE = "a1f3c2d4-0000-4000-8000-0000000005e1"
+if os.environ.get("MOCK_WIDE") == "1":
+    SESSIONS.append(sess("macbook", WIDE, "宽表格和代码块", "/Users/me/code/weather", "done", "read", "weather", 1, "wide", 4, 1, "就这些。"))
+    _wide = """窄表：
+
+| 项 | 值 |
+| --- | --- |
+| 窄表第一行 | 一 |
+
+宽表：
+
+| 宽表城市 | 温度 | 湿度 | 风速 | 降雨 | 空气质量 | 数据来源 | 更新时间 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 北京 | 18℃ | 40% | 3 级 | 10% | 良 | 中国气象局开放平台 | 每小时整点 | 夜间降到每三小时 |
+| 上海 | 21℃ | 65% | 2 级 | 30% | 优 | 中国气象局开放平台 | 每小时整点 | 夜间降到每三小时 |
+
+宽代码块：
+
+```swift
+let wideCodeLine = forecast.hours.map { hour in hour.precipitation.rounded(toNearest: 5) }.filter { $0 >= 10 }.prefix(24).joined(separator: ", ")
+```"""
+    ITEMS[WIDE] = [it("user", "text", 4, text="给我看看宽表格"), it("assistant", "text", 3, text=_wide),
+                   it("user", "text", 2, text="还有吗"), it("assistant", "text", 1, text="就这些。")]
+
 # MOCK_CHAT_READ=1: a finished exchange for reading the chat on a phone (#1996, web_mobile_read_e2e.py): a long message
 # of yours, an edit of 60 lines (its diff folds on a phone), a command with output, and an answer with a code block and
 # formulas (KaTeX loads only for those).

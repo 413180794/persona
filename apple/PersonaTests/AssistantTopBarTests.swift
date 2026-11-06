@@ -135,6 +135,25 @@ struct AssistantTopBarTests {
         #expect(!DrawerPan.Coordinator.sidewaysScroller(at: CGPoint(x: 200, y: 500), in: root, towardsRight: true))
     }
 
+    /// On an iPad the chat's scroll views run on under the sidebar, inset by it on their left: a table wider than what
+    /// shows of it scrolls, though not wider than its bounds (#5737).
+    @Test @MainActor func aSidewaysScrollerInsetUnderTheSidebar() {
+        let root = UIView(frame: CGRect(x: 0, y: 0, width: 820, height: 800))
+        let table = UIScrollView(frame: CGRect(x: 32, y: 100, width: 788, height: 100))
+        table.contentInset.left = 372
+        table.contentSize = CGSize(width: 751, height: 100)
+        table.contentOffset.x = -372
+        table.addSubview(UIView(frame: CGRect(x: 0, y: 0, width: 751, height: 100)))
+        root.addSubview(table)
+        let here = CGPoint(x: 615, y: 150)
+        #expect(DrawerPan.Coordinator.sidewaysScroller(at: here, in: root, towardsRight: true))
+        table.contentOffset.x = 751 - 788 // at its right end
+        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: here, in: root, towardsRight: true))
+        table.contentSize.width = 300 // fits in what shows: nothing to scroll
+        table.contentOffset.x = -372
+        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: here, in: root, towardsRight: true))
+    }
+
     /// The shell's strip: on Assistant a drag to the left pages (to the right is the drawer's), on Agents a drag to the right.
     @Test @MainActor func stripDirection() {
         let pager = ShellPager()

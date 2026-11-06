@@ -10,7 +10,7 @@ struct SidewaysScroll<Content: View>: View {
         ScrollView(.horizontal, showsIndicators: false) { content }
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .onScrollGeometryChange(for: Bool.self) { g in
-                g.contentOffset.x + g.containerSize.width < g.contentSize.width - 1
+                g.visibleRect.maxX < g.contentSize.width - 1 // as FittedTable's: right under an inset (#5737)
             } action: { _, now in more = now }
             .mask {
                 LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: more ? 0.85 : 1),

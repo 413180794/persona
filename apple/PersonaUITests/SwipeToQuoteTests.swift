@@ -24,6 +24,14 @@ final class SwipeToQuoteTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
         app.launchPinned()
+        dropKeptQuotes()
+    }
+
+    /// Quotes are kept with the chat across launches: an earlier test's (or run's) quote is dropped first.
+    @MainActor private func dropKeptQuotes() {
+        let bar = app.descendants(matching: .any).matching(identifier: "composer.quotes").firstMatch
+        guard bar.waitForExistence(timeout: 3) else { return }
+        for _ in 0..<5 where bar.exists { bar.buttons.firstMatch.tap(); usleep(400_000) }
     }
 
     @MainActor private func shot(_ name: String) {

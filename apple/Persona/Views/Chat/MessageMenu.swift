@@ -99,6 +99,8 @@ struct SelectableText: Identifiable {
 /// A drag to the left on a message, Telegram's reply (#1058). It fails as soon as the finger goes another way, and
 /// the scroll views around it (the chat list, a pager) wait for that: scrolling starts as it always did, while a drag
 /// that does go left moves the message and not the list. The left edge's swipe back goes right, so never starts it.
+/// On something in the message that scrolls sideways and can still go on to the right (a wide table or code block,
+/// #5737) it fails too, so that scrolls; at its right end, or anywhere else, the drag quotes.
 final class LeftDragRecognizer: UIPanGestureRecognizer {
     private var start: CGPoint?
 
@@ -111,7 +113,7 @@ final class LeftDragRecognizer: UIPanGestureRecognizer {
         if state == .possible, let start, let p = touches.first?.location(in: view) {
             let dx = p.x - start.x, dy = p.y - start.y
             if hypot(dx, dy) > MessageSwipe.decide {
-                guard dx < 0, abs(dx) > abs(dy) * MessageSwipe.slope else {
+                guard dx < 0, abs(dx) > abs(dy) * MessageSwipe.slope, !scrollsInstead(at: start) else {
                     state = .failed
                     return
                 }
@@ -123,6 +125,12 @@ final class LeftDragRecognizer: UIPanGestureRecognizer {
     override func reset() {
         super.reset()
         start = nil
+    }
+
+    /// A sideways scroller under where the finger went down has room on to the right: the drag is its.
+    private func scrollsInstead(at start: CGPoint) -> Bool {
+        guard let view, let window = view.window else { return false }
+        return DrawerPan.Coordinator.sidewaysScroller(at: view.convert(start, to: window), in: window, towardsRight: true)
     }
 
     override func shouldBeRequiredToFail(by other: UIGestureRecognizer) -> Bool {

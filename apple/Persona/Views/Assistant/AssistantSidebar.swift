@@ -475,10 +475,13 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
 
         /// Something under the finger scrolls sideways and has room to go the way the finger pulls it: back towards its
         /// left edge for a drag to the right, on towards its right edge (`towardsRight`) for a drag to the left.
+        /// Against the width it shows content in: on an iPad a scroll view in the chat runs on under the sidebar,
+        /// with that much inset on its left (#5737: a wide table 751 wide in bounds 788, inset 372, scrolls).
         static func sidewaysScroller(at point: CGPoint, in view: UIView, towardsRight: Bool) -> Bool {
             var hit = view.hitTest(point, with: nil)
             while let v = hit, v !== view {
-                if let s = v as? UIScrollView, s.isScrollEnabled, s.contentSize.width > s.bounds.width + 1 {
+                if let s = v as? UIScrollView, s.isScrollEnabled,
+                   s.contentSize.width > s.bounds.width - s.adjustedContentInset.left - s.adjustedContentInset.right + 1 {
                     let room = towardsRight
                         ? s.contentOffset.x < s.contentSize.width - s.bounds.width + s.adjustedContentInset.right - 1
                         : s.contentOffset.x > -s.adjustedContentInset.left + 1

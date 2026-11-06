@@ -164,7 +164,9 @@ struct FittedTable: View {
                 .markdownTableBackgroundStyle(.alternatingRows(Color.clear, Color.primary.opacity(0.035), header: Color.primary.opacity(0.07)))
         }
         .scrollDisabled(plan?.scrolls != true)
-        .onScrollGeometryChange(for: Bool.self) { g in g.contentOffset.x + g.containerSize.width >= g.contentSize.width - 4 } action: { _, end in
+        // What shows of it, not offset + container: on an iPad the chat's scroll views run on under the sidebar, inset
+        // by it, and the container leaves that out, so the fade stayed at the end (#5737).
+        .onScrollGeometryChange(for: Bool.self) { g in g.visibleRect.maxX >= g.contentSize.width - 4 } action: { _, end in
             atEnd = end
         }
         .mask {
