@@ -34,12 +34,15 @@ func (c *conversation) answerStatus(delegation string, gen int) {
 		st.Do = "gone"
 	default:
 		st.State = sess.State
-		if working(sess) {
+		switch {
+		case atWork(sess):
 			st.State = proto.StateWorking
 			st.Activity = activityIn(l, sess.Activity) // in the call's language, the category only (#4841)
 			if !sess.StateSince.IsZero() {
 				st.Elapsed = channel.Duration(l, time.Since(sess.StateSince))
 			}
+		case waitingOnUser(sess): // listed working while a card waits on its hook is a wait on the user (#5500)
+			st.State = proto.StateNeedsYou
 		}
 		if sess.Work != nil {
 			st.Work = clipRunes(oneLine(sess.Work.Line), 200)

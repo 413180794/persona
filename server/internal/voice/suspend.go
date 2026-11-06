@@ -337,6 +337,6 @@ func (t *tracker) works() bool {
 // saw notes how a look found the conversation of key (s nil: not listed): whether the bound conversation works.
 func (t *tracker) saw(key linkKey, s *proto.Session) {
 	if t.obs.on && key == t.obs.key {
-		t.busy = s != nil && working(s)
+		t.busy = s != nil && atWork(s) // waiting on the user is not: they may speak at any moment (docs/voice.md 4.9)
 	}
 }

@@ -496,6 +496,7 @@ func TestHubLinkReconnects(t *testing.T) {
 // again after working; then the turn's answer.
 func TestCardWaitingOnTheUserIsSaidOnce(t *testing.T) {
 	setVar(t, &lookEvery, 100*time.Millisecond)
+	setVar(t, &cardGrace, 300*time.Millisecond) // no card comes: said once that is past
 	hub := newFakeHub(t)
 	hub.manual = true
 	up := delegatingUpstream(t)
@@ -529,6 +530,98 @@ func TestCardWaitingOnTheUserIsSaidOnce(t *testing.T) {
 	hub.end("main1")
 	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "部署好了") {
 		t.Fatalf("result: %s", got)
+	}
+}
+
+// A turn listed working while a card waits on the user waits on the user (#5500): a headless conversation (the main
+// one) stays working while its permission hook waits, as a question through Claude Code's hook does. Its run is
+// needs_you, the card is said by its kind and no heartbeat says it still works, a status says it waits, and the call
+// does not pause; once the card is answered it works again, and its answer is said.
+func TestListedWorkingWhileACardWaits(t *testing.T) {
+	setVar(t, &lookEvery, 100*time.Millisecond)
+	setVar(t, &heartbeatAfter, time.Second)
+	setVar(t, &pauseAfter, 500*time.Millisecond)
+	hub := agentHub(t)
+	hub.manual = true
+	up := boundUpstream(t, false)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	a.send(map[string]any{"type": "text", "text": "清理一下临时目录"})
+	m := hub.waitSent(1)
+	hub.status("a1", "working")
+	a.runStates(m.ID, runWorking)
+	hub.raise(proto.Interaction{ID: "p1", MachineID: "m", SessionID: "a1", Kind: proto.IxPermission, ToolName: "Bash", Summary: "rm -rf /tmp/x"})
+	hub.edit("a1", func(s *fakeSession) { s.pending = 1 }) // still listed working
+	a.runStates(m.ID, runNeedsYou)
+	up.nextMatch(saying("在等用户处理"))
+	time.Sleep(2500 * time.Millisecond) // past heartbeatAfter and pauseAfter
+	if n := up.count(saidWith("还在做")); n != 0 {
+		t.Fatalf("%d heartbeats while a card waits", n)
+	}
+	if n := up.count(saidWith("等用户回答或批准")); n != 0 {
+		t.Fatal("the turn said it waits too: its card says itself")
+	}
+	a.mu.Lock()
+	paused := a.types["link"]
+	a.mu.Unlock()
+	if paused {
+		t.Fatal("paused while a card waits on the user")
+	}
+	a.send(map[string]any{"type": "text", "text": "状态：到哪了"})
+	if got := content(up.nextMatch(on("dlg2"))); !strings.Contains(got, "在屏幕上等用户处理") || strings.Contains(got, "还在做") {
+		t.Fatalf("status: %s", got)
+	}
+	hub.answerOnScreen("p1")
+	hub.edit("a1", func(s *fakeSession) { s.pending = 0 })
+	a.runStates(m.ID, runWorking)
+	hub.add("a1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "清理好了"})
+	hub.end("a1")
+	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "清理好了") {
+		t.Fatalf("result: %s", got)
+	}
+}
+
+// A dialog on the screen is made a card by the node after the session already shows it blocked (#5500): the turn does
+// not say it waits before cardGrace, and the card, once it comes, says itself, once. Blocked with no card at all past
+// cardGrace, the turn says it waits, once.
+func TestCardThatComesLateSaysItself(t *testing.T) {
+	setVar(t, &lookEvery, 100*time.Millisecond)
+	setVar(t, &cardGrace, 1500*time.Millisecond)
+	hub := agentHub(t)
+	hub.manual = true
+	up := boundUpstream(t, false)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	a.send(map[string]any{"type": "text", "text": "跑一下迁移"})
+	m := hub.waitSent(1)
+	hub.status("a1", "working")
+	a.runStates(m.ID, runWorking)
+	turn := saidWith("等用户回答或批准")
+	hub.edit("a1", func(s *fakeSession) { s.status = "blocked" }) // the dialog is up; its card not yet
+	a.runStates(m.ID, runNeedsYou)
+	time.Sleep(700 * time.Millisecond)
+	hub.raise(proto.Interaction{ID: "s1", MachineID: "m", SessionID: "a1", Kind: proto.IxScreen, Summary: "Continue?"})
+	hub.edit("a1", func(s *fakeSession) { s.pending = 1 })
+	up.nextMatch(saying("在等用户处理"))
+	time.Sleep(2 * cardGrace)
+	if n := up.count(turn); n != 0 {
+		t.Fatalf("the turn said it waits %d times besides its card", n)
+	}
+	hub.answerOnScreen("s1")
+	hub.edit("a1", func(s *fakeSession) { s.status, s.pending = "working", 0 })
+	a.runStates(m.ID, runWorking)
+	hub.edit("a1", func(s *fakeSession) { s.status = "blocked" }) // no card ever comes (a form the hub keeps from the extension)
+	a.runStates(m.ID, runNeedsYou)
+	time.Sleep(cardGrace / 2)
+	if n := up.count(turn); n != 0 {
+		t.Fatal("said it waits before cardGrace")
+	}
+	up.nextMatch("the turn says it waits", turn)
+	time.Sleep(cardGrace)
+	if n := up.count(turn); n != 1 {
+		t.Fatalf("said %d times", n)
 	}
 }
 

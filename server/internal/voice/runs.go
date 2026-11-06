@@ -37,8 +37,11 @@ type voiceRun struct {
 	checked  time.Time // its answer was last read
 	notFound bool      // that read did not find its message
 	ended    bool      // the hub said a turn ended there since
-	waiting  bool      // the user was told it waits for them (until it works again)
+	waiting  bool      // it was seen waiting on the user (until it works again)
 	rev      int64     // the conversation's transcript before the send (proto.Session.Rev)
+	// owed: it waits on the user and no card of it was seen since (a card says itself, asks.go); past cardGrace
+	// without one the turn says it waits (report needs_you). Zero once a card is seen or that is said.
+	owed time.Time
 
 	// task is its own task (Tasks has the folded ones' too); message what was sent (a resend sends it again).
 	task, message string
@@ -277,6 +280,16 @@ func waitingOnUser(s *proto.Session) bool {
 	return s.Status == proto.StatusBlocked || s.State == proto.StateNeedsYou || s.PendingInteractions > 0
 }
 
+// atWork: it works on its own, not stopped on the user. A headless conversation (the main one) stays working while a
+// permission card waits on its hook, as does a Claude Code question asked through its hook (#5500): that is a wait on
+// the user, not work to report as such (the run's state, a heartbeat, a status, a pause).
+func atWork(s *proto.Session) bool { return working(s) && !waitingOnUser(s) }
+
+// cardGrace is how long a turn seen waiting on the user may go without a card before it says so itself: a dialog on
+// the screen is made a card by the node's reading of it, after the session already shows it blocked (1.5 s measured,
+// #5500), and that card says itself (asks.go).
+var cardGrace = 5 * time.Second
+
 // check is channel.Run's rules against the conversation now (the assistant's checkChannelRun, over HTTP): wait, read
 // the answer, or give up; an answer, a stop or a card waiting for the user is told to the voice model.
 func (t *tracker) check(ctx context.Context, r *voiceRun) {
@@ -294,11 +307,13 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		return
 	}
 	look := channel.Look{Now: now, Exists: sess != nil, Lang: l}
+	onUser := false // stopped on the user, whether or not it is listed working (busy)
 	if sess != nil {
 		r.lastRev = sess.Rev
 		look.Working, look.Offline, look.Background = working(sess), sess.Status == proto.StatusOffline, channel.Background(*sess)
+		onUser = waitingOnUser(sess)
 		if !look.Working {
-			look.Waiting = waitingOnUser(sess)
+			look.Waiting = onUser
 			look.Failed = !look.Waiting && strings.TrimSpace(sess.TurnError) != ""
 		}
 		if !r.Seen && !look.Working && sess.Rev != 0 && sess.Rev != r.rev {
@@ -310,15 +325,24 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		look.Online, _ = hub.machineOnline(ctx, r.MachineID)
 	}
 	switch {
-	case look.Waiting && !r.waiting:
-		r.waiting = true // once until it works again: the user answers on the phone
-		t.set(r, runNeedsYou)
-		if !t.asks.covers(ctx, linkKey{r.MachineID, r.SessionID}) { // a card waiting says itself (asks.go)
-			t.say(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), To: t.c.target.to(), Status: "needs_you",
-				Tasks: r.Tasks, Observed: r.Observed})), false)
+	case onUser:
+		if !r.waiting {
+			r.waiting, r.owed = true, now // once until it works again: the user answers on the screen or the phone
+			t.set(r, runNeedsYou)
+		}
+		if !r.owed.IsZero() {
+			key := linkKey{r.MachineID, r.SessionID}
+			switch {
+			case t.asks.covers(ctx, key): // a card waiting says itself (asks.go)
+				r.owed = time.Time{}
+			case !t.asks.inScope(key) || now.Sub(r.owed) >= cardGrace: // no card says itself here, or none came
+				r.owed = time.Time{}
+				t.say(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), To: t.c.target.to(), Status: "needs_you",
+					Tasks: r.Tasks, Observed: r.Observed})), false)
+			}
 		}
 	case look.Working:
-		r.waiting, r.continued, r.stopAt = false, r.continued || r.transient, time.Time{}
+		r.waiting, r.owed, r.continued, r.stopAt = false, time.Time{}, r.continued || r.transient, time.Time{}
 		if !r.Held {
 			t.set(r, runWorking)
 			t.heartbeat(r, sess, now)
