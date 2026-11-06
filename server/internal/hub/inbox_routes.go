@@ -50,12 +50,17 @@ func (h *Hub) inboxRoutesRelayed(api *http.ServeMux) {
 		if pattern == "POST /api/v1/inbox/{id}/suggestion" {
 			// Confirming a reply sends it: cut off on the way it is in doubt, like a reply (the manager's send id has
 			// it sent once). What an answer-only device may do the manager checks (it knows the suggestion).
+			// The item's manager, as for a reply (#5298).
 			api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-				if h.busConnOf(assistantwire.AssistantID) == nil {
+				id, ok := h.owner(w, r, h.byRequest)
+				if !ok {
+					return
+				}
+				if h.busConnOf(id) == nil {
 					writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
 					return
 				}
-				h.forwardSend(w, r, assistantwire.AssistantID)
+				h.forwardSend(w, r, id)
 			})
 			continue
 		}

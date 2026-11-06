@@ -220,3 +220,40 @@ func TestMergeListOneManager(t *testing.T) {
 		t.Fatalf("offline: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// Acting on an inbox item's suggestion goes to the item's manager, as its reply does: the one the request names, else
+// the default; the assistant being offline says nothing of another manager's item.
+func TestInboxSuggestionGoesToTheItemsManager(t *testing.T) {
+	h := newTestHub(t)
+	h.bus.idents = &memIdents{}
+	bm := http.NewServeMux()
+	h.busRoutes(bm)
+	bsrv := httptest.NewServer(bm)
+	t.Cleanup(bsrv.Close)
+	t.Cleanup(func() {
+		for _, c := range h.stopBus() {
+			_ = c.ws.CloseNow()
+		}
+	})
+	a := connectFakeManager(t, h, bsrv, assistantwire.AssistantID)
+	connectFakeManager(t, h, bsrv, "m-0a0b0c")
+	eventually(t, 5*time.Second, "both managers connected", func() bool {
+		return h.busConnOf(assistantwire.AssistantID) != nil && h.busConnOf("m-0a0b0c") != nil
+	})
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	for _, route := range []string{"reply", "suggestion"} {
+		path := "/api/v1/inbox/item-m-0a0b0c/" + route + "?manager=m-0a0b0c"
+		if code, out := ownershipGet(t, h, srv, http.MethodPost, path, nil); code != http.StatusOK || out["who"] != "m-0a0b0c" {
+			t.Fatalf("%s: %d %v, want m-0a0b0c's", route, code, out)
+		}
+	}
+	_ = a.bus.ws.Close(websocket.StatusNormalClosure, "test")
+	eventually(t, 5*time.Second, "the assistant offline", func() bool { return h.busConnOf(assistantwire.AssistantID) == nil })
+	for _, route := range []string{"reply", "suggestion"} {
+		path := "/api/v1/inbox/item-m-0a0b0c/" + route
+		if code, out := ownershipGet(t, h, srv, http.MethodPost, path, map[string]string{ManagerHeader: "m-0a0b0c"}); code != http.StatusOK || out["who"] != "m-0a0b0c" {
+			t.Fatalf("%s with the assistant offline: %d %v, want m-0a0b0c's", route, code, out)
+		}
+	}
+}
