@@ -335,19 +335,27 @@ func TestInteractions(t *testing.T) {
 		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour), Resumable: true})
 	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix4", MachineID: "server", SessionID: "s", Kind: proto.IxPermission,
 		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(-time.Minute), Resumable: true})
+	// The manager's card about a turn stays pending: it puts it back up from session_work.
+	_, _ = d.pool.Exec(ctx, `TRUNCATE session_work`)
+	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "work_1", MachineID: "server", SessionID: "s", Kind: proto.IxQuestion, CreatedAt: time.Now()})
+	if err := d.PutSessionWork(ctx, SessionWork{MachineID: "server", SessionID: "s", TurnAt: time.Now().UTC(), InteractionID: "work_1",
+		Work: proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, InteractionID: "work_1"}}); err != nil {
+		t.Fatal(err)
+	}
 	kept, err := d.ExpireStaleInteractions(ctx)
 	if err != nil || len(kept) != 1 || kept[0].ID != "ix3" || !kept[0].Resumable {
 		t.Fatalf("kept %+v, %v", kept, err)
 	}
 	recs, err := d.Interactions(ctx, "server", "s", 10)
-	if err != nil || len(recs) != 4 {
+	if err != nil || len(recs) != 5 {
 		t.Fatalf("records = %+v, %v", recs, err)
 	}
 	status := map[string]string{}
 	for _, r := range recs {
 		status[r.Interaction.ID] = r.Status
 	}
-	if status["ix1"] != "resolved" || status["ix2"] != "cancelled" || status["ix3"] != "pending" || status["ix4"] != "cancelled" {
+	if status["ix1"] != "resolved" || status["ix2"] != "cancelled" || status["ix3"] != "pending" || status["ix4"] != "cancelled" ||
+		status["work_1"] != "pending" {
 		t.Fatalf("status = %v", status)
 	}
 	if st, res, err := d.InteractionOutcome(ctx, "ix1"); err != nil || st != "resolved" || res == nil || res.Approve == nil || !*res.Approve {

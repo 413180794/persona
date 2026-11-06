@@ -650,7 +650,9 @@ struct InboxAgentRow: View {
 
     var body: some View {
         let ix = interaction
-        let asks = ix.summary ?? ix.questions?.first?.question
+        // What it asks, by card kind (the plan's title, the terminal dialog's question); older hubs that filled
+        // neither keep the old summary / first-question fallback.
+        let asks = ix.askLine(includeToolName: false) ?? ix.summary ?? ix.questions?.first?.question
         HStack(alignment: .top, spacing: Theme.Space.m) {
             // The rounded square of the Agents rows (SessionAvatar), with what kind of request it is.
             SessionAvatar(machine: machine, state: .needsYou, size: 40, symbol: ix.kind.symbol, dot: false)

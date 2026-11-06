@@ -311,6 +311,7 @@ func (s *Service) loadWork(ctx context.Context) bool {
 	v := s.newWorkView(ctx)
 	now := time.Now()
 	var forgot []db.SessionWork
+	var forgotIDs []string
 	cards := map[string]proto.Interaction{}
 	var up map[string]proto.Interaction
 	for i := range rows {
@@ -329,6 +330,7 @@ func (s *Service) loadWork(ctx context.Context) bool {
 		case ix != nil:
 			cards[e.InteractionID] = *ix
 		case !keep:
+			forgotIDs = append(forgotIDs, e.InteractionID)
 			rows[i].InteractionID, rows[i].Work.InteractionID = "", ""
 			forgot = append(forgot, rows[i])
 		}
@@ -352,6 +354,9 @@ func (s *Service) loadWork(ctx context.Context) bool {
 	s.work.mu.Unlock()
 	for _, e := range forgot {
 		s.saveWork(e)
+	}
+	for _, id := range forgotIDs {
+		s.recordEnd(id, "cancelled", nil) // kept pending across the restart for this (db ExpireStaleInteractions)
 	}
 	return true
 }
@@ -1312,21 +1317,32 @@ func (s *Service) cardsUp(ctx context.Context) map[string]proto.Interaction {
 	return out
 }
 
-// cardBack is e's card put back (its turn still waits; nil when not now), and whether e keeps it meanwhile: its machine
-// is not back yet, or the hub does not list the session yet (false: past its day, or the turn moved on).
+// cardBack is e's card put back (its turn still waits; nil when not now), and whether e keeps it meanwhile (false: past
+// its day, or the turn went on). Only the agent going on ends the card: working again, or a later turn. A card
+// still waits for its answer when the session was looked at (as one the hub kept up does), and is kept for a later
+// tick while its machine or session is not back as it was — right after a hub restart the nodes reconnect and report
+// their sessions over the next seconds, a node that restarted too before it has read the transcripts.
 func (s *Service) cardBack(v *workView, e db.SessionWork, now time.Time) (*proto.Interaction, bool) {
 	if now.After(e.TurnAt.Add(workCardTTL)) || len(e.Work.Questions) == 0 {
 		return nil, false
 	}
 	c, why := s.workGuard(v, e, true)
 	switch why {
-	case "":
+	case "", "looked at in herdr":
 		ix := workCard(e.MachineID, c, e.Work, e.InteractionID)
 		return &ix, true
-	case "offline", "gone":
-		return nil, true
+	case "moved on":
+		if wentOn(c, e) {
+			return nil, false
+		}
 	}
-	return nil, false
+	return nil, true
+}
+
+// wentOn: c went on from e's turn — it works again, or a later turn ended. A session that reads older than the turn
+// (a node that has not read its transcript yet) did not.
+func wentOn(c proto.Session, e db.SessionWork) bool {
+	return c.Status == proto.StatusWorking || c.UpdatedAt.After(e.TurnAt.Add(2*time.Second))
 }
 
 // cardTick: k's card is past its day, or its turn went on (a turn_started the manager missed while it was away): it
@@ -1341,8 +1357,8 @@ func (s *Service) cardTick(ctx context.Context, v *workView, k [2]string, now ti
 	s.work.mu.Unlock()
 	var drop bool
 	if out {
-		_, why := s.workGuard(v, e, true)
-		drop = now.After(e.TurnAt.Add(workCardTTL)) || why == "moved on"
+		c, why := s.workGuard(v, e, true)
+		drop = now.After(e.TurnAt.Add(workCardTTL)) || why == "moved on" && wentOn(c, e)
 	} else {
 		ix, keep := s.cardBack(v, e, now)
 		if ix != nil {
@@ -1360,6 +1376,9 @@ func (s *Service) cardTick(ctx context.Context, v *workView, k [2]string, now ti
 	s.work.mu.Lock()
 	delete(s.work.cards, e.InteractionID)
 	s.work.mu.Unlock()
+	if !out {
+		s.recordEnd(e.InteractionID, "cancelled", nil) // never put back up: nothing else ends it in the history
+	}
 	e.InteractionID, e.Work.InteractionID = "", ""
 	s.putWork(ctx, e)
 }

@@ -291,6 +291,12 @@
     <string name="designsystem_core_headline_agent_permission_detail">%1$sが%2$sの使用をリクエスト：%3$s</string>
     <string name="designsystem_core_headline_screen">ターミナルのダイアログで要対応</string>
     <string name="designsystem_core_headline_needs_you">要対応</string>
+    <string name="designsystem_core_ask_question">質問中</string>
+    <string name="designsystem_core_ask_permission">許可が必要</string>
+    <string name="designsystem_core_ask_plan">プランの承認待ち</string>
+    <string name="designsystem_core_ask_screen">ターミナルのダイアログ</string>
+    <string name="designsystem_core_ask_elicitation">MCPリクエスト</string>
+    <string name="designsystem_core_ask_line">%1$s：%2$s</string>
     <string name="designsystem_core_todo_done">完了</string>
     <string name="designsystem_core_todo_unread">未確認</string>
     <string name="designsystem_core_todo_working">進行中</string>

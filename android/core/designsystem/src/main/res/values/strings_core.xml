@@ -317,6 +317,12 @@
     <string name="designsystem_core_headline_agent_permission_detail">%1$s wants to use %2$s: %3$s</string>
     <string name="designsystem_core_headline_screen">A dialog in the terminal needs you</string>
     <string name="designsystem_core_headline_needs_you">Needs you</string>
+    <string name="designsystem_core_ask_question">Asking you</string>
+    <string name="designsystem_core_ask_permission">Needs permission</string>
+    <string name="designsystem_core_ask_plan">Plan to approve</string>
+    <string name="designsystem_core_ask_screen">Terminal dialog</string>
+    <string name="designsystem_core_ask_elicitation">MCP request</string>
+    <string name="designsystem_core_ask_line">%1$s: %2$s</string>
     <string name="designsystem_core_todo_done">Completed</string>
     <string name="designsystem_core_todo_unread">To review</string>
     <string name="designsystem_core_todo_working">In progress</string>

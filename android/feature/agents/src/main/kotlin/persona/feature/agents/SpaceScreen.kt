@@ -13,6 +13,7 @@ import persona.core.contracts.*
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.*
+import persona.core.domain.answer.firstBySession
 import java.time.Instant
 
 /**
@@ -31,6 +32,7 @@ internal fun SpaceScreen(
     title: String = "",
     loaded: Boolean = true,
 ) {
+    val cards = remember(pending) { pending.firstBySession() }
     Box(Modifier.fillMaxSize()) {
         JListPage(title = space?.name ?: title.ifBlank { stringResource(R.string.agents_space) }, onBack = onDismiss,
             subtitle = machines.firstOrNull { it.id == space?.machineId }?.displayName,
@@ -48,6 +50,7 @@ internal fun SpaceScreen(
                 val tabs = agentTabs(space.members)
                 itemsIndexed(space.members, key = { _, row -> row.id }) { index, row ->
                     val requests = pending.count { it.sessionKey == row.session.key }
+                    val card = cards[row.session.key]
                     val tab = row.session.tabKey?.let(tabs::get)
                     val branch = tab?.isBranch(row) == true
                     SlotRow(row, machines.firstOrNull { it.id == row.session.machineId }?.displayName,
@@ -58,7 +61,7 @@ internal fun SpaceScreen(
                         slotLabel = row.session.slotName?.takeIf { it.isNotBlank() && it != row.session.displayTitle }
                             // herdr's default tab names are numbers; a bare 「1」 reads as a count, so say #1.
                             ?.let { if (it.all(Char::isDigit)) "#$it" else it }
-                            ?: stringResource(R.string.agents_space_tab, row.session.slotIndex ?: 0), requestCount = requests, onClose = onClose(row))
+                            ?: stringResource(R.string.agents_space_tab, row.session.slotIndex ?: 0), requestCount = requests, onClose = onClose(row), card = card)
                 }
                 if (canStart) item("new-tab") {
                     JButton(stringResource(R.string.agents_space_new_tab), { onNewTab(space) }, Modifier.fillMaxWidth().padding(top = 16.dp), enabled = !busy, icon = PhIcons.Plus)

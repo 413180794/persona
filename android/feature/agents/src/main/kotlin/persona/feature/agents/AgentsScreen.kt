@@ -28,6 +28,9 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.*
+import persona.core.domain.answer.firstBySession
+import persona.core.domain.answer.rowLine
+import persona.core.domain.answer.askingLine
 import persona.core.navigation.*
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -117,6 +120,9 @@ internal fun AgentsScreen(
             .filter { operations.sessions[it.sessionKey]?.closed != true }
     }
     val messagesBySession = remember(outbox) { outbox.groupBy { it.session } }
+    // Each row's own card (the one that came first) and how many it has, as on the space page (#3964).
+    val cards = remember(pending) { pending.firstBySession() }
+    val cardCounts = remember(pending) { pending.groupingBy { it.sessionKey }.eachCount() }
     val unknownRequests = remember(pending, delivery) {
         pending.filter { delivery[it.id] == RequestDelivery.Unknown }.map { it.sessionKey }.toSet()
     }
@@ -385,10 +391,12 @@ internal fun AgentsScreen(
                             depth = entry.depth, position = GroupPosition(entry.first, entry.last), located = entry.located,
                             onOpen = { openRow(row) }, menuItems = { rowMenu(row) },
                             onClose = closeSwipe(row, operations.busy) { operationDialog = AgentOperationDialog.Close(row.session) },
-                            launcher = entry.launcher, branch = entry.branch)
+                            launcher = entry.launcher, branch = entry.branch,
+                            requestCount = cardCounts[row.session.key] ?: 0, card = cards[row.session.key])
                     }
                     is TreeTabEntry -> item(entry.key, contentType = "tab") {
-                        AgentTabEntryRow(entry, now, page.preferences.compact, onOpen = { openRow(entry.tab.lead) }, onToggle = { model.foldTab(entry.tab) })
+                        AgentTabEntryRow(entry, now, page.preferences.compact, onOpen = { openRow(entry.tab.lead) }, onToggle = { model.foldTab(entry.tab) },
+                            card = cards[entry.tab.lead.session.key])
                     }
                     is TreeIdleEntry -> item(entry.key, contentType = "idle") {
                         AgentIdleRow(entry.hidden, onClick = { model.showIdle(entry.group) }, depth = entry.depth)
@@ -545,6 +553,8 @@ internal fun SlotRow(
     onClose: (() -> Unit)? = null,
     /** Under its herdr tab (#2320): the tab's 发起者, or a pane it split off. */
     launcher: Boolean = false, branch: Boolean = false,
+    /** The card this agent waits on, first of its own ([firstBySession]): what it asks is the row's line while it needs you. */
+    card: Interaction? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     val session = row.session
@@ -562,9 +572,8 @@ internal fun SlotRow(
         title = session.displayTitle, status = row.state.designStatus, depth = depth, position = position,
         onClick = onOpen, onLongClick = { menu = true }, compact = compact, muted = muted,
         selected = isSessionSelected(LocalDetailKey.current, session.key),
-        // Why its host says it waits or stopped (iOS listPreview), where its work stands once the hub triaged its turn
-        // (docs/agent-work.md), else its last words.
-        preview = session.reasonPreview ?: session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(agentResources(), row.updatedAt, now),
+        // What its card asks while it needs you, else why its host says it waits or stopped, where its work stands, its last words.
+        preview = session.rowLine(card, now)?.text(), time = relativeTime(agentResources(), row.updatedAt, now),
         // Codex, TRAEX or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
         agent = session.agentLabel.takeIf { !session.isClaude && source == null },
         statusText = row.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label,
@@ -612,16 +621,18 @@ internal fun SlotRow(
  * Time and agent kind stay on the agents' own rows: the tab's row has 「N 个 Agent」 at its end instead.
  */
 @Composable
-internal fun AgentTabEntryRow(entry: TreeTabEntry, now: Instant, compact: Boolean, onOpen: () -> Unit, onToggle: () -> Unit) {
+internal fun AgentTabEntryRow(entry: TreeTabEntry, now: Instant, compact: Boolean, onOpen: () -> Unit, onToggle: () -> Unit, card: Interaction? = null) {
     val lead = entry.tab.lead
     val session = lead.session
     val titled = entry.tab.launcher ?: entry.tab.members.first()
-    val words = session.reasonPreview ?: session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }
+    val asks = session.askingLine(card)?.text()
+    val words = asks ?: session.rowLine(card, now)?.text()
     AgentTabRow(
         label = titled.session.slotLabel.orEmpty(), title = titled.session.displayTitle, status = lead.state.designStatus,
         agents = entry.tab.members.size, folded = entry.folded, onToggle = onToggle, onClick = onOpen,
         depth = entry.depth, position = GroupPosition(entry.first, entry.last),
-        preview = words?.let { if (lead.id == titled.id) it else stringResource(R.string.agents_tab_lead_words, session.agentLabel, it) },
+        // 「Codex · 需要授权：…」: the card's own words already have a colon
+        preview = words?.let { if (lead.id == titled.id) it else stringResource(if (asks != null) R.string.agents_tab_lead_asks else R.string.agents_tab_lead_words, session.agentLabel, it) },
         statusText = lead.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label, compact = compact,
         // folded, the tab's row stands for its agents: it is the one lit while one of them is open
         selected = entry.folded && entry.tab.members.any { isSessionSelected(LocalDetailKey.current, it.session.key) },

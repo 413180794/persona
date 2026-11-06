@@ -287,6 +287,12 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.HeadlineAgentPermissionDetail -> R.string.designsystem_core_headline_agent_permission_detail
     CoreText.Key.HeadlineScreen -> R.string.designsystem_core_headline_screen
     CoreText.Key.HeadlineNeedsYou -> R.string.designsystem_core_headline_needs_you
+    CoreText.Key.AskQuestion -> R.string.designsystem_core_ask_question
+    CoreText.Key.AskPermission -> R.string.designsystem_core_ask_permission
+    CoreText.Key.AskPlan -> R.string.designsystem_core_ask_plan
+    CoreText.Key.AskScreen -> R.string.designsystem_core_ask_screen
+    CoreText.Key.AskElicitation -> R.string.designsystem_core_ask_elicitation
+    CoreText.Key.AskLine -> R.string.designsystem_core_ask_line
     CoreText.Key.TodoDone -> R.string.designsystem_core_todo_done
     CoreText.Key.TodoUnread -> R.string.designsystem_core_todo_unread
     CoreText.Key.TodoWorking -> R.string.designsystem_core_todo_working

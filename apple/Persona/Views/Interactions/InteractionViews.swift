@@ -144,14 +144,7 @@ struct InteractionPreviewCard: View {
         return ScreenParser.waitingOn(interaction.screen ?? "")
     }
 
-    private var summary: String {
-        switch interaction.kind {
-        case .question: interaction.questions?.first?.question ?? ""
-        case .plan: PlanText.title(interaction.plan ?? "")
-        case .permission: [interaction.toolName, interaction.summary].compactMap { $0 }.joined(separator: String(localized: "：", comment: "Separator between a tool name and what it runs"))
-        case .screen: interaction.screenDialog?.question ?? ""
-        }
-    }
+    private var summary: String { interaction.askLine(includeToolName: true) ?? "" }
 
     @ViewBuilder private var quickActions: some View {
         switch interaction.kind {
@@ -225,16 +218,6 @@ struct FlowButtons: View {
 /// suggestion; the accent would read as something to tap).
 struct RecommendedTag: View {
     var body: some View { Chip(text: String(localized: "推荐"), look: .tint(Theme.ai)) }
-}
-
-enum PlanText {
-    static func title(_ plan: String) -> String {
-        for line in plan.split(separator: "\n") {
-            let t = line.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#* "))
-            if !t.isEmpty { return t }
-        }
-        return String(localized: "执行计划")
-    }
 }
 
 /// Full interaction UI pinned above the composer in a chat. Capped in height (scrolls inside) and collapsible,

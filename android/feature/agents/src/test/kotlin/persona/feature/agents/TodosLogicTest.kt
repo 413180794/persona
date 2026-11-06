@@ -92,4 +92,25 @@ class TodosLogicTest {
         assertEquals(TodoUrgentSummary.Words("agent title"), summary(null, title = "agent title"))
         assertNull(summary(null, title = " "))
     }
+
+    @Test
+    fun aWaitingAgentsLineSaysWhatItsCardAsks() {
+        val agent = TodoAgent("mac", "s1")
+        val waiting = session("mac", "s1", "needs_you", lastText = "我先跑一下测试")
+        val card = Interaction("c1", machineId = "mac", sessionId = "s1", kind = "permission", toolName = "Bash", summary = "./gradlew test")
+        fun summary(session: Session?, card: Interaction?, failed: Boolean = false) =
+            mostUrgentSummary(TodoMostUrgent(agent.copy(startError = "no claude".takeIf { failed }), session, session?.agentState ?: AgentState.Offline, failed), card)
+        val asks = summary(waiting, card) as TodoUrgentSummary.Asks
+        assertEquals(CoreText.Key.AskLine, asks.text.key)
+        assertEquals("./gradlew test", (asks.text.args[1] as CoreText).args.first())
+        // without a card, or while it works, the last words as before; a failed start still says why
+        assertEquals(TodoUrgentSummary.Words("我先跑一下测试"), summary(waiting, null))
+        assertEquals(TodoUrgentSummary.Words("我先跑一下测试"), summary(waiting.copy(state = "working"), card))
+        assertEquals(TodoUrgentSummary.StartFailed("no claude"), summary(waiting, card, failed = true))
+        // the to-do page's agent row: the card while it waits, else its last words, nothing without a session
+        assertEquals(CoreText.Key.AskLine, todoAgentPreview(waiting, card)?.key)
+        assertEquals(CoreText.plain("我先跑一下测试"), todoAgentPreview(waiting, null))
+        assertEquals(CoreText.plain("我先跑一下测试"), todoAgentPreview(waiting.copy(state = "working"), card))
+        assertNull(todoAgentPreview(null, card))
+    }
 }

@@ -782,6 +782,79 @@ func TestWorkComesBackAfterARestart(t *testing.T) {
 	}
 }
 
+// The hub restarted (and the node with it): a red-line card waiting for the user comes back under the same id, whatever
+// the session looks like while its node is coming back — looked at (idle), still blocked on its own question, or not
+// yet read (no time on it). Only a later turn or the agent working again ends it.
+func TestRedLineCardSurvivesAHubRestart(t *testing.T) {
+	f := newFakeHub()
+	f.sessions["box"] = nil
+	st := &workMemStore{}
+	ctx := context.Background()
+	s := newServiceOn(t, f, st)
+	if err := s.putTriageSwitches(ctx, TriageSwitches{Enabled: true, Decide: true}); err != nil {
+		t.Fatal(err)
+	}
+	f.triage = `{"phase":"blocked","on":"user","line":"等你定部署顺序","questions":[{"question":"先部署哪边？","options":[{"label":"先部署后端"},{"label":"先别部署"}]}]}`
+	recent := time.Now().Add(-time.Minute).UTC().Truncate(time.Second)
+	c := stopped("s1", "先部署哪边？")
+	c.UpdatedAt = recent
+	f.setSessions("box", c)
+	triage(t, s, "s1")
+	id := entryOf(t, s, "s1").InteractionID
+	if id == "" {
+		t.Fatal("setup: no card")
+	}
+	s.waitWorkEvents()
+
+	for _, back := range []struct {
+		name string
+		edit func(*proto.Session)
+	}{
+		{"looked at", func(c *proto.Session) { c.Status = proto.StatusIdle }},
+		{"not read yet", func(c *proto.Session) { c.UpdatedAt = time.Time{} }},
+		{"blocked", func(c *proto.Session) { c.Status = proto.StatusBlocked }},
+	} {
+		after := c
+		back.edit(&after)
+		f.setSessions("box", after)
+		s = newServiceOn(t, f, st) // the hub has no card up: it restarted
+		s.workTick(ctx, time.Now())
+		if e := entryOf(t, s, "s1"); e.InteractionID != id {
+			t.Fatalf("%s: the card was forgotten: %+v", back.name, e)
+		}
+	}
+	// Its node has read the session again: the card is out, the same one, and its answer goes to the agent.
+	f.setSessions("box", c)
+	s = newServiceOn(t, f, st)
+	s.workTick(ctx, time.Now())
+	if cards := s.workCards(); len(cards) != 1 || cards[0].ID != id {
+		t.Fatalf("cards %+v", cards)
+	}
+	answerCard(t, s, id, proto.Resolution{Answers: map[string]string{"先部署哪边？": "先别部署"}})
+	if got := f.sentToAgents(); len(got) != 1 || !strings.Contains(got[0], "先别部署") {
+		t.Fatalf("sent %v", got)
+	}
+
+	// A later turn ends a card read back after a restart.
+	f.triage = `{"phase":"blocked","on":"user","line":"再问一次","questions":[{"question":"先部署哪边？","options":[{"label":"先部署后端"},{"label":"先别部署"}]}]}`
+	c.UpdatedAt = time.Now().UTC().Truncate(time.Second)
+	f.setSessions("box", c)
+	triage(t, s, "s1")
+	second := entryOf(t, s, "s1").InteractionID
+	if second == "" || second == id {
+		t.Fatalf("setup: second card %q", second)
+	}
+	s.waitWorkEvents()
+	later := c
+	later.UpdatedAt = c.UpdatedAt.Add(time.Minute)
+	f.setSessions("box", later)
+	s = newServiceOn(t, f, st)
+	s.workTick(ctx, time.Now())
+	if e := entryOf(t, s, "s1"); e.InteractionID != "" {
+		t.Fatalf("a card outlived its turn: %+v", e)
+	}
+}
+
 // A pass that cannot read a machine's sessions decides nothing about them: a wake due then goes a minute later.
 func TestWakeWaitsWhenTheHubCannotSay(t *testing.T) {
 	s, f := workService(t)

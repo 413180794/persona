@@ -226,12 +226,13 @@ extension MacMenuBar {
 
     /// One line on what it asks.
     static func summary(_ ix: Interaction) -> String {
-        let s: String = switch ix.kind {
-        case .question: ix.questions?.first?.question ?? String(localized: "Claude 在问你")
-        case .plan: PlanText.title(ix.plan ?? "")
-        case .permission: [ix.toolName, ix.summary].compactMap { $0 }.joined(separator: String(localized: "：", comment: "Separator between two parts of a one-line summary, e.g. a tool name and what it does"))
-        case .screen: ix.screenDialog?.question ?? String(localized: "终端在问你")
+        // Cards whose text the hub did not fill keep the menu bar's generic wording.
+        let fallback: String
+        switch ix.kind {
+        case .question: fallback = String(localized: "Claude 在问你")
+        case .screen: fallback = String(localized: "终端在问你")
+        case .plan, .permission: fallback = ""
         }
-        return String(s.prefix(80))
+        return String((ix.askLine(includeToolName: true) ?? fallback).prefix(80))
     }
 }

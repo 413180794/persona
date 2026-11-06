@@ -144,9 +144,11 @@ fun EntryProviderScope<NavKey>.agentsEntries(
         val tasksStore = dependencies.tasks() ?: wiring.tasks
         val sessions by dependencies.sessions().sessions.collectAsStateWithLifecycle()
         val todos by (tasksStore?.todos ?: flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
+        val pending by dependencies.interactions().pending.collectAsStateWithLifecycle()
         TodosScreen(
             todos = todos,
             sessions = sessions,
+            pending = pending,
             tasks = tasksStore,
             onBack = { navigator.back() },
             onOpenTodo = { todoId -> navigator.navigate(TodoDetailRoute(todoId)) },
@@ -168,11 +170,13 @@ fun EntryProviderScope<NavKey>.agentsEntries(
         val creationService = wiring.creation ?: LocalAgentCreationService.current
         var handOffTodo by remember { mutableStateOf<Todo?>(null) }
         val scope = rememberCoroutineScope()
+        val pending by dependencies.interactions().pending.collectAsStateWithLifecycle()
         TodoDetailScreen(
             todoId = route.todoId,
             todos = todos,
             machines = machines,
             sessions = sessions,
+            pending = pending,
             tasks = tasksStore,
             onBack = { navigator.back() },
             onOpenSession = { key -> navigator.navigate(ChatRoute(key.machineId, key.sessionId)) },

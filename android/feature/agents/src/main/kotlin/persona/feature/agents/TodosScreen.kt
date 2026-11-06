@@ -23,6 +23,9 @@ import kotlinx.coroutines.launch
 import persona.core.contracts.*
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.core.domain.answer.askingLine
+import persona.core.domain.answer.firstBySession
+import persona.core.domain.plainMarkdown
 import persona.core.domain.tasks.TasksStore
 import java.time.Instant
 
@@ -72,7 +75,10 @@ fun TodosScreen(
     onError: (String) -> Unit = {},
     /** Opens with 新建待办 up (the launcher's shortcut). */
     startCreating: Boolean = false,
+    /** The cards waiting for an answer: a waiting agent's line says what its card asks (#3964). */
+    pending: List<Interaction> = emptyList(),
 ) {
+    val cards = remember(pending) { pending.firstBySession() }
     var query by rememberSaveable { mutableStateOf("") }
     var creating by rememberSaveable { mutableStateOf(startCreating) }
     var completedFolded by rememberSaveable { mutableStateOf(true) }
@@ -271,7 +277,7 @@ fun TodosScreen(
 
                                     // One line of what is going on (iOS TodoRow): why it finished on its own, the most urgent
                                     // agent's latest (red while it waits for you), the notes, or that no agent has it yet.
-                                    TodoActivityLine(todo, urgent)
+                                    TodoActivityLine(todo, urgent, urgent?.let { cards[it.agent.key] })
 
                                     // 底部相对时间与挂靠 Agent 数量
                                     Row(
@@ -393,43 +399,36 @@ internal val Todo.autoDoneReason: String?
 internal sealed interface TodoUrgentSummary {
     data class StartFailed(val error: String) : TodoUrgentSummary
     data class Words(val text: String) : TodoUrgentSummary
+    /** What the card it waits on asks (#3964). */
+    data class Asks(val text: CoreText) : TodoUrgentSummary
 }
 
 /**
- * iOS mostUrgentSummary: a failed start with its error; else the session's last words as plain text, or its title;
- * else the agent's own title. Nothing when none of them says anything, so the notes or 还没交给 Agent show instead.
+ * iOS mostUrgentSummary: a failed start with its error; else what its [card] asks while it waits for you; else the
+ * session's last words as plain text, or its title; else the agent's own title. Nothing when none of them says
+ * anything, so the notes or 还没交给 Agent show instead.
  */
-internal fun mostUrgentSummary(urgent: TodoMostUrgent?): TodoUrgentSummary? {
+internal fun mostUrgentSummary(urgent: TodoMostUrgent?, card: Interaction? = null): TodoUrgentSummary? {
     urgent ?: return null
     val error = urgent.agent.startError?.trim().orEmpty()
     if (urgent.isFailed && error.isNotEmpty()) return TodoUrgentSummary.StartFailed(error)
     urgent.session?.let { session ->
+        if (!urgent.isFailed) session.askingLine(card)?.let { return TodoUrgentSummary.Asks(it) }
         val last = session.lastText?.let(::plainMarkdown)?.takeIf(String::isNotBlank)
         return TodoUrgentSummary.Words(last ?: session.displayTitle)
     }
     return urgent.agent.title?.takeIf(String::isNotBlank)?.let(TodoUrgentSummary::Words)
 }
 
-/** Markdown marks off a line so it reads as prose (iOS Fmt.plain): headings, quotes, bullets, emphasis, code, links. */
-internal fun plainMarkdown(text: String): String = text.lineSequence()
-    .map { it.trim().replace(MarkdownLead, "") }
-    .filter(String::isNotEmpty)
-    .joinToString(" ")
-    .replace(MarkdownLink, "$1")
-    .replace(MarkdownMarks, "")
-
-private val MarkdownLead = Regex("^(#{1,6}\\s+|>\\s?|[-*+]\\s+|\\d+[.)]\\s+)+")
-private val MarkdownLink = Regex("!?\\[([^\\]]*)]\\([^)]*\\)")
-private val MarkdownMarks = Regex("\\*\\*|__|~~|`")
-
 /** The open row's line under the title: the auto-done reason, the most urgent agent, the notes, or 还没交给 Agent. */
 @Composable
-private fun TodoActivityLine(todo: Todo, urgent: TodoMostUrgent?) {
+private fun TodoActivityLine(todo: Todo, urgent: TodoMostUrgent?, card: Interaction?) {
     val palette = PersonaTheme.palette
     val reason = todo.autoDoneReason
-    val summary = when (val line = mostUrgentSummary(urgent)) {
+    val summary = when (val line = mostUrgentSummary(urgent, card)) {
         is TodoUrgentSummary.StartFailed -> stringResource(R.string.agents_todo_start_failed, line.error)
         is TodoUrgentSummary.Words -> line.text
+        is TodoUrgentSummary.Asks -> line.text.text()
         null -> null
     }
     val notes = todo.notes.trim().takeIf { it.isNotEmpty() }

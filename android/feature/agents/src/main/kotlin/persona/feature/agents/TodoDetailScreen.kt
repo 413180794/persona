@@ -20,6 +20,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import persona.core.contracts.AgentState
+import persona.core.contracts.CoreText
+import persona.core.contracts.Interaction
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -28,6 +30,8 @@ import persona.core.contracts.TodoAgent
 import persona.core.contracts.TodoState
 import persona.core.contracts.state
 import persona.core.designsystem.*
+import persona.core.domain.answer.askingLine
+import persona.core.domain.answer.firstBySession
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.slotLabel
 import persona.core.domain.tasks.TasksStore
@@ -46,6 +50,10 @@ internal fun agentSource(agent: TodoAgent, lookup: (SessionKey) -> Session?): St
     else -> null
 }
 
+/** An agent row's last line on a to-do's page: what its [card] asks while it waits for you, else its last words. */
+internal fun todoAgentPreview(session: Session?, card: Interaction?): CoreText? =
+    session?.askingLine(card) ?: session?.lastText?.takeIf { it.isNotBlank() }?.let(CoreText::plain)
+
 @Composable
 fun TodoDetailScreen(
     todoId: String,
@@ -58,7 +66,10 @@ fun TodoDetailScreen(
     onHandOff: (Todo) -> Unit,
     onError: (String) -> Unit = {},
     now: Instant = Instant.now(),
+    /** The cards waiting for an answer: a waiting agent's row says what its card asks (#3964). */
+    pending: List<Interaction> = emptyList(),
 ) {
+    val cards = remember(pending) { pending.firstBySession() }
     val todo = todos.firstOrNull { it.id == todoId }
     val scope = rememberCoroutineScope()
     val res = agentResources()
@@ -341,7 +352,7 @@ fun TodoDetailScreen(
                     val place = listOf(machineName, session?.spaceName, session?.slotLabel).filterNot { it.isNullOrBlank() }.joinToString(" · ")
                         .ifBlank { stringResource(R.string.agents_todo_location, machineName, session?.folderName ?: agent.cwd?.substringAfterLast('/').orEmpty()) }
                     val source = agentSource(agent, sessionLookup)
-                    val preview = session?.lastText?.takeIf { it.isNotBlank() } ?: if (session == null) stringResource(R.string.agents_todo_not_listed) else null
+                    val preview = todoAgentPreview(session, cards[agent.key])?.text() ?: if (session == null) stringResource(R.string.agents_todo_not_listed) else null
                     val subtitle = listOfNotNull(place, source, preview).joinToString("\n")
                     val status = session?.let {
                         Status.entries.firstOrNull { s -> s.name == it.agentState.name }
