@@ -201,7 +201,8 @@ Offline sessions listed by the companion (when DSH is not running) omit subagent
 
 ## Verification
 
-- `go test ./internal/node -run 'TestRuntime|TestPollAgentsPublishesWithoutHerdr'`, `./internal/hub -run TestRuntimeLauncher`.
+- `go test ./internal/node -run 'TestRuntime|TestPollAgentsPublishesWithoutHerdr|TestLauncherModelsKnowsRuntimeLaunchers'`, `./internal/assistant -run TestRuntimeLauncherKeepsItsSource`
+  (the DSH launcher keeps its `dsh` source in the new-chat picker and is not listed under Settings › Models).
 - `cd integrations/dsh && npm test`: mapping, pagination, sending, watch continuity, streaming, authorization / questions / plans / late answers, reconnection; archiving and closing, hello / card ids after renaming,
   phone-tool registration and calls (`dsh.test.js`); companion offline lists, pagination, wakeup and handover, rejection of old nodes (`files.test.js`).
 - Node: `go test ./internal/node -run 'TestRuntime'` (runtime id conflicts, same-process reconnection, single-owner launchers, three handover outcomes: `runtimes_identity_test.go`;

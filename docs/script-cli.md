@@ -83,6 +83,7 @@ Delivery goes through APNs (direct or via the push relay) and the persistent con
 - `--error`: `interruption-level: time-sensitive`, and the title gets a "⚠️ " prefix; the default is `active`.
 - `--silent`: no `sound` in `aps`. `notifyRequest` gained an optional `silent` field for this, which the HTTP API also accepts.
 - The title is at most 120 characters, the body at most 1000; anything longer is truncated in node, without an error.
+  The push itself is bounded in bytes (3500 encoded), so the hub then cuts the body further, by characters with a trailing "…", until it fits (`fitBody`): 1000 emoji or escaped `<` `>` `&` are still delivered. Only a title too large on its own is refused (`notification is too large`). Extensions' `POST /api/v1/notify` is not cut: it still gets a 400 over the limit.
 
 ## Clients
 
@@ -99,7 +100,7 @@ Delivery goes through APNs (direct or via the push relay) and the persistent con
 ## Verification
 
 - Unit tests: `server/internal/scriptcli` (exit codes, flags, terminal fallback, Ctrl-C, `--strict`); `server/internal/node/scriptcli_test.go` (fake hub + fake socket: card shape, attribution, timeout, withdrawal, restart reconnect, `notify` parameters and truncation);
-  `server/internal/hub/notify_api_test.go` (`silent`, `notify` from node: muting, preferences, no extension fields).
+  `server/internal/hub/notify_api_test.go` (`silent`, `notify` from node: muting, preferences, no extension fields, the body cut to fit the push).
 - The real `personad` binary was run against a fake node socket to check the exit codes and wire JSON of `ask` / `notify` (without touching a real node or phone).
 - Not done: end-to-end against a real hub + phone (by convention, tests don't send real notifications).
 
