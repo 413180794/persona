@@ -1,6 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { STATE_LABEL } from "../lib/format";
 import { t } from "../i18n";
 import type { AgentState } from "../lib/types";
 import { Icon, type IconName } from "./icons";
@@ -13,6 +12,7 @@ import { keyboardFrame } from "../lib/viewport";
 import { prefersReducedMotion } from "./stream/motion";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
 import { focusables, NARROW_QUERY, placeMenu, placeSubmenu, SHEET_QUERY, trapTab, useMedia, type MenuPlace } from "./overlay";
+import { STATE_LABEL } from "../lib/state-labels";
 
 export const EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 

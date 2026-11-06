@@ -194,7 +194,9 @@ struct PlanCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             ForEach(failed, id: \.title) { t in
-                Label("“\(t.title)” didn't start: \(t.error ?? "")", systemImage: Theme.Icon.error)
+                // No reason from the hub says so, as the task's status line does, rather than ending on the colon (#4138).
+                let reason = t.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                Label("“\(t.title)” didn't start: \(reason.isEmpty ? String(localized: "unknown reason") : reason)", systemImage: Theme.Icon.error)
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.danger)
                     .lineLimit(2)

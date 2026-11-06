@@ -334,7 +334,7 @@ describe("panes of one tab", () => {
     expect(homeOverview([idle], []).quiet).toBe(true);
   });
 
-  it("homeOverview: 全部标为已读 marks every unread agent, beside the summary when their tabs are filed elsewhere", () => {
+  it("homeOverview: 全部标为已看 marks every unread agent, beside the summary when their tabs are filed elsewhere", () => {
     const working = at("pW", { pane_index: 0, st: "working" });
     const doneA = at("p2E", { pane_index: 1, st: "unread" });
     const asking = pane({ space: "w1", slot: 2, p: 1, pane_index: 0, st: "needs_you" });

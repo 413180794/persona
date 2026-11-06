@@ -8,14 +8,15 @@ import { agentKey, isSpacePinned, type AgentPins } from "./pins";
 import { isMuted } from "./session-actions";
 import type { AgentState, Session } from "./types";
 import { byTime, timeMs } from "./times";
+import { stateName } from "./state-labels";
 
 export type AgentFilter = "all" | "needs" | "unread" | "working" | "feishu" | "terminal";
 
 export const AGENT_FILTERS: { key: AgentFilter; label: string; state?: AgentState }[] = [
   { key: "all", label: t("lib-agent-filter.all") },
-  { key: "needs", label: t("lib-agent-filter.needs_you"), state: "needs_you" },
-  { key: "unread", label: t("lib-agent-filter.unread"), state: "unread" },
-  { key: "working", label: t("lib-agent-filter.working"), state: "working" },
+  { key: "needs", label: stateName("needs_you"), state: "needs_you" },
+  { key: "unread", label: stateName("unread"), state: "unread" },
+  { key: "working", label: stateName("working"), state: "working" },
   // where the agent was opened (#2526): a botmux session (its Feishu group) or a herdr pane
   { key: "feishu", label: t("lib-agent-filter.feishu") },
   { key: "terminal", label: t("lib-agent-filter.terminal") },
@@ -82,7 +83,7 @@ export function matchingKeys(sessions: Session[], f: AgentFilter, mutes: AgentMu
   return new Set(f === "all" ? [] : sessions.filter((s) => matchesFilter(s, f, mutes)).map(agentKey));
 }
 
-/** The finished-unread ones among these (what "Mark all as read" marks). */
+/** The finished-unread ones among these (what "Mark all as seen" marks). */
 export function unreadOf(sessions: Session[]): Session[] {
   return sessions.filter((s) => stateOf(s) === "unread");
 }

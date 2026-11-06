@@ -12,6 +12,7 @@ import { AssistantSettings } from "../settings/AssistantSettings";
 import { Group, Pill } from "../settings/SettingsParts";
 import { PersonaAvatar, PersonaPicker, usePersona } from "./Persona";
 import { t } from "../../i18n";
+import { stateName } from "../../lib/state-labels";
 
 const REACH: { text: string; icon: IconName }[] = [
   { text: t("assistant-profile.reach_agents"), icon: "layers" },
@@ -55,7 +56,7 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             <p className="max-w-full truncate text-[13px] text-ink-2">{machineName ? t("assistant-profile.subtitle", { machine: machineName }) : t("assistant-profile.subtitle_no_machine")}</p>
             <div className="mt-1 flex flex-wrap justify-center gap-1.5">
               {machine && <Pill tone={machine.online ? "green" : undefined}>{machine.online ? t("assistant-profile.online") : t("assistant-profile.offline")}</Pill>}
-              {working && <Pill tone="accent">{t("assistant-profile.working")}</Pill>}
+              {working && <Pill tone="accent">{stateName("working")}</Pill>}
               {next[0] && <Pill>{t("assistant-profile.next_up", { day: dayLabel(next[0].at, now), time: hm(next[0].at) })}</Pill>}
             </div>
           </div>

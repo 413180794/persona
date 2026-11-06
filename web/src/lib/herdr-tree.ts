@@ -117,7 +117,7 @@ export function homeTaskGroups(sessions: readonly Session[], interactions: reado
   return out;
 }
 
-/** What the overview shows (Home): the task rows (homeTaskGroups); every unread agent, which "Mark all as read" marks —
+/** What the overview shows (Home): the task rows (homeTaskGroups); every unread agent, which "Mark all as seen" marks —
  *  all of them, as before tabs were rows, though some sit in tabs filed under needs-you or working — and where that
  *  action goes: "Done, not seen yet"'s header, beside the summary when that section is empty, nowhere when none is unread;
  *  and whether there is nothing to do (no card waiting either). */

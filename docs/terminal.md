@@ -646,7 +646,7 @@ with node methods `panes.close` / `panes.split` / `panes.agent` / `panes.git` / 
 - **Rename tab**: 1–80 characters, whitespace collapsed to single spaces. Agent tabs use existing `session.rename`; others `tabs.rename`.
 - **Run Agent Here…**: only panes at shell prompts (no Agent, no bound session, all foreground programs shells; unreadable foreground also rejected). `panes.agent {pane, launcher}` reuses the full `start` pipeline—
   same launcher command, trust-dialog handling, readiness wait, pane binding, continuation command—without creating a tab, replacing `newTab` with selected pane in `context` (`withAdoptedPane`). Failure **doesn't** close this pane (new-tab failures do close the new tab).
-  Web lists only Claude Code launchers (Codex/TRAEX startup needs a first message, menu has no composer).
+  Web lists only Claude Code launchers (Codex/compatible Codex forks startup needs a first message, menu has no composer).
 - **Git**: run in pane directory (workspace uses its own), reject non-repositories ("Not a Git repository"). **Pull** uses existing `gitPull`: fast-forward only, reject uncommitted changes; **Fetch** `git fetch --no-recurse-submodules`.
   **Push** requires branch/upstream and pending commits (otherwise "No commits to push"), explicit `refs/heads/<branch>:<upstream branch>` without `+`, preventing force push even if `remote.<name>.push = +…` is configured. Remote rejects behind branches, with original reason shown in menu.
   All timeout after 60 seconds, don't prompt for passwords (`GIT_TERMINAL_PROMPT=0`, askpass `false`), retain only last 2 KB output.

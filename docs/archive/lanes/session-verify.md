@@ -69,11 +69,11 @@ hub sendMessage (hub/send.go)
   ▼  JSON-lines RPC over `ssh -C … jarvisd node --stdio` (LAN round trip ~5 ms)
 node session.send
   · one at a time per session (typingLocks)
-  · session not running: Claude is started with --resume via its original launcher (~5 s); Codex / TRAEX return an error
+  · session not running: Claude is started with --resume via its original launcher (~5 s); Codex / compatible Codex forks return an error
   · read the screen (ANSI, 60 lines, ~10 ms): dialog → 409 dialog_open; draft → 409 input_draft (our own just-typed text: wait for it to be taken)
   · images saved to ~/.jarvis/uploads, paths written into <attached_images>
   ▼  herdr unix socket (10 s deadline per call; CLI only if the socket is unreachable)
-herdr agent.prompt (Claude, Codex): paste the whole text (bracketed paste) → ~300 ms → Enter; TRAEX: send_text + 150 ms + enter
+herdr agent.prompt (Claude, Codex): paste the whole text (bracketed paste) → ~300 ms → Enter; compatible Codex forks: send_text + 150 ms + enter
   ▼
 Claude Code: starts a turn right away when idle; queued when working (transcript records queue-operation, writes queued_command when absorbed mid-turn)
 Codex: writes UserMessage right away when idle; queued after the current turn when working
@@ -97,7 +97,7 @@ and when queued behind a turn it waits for that turn to end (measured 10–70 s;
 | Sending while a permission dialog is up | 409 dialog_open, nothing typed | — |
 | Sending while a question card is up (held by the hook) | Claude queues it and absorbs it in this turn after the answer; exactly once | — |
 | **3 in a row (same session)** | Messages 2 and 3 got 409 input_draft (message 1 was still in the input field), and the app offered "Clear and send", which would clear the user's own message 1 | node serializes; messages 2 and 3 are delivered normally |
-| Two devices sending at once | Claude: both arrived (by luck they did not collide); Codex / TRAEX have no draft check and could merge into one | Serialized |
+| Two devices sending at once | Claude: both arrived (by luck they did not collide); Codex / compatible Codex forks have no draft check and could merge into one | Serialized |
 | **"Reconnect" this machine in the app** | The hub only closed the RPC; the ssh process stayed alive and the connection loop kept waiting for it to exit: the machine showed online, but **every call returned "rpc: connection closed"** until the hub restarted (measured 4.5 minutes; it only recovered after killing the ssh child process by hand) | Reconnects as soon as it closes (reproduced in tests with a fake node child process) |
 | **node disconnects / hub restarts mid-delivery** | The message actually reached the computer, but the app got a plain 502 → tapping resend typed it a second time; node's dedup was in memory, so the new process after reconnecting did not know | hub dedups in the database; returns `delivered: unknown` and the app says "may already have been delivered"; a manual resend uses a new id |
 | App goes to background / loses network while sending | When the request was cancelled the hub stopped waiting too, and nobody recorded the result; the app marked it waiting and resent automatically with the same id, which duplicated if node had reconnected | hub is not cancelled with the request; the result is stored |
@@ -113,4 +113,4 @@ and when queued behind a turn it waits for that turn to end (measured 10–70 s;
 - Slash commands that open a TUI panel (`/cost`, `/status`, `/model`): the phone cannot see the result, and the panel blocks later messages. node could recognize the panel, read its content back to the phone and press Esc,
   but that needs per-command adaptation; to be done separately.
 - On a new machine, claude's first launch stops at the theme picker: `POST /sessions` waits 60 seconds and returns 502, leaving a tab behind in herdr.
-- Draft checks for Codex / TRAEX (if the input field has text, the message gets appended to it).
+- Draft checks for Codex / compatible Codex forks (if the input field has text, the message gets appended to it).

@@ -5,7 +5,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Reac
 import { enc, api } from "../lib/api";
 import { machineWithHub } from "../lib/mesh";
 import { createPortal } from "react-dom";
-import { ago, sessionTitle, shortPath, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { ago, sessionTitle, shortPath, stateOf, tabLabel } from "../lib/format";
 import { appCommands, commandKeys, contextCommands, filterCommands, inboxHits, orderGroups, parseQuery, placeHits, setPaletteQuery, terminalHits, usePalette, type InboxHit, type MachinePanes, type PaletteCommand, type PlaceHit, type PlaceInput, type TerminalHit } from "../lib/palette";
 import { isDone, useInbox, type InboxItem } from "../lib/inbox";
 import { useNavPages } from "./Sidebar";
@@ -23,6 +23,7 @@ import { useModalFocus } from "../ui/overlay";
 import { copyFileMention, FilesHeading, FilesNotice, FileResultRow, openFileHit, usePaletteFiles, type FileRow } from "./palette/FilesSection";
 import { t } from "../i18n";
 import { byTime } from "../lib/times";
+import { STATE_LABEL } from "../lib/state-labels";
 
 interface Hit {
   key: string;

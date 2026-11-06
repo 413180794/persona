@@ -21,6 +21,7 @@ import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { AgentRow } from "./machines/AgentRow";
 import { Empty } from "./session/files/parts";
 import { t } from "../i18n";
+import { markAllSeenLabel, stateCount } from "../lib/state-labels";
 
 const NO_SESSIONS: Session[] = [];
 
@@ -112,9 +113,9 @@ export function SpacePage({ mid, space, onToggleSidebar }: { mid: string; space:
   const supportSpaces = todosLoaded && todosSupported !== false && spacesSupported !== false;
   const spaceTodo = linked.find((x) => x.via === "space");
   const counts = [
-    view.counts.needs && t("space-page.count_needs", { count: view.counts.needs }),
-    view.counts.working && t("space-page.count_working", { count: view.counts.working }),
-    view.counts.unread && t("space-page.count_unread", { count: view.counts.unread }),
+    view.counts.needs && stateCount("needs_you", view.counts.needs),
+    view.counts.working && stateCount("working", view.counts.working),
+    view.counts.unread && stateCount("unread", view.counts.unread),
   ].filter(Boolean).join(" · ");
   const unread = unreadOf(view.live);
 
@@ -147,7 +148,7 @@ export function SpacePage({ mid, space, onToggleSidebar }: { mid: string; space:
               count={view.live.length}
               right={
                 <span className="flex items-center gap-1">
-                  {unread.length > 0 && <Button tone="quiet" icon="check" onClick={() => setConfirmSeen(unread)}>{t("space-page.mark_all_seen")}</Button>}
+                  {unread.length > 0 && <Button tone="quiet" icon="check" onClick={() => setConfirmSeen(unread)}>{markAllSeenLabel()}</Button>}
                   {online && first.cwd && <Button tone="secondary" icon="plus" onClick={() => openNewAgent({ machineId: mid, cwd: first.cwd })}>{t("space-page.new_agent")}</Button>}
                 </span>
               }

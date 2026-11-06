@@ -19,7 +19,7 @@ The table below is for Orca; where the herdr engine differs is in the table in t
 | Close a session | ✅ | |
 | Create a session from the phone, resume a session that isn't running | ❌ | The Orca engine doesn't support this on any platform yet ([plan-orca-support.md](plan-orca-support.md), "Phase 2"); not a Windows problem |
 | Machine monitoring (CPU, memory, swap, network, disk, system info) | ✅ | Win32 calls, no processes spawned; the metrics follow the Windows column of [machines.md](machines.md) ("Collection metrics") (#1943) |
-| Port forwarding, Codex / TRAEX discovery | ❌ | Depends on `ps` / `lsof` / `/proc`; silently unavailable on Windows (#1179) |
+| Port forwarding, Codex / compatible Codex forks discovery | ❌ | Depends on `ps` / `lsof` / `/proc`; silently unavailable on Windows (#1179) |
 | Processes the node starts itself: managed launchers, `codex` start | ✅ | `osproc.Exec`: Windows has no exec, so it starts a child in the same console and exits with its exit code ("herdr" below) |
 | hub self-update | ❌ | Still `syscall.Exec`; the hub doesn't run natively on Windows (#1179) |
 | Updating the resident node through the hub ([node-update.md](node-update.md)) | ❌ | The node reports it as unsupported ("resident node is not managed by launchd/systemd"), and the App shows why; to upgrade, run `jarvis-link install --jarvisd <new personad.exe>` again |

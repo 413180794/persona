@@ -1,4 +1,5 @@
 import MarkdownUI
+import PersonaKit
 import SwiftUI
 
 /// A long Markdown file cut between its top-level blocks into pieces of about `lines` lines (docs/ios.md「文件查看器」):
@@ -12,13 +13,13 @@ nonisolated enum MarkdownChunks {
         let definitions = lines.filter { $0.range(of: #"^ {0,3}\[[^\]]+\]:\s*\S"#, options: .regularExpression) != nil }
         var out: [String] = []
         var current: [String] = []
-        var fence: String?
+        var fence: MarkdownFence?
         for (i, line) in lines.enumerated() {
             let t = line.trimmingCharacters(in: .whitespaces)
             if let f = fence {
-                if t.hasPrefix(f) { fence = nil }
-            } else if t.hasPrefix("```") || t.hasPrefix("~~~") {
-                fence = String(t.prefix(3))
+                if f.isClosed(by: t) { fence = nil }
+            } else {
+                fence = MarkdownFence.opening(t)
             }
             current.append(line)
             guard fence == nil, current.count >= target, t.isEmpty, i + 1 < lines.count else { continue }

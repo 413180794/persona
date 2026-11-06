@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { stateColor, STATE_LABEL } from "../lib/format";
+import { stateColor } from "../lib/format";
 import type { AgentState } from "../lib/types";
 import { Button, copyText, Dialog, IconButton, Loading, Menu, useMenu } from "./atoms";
 import { markOf } from "./StatusMark";
+import { STATE_LABEL } from "../lib/state-labels";
 
 vi.mock("react", async (importOriginal) => ({
   ...await importOriginal<typeof import("react")>(),

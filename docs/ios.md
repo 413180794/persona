@@ -1,7 +1,7 @@
 # iOS / watchOS App
 
 XcodeGen source is `apple/project.yml`, generating `apple/Persona.xcodeproj` (generated files are not committed); old `apple/Jarvis.xcodeproj` symlinks to it. Scheme compatibility is in [Compatibility migration](rename.md). iOS 26 / watchOS 10 (the watch App must install on older watches stuck on watchOS 10), Swift 6, default MainActor isolation. Depends on MarkdownUI.
-Bundle ID comes from configuration (`app.bundle_id`, watch `<id>.watchkitapp`, `docs/config.md`). UI in Chinese.
+Bundle ID comes from configuration (`app.bundle_id`, watch `<id>.watchkitapp`, `docs/config.md`). The UI supports English, Simplified Chinese and Japanese (`en` / `zh-Hans` / `ja`).
 
 ## Agents recently used view
 
@@ -611,7 +611,7 @@ iOS, Mac, visionOS, watch and extensions support Simplified Chinese, English and
   and `.environment(\.locale, LanguageStore.drawingLocale)`; App language changes affect their next refresh, watch next launch.
 - **Tell the hub**: every HTTP request and WebSocket handshake carries `Accept-Language: <code>`; after connection send `{"type":"client_hello","locale":…}` (locale only; features / heartbeat / platform unchanged),
   `POST /api/v1/devices` includes `locale`, using this launch's interface language (`LanguageStore.launched`).
-- **Code comments are English** (#5055): `python3 scripts/i18n/apple_comments.py check` (run by `scripts/test/test_apple_comments.py`) checks that comments under apple/ contain no Chinese or Japanese outside 「」; those brackets hold only Chinese document section titles (such as `docs/ios.md`「界面语言」, "Interface language") or exact text matched by code.
+- **Code comments are English** (#5055): `python3 scripts/i18n/apple_comments.py check` (run by `scripts/test/test_apple_comments.py`) checks that comments under apple/ contain no Chinese or Japanese outside 「」; those brackets are reserved for exact localized text matched by code. Document references use English section titles, such as `docs/ios.md` ("Interface language").
 - **Tests**: scheme test actions pin `language: zh-Hans`, `region: CN`; unit, UI and pixel / layout tests all run in Chinese; `AppLanguageTests` covers parsing and storage.
 - **Not covered yet**: hub-pushed text (Live Activity titles, details and terminal-needs-attention messages, push bodies, assistant replies) is localized by the hub; demo data (chats, names) is Chinese only.
 

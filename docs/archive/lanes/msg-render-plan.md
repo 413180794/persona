@@ -28,7 +28,7 @@ hooks (PreToolUse / PermissionRequest) ▶ interaction ────────�
 
 - **Locating**: session id from the herdr claude integration → pane bound by a hook → `~/.claude/sessions/<pid>.json` → newest transcript in the same directory as fallback
   (`node/sessions.go` `setAgents` / `sessionFromProcess` / `guessSession`). Codex uses herdr's id or the newest rollout in the same directory (`node/codex.go`).
-- **Parsing**: `server/internal/transcript/transcript.go` (Claude), `codex.go` (Codex / TRAEX). One JSONL line → 0..n `proto.Item`s, append-only, never modified.
+- **Parsing**: `server/internal/transcript/transcript.go` (Claude), `codex.go` (Codex / compatible Codex forks). One JSONL line → 0..n `proto.Item`s, append-only, never modified.
 - **Paging**: `File.PageTurns` (used by the App, pages by "one question, one answer"), `File.Page`, `File.After` (incremental / backfill, capped at 500).
 - **Push**: when the first subscriber arrives, the hub has node `session.watch(since=lastSeq recorded by the hub)`; each subscription additionally starts `sendBacklog(since=the App's lastSeq)`.
 - **App**: `ChatStore.merge` dedups by id, append-only; the disk cache only keeps the last two turns (`ChatCache`); rendered with an inverted ScrollView + LazyVStack;
@@ -71,7 +71,7 @@ with no history identity and no continuity check, so any single missed delivery 
 | B8 | **[Confirmed, coverage gap] Parsing tests are all hand-written strings, with no real sample fixtures**; Claude Code versions move fast (the local sample already has new types such as `atis-latch`, `mode`, `api-request-blob`, `cost-state`), and there is no regression protection | `transcript/transcript_test.go`, `codex_test.go` |
 
 Already correct (no change needed): messages absorbed by queued_command, showing non-empty thinking, `isSidechain` filtering + subagents in separate files, unwrapping pasted_content,
-`<bash-input>` / `<bash-stdout>`, cross-session messages, `[Request interrupted…]`, the compact notice, Codex commentary → thinking, TRAEX `history_mutation` dedup.
+`<bash-input>` / `<bash-stdout>`, cross-session messages, `[Request interrupted…]`, the compact notice, Codex commentary → thinking, compatible Codex forks `history_mutation` dedup.
 
 ### C. Paging and large-session performance
 
@@ -150,7 +150,7 @@ Stage 4 committed on the lane branch:
   - `scripts/diag/redact_transcript.py`: redacts real transcripts / rollouts into fixtures: keeps structure, types, uuid relations and line order; replaces text with same-length placeholders,
     paths / host names / emails with placeholders, base64 images with a 1×1 PNG; prints remaining suspicious strings for manual review.
   - `server/internal/transcript/testdata/`: one each for Claude (with local_command, api_error retries, task-notification in three places, queued_command, compact,
-    scheduled_task_fire, tool_result with an image, subagent), Codex 0.15x/0.16x (with Extension, multi-file FileChange, turn_aborted) and TRAEX.
+    scheduled_task_fire, tool_result with an image, subagent), Codex 0.15x/0.16x (with Extension, multi-file FileChange, turn_aborted) and compatible Codex forks.
   - Golden tests: fixture → JSON snapshot of the item list (`-update` refreshes); **incremental = cold read** tests (appending byte by byte / line by line gives the same result);
     property tests that `After` / `Page` / `PageTurns` paging has no gaps or overlaps.
   - Write A2, A5 and B1–B5 as failing tests first.

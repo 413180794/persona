@@ -3,6 +3,7 @@ import { byAttention, stateOf } from "./format";
 import { hubWaits } from "./work";
 import type { AgentState, Machine, Session } from "./types";
 import { byTime } from "./times";
+import { stateName } from "./state-labels";
 
 export type AgentGrouping = "repo" | "space" | "state" | "machine" | "todo";
 // "By machine" is herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts) and the default for a browser that never
@@ -128,12 +129,12 @@ function byDate(a: Session, b: Session): number {
 export function buildAgentGroups(all: Session[], machines: Machine[], _grouping: "state", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
   const { live } = splitAgentSessions(all, machines);
   const groups: AgentGroup[] = [
-    { key: "state:needs", name: t("lib-agent-groups.state_needs_you"), state: "needs_you", sessions: [] },
-    { key: "state:unread", name: t("lib-agent-groups.state_unread"), state: "unread", sessions: [] },
-    { key: "state:working", name: t("lib-agent-groups.state_working"), state: "working", sessions: [] },
-    { key: "state:waiting", name: t("lib-agent-groups.state_waiting"), sessions: [] },
+    { key: "state:needs", name: stateName("needs_you"), state: "needs_you", sessions: [] },
+    { key: "state:unread", name: stateName("unread"), state: "unread", sessions: [] },
+    { key: "state:working", name: stateName("working"), state: "working", sessions: [] },
+    { key: "state:waiting", name: stateName("waiting"), sessions: [] },
     { key: "state:muted", name: t("lib-agent-groups.state_muted"), sessions: [] },
-    { key: "state:idle", name: t("lib-agent-groups.state_idle"), state: "idle", sessions: [], folded: true },
+    { key: "state:idle", name: stateName("idle"), state: "idle", sessions: [], folded: true },
   ];
   for (const s of live) {
     const state = stateOf(s);

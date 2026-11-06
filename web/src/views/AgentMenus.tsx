@@ -16,6 +16,7 @@ import { Button, copyText, Dialog, toast, type MenuItem } from "../ui/atoms";
 import type { MenuAt } from "../ui/menu-model";
 import { NodeMenu } from "./NodeMenu";
 import { t } from "../i18n";
+import { markAllSeenLabel } from "../lib/state-labels";
 
 /** What a row's ⋯ (and its right click) offers. `onLinkTodo`: the row can hang on a todo ("Link to to-do…"; "Move to another to-do…" and
  *  "Unlink" when it does). Everything a row offers is here, so a touch screen (no right click; iOS Safari sends no contextmenu on a
@@ -102,7 +103,7 @@ export function SpaceMenu({
   const page = { name: "space" as const, mid: sp.machineId, space: sp.name };
   const items: MenuItem[] = [
     ...(openPage && first?.space_id ? [{ key: "open", label: t("agentmenus.open_space"), icon: "layers" as const, onSelect: () => navigate(page) }] : []),
-    ...(unread.length ? [{ key: "seen", label: t("agentmenus.mark_all_seen_count", { count: unread.length }), icon: "check" as const, onSelect: () => onMarkSeen(unread) }] : []),
+    ...(unread.length ? [{ key: "seen", label: markAllSeenLabel(unread.length), icon: "check" as const, onSelect: () => onMarkSeen(unread) }] : []),
     ...(first?.space_id && !first.source_kind ? [{ key: "rename", label: t("agentmenus.rename_space"), icon: "pencil" as const, onSelect: () => onRename(first) }] : []),
     ...(supportSpaces
       ? linkedTodo
@@ -156,7 +157,7 @@ export function MarkSeenDialog({ list, onClose, onDone }: { list: Session[] | nu
     <Dialog
       open={Boolean(list)}
       onClose={onClose}
-      title={t("agentmenus.mark_all_seen")}
+      title={markAllSeenLabel()}
       width={380}
       footer={
         <>
@@ -172,7 +173,7 @@ export function MarkSeenDialog({ list, onClose, onDone }: { list: Session[] | nu
               onClose();
             }}
           >
-            {t("agentmenus.mark_all_seen_count", { count: n })}
+            {markAllSeenLabel(n)}
           </Button>
         </>
       }

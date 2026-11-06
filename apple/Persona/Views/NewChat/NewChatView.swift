@@ -642,6 +642,13 @@ struct DirectoryBrowser: View {
                 }
             } else if let error {
                 Text(error).foregroundStyle(Theme.danger)
+                // Nothing listed yet: the page has no row to tap and no path to edit, only this (#4315).
+                if loading {
+                    ProgressView().frame(maxWidth: .infinity)
+                } else {
+                    Button("Retry [Components b8784c]") { Task { await load(start) } }.lineLimit(1)
+                        .accessibilityIdentifier("dirBrowser.retry")
+                }
             } else {
                 ProgressView().frame(maxWidth: .infinity)
             }
@@ -661,7 +668,8 @@ struct DirectoryBrowser: View {
     /// The last tap wins; a directory the hub can't list keeps the current one on screen and says why. A start that
     /// can't be listed (a saved directory gone or unreadable) falls back to the home directory, the reason above it.
     private func load(_ p: String) async {
-        guard let api = model.api(ref.group) else { return }
+        // No hub for this machine: said, not left as a spinner (#4315).
+        guard let api = model.api(ref.group) else { error = String(localized: "Not connected to the hub [App Model 93d955]"); return }
         attempt += 1
         let mine = attempt
         loading = true

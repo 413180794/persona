@@ -4,12 +4,7 @@
   "by_project": "プロジェクト別",
   "by_state": "状態別",
   "by_todo": "ToDo別",
-  "state_needs_you": "要対応",
-  "state_unread": "未確認",
-  "state_working": "作業中",
-  "state_waiting": "待機中",
   "state_muted": "ミュート中",
-  "state_idle": "確認済み",
   "source_feishu": "Larkグループ",
   "source_terminal": "ターミナル",
   "open_feishu_topic": "Larkでこのトピックを開く"

@@ -4,6 +4,7 @@ import { formatDate, t } from "../i18n";
 import { stateOf, tabLabel } from "./format";
 import type { AgentState, Machine, Session } from "./types";
 import type { MachineComputer } from "./computer";
+import { stateCount } from "./state-labels";
 
 // ── wire types (GET /api/v1/machines/{id}/metrics, docs/protocol.md) ──
 
@@ -303,7 +304,7 @@ export function agentsBySpace(sessions: Session[]): SpaceGroup[] {
 
 /** "1 needs you · 2 working" for a space's header; "" when all are quiet. */
 export function countsText(c: SpaceGroup["counts"]): string {
-  return [c.needs && t("lib-machine-detail.count_needs", { count: c.needs }), c.working && t("lib-machine-detail.count_working", { count: c.working }), c.unread && t("lib-machine-detail.count_unread", { count: c.unread })].filter(Boolean).join(" · ");
+  return [c.needs && stateCount("needs_you", c.needs), c.working && stateCount("working", c.working), c.unread && stateCount("unread", c.unread)].filter(Boolean).join(" · ");
 }
 
 /** The tab label and, for anything but Claude Code, which agent it is: "#2 · Codex". */

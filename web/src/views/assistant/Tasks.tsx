@@ -56,6 +56,7 @@ import { answeredLookup, answeredSessions } from "./answered-lookup";
 import { Empty } from "./parts";
 import { PlanEditDialog } from "./PlanEdit";
 import { byTime } from "../../lib/times";
+import { stateName } from "../../lib/state-labels";
 
 // ── what a task is now ──
 
@@ -1047,8 +1048,8 @@ export function TaskDock({ conversation }: { conversation: string }) {
             >
               <TaskMark status={st} size={8} />
               <span className="truncate">{todo.title}</span>
-              {st === "needs_you" && <span className="shrink-0">{t("assistant-tasks.waiting")}</span>}
-              {st === "interrupted" && <span className="shrink-0">{t("assistant-tasks.interrupted_short")}</span>}
+              {st === "needs_you" && <span className="shrink-0">{stateName("needs_you")}</span>}
+              {st === "interrupted" && <span className="shrink-0">{stateName("interrupted")}</span>}
             </button>
             );
           })}
@@ -1056,14 +1057,14 @@ export function TaskDock({ conversation }: { conversation: string }) {
             <button
               key={`${s.machine_id}/${s.session_id}`}
               type="button"
-              aria-label={state === "needs_you" ? t("assistant-tasks.dock_agent_waiting", { title: sessionTitle(s) }) : t("assistant-tasks.dock_agent_working", { title: sessionTitle(s) })}
+              aria-label={t("assistant-tasks.dock_agent", { title: sessionTitle(s), state: stateName(state === "needs_you" ? "needs_you" : "working") })}
               onClick={() => openPanel({ kind: "agent", mid: s.machine_id, sid: s.session_id })}
               className={cx(pill, state === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
             >
               <StatusMark state={state} />
               <Icon name="agent" size={13} className={cx("shrink-0", state !== "needs_you" && "text-ink-2")} />
               <span className="truncate">{sessionTitle(s)}</span>
-              {state === "needs_you" && <span className="shrink-0">{t("assistant-tasks.waiting")}</span>}
+              {state === "needs_you" && <span className="shrink-0">{stateName("needs_you")}</span>}
             </button>
           ))}
         </div>
@@ -1114,13 +1115,13 @@ export function useTaskState(todo?: Todo): { status: TodoStatus; lead?: Session;
 // ── "All": the task board ──
 
 const BOARD_TITLE: Record<BoardSectionKey, string> = {
-  waiting: t("assistant-tasks.board_waiting"),
+  waiting: stateName("needs_you"),
   review: t("assistant-tasks.review_pending"),
-  working: t("assistant-tasks.board_working"),
-  unread: t("assistant-tasks.board_unread"),
-  stopped: t("assistant-tasks.board_stopped"),
-  done: t("assistant-tasks.board_done"),
-  failed: t("assistant-tasks.board_failed"),
+  working: stateName("working"),
+  unread: stateName("unread"),
+  stopped: stateName("follow_up"),
+  done: stateName("done"),
+  failed: stateName("failed"),
 };
 
 /** What a manual agent on the board is doing: machine · project · agent · its last words (iOS agentSubtitle). */

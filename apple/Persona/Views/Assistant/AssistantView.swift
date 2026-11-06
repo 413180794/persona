@@ -215,7 +215,9 @@ struct AssistantView: View {
             .onChange(of: atRoot, initial: true) { _, root in shell?.chatAtRoot = root }
             // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does Ask Persona
             // from the knowledge base, even when its conversation is the one already open.
-            .onChange(of: model.assistantCurrent) { backToRoot() }
+            // A start error belongs to the home page it failed on: another conversation (from any menu, the Mac's
+            // ⇧⌘N, a quick action) leaves it behind.
+            .onChange(of: model.assistantCurrent) { backToRoot(); startError = nil }
             .onChange(of: model.assistantReveal) { backToRoot(); activeDrawer.close() }
             #if DEBUG
             // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages;
@@ -307,6 +309,8 @@ struct AssistantView: View {
         withAnimation(Theme.Motion.standard) {
             model.assistantCurrent = nil
             pending = nil
+            // Also on the home page already (no change of conversation): the last failure's line would read as a new one.
+            startError = nil
         }
     }
 

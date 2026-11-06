@@ -42,7 +42,7 @@ This repository is about to go public (requested 2026-11-06); from now on everyo
 
 ### Language
 
-The repository is public and read worldwide (requested 2026-11-06).
+Prepare the repository for a public, international audience (requested 2026-11-06).
 
 - **English for everything people read in the repository**: code comments, docs (`docs/`, module READMEs, this file), commit titles and bodies, PR titles and bodies
   (squash merges turn the PR title and body into the commit on master), and issues and their comments. Write natural, concise English, not word-for-word translation.
@@ -87,7 +87,7 @@ The repository is public and read worldwide (requested 2026-11-06).
 - **Never change how an existing screen looks directly**:
   a different visual style (component library, design language) is always a new **style** (**Settings › Appearance › Style**, `AppStyle`), a different color set a new **theme color** (`ThemeColor`).
   It only applies when selected; the default and every other option stay pixel-identical. Bug fixes and changes to a screen the user explicitly asked for don't count.
-  On 2026-10-31 Android was rebuilt at the user's request into three styles (Glass by default, Morning paper, Board): pages are written once, and all differences live in the design system's components and shell; see `docs/android-design.md`.
+  On 2026-10-31 Android was rebuilt at the user's request into three styles (Glass by default, Brief, Board): pages are written once, and all differences live in the design system's components and shell; see `docs/android-design.md`.
 - **The UI uses only the design system** (requested 2026-10-31: the design system is a constraint of the repository): font sizes, spacing, corner radii, sizes, animation, colors, icons, brand marks and styles all come from the design system;
   pages never hard-code numbers, system font sizes, SF Symbol names or hex colors. If something is missing, add a token first. See "Design system (iOS)" below; for Android, `docs/android-design.md`.
 - **Button text never wraps**: button labels are always one line (`.lineLimit(1)`; when space is tight, `.minimumScaleFactor`, shorter text, or an icon).
@@ -320,7 +320,7 @@ Every number, color and icon in the UI comes from the design system; pages conta
 | `docs/mac-design.md` | Mac design language: each column's header is its title bar, density, reading width, saying each thing once; rules for sidebars / lists / details / cards / buttons / selections / empty states, design drafts and their generation |
 | `docs/vision.md` | visionOS app (`PersonaVision`): sharing logic and content views with iOS, the visionOS shell (`apple/Vision/`), mapping to iOS, simulator builds and screenshots |
 | `docs/android.md` | Android app: module responsibilities and dependencies, entry wiring, resident-connection notifications, multi-hub (grouping, group suffixes on session keys, route switches within a group), build / test / mock-hub screenshot commands |
-| `docs/android-design.md` | Android's three styles (Glass / Morning paper / Board), design tokens, components, page-writing rules, Glass fallback |
+| `docs/android-design.md` | Android's three styles (Glass / Brief / Board), design tokens, components, page-writing rules, Glass fallback |
 | `docs/web.md` | Web app: hub hosting, login exchanged for a device token, pages (Inbox, terminal / files / Git side panels, links, linked-hub labels), connections and gap recovery, details, the gap from mobile |
 | `docs/workspace-board.md` | Web workspace board (#1646): off by default, switch in Settings, each card binds a code directory on a computer and its Agents; state, persistence, permissions and refresh, upgrade compatibility |
 

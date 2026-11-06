@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
-import { stateColor, STATE_LABEL } from "../lib/format";
+import { stateColor } from "../lib/format";
 import { FOLDED_ORDER, type FoldedCounts } from "../lib/folded-counts";
 import { t } from "../i18n";
 import { BUSY_MOTION } from "../lib/busy-motion";
 import type { AgentState } from "../lib/types";
+import { STATE_LABEL, stateCount } from "../lib/state-labels";
 
 /** How a state is drawn (#3559, after Moshi). The shapes differ, so a state never rests on color alone:
  *  - arc: working, a short arc that turns;
@@ -43,7 +44,7 @@ export function StatusMark({ state, size = "md", label = true }: { state: AgentS
 export function StateTally({ counts, className }: { counts: FoldedCounts; className?: string }) {
   const shown = FOLDED_ORDER.filter((k) => counts[k.key] > 0);
   if (!shown.length) return null;
-  const label = t("sidebar.folded_states", { list: shown.map((k) => t(`sidebar.folded_${k.key}`, { count: counts[k.key] })).join(t("sidebar.list_separator")) });
+  const label = t("sidebar.folded_states", { list: shown.map((k) => stateCount(k.key, counts[k.key])).join(t("sidebar.list_separator")) });
   return (
     <span title={label} className={className ? `state-tally ${className}` : "state-tally"} data-testid="state-tally">
       <span className="sr-only">{label}</span>

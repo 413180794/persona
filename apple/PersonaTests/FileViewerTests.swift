@@ -107,6 +107,19 @@ struct FileViewerTests {
         #expect(pieces.joined().contains("- item\n\n    continued"))
     }
 
+    @Test func markdownLongerFenceStaysOpenPastAShorterOne() {
+        // A ```` block that shows a ``` one (a README about Markdown): only ```` ends it (CommonMark, #3625).
+        let block = "````md\n```html\na\nb\nc\nd\n\n<p>x</p>\n```\n````"
+        let lines: [String] = (0..<6).map { "Intro \($0)" } + [""] + block.components(separatedBy: "\n") + [""] + (0..<6).map { "Tail \($0)" }
+        let pieces = MarkdownChunks.split(lines.joined(separator: "\n"), lines: 4)
+        #expect(pieces.count > 1)
+        #expect(pieces.contains { $0.contains(block) })
+        // A ``` line with a language name inside a ``` block does not end it either.
+        let inner = "```\n```js\na\nb\nc\n\nlet a = 1\n```"
+        let more: [String] = (0..<6).map { "Intro \($0)" } + [""] + inner.components(separatedBy: "\n") + [""] + (0..<6).map { "Tail \($0)" }
+        #expect(MarkdownChunks.split(more.joined(separator: "\n"), lines: 4).contains { $0.contains(inner) })
+    }
+
     // MARK: Paths
 
     @Test func pathsAreLinkedOnlyWhenThereAndAskedInOneBatch() async throws {

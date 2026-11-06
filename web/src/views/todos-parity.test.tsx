@@ -115,7 +115,7 @@ describe("the task board", () => {
       sessions: { m1: [session({ state: "working", status: "working" })] },
     });
     const html = renderToStaticMarkup(<TaskBoard open conversation="c1" onClose={() => {}} />);
-    expect(html).toContain("在做 · 1");
+    expect(html).toContain("工作中 · 1");
     expect(html).toContain("已完成 · 1");
     expect(html).not.toContain("别的对话");
     expect(html).toContain('aria-label="移除「已经做完」"');

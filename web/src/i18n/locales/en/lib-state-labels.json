@@ -1,0 +1,21 @@
+{
+  "needs_you": "Needs you",
+  "working": "Working",
+  "unread": "Unread",
+  "idle": "Seen",
+  "offline": "Not running",
+  "unknown": "Unknown",
+  "waiting": "Waiting",
+  "done": "Done",
+  "interrupted": "Interrupted",
+  "follow_up": "Follow-up",
+  "not_started": "Not started",
+  "failed": "Didn't start",
+  "count_needs_you_one": "{count} needs you",
+  "count_needs_you_other": "{count} need you",
+  "count_working_other": "{count} working",
+  "count_unread_other": "{count} unread",
+  "count_done_other": "{count} done",
+  "mark_all_seen": "Mark all as seen",
+  "mark_all_seen_count": "Mark all as seen ({count})"
+}

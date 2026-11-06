@@ -3,5 +3,5 @@
   "agents": "Agents",
   "sidebar": "侧边栏",
   "switch_page": "切换页面",
-  "waiting_label_other": "{label}，{count} 个等你"
+  "waiting_label_other": "{label}，{count} 个需要你"
 }

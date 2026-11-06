@@ -49,15 +49,6 @@ export function sessionDeletable(s: Session): boolean {
   return !s.assistant && s.status === "offline" && !s.starting;
 }
 
-export const STATE_LABEL: Record<AgentState, string> = {
-  needs_you: t("lib-format.state_needs_you"),
-  working: t("lib-format.state_working"),
-  unread: t("lib-format.state_unread"),
-  idle: t("lib-format.state_idle"),
-  offline: t("lib-format.state_offline"),
-  unknown: t("lib-format.state_unknown"),
-};
-
 // docs/agent-states.md: needs you → unread → working → idle → unknown → offline
 const RANK: Record<AgentState, number> = { needs_you: 0, unread: 1, working: 2, idle: 3, unknown: 4, offline: 5 };
 

@@ -5,6 +5,7 @@
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
 import { BASE } from "./base";
 import { t } from "../i18n";
+import { stateName } from "./state-labels";
 
 /** The default, Mochi (nothing saved means it). */
 export const BUILTIN_PERSONA = "persona";
@@ -26,8 +27,8 @@ export type PersonaState = "idle" | "thinking" | "working" | "needs_you" | "offl
 export const PERSONA_STATES: { id: PersonaState; title: string }[] = [
   { id: "idle", title: t("lib-persona.state_idle") },
   { id: "thinking", title: t("lib-persona.state_thinking") },
-  { id: "working", title: t("lib-persona.state_working") },
-  { id: "needs_you", title: t("lib-persona.state_needs_you") },
+  { id: "working", title: stateName("working") },
+  { id: "needs_you", title: stateName("needs_you") },
   { id: "offline", title: t("lib-persona.state_offline") },
 ];
 

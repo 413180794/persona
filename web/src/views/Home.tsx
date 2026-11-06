@@ -1,6 +1,6 @@
 // Overview: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
 import { useMemo, useRef, useState } from "react";
-import { ago, sessionCan, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { ago, sessionCan, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { cardState } from "../lib/card-focus";
 import { interactionAsk } from "../lib/inbox";
 import { answerLines, type Resolution } from "../lib/answered";
@@ -29,6 +29,7 @@ import { answeredSessions } from "./assistant/answered-lookup";
 import { resolve } from "./chat/Interactions";
 import { OverviewCards } from "./extensions/ExtensionSlots";
 import { t } from "../i18n";
+import { markAllSeenLabel, STATE_LABEL, stateCount, stateName } from "../lib/state-labels";
 
 const KIND: Record<Interaction["kind"], string> = { question: t("home.kind_question"), plan: t("home.kind_plan"), permission: t("home.kind_permission"), screen: t("home.kind_screen"), elicitation: t("home.kind_elicitation") };
 
@@ -89,7 +90,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{greeting()}</h1>
             <div className="mt-1 flex items-center gap-2">
               <p className="min-w-0 flex-1 text-[13.5px] text-ink-2">
-                {!loaded ? t("home.connecting") : quiet ? noMachines ? t("home.no_machines_summary") : t("home.all_quiet") : t("home.summary", { list: [counts.needs && t("home.summary_needs", { count: counts.needs }), counts.working && t("home.summary_working", { count: counts.working }), counts.unread && t("home.summary_unread", { count: counts.unread })].filter(Boolean).join(t("home.summary_separator")) })}
+                {!loaded ? t("home.connecting") : quiet ? noMachines ? t("home.no_machines_summary") : t("home.all_quiet") : t("home.summary", { list: [counts.needs && t("home.summary_needs", { count: counts.needs }), counts.working && stateCount("working", counts.working), counts.unread && stateCount("unread", counts.unread)].filter(Boolean).join(t("home.summary_separator")) })}
               </p>
               {loaded && markAllAt === "summary" && markAll}
             </div>
@@ -104,7 +105,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 
           {/* the headline counts agents, this counts cards: say so when one agent has several cards waiting */}
           {loaded && (interactions.length > 0 || held.length > 0) && (
-            <Group title={t("home.needs_you")} count={interactions.length} hint={new Set(interactions.map((ix) => `${ix.machine_id}/${ix.session_id}`)).size < interactions.length ? t("home.needs_you_hint") : undefined}>
+            <Group title={stateName("needs_you")} count={interactions.length} hint={new Set(interactions.map((ix) => `${ix.machine_id}/${ix.session_id}`)).size < interactions.length ? t("home.needs_you_hint") : undefined}>
               {withHeld(interactions, held).map(({ ix, held: h }, i, rows) => {
                 const s = sessions.find((x) => x.machine_id === ix.machine_id && x.session_id === ix.session_id);
                 const title = ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"));
@@ -147,13 +148,13 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           {loaded && groups.needs.length > 0 && (
             <Group title={t("home.waiting_on_computer")} count={groups.needs.length} hint={t("home.waiting_on_computer_hint")}>
               {groups.needs.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">{t("home.state_needs_you")}</Pill>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">{stateName("needs_you")}</Pill>} />
               ))}
             </Group>
           )}
 
           {loaded && groups.working.length > 0 && (
-            <Group title={t("home.working")} count={groups.working.length}>
+            <Group title={stateName("working")} count={groups.working.length}>
               {groups.working.map((g, i) => (
                 <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{g.lead.state_since ? shortDuration(now - Date.parse(g.lead.state_since)) : ""}</span>} />
               ))}
@@ -162,12 +163,12 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 
           {loaded && groups.unread.length > 0 && (
             <Group
-              title={t("home.unread")}
+              title={stateName("unread")}
               count={groups.unread.length}
               right={markAllAt === "section" && markAll}
             >
               {groups.unread.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="green">{ago(g.lead.updated_at) || t("home.done")}</Pill>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="green">{ago(g.lead.updated_at) || stateName("done")}</Pill>} />
               ))}
             </Group>
           )}
@@ -225,7 +226,7 @@ function MarkAllSeen({ count, onClick }: { count: number; onClick: () => void })
   return (
     <button type="button" onClick={onClick} title={t("home.mark_all_seen_title", { count })} className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-control px-1.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
       <Icon name="check" size={12} stroke={2.4} />
-      {t("home.mark_all_seen")}
+      {markAllSeenLabel()}
     </button>
   );
 }

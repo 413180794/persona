@@ -2,7 +2,7 @@
 // doing, its state, in the order they sit in the tab; the "Lead" (the first pane, the others split from it, #2320) wears
 // a small mark. Arrow keys move between them like any tab list; a tab with one pane has none.
 import { useEffect, useRef } from "react";
-import { sessionTitle, stateOf, STATE_LABEL } from "../../lib/format";
+import { sessionTitle, stateOf } from "../../lib/format";
 import { launcherOf } from "../../lib/herdr-tree";
 import { agentLabel } from "../../lib/mentions";
 import type { Session } from "../../lib/types";
@@ -11,6 +11,7 @@ import { cx } from "../../ui/atoms";
 import { StatusMark } from "../../ui/StatusMark";
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
+import { STATE_LABEL } from "../../lib/state-labels";
 
 /** The tab an arrow key (or Home / End) moves to from `i` among `n`; undefined for any other key. */
 export function nextTab(i: number, key: string, n: number): number | undefined {

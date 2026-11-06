@@ -294,11 +294,11 @@ Results still read from transcripts (receipts, `agent_read`, chat page); Unread 
 | --- | --- |
 | Claude Code | `<launcher> --resume <id>`, with original permission mode, thinking effort and model |
 | Codex | Launcher arguments (with original model substituted) `resume <id> -- <message>`, through `personad codex-start`; message passed as an argument, not through shell or on screen |
-| TRAEX | `<launcher> resume <id> <message>` |
+| Compatible Codex forks | `<launcher> resume <id> <message>` |
 
 Resume waits for launcher readiness; like chat sends, `route` is not cancelled by phone disconnection, waiting at most 5 minutes. Completed to-do does not reopen for this message; after another 3 minutes idle, Agent closes again.
 
-**Do not close**: working, waiting for user (questions, plans, permissions, any dialog, pending cards), unknown engine state; queued messages, background shells, running sub-Agents, `/loop`, listening ports (development servers); linked to another unfinished to-do; assistant chats; sessions managed by other tools (external Codex app-server, runtime, daemon, pi); not started by Persona (unknown resume method); engines unable to create tabs (Orca, herdr-core); Claude without transcript, Codex / TRAEX without known launcher.
+**Do not close**: working, waiting for user (questions, plans, permissions, any dialog, pending cards), unknown engine state; queued messages, background shells, running sub-Agents, `/loop`, listening ports (development servers); linked to another unfinished to-do; assistant chats; sessions managed by other tools (external Codex app-server, runtime, daemon, pi); not started by Persona (unknown resume method); engines unable to create tabs (Orca, herdr-core); Claude without transcript, Codex / compatible Codex forks without known launcher.
 node rejects these (`not_retirable`), assistant records them and does not ask again for 10 minutes if Agent unchanged (`taskCloseRetry`, then retries because node may have upgraded). Old nodes not recognizing `session.retire` are likewise treated as refusals, so hub-first/node-later upgrades do not close wrongly; after node upgrade, closure resumes within at most 10 minutes.
 Agents linked to no task (user-created, `agent_start`, inspection sessions such as herdr-leader) are not managed here.
 

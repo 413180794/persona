@@ -13,8 +13,6 @@
   "delete_chat": "Delete chat…",
   "unlinked": "Unlinked from to-do",
   "unlink_failed": "Couldn't unlink: {error}",
-  "mark_all_seen_count_one": "Mark all as seen ({count})",
-  "mark_all_seen_count_other": "Mark all as seen ({count})",
   "rename_space": "Rename space…",
   "remove_from_todo": "Remove from to-do",
   "removed_from_todo": "Removed from to-do",
@@ -25,7 +23,6 @@
   "unmute_space": "Unmute space",
   "mute_space": "Mute this space",
   "space_header": "Space {name}",
-  "mark_all_seen": "Mark all as seen",
   "mark_all_seen_body_one": "Mark {count} unread session as seen? It changes on your phone and other browsers too.",
   "mark_all_seen_body_other": "Mark {count} unread sessions as seen? They change on your phone and other browsers too.",
   "open_space": "Open space page"

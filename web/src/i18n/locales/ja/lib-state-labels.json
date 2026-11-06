@@ -1,0 +1,20 @@
+{
+  "needs_you": "要対応",
+  "working": "作業中",
+  "unread": "未確認",
+  "idle": "確認済み",
+  "offline": "停止中",
+  "unknown": "不明",
+  "waiting": "待機中",
+  "done": "完了",
+  "interrupted": "中断",
+  "follow_up": "フォローアップ",
+  "not_started": "未着手",
+  "failed": "開始失敗",
+  "count_needs_you_other": "要対応{count}件",
+  "count_working_other": "作業中{count}件",
+  "count_unread_other": "未確認{count}件",
+  "count_done_other": "完了{count}件",
+  "mark_all_seen": "すべて確認済みにする",
+  "mark_all_seen_count": "すべて確認済みにする（{count}）"
+}

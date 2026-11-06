@@ -4,6 +4,7 @@ import { repoOf } from "./agent-repos";
 import { stateOf } from "./format";
 import { buildTodoAgentGroups, interruptedAgent, todoStatus, type SessionLookup, type Todo, type TodoStatus } from "./todos";
 import type { Machine, Session } from "./types";
+import { stateName } from "./state-labels";
 
 /** The one-word state every node of the tree shows (#2526): "Needs you" before "Working" before "Done". */
 export type TreeState = "needs_you" | "working" | "done";
@@ -11,7 +12,7 @@ export type TreeState = "needs_you" | "working" | "done";
 const TREE_RANK: Record<TreeState, number> = { needs_you: 0, working: 1, done: 2 };
 
 export function treeStateLabel(s: TreeState): string {
-  return t(`lib-todo-tree.state_${s}`);
+  return stateName(s);
 }
 
 /** A branch with nothing going on whose newest activity is older than this folds by default. */

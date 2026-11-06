@@ -82519,6 +82519,29 @@
       },
       "extractionState": "manual"
     },
+    "Set or clear a goal in the agent; in Claude Code, send /goal <condition> or /goal clear in the message field.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set or clear a goal in the agent; in Claude Code, send /goal <condition> or /goal clear in the message field."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目標はエージェントで設定・解除します。Claude Codeでは、入力欄で/goal <条件>または/goal clearを送信します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Agent 里设置或清除目标，比如 Claude Code 在输入框里发 /goal <条件> 或 /goal clear。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Set · %@": {
       "localizations": {
         "en": {
@@ -99365,29 +99388,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "待做"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "To set or clear a goal, send /goal <condition> or /goal clear in the message field (Claude Code).": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "To set or clear a goal, send /goal <condition> or /goal clear in the message field (Claude Code)."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "目標を設定・解除するには、入力欄で/goal <条件>または/goal clearを送信します（Claude Code）。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设置或清除目标：在输入框里发 /goal <条件> 或 /goal clear（Claude Code）。"
           }
         }
       },

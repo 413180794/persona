@@ -8,6 +8,7 @@ import { splitAgentSessions, type AgentGroup, type AgentMutes } from "./agent-gr
 import type { AgentState, Machine, Session } from "./types";
 import type { Route } from "./router";
 import { byTime } from "./times";
+import { stateName } from "./state-labels";
 
 export type TodoAgentSource = "manual" | "space" | "spawned" | "chat";
 
@@ -103,14 +104,14 @@ export function todoRank(todo: Todo, status: TodoStatus): number {
 }
 
 export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" | "green" | "amber" | "idle" | "off" }> = {
-  done: { label: t("lib-todos.status_done"), tone: "off" },
-  needs_you: { label: t("lib-todos.status_needs_you"), tone: "red" },
-  interrupted: { label: t("lib-todos.status_interrupted"), tone: "red" },
-  unread: { label: t("lib-todos.status_unread"), tone: "green" },
-  working: { label: t("lib-todos.status_working"), tone: "amber" },
-  follow_up: { label: t("lib-todos.status_follow_up"), tone: "idle" },
-  not_started: { label: t("lib-todos.status_not_started"), tone: "off" },
-  failed: { label: t("lib-todos.status_failed"), tone: "red" },
+  done: { label: stateName("done"), tone: "off" },
+  needs_you: { label: stateName("needs_you"), tone: "red" },
+  interrupted: { label: stateName("interrupted"), tone: "red" },
+  unread: { label: stateName("unread"), tone: "green" },
+  working: { label: stateName("working"), tone: "amber" },
+  follow_up: { label: stateName("follow_up"), tone: "idle" },
+  not_started: { label: stateName("not_started"), tone: "off" },
+  failed: { label: stateName("failed"), tone: "red" },
 };
 
 /** Nothing of the task runs (it ended, stopped, or never started): the user may remove it (#1142). */

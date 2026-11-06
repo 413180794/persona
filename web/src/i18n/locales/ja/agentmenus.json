@@ -13,7 +13,6 @@
   "delete_chat": "チャットを削除…",
   "unlinked": "ToDoとの関連付けを解除しました",
   "unlink_failed": "関連付けを解除できませんでした：{error}",
-  "mark_all_seen_count_other": "すべて確認済みにする（{count}）",
   "rename_space": "スペース名を変更…",
   "remove_from_todo": "ToDoから外す",
   "removed_from_todo": "ToDoから外しました",
@@ -24,7 +23,6 @@
   "unmute_space": "スペースのミュートを解除",
   "mute_space": "このスペースをミュート",
   "space_header": "スペース {name}",
-  "mark_all_seen": "すべて確認済みにする",
   "mark_all_seen_body_other": "未確認のセッション{count}件を確認済みにしますか？スマートフォンやほかのブラウザーでも確認済みになります。",
   "open_space": "スペースページを開く"
 }

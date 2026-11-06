@@ -1,7 +1,4 @@
 {
-  "state_needs_you": "Needs you",
-  "state_working": "Working",
-  "state_done": "Done",
   "no_project": "Other",
   "no_agent": "No agent yet",
   "spawned_agents": "{count} agents it spawned"

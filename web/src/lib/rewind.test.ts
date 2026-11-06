@@ -47,7 +47,7 @@ describe("rewindBlock", () => {
     expect(rewindBlock(session({ assistant: true }), false)).toBe("仅 Claude");
     expect(rewindBlock(session({ state: "working" }), false)).toBe("工作中");
     expect(rewindBlock(session(), true)).toBe("工作中");
-    expect(rewindBlock(session({ state: "needs_you" }), false)).toBe("待回答");
+    expect(rewindBlock(session({ state: "needs_you" }), false)).toBe("需要你");
     expect(rewindBlock(session({ status: "offline" }), false)).toBe("未运行");
     expect(rewindBlock(undefined, false)).toBe("仅 Claude");
   });

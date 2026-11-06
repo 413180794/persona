@@ -34,7 +34,7 @@ describe("「助手 | Agents」", () => {
   });
   it("carries the agents waiting for you on its Agents side, none at 0", () => {
     const html = renderToStaticMarkup(<ShellSwitchView page="assistant" waiting={3} />);
-    expect(html).toContain('aria-label="Agents，3 个等你"');
+    expect(html).toContain('aria-label="Agents，3 个需要你"');
     expect(html).toMatch(/bg-red[^"]*">3<\/span>/);
     expect(renderToStaticMarkup(<ShellSwitchView page="assistant" waiting={0} />)).not.toContain("bg-red");
   });

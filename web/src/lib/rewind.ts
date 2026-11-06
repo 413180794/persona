@@ -7,6 +7,7 @@ import { api, ApiError, errorText, sessionPath } from "./api";
 import { t } from "../i18n";
 import { stateOf } from "./format";
 import type { Item, Session } from "./types";
+import { stateName } from "./state-labels";
 
 export type RewindRestore = "conversation" | "code_and_conversation";
 
@@ -72,9 +73,9 @@ export function rewindTarget(items: Item[], messageId: string): RewindTarget | n
 export function rewindBlock(session: Session | undefined, busy: boolean): string {
   if (!session || session.assistant || session.source_kind || (session.agent && session.agent !== "claude")) return t("rewind.block_claude_only");
   const state = stateOf(session);
-  if (state === "offline" || session.starting) return t("rewind.block_offline");
-  if (state === "needs_you" || (session.pending_interactions ?? 0) > 0) return t("rewind.block_needs_you");
-  if (busy || state === "working") return t("rewind.block_working");
+  if (state === "offline" || session.starting) return stateName("offline");
+  if (state === "needs_you" || (session.pending_interactions ?? 0) > 0) return stateName("needs_you");
+  if (busy || state === "working") return stateName("working");
   return "";
 }
 

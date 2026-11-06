@@ -22,6 +22,14 @@ import Testing
         #expect([Phase.waitingForNetwork, .connecting, .updating].map(\.title) == ["等待网络", "连接中…", "更新中…"])
     }
 
+    /// What the title shows is also what VoiceOver reads (#3441): Connecting… becomes Hub updating… only while the hub restarts.
+    @Test func labelTextWhileTheHubRestarts() {
+        #expect(ConnectionLabel.text(.connecting, hubRestarting: true) == "hub 正在更新…")
+        #expect(ConnectionLabel.text(.connecting, hubRestarting: false) == "连接中…")
+        #expect(ConnectionLabel.text(.waitingForNetwork, hubRestarting: true) == "等待网络")
+        #expect(ConnectionLabel.text(.rejected, hubRestarting: true) == "配对已失效")
+    }
+
     @Test func detailFacts() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         let facts = ConnectionDetails.facts(phase: .connecting, link: .failed("Could not connect to the server."),

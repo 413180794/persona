@@ -94,7 +94,8 @@ struct GoalSheet: View {
                             Text(reason).font(Theme.Font.secondary).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                     }
-                    Text("To set or clear a goal, send /goal <condition> or /goal clear in the message field (Claude Code).")
+                    // The same sheet opens for Claude Code's /goal and Codex's thread goal, and it does not know which agent it is.
+                    Text("Set or clear a goal in the agent; in Claude Code, send /goal <condition> or /goal clear in the message field.")
                         .font(Theme.Font.caption)
                         .foregroundStyle(.tertiary)
                 }

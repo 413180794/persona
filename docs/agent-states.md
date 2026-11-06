@@ -19,7 +19,7 @@ Sort priority: Needs you → Working → Unread → Seen → Unknown → Not run
 
 ### Non-Claude herdr agents (opencode, pi, unrecognized agents)
 
-When the agent herdr reports isn't Claude / Codex / TRAEX, the state is **always what herdr reports** (`blocked` / `working` / `done` / `idle` / `unknown`); there are no hooks, transcripts or on-screen boxes to add to it.
+When the agent herdr reports isn't Claude / Codex / compatible Codex forks, the state is **always what herdr reports** (`blocked` / `working` / `done` / `idle` / `unknown`); there are no hooks, transcripts or on-screen boxes to add to it.
 Deciding "Needs you" / "done" and pushing are the hub's existing logic (based on session state changes, regardless of which agent). Per-agent additions:
 
 - **opencode** (`docs/opencode.md`): herdr's opencode plugin reports `working` (turn start, tool execution, after a permission answer), `blocked` (`permission.asked`, `question.asked`, errors) and `idle` (turn end).
@@ -144,7 +144,7 @@ opencode (`docs/opencode.md`): those in herdr panes are herdr sessions (`space_k
 
 node fills these fields from herdr's `session.snapshot` (workspaces, tabs and agents in one call): once whenever herdr pushes a change via `events.subscribe`
 (the list is rebuilt at most once a second; entering / leaving blocked doesn't wait, see `docs/server.md` ("Fast lane for cards")),
-and every 10 seconds as a fallback (every second when the event stream is down or there's a TRAEX pane, see `docs/server.md` ("Connection to herdr")). When a tab name is the default number, the App shows `#2`.
+and every 10 seconds as a fallback (every second when the event stream is down or there's a compatible Codex forks pane, see `docs/server.md` ("Connection to herdr")). When a tab name is the default number, the App shows `#2`.
 
 ### Several panes in one tab
 

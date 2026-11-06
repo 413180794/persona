@@ -4,12 +4,7 @@
   "by_project": "按项目",
   "by_state": "按状态",
   "by_todo": "按待办",
-  "state_needs_you": "需要你",
-  "state_unread": "完成未看",
-  "state_working": "工作中",
-  "state_waiting": "待唤醒",
   "state_muted": "已屏蔽",
-  "state_idle": "已看",
   "source_feishu": "飞书群",
   "source_terminal": "终端",
   "open_feishu_topic": "在飞书里打开这个话题"

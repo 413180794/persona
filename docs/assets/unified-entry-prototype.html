@@ -485,7 +485,7 @@ function sendText(text, to){
     if(t.status==='done'){ t.status='working'; }
     t.live = 'Received: '+text.slice(0,18)+(text.length>18?'…':'');
     add({k:'ai', html:`Forwarded to “${esc(t.title)}”; it will continue.`, small:true});
-  } else if(/修|改|做|查|跑|写|整理|部署|发|找|看看/.test(text)){ // Chinese task-intent keywords: fix, change, do, check, run, write, organize, deploy, send, find, look.
+  } else if(/修|改|做|查|跑|写|整理|部署|发|找|看看/.test(text) || /\b(?:fix|change|build|check|run|write|organize|deploy|send|find|look)\b/i.test(text)){ // Task-intent keywords; the Chinese examples remain supported.
     const id = 'tx'+S.nid;
     TASKS[id] = { title:text.length>18? text.slice(0,18)+'…' : text, short:text.slice(0,6), where:['Work Mac','jarvis','Claude Opus 5.5'], icon:'laptop', total:5 };
     add({k:'plan', id:'p'+id, tasks:[id], state:'open'});

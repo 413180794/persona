@@ -264,7 +264,7 @@ On the user's real hub, Dynamic Island content changed about 180 times per hour.
 
 - Source is the transcript: every 10 seconds the node (`node/usage.go`) scans new parts of all local transcripts—main sessions and sub-Agent files under each Claude Code config directory
   (`message.usage` on assistant lines; each content block of one reply repeats the same usage, deduplicated by message id; `<synthetic>` excluded),
-  and Codex / TRAEX rollouts (`last_token_usage` on `token_count` events; repeated events whose totals didn't increase are skipped). Accumulates the last 26 hours by "minute × model".
+  and Codex / compatible Codex forks rollouts (`last_token_usage` on `token_count` events; repeated events whose totals didn't increase are skipped). Accumulates the last 26 hours by "minute × model".
 - Only new bytes are read: each file has an offset, an unfinished partial line waits until next time; for a large file first seen, it searches backwards from the tail to 26 hours ago before reading,
   skipping single lines over 16 MB (images). Measured on the hub machine's daily transcripts: first scan 85 ms, subsequent scans about 1 ms each.
 - The node reports changed minutes to the hub (`usage` event, full value for each minute, repeated reports just overwrite); the first report after connecting sends everything with `full: true`.

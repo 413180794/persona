@@ -1,12 +1,4 @@
 {
-  "status_done": "已完成",
-  "status_needs_you": "等你",
-  "status_interrupted": "中断了",
-  "status_unread": "待查看",
-  "status_working": "进行中",
-  "status_follow_up": "待跟进",
-  "status_not_started": "未开始",
-  "status_failed": "没开起来",
   "auto_done": "自动完成",
   "model_request_failed": "模型请求失败",
   "unassigned": "没挂待办的",

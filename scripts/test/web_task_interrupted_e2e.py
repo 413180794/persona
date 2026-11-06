@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of a task the model service cut off (#1516), in the web's main conversation: its agent's turn ended
 in an API error, so its receipt is red ("<task> Interrupted", why in words, "Continue"), not a green "Done" with the error as
-its summary; its card says "Interrupted" with "Continue", and the dock has it in red. "Continue" sends one retry; the card goes to "Active" and
+its summary; its card says "Interrupted" with "Continue", and the dock has it in red. "Continue" sends one retry; the card goes to "Working" and
 the receipt folds to a quiet line, and once the agent finishes the card is "Unread".
 
 Needs a running web page against the fake hub with a cut-off task (MOCK_TASKS=1 MOCK_TASKS_CUT=1; GET /mock/cut puts
@@ -92,15 +92,15 @@ def run(browser, base, hub, token, size, theme, shots):
     expect(quiet).to_be_visible()
     expect(receipt).to_have_count(0)
     bring(card := page.locator("div[role=button]", has_text=TITLE).first)
-    expect(card).to_contain_text("进行中")
+    expect(card).to_contain_text("工作中")
     expect(card.get_by_role("button", name="继续")).to_have_count(0)
     shot("continued")
     if len(posts) != 1:
         fail(f"{tag}: {len(posts)} retries posted")
-    ok(f"{tag}: 继续 posted once; the card is 进行中 and the receipt a quiet line")
-    expect(card).to_contain_text("待查看", timeout=10000)
+    ok(f"{tag}: 继续 posted once; the card is 工作中 and the receipt a quiet line")
+    expect(card).to_contain_text("完成未看", timeout=10000)
     shot("finished")
-    ok(f"{tag}: once it finished the card is 待查看")
+    ok(f"{tag}: once it finished the card is 完成未看")
     ctx.close()
 
 

@@ -356,7 +356,7 @@ ext  → run …"sent" → …"working" → {"type":"link","state":"paused"} →
 - **Protocol 2**:
   - Requires `target`, fixed at `ready`, never follows "current main chat" during the call.
   - Session must appear in `GET /api/v1/sessions?machine_id=`. Nil `capabilities` means sendable (#3502 follows App `canSend` and assistant `send_to_agent`: external-source sessions such as `codex_history` require `capabilities.send` true).
-  - kind: `assistant` sessions are `main` (the main chat from `GET /api/v1/assistant`) or `assistant`; others are `agent`. `agent_label` uses session `agent_label`, otherwise Claude Code / Codex / TRAEX from `agent`; Persona's own chats use Persona (main chat empty).
+  - kind: `assistant` sessions are `main` (the main chat from `GET /api/v1/assistant`) or `assistant`; others are `agent`. `agent_label` uses session `agent_label`, otherwise Claude Code / Codex / compatible Codex forks from `agent`; Persona's own chats use Persona (main chat empty).
   - Offline sessions can bind; hub uses `--resume` on send. Offline machines can also bind, followed by nonfatal `machine_offline`.
   - Read-only sources return `target_read_only`; sessions absent from the list return `target_gone`.
 - **Protocol 1**: main chat, resolved before each delegation; if none exists, use `startMain` (existing behavior).
@@ -1096,7 +1096,7 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
 Umbrella issue #3489, with sub-issues below. Each PR corresponds to one sub-issue (`Closes #<sub-issue>`) and also `Refs #3489`. All sizes include tests.
 When everything is complete, move this section to `docs/archive/`.
 
-| Issue | Title (issue in Chinese / PR in English) | Scope | Size | Dependencies |
+| Issue | Title (issues and PRs in English) | Scope | Size | Dependencies |
 | --- | --- | --- | --- | --- |
 | #3495 | Empirical tests of GPT-Live behavior / docs(lessons): GPT-Live delegation behaviour | No feature code. Connect `personad voice` to a GPT-Live-compatible upstream (local is fine), test every question listed under risk 1 in section 8, write findings in new docs/lessons/voice.md, and choose the constants for 4.5 | S | — |
 | #3496 | Voice-mode design document / docs: voice mode design | This document, CLAUDE.md documentation index, two pointers in `docs/extensions.md` | S | — |

@@ -14,7 +14,8 @@ struct ConnectionTitle: View {
             if phase != .online {
                 Button { Haptics.tap(); details = true } label: { ConnectionLabel(phase: phase) }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(phase.title), view connection details")
+                    // What the label shows (Hub updating… while it restarts), not the bare phase.
+                    .accessibilityLabel("\(ConnectionLabel.text(phase, hubRestarting: model.hubUpdate?.restarting == true)), view connection details")
                     .accessibilityIdentifier("connection-title")
                     .transition(.opacity)
             } else if let title {
@@ -46,13 +47,18 @@ struct ConnectionLabel: View {
             } else {
                 ProgressView().controlSize(compact ? .mini : .small)
             }
-            // The hub restarting into a new version: the connection going away is expected (docs/hub-update.md).
-            Text(phase == .connecting && model.hubUpdate?.restarting == true ? String(localized: "Hub updating…") : phase.title)
+            Text(Self.text(phase, hubRestarting: model.hubUpdate?.restarting == true))
                 .font(compact ? Theme.Font.label : Theme.Font.heading)
                 .foregroundStyle(compact ? .secondary : .primary)
                 .lineLimit(1)
                 .contentTransition(.opacity)
         }
+    }
+
+    /// The words for `phase`. The hub restarting into a new version: the connection going away is expected
+    /// (docs/hub-update.md), so Connecting… says so. The title's accessibility label reads the same words.
+    static func text(_ phase: ConnectionStatus.Phase, hubRestarting: Bool) -> String {
+        phase == .connecting && hubRestarting ? String(localized: "Hub updating…") : phase.title
     }
 }
 

@@ -68,6 +68,7 @@ import { clipsOverflow, glideBox, glideStyle, sameBox, type GlideBox, type Span 
 import { AGENTS_FOLD, onGrouping, setAgentsFolded } from "../lib/sidebar-api";
 import { formatChord, jumpHint, useBindings } from "../lib/shortcuts";
 import { toggleSidebarColumn } from "../lib/layout";
+import { markAllSeenLabel, stateCount } from "../lib/state-labels";
 import { NoComputers, useAddComputer } from "./machines/AddComputerEntry";
 import { neverConnected } from "../lib/add-computer";
 
@@ -593,8 +594,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       {unreadShown.length > 0 && (
         <button type="button" onClick={() => setConfirmSeen(unreadShown)} className="relative z-10 mt-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98] [@media(pointer:coarse)]:min-h-11">
           <span className="flex size-3.5 shrink-0 items-center justify-center text-green"><Icon name="check" size={13} stroke={2.4} /></span>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("sidebar.mark_all_read")}</span>
-          <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3 tabular-nums">{t("sidebar.unread_count", { count: unreadShown.length })}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{markAllSeenLabel()}</span>
+          <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3 tabular-nums">{stateCount("unread", unreadShown.length)}</span>
         </button>
       )}
 
@@ -1041,7 +1042,7 @@ function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRo
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {m.needs > 0 && !(folded && online) ? (
-          <span title={t("sidebar.needs_you_count", { count: m.needs })} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
+          <span title={stateCount("needs_you", m.needs)} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
         ) : !online ? (
@@ -1214,7 +1215,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {m.needs > 0 && !(folded && online) ? (
-          <span title={t("sidebar.needs_you_count", { count: m.needs })} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
+          <span title={stateCount("needs_you", m.needs)} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
         ) : !online ? (
@@ -1320,7 +1321,7 @@ function ChildSummary({ counts }: { counts: ChildStates }) {
   const parts = (["needs_you", "working", "done"] as const).filter((k) => counts[k] > 0);
   if (!parts.length) return null;
   return (
-    <span title={t("sidebar.children_title", { list: parts.map((k) => t(`sidebar.child_${k}`, { count: counts[k] })).join(t("sidebar.list_separator")) })} className="flex items-center gap-1.5 text-[10.5px] text-ink-3 tabular-nums">
+    <span title={t("sidebar.children_title", { list: parts.map((k) => stateCount(k, counts[k])).join(t("sidebar.list_separator")) })} className="flex items-center gap-1.5 text-[10.5px] text-ink-3 tabular-nums">
       {parts.map((k) => (
         <span key={k} className="flex items-center gap-0.5">
           <span aria-hidden className="flex"><StatusMark state={k === "done" ? "unread" : k} size="sm" /></span>

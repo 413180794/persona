@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { STATE_LABEL } from "../lib/format";
+import { STATE_LABEL } from "../lib/state-labels";
 import { foldedCounts } from "../lib/folded-counts";
 import type { AgentState, Session } from "../lib/types";
 import { markOf, StateTally, StatusMark, type MarkShape } from "./StatusMark";

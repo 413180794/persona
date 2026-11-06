@@ -1,7 +1,5 @@
 {
   "state_idle": "Idle",
   "state_thinking": "Thinking",
-  "state_working": "Working",
-  "state_needs_you": "Needs you",
   "state_offline": "Offline"
 }

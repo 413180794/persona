@@ -56,7 +56,7 @@ Never clean up other people's socket files.
 its stat has `+` (foreground process group) and does not start with `T` (not suspended). Nesting then separates naturally:
 when tmux runs inside a herdr pane, claude's tty belongs to the tmux pane; when herdr runs inside a tmux pane, claude's tty belongs to the herdr pane and tmux does not claim it
 (`docs/lessons/agents.md` records the tmux server inheriting `HERDR_PANE_ID` and reporting botmux sessions into a herdr pane: judging ownership by environment variables is unreliable).
-TRAEX follows the shared layer's approach (owner file); the host only provides "all panes". Session ids follow the shared layer: pid of the foreground claude → `sessions/<pid>.json`.
+compatible Codex forks follows the shared layer's approach (owner file); the host only provides "all panes". Session ids follow the shared layer: pid of the foreground claude → `sessions/<pid>.json`.
 
 **The tmux command itself**: a node resident under launchd has only the system PATH, so try PATH first, then `/opt/homebrew/bin/tmux`, `/usr/local/bin/tmux` (same as botmux looking for `~/.botmux/bin/botmux`).
 When the client and server versions differ too much, tmux reports `protocol version mismatch`: report that server as incompatible with a `note` in `node.info`; do not guess (the exact error text is unverified; test between two versions during implementation).
@@ -141,9 +141,9 @@ same as Orca and Herdr App, but because colors are available the draft detection
 tmux does not know the state of the program in a pane. Sources in priority order:
 
 1. **Persona's hooks** (claude started by Persona): question, permission, plan → Needs you; `UserPromptSubmit` / `Stop` → Working / done, same as on herdr machines.
-2. **Title**: while working, Claude Code puts a spinner character in front of the terminal title (`stripSpinner` in `hostherdrcore.go` already strips it); a braille spinner → Working (TRAEX's current check).
+2. **Title**: while working, Claude Code puts a spinner character in front of the terminal title (`stripSpinner` in `hostherdrcore.go` already strips it); a braille spinner → Working (the compatible fork's current check).
    Control mode subscribes to `pane_title` and pushes changes immediately, no polling (not verified with a real claude in tmux; test during implementation).
-3. **Screen reads**: TRAEX's approach, at most one read every 2 seconds: `esc to interrupt` → Working, a dialog recognized by `screen.ParseDialog` → Needs you, anything else → done.
+3. **Screen reads**: the compatible fork's approach, at most one read every 2 seconds: `esc to interrupt` → Working, a dialog recognized by `screen.ParseDialog` → Needs you, anything else → done.
 4. The transcript fills in "last line" and "done, not seen" as usual (the hub derives `unread` / `idle` from whether it was seen, `docs/agent-states.md`).
 
 Codex follows the shared layer (corrections such as `codexTurnOver`).
