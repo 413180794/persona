@@ -304,6 +304,7 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
                     _todosSupported.value = true
                     todosLoaded = true
                     if (list != _todos.value) _todos.value = list
+                    dropStaleRoutes()
                 }
                 .onFailure { error ->
                     val status = (error as? Exception)?.let { e ->
@@ -347,6 +348,13 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     suspend fun deleteTodo(id: String) {
         api.deleteTodo(id)
         _todos.update { list -> list.filterNot { it.id == id } }
+        dropStaleRoutes()
+    }
+
+    /** Routes to to-dos no longer listed (deleted here or on another device) go: their chip is hidden already. */
+    private fun dropStaleRoutes() {
+        val ids = _todos.value.mapTo(HashSet()) { it.id }
+        routes.update { r -> r.filterValues { it in ids }.takeIf { it.size != r.size } ?: r }
     }
 
     suspend fun linkTodoAgent(todoId: String, machineId: String, sessionId: String) {
@@ -506,10 +514,11 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         routes.update { if (todoId == null) it - conversation else it + (conversation to todoId) }
     }
 
-    /** Sends text straight to the task the conversation is routed to; false when there is none. */
+    /** Sends text straight to the task the conversation is routed to; false when there is none or its to-do is gone. */
     fun sendRouted(conversation: String, text: String, onError: (Throwable) -> Unit): Boolean {
         val todoId = routes.value[conversation] ?: return false
         setRoute(conversation, null)
+        if (_todos.value.none { it.id == todoId }) return false // the hub would refuse it (409): Persona gets it instead
         scope.launch { runCatching { api.route(conversation, todoId, text) }.onSuccess { received(listOf(it)) }.onFailure(onError) }
         return true
     }

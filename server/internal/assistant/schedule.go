@@ -305,7 +305,35 @@ func (s *Service) loadSchedule(ctx context.Context) *schedule {
 		return sc
 	}
 	sc.tasks, sc.runs, sc.loaded = tasks, runs, true
+	if upgradeDefaultRoutines(sc.tasks) {
+		s.saveLocked(sc)
+		s.logf("schedule: the default 早报 / 晚报 prompts brought up to date")
+	}
 	return sc
+}
+
+// upgradeDefaultRoutines gives the default daily tasks (morning, evening) the current default prompt when what they
+// hold is byte for byte an earlier default: a hub set up before kept the old one for good. A prompt the user (or the
+// assistant) changed in any way is left alone.
+func upgradeDefaultRoutines(tasks []Task) bool {
+	changed := false
+	for i := range tasks {
+		t := &tasks[i]
+		var cur string
+		var former []string
+		switch t.ID {
+		case "morning":
+			cur, former = prompts.RenderMorningRoutine(), prompts.FormerMorningRoutines()
+		case "evening":
+			cur, former = prompts.RenderEveningRoutine(), prompts.FormerEveningRoutines()
+		default:
+			continue
+		}
+		if t.Prompt != cur && slices.Contains(former, t.Prompt) {
+			t.Prompt, changed = cur, true
+		}
+	}
+	return changed
 }
 
 // lockedSchedule returns the schedule locked, or errScheduleUnavailable (and nothing locked) while it could not be

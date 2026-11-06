@@ -258,6 +258,16 @@ func RenderTaskRun(t TaskRun) string { return render("assistant/task_run", t) }
 func RenderMorningRoutine() string { return render("assistant/routine_morning", nil) }
 func RenderEveningRoutine() string { return render("assistant/routine_evening", nil) }
 
+// FormerMorningRoutines and FormerEveningRoutines are the earlier defaults of those prompts, oldest first: a hub that
+// saved one unchanged gets the current default (assistant: upgradeDefaultRoutines). Never edited: each is what a hub
+// may hold byte for byte.
+func FormerMorningRoutines() []string {
+	return []string{render("assistant/routine_morning_former1", nil), render("assistant/routine_morning_former2", nil)}
+}
+func FormerEveningRoutines() []string {
+	return []string{render("assistant/routine_evening_former1", nil)}
+}
+
 // RenderLostTasks tells an assistant conversation that a restart stopped its background tasks (assistant/lost_tasks).
 func RenderLostTasks(tasks []string) string {
 	return render("assistant/lost_tasks", struct{ Tasks []string }{tasks})

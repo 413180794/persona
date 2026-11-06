@@ -1020,3 +1020,52 @@ func TestSnapshotScheduleLateRecordedRunAndTotals(t *testing.T) {
 		t.Fatalf("snapshot says how many daily tasks there are: %s", text)
 	}
 }
+
+// A hub set up before kept its 早报 / 晚报 prompts as they were saved: one byte for byte an earlier default gets the
+// current default when the schedule is read, so the 早报 puts what waits on the owner first. One the owner changed,
+// even by a character, and another task holding the old text, are left alone.
+func TestUpgradeDefaultRoutines(t *testing.T) {
+	formerM, formerE := prompts.FormerMorningRoutines(), prompts.FormerEveningRoutines()
+	edited := formerM[0] + "\n另外提醒我喝水。"
+	tasks := []Task{
+		{ID: "morning", Repeat: repeatDaily, Prompt: formerM[0]},
+		{ID: "evening", Repeat: repeatDaily, Prompt: formerE[0]},
+		{ID: "rt_mine", Repeat: repeatDaily, Prompt: formerM[1]},
+	}
+	if !upgradeDefaultRoutines(tasks) {
+		t.Fatal("nothing upgraded")
+	}
+	if tasks[0].Prompt != prompts.RenderMorningRoutine() || tasks[1].Prompt != prompts.RenderEveningRoutine() {
+		t.Fatalf("the defaults are current: %q / %q", tasks[0].Prompt, tasks[1].Prompt)
+	}
+	if tasks[2].Prompt != formerM[1] {
+		t.Fatal("another task holding the old text is not the default one: left alone")
+	}
+	if upgradeDefaultRoutines(tasks) {
+		t.Fatal("current prompts are not upgraded again")
+	}
+	mine := []Task{{ID: "morning", Repeat: repeatDaily, Prompt: edited}, {ID: "evening", Repeat: repeatDaily, Prompt: formerE[0] + " "}}
+	if upgradeDefaultRoutines(mine) || mine[0].Prompt != edited {
+		t.Fatalf("an edited prompt is never touched: %q", mine[0].Prompt)
+	}
+	for _, p := range append(formerM, formerE...) {
+		if !strings.HasPrefix(p, "给我今天的早报") && !strings.HasPrefix(p, "今天的晚间回顾") {
+			t.Fatalf("a former default is what hubs saved: %q", p)
+		}
+	}
+
+	// Read from the store: the upgrade is saved.
+	store := &flakyScheduleStore{data: map[string][]byte{}}
+	if err := store.PutSetting(context.Background(), tasksKey, []Task{{ID: "morning", Title: "早报", Repeat: repeatDaily, Time: "09:00",
+		Enabled: true, Prompt: formerM[1]}}); err != nil {
+		t.Fatal(err)
+	}
+	h := newServiceOn(t, newFakeHub(), store)
+	if got, _ := taskByID(h, "morning"); got.Prompt != prompts.RenderMorningRoutine() {
+		t.Fatalf("loaded: %q", got.Prompt)
+	}
+	var saved []Task
+	if _, err := store.Setting(context.Background(), tasksKey, &saved); err != nil || len(saved) != 1 || saved[0].Prompt != prompts.RenderMorningRoutine() {
+		t.Fatalf("saved: %+v %v", saved, err)
+	}
+}
