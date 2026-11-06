@@ -493,7 +493,7 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 | 方法 | 参数 → 回答 | 说明 |
 | --- | --- | --- |
 | `auth.status` | `{}` → `AuthStatus` | 只看本地状态，要快（hub 最多等 10 秒） |
-| `auth.step` | `{step, values}` → `AuthPrompt` | 分步登录，`step` 为 `""` 从头开始；hub 最多等 1 分钟 |
+| `auth.step` | `{step, values}` → `AuthPrompt` | 分步登录，`step` 为 `""` 从头开始；要马上回答：hub 等的是进程调用的超时（30 秒，有连接器的扩展 2 分钟） |
 | `auth.logout` | `{}` → `AuthStatus` | 清掉扩展自己存的凭据 |
 | 事件 `auth.changed` | `{}` | 状态自己变了（过期、在别处登出）：hub 再问一次 `auth.status` |
 
@@ -501,6 +501,8 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 `AuthPrompt` 就是连接器的 `Prompt`（`connector-protocol.md` 末尾）加一个可选的 `expires_at`：填字段的一步、`device_code`（`url` 打开、`user_code` 输入，`user_code` 可以没有）、`qr`（`url` 用别的 App 扫），或 `done`。
 `device_code` / `qr` 时客户端每隔 `interval` 秒带同一个 `step`、不带值再问，直到回来别的步骤或 `done`。hub 给 `qr` 和 `device_code` 的 `url` 都画好二维码点阵（`qr`），扩展只给 `url`。
 Go SDK：`ext.AuthHandler(a)` 放在 `Program.Namespaces["auth"]`，`hub.AuthChanged()` 发事件。
+包一层命令行登录时，「等用户确认」常常是一个会阻塞的命令（比如有的命令行带着设备码轮询一次，要等约 30 秒才回答超时），比调用的超时还长：
+在扩展里起一个后台的轮询，`auth.step` 只回答它现在知道的（还在等就回同一步，确认了回 `done`），确认后发 `auth.changed`。
 
 **凭据只在扩展那里**：登录得到的东西存在扩展的数据目录（`PERSONA_EXTENSION_DATA`）；`values` 只交给扩展，hub 不记日志、不回显，审计只记 `auth_start`、`auth_signed_in`、`auth_logout` 和谁做的。
 
