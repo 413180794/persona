@@ -10,5 +10,10 @@
   "in_doubt": "Delivery cannot be confirmed. Check the result before sending again.",
   "offline": "This computer is offline. Reconnect it before retrying.",
   "nothing_queued": "Nothing is queued for the agent any more.",
-  "send_now_unsupported": "This agent can’t send queued messages now. Update Claude Code, or wait for the queue."
+  "send_now_unsupported": "This agent can’t send queued messages now. Update Claude Code, or wait for the queue.",
+  "not_a_repository": "This folder isn’t in a Git repository.",
+  "not_our_worktree": "This folder isn’t a worktree Persona made.",
+  "worktree_in_use": "An agent still runs in this worktree. Close it first.",
+  "worktree_dirty": "The worktree has uncommitted changes.",
+  "worktree_unmerged": "The branch has commits that aren’t on the main branch."
 }

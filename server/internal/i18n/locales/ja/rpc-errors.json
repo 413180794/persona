@@ -10,5 +10,10 @@
   "in_doubt": "配信を確認できません。結果を確認してからもう一度送信してください。",
   "offline": "このコンピューターはオフラインです。接続してから再試行してください。",
   "nothing_queued": "送信待ちのメッセージはもうありません。",
-  "send_now_unsupported": "このエージェントは送信待ちのメッセージをすぐに送れません。Claude Code を更新するか、順番を待ってください。"
+  "send_now_unsupported": "このエージェントは送信待ちのメッセージをすぐに送れません。Claude Code を更新するか、順番を待ってください。",
+  "not_a_repository": "このフォルダは Git リポジトリにありません。",
+  "not_our_worktree": "このフォルダは Persona が作った worktree ではありません。",
+  "worktree_in_use": "この worktree ではまだエージェントが動いています。先に閉じてください。",
+  "worktree_dirty": "この worktree にはコミットされていない変更があります。",
+  "worktree_unmerged": "このブランチにはメインブランチにないコミットがあります。"
 }

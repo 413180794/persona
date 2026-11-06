@@ -65,9 +65,19 @@ func (n *Node) repoOfWorkspace(ctx context.Context, kind, workspace, cwd string)
 	if err != nil {
 		return nil, "", repo, errors.New("不知道这个工作区的目录")
 	}
+	if repo, err = repoAt(ctx, dir); err != nil {
+		return nil, "", repo, err
+	}
+	return h, workspace, repo, nil
+}
+
+// repoAt is the repository dir is in: its root, the branch checked out there and its name (a linked worktree is named
+// for its repository).
+func repoAt(ctx context.Context, dir string) (worktreeRepo, error) {
+	var repo worktreeRepo
 	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil || strings.TrimSpace(root) == "" {
-		return nil, "", repo, errors.New("这个工作区不在 Git 仓库里")
+		return repo, errors.New("这个工作区不在 Git 仓库里")
 	}
 	repo.root = strings.TrimSpace(root)
 	// "" on a detached HEAD
@@ -88,7 +98,7 @@ func (n *Node) repoOfWorkspace(ctx context.Context, kind, workspace, cwd string)
 			repo.name = strings.TrimSuffix(filepath.Base(c), ".git") // a bare repository
 		}
 	}
-	return h, workspace, repo, nil
+	return repo, nil
 }
 
 // spaceHolding is the host's space whose directory is dir or holds it, the deepest such space.

@@ -698,6 +698,22 @@ Same shape as Moshi `worktree/prepare` + `worktree/create`.
   `node/hostorca_worktree_test.go` (real Git + a fake Orca whose `worktree.create` behaves like Orca 1.4: Orca's default folder; a new branch from the source workspace's branch, under it, not activated, to the terminal Orca opened; an existing branch without a base; a detached HEAD's commit; a branch in use and an existing empty folder refused without asking Orca; Orca's own folder taken as it is; a renamed branch is an error; a workspace Orca does not list),
   `herdr/worktrees_test.go` (config parsing, slug, socket args, CLI fallback), `hub/panes_test.go` (permissions, named fields only), `web/src/lib/worktree.test.ts`, `node-actions.test.ts`, `node-palette.test.ts`, `views/NewWorktree.test.tsx`.
 
+### A new agent in a worktree (#6115)
+
+A new agent can start in a Git worktree of its own, so agents on the same repository don't step on each other (after Claude Desktop, which gives each session a worktree under the repository and asks to keep or discard it on archive).
+
+- `worktree/add` (node `worktree.add`, `node/agentworktree.go`) makes one from the agent's folder:
+  - **Branch:** `persona/<the agent's name as a slug>`; `-2`, `-3`… while the branch or its folder is taken; `persona/agent` for a name with no ASCII letters or digits.
+  - **Path:** under the same checkouts directory as section 23 (`worktree/prepare`'s `path`).
+  - **How:** a plain `git worktree add -b` from the repository's HEAD. It opens no workspace; the agent's start does.
+  - **A branch given** is used as it is: an existing one is checked out, a new one is made.
+- `worktree/status` says whether a folder is a linked worktree and whether it is one of Persona's: it lies under that checkouts directory, so no state is kept. It also reports what removing it would lose: changed files (`dirty`), and commits not on the branch the main checkout is on (`unmerged`, `main_branch`). For any folder in a repository it also gives that checkouts directory (`checkouts`), so New agent can show where the worktree will go.
+- `worktree/remove` takes one away when the user says so:
+  - **Refused:** a folder that is not one of Persona's worktrees (the worktree's own folder, not one inside it), and one a live agent still runs in.
+  - **Refused unless `force`:** uncommitted changes (`worktree_dirty`, with the count), and deleting a branch with unmerged commits (`worktree_unmerged`). The client asks the user before sending `force`.
+  - **The branch** goes only with `delete_branch` (`git branch -d`, or `-D` with `force`).
+- All three are full-device routes like section 23's, and extension tokens never reach them. The body is read field by field, plus the two switches (`flags`, booleans only).
+
 ## 24. Full herdr UI: a PTY client, switchable beside Single pane (2026-11-05, #2357)
 
 Moshi web defaults to a full herdr client (herdr sidebar, tabs, splits); Control mode shows only the selected pane, Persona's original observe/control approach (sections 1–20). User wants both, easy switching and a little animation,

@@ -86,6 +86,35 @@ type WorktreePrepare struct {
 	Path   string `json:"path"`
 }
 
+// WorktreeAdded is the worktree worktree.add made for a new agent (#6115): its checkout, its branch, the repository's root.
+type WorktreeAdded struct {
+	Path   string `json:"path"`
+	Branch string `json:"branch"`
+	Root   string `json:"root"`
+}
+
+// WorktreeStatus is what worktree.status says of a directory (#6115): whether it is a linked Git worktree, whether
+// Persona made it (it lies under the directory the computer puts this repository's checkouts in), and what removing
+// it would lose: changed files, and commits not on the branch the repository's main checkout is on. Checkouts is the
+// directory a new agent's worktree of this repository goes under, for any folder in a repository.
+type WorktreeStatus struct {
+	Worktree   bool   `json:"worktree"`
+	Ours       bool   `json:"ours"`
+	Path       string `json:"path,omitempty"`
+	Branch     string `json:"branch,omitempty"`
+	Root       string `json:"root,omitempty"`
+	MainBranch string `json:"main_branch,omitempty"`
+	Checkouts  string `json:"checkouts,omitempty"`
+	Dirty      int    `json:"dirty"`
+	Unmerged   int    `json:"unmerged"`
+}
+
+// WorktreeRemoved is what worktree.remove did.
+type WorktreeRemoved struct {
+	Removed       bool `json:"removed"`
+	BranchDeleted bool `json:"branch_deleted"`
+}
+
 // WorktreeCreateResult is what worktree.create opened: the new workspace, and the checkout it is in.
 type WorktreeCreateResult struct {
 	WorkspaceID string `json:"workspace_id"`

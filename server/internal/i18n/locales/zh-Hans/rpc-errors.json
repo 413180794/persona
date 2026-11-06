@@ -10,5 +10,10 @@
   "in_doubt": "无法确认是否送达，请检查结果后再发送。",
   "offline": "这台电脑未连接，请连接后重试。",
   "nothing_queued": "已经没有排队的消息了。",
-  "send_now_unsupported": "这个 Agent 不能立即发送排队的消息。请升级 Claude Code，或等它按顺序发出。"
+  "send_now_unsupported": "这个 Agent 不能立即发送排队的消息。请升级 Claude Code，或等它按顺序发出。",
+  "not_a_repository": "这个文件夹不在 Git 仓库里。",
+  "not_our_worktree": "这个文件夹不是 Persona 建的 worktree。",
+  "worktree_in_use": "还有 Agent 在这个 worktree 里运行，先关掉它。",
+  "worktree_dirty": "这个 worktree 里有没提交的改动。",
+  "worktree_unmerged": "这个分支上有主分支没有的提交。"
 }

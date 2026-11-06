@@ -145,6 +145,9 @@ var actionBodies = map[string]string{
 	"tabs/rename":      `{"tab_id":"w1:t2","label":"build"}`,
 	"worktree/prepare": `{"workspace_id":"w1"}`,
 	"worktree/create":  `{"workspace_id":"w1","branch":"feat/x","path":"/tmp/wt/feat-x"}`,
+	"worktree/add":     `{"cwd":"/tmp/proj","name_hint":"fix the crash"}`,
+	"worktree/status":  `{"cwd":"/tmp/wt/persona-fix-the-crash"}`,
+	"worktree/remove":  `{"path":"/tmp/wt/persona-fix-the-crash","delete_branch":true}`,
 }
 
 func postAction(h *Hub, role, path, body string) int {
@@ -179,7 +182,7 @@ func TestNodeActionsNeedAFullDevice(t *testing.T) {
 		}
 	}
 	want := map[string]bool{"panes.close": true, "panes.split": true, "panes.agent": true, "panes.git": true, "tabs.close": true, "tabs.rename": true,
-		"worktree.prepare": true, "worktree.create": true}
+		"worktree.prepare": true, "worktree.create": true, "worktree.add": true, "worktree.status": true, "worktree.remove": true}
 	for _, m := range tn.await(t, len(want)) {
 		delete(want, m)
 	}
@@ -203,17 +206,29 @@ func TestNodeActionsPassOnlyTheirFields(t *testing.T) {
 	if got != `{"op":"push","pane":"w1:p2"}` {
 		t.Errorf("the node was sent %s", got)
 	}
+	// worktree/remove's switches (#6115): booleans only, and only when true; a string "true" is not one
+	if code := postAction(h, roleFull, "worktree/remove", `{"path":"/tmp/wt/x","delete_branch":true,"force":"true","command":"rm -rf ~"}`); code != http.StatusOK {
+		t.Fatalf("remove = %d", code)
+	}
+	tn.await(t, 1)
+	tn.mu.Lock()
+	got = tn.args["worktree.remove"]
+	tn.mu.Unlock()
+	if got != `{"delete_branch":true,"path":"/tmp/wt/x"}` {
+		t.Errorf("the node was sent %s", got)
+	}
 	for path, body := range map[string]string{
 		"panes/close": `{}`, "panes/split": `{"pane":"w1:p2"}`, "panes/agent": `{"pane":"w1:p2"}`, "panes/git": `{"pane":"w1:p2"}`,
 		"tabs/close": `{"tab_id":7}`, "tabs/rename": `{"tab_id":"w1:t2"}`, "panes/close ": `not json`,
 		"worktree/prepare": `{}`, "worktree/create": `{"workspace_id":"w1","branch":"feat/x"}`,
+		"worktree/add": `{"branch":"x"}`, "worktree/status": `{}`, "worktree/remove": `{"force":true}`,
 	} {
 		path = strings.TrimSpace(path)
 		if code := postAction(h, roleFull, path, body); code != http.StatusBadRequest {
 			t.Errorf("%s %s = %d", path, body, code)
 		}
 	}
-	if got := tn.await(t, 1); len(got) != 1 {
+	if got := tn.await(t, 2); len(got) != 2 { // the git call and the remove above
 		t.Errorf("a refused request reached the node: %q", got)
 	}
 }

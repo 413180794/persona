@@ -934,6 +934,20 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.worktreePrepare(ctx, p.Kind, p.WorkspaceID, p.Cwd)
 	case "worktree.create": // a Git worktree of a workspace's repository, opened as a workspace (worktree.go)
 		return n.worktreeCreate(ctx, p.Kind, p.WorkspaceID, p.Cwd, p.Branch, p.Path)
+	case "worktree.add", "worktree.status", "worktree.remove": // a new agent's own worktree (agentworktree.go, #6115)
+		var a struct {
+			NameHint     string `json:"name_hint"`
+			DeleteBranch bool   `json:"delete_branch"`
+			Force        bool   `json:"force"`
+		}
+		_ = json.Unmarshal(params, &a)
+		switch method {
+		case "worktree.add":
+			return n.worktreeAdd(ctx, p.Kind, p.Cwd, p.Branch, a.NameHint)
+		case "worktree.status":
+			return n.worktreeStatus(ctx, p.Kind, p.Cwd)
+		}
+		return n.worktreeRemove(ctx, p.Kind, p.Path, a.DeleteBranch, a.Force)
 	case "tabs.close":
 		return ok(n.closeTab(ctx, p.Kind, p.TabID))
 	case "tabs.rename":

@@ -65,6 +65,7 @@ type nodeAction struct {
 	timeout  time.Duration
 	required []string
 	optional []string
+	flags    []string // booleans, passed only when true
 }
 
 func (h *Hub) nodeAction(a nodeAction) http.HandlerFunc {
@@ -82,6 +83,11 @@ func (h *Hub) nodeAction(a nodeAction) http.HandlerFunc {
 		for _, k := range append(append([]string{}, a.required...), a.optional...) {
 			if v, ok := body[k].(string); ok && v != "" {
 				params[k] = v
+			}
+		}
+		for _, k := range a.flags {
+			if v, ok := body[k].(bool); ok && v {
+				params[k] = true
 			}
 		}
 		for _, k := range a.required {
@@ -117,4 +123,9 @@ var nodeActions = map[string]nodeAction{
 	// The branch and the path are typed in the dialog; the node refuses a path that holds something and never forces.
 	"worktree/prepare": {method: "worktree.prepare", timeout: 30 * time.Second, required: []string{"workspace_id"}, optional: []string{"kind"}},
 	"worktree/create":  {method: "worktree.create", timeout: 150 * time.Second, required: []string{"workspace_id", "branch", "path"}, optional: []string{"kind"}},
+	// #6115 a new agent in a worktree of its own: made from its folder, told apart, removed when it is closed and the
+	// user says so (the node refuses uncommitted work and unmerged branches unless force, which the user confirms).
+	"worktree/add":    {method: "worktree.add", timeout: 150 * time.Second, required: []string{"cwd"}, optional: []string{"branch", "name_hint", "kind"}},
+	"worktree/status": {method: "worktree.status", timeout: 30 * time.Second, required: []string{"cwd"}, optional: []string{"kind"}},
+	"worktree/remove": {method: "worktree.remove", timeout: 90 * time.Second, required: []string{"path"}, optional: []string{"kind"}, flags: []string{"delete_branch", "force"}},
 }

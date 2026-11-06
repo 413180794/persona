@@ -212,6 +212,12 @@ var rpcFailureKeys = map[string]string{
 	"nothing_queued":       "rpc-errors.nothing_queued",
 	"send_now_unsupported": "rpc-errors.send_now_unsupported",
 	"send_now_in_doubt":    "rpc-errors.in_doubt",
+	// a new agent's worktree (#6115)
+	"not_a_repository":  "rpc-errors.not_a_repository",
+	"not_our_worktree":  "rpc-errors.not_our_worktree",
+	"worktree_in_use":   "rpc-errors.worktree_in_use",
+	"worktree_dirty":    "rpc-errors.worktree_dirty",
+	"worktree_unmerged": "rpc-errors.worktree_unmerged",
 }
 
 func localizeFailure(body map[string]any, status int, err error, l i18n.Lang) {
