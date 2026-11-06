@@ -28,6 +28,19 @@ export interface Supervision {
   round?: number;
   reviews?: TaskReview[];
   updated_at?: string;
+  /** What its agent last reported to Persona (report_to_supervisor); kept by the hub while it runs. */
+  progress?: TaskProgress;
+}
+
+export type ReportKind = "progress" | "question" | "blocked" | "done";
+
+/** A supervised task's agent's latest report: the step of how many (0 or absent: not said), what it said in a line. */
+export interface TaskProgress {
+  kind: ReportKind;
+  step?: number;
+  steps?: number;
+  text: string;
+  at?: string;
 }
 
 /** The review state that holds now: an accepted or cancelled task the user reopened goes on again. */
@@ -92,6 +105,28 @@ export function checkCount(sup: Supervision | undefined): string {
   const list = checklist(sup);
   if (list.length === 0) return "";
   return `${list.filter((c) => c.mark === "met").length}/${list.length}`;
+}
+
+/** "Step 3/5 · …", "Asked Persona: …": the agent's latest report in a line for a card; undefined when it has none. */
+export function progressLine(sup: Supervision | undefined): string | undefined {
+  const p = sup?.progress;
+  if (!p || !p.text) return undefined;
+  return reportLine(p.kind, p.text, p.step, p.steps);
+}
+
+/** A report (on a card, or a feed item of kind "report") in a line. */
+export function reportLine(kind: string, text: string, step?: number, steps?: number): string {
+  switch (kind) {
+    case "question":
+      return t("assistant-tasks.report_question", { text });
+    case "blocked":
+      return t("assistant-tasks.report_blocked", { text });
+    case "done":
+      return t("assistant-tasks.report_done", { text });
+  }
+  if (step && steps) return t("assistant-tasks.report_step_of", { step, steps, text });
+  if (step) return t("assistant-tasks.report_step", { step, text });
+  return text;
 }
 
 /** A review in the conversation's feed (kind "review"), in a line. */

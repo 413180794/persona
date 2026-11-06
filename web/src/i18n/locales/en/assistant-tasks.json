@@ -137,5 +137,12 @@
   "review_note": "Supervisor: {note}",
   "review_count": "Review {count}",
   "review_expect": "About {minutes} min",
-  "dock_task_asks": "{title}: {ask}"
+  "dock_task_asks": "{title}: {ask}",
+  "report_question": "Asked Persona: {text}",
+  "report_blocked": "Stuck: {text}",
+  "report_done": "Says it is done: {text}",
+  "report_step_of": "Step {step}/{steps} · {text}",
+  "report_step": "Step {step} · {text}",
+  "report_from": "\"{title}\" to Persona",
+  "said_to_interrupting": "Stopped \"{title}\" and told it"
 }

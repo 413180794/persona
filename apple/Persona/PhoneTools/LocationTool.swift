@@ -125,8 +125,10 @@ nonisolated final class OneShotLocation: NSObject, CLLocationManagerDelegate, @u
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
         let code = (error as? CLError)?.code
+        // Denied names the source like the check in `LocationTool.current` does, so
+        // `ToolErrors.describe` words it like every other source and says where to allow it.
         let message = code == .denied
-            ? "定位被拒绝 / Location access was denied" // i18n-ignore
+            ? "位置 / Location" // i18n-ignore
             : "定位失败 / Location failed: \(error.localizedDescription)" // i18n-ignore
         pending?.fail(ToolFailure(code == .denied ? .denied : .unavailable, message))
         pending = nil

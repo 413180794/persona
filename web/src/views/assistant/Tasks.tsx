@@ -45,7 +45,8 @@ import { Button, Collapse, cx, Dialog, IconButton, Menu, toast, useNow } from ".
 import { StatusMark } from "../../ui/StatusMark";
 import { useClamped } from "../../ui/use-clamped";
 import { Icon, type IconName } from "../../ui/icons";
-import { ReviewBadge, ReviewLine } from "./Supervision";
+import { ReportLine, ReviewBadge, ReviewLine } from "./Supervision";
+import { progressLine } from "../../lib/supervision";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
 import { MessageActions } from "../chat/MessageActions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
@@ -392,6 +393,8 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   // its turn ended to wait for a background workflow (#2935): the run's progress, under its own
   const wfNow = useNow(60_000, runningWorkflows(lead).length > 0);
   const workflow = status === "working" || status === "needs_you" ? workflowLine(lead, wfNow) : "";
+  // what its agent last told Persona (report_to_supervisor): while the task is open
+  const reported = status !== "done" && status !== "failed" ? progressLine(todo.supervision) : undefined;
   return (
     <div
       role="button"
@@ -425,6 +428,12 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
               {subagents.length > 3
                 ? t("assistant-tasks.subagents_running_more", { names: subagents.slice(0, 3).join(t("assistant-tasks.list_separator")), count: subagents.length })
                 : t("assistant-tasks.subagents_running", { names: subagents.slice(0, 3).join(t("assistant-tasks.list_separator")) })}
+            </span>
+          )}
+          {reported && (
+            <span data-progress-line className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3">
+              <Icon name="chat" size={11} stroke={2.2} className="shrink-0" />
+              <span className="truncate">{reported}</span>
             </span>
           )}
           {workflow && (
@@ -549,12 +558,14 @@ export const FeedLineView = memo(function FeedLineView({ item }: { item: FeedIte
       return <ReceiptCard item={item} />;
     case "review":
       return <ReviewLine item={item} title={title} onOpenTask={known && item.ref ? () => openTask(item.ref!) : undefined} />;
+    case "report":
+      return <ReportLine item={item} title={title} onOpenTask={known && item.ref ? () => openTask(item.ref!) : undefined} />;
     case "routed":
       return (
         <div className="flex flex-col items-end gap-1 pl-10">
           <span className="inline-flex items-center gap-1 text-[12px] font-medium text-accent">
-            <Icon name="send" size={11} />
-            {t("assistant-tasks.say_to", { title })}
+            <Icon name={item.body?.interrupted === true ? "stop" : "send"} size={11} />
+            {item.body?.interrupted === true ? t("assistant-tasks.said_to_interrupting", { title }) : t("assistant-tasks.say_to", { title })}
           </span>
           <div className="rounded-[18px] bg-field px-3.5 py-2 text-[14.5px]">{field(item, "text")}</div>
         </div>

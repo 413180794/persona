@@ -14,7 +14,7 @@ import (
 )
 
 // writeRollout writes a made-up Codex rollout that started on day (its directory) in cwd, last written at written.
-func writeRollout(t *testing.T, home, id, cwd string, day, written time.Time, events ...string) {
+func writeRollout(t testing.TB, home, id, cwd string, day, written time.Time, events ...string) {
 	t.Helper()
 	dir := filepath.Join(home, ".codex", "sessions", day.Format("2006"), day.Format("01"), day.Format("02"))
 	if err := os.MkdirAll(dir, 0o755); err != nil {

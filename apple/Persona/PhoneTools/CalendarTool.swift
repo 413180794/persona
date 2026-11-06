@@ -81,20 +81,29 @@ enum CalendarTool {
         var events = store.events(matching: predicate).filter { !$0.isDetached }
         events.sort { $0.startDate < $1.startDate }
 
-        var rows: [JSONValue] = []
-        for event in events {
-            if let query, !Self.matches(event, query: query) { continue }
-            guard rows.count < limit else { break }
-            rows.append(Self.encode(event))
+        let (picked, truncated) = Self.firstMatches(events, limit: limit) { event in
+            query.map { Self.matches(event, query: $0) } ?? true
         }
+        let rows = picked.map(Self.encode)
 
         return Output.json(.object([
             "start": .string(ToolDate.string(start)),
             "end": .string(ToolDate.string(end)),
             "count": .number(Double(rows.count)),
-            "truncated": .bool(rows.count >= limit && events.count > rows.count),
+            "truncated": .bool(truncated),
             "events": .array(rows),
         ]))
+    }
+
+    /// The first `limit` items that pass `include`. `truncated` is true only when
+    /// another matching item exists past them, so items the filter rejects never count.
+    static func firstMatches<T>(_ items: [T], limit: Int, where include: (T) -> Bool) -> (kept: [T], truncated: Bool) {
+        var kept: [T] = []
+        for item in items where include(item) {
+            guard kept.count < limit else { return (kept, true) }
+            kept.append(item)
+        }
+        return (kept, false)
     }
 
     private static func matches(_ event: EKEvent, query: String) -> Bool {

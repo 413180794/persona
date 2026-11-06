@@ -44,6 +44,24 @@ describe("a supervised task", () => {
     expect(html).toContain("派活时没写验收标准");
   });
 
+  it("draws an agent's report to Persona in the conversation, with its evidence", () => {
+    const item: FeedItem = { id: "f2", conversation: "main", at: "2026-11-05T09:00:00Z", kind: "report", ref: "todo_1",
+      body: { kind: "question", text: "A 先灰度还是 B 直接全量？", evidence: ["https://github.com/o/r/pull/902"] } };
+    const html = renderToStaticMarkup(<FeedLineView item={item} />);
+    expect(html).toContain('data-testid="report-line"');
+    expect(html).toContain("向 Persona 汇报");
+    expect(html).toContain("问 Persona：A 先灰度还是 B 直接全量？");
+    expect(html).toContain("pull/902");
+  });
+
+  it("marks a line to a task that cut its turn short", () => {
+    const say = (body: Record<string, unknown>): string =>
+      renderToStaticMarkup(<FeedLineView item={{ id: "f3", conversation: "main", at: "2026-11-05T09:00:00Z", kind: "routed", ref: "todo_1", body }} />);
+    expect(say({ text: "先修测试", interrupted: true })).toContain("打断「");
+    expect(say({ text: "先修测试" })).not.toContain("打断「");
+    expect(say({ text: "先修测试" })).toContain("对「");
+  });
+
   it("draws a review in the conversation as a line", () => {
     const item: FeedItem = { id: "f1", conversation: "main", at: "2026-11-05T09:00:00Z", kind: "review", ref: "todo_1",
       body: { title: "部署 hub", verdict: "accepted", note: "已部署，/healthz ok" } };

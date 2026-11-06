@@ -28,6 +28,15 @@ nonisolated enum FleetLink {
         state.items.count == 1 ? url(state.items.first) : URL(string: "jarvis://open")
     }
 
+    /// A tap on the lock screen, by what `FleetLockScreen` draws: one request alone (the first a button settles, or
+    /// the one nameless line when names are hidden) opens its agent, as its View button does; rows or only counts, `whole`.
+    /// Before #4318 the lock screen tapped as `whole`, which with several agents only opened the app.
+    static func lockScreen(_ state: FleetState, stale: Bool) -> URL? {
+        if !stale, let act = state.firstActionable { return url(act) }
+        if !state.details, let first = state.items.first, first.needsYou { return url(first) }
+        return whole(state)
+    }
+
     /// The session a link opens, or nil for anything else (`jarvis://open` alone just opens the app).
     static func session(_ url: URL) -> (machine: String, session: String)? {
         guard ["persona", "jarvis"].contains(url.scheme?.lowercased() ?? ""), url.host == "open",

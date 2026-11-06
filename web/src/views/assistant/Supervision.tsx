@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { t } from "../../i18n";
 import type { FeedItem } from "../../lib/feed";
-import { checkCount, checklist, latestReview, reviewBadge, reviewVerdictLabel, type CheckMark, type ReviewTone } from "../../lib/supervision";
+import { checkCount, checklist, latestReview, reportLine, reviewBadge, reviewVerdictLabel, type CheckMark, type ReviewTone } from "../../lib/supervision";
 import type { Todo } from "../../lib/todos";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -74,6 +74,34 @@ export function ReviewChecklist({ todo }: { todo: Todo }) {
       )}
       {review?.note && <p className="mt-2 text-[12.5px] leading-[1.6] text-ink-2 select-text">{t("assistant-tasks.review_note", { note: review.note })}</p>}
     </section>
+  );
+}
+
+/** A supervised task's agent reported to Persona (feed kind "report": a question, a block, a finish): who, and what. */
+export function ReportLine({ item, title, onOpenTask }: { item: FeedItem; title: string; onOpenTask?: () => void }) {
+  const body = (item.body ?? {}) as { kind?: string; text?: string; step?: number; steps?: number; evidence?: string[] };
+  const tone = body.kind === "blocked" || body.kind === "question" ? "text-orange" : "text-ink-2";
+  return (
+    <div data-testid="report-line" className="flex max-w-full min-w-0 flex-col gap-1 self-start pr-10">
+      <span className={cx("inline-flex min-w-0 items-center gap-1 text-[12px] font-medium", tone)}>
+        <Icon name="chat" size={11} className="shrink-0" />
+        {onOpenTask ? (
+          <button type="button" onClick={onOpenTask} className="min-w-0 truncate text-left hover:underline">
+            {t("assistant-tasks.report_from", { title })}
+          </button>
+        ) : (
+          <span className="min-w-0 truncate">{t("assistant-tasks.report_from", { title })}</span>
+        )}
+      </span>
+      <div className="rounded-[18px] bg-field px-3.5 py-2 text-[14.5px] whitespace-pre-wrap">{reportLine(body.kind ?? "", body.text ?? "", body.step, body.steps)}</div>
+      {body.evidence && body.evidence.length > 0 && (
+        <ul className="flex flex-col gap-0.5 pl-1 text-[12px] text-ink-3">
+          {body.evidence.slice(0, 8).map((e) => (
+            <li key={e} className="truncate">· {e}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -48,6 +49,10 @@ type rolloutCache struct {
 	rollouts []codexRollout
 	older    []string // rollouts in day directories before the window, listed once a minute
 	olderAt  time.Time
+	// misses are the ids rolloutPath globbed for and found nowhere, with missStamp then: a thread with no rollout (an
+	// app-server thread that never wrote one) was globbed across all of history every second. A miss holds while the
+	// recent day directories and archived_sessions are unchanged, and until the older days are listed again.
+	misses   map[string][]int64
 	metas    map[string]rolloutMeta // path → its session_meta (never changes once written)
 	titles   map[string]string
 	titlesAt time.Time
@@ -116,6 +121,7 @@ func rollouts(home string) []codexRollout {
 			}
 		}
 		c.olderAt = now
+		c.misses = nil
 	}
 	firstOlder := len(paths)
 	paths = append(paths, c.older...)
@@ -213,14 +219,55 @@ func rolloutPath(home, id string) string {
 	if !validID(id) {
 		return ""
 	}
+	looked := time.Now()
+	stamp := missStamp(home)
+	rolloutCaches.Lock()
+	missed, ok := cacheFor(home).misses[id]
+	rolloutCaches.Unlock()
+	if ok && slices.Equal(missed, stamp) {
+		return ""
+	}
 	matches, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
 	if len(matches) == 0 {
 		matches, _ = filepath.Glob(filepath.Join(home, "archived_sessions", "rollout-*-"+id+".jsonl"))
 	}
 	if len(matches) == 0 {
+		// A directory changed in the last second may change again within its mtime's granularity (a coarse clock
+		// tick) without its mtime moving: no miss kept on it.
+		if slices.Max(stamp) < looked.Add(-time.Second).UnixNano() {
+			rolloutCaches.Lock()
+			c := cacheFor(home)
+			if c.misses == nil {
+				c.misses = map[string][]int64{}
+			}
+			c.misses[id] = stamp
+			rolloutCaches.Unlock()
+		}
 		return ""
 	}
 	return newestFirst(matches)[0]
+}
+
+// missStamp is when the directories a new rollout appears in were last changed (0: not there): the day directories of
+// the window, where a thread's rollout is created, and archived_sessions, where an archived one moves. A file created
+// or moved into one changes its mtime.
+func missStamp(home string) []int64 {
+	now := time.Now()
+	days := int(codexWindow / (24 * time.Hour))
+	out := make([]int64, 0, days+2)
+	for d := 0; d <= days; d++ {
+		day := now.AddDate(0, 0, -d)
+		out = append(out, dirStamp(filepath.Join(home, "sessions", day.Format("2006"), day.Format("01"), day.Format("02"))))
+	}
+	return append(out, dirStamp(filepath.Join(home, "archived_sessions")))
+}
+
+func dirStamp(dir string) int64 {
+	st, err := os.Stat(dir)
+	if err != nil {
+		return 0
+	}
+	return st.ModTime().UnixNano()
 }
 
 // codexSession picks the rollout of a Codex pane herdr could not identify: the newest conversation in its directory

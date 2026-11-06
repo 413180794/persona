@@ -37,7 +37,7 @@ export interface TaskPlan {
   created_at?: string;
 }
 
-export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review";
+export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report";
 
 export interface FeedItem {
   id: string;

@@ -94,6 +94,12 @@ func (s *Service) toolAgentInterrupt(ctx context.Context, machine, self string, 
 		}
 		return "", err
 	}
+	if t, ok := s.taskOf(ctx, am.ID, c.SessionID); ok && (t.Origin == self || t.Supervision != nil && t.Supervision.Supervisor == self) {
+		// The conversation shows what it told its task, as for agent_send to a task (routed); marked when it cut in.
+		if _, err := s.appendFeed(ctx, self, feedRouted, t.ID, map[string]any{"text": then, "interrupted": working}); err != nil {
+			s.logf("task %s: routed feed: %v", t.ID, err)
+		}
+	}
 	if !working {
 		return fmt.Sprintf("%s on %s was not working: sent the new instruction.", agentLabel(c), am.Name), nil
 	}
@@ -213,6 +219,15 @@ func criteriaWords(list []string, v *Supervision) string {
 		return "not set (judge by what the task is for; set it with agent_supervise)"
 	}
 	return strconv.Quote(strings.Join(list, "; "))
+}
+
+// reportBody is a report feed item's body (feedReport).
+type reportBody struct {
+	Kind     string   `json:"kind"`
+	Text     string   `json:"text"`
+	Evidence []string `json:"evidence,omitempty"`
+	Step     int      `json:"step,omitempty"`
+	Steps    int      `json:"steps,omitempty"`
 }
 
 // ---- report_to_supervisor ----
@@ -357,6 +372,15 @@ func (s *Service) reportToSupervisor(ctx context.Context, machine, session strin
 	}
 	s.signal(superviseSignal{Todo: t.ID, Kind: sigReport, Key: now.UTC().Format(time.RFC3339Nano), At: now, Machine: machine,
 		Session: session, Report: a.Kind, Detail: text, Evidence: evidence, Step: step, Steps: steps})
+	s.noteProgress(ctx, t.ID, TaskProgress{Kind: a.Kind, Step: step, Steps: steps, Text: clip(oneLine(text), 200), At: now.UTC()})
+	// What it asks, what blocks it and its finish show in the supervisor's conversation too, so the user can follow
+	// the handoff; progress reports only update the card (the stream stays quiet).
+	if a.Kind != upReportProgress {
+		body := reportBody{Kind: a.Kind, Text: text, Evidence: evidence, Step: step, Steps: steps}
+		if _, err := s.appendFeed(ctx, t.Supervision.Supervisor, feedReport, t.ID, body); err != nil {
+			s.logf("task %s: report feed: %v", t.ID, err)
+		}
+	}
 	s.logf("task %s: %s reports %s", t.ID, short(session), a.Kind)
 	if a.Kind == upReportProgress {
 		return "Noted for your supervisor: it reads it with its next supervision message. Go on with the work.", nil

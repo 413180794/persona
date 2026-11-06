@@ -2201,6 +2201,23 @@ if MOCK_TASKS:
               {"title": "设置页按钮对齐", "state": "failed", "summary": "没开起来：rpc: connection closed"}),
         _feed("feed_m9", 1.8, "plan", "plan_mock_3"),
     ]
+    # MOCK_TASKS_REPORTS=1: supervised tasks whose agents report to Persona (#5112): the widget task's latest progress
+    # on its card, the tests task's question and Persona cutting in on it in the feed.
+    if os.environ.get("MOCK_TASKS_REPORTS") == "1":
+        for _t in TODOS_INIT + TODOS:  # TODOS is the copy made above (reset copies TODOS_INIT again)
+            if _t["id"] == "todo_task_widget":
+                _t["supervision"] = {"supervisor": ASK1, "done_when": ["PR 合并到 master", "横屏截图贴进 PR"], "state": "", "round": 0,
+                                     "reviews": [], "updated_at": ago(minutes=40),
+                                     "progress": {"kind": "progress", "step": 3, "steps": 5, "text": "在横屏模拟器上复现崩溃", "at": ago(minutes=2)}}
+            if _t["id"] == "todo_task_tests":
+                _t["supervision"] = {"supervisor": ASK1, "done_when": ["覆盖率到 80%"], "state": "", "round": 0, "reviews": [],
+                                     "updated_at": ago(minutes=40),
+                                     "progress": {"kind": "question", "text": "Mock 用协议注入还是保留单例？", "at": ago(minutes=4)}}
+        TASK_FEED[ASK1] += [
+            _feed("feed_r1", 4, "report", "todo_task_tests", {"kind": "question", "text": "Mock 用协议注入还是保留单例？\n协议注入要改 6 个文件。",
+                                                             "evidence": ["https://github.com/example/weather/pull/42"]}),
+            _feed("feed_r2", 3, "routed", "todo_task_tests", {"text": "用协议注入，先改网络层那 6 个文件", "interrupted": True}),
+        ]
     ITEMS[ASK1] = (
         [it("user", "text", 60 * 26, text="博客迁移到 Astro，在 Mac Studio 上做")]
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_0 is on the user's screen as a card.", 60 * 26 - 0.3)

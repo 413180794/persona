@@ -85,7 +85,8 @@ const (
 	feedTask     = "task"     // ref: the todo id
 	feedAnswered = "answered" // ref: the todo id; body: answeredBody (answered.go)
 	feedReceipt  = "receipt"  // ref: the todo id; body: title, state, summary, pr, machine
-	feedRouted   = "routed"   // ref: the todo id; body: text
+	feedRouted   = "routed"   // ref: the todo id; body: text, interrupted (agent_interrupt stopped its turn first)
+	feedReport   = "report"   // ref: the todo id; body: reportBody (a supervised task's agent reported, agent_control.go)
 	feedMessage  = "message"  // ref: the inbox item id; body: MessageCard (a message about a task, with its draft reply)
 )
 
@@ -1349,6 +1350,10 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 		task.Health, rank = taskHealth(t, agents, now) // supervised tasks: what needs the assistant first (supervise.go)
 		if t.Supervision != nil {
 			task.DoneWhen = len(t.Supervision.DoneWhen)
+			if p := t.Supervision.Progress; p != nil {
+				task.Reported = &prompts.SnapshotReport{Kind: p.Kind, Step: p.Step, Steps: p.Steps, Text: p.Text,
+					Minutes: max(0, int(now.Sub(p.At).Minutes()))}
+			}
 		}
 		all = append(all, ranked{task, rank})
 		if len(all) == 30 {

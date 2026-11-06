@@ -72,6 +72,33 @@ struct FleetStateTests {
         #expect(FleetLink.url(nil)?.absoluteString == "jarvis://open")
     }
 
+    /// A tap on the lock screen opens what it shows (#4318): its one request, else the same as the whole activity.
+    @Test func lockScreenTapOpensTheRequestItShows() {
+        let permission = FleetState.Item(id: "box/a", title: "A", kind: .permission, interaction: "ix_a")
+        let question = FleetState.Item(id: "box/q", title: "Q", kind: .question)
+        let working = FleetState.Item(id: "box/w", title: "W", kind: .working)
+        func tap(_ s: FleetState, stale: Bool = false) -> String? { FleetLink.lockScreen(s, stale: stale)?.absoluteString }
+
+        // The request with buttons is the one row, names shown or not.
+        let buttons = FleetState(phase: .needsYou, needsYou: 1, working: 1, items: [working, permission])
+        #expect(tap(buttons) == "jarvis://open?machine=box&session=a")
+        var named = buttons
+        named.details = true
+        #expect(tap(named) == "jarvis://open?machine=box&session=a")
+        // Stale: no buttons, two rows drawn, so just the app.
+        #expect(tap(named, stale: true) == "jarvis://open")
+        // Names hidden: the one nameless line (a question is waiting) is the first agent's.
+        let asks = FleetState(phase: .needsYou, needsYou: 1, working: 1, items: [question, working])
+        #expect(tap(asks) == FleetLink.url(question)?.absoluteString)
+        #expect(tap(asks, stale: true) == FleetLink.url(question)?.absoluteString)
+        // Rows, or only counts: as the whole activity.
+        var rows = asks
+        rows.details = true
+        #expect(tap(rows) == "jarvis://open")
+        #expect(tap(FleetState(phase: .working, working: 2, items: [working, working])) == "jarvis://open")
+        #expect(tap(FleetState(phase: .working, working: 1, items: [working])) == FleetLink.url(working)?.absoluteString)
+    }
+
     // MARK: Island
 
     /// What hub forDevice pushes to a device with preset b, read with a plain decoder like ActivityKit does.

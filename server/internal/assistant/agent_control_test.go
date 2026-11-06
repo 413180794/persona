@@ -188,3 +188,92 @@ func TestReportsOfAKindAreJoined(t *testing.T) {
 		t.Fatalf("merged: %+v", merged)
 	}
 }
+
+// A report is the task's progress (step, kind, a line of its text) on the ledger the apps get, without touching what
+// the ledger's review is keyed on; a ledger write afterwards keeps it.
+func TestReportIsTheTasksProgress(t *testing.T) {
+	s, _ := newQuietService(t)
+	ctx := context.Background()
+	todo, err := s.createTodo(ctx, "迁移数据库", "x", "conv1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.superviseTodo(ctx, todo.ID, "conv1", []string{"迁移完成"}, 0)
+	if err := s.linkTodoAgent(ctx, todo.ID, "box", "s1abcdef", "迁移数据库", "/code/app", "claude"); err != nil {
+		t.Fatal(err)
+	}
+	before := todoNow(s, todo.ID).Supervision.UpdatedAt
+	res := s.agentTool(ctx, "box", "s1abcdef", "report_to_supervisor", json.RawMessage(`{"kind":"progress","text":"在跑迁移脚本\n第二行","step":3,"steps":5}`))
+	if res.IsError {
+		t.Fatalf("report: %+v", res)
+	}
+	v := todoNow(s, todo.ID).Supervision
+	if p := v.Progress; p == nil || p.Kind != "progress" || p.Step != 3 || p.Steps != 5 || p.Text != "在跑迁移脚本 第二行" || p.At.IsZero() {
+		t.Fatalf("progress: %+v", v.Progress)
+	}
+	if !v.UpdatedAt.Equal(before) {
+		t.Fatal("the report moved the ledger's updated_at (the review key)")
+	}
+	if _, _, err := s.updateSupervision(ctx, todo.ID, func(v *Supervision) bool { v.ExpectMinutes = 40; return true }); err != nil {
+		t.Fatal(err)
+	}
+	if v := todoNow(s, todo.ID).Supervision; v.Progress == nil || v.Progress.Step != 3 || v.ExpectMinutes != 40 {
+		t.Fatalf("after a ledger write: %+v", v)
+	}
+	raw, _ := json.Marshal(formatTodo(todoNow(s, todo.ID)))
+	if !strings.Contains(string(raw), `"progress":{"kind":"progress","step":3,"steps":5`) {
+		t.Fatalf("the apps do not get it: %s", raw)
+	}
+	// Progress stays off the conversation's stream; a question goes in it.
+	if strings.Contains(feedKinds(s, "conv1"), "report") {
+		t.Fatalf("a progress report is in the feed: %s", feedKinds(s, "conv1"))
+	}
+	if res := s.agentTool(ctx, "box", "s1abcdef", "report_to_supervisor", json.RawMessage(`{"kind":"question","text":"要不要先停写？"}`)); res.IsError {
+		t.Fatalf("question: %+v", res)
+	}
+	if !strings.Contains(feedKinds(s, "conv1"), "report") {
+		t.Fatalf("the question is not in the feed: %s", feedKinds(s, "conv1"))
+	}
+	if p := todoNow(s, todo.ID).Supervision.Progress; p.Kind != "question" || p.Step != 0 {
+		t.Fatalf("progress after the question: %+v", p)
+	}
+}
+
+// Redirecting the agent of this conversation's task shows in its feed as a line to the task, marked as cutting in.
+func TestInterruptOfATaskIsInTheFeed(t *testing.T) {
+	s, f := newQuietService(t)
+	ctx := context.Background()
+	todo, err := s.createTodo(ctx, "修登录页", "x", "conv1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.setSessions("box", proto.Session{SessionID: "s1abcdef", MachineID: "box", Cwd: "/code/app", Agent: "claude",
+		Status: proto.StatusWorking, State: proto.StateWorking, UpdatedAt: time.Now()})
+	if err := s.linkTodoAgent(ctx, todo.ID, "box", "s1abcdef", "修登录页", "/code/app", "claude"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runJSON(t, s, "conv1", "agent_interrupt", map[string]any{"machine": "box", "session_id": "s1abcdef", "then": "先修测试"}); err != nil {
+		t.Fatal(err)
+	}
+	items, _, err := s.feed(ctx, "conv1", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var routed string
+	for _, it := range items {
+		if it.Kind == feedRouted {
+			routed = string(it.Body)
+		}
+	}
+	if routed != `{"interrupted":true,"text":"先修测试"}` {
+		t.Fatalf("routed: %q (%s)", routed, feedKinds(s, "conv1"))
+	}
+	// Stopping without a new instruction adds nothing.
+	n := len(items)
+	if _, err := runJSON(t, s, "conv1", "agent_interrupt", map[string]any{"machine": "box", "session_id": "s1abcdef"}); err != nil {
+		t.Fatal(err)
+	}
+	if items, _, _ := s.feed(ctx, "conv1", time.Time{}); len(items) != n {
+		t.Fatalf("a bare stop added to the feed: %s", feedKinds(s, "conv1"))
+	}
+}

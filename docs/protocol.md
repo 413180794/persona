@@ -498,6 +498,8 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
                 "round":1,        // how many rework rounds, at most 2
                 "reviews":[{"at":"...","verdict":"accepted|rework|needs_user|cancelled","round":1,   // round only on rework
                             "checks":[{"criterion":"Light / dark screenshots posted in the PR","met":false,"evidence":"Only the light one"}],"note":"Add the dark screenshot"}],
+                // its agent's latest report to the supervisor (report_to_supervisor, #5112); absent until it reports, and after a hub restart until it reports again
+                "progress":{"kind":"progress|question|blocked|done","step":3,"steps":5,"text":"one line of what it said","at":"..."},   // step / steps absent = not said
                 "updated_at":"..."},
  "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
  "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
@@ -2054,7 +2056,7 @@ Tasks dispatched from an assistant chat ([unified-entry.md](unified-entry.md)). 
            "error":""}]}                 // why the Agent didn't start
 
 // FeedItem: entries the hub inserts into an assistant chat, not in the transcript; clients draw them merged with the transcript by at
-{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review|notice","ref":"plan_…, todo_…, a date or an Inbox entry id",
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review|report|notice","ref":"plan_…, todo_…, a date or an Inbox entry id",
  "body":{…}}
 // plan: ref is the plan id, no body; task: ref is the to-do id, no body
 // answered: {"question":"Use Bash","answer":"Approved · don't ask again for this kind",
@@ -2067,7 +2069,10 @@ Tasks dispatched from an assistant chat ([unified-entry.md](unified-entry.md)). 
 // receipt: {"title":"…","state":"done|failed|interrupted","summary":"the Agent's last reply (Markdown, cut by lines to about 600 characters, never inside a markup token)","pr":"https://github.com/…/pull/N","machine":"…"}
 //   interrupted (#1516): the Agent's turn was interrupted by a model service error; summary is "The model service errored and was interrupted", error is the original error text; clients draw it in red with "Continue".
 //   A turn with no reply, no tool calls and no error (the model service returned 200 with empty content, #2349) is also interrupted, with error "This turn produced no output: …"
-// routed: {"text":"…"} (the note sent to the Agent when the supervisor sends work back is also a routed)
+// routed: {"text":"…"} (the note sent to the Agent when the supervisor sends work back is also a routed);
+//         "interrupted":true when the assistant stopped the Agent's turn first and then told it (agent_interrupt with then, #5112); clients that don't know it show an ordinary line to the task
+// report: ref is the to-do id; a supervised task's Agent reported to Persona (report_to_supervisor, #5112): {"kind":"question|blocked|done","text":"…","evidence":["…"],"step":2,"steps":5};
+//         progress reports are not written here (only supervision.progress); clients that don't know it skip this entry
 // notice: no ref; a one-line note the hub writes into the chat {"text":"…"} (already written in the hub's language); clients draw it as a centered line of small text, and clients that don't know it skip it.
 //         There's only one kind now: after scheduled tasks were skipped because the main chat wasn't set up, once ready, before the first run the main chat gets "Computers and models are set up; scheduled tasks are running again, this time 'Morning briefing'" (#4253)
 // review: ref is the to-do id; the supervisor did one acceptance review (#3124): {"title","verdict":"accepted|rework|needs_user|cancelled","round":1,"note":"…",

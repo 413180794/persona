@@ -417,5 +417,8 @@ func TestGoldenSupervise(t *testing.T) {
 		{ID: "todo_2", Title: "部署 hub", State: "停着", Health: "等你决定", DoneWhen: 1},
 		{ID: "todo_1", Title: "修登录崩溃", State: "做完了（用户还没看）", Health: "待验收", DoneWhen: 2},
 		{ID: "todo_3", Title: "跑 UI 测试", State: "在做", Health: "卡住 35 分钟"},
+		{ID: "todo_4", Title: "迁移数据库", State: "在做", Health: "正常", DoneWhen: 1,
+			Reported: &prompts.SnapshotReport{Kind: "progress", Step: 3, Steps: 5, Text: "在跑迁移脚本", Minutes: 4}},
+		{ID: "todo_5", Title: "整理文档", State: "停着", Health: "正常", Reported: &prompts.SnapshotReport{Kind: "question", Text: "放 docs 还是 wiki？"}},
 	}}))
 }

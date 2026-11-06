@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { checkCount, checklist, latestReview, reviewBadge, reviewState, type Supervision } from "./supervision";
+import { checkCount, checklist, latestReview, progressLine, reportLine, reviewBadge, reviewState, type Supervision } from "./supervision";
 import { todoStatusLabel, type Todo } from "./todos";
 
 const base: Todo = { id: "todo_1", title: "部署 hub", created_at: "2026-11-05T08:00:00Z", updated_at: "2026-11-05T08:00:00Z" };
 const sup = (s: Partial<Supervision>): Supervision => ({ supervisor: "main", done_when: ["PR 合并到 master", "截图贴进 PR"], ...s });
 
 describe("supervision", () => {
+  it("says the agent's latest report in a line", () => {
+    expect(progressLine(undefined)).toBeUndefined();
+    expect(progressLine(sup({}))).toBeUndefined();
+    expect(progressLine(sup({ progress: { kind: "progress", step: 3, steps: 5, text: "在跑迁移" } }))).toBe("第 3/5 步 · 在跑迁移");
+    expect(progressLine(sup({ progress: { kind: "progress", step: 2, text: "在跑迁移" } }))).toBe("第 2 步 · 在跑迁移");
+    expect(progressLine(sup({ progress: { kind: "progress", text: "在跑迁移" } }))).toBe("在跑迁移");
+    expect(progressLine(sup({ progress: { kind: "question", step: 2, steps: 5, text: "要不要停写？" } }))).toBe("问 Persona：要不要停写？");
+    expect(reportLine("blocked", "等 CI")).toBe("卡住了：等 CI");
+    expect(reportLine("done", "PR 已合并")).toBe("说做完了：PR 已合并");
+  });
+
   it("has no badge for a task that is not supervised (an older hub)", () => {
     expect(reviewBadge(base)).toBeUndefined();
     expect(checklist(undefined)).toEqual([]);

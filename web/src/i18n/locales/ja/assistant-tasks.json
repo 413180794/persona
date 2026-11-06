@@ -127,5 +127,12 @@
   "review_note": "監督メモ：{note}",
   "review_count": "検収 {count}",
   "review_expect": "目安 {minutes} 分",
-  "dock_task_asks": "{title}：{ask}"
+  "dock_task_asks": "{title}：{ask}",
+  "report_question": "Persona に確認：{text}",
+  "report_blocked": "行き詰まり：{text}",
+  "report_done": "完了の報告：{text}",
+  "report_step_of": "ステップ {step}/{steps} · {text}",
+  "report_step": "ステップ {step} · {text}",
+  "report_from": "「{title}」から Persona へ",
+  "said_to_interrupting": "「{title}」を止めて指示"
 }

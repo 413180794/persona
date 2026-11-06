@@ -164,6 +164,26 @@ struct PhoneToolsTests {
         #expect(summary?.contains("14:00") == true)
     }
 
+    @Test func calendarTruncatedCountsOnlyMatchingEvents() {
+        let isEven: (Int) -> Bool = { $0 % 2 == 0 }
+        // Exactly `limit` matches; the rest were rejected by the filter: nothing was cut off.
+        let exact = CalendarTool.firstMatches([1, 2, 3, 4, 5], limit: 2, where: isEven)
+        #expect(exact.kept == [2, 4])
+        #expect(exact.truncated == false)
+        // A third match exists past the limit.
+        let over = CalendarTool.firstMatches([1, 2, 3, 4, 5, 6], limit: 2, where: isEven)
+        #expect(over.kept == [2, 4])
+        #expect(over.truncated == true)
+        // No filter: more items than the limit.
+        let all = CalendarTool.firstMatches([1, 2, 3], limit: 2) { _ in true }
+        #expect(all.kept == [1, 2])
+        #expect(all.truncated == true)
+        // Fewer items than the limit.
+        let few = CalendarTool.firstMatches([1, 2], limit: 5) { _ in true }
+        #expect(few.kept == [1, 2])
+        #expect(few.truncated == false)
+    }
+
     @Test func completingAReminderNamesItOnTheCard() {
         let summary = RemindersTool.completeSummary(
             id: "ABC-123",

@@ -51,6 +51,20 @@ type Supervision struct {
 	Round         int          `json:"round"` // reworks so far
 	Reviews       []TaskReview `json:"reviews"`
 	UpdatedAt     time.Time    `json:"updated_at"`
+	// Progress: what its agent last reported to the supervisor (report_to_supervisor, agent_control.go). A live
+	// reading kept in memory only (the next report brings it back after a restart), and apart from UpdatedAt, which
+	// names the review a task waits for.
+	Progress *TaskProgress `json:"progress,omitempty"`
+}
+
+// TaskProgress is a supervised task's agent's latest report: its kind, the step it is on of how many (0: not said),
+// what it said in a line, and when.
+type TaskProgress struct {
+	Kind  string    `json:"kind"`
+	Step  int       `json:"step,omitempty"`
+	Steps int       `json:"steps,omitempty"`
+	Text  string    `json:"text"`
+	At    time.Time `json:"at"`
 }
 
 // TaskReview is one review: the assistant's verdict, with each criterion's evidence or gap.
@@ -81,6 +95,10 @@ func (v *Supervision) clone() *Supervision {
 	}
 	if out.DoneWhen == nil {
 		out.DoneWhen = []string{}
+	}
+	if v.Progress != nil {
+		p := *v.Progress
+		out.Progress = &p
 	}
 	return &out
 }
@@ -173,11 +191,32 @@ func (s *Service) updateSupervision(ctx context.Context, id string, change func(
 	}
 	s.todos.mu.Lock()
 	if cur := s.todos.todos[id]; cur != nil {
-		cur.Supervision = v.clone()
+		next := v.clone()
+		if cur.Supervision != nil { // the progress is noteProgress's: a report that came meanwhile stays
+			next.Progress = cur.Supervision.clone().Progress
+		}
+		cur.Supervision = next
 	}
 	s.todos.mu.Unlock()
 	s.todosChanged(ctx)
 	return *v, true, nil
+}
+
+// noteProgress keeps p as supervised task id's progress (in memory, no ledger write: see Supervision.Progress) and
+// tells the apps.
+func (s *Service) noteProgress(ctx context.Context, id string, p TaskProgress) {
+	s.todos.mu.Lock()
+	cur := s.todos.todos[id]
+	ok := cur != nil && cur.Supervision != nil
+	if ok {
+		v := cur.Supervision.clone()
+		v.Progress = &p
+		cur.Supervision = v
+	}
+	s.todos.mu.Unlock()
+	if ok {
+		s.todosChanged(ctx)
+	}
 }
 
 // ---- signals ----

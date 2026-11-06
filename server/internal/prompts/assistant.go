@@ -145,6 +145,17 @@ type SnapshotTask struct {
 	// Delivery: how far its finished work was delivered when that is short of live ("stopped at the PR, stuck on 'CI queued'"), ""
 	// otherwise (docs/todos.md "Delivery").
 	Delivery string
+	// Reported: what its agent last reported to the supervisor (report_to_supervisor), nil when it has not.
+	Reported *SnapshotReport
+}
+
+// SnapshotReport is a supervised task's agent's latest report: its kind (progress, question, blocked, done), the step
+// of how many (0: not said), what it said in a line and how many minutes ago.
+type SnapshotReport struct {
+	Kind        string
+	Step, Steps int
+	Text        string
+	Minutes     int
 }
 
 // SnapshotWorkflow is a Claude Code workflow run still running in an agent's background (#2935): the agent's turn

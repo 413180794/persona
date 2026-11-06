@@ -22,7 +22,6 @@ struct FleetLiveActivity: Widget {
             FleetLockScreen(state: context.state, stale: context.isStale)
                 // The lock screen is cut at about 160 pt: larger text would push the rows off it.
                 .dynamicTypeSize(...DynamicTypeSize.large)
-                .widgetURL(FleetLink.whole(context.state))
                 .activitySystemActionForegroundColor(FleetPalette.accent)
                 // The app's interface language now, not the one this long-lived process started in.
                 .environment(\.locale, LanguageStore.drawingLocale)
@@ -291,10 +290,12 @@ struct FleetLockScreen: View {
     @Environment(\.activityFamily) private var family
 
     var body: some View {
+        // The small family (the Watch's counts) taps as the whole activity; the lock screen opens the one request it
+        // draws, if it draws just one.
         if family == .small {
-            small
+            small.widgetURL(FleetLink.whole(state))
         } else {
-            full
+            full.widgetURL(FleetLink.lockScreen(state, stale: stale))
         }
     }
 

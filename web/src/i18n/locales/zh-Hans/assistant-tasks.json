@@ -127,5 +127,12 @@
   "review_note": "督办说明：{note}",
   "review_count": "验收 {count}",
   "review_expect": "预计 {minutes} 分钟",
-  "dock_task_asks": "{title}：{ask}"
+  "dock_task_asks": "{title}：{ask}",
+  "report_question": "问 Persona：{text}",
+  "report_blocked": "卡住了：{text}",
+  "report_done": "说做完了：{text}",
+  "report_step_of": "第 {step}/{steps} 步 · {text}",
+  "report_step": "第 {step} 步 · {text}",
+  "report_from": "「{title}」向 Persona 汇报",
+  "said_to_interrupting": "打断「{title}」并告诉它"
 }
