@@ -20,6 +20,7 @@ import { agentLabel } from "../lib/mentions";
 import { ago, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { NAV_PAGES, firstAndCurrent, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
+import { arrangePages, useSidebarPrefs } from "../lib/sidebar-pages";
 import { sidebarConversations, usePinnedConversations } from "../lib/conversation-pins";
 import { autoConversations, autoOrigin, isAutoConversation, originLabel, type AutoOrigin, type OriginTally } from "../lib/conversation-origins";
 import { ConversationRowMenu, pinnedSectionItems } from "./ConversationMenu";
@@ -265,7 +266,7 @@ export function useNavPages() {
     terminal: terminalPanes && { k: "terminal", to: { name: "terminal" }, icon: "terminal", label: t("sidebar.nav_terminal") },
     settings: { k: "settings", to: { name: "settings" }, icon: "gear", label: t("sidebar.nav_settings") },
   };
-  const pages = NAV_PAGES.flatMap((k): NavPage[] => [
+  const all = NAV_PAGES.flatMap((k): NavPage[] => [
     // the extensions' pages (docs/extensions.md "UI slots" nav_page): one entry each, right before "Settings"
     ...(k === "settings"
       ? extensionPages.map((u) => {
@@ -276,14 +277,17 @@ export function useNavPages() {
     ...(page[k] ? [page[k]] : []),
   ]);
 
-  return { phase, online, total: machines.length, main, pages };
+  // as arranged in 设置 › 通用 › 侧栏: the list, and the pages that wait under 更多 (docs/web.md「侧栏的页面」)
+  const { shown: pages, more } = arrangePages(all, useSidebarPrefs());
+
+  return { phase, online, total: machines.length, main, pages, more, all };
 }
 
 export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Route; onSearch: () => void; onNewAgent: () => void; onNavigate?: () => void }) {
   const bindings = useBindings();
   const searchHint = jumpHint(bindings);
   const assistant = useStore((s) => s.assistant);
-  const { phase, online, total, main: mainConversation, pages } = useNavPages();
+  const { phase, online, total, main: mainConversation, pages, more } = useNavPages();
   // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
   const narrow = useMedia(NARROW);
   const activeKey = useActiveKey(route);
@@ -299,7 +303,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const autoHolds = activeKey.startsWith("auto:") || isOpenAuto(assistant?.conversations, activeKey, convs);
   const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || autoHolds || convs.some((c) => activeKey === `j:${c.session_id}`) });
   // the pages fold under their own title (#2524); the drawer's grid of icons doesn't
-  const [pagesFolded, togglePages] = useFolded("pages", false, { all: false });
+  const [pagesFolded, togglePages] = useFolded("pages", false, { all: false, holds: more.some((p) => p.k === activeKey) });
   const { nav, reg, hover, highlight } = useGlide(activeKey);
   const go = useGo(onNavigate);
 
@@ -324,11 +328,12 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           {/* the main conversation is the column's first row, Persona with the app's mark, and only there (#2004, #5109) */}
           <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />
           <span aria-hidden data-persona-divider className="mx-2 my-1 h-px shrink-0 bg-line" />
-          {narrow && <NavGrid pages={pages} activeKey={activeKey} go={go} />}
+          {narrow && <NavGrid pages={pages} more={more} activeKey={activeKey} go={go} onNavigate={onNavigate} />}
         </div>
         {!narrow && (
-          <Section title={t("sidebar.pages")} folded={pagesFolded} onToggle={togglePages} right={pagesFolded ? <PagesTally pages={pages} /> : undefined} first>
+          <Section title={t("sidebar.pages")} folded={pagesFolded} onToggle={togglePages} right={pagesFolded ? <PagesTally pages={[...pages, ...more]} /> : undefined} first>
             {pages.map((p) => <NavRow key={p.k} {...p} reg={reg} hover={hover} active={activeKey === p.k} go={go} />)}
+            {more.length > 0 && <MorePages more={more} reg={reg} hover={hover} activeKey={activeKey} go={go} />}
           </Section>
         )}
 
@@ -388,9 +393,12 @@ export function navGridColumns(n: number): number {
 }
 
 /** The pages as two rows of icons in a phone's drawer: one tap away like the list, a third of its height. */
-export function NavGrid({ pages, activeKey, go }: { pages: NavPage[]; activeKey: string; go: GoFn }) {
+export function NavGrid({ pages, more = [], activeKey, go, onNavigate }: { pages: NavPage[]; more?: NavPage[]; activeKey: string; go: GoFn; onNavigate?: () => void }) {
+  const [menu, setMenu] = useState<HTMLElement | null>(null);
+  const moreActive = more.some((p) => p.k === activeKey);
+  const moreBadge = more.find((p) => p.badge !== undefined);
   return (
-    <nav aria-label={t("sidebar.pages")} className="mb-1 grid gap-0.5" style={{ gridTemplateColumns: `repeat(${navGridColumns(pages.length)}, minmax(0, 1fr))` }}>
+    <nav aria-label={t("sidebar.pages")} className="mb-1 grid gap-0.5" style={{ gridTemplateColumns: `repeat(${navGridColumns(pages.length + (more.length ? 1 : 0))}, minmax(0, 1fr))` }}>
       {pages.map((p) => {
         const active = activeKey === p.k;
         return (
@@ -413,7 +421,69 @@ export function NavGrid({ pages, activeKey, go }: { pages: NavPage[]; activeKey:
           </a>
         );
       })}
+      {more.length > 0 && (
+        <button
+          type="button"
+          onClick={(e) => setMenu(menu ? null : e.currentTarget)}
+          aria-haspopup="menu"
+          aria-expanded={!!menu}
+          aria-label={t("sidebar.more_pages_count", { count: more.length })}
+          className={cx("relative z-10 flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-[9px] px-0.5 py-1.5 transition-[background-color,transform] duration-150 active:scale-[0.96]", moreActive || menu ? "bg-hover" : "hover:bg-hover")}
+        >
+          <span className={cx("relative", moreActive ? "text-ink" : "text-ink-3")}>
+            <Icon name="more" size={17} stroke={1.8} />
+            {moreBadge && <span aria-hidden className={cx("absolute -top-0.5 -right-1 size-2 rounded-full ring-2 ring-canvas", DOT_CLASS[moreBadge.badgeTone ?? "accent"])} />}
+          </span>
+          <span className={cx("w-full truncate text-center text-[11px] leading-tight", moreActive ? "font-medium text-ink" : "text-ink-2")}>{t("sidebar.more_pages")}</span>
+        </button>
+      )}
+      {menu && <Menu anchor={menu} onClose={() => setMenu(null)} align="right" width={220} header={t("sidebar.more_pages")} items={morePagesMenu(more, activeKey, onNavigate)} />}
     </nav>
+  );
+}
+
+/** The pages under "More" as menu rows (the phone's grid, the rail): a choice opens the page, then `onNavigate`
+ *  (the phone's drawer closes, as it does for a tap on any other page). */
+function morePagesMenu(more: NavPage[], activeKey: string, onNavigate?: () => void): MenuItem[] {
+  const open = (to: Route) => () => {
+    navigate(to);
+    onNavigate?.();
+  };
+  return [
+    ...more.map((p): MenuItem => ({ key: p.k, label: p.label, icon: p.icon, hint: p.badge !== undefined ? String(p.badge) : p.hint, checked: p.k === activeKey || undefined, onSelect: open(p.to) })),
+    { key: "-arrange", label: t("sidebar.arrange_pages"), icon: "gear", divider: true, onSelect: open({ name: "settings" }) },
+  ];
+}
+
+/**
+ * "More" at the end of the pages (#5026): the ones put away in Settings › General › Sidebar, and the extensions' pages past
+ * the list's share of them. Folded by default; it opens by itself while one of its pages is open, and a count on one
+ * of them shows as a dot on the row, so nothing waiting there goes unseen.
+ */
+function MorePages({ more, reg, hover, activeKey, go }: { more: NavPage[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
+  const [folded, toggle] = useFolded("pages-more", true, { all: false, holds: more.some((p) => p.k === activeKey) });
+  const counted = more.filter((p) => p.badge !== undefined);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={!folded}
+        title={counted.map((p) => `${p.label} ${p.badge}`).join(t("sidebar.list_separator")) || undefined}
+        className="touch-hit relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-[background-color,transform] duration-150 hover:bg-hover active:scale-[0.98] [@media(pointer:coarse)]:min-h-11"
+      >
+        <span className="text-ink-3"><Icon name="more" size={14} stroke={1.8} /></span>
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{t("sidebar.more_pages")}</span>
+        {folded && counted.length > 0 && <span aria-hidden className={cx("size-1.5 rounded-full", DOT_CLASS[counted[0].badgeTone ?? "accent"])} />}
+        <span className="text-[11px] text-ink-3 tabular-nums">{more.length}</span>
+        <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+      </button>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px pl-3" inert={folded || undefined}>
+          {more.map((p) => <NavRow key={p.k} {...p} reg={reg} hover={hover} active={activeKey === p.k} go={go} />)}
+        </div>
+      </Collapse>
+    </>
   );
 }
 
@@ -2090,7 +2160,8 @@ const RAIL_ITEM = "touch-hit relative flex size-9 shrink-0 items-center justify-
  * conversations are what fold away; ⌘K finds any of them.
  */
 export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onSearch: () => void; onNewAgent: () => void }) {
-  const { phase, online, total, main, pages } = useNavPages();
+  const { phase, online, total, main, pages, more } = useNavPages();
+  const [moreMenu, setMoreMenu] = useState<HTMLElement | null>(null);
   const bindings = useBindings();
   const activeKey = useActiveKey(route);
   const go = useGo();
@@ -2139,6 +2210,21 @@ export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onS
           p.badge !== undefined ? <span aria-hidden className={cx("absolute top-1.5 right-1.5 size-2 rounded-full ring-2 ring-canvas", DOT_CLASS[p.badgeTone ?? "accent"])} /> : null,
           [p.title ?? p.label, p.badge ?? p.hint].filter((x) => x !== undefined).join(" · "),
         ))}
+        {more.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => setMoreMenu(moreMenu ? null : e.currentTarget)}
+            aria-haspopup="menu"
+            aria-expanded={!!moreMenu}
+            aria-label={t("sidebar.more_pages_count", { count: more.length })}
+            title={t("sidebar.more_pages_count", { count: more.length })}
+            className={cx(RAIL_ITEM, more.some((p) => p.k === activeKey) ? cx(CURRENT_ROW, "text-ink") : "text-ink-3 hover:bg-hover hover:text-ink")}
+          >
+            <Icon name="more" size={16} stroke={1.8} />
+            {more.some((p) => p.badge !== undefined) && <span aria-hidden className={cx("absolute top-1.5 right-1.5 size-2 rounded-full ring-2 ring-canvas", DOT_CLASS[more.find((p) => p.badge !== undefined)!.badgeTone ?? "accent"])} />}
+          </button>
+        )}
+        {moreMenu && <Menu anchor={moreMenu} onClose={() => setMoreMenu(null)} width={220} header={t("sidebar.more_pages")} items={morePagesMenu(more, activeKey)} />}
         <button type="button" onClick={onNewAgent} aria-label={t("sidebar.new_agent")} title={t("sidebar.new_agent")} className={cx(RAIL_ITEM, "mt-1 text-ink-3 hover:bg-hover hover:text-ink")}>
           <Icon name="plus" size={15} stroke={1.8} />
         </button>

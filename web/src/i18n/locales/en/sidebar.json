@@ -130,5 +130,9 @@
   "auto_chats_label": "{count} automatic chats",
   "auto_working": "{count} running",
   "auto_needs_you": "{count} need you",
-  "not_connected_yet": "Not connected yet"
+  "not_connected_yet": "Not connected yet",
+  "more_pages": "More",
+  "more_pages_count_one": "More (1 page)",
+  "more_pages_count_other": "More ({count} pages)",
+  "arrange_pages": "Arrange sidebar…"
 }

@@ -162,5 +162,15 @@
   "providers_advanced": "Advanced",
   "zshrc_import_hint": "Turns the functions that call claude in a computer's ~/.zshrc into providers. The hub reads the keys from that computer; they never pass through the browser.",
   "zshrc_import_no_machines": "No computer is connected yet. This reads ~/.zshrc on a computer, so add one under Machines first.",
-  "assistant_footer_none": "No computer connected yet. Once one is, each chat runs in the background on it. Pick models in Model settings; manage connections and credentials in Model providers."
+  "assistant_footer_none": "No computer connected yet. Once one is, each chat runs in the background on it. Pick models in Model settings; manage connections and credentials in Model providers.",
+  "sidebar_pages": "Sidebar pages",
+  "sidebar_pages_footer": "Drag, or use the arrows, to reorder. Pages switched off go under More at the bottom of the sidebar, still a click away, with their badges. The sidebar holds up to {cap} extension pages; more go under More until you switch them on here. Saved in this browser only.",
+  "sidebar_pages_reset": "Reset",
+  "sidebar_pages_drag": "Drag to reorder",
+  "sidebar_pages_locked": "Always in the sidebar",
+  "sidebar_pages_in_list": "In the sidebar",
+  "sidebar_pages_in_more": "Under More",
+  "sidebar_pages_up": "Move {name} up",
+  "sidebar_pages_down": "Move {name} down",
+  "sidebar_pages_show": "Show {name} in the sidebar"
 }

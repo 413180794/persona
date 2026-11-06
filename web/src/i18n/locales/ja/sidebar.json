@@ -126,5 +126,8 @@
   "auto_chats_label": "自動のチャット {count} 件",
   "auto_working": "{count} 件実行中",
   "auto_needs_you": "{count} 件が対応待ち",
-  "not_connected_yet": "未接続"
+  "not_connected_yet": "未接続",
+  "more_pages": "その他",
+  "more_pages_count": "その他（{count} ページ）",
+  "arrange_pages": "サイドバーを整理…"
 }

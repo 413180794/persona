@@ -23,6 +23,7 @@ import { setAgentDetails, setContextAsUsed, useAgentDetails, useContextAsUsed } 
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
+import { SidebarPagesGroup } from "./settings/SidebarPages";
 import { AgentGroup } from "./settings/AgentGroup";
 import { AssistantSettings } from "./settings/AssistantSettings";
 import { PersonaPicker } from "./assistant/Persona";
@@ -314,6 +315,8 @@ function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; o
           <Switch on={contextAsUsed} onChange={setContextAsUsed} label={t("context.as_used")} />
         </Row>
       </Group>
+
+      <SidebarPagesGroup />
 
       <AgentGroup />
 
