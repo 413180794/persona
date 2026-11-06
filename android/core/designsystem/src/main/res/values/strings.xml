@@ -183,6 +183,8 @@
     <string name="designsystem_work_waiting">Waiting for you</string>
     <string name="designsystem_work_unknown">No result recorded</string>
     <string name="designsystem_send">Send</string>
+    <string name="designsystem_composer_expand">Expand the message box</string>
+    <string name="designsystem_composer_collapse">Collapse the message box</string>
     <string name="designsystem_send_stop">Stop</string>
     <string name="designsystem_jump_latest">Jump to latest</string>
     <plurals name="designsystem_jump_latest_new">

@@ -162,6 +162,8 @@
     <string name="designsystem_work_waiting">等你</string>
     <string name="designsystem_work_unknown">没有结果记录</string>
     <string name="designsystem_send">发送</string>
+    <string name="designsystem_composer_expand">展开输入框</string>
+    <string name="designsystem_composer_collapse">收起输入框</string>
     <string name="designsystem_send_stop">停止</string>
     <string name="designsystem_jump_latest">回到最新</string>
     <plurals name="designsystem_jump_latest_new">

@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -23,7 +24,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ChatComposerService
@@ -95,7 +95,11 @@ fun ChatComposer(
     // A photo in the draft being marked up (iOS editingIndex); [editOpening] while it is read for the editor.
     var editing by remember { mutableStateOf<ComposerPhotoEdit?>(null) }
     var editOpening by remember { mutableStateOf(false) }
-    LaunchedEffect(menu, confirmClear, cameraDenied, editing) { onOverlay(menu || confirmClear || cameraDenied || editing != null) }
+    // The draft full screen (#5688): offered once the field has grown to its line limit and scrolls.
+    var expandedEditor by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(menu, confirmClear, cameraDenied, editing, expandedEditor) {
+        onOverlay(menu || confirmClear || cameraDenied || editing != null || expandedEditor)
+    }
     DisposableEffect(Unit) { onDispose { onOverlay(false) } }
     var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
     var interruptPending by rememberSaveable { mutableStateOf(false) }
@@ -235,7 +239,7 @@ fun ChatComposer(
         }
     }
 
-    LaunchedEffect(visible) { if (!visible) { menu = false; confirmClear = false; cameraDenied = false; editing = null } }
+    LaunchedEffect(visible) { if (!visible) { menu = false; confirmClear = false; cameraDenied = false; editing = null; expandedEditor = false } }
     editing?.let { edit ->
         key(edit) { ImageEditor(edit.source, onCancel = { if (editing === edit) editing = null }, onDone = { finishEdit(edit, it) }) }
     }
@@ -285,6 +289,14 @@ fun ChatComposer(
         }
     }
 
+    // The field grows with the draft up to growLines (from the height above the keyboard), then scrolls inside and
+    // shows Expand at its top right; the text keeps clear of the button only while it shows.
+    val growLines = rememberComposerGrowLines()
+    var lineCount by remember { mutableIntStateOf(1) }
+    val offersExpand = enabled && composerOffersExpand(lineCount, growLines)
+    LaunchedEffect(enabled) { if (!enabled) expandedEditor = false }
+    val canSend = enabled && state.ready && !sending
+
     ComposerFrame(
         // Blank space around the field (its padding, beside the buttons) types too: one tap, not a hunt for the line.
         onBlankTap = { if (enabled) { focusRequester.requestFocus(); keyboard?.show() } },
@@ -301,7 +313,7 @@ fun ChatComposer(
             dictate?.let { JIconButton(PhIcons.Microphone, stringResource(R.string.chat_composer_dictate), it, enabled = !sending) }
             when {
                 blockedLabel != null && enabled -> BlockedSendButton(blockedLabel, onBlocked)
-                hasContent -> SendButton(onClick = onSend, enabled = enabled && state.ready && !sending, loading = sending)
+                hasContent -> SendButton(onClick = onSend, enabled = canSend, loading = sending)
                 working && canInterrupt -> {
                     SendButton(onClick = {
                         if (service != null) {
@@ -339,8 +351,9 @@ fun ChatComposer(
         },
     ) {
         BasicTextField(state.value, { state.beginEdit(); state.value = it },
-            modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp).focusRequester(focusRequester)
-                .onFocusChanged { state.focused = it.isFocused },
+            modifier = Modifier.fillMaxWidth().then(if (offersExpand) Modifier.padding(end = ComposerExpandInset) else Modifier)
+                .focusRequester(focusRequester).onFocusChanged { state.focused = it.isFocused },
+            maxLines = growLines, onTextLayout = { lineCount = it.lineCount },
             enabled = enabled, textStyle = PersonaTheme.type.body.copy(color = PersonaTheme.palette.ink),
             cursorBrush = SolidColor(PersonaTheme.palette.ink),
             decorationBox = { field ->
@@ -350,6 +363,12 @@ fun ChatComposer(
                     field()
                 }
             })
+        if (offersExpand) ComposerExpandButton(expanded = false, onClick = { expandedEditor = true }, modifier = Modifier.align(Alignment.TopEnd))
+    }
+    // Same draft and caret as the field; collapsing puts the caret back in the field. Sending closes it.
+    if (expandedEditor) ExpandedComposer(state.value, { state.beginEdit(); state.value = it }, placeholder,
+        onCollapse = { expandedEditor = false; state.focusRequest++ }, enabled = enabled) {
+        SendButton(onClick = { expandedEditor = false; onSend() }, enabled = canSend && hasContent && blockedLabel == null, loading = sending)
     }
     if (menu) ChatActionsSheet(onDismiss = { menu = false }, title = stringResource(R.string.chat_composer_menu_title), actions = buildList {
         add(JAction(stringResource(R.string.chat_composer_photos), enabled = service != null && state.attachments.count { it.image } < 4) {

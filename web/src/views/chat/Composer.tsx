@@ -9,7 +9,9 @@ import { ApiError, errorText } from "../../lib/api";
 import { composerEntryDrop, dragHasEntry, droppedEntry } from "../../lib/entry-drag";
 import { uuid } from "../../lib/format";
 import { lazyPage } from "../../lib/lazy-page";
-import { enterSends, hasFinePointer } from "../../lib/viewport";
+import { enterSends, hasFinePointer, useMedia } from "../../lib/viewport";
+import { useModalFocus } from "../../ui/overlay";
+import { COMPACT_COMPOSER, growLines, lineCount, offersExpand } from "./composer-grow";
 import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
@@ -144,6 +146,14 @@ export function Composer({
     return () => clearTimeout(timer);
   }, [nudge]);
   const input = useRef<HTMLTextAreaElement>(null);
+  // Phones (#5688): the box grows to a line limit from the visible height, then scrolls and offers Expand, the draft
+  // full screen. `grow` is what the last measure found: the limit, a line's height, the padding, and whether it is past it.
+  const compact = useMedia(COMPACT_COMPOSER);
+  const visible = useVisibleHeight(compact);
+  const [grow, setGrow] = useState({ limit: 0, line: 0, pad: 0, over: false });
+  const [expanded, setExpanded] = useState(false);
+  // the caret to put back in the box when the full editor closes
+  const collapsedSel = useRef<[number, number] | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // text picked in the link panel waits here (lib/links.ts), and "AI edit" sends through this composer
@@ -289,7 +299,28 @@ export function Composer({
     // lowers the cap, no new draft comes to say so)
     el.style.height = `${Math.max(h, 24)}px`;
     if (holder) holder.style.minHeight = held;
-  }, [draft]);
+    if (!compact) return;
+    const css = getComputedStyle(el);
+    const line = parseFloat(css.lineHeight) || 24;
+    const pad = (parseFloat(css.paddingTop) || 0) + (parseFloat(css.paddingBottom) || 0);
+    const limit = growLines(visible, line);
+    const over = offersExpand(lineCount(h - pad, line), limit);
+    setGrow((g) => (g.limit === limit && g.line === line && g.pad === pad && g.over === over ? g : { limit, line, pad, over }));
+  }, [draft, compact, visible, grow.over]);
+  const showExpand = compact && grow.over && !disabled;
+  useEffect(() => {
+    if (!compact || disabled) setExpanded(false);
+  }, [compact, disabled]);
+  // Back from the full editor: the caret where it was there, in the box.
+  useEffect(() => {
+    if (expanded || !collapsedSel.current) return;
+    const el = input.current;
+    const [a, b] = collapsedSel.current;
+    collapsedSel.current = null;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(a, b);
+  }, [expanded]);
 
   const quickPrompts = useQuickPrompts();
   const allCommands = useMemo(() => [...commands, ...promptCommands(quickPrompts)], [commands, quickPrompts]);
@@ -588,6 +619,7 @@ export function Composer({
         )}
         {/* a field that turns disabled loses focus with no blur event: the keyboard is down, say so */}
         <DisabledBlur disabled={Boolean(disabled)} focused={focused} onBlur={() => { setFocused(false); onFocusChange?.(false); }} />
+        <div className="relative">
         <textarea
           ref={input}
           rows={1}
@@ -686,9 +718,22 @@ export function Composer({
           placeholder={pill && hasFinePointer() ? t("chat-composer.suggestion", { suggestion: pill }) : placeholder}
           aria-label={t("chat-composer.message")}
           title={hasFinePointer() ? t("composer.history_hint") : undefined}
-          style={{ maxHeight: INPUT_MAX }}
-          className="min-h-6 w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [@media(pointer:coarse)]:text-[16px] [@media(pointer:coarse)]:leading-[24px] [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
+          style={{ maxHeight: compact && grow.line ? `${grow.limit * grow.line + grow.pad}px` : INPUT_MAX }}
+          className={cx("min-h-6 w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [@media(pointer:coarse)]:text-[16px] [@media(pointer:coarse)]:leading-[24px] [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50", showExpand && "pr-8")}
         />
+        {showExpand && (
+          <button
+            type="button"
+            data-testid="composer-expand"
+            aria-label={t("chat-composer.expand")}
+            title={t("chat-composer.expand")}
+            onClick={() => setExpanded(true)}
+            className="touch-hit absolute top-0.5 right-0 flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+          >
+            <Icon name="expand" size={14} stroke={2} />
+          </button>
+        )}
+        </div>
         {loop && (
           <div role="status" className={cx("flex items-center gap-1.5 px-2 text-[11.5px]", loop.missing ? "text-ink-3" : "text-ink-2")}>
             <Icon name="loop" size={12} stroke={2.2} className="shrink-0" />
@@ -782,6 +827,29 @@ export function Composer({
           )}
         </div>
       </div>
+      {expanded && (
+        <ExpandedComposer
+          value={draft}
+          placeholder={placeholder}
+          selection={[input.current?.selectionStart ?? draft.length, input.current?.selectionEnd ?? draft.length]}
+          onChange={(v) => {
+            setDraft(v);
+            onEdit?.();
+            setDismissed(false);
+          }}
+          onCollapse={(sel) => {
+            collapsedSel.current = sel;
+            setExpanded(false);
+          }}
+          canSend={Boolean(canSend) && !blocked}
+          sending={sending}
+          onSend={(sel) => {
+            collapsedSel.current = sel;
+            setExpanded(false);
+            void submit();
+          }}
+        />
+      )}
       {editing && (
         <Suspense fallback={null}>
           <ImageEditor
@@ -796,6 +864,103 @@ export function Composer({
           />
         </Suspense>
       )}
+    </div>
+  );
+}
+
+/** The visible height (above the keyboard), followed while `on`: the grow limit comes from it. */
+function useVisibleHeight(on: boolean): number {
+  const read = () => (typeof window === "undefined" ? 0 : Math.round(window.visualViewport?.height ?? window.innerHeight));
+  const [h, setH] = useState(read);
+  useEffect(() => {
+    if (!on) return;
+    const vv = window.visualViewport;
+    const update = () => setH(read());
+    update();
+    vv?.addEventListener("resize", update);
+    addEventListener("resize", update);
+    return () => {
+      vv?.removeEventListener("resize", update);
+      removeEventListener("resize", update);
+    };
+  }, [on]);
+  return h;
+}
+
+/** The draft full screen on a phone (#5688): collapse at the top right, the text filling the visible height, send at the
+ *  bottom right. It edits the box's own draft; closing hands back the caret so the box picks up where this left off. */
+function ExpandedComposer({ value, placeholder, selection, onChange, onCollapse, canSend, sending, onSend }: {
+  value: string;
+  placeholder: string;
+  selection: [number, number];
+  onChange: (v: string) => void;
+  onCollapse: (sel: [number, number]) => void;
+  canSend: boolean;
+  sending: boolean;
+  onSend: (sel: [number, number]) => void;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const start = useRef(selection);
+  useModalFocus(panel);
+  useLayoutEffect(() => {
+    const el = field.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(start.current[0], start.current[1]);
+  }, []);
+  const sel = (): [number, number] => [field.current?.selectionStart ?? value.length, field.current?.selectionEnd ?? value.length];
+  return (
+    <div
+      ref={panel}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("chat-composer.message")}
+      tabIndex={-1}
+      data-testid="composer-expanded"
+      className="fixed inset-x-0 z-50 flex flex-col bg-surface outline-none"
+      style={{ top: "var(--kb-top)", height: "var(--kb-h)", animation: `fade-in 160ms ease-out both` }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !e.nativeEvent.isComposing) {
+          e.preventDefault();
+          e.stopPropagation();
+          onCollapse(sel());
+        }
+      }}
+    >
+      <div className="flex justify-end px-2 pt-[max(env(safe-area-inset-top),8px)]">
+        <button
+          type="button"
+          data-testid="composer-collapse"
+          aria-label={t("chat-composer.collapse")}
+          title={t("chat-composer.collapse")}
+          onClick={() => onCollapse(sel())}
+          className="touch-hit flex size-9 items-center justify-center rounded-[10px] text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+        >
+          <Icon name="collapse" size={18} stroke={2} />
+        </button>
+      </div>
+      <textarea
+        ref={field}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={t("chat-composer.message")}
+        className="min-h-0 w-full flex-1 resize-none bg-transparent px-5 py-1 text-[16px] leading-[24px] text-ink outline-none [overflow-wrap:anywhere] placeholder:text-ink-3"
+      />
+      <div className="flex justify-end px-3 pt-2 pb-[max(env(safe-area-inset-bottom),12px)]">
+        <button
+          type="button"
+          data-testid="composer-expanded-send"
+          aria-label={t("chat-composer.send")}
+          disabled={!canSend}
+          onClick={() => onSend(sel())}
+          className="touch-hit flex size-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94]"
+          style={{ background: canSend ? "var(--ink)" : "var(--line-strong)", color: canSend ? "var(--surface)" : "var(--ink-2)" }}
+        >
+          {sending ? <Spinner /> : <Icon name="up" size={18} stroke={2.4} />}
+        </button>
+      </div>
     </div>
   );
 }

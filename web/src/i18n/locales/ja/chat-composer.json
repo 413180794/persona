@@ -39,5 +39,7 @@
   "interrupt_hint": "中断（Esc）",
   "send": "送信",
   "send_hint": "送信（Enter）· 改行（Shift+Enter）",
-  "blocked_hint": "まだ送信されていません：{label}。書いた内容はここに残ります。"
+  "blocked_hint": "まだ送信されていません：{label}。書いた内容はここに残ります。",
+  "expand": "入力欄を広げる",
+  "collapse": "入力欄を縮める"
 }

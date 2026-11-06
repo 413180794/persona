@@ -12,6 +12,9 @@ const P: Record<string, React.ReactNode> = {
   // show all the lines hidden between two hunks of a diff
   unfold: <path d="M12 3v7M8.5 6.5L12 3l3.5 3.5M12 21v-7M8.5 17.5L12 21l3.5-3.5" />,
   up: <path d="M12 19V5M5 12l7-7 7 7" />,
+  // the phone composer's Expand / Collapse (#5688): arrows out to the corners, and back in
+  expand: <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />,
+  collapse: <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />,
   plus: <path d="M12 5v14M5 12h14" />,
   x: <path d="M18 6L6 18M6 6l12 12" />,
   check: <path d="M20 6L9 17l-5-5" />,
