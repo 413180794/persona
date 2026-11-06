@@ -19,8 +19,8 @@
   "source_phone_body": "Steps, sleep, heart rate, weight and more, read through your phone. The Persona app needs to be open on it.",
   "source_write": "Log a sample",
   "source_write_body": "Say “log my weight” or “I drank 300 ml of water”; it's saved to Health after you confirm on the phone.",
-  "source_upload": "Lab results and reports",
-  "source_upload_body": "Send a PDF or a photo: each item is read out and the ones outside the reference range are marked. The original and its record stay in Health, so years can be compared.",
+  "source_upload": "Checkup reports and lab results",
+  "source_upload_body": "Choose Upload a checkup report and pick a PDF or a photo: each item is read out and the ones outside the reference range are marked. The original and its record stay in Health, so years can be compared.",
   "memory": "Health memory",
   "memory_count": "{count}",
   "memory_empty": "Nothing yet. Goals, allergies, medication and the like remembered in health chats show up here.",
@@ -32,5 +32,9 @@
   "privacy_separate": "Health chats stay here: Persona's other chats can't see or read them.",
   "privacy_memory": "Health memory is kept on its own and never flows into other chats; you can view and delete it any time.",
   "privacy_where": "Chats and memory stay on the hub's machine and don't go into the knowledge base.",
-  "privacy_doctor": "This gives explanations and suggestions; it doesn't replace a doctor's diagnosis or treatment."
+  "privacy_doctor": "This gives explanations and suggestions; it doesn't replace a doctor's diagnosis or treatment.",
+  "report_upload": "Upload a checkup report",
+  "report_uploading": "Uploading…",
+  "report_failed": "Upload failed: {error}",
+  "report_prompt": "This is my checkup report. Please go through it item by item: {paths}"
 }

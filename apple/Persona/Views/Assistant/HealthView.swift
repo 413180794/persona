@@ -52,12 +52,27 @@ struct HealthView: View {
     /// Starts a health conversation with the message (`AssistantView.start(…, space:)`).
     var send: (String, [ImagePayload]) -> Void
     @State private var page = HealthModel()
+    // 上传体检报告 (docs/health.md「体检报告」): the picked files go to reports/; once they are up the conversation starts.
+    @State private var showReports = false
+    @State private var reports = FileUploads()
+
+    /// The assistant's machine (the hub's unless set otherwise), where the health space's directory is.
+    private var machine: MachineRef { model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID) }
+
+    private func uploadReports(_ urls: [URL]) {
+        let send = send
+        reports.startAll(urls, machine: machine, model: model, dest: Session.healthSpace) { paths in
+            let names = paths.map(PathInsert.quoted).joined(separator: " ")
+            send(String(localized: "这是我的体检报告，帮我逐项看看：\(names)"), [])
+        }
+    }
 
     var body: some View {
         // The field under the list, not over it (a safe-area inset): the Mac's list ran on under the field.
         VStack(spacing: 0) {
             sections(HealthModel.merge(page.fetched, live: model.healthConversations))
                 .themedPage()
+            if !reports.items.isEmpty { UploadsBar(uploads: reports).padding(.horizontal, Theme.Space.page) }
             Group {
                 if AppStyle.current.usesBeautifulUI {
                     BeautifulStarterComposer(disabled: disabled, launcher: $launcher, placeholder: String(localized: "问健康相关的问题…"), uploadDest: Session.healthSpace, send: send)
@@ -74,6 +89,17 @@ struct HealthView: View {
         }
         .background(Theme.groupedPage)
         .pageTitle(String(localized: "健康"))
+        .fileUploadPicker(isPresented: $showReports) { uploadReports($0) }
+        #if DEBUG
+        .task { // `-showReportUpload <name>`: a made-up report uploaded as if picked, to check the whole way without the picker
+            if let name = UserDefaults.standard.string(forKey: "showReportUpload") {
+                try? await Task.sleep(for: .seconds(3))
+                let url = FileManager.default.temporaryDirectory.appending(path: name)
+                try? Data("%PDF-1.7 demo".utf8).write(to: url)
+                uploadReports([url])
+            }
+        }
+        #endif
         .task { await page.load() }
         .refreshable { await page.load() }
     }
@@ -85,6 +111,16 @@ struct HealthView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                 Section {
+                    Button { showReports = true } label: {
+                        Label { Text("上传体检报告").foregroundStyle(Theme.Hue.pink).lineLimit(1) } icon: {
+                            Image(systemName: Theme.Icon.document).foregroundStyle(Theme.Hue.pink)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(disabled || !reports.items.isEmpty)
+                    .accessibilityIdentifier("health-upload-report")
                     ForEach(HealthModel.suggestions, id: \.self) { q in
                         Button { send(q, []) } label: {
                             Label { Text(q).foregroundStyle(Color.primary).lineLimit(1) } icon: {
@@ -130,7 +166,7 @@ struct HealthView: View {
                 Section {
                     source(Theme.Icon.health, "Apple Health", String(localized: "经你的 iPhone 读取步数、睡眠、心率、体重等汇总，需要 Persona 在手机上打开并授权。"))
                     source(Theme.Icon.edit, String(localized: "记一条数据"), String(localized: "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。"))
-                    source(Theme.Icon.photo, String(localized: "化验单和报告"), String(localized: "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。"))
+                    source(Theme.Icon.document, String(localized: "体检报告和化验单"), String(localized: "点「上传体检报告」选 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。"))
                 } header: {
                     Text("数据来源")
                 }

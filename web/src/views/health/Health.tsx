@@ -2,7 +2,7 @@
 // is its home (what it is, where its data comes from, suggested questions, its past conversations, its memory);
 // `/health/<id>` one of its conversations. Its conversations run in a directory of their own on the assistant's machine,
 // so the assistant's other conversations don't see them and its memory is its own (`?space=health`).
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { memoryEntries, type MemoryEntry, type MemoryFile } from "../../lib/memory";
@@ -16,6 +16,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { ChatView } from "../chat/ChatView";
 import { Composer, type Outgoing } from "../chat/Composer";
 import { conversationTitle, newestFirst } from "../assistant/conversations";
+import { REPORT_FILES, uploadReports } from "./reports";
 import { Empty, SectionTitle } from "../assistant/parts";
 import { t } from "../../i18n";
 
@@ -26,7 +27,7 @@ const SUGGESTIONS = [t("health.suggestion_sleep"), t("health.suggestion_steps"),
 const SOURCES: { icon: IconName; title: string; body: string }[] = [
   { icon: "heart", title: t("health.source_phone"), body: t("health.source_phone_body") },
   { icon: "pencil", title: t("health.source_write"), body: t("health.source_write_body") },
-  { icon: "image", title: t("health.source_upload"), body: t("health.source_upload_body") },
+  { icon: "upload", title: t("health.source_upload"), body: t("health.source_upload_body") },
 ];
 
 /** The space's conversations, newest first (GET /api/v1/assistant?space=health). */
@@ -83,6 +84,21 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       return false;
     }
   };
+  // 上传体检报告: picked files go to reports/ and their conversation starts by itself
+  const picker = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const upload = async (files: File[]) => {
+    const mid = assistant?.machine_id;
+    if (!mid || !files.length) return;
+    setUploading(true);
+    try {
+      await start({ text: await uploadReports(mid, files, HEALTH_SPACE), images: [] });
+    } catch (e) {
+      toast(t("health.report_failed", { error: errorText(e) }), "error");
+    } finally {
+      setUploading(false);
+    }
+  };
   const fill = (text: string) => {
     localStorage.setItem("draft:health-new", text);
     setSeed((x) => x + 1);
@@ -109,7 +125,12 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </div>
 
           <Composer key={seed} draftKey="health-new" placeholder={t("health.ask_placeholder")} machineId={assistant?.machine_id} uploadDest={HEALTH_SPACE} onSend={start} autoFocus commands={[]} />
-          <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          <input ref={picker} type="file" multiple hidden accept={REPORT_FILES} data-testid="health-report-input" onChange={(e) => void upload(Array.from(e.target.files ?? [])).finally(() => (e.target.value = ""))} />
+          <button type="button" disabled={uploading || !assistant} onClick={() => picker.current?.click()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-control bg-red-tint px-3 py-2.5 text-[13px] font-medium whitespace-nowrap text-red shadow-hairline transition-colors hover:brightness-110 disabled:opacity-60">
+            <Icon name="upload" size={14} className="shrink-0" />
+            {uploading ? t("health.report_uploading") : t("health.report_upload")}
+          </button>
+          <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {SUGGESTIONS.map((s) => (
               <button key={s} type="button" onClick={() => fill(s)} className="flex items-center gap-2 rounded-control px-3 py-2 text-left text-[12.5px] text-ink-2 shadow-hairline transition-colors hover:bg-hover hover:text-ink">
                 <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />

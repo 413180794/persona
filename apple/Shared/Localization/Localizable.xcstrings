@@ -28101,24 +28101,24 @@
         }
       }
     },
-    "化验单和报告": {
+    "体检报告和化验单": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lab Results and Reports"
+            "value": "Checkup Reports and Lab Results"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "検査結果とレポート"
+            "value": "健康診断と検査の結果"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "化验单和报告"
+            "value": "体检报告和化验单"
           }
         }
       }
@@ -29687,24 +29687,24 @@
         }
       }
     },
-    "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。": {
+    "点「上传体检报告」选 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Send a PDF or a photo: each item is read out and the ones outside the reference range are marked. The original and its record stay in Health, so years can be compared."
+            "value": "Choose Upload a checkup report and pick a PDF or a photo: each item is read out and the ones outside the reference range are marked. The original and its record stay in Health, so years can be compared."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "PDF か画像を送ると、項目ごとに読み取り、基準範囲外のものに印を付けます。原本と整理した記録はヘルスに残り、年ごとに比べられます。"
+            "value": "「健康診断の結果をアップロード」から PDF か画像を選ぶと、項目ごとに読み取り、基準範囲外のものに印を付けます。原本と整理した記録はヘルスに残り、年ごとに比べられます。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。"
+            "value": "点「上传体检报告」选 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。"
           }
         }
       }
@@ -101306,6 +101306,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ の新しい項目が受信トレイに表示されます。コネクタのページの「受信トレイに表示」と同じスイッチです。"
+          }
+        }
+      }
+    },
+    "上传体检报告": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload a Checkup Report"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康診断の結果をアップロード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上传体检报告"
+          }
+        }
+      }
+    },
+    "这是我的体检报告，帮我逐项看看：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is my checkup report. Please go through it item by item: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これは私の健康診断の結果です。項目ごとに見てください：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是我的体检报告，帮我逐项看看：%@"
           }
         }
       }

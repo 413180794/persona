@@ -151,6 +151,9 @@
 - 实测（Claude Code 2.1.318，两份假报告）：两份记录逐项抄对，日期取的是报告上的检查日期，「TG」「LDL-C」和去年的「甘油三酯」「低密度脂蛋白」对上了，回答带三张 `line` 卡片。
 - iOS / Mac（#4587）：健康页的输入框（两种界面风格）和健康对话里的输入框「文件」选的、Mac 上拖进来的文件都带 `dest=health`（`FileUploads.start(…, dest:)`），
   照片照旧当图片发；视频照旧进临时目录。hub / node 早于 #4546 的回 400 / 「unknown upload destination」，App 提示上传失败，更新 hub 后就好。
+- **入口（#4656）**：只有输入框的 `+` 时看不出能传，所以健康页有一个明确的「上传体检报告」：网页在首页输入框下方，iOS / Mac 在「问问看」最前面。
+  点了选 PDF 或图片（图片也当文件传，原件同样留在 `reports/`），全部传完后自动开一段健康对话（`views/health/reports.ts`、`FileUploads.startAll`），第一条消息带着路径；
+  传的途中离开页面也照样开。测整条路：iOS 启动参数 `-showReportUpload <文件名>`（假 hub 上看 `POST …/files?dest=health` 和 `POST /api/v1/assistant/conversations`）。
 - 还没有：Android（还没有健康空间的入口）。
 
 ## 第一版不做的

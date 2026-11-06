@@ -19,8 +19,8 @@
   "source_phone_body": "经你的手机读取步数、睡眠、心率、体重等汇总，需要 Persona App 在手机上打开。",
   "source_write": "记一条数据",
   "source_write_body": "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。",
-  "source_upload": "化验单和报告",
-  "source_upload_body": "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。",
+  "source_upload": "体检报告和化验单",
+  "source_upload_body": "点「上传体检报告」选 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。",
   "memory": "健康记忆",
   "memory_count": "{count} 条",
   "memory_empty": "还没有。健康对话里记下的目标、过敏、用药等会出现在这里。",
@@ -32,5 +32,9 @@
   "privacy_separate": "健康对话只在这里：Persona 的其他对话看不到、读不到。",
   "privacy_memory": "健康记忆单独存放，不会流到其他对话；你可以随时查看和删除。",
   "privacy_where": "对话和记忆都留在 hub 所在的机器上，不进知识库。",
-  "privacy_doctor": "这里给的是解释和建议，不能替代医生的诊断和治疗。"
+  "privacy_doctor": "这里给的是解释和建议，不能替代医生的诊断和治疗。",
+  "report_upload": "上传体检报告",
+  "report_uploading": "正在上传…",
+  "report_failed": "上传失败：{error}",
+  "report_prompt": "这是我的体检报告，帮我逐项看看：{paths}"
 }

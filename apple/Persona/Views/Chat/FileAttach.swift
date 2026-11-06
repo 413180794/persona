@@ -100,6 +100,20 @@ final class FileUploads {
         }
     }
 
+    /// `start` for files wanted together: done gets their paths once every upload has ended (a failed or cancelled one
+    /// is left out; nothing got through, no call). It runs even if the view that started them has gone.
+    func startAll(_ urls: [URL], machine: MachineRef, model: AppModel, dest: String? = nil, done: @escaping ([String]) -> Void) {
+        let got = Collected()
+        start(urls, machine: machine, model: model, dest: dest) { got.paths.append($0) }
+        let ending = last
+        Task {
+            await ending?.value
+            if !got.paths.isEmpty { done(got.paths) }
+        }
+    }
+
+    private final class Collected { var paths: [String] = [] }
+
     func cancel(_ id: UUID) {
         tasks.removeValue(forKey: id)?.cancel()
         items.removeAll { $0.id == id }

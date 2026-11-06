@@ -325,6 +325,7 @@ export function TodosView({
 
       {activeTodo && (
         <HandoverDialog
+          key={activeTodo.id}
           open={handoverOpen}
           todo={activeTodo}
           machines={machines}
@@ -1300,16 +1301,19 @@ function HandoverDialog({
   }, [allSessions]);
   const [selectedSid, setSelectedSid] = useState(() => liveSessions[0]?.session_id ?? "");
 
+  // The form starts over when the dialog opens. While it is open the lists change with every push of a session or a
+  // machine: what is typed stays, and the picked agent / computer changes only once it is gone from its list.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
-      setPrompt("");
-      if (onlineMachines[0] && (!mid || !onlineMachines.some((m) => m.id === mid))) {
-        setMid(onlineMachines[0].id);
-      }
-      if (liveSessions[0]) {
-        setSelectedSid(liveSessions[0].session_id);
-      }
+    const opening = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (!open) return;
+    if (opening) setPrompt("");
+    if (onlineMachines[0] && (!mid || !onlineMachines.some((m) => m.id === mid))) {
+      setMid(onlineMachines[0].id);
     }
+    const first = liveSessions[0]?.session_id;
+    if (first) setSelectedSid((sid) => (opening || !liveSessions.some((s) => s.session_id === sid) ? first : sid));
   }, [open, onlineMachines, liveSessions]);
 
   useEffect(() => {
