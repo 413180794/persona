@@ -555,6 +555,8 @@ Requested: "Generate titles after starting new chats; standardize as ‘MMDD | T
   No transcript writes; same for Claude / Codex, no node changes.
 - **Once only, user wins**: App Rename (drawer long-press chat › Rename…, `POST /api/v1/sessions/{mid}/{sid}/rename`) records user-authored titles, never overwritten;
   even before the first turn ends. Codex renames are stored only in hub (node would write Claude custom-title lines into Codex rollout).
+  A Claude rename goes to the node first and is stored once it succeeds. Before Claude has written the transcript (the Feishu /agent renames its conversation
+  right after starting it), the node keeps the title and writes the custom-title line when the transcript appears (#5866).
 - No backfill for old chats lacking pending-title records, except old AI twin chats gain `MMDD | Inbox | …` while backfilling origins ("Chat origins" below).
 - **Main chat has no title** (#1313): App session-list `title` is always "Persona" (`mainTitle`, settings `assistant.main`),
   not node's first-message title (headless transcripts lack Claude ai-title), no `MMDD | Type | Topic` (discard pending-title on first-turn completion without model call),

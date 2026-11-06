@@ -155,6 +155,9 @@ final class AppModel {
     /// over the picture.
     var computerActivities: [MachineRef: ComputerActivity] = [:]
     var openChat: SessionKey?
+    /// A personal agent's conversation to open on the Agents page, over its list (a Spotlight result, #4519): ChatsView
+    /// takes it as it takes `openChat`.
+    var openPersonalAgent: PersonalAgentSession?
     /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
     /// "Done" notification. From the background the session list is stale (the agent still reads as working until the
     /// hub's next list), so the chat cannot tell by itself that this turn finished unseen (2026-10-31).

@@ -82,6 +82,7 @@ type Node struct {
 	fsw            fsWatcher // the folders the web panels have open (fswatch.go)
 
 	mu      sync.Mutex
+	titleMu sync.Mutex // orders the custom-title lines renames write (control.go retitle)
 	state   *stateFile
 	files   map[string]*transcript.File // session id -> parsed transcript
 	paths   map[string]string           // session id -> transcript path
@@ -100,6 +101,7 @@ type Node struct {
 	layouts   map[string]layout          // host kind -> space / slot names from its last snapshot
 	shellTabs *shellTabs                 // the sweep's memory; nil: the process's own (shelltabs.go)
 	procs     map[string]*assistantProc  // headless assistant conversations (assistant.go)
+	titles    map[string]string          // session id -> title given before its transcript existed (control.go retitle)
 	spare     *assistantProc             // warm process waiting for the next new conversation
 	akeys     map[string]*assistantProc  // the key a Codex conversation's MCP server reports until its thread exists
 	lastList  string                     // serialized last sessions.changed payload

@@ -12,7 +12,7 @@ it reads `Keychain.serverConfig` afresh each time (the hub address + device toke
 | `AgentTaskIntent` | Give an Agent a Task | `POST /api/v1/agents/sessions/{id}/messages`, with a new UUID for `clientId` each time (hub deduplication + outbox). Choose a session through `PersonalAgentEntity`; if none is selected, use the first in the list with `canSend`. | Background |
 | `AgentsStatusIntent` | Personal Agent Unread | `GET /api/v1/agents/sessions`: reports how many sessions have how many unread messages, listing the first three; if none are unread, reports the three most recent. | Background |
 | `AddTodoIntent` | New To-Do | `POST /api/v1/todos` (`{"title", "notes"?}`, see `docs/todos.md`), in the App's currently selected hub group (`hub.group`, the same as the To-dos page; falls back to the first group if it is missing). Reads "To-do saved: '…'" and returns the title for use in subsequent Shortcuts actions. If an old hub lacks the to-do endpoint (404), asks the user to update the hub first. | Background |
-| `OpenPersonalAgentIntent` | Open Personal Agent | Opens the App's Agents tab when a personal Agent session is tapped in Spotlight. | Foreground |
+| `OpenPersonalAgentIntent` | Open Personal Agent | Tapping a personal Agent session in Spotlight opens that conversation directly (Agents › Personal Agents › session; back goes to the personal Agents list; an open settings sheet is closed first). `AppModel.openPersonalAgent` is handed to `ChatsView`, which, as with `openChat`, pushes it once the list has appeared and the navigation stack is still. | Foreground |
 | `OpenJarvisAssistantIntent` / `OpenJarvisAgentsIntent` | Open Persona Assistant / Agents | Intents behind the controls for Control Center, the Lock Screen, and the Action Button. | Foreground |
 
 `PersonalAgentEntity` is an `IndexedEntity`: whenever the Agents page finishes loading, it calls `CSSearchableIndex.default().indexAppEntities(...)`
@@ -37,7 +37,7 @@ and `JarvisShortcuts.updateAppShortcutParameters()`, so Spotlight can find sessi
 ## Not implemented / deferred
 
 - Apple Intelligence assistant schemas such as `@AppIntent(schema: .assistant...)`: none fits "ask a private assistant" (existing schemas cover domains such as mail / photos / books), so they are not integrated.
-- Tapping a personal Agent in Spotlight switches only to the Agents tab, not directly to that session (ChatsView's navigation stack has no external entry point yet).
+- A personal Agent's Spotlight result carries no hub group: with several hub groups connected, the opened conversation uses the App's selected group, and a session in another group shows an error on its page.
 - Ask Persona has a 24-second answer limit: long tasks cannot be read in full; view them in the App's main chat.
 - For long chats in the car, see `docs/carplay.md` (Siri is only the entry point; the chat uses duplex voice).
 - Controls can only open the App. Asking directly from a control would require App Intents text input, which controls do not support.
@@ -50,7 +50,7 @@ and `JarvisShortcuts.updateAppShortcutParameters()`, so Spotlight can find sessi
 4. Say "Check Persona agents".
 5. Say "Add a to-do in Persona", then give a title: it should reply "To-do saved: '…'", and the App's To-dos page should contain the new entry.
 6. These actions should appear under **Shortcuts App › Persona** and be selectable for the Action Button; **Control Center › Add a Control › Persona** should contain two controls.
-7. Searching for a personal Agent's session name in Spotlight should find it.
+7. Searching for a personal Agent's session name in Spotlight should find it; tapping it opens that conversation directly, and back in the top-left returns to the personal Agents list. Try once each with the settings sheet open, with the App in the background, and with it not running.
 
 Unit tests: `PersonaTests/SiriIntentsTests.swift` (answer extraction, polling completion, spoken text, session selection, unread text), `PersonaTests/IntentsTests.swift` (new to-do text, old hubs, the hub group read).
 After compilation, `Persona.app/Metadata.appintents/extract.actionsdata` should contain the new actions and autoShortcuts.

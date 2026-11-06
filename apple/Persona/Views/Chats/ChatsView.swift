@@ -322,11 +322,15 @@ struct ChatsView: View {
                     // read three times, `-openUploadDemo` uploading twice, #2061). The list's appearing opens it.
                     if rootShown { takeOpenChat() }
                 }
+                .onChange(of: model.openPersonalAgent) { _, _ in
+                    if rootShown { takeOpenPersonalAgent() } // held back as `openChat` is (above)
+                }
                 .onAppear {
                     if !rootShown {
                         rootShown = true
                         // Asked for before the list was there (above): a turn later, as the remembered chat below.
                         if model.openChat != nil { DispatchQueue.main.async { takeOpenChat() } }
+                        if model.openPersonalAgent != nil { DispatchQueue.main.async { takeOpenPersonalAgent() } }
                     }
                     // A new tree (RootView swaps the shell and the tabs when the width class changes, which iOS does
                     // for its snapshots when the app goes to the background: iPhone Duo open, 2026-11-04) starts at the
@@ -334,9 +338,13 @@ struct ChatsView: View {
                     // forgotten (rememberChat(nil) above). A turn later: the split of the tree going away empties
                     // the paths as it goes, and a push made in the same update did not show.
                     // Still the same chat a turn later: going back runs onAppear before onChange(path) forgets it (#1868).
-                    if path.isEmpty, model.openChat == nil, model.selectedTab == .chats, let v = AppModel.rememberedChat {
+                    // Not over a personal agent's conversation asked for (#4519): that one is what the app came up for.
+                    if path.isEmpty, model.openChat == nil, model.openPersonalAgent == nil, model.selectedTab == .chats,
+                       let v = AppModel.rememberedChat {
                         DispatchQueue.main.async {
-                            if path.isEmpty, model.openChat == nil, AppModel.rememberedChat == v { model.openChat = SessionKey(path: v) }
+                            if path.isEmpty, model.openChat == nil, model.openPersonalAgent == nil, AppModel.rememberedChat == v {
+                                model.openChat = SessionKey(path: v)
+                            }
                         }
                     }
                     if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
@@ -484,6 +492,27 @@ struct ChatsView: View {
     private func openFromList(_ value: some Hashable) {
         spaceAt = (value as? SpaceRoute).map { [0: $0.id] } ?? [:]
         path = NavigationPath([value])
+    }
+
+    /// A personal agent's conversation asked for from outside (a Spotlight result, #4519): once the stack is still, as
+    /// `takeOpenChat`.
+    private func takeOpenPersonalAgent() {
+        guard model.openPersonalAgent != nil else { return }
+        stackStill.whenStill { pushOpenPersonalAgent() }
+    }
+
+    /// Over the personal agents list, as a tap there opens it: its ‹ goes back to that list. Through `pushing`, so an
+    /// open search closes first. The chat the path held is forgotten: the path does not pass through empty on the way,
+    /// and a rebuilt list or the next launch would bring that chat back over this conversation.
+    private func pushOpenPersonalAgent() {
+        guard let session = model.openPersonalAgent else { return }
+        var under = NavigationPath()
+        under.append(PersonalAgentsRoute())
+        under.append(session)
+        AppModel.rememberChat(nil)
+        spaceAt = [:]
+        pushing.wrappedValue = under
+        model.openPersonalAgent = nil
     }
 }
 

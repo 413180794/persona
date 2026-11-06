@@ -29,6 +29,15 @@ struct PersonalAgentEntity: IndexedEntity, Hashable, Sendable {
         self.init(id: s.id, title: s.title, provider: s.provider, unread: s.unreadCount, canSend: s.canSend)
     }
 
+    /// The session to open from Spotlight: what the entity knows, until the conversation's first page brings the
+    /// hub's copy (`PersonalAgentSessionView` takes it). The id splits at its first ":" (keys contain ":" too).
+    nonisolated var session: PersonalAgentSession {
+        let colon = id.firstIndex(of: ":")
+        return PersonalAgentSession(id: id, source: colon.map { String(id[..<$0]) } ?? "",
+                                    sessionKey: colon.map { String(id[id.index(after: $0)...]) } ?? id,
+                                    provider: provider, title: title, canSend: canSend, unreadCount: unread, rankTimeMs: 0)
+    }
+
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(PersonalAgentIntentText.name(title: title, id: id))",
                               subtitle: "\(PersonalAgentIntentText.subtitle(provider: provider, unread: unread))")
@@ -132,7 +141,7 @@ struct AgentsStatusIntent: AppIntent {
     }
 }
 
-/// Opens the app on the personal agents list (Spotlight results and the dialog buttons land here).
+/// Opens the app on one personal agent's conversation (Spotlight results and the dialog buttons land here).
 struct OpenPersonalAgentIntent: OpenIntent {
     nonisolated static let title: LocalizedStringResource = "Open Personal Agent"
     nonisolated static var supportedModes: IntentModes { .foreground(.immediate) }
@@ -144,7 +153,16 @@ struct OpenPersonalAgentIntent: OpenIntent {
     nonisolated init(target: PersonalAgentEntity) { self.target = target }
 
     nonisolated func perform() async throws -> some IntentResult {
-        await MainActor.run { AppModel.shared.selectedTab = .chats }
+        let session = target.session
+        await MainActor.run {
+            // Straight into that conversation, over the personal agents list as a tap in the app opens it (#4519).
+            // Off the shell's settings sheet, which would cover it, and no chat the last launch kept is pushed first.
+            let model = AppModel.shared
+            model.shellSettings = false
+            model.openChat = nil
+            model.selectedTab = .chats
+            model.openPersonalAgent = session
+        }
         return .result()
     }
 }

@@ -56,6 +56,15 @@ struct SiriIntentsTests {
         #expect(PersonalAgentIntentText.status(read) == "没有未读。最近的是：「甲」")
     }
 
+    /// A Spotlight result opens its conversation (#4519): the session it hands over until the hub's copy comes.
+    @Test func spotlightResultBecomesItsSession() {
+        let e = PersonalAgentEntity(id: "ob:agent:x:a1:main", title: "日程", provider: "claude", unread: 2, canSend: false)
+        let s = e.session
+        #expect(s.id == "ob:agent:x:a1:main" && s.source == "ob" && s.sessionKey == "agent:x:a1:main")
+        #expect(s.title == "日程" && s.provider == "claude" && s.unreadCount == 2 && !s.canSend)
+        #expect(PersonalAgentEntity(id: "plain", title: "甲").session.sessionKey == "plain")
+    }
+
     @Test func sentWording() {
         #expect(PersonalAgentIntentText.sent(status: "sent", to: "甲", error: nil) == "已交给「甲」")
         #expect(PersonalAgentIntentText.sent(status: "failed", to: "甲", error: "boom") == "发给「甲」失败：boom")

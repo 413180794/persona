@@ -11,6 +11,9 @@ Pitfalls, unusual behavior, and the trade-offs made at the time (originally in "
 - Newer Claude Code versions write narration between tool calls into nonempty `thinking` blocks, not `text`. The UI must not hide all thinking indiscriminately.
 - A new session (a headless assistant or a newly launched herdr Agent) has no transcript until claude writes its first line. The phone requests a backlog as soon as it subscribes to the hub. `session.items`
   must return an empty list rather than not found for these "starting" sessions (`startingSession`). Once watch sees the file appear, it must first replay the lines already written, or the chat page briefly flashes an error.
+  A rename is the same: the Feishu /agent names its conversation right after starting it, and the custom-title line had nowhere to go, so the node
+  answered "transcript … not found" and the manager kept no title. The node now keeps the title of a running assistant conversation and writes it once the
+  transcript appears; if renamed again meanwhile, the newest title wins; if the process ends first, the title is dropped (`retitle`, #5866).
 - Only a response paginated from the newest end knows "whether there are earlier messages" (`has_more`). Subscription catch-up with since_seq used to send `has_more: false`;
   if it arrived before the first HTTP page, the App assumed it had reached the start of history and stopped upward scrolling at the earliest loaded message (2026-10-26). The hub now omits this field in catch-up,
   and the App treats its absence as unknown. A batch that does not cover the earliest local message must not set it to false either. Reproduce with `-showScrollToOldest YES`, scrolling all the way up while logging.
