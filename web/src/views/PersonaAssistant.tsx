@@ -10,7 +10,7 @@ import { refreshAssistant, useStore } from "../lib/store";
 import { NEW_CONVERSATION, pickedLauncher, pickLauncher } from "../lib/assistant-chat";
 import { noteSent } from "../lib/outbox";
 import type { Session } from "../lib/types";
-import { cx, EASE, IconButton, Loading } from "../ui/atoms";
+import { Button, cx, EASE, IconButton, Loading } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { ChatView } from "./chat/ChatView";
 import { Composer, type Outgoing } from "./chat/Composer";
@@ -30,17 +30,51 @@ const NEW_MENTION: MentionSource = { self: "jarvis-new", files: () => [] };
 
 export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string; fresh?: boolean; onToggleSidebar: () => void }) {
   const assistant = useStore((s) => s.assistant);
+  const assistantError = useStore((s) => s.assistantError);
   const loaded = useStore((s) => s.loaded);
   if (fresh) return <Starter onToggleSidebar={onToggleSidebar} />;
   const id = sid ?? assistant?.main;
   if (id) {
-    if (!assistant) return <Centered><Loading /></Centered>;
+    if (!assistant) {
+      if (assistantError) return <AssistantLoadFailed error={assistantError} onToggleSidebar={onToggleSidebar} />;
+      return <Centered><Loading /></Centered>;
+    }
     // the main conversation is the phone's assistant page: "Assistant | Agents" in its top bar (ChatView's `topCenter`, narrow only)
     const topCenter = id === assistant.main ? <ShellSwitch page="assistant" /> : undefined;
     return <ChatView key={id} mid={assistant.machine_id} sid={id} assistant starting={starting.has(id)} onToggleSidebar={onToggleSidebar} topCenter={topCenter} />;
   }
   if (!loaded) return <Centered><Loading /></Centered>;
+  if (!sid && assistantError && !assistant) {
+    return <AssistantLoadFailed error={assistantError} onToggleSidebar={onToggleSidebar} />;
+  }
   return <Starter main onToggleSidebar={onToggleSidebar} />;
+}
+
+function AssistantLoadFailed({ error, onToggleSidebar }: { error: string; onToggleSidebar: () => void }) {
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      await refreshAssistant();
+    } catch {
+      // Keep the failure displayed with the latest error
+    } finally {
+      setRetrying(false);
+    }
+  };
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
+        <ShellHeaderSlots page="assistant" onToggleSidebar={onToggleSidebar} end={<IconButton icon="info" label={t("personaassistant.profile")} onClick={() => navigate({ name: "profile" })} />} />
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-5 text-center">
+        <p className="text-[13px] text-ink-2">{t("personaassistant.load_failed", { error })}</p>
+        <Button onClick={retry} busy={retrying} icon="retry">
+          {t("personaassistant.retry")}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

@@ -5,7 +5,7 @@ import { BASE } from "./base";
 import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
 import { applySessionDelta, SESSIONS_DELTA_FEATURE, sessionRefreshed, sessionSnapshot } from "./sessions-delta";
-import { api, ApiError, CLIENT_FEATURES, CLIENT_PLATFORM, CLIENT_VERSION, getToken } from "./api";
+import { api, ApiError, CLIENT_FEATURES, CLIENT_PLATFORM, CLIENT_VERSION, errorText, getToken } from "./api";
 import { currentLanguage } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
@@ -55,6 +55,7 @@ export interface State {
   /** Cards this page just answered, by interaction id: shown answered (with the picks) for a moment, not clickable. */
   answered: Record<string, AnsweredCard>;
   assistant: AssistantInfo | null;
+  assistantError: string | null;
   mutes: AgentMutes;
   /** Pinned spaces / agents (GET /pins): the top of the Agents list. */
   pins: AgentPins;
@@ -80,6 +81,7 @@ let state: State = {
   interactions: [],
   answered: {},
   assistant: null,
+  assistantError: null,
   mutes: { spaces: [], sessions: [], allowed: [] },
   pins: NO_PINS,
   loaded: false,
@@ -693,7 +695,12 @@ export async function refresh() {
     patch.sessions = by;
   }
   if (interactions.status === "fulfilled") patch.interactions = mergeInteractions(interactions.value.interactions ?? [], before);
-  if (assistant.status === "fulfilled" && askedAssistant.fresh()) patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
+  if (assistant.status === "fulfilled" && askedAssistant.fresh()) {
+    patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
+    patch.assistantError = null;
+  } else if (assistant.status === "rejected" && askedAssistant.fresh()) {
+    patch.assistantError = errorText(assistant.reason);
+  }
   if (machines.status === "fulfilled" && machinesAt === machinesRev) patch.machines = machines.value.machines ?? [];
   if (mutes.status === "fulfilled" && mutesAt === mutesSaves.rev) patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   if (pins.status === "fulfilled" && pinsAt === pinsSaves.rev) patch.pins = pinsOf(pins.value);
@@ -752,9 +759,16 @@ export async function refreshTodos() {
 
 export async function refreshAssistant() {
   const asked = assistantAsked.ask();
-  const a = await asked.answer;
-  if (!asked.fresh()) return;
-  set({ assistant: { ...a, conversations: a.conversations ?? [] } });
+  try {
+    const a = await asked.answer;
+    if (!asked.fresh()) return;
+    set({ assistant: { ...a, conversations: a.conversations ?? [] }, assistantError: null });
+  } catch (err) {
+    if (asked.fresh()) {
+      set({ assistantError: errorText(err) });
+    }
+    throw err;
+  }
 }
 
 export function markSeenLocally(mid: string, sid: string) {
@@ -783,6 +797,7 @@ export function reset() {
     interactions: [],
     answered: {},
     assistant: null,
+    assistantError: null,
     launches: {},
     outbox: {},
     mutes: { spaces: [], sessions: [], allowed: [] },

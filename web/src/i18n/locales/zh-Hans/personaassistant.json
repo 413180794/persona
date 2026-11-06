@@ -10,5 +10,7 @@
   "empty_body": "能看你的日程、飞书、邮件、知识库，也能到各台电脑上动手。",
   "ask_placeholder": "问 {name}…",
   "empty_body_setup": "还差一步就能开始，下面告诉你缺什么。",
-  "needs_calendar": "会用到手机日历"
+  "needs_calendar": "会用到手机日历",
+  "load_failed": "没读到主对话：{error}",
+  "retry": "重试"
 }

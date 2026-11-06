@@ -397,6 +397,35 @@ describe("助手会话列表：先发的 /assistant 晚回来不盖掉新的 (#4
     await b;
     expect(shown()).toEqual({ main: "second", ids: ["second", "first"] });
   });
+
+  it("records assistantError on failure and clears it on success", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith("/assistant")) return new Response(JSON.stringify({ error: "Service Unavailable" }), { status: 503 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    }));
+    await expect(refreshAssistant()).rejects.toThrow();
+    expect(getState().assistantError).toContain("Service Unavailable");
+    expect(getState().assistant).toBeNull();
+
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith("/assistant")) return new Response(JSON.stringify(info("m1", "m1")), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    }));
+    await refreshAssistant();
+    expect(getState().assistantError).toBeNull();
+    expect(getState().assistant?.main).toBe("m1");
+  });
+
+  it("refresh() records assistantError when /assistant fails with 503", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith("/assistant")) return new Response(JSON.stringify({ error: "hub 503" }), { status: 503 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    }));
+    await refresh();
+    expect(getState().loaded).toBe(true);
+    expect(getState().assistantError).toContain("hub 503");
+    expect(getState().assistant).toBeNull();
+  });
 });
 
 describe("the hub withdrawing an answered card (#4877)", () => {
