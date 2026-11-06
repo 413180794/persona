@@ -44,6 +44,7 @@ struct InboxPage: View {
     @StoredValue("inbox.source") private var source = "" // "" all, "feishu", or a mail account id
     @StoredValue("inbox.kind") private var kind = ""     // "" all, agent, dm, mention, group, mail
     @State private var query = ""
+    @State private var itemMemo = InboxProjectionMemo()
     private var accounts: [MailAccount] {
         get { accountState.accounts }
         nonmutating set { accountState.accounts = newValue }
@@ -60,23 +61,14 @@ struct InboxPage: View {
     /// The kind filters, by key.
     static let kinds = [("mention", String(localized: "@Me")), ("dm", String(localized: "DMs")), ("group", String(localized: "Group chat")), ("mail", String(localized: "Mail [Assistant View 3d708e]")), ("agent", "Agent")]
 
-    private func matches(_ it: InboxItem) -> Bool {
-        if !source.isEmpty && it.account != source { return false }
-        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == String(localized: "@Me"))) { return false }
-        if query.isEmpty { return true }
-        return [it.title, it.sender ?? "", it.preview, it.summary ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
+    private var itemProjection: InboxProjection {
+        itemMemo(store.items, filter: .init(source: source, kind: kind, query: query), revision: store.itemsRevision)
     }
 
-    private var openItems: [InboxItem] { store.items.filter { !$0.isDone && matches($0) } }
+    private var openItems: [InboxItem] { itemProjection.openItems }
 
     /// The hub's connectors with items in the list (GitHub…), one filter each; none, no chip.
-    private var connectorSources: [(id: String, name: String)] {
-        var seen = Set<String>()
-        return store.items.compactMap { it in
-            guard it.connector != nil, seen.insert(it.account).inserted else { return nil }
-            return (it.account, it.accountName)
-        }
-    }
+    private var connectorSources: [InboxProjection.Source] { itemProjection.connectorSources }
 
     /// Agents (and the assistant) waiting for an answer, an approval or a plan review: they need the user too, so they
     /// head Needs You. Opening one goes to its chat; the Agents tab stays as it is.
@@ -204,12 +196,11 @@ struct InboxPage: View {
     }
 
     private var list: some View {
-        let partition = Dictionary(grouping: store.items.filter(matches), by: \.isDone)
-        let openItems = partition[false] ?? []
-        let byTier = Dictionary(grouping: openItems, by: \.triage)
-        let doneItems = partition[true] ?? []
-        let shownDone = expanded.contains("done")
-            ? doneItems.sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) } : []
+        let projection = itemProjection
+        let openItems = projection.openItems
+        let byTier = projection.byTier
+        let doneItems = projection.doneItems
+        let shownDone = expanded.contains("done") ? projection.sortedDoneItems : []
         let waitingAgents = waitingAgents
         return List {
             filters

@@ -8,7 +8,11 @@ import Observation
 final class InboxStore {
     static let shared = InboxStore()
 
-    private(set) var items: [InboxItem]
+    private(set) var items: [InboxItem] {
+        didSet { itemsRevision &+= 1 }
+    }
+    /// A synchronous cache stamp for every assignment and in-place optimistic item mutation.
+    @ObservationIgnored private(set) var itemsRevision: UInt64 = 0
     /// How triage stands on the hub (new items held back until the model sorts them), with every list; nil from an
     /// older hub, and until the first list of this run (it is not kept on disk: an old count must not show offline).
     private(set) var triage: InboxTriageStatus?

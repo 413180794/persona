@@ -91,6 +91,8 @@ Use an invalidation revision as the task key and handle the flag after completio
   write it per scroll `frame`, and overlay the moving piece rather than changing content frames (which relayout the entire page and jump messages). Snap on release.
 - Chat-row bodies reevaluate during scrolling and streaming: cache text-derived Markdown, paths / links and tag-stripped text by message id (`RowMemo`, `TextMemo`),
   warming in the background after loading. Do not run regex / NSDataDetector in body (measured largest main-thread hotspot).
+  - 收件箱过滤、分层和来源 chip 在同一完整快照中单遍准备，已处理排序只在展开时做（2026-11-07，#5730）。按 Store 的完整变更序号及筛选/搜索/本地化键复用，乐观更新、回滚和同 id/version 的新载荷都必须同步失效。
+  - 缓存长期持有 Store 原数组会让单项修改触发全数组写时复制；有完整变更序号的路径只保留派生数组，不持有源数组，也不在无关重绘时逐项比较。没有序号的独立调用者仍用完整值比较，值相等但存储不同的命中须更新源引用，避免每次都线性比较。
 - Do not write page `@State` in row `onAppear` / `onDisappear`, even invisible bookkeeping (2026-11-03, #674):
   Lark chat rows updated "seen" and report timers on entry, receipt bookkeeping on exit, repeatedly reevaluating the entire page during scrolling and doubling dropped frames.
   Keep invisible bookkeeping in a class held by `@State` (`LarkChatBook`), whose writes do not invalidate views; visible counts / receipts remain state, written only when actually changed.

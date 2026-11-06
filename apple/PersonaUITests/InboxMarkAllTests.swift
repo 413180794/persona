@@ -5,6 +5,17 @@ import XCTest
 /// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which keeps the bulk requests at /mock/inbox_bulk (each test counts the
 /// ones it adds, so both run against one mock). `TEST_RUNNER_JARVIS_SHOTS=<dir>` also writes the screenshots there.
 final class InboxMarkAllTests: XCTestCase {
+    @MainActor private func launch(_ app: XCUIApplication, pair: String, args: [String]) {
+        let scheme = ProcessInfo.processInfo.environment["JARVIS_SHOTS_SCHEME"] ?? "light"
+        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-ui.scheme", scheme]
+        app.launchPinned()
+        acceptIconAlert()
+        app.terminate()
+        app.launchArguments = ["-pairURL", pair, "-ui.scheme", scheme] + args
+        app.launchPinned()
+        acceptIconAlert()
+    }
+
     @MainActor func testCleanUpAllInTheFilterThenUndo() throws {
         let entry = "全部清理", action = "dismiss", doneBy = "dismissed", shotName = "inbox clean up all"
         let toast: (Int) -> String = { "已清理 \($0) 件" }
@@ -13,8 +24,7 @@ final class InboxMarkAllTests: XCTestCase {
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "", "-inbox.source", "feishu"]
-        app.launchPinned()
+        launch(app, pair: pair, args: ["-tab", "mail", "-inbox.kind", "", "-inbox.source", "feishu"])
         func shot(_ name: String) {
             let image = app.screenshot()
             let a = XCTAttachment(screenshot: image)
@@ -63,6 +73,8 @@ final class InboxMarkAllTests: XCTestCase {
         XCTAssertTrue(text(toast(feishuOpen.count)).waitForExistence(timeout: 5), "no toast:\n\(app.debugDescription)")
         let undo = app.buttons["撤销"].firstMatch
         XCTAssertTrue(undo.waitForExistence(timeout: 2), "no 撤销 on the toast")
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: row)
+        waitForExpectations(timeout: 5)
         shot(shotName + " toast")
 
         // One bulk request with the action, the ids and each item's version; only the filter's items filed.
@@ -101,8 +113,7 @@ final class InboxMarkAllTests: XCTestCase {
         guard open >= 10 else { throw XCTSkip("needs MOCK_INBOX_EXTRA=<n> (only \(open) open)") }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "", "-inbox.source", ""]
-        app.launchPinned()
+        launch(app, pair: pair, args: ["-tab", "mail", "-inbox.kind", "", "-inbox.source", ""])
         let more = app.buttons["更多"].firstMatch
         XCTAssertTrue(more.waitForExistence(timeout: 20), "no 更多")
         sleep(3) // the list loads
