@@ -298,9 +298,9 @@ enum ExtensionOperationText {
     static func detail(_ s: ExtensionOperationStep) -> String? {
         if s.cached == true { return String(localized: "Used the package cached on the hub") }
         if let bytes = s.bytes, bytes > 0 {
-            let done = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            let done = bytes.storageText
             if let total = s.total, total > 0, s.state == .running {
-                let all = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+                let all = total.storageText
                 return String(localized: "\(done) / \(all)")
             }
             return done

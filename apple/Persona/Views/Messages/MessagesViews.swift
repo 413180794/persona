@@ -428,7 +428,7 @@ struct MessagesAttachmentRow: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(title).font(Theme.Font.labelStrong).lineLimit(1)
                 if let size = attachment.size, size > 0 {
-                    Text(size.formatted(.byteCount(style: .file))).font(Theme.Font.caption).opacity(0.8)
+                    Text(size.storageText).font(Theme.Font.caption).opacity(0.8)
                 }
             }
         } icon: {

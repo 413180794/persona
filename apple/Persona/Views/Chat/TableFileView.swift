@@ -351,7 +351,7 @@ struct TableFileView: View {
     private func summary(_ sheet: TableSheet) -> String {
         var parts = [String(localized: "\(sheet.rows.count) × \(sheet.columns) table")]
         if model.next > 0 {
-            parts.append(String(localized: "Read \(ByteCountFormatter.string(fromByteCount: model.next, countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: model.file.size, countStyle: .file)); scroll down to read more"))
+            parts.append(String(localized: "Read \(model.next.storageText) of \(model.file.size.storageText); scroll down to read more"))
         }
         if sheet.capped { parts.append(String(localized: "Showing only the first \(TableSheet.maxRows) rows")) }
         return parts.joined(separator: " · ")

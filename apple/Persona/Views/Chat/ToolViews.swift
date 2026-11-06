@@ -744,7 +744,7 @@ struct ResultBlock: View {
                 CodeBlock(text: text, maxLines: 10)
                 if let cut {
                     Button { showFull = true } label: {
-                        Label("Truncated. View full text (\(ByteCountFormatter.string(fromByteCount: Int64(cut.size), countStyle: .file)))",
+                        Label("Truncated. View full text (\(Int64(cut.size).storageText))",
                               systemImage: Theme.Icon.text)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)

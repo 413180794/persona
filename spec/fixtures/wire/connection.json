@@ -76,6 +76,7 @@
         "runtime_cli",
         "conversation_origin",
         "builtin_presets",
+        "upload_dir",
         "task_push"
       ],
       "fp": "",
@@ -165,6 +166,7 @@
           "runtime_cli",
           "conversation_origin",
           "builtin_presets",
+          "upload_dir",
           "task_push"
         ],
         "/type": "hello"
@@ -245,6 +247,7 @@
         "runtime_cli",
         "conversation_origin",
         "builtin_presets",
+        "upload_dir",
         "task_push"
       ],
       "fp": "",
@@ -324,6 +327,7 @@
           "runtime_cli",
           "conversation_origin",
           "builtin_presets",
+          "upload_dir",
           "task_push"
         ],
         "/ok": true,

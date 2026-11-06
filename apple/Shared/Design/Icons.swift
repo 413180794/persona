@@ -102,6 +102,8 @@ extension Theme {
         static let skipForward = "goforward.15"
         static let share = "square.and.arrow.up"
         static let save = "square.and.arrow.down"
+        /// Upload: files from this device into a folder on a machine (#4858).
+        static let upload = "doc.badge.arrow.up"
         static let down = "arrow.down"
         static let gitBranch = "arrow.triangle.branch"
         /// The spaces a host nests under another (Orca's child worktrees,「N 个子项」, #3075).

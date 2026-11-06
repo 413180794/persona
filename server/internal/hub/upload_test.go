@@ -25,6 +25,10 @@ type uploadNode struct {
 	data    bytes.Buffer
 	aborted bool
 	dests   []string // the dest of each file.upload.begin
+	begins  []map[string]any
+	noEcho  bool   // knows file.upload.* but not dest=dir: opens it in its temp directory and says nothing
+	refuse  string // file.upload.begin fails with this rpc code
+	noDest  bool   // fails dest=dir as a node from before it does: "unknown upload destination"
 }
 
 func (f *uploadNode) handle(_ context.Context, method string, params json.RawMessage) (any, error) {
@@ -44,6 +48,18 @@ func (f *uploadNode) handle(_ context.Context, method string, params json.RawMes
 	switch method {
 	case "file.upload.begin":
 		f.dests = append(f.dests, p.Dest)
+		var all map[string]any
+		_ = json.Unmarshal(params, &all)
+		f.begins = append(f.begins, all)
+		if f.refuse != "" {
+			return nil, &rpc.Error{Code: f.refuse, Message: "refused", Data: json.RawMessage(`{"name":"a.txt"}`)}
+		}
+		if f.noDest && p.Dest == proto.UploadDestDir {
+			return nil, errors.New(`unknown upload destination "dir"`)
+		}
+		if p.Dest == proto.UploadDestDir && !f.noEcho {
+			return map[string]any{"upload_id": "u1", "dest": p.Dest}, nil
+		}
 		return map[string]any{"upload_id": "u1"}, nil
 	case "file.upload.chunk":
 		f.offsets = append(f.offsets, p.Offset)
@@ -203,5 +219,65 @@ func TestUploadForTerminal(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.txt&dest=%2Fetc", strings.NewReader("hi")))
 	if rec.Code != http.StatusBadRequest || len(f.dests) != 1 {
 		t.Fatalf("%d %s %v", rec.Code, rec.Body, f.dests)
+	}
+}
+
+// dest=dir hands the folder, cwd and conflict policy to the node and takes up to the bigger cap; the node's refusals
+// keep their codes; a node that predates dest=dir is node_outdated, never a file quietly in its temp directory.
+func TestUploadIntoFolder(t *testing.T) {
+	f := &uploadNode{}
+	rec := httptest.NewRecorder()
+	uploadHub(t, f).ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.txt&dest=dir&dir=~/proj&cwd=/w&conflict=keep", strings.NewReader("hi")))
+	if rec.Code != 200 || len(f.begins) != 1 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if b := f.begins[0]; b["dest"] != "dir" || b["dir"] != "~/proj" || b["cwd"] != "/w" || b["conflict"] != "keep" {
+		t.Fatalf("begin %v", b)
+	}
+
+	// No folder: refused before the node hears of it.
+	f = &uploadNode{}
+	rec = httptest.NewRecorder()
+	uploadHub(t, f).ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.txt&dest=dir", strings.NewReader("hi")))
+	if rec.Code != http.StatusBadRequest || len(f.calls) != 0 {
+		t.Fatalf("%d %v", rec.Code, f.calls)
+	}
+
+	// The folder's cap is above the chat's.
+	f = &uploadNode{}
+	req := httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.bin&dest=dir&dir=~", strings.NewReader("x"))
+	req.ContentLength = proto.MaxUploadBytes + 1
+	rec = httptest.NewRecorder()
+	uploadHub(t, f).ServeHTTP(rec, req)
+	if rec.Code == http.StatusRequestEntityTooLarge || len(f.begins) != 1 {
+		t.Fatalf("over the chat's cap: %d %s", rec.Code, rec.Body)
+	}
+	req = httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.bin&dest=dir&dir=~", strings.NewReader("x"))
+	req.ContentLength = proto.MaxDirUploadBytes + 1
+	rec = httptest.NewRecorder()
+	uploadHub(t, &uploadNode{}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over the folder's cap: %d", rec.Code)
+	}
+
+	// The name is taken / the folder is read-only: 409 with the node's code and details.
+	for _, code := range []string{proto.CodeExists, proto.CodeReadOnly} {
+		rec = httptest.NewRecorder()
+		uploadHub(t, &uploadNode{refuse: code}).ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.txt&dest=dir&dir=~", strings.NewReader("hi")))
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"`+code+`"`) || !strings.Contains(rec.Body.String(), `"name":"a.txt"`) {
+			t.Fatalf("%s: %d %s", code, rec.Code, rec.Body)
+		}
+	}
+
+	// Nodes from before dest=dir: one that says so, and one that ignores dest (its upload is aborted, nothing sent).
+	for _, old := range []*uploadNode{{noDest: true}, {noEcho: true}} {
+		rec = httptest.NewRecorder()
+		uploadHub(t, old).ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.txt&dest=dir&dir=~", strings.NewReader("hi")))
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"node_outdated"`) || old.data.Len() != 0 {
+			t.Fatalf("old node: %d %s %v", rec.Code, rec.Body, old.calls)
+		}
+		if old.noEcho && !old.aborted {
+			t.Fatal("the ignored upload was not aborted")
+		}
 	}
 }

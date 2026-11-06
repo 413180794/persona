@@ -1912,3 +1912,14 @@ nonisolated enum SessionSource: String, Sendable {
     case feishu, terminal
     var label: String { self == .feishu ? String(localized: "Lark Group [Models e86099]") : String(localized: "Terminal") }
 }
+
+nonisolated extension Int64 {
+    /// "0 bytes", "30 bytes", 12 KB, 3.4 MB, 1.2 GB: every size the app shows goes through here, so an empty file reads like
+    /// a small one (the default formatter says "Zero KB" for 0 but "30 bytes" for 30).
+    var storageText: String {
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        f.allowsNonnumericFormatting = false
+        return f.string(fromByteCount: self)
+    }
+}

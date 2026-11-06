@@ -614,7 +614,7 @@ struct FeishuDocsFileBlock: View {
     var body: some View {
         let name = node.attr("name") ?? String(localized: "Files")
         let icon = FeishuDocsFileKind.symbol(ext: node.attr("extension"), title: name)
-        let size = node.number("size").flatMap { $0 > 0 ? ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) : nil }
+        let size = node.number("size").flatMap { $0 > 0 ? Int64($0).storageText : nil }
         Button {
             if let token = node.attr("token") {
                 request = ("/api/v1/lark/raw/documents/drive/files/\(token)/download", name)

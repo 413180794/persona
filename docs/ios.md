@@ -307,6 +307,12 @@ Chat page:
     Clean-worktree fast-forward only, no auto stash/merge/rebase; existing stashes unchanged; explain no upstream/detached HEAD/uncommitted changes/divergence. Other Git views stay read-only.
   - Files (`FilesPane`): descend from session cwd, breadcrumbs jump levels, directories first, size/modification/Git flags (dot for changes within directory),
     hidden files off by default, menu toggle; tap file viewer.
+    The machine page's Files row (below Agents, disabled when offline) opens that computer's home in the same pane (`cwd` is `~`).
+  - **Upload, Save to Files** (#4858, `Views/Session/FolderTransfers.swift`, interface in `docs/protocol.md` "Changing files"): the upload button right of the breadcrumbs offers Choose from Files or Choose from Photos (several at once; photos are saved as files in their original format and name),
+    into the current folder under their own names, up to 2 GB; one after another, a row with progress and ✕ per file under the list. A taken name first asks Replace / Keep Both (Keep Both saves "name 2") before anything is sent;
+    a folder that cannot be written (outside the home, `~/.persona`, `~/.jarvis`, `~/Library`), an outdated personad on the computer, and files over the cap each get a one-line reason. Leaving the page lets uploads finish; a pending name question counts as cancel.
+    A file's long-press menu (also a VoiceOver action) has Save to Files: downloads to a temporary folder with progress, then the system's location picker; the temporary file is removed either way.
+    Rename, move and delete come in the second batch.
   - **Auto-refresh** (#3089, web #2439, `App/FsLive.swift`, `Views/Session/FsLiveModifier.swift`, `docs/protocol.md` ("Automatic file refresh")):
     foreground Files/Git sends WebSocket `fs_watch` (current directory/Git marks, Git state; same cwd combined),
     `fs_changed` debounced 200 ms then reread in place without loading animation (retain older loaded commits if latest unchanged); unsubscribe off foreground (`.onTabVisibility`),

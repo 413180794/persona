@@ -320,6 +320,7 @@ var Features = []string{
 	"runtime_cli",              // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/runtime-cli.md)
 	"conversation_origin",      // Session.origin on assistant conversations (docs/protocol.md "Origin of assistant conversations")
 	"builtin_presets",          // the hub's own provider presets in GET /api/v1/launchers/presets; POST /api/v1/launchers with a preset takes an empty name, display_name and assign (docs/launchers.md "Built-in presets")
+	"upload_dir",               // POST /api/v1/machines/{mid}/files?dest=dir&dir=&conflict=: into a folder of the home (docs/protocol.md "Changing files")
 	"task_push",                // Task.push on /api/v1/assistant/tasks: "Push when done", every run or only what a run sends (docs/assistant.md "Push when done")
 }
 
@@ -334,6 +335,17 @@ const (
 	// A checkup report or lab result for the health space (dest=health, docs/health.md "Checkup reports"): it lands in the
 	// health directory's reports/ and stays, where the health conversations read it and the others are denied.
 	UploadDestHealth = "health"
+	// A file put into a folder the app is browsing (dest=dir&dir=…, docs/protocol.md "Changing files"): it keeps its own
+	// name, only folders in the home take it (node/writeguard.go), and it may be bigger.
+	UploadDestDir     = "dir"
+	MaxDirUploadBytes = 2 << 30
+	// What dest=dir does when the name is taken: "" refuses with CodeExists (409, the app asks), replace overwrites
+	// the file, keep puts it beside as "name 2.ext".
+	UploadConflictReplace = "replace"
+	UploadConflictKeep    = "keep"
+	// CodeReadOnly: the path is outside what the phone may change (409); CodeExists: the name is taken (409, name).
+	CodeReadOnly = "read_only"
+	CodeExists   = "exists"
 	// CodeTooLarge: over MaxUploadBytes (413); CodeNodeOutdated: the machine's node predates the feature (409).
 	CodeTooLarge     = "too_large"
 	CodeNodeOutdated = "node_outdated"

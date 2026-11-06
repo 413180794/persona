@@ -282,11 +282,18 @@ nonisolated struct APIClient: Sendable {
     /// Sends a file to the machine's temp directory (docs/protocol.md「发送文件」), streamed from disk; progress gets
     /// the bytes sent so far. Cancelling the task cancels the upload and the machine removes what it wrote.
     /// dest "terminal": a file pasted into a terminal, kept in Persona's own directory (docs/terminal.md section 18).
-    func upload(file: URL, name: String, machine: String, dest: String? = nil,
+    /// dest "dir": into the folder `query` names (dir, cwd, conflict; docs/protocol.md "Changing files"), under its own name.
+    func upload(file: URL, name: String, machine: String, dest: String? = nil, query extra: [String: String] = [:],
                 progress: @escaping @Sendable (Int64) -> Void) async throws -> UploadedFile {
         if config.isDemo { throw APIError(status: 403, message: DemoText.notSent) }
-        var query = ["name": name]
+        var query = extra.merging(["name": name]) { _, new in new }
         if let dest { query["dest"] = dest }
+        if let transport { // unit tests (FakeHub): the whole file in one request
+            let body = try Data(contentsOf: file)
+            let out = try await transport(LocalRequest(method: "POST", path: "/api/v1/machines/\(machine)/files", query: query, body: body))
+            progress(Int64(body.count))
+            return try JSON.decoder.decode(UploadedFile.self, from: out)
+        }
         var req = URLRequest(url: url("/api/v1/machines/\(machine)/files", query: query), timeoutInterval: 120)
         req.httpMethod = "POST"
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")

@@ -333,7 +333,7 @@ struct ThreadMediaView: View {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(name).font(Theme.Font.secondaryMedium).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
                     if let size = media.size, size > 0 {
-                        Text(size.formatted(.byteCount(style: .file))).font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text(size.storageText).font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: Theme.Space.s)

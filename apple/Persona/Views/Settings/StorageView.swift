@@ -177,11 +177,6 @@ nonisolated enum StorageUsage {
     }
 }
 
-extension Int64 {
-    /// 12 KB, 3.4 MB, 1.2 GB.
-    var storageText: String { ByteCountFormatter.string(fromByteCount: self, countStyle: .file) }
-}
-
 /// Settings › Storage: how much the app keeps on this phone, by kind, and clearing it.
 struct StorageView: View {
     @State private var usage: [StorageKind: Int64]?

@@ -19,7 +19,7 @@ import AppKit
         guard Self.on, !marked.contains(what) else { return }
         marked.insert(what)
         let ms = Int((CACurrentMediaTime() - start) * 1000)
-        Self.write("\(name) \(what) \(ms) ms" + (bytes > 0 ? " (\(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)))" : ""))
+        Self.write("\(name) \(what) \(ms) ms" + (bytes > 0 ? " (\(Int64(bytes).storageText))" : ""))
     }
 
     static var on: Bool {

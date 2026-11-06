@@ -259,7 +259,7 @@ struct LarkFlowLayout: Layout {
 nonisolated enum LarkFormat {
     static func fileSize(_ raw: String?) -> String {
         guard let raw, let n = Int64(raw) else { return raw ?? "" }
-        return ByteCountFormatter.string(fromByteCount: n, countStyle: .file)
+        return n.storageText
     }
 
     static func duration(ms: Double?) -> String {

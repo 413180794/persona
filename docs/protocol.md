@@ -1322,6 +1322,25 @@ The foundation shared by the file page and the various previews (spreadsheets, O
 - `GET /api/v1/machines/{mid}/health/reports`: the reports, newest first, `{"reports":[{name,title,path?,record_path?,size,modified_at}]}` (`proto.HealthReport`, #4998). `path` is the original, `record_path` the same-name `.md` record; both are read through `file` / `file/download`.
 - `DELETE /api/v1/machines/{mid}/health/reports/{name}`: permanently delete a report (original and record), succeeding even if already absent; `name` must name an ordinary file under `reports/`. Both endpoints require full credentials; old nodes return 409 `node_outdated` (RPC `health.reports.list` / `health.reports.delete`).
 
+- `?dest=dir&dir=<folder>`: into the folder the file browser shows; see the next section, "Changing files".
+
+### Changing files
+
+The app's file browser (the session's Files pane, the machine page's Files row) can upload into a folder (#4858); rename, move and delete come in the second batch.
+
+- **Where writes are allowed** (`node/writeguard.go`): inside the home only. A path first passes the read guard (`pathguard.go`: links followed component by component; iCloud, key folders such as `.ssh`,
+  private key names and the hub's keys are refused); the real path after following links must still be in the home (the home itself is fine); `~/.persona`, `~/.jarvis` and `~/Library` are entirely unwritable.
+  `../` and links pointing outside the home are judged by where they end up. A refused write is 409 `code: read_only`. Everything outside the home stays read-only.
+- **Upload into a folder**: `POST /api/v1/machines/{mid}/files?name=<file name>&dest=dir&dir=<folder>[&cwd=][&conflict=]`; `dir` may be `~/…`, absolute,
+  or relative to `cwd` (the session's working directory). Chunks, cancel and timeouts as in "Send files" above; the cap is 2 GB (`proto.MaxDirUploadBytes`). A missing `dir` is 400; a folder that does not exist or is not a folder, or an unknown `conflict`, is 502 `code: internal` with the node's reason.
+  - The file **keeps its name** (`/`, `\`, control characters become `_`), mode 0644; the returned `path` is the folder as the app gave it + the file name. The partial `.jarvis-upload-*` is written in that folder and renamed when complete.
+  - Name taken: without `conflict`, begin already answers 409 `code: exists` (with `name`) and no byte is sent; the app asks "Replace / Keep Both" and sends again;
+    `conflict=keep` saves as `name 2.ext`, `name 3.ext`… (like Finder); `conflict=replace` overwrites and keeps the old file's mode, and still answers `exists` when the name is a folder.
+    A name taken while the upload runs is not overwritten: the end answers `exists` and the partial file is removed.
+  - An old node that does not know `dest=dir` (answers `unknown upload destination`, or an even older one ignores `dest`): 409 `code: node_outdated`. The hub requires begin to echo `dest`
+    and aborts without the echo, so the file never lands in a temp folder quietly. `upload_dir` in the hello `features` says the hub takes these parameters.
+- Full paired-device credentials only: extension tokens are refused (`testdata/route_scopes.txt` says `-`).
+
 ### Sending videos
 
 **+** › **Photos** in the input box picks both images and videos (#981; the same in Agents, assistant chats and the new-chat input box). **Videos are sent as files**, not converted to images:

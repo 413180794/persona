@@ -31,7 +31,7 @@ nonisolated struct AttachedFile: Hashable, Sendable {
 
     /// "24.1 MB · 0:12".
     var detail: String {
-        let size = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        let size = size.storageText
         guard let duration else { return size }
         return size + " · " + RecordingFormat.clock(duration.rounded())
     }

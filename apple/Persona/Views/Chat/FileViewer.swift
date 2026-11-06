@@ -272,7 +272,7 @@ struct FileViewer: View {
                 if let audio = page.audio { AudioFileView(model: audio) }
             case .binary:
                 EmptyStateView(symbol: Theme.Icon.missingFile, title: String(localized: "Can't Preview"),
-                               message: "\(file.mime ?? String(localized: "Binary file")) · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
+                               message: "\(file.mime ?? String(localized: "Binary file")) · \(file.size.storageText)")
             }
         } else if let error = page?.error {
             EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Open This File"), message: error)
@@ -343,7 +343,7 @@ struct FileViewer: View {
             HStack(spacing: Theme.Space.sm) {
                 Text(Fmt.path(page.file?.path ?? ref.path, home: model.machine(ref.machineRef)?.home)).lineLimit(1).truncationMode(.head)
                 Text("·")
-                Text(ByteCountFormatter.string(fromByteCount: page.file?.size ?? 0, countStyle: .file))
+                Text((page.file?.size ?? 0).storageText)
                 if let lang = page.language { Text("· " + lang) }
             }
             .foregroundStyle(.secondary)
@@ -581,7 +581,7 @@ final class FileViewerModel {
         case .notebook: await buildNotebook()
         default: break
         }
-        if f.truncated, f.next == nil { note = String(localized: "File too large; showing the first \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))") }
+        if f.truncated, f.next == nil { note = String(localized: "File too large; showing the first \(Int64(text.utf8.count).storageText)") }
     }
 
     /// Opened at a line (a message's `path:12`): the source, read up to that line, with the line marked. Rendered
@@ -626,8 +626,8 @@ final class FileViewerModel {
     private func updateNote() {
         guard let f = file else { return }
         if next > 0 {
-            let read = ByteCountFormatter.string(fromByteCount: next, countStyle: .file)
-            let all = ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file)
+            let read = next.storageText
+            let all = f.size.storageText
             note = kind == .json ? String(localized: "Read \(read) of \(all), reading the whole file…") : String(localized: "Read \(read) of \(all); scroll down to read more")
             progressNote = note
         } else if note != nil, note == progressNote {

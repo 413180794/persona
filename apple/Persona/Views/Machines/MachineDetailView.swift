@@ -22,6 +22,15 @@ struct MachineDetailView: View {
     @State private var allAgents = false
     @State private var plugins = ExtensionMachineModel()
     @State private var pluginLink: LinkTarget?
+    @State private var filesOpen = Self.initialFilesOpen
+
+    private static var initialFilesOpen: Bool {
+        #if DEBUG
+        return UserDefaults.standard.bool(forKey: "openMachineFiles") // `-openMachineFiles YES`: straight into Files (screenshots)
+        #else
+        return false
+        #endif
+    }
 
     /// A machine's agents: live ones, not the Chat tab's assistant conversations (the Agents tab leaves those out too).
     static func agents(_ model: AppModel, _ ref: MachineRef) -> [Session] {
@@ -61,6 +70,7 @@ struct MachineDetailView: View {
                         if !online, !machine.isPending { connection(machine) }
                     }
                     agentsSection(machine)
+                    filesRow(online: online)
                     // The node's self-check by feature, after the engine as on the web (#3018).
                     NodeHealthSection(ref: ref, machine: machine)
                     if let computer = machine.computer { ComputerSection(ref: ref, computer: computer, online: online) }
@@ -99,6 +109,11 @@ struct MachineDetailView: View {
         }
         .themedGroupedPage()
         .pluginLinks($pluginLink)
+        .navigationDestination(isPresented: $filesOpen) { // a leaf: the browser walks folders and opens files in place
+            FilesPane(machineID: machineID, group: ref.group, cwd: "~")
+                .detailTitle(String(localized: "Files"))
+                .navigationBarTitleDisplayMode(.inline)
+        }
         .extensionPushes(Array(plugins.models.values))
         .detailTitle(machine?.name ?? machineID)
         .navigationBarTitleDisplayMode(.inline)
@@ -220,6 +235,29 @@ struct MachineDetailView: View {
             Text("Only sessions in the selected engine are shown.").font(Theme.Font.label).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.xs)
         }
+    }
+
+    /// Files: the machine's home in the file browser (upload into a folder, Save to Files; #4858).
+    private func filesRow(online: Bool) -> some View {
+        Button {
+            Haptics.tap()
+            filesOpen = true
+        } label: {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.folder).font(Theme.Font.body).foregroundStyle(Theme.accent).scaledFrame(width: Theme.Size.icon)
+                Text("Files").font(Theme.Font.body).lineLimit(1)
+                Spacer(minLength: Theme.Space.s)
+                Text(online ? String(localized: "Home") : String(localized: "Offline [Machine Entity be1b4f]")).font(Theme.Font.body).foregroundStyle(.secondary).lineLimit(1)
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(!online)
+        .accessibilityIdentifier("machine.files")
+        .card(padding: 0)
     }
 
     // MARK: Launchers, connection

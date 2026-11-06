@@ -142,8 +142,7 @@ struct VideoFileView: View {
                     ProgressView(value: Double(model.received), total: Double(max(model.total, 1)))
                     Text("Buffering Video…")
                         .font(Theme.Font.body)
-                    Text(ByteCountFormatter.string(fromByteCount: model.received, countStyle: .file) + " / " +
-                         ByteCountFormatter.string(fromByteCount: model.total, countStyle: .file))
+                    Text(model.received.storageText + " / " + model.total.storageText)
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                 }

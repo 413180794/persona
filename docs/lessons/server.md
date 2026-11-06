@@ -597,6 +597,13 @@ Two remaining limits aren't fixed by heartbeat settings:
   The root fix is smaller frames (`Writer` segmentation), or ping only when idle.
 - Hub Persona Link forwarding caps each write at 1 minute (`spliceWS`); below about 17 KB/s, 1 MiB blocks still time out. Use smaller blocks or speed-dependent limits.
 
+## A new value for an existing RPC parameter may be silently ignored by an old node (2026-11-06, #4858)
+
+Uploads already had a `dest` parameter (`terminal`, `health`), but older nodes never read it: given `dest=dir&dir=~/proj`, they still put the file in the system temp directory and returned a successful path.
+The app saw a successful upload while the folder stayed empty, with no error anywhere. A node that knows `dest` but not `dir` answers `unknown upload destination`, which is easy to handle.
+Now the node echoes `dest` in its begin result; without the echo the hub aborts the upload and answers 409 `node_outdated`.
+Whenever an existing method gains a "write somewhere else" / "do it differently" parameter, work out what an old node does with it: if it would quietly do something else, have new nodes echo it and check the echo in the hub before going on.
+
 ## Docker: containers can't write `.env`; Postgres loopback doesn't verify passwords (2026-11-06, #4045)
 
 - Compose reads `.env` on the host before containers start, including `${X:?}` failures. "Fill missing values on first startup" requires mounted storage (DB password in `data/docker/db-password`) read by image scripts, not rewriting `.env`.

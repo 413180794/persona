@@ -39,6 +39,11 @@ type upload struct {
 	f       *os.File
 	idle    *time.Timer
 	random  bool // the final name starts with a random prefix instead of ending in a timestamp (terminal pastes)
+	// into: a folder the app is browsing (dest=dir): the file keeps its own name there, shown is that folder as the
+	// app knows it, conflict what a taken name does (proto.UploadConflict*).
+	into     bool
+	shown    string
+	conflict string
 }
 
 // begin opens an upload into the temp directory (the chat's "Send file").
@@ -111,11 +116,47 @@ func (u *uploads) chunk(id string, offset int64, data []byte) (int64, error) {
 	return up.written, nil
 }
 
+// beginInto opens an upload into a folder of the home (dest=dir) under the file's own name. With no conflict
+// policy a taken name is refused here already, before any byte is sent.
+func (n *Node) beginInto(dir, cwd, name, conflict string, size int64) (string, error) {
+	switch conflict {
+	case "", proto.UploadConflictReplace, proto.UploadConflictKeep:
+	default:
+		return "", fmt.Errorf("unknown conflict %q", conflict)
+	}
+	shown, real, err := n.writableDir(dir, cwd)
+	if err != nil {
+		return "", err
+	}
+	clean := cleanName(name)
+	if err := n.writable(filepath.Join(real, clean)); err != nil {
+		return "", err
+	}
+	if st, err := os.Lstat(filepath.Join(real, clean)); err == nil {
+		if conflict == "" || (conflict == proto.UploadConflictReplace && st.IsDir()) {
+			return "", errExists(clean)
+		}
+	}
+	id, err := n.ups.beginIn(real, clean, size, proto.MaxDirUploadBytes, false)
+	if err != nil {
+		return "", err
+	}
+	n.ups.mu.Lock()
+	if up := n.ups.open[id]; up != nil {
+		up.into, up.shown, up.conflict = true, shown, conflict
+	}
+	n.ups.mu.Unlock()
+	return id, nil
+}
+
 // end checks the size and gives the file its name; it returns the absolute path.
 func (u *uploads) end(id string, now time.Time) (string, int64, error) {
 	up, err := u.take(id)
 	if err != nil {
 		return "", 0, err
+	}
+	if up.into {
+		return up.finishInto()
 	}
 	if err := up.f.Close(); err != nil {
 		up.discard()
@@ -141,6 +182,83 @@ func (u *uploads) end(id string, now time.Time) (string, int64, error) {
 		return "", 0, err
 	}
 	return path, up.size, nil
+}
+
+// finishInto gives a dest=dir upload its own name in the folder, by the conflict policy; it returns the path as the
+// app knows the folder. The name is taken with O_EXCL (or replaced by rename) so a file that appeared meanwhile is
+// never overwritten unasked.
+func (up *upload) finishInto() (string, int64, error) {
+	if err := up.f.Close(); err != nil {
+		up.discard()
+		return "", 0, err
+	}
+	part := up.f.Name()
+	if st, err := os.Stat(part); err != nil || st.Size() != up.size || up.written != up.size {
+		up.discard()
+		return "", 0, fmt.Errorf("got %d of %d bytes", up.written, up.size)
+	}
+	dir, name := filepath.Dir(part), up.name
+	mode := os.FileMode(0o644)
+	var path string
+	switch up.conflict {
+	case proto.UploadConflictReplace:
+		path = filepath.Join(dir, name)
+		if st, err := os.Lstat(path); err == nil {
+			if st.IsDir() {
+				up.discard()
+				return "", 0, errExists(name)
+			}
+			if st.Mode().IsRegular() {
+				mode = st.Mode().Perm() // the replaced file's permissions carry over
+			}
+		}
+	default:
+		var err error
+		if path, err = reserveNumbered(dir, name, up.conflict == proto.UploadConflictKeep); err != nil {
+			up.discard()
+			return "", 0, err
+		}
+	}
+	if err := os.Chmod(part, mode); err != nil {
+		if up.conflict != proto.UploadConflictReplace {
+			_ = os.Remove(path)
+		}
+		up.discard()
+		return "", 0, err
+	}
+	if err := os.Rename(part, path); err != nil {
+		if up.conflict != proto.UploadConflictReplace {
+			_ = os.Remove(path) // the empty reservation
+		}
+		up.discard()
+		return "", 0, err
+	}
+	return filepath.Join(up.shown, filepath.Base(path)), up.size, nil
+}
+
+// reserveNumbered creates an empty file for name in dir, or with keep the first free "stem 2.ext", "stem 3.ext"…
+// as Finder names a copy; without keep a taken name is CodeExists.
+func reserveNumbered(dir, name string, keep bool) (string, error) {
+	stem, ext := splitName(name)
+	for i := 1; i < 1000; i++ {
+		n := name
+		if i > 1 {
+			n = fmt.Sprintf("%s %d%s", stem, i, ext)
+		}
+		p := filepath.Join(dir, n)
+		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			_ = f.Close()
+			return p, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return "", err
+		}
+		if !keep {
+			return "", errExists(name)
+		}
+	}
+	return "", fmt.Errorf("no free name for %s", name)
 }
 
 func (u *uploads) abort(id string) {
@@ -256,7 +374,10 @@ func (n *Node) uploadCall(method string, params json.RawMessage) (any, error) {
 	var p struct {
 		UploadID string `json:"upload_id"`
 		Name     string `json:"name"`
-		Dest     string `json:"dest"` // "terminal": a paste into a terminal (uploadDir); "health": a report (healthReportsDir); "" the temp directory
+		Dest     string `json:"dest"` // "terminal": a paste into a terminal (uploadDir); "health": a report (healthReportsDir); "dir": Dir; "" the temp directory
+		Dir      string `json:"dir"`      // dest=dir: the folder, ~/ or relative to Cwd
+		Cwd      string `json:"cwd"`      // dest=dir
+		Conflict string `json:"conflict"` // dest=dir: proto.UploadConflict*
 		Size     int64  `json:"size"`
 		Offset   int64  `json:"offset"`
 		Data     []byte `json:"data"` // base64 in JSON
@@ -281,13 +402,19 @@ func (n *Node) uploadCall(method string, params json.RawMessage) (any, error) {
 			if err = os.MkdirAll(dir, 0o700); err == nil {
 				id, err = n.ups.beginIn(dir, p.Name, p.Size, proto.MaxUploadBytes, false)
 			}
+		case proto.UploadDestDir:
+			id, err = n.beginInto(p.Dir, p.Cwd, p.Name, p.Conflict, p.Size)
 		default:
 			err = fmt.Errorf("unknown upload destination %q", p.Dest)
 		}
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"upload_id": id, "chunk_bytes": proto.UploadChunkBytes}, nil
+		res := map[string]any{"upload_id": id, "chunk_bytes": proto.UploadChunkBytes}
+		if p.Dest == proto.UploadDestDir {
+			res["dest"] = p.Dest // the hub checks it: a node from before dest=dir would quietly use the temp directory
+		}
+		return res, nil
 	case "file.upload.chunk":
 		got, err := n.ups.chunk(p.UploadID, p.Offset, p.Data)
 		if err != nil {

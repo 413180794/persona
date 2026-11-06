@@ -22,6 +22,9 @@ import (
 // dest=terminal (the web terminal's paste and drop, docs/terminal.md): the node keeps the file under its Persona
 // directory for a week instead of the temp directory, and the limit is proto.MaxTerminalUploadBytes.
 // dest=health (a report for the health space): the node keeps it in the health directory's reports/.
+// dest=dir&dir=<folder>[&cwd=][&conflict=replace|keep] (the app's file browser, docs/protocol.md "Changing files"): the file
+// keeps its name in that folder, which must be in the home; a taken name is 409 exists unless conflict says what
+// to do, up to proto.MaxDirUploadBytes.
 func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	size := r.ContentLength
@@ -30,6 +33,12 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	case "", proto.UploadDestHealth:
 	case proto.UploadDestTerminal:
 		limit = proto.MaxTerminalUploadBytes
+	case proto.UploadDestDir:
+		limit = proto.MaxDirUploadBytes
+		if strings.TrimSpace(r.URL.Query().Get("dir")) == "" {
+			writeErr(w, http.StatusBadRequest, errors.New("dir is required"))
+			return
+		}
 	default:
 		writeErr(w, http.StatusBadRequest, errors.New("unknown dest"))
 		return
@@ -54,18 +63,34 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	}
 	var begin struct {
 		UploadID string `json:"upload_id"`
+		Dest     string `json:"dest"` // echoed by a node that knows dest=dir
 	}
 	beginParams := map[string]any{"name": name, "size": size}
 	if dest != "" {
 		beginParams["dest"] = dest // an old node ignores it and uses the temp directory
 	}
+	if dest == proto.UploadDestDir {
+		q := r.URL.Query()
+		beginParams["dir"], beginParams["cwd"], beginParams["conflict"] = q.Get("dir"), q.Get("cwd"), q.Get("conflict")
+	}
 	if err := step("file.upload.begin", beginParams, &begin); err != nil {
 		var re *rpc.Error
-		if errors.As(err, &re) && re.Code == "" && strings.HasPrefix(re.Message, "unknown method") {
+		// A node from before file.upload.*, or before dest=dir: "unknown upload destination".
+		if errors.As(err, &re) && re.Code == "" && (strings.HasPrefix(re.Message, "unknown method") || strings.HasPrefix(re.Message, "unknown upload destination")) {
 			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-upload.outdated", i18n.Args{"name": m.cfg.Name}), nil)
 			return
 		}
 		callErr(w, err)
+		return
+	}
+	outdated := func() {
+		writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-upload.outdated", i18n.Args{"name": m.cfg.Name}), nil)
+	}
+	if dest == proto.UploadDestDir && begin.Dest != dest { // an old node ignored dest and opened it in its temp directory
+		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = m.call(c, "file.upload.abort", map[string]any{"upload_id": begin.UploadID}, nil)
+		cancel()
+		outdated()
 		return
 	}
 	done := false
