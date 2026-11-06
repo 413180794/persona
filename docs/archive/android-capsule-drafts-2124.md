@@ -1,24 +1,24 @@
-# 完成提示后的草稿保留（#2124）
+# Keeping drafts after the completion toast (#2124)
 
-## 结果与证据
+## Outcome and evidence
 
-输入未发送文字后收起，经过完成提示和自动收回，再展开仍保留原草稿；不同会话草稿保持独立，关闭或切配对时清理。用旧版真实复现、生产Compose回归、修版模拟器同路径和APK / lint / 相关测试证明。
+Type unsent text, collapse, let the completion toast appear and auto-retract, expand again: the original draft is still there; drafts for different sessions stay separate and are cleared on close or when switching pairings. Proven by a real reproduction on the old version, a production Compose regression test, the same path on the fixed build in the emulator, and APK / lint / related tests.
 
-## 范围
+## Scope
 
-仅将UI草稿提升到Host生命周期并接回Surface，不保留隐藏的大窗口，不改完成触发、队列、4秒时长或目标路由。原187项测试与完成提示实测继续适用；本轮重测发生变化的草稿路径。
+Only lifts the UI draft to the Host lifecycle and wires it back into the Surface; it does not keep a hidden large window, and does not change the completion trigger, the queue, the 4-second duration or target routing. The original 187 tests and the completion-toast field test still apply; this round retests the changed draft path.
 
-## 阶段
+## Stages
 
-- [x] 记录回归并建立独立修复分支。
-- [x] 旧版复现与生产组件修复 / 回归。
-- [x] Native / App测试、APK / lint与真实草稿验证。
-- [ ] PR与0.2.3发布（外部进展见Issue）。
+- [x] Record the regression and create a separate fix branch.
+- [x] Reproduce on the old version, fix / regression-test the production component.
+- [x] Native / App tests, APK / lint and real draft verification.
+- [ ] PR and 0.2.3 release (external progress in the issue).
 
-## 回归与修复证据
+## Regression and fix evidence
 
-0.2.2真实模拟器输入后收起，另一会话完成约0.195秒出现提示、4.190秒收回；再展开原草稿变空。Compose同路径红测在提示结束后恢复输入框断言失败。修复将草稿map提升到Host，每个Host独立，关闭时清空；原有Runtime切配对或关闭开关会关闭旧Host。修后24项原生测试通过，新回归同时覆盖主对话和Agent两个草稿，独立只读审查通过。
+On 0.2.2 in a real emulator, after typing and collapsing, another session finished, the toast appeared at about 0.195 s and retracted at 4.190 s; on expanding again the draft was empty. The Compose red test on the same path failed its input-field assertion after the toast ended. The fix lifts the draft map into the Host, one per Host, cleared on close; the existing Runtime closes the old Host when switching pairings or turning the switch off. After the fix, 24 native tests passed, the new regression test covers both the main chat draft and an Agent draft, and an independent read-only review passed.
 
-最终APK、模拟器验收与合并发布结果以#2124进展评论为准。
+The final APK, emulator acceptance, and merge / release results are in the progress comments on #2124.
 
-0.2.3同签名覆盖安装保留原配对和Always开关。相同真实路径中新草稿前后一致，提示约0.282秒出现、4.145秒收回；已检查提示和恢复草稿截图。App91项、原生24项测试以及APK / lint通过；文档路径3项与暂存隐私扫描通过。数据层未改，沿用上一轮73项通过结果。
+The 0.2.3 same-signature upgrade in place keeps the existing pairing and the Always switch. On the same real path the new draft is identical before and after; the toast appeared at about 0.282 s and retracted at 4.145 s; the toast and restored-draft screenshots were checked. App 91, native 24 tests and APK / lint passed; the 3 doc-path checks and the staged privacy scan passed. The data layer was unchanged, so the previous round's 73 passing tests still stand.

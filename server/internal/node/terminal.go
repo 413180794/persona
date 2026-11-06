@@ -244,7 +244,9 @@ func (n *Node) terminalWatch(ctx context.Context, id string, ctl *termControl) (
 	if err != nil {
 		return nil, err
 	}
-	sctx, cancel := context.WithCancel(context.Background())
+	// The stream outlives this request but not the connection: a resident node makes a new Node per hub
+	// connection, and one left running on the old one would observe (or hold the attach slot) for good (#5331).
+	sctx, cancel := context.WithCancel(rpc.ConnContext(ctx))
 	s := &termStream{cancel: cancel}
 	n.setTermStream(id, s)
 	go n.terminalLoop(sctx, id, s)
@@ -292,7 +294,7 @@ func (n *Node) terminalControl(ctx context.Context, id string, ctlr host.Control
 			}
 		}
 	}
-	sctx, cancel := context.WithCancel(context.Background())
+	sctx, cancel := context.WithCancel(rpc.ConnContext(ctx)) // ends with the connection, as terminalWatch's (#5331)
 	s := &termStream{cancel: cancel, lease: time.Now(), leaseFor: termLease}
 	epoch := strconv.FormatInt(time.Now().UnixNano(), 36)
 	frames, replay := 0, 0

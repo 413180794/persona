@@ -1,296 +1,296 @@
-# hub 重启对客户端无感
+# Hub restarts invisible to clients
 
-用户 2026-11-04：hub 每次部署或重启，iPhone、Mac、网页、安卓上的 Persona 都会掉线，主对话里正在跑的助手后台任务（Monitor、`run_in_background`）也会被停掉。
-要求：**服务端重启时，客户端完全感觉不到**。issue #1574。
+User, 2026-11-04: every time the hub is deployed or restarted, Persona on iPhone, Mac, web and Android disconnects, and the assistant's background tasks running in the main chat (Monitor, `run_in_background`) get stopped too.
+Requirement: **when the server restarts, clients notice nothing at all**. Issue #1574.
 
-目标：一次正常部署，所有客户端上都不出现断开提示，不丢消息，不中断正在跑的对话。
+Goal: in a normal deployment, no client shows a disconnect notice, no message is lost, and no running chat is interrupted.
 
-## 现状（2026-11-04 核实，改动前，master `2fe55f92`）
+## Current state (verified 2026-11-04, before the change, master `2fe55f92`)
 
-代码位置写的是现在的文件和函数（2026-11-06 对过；`2fe55f92` 之后，机器连接（拉起 node、断线处理）从 hub/machine.go、hub/machine_conn.go 搬到了 `devices/`；`hub/machine.go` 还在，转发 node 事件的 `onEvent` 留在那里），行为说的仍是改动前。
+Code locations refer to the current files and functions (checked 2026-11-06; after `2fe55f92`, machine connections (spawning nodes, disconnect handling) moved from hub/machine.go and hub/machine_conn.go to `devices/`; `hub/machine.go` still exists, and `onEvent`, which forwards node events, stayed there); the behavior described is still that before the change.
 
-### 重启的过程
+### What a restart does
 
-- `scripts/deploy/deploy.sh:200-215` 部署 hub：`db.sh` → 拷 node 二进制 → `install_bin`（`jarvisd.new` 再 `mv`，原子替换）→ 插件程序 → `hub-systemd.sh`。
-  `install_bin` 顺手重启这台的常驻 node（`deploy.sh:126`、`:137`，`node-launchd.sh restart`）。
-- `scripts/deploy/hub-systemd.sh:34-55` 每次重写 `~/.config/systemd/user/jarvisd.service`（`Restart=always`、`RestartSec=3`，没写 `KillMode`，
-  即 control-group），然后 `systemctl --user restart jarvisd`。除了 `is-active` 没有健康检查。
-- 收到 SIGTERM（`cmd/personad/main.go` 的 `main` 里的 `signal.NotifyContext`）：hub 的 ctx 立刻取消，各台机器的连接同时被杀（`hub/hub.go` 的 `runHub` 里 `startDevices(ctx)` 起的连接）。
-  `hub/public.go` 的 `serveHTTP` 里的停机顺序：先关监听 → `stopWebSockets` 给每个客户端发 1001「hub stopping」，等 0.5 s 后强关（`hub/shutdown.go` 的 `stopWebSockets`）
-  → `http.Server.Shutdown`（每步 2 s，总预算 8 s，`shutdown.go` 的 `defaultShutdownTimeout` / `shutdownStepTimeout`）→ 等 node 连接 → 关数据库。**先关监听再排空**，排空期间端口是关着的。
-- 监听是进程自己 `net.Listen`（`public.go` 的 `serveHTTP`，TLS 端口在 `startPublic`），没有 `SO_REUSEPORT`、`LISTEN_FDS` 或 socket activation。
-  新进程在 `db.Open`（迁移）、插件、知识库等全部起来以后才监听（`hub.go` 的 `runHub`）。
-- 实测（这台开发机 2026-11-04 19:30 那次重启的 journal）：19:30:29.88 开始停，30.93 停完，31.14 新进程开始监听，**端口关了约 1.3 s**，
-  这期间的连接被拒绝（connection refused）。
+- `scripts/deploy/deploy.sh:200-215` deploys the hub: `db.sh` → copy the node binary → `install_bin` (`jarvisd.new` then `mv`, an atomic replace) → extension programs → `hub-systemd.sh`.
+  `install_bin` also restarts this machine's resident node (`deploy.sh:126`, `:137`, `node-launchd.sh restart`).
+- `scripts/deploy/hub-systemd.sh:34-55` rewrites `~/.config/systemd/user/jarvisd.service` every time (`Restart=always`, `RestartSec=3`, no `KillMode`,
+  i.e. control-group), then runs `systemctl --user restart jarvisd`. There is no health check beyond `is-active`.
+- On SIGTERM (`signal.NotifyContext` in `main` of `cmd/personad/main.go`): the hub's ctx is cancelled at once, and every machine connection is killed at the same moment (the connections started by `startDevices(ctx)` in `runHub` of `hub/hub.go`).
+  The shutdown order in `serveHTTP` of `hub/public.go`: close the listener first → `stopWebSockets` sends each client 1001 "hub stopping" and force-closes after 0.5 s (`stopWebSockets` in `hub/shutdown.go`)
+  → `http.Server.Shutdown` (2 s per step, 8 s total budget, `defaultShutdownTimeout` / `shutdownStepTimeout` in `shutdown.go`) → wait for node connections → close the database. **The listener closes before draining**, so the port is closed during the drain.
+- The process listens itself with `net.Listen` (`serveHTTP` in `public.go`, the TLS port in `startPublic`); there is no `SO_REUSEPORT`, `LISTEN_FDS` or socket activation.
+  The new process only listens after `db.Open` (migrations), extensions, the knowledge base and everything else is up (`runHub` in `hub.go`).
+- Measured (journal of the restart on this dev machine at 19:30 on 2026-11-04): stopping began at 19:30:29.88, finished at 30.93, and the new process started listening at 31.14: **the port was closed for about 1.3 s**,
+  and connections in that window were refused (connection refused).
 
-### 各类连接在重启那一刻
+### Each kind of connection at the moment of restart
 
-| 连接 | 重启时 | 位置 |
+| Connection | During restart | Location |
 | --- | --- | --- |
-| 客户端的 WebSocket（`/api/v1/ws`） | 收到 1001 关闭；之后 1.3 s 里重连被拒绝，新进程起来后才连上 | `shutdown.go` 的 `stopWebSockets`，`http.go` 的 `serveWS`（停机中的升级给 503） |
-| 进行中的 HTTP 请求 | `Shutdown` 最多等 2 s，超过就强关；这 1.3 s 里新发的请求被拒绝 | `public.go` 的 `serveHTTP` |
-| 各台电脑的 node | hub 的 ctx 一取消就杀掉 `jarvisd node --stdio` / `ssh` 子进程（SIGKILL，`devices/machine.go` 的 `open` 里 `WaitDelay` 2 s），**同时**把机器标成离线、广播 `machines`、结束这台机器上不可续的交互（`devices/conn.go` 的 `detach`），这些广播客户端在被断开前就收到了 | `devices/machine.go` 的 `command`、`open` |
-| 本机 node | 是 hub 的子进程（`node --stdio`），和 hub 一起被 systemd 的 cgroup 杀掉 | `devices/machine.go` 的 `command`（`local` 那支） |
-| 插件（接飞书的扩展、removed 等） | hub 的子进程（stdio RPC），随 hub 的 cgroup 被杀，新 hub 再拉起；登录态在插件自己的目录里，重启只丢 hub 侧的会话和就绪状态 | `extension/host/host.go` 的 `spawn` |
-| 连接器程序（telegram、wechat） | 同上，退避 5 s 起 | `connector/proc/proc.go` 的 `Conn.Run`（`restartFirst`） |
-| jarvis-link（kind link 的电脑） | 收到 1001，1–60 s 指数退避重连，状态文字「hub 重启了」 | `link/client.go` 的 `backoff`、`summary` |
+| Client WebSocket (`/api/v1/ws`) | Receives a 1001 close; reconnects in the next 1.3 s are refused, and it only connects once the new process is up | `stopWebSockets` in `shutdown.go`, `serveWS` in `http.go` (upgrades during shutdown get 503) |
+| In-flight HTTP requests | `Shutdown` waits at most 2 s, then force-closes; new requests in that 1.3 s are refused | `serveHTTP` in `public.go` |
+| Nodes on each computer | As soon as the hub's ctx is cancelled, the `jarvisd node --stdio` / `ssh` subprocesses are killed (SIGKILL, `WaitDelay` 2 s in `open` of `devices/machine.go`), and **at the same time** the machine is marked offline, `machines` is broadcast, and non-resumable interactions on that machine are ended (`detach` in `devices/conn.go`); clients receive these broadcasts before they are disconnected | `command`, `open` in `devices/machine.go` |
+| Local node | A child process of the hub (`node --stdio`), killed together with the hub by systemd's cgroup | `command` in `devices/machine.go` (the `local` branch) |
+| Extensions (the Lark extension and others) | Child processes of the hub (stdio RPC), killed with the hub's cgroup and respawned by the new hub; login state lives in each extension's own directory, so a restart only loses the hub-side session and readiness state | `spawn` in `extension/host/host.go` |
+| Connector programs (telegram, wechat) | Same, restarted with a 5 s backoff | `Conn.Run` in `connector/proc/proc.go` (`restartFirst`) |
+| jarvis-link (computers of kind link) | Receives 1001, reconnects with 1–60 s exponential backoff, status text "hub restarted" | `backoff`, `summary` in `link/client.go` |
 
-新 hub 起来后：本机 node 0.2 s 内连上，ssh 的 Mac 要 2–8 s（实测一台 +2.4 s、另一台 +8 s）。这段时间里机器显示离线、它的会话列表是空的。
+After the new hub comes up: the local node connects within 0.2 s; a Mac over ssh takes 2–8 s (measured: one at +2.4 s, another at +8 s). During that time the machine shows as offline and its session list is empty.
 
-### 客户端怎么发现断线、怎么恢复
+### How clients detect a disconnect and recover
 
-| | iOS / Mac（`apple/Shared/LiveConnection.swift`） | 网页（`web/src/lib/store.ts`） | 安卓（`core/hub/.../OkHttpHubConnection.kt`） |
+| | iOS / Mac (`apple/Shared/LiveConnection.swift`) | Web (`web/src/lib/store.ts`) | Android (`core/hub/.../OkHttpHubConnection.kt`) |
 | --- | --- | --- | --- |
-| 发现断线 | receive 失败；20 s ping，pong 晚 5 s 算卡住，45 s 没消息断开（`:266-269`、`:383-411`） | `onclose`；10 s 一次看门狗，70 s 没消息重连（`:217-245`） | `onClosing` / `onFailure`、hello 15 s 超时、前台 45 s 无消息（`:411-486`） |
-| 重连 | 1 s 起翻倍到 20 s，无抖动（`:468-477`） | 600 ms 起翻倍到 15 s，±20% 抖动（`:222`） | 1 s 起翻倍到 20 s，×0.8–1.0；同步完成才复位（`:340-378`） |
-| 界面 | 非在线状态持续 1.5 s 才显示「连接中…」「更新中…」（`ConnectionStatus.swift:39`、`:127-151`）；hub 自更新时显示「hub 正在更新…」 | 每次断开立刻变「连接中」，第三次失败起「连不上 hub，正在重试…」（`App.tsx:206-212`、`Sidebar.tsx:429`），没有宽限 | 离开 Online 延迟 1.5 s 发布（`:797-813`），超时立刻「连接中」，一连上先显示「更新中…」（`:511-513`） |
-| 重连后 | 连接快照（machines、sessions、交互）+ 重拉交互、收件箱、待办、任务等；对话按 `since_seq` 续 | `hello` 后 `refresh()` 重拉 7 个接口 + 收件箱、插件槽、终端；对话按 `since_seq` 续 | 回到 Online 重拉机器、会话、交互；对话按 `since_seq` 续 |
-| 断线期间的写操作 | 消息进持久化发件箱，连上后补发（`client_msg_id`）；审批 / 回答乐观移除、失败恢复，不重试、不带 op id | 发消息立刻失败（「没发出去：连不上 hub」）；审批失败弹「没送到」；不带 op id | 消息走持久化发件箱，带 `client_msg_id` 和 `X-Jarvis-Op-Id`，回执核对；审批不带 op id、不重试 |
+| Detecting a disconnect | receive fails; ping every 20 s, a pong 5 s late counts as stuck, disconnect after 45 s without messages (`:266-269`, `:383-411`) | `onclose`; a watchdog every 10 s, reconnect after 70 s without messages (`:217-245`) | `onClosing` / `onFailure`, 15 s hello timeout, 45 s without messages in the foreground (`:411-486`) |
+| Reconnecting | Starts at 1 s, doubling to 20 s, no jitter (`:468-477`) | Starts at 600 ms, doubling to 15 s, ±20% jitter (`:222`) | Starts at 1 s, doubling to 20 s, ×0.8–1.0; reset only after sync completes (`:340-378`) |
+| UI | A non-online state must last 1.5 s before "Connecting…" / "Updating…" shows (`ConnectionStatus.swift:39`, `:127-151`); during a hub self-update it shows "Hub updating…" | Every disconnect switches to "Connecting" at once, and from the third failure on "Can't reach the hub. Retrying…" (`App.tsx:206-212`, `Sidebar.tsx:429`); no grace period | Leaving Online is published after a 1.5 s delay (`:797-813`), a timeout shows "Connecting" immediately, and once connected it first shows "Updating…" (`:511-513`) |
+| After reconnecting | Connection snapshot (machines, sessions, interactions) + refetch interactions, Inbox, to-dos, tasks, etc.; chats resume from `since_seq` | After `hello`, `refresh()` refetches 7 endpoints + Inbox, extension slots, terminals; chats resume from `since_seq` | Back to Online, refetches machines, sessions, interactions; chats resume from `since_seq` |
+| Writes during the disconnect | Messages go into a persistent outbox and are resent after connecting (`client_msg_id`); approvals / answers are removed optimistically and restored on failure, with no retry and no op id | Sending a message fails immediately ("not sent: can't reach the hub"); a failed approval shows "not delivered"; no op id | Messages go through a persistent outbox with `client_msg_id` and `X-Jarvis-Op-Id`, checked against receipts; approvals carry no op id and are not retried |
 
-共同点：**全局的实时事件没有序号**，断线期间的广播（`todos`、`inbox`、`lark`、`revs`、`interaction_resolved`……）全部丢失，只能靠重连后全量重拉；
-只有对话内容能按 `since_seq` 续（`http.go` 的 `onClientMessage` 里的 `subscribe` 和 `sendBacklog`、`docs/protocol.md`「items 的连续性」）。hub 已经有幂等回执（`X-Jarvis-Op-Id`，`hub/clientops.go`、
-`docs/protocol.md`「操作回执」）和 `client_msg_id` 去重，但只有安卓的发消息用了 op id。
+What they share: **global live events have no sequence number**, so broadcasts during the disconnect (`todos`, `inbox`, `lark`, `revs`, `interaction_resolved`…) are all lost and can only be recovered by a full refetch after reconnecting;
+only chat content can resume from `since_seq` (`subscribe` and `sendBacklog` in `onClientMessage` of `http.go`, `docs/protocol.md` ("Continuity of items")). The hub already has idempotent receipts (`X-Jarvis-Op-Id`, `hub/clientops.go`,
+`docs/protocol.md` ("Operation receipts")) and `client_msg_id` dedup, but only Android's message sending uses an op id.
 
-一次重启客户端看到的：网页立刻变「连接中」（约 1.3 s 后连上，全量重拉一遍）；iOS / 安卓超过 1.5 s 才显示，一般刚好看得到「连接中…」或「更新中…」闪一下；
-Mac 上的 ssh 机器离线 2–8 s，列表里它的会话先消失再出现。
+What clients see during one restart: the web switches to "Connecting" immediately (connected again after about 1.3 s, with a full refetch); iOS / Android only show something after 1.5 s, so usually a brief flash of "Connecting…" or "Updating…";
+on the Mac, ssh machines go offline for 2–8 s, and their sessions disappear from the list and then reappear.
 
-### hub 里正在进行的工作
+### Work in progress inside the hub
 
-- 助手（Persona tab 主对话、副对话、定时任务、AI 分身、飞书 /agent、机器人、频道插件，`hub/assistant*.go`、AI 分身是管理者的 `assistant/inbox_agent.go`、飞书 /agent 在接飞书的插件里（#1571 起，经 hub 的公开接口开对话）、
-  飞书机器人 `assistant/feishu.go` 的 `botSend`、频道插件 `assistant/channels_plugin.go` 的 `channelForward`）都走 `assistant.send`（机器人和频道插件现在只有开新对话走它，接着说走 `sendOnce` 的 `session.send_once`），由**助手所在机器的 node** 起无头 claude：
-  `zsh -ic "<启动器> \"$@\"" … -p --input-format stream-json --output-format stream-json --include-partial-messages`（`node/assistant.go` 的 `spawnClaude`），
-  独立进程组（`Setpgid`），stdin / stdout 是管道。
-- 流式输出：`readAssistant` 把 `text_delta` 攒在内存的 `p.partial`，每 80 ms 发一次 `session.delta`（`node/assistant.go` 的 `readAssistant`、`emitDelta`），hub 转给订阅者
-  （`hub/machine.go` 的 `onEvent`，`session.delta` 那支）。正在生成的文字只在内存里；写完的消息在 Claude Code 自己的 transcript 里。
-- hub 重启时：node 的连接断开 → `Node.Serve` 返回 → `reapAssistants` 停掉所有助手进程（`node/assistant.go` 的 `reapAssistants`）；本机的 node 本来就和 hub 一起被 cgroup 杀掉。
-  **常驻 node（`node --attach`）也一样**：每条 hub 连接一个 `Node`，新连接进来旧的就停（`node/attach.go` 的 `Attach`），它的助手进程一起停。
-- Monitor、`run_in_background` 的后台命令是 claude 的子进程，随它一起死。node 记着每个对话的后台任务（`background_tasks_changed` → `state.put`），
-  重启后 `recoverAssistantTasks` 给这些对话发一条「jarvisd 刚重启过……后台任务停了」（`node/assistant.go`、`prompts/assistant/lost_tasks.md`），让它自己重新布置。
-- 用户看到的：正在回答的那条停在半截（流式的部分没了，只剩 transcript 里已写完的块），下一条消息时 `--resume` 接着；后台任务没了，对话收到一条「刚重启过」。
-  herdr 里的 Agent 不受影响（herdr 是独立进程，只有观察它的辅助子进程会断）。
+- The assistant (the Persona tab's main chat, side chats, scheduled tasks, the AI twin, Lark /agent, bots, channel extensions: `hub/assistant*.go`; the AI twin is the manager's `assistant/inbox_agent.go`; Lark /agent lives in the Lark extension (since #1571, opening chats through the hub's public API);
+  the Lark bot is `botSend` in `assistant/feishu.go`; channel extensions are `channelForward` in `assistant/channels_plugin.go`) all goes through `assistant.send` (bots and channel extensions now use it only to open new chats; continuing uses `session.send_once` via `sendOnce`), and **the node on the assistant's machine** starts a headless claude:
+  `zsh -ic "<launcher> \"$@\"" … -p --input-format stream-json --output-format stream-json --include-partial-messages` (`spawnClaude` in `node/assistant.go`),
+  in its own process group (`Setpgid`), with pipes for stdin / stdout.
+- Streaming output: `readAssistant` accumulates `text_delta` in memory in `p.partial` and sends a `session.delta` every 80 ms (`readAssistant`, `emitDelta` in `node/assistant.go`); the hub forwards it to subscribers
+  (`onEvent` in `hub/machine.go`, the `session.delta` branch). Text being generated exists only in memory; finished messages are in Claude Code's own transcript.
+- When the hub restarts: the node's connection drops → `Node.Serve` returns → `reapAssistants` stops all assistant processes (`reapAssistants` in `node/assistant.go`); the local node is killed with the hub by the cgroup anyway.
+  **A resident node (`node --attach`) is no different**: one `Node` per hub connection, and a new connection stops the old one (`Attach` in `node/attach.go`), taking its assistant processes with it.
+- Background commands from Monitor and `run_in_background` are child processes of claude and die with it. The node remembers each chat's background tasks (`background_tasks_changed` → `state.put`);
+  after a restart, `recoverAssistantTasks` sends those chats a message "jarvisd just restarted… background tasks stopped" (`node/assistant.go`, `prompts/assistant/lost_tasks.md`) so it can set them up again.
+- What the user sees: the answer in progress stops halfway (the streamed part is gone, only the blocks already written to the transcript remain), and the next message continues with `--resume`; background tasks are gone, and the chat gets a "just restarted" message.
+  Agents in herdr are unaffected (herdr is a separate process; only the helper subprocesses observing it disconnect).
 
-## 方案
+## Design
 
-### 零空窗：systemd socket activation
+### Zero gap: systemd socket activation
 
-监听 socket 交给 `jarvisd.socket`（`ListenStream` 是 hub.json 的 `listen`，配了 `public.tls_listen` 再加一个），hub 启动时从 `LISTEN_FDS` 拿
-（`hub/listen.go`：按端口对上，拿到就用，拿不到自己 `net.Listen`）。`systemctl --user restart jarvisd` 只重启服务，socket 一直在 systemd 手里：
-旧进程停、新进程起的这段时间，新连接在 backlog 里排队等着（不是被拒绝），新进程一 `Accept` 就接上。
+The listening socket is handed to `jarvisd.socket` (`ListenStream` is hub.json's `listen`, plus a second one if `public.tls_listen` is configured), and the hub takes it from `LISTEN_FDS` at startup
+(`hub/listen.go`: matched by port; if found it is used, otherwise the hub calls `net.Listen` itself). `systemctl --user restart jarvisd` only restarts the service while the socket stays with systemd:
+between the old process stopping and the new one starting, new connections wait in the backlog (instead of being refused), and are accepted as soon as the new process calls `Accept`.
 
-为什么选它：
+Why this one:
 
-- **SO_REUSEPORT + 新旧进程并存**：要先起新进程再停旧的，systemd 一个服务只有一个主进程，得改成 deploy 脚本在 unit 外面起新进程或者改 `Type=notify` 换主 PID，
-  部署方式改动大；两个进程同时接连接时，WebSocket 会分到正在退出的那个。
-- **自己传 fd（tableflip 式 re-exec）**：能做到新进程就绪再停旧的，但要 `Type=notify` + `NotifyAccess=all` + `MAINPID`、处理 cgroup 里的子进程，
-  出错面大；收益只是省掉新进程启动的约 0.2 s，而这 0.2 s 在 backlog 里排队客户端看不出来。
-- **socket activation**：标准、几行代码、对 Docker / launchd / 手动运行没有影响（没有 `LISTEN_FDS` 就自己监听）；回滚就是删掉 socket unit。
-  代价：停旧进程那约 1 s 里连接要等，不能立刻得到回应——客户端的宽限远大于这个。
+- **SO_REUSEPORT + old and new processes side by side**: the new process must start before the old one stops, but a systemd service has only one main process, so either the deploy script starts the new process outside the unit or it switches to `Type=notify` and changes the main PID;
+  a big change to how deployment works; and with two processes accepting connections at once, WebSockets can land on the one that is exiting.
+- **Passing the fd ourselves (tableflip-style re-exec)**: can wait until the new process is ready before stopping the old one, but needs `Type=notify` + `NotifyAccess=all` + `MAINPID` and handling child processes in the cgroup,
+  a large surface for errors; the only gain is saving the new process's ~0.2 s startup, and clients cannot see those 0.2 s spent queued in the backlog.
+- **Socket activation**: standard, a few lines of code, no effect on Docker / launchd / running by hand (without `LISTEN_FDS` the hub listens itself); rolling back means deleting the socket unit.
+  Cost: during the ~1 s while the old process stops, connections wait and get no immediate response, which is far within the clients' grace periods.
 
-`hub-systemd.sh` 负责写两个 unit：第一次（或地址变了）要停一次服务把端口交给 socket（只这一次有约 1 s 的空窗），以后每次都只 `restart jarvisd`。
-`TimeoutStopSec=20`（停机预算 8 s 之外留余量）。
+`hub-systemd.sh` writes both units: the first time (or when the address changes) it stops the service once to hand the port to the socket (only this once is there a ~1 s gap); after that it always just runs `restart jarvisd`.
+`TimeoutStopSec=20` (headroom beyond the 8 s shutdown budget).
 
-### 蓝绿切换：hub 的入口（`internal/hubedge`，2026-11-06）
+### Blue-green switching: the hub's edge (`internal/hubedge`, 2026-11-06)
 
-参考一个账号池网关（中转）的做法：入口进程常驻并持有端口，后面挂两个槽位。起因是 2026-11-05 在 Linux 上复现的问题：自更新原地 `syscall.Exec` 新二进制时，systemd 传来的监听 socket 丢了。
-启动时清掉了 `LISTEN_FDS`，`net.FileListener` 复制出的 fd 又带 close-on-exec，新进程只能自己 `bind`，端口却还在 `jarvisd.socket` 手里，于是报 `address already in use` 退出，
-要等 systemd 用 `Restart=always` 再拉起来，还白白多算一次启动次数。自更新这条路也不走计划内停机，客户端收不到 `hub_restarting`。
+Modeled on an account-pool relay gateway's approach: a resident edge process holds the port, with two slots behind it. The trigger was a problem reproduced on Linux on 2026-11-05: when self-update `syscall.Exec`'d the new binary in place, the listening socket passed by systemd was lost.
+`LISTEN_FDS` was cleared at startup, and the fd duplicated by `net.FileListener` had close-on-exec set, so the new process had to `bind` itself while the port was still held by `jarvisd.socket`; it exited with `address already in use`,
+and had to wait for systemd's `Restart=always` to bring it back, needlessly burning one more start count. The self-update path also skipped the planned shutdown, so clients never got `hub_restarting`.
 
-现在 `personad hub run`（Linux、macOS）是一个**入口**：
+Now `personad hub run` (Linux, macOS) is an **edge**:
 
-- 入口持有 hub 的端口：systemd 给的 socket，没有就自己监听。整个服务运行期间一直不放。
-- hub 本身作为**槽位**运行：`personad hub slot`，入口的子进程，在 `~/.persona/run/slot-<a|b>-<端口>.sock` 上监听。
-- 入口逐字节转发每条连接，转发前先写一个 PROXY v2 头说明来源。槽位的 `RemoteAddr` / `LocalAddr` 因此还是客户端和它连上的地址，
-  按来源判断信任（回环、局域网、VPN 网卡、用户自己的 PROXY protocol 上游）照旧。
-- TLS 证书、公钥钉扎、数据库都归槽位，入口只转发 TCP。
+- The edge holds the hub's ports: the socket from systemd, or its own listener if there is none. It never lets go while the service runs.
+- The hub itself runs as a **slot**: `personad hub slot`, a child process of the edge, listening on `~/.persona/run/slot-<a|b>-<port>.sock`.
+- The edge forwards every connection byte for byte, first writing a PROXY v2 header stating the origin. So the slot's `RemoteAddr` / `LocalAddr` are still the client's address and the address it connected to,
+  and trust decisions by origin (loopback, LAN, VPN interface, the user's own PROXY protocol upstream) work as before.
+- TLS certificates, public-key pinning and the database belong to the slot; the edge only forwards TCP.
 
-切换一次（自更新、`personad hub switch`、deploy.sh），按顺序：
+One switch (self-update, `personad hub switch`, deploy.sh), in order:
 
-1. 新二进制作为 **standby** 槽位启动：报出版本和 build 号，自检配置，连得上数据库（`db.Check`，不迁移），然后等着。
-   这期间旧槽位照常服务；版本不对、起不来、连不上库，就杀掉新的，旧的继续跑，没有任何中断。
-2. 入口开始 **hold**：新连接在入口排队，不拒绝。然后通知旧槽位 **release**，它照计划内停机的流程停下：`hub_restarting`、交出机器和事件日志、1001。
-3. 通知新槽位 **activate**：迁移数据库，接管机器，开始监听，报 ready。入口把路由切过去，排着的连接放给它。
-4. 新槽位没能接手（迁移失败、退出、超时），就换回上一版：`--prev`，或者自更新时由入口把 pending 标记里的文件换回去。
+1. The new binary starts as the **standby** slot: it reports its version and build number, self-checks the config, verifies it can reach the database (`db.Check`, no migration), then waits.
+   Meanwhile the old slot keeps serving; if the version is wrong, it fails to start, or it cannot reach the database, the new one is killed and the old one keeps running with no interruption at all.
+2. The edge starts to **hold**: new connections queue at the edge instead of being refused. Then it tells the old slot to **release**, and it stops through the planned-shutdown flow: `hub_restarting`, hand over machines and the event log, 1001.
+3. It tells the new slot to **activate**: migrate the database, take over machines, start listening, report ready. The edge switches routing over and releases the queued connections to it.
+4. If the new slot fails to take over (migration failure, exit, timeout), it switches back to the previous version: `--prev`, or during self-update the edge swaps back the files recorded in the pending marker.
 
-另外几点：
+Other points:
 
-- 连接在旧槽位的 socket 队列里还没被接、旧槽位就被 release 了：入口把客户端已经发出的字节（最多 64 KiB）原样交给下一个槽位，客户端看不出来。
-  槽位崩溃时不这样重放，因为它可能已经处理了没来得及回答的请求。
-- 槽位意外退出：入口 hold 住连接，按退避时间重新启动它；连续 5 次起不来，入口自己退出，交给服务管理器。
-- `public.tls_listen` 指定的局域网地址已经不在这台机器上（DHCP 换了地址）：入口不持有这个端口，槽位也拿不到它的 socket（`ErrNoSocket`），
-  于是关掉 TLS 照常启动，和 hub 自己监听时的做法一样（`docs/onboarding.md` 4.1）。
-- 入口本身不跟着 hub 自动更新，只在服务重启时换（unit 变了、或者 `hub switch` 发现入口协议比新二进制旧，退出码 3）。
-  所以入口要保持很薄：转发、排队、两个槽位、控制 socket（`~/.persona/run/hub-edge.sock`，0600）。
+- A connection still waiting, not yet accepted, in the old slot's socket queue when the old slot is released: the edge hands the bytes the client already sent (up to 64 KiB) unchanged to the next slot, and the client cannot tell.
+  This replay does not happen when a slot crashes, because it may already have processed a request it had not answered.
+- A slot exits unexpectedly: the edge holds connections and restarts it with backoff; after 5 failed starts in a row, the edge exits itself and leaves it to the service manager.
+- The LAN address set in `public.tls_listen` is no longer on this machine (DHCP changed it): the edge does not hold that port, the slot cannot get its socket either (`ErrNoSocket`),
+  so it starts normally with TLS off, the same as when the hub listens itself (`docs/onboarding.md` 4.1).
+- The edge itself does not update automatically with the hub; it changes only on service restart (the unit changed, or `hub switch` finds the edge protocol older than the new binary, exit code 3).
+  So the edge must stay very thin: forwarding, queuing, two slots, a control socket (`~/.persona/run/hub-edge.sock`, 0600).
 
-为什么不做两个 hub 同时服务（那个网关的并行切换）：hub 里有很多同一时刻只能有一个的东西，机器连接、助手进程、机器人、连接器、扩展，还有数据库迁移。
-新旧并存的只有 standby 自检这一段，交接时有 1–2 秒的 hold。实测（NAS，2026-11-06）：一次切换 0.68 秒，期间 4 路并发请求共 607 次，失败 0 次。
+Why not two hubs serving at once (that gateway's parallel switch): the hub has many things that can only exist once at a time: machine connections, assistant processes, bots, connectors, extensions, and database migrations.
+Old and new coexist only during the standby self-check, with a 1–2 second hold at handover. Measured (NAS, 2026-11-06): one switch took 0.68 seconds, with 607 requests across 4 concurrent streams during it and 0 failures.
 
-不经入口的情况：Windows、Docker（镜像更新）、`PERSONA_HUB_EDGE=0`、数据目录路径太长（Unix socket 地址超限）。这时 hub 照旧自己监听。
-这条路上原地 exec 的问题也修了：systemd 给的 fd 保留下来（close-on-exec），exec 前清掉标志，再带上 `LISTEN_FDS` / `LISTEN_PID`（`listen.go` 的 `execListenEnv`）。
+Cases that bypass the edge: Windows, Docker (image updates), `PERSONA_HUB_EDGE=0`, a data directory path that is too long (Unix socket address limit). In these the hub listens itself as before.
+The in-place exec problem on this path is fixed too: the fds from systemd are kept (close-on-exec), the flag is cleared before exec, and `LISTEN_FDS` / `LISTEN_PID` are passed along (`execListenEnv` in `listen.go`).
 
-### 计划内停机（`hub/restart.go`）
+### Planned shutdown (`hub/restart.go`)
 
-SIGTERM 不再直接取消 hub 的 ctx，而是先 `beginStop`：
+SIGTERM no longer cancels the hub's ctx directly; it runs `beginStop` first:
 
-1. 标记 `stopping`；
-2. 给每个客户端发 `{"type":"hub_restarting","back_in_ms":3000}`，等最多 300 ms 让它发出去；
-3. 把此刻各台在线机器的 `NodeInfo` 和会话列表交给下一个 hub（Postgres settings `hub.warm_machines`）；
-4. 再取消 ctx，照原来的顺序停：关监听 → 1001 关 WebSocket（原因改成「hub restarting」）→ 排空 HTTP → 等 node 连接 → **交出事件日志** → 关数据库。
+1. Mark `stopping`;
+2. Send every client `{"type":"hub_restarting","back_in_ms":3000}`, waiting up to 300 ms for it to go out;
+3. Hand the `NodeInfo` and session lists of the machines online at this moment to the next hub (Postgres settings `hub.warm_machines`);
+4. Then cancel the ctx and stop in the original order: close the listener → close WebSockets with 1001 (reason changed to "hub restarting") → drain HTTP → wait for node connections → **hand over the event log** → close the database.
 
-停机期间 node 连接断开、机器离线、它的问题结束——这些都是停机本身造成的，**不再广播**（`detach` / `markOffline` 看 `stopping`）：
-以前客户端在被断开前先收到一串「机器离线」「交互已结束」，然后再连上看它们回来。
+During shutdown, node connections drop, machines go offline and their interactions end; all of this is caused by the shutdown itself, so it is **no longer broadcast** (`detach` / `markOffline` check `stopping`).
+Previously clients received a string of "machine offline" and "interaction ended" just before being disconnected, then saw it all come back after reconnecting.
 
-### 事件续传（`hub/eventlog.go`）
+### Event resume (`hub/eventlog.go`)
 
-- 所有经 `broadcastTo` 发给每个客户端的消息（`machines`、`interaction`、`interaction_resolved`、`todos`、`inbox`、`lark`、`revs`、`task_plan`、
-  `assistant_feed`、`fleet`、`hub_update`、`plugin_ui`、`agents`、`mail_accounts`、`assistant_schedule`……）带 `event_seq`，同一条流里每条加一。
-  hub 在内存里留最近的（最多 2000 条、8 MB、15 分钟）。
-- 每条连接自己的消息不进日志：连接快照（`machines`、`sessions`、待处理交互、`desktops`）本身是完整状态；`sessions_delta` 按连接算；对话的 `items` 有
-  `since_seq`，终端有 `epoch` / `after_seq`，各自续。
-- 客户端重连时带 `GET /api/v1/ws?event_stream=<流>&event_seq=<最后一条>`。hub 在登记这个连接的同一把锁里（广播也在这把锁里编号和发送）先发 `hello`
-  （带 `event_stream`、`event_seq`、`resumed`），`resumed: true` 时紧接着补发漏掉的，然后才是实时的：不会漏，也不会重。
-  流不对、漏掉的已经不在日志里、或者超过 400 条（客户端的发送队列 512），`resumed: false`，客户端照旧全量刷新。
-- 跨重启：停机时把日志（流的 id、序号、最近的事件）写进 settings `hub.event_log`，新进程启动时**取走**（`DELETE … RETURNING`，只读一次）接着编号。
-  10 分钟内交接的才接着用。崩溃时没有交接，新进程开一条新流，客户端全量刷新——不会拿到重复的序号。
-- 需要填写的授权卡片（elicitation）只发给声明了能力的客户端；重连补发时客户端还没发 `client_hello`，所以补发跳过它们，靠连接后的待处理交互快照补上。
+- Every message sent to every client through `broadcastTo` (`machines`, `interaction`, `interaction_resolved`, `todos`, `inbox`, `lark`, `revs`, `task_plan`,
+  `assistant_feed`, `fleet`, `hub_update`, `plugin_ui`, `agents`, `mail_accounts`, `assistant_schedule`…) carries an `event_seq`, incremented by one per message within a stream.
+  The hub keeps the most recent ones in memory (at most 2000 messages, 8 MB, 15 minutes).
+- Per-connection messages do not go into the log: the connection snapshot (`machines`, `sessions`, pending interactions, `desktops`) is complete state in itself; `sessions_delta` is computed per connection; chat `items` have
+  `since_seq` and terminals have `epoch` / `after_seq`, each resuming on its own.
+- On reconnect the client sends `GET /api/v1/ws?event_stream=<stream>&event_seq=<last one>`. Under the same lock that registers the connection (broadcasts are numbered and sent under this lock too), the hub first sends `hello`
+  (with `event_stream`, `event_seq`, `resumed`); when `resumed: true` it immediately replays what was missed, and only then live events: nothing is missed and nothing repeats.
+  If the stream does not match, the missed events are no longer in the log, or there are more than 400 of them (the client's send queue is 512), `resumed: false` and the client does a full refresh as before.
+- Across restarts: on shutdown the log (stream id, sequence number, recent events) is written to settings `hub.event_log`, and the new process **takes** it at startup (`DELETE … RETURNING`, read only once) and continues numbering.
+  It is reused only if handed over within 10 minutes. After a crash there is no handover; the new process opens a new stream and clients do a full refresh, so they never get duplicate sequence numbers.
+- Approval cards that need filling in (elicitation) are sent only to clients that declared the capability; during the reconnect replay the client has not sent `client_hello` yet, so the replay skips them and the pending-interactions snapshot after connecting fills them in.
 
-### 机器和会话（`devices/warm.go`，hub 那头 `hub/devices_link.go` 的 `startDevices`）
+### Machines and sessions (`devices/warm.go`; on the hub side `startDevices` in `hub/devices_link.go`)
 
-2026-11-04 起电脑是管理者连的（[machines.md](machines.md)「谁连电脑」）：管理者是 hub 的子进程，hub 停的时候它也收到 SIGTERM，
-先把此刻在线机器的 `NodeInfo` 和会话列表交给下一个（`hub.warm_machines`，键和格式都和以前 hub 交的一样，另加每台的引擎 `engines`），再断开它们（这时不报离线）。
-hub 停机时等它退出（和以前等 node 连接一样，在停机预算里）。
+Since 2026-11-04 computers are connected by the manager ([machines.md](machines.md) ("Who connects computers")): the manager is a child process of the hub and also receives SIGTERM when the hub stops.
+It first hands the `NodeInfo` and session lists of the machines online at this moment to the next one (`hub.warm_machines`, same key and format as the hub used to hand over, plus each machine's engines `engines`), then disconnects them (without reporting them offline).
+When the hub shuts down it waits for the manager to exit (as it used to wait for node connections, within the shutdown budget).
 
-新 hub 起来先**读**（不取走）`hub.warm_machines`（2 分钟内交接的），按它显示 hub.json 的机器，在管理者第一次上报之前对这些机器的调用（订阅补发、发消息……）
-等它（最多 30 s），而不是立刻返回「离线」。新管理者起来**取走**这一份，给当时在线的机器恢复 `NodeInfo` 和会话列表、**30 s 内**照常显示在线，同时把 node 连回来：
-重连上来的客户端看不到 Mac 先离线再回来。30 s 还没连上就按原来的方式显示离线（会话标成未知）并广播。
-这段暖启动只是显示：hub 的自更新确认「之前在线的都连回来了」、之后更新各台 node，等的是 node 真连上（管理者报的 `connected`），和以前 hub 自己的暖启动一样。
-升级到这一版的那次重启，交接是旧 hub 写的，新管理者照样接得上。
+The new hub first **reads** (without taking) `hub.warm_machines` (if handed over within 2 minutes) and shows the machines in hub.json accordingly; until the manager's first report, calls to these machines (subscription replay, sending messages…)
+wait for it (up to 30 s) instead of returning "offline" immediately. The new manager **takes** this record on startup, restores `NodeInfo` and session lists for the machines online at the time, shows them online as usual **for 30 s**, and reconnects the nodes in the meantime:
+clients that reconnect do not see the Mac go offline and come back. If a node has not connected after 30 s, it is shown offline the old way (sessions marked unknown) and broadcast.
+This warm start is display only: when the hub's self-update confirms "everything that was online has reconnected" before updating each node, it waits for the node to really connect (`connected` reported by the manager), the same as the hub's own warm start used to.
+On the restart that upgrades to this version, the handover is written by the old hub, and the new manager picks it up all the same.
 
-### 正在生成的文字
+### Text being generated
 
-hub 记住每个会话最后一条 `session.delta`（空串清掉，机器真正离线时清掉），客户端订阅时在补发的 items 之后紧跟一条当前的 `delta`：
-重连的客户端马上看到回答接着往下写，不用等下一个 token。
+The hub remembers each session's last `session.delta` (cleared by an empty string, and when the machine really goes offline); when a client subscribes, the current `delta` follows right after the replayed items:
+a reconnected client immediately sees the answer continue, without waiting for the next token.
 
-### 对话不中断：常驻 node 托管（`node/assistant_keep.go`）
+### Chats not interrupted: hosting by the resident node (`node/assistant_keep.go`)
 
-助手的 claude 不再归某一条 hub 连接：
+The assistant's claude no longer belongs to a single hub connection:
 
-- hub 所在的机器装**常驻 node**（`scripts/deploy/node-launchd.sh install`，Linux 是 systemd 用户服务 `jarvisd-node`，独立的 cgroup）。
-  hub 照旧起 `jarvisd node --stdio`，它发现常驻 node 在听就只做转发（`node/attach.go` 的 `Relay`）。hub 重启只杀掉转发进程。
-- 常驻 node 里，一条连接结束时，它的 claude 对话交给进程级的 `assistantKeeper`（Codex 的对话连接属于 `Node`，照旧停掉）；下一条连接的 `Node`
-  在加载状态前接管（`adopt`），之后对话的输出（流式文字、回合结束、后台任务变化）都报给新的 `Node`，也就是新的 hub。
-  接管时把后台任务列表和正在生成的文字重新报一遍。`Attach` 等上一条连接交接完才服务下一条，不会两个 `Node` 抢。
-- 输出缓冲：claude 的 stdout 一直由同一个读协程读（不会因为没有 hub 而阻塞），正在生成的文字在 `p.partial` 里，写完的在 transcript 里；
-  没有 hub 的那 1–2 秒里的 delta 发不出去，接管后发一条完整的当前文字补上（delta 本来就是「到目前为止的全文」）。
-- Monitor 和后台命令是 claude 的子进程，claude 不停它们就不停，**hub 重启后自动接着跑**，结束时照常唤醒对话。
-  `recoverAssistantTasks` 只在对话进程真的没了时才发「刚重启过」（比如 node 自己重启了）。
-- **node 自己更新**（部署换了二进制）：`deploy.sh` 改成 `node-launchd.sh restart-idle`，只给 node 主进程发 SIGHUP
-  （`systemctl --user kill -s HUP --kill-whom=main`；Mac 用 `launchctl kill SIGHUP`），node 等到没有对话在回答、在等后台任务时，
-  停掉空闲的对话进程，`exec` 新的二进制（PID 不变，systemd / launchd 看不出来）。空闲的对话下一条消息时 `--resume`。旧版常驻 node 不认 SIGHUP，会直接退出再被拉起，和以前的 `restart` 一样。
+- The hub machine runs a **resident node** (`scripts/deploy/node-launchd.sh install`; on Linux the systemd user service `jarvisd-node`, in its own cgroup).
+  The hub still starts `jarvisd node --stdio`, which only relays when it finds the resident node listening (`Relay` in `node/attach.go`). A hub restart only kills the relay process.
+- In the resident node, when a connection ends, its claude chats are handed to the process-level `assistantKeeper` (Codex chat connections belong to the `Node` and are still stopped); the next connection's `Node`
+  takes them over (`adopt`) before loading state, and from then on the chats' output (streamed text, turn ends, background task changes) is reported to the new `Node`, that is, the new hub.
+  On takeover, the background task list and the text being generated are reported again. `Attach` waits for the previous connection to finish handing over before serving the next, so two `Node`s never compete.
+- Output buffering: claude's stdout is always read by the same reader goroutine (it never blocks for lack of a hub); text being generated is in `p.partial`, finished text in the transcript;
+  deltas from the 1–2 seconds without a hub cannot be sent, so after takeover one complete current text is sent instead (a delta is "the full text so far" anyway).
+- Monitor and background commands are child processes of claude, and they keep running as long as claude does, so they **continue automatically after a hub restart** and wake the chat as usual when they finish.
+  `recoverAssistantTasks` only sends "just restarted" when the chat process is really gone (for example, the node itself restarted).
+- **The node updating itself** (a deployment swapped the binary): `deploy.sh` now uses `node-launchd.sh restart-idle`, which sends SIGHUP to the node's main process only
+  (`systemctl --user kill -s HUP --kill-whom=main`; on the Mac `launchctl kill SIGHUP`). The node waits until no chat is answering or waiting on background tasks,
+  stops idle chat processes, and `exec`s the new binary (same PID, invisible to systemd / launchd). Idle chats `--resume` on their next message. Old resident nodes do not understand SIGHUP; they simply exit and are restarted, like the old `restart`.
 
-没有常驻 node 的机器（hub 直接 ssh 起 `node --stdio` 并由它自己处理）行为不变：hub 重启时对话照旧中断，后台任务照旧收到「刚重启过」。
+Machines without a resident node (where the hub starts `node --stdio` directly over ssh and it handles everything itself) behave as before: a hub restart still interrupts chats, and background tasks still get "just restarted".
 
-### 客户端容忍短时间断线
+### Clients tolerate short disconnects
 
-客户端统一的做法（网页、安卓已做，iOS / Mac 见文末 issue）：
+The shared client approach (done on web and Android; for iOS / Mac see the issue at the end):
 
-- **静默重连**：断线后先不改界面。收到 `hub_restarting` 或关闭码 1001：150–400 ms 后重连，之后每 0.5–1 s 一次，界面保持「在线」**30 s**；
-  其他断线：第一次 300–600 ms 重试，界面保持在线 **8 s**，之后照旧的退避和提示。宽限内连上，界面什么都不变（不闪「连接中」、列表不刷）。
-- **续传**：记住 hello 的 `event_stream` 和收到的最大 `event_seq`，重连时带上；`resumed: true` 不全量重拉，只照常重新订阅打开的对话（`since_seq`）；
-  `resumed` 不为 true 照旧全量刷新。
-- **写操作排队、幂等重放**：发消息、回答 / 审批带 `X-Jarvis-Op-Id`（一次逻辑操作一个 UUID，发消息时和 `client_msg_id` 相同；hub 对打断、关闭、改名、
-  切模式、新建会话也认这个头，客户端可以逐步接上）。
-  网络错误或不是 hub 自己给的 502 / 503 / 504，保持「发送中」，等连接回来用**同一个 id** 重发，最多 60 s；网页在 WebSocket 也断着时（hub 在重新部署）一直等到「hub 正在更新」的上限 5 分钟，hub 一回来就发（#4174）；hub 按 op id 返回第一次的结果，不会执行两次。
-  hub 给出的真实错误（带 `code`）照旧立刻失败。
+- **Silent reconnect**: after a disconnect, do not change the UI at first. On `hub_restarting` or close code 1001: reconnect after 150–400 ms, then every 0.5–1 s, keeping the UI "online" for **30 s**;
+  other disconnects: first retry after 300–600 ms, keeping the UI online for **8 s**, then the usual backoff and notices. If it reconnects within the grace period, nothing in the UI changes (no "Connecting" flash, no list refresh).
+- **Resume**: remember hello's `event_stream` and the largest `event_seq` received, and send them on reconnect; with `resumed: true` there is no full refetch, only the usual resubscription of open chats (`since_seq`);
+  if `resumed` is not true, do a full refresh as before.
+- **Queued writes, idempotent replay**: sending messages and answers / approvals carry `X-Jarvis-Op-Id` (one UUID per logical operation, equal to `client_msg_id` when sending a message; the hub also honors this header for interrupt, close, rename,
+  mode switch and new session, so clients can adopt it step by step).
+  On network errors or a 502 / 503 / 504 not issued by the hub itself, stay "sending" and resend with the **same id** once the connection is back, for up to 60 s; when the WebSocket is down as well (the hub is redeploying), the web keeps waiting up to the 5-minute limit of "Hub is updating" and sends as soon as the hub returns (#4174); the hub returns the first result for an op id and never executes it twice.
+  Real errors from the hub (with a `code`) still fail immediately.
 
-### node 和插件
+### Nodes and extensions
 
-- node：本机的常驻 node 和 hub 之间只是转发，hub 重启后 0.2 s 内重新连上并接管对话；ssh 的电脑照旧 2–8 s 重连，靠 warm start 让客户端看不出来。
-- node 自己断开又马上回来（常驻 node 空闲时 `exec` 新二进制约 2 s、转发进程被换掉）：运行中的 hub 先把这台照原样显示 **5 s**
-  （`reconnectGrace`，管理者 `devices/conn.go` 的 `detach`），回来了就什么都不报，过了 5 s 还没回来才照旧显示离线。jarvis-link 的电脑除外：链路断了就是电脑走了，立刻离线。
-- 常驻 node 正在 `exec` 时它的 socket 文件还在、但没人听：`node --stdio` 的 `Relay` 遇到「拒绝连接」会等它最多 8 s（`dialResident`），
-  而不是自己接下这条连接——那样助手的对话又会落到 hub 的 cgroup 里。没有 socket 文件（没装常驻 node）时立刻自己处理，和以前一样。
-  node 侧状态（会话状态、后台任务）在 Postgres，连上后 `state.load`；hub 重新 `session.watch` 订阅中的会话（`since_seq`）。
-- 交互（提问、审批）：可续的照旧等 hook 重连认领（`resumeGrace` 3 分钟）；停机时不再先结束、广播再恢复。
-- 插件、连接器程序：仍是 hub 的子进程，随 hub 重启（登录态在插件自己的目录里，新 hub 一起来就拉起）。插件起来之前对它的请求会失败，和以前一样；
-  客户端看到的插件状态由新 hub 推的 `plugin_ui` 和连接快照更新。把插件挪出 hub 的 cgroup 要处理新旧两个 hub 同时连同一个插件，这次不做。
-- 助手的 MCP 工具（`personad mcp`）经 node 的 `node.sock` 转到 hub。这个 socket 归服务当前 hub 连接的 `Node`，交接那一两秒里没人听：
-  `tools/list` 本来就一直重试到 node 起来（#1584）；`tools/call` 用 `mcpserver.callNode`，只在「连不上 socket」（什么都还没发出去）时每 0.5 s 重试，最多 15 s。已经发出去、正好赶上旧 hub 停机的调用
-  （包括 hub 经 WebSocket 叫手机做事、等 `tool_result` 的）会失败，claude 拿到工具错误，自己决定要不要重试——不自动重试，因为发邮件这类调用不能做两次。
+- node: between the local resident node and the hub there is only a relay; after a hub restart it reconnects within 0.2 s and takes over the chats; ssh computers still reconnect in 2–8 s, hidden from clients by the warm start.
+- A node that disconnects and comes right back (a resident node `exec`ing a new binary while idle takes about 2 s, the relay process is replaced): the running hub keeps showing that machine unchanged for **5 s**
+  (`reconnectGrace`, `detach` in the manager's `devices/conn.go`); if it comes back nothing is reported, and only if it is still gone after 5 s is it shown offline as before. jarvis-link computers are the exception: a dropped link means the computer left, so they go offline at once.
+- While a resident node is `exec`ing, its socket file still exists but nobody listens: `Relay` in `node --stdio` waits up to 8 s on "connection refused" (`dialResident`)
+  instead of taking the connection itself, which would land the assistant's chats in the hub's cgroup again. Without a socket file (no resident node installed) it handles things itself immediately, as before.
+  Node-side state (session state, background tasks) is in Postgres and loaded with `state.load` after connecting; the hub re-subscribes the subscribed sessions with `session.watch` (`since_seq`).
+- Interactions (questions, approvals): resumable ones still wait for the hook to reconnect and reclaim them (`resumeGrace`, 3 minutes); shutdown no longer ends them first, broadcasts, then restores them.
+- Extensions, connector programs: still child processes of the hub, restarted with it (login state lives in each extension's own directory, and the new hub launches them as soon as it is up). Requests to an extension fail until it is up, as before;
+  the extension status clients see is updated by the new hub's `plugin_ui` pushes and the connection snapshot. Moving extensions out of the hub's cgroup would mean handling old and new hubs connected to the same extension at once; not done this time.
+- The assistant's MCP tools (`personad mcp`) go to the hub through the node's `node.sock`. That socket belongs to the `Node` serving the current hub connection, and nobody listens during the one or two seconds of handover:
+  `tools/list` already retries until the node is up (#1584); `tools/call` uses `mcpserver.callNode`, which retries every 0.5 s for up to 15 s only when it "cannot connect to the socket" (nothing has been sent yet). Calls already sent that hit the old hub's shutdown
+  (including ones where the hub asks the phone to do something over WebSocket and waits for `tool_result`) fail, and claude gets a tool error and decides whether to retry. No automatic retry, because calls like sending an email must not happen twice.
 
-## 部署和回滚
+## Deployment and rollback
 
-改了两处部署方式：
+Two deployment changes:
 
-| 改动 | 怎么做 | 回滚 |
+| Change | How | Rollback |
 | --- | --- | --- |
-| hub 的监听交给 `jarvisd.socket` | `scripts/deploy/hub-systemd.sh`（deploy.sh 每次部署都跑）：写 `jarvisd.socket`、service 加 `Wants/After=jarvisd.socket` 和 `TimeoutStopSec=20`；第一次停一下服务把端口交给 socket | `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`：删 socket unit、停 socket、hub 自己监听；或者手动 `systemctl --user stop jarvisd; systemctl --user disable --now jarvisd.socket; rm ~/.config/systemd/user/jarvisd.socket; systemctl --user daemon-reload; systemctl --user start jarvisd` |
-| hub 的机器装常驻 node | `scripts/deploy/node-launchd.sh install`（一次），之后 deploy.sh 用 `restart-idle` | `scripts/deploy/node-launchd.sh uninstall`，下次 hub 重连时回到 hub 自己起 `node --stdio` |
+| Hand the hub's listener to `jarvisd.socket` | `scripts/deploy/hub-systemd.sh` (deploy.sh runs it on every deployment): write `jarvisd.socket`, add `Wants/After=jarvisd.socket` and `TimeoutStopSec=20` to the service; stop the service briefly the first time to hand the port to the socket | `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`: remove the socket unit, stop the socket, let the hub listen itself; or manually `systemctl --user stop jarvisd; systemctl --user disable --now jarvisd.socket; rm ~/.config/systemd/user/jarvisd.socket; systemctl --user daemon-reload; systemctl --user start jarvisd` |
+| Install a resident node on the hub machine | `scripts/deploy/node-launchd.sh install` (once), then deploy.sh uses `restart-idle` | `scripts/deploy/node-launchd.sh uninstall`; on the hub's next reconnect it goes back to starting `node --stdio` itself |
 
-不动的：Docker 部署（`deploy/docker/`，没有 `LISTEN_FDS`，照旧自己监听）、Mac 上的 hub（launchd）、数据库和数据。
+Unchanged: Docker deployment (`deploy/docker/`, no `LISTEN_FDS`, still listens itself), the hub on Mac (launchd), the database and data.
 
-蓝绿切换（上面「蓝绿切换」）之后：
+After blue-green switching ("Blue-green switching" above):
 
-- deploy.sh 换 hub 的二进制前先把旧的留成 `jarvisd.prev`。
-- `hub-systemd.sh` 在 unit 没变、hub 正在运行时，先跑 `jarvisd hub switch --prev …`：
-  - 退出码 0：切换完成，什么都不重启；
-  - 退出码 1：新版没能接手，旧版照常服务，脚本把 `jarvisd.prev` 放回原位，部署失败；
-  - 其他退出码：没有入口（第一次部署这一版、旧二进制），或者入口协议更旧，就照原来的方式重启服务。
-- Mac（launchd）也是先切换，不行再 `kickstart`。
-- 回滚：在 hub 的机器上跑 `PERSONA_HUB_EDGE=0 scripts/deploy/hub-systemd.sh`。它把这个变量写进 unit 的 `Environment=`，服务重启后 hub 自己监听；
-  以后的部署会保留它，直到用 `PERSONA_HUB_EDGE=1` 再跑一次。手动运行时直接设置这个环境变量。
+- Before replacing the hub binary, deploy.sh saves the old one as `jarvisd.prev`.
+- When the unit has not changed and the hub is running, `hub-systemd.sh` first runs `jarvisd hub switch --prev …`:
+  - Exit code 0: switch complete, restart nothing;
+  - Exit code 1: the new version could not take over, the old one keeps serving; the script restores `jarvisd.prev` and deployment fails;
+  - Other exit codes: no edge (the first deployment of this version, an old binary), or an older edge protocol; restart the service the old way.
+- Mac (launchd) also tries switching first, then `kickstart` if that fails.
+- Rollback: run `PERSONA_HUB_EDGE=0 scripts/deploy/hub-systemd.sh` on the hub machine. It writes this variable into the unit's `Environment=`, and after the service restarts the hub listens itself;
+  later deployments preserve it until you run it again with `PERSONA_HUB_EDGE=1`. When running manually, set this environment variable directly.
 
-入口要注意：
+Edge caveats:
 
-- `systemctl --user stop jarvisd` 停的是入口，入口先 release 槽位再退出（`TimeoutStopSec=20` 够用）。
-  槽位卡住超过 20 秒才会被杀；被杀时扩展各在自己的进程组里，可能留下来，下次启动前看一眼 `ps`。
-- 两个槽位交接时写同一个日志，每行前面带 `[slot a]` / `[slot b]`；入口自己的行以 `hub edge:` 开头。
+- `systemctl --user stop jarvisd` stops the edge, which first releases the slot and then exits (`TimeoutStopSec=20` is enough).
+  A stuck slot is killed only after 20 seconds; when killed, extensions in their own process groups may survive, so check `ps` before the next start.
+- Both slots write to the same log during handover, with `[slot a]` / `[slot b]` before each line; the edge's own lines start with `hub edge:`.
 
-用了 socket 之后要注意：
+Socket activation caveats:
 
-- **换回旧二进制之前先回滚 socket**：不认识 `LISTEN_FDS` 的旧 hub 会自己 `net.Listen`，端口在 socket 手里，起不来（`address already in use`）、反复重启。
-  先 `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`，再换二进制。
-- **`systemctl --user stop jarvisd` 停不住**：socket 还在听，下一个连接会把服务重新拉起来（socket activation 本来的行为）。
-  真要停：`systemctl --user stop jarvisd.socket jarvisd`。
+- **Roll back the socket before switching to an old binary**: an old hub that does not understand `LISTEN_FDS` calls `net.Listen` itself while the socket holds the port, fails to start (`address already in use`) and keeps restarting.
+  Run `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh` first, then replace the binary.
+- **`systemctl --user stop jarvisd` does not keep it stopped**: the socket is still listening, so the next connection starts the service again (normal socket activation behavior).
+  To really stop: `systemctl --user stop jarvisd.socket jarvisd`.
 
-## 怎么验证
+## Verification
 
-- 蓝绿切换：
-  - `internal/hubedge` 的测试（Linux / macOS）：测试二进制自己扮演槽位。覆盖来源地址、切换期间请求零失败、6 次连续切换下的并发、起不来的新版、
-    接手失败回到上一版、槽位自己请求切换、构建号不对被拒、未确认的更新回滚、崩溃后重启。
-  - `hub` 的 `TestUpdateHandsOverToTheEdge` 等；`scripts/test/test_hub_switch_deploy.py`（hub-systemd.sh 的三种结果）。
-  - 真实 personad 的端到端测试：私有 Postgres，v1 → `hub switch` → v2，同时持续打 `/api/v1/health`，再试一个起不来的二进制。
-- 单元 / 集成测试（`server/`）：`TestEventLogSince`、`TestHelloResumes`、`TestStampEvent`、`TestListenInherited`（像 systemd 那样传 fd 3 给子进程）、
-  `TestEventLogHandOver`、`TestRestartIsPlanned`（真跑两次 `hub.Run`：客户端先收到 `hub_restarting` 和 1001「hub restarting」，下一个 hub 接着同一条流、`resumed: true`），
-  `node` 的 `TestResidentNodeKeepsConversations`（连接结束后对话进程还在，下一条连接的 `Node` 接管后收到它的输出）。
-  网页 `src/lib/reconnect.test.ts`、`store-reconnect.test.ts`、`ops.test.ts`；安卓见 `docs/android.md`。
-- 反复重启：`scripts/test/hub_restart_seamless.py --restarts N --converse`，在 hub 的机器上跑：
-  - 每 100 ms 打一次 `/api/v1/health`，任何一次被拒绝 / 失败都算失败；
-  - 一个照网页客户端做法的 WebSocket 客户端：每条广播的 `event_seq` 必须接着上一条（不丢、不重），第一次之后的每次重连都必须 `resumed`、同一条流，
-    断开到下一个 hello 的时间不超过客户端的宽限（默认 8 s）；
-  - `--converse`：新开一个**副对话**（不碰主对话），让它在后台跑 `sleep 75` 的命令、同时逐行输出 1 到 N；重启穿插在输出过程中，最后检查数字一个不少、
-    后台命令的结果回来了、对话没收到「刚重启过」。
-  - 最后一行 `PASS` / `FAIL` / `TIMEOUT` 和数字。
+- Blue-green switching:
+  - `internal/hubedge` tests (Linux / macOS): the test binary plays the slot itself. Covers source addresses, zero failed requests during switching, concurrency across 6 consecutive switches, a new version that cannot start,
+    rollback after failed takeover, a slot requesting its own switch, rejection of a wrong build number, rollback of an unconfirmed update, and restart after a crash.
+  - `TestUpdateHandsOverToTheEdge` and others in `hub`; `scripts/test/test_hub_switch_deploy.py` (hub-systemd.sh's three outcomes).
+  - End-to-end test with real personad: private Postgres, v1 → `hub switch` → v2, with continuous requests to `/api/v1/health`, then try a binary that cannot start.
+- Unit / integration tests (`server/`): `TestEventLogSince`, `TestHelloResumes`, `TestStampEvent`, `TestListenInherited` (pass fd 3 to a child like systemd),
+  `TestEventLogHandOver`, `TestRestartIsPlanned` (actually runs `hub.Run` twice: the client first receives `hub_restarting` and 1001 "hub restarting", then the next hub continues the same stream with `resumed: true`),
+  `TestResidentNodeKeepsConversations` in `node` (the chat process survives the connection ending, and the next connection's `Node` receives its output after takeover).
+  Web: `src/lib/reconnect.test.ts`, `store-reconnect.test.ts`, `ops.test.ts`; for Android see `docs/android.md`.
+- Repeated restarts: run `scripts/test/hub_restart_seamless.py --restarts N --converse` on the hub machine:
+  - Request `/api/v1/health` every 100 ms; any refused / failed request is a failure;
+  - A WebSocket client following the web client's behavior: each broadcast's `event_seq` must follow the previous one (no loss or duplicates), every reconnect after the first connection must be `resumed` on the same stream,
+    and the time from disconnect to the next hello must stay within the client's grace period (default 8 s);
+  - `--converse`: open a new **side chat** (leave the main chat alone), have it run `sleep 75` in the background while outputting 1 through N line by line; restart during output, then check that every number is present,
+    the background command's result came back, and the chat received no "just restarted" message.
+  - The last line is `PASS` / `FAIL` / `TIMEOUT` and the numbers.
 
-## 实测结果（2026-11-04，这台开发机的 hub，#1617 部署后）
+## Measured results (2026-11-04, this dev machine's hub, after deploying #1617)
 
-部署：hub 切到 `jarvisd.socket`、装常驻 node（`jarvisd-node`），切换那一次停了约 1 s。之后：
+Deployment: switched the hub to `jarvisd.socket`, installed the resident node (`jarvisd-node`); that initial switch stopped it for about 1 s. Afterwards:
 
-| 场景 | 结果 |
+| Scenario | Result |
 | --- | --- |
-| `hub_restart_seamless.py --restarts 3`（只挂客户端） | PASS：健康探针 247 次 0 失败（最慢 0.95 s，在 backlog 里等）；4 次连接里 3 次重连全部 `resumed`，同一条流，54 条事件不丢不重；客户端看到的断开 0.73–1.01 s（网页 / 安卓的宽限 8 s、重启时 30 s，界面不变）；每次重启连命令 1.3–1.6 s |
-| `--restarts 3 --converse --count 300`（同时一个流式输出的副对话 + `sleep 75` 的后台命令） | PASS：健康探针 827 次 0 失败；3 次重连全部续传，121 条事件不丢不重，断开最长 0.81 s；回答 300 行一行不少，后台命令跑完回报了，对话没收到「刚重启过」；node 日志三次「took over 1 running conversations」（同一个 claude 进程） |
-| hub 日志 | 每次重启：`event log: continuing stream … at N`、`warm start: 3 machines shown as before`、本机 node 0.2–1 s、两台 ssh 的 Mac 1–3 s 连回 |
-| 常驻 node 空闲重启（`node-launchd.sh restart-idle`） | PID 不变（`exec`），hub 那边本机 node 断开约 2 s——当时会广播一次离线；之后加了上面的 5 s 宽限和 `dialResident`（#1574 的后续 PR） |
+| `hub_restart_seamless.py --restarts 3` (client only) | PASS: 247 health probes, 0 failures (slowest 0.95 s, waiting in the backlog); all 3 reconnects among 4 connections were `resumed` on the same stream, 54 events with no loss or duplicates; client-visible disconnects 0.73–1.01 s (web / Android grace is 8 s, 30 s during restart, so the UI stays unchanged); 1.3–1.6 s per restart including the command |
+| `--restarts 3 --converse --count 300` (a streaming side chat plus a `sleep 75` background command) | PASS: 827 health probes, 0 failures; all 3 reconnects resumed, 121 events with no loss or duplicates, longest disconnect 0.81 s; all 300 answer lines present, the background command finished and reported back, no "just restarted" message in the chat; the node logged "took over 1 running conversations" three times (the same claude process) |
+| Hub logs | Each restart: `event log: continuing stream … at N`, `warm start: 3 machines shown as before`, local node reconnects in 0.2–1 s, the two Macs over ssh in 1–3 s |
+| Resident node idle restart (`node-launchd.sh restart-idle`) | PID unchanged (`exec`), the local node disconnected from the hub for about 2 s, which then broadcast an offline event; the 5 s grace and `dialResident` above were added afterwards (follow-up PR for #1574) |
 
-改动前的对照（同一台机器 2026-11-04 19:30 那次部署的 journal）：端口关约 1.3 s，期间连接被拒绝；本机 node 和它的助手进程被杀；两台 Mac 2.4 s、8 s 后才连回，期间显示离线。
+Before-change comparison (journal of the deployment at 19:30 on 2026-11-04 on the same machine): the port closed for about 1.3 s and connections were refused; the local node and its assistant processes were killed; the two Macs reconnected after 2.4 s and 8 s, showing offline in between.
 
-## iOS / Mac（#1634）
+## iOS / Mac (#1634)
 
-规则和网页、安卓相同，Apple 端的实现（iOS 和 Mac 共用）：
+Same rules as web and Android; the Apple implementation (shared by iOS and Mac):
 
-- 纯逻辑在 `apple/Shared/Reconnect.swift`：`LinkDrop`（宽限 8 s / 30 s、重连节奏）、`EventCursor`（续传序号）、`FrameMeta`（解码时顺带读 `event_seq`、`event_stream`、`resumed`、`hub_restarting`）、
-  `ReconnectPlan`（`resumed` 时重连后不重拉）、`OpRetry`（同一个 op id 重试，最多 60 s，`Error.isGap` 判断是不是「请求可能没到 hub」）。
-- `LiveConnection` 记下断开（`drop`、`inGrace`、`graceOver`），宽限内 `ConnectionStatus` 把它当成连着；关闭码用 `URLSessionWebSocketTask.closeCode`（自己因为心跳超时关的不算 1001）。
-- `AppModel.didConnect` 在 `resumed` 时只注册手机和重新订阅；发消息（`SendSafety.sendPending`）和回答（`AppModel.resolve`）带 op id。界面上的行为见 `docs/ios.md`「连接状态」。
-- 验证：`PersonaTests/HubRestartTests`（含一个 Network.framework 的回环 WebSocket：`hub_restarting` + 1001 → 宽限、不到 1 秒重连、`resumed`）；
-  mock hub 的 `MOCK_RESTART=1`（`GET /mock/restart?gap_ms=…&missed=…&drop_post=1` 模拟一次计划内重启，`docs/testing.md`）配模拟器看界面和请求。
+- Pure logic in `apple/Shared/Reconnect.swift`: `LinkDrop` (8 s / 30 s grace, reconnect timing), `EventCursor` (resume sequence), `FrameMeta` (reads `event_seq`, `event_stream`, `resumed`, `hub_restarting` while decoding),
+  `ReconnectPlan` (no refetch after reconnect when `resumed`), `OpRetry` (retry with the same op id, at most 60 s; `Error.isGap` determines whether the request might not have reached the hub).
+- `LiveConnection` records disconnects (`drop`, `inGrace`, `graceOver`), and `ConnectionStatus` treats it as connected during the grace period; close codes come from `URLSessionWebSocketTask.closeCode` (closing it ourselves on a heartbeat timeout does not count as 1001).
+- When `resumed`, `AppModel.didConnect` only registers the phone and resubscribes; sending messages (`SendSafety.sendPending`) and answers (`AppModel.resolve`) carry op ids. For UI behavior see `docs/ios.md` ("Connection status").
+- Verification: `PersonaTests/HubRestartTests` (includes a loopback WebSocket using Network.framework: `hub_restarting` + 1001 → grace, reconnect within 1 second, `resumed`);
+  mock hub `MOCK_RESTART=1` (`GET /mock/restart?gap_ms=…&missed=…&drop_post=1` simulates a planned restart, `docs/testing.md`) with a simulator to inspect the UI and requests.

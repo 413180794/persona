@@ -1,1187 +1,1181 @@
 # iOS / watchOS App
 
-XcodeGen 源头是 `apple/project.yml`，生成 `apple/Persona.xcodeproj`（生成内容不入库）；旧 `apple/Jarvis.xcodeproj` 软链指向它，新旧 schemes 的关系见 [兼容迁移](rename.md)。iOS 26 / watchOS 10（手表 App 要能装在停在 watchOS 10 的旧表上），Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
-Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/config.md`）。界面中文。
+XcodeGen source is `apple/project.yml`, generating `apple/Persona.xcodeproj` (generated files are not committed); old `apple/Jarvis.xcodeproj` symlinks to it. Scheme compatibility is in [Compatibility migration](rename.md). iOS 26 / watchOS 10 (the watch App must install on older watches stuck on watchOS 10), Swift 6, default MainActor isolation. Depends on MarkdownUI.
+Bundle ID comes from configuration (`app.bundle_id`, watch `<id>.watchkitapp`, `docs/config.md`). UI in Chinese.
 
-## Agents 的最近使用视图
+## Agents recently used view
 
-Agents 列表的分组菜单增加「最近使用」（Mac 在「显示 › 分组方式」），仍记在本机 `dev.grouping`，原有默认和分组选项不变。
-置顶会话仍单列一次，其余会话跨项目、跨机器平铺，按最后活动时间 `updated_at` 倒序，相同时间按包含机器和 hub 的完整会话 id 排，缺少时间的排最后。
-工作中的会话也按最后活动时间，不改用开始工作的时间；已读、空闲、未运行的历史会话都直接列出，不再折入项目或「空闲的空间」。
-这里的「使用」指有消息或工作进展，不是打开页面：读完回复不会改变会话的活动时间或位置。机器 / hub 筛选、搜索、快捷状态筛选和行菜单继续可用，折叠 / 展开操作在这个视图不显示。
-列表仍使用原有 `AgentsFeed` 和滚动保护；只有活动时间改变了会话之间的先后次序才更新结构，浏览时暂停重排，保持当前阅读位置。
-Mac 的上一个 / 下一个 Agent 在此模式跟随置顶顺序和最近活动顺序；其他模式维持原顺序。
+The Agents grouping menu adds Recently used (Mac: View › Group by), still stored locally in `dev.grouping`; defaults and existing grouping choices stay unchanged.
+Pinned sessions appear separately once; remaining sessions flatten across projects and machines, newest `updated_at` first, ties by full session id including machine and hub; missing timestamps last.
+Working sessions also use last activity, not work-start time; seen, idle and not-running history appears directly, no folding into projects or Idle spaces.
+"Used" means messages or work progress, not opening a page: reading a reply does not change its activity time or position. Machine / hub filters, search, quick state filters and row menus remain; collapse / expand actions are hidden in this view.
+The existing `AgentsFeed` and scroll protection remain; structure updates only when activity timestamps change relative session order, with reordering paused while browsing to preserve reading position.
+Mac's previous / next Agent follows pinned order then recent activity in this mode; other modes retain their order.
 
-## 信息架构
+## Information architecture
 
-Agents 的「空闲的空间」展开后，普通卡片、细列表、胶囊样式均复用 `AgentListOrder.ordered`，按最新活动在前显示（#2443）。
-`SpaceGroup.sessions` 仍保留原始标签顺序，空间页的标签编号和顺序不变；胶囊卡片的底部行按显示后的顺序确定。
+Expanded Idle spaces in Agents reuse `AgentListOrder.ordered` across normal cards, compact lists and capsules, newest activity first (#2443).
+`SpaceGroup.sessions` keeps original tab order, preserving tab numbers and ordering on space pages; capsule-card bottom rows follow displayed order.
 
-| Tab | 内容 |
+| Tab | Content |
 | --- | --- |
-| Persona | **Persona 助手**（2026-10-30 从「对话」改名）：hub 机器上 `~/.persona/assistant` 里**无头运行**的 Claude（`claude -p` + stream-json，不进 herdr；逐字流式；
-点顶栏正中的头像（菜单里「启动器：…」）随时切换启动器 / 模型，下一条消息起用 `--resume` 换过去，同一个菜单里还有「会话信息」；首页模型标签决定新对话用哪个，默认在设置里改），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* 等 skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「工具 N · 电脑、iPhone…」。顶栏和侧边栏见下面「Persona 顶栏和侧边栏」；知识库（`KnowledgeView`，2026-10-31 重做：顶部一排类型胶囊（项目 / 会话 / 人 / 文档 / 会议 / 日程 / 录音，选中的带数量；录音在手机上是本机的录音和录音控制，转写的文字自动同步进知识库，见 `docs/recording.md`），右上角漏斗按标签筛选；项目分「重点」（P0 / P1）「其他进行中」「已完成」，「不是项目」收起；每行是类型图块（人和会话是首字，颜色跟重要级）+ 名字 + 一句话 + P 级 / 长短期 / 相关性 / 放得下的标签；全文搜索按条目合并，一条一行，带名字和最多两处命中、加粗搜索词，点开就是那个条目。详情顶部是图块、名字、徽章、一句话、全部标签和「问 Persona」「开 Agent」；下面依次是在做这个项目的 Agent、竖线时间线（新的在上，默认 6 条）、档案、按类型分组的关联（每类 4 个，可展开）、代码目录、最近 7 天的消息、目录路径；右上角「打标」手动改重要级 / 相关性 / 标签 / 项目类型和状态。截图参数：`-tab assistant -openAssistantPage knowledge`，加 `-showKnowledgeEntry <kind>/<id>` 打开某条、`-showKnowledgeLower YES` 去掉头部直接看时间线、`-showKnowledgeSearch <词>` 搜索）；第一段对话就是**主对话**（`assistant.main`，历史里标「主对话」），之后的新对话是旁支；首次启动打开主对话。其他页面「交给 Persona」（Agents 长按菜单、知识库「问 Persona」）都发进主对话（`AppModel.askJarvis`，没有主对话就新建一个） |
-| 开发 | 搜索框打开时收起，下拉显示、上滑收起（见 `docs/lessons/ios.md`「布局与组件」）；手机上的快速筛选是列表首行、随列表滚动，宽屏分栏时仍在列表上方。快速筛选（`AgentFilter`：全部 / 需要你 / 未读 / 工作中，带计数，点一下生效，和机器筛选、搜索叠加；不记住，回来是全部）。筛选下列出选中那一刻符合的 Agent（`kept`），之后看过的不消失，留在原位（灰点），空间和行只按时间排，方便一路往下看；重选筛选或切机器才重算。未读筛选顶部「全部标为已读」（先确认）。需要你处理卡片只在全部 / 需要你下显示，选了机器就只显示那台的。左上角菜单里「卡片 / 细列表」（`dev.compact`，记住；细列表 `CompactSlotRow` 一行：状态点、标题、tab（不按项目时「空间 › tab」）、时间。
-细列表整体一套尺度 `CompactList`（2026-10-31 用户要求「整体更协调，不要一些大一些小」）：三级字号（分组标题 = 空间名 / 需要你处理 / 空闲的空间 / 状态 / 机器用 `heading`，行标题 `secondary`，
-元信息 = tab、时间、计数、空闲 tab 名用 `caption`）；每一行（Agent、「还有 N 个空闲」、「收起」、空闲的空间、全部标为已读）一样高、一样的内边距，行首记号（状态点、折叠箭头、空间图标）在同一列，标题左缘对齐；
-行右侧只放时间，所以时间右对齐成一列；空闲的 tab 名是一行小字，不用胶囊；空闲的空间是一行（名字、几个标签、时间），点开在下面列出它的 Agent，不用 DisclosureGroup（它的行高和箭头和别的行不一样）；
-空间标题的 ⋯ 是灰色 `ellipsis`，和计数一样安静；需要你处理也是一行（`CompactInteractionRow`：红色的类型图标、计划等你审批 / Claude 在问你…、会话 · 机器、时间、›，点进对话作答；卡片模式仍是带快捷按钮的卡片）。只有一行的分组是胶囊形，是 iOS 26 分组列表自己的圆角（自定义行背景也会被它裁成胶囊），和「设置」一致，用户 2026-10-31 接受）、「全部折叠 / 全部展开」。点空间标题折叠 / 展开（`dev.folded`，记住；折叠的空间是一行标题，仍显示各状态计数），按状态 / 按机器的分组标题也能折叠；空间页从标题 ⋯ 的「打开空间」进，同一个菜单有「全部标为已读（N）」。左上角菜单选分组方式（`DevGrouping`，记住）：按仓库（默认，没选过分组的都用它，#2108，见下）/ 按待办（#1836；每个有 Agent 的未完成待办一段，没挂待办、在 herdr 里手动开的（`startedByJarvis` 为假）一段「手动开的」，展开，#2917，其余没挂待办的放最后「未归属」，上面有待办时默认折叠、里面有需要你的就展开；列表里同时有 herdr 和别的宿主时，不在 herdr 的行带宿主名，如 `botmux`；hub 不支持待办时按项目）/ 按项目（下面描述的样子）/ 按状态（需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，已看一段默认折叠，展开就是它的全部 Agent，里面没有「还有 N 个空闲」那一层（2026-10-31：原来要点两次）；「待唤醒」是没有新消息要看、但 `/loop` 还没到点的 Agent，过几分钟可能有新消息（后台命令 / 子代理还在跑的 hub 算工作中，#2228），hub 分诊后替它等的（自动重试、到点叫醒，`WorkState.hubWaits`）也算待唤醒，#2895）/
-按机器（每台机器一段，标题有在线状态和状态计数，段内按状态排、同状态按最后更新时间、空闲折叠）；按仓库（`RepoTree`，照 Orca 的项目侧栏）：最外层按电脑分段（电脑标题贴页边、比分组标题大一级，带各状态计数，点标题折叠整台电脑，和按机器共用折叠记录；电脑按 hub 的顺序），段内是这台电脑上的仓库（按名字排，和 Finder 一样 app2 在 app10 前面），仓库卡片里是它的工作树（⌂ 主工作树排第一，其余按名字；只有主工作树的仓库省掉这一层），工作树下面缩进一级是 Agent；全是空闲的工作树收成一行「空闲」，全是空闲的仓库收进这台电脑末尾的「空闲的仓库」。带 `parent_space_id` 的空间（Orca 的子工作区，#3075，网页同 #2073）不按自己的 cwd 推断仓库，挂在顶层父空间所在的工作树下：工作树的 Agent 后面一行「N 个子项」（带子项的状态计数，默认收起，`<工作树>/子项` 记住），展开是各子空间，每个一行工作树、下面一级是它的 Agent，多层的按深度优先摊平；父空间不在列表里或成环时子空间照旧按 cwd 排；其他分组还平铺。仓库和工作树从 cwd 推断，规则和网页的按仓库一样（`.worktrees/`、`.claude/worktrees/`、`.herdr/worktrees/`，见 `docs/web.md`）；仓库的 Agent 都在一个 herdr 空间里时（通常如此），这个空间的置顶 / 屏蔽标记、待办和 ⋯ 菜单就是仓库的，分在几个空间里时 ⋯ 只有「全部标为已读」。按项目也先按电脑分段，空间标题不再写电脑名，每台电脑末尾各有自己的「空闲的空间」。只有一台电脑有 Agent（或选了机器筛选）时不画电脑这一层。「全部折叠」仍只折叠空间和仓库（每个一行，一眼看全），电脑标题不动。快捷筛选先挑出 Agent 再分组，电脑标题按筛选前算，切筛选不会多出或少掉电脑；不按项目时行末的元信息带「空间 › tab」（按状态时还带机器名）；三种分组用同一个顺序（`ChatsView.rank`）：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，同一状态按最后更新时间排（新的在上）；屏蔽了的工作中 / 完成未看 / 待唤醒的 Agent 算「已屏蔽」（需要你的照旧排第一）。按项目时：原来的会话列表（不含助手对话）：「需要你处理」卡片 → 置顶的 Agent（置顶的 Agent 只在这里出现一次、和别的行一样只靠圆点表达状态，不再出现在空间 / 状态 / 机器分组里；空间内的 Agent 按上面的状态顺序排（空间页 `SpaceView` 仍按 tab 顺序，和 herdr 一致）；手表仍按 `AgentState.priority`） → 置顶的空间 → 进行中 → 刚完成 → 屏蔽但有 Agent 在跑的空间（弱显示）→ 空闲的空间（折叠，屏蔽的空闲空间也在这里）；搜索、按机器筛选、左滑置顶 / 中断、右滑关闭（长按菜单、对话页「…」也有「关闭 Agent…」，herdr 里的任何 Agent 都能关，先从底部弹出确认卡片 `CloseAgentSheet`：哪个 Agent、在哪台机器哪个标签页、关了会怎样，「停止并关闭」/「取消」）；空间标题 ⋯ 置顶空间。置顶存在 hub（`/api/v1/pins`）。`/loop` 驱动的 Agent 带「⟳ 下次 12:20」标记、不折进空闲；轮次结束但还有后台命令 / 子代理在跑的 Agent 带琥珀色「⚙ 后台 N」，状态是工作中（#2228），同样不折进空闲，它所在的空间也不算空闲空间，长按可停止循环。改名（空间：标题 ⋯ / 空间页菜单「重命名空间」，同步改 herdr workspace；Agent：长按 / 对话页「…」「重命名…」，一次改 herdr tab 名和 Claude 会话名，Mac 上 herdr 和 claude --resume 看到的一致）。屏蔽（Agent：长按或对话页「…」菜单；空间：标题右侧的 ⋯，或空间页右上角菜单——列表分组标题上的长按菜单触发不了）：不再推送通知（空间屏蔽时，其中的 Agent 可以单独「开启通知」，反之亦然——每个 Agent 的开关叠在空间的设置上，`Pins.togglingMute`）；列表里弱化（状态色变灰、🔕、不透明度 0.8——比工作中的弱，不比空闲的空间淡），在跑的照常显示不折叠，屏蔽且没在跑的空间就是普通的空闲空间；Agents tab 角标不计（`/api/v1/mutes`）。同一个菜单的「排序」（`AgentSort`，`dev.sort`，记住；按状态分组时不显示，它本来就按状态分段、段内按时间）可以换成「最近更新」（#823）：行只按最后更新时间排、不看状态；按仓库时每台电脑里的仓库、按项目时进行中的空间、按机器时各台机器也按其中最近更新的 Agent 排（屏蔽的空间仍在后面）；置顶、需要你处理、空闲折叠都不变。时间用 `sortDate`：工作中的 Agent 按开始工作的时间，不会每走一步就换位置。默认「状态优先」，和原来一样。 |
-| 收件箱 | 飞书消息和邮件在一个列表里，一行一件事（一个会话的新消息、一个邮件线程），AI 分拣，左滑已处理；筛选来源 / 账号 / 类型（`docs/inbox.md`）。点开飞书是会话页，同飞书手机版：别人的消息在左侧带头像，群聊里连续消息的第一条显示名字；自己的在右侧、不带自己的头像和名字，气泡蓝色（#D1E3FF / 深色 #133063）；点头像或名字看资料卡；点表情回应切换自己的回应；长按菜单最上面一排 6 个常用表情（hub 的 `reactions/quick`），点一下就回应并收起菜单，「☺︎」或长按「表情回复」打开常用 + 全部表情；公司圈分享链接渲染成卡片，点开看帖子全文、图片和评论。打开时停在这件事的第一条新消息，只把上过屏的消息上报为已读。卡片渲染等见下文「飞书消息渲染」；邮件：详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），添加邮箱（也可以在 Persona 里说「帮我添加邮箱」，它用 `mail_account_add` 加，手机上确认） |
-| 待办 | 待办列表与详情（侧边栏「待办」入口，带未完成数量角标；新外壳在侧边栏）：按状态优先级排（等你 > 待查看 > 进行中 > 待跟进 > 未开始），已完成收到底部；支持新建（标题 + 说明）、点圆圈或右滑完成、右滑重新打开、左滑删除。详情页支持编辑标题和说明、展示当前运行与参与过的 Agent 会话，支持移除启动失败项；底部「交给 Agent」可新开或指定已有 Agent 会话派活，附带结构化待办上下文卡片 |
-| 设置 | 助手（不显示、不配置模型，模型在「模型配置 › 主对话」，#1291；「主动做事和记忆」四页，`AssistantProactiveViews.swift`：定时任务——列表行尾开关直接启停，编辑已有的离开页面即保存，新建（＋，可选会前准备 / 周报 / Agent 巡检 / 下班前盘点模板）是带「取消 / 添加」的浮层，避免试一下模板就建出来；立即运行 / 查看上次结果切到「对话」打开那段对话；一次性跟进、按间隔重复的任务和定时任务在同一页、同一个编辑页（运行方式：模型、权限模式、思考强度，全部放行先确认）；记忆——解析 frontmatter，标题优先取 MEMORY.md 索引里的中文标题，类型标签，详情 Markdown 渲染，「编辑」改整个文件，左滑删除，索引单独一行只读；关于我——编辑 notes，离开即保存）、Claude Code 设置（各机器 `~/.claude/settings.json` 的白名单项：离开回顾 recap、思考强度、总是思考、回复语言等，可一键应用到所有机器）、机器（二级页：在线状态、会话数、版本、启动器、重连）、连接器（2026-11-01：这台 iPhone = 原来的手机数据开关和授权、邮箱 = 原来收件箱 ⋯ 里的管理邮箱、飞书 = hub 的飞书网关连接状态和用途，`ConnectorsViews.swift`，hub `GET /api/v1/lark/status`；
-hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加行（2026-11-02，先有 GitHub：状态、账号、「来自 <机器> 的 gh 登录」、最近一次同步，通用的 `HubConnectorView`，DEBUG `-openConnectorGitHub YES`；要在 App 里登录的连接器（Telegram，`signsInHere`）多出开关、分步登录、退出登录、删除已存的数据，`ConnectorSignInSections`，DEBUG `-openConnectorTelegram YES`））、通知、重新配对 |
+| Persona | **Persona assistant** (renamed from Chat 2026-10-30): Claude **running headlessly** in `~/.persona/assistant` on the hub machine (`claude -p` + stream-json, outside herdr, token-by-token streaming; tap the centered top-bar avatar, menu Launcher: …, to change launcher / model anytime, switching with `--resume` from the next message; same menu has Session info; home model label sets new-chat model, default configured in Settings). Hub-generated CLAUDE.md explains computer access (ssh), Lark and other work data (lark-* skills), iPhone (phone_*) and mail (mail_*). Home has greeting + available devices + 6 suggestions; sending immediately shows a bubble and Preparing while the session starts in background. Thinking is hidden; tool calls fold into one line "Tools N · Computer, iPhone…". Top bar and sidebar below. Knowledge (`KnowledgeView`, rebuilt 2026-10-31): top type capsules (Projects / Chats / People / Documents / Meetings / Calendar / Recordings, selected count; phone Recordings contains local recordings and controls, transcripts automatically sync to Knowledge, `docs/recording.md`), top-right tag funnel; projects grouped Focus (P0 / P1), Other active, Completed, with Not projects collapsed. Rows: type tile (initials for people/chats, importance color) + name + one sentence + priority / long- or short-term / relevance / fitting tags. Full-text results merge by entry, one row with name and at most two matches, bold query; tap opens the entry. Details: tile, name, badges, sentence, all tags, Ask Persona / Start Agent; then project Agents, vertical newest-first timeline (6 by default), profile, related entries by type (4 each, expandable), code directories, last 7 days' messages, directory path; top-right Tag edits importance / relevance / tags / project type and state. Screenshots `-tab assistant -openAssistantPage knowledge`, add `-showKnowledgeEntry <kind>/<id>`, `-showKnowledgeLower YES` to skip header and inspect timeline, `-showKnowledgeSearch <query>` for search. First chat is **main chat** (`assistant.main`, marked Main chat in history), later new chats are branches; first launch opens main chat. Other pages' Hand to Persona (Agents long-press, Knowledge Ask Persona) sends to main chat (`AppModel.askJarvis`, creates one if absent) |
+| Development | Search field starts collapsed, pull down to show / scroll up to hide (`docs/lessons/ios.md` ("Layout and components")); phone quick filters are the list's first row and scroll with it, still above the list in wide split layouts. `AgentFilter`: All / Needs you / Unread / Working with counts, immediate, combined with machine filter and search; not remembered, returns to All. Filter keeps the Agents matching when selected (`kept`), so reading does not remove them; they stay in place with gray dots, spaces and rows sorted only by time for sequential reading; reselecting or changing machine recomputes. Unread has Mark all as seen at top (confirmation). Needs-you cards show only under All / Needs you and respect machine filtering. Top-left menu Cards / Compact list (`dev.compact`, remembered; `CompactSlotRow`: state dot, title, tab (Space › Tab outside project grouping), time). Compact list uses one `CompactList` scale (requested 2026-10-31: harmonious sizes): three font levels (group titles = space / Needs you / Idle spaces / state / machine use `heading`, row titles `secondary`, metadata = tab / time / count / idle-tab name `caption`); every row (Agent, N more idle, Collapse, Idle spaces, Mark all as seen) shares height and padding, leading marks (state dot, disclosure, space icon) align, titles align left; right side only time, aligned in a column; idle tab names are small text, not capsules; idle spaces are single rows (name, tabs, time), tap lists Agents beneath, no DisclosureGroup (different height and arrow). Space-title ⋯ uses quiet gray `ellipsis` like counts; Needs you is also one row (`CompactInteractionRow`: red type icon, Plan awaiting approval / Claude has a question…, Session · Machine, time, ›; open chat to answer; card mode retains quick-action cards). Single-row groups are capsules from iOS 26 grouped-list corners (custom backgrounds clipped too), like Settings, accepted 2026-10-31. Collapse all / Expand all. Tap space titles to fold (`dev.folded`, remembered; folded row keeps state counts); state / machine titles also fold. Space pages open via title ⋯ › Open space, also Mark all as seen (N). Grouping menu (`DevGrouping`, remembered): Repository (default for never-chosen grouping, #2108, below) / To-do (#1836; each incomplete to-do with Agents gets a section; unattached manually started herdr sessions (`startedByJarvis` false) in expanded Manually started, #2917; remaining unattached sessions last in Unassigned, collapsed when to-dos exist unless Needs you; with herdr and other hosts together, non-herdr rows show host, e.g. an alternative host; hubs lacking to-dos use Project) / Project / State (Needs you → Unread → Working → Waiting → Muted → Seen; Seen collapsed by default, expands directly to all Agents without N more idle (2026-10-31: formerly two taps). Waiting means no new message but `/loop` not due; background commands / subagents count Working, #2228; hub triage waits (`WorkState.hubWaits`, retries / scheduled wake-ups) also Waiting, #2895) / Machine (each machine section with online status and state counts, state order then last update, idle folded). Repository (`RepoTree`, like Orca project sidebar): computers outermost, titles at page edge one font level above groups, state counts, tap folds whole computer using shared machine-fold storage; hub order. Repositories within each computer sort naturally like Finder (app2 before app10), cards contain worktrees (⌂ main first, then names; omit worktree level if only main), Agents indented below. Fully idle worktrees fold to Idle; fully idle repos into Idle repositories at that computer's end. Spaces with `parent_space_id` (Orca child workspaces, #3075, web #2073) attach under the top-level parent's worktree rather than infer from own cwd: after Agents, N children row with state counts, default folded, remembered under `<worktree>/children`; expands child spaces, each worktree row then Agents one level below; deeper levels flattened depth-first. Missing parent or cycles fall back to cwd grouping; other modes remain flat. Repo/worktree inference matches web (`.worktrees/`, `.claude/worktrees/`, `.herdr/worktrees/`, `docs/web.md`). If all repo Agents are in one herdr space (usual), that space's pin / mute / to-do / ⋯ acts on the repo; multiple spaces leave only Mark all as seen. Project grouping also starts by computer, omits machine names from space titles, each computer has its own Idle spaces. Hide computer level when only one has Agents or a machine filter is selected. Collapse all folds only spaces/repos to one row, not computers. Quick filters choose Agents before grouping; computer titles use prefilter data, so filters do not add/remove computers. Non-project row metadata includes Space › Tab (plus machine under State). Three groupings share `ChatsView.rank`: Needs you → Unread → Working → Waiting → Muted → Seen, newest update within state; muted Working / Unread / Waiting count Muted, Needs you still first. Project mode retains original sessions (not assistant chats): Needs you cards → pinned Agents (once only, status via dot like other rows, excluded from space/state/machine groups; Agents in spaces use state order; `SpaceView` keeps herdr tab order; watch keeps `AgentState.priority`) → pinned spaces → active → just finished → muted spaces with running Agents (dimmed) → Idle spaces (folded, includes muted idle spaces). Search, machine filters, swipe left pin / interrupt, right close (also long-press / chat ⋯ › Close Agent…; any herdr Agent can close after bottom `CloseAgentSheet` confirmation: Agent, machine/tab, consequences, Stop and close / Cancel). Space-title ⋯ pins space. Pins stored on hub (`/api/v1/pins`). `/loop` Agents show "⟳ Next 12:20" and do not fold into idle; turn-ended Agents with background commands / subagents show amber "⚙ Background N", Working (#2228), not folded, their spaces not idle; long-press can stop loop. Rename spaces through title ⋯ / space-page Rename space (updates herdr workspace); Agents via long-press / chat ⋯ Rename… (updates both herdr tab and Claude session name, consistent with Mac herdr / claude --resume). Mute Agents by long-press / chat ⋯; spaces via title ⋯ / space-page menu (group-title long-press does not trigger): no push (Agents can override muted space with Enable notifications and vice versa, `Pins.togglingMute`); dimmed (gray state, 🔕, opacity 0.8, weaker than Working but not fainter than idle spaces), running ones stay expanded, nonrunning muted spaces are ordinary idle spaces; excluded from Agents badge (`/api/v1/mutes`). Same menu Sort (`AgentSort`, `dev.sort`, remembered; hidden under State, already state then time) offers Recently updated (#823): rows only by last update, regardless of state; repos within computers, active project spaces and machines sort by newest Agent (muted spaces stay behind); pins, Needs you, idle folding unchanged. Uses `sortDate`: Working Agents use work-start time so each step does not move them. Default State first, unchanged |
+| Inbox | Lark messages and email together, one row per item (new messages in a chat, an email thread), AI triage, swipe left to mark handled; source / account / type filters (`docs/inbox.md`). Lark opens a chat like mobile Lark: others left with avatars, first consecutive group message shows sender; own right without own avatar/name, blue bubbles (#D1E3FF / dark #133063); tap avatar/name for profile, reaction toggles own reaction; long-press menu starts with 6 common emoji (hub `reactions/quick`), tap reacts and closes; ☺︎ or long-press React opens common + all emoji. Moments shares render as cards opening full post, images and comments. Start at the item's first new message; report only messages actually displayed as read. Rendering below. Email: details, reply, compose, Let Claude handle, account management (top-right menu), add account (also ask Persona "Help me add an email account", `mail_account_add` with phone confirmation) |
+| To-dos | List/details (sidebar To-dos with incomplete-count badge; new shell sidebar): priority Waiting for you > To review > In progress > Follow-up > Not started, completed at bottom; create title + description, tap circle or swipe right complete, swipe right reopen, swipe left delete. Details edit title/description, show current and past Agent sessions, remove failed starts; bottom Hand to Agent starts new or picks existing session with structured to-do context card |
+| Settings | Assistant (no model displayed/configured here; Model configuration › Main chat, #1291; Proactive work and memory pages, `AssistantProactiveViews.swift`: Scheduled tasks row-end toggles, existing edits save on leaving; new + with Meeting preparation / Weekly report / Agent check / End-of-day review templates uses Cancel / Add sheet so trying a template does not create it; Run now / View last result switches to Chat and opens that chat; one-time follow-ups, interval and scheduled tasks share page/editor; run settings model, permission mode, effort, Allow everything confirmation. Memory parses frontmatter, title prefers Chinese MEMORY.md index title, type badges, Markdown details, Edit whole file, swipe delete, read-only index row; About me edits notes, saves on leaving). Claude Code settings (allowlisted per-machine `~/.claude/settings.json`: exit recap, effort, always think, reply language etc., apply to all); Machines (online, session count, version, launchers, reconnect); Connectors (2026-11-01: This iPhone = old phone-data toggles/permissions; Email = old Inbox ⋯ account management; Lark = hub gateway status and purpose, `ConnectorsViews.swift`, `GET /api/v1/lark/status`; with hub `connectors`, add rows below Lark from `GET /api/v1/connectors` (2026-11-02, GitHub first: status, account, gh login from <machine>, last sync, generic `HubConnectorView`, DEBUG `-openConnectorGitHub YES`; in-App sign-in connectors (Telegram, `signsInHere`) add enable toggle, stepwise login, sign out, delete stored data, `ConnectorSignInSections`, DEBUG `-openConnectorTelegram YES`)); Notifications; Pair again |
 
-对话页：
+Chat page:
 
-- 消息：用户气泡（珊瑚色）、助手 markdown（无气泡，阅读优先）、思考（折叠一行）、工具步骤组（>2 步折叠成「N 个步骤 · 运行 5 · 读取 3」，
-  永远露出最后一步）、待办清单（TodoWrite 直接渲染）、Edit 的红绿 diff、Bash 命令和输出、图片。
-- 展开的工作过程是一张卡片：每一步仍是聊天列表里单独的懒加载行（一轮可能几百步，包成一个视图会卡死），各行自己画卡片的一段
-  （`WorkCardSlice`：第一步上圆角、「收起 N 步」那行下圆角，背景伸进行距的一半和邻行接上），步与步之间是从文字列开始的细分隔线；工具行 44pt 高。
-  **液态玻璃（默认）不画卡片**（2026-10-31 用户要求：卡片和聊天主页不一致，`StyleSpec.workList = .timeline`）：步骤直接在页面上，左边一条细竖线从第一步
-  通到「收起 N 步」，工具的圆形图标坐在线上（图标下垫页面底色把线挡住），工具的动词用中等字重；工作中间 Agent 说的话用小一号的灰字（`AssistantText(quiet:)`），
-  读起来是过程而不是回复；思考、折叠的步骤、待办、工具详情、「收起」都从线右边的文字列开始。其他风格仍是卡片（`.card`）。
-  各段背景伸进行距的一半（`WorkCardSlice.bridge = Theme.Space.l / 2`）：原来按 14 的行距写死 7，行距改成 16 后每条接缝都有 2pt 白缝。
-- diff 只有一个 `DiffView`（Claude 的 Edit / MultiEdit / Write 给新旧文本，Codex 给 unified diff），用 Git 页的行模型（`DiffText.Line` / `parse`）：
-  头部是文件名、目录、+N −N（点开文件）；只有 ± 符号和行底色上色，代码是正文色；长行横滑，右侧渐隐提示还有；超过 40 行先显示开头和「展开全部」。
-  Git 页整份文件的 diff 仍用 `MonoTextView` 画（大 diff 的性能），行模型和配色一样。工具出错时「出错了」写在输出上方，不再盖住输出的第一行。
-- 图片查看器：App 里所有打开大图的地方（对话里的图片、自己发的图、这一轮看过的图、工具结果、文件页的图片、notebook 输出、Markdown 里的网页图片和图表、
-  飞书消息 / 卡片 / 公司圈 / 文档、收件箱的连接器消息、飞书附件）都走同一个 `ImageViewer`（`ImageViewer.swift`，数据是 `ViewerImage`：
-  图片字节、机器上的文件或飞书 URL），照「照片」App 的样子：
-  - 顶栏：圆形返回 · 两行标题胶囊（名字；「9 / 20 · 来源或尺寸」）· 圆形「⋯」菜单（拷贝图片、标注、拷贝路径、在文件页打开、信息）；
-    底栏：多张时缩略图条（当前那张宽一点，跟着滑动居中）；圆形分享 · 胶囊里保存（仅添加权限）/ 标注 / 信息 · 圆形拷贝。纯图标、固定 44pt，
-    字号最多到 xxxLarge，iPhone SE 也放得下。两条栏和按钮是设计系统里的 `ViewerTopBar` / `ViewerBottomBar` / `ViewerIcon`
-    （`DesignSystem/ViewerChrome.swift`），消息的「分享」预览页也用它们，两处一直一个样子（#4714）。
-  - 背景跟随深浅色（`Theme.Viewer.canvas`），单击图片收起所有栏、背景变黑（`immersive`）；Mac 上单击不收（关闭按钮和 Esc 在栏里）。
-  - 手势：双指 / 双击缩放，放大后拖动，左右滑切换，适配大小时往下拖关闭：图片跟手缩小、背景渐隐，松手按距离 / 速度决定关还是弹回（`ZoomMath.pullProgress` / `pullCloses`）；
-    系统 zoom 转场的拖动关闭用 `.interactiveDismissDisabled()` 关掉，免得两个手势抢。有缩略图的入口用 zoom 转场打开。
-  - 标注（`ImageEditor.swift`）：框选 / 画笔、6 种颜色、撤销 / 清除，完成后「加到输入框」，作为下一条消息的附件（`AppModel.composerInbox`），
-    补一句话就能发；只有对话里打开时才有。输入框里待发的图片点一下也能先编辑再发。
-  - 截图：`-openFirstImage YES` / `-openViewedImage N` 打开，`-showViewerChromeHidden YES` 收起栏，`-showViewerInfo YES` 打开信息。
-- 后台同步（推拉结合，照 IM 的做法；只在 App 前台且连着 hub 时）：hub 推「哪个会话变了」，App 自己按游标拉增量。
-  Agents（`AgentSync`）：会话列表 / `revs` 事件里的 `rev` 和本地记下的不同，就按 `after_seq` 拉新内容，内存里有这个对话就合并进去，
-  没有就写进磁盘缓存（`ChatCache.folder`，现在是 `chats-v3`），打开时直接就是最新的；范围是活着的 Agent + 24 小时内用过的会话（最多 40 个，最近的先拉，并发 3），
-  正在看的对话靠自己的订阅，不重复拉。工作中的 Agent 每个对话最多一分钟拉一次（`AgentSync.workingGap`；每次都要把那个对话的整份磁盘缓存解码、再写回），
-  轮次结束、需要你的那一刻立刻拉（这时最可能被打开）；真实 hub 录的 19 分钟回放：每分钟 45 次 → 9 次（2026-11-02，耗电排查）。飞书（`LarkSync`）：hub 转发飞书网关的实时事件（`lark`），收件箱里的飞书会话和打开的会话收到就刷新
-  （轮询只作兜底：列表 90 秒、会话 60 秒）；收件箱里有变化的会话在后台取最新一页写进 `lark-chat-<id>` 缓存，连上 hub 时把最近 20 个
-  补一遍；未读会话的缓存覆盖到第一条未读时也直接用缓存打开。
-- 设置 › 存储空间（`StorageView`）：App 在这台手机上占用的空间，按类别（Agent 对话、对话图片、飞书图片和文件、列表和飞书会话、网页、
-  网络缓存、其他、App 数据）显示大小和占比条，左滑 / 长按清除一类，或「清除全部缓存」（设置和配对信息保留；网页只清缓存不清登录）。
-  清除后内存里的副本一起丢掉，后台同步重新拉。DEBUG：`-tab settings -openStorage YES`。
-- 图片按需加载：历史分页和实时推送都不带图片数据（`lazy_images`，一页从几 MB 降到几百 KB），只带尺寸；行滚到屏幕上才按
-  `ImagePayload.ref` 取图（`ChatImageLoader`：同一张只下载一次，内存 NSCache + `Caches/chat-images` 磁盘缓存，图片不会变，永久有效），
-  取到之前按尺寸占好位置，列表不跳。缩略图、全屏查看器都走它；本地发出的图片仍是内嵌 base64。
-- 链接（`Views/Link/LinkSheet.swift`）：会话里的 http(s) 链接在 App 内的底部卡片打开（Telegram 式）：打开即铺满屏幕，下拉到 60% 时对话照常可用、再下拉收起，
-  卡片升到 60% 时后面的对话照常可滚动、可输入（`presentationBackgroundInteraction`）。飞书文档 / 知识库走原生阅读器（`FeishuDocReader`），
-  其他网页用 `WebViewPool`：每条回复出现时预加载其中前 3 个链接，最多常驻 6 个 WKWebView（LRU），共用默认的磁盘网站数据（缓存、登录态），
-  请求用 `returnCacheDataElseLoad`，打开时直接拿已加载好的视图。网页里选中文字，系统菜单多「AI 修改」（填修改要求后立即发给 Agent）和
-  「作为上下文」（输入框上方出现引用条，随下一条消息发送）；原生飞书文档用标题栏的「作为上下文」带整篇。上下文在消息里是
-  `<jarvis-context kind="context|edit" title="…" url="…">选中文字</jarvis-context>`，原始标签不显示。
-- 本 hub 的链接（#2696，`Shared/HubPageLink.swift`、`App/HubPageRouting.swift`）：助手回答里指向本 hub 网页的链接（#2194）不开网页卡片，直接进 App 里的页面：
-  `/s/<机器>/<会话>`、`/t/<机器>/<空间>/<槽位>/<会话>` 打开那个 Agent 的对话，`/j/<id>`、`/persona/<id>` 打开那个 Persona 对话，`?at=<条目 id>` 再滚到那条消息并闪一下
-  （和点引用回到原消息同一套，不在已加载的里就往前翻几页，找不到停在最新）；`/todos?id=<id>`、`/todos/<id>` 浮起待办详情。会话 id 可以是唯一的前缀（同网页，#2464）。
-  「本 hub」按 host + 端口（不看 http / https）对：这一组配对的地址、socket 当前用的地址、mesh 的 endpoints、hello 的 `public_url`；hub 在反向代理子路径下时路径要在那个前缀里。
-  别的站点、`/todos` 看板、`/inbox`、`/machines` 等 App 没对应页面的路径，以及别组 hub 的待办、不知道在哪台机器上的 Persona 对话，照旧在网页卡片里打开。手表的消息不渲染链接，不涉及。
-- 引用（#986，2026-11-03 用户要求，参考 Telegram 的回复；组件在 `DesignSystem/QuoteViews.swift`）：
-  - **左滑引用**（#1058，Agents 对话）：按住一条消息往左拖，我的消息和 Agent 的文字回复都行，工作行不行。
-    - 气泡跟着手指走，右边露出回复图标；拖过阈值（`MessageSwipe.threshold`）轻震一下，图标填上强调色；再往后只跟一小部分（橡皮筋）。
-    - 松手后弹回，这条进引用条，输入框获得焦点；没过阈值松手什么都不发生。
-    - 手势是 UIKit 的 `LeftDragRecognizer`：一开始不是往左的横向拖动就立刻失败；外面的滚动视图（列表、新外壳的翻页）等它失败了才开始，所以竖着滚照常，从左边缘往右滑返回也不受影响。
-    - 助手的对话没有开：它在新外壳的翻页里，左滑要留给翻页。
-  - **输入框上方**：长按消息 › 引用、链接页的「作为上下文」、@ 会话，都以引用条的样子放进输入框里、文字框上面。
-    一条引用由这几部分组成：一道强调色竖线；标题，如「引用 Claude」「引用 你的消息」「引用选中的文字 · 页面」「引用会话 …」；摘要；右边的 × 取消。
-    一条时摘要两行；有几条就竖着叠起来，每条一行摘要。
-  - **发出后**：自己的气泡顶部嵌同样的引用块，气泡和最宽的一块一样宽。点引用块：
-    - 引用的是这个对话里的消息（`kind="quote"`，带 `msg="<消息 id>"` 属性），就滚到原消息，并给那一行亮一下（`QuoteFlash`）；
-    - 原消息不在已加载的对话里，就展开全文；
-    - 网页摘录则打开那一页。
-  - **两套样式**：液态玻璃等风格画 Telegram 的竖线加文字（气泡里垫一层淡色）；BeautifulUI 画一张小卡片，竖线贴在卡片左边。
-  - **不算引用的**：hub 给飞书 /agent 请求带的说明和文档（kind instructions / doc）还是折成一行（`ContextGroup`）。
-  - **飞书聊天页**：回复条也放进输入框里，气泡里的引用块点了跳回原消息。
-  - 截图：`-showSampleQuotes YES` 在输入框上方加一段网页摘录和一个会话；端到端的用例是 `QuoteBubbleTests`。
-- 文件：消息里出现的路径显示成可点的文件标签，工具卡片里 Read / Edit / Write 的路径也能点；在会话所在机器上读取
-  （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
-- 同空间的其他 Agent（Agents 页）：顶栏第二行是 tab 条（`SiblingTabs`，2026-10-31 用户要求恢复平铺）：每个 tab 一个胶囊，胶囊的底色就是状态色
-  （需要你红、工作中橙、未读绿，已看 / 空闲灰；不用会闪的圆点），当前的加粗、带一圈描边，宽度放得下几个就显示当前 tab 和它两边的几个，左右滑能看到全部；最右边「⋯」弹出全部 tab 的列表（状态圆点、名字、状态字，
-  当前的打勾，别的 Agent 需要你时「⋯」右上角一个红点），第一项「空间 X 的所有 Agent」进空间页。对话页「…」→「空间里的所有 Agent」同样。
-  标签行左滑露出「关闭」（不允许整行滑到底就执行），列表行和顶部胶囊长按也有「停止并关闭 Agent」。工作中、等待交互、状态不明或仍有后台 / 排队 / 循环任务时先确认；空闲、完成的标签直接关闭。
-- 删除对话（#1749，对齐网页 #801）：没在运行的会话（`Session.canDelete`：未运行 / 完成 / 未知，不在启动中，不是助手的）在 Agents 行的长按菜单、对话页「…」（Mac 上还有菜单栏 Agent ›「删除对话…」）里有「删除对话…」，系统确认框说明只从各端列表移除、电脑上的记录不删、再用到会重新出现（`DeleteSessionText`）。确认后 `AppModel.deleteSession` 调 `DELETE /api/v1/sessions/{mid}/{sid}`，成功就从本机列表拿掉（hub 的下一次 sessions 推送一致），开着这个对话的页面都退出（分栏右侧、Mac 的单独窗口也是，`AppModel.deletedSession`）；失败显示 hub 的原话。
-- 节点菜单（#3098，对齐网页 #2329，`docs/terminal.md`「节点菜单」）：herdr 里还在跑的 Agent 行的长按菜单多一组「拆分窗格 ▸ 向右 / 向下拆分」「Git ▸ 拉取 / 推送 / 获取」（在窗格的目录）「关闭标签页…」（系统确认框：标签页里的窗格都会关、Agent 也结束），空间标题的 ⋯ 多「在这里运行 Agent…」和「Git ▸」（在工作区的目录）。「在这里运行 Agent…」是一张 sheet：读 `GET /machines/{mid}/panes`，列出这个工作区里没有 Agent、没有绑定会话的 shell 窗格和这台电脑能直接启动的 Claude Code 启动器（Codex 要第一条消息，走新建 Agent），点「运行」调 `panes/agent`；没有空闲的 shell 时可以「新开终端标签页」（`POST /panes`）再选。只给 herdr 宿主（Orca、herdr-core、botmux 不出现）；改标签页名沿用原来的「重命名…」。逻辑在 `Views/Chats/NodeActions.swift`（`NodeMenu` 纯函数 + `NodeActions` 执行和确认，`nodeActionPrompts()` 挂在 Agents 列表上），菜单本身照旧是 Equatable 的，不读推送里会变的东西；失败把 hub / node 的原话放进红色 toast。测试 `NodeMenuTests`。
-- 新建 worktree…（#3099，对齐网页 #2431，`docs/terminal.md`「新建 worktree…」）：herdr 空间的 ⋯ 里，sheet `NewWorktreeSheet` 先 `worktree/prepare` 读仓库（「persona · 当前分支 main」），填分支和检出路径（路径跟着分支名走，规则和 herdr / 网页一样，手改后不再跟、清空后恢复；分支名当场按 `git check-ref-format` 的规则提示），「创建」调 `worktree/create`。git 的拒绝原样显示在 sheet 里；旧 hub / node 没有这两个接口时说「这台电脑上的 Persona 版本太旧，更新后才能新建 worktree」。手机上没有终端页可以跳，建好后 sheet 换成预填了新工作区和检出目录的「新对话」（`SpacePreset`），开出的 Agent 在新 worktree 里。逻辑在 `WorktreeForm`（`Views/Chats/NodeActions.swift`），测试 `WorktreeFormTests`、`NodeMenuUITests`。
-  复用 `session.close`：远端确认关闭后才将本地副本标为未运行（历史、标题与会话内容保留），失败时确认卡片留着并显示错误，可重试或取消；不连接 hub 时不能伪报成功。
-  列表直接观察同空间的活动会话，关闭其他标签不退出列表、不切换当前对话；关闭当前标签选它后面的活动标签，没有则选前面的，全部关闭后返回。只剩一个标签也保留操作入口。
-  10-29 曾改成只剩一个按钮的菜单（`SiblingMenu`），看不到 tab 和状态，用户不喜欢。
-  对话本来就是从这个空间页点进来的，就直接返回，不再叠一层（ChatsView 记着哪一层是哪个空间页：`spaceAt`）。
-  空间页顶部的机器按钮（「公司 Mac ›」）进机器页（`MachineSpacesView`）：这台机器的在线状态和各状态数量，进行中的项目（每个带最需要注意的
-  那个 Agent 的最新一句）和空闲的项目，点进各自的空间页；不属于任何 herdr 空间的 Agent 直接列出；右上角 ⓘ 是机器详情。
-  DEBUG：`-tab dev -openMachinePage <机器 id>`。
-- 机器（`docs/machines.md`「App」）：一个页面看全部机器，每台一张卡：在线、系统、Agent 数（需要你 / 工作中 / 空闲）、CPU / 内存 / 网络当前值和
-  最近 1 小时迷你曲线、告警、版本不一致时的「重新部署」，需要注意的排前面。点卡片进机器详情：上面是这台的 Agent（点进对话），下面是曲线
-  （1 / 6 / 24 小时，按住看某一时刻）、系统信息、启动器。引擎下面是「这台电脑能做什么」（#3018，node 自检按功能读出来，可展开全部检查，生成文件过期时「修复」先确认一次；`docs/machines.md`「自检」）。入口：抽屉「机器」、设置 › 机器、Agents 左上角菜单「机器」（原来的「机器监控」并进来了）。
-  卡片下面是「订阅额度」（#2889，`docs/usage-windows.md`「界面（iOS / Mac）」）：Codex / Claude / 账号池网关的账号，每个窗口一行，hub 没有数据时不画。
-  DEBUG：`-tab dev -openMonitor all|<机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`。
-- 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
-- 展示逻辑（助手和开发统一，`chatLines` + `WorkLine`）：一轮按「消息」切成若干段，每条消息自成一段对话：
-  你的消息 → 一行灰色的工作行「工具 5 · 思考 1 · 回复 1 · 4 分 17 秒 ›」（计数一律「名称 数字」）→ Agent 在下一条消息之前说的最后一段话 → 下一条消息……
-  进行中和已完成长得一样，只是进行中的那段工作行带转圈、计时、终端按钮（「正在工作 39 秒 · 工具 2」）。
-  一轮里有多条消息（工作中排队发的）时，做完后也照样按消息一来一回：发几条显示几条，每段工作和回复挂在对应那条下面（#2512 去掉了原来做完后合成一个气泡的画法）。用户发的图片在消息上方显示成方形缩略图（`SentPhotos`，和发送中的样子一致），
-  气泡里去掉 Claude 的「[Image #N]」占位。
-- 进入位置：完成未看的会话顶部只露出你最后一条消息的最后一行，下面就是 Agent 这次做了什么和回复（`landUnderInput`：先按 id 跳到消息，再按实测位置修正；顶栏同时收成细条，按细条的高度排）；其他会话回到上次离开时屏幕最上面那一行（`chat.read.<会话>`，
-  离开时在最新处就清掉，下次直接到最新）。落点在最后一屏时落下来就是最底部：照常跟随新消息（`ChatView.landed`）。
-  这样不管收起还是展开，每条输入对应的输出都紧跟在它后面；不再把一轮的多条消息堆在一起，也不再编号。
-  - 工作行折叠的是这段里除最后一段话之外的一切：工具调用、思考（新版 Claude Code 把旁白写成 thinking）、系统提示（后台命令完成等）、
-    中间的回复。点一下在原地按顺序列出每一步（左侧一条细线），再点同一行收起；最后一步下面也有「收起 N 步」，几百步时不用滑回顶部。
-    展开后每一步是列表里独立的一行（`ChatLine.workStep` / `.workEnd`，几百步也不会变成一整块大视图）。收起 / 展开不动正在看的内容
-    （`toggleWork`，不带动画）：从底部「收起」时，倒置列表的最新一端本来就不动，下面的回复留在原处、折好的工作行落在「收起」原来的位置；
-    从标题点时标题留在手指下（先按 id 跳过去，布局完成后按实测位置修正偏移）。DEBUG `-showFoldProbe YES` 自动做一遍并把各自移动了多少
-    写进 `Documents/fold.txt`（应全是 0）。
-    在最新处点开时，标题往上升到顶栏下面露出步骤（#1173），升的过程每帧补一点（`ChatPin.rising`，时间常数 0.1 s，一帧最多算一帧的量，
-    步骤分几批到、中间卡一帧也不会一下窜上去），升的时候不出 ↓；在最新处收起时列表留不住标题，先原地停一帧再滑下去（`ChatPin.glide`，约 0.35 s）。
-    Mac 上 `NSClipView` 一布局就把越过最新端的偏移夹回去，所以滑动是一帧一步自己放的，滑的过程中谁把列表挪走就在同一次布局里放回去（`ChatPin+Mac.swift`）。
-    打开着的工作行里再点思考、工具、BeautifulUI 的一串工具胶囊，标题和被点的行都不动（不再借标题剩下的上升量，也不把工作行的「一直按住」换成普通的 1.5 s）。
-    打开「减弱动态效果」时不升不滑、展开的内容不渐显（`Theme.Motion.reduced`，#1123）。
-  - 后台任务把空闲的 Claude 唤醒（`wake` 通知）：还是同一轮，不切开。唤醒把这一轮分成几段，每段以 Agent 的一段话收尾，
-    「真正的回复」取其中最长的那段（「总结 → 构建已上传」取总结；「等它的结果 → 总结」取总结，`Turn.pickAnswerAcrossWakes`）。
-    回复之前的一切（含过渡的话、唤醒本身——算一个工具）合成一行工作行；回复后面一个小的「🔔 后台命令完成 · <描述> ›」，不展开，
-    点了从下面拉起抽屉（`WakeDrawer`），只看结果：按顺序列出每个后台任务的通知和 Agent 对它的回复，中间的工具、思考、过程中的话收成末尾一条默认折叠的工作行（2026-10-31 用户要求：展开不要同时铺开 n 段过程）。唤醒后还在干活时，小条显示「后台任务完成 · 正在处理」。
-    工作中途完成的后台任务（不是唤醒）仍然只是工作行里的一步。
-    坑：Claude Code 在空闲会话里会写「离开期间回顾」（recap），它会把这一轮收住；之后来的唤醒要把上一轮重新打开并入，
-    回顾卡片留在原位，否则唤醒后的回复又直接露出来（`ChatBlock.build` 的 `lastRaw` / `reopenedAt`）。
-  - 离开期间回顾（recap）和后台任务一样：只显示一个小条「↺ 离开期间回顾 · 21 分钟前 ›」，点了从下面拉起抽屉看全文（`RecapCard` / `RecapDrawer`）。中间没有别的东西的几条回顾合成一行「↺ 离开期间回顾 · 3 次 · 3 分钟前 ›」，抽屉里最新的在最前（`ChatLines.foldRecaps`，2026-10-31 用户要求：像合并后台任务一样）；mock 用 `MOCK_RECAPS=1`。
-    回到对话时，如果最新一条回顾是对话的最后一项、还没关过，它在对话末尾展开成全文卡片（`RecapStrip`，`ChatLines.openRecap`）：
-    和 Agent 的回复在同一个平面，是倒置列表里最新的一行，往上翻跟着正文滚走，贴底时连同回顾一起完整露出来，不再放在输入框上方
-    （#1360：放在 footer 里时，展开后拉到底会盖住回复的最后一部分）。点它或开始打字就关，关掉后变回那一行小条；关过的按会话记在
-    `closedRecaps`。同一行里折起来的更早几条回顾留成小条，放在全文卡片上面。
-  - 顶部自动收起只认用户的拖动和拖动之后的惯性滑动；打开会话时程序定位产生的 decelerating 不算，否则一打开就收起。
-  - 工作行文字不截断：放不下时换成短格式（只留工具数和用时）。
-- 「连不上 hub」横幅：连续 5 秒连不上才出现（网络抖动、回到前台的重连都在 5 秒内完成，原来一闪而过），连上立刻消失。
-- 布局：列表在上、输入区（交互面板 / 循环 / 后台 / 排队 / 输入框）在下，用 VStack 排、不再叠在列表上；键盘弹起整页变矮，最新消息始终贴着输入框。
-  列表上方垫 1pt 空视图，让滚动视图不贴顶部安全区，这样它完全没有安全区（翻转后安全区会落在错的一端），也不必忽略安全区、自己补边距。
-- 其他会话发来的消息（`Item.from`）：左侧灰色卡片「来自 名字」，正文按 Markdown 画（同回答；队友的 JSON 通知 hub 已转成 Markdown）。
-- 列表是倒置的（`chatScroll`：ScrollView 和每一行各翻转一次）：最新消息在滚动偏移 0，进入、跟随新消息、点 ↓ 都是精确跳到 0，
-  不再按懒加载的估算高度去找底部（偶发白屏的根源）；更早的历史加载在另一端，不推动正在看的位置。看历史时（`followsEnd` 关）新来的行先不插进
-  列表（`frozenAt`），回到最新再出现，所以不会把正在看的内容挤走。不要用 `defaultScrollAnchor(…, for: .sizeChanges)`：翻转后它锚在远端，
-  一变高就把视图带进没渲染的区域（白屏）。倒置后安全区会落错端：滚动视图忽略纵向安全区，用 `contentMargins` 按实际 inset 补留白；
-  iOS 26 的边缘模糊会按未翻转的视图算区域、把整页蒙住，所以关掉（`scrollEdgeEffectHidden`）。
-- 本地缓存（`StateCache`，Caches/state）：机器 / 会话 / 待处理交互 / 助手设置（`dev`）、收件箱（`inbox-items`，`InboxStore`）、
-  邮箱账号（`mail-accounts`）、每个飞书会话最近 80 条（`lark-chat-<id>`）。冷启动、断网、切 tab 都先画缓存，后台静默刷新；有缓存就不显示转圈。
-- 历史：按轮次分页，首次进入和每次滑到最上面都取两轮完整的「用户输入 + 回答」（`turns=2`），不按条数切；顶部转圈自动加载，
-  没有「加载更早」按钮。每个会话的最后两轮存在本机（`ChatCache`，Caches/chats，超过 6 MB 去掉图片），打开 / 切换会话先画缓存再合并服务器数据，
-  不出现空白。轮次开始 / 结束、自己发了消息、切回「对话」选项卡时都回到底部（一轮结束会收起，内容骤短，不跳会停在空白处）。
-  「贴底」状态（`followsEnd`）：在最底部时开；手指一拖列表就关（看历史时任何更新都不动位置）；回到底部、点 ↓、自己发消息时再开。
-  只在贴底时，新内容到来后才跳到底：先按底部边缘跳、再按底部哨兵的 id 对齐，等新行布局完再跳（`settleAtEnd`），哨兵没真正出现在屏幕上就重试
-  （单次按 id 跳进没布局过的区域会落在更早的某条输入上——「动不动跳到之前的输入」就是贴底判断写成「滑过就不重试」造成的）。
-  进入页面时的定位只做一次，从全屏终端等返回不再重复。LazyVStack 按估算高度定位，行高差异很大时会停在没渲染的地方（白屏）；`atBottom` 初始为 false，
-  万一仍白屏，「回到底部」箭头会出现。滑到顶自动加载更早的一页，只在用户手动拖动过列表之后才生效（进入时 LazyVStack 可能先布局顶部那行，
-  曾导致一进页面就连锁加载整段历史）。
-- 渲染：每条消息、计时行、叙述、工具计数、答复都是 LazyVStack 里的独立行（`ChatLine`）。进行中的一轮可能有几百步，
-  做成一个整块 VStack 时整页卡住、空白好几秒。
-- 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
-- 输入框：**新外壳里助手对话页和 Agent 对话页是同一个 `ShellComposerBar`**（#1091，任何界面风格）。`ChatView` 的 `Composer` 以前只看
-  `shellChat`（只有 `AssistantView` 设），Agents 页推进来的对话走的是另一套（`ComposerRow` / `PromptComposer`），所以两页长得不一样；
-  现在条件是 `shellChat || shell != nil`（`usesShellComposer`）。Agent 页的 + 菜单比助手多一组「快捷指令」（含 /clear）；
-  BeautifulUI 风格下 Agent 页因此没有了 Prompt Bar 的 @ 和 / 菜单（快捷指令在 + 里）。
-- **输入「/」弹出命令列表**（#2747，对齐网页的 `AGENT_COMMANDS`）：没有 Prompt Bar 的两个输入框（`ShellComposerBar`、`ComposerRow`，任何界面风格）里，
-  Agent 对话的草稿是「/」加一个词时，输入框上方出现 `SlashMenu`：/继续、/提交、/汇报、/compact、/context，能选模型时有 /model，能清空时有 /clear，
-  顺序和网页一样；每行是命令词、说明，快捷消息在右边显示要发的原文；继续打字按命令词的开头或说明里的字过滤。点一行把它的文字填进输入框，不发送
-  （/clear 弹原来的确认框）；填进去的就是一条命令（如 /context）时列表不再弹出，改了草稿才重新判断。超过五行半时列表内部滚动。
-  助手对话和网页一样没有这个列表。列表放在 `Composer` 的 VStack 里、不是浮层，因为输入框在自己的宿主控制器里，浮出边界的部分点不到（#518）。
-  + 菜单的「快捷指令」不变。截图用 `-openSlashMenu YES`；UI 测试 `PersonaUITests/SlashMenuTests`（两种布局都跑）。
-- **iPad（regular 宽度，iPhone Duo 展开同理）也用这一个 `ShellComposerBar`**（#2779）：它不进新外壳（`RootView.usesShell` 只看 compact），
-  环境里没有 `shell`，以前退回 `ComposerRow`，和 iPhone 不一样。现在 `ChatComposerKind.padCard`（iOS 且没开旧布局）让 Agent 对话、助手对话
-  （`shellChat`）和助手新对话（`AssistantHome` 交给 `StarterComposer(shell:)`，模式 chip 收进模型菜单）都画它，宽度跟对话页一起限在 `ChatView.readableWidth` 并居中。
-- **长草稿可以展开成整页编辑器**（#3167，对齐 ChatGPT）：`ShellComposerBar` 里的字到 3 行（按输入框宽度折行后的草稿高度对一行字高，不看输入框自己的高度：上面有引用、键盘弹起时它会被压到不足 3 行），卡片按钮行 + 右边出现「⤢ 展开」
-  （读屏「展开输入框」）；点了拉起整页的 sheet（`ComposerPageEditor`，iPad 是 `.page` 大小，文字宽度限在 `ChatView.readableWidth`），顶栏左「收起」、右「发送」（Agent 工作中且没字时是「中断」），
-  上面是引用条。编辑的是同一份草稿（`text` 绑定，`model.drafts` 仍是唯一来源），待发的图片和文件留在下面的 composer 里照常随消息发出。
-  页有自己的光标（打开时接过调用方的 `selection`，关掉时还回去；直接绑调用方的，每个字的光标都绕调用方一圈、回来晚了，iPad 上偶尔丢字），
-  页开着时输入框自己的字段改绑一份闲置的 `parkedSelection`，在 sheet 下面动不了调用方的光标。焦点绑定进不了 sheet，页也有自己的 `@FocusState`：
-  页开着时谁要输入框的焦点（上传完的文件路径 `PathInsert.edit`、⌘I），输入框把它转给页，不在 sheet 下面弹键盘；这时输入框不算在编辑，
-  路径插在草稿末尾，页的光标跟到路径后面（调用方的光标动过才接，单纯 ⌘I 不动光标）。
-  收起、下滑关掉、页被换掉（切对话、换树）时先确认输入法正在拼的字（`TypedText.commitFocused`，#2203），回到输入框时键盘和光标都在原处；
-  在页里发送（工具栏按钮带 ⌘⏎ 快捷键）和点输入框的发送完全一样，只发一次；页开着时输入框的 ⌘⏎ 关掉，不会从下面再发。量行数的隐藏文字最多排 4 行、取草稿前 600 字，结尾的换行算一行，页开着时不量。
-  按钮放在按钮行、不压在输入框角上：压在角上要么挡字，要么出现时整段重新折行。只在 iOS；旧布局、Mac 不变。
-  UI 测试 `ComposerExpandTests`（助手 / Agent，键盘起落，一整段自动折行，光标从中间带过去带回来，下滑关掉留住改动，发送只到 hub 一次且带引用；iPhone / iPad / iPhone Duo 都能跑，`TEST_RUNNER_JARVIS_ORIENTATION=landscape` 横着跑；展开竖放的 iPhone Duo 上 XCUITest 把屏幕当成倒置竖屏、合成的拖动落不到位，用 `TEST_RUNNER_JARVIS_NO_DRAG=1` 跳过收键盘、下滑两步）。⌘⏎ 的用例要 `TEST_RUNNER_JARVIS_HARDWARE_KEYS=1`：Xcode 27.2 + iOS 26.5 模拟器上合成的 ⌘⏎ 普通字能到、快捷键不触发（输入框原有的 ⌘⏎ 同样不触发）。
-- 旧布局（`-ui.oldLayout YES`）和 Mac 不变：Agent 对话和助手新对话共用 `ComposerRow`（+、玻璃胶囊输入框、发送，Agent 工作中且没打字时是红色的中断，
-  没有听写），输入框上方是权限 / 思考强度两个胶囊（`SessionModeBar`）。
-- **听写和中断按钮只有一份**（#1079）：`DesignSystem/ComposerButtons.swift` 的 `ComposerMicButton`（线条麦克风，听写中变实心、红色、脉动）和
-  `ComposerRoundButton.stop`（墨色实心圆里的停止），44pt 点按区域，随外壳放大一档（`shellScaled`）。`ShellComposerBar` 和 iOS 上的 `PromptComposer` 用它们。
-- 「BeautifulUI」风格（设置 › 外观 › 界面风格，`AppStyle.beautiful`，2026-10-30）下，输入框换成 `PromptComposer`（助手新对话是 `BeautifulStarterComposer`），
-  是 BeautifulUI 的 Prompt Bar（`layout: .stacked`）。其他风格完全是上面的样子（CLAUDE.md：新样子做成新主题）：
-  上面一个圆角框里是多行输入，下面一行工具栏：+（照片 / 拍照 / 文件）、@、/、模型、听写，右边发送；Agent 工作中且没打字时发送换成中断。
-  底色是当前风格的 `.surface`（库自己不画），按钮 34pt。iOS 上听写和中断是上面共用的按钮：库自带的麦克风关掉（`showsDictation = false`），
-  不给 `onStop`，在库画发送的位置叠上共用的按钮；中断出现时用一个偶奇填充的遮罩（`SendCutout`）把库的发送挖掉，遮罩往外伸得很远，
-  所以从输入框上方弹出的菜单不会被裁（库代码不改，见 `apple/Packages/BeautifulUI/VENDORED.md`）。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里。
-  - 草稿：输入框直接编辑 `model.drafts`（`Options.text`），不要让 bar 和宿主互相回写，否则拼音输入法正在拼的字会被提前上屏。
-    发送前先确认输入法正在拼的字、拿文本视图里的字更新草稿（`TypedText.commitFocused`，三个输入框都这样，#2203：微信输入法下发出去只有一半）。
-    引用（`composerContexts`）和文字一样存进 StateCache（"composer-contexts"），App 被杀后还在；有字或有引用的会话在 Agents 列表行的元信息前标「草稿」（#4578，
-    `AppModel.draftMarks`，只在某个会话有了或没了草稿时才变，打字时行不重绘）。
-  - 粘贴图片（#4573）：剪贴板里有图片、输入框聚焦时，输入框上方出现系统的「粘贴」按钮（`PasteImageChip`，SwiftUI `PasteButton`），点一下就把图加进待发图片；
-    点按钮本身就是授权，不弹「允许粘贴」。是否有图只用 `hasImages` 判断，不读内容；同一次拷贝点过或点 × 后不再出现。对话、助手的两种起始输入框都有。
-  - 「@」：本会话的工具读写过的文件（最近 12 个，打 `@相对路径`，Claude Code 和 Codex 都认），再是其他会话（最近活跃的 8 个，选中后作为一段
-    `<jarvis-context>` 引用附在消息前，显示成输入框上方的引用胶囊）。只列已载入的步骤里的文件：长会话里收起的工作卡没展开过就没有。
-  - 「/」：`SlashCommand.all`，快捷消息用短词（/继续、/提交、/汇报），选中后把要发的话填进输入框，点发送才发出（以前点菜单就直接发）；
-    /compact、/context 原样；能清空时有 /clear，点了先弹确认。
-  - /loop（#2601，照网页 #1600）：只给 Claude Agent（Codex、TRAEX、助手没有，`LoopCommand.offered`），在「/」菜单和 + 菜单的快捷指令里，
-    选中把 `/loop ` 加在输入框已有文字前面（已有的字成为要做的事，光标停在命令词后面补间隔），不直接发送（+ 菜单其余快捷指令照旧点了就发）。草稿是 `/loop` 命令时输入框上方一行 `LoopDraftNote`
-    说它会做什么（「每 10 分钟重复：看下 CI」「由 Claude 自己定节奏重复：…」，没写要做的事时是灰的用法提示），三种输入框共用；
-    解析规则在 PersonaKit 的 `LoopCommand`，和 `web/src/lib/loop-command.ts` 一致。截图：`-showLoopDraft "/loop 10m 看下 CI"`。
-  - 模型：Agent 对话里是 Claude Code 的 `/model` 别名（默认 / Opus / Sonnet / Haiku），选中就发 `/model <别名>`；Codex、TRAEX、无头助手没有这个按钮。
-    助手首页是启动器列表（原来输入框上方的模型标签挪进来了）。
-  - 听写：`Dictation`（`SFSpeechRecognizer` 中文 + `AVAudioEngine`），听到的字实时接在草稿后面，再点一下停；发送时自动停。
-  - 输入框上方的权限、思考强度标签（`SessionModeBar` / `NewSessionModePicker`）留在原处，不并进工具栏，理由见 PLAN「PromptBar v2」。
-  - DEBUG：`-showPromptMenu mention|command|attach|model` 几秒后打开对应菜单（截图用）。
-- 模型 API 报错（`APIErrorCard`）：Claude Code 放弃重试后写的「API Error: 502 …」回复、hub 的「API 错误：…」通知，都画成一张报错卡，
-  不再把原文当正文铺开。第一行是一句人话的原因（`APIErrorInfo.explain`，比如「推理服务暂时没有可用的 GPU」「登录过期了，要在电脑上重新 /login」），
-  下面是 BeautifulUI 的 chip：状态码（错误样式）、「临时故障」或「要处理」、连续次数。点开看请求 ID、Session、时间和原文，都能复制。
-  同一个报错再来一次、中间只有「继续」这类重试时，合成一张卡加次数（`ChatView.foldAPIErrors`）。报错是最后一条、Agent 空闲、而且是临时性的才有「重试」（发「继续」）。
-  现在从文字里解析；Claude Code 在这条消息上还带了 `apiErrorStatus`、`error`、`requestId` 等字段，hub 读出来以后以字段为准。DEBUG：`-showErrorDetails YES` 卡片默认展开。
-  截图：mock 加 `MOCK_API_ERRORS=1`，看助手主对话和 review 会话。
-- Claude 的建议（`SuggestionPill`）：会话有 `suggestion`、Agent 没在工作、输入框为空时，输入框上方一条胶囊「✦ 建议 … 采用」（✦ 是 AI 的紫色，不是主色），占位文字也换成这条建议；
-  点一下填进输入框（可以改了再发），长按菜单「直接发送」。一打字就消失。无头助手没有 TUI，没有建议。截图：mock 加 `MOCK_SUGGESTION=1`，打开 review 会话。
-- 发送：点发送立即清空输入框、消息以「发送中」气泡上屏（`ChatStore.pending`），请求在后台发；transcript 里出现同样的话
-  （或进了排队列表）就换成真消息，失败变红可重发 / 删除。不等网络，任何地方发都不卡。
-- 发的图片：hub 把路径用 `<attached_images>` 标签附在消息后面，App 解析出来在文字上方显示方形缩略图（经 file 接口从会话所在机器读，
-  内存缓存），点开全屏查看；气泡里不显示这个标签（旧的「相关图片：…」/「（我从手机发来了图片…）」也兼容）。
-- 等宽文本（文件、diff、终端，`MonoTextView`）：UIScrollView 里放一个按最长行实测宽度、不滚动的 UITextView，不换行，横竖都能滑，能选字。
-- 长按消息（`MessageMenu.swift`）：像微信一样在按下的位置上方弹出深色操作条（复制 / 选择文本 / 引用 / 分享，自己的消息多一个编辑），
-  不再先把消息浮起来；按的位置靠近导航栏时放到下方。点任意处或手指拖动列表关闭（内容流入导致的程序滚动不关）。
-  「复制」拷整条；要拷其中一段用「选择文本」（#3189：原来叫「选择」，挨着复制像多选消息，用户找不到）：打开一页可以任意拖选的文字，系统菜单「拷贝」只拷选中的部分，右上角「全部拷贝」拷整条原文。回复按对话里的样子排（`SelectableMarkdown`）：粗体 / 斜体 / 行内代码 / 链接留样式、去掉记号，标题加粗，列表项换成圆点（缩进照留，含 Tab），围栏代码块等宽、缩进、不要围栏（只有同一种字符、不短于开头的光围栏才收尾，````md 里套 ``` 不会提前结束）；公式（`$…$`、`\(…\)`、`$$` 块）、四格缩进的代码、分隔线（`* * *`、`---`）、表格、引用照原文。自己的消息气泡里就是纯文本，这一页也照原样，不套 Markdown（`__init__.py`、`2*3*4` 不丢字）。字号跟系统的动态字体走，改了字号页面跟着变。UI 测试 `SelectTextTests`，单测 `SelectableMarkdownTests`；「引用」把消息以 `> ` 引用放到输入框前面；「编辑」把自己的旧消息放回输入框。
-  操作条的图标固定 22pt 高（各 SF Symbol 高度不同，不固定文字就上下错开）。
-  - 回退到这里（#2915，对齐网页 #2436，`Rewind.swift`）：Claude Agent 的对话里，自己的消息（transcript 里自己的一行）操作条多一个「回退」，
-    弹出「只回退对话 / 回退代码和对话」，后者再确认一次（电脑上的文件也回去）。只在会话空闲时能选，工作中、待回答、未运行、不是 Claude 时说明原因；
-    助手的对话和子 Agent 没有。App 告诉 hub 这条消息的原文（被截断的先取全文）、同样文字的倒数第几条、之后还有几条（`POST …/rewind`），
-    node 核对屏幕后执行 /rewind；成功后提示，Claude 的输入框清空了就把这条消息放回 App 的输入框，失败显示原因（hub 太旧、需要完整权限的设备、node 的拒绝）。
-    对话里回退掉的轮次靠 `history` 变化自动重读。六个按钮放不下时操作条按聊天宽度均分。截图：mock 加 `MOCK_REWIND=1`，
-    打开 review 会话，`-showRewind bar|ask|run`（操作条 / 选择框 / 直接执行只回退对话）。
-  - 「选择文本」为什么不在原地选：消息是 MarkdownUI 排的一组 SwiftUI Text（段落、列表、表格各是一块），SwiftUI 的 Text 在 iOS 上
-    只能整段拷贝、不能拖手柄选一段，更不能跨块；原地选要换成 UITextView 重排，表格 / 代码块的样式会丢。技术限制，保持弹出纯文本页。
-  - 「分享」（`ShareCard.swift`）：把消息排成一张卡片（渐变底 + 白 / 深色卡片：Claude 或「我」、来源「app › leader」、时间、正文、
-    Persona 标记），栏和图片查看器一样（#4714）：顶上圆形关闭 · 胶囊里浅色 / 深色；底下圆形分享（图片，走系统分享）·
-    胶囊里保存（进相册，仅添加权限）/ 拷贝图片 · 圆形分享文字（纯文字）。卡片在两条栏下面滚动。
-    `ImageRenderer` 画不出 ScrollView：卡片用单独的 Markdown 主题 `.card`（代码块折行、表格不横滑），否则表格和它后面的内容全是空白；
-    渲染要设 `proposedSize` 宽度，不然高度按别的宽度量，卡片底下多出一大块空白。超过 3000 字截断。
-- 顶栏（Agents 对话页）：① 返回 / 标题 + 副标题 / …，副标题是「● 状态（工作中带这一轮的用时，按分钟）· 机器 · 空间 › tab」（2026-10-31 起「已看」「未运行」这类平静的状态不写字，只留圆点；点标题从底部弹出「会话信息」浮层：运行 / 用量 / 位置分组、拷贝 id 和恢复命令，下滑或点上方关闭，原来从标题下拉的卡片去掉了；「用量」里在上下文 tokens 下面有一行「上下文余量 · 还剩 N%」和一条细条（#3289，对齐网页 #2430，`ContextUsage.swift`：会话的 `context_tokens` / `context_window`，随会话推送实时变，已用 ≥ 80% 变警告色，窗口未知时不画）），状态字用状态色，
-  放不下先省机器、再省位置；② 有同一空间的其他 Agent 或循环 / 后台任务时才有第二行：同伴菜单、循环和后台的小标签（只写下次时间和个数，点开看详情）。
-  原来标题、同伴条、tab、活动标签各占一行。文件、终端和 Git 都在右上角的 ··· 菜单里，在文件页上从 ··· 的「回到对话」回去；收起后的细条只有返回、位置和循环 / 后台的小标记。
-  原来往左滑翻到文件页，2026-11-04 起改成左滑引用消息（#1058）；同一天文件先是 ··· 左边单独的文件夹按钮，按用户要求收进 ··· 菜单（#1205）。
-- 顶部自动收起（Agents 对话页，像 Safari 的工具栏）：这个顶栏是自绘的
-  （`ChromeHeader`，系统导航栏在 Agents 对话页隐藏），浮在列表上方；**跟手**：手指往新消息方向推，顶栏按同样的距离往上滑走、同时淡出，
-  细条（返回 +「● app › leader · 对话」）在后半段淡入；往历史方向拉就一点点滑回来。松手后不会停在半截：在最新处收起，
-  否则按离哪头近吸附到全开或全收（`.smooth` 0.3 秒）。跟着新内容自动滚动时也收起（用户动过列表之后）；点细条、切 tab 展开。
-  停住 3 秒（`ChatView.chromeIdleSeconds`：没滑列表、没碰顶栏、信息卡没开、页面上没有弹出的 sheet 或菜单）也自动收起；碰顶栏（横滑 Agent 条等）、点细条展开、切 tab 都重新计时。
-  看不见的那层不在无障碍树上：全开时没有细条，折起后全开那层隐藏（还占位量高度），VoiceOver 和 UI 测试任何时候只找到一个「返回」（`ChatHeaderTests`）。
-  - 为什么顺：折叠程度放在单独的 `@Observable`（`ChatChrome`），每帧只重画顶栏；顶栏浮在列表上、列表的 frame 不变（只在最老那头
-    留出顶栏高度的 contentMargins），所以收起展开时消息一像素都不动。以前是开关式：系统导航栏和两条标签各自做动画、列表跟着变高，看着突兀。
-  - 只认用户的拖动和拖完的惯性（`onScrollPhaseChange` 的 tracking / interacting，及紧跟其后的 decelerating）；键盘弹起改变列表高度时的偏移变化不算。
-  - 系统导航栏隐藏后 UIKit 会关掉边缘右滑返回：`SwipeBack.swift` 把 `interactivePopGestureRecognizer` 的 delegate 接过来重新打开。
-- 排队消息：Claude 工作中发的消息不进对话记录，显示在输入框上方的「排队中」列表；每条可「撤回编辑」（回到输入框）、拷贝、删除。
-  实现照 TUI：↑ 把全部排队消息拉回输入框（transcript 记 popAll），清空输入框后把保留的重新排队（`POST …/queue {"keep":[…]}`）。
-- 开发列表：忙碌的空间里只显示需要你 / 工作中 / 完成未看的 agent，空闲的折成一行「还有 N 个空闲」，点开展开。
-- 「回到底部」箭头：用列表末尾的哨兵视图判断是否在底部（滚到底就隐藏）。
-- 会话页的终端、文件、Git（开发会话，`Views/Session/`）：**没有选项卡**（2026-10-30 用户要求去掉「对话 · 终端 · Git · 文件」那一排）。
-  终端在顶栏右上角的 ··· 菜单里（2026-10-31 用户要求去掉顶栏上单独的终端按钮，收起的细栏也不再有）；工作中的那段工作行上仍有终端按钮；文件和 Git 从对话**往左划**进入（对话 → 文件 → Git，往右划回去），
-  或者 ··· 菜单里点「文件」「Git（改动数）」；在文件 / Git 里返回键先回到对话。Git 只在仓库里出现，文件在知道目录时出现；助手对话都没有。
-  - 终端（`TerminalPanel`，`Views/Session/Terminal/`，方案见 `docs/terminal.md`）：任何状态都能看。点终端按钮**从底部弹出盖住整页**（`TerminalCover`，2026-10-30 用户要求）：没有标题和选项卡，顶上只有一条细栏（左边尺寸、中间把手、右边设置），
-    按住细栏往下拖跟手、拖过 140pt 或快速下划就关掉（点把手也关）；终端的尺寸只随键盘变，不随页头变（换尺寸就是给接管的窗格改尺寸，Claude 要重排）。
-    底下的键栏照 Moshi：一条矮的深色胶囊装下所有键（30pt 高的扁平小键，Ctrl / Esc / Tab 等宽小字，其余是图标），把高度留给终端。hub 有 `terminal_stream` 时订阅实时流
-    （`TerminalFeed`：herdr observe 的帧套到窗格尺寸的网格 `TerminalGrid` 上，丢帧 / 换流就从整帧重来，重连带 epoch / seq 续上）；
-    hub / node / herdr 不能推流时每秒读一次带颜色的屏幕（`format=ansi`）。
-    默认「手机尺寸」（设置 › 尺寸）：hub 有 `terminal_control` 时手机按自己的列 × 行接管终端，Claude 按手机宽度排版，键直接写进终端；
-    表头显示「手机尺寸 45×29」，被别的程序占着先问「接管 / 只看」，被抢走后显示「只看 · 接管」。离开 tab、进后台、断线后窗格回到电脑的尺寸（`docs/terminal.md` 第十一节）。画面由 `TerminalView` 按格子画：每个字符画在自己的格子里
-    （宽字符两格），框线和块字符画成线和矩形，所以中文和框线永远对齐；屏幕只画到最后一行有字的地方或光标处。默认按手机宽度折行，
-    右上角「换行 / 不换行 · 左右滑」切换（`@AppStorage("terminalWrap")`）；配色跟随浅 / 深色（`TerminalTheme`：Persona、Solarized、深夜），
-    字号 `terminalFontSize`。长按选词、拖动扩选，菜单「拷贝 / 全选」；点 OSC 8 链接或行里的网址在 App 内打开。
-    往上滑到顶附近自动加载前一段 200 行（带颜色，瀑布式，不一次取全量），
-    一直到 herdr 保留的最前面。每段用「当前最上面 20 行 + 已加载行数」去服务端缓冲里定位（`POST …/screen/before`）：Claude 重绘会把同一屏幕反复推进滚动历史，同样的内容可能出现多处，取离「末尾往前已加载行数」最近的那处；终端仍在输出也不会错位；
-    看历史时屏幕停住，「回到最新」恢复（上面没有历史——全屏的 Claude——就不停）。herdr 每个窗格只能读出约 1000 行（`pane read` 不管 --lines 多少都封顶，也没有偏移 / 滚动接口），
-    到头提示「herdr 只保留最近约 1000 行，更早的过程在「对话」里」——完整历史在 transcript。卡片样式写在顶栏左边；从底部升起的浮层（`TerminalCover`）顶栏放不下，写在「回到最新」上面（#1133）。新版 Claude（Mac）是全屏界面，窗格本身没有滚动历史。
-    连不上 hub、流停了、读屏失败或超过 4 秒没拿到新屏幕时，终端顶部出现状态条（`TerminalLinkStatus`）：「上次更新 N 秒前」+「N 秒后重试 · 原因」+「重试」，
-    失败后按 1、2、4、8 秒退避，之后每 15 秒一次；恢复后状态条自动消失。旧内容不能看起来像还在实时刷新。
-    按键栏（`TerminalKeyBar`）：ctrl / alt / ⇧ 三个修饰键照搬 Moshi——单击粘滞（只作用于下一个键）、快速双击锁定（再点一下解锁，键上填满色并带一道横线）、
-    按住期间一直按着（松手时没按别的键就变成粘滞）；修饰键也作用于下面输入框里打的字：按下修饰键时打的下一个字符立刻作为组合键发出
-    （ctrl、c → `ctrl+c`；只有 shift 时发大写字符），输入框描边变色、占位文字提示；发送按钮的回车也带上修饰键（shift+enter 在 Claude 里换行）。
-    然后是 esc、tab、直达的 ⌃C 和游戏手柄图标（点开浮出方向键 + 回车十字键盘，方向键也带修饰键）。
-    操作层：捏合调字号（7–20，存 `terminalFontSize`）；双指左右滑切到同一空间的上 / 下一个 Agent（herdr 的 tab），上下滑切到同一台电脑的相邻空间；
-    双击终端粘贴剪贴板（不带回车，多行先确认）；接管时按住键栏的粘贴键选照片 / 文件，传到窗格所在的电脑后把路径敲进去（`docs/terminal.md` 第十八节「iOS / Mac」）；输入框左边的闪电是快捷命令（单击填入、双击直接发送，`terminalShortcuts`）；
-    终端右上角的调节按钮打开「终端设置」：编辑快捷命令、键栏显示哪些键（ctrl 一直在）、「不打字时收起键栏」、配色、字号、换行。
-    打字时输入框上方出补全：之前在提示符（`$ ` `❯ ` `➜ ` …）后敲过的命令、屏幕上出现过的路径 / 名字，**只用窗格里的内容，不读电脑的 shell 历史**。
-    听写用系统键盘的麦克风（App 里没有单独的语音输入）。键名就是 herdr `send-keys` 的写法，
-    组合顺序 ctrl+alt+shift+键，herdr 会编码（ctrl+shift+a 发 CSI u），不认识的键名整组拒绝（`invalid_key`）。终端里的按键按按下的顺序串行发送。
-    实时状态条上的终端图标打开同一个面板的全屏版。
-  - Git（`GitPane`）：分支、上游 ↑↓、暂存数；改动列表（状态字母、+/− 行数、已暂存 / 部分暂存），点开看 diff（新旧行号、红绿底、不换行横滑，
-    同时有暂存和未暂存时可切换）；提交历史（分页加载更早），点开看提交说明和每个文件的 diff。
-    分支卡片右侧的「拉取 N」可单击拉取上游最新代码，已同步时保留「拉取」用于主动检查远端；操作中禁用重复点击，结束后刷新状态、文件和历史并显示结果。
-    只允许干净工作区的 fast-forward，不自动 stash、合并或变基；已有 stash 保持原样，无上游、分离 HEAD、未提交改动或分叉时给出失败原因。其他 Git 视图仍只读。
-  - 文件（`FilesPane`）：从会话目录开始逐级进入，面包屑跳回任意一级；目录在前，显示大小和修改时间、Git 改动标记（目录里有改动显示圆点）；
-    隐藏文件默认不显示（菜单里切换）；点文件用文件查看器打开。
-  - **自动刷新**（#3089，和网页 #2439 一样，`App/FsLive.swift`、`Views/Session/FsLiveModifier.swift`，`docs/protocol.md`「文件自动刷新」）：
-    文件页、Git 页在前台时经 WebSocket 发 `fs_watch`（文件页看当前文件夹和 Git 标记，Git 页看 Git 状态；同一会话目录的合成一份），
-    收到 `fs_changed` 等 200 ms 去抖后原位重读（不出加载动画，Git 页已加载的更早提交在最新提交没变时保留）；不在前台（`.onTabVisibility`）时退订，
-    回来时重读一遍；socket 重连后重发并重读。旧 hub / node 不认 `fs_watch`，照旧下拉 / ⌘R 手动刷新。打开着的 diff 和文件查看器还不跟着刷新。Mac 共用这两个面板。
-- 循环（`/loop`）：输入框上方「循环中 · 每 30 分钟 · 下次唤醒 11:56（还有 4 分钟）」，点开看循环的任务，「停止循环」确认后给 Agent 发停止指令；
-  每次唤醒在对话里是一行「⟳ 循环唤醒 21:11 …」，不是一条用户气泡。
-- 子 Agent：Agent 工具启动的子 Agent 不再算后台任务。对话页选项卡下多一排「主 Agent / 运行中的子 Agent」（转圈；会话一天内有子 Agent 就有这一排，完成的不列成 chip，从工作行里的「查看子 Agent」进入），点一个就用同一套
-  消息 / 工具界面看它的对话（只读，底部「子 Agent · Explore · 运行中，只读 · 回到主 Agent」）；展开的工作行里每个 Agent 调用下有「查看子 Agent」。
-  有不在这排里的（已结束的、嵌套的）时，这排末尾多一个「全部子 Agent N」（#1559，同网页），点开底部 sheet 按谁起的谁列成树（`Subagent.tree`，排序同网页的 `subagentTree`：
-  按 `parent_id` 缩进，父的不在列表里的放顶层；同一层运行中的在前，再按开始时间新的在前）：每行状态点、描述、运行中 / 已结束、类型（分叉的标「分叉」）、多久前开始，点一行只读看它。
-  截图用 `MOCK_CHAT_LINES=1` 的假 hub，`-openSession macbook/a1f3c2d4-0000-4000-8000-0000000c1e01`。
-  开发列表里有子 Agent 在跑的 Agent 带「👥 子 Agent N」，不算空闲。会话 id 为「<主会话>@<agent id>」，历史 / 实时 / 分页和普通会话完全一样。
-- 后台 workflow（#2935，字段见 `docs/protocol.md` 的 `workflows`）：Claude 用 Workflow 工具在后台跑多 Agent 脚本时，这一轮结束、等完成通知，
-  hub 把它算成工作中（`state` 照旧决定颜色、计数、手表、待办状态）。App 里：状态字写「工作中（后台）」（`Session.stateLabel`）；
-  Agents 列表的行和待办卡片在最后一句下面多一行 `WorkflowLine`：「后台 workflow「parity-audit」· Verify 2/2 · 169/185 · 14 分钟」（几个就加「等 N 个」）；
-  对话页头部（展开的页头、侧栏页头、Mac 的上方一栏）在子 Agent 条上方是「后台 workflow」区块（`WorkflowSection`）：
-  在跑的各一张卡片（`WorkflowCard`）：名字、耗时、状态 Chip（在跑 ai 色、完成 positive、失败 / 已停止 danger、没动静了 caution）；下面一行是阶段横排（当前高亮，前面打勾）
-  和「169/185 · 16 个在跑 ⌄」，点计数展开 agent（在跑的在前），点一行按 `session_id` 像子 Agent 一样只读看。一小时内结束的收在卡片下面，一个一行（`WorkflowEndedRow`）：
-  名字、完成数 / 已开始数 · 耗时、怎么结束的，失败 / 停止的下面留一行 error，有 agent 的点一下展开。整个区块最高占对话页的 38%（`Theme.Size.workflowShare`，#4532），
-  超出在区块里面滚动，展开再多 agent 也不把对话挤出屏幕。截图：`MOCK_WORKFLOW=crowded`（3 个 workflow、在跑的有 10 个 agent）跑 `testCrowdedWorkflowsLeaveRoomForTheChat`。手表的列表行和会话页是一个小 Chip「workflow 169/185」。
-  「后台 N」不重复数 `background` 里 kind 为 `workflow` 的那条（`Session.backgroundCount`）。实时活动不变（state 已是 working）。
-  解析都是宽松的：旧 hub 没有 `workflows` 时和原来一样，未知 status 当完成，单个坏条目不会丢会话（`WorkflowTests`）。截图：`MOCK_WORKFLOW=1` 的假 hub 跑 `PersonaUITests/WorkflowUITests`。
-- 后台任务：Claude 用 `run_in_background` 跑的命令 / 子代理还没回报时，输入框上方显示「N 个后台任务」（轮次结束后也在），展开看描述、命令和已运行时间，
-  点一条打开它的输出文件。
-- 底部 tab 栏常驻，不随滚动收起。
-- 实时状态条：claude 工作时显示 spinner 行（「Cogitating… 12s · ↓3.2k」），点开看输出预览；右侧进终端。
-- 终端等你处理（hook 没接住的 AskUserQuestion、权限确认等，`ScreenForm`）：从屏幕上读出对话框（`ScreenParser.dialog`：☐ 标题、│ 引用的问题、
-  编号选项和下面缩进的说明、「Type something.」「Chat about this」），排成和提问卡片一样的样子，标题「终端在问你」；点选项发编号键，
-  「其他回答…」先按「Type something.」的编号再输入并回车（`Resolution.preKeys`），「改在对话里说」发 Chat about this 的编号；原始终端、
-  按键栏和输入框收在「查看终端」里。读不出对话框时直接显示终端。DEBUG：`-showSampleScreen YES`。
-- 交互面板：贴在输入框上方。提问（`QuestionForm`，iOS 分组列表的样子：题目 + 一个圆角框里的选项，前面是终端那样的编号圆点、选中变勾，「(Recommended)」显示成「推荐」标签但回答仍发原文；「其他回答…」是框里最后一行，点了才变输入框；单题单选点一下就提交，多题顶部「标题 · 1/2」、底部小号「上一题 / 下一题 / 提交」，单选后自动翻到下一题；`-showSampleQuestion YES` 塞一个示例截图用）、计划（markdown 预览 + 全屏、批准并自动执行 /
-  批准并自动接受编辑 / 打回写意见）、授权（允许 / 拒绝 / 本会话总是允许）、终端（屏幕快照 + 解析出的编号选项 + 按键面板 + 发文字）。
-- Codex / TRAEX 的卡片（带 `agent`，`docs/codex.md`「提问和审批」）：标题「Codex 在问你」「Codex 需要你授权」，提问用同一个 `QuestionForm`；
-  授权是 `AgentPermissionForm`：Codex 的理由、命令全文或改动、拒绝 / 同意，「总是同意 · 以后不再问以 … 开头的命令」（`always_label`，没有就不显示），
-  「拒绝并说明理由…」点开变输入框（理由会停下这一轮并作为下一条消息发给它）。Claude 的授权卡不变。没能输入时（电脑上有草稿等）卡片留着、
-  toast 说原因。BeautifulUI 风格里是它的审批卡（`BUIPermissionForm`）：问「同意 Bash 吗？」，选项同意 / 总是同意（说明放行什么）/ 拒绝，
-  Codex 的理由在命令上面，输入框里写字就是拒绝并说明理由。DEBUG：`-showSampleCodexApproval YES`、`-showSampleCodexQuestion YES`；
-  UI 测试 `CodexCardsTests`（mock `MOCK_CODEX=1`，含 BeautifulUI）。
-- 输入框：见上面「输入框」一条（照片最多 4 张，压缩到 1600px；图库里的视频当文件传到那台电脑、消息里是文件卡片，见 protocol.md「发送视频」；「/」里是快捷消息和指令；工作中发送换成红色中断）。
-- 导航副标题：机器 · 模型 · 状态。
+- Messages: user bubbles (coral), assistant Markdown (no bubble, reading first), thinking (one folded row), grouped tool steps (>2 fold into "N steps · Run 5 · Read 3",
+  always showing the last step), to-do lists (TodoWrite rendered directly), red/green Edit diffs, Bash commands and output, images.
+- Expanded work is one card: each step remains a separate lazy-loaded chat row (a turn may have hundreds; one giant view would hang), with each row drawing a card slice
+  (`WorkCardSlice`: top corners on first step, bottom corners on Collapse N steps, backgrounds extending halfway into spacing to join neighbors), thin separators starting at the text column; tool rows 44pt high.
+  **Liquid Glass (default) has no card** (requested 2026-10-31: cards did not match chat home, `StyleSpec.workList = .timeline`): steps sit directly on the page, with a thin left vertical line from first step
+  through Collapse N steps, circular tool icons on it (page background behind icons masks the line), medium-weight tool verbs; intermediate Agent remarks use smaller gray text (`AssistantText(quiet:)`),
+  reading as process rather than reply; thinking, folded steps, to-dos, tool details and Collapse start at the text column right of the line. Other styles keep cards (`.card`).
+  Background slices extend halfway into spacing (`WorkCardSlice.bridge = Theme.Space.l / 2`): the old hard-coded 7 for 14pt spacing left 2pt white seams after spacing changed to 16.
+- One `DiffView` (Claude Edit / MultiEdit / Write supplies old/new text; Codex unified diff), sharing Git row models (`DiffText.Line` / `parse`):
+  header filename, directory, +N −N (opens file); only ± and row backgrounds are colored, code uses body color; long lines scroll horizontally with right fade; beyond 40 lines show beginning + Expand all.
+  Whole-file Git diffs still use `MonoTextView` for large-diff performance, same models and colors. Tool failures put Error above output instead of covering its first line.
+- Image viewer: every full-image entry in the App (chat images, sent images, images viewed this turn, tool results, Files images, notebook outputs, Markdown web images and diagrams,
+  Lark messages / cards / Moments / documents, Inbox connector messages, Lark attachments) uses one `ImageViewer` (`ImageViewer.swift`, `ViewerImage` data:
+  image bytes, computer file or Lark URL), styled like Photos:
+  - Top: circular Back · two-line title capsule (name; "9 / 20 · source or dimensions") · circular ⋯ menu (Copy image, Annotate, Copy path, Open in Files, Info);
+    bottom: thumbnail strip for multiple images (current slightly wider, tracks paging centered); circular Share · capsule Save (add-only permission) / Annotate / Info · circular Copy. Icons only, fixed 44pt,
+    text scaling capped at xxxLarge, fits iPhone SE. Bars and buttons use design-system `ViewerTopBar` / `ViewerBottomBar` / `ViewerIcon`
+    (`DesignSystem/ViewerChrome.swift`), also used by message Share previews, keeping both identical (#4714).
+  - Background follows light/dark (`Theme.Viewer.canvas`); single tap hides bars and turns black (`immersive`); Mac single tap does not hide (Close and Esc are in the bars).
+  - Gestures: pinch / double-tap zoom, pan when zoomed, swipe to switch, drag down at fitted size to dismiss: image shrinks with finger, background fades, release closes or springs back by distance / velocity (`ZoomMath.pullProgress` / `pullCloses`);
+    system zoom-transition drag dismissal disabled via `.interactiveDismissDisabled()` to avoid competing gestures. Thumbnail entry points use zoom transitions.
+  - Annotation (`ImageEditor.swift`): rectangle / brush, 6 colors, undo / clear, then Add to input as next-message attachment (`AppModel.composerInbox`),
+    ready to send with a note; only available when opened from a chat. Pending input images can also be tapped to edit before sending.
+  - Screenshots: `-openFirstImage YES` / `-openViewedImage N`, `-showViewerChromeHidden YES` hides bars, `-showViewerInfo YES` opens info.
+- Background sync (push + pull like IM; only foregrounded and connected): hub pushes which session changed; App pulls increments by cursor.
+  Agents (`AgentSync`): changed `rev` in session list / `revs` triggers `after_seq` fetch, merged into memory if present,
+  otherwise written to disk (`ChatCache.folder`, currently `chats-v3`) so opening is already current; scope active Agents + sessions used within 24 hours (at most 40, newest first, concurrency 3),
+  currently viewed chats rely on their subscriptions without duplicate fetches. Working Agents fetch at most once per minute (`AgentSync.workingGap`; each fetch decodes and rewrites the entire disk cache),
+  immediately at turn end / Needs you (most likely to open); 19-minute real-hub replay: 45 calls/minute → 9 (2026-11-02 battery investigation). Lark (`LarkSync`): hub forwards gateway live events (`lark`), refreshing Inbox Lark chats and open chats
+  (polling fallback only: list 90 seconds, chat 60); changed Inbox chats fetch the newest page into `lark-chat-<id>` cache; on hub connection catch up latest 20;
+  unread chats open from cache if it reaches the first unread message.
+- Settings › Storage (`StorageView`): space used on this phone, size and share bars by category (Agent chats, chat images, Lark images/files, lists/Lark chats, websites,
+  network cache, other, App data); swipe left / long-press clears a category, or Clear all caches (settings and pairing retained; websites clear cache, not login).
+  Memory copies clear too; background sync refetches. DEBUG `-tab settings -openStorage YES`.
+- Lazy images: history pages and pushes omit image bytes (`lazy_images`, reducing pages from MB to hundreds of KB), dimensions only; visible rows fetch through
+  `ImagePayload.ref` (`ChatImageLoader`: one download, NSCache + `Caches/chat-images`, immutable images valid forever),
+  reserving dimensions before arrival to avoid jumps. Thumbnails and full viewer share it; locally sent images retain inline base64.
+- Links (`Views/Link/LinkSheet.swift`): chat http(s) opens an in-App bottom card like Telegram: full screen immediately, at 60% pulled down the chat remains usable, further down closes;
+  behind a 60% card chat still scrolls and accepts input (`presentationBackgroundInteraction`). Lark docs / Knowledge use native `FeishuDocReader`,
+  other websites `WebViewPool`: preload first 3 links in each appearing reply, at most 6 resident WKWebViews (LRU), sharing default disk website data (cache, login),
+  requests `returnCacheDataElseLoad`, opening reuses the loaded view. Selected web text gets AI edit (enter request, immediately send to Agent) and
+  Add as context (quote strip above input, sent with next message); native Lark docs use title-bar Add as context for the whole document. Message context is
+  `<jarvis-context kind="context|edit" title="…" url="…">selected text</jarvis-context>`, raw tags hidden.
+- This-hub links (#2696, `Shared/HubPageLink.swift`, `App/HubPageRouting.swift`): assistant links to this hub's web pages (#2194) open native App pages, not website cards:
+  `/s/<machine>/<session>`, `/t/<machine>/<space>/<slot>/<session>` open Agent chat; `/j/<id>`, `/persona/<id>` open Persona chat; `?at=<item id>` scrolls and flashes the message
+  (same as quote navigation; fetch a few older pages if missing, otherwise stop at latest); `/todos?id=<id>`, `/todos/<id>` present to-do details. Session ids may be unique prefixes (web #2464).
+  This hub matches host + port, ignoring http/https: paired group addresses, active socket address, mesh endpoints, hello `public_url`; reverse-proxy subpath must match its prefix.
+  Other sites, `/todos` board, `/inbox`, `/machines` and unmatched App routes, other hub groups' to-dos and Persona chats with unknown machine still use website cards. Watch messages render no links.
+- Quotes (#986, requested 2026-11-03, Telegram-style; `DesignSystem/QuoteViews.swift`):
+  - **Swipe left to quote** (#1058, Agents chats): drag own messages or Agent text replies left, not work rows.
+    - Bubble follows finger, reply icon revealed right; past `MessageSwipe.threshold` light haptic and accent-filled icon; farther motion rubber-bands.
+    - Release springs back, adds quote strip, focuses input; below threshold does nothing.
+    - UIKit `LeftDragRecognizer` immediately fails unless initial motion is horizontal left; outer scroll views (list, shell paging) wait for failure, preserving vertical scroll and left-edge right-swipe Back.
+    - Not enabled for assistant chats, whose left swipe belongs to shell paging.
+  - **Above input**: long-press Quote, website Add as context and @session become strips inside input above text.
+    Each has accent vertical line, title ("Quote Claude", "Quote your message", "Selected text · Page", "Session …"), summary, right ×.
+    One quote has two summary lines; multiple stack with one each.
+  - **After sending**: same quote block embedded atop own bubble; bubble width equals its widest block. Tap:
+    - Same-chat message (`kind="quote"`, `msg="<message id>"`) scrolls to original and flashes (`QuoteFlash`);
+    - If not loaded, expand full text;
+    - Website excerpts open the page.
+  - **Styles**: Liquid Glass and others use Telegram line + text (pale bubble backing); BeautifulUI uses a small card with line on its left edge.
+  - **Not quotes**: hub Lark /agent instructions/docs (kind instructions / doc) still fold into one row (`ContextGroup`).
+  - **Lark chats**: reply strip also inside input; bubble quote navigates to original.
+  - Screenshots `-showSampleQuotes YES` adds website excerpt and session above input; end-to-end `QuoteBubbleTests`.
+- Files: message paths and Read / Edit / Write tool paths become tappable file tags, read from the session's computer
+  (`GET /api/v1/machines/{mid}/file`, at most 2 MB, iCloud directories denied), rendered Markdown / numbered code / images / PDF / directories.
+- Other Agents in the space (Agents): second header row `SiblingTabs` (restored flat tabs at request 2026-10-31), one capsule each with state-color background
+  (Needs you red, Working orange, Unread green, Seen / Idle gray, no blinking dots); current bold outlined, shows current and fitting neighbors, horizontal scroll all; right ⋯ opens full list (dot, name, state,
+  current checkmark; red top-right dot on ⋯ when another Agent needs you), first All Agents in space X opens space page; chat ⋯ › All Agents in space same.
+  Swipe tab rows left for Close (no full-swipe execution); list rows and capsules also long-press Stop and close Agent. Confirm if working, awaiting interaction, unknown, or holding background / queued / loop tasks; idle and completed close directly.
+- Delete chat (#1749, web #801): nonrunning sessions (`Session.canDelete`: Not running / Done / Unknown, not starting, not assistant) offer Delete chat… in Agents long-press / chat ⋯ (Mac also Agent › Delete Chat…); system confirmation explains removal from client lists only, computer records retained, reappears when reused (`DeleteSessionText`). `AppModel.deleteSession` calls `DELETE /api/v1/sessions/{mid}/{sid}`, removes locally on success (matches next hub sessions push), exits every open page (split details, separate Mac windows, `AppModel.deletedSession`); failure shows hub message.
+- Node menus (#3098, web #2329, `docs/terminal.md` ("Node menus")): running herdr Agent long-press adds Split pane ▸ Right / Down, Git ▸ Pull / Push / Fetch (pane cwd), Close tab… (system confirms all panes and Agents close); space ⋯ adds Run Agent here… and Git ▸ (workspace cwd). Run Agent here… sheet loads `GET /machines/{mid}/panes`, lists workspace shell panes with no Agent/bound session and directly startable Claude Code launchers (Codex requires first message, use New Agent), Run calls `panes/agent`; if no idle shell, create New terminal tab (`POST /panes`) then select. herdr only (not Orca, herdr-core or alternative hosts); rename retains Rename…. Logic `Views/Chats/NodeActions.swift` (`NodeMenu` pure + `NodeActions` execution/confirmation, `nodeActionPrompts()` on Agents list); menus stay Equatable, no changing push-data reads; failures show hub/node raw text in red toast. `NodeMenuTests`.
+- New worktree… (#3099, web #2431, `docs/terminal.md` ("New worktree…")): herdr space ⋯ sheet `NewWorktreeSheet` calls `worktree/prepare` for repo ("persona · Current branch main"), branch and checkout path (tracks branch like herdr/web until manually edited, clears to resume; immediate `git check-ref-format` validation), Create calls `worktree/create`. Git refusal shown unchanged; old hub/node says "Persona on this computer is too old; update to create worktrees". No phone terminal page to navigate to; after creation sheet becomes New chat prefilled with workspace / checkout directory (`SpacePreset`), starting inside new worktree. Logic `WorktreeForm` (`Views/Chats/NodeActions.swift`), tests `WorktreeFormTests`, `NodeMenuUITests`.
+  Reuses `session.close`: mark local copy Not running only after remote confirmation (history/title/content retained); failure keeps confirmation with error, retry/cancel; no false success without hub.
+  List directly observes active same-space sessions; closing others neither exits list nor switches current; closing current selects next active tab, otherwise previous, returns when all closed. Actions remain with one tab.
+  On 10-29 changed to one-button `SiblingMenu`, hiding tabs/states; user disliked it.
+  If entered from that space page, return directly, no extra layer (`spaceAt` in ChatsView tracks space-page depth).
+  Space-top machine button ("Work computer ›") opens `MachineSpacesView`: online/state counts, active projects with newest sentence of most urgent Agent,
+  idle projects opening spaces; Agents outside herdr spaces listed directly; top-right ⓘ machine details.
+  DEBUG `-tab dev -openMachinePage <machine id>`.
+- Machines (`docs/machines.md` ("App")): all machines in one page, each card online/system/Agent counts (Needs you / Working / Idle), current CPU/memory/network,
+  1-hour mini charts, alerts, Redeploy on version mismatch, urgent first. Details show Agents above (open chats), then charts
+  (1 / 6 / 24 hours, press to scrub), system info, launchers. Below Engine: What this computer can do (#3018, node self-check by capability, expandable checks; stale generated files offer confirmed Repair, `docs/machines.md` ("Self-check")); entries drawer Machines, Settings › Machines, Agents menu Machines (old Machine monitoring merged).
+  Subscription Usage below cards (#2889, `docs/usage-windows.md` ("UI (iOS / Mac)")): Codex / Claude / gateway accounts, one row per window, hidden with no data.
+  DEBUG `-tab dev -openMonitor all|<machine id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`.
+- Away recap: Claude Code away_summary becomes Away recap card, removing "(disable recaps in /config)"; disable in Settings › Claude Code Settings.
+- Display logic (assistant and development unified, `chatLines` + `WorkLine`): turns split by messages, one chat segment per message:
+  Your message → gray work row "Tools 5 · Thinking 1 · Replies 1 · 4 min 17 sec ›" (name then count) → Agent's last text before next message → next message…
+  Active and complete look identical except active spinner, timer and terminal button ("Working 39 sec · Tools 2").
+  Multiple queued messages in one turn still pair one-to-one after completion, each with its work/reply (#2512 removed merged-bubble completion); sent images are square thumbnails above message (`SentPhotos`, same as pending),
+  stripping Claude "[Image #N]" placeholders from bubbles.
+- Landing: Unread chats show only the last line of your last input at top, then this turn's work and answer (`landUnderInput`: jump by id, correct measured position; header collapses to slim bar and layout uses that height); other chats restore topmost row from last visit (`chat.read.<session>`,
+  cleared when leaving at latest). Landings within final screen land at bottom and follow new messages (`ChatView.landed`).
+  Thus outputs always follow each input whether folded or expanded, no piled-up inputs or numbering.
+  - Work row folds everything except final text: tools, thinking (new Claude Code narration uses thinking), system messages (background completion),
+    intermediate replies. Tap lists steps inline in order (thin left line), tap same row to fold; Collapse N steps below last avoids scrolling hundreds back.
+    Each expanded step remains independent (`ChatLine.workStep` / `.workEnd`), not a huge view. Folding/unfolding preserves viewed content
+    (`toggleWork`, no animation): bottom Collapse keeps inverted list's latest end fixed, reply stationary and folded row at old Collapse position;
+    title tap keeps title under finger (jump by id, correct measured offset after layout). DEBUG `-showFoldProbe YES` exercises it and writes movements
+    to `Documents/fold.txt` (all should be 0).
+    Expanding at latest raises title under the bar to reveal steps (#1173), per-frame increments (`ChatPin.rising`, 0.1 s time constant, at most one frame's movement per frame,
+    so batched steps / a stalled frame do not jump), no ↓ while rising; collapsing at latest cannot retain title, pauses one frame then glides down (`ChatPin.glide`, about 0.35 s).
+    Mac `NSClipView` clamps beyond-latest offsets on layout, so glide manually sets each frame and restores any displacement in the same layout (`ChatPin+Mac.swift`).
+    Tapping thinking/tools/BeautifulUI tool-pill groups within open work keeps both title and tapped row still (no borrowing remaining title rise or replacing persistent hold with normal 1.5 s).
+    Reduce Motion disables rise/glide and content fades (`Theme.Motion.reduced`, #1123).
+  - Background tasks wake idle Claude (`wake` notice): still the same turn, not split. Wake-ups divide it into segments ending with Agent text;
+    the real answer is the longest (`Turn.pickAnswerAcrossWakes`: Summary → Build uploaded chooses Summary; Waiting for results → Summary chooses Summary).
+    Everything before the answer (transitional text, wake itself counted as a tool) folds into one work row; after it a small "🔔 Background command finished · <description> ›" strip, not inline expansion,
+    opens bottom `WakeDrawer` showing only results: each task notice and Agent reply in order, intermediate tools/thinking/text folded into one final work row by default (requested 2026-10-31: expanding should not unfold N process segments). While still handling a wake, strip says Background task finished · Processing.
+    Tasks completing during work (not waking) remain a work step.
+    Pitfall: Claude Code's idle-session away recap closes the turn; a later wake must reopen and merge into it,
+    keeping recap in place, or post-wake replies show directly (`ChatBlock.build` `lastRaw` / `reopenedAt`).
+  - Away recaps resemble background tasks: small "↺ Away recap · 21 min ago ›" strip opens `RecapCard` / `RecapDrawer` with full text. Consecutive recaps with nothing between merge into "↺ Away recap · 3 times · 3 min ago ›", newest first in drawer (`ChatLines.foldRecaps`, requested 2026-10-31); mock `MOCK_RECAPS=1`.
+    On returning, if latest recap is the chat's last item and never closed, it expands at the end as a full card (`RecapStrip`, `ChatLines.openRecap`):
+    same plane as Agent replies, newest inverted-list row, scrolling away with content and fully visible when following bottom, not above input
+    (#1360: footer placement covered the end of replies when expanded and scrolled down). Tap or type to close, reverting to strip; closures stored per session in
+    `closedRecaps`. Earlier folded recaps in that row stay as a strip above the full card.
+  - Header auto-collapse only follows user drags and their inertial scroll, not programmatic landing deceleration, which otherwise collapses immediately on opening.
+  - Work-row text never truncates; insufficient space uses short format with tool count and duration only.
+- Can't reach hub banner appears only after 5 continuous seconds (brief network/foreground reconnects finish sooner; previously flashed), disappears immediately on reconnect.
+- Layout: list above, input region (interactions / loop / background / queue / composer) below in VStack, no overlay; keyboard reduces page height, latest messages stay against input.
+  A 1pt empty view above keeps the scroll view away from top safe area, eliminating its safe areas (inversion puts them at the wrong end) without ignoring them and manually padding.
+- Messages from other sessions (`Item.from`): left gray From name card, Markdown body like replies (hub converts teammate JSON notices to Markdown).
+- Inverted list (`chatScroll`: flip ScrollView and each row): latest offset 0, entry/follow/↓ jump exactly to 0,
+  not estimated lazy heights (cause of occasional blank screens); older history loads at the opposite end without moving reading position. While browsing (`followsEnd` false), new rows are held outside
+  the list (`frozenAt`) until returning to latest, preventing displacement. Never use `defaultScrollAnchor(…, for: .sizeChanges)`: inverted it anchors at the far end,
+  and height changes move into unrendered blank regions. Inverted safe areas land wrong: ignore vertical safe areas and restore actual insets via `contentMargins`;
+  iOS 26 edge blur measures the uninverted view and covers the page, so disable it (`scrollEdgeEffectHidden`).
+- Local cache (`StateCache`, Caches/state): machines / sessions / pending interactions / assistant settings (`dev`), Inbox (`inbox-items`, `InboxStore`),
+  mail accounts (`mail-accounts`), latest 80 messages per Lark chat (`lark-chat-<id>`). Cold launch, offline and tab switches display cache before silent refresh; no spinner when cached.
+- History: turn-based paging, two complete input/answer turns (`turns=2`) on entry and at top, not item count; top spinner auto-loads,
+  no Load earlier button. Latest two turns cached locally (`ChatCache`, Caches/chats; strip images beyond 6 MB), shown first on open/switch then merged with server,
+  no blank. Turn start/end, own send and returning to Chat tab jump bottom (completion folds and shortens content, otherwise leaving blank).
+  Following (`followsEnd`) starts at bottom; any finger drag disables it (history updates never move position); return bottom / ↓ / own send reenables.
+  Only following jumps for new content: bottom edge then bottom sentinel id after row layout (`settleAtEnd`), retry until sentinel really visible
+  (one id jump into unlaid-out content can land on older input; the "keeps jumping to earlier input" bug came from treating a passed sentinel as no retry).
+  Entry positioning runs once, not again after full-screen terminal. LazyVStack estimated heights can land unrendered when row heights vary greatly; `atBottom` starts false,
+  so a residual blank screen still shows Return to bottom. Top paging starts only after a manual list drag (LazyVStack may initially lay out top row,
+  formerly cascading into loading all history on entry).
+- Rendering: each message, timer, narration, count and reply is an independent LazyVStack `ChatLine`; active turns can have hundreds of steps,
+  and a single VStack blocks the page with seconds of blankness.
+- Cancellation is not an error: leaving/replaced requests (iOS text "Cancelled") never alert (`Error.shown` / `isCancellation`).
+- Input: **assistant and Agent chats in the new shell share `ShellComposerBar`** (#1091, every style). `ChatView`’s `Composer` formerly checked only
+  `shellChat` (set only by `AssistantView`), so Agents-pushed chats used `ComposerRow` / `PromptComposer` and looked different;
+  now `shellChat || shell != nil` (`usesShellComposer`). Agent + menus additionally have Shortcuts (including /clear);
+  BeautifulUI Agents therefore lose Prompt Bar @ and / menus (shortcuts in +).
+- **Typing / opens commands** (#2747, matches web `AGENT_COMMANDS`): both non-Prompt-Bar composers (`ShellComposerBar`, `ComposerRow`, all styles),
+  Agent drafts consisting of / plus a word show `SlashMenu` above input: /继续 (continue), /提交 (commit), /汇报 (report), /compact, /context, /model when selectable, /clear when allowed,
+  same web ordering; command and description per row, quick-message original text right; further typing filters command prefixes/descriptions. Tap fills input, does not send
+  (/clear uses existing confirmation); an exact inserted command such as /context does not reopen the list until draft changes. Beyond 5½ rows scroll internally.
+  Assistant chats have none, like web. In `Composer` VStack, not overlay, because the composer's own hosting controller makes out-of-bounds overlays untappable (#518).
+  + Shortcuts unchanged; `-openSlashMenu YES` screenshots, `PersonaUITests/SlashMenuTests` both layouts.
+- **iPad regular width (also open Duo) shares `ShellComposerBar`** (#2779): outside new shell (`RootView.usesShell` compact-only),
+  no `shell` environment previously fell back to `ComposerRow`, differing from iPhone. `ChatComposerKind.padCard` (iOS, old layout off) now makes Agent, assistant chats
+  (`shellChat`) and assistant new chats (`AssistantHome` → `StarterComposer(shell:)`, mode chips in model menu) use it, centered within `ChatView.readableWidth`.
+- **Long drafts expand into a full-page editor** (#3167, like ChatGPT): once `ShellComposerBar` text reaches 3 lines (wrapped draft height relative to one line at the input width, not the input's own height, which quotes and the keyboard may compress below 3 lines), an Expand button appears beside + in the card's button row
+  (accessibility label Expand input). It opens a full-page sheet (`ComposerPageEditor`, `.page` sizing on iPad, text limited to `ChatView.readableWidth`), with Collapse left and Send right (Interrupt when the Agent is working and the draft is empty),
+  and quotes above the text. It edits the same draft (`text` binding, `model.drafts` still the sole source); pending images and files remain in the composer below and send with the message as usual.
+  The page owns its cursor (takes the caller's `selection` on opening, returns it on closing; directly binding to the caller sent every cursor update through it with delayed returns, occasionally losing characters on iPad).
+  While open, the composer's own field binds to an idle `parkedSelection`, so it cannot move the caller's cursor underneath the sheet. Focus bindings cannot cross into sheets, so the page has its own `@FocusState`:
+  requests to focus the composer while open (uploaded file paths via `PathInsert.edit`, ⌘I) forward to the page, without showing a keyboard underneath. The composer is not treated as editing then;
+  paths append to the draft, and the page cursor follows them (only when the caller's cursor changed; ⌘I alone does not move it).
+  Collapsing, swiping down or replacing the page (chat switch, tree replacement) first commits marked input (`TypedText.commitFocused`, #2203); returning to the composer preserves keyboard and cursor positions.
+  Sending from the page (toolbar ⌘⏎ shortcut) is identical to composer Send and happens once; the composer's ⌘⏎ is disabled while the page is open, preventing another send underneath. Hidden line measurement lays out at most 4 lines from the first 600 draft characters, counts trailing newlines, and stops while the page is open.
+  The button belongs in the button row, not over the input corner: a corner overlay either covers text or rewraps it when appearing. iOS only; old layout and Mac unchanged.
+  `ComposerExpandTests` covers assistant / Agent, keyboard opening/closing, paragraph wrapping, cursor transfer both ways, swipe dismissal preserving edits, one hub send with quotes; runs on iPhone / iPad / Duo, landscape with `TEST_RUNNER_JARVIS_ORIENTATION=landscape`. On an unfolded portrait Duo, XCUITest treats the screen as upside-down portrait and synthetic drags miss; `TEST_RUNNER_JARVIS_NO_DRAG=1` skips keyboard dismissal and swipe-down. ⌘⏎ tests require `TEST_RUNNER_JARVIS_HARDWARE_KEYS=1`: Xcode 27.2 + iOS 26.5 simulator delivers synthetic ordinary characters but does not trigger shortcuts (including the composer's existing ⌘⏎).
+- Old layout (`-ui.oldLayout YES`) and Mac unchanged: Agent and new assistant chats share `ComposerRow` (+, glass capsule input, Send, red Interrupt while working and empty,
+  no dictation), with permission/effort capsules above (`SessionModeBar`).
+- **One dictation and stop button** (#1079): `DesignSystem/ComposerButtons.swift` `ComposerMicButton` (outline mic, solid red pulsing while dictating),
+  `ComposerRoundButton.stop` (stop in solid ink circle), 44pt tap target, one shell scaling step (`shellScaled`), used by `ShellComposerBar` and iOS `PromptComposer`.
+- BeautifulUI style (Settings › Appearance › Style, `AppStyle.beautiful`, 2026-10-30) uses `PromptComposer` (new assistant `BeautifulStarterComposer`),
+  BeautifulUI Prompt Bar (`layout: .stacked`); other styles unchanged above (CLAUDE.md: new appearance as new theme):
+  rounded multiline input, toolbar below: + (Photos / Camera / Files), @, /, model, dictation, Send right; working Agent with empty text gets Interrupt.
+  Background current style `.surface` (library draws none), buttons 34pt. iOS uses shared dictation/stop: library microphone off (`showsDictation = false`),
+  no `onStop`; overlay shared button at library Send. Stop uses even-odd `SendCutout` masking library Send, extending far out
+  so menus above input are not clipped (library unchanged, `apple/Packages/BeautifulUI/VENDORED.md`). Pending images `ComposerImages`; drafts, send safety and uploads remain in each composer.
+  - Drafts: directly edit `model.drafts` (`Options.text`), no reciprocal bar/host writes that prematurely commit Pinyin marked text.
+    Before sending, commit marked input and update draft from text view (`TypedText.commitFocused`, all three composers, #2203: WeChat keyboard sent only half).
+    Quotes (`composerContexts`) persist like text in StateCache (`composer-contexts`), surviving App termination; Agents row metadata gets Draft for text or quotes (#4578,
+    `AppModel.draftMarks`, changes only when a session gains/loses draft, no row redraw while typing).
+  - Paste images (#4573): clipboard image + focused input shows system Paste above (`PasteImageChip`, SwiftUI `PasteButton`); tap adds pending image,
+    itself authorizes paste, no Allow paste prompt. Only `hasImages` checks presence, no content reads; after tap or × same copy does not show again. Chats and both assistant starter composers supported.
+  - @: recently accessed tool files (12, `@relative/path`, understood by Claude Code and Codex), then recent 8 sessions, selected as
+    `<jarvis-context>` before message, quote capsule above input. Only loaded-step files; folded work never expanded in long chats yields none.
+  - /: `SlashCommand.all`, quick words /继续 (continue), /提交 (commit), /汇报 (report), fills request text for explicit Send (formerly menu sent immediately);
+    /compact and /context unchanged; /clear when supported, confirmation first.
+  - /loop (#2601, web #1600): Claude Agents only, not Codex, internal Codex fork or assistant (`LoopCommand.offered`), in / and + Shortcuts;
+    prefixes existing input with `/loop ` (existing text becomes task, cursor after command to enter interval), never sends directly (other + shortcuts still send on tap). A `/loop` draft shows shared `LoopDraftNote`
+    explaining "Repeat every 10 minutes: Check CI" / "Repeat at Claude's chosen pace: …", gray usage when task absent;
+    PersonaKit `LoopCommand` matches `web/src/lib/loop-command.ts`. Screenshot `-showLoopDraft "/loop 10m Check CI"`.
+  - Model: Claude Code `/model` aliases (Default / Opus / Sonnet / Haiku), selection sends `/model <alias>`; absent for Codex, internal Codex fork and headless assistant.
+    Assistant home uses launcher list (former model label moved here).
+  - Dictation: `Dictation` (`SFSpeechRecognizer` Chinese + `AVAudioEngine`), live recognized text appended to draft; tap again or send stops.
+  - Permission/effort above input (`SessionModeBar` / `NewSessionModePicker`) remain, not merged into toolbar; rationale PLAN PromptBar v2.
+  - DEBUG `-showPromptMenu mention|command|attach|model` opens after a few seconds for screenshots.
+- Model API errors (`APIErrorCard`): Claude Code's final "API Error: 502 …" after retries and hub "API 错误：…" ("API error") notices become error cards,
+  not raw body text. First line plain-language cause (`APIErrorInfo.explain`, e.g. "Inference service has no available GPU" / "Login expired; run /login on the computer"),
+  then BeautifulUI chips: error-styled status, Temporary failure / Needs attention, consecutive count. Open request ID, session, time and original, all copyable.
+  Repeated identical errors separated only by Continue-like retries merge with count (`ChatView.foldAPIErrors`). Retry (sends "继续", "Continue") only when last item, idle Agent and transient.
+  Currently text parsing; Claude Code also provides `apiErrorStatus`, `error`, `requestId` fields, preferred once hub reads them. DEBUG `-showErrorDetails YES` opens by default.
+  Screenshots mock `MOCK_API_ERRORS=1`, assistant main and review chats.
+- Claude suggestions (`SuggestionPill`): session `suggestion`, not working, empty input shows "✦ Suggestion … Use" above (AI purple, not accent), also placeholder;
+  tap fills editable input, long-press Send now. Typing hides it. Headless assistant has no TUI/suggestions; mock `MOCK_SUGGESTION=1`, review session.
+- Sending clears input immediately and displays Sending bubble (`ChatStore.pending`), request background; same text in transcript
+  or queue replaces it, failure red with retry/delete. No waiting on network anywhere.
+- Sent images: hub appends paths in `<attached_images>`, App parses square thumbnails above text (file API from session computer,
+  memory cache), tap full viewer; tag hidden (legacy "相关图片：…", "Related images", / "（我从手机发来了图片…）", "I sent images from my phone", supported).
+- Monospace (files, diffs, terminal, `MonoTextView`): non-scrolling UITextView measured to longest line inside UIScrollView, no wrapping, both-axis scroll and selection.
+- Long-press messages (`MessageMenu.swift`): dark WeChat-style action strip above press (Copy / Select text / Quote / Share, own also Edit),
+  no lifted message; below if near navigation bar. Tap anywhere or finger-scroll closes (programmatic content-flow scrolling does not).
+  Copy whole message; Select text (#3189, formerly Select misleading beside Copy like multi-selection) opens freely selectable text, system Copy only selection, top-right Copy all original. Replies use `SelectableMarkdown`: bold/italic/code/links styled without markers, headings bold, list bullets with indentation/tabs, fenced code monospace indented without fence (closing plain fence same character and at least opener length; ``` inside ````md does not close early); math `$…$`, `\(…\)`, `$$`, four-space code, rules `* * *` / `---`, tables and quotes keep source. Own messages stay plain like bubbles, no Markdown (preserves `__init__.py`, `2*3*4`). Follows Dynamic Type live. `SelectTextTests`, `SelectableMarkdownTests`; Quote prepends `> ` into input; Edit restores old own message.
+  Action icons fixed 22pt high (SF Symbols differ, otherwise text misaligns).
+  - Rewind here (#2915, web #2436, `Rewind.swift`): Claude Agent own transcript message action adds Rewind,
+    chooses Chat only / Code and chat, latter confirms files too. Idle only; working/waiting/not running/non-Claude explains why;
+    absent for assistant/sub-Agents. App sends original text (fetch full if truncated), reverse occurrence index of identical text and count after it (`POST …/rewind`),
+    node checks screen then /rewind; success notice and restores message into App input if Claude input cleared, failures explain (old hub, full-permission credential required, node refusal).
+    Rewound turns refetch on `history` change. Six buttons divide chat width when needed. Mock `MOCK_REWIND=1`,
+    review session, `-showRewind bar|ask|run` (bar / picker / directly rewind chat only).
+  - Why Select text opens a page: MarkdownUI messages are groups of SwiftUI Text blocks (paragraphs/lists/tables); on iOS Text supports
+    whole-block copying, not draggable partial or cross-block selection. Inline selection would require UITextView relayout and lose table/code styles. Technical limitation: keep the separate text page.
+  - Share (`ShareCard.swift`): render a card (gradient background + white/dark card: Claude or Me, source "app › leader", time, body,
+    Persona mark); same chrome as image viewer (#4714): circular Close · Light / Dark capsule above, circular Share image (system share) ·
+    Save (Photos, add-only permission) / Copy image capsule · circular Share text below; card scrolls behind both bars.
+    `ImageRenderer` cannot draw ScrollView: separate `.card` Markdown theme wraps code and prevents horizontal table scrolling, otherwise tables and everything after turn blank;
+    set `proposedSize` width or height is measured at another width, leaving a large blank bottom. Truncate beyond 3000 characters.
+- Agents chat top bar: ① Back / title + subtitle / ⋯; subtitle "● State (working duration in minutes) · Machine · Space › Tab" (since 2026-10-31 calm Seen/Not running states show only dot; tap title opens bottom Session info sheet with Run / Usage / Location, copy id/resume command, swipe down or tap above closes, former under-title pullout removed; Usage below context tokens has "Context remaining · N% left" and thin bar (#3289, web #2430, `ContextUsage.swift`: `context_tokens` / `context_window`, live session pushes, warning at ≥80% used, hidden for unknown window)); state text state-colored,
+  omit machine first then location if crowded; ② second row only for other same-space Agents or loop/background: companion menu, loop/background tags with next time/count, tap for details.
+  Formerly title, companion bar, tabs and activity each had a row. Files/Terminal/Git in top-right ⋯; Files ⋯ › Return to chat; collapsed slim bar has Back, location, small loop/background marks.
+  Former left-swipe Files became left-swipe Quote 2026-11-04 (#1058); that day Files first had a standalone folder left of ⋯, then moved into menu at user request (#1205).
+- Header auto-collapse (Agents, like Safari toolbar): custom
+  `ChromeHeader` (system navigation hidden), floating above list; **finger tracking**: drag toward newer messages slides bar upward by same distance and fades,
+  slim Back + "● app › leader · Chat" fades in during latter half; dragging toward history restores it. Release never stays halfway: collapse at latest,
+  otherwise snap nearest end (`.smooth`, 0.3 s). Following new content also collapses after user has touched list; tap slim bar / switch tabs expands.
+  After 3 idle seconds (`ChatView.chromeIdleSeconds`: no list/header touch, info card closed, no sheet/menu), auto-collapse; header interaction (swiping Agents), expand and tab switch reset timer.
+  Invisible layer excluded from accessibility: expanded has no slim bar, collapsed hides full layer while keeping measurement, VoiceOver/tests find one Back (`ChatHeaderTests`).
+  - Smooth because collapse lives in separate `@Observable` `ChatChrome`, redrawing only header per frame; floating above fixed-frame list (header-height margins only at oldest end),
+    so messages never move a pixel. Former toggle animated system navigation plus two labels independently and changed list height, abrupt.
+  - User tracking/interacting and immediately subsequent decelerating only (`onScrollPhaseChange`), not keyboard-driven offset changes.
+  - Hidden system navigation disables UIKit edge Back; `SwipeBack.swift` takes `interactivePopGestureRecognizer` delegate to reenable.
+- Queued messages: messages sent while Claude works are outside transcript, in Queued above input; each Recall and edit / Copy / Delete.
+  Like TUI: ↑ pulls all back to input (transcript popAll), after clearing input requeue kept messages (`POST …/queue {"keep":[…]}`).
+- Development list: busy spaces show only Needs you / Working / Unread Agents, idle folded into N more idle, tap expands.
+- Return-to-bottom arrow: bottom sentinel determines visibility.
+- Terminal/Files/Git in development chats (`Views/Session/`): **no tabs** (requested 2026-10-30: remove Chat · Terminal · Git · Files).
+  Terminal in top-right ⋯ (requested 2026-10-31: remove standalone button, also collapsed bar); active work row still has terminal. Files/Git by **left swipe** (Chat → Files → Git, right back),
+  or ⋯ Files / Git (change count); Back in Files/Git first returns to chat. Git only in repos, Files when cwd known; absent for assistant.
+  - Terminal (`TerminalPanel`, `Views/Session/Terminal/`, `docs/terminal.md`): view in any state. Button opens **full-page cover from bottom** (`TerminalCover`, requested 2026-10-30), no title/tabs, slim top bar (size left, handle center, settings right),
+    drag bar down follows finger, closes past 140pt or fast swipe (handle tap too); terminal size changes only with keyboard, not header (resize changes controlled pane, requiring Claude relayout).
+    Moshi-style bottom key bar: low dark capsule, flat 30pt keys, small monospace Ctrl/Esc/Tab, others icons, preserving terminal height. With `terminal_stream`, subscribe live
+    (`TerminalFeed`: herdr observe frames applied to pane-sized `TerminalGrid`, dropped frame/new stream restarts from full frame, reconnect with epoch/seq);
+    without hub/node/herdr streaming, fetch colored screen each second (`format=ansi`).
+    Default Phone size (Settings › Size): with `terminal_control`, control at phone columns×rows, Claude lays out to phone width and keys write directly;
+    header Phone size 45×29, occupied asks Take over / View only, lost control shows View only · Take over. Leaving tab/background/disconnect restores computer size (`docs/terminal.md` section 11). `TerminalView` draws each character in its grid
+    (wide characters two cells), box/block characters as lines/rectangles, keeping Chinese/boxes aligned; draw only through last text/cursor row. Wrap to phone width by default,
+    top-right Wrap / No wrap · Swipe horizontally (`@AppStorage("terminalWrap")`), light/dark `TerminalTheme` Persona / Solarized / Midnight,
+    `terminalFontSize`. Long-press word, drag selection, Copy / Select all; OSC 8 and plain URLs open in App.
+    Near top, load older 200-line colored chunks incrementally,
+    to herdr's earliest retained point. Locate each chunk by current top 20 lines + loaded count in server buffer (`POST …/screen/before`): Claude redraw duplicates screens in history, choose match nearest loaded-count-from-end; continuing output does not misalign.
+    History freezes screen until Return to latest (no history, e.g. fullscreen Claude, does not freeze). herdr retains about 1000 lines/pane (`pane read` caps regardless of --lines, no offsets/scroll API),
+    at limit says "herdr keeps only about 1000 recent lines; earlier work is in Chat", whose transcript is complete. Card layout shows this top-left; `TerminalCover` has no space, places above Return to latest (#1133). New Mac Claude fullscreen has no pane scrollback.
+    Unreachable hub, stopped stream, failed screen read or over 4 seconds without fresh screen shows `TerminalLinkStatus` atop: Last update N sec ago + Retry in N sec · Reason + Retry;
+    backoff 1/2/4/8 seconds then every 15, disappears on recovery. Old content must not look live.
+    `TerminalKeyBar` ctrl/alt/⇧ like Moshi: single sticky for next key, fast double locks (tap unlocks, filled key with horizontal line),
+    held while pressed (release without another key makes sticky); modifiers affect input typing too, next character immediately sent as chord
+    (ctrl,c → `ctrl+c`; shift-only uppercase), input outline/placeholder changes; Send's Enter includes modifiers (shift+enter newline in Claude).
+    Then esc/tab/direct ⌃C/gamepad opening arrow+Enter cross; arrows use modifiers too.
+    Controls: pinch font 7–20 stored `terminalFontSize`; two-finger horizontal swipe previous/next same-space Agent (herdr tab), vertical adjacent same-computer space;
+    double-tap terminal pastes clipboard without Enter, multiline confirmation; while controlling, hold key-bar Paste for photo/file, upload to pane computer then type path (`docs/terminal.md` section 18 "iOS / Mac"); left input lightning shortcuts (tap fills, double sends, `terminalShortcuts`);
+    top-right controls opens Terminal settings: shortcuts, visible keys (ctrl always), Hide key bar when not typing, colors/font/wrap.
+    Typing completion from commands previously typed after prompts (`$ `, `❯ `, `➜ `…), visible paths/names, **pane content only, no computer shell history**.
+    Dictation uses system keyboard microphone, no App voice input. Key names follow herdr `send-keys`,
+    order ctrl+alt+shift+key, herdr encodes (ctrl+shift+a CSI u), unknown names reject entire chord (`invalid_key`); serial sends preserve press order.
+    Live-status terminal icon opens full-screen version of same panel.
+  - Git (`GitPane`): branch, upstream ↑↓, staged count; changes (status letter, +/− lines, staged/partially staged), diff with old/new numbers and red/green, no wrap, horizontal scroll,
+    staged/unstaged switch when both; paged history, commit message and per-file diffs.
+    Branch-card Pull N fetches latest upstream in one tap, retained as Pull when synced for active remote checks; disable repeat taps while running, refresh status/files/history and show result.
+    Clean-worktree fast-forward only, no auto stash/merge/rebase; existing stashes unchanged; explain no upstream/detached HEAD/uncommitted changes/divergence. Other Git views stay read-only.
+  - Files (`FilesPane`): descend from session cwd, breadcrumbs jump levels, directories first, size/modification/Git flags (dot for changes within directory),
+    hidden files off by default, menu toggle; tap file viewer.
+  - **Auto-refresh** (#3089, web #2439, `App/FsLive.swift`, `Views/Session/FsLiveModifier.swift`, `docs/protocol.md` ("Automatic file refresh")):
+    foreground Files/Git sends WebSocket `fs_watch` (current directory/Git marks, Git state; same cwd combined),
+    `fs_changed` debounced 200 ms then reread in place without loading animation (retain older loaded commits if latest unchanged); unsubscribe off foreground (`.onTabVisibility`),
+    reread on return and re-send/reread on socket reconnect. Old hubs/nodes lacking `fs_watch` keep pull-to-refresh / ⌘R. Open diffs/file viewers do not refresh yet. Mac shares panels.
+- Loop (`/loop`): above input "Looping · Every 30 minutes · Next wake 11:56 (in 4 minutes)", tap task, confirmed Stop loop sends stop;
+  each wake is "⟳ Loop wake 21:11 …" row, not user bubble.
+- Sub-Agents: Agent-tool children no longer count background tasks; below chat tabs Main Agent / running sub-Agents (spinner, row if children within a day; completed not chips, View sub-Agent in work), tap same
+  message/tool UI read-only, footer "Sub-Agent · Explore · Running, read-only · Return to main Agent"; View sub-Agent below each Agent call.
+  Ended/nested children outside row add All sub-Agents N (#1559, web) at end, bottom tree sheet (`Subagent.tree`, same `subagentTree` sort:
+  `parent_id` indentation, missing parents top-level; running first then newest start within level); state dot/description/Running or Finished/type (forks labeled Fork)/start age, tap read-only.
+  Mock `MOCK_CHAT_LINES=1`, `-openSession <machine>/a1f3c2d4-0000-4000-8000-0000000c1e01` for screenshots.
+  Agents with running children show "👥 Sub-Agents N", not idle. Id `<main session>@<agent id>`, history/live/paging identical to normal.
+- Background workflows (#2935, `workflows` in `docs/protocol.md`): Claude Workflow tool multi-Agent background scripts keep Agent Working after turn ends while waiting for completion,
+  `state` still drives colors/count/watch/to-dos; App label Working (background) (`Session.stateLabel`);
+  Agents rows/to-do cards add `WorkflowLine` below last text: "Background workflow ‘parity-audit’ · Verify 2/2 · 169/185 · 14 min" (multiple add Waiting for N);
+  chat header (expanded, side, Mac top) has Background workflows above sub-Agents (`WorkflowSection`):
+  running `WorkflowCard`s with name/time/status Chip (running ai, complete positive, failed/stopped danger, inactive caution), stage row current highlighted, prior checked,
+  "169/185 · 16 running ⌄" expands Agents, running first, tap `session_id` read-only like child. Ended within hour below as `WorkflowEndedRow`:
+  name/completed-to-started/time/end state, error line for failed/stopped, expandable Agents. Whole section capped at 38% chat height (`Theme.Size.workflowShare`, #4532),
+  internal scrolling preserves chat even with many Agents. Screenshot `MOCK_WORKFLOW=crowded` (3 workflows, 10 running Agents) runs `testCrowdedWorkflowsLeaveRoomForTheChat`. Watch tiny "workflow 169/185" Chip in list/chat.
+  Background N excludes `background` kind `workflow` (`Session.backgroundCount`); Live Activities unchanged, state already working.
+  Lenient parsing: old hubs no `workflows` unchanged, unknown status complete, one bad entry does not lose session (`WorkflowTests`); mock `MOCK_WORKFLOW=1` runs `PersonaUITests/WorkflowUITests`.
+- Background tasks: `run_in_background` commands/subagents not yet reported show N background tasks above input even after turn end, expandable description/command/elapsed,
+  tap opens output file.
+- Bottom tab bar persistent, no scroll collapse.
+- Live status: working Claude spinner "Cogitating… 12s · ↓3.2k", tap output preview, terminal right.
+- Terminal needs you (AskUserQuestion/permissions not caught by hooks, `ScreenForm`): parse screen dialog (`ScreenParser.dialog`: ☐ heading, │ quoted question,
+  numbered choices and indented descriptions, "Type something.", "Chat about this"), render like question card titled Terminal has a question; choice sends number,
+  Other answer… first number for Type something then text+Enter (`Resolution.preKeys`), Chat instead sends Chat about this number; raw terminal,
+  keys/input under View terminal; unparseable dialog shows terminal directly. DEBUG `-showSampleScreen YES`.
+- Interaction panel above input: questions (`QuestionForm`, iOS grouped list, question + rounded choice group, terminal-style numbered circles become checks, "(Recommended)" shown as Recommended badge but original sent; Other answer… last row becomes input on tap; single-question single-choice submits immediately, multiple title "Heading · 1/2", small Previous / Next / Submit below, auto-next after single choice; `-showSampleQuestion YES`), plans (Markdown + full screen, Approve and run automatically /
+  Approve and auto-accept edits / Request changes with feedback), permissions (Allow / Deny / Always allow this session), terminal (screen + parsed choices + keys + text).
+- Codex / internal Codex fork cards (`agent`, `docs/codex.md` ("Questions and approvals")): Codex has a question / Codex needs permission, same `QuestionForm`;
+  `AgentPermissionForm` shows reason/full command or changes/Deny/Approve, Always approve · Stop asking for commands beginning with … (`always_label`, absent hides),
+  Deny with reason… opens input (stops turn and sends reason next message). Claude card unchanged; inability to type (computer draft etc.) keeps card,
+  toast explains. BeautifulUI `BUIPermissionForm` asks Approve Bash?, Approve / Always approve (scope explained) / Deny,
+  Codex reason above command, input means deny with reason; DEBUG `-showSampleCodexApproval YES`, `-showSampleCodexQuestion YES`,
+  `CodexCardsTests` mock `MOCK_CODEX=1`, includes BeautifulUI.
+- Input: above (at most 4 photos, resized 1600px; library videos uploaded as files to computer, message file card, protocol.md ("Sending video"); / shortcuts; Send becomes red Interrupt while working).
+- Navigation subtitle: Machine · Model · State.
 
-## 新外壳（ChatGPT 式，2026-11-01）
+## New shell (ChatGPT-style, 2026-11-01)
 
-用户要求（2026-11-01）：照 ChatGPT 的 iOS App 重排 iPhone 的外壳，「聊天是 Persona（大改），工作是 Agents（改个入口）」，
-两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；新对话页和旧布局一样是欢迎页（2026-11-02 用户要回来的，原来没有待办时什么都不放，整页空白）；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
-#392：飞书设置打开「首页显示消息」后，顶部增加第三页「消息」，默认仍是两页；旧布局与 iPad 对应增加 Tab。它只浏览会话并复用现有聊天页，边界见 [飞书迁移](lark-migration.md)。
-#1530：经飞书网关接飞书由私有插件提供，依赖 `/api/v1/lark/…` 的入口只在 hub 的 features 里有 `lark` 时出现（`LarkFeatures`，`App/LarkFeatures.swift`）：「消息」页和它的切换按钮 / Tab（开关保留原值，装上插件就回来）、设置 › 连接器 › 飞书、翻译里的「飞书会话」、链接打开飞书文档的原生阅读器；公司圈帖子的原生阅读器还要 `lark_moments`。没有时飞书文档和公司圈链接照普通网页打开；收件箱里带 `lark` / `doc` / `moment` 块的条目只有插件给，照常画。features 为空（还没收到 hello、体验模式）或只有 `lark_attachments` 没有 `lark`（插件之前自己接飞书的 hub）按原样全部显示。假 hub 用 `MOCK_NO_LARK=1` 模拟没装插件。
-只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变（iPad 和 iPhone Duo 打开时 Persona 的侧边栏照抽屉排，见「iPad」）。代码在 `Persona/Views/Shell/`，组件在
-`DesignSystem/ShellComponents.swift`、`ShellComposerBar.swift`，颜色和尺寸是 `Theme.Shell`（各风格都用这一套中性色）。
+Requested 2026-11-01: rearrange the iPhone shell like ChatGPT's iOS App: "chat is Persona (major changes), work is Agents (change the entry point)".
+The pages are Assistant and Agents (requested 2026-11-01, formerly Chat and Work); new chats use the same welcome page as the old layout (restored at the user's request 2026-11-02; previously no to-dos meant a blank page). Settings › Appearance › Layout keeps an Old layout toggle for a few transition days (`AppModel.oldLayout`, `ui.oldLayout`).
+#392: enabling Show messages on home in Lark settings adds a third Messages page at the top, otherwise two; the old layout and iPad add a corresponding tab. It only browses chats and reuses existing chat pages; boundaries in [Lark migration](lark-migration.md).
+#1530: the private extension provides Lark gateway integration; entry points depending on `/api/v1/lark/…` appear only with hub feature `lark` (`LarkFeatures`, `App/LarkFeatures.swift`): Messages page and its switch / tab (stored toggle preserved, restored when the extension is installed), Settings › Connectors › Lark, Lark chats in Translation, native Lark document reader; native Moments reader additionally requires `lark_moments`. Without them, Lark document and Moments links open as ordinary websites; Inbox items with `lark` / `doc` / `moment` blocks only come from the extension and render normally. Empty features (before hello, demo mode), or only `lark_attachments` without `lark` (hubs that integrated Lark themselves before the extension), retain all existing UI. Mock `MOCK_NO_LARK=1` simulates no extension.
+Only at iPhone compact width; iPad, open iPhone Duo, Mac and watch remain unchanged (iPad and open Duo use drawer ordering in Persona's sidebar, see iPad). Code in `Persona/Views/Shell/`, components in
+`DesignSystem/ShellComponents.swift`, `ShellComposerBar.swift`, colors and sizes in `Theme.Shell` (the same neutral palette across styles).
 
-| 部分 | 做法 |
+| Part | Approach |
 | --- | --- |
-| 底部 | 没有 tab 栏 |
-| 顶栏 | 形象的头像 · 助手 \| Agents（工作带等你的 Agent 数）· 右边按钮。助手页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；Agents 页是 `AgentsTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。顶栏比系统导航栏高，Agents 根页在自己的导航项上加一行空白 prompt 让位（`ShellNavigationClearance`，不动导航容器，进对话再返回列表不动，#340）；两页顶栏的按钮因此在 xxxLarge 字号封顶（`Theme.Shell.topBarLargestTypeSize`）。点了搜索，系统把搜索框升进导航栏那一行（带「取消」）：这时 `AgentsTopBar` 淡出让位、侧边栏也拉不出来，取消后再回来（从搜索结果打开会话时也不闪回来）；搜不到时写「没有找到「…」」，不再是「开始第一个开发会话」（`ShellSearchTests`）。助手页再点一下「助手」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
-| 左上角的头像 | 原来是 ☰。2026-11-01 用户要求：换成顶栏后旧布局正中的形象头像没地方放了，改成左上角的「历史对话」入口，用来展示形象。两页（和拖动时的 `ShellMovingBar`）都是同一个 `ShellPersonaButton`：当前形象的状态头像（`PersonaDot`，和旧布局正中的同一个，五个状态见 `docs/persona.md`「状态」），状态取助手页当前那条对话的（`assistantCurrent`），所以两页、拖动中都一样；点了打开抽屉。和右边的圆按钮一样大（点按区域 `Theme.Size.tapTarget`，随字号变大）。收件箱有「需要你」时右下角一个小淡红点（`InboxDot`，颜色 `Theme.inboxDot`，2026-11-04 用户要求：原来是头像外面一个红底托盘角标，太显眼）：不显示数字和图标，直径 `Theme.Size.dotXL`，叠在圆形的脸上、圆心在右下 45° 处、整个点在脸的圆以内（`dotShift`），一圈页面背景色的细描边把它和脸分开；淡红不是「需要你」的系统红，不抢眼，也避开形象包画在右上角的思考气泡和 z。VoiceOver 读「历史对话」，值是「Persona，空闲」（形象名和状态）加「收件箱有事等你」。头像和角标读的数据（会话、交互、机器、连接、收件箱）都只在按钮自己里面读，顶栏不跟着推送重建（#178；`AgentsTopBar` 是 Equatable）。`ShellAvatarTests`；截图里没有角标用 mock 加 `MOCK_INBOX=empty` |
-| 两页 | 一条横条：抽屉 \| 助手 \| Agents（`ShellPager`，2026-11-01 用户要求）。助手页左拖、Agents 页右拖跟手翻到另一页，切换按钮的选中块跟着手指走；松手和抽屉一个规则（快甩就过去，否则过半），同一个弹簧。点切换按钮也是滑过去。助手（`AssistantView`）一直在，Agents（`ChatsView`）第一次切过去或拖过去时建好，之后都留着，切换不丢位置；静止时另一页透明、不接触摸。拖动中两页自己的顶栏藏起来，壳上一条 `ShellMovingBar` 顶替（头像和切换按钮不动，右边按钮从「新对话」渐变成「新建会话」）：各页的顶栏画在自己页里，会被另一页盖住一截 |
-| 横向拖动归谁 | 一个 UIKit pan（`DrawerPan`）在手指动了几个点时按实际位移定：45° 以内算横向，更陡是列表自己的滚动。助手页：右拖是抽屉（和以前一样），左拖翻到 Agents。Agents 页：右拖翻回助手；从行的中间起拖仍是行自己的右滑（置顶 / 中断 / 标为已看），从左边缘 32pt 内起拖、或者不在行上（分组标题、筛选条、标签页的分组行、空白）就翻页；左拖：只有两页时 Agents 右边没有页，是行的「关闭」；开了「消息」页（三页）后，能关闭的行（标了 `SwipeRowMark`）从中间起拖仍是行的「关闭」，从右边缘 32pt 内起拖、不能关闭的行、不在行上就翻到消息（#2822）。Agents 页不再右拖出抽屉，点左上角的头像。能往那个方向滚的代码块、表格先滚；在正在输入的文字上拖不翻页；推出了页面（系统右滑返回）、在搜索、抽屉开着时都不翻页 |
-| 侧边栏 | 从 Persona tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；两页都可以点左上角的头像（Agents 页右拖是翻回助手）。内容：最上面是主对话（显示为「Persona」，前面是当前形象的 App 图标 `AppGlyph`，#3203；只改显示名、不动会话 id，#2004），一条分隔线，再是收件箱（带数）、待办、定时任务、知识库、机器，一条分隔线，下面是对话历史「置顶」「最近」。主对话只出现一次（不进「置顶」「最近」和「自动对话」）；它的会话还没列出来、没有别的对话时这一行也在（点了打开主对话，还没有主对话时打开新对话页，助手配置到之前置灰）；右边是状态（工作中 / 等你 / 未读），长按：压缩上下文 / 新建主对话、拷贝会话 ID、拷贝诊断、在跑时结束…，不能左滑归档。#4606 / #4916 曾把它挪到「最近」上面改叫「主对话」，owner 要 #2004 的样子，#5110 改回；底部「新对话」药丸（主题色，#1312）+ 设置 |
-| 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
-| 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
-| 空对话 | 和旧布局同一个欢迎页（`AssistantWelcome`：问候、开一段新对话 / 主对话的说明、在线的机器和 iPhone、六个可以问的事；液态玻璃是两列卡片，BeautifulUI 是「可以问我」列表卡片）。2026-11-01 第一版只放输入框，没有待办时整页空白，用户 2026-11-02 要回原来的设计。输入框上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`），没有就不显示；这一块和输入框垫着页面底色，欢迎页滚到它们下面，在上沿渐隐（不硬切）。行数按空间定（2026-11-02，#283，iPhone Duo 外屏上 3 行 + 输入框占了半屏、把建议卡片拦腰截断）：这一块不盖住欢迎页第一行可以问的事（`NeedsRoom`：量第一行的下沿、页面高度（键盘不算）、输入框静止时的高度），放不下就少几行，至少 1 行；普通 iPhone 的液态玻璃仍是 3 行，17e 的 BeautifulUI 是 2 行，Duo 外屏和 SE 是 1 行。收起的里面有 Agent 时那一行写「还有 N 件需要你」，只剩 Agent 时点了去 Agents 页（收件箱里没有它们）。`AssistantWelcomeTests` 守着：两种布局、从侧边栏点新对话，问候、说明、第一个建议都在屏幕上、在输入框上面；「需要你」不盖住第一个建议、聚焦输入框后行数不变（在 Duo 外屏上也跑） |
-| 输入框 | 一行：[+] 问 Persona [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [模型 · 思考强度] [麦克风] [发送]（`ShellComposerBar`，助手和 Agent 对话页同一个，#1091）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。「模型 思考强度」是 ChatGPT「6.1 Sol 中」那样的紧凑文字按钮（「Opus 5.5 高」，#1117）：没有图标、不用红色，模型名主文本色加粗（`secondaryStrong`），思考强度次要文本色，中间一个小空格；模型名太长从尾部截断，思考强度不截；按钮右边留的空和发送 / 停止圆按钮四周留的一样，所以「模型 ↔ 麦克风」和「麦克风 ↔ 发送 / 停止」间隔相同（`SessionModes.composerTitle` / `modelName`）。GPT 显示名去掉 `gpt-` 前缀、后缀按单词显示（`gpt-6.1-sol` → `6.1 Sol`），版本和变体保留；直接相关的模型选择项使用同一格式，独立自定义名称优先，原始 model ID、保存值和请求参数不变（#2200）。App 不再添加「收起键盘」图标或单独占位行，系统按钮和聊天列表的收键盘手势保留。菜单从按钮往上弹，离按钮最近的依次是：全部放行时的红色警告（`BypassWarning`，输入框上不再标）、模型、思考强度、再下一层的权限模式（`SessionModesMenu`；新对话 `StarterModesMenu`，模型就是启动器）。模型能选的只有 herdr 窗格里的 Claude Code（发 `/model`）和助手新对话（选启动器）；已开的助手对话、Codex 只显示正在用的模型；Codex / TRAEX 没有权限模式，经 app-server 的 Codex 有思考强度（`efforts`），其余没有 |
-| 对话 | 用户气泡和 Agents 的对话同一个颜色（界面风格的 `Theme.userBubble`，#2647；原先是外壳专用的中性灰） |
-| 弱网 | 顶栏下面一个小药丸（等待网络 / 连接中…），两页共用；原来的标题位被切换按钮占了 |
+| Bottom | No tab bar |
+| Top bar | Avatar · Assistant \| Agents (work shows Agents waiting for you) · right button. Assistant uses floating `AssistantTopBar` over the chat (`shellBar` in the shell); Agents uses `AgentsTopBar` over the system navigation bar (retained for search), with button positions identical to the pixel. The bar is taller than system navigation; Agents root adds a blank prompt to its own navigation item (`ShellNavigationClearance`, not the navigation container, unchanged on returning from a chat, #340), so both bars cap button scaling at xxxLarge (`Theme.Shell.topBarLargestTypeSize`). Search moves its field into the navigation-bar row with Cancel: `AgentsTopBar` fades away and the sidebar cannot open; cancel restores it (no flash when opening a search result). No results says "No results for ‘…’", not "Start your first development session" (`ShellSearchTests`). Tapping Assistant again opens the former avatar menu (Knowledge, details, launcher, session info, interrupt…) |
+| Top-left avatar | Formerly ☰. Requested 2026-11-01: the old centered avatar no longer fit after the bar change, so it becomes the top-left Chat history entry, displaying the avatar. Both pages (and dragging `ShellMovingBar`) share `ShellPersonaButton`: current avatar's state face (`PersonaDot`, identical to the old center one; five states in `docs/persona.md` ("States")), based on the assistant page's current chat (`assistantCurrent`), identical on both pages and while dragging; tap opens the drawer. Same size as the right circular button (`Theme.Size.tapTarget`, grows with text). When Inbox needs you, a small pale-red bottom-right dot (`InboxDot`, `Theme.inboxDot`, requested 2026-11-04; the previous red tray badge outside the face was too prominent): no number or icon, diameter `Theme.Size.dotXL`, centered at 45° bottom-right and wholly inside the face (`dotShift`), with a thin page-background outline. Pale red avoids the strong system Needs you red and the avatar's top-right thought bubble / z. VoiceOver says Chat history, value "Persona, idle" (avatar name and state), plus "Inbox needs your attention". Chat, interaction, machine, connection and Inbox data are read only inside the button, preventing push-driven top-bar rebuilds (#178; `AgentsTopBar` is Equatable). `ShellAvatarTests`; use mock `MOCK_INBOX=empty` for no badge |
+| Pages | One horizontal strip: drawer \| Assistant \| Agents (`ShellPager`, requested 2026-11-01). Drag left from Assistant or right from Agents to follow the finger to the other page; the selected switch segment tracks the finger. Release follows drawer rules (fast flick switches, otherwise past halfway), with the same spring. Tapping switches slides too. `AssistantView` stays mounted; `ChatsView` is created on first switch / drag, then retained, preserving position; at rest the other page is transparent and noninteractive. While dragging, page top bars hide and shell `ShellMovingBar` replaces them (avatar and switch stationary, right button morphs from New chat to New session), as page-local bars would partly cover each other |
+| Horizontal gesture ownership | A UIKit pan (`DrawerPan`) decides from actual displacement after a few points: within 45° is horizontal, steeper belongs to list scrolling. Assistant: right opens drawer, left goes to Agents. Agents: right returns to Assistant; dragging from a row's middle remains its swipe (pin / interrupt / mark seen), but starting within 32pt of the left edge or off a row (group titles, filters, grouped tab rows, blank space) switches pages. Left: with two pages there is no page beyond Agents, so it closes the row; with Messages enabled, closable rows (`SwipeRowMark`) still close when dragged from the middle, while starts within 32pt of the right edge, nonclosable rows and off-row starts go to Messages (#2822). Agents no longer opens the drawer by right swipe; use the avatar. Code blocks and tables that can scroll in that direction get priority; dragging in text being edited never switches pages; pushed pages (system back swipe), search and an open drawer also disable paging |
+| Sidebar | Lifted from Persona tab into the shell (`ShellState.drawer`), accessible from both pages. Assistant at root opens it with a full-page right swipe; both pages can tap the avatar (right swipe on Agents returns to Assistant). Main chat is first, displayed as Persona with the current avatar App icon `AppGlyph` (#3203; display name only, session id unchanged, #2004), then a separator, Inbox (count), To-dos, Scheduled tasks, Knowledge, Machines, another separator, then Pinned and Recent history. Main chat appears once, excluded from Pinned, Recent and Automatic chats; its row remains before its session is listed or any other chat exists (tap opens main chat, or New chat if none exists; disabled until assistant configuration arrives). Its right side shows Working / Waiting for you / Unread; long-press offers Compact context / New main chat, Copy session ID, Copy diagnostics, End while running…; it cannot swipe left to archive. #4606 / #4916 moved it above Recent and renamed it Main chat; the owner wanted the #2004 layout, restored by #5110. Bottom theme-colored New chat pill (#1312) + Settings |
+| Sidebar destinations | All push onto Assistant's stack (`ShellState.show` → `AssistantView.show`). Inbox and Machines use value-based pushes (`ShellRoute`, `ShellDestinations` registers them and their InboxItem / Lark / machine-detail / session destinations): a value-based push from a view-pushed page inserts the new page underneath it (docs/lessons/ios.md) |
+| Settings | Full-screen sheet (`model.shellSettings`, in the model because style changes rebuild the tree and the sheet must return to the same page), top-right × |
+| Empty chat | Same welcome as old layout (`AssistantWelcome`: greeting, explanation of new / main chat, online computers and iPhone, six suggestions; Liquid Glass two-column cards, BeautifulUI "You can ask me" list card). The first 2026-11-01 version showed only the input and was blank without to-dos; user restored the old design 2026-11-02. Above input: Agents waiting for you, then Inbox Needs you, at most 3 rows + "N more in Inbox" (`ShellNeedsYou`), hidden if empty; page background beneath this and the input, with welcome scrolling underneath and fading at the top rather than clipping. Rows adapt to space (2026-11-02, #283; 3 rows + input occupied half Duo's outer screen and cut suggestion cards): never cover the first suggestion (`NeedsRoom`: measures its lower edge, page height excluding keyboard, resting input height), reduce rows when needed, minimum 1; ordinary iPhone Liquid Glass 3, 17e BeautifulUI 2, Duo outer / SE 1. If hidden items include Agents, say "N more need you"; if only Agents remain, tap goes to Agents (they are not in Inbox). `AssistantWelcomeTests` guards both layouts and drawer New chat: greeting, explanation and first suggestion visible above input; Needs you does not cover the first suggestion and focusing input does not change row count (also run on Duo outer screen) |
+| Input | One row: [+] Ask Persona [microphone]; focused or nonempty it grows into a card, text above, then [+] … [Model · Effort] [microphone] [Send] (`ShellComposerBar`, shared with Agent chats, #1091). Always the same view, preserving focus and Pinyin marked text while morphing. Model / effort is compact text like ChatGPT "6.1 Sol Medium" ("Opus 5.5 High", #1117): no icon or red, model in bold primary text (`secondaryStrong`), effort in secondary text with a small space; truncate long model names at the tail, never effort. Right-side space matches the circular Send / Stop button margins, making Model ↔ microphone and microphone ↔ Send / Stop gaps equal (`SessionModes.composerTitle` / `modelName`). GPT display names drop `gpt-` and word-format suffixes (`gpt-6.1-sol` → `6.1 Sol`), preserving version and variant; directly related model choices use the same format, custom display names take priority, raw model IDs, saved values and requests unchanged (#2200). No App-added Hide keyboard icon or spacer row; system buttons and chat keyboard-dismiss gestures stay. The menu opens upward, nearest the button first: red Allow everything warning (`BypassWarning`, no input label), model, effort, then nested permission mode (`SessionModesMenu`; new chat `StarterModesMenu`, model is launcher). Model selection only for Claude Code in herdr panes (`/model`) and new assistant chats (launcher); existing assistant chats and Codex only show the current model. Codex / the internal Codex fork have no permission mode; app-server Codex has effort (`efforts`), others do not |
+| Chat | User bubbles share Agents-chat colors (`Theme.userBubble` from the interface style, #2647; previously shell-specific neutral gray) |
+| Slow network | Small pill below the top bar (Waiting for network / Connecting…), shared by both pages; the page switch occupies the original title area |
 
-路由不变：所有跳转仍然写 `AppModel.selectedTab`（通知、Siri、交给 Persona、收件箱的行…），壳把 `.assistant` / `.chats` 当成两页，
-`.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。哪一页在前只有一个来源 `ShellState.page`，
-写 `selectedTab` 当场转给外壳（不靠 `onChange`），切换段、拖动也都经过它：见 `docs/shell.md`。
+Routing stays unchanged: all navigation still writes `AppModel.selectedTab` (notifications, Siri, hand to Persona, Inbox rows…); the shell treats `.assistant` / `.chats` as its pages,
+`.mail` as "push Inbox on Assistant", `.settings` as "open Settings sheet", then returns to the original page. Foreground page has one source, `ShellState.page`;
+writing `selectedTab` forwards immediately to the shell (not through `onChange`), and switch segments and dragging use it too: see `docs/shell.md`.
 
-UI 测试一律用 `launchPinned()` 固定风格；布局包装在 `PersonaUITests/LaunchLayout.swift` 的 `launchPersona()`（默认带 `-ui.oldLayout YES`），旧 `launchJarvis()` 仍转发到同一实现。
-壳自己的在 `ShellTests`、`ShellAvatarTests`（左上角的头像和收件箱角标）、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图；`-showHomeState empty|error`（新对话页：什么都不用你处理 / 一条开始失败的提示，截图用）。
+UI tests always use `launchPinned()` to fix the style; layout wrappers in `PersonaUITests/LaunchLayout.swift` use `launchPersona()` (default `-ui.oldLayout YES`); old `launchJarvis()` forwards to the same implementation.
+Shell tests: `ShellTests`, `ShellAvatarTests` (top-left avatar and Inbox badge), `ShellPagerTests` (paging), `ShellSwitchTests`, `ShellSearchTests` (`-ui.oldLayout NO`). DEBUG: `-openShellPage inbox|machines|routines|knowledge|profile`; `-showShellPagerAt 0.3` holds the strip 30% across for screenshots; `-showHomeState empty|error` (new-chat page: nothing needs you / a failed-start notice, for screenshots).
 
-## 只在前台做的事（轮询和上报已读）
+## Foreground-only work (polling and reporting read state)
 
-只有两类后台工作在「视图在窗口里，而且它所在的页在前台」时才做（`Views/TabActivity.swift`）：**轮询**和**上报已读**。
-以前靠的是系统 `TabView` 切走时把旧 tab 摘下窗口（`onDisappear` 触发、`.task` 取消）。新外壳的两页（助手、Agents）是一个 ZStack，
-藏起来的一页只是透明、不接触摸，**不摘窗**，`onDisappear` 不会触发：不加信号，藏着的那页会一直轮询、替用户标已读。
+Only two kinds of background work require "the view is in the window and its page is foregrounded" (`Views/TabActivity.swift`): **polling** and **reporting read state**.
+Previously the system `TabView` removed the old tab from the window on switching (`onDisappear`, cancellation of `.task`). The new shell's Assistant and Agents pages are a ZStack;
+the hidden page is merely transparent and noninteractive, **still mounted**, so `onDisappear` never fires: without a signal it would keep polling and mark messages read for the user.
 
-- 往下给 `tabIsActive`（不在任何页里时为真）：新外壳是 `ShellPageSlide` 按这页是不是在前（`ShellState.page`）设；旧布局、iPad、iPhone Duo 打开的 `TabView` 是每个 tab 内容上的 `TabActivityScope`。
-- `.tabActiveTask` / `.tabActiveTask(id:)`：页到后面就取消，回到前面从头再跑。`.onTabVisibility(appear:disappear:)` 代替成对的
-  `onAppear` / `onDisappear`，两边各只调一次；系统在切走途中把旧 tab 短暂放回窗口时不算出现。
-- 用到的地方：飞书会话的 60 秒兜底轮询和已读上报（回到前面时补报）；「机器」页（`MachinesView`）和机器详情（`MachineDetailView`）的轮询。
-- **不用在**：对话的消息订阅、正在生成的回复、Agent 的任务、听写、计时（工作行的秒表、终端的 250ms tick、页头自动收起）。这些不管哪一页在前台都照常跑。
-- 系统 `TabView` 下这些和摘窗的时机一致，界面和行为不变。新写的轮询和上报已读用上面这两个，别直接写 `onDisappear` / `.task`。
+- Pass down `tabIsActive` (true outside any page): `ShellPageSlide` sets it from `ShellState.page` in the new shell; old layout, iPad and open Duo `TabView` use `TabActivityScope` on each tab's content.
+- `.tabActiveTask` / `.tabActiveTask(id:)` cancels when the page goes behind and restarts from scratch when foregrounded. `.onTabVisibility(appear:disappear:)` replaces paired
+  `onAppear` / `onDisappear`, each called once; the system briefly remounting the old tab during a switch does not count as appearance.
+- Used for Lark chat's 60-second fallback polling and read reporting (catch up on foregrounding), and Machines-page (`MachinesView`) / machine-detail (`MachineDetailView`) polling.
+- **Not for** chat subscriptions, generating replies, Agent tasks, dictation or timers (work-row stopwatch, terminal 250ms tick, header auto-collapse). These continue regardless of the foreground page.
+- Under system `TabView`, timing matches window removal, so UI and behavior stay unchanged. New polling and read reporting must use these helpers, not direct `onDisappear` / `.task`.
 
-## Persona 顶栏和侧边栏（2026-10-30）
+## Persona top bar and sidebar (2026-10-30)
 
-参考 dot 和 ChatGPT App（用户给的截图）。代码在 `Persona/Views/Assistant/AssistantTopBar.swift`、`AssistantSidebar.swift`。
+Inspired by dot and ChatGPT App (user-provided screenshots). Code in `Persona/Views/Assistant/AssistantTopBar.swift`, `AssistantSidebar.swift`.
 
-- **顶栏**浮在对话上方，没有系统导航栏，也没有实心的栏：下面是一层由上往下渐隐的雾（`TopFog`：页面底色 + 材质，延伸到状态栏下），对话从下面滚过去。
-  对话列表顶端留出 `AssistantTopBar.height`（70pt），首页用 `contentMargins(.top)` 留出同样的高度。滚动时顶栏不动（不像 Agents 的页头会折叠）。
-- 正中是 **Persona 头像 + 名字胶囊**（主对话和新对话页是形象的名字，默认「Persona」；旁支对话是对话标题）。头像是当前形象的**状态圆点**
-  （`PersonaDot`）：空闲 / 思考中 / 工作中 / 等你处理 / 离线各有自己的动画，见 `docs/persona.md`「状态」。点它弹出菜单：知识库、详细信息（资料页
-  `AssistantProfileView`）、回到主对话（旁支时）；拷贝目录（助手的工作目录）、拷贝信息（对话名、会话 ID、所在机器、工作目录、启动器 / 模型、
-  `claude --resume` 命令，方便贴给别的 Agent，`AssistantCopyText`）、拷贝会话 ID；启动器子菜单、会话信息卡片、工作中时的「中断」。
-  拷贝后名字胶囊上盖一个「✓ 已拷贝…」3 秒（不用全局 toast：它正好压在头像上）。弱网 / 断网时胶囊里的名字换成「转圈 + 等待网络 / 连接中… / 更新中…」，
-  菜单第一项变成「连接详情」。
-- 左边圆按钮 **历史对话** 打开侧边栏，右边圆按钮 **新对话**（新对话页上置灰）。两个都是纯图标。
-- **侧边栏**在主页面下面，占屏宽 82%（最宽 380pt）。主页面覆盖它，向右滑开后仍是一张等尺寸的圆角卡片（深色模式加一圈细边，否则和侧边栏分不开），随拉出的进度压暗（`Theme.Fill.scrim`，浅色黑 20%、深色黑 45%，#334）；侧边栏横向固定，只在被揭开时轻微上浮 8pt（`Theme.Motion.drawerLift`），不缩放、不淡入。点卡片或往左拖关闭。
-  内容（2026-10-31 照豆包的侧边栏改，用户给的截图）：顶部是大字的形象名（「Persona」）和右边一个圆的搜索按钮（点了换成搜索框 + 取消）；
-  最上面一行是主对话（形象的 App 图标 +「Persona」，和新外壳的抽屉同一行，#2004 / #5110），一条分隔线；下面几行要开始的事：新对话、定时任务、知识库、健康（图标 + 字，没有卡片；健康见 `docs/health.md`「iOS 和 Mac 入口」）；一条分隔线；「置顶」（主对话不在这里；
-  长按别的对话可置顶，存在本机 `assistant.pinned`）和「最近」（其余按时间倒序，先显示 30 个，「查看全部」展开），每段标题右边一个灰色 ⋯
-  （置顶：全部取消置顶；最近：新对话、查看全部）。每行只有一个圆形标记（按会话 id 取一种淡色的对话气泡，相邻的不同色）+ 一行标题，
-  右边只在需要你 / 未读 / 工作中时有状态点；长按的预览里才有最后一条消息。当前对话是灰底圆角。底部一行：形象头像 + 名字 + 在线 / 离线和所在机器
-  （点开资料页），右边设置（只在抽屉里有；分栏时 tab 栏在旁边，不放）。搜索时只列结果（「N 个对话」）。长按对话还能拷贝会话 ID、结束。
-  **自动对话**（#3264，`AutoConversations`）：hub 说了来源（feature `conversation_origin`，会话的 `origin`，`docs/protocol.md`「助手对话的来源」）时，
-  「最近」只列用户自己的（`user` / `channel` / 不带），收件箱 AI 分身、定时任务、飞书 /agent、对话派生、扩展开的收成「最近」标题下第一行「自动对话 N」，
-  默认收起、展开状态存本机 `assistant.autoOpen`；收起时右边照样有等你的个数 / 工作中 / 未读。展开是每个来源一小行（个数、状态）和「全部对话」，
-  点开 `AutoConversationsView`（全部 · 我的 · 各来源的筛选，按来源筛好）；「最近」的 ⋯ 里也有「全部对话」。iPhone 抽屉、iPad 分栏、Mac 侧边栏是同一个视图。
-  当前打开的自动对话照旧在「最近」里留一行；搜索照旧搜全部。旧 hub 不说来源时没有这一行，定时任务的对话照旧按 #2838 认出来收在「定时任务」页。
-- **手势**（2026-10-31 按 ChatGPT App 的手感重做，用户反馈 build 49「不丝滑、不跟手、范围小、划了没反应」）：页面任何位置向右拖都能拉出侧边栏，
-  和按钮打开是同一个状态。UIKit 的 pan（`DrawerPan`），手指动了十来个点时判断：按**从按下处算的实际位移**，离水平 45° 以内就归侧边栏
-  （`AssistantDrawer.takes`；拇指斜着划一般 30°–40°，竖着滚动更陡），关着时只认向右。以前用 pan 的 translation / velocity 判断：
-  问的那一刻 translation 还是 0，velocity 是最后两个采样的猜测，一次 30° 的斜划读成几乎竖直向下，交给了列表，就是「划了没反应」。
-  手指下面有能横向滚动、而且没在最左边的东西（宽代码块、表格）时让给它滚；它在最左边时向右拖归侧边栏。页面里所有滚动视图的 pan 都等侧边栏先判断完
-  （`shouldBeRequiredToFailBy`；侧边栏在它们本来开始滚的那几个点里就判断完，滚动不会变晚）：否则 40° 的斜划竖直分量先过列表的门槛，
-  列表抢走手势、侧边栏根本没被问（对话已经在最底下，看上去就是「划了没反应」），代码块在最左边时也会抢去做回弹。推出了别的页面（资料、知识库、定时任务）时不生效，那里是系统的返回手势。
-- **松手**像系统的返回手势：速度超过 300pt/s 按方向走，否则过半（加上 0.2 秒的去势）打开（`settlesOpen`）；吸附用无回弹的弹簧
-  （`Theme.Motion.drawer`），把手指的速度接过去，快甩不会先停一下再动。
-- **跟手**：拖动时只有页面那张卡片的一个小修饰器（`DrawerPageMotion`）读进度，只改位移和透明度（2026-11-01 照 ChatGPT 去掉了缩小 6%：卡片上下露出空档、顶栏比侧边栏的低一截）；圆角取屏幕本身的圆角（`Theme.Radius.page`）。2026-11-02 按用户要求改成 Codex App 的层叠关系（#341）：主页面在上层向右滑开，侧边栏在下层横向不动，只从低 8pt 的位置缓缓上浮到原位，全程不透明、等尺寸（不再是贴着页面左边一起横移的两块矩形）。圆角、阴影、细边是固定的形状淡入，
-  不随进度重画。侧边栏一直建着（放在自己的 `UIHostingController` 里，`DrawerSidebarHost`），由 UIKit 直接改纵向 transform、关着时隐藏，
-  每帧不经过 SwiftUI；tab 栏随进度淡出（UIKit 的 alpha），不再用 `.toolbarVisibility` 藏：藏 tab 栏会改页面的安全区，整页对话在拖动第一帧和
-  关上最后一帧各重新布局一次。侧边栏伸到屏幕底边（tab 栏淡出后的位置），底下留出 home 条的高度。改前改后的每帧主线程耗时见 `docs/testing.md`「侧边栏拖动」。
-- 测试：`AssistantTopBarTests`（头像菜单和拷贝、左右按钮、按钮和手势两条路打开侧边栏、选对话后关闭并切过去、长对话滚动时顶栏位置不变、连接状态；单测还守住各屏宽和拖动进度下侧栏横向固定、等尺寸、不透明，关闭与重新打开沿同一路径往返）。
-  `DrawerSwipeTests`（mock 加 `MOCK_DRAWER=1`）：从屏幕中部 ±30° / ±40° 斜划、从气泡上划、列表快甩停下后划都能打开；代码块上左右拖是代码在滚，
-  滚回最左边后再向右拖打开侧边栏。
-  `-openAssistantSidebar YES` 启动时侧边栏就是开着的（截图）；给一个小数（如 `0.5`）就停在拖到一半的位置，看卡片的圆角和阴影。
+- **Top bar** floats over the chat, with no system navigation bar or solid bar: a downward-fading fog (`TopFog`: page background + material, extending under the status bar), with chat scrolling beneath.
+  Chat-list top reserves `AssistantTopBar.height` (70pt); the home page reserves the same via `contentMargins(.top)`. The bar stays fixed while scrolling (unlike the collapsible Agents header).
+- Centered **Persona avatar + name capsule** (main and new chats use the avatar name, default Persona; side chats use the chat title). The avatar is the current avatar's **state dot**
+  (`PersonaDot`): Idle / Thinking / Working / Needs you / Offline animations, see `docs/persona.md` ("States"). Tap for Knowledge, Details (profile
+  `AssistantProfileView`), Return to main chat (side chats); Copy directory (assistant cwd), Copy info (chat name, session ID, machine, cwd, launcher / model,
+  `claude --resume` command, convenient for another Agent, `AssistantCopyText`), Copy session ID; launcher submenu, session-info card, Interrupt while working.
+  Copy overlays "✓ Copied…" on the name capsule for 3 seconds (not global toast, which would cover the avatar). Slow / offline networks replace the name with spinner + Waiting for network / Connecting… / Updating…,
+  and the menu's first item becomes Connection details.
+- Left circular **Chat history** button opens the sidebar; right circular **New chat** button (disabled on the new-chat page). Both icon-only.
+- **Sidebar** below the main page, 82% of screen width (at most 380pt). The main page covers it, remaining a same-size rounded card when slid right (thin dark-mode border separates it from the sidebar), dimming with progress (`Theme.Fill.scrim`, black 20% light / 45% dark, #334); sidebar stays horizontally fixed and rises only 8pt as revealed (`Theme.Motion.drawerLift`), with no scaling or fading. Tap the card or drag left to close.
+  Content (2026-10-31, changed to match Doubao's sidebar from user screenshots): large avatar name (Persona) and a circular Search button on the right (becomes search field + Cancel);
+  Main chat is the first row (avatar App icon + Persona, identical to the new-shell drawer, #2004 / #5110), then a separator; actions below: New chat, Scheduled tasks, Knowledge, Health (icon + text, no cards; Health in `docs/health.md` ("iOS and Mac entry points")); separator; Pinned (main chat excluded;
+  long-press other chats to pin, stored locally in `assistant.pinned`) and Recent (remaining chats newest first, first 30 then View all), each with gray ⋯ at the title's right
+  (Pinned: Unpin all; Recent: New chat, View all). Each row has one circular marker (pale chat bubble color chosen by session id, adjacent rows different) + one-line title,
+  with a right-side status dot only for Needs you / Unread / Working; the last message appears only in long-press preview. Current chat has a rounded gray background. Bottom row: avatar + name + Online / Offline and machine
+  (tap for profile), Settings on the right (drawer only; split mode has the tab bar beside it). Search lists only results (N chats). Long-press also copies session ID or ends the chat.
+  **Automatic chats** (#3264, `AutoConversations`): when the hub reports origins (`conversation_origin`, session `origin`, `docs/protocol.md` ("Assistant chat origins")),
+  Recent lists only the user's own (`user` / `channel` / absent); Inbox AI twin, scheduled tasks, Lark /agent, derived chats and extension-created chats fold into the first row below Recent, "Automatic chats N",
+  collapsed by default, local `assistant.autoOpen`; collapsed still shows waiting count / Working / Unread. Expanded shows small rows per origin (count, status) and All chats,
+  opening `AutoConversationsView` (All · Mine · source filters, prefiltered by source); Recent's ⋯ also includes All chats. Same view in iPhone drawer, iPad split and Mac sidebar.
+  The currently open automatic chat keeps its Recent row; search still searches all. Old hubs without origins omit this row; scheduled-task chats are still recognized per #2838 and grouped on Scheduled tasks.
+- **Gestures** (2026-10-31, rebuilt to match ChatGPT after build 49 feedback "not smooth, not following the finger, small area, swipes do nothing"): right-drag anywhere on the page opens the sidebar,
+  using the same state as the button. UIKit pan (`DrawerPan`) decides after roughly ten points, from **actual displacement since touch-down**; within 45° of horizontal belongs to the sidebar
+  (`AssistantDrawer.takes`; thumb diagonals typically 30°–40°, vertical scrolling steeper); when closed only rightward motion counts. Previous pan translation / velocity logic
+  read translation 0 at that moment and velocity estimated from the last two samples, misreading a 30° swipe as nearly vertical and yielding to the list: "swipes do nothing".
+  Horizontally scrollable content under the finger that is not at its left edge (wide code blocks, tables) gets priority; at its left edge, right-drag opens the sidebar. Every page scroll-view pan waits for the sidebar's decision
+  (`shouldBeRequiredToFailBy`; it decides within the same few points where scrolling normally begins, so scrolling is not delayed); otherwise a 40° swipe's vertical component crosses the list threshold first,
+  which steals it before the sidebar is asked (at the chat bottom it looks like no response); code blocks at their left edge also steal it for bounce. Pushed pages (profile, Knowledge, scheduled tasks) use system back gestures instead.
+- **Release** matches system back: above 300pt/s follow velocity direction, otherwise open past halfway (including 0.2-second momentum projection, `settlesOpen`); snap with a non-bouncing spring
+  (`Theme.Motion.drawer`) inheriting finger velocity so fast flicks do not pause before moving.
+- **Finger tracking**: while dragging, only a small page-card modifier (`DrawerPageMotion`) reads progress, changing offset and opacity (2026-11-01 removed 6% shrinking like ChatGPT: it left top/bottom gaps and lowered the top bar relative to the sidebar); corners use screen radius (`Theme.Radius.page`). Requested 2026-11-02, switched to Codex App layering (#341): main page slides right above a horizontally fixed sidebar beneath, rising slowly from 8pt lower, fully opaque and same-sized throughout (no longer two rectangles moving together side by side). Corners, shadow and thin border fade in as fixed shapes,
+  not redrawn per progress. Sidebar stays mounted in its own `UIHostingController` (`DrawerSidebarHost`), UIKit directly adjusts vertical transform and hides it when closed,
+  avoiding per-frame SwiftUI. Tab bar fades with UIKit alpha rather than `.toolbarVisibility`: hiding it changes safe areas, relaying out the whole chat on the first drag frame and
+  final closing frame. Sidebar reaches the bottom screen edge where the faded tab bar was, with home-indicator clearance. Per-frame main-thread timings before / after are in `docs/testing.md` ("Sidebar dragging").
+- Tests: `AssistantTopBarTests` (avatar menu / copying, left/right buttons, button and gesture opening, selecting a chat closes and switches, fixed top bar during long-chat scrolling, connection status; unit tests guard horizontally fixed, same-size, opaque sidebar across screen widths and drag progress, with closing / reopening following the same path).
+  `DrawerSwipeTests` (mock `MOCK_DRAWER=1`): ±30° / ±40° swipes from screen center, over bubbles and after list flicking all open; left/right drags over code scroll it,
+  then right-drag after returning to the left edge opens the sidebar.
+  `-openAssistantSidebar YES` starts with sidebar open (screenshots); a fraction such as `0.5` holds halfway through dragging to inspect card corners and shadows.
 
-## iPhone Duo（2026-10-30）
+## iPhone Duo (2026-10-30)
 
-iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度），打开用内屏（约 669×951 点，regular 宽度），还能半折、横放、立着。
-外屏和内屏横放时，**系统把状态栏、导航栏、工具栏、tab 栏竖着放到屏幕侧边**；内屏竖放时仍是水平的栏。官方指南：
-`developer.apple.com/iphone-duo`、HIG「Designing for iPhone Duo」。要用 Xcode 27 及以上编译（配置 `xcode`，`docs/config.md`），
-旧 Xcode 编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面。
+The iPhone Duo folds: closed it uses the outer screen (about 466×678 points, compact width), open the inner screen (about 669×951 points, regular width), and can also be half-folded, landscape or portrait.
+On the outer screen and the inner screen in landscape, **the system places the status, navigation, toolbar and tab bars vertically along the screen edge**; on the inner screen in portrait the bars remain horizontal. Official guides:
+`developer.apple.com/iphone-duo`, HIG "Designing for iPhone Duo". Build with Xcode 27 or later (`xcode` configuration, `docs/config.md`);
+Apps built with older Xcode do not extend under the status bar and camera on Duo.
 
-- **按宽度分两种布局，不看机型**（`Persona/Views/SplitNavigation.swift`）。compact（所有普通 iPhone、Duo 合上）还是原来的单个
-  NavigationStack，行为一点不变；regular（Duo 打开）用 `NavigationSplitView`：左栏是列表，右栏是它打开的页面，像 Mail。
-  两种布局共用同一个 `path`，开合时正在看的页面不丢；半折时系统自动让两栏避开折痕。Agents、收件箱、设置都用它。
-  - 但 `RootView` 按宽度在新外壳和 tab 之间换整棵树（`usesShell`），换树时 Agents 页的 `path`（视图状态）丢了；iOS 切后台拍快照时会临时改宽度，
-    Duo 打开时切个 App 回来右栏就成了「选一个 Agent」（2026-11-04）。而且分栏里左栏的链接打开的对话不写进 `path`。所以新的 Agents 页出现时
-    按 `dev.openChat`（打开对话时记下、回到列表时清掉）再打开一次，晚一拍（要走的那棵树的分栏走的时候会清空路径）；
-    页头切到的同空间 Agent 记在 `AppModel.chatSwitched`，同一个路径重建的对话页直接打开它。`ReturnToChatTests` 用 `-swapTreeAt` 在 iPad 上模拟换树。
-  - 左栏的 `NavigationLink(value:)` 替换右栏（左栏自己有一个永远不推的栈，把要推的值转给右栏）；列表里用代码打开的页面也要替换：
-    `path = NavigationPath([值])`（单栏时列表在栈底，和 append 一样；Agents 的 `openFromList`）。详情页里再打开的页面照常 append。
-  - 右栏第一页没有返回按钮（旁边就是列表）：目标页加 `.splitDetailPage()`；Agents 对话页自绘的返回键看 `\.splitDetail` 隐藏（保留占位，标题居中）。
-  - 分栏时对话页不隐藏 tab 栏（单栏时隐藏，好让对话占满）。
-  - 设置页的入口全部改成按值（`SettingsPage`），视图式的 `NavigationLink { 页面 }` 会推进左栏自己的栈，在窄栏里打开。
-- **Persona**：regular 下侧边栏是 `NavigationSplitView` 的左栏（没有「设置」齿轮：tab 栏一直在旁边），左上角按钮显示 / 隐藏左栏；
-  compact 下仍是抽屉。
-- **可读宽度**：对话和 Persona 首页最宽 760pt（`ChatView.readableWidth`），更宽时居中，顶栏仍然铺满。
-- **不用屏幕尺寸**：两块屏尺寸、比例都不同，`UIScreen.main` 一律不用。长按消息的操作条夹在对话区域里（`MessageMenu.area`
-  坐标空间），交互卡片的表单最高为所在容器的 55%（`containerRelativeFrame`），图片缩放按视图的 `traitCollection.displayScale`。
-- **工具栏按钮都要有标题和图标**（`Label("新建会话", systemImage: …)`）：竖排时只显示图标，放不下收进溢出菜单时显示标题；
-  只有图标的按钮在溢出菜单里是空白。
-- **侧边竖排栏**：系统把栏竖着放到侧边时（外屏，内屏横放；`toolbarVerticalEdge` 不为 nil，iOS 27.1 起），Agents 对话页不再画自己的页头按钮，
-  把返回、终端、Git、文件、⋯ 交给系统工具栏，它们排进状态栏下面那一列（`ChatView.sideBarItems`，每个都有标题和图标）；页面顶部只留一条不折叠的标题
-  （点开会话信息）和同空间的 Agent、循环 / 后台任务、子 Agent（`sideHeader`）。水平栏时（普通 iPhone、内屏竖放）照旧是自绘的可折叠页头。
-  系统自己的返回键由对话页藏起（`navigationBarBackButtonHidden(sideBars)`），侧边那一列只有对话页给的「返回」。对话页的目标页要用
-  `.splitDetailPage(ownsBack: true)`：外层写的 `navigationBarBackButtonHidden(false)` 会盖过页面自己的 `true`，系统的返回又冒出来，
-  两个返回键上下排着（2026-11-04，TestFlight）。
-  输入框弹出键盘时这一条只剩雾（标题、同空间的 Agent、子 Agent 都收起，键盘收下去再出来）：内屏横放时键盘上面只有约 390pt，
-  页头、模式按钮和输入框占满了，一行消息都看不到（2026-11-04）。侧边那一列的系统标题仍然写着是哪个会话。
-  Persona 的顶栏仍是自绘的、在内容顶部，它下面的雾横向铺到侧边状态栏下面（`BarFog`，只铺到内容宽度时深色下有一条竖边）。
-- **外屏矮**（约 678pt）：Persona 新对话页输入框上面的「需要你」按剩下的空间收行数（见上面「新外壳」的「空对话」）。
-- **在模拟器上验证**：iPhone Duo 只有 iOS 27.1 运行时（这个运行时也只支持它）。开合 / 半折只能在 Xcode 的 Device Hub 里切，
-  没有命令行。截图要指定屏幕：`xcrun simctl io <udid> screenshot --display=1`（外屏）/ `--display=3`（内屏，横放时是 2853×2007），
-  不指定时可能拍到熄灭的那块（全黑）；先算一下亮度确认拍到的是亮着的屏。启动参数照常用（`-tab`、`-openSession` 等）。
+- **Two layouts by width, not device model** (`Persona/Views/SplitNavigation.swift`). Compact (ordinary iPhones, closed Duo) keeps the original single
+  NavigationStack with no behavior changes; regular (open Duo) uses `NavigationSplitView`: list left, opened page right, like Mail.
+  Both share the same `path`, preserving the current page when folding / unfolding; half-folded, the system keeps both columns away from the crease. Agents, Inbox and Settings all use it.
+  - But `RootView` swaps the entire tree between the new shell and tabs by width (`usesShell`), losing the Agents page's `path` (view state); iOS briefly changes width when taking a background snapshot,
+    so switching Apps on an open Duo could return to "Select an Agent" in the right column (2026-11-04). Also, chats opened by left-column links do not write to `path`. The new Agents page therefore
+    reopens `dev.openChat` (saved when opening a chat, cleared on returning to the list), one beat later (the outgoing tree's split view clears the path as it leaves);
+    header-switched Agents in the same space are stored in `AppModel.chatSwitched`, and a rebuilt chat page on the same path opens that one directly. `ReturnToChatTests` uses `-swapTreeAt` on iPad to simulate a tree swap.
+  - Left-column `NavigationLink(value:)` replaces the right column (the left has its own never-pushed stack, forwarding values to the right); programmatically opened list pages must replace it too:
+    `path = NavigationPath([value])` (in single-column mode the list is at the stack bottom, equivalent to append; Agents `openFromList`). Pages opened from details still append.
+  - The first right-column page has no back button (the list is beside it): add `.splitDetailPage()` to the destination; Agents' custom chat back button hides for `\.splitDetail` (keeping its space so the title stays centered).
+  - Split chat pages do not hide the tab bar (single-column pages do, to fill the screen).
+  - Settings entry points all use values (`SettingsPage`); view-based `NavigationLink { page }` pushes the left column's own stack and opens in the narrow column.
+- **Persona**: in regular width, the sidebar is `NavigationSplitView`'s left column (no Settings gear; the tab bar is always beside it), with the top-left button showing / hiding it;
+  compact still uses a drawer.
+- **Readable width**: chats and the Persona home page are at most 760pt wide (`ChatView.readableWidth`), centered when wider; the top bar still spans the full width.
+- **No screen dimensions**: the screens have different sizes and ratios; never use `UIScreen.main`. The long-press message action bar stays within the chat area (`MessageMenu.area`
+  coordinate space); interaction forms have a maximum height of 55% of their container (`containerRelativeFrame`); image scaling uses the view's `traitCollection.displayScale`.
+- **Toolbar buttons need both titles and icons** (`Label("新建会话", systemImage: …)`, "New chat"): vertical bars show only icons, and overflow menus show titles;
+  icon-only buttons become blank menu items.
+- **Vertical side bars**: when the system places bars at the side (outer screen, inner landscape; non-nil `toolbarVerticalEdge`, iOS 27.1 onward), the Agents chat page no longer draws its own header buttons;
+  Back, Terminal, Git, Files and ⋯ go into the system toolbar, arranged below the status bar (`ChatView.sideBarItems`, each with title and icon). The content top keeps only a non-collapsing title
+  (tap for session info), same-space Agents, loop / background tasks and sub-Agents (`sideHeader`). Horizontal bars (ordinary iPhone, inner portrait) retain the custom collapsible header.
+  The chat hides the system back button (`navigationBarBackButtonHidden(sideBars)`), leaving only its supplied Back in the side column. Chat destinations must use
+  `.splitDetailPage(ownsBack: true)`: an outer `navigationBarBackButtonHidden(false)` overrides the page's `true`, bringing back the system button
+  and stacking two Back buttons (2026-11-04, TestFlight).
+  With the keyboard open, this header becomes fog only (title, same-space Agents and sub-Agents hide until the keyboard closes): inner landscape leaves only about 390pt above the keyboard,
+  and the header, mode buttons and input previously occupied it all, leaving no message visible (2026-11-04). The side column's system title still names the session.
+  Persona's top bar remains custom at the content top; its fog extends horizontally under the side status bar (`BarFog`; limiting it to content width leaves a vertical edge in dark mode).
+- **Short outer screen** (about 678pt): on Persona's new-chat page, Needs you rows above the input shrink to the remaining space (see "Empty chat" under "New shell" above).
+- **Simulator verification**: iPhone Duo has only the iOS 27.1 runtime (which supports only it). Folding / unfolding / half-folding can only be switched in Xcode Device Hub,
+  with no CLI. Screenshots must specify the display: `xcrun simctl io <udid> screenshot --display=1` (outer) / `--display=3` (inner, 2853×2007 in landscape);
+  otherwise the inactive screen may be captured (all black); calculate brightness first to confirm the active screen. Launch arguments work normally (`-tab`, `-openSession`, etc.).
 
-## iPad（2026-10-31）
+## iPad (2026-10-31)
 
-iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：在 iPad 上是放大按钮的手机兼容窗口。
+One App for iPhone and iPad (`TARGETED_DEVICE_FAMILY` 1,2). Previously only 1, giving iPad a phone compatibility window with enlarged buttons.
 
-- 布局和 iPhone Duo 一样按宽度分：常规宽度（iPad 全屏、大一些的分屏）是 `SplitNavigation` 左右两栏，紧凑宽度（窄的分屏 / 侧拉）是一个栈。
-- iPad 上左栏用 `Theme.Size.sidebar`（340…480，理想 400；系统默认太窄，Agents 卡片的标题全折行），Persona tab 的对话列表也一样，切 tab 时左栏不跳。
-  iPhone Duo 不设宽度（系统按折痕分栏）。
-- iPad 支持四个方向（分屏和台前调度要求）；iPhone 仍然只竖屏。
-- 侧边栏和 iPhone 新外壳的抽屉一样（2026-11-05 用户要求）：最上面是 Persona（主对话），一条分隔线，收件箱、待办、定时任务、知识库、机器，再是对话历史（#2004 / #5110）；
-  底部「新对话」药丸 + 设置，下面仍是形象、在线状态和机器那一行。顶部的 Tab 只有 Persona、Agents（和可选的「消息」），收件箱和设置不再是 Tab：
-  收件箱、待办、机器推到 Persona 的右栏（`ShellDestinations`），设置是浮层（右上角 ×）。路由照旧写 `AppModel.selectedTab`，
-  `PadRouter`（`RootView.swift`）把 `.mail` 转成「在 Persona 页推收件箱」、`.settings` 转成「打开设置浮层」。旧布局还是四个 Tab。
-  `IPadSidebarTests` 守着（竖屏、横屏：顺序、底部按钮、没有收件箱 / 设置 Tab、收件箱在右栏打开、设置浮层能关）。
-- 欢迎页的内容宽度不超过 `Theme.Size.readable`（560），不在大屏上铺满。
-- 从对话里打开的详情页（任务详情、坞里的 Agent、对话里的待办条、hub 链接 `/todos?id=`）在常规宽度下推进对话所在的栈、铺满详情栏，
-  不用 sheet：`presentationDetents` 在常规宽度下不起作用，sheet 会是屏幕中间的小表单（2026-11-05 用户反馈，#2816）。统一用
-  `detailPresentation`（`Views/DetailPresentation.swift`）：手机上仍是 sheet，Mac / visionOS 不变；页面自己的 `NavigationStack` 换成
-  `DetailStack`（推进去时不再套一层）。没有栈可推的（会话信息 sheet 里再开的待办）至少 `.presentationSizing(.page)`。
-  测试 `IPadTaskDetailTests`（只在 iPad 上跑，`MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1`）。
-- 左栏顶到屏幕顶：分栏的左栏从状态栏下面开始画、自己画不进状态栏，那一条原来是窗口的白色，看起来列表「没顶到头」（2026-10-31）。
-  `SidebarTopFill` 在整个分栏后面按左栏的宽度把那一条涂成左栏的颜色（玻璃风格是系统左栏色 `Theme.systemSidebar`，其他风格是页面底色）；
-  左栏收起时不涂（看分栏的 `columnVisibility`，收起后左栏最后的位置还会留着上报）。`IPadLayoutTests.testSidebarReachesTheTop` 按像素查。
-- 测试：`IPadLayoutTests`（只在 iPad 模拟器上跑：竖屏 / 横屏都是原生全屏、左栏够宽、对话在右栏打开）；`InboxSplitTests`（分栏时跑：
-  收件箱从一个飞书会话点到另一个，右栏是新会话自己的消息和草稿，再点回来草稿还在）。XCUITest 自己在横屏下截的图是转过的，
-  看横屏要 `TEST_RUNNER_JARVIS_HOLD=<秒>` 停住、用 `simctl io screenshot` 拍。
+- Like iPhone Duo, layout follows width: regular (iPad full screen, wider split screen) uses `SplitNavigation` with two columns; compact (narrow split screen / Slide Over) uses one stack.
+- iPad's left column uses `Theme.Size.sidebar` (340…480, ideal 400; system default is too narrow and wraps all Agents-card titles); Persona's chat list does too, preventing width jumps when switching tabs.
+  iPhone Duo sets no width (the system splits at the crease).
+- iPad supports all four orientations (required by split screen and Stage Manager); iPhone remains portrait only.
+- The sidebar matches the iPhone new shell's drawer (requested 2026-11-05): Persona (main chat) first, then a separator, Inbox, To-dos, Scheduled tasks, Knowledge, Machines, then chat history (#2004 / #5110);
+  bottom "New chat" pill + Settings, then the avatar, online status and machines row. Top tabs are only Persona, Agents (and optional Messages); Inbox and Settings are no longer tabs:
+  Inbox, To-dos and Machines push into Persona's right column (`ShellDestinations`); Settings is a sheet (top-right ×). Routing still writes `AppModel.selectedTab`;
+  `PadRouter` (`RootView.swift`) maps `.mail` to "push Inbox on Persona" and `.settings` to "open Settings sheet". The old layout keeps four tabs.
+  `IPadSidebarTests` guards this (portrait and landscape: ordering, bottom buttons, no Inbox / Settings tabs, Inbox opens on the right, Settings sheet can close).
+- Welcome content is limited to `Theme.Size.readable` (560), not stretched across large screens.
+- Detail pages opened from chats (task details, dock Agents, to-do strips, hub links `/todos?id=`) push into the chat's stack at regular width and fill the detail column,
+  rather than sheets: `presentationDetents` has no effect at regular width and a sheet becomes a small centered form (feedback 2026-11-05, #2816). Use
+  `detailPresentation` (`Views/DetailPresentation.swift`): still a sheet on phones, Mac / visionOS unchanged; replace a page's own `NavigationStack` with
+  `DetailStack` (no extra stack when pushed). Where there is no stack to push into (a to-do opened from a session-info sheet), use at least `.presentationSizing(.page)`.
+  Tests: `IPadTaskDetailTests` (iPad only, `MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1`).
+- Left column reaches the screen top: the split view's left column starts below the status bar and cannot draw into it; that strip used to be window white, making the list appear short of the top (2026-10-31).
+  `SidebarTopFill` behind the whole split view colors the strip to the left-column width (system sidebar color `Theme.systemSidebar` for glass, page background for other styles);
+  it does not fill when the column is hidden (uses `columnVisibility`; the hidden column still reports its last position). `IPadLayoutTests.testSidebarReachesTheTop` checks pixels.
+- Tests: `IPadLayoutTests` (iPad simulator only: native full-screen portrait / landscape, wide enough sidebar, chats open on the right); `InboxSplitTests` (split layout:
+  switching between Lark chats shows the new chat's own messages and draft on the right, switching back preserves the draft). XCUITest's own landscape screenshots are rotated;
+  inspect landscape by holding with `TEST_RUNNER_JARVIS_HOLD=<seconds>` and capturing with `simctl io screenshot`.
 
-## 长按图标快捷操作（#3199）
+## Home-screen quick actions (#3199)
 
-主屏长按 Persona 图标：「新对话」「Agents」「收件箱」（`Persona/App/QuickActions.swift`），和 Android 的快捷方式、网页 manifest 的 shortcuts 对齐。启动时设一次 `shortcutItems`，对谁都一样，不随状态更新。
+Long-press the Persona icon: "New chat", "Agents", "Inbox" (`Persona/App/QuickActions.swift`), aligned with Android shortcuts and web manifest shortcuts. Set `shortcutItems` once at launch, identical for everyone, not updated with state.
 
-- 只做切页：「Agents」切到 Agents 页，「收件箱」推到助手上，「新对话」走抽屉「新对话」同一条路（`ShellState.show(.newConversation)`），已推开的收件箱等页面一起退回根。没配对 hub 时停在欢迎页。
-- App 开着或在后台时点，走场景代理的 `windowScene(_:performActionFor:)`；冷启动时点，项在场景的 connectionOptions 里。场景代理（`QuickActionSceneDelegate`）只接这两处，窗口仍由 SwiftUI 管。
-- UI 测试 `QuickActionsTests` 从主屏长按依次点三项。冷启动没有测：从 SpringBoard 启动带不上体验模式的启动参数。模拟器上每次回主屏都要等约 60 秒 SpringBoard 空闲，整条约 7 分钟。
+- Navigation only: Agents switches to Agents, Inbox pushes onto the assistant, New chat follows the drawer's New chat route (`ShellState.show(.newConversation)`), returning already-pushed pages such as Inbox to the root. Without hub pairing, remain on Welcome.
+- If the App is open or backgrounded, use the scene delegate's `windowScene(_:performActionFor:)`; on cold launch the item comes through scene connectionOptions. `QuickActionSceneDelegate` handles only these two entry points; SwiftUI still manages the window.
+- `QuickActionsTests` long-presses the home-screen icon and taps all three items. Cold launch is untested: SpringBoard launch cannot pass demo-mode arguments. Each simulator return to the home screen waits about 60 seconds for SpringBoard idle; the whole test takes about 7 minutes.
 
-## 分享到 Persona（#4586）
+## Share to Persona (#4586)
 
-别的 App 里点「分享」› Persona：文字、一个网页链接或最多 4 张图片，加一句可选的附言，发到 Persona 主对话，和 Android 的 ShareActivity 一样（`PersonaShare/`，target `PersonaShare`）。
+In another App, Share › Persona sends text, a web link or up to 4 images, with an optional note, to the Persona main chat, like Android's ShareActivity (`PersonaShare/`, target `PersonaShare`).
 
-- 扩展自己连 hub，不需要 App 在跑：从钥匙串读 App 存的配对（`HubStore` 的 "hubs" 条目，App 的钥匙串组），取默认分组的 hub 依次试，`GET /api/v1/assistant` 拿主对话，再像输入框一样发消息（图片缩到 1600 px、JPEG）。没有用 App Group，所以不用去开发者网站手动挂组。
-- 失败就留在面板上说原因：没配对、配对失效、还没有主对话、连不上 hub。不走 SSH 隧道；只能发主对话，选别的会话以后再说。
-- 发版：分享扩展是新的 Bundle ID（`<bundle id>.share`），见 `docs/release.md`。
+- The extension connects to the hub itself; the App need not be running: read App-saved pairing from Keychain (`HubStore` "hubs" entry, App keychain group), try hubs in the default group in order, obtain the main chat with `GET /api/v1/assistant`, then send like the input field (images resized to 1600 px, JPEG). No App Group, so no manual group setup on the developer website.
+- Failure stays on the panel with a reason: unpaired, invalid pairing, no main chat yet, cannot reach the hub. No SSH tunnels; main chat only, other destinations later.
+- Release: the share extension has a new Bundle ID (`<bundle id>.share`), see `docs/release.md`.
 
-## 思考强度和权限模式
+## Effort and permission modes
 
-对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（自动 / 低 … 最高），
-相当于 Claude Code 终端底栏，点开就能改（`SessionModeBar`，文案和图标在 `SessionModes`）。新外壳里没有这两个标签，收进了输入框右下角的
-「模型 · 思考强度」按钮（#1091，见上面「新外壳」的输入框）。新开 Agent 的表单、助手首页的输入框上方
-也能选（不选就是「跟随启动器」）。Codex / TRAEX 的会话不显示；经 app-server 驱动的 Codex 会话（hub 给了 `efforts`，`Session.setsEffortOnly`）
-只显示思考强度，选项是它的模型的档位（`SessionModes.effortOptions`，`docs/codex.md`「思考强度」）。
-herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模型」一节（#3119，对齐网页 #2434；`SessionModes.switchesModel`）：
-默认 / Opus / Sonnet / Haiku，选了发 `POST …/modes {"model"}`，node 按发消息的防护打 `/model <id>` 并读屏确认，失败显示原因；
-工作中、等你回答、没在运行时这一节是灰的，标题写原因；标题提醒所选模型也会成为新会话的默认（Claude Code 的行为）。
-新外壳的「模型 · 思考强度」菜单仍是把 `/model <id>` 作为一条消息发出去。
+Two small labels above the chat input: permission mode (Manual approval / Auto-edit files / Plan only / Auto / Allow everything) and effort (Auto / Low … Max),
+like Claude Code's terminal bottom bar; tap to change (`SessionModeBar`, wording and icons in `SessionModes`). The new shell moves these into the input's bottom-right
+"Model · Effort" button (#1091, see the input under "New shell" above). New Agent forms and the assistant home page above its input
+also offer selection (unset means "Follow launcher"). Codex / the internal Codex fork sessions do not show them; app-server-driven Codex sessions (hub supplies `efforts`, `Session.setsEffortOnly`)
+show effort only, with levels supported by their model (`SessionModes.effortOptions`, `docs/codex.md` ("Effort")).
+For Claude Code sessions in herdr, the effort menu also has a Model section (#3119, matching web #2434; `SessionModes.switchesModel`):
+Default / Opus / Sonnet / Haiku; choosing sends `POST …/modes {"model"}`, and the node enters `/model <id>` with message-sending safeguards and checks the screen; failure explains why.
+While working, waiting for your answer or not running, this section is disabled and its title explains why; the title notes that the model also becomes the default for new sessions (Claude Code behavior).
+The new shell's Model · Effort menu still sends `/model <id>` as a message.
 
-- 显示：transcript 每条 user 行带 `permissionMode`、每条回复带 `effort`；在 App 里改过的值在 transcript 写下更新的值之前优先
-  （node/modes.go）。助手对话例外（#2416）：App 设的值存进 hub 的会话状态（`app_mode` / `app_effort`），始终胜过 transcript、node 重启不丢
-  （以前主对话 transcript 里旧的 default 把模式锁死，App 改了 node 一重启又回去）。终端里 shift+tab 改的模式要等下一条消息才写进 transcript，开发信息卡片读终端底栏拿实时值。
-- 新开：`--permission-mode` / `--effort`。
-- 改在跑的会话：助手（无头）往 stdin 发 control request（`set_permission_mode`、`apply_flag_settings {effortLevel}`），下一次请求就生效；
-  herdr 里的 Agent 像人一样操作：shift+tab 循环到目标模式（default → acceptEdits → plan → auto），思考强度打开 `/effort` 选择器移到目标档位
-  按 `s`（只对本会话生效）。**别发 `/effort <档位>`**：它会顺手存成这个模型以后所有新会话的默认值（写进 settings 的 `modelSettings`）。
-- 改思考强度要等这一轮结束、终端输入框是空的（否则 `/effort` 会接在别人没发出的草稿后面）；herdr 里的 Agent「全部放行」只能新开时选，循环里没有它。
-- 助手对话（Persona 页，主对话也一样）新开和在跑都能选「全部放行」（#2416），菜单最上面标红写明后果（`BypassWarning`）。Persona 不带
-  `--dangerously-skip-permissions` 启动 claude，控制请求切不到 bypassPermissions：进程空闲就停掉，下一条消息带 `--permission-mode bypassPermissions`
-  续上；正在回答或有后台任务就等这一轮之后的第一条消息再换进程。
-- 思考强度「自动」（`auto`，用模型自己的默认档）。Claude Code 2.1.316 实测：`--effort` 不认 auto（打一条警告、按默认档跑），
-  settings.json 的 `effortLevel` 也不认（被静默忽略），`/effort` 选择器里没有这一格；只有 `/effort auto` 命令认，而它会顺手清掉
-  这个模型存在 settings 里的默认档。所以三条路分别是：
-  - 新开：不传 `--effort`。这和「跟随启动器」一样，新开的表单里就不放这一项（`SessionModes.startEffortLevels`）。
-  - 助手（无头）：`apply_flag_settings {"effortLevel": null}`，Claude Code 自己表达 auto 就是这样发的。transcript 里记的是实际档位，
-    node 不能把它当成 App 的新选择再发回去（否则 auto 被钉成那一档），助手的思考强度只有 App 会改，App 选过 auto 就一直按 auto。
-  - herdr 里的 Agent：打开 `/effort` 选择器，从最左一格格往右，停在下面写着「The default effort for this model」的那一格，按 `s`（滑块式按 `enter`）。
-    这是近似：本会话钉在当前模型的默认档，之后换模型不会跟着变；组织设置改了默认档、选择器里找不到这行时，node 取消并报错。
-  - 显示：transcript 每条回复只记实际档位、从不记 auto，所以「自动」标签只维持到下一条回复，之后显示成那一档（比如「中」）。
-  - 设置 › Claude Code 设置里的思考强度选 auto 就是删掉 `effortLevel`（`claudeconfig.go`）。
-- 选择器开着时 herdr 把 Agent 报成 blocked，hub 1.5 秒后会把它当成要处理的终端对话框推给手机：node 操作期间不报 blocked。
+- Display: each transcript user row has `permissionMode`, each reply `effort`; App changes take priority until the updated value appears in the transcript
+  (node/modes.go). Assistant chats are an exception (#2416): App values persist in hub session state (`app_mode` / `app_effort`), always override the transcript and survive node restarts
+  (previously the main chat's old transcript default locked the mode, and App changes reverted on node restart). Terminal shift+tab changes enter the transcript only on the next message; developer-info cards read the terminal bottom bar for live values.
+- New sessions: `--permission-mode` / `--effort`.
+- Changing running sessions: the headless assistant sends stdin control requests (`set_permission_mode`, `apply_flag_settings {effortLevel}`), effective on the next request;
+  herdr Agents are operated like a person: shift+tab cycles to the target (default → acceptEdits → plan → auto), and the `/effort` picker moves to the level,
+  then presses `s` (session-only). **Do not send `/effort <level>`**: it also saves the level as this model's default for all future sessions (`modelSettings` in settings).
+- Effort changes wait until the turn ends and the terminal input is empty (otherwise `/effort` appends to someone else's unsent draft); herdr Agents can choose Allow everything only at creation, not in the cycle.
+- Assistant chats (Persona page, including the main chat) can choose Allow everything both at creation and while running (#2416); a red warning at the menu top explains consequences (`BypassWarning`). Persona does not start
+  claude with `--dangerously-skip-permissions`, so a control request cannot switch to bypassPermissions: stop an idle process, then resume the next message with `--permission-mode bypassPermissions`;
+  if answering or holding background tasks, replace the process on the first message after this turn.
+- Auto effort (`auto`, the model's default). Tested on Claude Code 2.1.316: `--effort` rejects auto (warning, then uses default),
+  settings.json `effortLevel` rejects it too (silently ignored), and the `/effort` picker has no Auto slot; only `/effort auto` accepts it, but also clears
+  this model's saved default in settings. The three paths are therefore:
+  - New sessions: omit `--effort`. Equivalent to Follow launcher, so new-session forms omit this option (`SessionModes.startEffortLevels`).
+  - Headless assistant: `apply_flag_settings {"effortLevel": null}`, the same representation Claude Code itself uses for auto. Transcripts record the actual level;
+    the node must not send it back as a new App choice (which would pin auto to that level). Only the App changes assistant effort; once Auto is selected, it remains auto.
+  - herdr Agents: open `/effort`, move right from the leftmost slot to the one labeled "The default effort for this model", press `s` (`enter` for the slider picker).
+    An approximation: the session is pinned to the current model's default and does not follow later model changes; if organization settings changed the default and the label cannot be found, the node cancels and errors.
+  - Display: transcript replies record actual levels, never auto; the Auto label lasts only until the next reply, then shows its level (for example Medium).
+  - Selecting auto in Settings › Claude Code Settings removes `effortLevel` (`claudeconfig.go`).
+- While the picker is open, herdr reports the Agent blocked; after 1.5 seconds the hub would push it to the phone as a terminal dialog needing attention, so the node suppresses blocked while operating it.
 
-ultracode 的服务端契约已在 #3427 增加（[protocol.md](protocol.md)「Claude Code ultracode」）：它是独立于思考强度的会话开关，
-默认关、不记选择、恢复后不自动重开。Session 的 `ultracode` 缺失表示未知，`ultracode_pending` 表示等下一轮生效，
-`ultracode_note` 是不能开启的原因，`ultracode_lost_at` 用于恢复后的提示和重新打开。Apple 的开关、提示、按钮和 `ChatCache` 目录版本升级由 #3430 实现；
-此处只记录接口，不表示当前 iOS / Mac / 手表已经有这些控件，主对话也不开放 ultracode。
+The ultracode server contract was added in #3427 ([protocol.md](protocol.md) ("Claude Code ultracode")): a session toggle independent of effort,
+off by default, not remembered, and not automatically reenabled after recovery. Missing Session `ultracode` means unknown; `ultracode_pending` means it takes effect next turn;
+`ultracode_note` explains why it cannot be enabled, and `ultracode_lost_at` supports the recovery notice and reenable action. Apple toggles, notices, buttons and the `ChatCache` directory-version bump are implemented by #3430;
+this records only the API, not that iOS / Mac / watch already have those controls. The main chat does not offer ultracode.
 
-## 会话分诊（设置 › 会话分诊，#3078）
+## Session triage (Settings › Session triage, #3078)
 
-在「助手」下面，和网页、安卓一样四个开关（`GET / PUT /api/v1/agents/triage`，存在 hub，各端一致，默认全关；含义和花谁的 token 见 `docs/agent-work.md`「开关」）：
-总开关和「分诊模型」（打开模型配置的 `agent.triage`），下面一段是要你决定的开卡片、出错自动继续、到点叫醒，总开关关着时不能改。
-改了立刻存，没改成退回原值并在页顶说原因；老 hub（404）只说不支持。`TriageSettingsModel` / `TriageSettingsView`，Mac 共用。
+Below Assistant, the same four toggles as web and Android (`GET / PUT /api/v1/agents/triage`, stored on the hub, consistent across clients, all off by default; meanings and whose tokens are spent in `docs/agent-work.md` ("Switches")):
+master switch and Triage model (opens model configuration `agent.triage`), followed by cards for decisions, automatically continuing after errors, and scheduled wake-ups; disabled while the master switch is off.
+Changes save immediately; failure restores the old value and explains why at the top; old hubs (404) show only unsupported. `TriageSettingsModel` / `TriageSettingsView`, shared with Mac.
 
-## 翻译（设置 › 翻译，2026-10-31）
+## Translation (Settings › Translation, 2026-10-31)
 
-开了「自动翻译」以后，内容不是目标语言（默认简体中文）就自动翻译，随时可以切回原文。
+With Automatic translation enabled, content not in the target language (Simplified Chinese by default) translates automatically; you can switch back to the original anytime.
 
-- 范围：**邮件**（默认开）；**飞书会话**默认一个都不翻（消息太多），只翻设置里选中的会话（`TranslationChatPicker`：置顶 + 最近的会话，可搜索），
-  而且只翻别人发的。设置存在本机（`@AppStorage` 的 `translate.*`，`TranslationPrefs`）。
-- 要不要翻在手机上判断（NaturalLanguage 的 `NLLanguageRecognizer`，取前 1500 字；字母少于 6 个不判；简繁中文算同一种语言，短文本里它分不清）。
-  结果按文本记在 `Translator` 里，行的 body 里不跑识别。
-- 翻译在管理者（助手进程，`server/internal/assistant/inbox_translate.go`，2026-11-04 和收件箱一起从 hub 挪过去，接口经 hub 转，助手不在时 503），
-  用模型配置的「文本与邮件翻译」用途（用户定的：不需要强模型，现在是 gpt-6.1-terra，两句话约 2 秒）。
-  邮件按引用翻（`POST /api/v1/translate/mail {account_id, uid, mailbox, target}`，管理者请 hub 读信，HTML 信用 `mail.ReadableText` 转成保留段落的文本，
-  正文最多 12000 字，超出的标 `clipped`）；飞书消息批量翻（`POST /api/v1/translate {texts≤30, target}`，App 把 300 ms 内出现的行攒成一批）。
-  管理者在内存里按模型和内容缓存（换了模型重新翻），App 在本次运行里缓存。
-- **邮件来了就翻，不等打开**（2026-11-01 用户要求）：App 把 设置 › 翻译 随设备偏好发给 hub（`PUT /api/v1/devices/{id}/prefs {"translate":{enabled,target,mail}}`，
-  连上时和改设置时，`Translator.syncPrefs`）。管理者每次收完邮件，对没处理的邮件里文字和目标语言不是同一种文字的（管理者的 `assistant/inbox_translate.go` 的 `foreignScript`：
-  按文字体系判断，中文目标时汉字少于两成或有假名算外文；拉丁字母的语言之间分不出，英文目标不翻法文），在后台逐封翻译，存在收件箱条目的
-  `translations[目标语言]` 里（库里也有，重启不丢）。列表直接显示译后的标题和摘要（标题旁一个翻译小图标），打开邮件时 `translate/mail` 先取这份，立刻出来。
-  只有某台设备打开了「翻译 › 邮件」才翻；关掉后不再翻新的。
-- 界面：邮件页标题和正文换成译文，正文上方一行「已翻译成简体中文 · 显示原文」；飞书消息气泡下方一行灰色译文（`LarkTranslationLine`）。
-- 截图 / 测试：`mock_hub.py` 的 504 号邮件是英文、「设计评审」（f2）会话里有英文消息，`/api/v1/translate` 回「【译】原文」；
-  UI 测试 `TranslationTests`；DEBUG `-openTranslationSettings YES` 打开设置页。
+- Scope: **Email** (on by default); **Lark chats** default to none (too many messages), translating only chats selected in Settings (`TranslationChatPicker`: pinned + recent chats, searchable),
+  and only others' messages. Preferences stay local (`@AppStorage` `translate.*`, `TranslationPrefs`).
+- The phone decides whether to translate (NaturalLanguage `NLLanguageRecognizer`, first 1500 characters; fewer than 6 letters skips detection; Simplified / Traditional Chinese count as one language, indistinguishable in short text).
+  Results are cached by text in `Translator`; detection does not run inside row bodies.
+- Translation runs in the manager (assistant process, `server/internal/assistant/inbox_translate.go`, moved with the Inbox from the hub on 2026-11-04; API forwarded through the hub, 503 if the assistant is absent),
+  using the Text and email translation model purpose (user decision: no strong model needed, currently gpt-6.1-terra, about 2 seconds for two sentences).
+  Email translates by reference (`POST /api/v1/translate/mail {account_id, uid, mailbox, target}`; the manager asks the hub to read mail, converts HTML with `mail.ReadableText` to paragraph-preserving text,
+  body at most 12000 characters, excess marked `clipped`); Lark messages translate in batches (`POST /api/v1/translate {texts≤30, target}`; the App batches rows appearing within 300 ms).
+  The manager caches in memory by model and content (model changes retranslate), the App caches for this run.
+- **Translate on mail arrival, not opening** (requested 2026-11-01): the App sends Settings › Translation with device preferences to the hub (`PUT /api/v1/devices/{id}/prefs {"translate":{enabled,target,mail}}`,
+  on connection and preference changes, `Translator.syncPrefs`). After each mail collection, the manager translates unhandled mail whose script differs from the target in the background (`foreignScript` in `assistant/inbox_translate.go`:
+  by writing system; for Chinese targets, under 20% Han characters or any kana counts as foreign; Latin-script languages cannot be distinguished, so French is not translated for an English target), storing it in Inbox-item
+  `translations[target language]` (also in the database, survives restarts). The list directly shows translated titles and summaries (translation icon by the title); opening mail retrieves this first via `translate/mail`, immediately.
+  Only runs if some device enabled Translation › Email; disabling stops new translations.
+- UI: mail titles and bodies become translations, with "Translated to Simplified Chinese · Show original" above the body; Lark bubbles have a gray translation line below (`LarkTranslationLine`).
+- Screenshots / tests: `mock_hub.py` mail 504 is English; the Design review (f2) chat has English messages; `/api/v1/translate` returns "【译】原文" ("[Translated] original text");
+  UI tests `TranslationTests`; DEBUG `-openTranslationSettings YES` opens Settings.
 
-## 界面语言（国际化，#2457）
+## Interface language (internationalization, #2457)
 
-iOS、Mac、visionOS、手表和扩展的界面有简体中文、English、日本語三种（共同约定见 `docs/i18n.md`）。
+iOS, Mac, visionOS, watch and extensions support Simplified Chinese, English and 日本語 (shared rules in `docs/i18n.md`).
 
-- **词条**：String Catalog，源语言 zh-Hans，**中文原文就是 key**（现有界面、单元测试和像素 / 布局基线都不变）。
-  `apple/Shared/Localization/Localizable.xcstrings` 是所有 target 共用的一份（App、Mac、visionOS、手表经 `Shared/` 编进去，小组件在 `project.yml` 里单独加）；
-  快捷指令的说法在 `Persona/Intents/AppShortcuts.xcstrings`；权限说明在各 target 的 `InfoPlist.xcstrings`（iOS、Mac、visionOS、手表各一份，因为文字不完全一样）。运行时显示的是词条不是 `Info.plist`：改权限说明要同时改 `Info.plist` 和词条的三种语言，`check` 拦 en 和 `Info.plist` 不一致、`Info.plist` 里有词条里没有的 `*UsageDescription`（#4790）。
-  `knownRegions` 由 XcodeGen 从这些 catalog 里的语言生成，不手改 pbxproj。Info.plist 的 `CFBundleDevelopmentRegion` 是 `en`：系统语言是三种之外的，Bundle 落到英文。
-- **写代码**：`Text("…")`、`Button("…")`、`Label`、`.navigationTitle` 这类 SwiftUI 参数本来就是 `LocalizedStringKey`；其余给人看的 `String` 一律 `String(localized: "…")`，
-  App Intents 用 `LocalizedStringResource`。整句带插值写成一个词条（`"共 \(n) 个"`），不拼半句；数量的复数在 catalog 里给英文 one / other；
-  日期、数字用 `FormatStyle`，不写死 `zh_CN`（机器格式仍是 `en_US_POSIX`）。同一句中文在不同地方要不同译法时，用 `String(localized: "<英文 key>", defaultValue: "关闭")` 拆开。
-  不是界面的中文（发给 hub / Agent 的提示词和消息、协议值、匹配 hub 或终端文字、日志、预览、DEBUG 页）行尾标 `// i18n-ignore`，整个文件是样例数据的在前 20 行写 `// i18n-ignore-file: <原因>`。
-- **加新文案后**：`xcodebuild … SWIFT_EMIT_LOC_STRINGS=YES` 编一次，`python3 scripts/i18n/apple_l10n.py sync <DerivedData>` 把新词条加进 catalog（Xcode IDE 编译时会自动做，命令行不会），
-  再补上 en、ja。`python3 scripts/i18n/apple_l10n.py check`（`scripts/test/test_apple_l10n.py` 跑它）查三种语言齐全、占位符一致、源码里没有漏进 catalog 的中文；
-  `apple_l10n.py strict <DerivedData>` 用编译器的提取结果逐个核对没被本地化的中文字面量。
-- **选语言**：设置 › 外观 › 语言：跟随系统（默认）/ 简体中文 / English / 日本語（`AppLanguage`、`LanguageStore`，`Shared/Localization/AppLanguage.swift`）。
-  选择在 App 内做而不是只靠系统的「按 App 选语言」：docs/i18n.md 要求统一的设置项；跟随系统要按 docs/i18n.md 的规则解析（法文 → English、繁体 → 简体中文），系统的 Bundle 匹配做不到；
-  手表和扩展没有自己的入口；Mac 上系统的按 App 语言藏得很深。两边是同一个值：App 把结果写进自己的 `AppleLanguages`（系统的按 App 语言写的也是它），
-  在系统设置里改了，下次打开 App 时被当成新的选择。
-- **什么时候生效**：Foundation 在进程启动时选定语言，`String(localized:)` 在运行中换不了（试过换 `Bundle` 的类、改 `AppleLanguages`，都只对 SwiftUI 的 `Text` 有效，会变成半中半英），
-  所以选了以后**下次打开 App 生效**，设置页提示，Mac 上有「立即重新打开」。`-AppleLanguages (ja)` 启动参数这一次优先、不保存（截图、测试）。
-- **手表、扩展**：手表跟随 iPhone：iPhone 经 WatchConnectivity 的 application context 发 `language`，手表写进自己的 `AppleLanguages`；没收到前按手表自己的系统语言。
-  小组件、实时活动读 App Group 里的 `persona.language.resolved`：扩展进程一跑几个小时，所以它画的文字用 `interfaceText(_:)`（带这个语言的 `LocalizedStringResource`）
-  和 `.environment(\.locale, LanguageStore.drawingLocale)`，App 改了语言下一次刷新就换；手表下次启动生效。
-- **告诉 hub**：每个 HTTP 请求和 WebSocket 握手带 `Accept-Language: <代码>`，连上后发 `{"type":"client_hello","locale":…}`（只带 locale，features / 心跳 / platform 不变），
-  `POST /api/v1/devices` 带 `locale`。值是这次启动的界面语言（`LanguageStore.launched`）。
-- **代码注释用英文**（#5055）：`python3 scripts/i18n/apple_comments.py check`（`scripts/test/test_apple_comments.py` 跑它）查 apple/ 下的注释里「」外没有中日文；「」里只放中文文档的标题（`docs/ios.md`「界面语言」）或代码要逐字匹配的原文。
-- **测试**：scheme 的测试动作固定 `language: zh-Hans`、`region: CN`，单元测试、UI 测试、像素 / 布局测试都按中文跑；`AppLanguageTests` 测解析规则和存取。
-- **还没覆盖**：hub 推来的文字（实时活动的标题、详情和「终端等你处理」、推送正文、助手回答）由 hub 按语言出；体验模式的演示数据（对话、人名）只有中文。
+- **Entries**: String Catalog, source language zh-Hans, **Chinese source text is the key** (existing UI, unit tests and pixel / layout baselines unchanged).
+  `apple/Shared/Localization/Localizable.xcstrings` is shared across all targets (App, Mac, visionOS and watch compile it through `Shared/`; widgets add it separately in `project.yml`);
+  shortcut phrases live in `Persona/Intents/AppShortcuts.xcstrings`; permission explanations in each target's `InfoPlist.xcstrings` (one each for iOS, Mac, visionOS, watch because wording differs). Runtime displays catalog text, not `Info.plist`: update both `Info.plist` and all three catalog languages for permission changes; `check` rejects en mismatches with `Info.plist` and `*UsageDescription` keys absent from the catalog (#4790).
+  XcodeGen generates `knownRegions` from catalog languages; do not edit pbxproj manually. `Info.plist` `CFBundleDevelopmentRegion` is `en`: other system languages fall back to English.
+- **Code**: SwiftUI `Text("…")`, `Button("…")`, `Label`, `.navigationTitle` already take `LocalizedStringKey`; every other user-facing `String` uses `String(localized: "…")`,
+  App Intents use `LocalizedStringResource`. Interpolated sentences are one entry (`"共 \(n) 个"`, "\(n) total"), never assembled fragments; English plurals get one / other in the catalog;
+  dates and numbers use `FormatStyle`, never hard-coded `zh_CN` (machine formats still `en_US_POSIX`). When identical Chinese needs different translations, separate it with `String(localized: "<English key>", defaultValue: "关闭")` ("Close").
+  Non-UI Chinese (hub / Agent prompts and messages, protocol values, matching hub or terminal text, logs, previews, DEBUG pages) gets `// i18n-ignore` at line end; sample-data-only files add `// i18n-ignore-file: <reason>` within the first 20 lines.
+- **After adding wording**: build once with `xcodebuild … SWIFT_EMIT_LOC_STRINGS=YES`, then `python3 scripts/i18n/apple_l10n.py sync <DerivedData>` adds new entries to the catalog (Xcode IDE builds do it automatically; CLI builds do not),
+  then fill en and ja. `python3 scripts/i18n/apple_l10n.py check` (run by `scripts/test/test_apple_l10n.py`) checks all three languages, matching placeholders, and source Chinese absent from the catalog;
+  `apple_l10n.py strict <DerivedData>` checks each unlocalized Chinese literal against compiler extraction.
+- **Choosing**: Settings › Appearance › Language: Match System (default) / 简体中文 / English / 日本語 (`AppLanguage`, `LanguageStore`, `Shared/Localization/AppLanguage.swift`).
+  An in-App setting rather than only system per-App language: docs/i18n.md requires a common setting; Match System must use docs/i18n.md rules (French → English, Traditional → Simplified Chinese), which Bundle matching cannot provide;
+  watch and extensions lack their own entry points; Mac's system per-App language is deeply buried. Both are the same value: the App writes its result to `AppleLanguages` (also used by the system's per-App language),
+  and system-settings changes become a new choice on the next App open.
+- **When effective**: Foundation chooses language at process start; `String(localized:)` cannot change at runtime (changing `Bundle`'s class or `AppleLanguages` only affected SwiftUI `Text`, leaving mixed Chinese and English),
+  so choices **take effect next time the App opens**, explained in Settings; Mac has "Reopen now". Launch argument `-AppleLanguages (ja)` overrides for this run only, without saving (screenshots, tests).
+- **Watch, extensions**: watch follows iPhone, which sends `language` in WatchConnectivity application context; watch writes its own `AppleLanguages`; before receipt, uses its system language.
+  Widgets and Live Activities read App Group `persona.language.resolved`: extension processes run for hours, so their text uses `interfaceText(_:)` (`LocalizedStringResource` with that language)
+  and `.environment(\.locale, LanguageStore.drawingLocale)`; App language changes affect their next refresh, watch next launch.
+- **Tell the hub**: every HTTP request and WebSocket handshake carries `Accept-Language: <code>`; after connection send `{"type":"client_hello","locale":…}` (locale only; features / heartbeat / platform unchanged),
+  `POST /api/v1/devices` includes `locale`, using this launch's interface language (`LanguageStore.launched`).
+- **Code comments are English** (#5055): `python3 scripts/i18n/apple_comments.py check` (run by `scripts/test/test_apple_comments.py`) checks that comments under apple/ contain no Chinese or Japanese outside 「」; those brackets hold only Chinese document section titles (such as `docs/ios.md`「界面语言」, "Interface language") or exact text matched by code.
+- **Tests**: scheme test actions pin `language: zh-Hans`, `region: CN`; unit, UI and pixel / layout tests all run in Chinese; `AppLanguageTests` covers parsing and storage.
+- **Not covered yet**: hub-pushed text (Live Activity titles, details and terminal-needs-attention messages, push bodies, assistant replies) is localized by the hub; demo data (chats, names) is Chinese only.
 
-## 设计语言
+## Design language
 
-- 代码结构（2026-10-31，方案见 bui-adopt 的 ARCH-PLAN）：
-  - `Shared/Design/`：token，手表也编译。`Theme`（字体级别和强调、间距、圆角、行高、动画、颜色角色）、`Icons`（`Theme.Icon` 和 `Theme.Brand`）、
-    `Palette`（基础色，小组件 / 实时活动也编译它）、`StyleSpec`（组合后的一个值）、`ColorSpec`（主题色、迁移）和 `Styles/` 下每种风格一个文件。
-  - `Persona/DesignSystem/`：只有 iOS 的配方和组件：`Styling`（表面、按钮、页面底色按 `spec.surface` / `spec.buttons` 画）、`Components`
-    （Chip、CountBadge、EmptyStateView、Monogram、`Loadable` / `LoadableContent`……）、`Notice`（`NoticeBanner`：页面内容顶上一句提示，
-    语气色（caution / danger）的图标（默认是语气自己的，也可以给一个说明是什么事的，比如等着的钟）+ 次要灰字 + 可选一个按钮
-    （手机上在字下面，Mac 在右边），底是语气色的浅底表面，和对话里的 `AttentionNote` 一个样子；不能关掉，说的事不成立了就消失，
-    收件箱的「等分拣」横幅用它，#1773）、`TextSize`。
-  - **加一种风格**：在 `Shared/Design/Styles/` 写一个 `ComponentSpec`（表面画法、按钮、字体设计、组件套件、底色怎么来、描边、飞书卡片、
-    它自己的颜色），`AppStyle` 加一个 case，`component` 里对上。**加一种主题色**：写一个 `ColorSpec`（主色、气泡和字、要不要压暗、
-    淡色调可以手调或按主色算），`ThemeColor` 加一个 case。别的代码只读 `StyleSpec.current`，不要 `switch AppStyle` / `ThemeColor`。
-    `StyleSpecTests` 会把每种风格和每种主题色（含一个黄色形象）两两组合，查深浅色的对比度。
-  - 检查（JarvisTests，扫源码）：`TypeScaleTests`（不写系统字号、不写死字号、强调用 `labelStrong` 这类 token 而不是在级别上 `.weight(`、
-    竖向间距在网格上）、`IconVocabularyTests`、`TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；
-    减少后删掉 `TokenBaseline.json` 重跑一次记下新的基线）、`StyleSpecTests`。Debug 编译对超过 150ms 的类型检查报警告（发版机器会超时）。
-- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组「形象」「主题色」「界面风格」「深浅色」「布局」（深浅色只在 iPhone / iPad，布局只在 iPhone；App 图标 2026-11-05 合进形象，没有单独一行，#3203），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
-- 外观是设置 › 外观里三个互不影响的选择（2026-10-31 用户要求：「形象，主题色和 UI 组件的选择」分开；以前一个界面风格同时管颜色和组件，
-  形象又盖掉主色，选了黏土再选奶娃紫色就没了，想要 Claude 的珊瑚橙配 Island 的卡片也做不到）：
-  - **形象**（`PersonaPicker`，`docs/persona.md`）：名字、头像、顶栏的状态圆点和动画，不改颜色。
-  - **主题色**（`ThemeColorPicker`，`ThemeColor`，存 `ui.color`，默认「跟随界面风格」）：主色（能点的东西、链接、选中态、Tab 的 tint）、
-    自己的气泡和上面的字、飞书页面的链接和「我的气泡」、黏土 / Island 底色的淡色调。选项：跟随界面风格（每种风格原来的颜色，看起来和拆开前一模一样）、
-    跟随形象（形象带配色时才出现）、系统蓝、珊瑚橙（原来的 Claude 风格）、薰衣草紫、青、飞书蓝。
-  - **界面风格**（`StylePicker`，`AppStyle`，存 `ui.style`，默认液态玻璃）：浮层和卡片的画法、按钮、字体、对话里的组件（BeautifulUI）、展开的工作过程画成卡片还是时间线（`workList`），以及底色从哪来。
-  - 三个选择组合成一个 `StyleSpec`（`StyleSpec.compose`，`StyleSpec.current`），Theme 和 Styling 只读它；任何一个变了 RootView 都按 `AppModel.look` 整棵重建。
-  - **底色和卡片色的归属**：玻璃风格（液态玻璃、BeautifulUI）用系统的页面和卡片，飞书用自己的浅灰 + 白卡片，这三种不随主题色变；
-    黏土、Island 的底色本来就是一种颜色的淡色（薰衣草紫、雾青），和组件绑在一起不好看（紫底配蜂蜜色按钮），所以改成**主题色的淡色调**
-    （`ComponentSpec.Canvas.wash` / `.islands`，`ColorSpec.Wash`）：黏土的页面、卡片、软块的彩色阴影都用它，Island 的页面用它、卡片仍是白色（深色下用淡色调的卡片）。
-    薰衣草紫和青的淡色调是原来手调的值，别的颜色按主色算（浅色页面九成白、卡片再浅一档；深色页面压到比系统分组单元格 #1C1C1E 暗）。
-  - **Claude 不再是一种风格**：它和液态玻璃只差颜色，拆开后只是主题色「珊瑚橙」；风格选择里没有重复的两张卡。
-  - **迁移**（`AppearanceChoice`，第一次读到没有 `ui.color` 的设置时）：原来的风格 → 同名风格 + 跟随界面风格；原来的 Claude → 液态玻璃 + 珊瑚橙；
-    选过形象的（原来会被形象染色）→ 跟随形象。迁移后写回两个键。看起来会变的有三处：黏土 / Island 加形象的老用户，底色从紫 / 青变成形象色的淡色调；飞书加形象的老用户，飞书页面的链接和自己的气泡变成形象色；原来的 Claude 风格展开的工作过程跟着液态玻璃变成时间线（原来是灰卡片）。
-  - 主题色页（`ThemeColorSettingsPage`）上面是一块用实时 token 画的小样（自己的气泡、带链接的回复卡片、两个按钮），下面每个颜色一个圆点；
-    界面风格页的预览卡按「这个风格 + 现在的主题色」画（跟随界面风格时就是各风格自己的颜色）。
+- Structure (2026-10-31, design in bui-adopt ARCH-PLAN):
+  - `Shared/Design/`: tokens, also compiled by watch. `Theme` (font levels/emphasis, spacing, radius, line height, motion, color roles), `Icons` (`Theme.Icon`, `Theme.Brand`),
+    `Palette` (base colors, also widgets/Live Activities), `StyleSpec` (composed value), `ColorSpec` (theme colors, migration), one file per style under `Styles/`.
+  - `Persona/DesignSystem/`: iOS-only recipes/components: `Styling` (surfaces/buttons/page backgrounds from `spec.surface` / `spec.buttons`), `Components`
+    (Chip, CountBadge, EmptyStateView, Monogram, `Loadable` / `LoadableContent`…), `Notice` (`NoticeBanner`: short notice atop page content,
+    tone-colored caution/danger icon (default tone icon or specific meaning, e.g. waiting clock) + secondary gray text + optional button
+    (below on phone, right on Mac), pale tone surface like chat `AttentionNote`; not dismissible, disappears when no longer applicable,
+    used for Inbox Awaiting triage banner, #1773), `TextSize`.
+  - **Add style**: a `ComponentSpec` in `Shared/Design/Styles/` (surface rendering, buttons, font design, component kit, canvas source, strokes, Lark cards,
+    its own colors), `AppStyle` case, matching `component`. **Add theme color**: `ColorSpec` (accent, bubbles/text, darkening,
+    washes manually tuned or derived), `ThemeColor` case. Other code reads `StyleSpec.current`, no `switch AppStyle` / `ThemeColor`.
+    `StyleSpecTests` combines every style/color (including yellow avatar) and checks light/dark contrast.
+  - Source checks (JarvisTests): `TypeScaleTests` (no system font styles/hard-coded sizes, emphasis via `labelStrong` rather than `.weight(` on a level,
+    vertical grid spacing), `IconVocabularyTests`, `TokenRatchetTests` (per-file hard-coded padding/horizontal spacing/radius/hex colors/animations/fixed dimensions may only decrease;
+    after reduction delete `TokenBaseline.json` and rerun to record baseline), `StyleSpecTests`. Debug warns on type checking over 150ms (release machine times out).
+- Settings › Appearance (requested 2026-11-01, like Connectors): home group Avatar / Theme Color / Interface Style / Light & Dark / Layout (Light & Dark iPhone/iPad only, Layout iPhone only; App icon merged into Avatar 2026-11-05, no separate row, #3203), current value right, each opens its own page (`AppearanceSettingsView.swift`).
+- Appearance has three independent choices (requested 2026-10-31: separate avatar, color and UI components; formerly style controlled colors/components,
+  avatar overwrote accent, Clay then a baby avatar lost purple, Claude coral with Island cards impossible):
+  - **Avatar** (`PersonaPicker`, `docs/persona.md`): name, face, top-bar state dot/animation, no color change.
+  - **Theme color** (`ThemeColorPicker`, `ThemeColor`, `ui.color`, default Match Interface Style): accent (actions, links, selections, tab tint),
+    own bubbles/text, Lark links/own bubbles, Clay/Island background washes. Choices Match Interface Style (original colors, pixel-identical before separation),
+    Match Avatar (only with avatar palette), System Blue, Coral (former Claude style), Lavender, Teal, Lark Blue.
+  - **Interface style** (`StylePicker`, `AppStyle`, `ui.style`, default Liquid Glass): overlays/cards/buttons/fonts/chat components (BeautifulUI), expanded work card/timeline (`workList`), canvas source.
+  - Choices compose `StyleSpec` (`StyleSpec.compose`, `StyleSpec.current`), read by Theme/Styling; changing any rebuilds RootView via `AppModel.look`.
+  - **Canvas/card ownership**: glass styles (Liquid Glass, BeautifulUI) use system pages/cards; Lark uses its own light gray/white cards, unaffected by theme color;
+    Clay/Island originally used colored washes (lavender/misty teal), poorly coupled to components (purple canvas/honey buttons), now **theme-color washes**
+    (`ComponentSpec.Canvas.wash` / `.islands`, `ColorSpec.Wash`): Clay pages/cards/soft-block colored shadows, Island pages with white cards (wash cards in dark mode).
+    Lavender/teal retain hand-tuned values; others derive from accent (light pages 90% white, cards lighter; dark pages darker than system grouped cells #1C1C1E).
+  - **Claude is no longer a style**: only color differed from Liquid Glass, now Coral theme color, no duplicate style cards.
+  - **Migration** (`AppearanceChoice`, first settings read without `ui.color`): old style → same style + Match Interface Style; Claude → Liquid Glass + Coral;
+    selected avatar (formerly tinting) → Match Avatar. Writes both keys. Three visible changes: old Clay/Island+avatar users get avatar-color washes instead of purple/teal; Lark+avatar links/bubbles get avatar color; old Claude expanded work follows Liquid Glass timeline instead of gray cards.
+  - `ThemeColorSettingsPage` sample uses live tokens (own bubble, reply card/link, two buttons), color dots below;
+    style preview cards render each style + current theme color (Match Interface Style uses each own colors).
 
-  | 风格 | 表面 / 按钮 | 底色 | 自己的颜色 |
+  | Style | Surfaces / buttons | Canvas | Own colors |
   | --- | --- | --- | --- |
-  | 液态玻璃 | Liquid Glass | 系统 | 系统蓝 `#007AFF`，浅蓝气泡 `#DCEAFF` 黑字（深色 `#1D3557`） |
-  | 黏土 | 实心软块：左上高光 + 右下彩色阴影、白描边，圆体字，圆角 24，软按钮 | 主题色的淡色调 | 薰衣草紫 `#7A5AF8`（深色 `#8979EB`），紫气泡 `#6759D3` 白字，淡紫底 `#EFEAF7`（深色 `#0A0510`） |
-  | Island | 白色悬浮卡片 + 大而柔的阴影，圆角 26，软按钮 | 主题色的淡色调，白卡片 | 青 `#27747F`（深色 `#2A9798`），墨黑气泡白字（深色反过来），雾青底 `#E6F1EF` |
-  | 飞书 | 白卡片 + 发丝描边、无阴影，圆角 10，按钮 bordered | 浅灰 `#F5F6F7`（不随主题色） | 飞书蓝 `#3370FF`，浅蓝气泡 `#D1E3FF` 黑字 |
-  | BeautifulUI | 同液态玻璃，换 BeautifulUI 的组件 | 系统 | 系统蓝 |
+  | Liquid Glass | Liquid Glass | System | System blue `#007AFF`, pale blue bubble `#DCEAFF` black text (dark `#1D3557`) |
+  | Clay | Solid soft blocks: top-left highlight + bottom-right colored shadow, white stroke, rounded font, radius 24, soft buttons | Theme-color wash | Lavender `#7A5AF8` (dark `#8979EB`), purple bubble `#6759D3` white text, pale purple canvas `#EFEAF7` (dark `#0A0510`) |
+  | Island | Floating white cards + large soft shadow, radius 26, soft buttons | Theme-color wash, white cards | Teal `#27747F` (dark `#2A9798`), ink bubble white text (reversed dark), misty teal canvas `#E6F1EF` |
+  | Lark | White cards + hairline stroke, no shadow, radius 10, bordered buttons | Light gray `#F5F6F7` (theme-independent) | Lark blue `#3370FF`, pale blue bubble `#D1E3FF` black text |
+  | BeautifulUI | Liquid Glass with BeautifulUI components | System | System blue |
 
-  珊瑚橙（原 Claude）：主色 `#D4683F`（深色 `#CD6E45`），深珊瑚气泡 `#B24C25` 白字。
+  Coral (former Claude): accent `#D4683F` (dark `#CD6E45`), deep coral bubbles `#B24C25` white text.
 
-  可读性底线（2026-10-30 修过一轮，数字见 jarvis-p1 的 themes-fix 报告；拆开后每种风格 × 每种主题色都要过）：实心按钮和选中胶囊的白字 ≥ 3.5:1（所以深色主色不能太亮），
-  自己气泡的白字 ≥ 4.5:1，主色当链接对页面 ≥ 3:1（淡色调页面上最紧的是珊瑚橙配黏土，3.2:1）；彩色气泡的渐变只往下压暗（`Theme.deepening`），不能提亮顶部。黏土 / Island 的实心按钮
-  （`SoftButtonStyle`）用当前 tint 填色、至少 44pt 高：调用处 `.tint(Theme.danger)` 的中断、关闭 Agent 在每套风格下都是红色。
-  自己画背景的滚动页用 `.themedGroupedPage()`，List / Form 用 `.themedPage()`，否则黏土 / Island / 飞书下切页时底色会跳。
-  `Theme` 的颜色按当前的组合取值（设置里的预览卡用 `StyleSpec.compose` 算别的组合）；面板用 `.surface(tint:interactive:in:)`、
-  按钮用 `.themedButton(prominent:)`、列表页面 `.themedPage()`、plain 列表的行 `.themedRow()`，不要直接写 `glassEffect` / `.glass`。
-  切换风格或主题色时 RootView 以 `AppModel.look` 为 id 整棵重建（token 是静态的），当前 tab 和打开的会话本来就会记住。飞书页面的框架色
-  （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡）跟着主题色走（主题色「飞书蓝」是飞书网关自己的那套），卡片底和描边跟着风格走，卡片内容的飞书具名色板不变。
-  调试：`-ui.style glass|clay|island|lark|beautiful`、`-ui.color style|persona|blue|coral|lavender|teal|lark`（UserDefaults 参数域，Release 也认，不算 DEBUG 开关；
-  `-ui.style claude` 仍当液态玻璃 + 珊瑚橙）。
-- **深浅色**（2026-11-03，#710）：设置 › 外观 › 深浅色，跟随系统（默认，和以前一样）/ 浅色 / 深色（`ColorSchemeChoice`，存 `ui.scheme`，只在 iPhone / iPad）。
-  - 生效在窗口上：`overrideUserInterfaceStyle`（`ColorSchemeChoice.apply`，所有场景的所有窗口），换选项时由 `AppModel.colorScheme` 套上，新窗口（启动、
-    iPad 另开一个场景）由 RootView 的 `onAppear` 套上。sheet、弹窗、键盘、WebView 里的网页（`prefers-color-scheme`）跟着窗口走。
-    不用 `preferredColorScheme`：它设回 nil 时，开着的 sheet 不一定回到系统的样子；而窗口的 `.unspecified` 就是交还给系统。
-  - 不整棵重建（`look` 不变）：token 都是按 trait 取值的动态颜色，窗口的 trait 一变就重画；只读 `@Environment(\.colorScheme)` 的视图也跟着变。
-    自己强制深浅色的地方不受影响（图片编辑器、消息菜单是深色，分享卡片、终端按自己的设置）。
-  - 系统画的东西仍跟随系统：灵动岛和锁屏的实时活动、小组件、手表、通知，以及 App 启动时的启动屏（`LaunchBackground`）。
-  - App 图标跟着走（2026-11-03 用户要求：浅色用浅色那张，深色用深色那张）：主屏图标用哪一面由系统按主屏的外观选，App 改不了，
-    所以纸色（团子的图标、主图标）多两套备用图标集：`AppIcon-PaperLight` 两种外观都是浅色那张、`AppIcon-PaperDark` 都是深色那张（着色照旧），
-    `make_alt_icons.py` 从 `AppIcon` 的图写出来。选了浅色 / 深色时 `AppIconModel.follow` 换到那一套，
-    跟随系统换回两面都有的那套（纸色就是主图标）；换形象时也按当前的深浅色挑（`AppIconChoice.iconName(for:)`）。
-    每次换系统都会弹「已更改图标」的提示（换图标的 API 就是这样，绕不过）；面罩、汇流的图标只有一套，不动。
-    `AppIconModel` 记着最新的深浅色：切换还在进行时（系统的提示框还没点）又改了深浅色，这次切完会再核对一遍、接着切到最新的那套，
-    不会停在错的上面（geminiwen 对 #714 的评审）；App 每次回到前台也 `follow` 一次（启动参数给的深浅色、被系统打断的切换都能对上），
-    已经对上就什么都不做、不弹提示。系统里记着这一版已经删掉的图标（余烬 / 薄荷 / 石墨，蜜桃 / p. / 气场）而形象要的是主图标时不动它：
-    主屏本来就显示主图标，回到前台自己去切会凭空弹提示。
-    App 里的标志（`AppGlyph`）按主屏实际显示的那一面画：纸色在浅色 / 深色下画那一面，其他和跟随系统画系统的那一面（读屏幕的 trait，
-    窗口的已经被 App 的深浅色盖住了）。调试命令 `set-appearance` 也走 `AppModel.colorScheme`（会存下来）。
-    UI 测试 `ColorSchemeIconTests`（体验模式）用 `probe.scheme` 查页面真的画成了那一面，失败时 tearDown 换回跟随系统；
-    iOS 26.0.1、26.3.1 模拟器不支持备用图标（`supportsAlternateIcons` 为 false），主屏图标的切换要真机看。
-  - 第一步先在液态玻璃下检查（列表、玻璃表面、玻璃按钮、sheet）；其他风格本来就适配系统深色，机制相同。Mac 和 Android 还没有这个选项：
-    Mac 上只设 `NSApp.appearance` 时 List 的行仍是浅色的颜色（`MacSnapshot.colorScheme` 的注释），每个窗口还要 `preferredColorScheme`，另做。
-  - 调试：`-ui.scheme light|dark|system`（UserDefaults 参数域，和 `-ui.style` 一样）；`-tab settings -openAppearance scheme` 打开这一页。
-- 状态色不随风格变，只有一张表 `Shared/StatusPalette.swift`（App、手表、实时活动都编译它）：需要你红、工作中琥珀、完成未看绿、已看灰、未运行浅灰，和 herdr 侧边栏一致（`docs/agent-states.md`）。每种状态三个值：`dot`（圆点、图标、填充）、`text`（同色相加深，小字对白底 ≥ 4.5:1）、`tint`（浅底）；界面用 `AgentState.tone`。提问 / 计划 / 授权 / 终端对话框都算需要你，一律用红；工作中的转圈用琥珀，旁边的字用次要灰。不是 Agent 状态的东西不借状态色，用 `Theme` 里各自的 token：`Theme.Diff`（diff 和 Git 的 ± 符号、计数、浅底，正文保持黑字）、`caution`（连接中、过期、截断、版本不一致这类提醒，配三角图标，不画成圆点）、`ai`（✦ AI 摘要）、`loop`（循环和待唤醒）、`positive`（成功、已连接、在线、做完的待办）、`Hue`（只用来区分类别，比如记忆类型）。权限模式标签是中性的，只有「全部放行」用红。
-- Agents 列表的一行（`SlotRow`）：状态点 + 标题 + 时间；最新一句；元信息一行「需要你 · Claude · 空间 › tab · 机器」，普通字体、次要灰。只有需要你写成字（红），其余状态只看圆点（完成未看另把标题加粗）；以前 tab 名着色胶囊、状态字、描边的 Agent 种类挤在第一行，把状态说了三遍。空间标题的状态计数是彩色圆点 + 次要灰数字。
-- Token（`Theme.swift`，页面只引用）：圆角 `Theme.Radius` 五档（badge 6 / control 10 / card 14 / bubble 20 / panel 22，外加胶囊和圆）；
-  背景灰阶 `Theme.Fill` 三档（well / chip / pressed，就是系统的 quaternary / tertiary / secondary fill，深色下也看得见，别再写 `Color.primary.opacity(…)`），外加侧边栏拉出时盖在主页面上的遮罩 `scrim`；
-  - 字体 `Theme.Font` 只有这几级（默认字号下）：display 28 粗、title 22、heading 17 粗、body 17、secondary 15、caption 13、sectionHeader 13 粗（配次要色）、
-    label 12、code 13 等宽。页面里不直接写 `.subheadline` 这类系统样式，也不写死 `.system(size:)`。
-    Mac 上同样这几级，换成 Mac 的一套（#779，2026-11-03 用户选「正文 13」）：display 24 粗、title 18 半粗、heading 13 粗、body 13、secondary 12、caption 11、sectionHeader 11 粗、label 11、code 11 等宽，
-    系统字体按这几个字号乘 `Theme.Font.scale` 画（`Theme.Font` 里 `#if os(macOS)`；Mac 的系统文字样式不跟动态字体变，小 / 标准 / 大靠这个比例：正文 12 / 13 / 14，每档一点，#833；不小于 11，「小」时 11 pt 那几级停在 11，`Theme.Font.pointSize`；iPhone 上它恒为 1）；`Theme.Level.size` 跟着两套走，Markdown（回答、档案）的基础字号取 `Theme.Level.body.size`，不写死。
-  - 和 BeautifulUI 一样，层次主要靠字重和颜色：行标题是 body 大小加粗，分组头是 caption 大小加粗、次要色，比行标题小；
-    Markdown 的一级标题是 title，其余标题是 heading，靠上方的空白分开；代码块是 code。
-  - 间距 `Theme.Space` 是 4pt 网格（2 4 6 8 12 16 24 32），竖向的 `VStack(spacing:)` 都用它；横向间距在按钮文字旁边，没有统一改。
-    页面的左右边是 `Theme.Space.page`（16）：一页上的搜索框、筛选 chip、分组标题、卡片和胶囊都对齐它，不各用各的内边距。
-  - 尺寸 `Theme.Size`（2026-10-31 用户要求）：图标框、圆点、头像、点按区域、缩略图、标签列宽这类挨着文字的尺寸都有名字，默认字号下和原来的点数一样，
-    用 `.scaledFrame(width:height:)` / `.scaledFrame(minWidth:…)` 随字号缩放，到辅助功能大字号最多 1.6×（44pt 的按钮不至于占掉三分之一屏幕）。
-    4pt 及以下的线、分隔条、进度条不缩，用普通 `frame`；按视图自己的几何算出来的尺寸照旧；手表不跟 App 的字号，保留自己的尺寸。
-  - 字号跟随动态字体；设置 › 外观 › 界面风格 › 字号（小 / 标准 / 大，`TextSize`，`ui.textSize`）在系统档位上再挪一档：RootView 设 `.dynamicTypeSize`，
-    所以文本样式、`@ScaledMetric`、MarkdownUI 和 BeautifulUI 的字号一起变，比例不变。
-  - 飞书消息和卡片保留飞书自己的字号（落在上面的级别上），通过 `LarkTextBase.scale`（`Theme.textScale`）一样跟随。
-  - 固定尺寸框里的图标加 `dynamicTypeSize(...)` 上限，免得长出框；AI 回复的 Markdown 基准 17pt（MarkdownUI 自己按动态字体缩放）。
-  - 例外：终端网格（用户自己调字号）、灵动岛格子、导出的分享卡片（固定版式的图片）、小圆圈里的序号和角标。
-  - 等宽只给要逐字符对照或拷贝的东西：代码、命令、路径、分支、哈希和 ID、版本号、终端和工具输出。中文说明和值用系统字体
-    （会话信息页按行选：模型、分支、目录、版本等宽，其余系统字体 + 等宽数字；记忆编辑器、知识库的最近消息是系统字体）。
-  - 图标 `Theme.Icon`（`Shared/Design/Icons.swift`）：一个意思一个 SF Symbol，页面写 `Theme.Icon.copy`，不写 `"doc.on.doc"`。
-    两个文件都用到的符号必须登记；出错一律是三角（`error` / `errorFilled`），八角只给机器的严重告警（`critical`）；拷贝 `doc.on.doc`、
-    粘贴 `doc.on.clipboard`；中断 `stop.fill`；模型 / 启动器 `cube`，`cpu` 只是处理器；代码文件 `curlybraces`，`</>` 只是 Agents。
-    `IconVocabularyTests` 扫源码：登记过的符号写了名字、两个文件共用却没登记、退役的出错符号回来，都会失败。
-    别家的图标名（飞书卡片的 icon token）照飞书的画，那一行以 `// icon: <原因>` 结尾。
-  - 品牌标志 `Theme.Brand`（Assets 的 Brands 文件夹，来源和条款见 `THIRD_PARTY_NOTICES.md`）：Claude、OpenAI（Codex）、飞书、
-    Gmail、Google 的 G、各 Linux 发行版。按官方原样用，不改颜色、不重画；发行版是单色模板，染发行版的颜色。用在：分享卡的头像
-    （Claude / Codex，TRAEX 没有公开标志，仍是绿底终端）、收件箱的来源角标和手表收件箱（飞书）、邮箱账号（Gmail / 飞书邮箱）、
-    「使用 Google 账号登录」按钮（照 Google 的规范：浅色白底灰边、深色 #131314，不用主色）、机器的系统图标（`OSBadge`）。
-  - 连接器、邮箱服务商、iPhone 数据来源的标志一律经 `BrandMark`（`apple/Persona/DesignSystem/BrandMark.swift`，#1003）画，
-    不直接 `Image(…).resizable()`：固定方框（`scaledFrame`，跟字号缩放），资源不带留白（飞书的 viewBox 裁到鸟本身），
-    再按形状做光学补偿（`Theme.Brand.optical`：圆形、横向的标志撑满，满版正方形 0.88），所以同一列里看起来一样大、中心对齐；
-    iPhone 应用图标按 App 图标画（`AppIconShape` 圆角 + 发丝边，白底的日历、健康在白卡片上也看得出边）。
-    BeautifulUI 行里和符号图块并排的用 `BrandTile`（白底，大小和圆角同 `BUIIconTile`），头像角上的圆形来源角标用 `BrandBadge`
-    （圆形标志撑满，其余按 `Theme.Brand.inCircle` 缩到圆里）。各处的方框：设置行 `icon`、详情页头 `wellM`、邮箱账号 `wellXS`、
-    数据来源 `wellS`、登录按钮 `iconXS`。加新的标志先量它的留白（`rsvg-convert` 后看不透明像素的范围），有留白就裁 viewBox。
-  锁屏实时活动限到 `.large`（高度约 160pt，超出会被裁掉）。
-- 动效（`Theme.Motion`：状态切换 `.snappy` 0.25、布局 `.smooth` 0.3）：一直在动的只有「需要你」圆点的呼吸和工作中的系统转圈，
-  打开「减少动态效果」时圆点也停（`accessibilityReduceMotion`，加载占位和「正在准备」同样停）；工作中的圆点是一圈静止的外环。
-  不再有图标摆动、齿轮旋转、头像脉冲、待办转圈。计数用 `.numericText` 过渡。`.surface` 外面不再加 `.shadow`（玻璃自己有，
-  黏土 / Island 风格的实心面也有，叠上去成了双层阴影）；相邻的玻璃（终端键栏的每个键、顶栏的返回和 ⋯）放进一个 `GlassEffectContainer`。
-- 语音光球（`DesignSystem/VoiceOrb.swift`，#3506；语音模式的设计见总 issue #3489）：语音通话条正中的那颗球，页面只传相位（`VoiceOrb.Phase`：还没开始、连接中、在听、听到你说话、正在说、在听且 Agent 在做、已暂停、已静音、已结束）和音量（0…1），不自己判断风格。
-  - 怎么动：在听时慢慢呼吸（`Theme.Motion.voiceBreath`，单程 1.6 s），正在说时跟着声音跳（`voiceBeat`，单程 0.42 s），两个时长和安卓 `Voice.kt` 一样（`VoiceOrbTests` 读那个文件对一遍）；听到你说话时随音量变大；连接中、Agent 在做时外面绕一圈弧线（`voiceSpin` / `voiceLap`）。由时钟（`TimelineView`）驱动，每秒最多 30 帧（`voiceFrame`，和「需要你」圆点、头像的光晕一样），不动的相位暂停；打开「减少动态效果」或低电量模式时每个相位只画一帧静止的（和顶栏的形象圆点一样），减少动态效果时换相位也不缩放，直接换成下一帧。和「需要你」圆点一样是少数一直在动的东西，只在通话中出现。
-  - 怎么画：液态玻璃和实心的几种风格是一颗有高光的球，在听时是形象主色（`Theme.persona`）的浅色，正在说时是主色本身；BeautifulUI 是平的圆片加五根音量条（和它输入框的听写一个样子），正在说时圆片填主色，条是白色，主色太浅（黄色形象）时换成近黑。连接中的弧线是主色，Agent 在做时是工作中的琥珀（`Theme.busy`）；已暂停、已静音、已结束是灰色，已暂停、已静音在球上画 `pause` / `voiceMute`，这两个相位的球是不加高光的灰，白色图标对灰色不低于 3:1（`VoiceOrbTests` 深浅色都查）。
-  - 尺寸：`Theme.Size.voiceOrb`（52，含光晕和放大的余地，球本身占 0.7）随字号缩放；画的东西都不出这个框：光晕不跟着球放大，渐变从球的边缘开始、到框的边缘为止，不会盖到通话条上旁边的字和按钮；音量条 `voiceLevelBar` / `voiceLevelGap` / `voiceLevelHeight` 按球的大小等比缩放。token 在 `Shared/Design/VoiceTokens.swift`（手表也编译，不画语音界面）。
-  - 正在说并且传了 `interrupt` 时它是一个按钮，无障碍标签「打断语音」：只让语音停下，不停 Agent（「停止 Claude」是通话条上另一个按钮，文案分开写）；其余时候是装饰，点不了、键盘也按不了（`disabled`），VoiceOver 跳过，状态由旁边的字说。
-  - 语音条上的图标：`voiceMute` / `voiceUnmute`（静音 / 取消静音，同一个划掉的麦克风，取消静音是实心的，像电话 App 的开关）、`voiceEnd`（结束，`Theme.danger`）、`voiceCaptions`（字幕全文）、`voiceTimbre`（音色）；入口沿用 `voiceChannel`。
-  - Mac 上一直走的时钟会让整个窗口每帧重新布局（`docs/lessons/macos.md`），Mac 还没有语音模式；以后加时把动画交给 Core Animation。
-- 标签和计数各只有一种画法（`Components.swift`）：`Chip` 是不能点的小标签，三种样子——中性（次要灰字 + 浅灰底：模型、版本、tab 名、私聊）、
-  着色（某个含义的字 + 它的浅底：状态用 `.tone`、@我 红、「推荐」用 AI 的紫色）、描边（Claude / Codex 这类种类）；`CountBadge` 是计数（白字压在
-  `Theme.countBadge` 灰或主色上，或者状态的字压在状态浅底上，过 99 写 99+）。能点的东西（筛选、选项卡、模式选择、子 Agent 条）是控件，不用它们。
-- BeautifulUI（`apple/Packages/BeautifulUI`，BeautifulUI 仓库拷入的副本，来源和更新方法见包里的 `VENDORED.md`，不在这里改库代码）：
-  **只在「BeautifulUI」风格下用**（`AppStyle.usesBeautifulUI`，表面同液态玻璃，颜色按主题色），其他风格的思考过程、工具行、工作卡、输入框都是 Persona 原来的。
-  2026-10-30 它曾直接替换原来的界面（#93、#94），用户觉得太丑，整体 revert 后改成这个主题。这个风格下：
-  - 对话页的思考过程是它的 `ThinkingState`（✦ + 首行，展开后正文在一条引导线右边）。
-  - 展开的工作卡里，连续两个以上的工具调用合成一行 chip（`ChatLine.toolRun`、`ChatView.runLines`、`ToolRunRow`）。
-    每种工具一个 chip：一个时写主语（「读取 WeatherStore.swift」），多个时写数量（「运行 6 条命令」）；编辑带 +N −N（和 diff 同一份 `ToolDiffMemo`）；出错的 chip 红底。
-    点一下展开成逐条工具行（`ToolChipRow`），再点一条才看参数和输出。只有一个调用的段直接是一行工具行。
-    转到后台的调用不进组，单独一行，好让它的「后台 · 已完成 / 失败」一直看得见（`ChatView.foldsIntoRun`）。
-    从后台任务通知跳到某个调用时，先展开它所在的组。
-  - diff、命令和输出、Markdown 代码块仍是 Persona 自己的（`DiffView`、`CodeBlock`）。
-  - 颜色、圆角、字号由 `BUITheme.jarvis(spec)`（`BeautifulUIBridge.swift`）从当前的 `StyleSpec` 生成，在 RootView 注入：
-    - 库的第三级文字也用 secondaryLabel（tertiaryLabel 在卡片上只有 1.7:1）；
-    - 代码关键字用 `Theme.Hue.blue`；
-    - 字号 ×1.2（库是桌面字号），代码保持 ×1；
-    - 入场动画关掉。
-- 触感：发出 / 回答成功 success，新交互 warning，出错 error。
-- 图标：「纸色」（#709，2026-11-03 用户在几轮方案里选定，换掉了原来的夜色背景 + 珊瑚光环 + 四角星）：一个手绘的白色小家伙在挥手，
-  粗黑描边、珊瑚色腮红，像 Manus 那种手绘图标，暖米白底（比官网的纸色深一点，浅色主屏上图标的边更清楚）；深色是同一个小家伙放在暖炭黑底上，
-  着色是黑底灰度。iPhone、手表、Mac 同一张。图是生成后挑定的，不是脚本画的：`AppIcon.appiconset` 的 `icon.png`（浅色）、`icon-dark.png`（深色）
-  就是素材，`scripts/assets/make_icon.py` 从它们算出 `icon-tinted.png`（灰度、四周的底拉到纯黑）、手表的图标（浅色那张，系统裁成圆）、
-  Mac 的各个尺寸和 `docs/icon-preview.png`；换图标就覆盖这两张再跑它和 `make_alt_icons.py`（设置页的预览）。
-- **App 图标跟着形象**（2026-11-05 合成一个「形象」，#3203，做法和迁移见 `docs/persona.md`「App 图标」；iPhone / iPad，手表和 Mac 只有一个图标）：
-  - 每个内置形象一张：团子 = 纸色（主图标，上面这个），面罩 = `AppIcon-Visor`，汇流 = `AppIcon-Circuit`，像素 = `AppIcon-Pixel`，晶面 = `AppIcon-Facet`，软糖 = `AppIcon-Blob`；hub / 扩展的形象用它 `app_icon_fallback` 指定的那张，没有就默认。
-  - 2026-11-03 去掉了「余烬」「薄荷」「石墨」，2026-11-05 去掉了「蜜桃」「p.」「气场」（不对应任何形象）。选过它们的人，系统找不到那个图标集，
-    主屏回到默认图标；`AppIconChoice(iconName:)` 把认不出的名字读成默认。
-  - 资源：`scripts/assets/make_alt_icons.py` 用 App 的 `PersonaFace` 画出 `AppIcon-Visor`、`AppIcon-Circuit`（any / dark / tinted），写纸色的 `…Light` / `…Dark`，
-    再从每个图标集（含默认的）缩出 App 里画标志用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
-  - 工程：iOS 目标的 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` 列出备用图标集，构建时写进 Info.plist 的 `CFBundleAlternateIcons`；
-    不在列表里的图标集不会打进包，加一个图标要同时改 `AppIconChoice`、这一行和脚本（`AppIconChoiceTests` 查三者一致、资源都在）。
-  - 当前是哪个读 `alternateIconName`（`AppIconModel`），App 不存；换的时候系统弹自己的提示框。
-  - 截图：`AppIconTests`（UI 测试，mock hub）在 设置 › 外观 › 形象 选面罩、接受系统提示、回主屏截图，再用 `-openPersona persona` 启动看图标回到团子的（迁移的情形）；
-    当前的图标读那行小字（`persona-icon-note`）的无障碍值，系统换不了图标时是 `unavailable`，测试跳过（模拟器上就是这样，见 `docs/lessons/ios.md`）。
-- 设置页顶部、欢迎页名字旁边和侧边栏主对话前面的标志是当前形象的 App 图标（`AppGlyph`，浅色 / 深色和主屏上一样：`AppIconChoice.homeScreenLook`；形象包画它自己的头像），换形象它跟着变（#709；#1312 以前一直是纸色；#3203 以前跟 App 图标设置、侧边栏写死纸色）。
-- 品牌色：珊瑚色（`Theme.brand`）只给 Persona 自己的标志：对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
-  两份 AccentColor 资源（手表的标题和 tint、系统弹窗这类读资源的地方）是系统蓝；iPhone / iPad 窗口的 `tintColor` 跟着主题色（`WindowTint`：UIKit 画的 List 行图标取它，#1188）；实时活动读不到风格，描边和按钮固定用系统蓝（按钮是压深的 `#0071E3`，白字 4.7:1）。
+  Readability floor (fixed once 2026-10-30, figures in jarvis-p1 themes-fix report; every style×color now must pass): white text on solid buttons/selected capsules ≥3.5:1 (dark accents cannot be too bright),
+  own bubble white text ≥4.5:1, accent links on pages ≥3:1 (tightest wash pairing Coral/Clay 3.2:1); colored bubble gradients darken only (`Theme.deepening`), never brighten tops. Clay/Island solid buttons
+  (`SoftButtonStyle`) use current tint, at least 44pt high: `.tint(Theme.danger)` Interrupt/Close Agent stays red in every style.
+  Background-drawing scroll pages use `.themedGroupedPage()`, List/Form `.themedPage()`, otherwise Clay/Island/Lark canvas jumps on navigation.
+  `Theme` reads current composition (Settings previews use `StyleSpec.compose`); panels `.surface(tint:interactive:in:)`,
+  buttons `.themedButton(prominent:)`, list pages `.themedPage()`, plain rows `.themedRow()`, never direct `glassEffect` / `.glass`.
+  RootView rebuilds on style/color with `AppModel.look` id (static tokens), current tab/chat already remembered. Lark framework colors
+  (`LarkColor.blue` links/selections/new-message line, own bubbles) follow theme (Lark Blue restores gateway colors); card surfaces/strokes follow style; named Lark card-content colors unchanged.
+  Debug `-ui.style glass|clay|island|lark|beautiful`, `-ui.color style|persona|blue|coral|lavender|teal|lark` (UserDefaults argument domain, Release supported, not DEBUG switches;
+  `-ui.style claude` still Liquid Glass + Coral).
+- **Light & Dark** (2026-11-03, #710): Settings › Appearance › Light & Dark, Match System default / Light / Dark (`ColorSchemeChoice`, `ui.scheme`, iPhone/iPad only).
+  - Window-level `overrideUserInterfaceStyle` (`ColorSchemeChoice.apply`, every window/scene); choices through `AppModel.colorScheme`, new windows (launch,
+    extra iPad scene) RootView `onAppear`. Sheets/dialogs/keyboards/WebView `prefers-color-scheme` follow window.
+    Not `preferredColorScheme`: resetting nil may leave an open sheet's appearance; window `.unspecified` truly returns to system.
+  - No whole-tree rebuild (`look` unchanged): trait-based dynamic colors redraw with window traits; `@Environment(\.colorScheme)` views update too.
+    Explicit appearances unaffected (image editor/message menu dark; share cards/terminal own settings).
+  - System surfaces still follow system: Dynamic Island/Lock Screen Live Activities, widgets/watch/notifications/launch screen (`LaunchBackground`).
+  - App icons follow (requested 2026-11-03: light image for Light, dark for Dark): system chooses home-screen variant, App cannot,
+    so Paper (Mochi/main icon) gets alternate sets `AppIcon-PaperLight` (both appearances light image), `AppIcon-PaperDark` (both dark, tinted unchanged),
+    generated by `make_alt_icons.py` from `AppIcon`. `AppIconModel.follow` selects corresponding set for Light/Dark,
+    Match System restores both-variant set (Paper main icon); avatar changes also respect choice (`AppIconChoice.iconName(for:)`).
+    Each switch triggers unavoidable system Icon changed alert; Visor/Circuit have one set, unchanged.
+    `AppIconModel` remembers latest appearance: if changed during pending switch/system alert, rechecks and switches again to newest,
+    never remains wrong (review of #714); `follow` also on every foreground (launch-argument appearance/interrupted switch),
+    matched state does nothing, no alert. If system remembers removed icons (Ember/Mint/Graphite, Peach/p./Aura) and avatar wants main, leave alone:
+    home already shows main, switching on foreground would spuriously alert.
+    `AppGlyph` uses actually displayed home variant: Paper selected Light/Dark, other/Match System screen trait
+    rather than window trait overridden by App. Debug `set-appearance` uses persisted `AppModel.colorScheme` too.
+    `ColorSchemeIconTests` (demo) reads `probe.scheme` for actual page appearance, tearDown restores Match System after failure;
+    iOS 26.0.1/26.3.1 simulators lack alternate icons (`supportsAlternateIcons` false), so verify home-screen switching on devices.
+  - First verify Liquid Glass (lists, glass surfaces/buttons, sheets); other styles already adapt to system dark with same mechanism. Mac/Android lack option:
+    Mac `NSApp.appearance` alone leaves List rows light (`MacSnapshot.colorScheme` comments), each window also needs `preferredColorScheme`, separate work.
+  - Debug `-ui.scheme light|dark|system` (UserDefaults argument domain like `-ui.style`), `-tab settings -openAppearance scheme`.
+- State colors never follow style; one `Shared/StatusPalette.swift` shared by App/watch/Live Activities: Needs you red, Working amber, Unread green, Seen gray, Not running pale gray, like herdr (`docs/agent-states.md`). Three values each: `dot` (dots/icons/fills), `text` (same hue darkened, small text on white ≥4.5:1), `tint` (pale background), via `AgentState.tone`. Questions/plans/permissions/terminal dialogs all Needs you red; working spinner amber, accompanying text secondary gray. Non-Agent states use their own `Theme` tokens: `Theme.Diff` (diff/Git ±, counts, fills, body black), `caution` (connecting/stale/truncated/version mismatch, triangle not dot), `ai` (✦ AI summary), `loop` (loops/waiting), `positive` (success/connected/online/completed to-dos), `Hue` (categories such as memory types). Permission labels neutral except Allow everything red.
+- Agent row (`SlotRow`): state dot + title + time; latest sentence; metadata "Needs you · Claude · Space › Tab · Machine", regular secondary gray. Only Needs you written red; others dots only (Unread also bold title); former colored tab pill/state text/outlined Agent kind crowded first line and repeated status three times. Space counts colored dots + gray numbers.
+- Tokens (`Theme.swift`, pages reference only): `Theme.Radius` badge 6/control 10/card 14/bubble 20/panel 22 plus capsule/circle;
+  `Theme.Fill` well/chip/pressed (system quaternary/tertiary/secondary fill, visible dark too, no `Color.primary.opacity(…)`), plus drawer `scrim`;
+  - `Theme.Font` levels at default size: display 28 bold, title 22, heading 17 bold, body 17, secondary 15, caption 13, sectionHeader 13 bold secondary,
+    label 12, code 13 monospace; pages no direct `.subheadline` or `.system(size:)`.
+    Mac same levels, Mac scale (#779, user selected body 13 on 2026-11-03): display 24 bold/title 18 semibold/heading 13 bold/body 13/secondary 12/caption 11/sectionHeader 11 bold/label 11/code 11 monospace,
+    system fonts multiply `Theme.Font.scale` (`#if os(macOS)` in `Theme.Font`; Mac styles do not follow Dynamic Type, Small/Standard/Large body 12/13/14, one point each, #833; floor 11 so small 11pt levels remain 11, `Theme.Font.pointSize`; iPhone scale always 1). `Theme.Level.size` follows both, Markdown answers/profiles base `Theme.Level.body.size`, no fixed size.
+  - Like BeautifulUI, hierarchy mainly weight/color: row titles bold body, section headers bold secondary caption smaller than row titles;
+    Markdown H1 title, others heading separated by top whitespace; blocks code.
+  - `Theme.Space` 4pt grid (2 4 6 8 12 16 24 32), all vertical `VStack(spacing:)`; horizontal beside button labels not globally changed.
+    Page sides `Theme.Space.page` 16, aligned search/filters/group titles/cards/capsules, not individual paddings.
+  - `Theme.Size` (requested 2026-10-31): named text-adjacent icons/dots/avatars/tap targets/thumbnails/label widths, default original points,
+    `.scaledFrame(width:height:)` / `.scaledFrame(minWidth:…)` follows text up to 1.6× accessibility (44pt buttons not a third of screen).
+    Lines/dividers/progress ≤4pt stay unscaled `frame`; geometric sizes unchanged; watch keeps own sizes, not App text sizing.
+  - Dynamic Type + Settings › Appearance › Interface Style › Text Size (Small/Standard/Large, `TextSize`, `ui.textSize`) offsets system one level via RootView `.dynamicTypeSize`,
+    changing text styles, `@ScaledMetric`, MarkdownUI and BeautifulUI together, ratios intact.
+  - Lark messages/cards retain own sizes mapped to levels, similarly scaled by `LarkTextBase.scale` (`Theme.textScale`).
+  - Fixed-frame icons cap `dynamicTypeSize(...)`; AI Markdown baseline 17pt (MarkdownUI scales).
+  - Exceptions: user-sized terminal grid, Dynamic Island grid, fixed-image share cards, small-circle numbers/badges.
+  - Monospace only character comparison/copying: code/commands/paths/branches/hashes/IDs/versions/terminal/tool output. Chinese explanations/values system font
+    (session info chooses by row: model/branch/directory/version monospace, others system + monospaced digits; memory editor/Knowledge recent messages system).
+  - `Theme.Icon` (`Shared/Design/Icons.swift`): one meaning per SF Symbol, pages `Theme.Icon.copy`, not `"doc.on.doc"`.
+    Symbols used in two files must register; errors triangles (`error` / `errorFilled`), octagon only critical machine alerts (`critical`); Copy `doc.on.doc`,
+    Paste `doc.on.clipboard`, Interrupt `stop.fill`, model/launcher `cube` (`cpu` only processor), code files `curlybraces`, `</>` only Agents.
+    `IconVocabularyTests` rejects direct registered names, shared unregistered symbols and retired error symbols.
+    External names (Lark card icon tokens) retain Lark rendering; line ends `// icon: <reason>`.
+  - `Theme.Brand` (Assets Brands, sources/terms `THIRD_PARTY_NOTICES.md`): Claude/OpenAI (Codex)/Lark,
+    Gmail/Google G/Linux distributions. Official originals, no recoloring/redrawing except monochrome distro templates tinted distro color. Used in share avatars
+    (Claude/Codex, internal Codex fork has no public logo, green terminal remains), Inbox source/watch Lark badges, Gmail/Lark Mail accounts,
+    Sign in with Google (Google spec: light white/gray border, dark #131314, not accent), machine `OSBadge`.
+  - Connector/mail-provider/iPhone-source marks through `BrandMark` (`apple/Persona/DesignSystem/BrandMark.swift`, #1003),
+    no direct `Image(…).resizable()`: fixed `scaledFrame`, padding-free assets (Lark viewBox cropped to bird),
+    optical compensation `Theme.Brand.optical` (circles/wide marks fill, full squares 0.88), equal apparent size/center in columns;
+    iPhone icons use `AppIconShape` radius + hairline, outlining white Calendar/Health on white cards.
+    BeautifulUI uses `BrandTile` white background matching `BUIIconTile`; circular source avatar badges `BrandBadge`
+    (circle logos fill, others `Theme.Brand.inCircle`). Boxes: Settings `icon`, detail header `wellM`, email account `wellXS`,
+    source `wellS`, sign-in `iconXS`; new marks measure opaque bounds after `rsvg-convert` and crop viewBox whitespace.
+  Lock Screen Live Activities capped at `.large` (~160pt height, clips beyond).
+- Motion (`Theme.Motion`: state `.snappy` 0.25, layout `.smooth` 0.3): continuous only Needs you dot breathing and system working spinner;
+  Reduce Motion (`accessibilityReduceMotion`) stops dot (and loading/preparing placeholders), working dot static outer ring.
+  No wobbling icons/spinning gears/pulsing avatars/spinning to-dos. Counts `.numericText`; no `.shadow` outside `.surface` (glass/Clay/Island already shadow,
+  doubling otherwise); neighboring glass keys/top Back/⋯ use `GlassEffectContainer`.
+- Voice orb (`DesignSystem/VoiceOrb.swift`, #3506, voice design #3489): centered call-bar ball; pages pass only phase (`VoiceOrb.Phase`: not started/connecting/listening/hearing you/speaking/listening with Agent working/paused/muted/ended) and volume 0…1, no style decisions.
+  - Motion: listening slow breath (`Theme.Motion.voiceBreath`, 1.6 s one-way), speaking audio beat (`voiceBeat`, 0.42 s one-way), matches Android `Voice.kt` (`VoiceOrbTests` reads/checks); hearing scales by volume, connecting/Agent working arcs (`voiceSpin` / `voiceLap`). `TimelineView` clock ≤30fps (`voiceFrame`, like Needs you dots/avatar glow), static phases paused; Reduce Motion or Low Power one static frame per phase (like avatar dot), Reduce Motion switches phase without scaling. One of few continuous animations, only during calls.
+  - Rendering: Liquid Glass/solid styles highlight sphere, pale avatar accent (`Theme.persona`) listening, accent speaking; BeautifulUI flat disc + five volume bars like dictation, filled accent speaking, white bars (near-black on pale/yellow accent). Connecting arc accent, working arc amber `Theme.busy`; paused/muted/ended gray, `pause` / `voiceMute` icons on nonhighlight gray with white contrast ≥3:1 (`VoiceOrbTests` light/dark).
+  - Size `Theme.Size.voiceOrb` 52 including glow/enlargement, sphere 0.7, text-scaled; everything inside frame, glow never enlarges with ball, gradient sphere edge to frame edge, not covering neighboring text/buttons. `voiceLevelBar` / `voiceLevelGap` / `voiceLevelHeight` scale proportionally; `Shared/Design/VoiceTokens.swift` also watch-compiled, no watch voice UI.
+  - Speaking with `interrupt` is a button labeled Interrupt voice: stops speech only, not Agent (separate Stop Claude call-bar button); otherwise decorative, `disabled`/no keyboard activation, VoiceOver skipped, status in adjacent text.
+  - Call icons `voiceMute` / `voiceUnmute` (same crossed mic, filled unmute, Phone-like toggle), `voiceEnd` (`Theme.danger`), `voiceCaptions` full captions, `voiceTimbre` voice; entry `voiceChannel`.
+  - Mac continuous clocks relayout whole window each frame (`docs/lessons/macos.md`); no Mac voice yet, future animation Core Animation.
+- One badge/count recipe (`Components.swift`): noninteractive `Chip` neutral (gray/pale: model/version/tab/direct chat),
+  tinted (meaning + pale fill: `.tone` state, @me red, Recommended AI purple), outlined (Claude/Codex kind); `CountBadge` white on
+  gray `Theme.countBadge` or accent, or state text on tint, 99+ over 99. Interactive filters/tabs/modes/sub-Agents are controls, not these.
+- BeautifulUI (`apple/Packages/BeautifulUI`, vendored copy, source/update in `VENDORED.md`, no local library edits):
+  **BeautifulUI style only** (`AppStyle.usesBeautifulUI`, Liquid Glass surfaces/theme colors), other styles retain Persona thinking/tool/work/input UI.
+  Direct replacement 2026-10-30 (#93/#94) judged ugly by user, reverted and made this theme. In it:
+  - `ThinkingState` (✦ + first line, expanded body right of guide).
+  - Runs of ≥2 tools in expanded work group into chip row (`ChatLine.toolRun`, `ChatView.runLines`, `ToolRunRow`).
+    Per-tool chip: one names target (Read WeatherStore.swift), multiple count (Run 6 commands), edits +N −N from shared `ToolDiffMemo`, failures red.
+    Tap expands individual `ToolChipRow`, then tap params/output; single call direct row.
+    Background calls stay separate so Background · Done / Failed remains visible (`ChatView.foldsIntoRun`).
+    Jumping from background notice expands containing run first.
+  - Diff/commands/output/Markdown code stay Persona `DiffView` / `CodeBlock`.
+  - `BUITheme.jarvis(spec)` (`BeautifulUIBridge.swift`) derives colors/radius/type from current `StyleSpec`, injected RootView:
+    - Tertiary text also secondaryLabel (tertiaryLabel only 1.7:1 on cards);
+    - Code keywords `Theme.Hue.blue`;
+    - Fonts ×1.2 (library desktop sizes), code ×1;
+    - Entry animations off.
+- Haptics: successful send/answer success, new interaction warning, error error.
+- Icon: Paper (#709, chosen over several proposals 2026-11-03, replacing night/coral halo/four-point star): hand-drawn little white waving figure,
+  heavy black outline/coral blush, Manus-like handmade icon, warm cream background (darker than website paper, clearer edge on light home screens); dark same figure on warm charcoal,
+  tinted grayscale black. Same iPhone/watch/Mac image. Generated and selected, not script-drawn: `AppIcon.appiconset` `icon.png` light / `icon-dark.png` dark
+  are source assets; `scripts/assets/make_icon.py` derives `icon-tinted.png` (grayscale, outer background pure black), watch light icon (system circular crop),
+  Mac sizes and `docs/icon-preview.png`; replace both sources and run it plus `make_alt_icons.py` for Settings previews.
+- **App icon follows avatar** (merged into Avatar 2026-11-05, #3203; migration `docs/persona.md` ("App icons"), iPhone/iPad, watch/Mac one icon):
+  - Built-ins: Mochi = Paper/main, Visor `AppIcon-Visor`, Circuit `AppIcon-Circuit`, Pixel `AppIcon-Pixel`, Facet `AppIcon-Facet`, Jelly `AppIcon-Blob`; hub/extension avatars use `app_icon_fallback`, otherwise default.
+  - Removed Ember/Mint/Graphite 2026-11-03, Peach/p./Aura 2026-11-05 (no matching avatars); previous users' missing sets fall back home-screen default; `AppIconChoice(iconName:)` unknown names default.
+  - `scripts/assets/make_alt_icons.py` draws `AppIcon-Visor` / `AppIcon-Circuit` from App `PersonaFace` (any/dark/tinted), Paper `…Light` / `…Dark`,
+    then derives `AppIcons/app-icon-*` previews from all sets including main (any/dark); rerun after rendering changes.
+  - iOS `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` lists sets, compiled into `CFBundleAlternateIcons`;
+    unlisted sets not packaged, add to `AppIconChoice`, setting and script together (`AppIconChoiceTests` consistency/assets).
+  - Current reads `alternateIconName` (`AppIconModel`), not App storage; system switch alert.
+  - `AppIconTests` mock UI chooses Visor in Settings › Appearance › Avatar, accepts alert, screenshots home, then `-openPersona persona` to verify return to Mochi (migration);
+    current icon accessibility value `persona-icon-note`, `unavailable` when system cannot switch, tests skip on simulator (`docs/lessons/ios.md`).
+- Settings top/welcome-name/sidebar-main marks use current avatar App icon (`AppGlyph`, home-screen light/dark via `AppIconChoice.homeScreenLook`, avatar packages own face), changes with avatar (#709; before #1312 always Paper, before #3203 followed separate App icon setting/sidebar hard-coded Paper).
+- Brand coral (`Theme.brand`) only Persona marks: chat-home icon, Lock Screen four-point star. Actions use current `Theme.accent`.
+  Both AccentColor assets (watch titles/tint, system dialogs) system blue; iPhone/iPad window `tintColor` follows theme (`WindowTint`, UIKit List icons, #1188); Live Activities cannot read style, stroke/buttons fixed system blue, button deep `#0071E3`, white contrast 4.7:1.
 
-## 数据流
+## Data flow
 
-- 逻辑层的选型（2026-10-31）：「加载 → 显示 → 编辑 → 保存」的页面用 MVVM：一个 `@Observable` 的 `XxxModel` 放在页面旁边，
-  hub、报错、toast、跳转从 `Deps` 传进来（`live` 接 `AppModel`），视图只留自己的状态（正在编辑哪个、弹出了什么）。第一个是
-  `AssistantRoutinesModel`。事件多、顺序出过问题的地方（对话页、飞书会话的分页）先把纯计算抽出来：`ChatLines`（消息 → 行）、
-  `AgentListOrder`（Agents 列表的排序和分组），再改成 reducer。
-- 单元测试不连 hub：`APIClient.transport` 换成 `FakeHub`（JarvisTests）按「方法 路径」回固定的 JSON，记下发了什么，view model 走真实的请求和解码。
-  体验模式仍用全局的 `APIClient.local`。
-- `AppModel`（`Persona/App`）：配对信息存 Keychain；`LiveConnection`（WebSocket，指数退避重连，重连后按 `since_seq` 重新订阅）；
-  每个会话一个 `ChatStore`（按 id 去重、按 seq 排序、`buildRows` 生成展示行）。
-- 进入对话页 `subscribe`，离开 `unsubscribe`；hub 推 `items` / `screen` / `sessions` / `interaction`。
-- 手机工具：hub 推 `tool_call` → `PhoneToolRegistry.call`（写操作先弹确认）→ `tool_result`。连上就 `register_phone` 声明工具（`docs/phone-tools.md`）。
-- 推送：配对后申请通知权限并注册 APNs，`POST /api/v1/devices`；hub 有 `apns.json` 时对新交互和 agent 完成推送（完成推送等 1 分钟、在电脑或 App 里看过就不推、后台任务结束才推，`docs/server.md` 推送策略）「标题」（不加 ✅；中断、出错的是「⚠️ 标题」），
-  副标题「机器 · 空间 › 标签」，正文是最后一条回复。前台且正在看该会话时不弹。模拟器自动化（`-pairURL`）不申请通知权限、不注册成手机。
-  交互推送带按钮（`NotificationActions`，类别名就是 hub 发的 `INTERACTION_<KIND>`）：授权「允许 / 拒绝」，计划「批准 / 打回修改」（打回可以直接输入意见）。完成推送的类别是 `SESSION_DONE`，可以直接「回复」（#3449）：要先解锁，在后台作为一条普通消息发到这个会话（新的 `client_msg_id`），发不出去会弹一条本地通知说明原因。会话出现在屏幕上时（`AppModel.show`），通知中心里它的旧通知（同一 `thread-id` 和 `machine_id`）一并删掉。
-  说「是」的按钮要先解锁（`.authenticationRequired`），「拒绝」不用；计划从通知批准用 `acceptEdits`（没看全计划，命令仍要逐个授权），
-  「批准并自动执行」只在 App 里。按钮在后台直接调 resolve，不打开 App；失败（已被处理、连不上 hub）发一条本地通知说明原因。提问、终端没有按钮，点开处理。
-  设置 › 通知（`NotificationSettingsView`）：「需要你处理时」开关、「Agent 做完时」不推送 / 只推长任务 / 每次都推、实时活动（锁屏和灵动岛 / 锁屏显示详情 / 灵动岛两侧显示什么 `IslandSettingsView`，`docs/live-activity.md`），存在 hub 上按设备分开（`PushRegistrar.deviceID`）。
-  点通知打开对应会话：`UNUserNotificationCenterDelegate` 用 completion handler 版本，切回主队列处理再回调（async 版本在后台执行器上返回，
-  UIKit 在非主线程收到完成回调，点通知冷启动会崩）。
-- 手表配对：iPhone 在 WCSession 激活后再推一次配对（激活前推会被丢掉），同时 transferUserInfo 保证送达；手表未配对页有「从 iPhone 同步」
-  （sendMessage 请求，iPhone 回复配对）；iPhone 设置里有「同步到 Apple Watch」。
-- 手表：iPhone 经 WatchConnectivity 把配对信息和摘要（运行中会话、待处理交互、收件箱里需要你的事）同步给手表；手表打开时每 8 秒直接请求 hub 刷新，
-  回答 / 发消息 / 中断也直接调 hub。
-  界面层级：每行的主体（问什么、会话名、收件箱标题）用 headline，类型和位置用 footnote；消息和计划去掉 Markdown 标记再显示（`WatchText.shown`），
-  气泡跟着字宽、自己的靠右；没拿到过数据时显示「加载中」，连不上 hub 时最上面一行「连不上 hub」+「重试」（有旧数据就写明是多久前的）。
+- Logic-layer choice (2026-10-31): pages with "load → display → edit → save" use MVVM: an `@Observable` `XxxModel` beside the page,
+  with hub access, errors, toasts and navigation passed through `Deps` (`live` connects to `AppModel`); the view keeps only its own state (what is being edited, what is presented). The first is
+  `AssistantRoutinesModel`. In event-heavy areas with ordering problems (chat pages, Lark chat pagination), extract pure calculations first: `ChatLines` (messages → rows),
+  `AgentListOrder` (Agents list sorting and grouping), then convert to a reducer.
+- Unit tests never connect to the hub: replace `APIClient.transport` with `FakeHub` (JarvisTests), which returns fixed JSON by "method path" and records requests; view models use real requests and decoding.
+  Demo mode still uses the global `APIClient.local`.
+- `AppModel` (`Persona/App`): pairing stored in Keychain; `LiveConnection` (WebSocket, exponential-backoff reconnect, resubscribing with `since_seq` after reconnect);
+  one `ChatStore` per session (deduplicated by id, sorted by seq, `buildRows` produces display rows).
+- Entering a chat page calls `subscribe`, leaving calls `unsubscribe`; the hub pushes `items` / `screen` / `sessions` / `interaction`.
+- Phone tools: hub pushes `tool_call` → `PhoneToolRegistry.call` (writes require confirmation first) → `tool_result`. On connection, `register_phone` declares tools (`docs/phone-tools.md`).
+- Push: after pairing, request notification permission and register APNs, `POST /api/v1/devices`; when the hub has `apns.json`, it pushes new interactions and Agent completion (completion waits 1 minute, is skipped if seen on a computer or in the App, and waits for background tasks to finish; push policy in `docs/server.md`), with "Title" (no ✅; interrupted or failed is "⚠️ Title"),
+  subtitle "Machine · Space › Tab", and the last reply as the body. No banner when the App is foregrounded and showing that session. Simulator automation (`-pairURL`) neither requests notification permission nor registers as a phone.
+  Interaction pushes carry buttons (`NotificationActions`, category is the hub's `INTERACTION_<KIND>`): permissions "Allow / Deny", plans "Approve / Request changes" (changes can include typed feedback). Completion category `SESSION_DONE` supports direct "Reply" (#3449): unlock first, then send a normal message to that session in the background (new `client_msg_id`); failure produces a local notification explaining why. When a session appears on screen (`AppModel.show`), its old notifications (same `thread-id` and `machine_id`) are removed from Notification Center.
+  Affirmative buttons require unlocking (`.authenticationRequired`); Deny does not. Plan approval from a notification uses `acceptEdits` (the whole plan has not been viewed, so commands still need individual approval),
+  and "Approve and run automatically" is App-only. Buttons call resolve directly in the background without opening the App; failure (already handled, cannot reach hub) produces a local notification explaining why. Questions and terminal interactions have no buttons; tap to handle them.
+  Settings › Notifications (`NotificationSettingsView`): "When you are needed" toggle, "When an Agent finishes" never / long tasks only / every time, Live Activities (Lock Screen and Dynamic Island / show details on Lock Screen / what each side of Dynamic Island shows, `IslandSettingsView`, `docs/live-activity.md`), stored per device on the hub (`PushRegistrar.deviceID`).
+  Tapping a notification opens its session: use the completion-handler version of `UNUserNotificationCenterDelegate`, switch to the main queue to handle it, then call back (the async version returns on a background executor,
+  UIKit receives completion off the main thread and a notification-triggered cold launch crashes).
+- Watch pairing: iPhone sends pairing again after WCSession activation (sends before activation are lost), also using transferUserInfo for guaranteed delivery; the watch's unpaired page offers "Sync from iPhone"
+  (sendMessage request, iPhone replies with pairing); iPhone Settings has "Sync to Apple Watch".
+- Watch: iPhone uses WatchConnectivity to sync pairing and a summary (running sessions, pending interactions, Inbox items needing you); while open, the watch directly requests a hub refresh every 8 seconds,
+  and answers / sends messages / interrupts directly through the hub too.
+  UI hierarchy: each row's main content (question, session name, Inbox title) uses headline; type and location use footnote; messages and plans strip Markdown markers (`WatchText.shown`),
+  bubbles fit text width, own messages align right; before any data arrives show "Loading"; when the hub is unreachable, a top row says "Can't reach the hub" + "Retry" (with old data, say how old it is).
 
-## 体验模式（没有 hub 也能看全部功能，2026-10-30）
+## Demo mode (see every feature without a hub, 2026-10-30)
 
-TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只有配对页，审核员和还没搭 hub 的朋友什么都看不到（可能被以 2.1 拒）。
-配对页第二个按钮「没有 hub？先体验一下」进入体验模式：App 用内置的假数据跑，不连任何服务器（Release 里可用，不是 DEBUG 开关）。
+TestFlight has a public link and must pass Beta App Review: previously an unpaired App showed only the pairing page, leaving reviewers and friends who had not set up a hub unable to see anything (potential rejection under 2.1).
+The pairing page's second button, "No hub? Try it first", enters demo mode: the App runs on built-in fake data and connects to no server (available in Release, not a DEBUG switch).
 
-- **挂在数据层下面，页面不分叉**：体验模式的配对信息是 `ServerConfig.demo`（`https://demo.invalid`，永远解析不了，漏网的请求也到不了网络）。
-  `APIClient.request`（以及 `image` / `fullItem`）对它不走 URLSession，交给 `APIClient.local`；`LiveConnection` 对它不开 WebSocket，
-  用 `LiveConnection.makeLocal` 做的本地 socket。两者都由 `DemoHub`（`Persona/App/DemoHub.swift`）注册和回答，回的是和 hub 一样的 JSON，
-  所以页面、`ChatStore`、`AppModel.handle` 都不知道自己在体验模式里。没有的接口回 404「体验模式里没有这项数据」，DEBUG 下记一行 `DemoHub miss`。
-- **数据**：`scripts/mock/make_demo_data.py` 从 `scripts/mock/mock_hub.py`（UI 测试用的假 hub）导出 `apple/Persona/Resources/Demo.json`，再加几个 Agent
-  （每种状态、几个空间都有）、飞书会话的消息、邮件正文、知识库条目，终端是按手机宽度排好的 Claude 屏幕（`phone_screen`，96 列的帧在手机上每行都折）。
-  全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器页的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
-  改了 mock 的数据就重跑脚本、提交 JSON；`DemoHubTests` 让每个接口都经 `APIClient` 解码成 App 的模型，模型改了形状会在这里挂。
-- **副作用**：给 Agent / Persona 发消息在本地回显，1.5 秒后「Agent」回一段「这是体验模式……」；回答提问 / 批准计划时卡片消失、Agent 接着「做」再回同一段话，
-  另弹「体验模式下不会真的发送」；Persona 新对话本地新建。其余会碰到电脑、飞书、邮件的操作（新建会话、中断、关闭、终端按键、发邮件、立即运行……）
-  以 `APIError(code: "demo")` 失败，`AppModel.show` 把它显示成蓝色提示「体验模式下不会真的发送」而不是红色报错，页面也不会显示「已关闭会话」这类成功提示。
-  只改本地状态的（已读、置顶、免打扰、定时任务开关、记忆、收件箱已处理）照常生效，退出后丢掉。
-- **标识和退出**：设置 tab 带「体验」角标；设置顶部写「体验模式 · 数据都是编造的」，下面一节「连接我的 hub」/「退出体验模式」，隐藏服务器和手表那两节。
-  退出回到配对页；配对成功（扫码、手动、`jarvis://pair` 链接）自动离开体验模式。体验模式记在 `demo.on`，重启 App 仍在体验模式里，进入时总从发货时的数据重新开始。
-  进入 / 离开时清掉演示会话的草稿和对话缓存（演示的会话 id 就是 mock 的 id，UI 测试的模拟器上会撞到别的测试留下的草稿）、收件箱，Persona tab 打开演示的主对话。
-- 体验模式下不申请通知权限、不注册 APNs、不 `register_phone`、不推配对信息给手表、不换设备凭据。
-- 审核备注（`app_store.external.review.notes`）写了从配对页进体验模式。
+- **Below the data layer, no separate pages**: demo pairing uses `ServerConfig.demo` (`https://demo.invalid`, which never resolves, so even missed requests cannot reach the network).
+  `APIClient.request` (and `image` / `fullItem`) routes it to `APIClient.local` instead of URLSession; `LiveConnection` opens no WebSocket for it,
+  using a local socket made by `LiveConnection.makeLocal`. Both are registered and answered by `DemoHub` (`Persona/App/DemoHub.swift`), returning the same JSON as the hub,
+  so pages, `ChatStore` and `AppModel.handle` do not know they are in demo mode. Missing endpoints return 404 "This data is not available in demo mode", with a `DemoHub miss` log in DEBUG.
+- **Data**: `scripts/mock/make_demo_data.py` exports `apple/Persona/Resources/Demo.json` from `scripts/mock/mock_hub.py` (the mock hub for UI tests), then adds several Agents
+  (covering every state and several spaces), Lark chat messages, email bodies and knowledge entries; the terminal is a Claude screen laid out for phone width (`phone_screen`; 96-column frames wrap every line on a phone).
+  Everything is fictional; times are relative (`@rel:<seconds>`, `@unix:<seconds>`) and converted near "now" on load, keeping the demo fresh. Machines-page charts are calculated by `DemoHub` (a port of `mock_hub.metric_at`).
+  When mock data changes, rerun the script and commit the JSON; `DemoHubTests` decodes every endpoint through `APIClient` into App models, catching model shape changes here.
+- **Side effects**: messages to Agents / Persona echo locally, then after 1.5 seconds the "Agent" replies "This is demo mode…"; answering a question / approving a plan removes the card, the Agent keeps "working" and replies with the same text,
+  with an extra "Nothing is actually sent in demo mode" notice; new Persona chats are created locally. Other actions that touch computers, Lark or email (new sessions, interrupt, close, terminal keys, sending email, run now…)
+  fail with `APIError(code: "demo")`; `AppModel.show` displays a blue "Nothing is actually sent in demo mode" notice rather than a red error, and pages do not show success messages such as "Session closed".
+  Local-state-only actions (seen, pins, mute, scheduled-task toggles, memory, handled Inbox items) work normally and are discarded on exit.
+- **Indicator and exit**: the Settings tab has a "Demo" badge; its top says "Demo mode · All data is fictional", followed by "Connect my hub" / "Exit demo mode", hiding the server and watch sections.
+  Exiting returns to pairing; successful pairing (QR scan, manual, `jarvis://pair` link) leaves demo mode automatically. Demo mode is stored in `demo.on` and survives App restarts, always resetting to shipped data on entry.
+  Entering / leaving clears demo-session drafts and chat caches (demo session ids are the mock ids and can collide with drafts left by other UI tests on the simulator), and the Inbox; the Persona tab opens the demo main chat.
+- Demo mode never requests notification permission, registers APNs, calls `register_phone`, sends pairing to the watch, or changes device credentials.
+- Review notes (`app_store.external.review.notes`) explain entering demo mode from pairing.
 
-## 主对话还缺什么（#4193，onboarding M1）
+## What the main chat still needs (#4193, onboarding M1)
 
-hub 有 `assistant_readiness` 时，App 读 `GET /api/v1/assistant/readiness`（`AssistantReadiness`，`apple/Shared/AssistantReadiness.swift`；
-状态在 `AppModel.readiness`，`AssistantReadinessModel`），和网页（`web.md`「主对话还缺什么」）画的是同一套：
+With hub feature `assistant_readiness`, the App reads `GET /api/v1/assistant/readiness` (`AssistantReadiness`, `apple/Shared/AssistantReadiness.swift`;
+state in `AppModel.readiness`, `AssistantReadinessModel`), using the same presentation as the web (`web.md` ("What the main chat still needs")):
 
-- 什么时候问：Persona 页在前台时（`.tabActiveTask`）、机器变了、`warm` 带回来的、开对话被拒之后、存了供应商之后（`readinessChanged()`）。老 hub（没有 feature 或回 404）什么都不画。
-- 新对话页（旧布局 `AssistantHome`、新外壳 `ShellHome`）的输入框上方一张 `ReadinessCard`（设计系统组件，BeautifulUI 风格下画它的列表行）：
-  `setup` 时是第一个缺的步骤；`rate_limited` 只出卡片不挡发送。`setup` 时打了字，发送按钮换成 `SendGate`（「先接上模型」「先添加电脑」…），点了去那一步，草稿留着，不排队。
-- 按钮去哪（`ReadinessRoute`）：添加 / 确认电脑先开机器页（M3 合入后换成添加电脑），接上模型开供应商向导，换 Key 开那个供应商，
-  装 / 登录 Claude Code、唤醒电脑和 `local` 的示例问题开本机的说明（`ReadinessHelpView`，不发给模型），试一句调 `?probe=1`。不认识的 `action` 只显示文字。
-- 开对话、发消息被 hub 带码拒绝（`no_machine`、`claude_missing`…，`CodedFailure`）画成卡片（`CodedFailureCard`），原文和请求 ID 在「详情」，不弹 toast；`assistant_offline` 安静地重试三次。
-- Persona 对话最后一轮带 `turn_error_code`（`not_logged_in` / `auth_failed` / `model_route`）时，最后那条「Not logged in」换成「模型没接好」卡片加「去修」。
+- Query while Persona is foregrounded (`.tabActiveTask`), when machines change, from `warm` responses, after chat creation is refused, and after saving a provider (`readinessChanged()`). Old hubs (no feature or 404) show nothing.
+- Above the new-chat input (old `AssistantHome`, new-shell `ShellHome`), a `ReadinessCard` (design-system component, BeautifulUI list rows):
+  `setup` shows the first missing step; `rate_limited` shows only a card without blocking Send. In `setup`, a nonempty draft replaces Send with `SendGate` ("Connect a model first", "Add a computer first"…); tap opens that step, retaining the draft without queuing it.
+- Actions (`ReadinessRoute`): add / confirm computer first opens Machines (switches to Add Computer after M3 lands); connect model opens provider wizard, replace key opens that provider;
+  install / log in to Claude Code, wake computer and `local` sample questions open local instructions (`ReadinessHelpView`, not sent to a model); Try a message queries `?probe=1`. Unknown `action` shows text only.
+- Hub-coded refusals to open a chat or send (`no_machine`, `claude_missing`…, `CodedFailure`) show `CodedFailureCard`, original text and request ID under Details, no toast; `assistant_offline` silently retries three times.
+- A Persona chat's last turn with `turn_error_code` (`not_logged_in` / `auth_failed` / `model_route`) replaces the final "Not logged in" with a "Model not connected correctly" card and Fix it.
 
-## 首屏和配对后的清单（#4195，onboarding M2）
+## Welcome screen and post-pairing checklist (#4195, onboarding M2)
 
-- 首屏（`WelcomeView`）不出现命令：主按钮「扫码连接 hub」（Mac「粘贴配对链接」），下面一句码从哪来（hub 装好时的屏幕、已连上设备的 设置 › 设备 › 连接新设备）；
-  「还没有 hub？」打开构建配置 `publish.getting_started_url` 的公开页面（Info.plist `PersonaGettingStartedURL`，没有就不显示）、「先体验一下」、「其他方式」。
-  手动输入、SSH 隧道和命令行写法只在 `PairView` 的「其他方式」里。码过期或用过（401 `invalid_token`）说「这个码过期了或已经用过了，再出一个」，iPhone 加「重新扫码」；从外面打开的配对链接同样（`AppModel.showPairing`）。
-- 配对成功后（`AppModel.checklistPending`，在引擎那一步之后），hub 有 `assistant_readiness` 且没有「以后再说」过时，整页换成清单（`OnboardingChecklistView`）：
-  电脑、Claude Code、模型、试一句四行，按就绪度的 `state` 画勾、叉、转圈、问号，按钮同主对话的卡片（`ReadinessRoute`）。「以后再说」调 dismiss；
-  全部打勾时是「开始使用」。设置顶部「还有 N 步就能用」（`ChecklistSettingsRow`，N 是 computer / claude / model 里没做完的）点了回到清单。老 hub 配对后不插清单。
+- Welcome (`WelcomeView`) shows no commands: the main button is Scan to connect hub (Mac: Paste pairing link), followed by where to find the code (the screen after installing the hub, or Settings › Devices › Connect a new device on a connected device);
+  No hub yet? opens the public page from build configuration `publish.getting_started_url` (Info.plist `PersonaGettingStartedURL`, hidden if absent), alongside Try it first and Other ways.
+  Manual entry, SSH tunnels and command-line instructions appear only under Other ways in `PairView`. Expired or used codes (401 `invalid_token`) say "This code expired or was already used; generate another", with Scan again on iPhone; externally opened pairing links behave the same (`AppModel.showPairing`).
+- After pairing (`AppModel.checklistPending`, after engine selection), when the hub has `assistant_readiness` and the user has not chosen Later, the page becomes `OnboardingChecklistView`:
+  Computer, Claude Code, Model and Try a message, using readiness `state` for checkmarks, crosses, spinners and question marks, with the same actions as main-chat cards (`ReadinessRoute`). Later calls dismiss;
+  when all are checked, show Get started. Settings top "N steps left to get started" (`ChecklistSettingsRow`, N counts unfinished computer / claude / model steps) returns to the checklist. Old hubs add no post-pairing checklist.
 
-## 连接新设备（#3077）
+## Connect a new device (#3077)
 
-设置 › 设备 最上面「连接新设备」，照网页的（#2731，`docs/web.md`「设置」）：向 hub 要一个一次性临时配对码（`POST /api/v1/auth/pair-codes`，带 `{"web": hub 的地址}`，
-`docs/protocol.md`「临时配对」），新设备不用再到 hub 所在的机器上 `personad hub pair`。卡片（`Views/Settings/ConnectDeviceView.swift`，逻辑在 `ConnectDeviceModel`）分两种：
+"Connect a new device" at the top of Settings › Devices follows the web (#2731, `docs/web.md` ("Settings")): request a one-time temporary pairing code from the hub (`POST /api/v1/auth/pair-codes`, with `{"web": the hub address}`,
+`docs/protocol.md` ("Temporary pairing")), so the new device does not need `personad hub pair` run on the hub machine. The card (`Views/Settings/ConnectDeviceView.swift`, logic in `ConnectDeviceModel`) has two modes:
 
-- Persona App：配对二维码（hub 画好的 `qr.rows`，`QRCodeView`）、临时码本身（可选中）、「拷贝配对链接」（Mac 和 Android 粘贴配对）。
-- 浏览器：登录链接的二维码（手机相机扫了直接在浏览器里打开）和「拷贝登录链接」；这台设备是经 `127.0.0.1` / `localhost`（SSH 隧道）连的 hub 时提示别的设备打不开。
-- 倒计时（每秒），到 0 显示已过期和「重新生成」；等配对时每 3 秒读一次设备列表，出现一个生成码时没有的凭据就显示「已连接：名字」，设备列表跟着刷新，可以「再连一台」。
-- 手表、临时码本身连着的设备，hub 返回 403，卡片显示 hub 的话和「重试」；旧 hub 不带二维码时只有临时码和链接。
+- Persona App: pairing QR code (hub-generated `qr.rows`, `QRCodeView`), the temporary code itself (selectable), "Copy pairing link" (paste to pair Mac and Android).
+- Browser: a login-link QR code (scan with the phone camera to open directly in the browser) and "Copy login link"; if this device connects to the hub through `127.0.0.1` / `localhost` (SSH tunnel), warn that other devices cannot open it.
+- Countdown (every second); at 0 show expired and "Generate again"; while waiting for pairing, read the device list every 3 seconds. When a credential absent when the code was generated appears, show "Connected: name", refresh the device list, and offer "Connect another".
+- For watches and devices connected with a temporary code themselves, the hub returns 403; the card shows the hub's message and "Retry". Old hubs without a QR code show only the temporary code and link.
 
-截图：`-openDevices YES -openConnectDevice YES`（`web`：打开在「浏览器」）；假 hub 的 `MOCK_PAIR_SECONDS` 缩短有效期，`POST /api/v1/auth/tokens` 假装新设备连上。
+Screenshots: `-openDevices YES -openConnectDevice YES` (`web`: open the Browser mode); mock hub `MOCK_PAIR_SECONDS` shortens validity, `POST /api/v1/auth/tokens` simulates a new device connecting.
 
-## 添加电脑、确认电脑（#4196）
+## Add and confirm computers (#4196)
 
-照网页（#3934）和 Android：在 App 里加一台电脑并确认是自己的（`docs/onboarding.md` 4.2、5.3，接口见 `docs/protocol.md`「电脑的配对码」「电脑的信任」）。
-一张表单（`Views/Machines/AddComputerView.swift`，逻辑在 `AddComputerModel`）：选系统（Mac / Linux / Windows）、填名字（可以中文，最多 40 个字，不填 id）→
-`pair-codes` 的 `add`（加在 hub 级的那组）→ 按系统一屏：Linux 是 hub 给的那一行安装命令（没有时退回配对命令，说先装好 Persona Link），Mac 是安装说明和分享 / 拷贝配对链接，
-Windows 是 PowerShell 那一行 → 倒计时（`ConnectDeviceText` 的算法；过期后「重新生成」用 `{"machine": id}`），每 3 秒读一次机器列表 → 它连上来、还在待确认时同一屏问
-「有一台电脑想加入：<名字>（macOS），是你的吗？」，「是我的电脑」/「不是」。错误按 `code` 出中文（`AddComputerText.failure`），`tls_required` 用 hub 给的话，不认识的码显示 hub 的 `error`。
+Like the web (#3934) and Android: add a computer in the App and confirm that it is yours (`docs/onboarding.md` 4.2, 5.3; APIs in `docs/protocol.md` ("Computer pairing codes", "Computer trust")).
+One form (`Views/Machines/AddComputerView.swift`, logic in `AddComputerModel`): choose OS (Mac / Linux / Windows), enter a name (Chinese allowed, at most 40 characters, no id) →
+`pair-codes` with `add` (added in the hub-level group) → one screen per OS: Linux shows the hub's one-line install command (otherwise falls back to the pairing command and says to install Persona Link first); Mac shows installation instructions and share / copy pairing link;
+Windows shows the PowerShell line → countdown (the `ConnectDeviceText` algorithm; after expiry "Generate again" uses `{"machine": id}`), read the machine list every 3 seconds → when it connects and is pending confirmation, the same screen asks
+"A computer wants to join: <name> (macOS). Is it yours?", "It's my computer" / "No". Errors use Chinese text by `code` (`AddComputerText.failure`); `tls_required` uses the hub's message, and unknown codes show the hub's `error`.
 
-- 入口：机器页的空状态和工具栏「+」、Agents 零电脑的空状态、Mac 的「文件 › 添加电脑…」，都只在 hub 有 `machines_add` 时出现（没有时机器页仍是原来的文案）。
-- 别的页面要打开它：`AppModel.openAddComputer()`（就绪度的 `add_computer`），`AppModel.openConfirmComputer(ref)`（`confirm_computer`；不给机器时取 `pendingToConfirm()`：先在线的待确认电脑），
-  都是设 `AppModel.addComputer`，由根视图的 `.addComputerPresentation()` 弹出；页面自己是一张 sheet 时用 `.addComputerSheet($request)` 在自己身上弹。
-- 列表和机器页：`trust == "pending"` 排最前、写「等你确认」，在线时「是我的电脑」/「不是」，没在线时「删掉」（hub 有 `machine_trust` 才有按钮）；`error_code` 写中文
-  （`AddComputerText.machineProblem`），hub 的原话在机器页「详情」里。新建 Agent（以及待办交给 Agent、邮件 / 知识库开 Agent，都走 `NewChatView.offered`）不列待确认的电脑。
-- 截图：`-showAddComputer YES`（`add:<mac|linux|windows>:<名字>` 填好并提交，`<机器 id>` 打开确认那台；Mac 用 `scripts/app/mac_shot.sh` 同样的参数）；UI 测试 `AddComputerTests`（见 `docs/testing.md`「就绪度场景」）。
+- Entry points: the Machines page's empty state and toolbar "+", the Agents empty state with no computers, Mac's File › Add Computer…; only shown when the hub has `machines_add` (otherwise the Machines page keeps its original text).
+- Other pages can open it with `AppModel.openAddComputer()` (readiness `add_computer`), `AppModel.openConfirmComputer(ref)` (`confirm_computer`; without a machine, use `pendingToConfirm()`: online pending computers first),
+  both setting `AppModel.addComputer`, presented by `.addComputerPresentation()` at the root; pages that are themselves sheets use `.addComputerSheet($request)` on themselves.
+- Lists and the Machines page: `trust == "pending"` comes first, labeled "Waiting for your confirmation"; online offers "It's my computer" / "No", offline offers "Delete" (buttons only with hub feature `machine_trust`); `error_code` gets Chinese text
+  (`AddComputerText.machineProblem`), with the hub's raw message in Machines-page Details. New Agent (and handing a to-do to an Agent, starting one from mail / Knowledge, all through `NewChatView.offered`) excludes pending computers.
+- Screenshots: `-showAddComputer YES` (`add:<mac|linux|windows>:<name>` fills and submits; `<machine id>` opens confirmation for that machine; Mac uses the same arguments with `scripts/app/mac_shot.sh`); UI tests `AddComputerTests` (`docs/testing.md` ("Readiness scenarios")).
 
-## Mac 已登录（2026-11-01）
+## Mac signed in (2026-11-01)
 
-照微信「Mac 微信已登录」：Mac 上的 Persona 连着 hub 时，Agents 列表最上面一行「Mac 上的 Persona 已登录」（几台就写几台），开了手机静音时右边带「手机静音」；
-搜索时不显示。点开是一张卡片（`Views/Settings/DesktopPresence.swift`）：
+Like WeChat's "Mac WeChat signed in": when Persona on a Mac is connected to the hub, the top of the Agents list says "Persona is signed in on Mac" (with a count for multiple Macs), with "Phone muted" on the right when enabled;
+not shown during search. Tapping opens a card (`Views/Settings/DesktopPresence.swift`):
 
-- 手机静音：Mac 在线时这台 iPhone 不再收到「需要你处理」「Agent 做完」的推送，由 Mac 提醒；助手按你的要求发的提醒照推。存在这台设备的推送设置里（`mute_while_desktop`），默认关。
-- 每台 Mac 的名字和登录时间，「退出这台 Mac 上的 Persona」：吊销它的设备凭据，hub 立刻断开它，要重新配对才能再用。用配对凭据直接连的 Mac 不能单独退出。
+- Phone muted: while a Mac is online, this iPhone no longer receives "Needs you" or "Agent finished" pushes; the Mac alerts you instead. Reminders the assistant sends at your request still push. Stored in this device's push settings (`mute_while_desktop`), off by default.
+- Each Mac's name and sign-in time, "Sign out of Persona on this Mac": revoke its device credential, and the hub disconnects it immediately; it must pair again to use Persona. A Mac connected directly with a pairing credential cannot be signed out individually.
 
-放在 Agents 列表顶上而不是顶栏：顶栏是两页共用的，常驻一条会盖住内容；列表顶上这一行跟着滚走，和微信一样。Mac 自己登记成桌面端，不当手机（`docs/mac.md`「Mac 是桌面端，不是手机」）。
-截图：`-showDesktopSample YES`（假装有一台 Mac、手机静音开着），`-openDesktopSheet YES` 打开卡片。
+Placed at the top of the Agents list rather than the shared top bar: a persistent line in the two pages' shared bar would cover content; a list-top row scrolls away, like WeChat. Mac registers as a desktop, not a phone (`docs/mac.md` ("Mac is a desktop, not a phone")).
+Screenshots: `-showDesktopSample YES` (fake one Mac with phone muting enabled), `-openDesktopSheet YES` opens the card.
 
-## 主对话派的任务只在主对话里通知（#1731）
+## Tasks dispatched by the main chat notify only there (#1731)
 
-设置 › 助手 › 任务通知的开关（hub 的 `main_tasks_quiet`，默认开，`GET / PUT /api/v1/assistant`；hub 没返回这个字段时不显示开关）。
-开着时从主对话派出去的任务是 quiet 的（待办的 `quiet`，挂在上面的会话也带 `quiet`），由 hub 往主对话投消息、助手来告诉你；推送和实时活动 hub 自己就不发。客户端这几处把它们去掉：
+Settings › Assistant › Task notifications toggle (hub `main_tasks_quiet`, on by default, `GET / PUT /api/v1/assistant`; hidden if the hub does not return the field).
+When on, tasks dispatched by the main chat are quiet (to-do `quiet`, attached sessions also carry `quiet`); the hub sends messages into the main chat and the assistant tells you. The hub itself sends no push or Live Activity. Clients exclude them here:
 
-- 实时活动：`AppModel.mergedFleet()` 合并前去掉 quiet 会话的条目、扣掉对应的数（`FleetState.leavingOut`），兜住标记之前的 fleet。
-- 前台通知：`willPresent` 遇到 quiet 会话不弹。
-- 角标：quiet 会话的提问不算在 Agents 上，算到助手上（在主对话里处理）；抽屉 / Mac 侧边栏的「待办」数不含 quiet 任务（`TodoStore.badgeCount`），待办列表本身照常有。
-- 手表：手机推过去的摘要和手表自己拉的列表都去掉 quiet 会话和它的提问（手表的凭据读不了待办，只认会话上的 `quiet`）。
-- Mac：通知、Dock 角标当作静音，菜单栏不列。
+- Live Activities: before merging, `AppModel.mergedFleet()` excludes quiet session entries and subtracts their counts (`FleetState.leavingOut`), covering fleet states predating the flag.
+- Foreground notifications: `willPresent` shows no banner for quiet sessions.
+- Badges: quiet-session questions count toward the assistant, not Agents (handled in the main chat); the drawer / Mac sidebar's To-dos count excludes quiet tasks (`TodoStore.badgeCount`), though the to-do list still includes them.
+- Watch: both the phone-synced summary and the watch's directly fetched lists exclude quiet sessions and their questions (watch credentials cannot read to-dos and use only session `quiet`).
+- Mac: notifications and Dock badges treat them as muted; the menu bar excludes them.
 
-判断在 `AppModel.isQuiet`：先看 hub 在会话上的 `quiet`，再看当前 hub 的待办（`QuietTasks`：quiet 待办和它的 Agent，放出去的也算）。主对话里的任务卡片、Agents 页的列表照常显示。
+`AppModel.isQuiet` decides: first the hub's session `quiet`, then the current hub's to-dos (`QuietTasks`: quiet to-dos and their Agents, including ones detached from the to-do). Task cards in the main chat and the Agents-page list still display normally.
 
-### hub 投进对话的消息（#2358）
+### Messages the hub injects into chats (#2358)
 
-hub 投给助手的任务通知，以及定时任务、跟进、叫醒、node 重启的说明，在 transcript 里都是用户文字（协议见 `docs/protocol.md`「Persona 注入的消息」）。
-Apple 端不把它们画成用户气泡，也不显示给模型的说明：
+Task notices the hub sends to the assistant, along with scheduled tasks, follow-ups, wake-ups and node-restart explanations, are user text in the transcript (protocol in `docs/protocol.md` ("Messages injected by Persona")).
+Apple clients do not draw them as user bubbles or show the model's instructions:
 
-- 识别：`Injected.of(item)`（`Shared/Injected.swift`）先看 hub 下发的 `item.injected`；旧 hub 没有这个字段时按文字认，规则和 hub 的 `prompts.ParseInjected` 一样，
-  单测 `InjectedTests` 跑共用夹具 `spec/fixtures/injected/cases.json`。App 自己发的（带 `client_msg_id`）、别的会话发来的（`from`）不认。
-- 对话页：`ChatView.rowView` 画成 `InjectedLine`，是一个居中的胶囊，和「回答了」那行（`AnsweredLine`）同一种样子，图标加 `line`。图标和颜色由 `InjectedLook` 决定，手机、Mac、手表共用：
-  做完是绿色勾，在等你是强调色举手，被打断或没开起来是红色警告，定时任务是闹钟，叫醒是铃，node 重启是灰色信息。
-  任务通知点一下打开任务详情：用 hub 给的 `todo_id`，没有就找这段对话开出的同名任务里最新的一个，找不到就不能点。
-  定时任务或跟进的那行可以点开，看任务本身的要求（`detail`）。
-- 一轮里有几条消息时，每条各画一行，注入的那条画成上面的居中一行。
-  它也不会被当成待发气泡已经送达（`PendingMessage.arrived`）。
-- 手表：对话里画成居中的一行小字（图标加 `line`），不画气泡（截图：mock 加 `MOCK_INJECTED_WATCH=1`，手表 `-openWatchItem session`）。
-- 对话列表的预览取的是助手的话（`last_text`），本来就不含这些消息。
-- `ChatCache` 升到 v9：缓存里的旧条目没有 `injected`。
+- Recognition: `Injected.of(item)` (`Shared/Injected.swift`) first checks the hub's `item.injected`; on old hubs without the field it recognizes text using the same rules as the hub's `prompts.ParseInjected`,
+  tested by `InjectedTests` with shared fixtures `spec/fixtures/injected/cases.json`. App-sent messages (with `client_msg_id`) and messages from another session (`from`) do not count.
+- Chat page: `ChatView.rowView` draws `InjectedLine`, a centered capsule like the "Answered" row (`AnsweredLine`), with an icon and `line`. `InjectedLook` determines icons and colors, shared by phone, Mac and watch:
+  finished is a green checkmark, waiting for you an accent-colored raised hand, interrupted or failed to start a red warning, scheduled tasks an alarm clock, wake-ups a bell, node restart gray information.
+  Tap a task notice for task details: use the hub's `todo_id`, otherwise find the newest same-name task created by this chat; without a match it is not tappable.
+  A scheduled-task or follow-up row can be opened to see the task's actual request (`detail`).
+- When a turn has multiple messages, each gets its own row; the injected one uses the centered row above.
+  Nor is it treated as delivery of a pending bubble (`PendingMessage.arrived`).
+- Watch: a small centered line (icon plus `line`), no bubble (screenshots: mock `MOCK_INJECTED_WATCH=1`, watch `-openWatchItem session`).
+- Chat-list previews use the assistant's words (`last_text`), which already exclude these messages.
+- `ChatCache` bumped to v9: old cached items lack `injected`.
 
-## 连接状态（弱网 / 断网）
+## Connection status (slow / offline networks)
 
-参考 Telegram：网络有问题时不弹横幅，**页面标题位直接换成「小转圈 + 状态」**，好了以后无声换回（2026-10-29 用户要求，原来列表顶上的
-`ConnectionBanner` 横幅已删掉）。
+Like Telegram: network trouble shows no banner; **the page title becomes "small spinner + status"**, then silently returns when recovered (requested 2026-10-29; the old list-top
+`ConnectionBanner` was removed).
 
-- 三种状态（`Persona/App/ConnectionStatus.swift`）：**等待网络**（`NWPathMonitor` 说手机没网）、**连接中…**（有网但 WebSocket 没连上、
-  正在重连，或者连着但 ping 5 秒没回 / 回得比 5 秒还慢 = 弱网）、**更新中…**（刚连上，正在补拉：待处理交互和打开着的对话的 backlog 都到了才算完，
-  最多 8 秒）。没配对、App 在后台（socket 是主动断开的）不算问题。
-- 去抖：从正常变成有问题后要持续 1.5 秒才显示，回到前台、切网络这种一秒内完成的重连什么都不显示；恢复时立刻换回标题。
-- **连着的 socket 断了先不说**（hub 无感重启，#1634，`docs/hub-restart.md`）：`LiveConnection` 记下这次断开（`drop`），
-  宽限期内（`inGrace`：普通断线 8 秒，收到 `hub_restarting` 或关闭码 1001 是 30 秒）照旧算连着：标题、状态行、设置里的圆点、助手页的设备图标都不变，
-  发消息照常发（失败了在宽限内用同一个 id 重试，不变成时钟气泡）。宽限过了还没连上，标题立刻显示，不再叠 1.5 秒。
-  重连节奏（`LinkDrop.retryDelay`，`Shared/Reconnect.swift`）：重启 150–400 ms 后第一次、之后每 0.5–1 秒，30 秒内不退避；普通断线第一次 300–600 ms，之后 1 秒起翻倍到 20 秒（±20%）。
-  续传：记住 hello 的 `event_stream` 和收到的最大 `event_seq`（`EventCursor`，跨重连保留，换 hub / 重新配对清掉，不落盘），重连带在 socket 的 URL 上；
-  hello 说 `resumed: true` 时（`ReconnectPlan`）不重拉交互、收件箱、待办、任务、飞书、Agents 列表，也不显示「更新中…」，只照常注册手机、重新订阅打开的对话（`since_seq`），
-  正在生成的回答不清空，等 hub 补的那条 `delta` 接着写。不是 `resumed` 的照以前全量刷新。
-- 弱网：只有及时回来的 pong 能解除「连接中…」（晚到的 pong 也算慢），慢的时候每 5 秒 ping 一次，好了很快就能看出来；
-  否则标题会每 20 秒闪一下（实测过）。socket 照旧 45 秒没任何消息才判死重连。
-- 网络恢复（path 从没网变成有网）立刻重连，不等退避（最长 20 秒）；切换网络（Wi-Fi ↔ 蜂窝）时马上 ping 一次，旧接口上的死连接几秒内就会显示出来。
-- hub 在自己更新（`hub_update` 的 `restarting` / `confirming`，`docs/hub-update.md`）时断开是预期的：「连接中…」换成「hub 正在更新…」，点开的说明讲是在重启。
-- 显示位置（`ConnectionTitle` / `ConnectionLabel`）：Agents 列表（平时没有标题，标题位留空）、收件箱、设置 › 机器
-  的导航栏中间（`.principal`）；「Persona」tab 是头像下的名字胶囊换成状态（菜单里多一项「连接详情」）；对话页展开的页头保留会话名、把副标题换成状态（Telegram 的做法），折叠后的小胶囊整个换成状态。
-  点状态弹出说明（`ConnectionDetails`：原因、上次失败、几秒后重试、上次连上、几条消息在等、「立即重试」）。
-- 断网时的操作：
-  - **发消息**：连不上时不发请求，气泡带时钟和「连上后自动发送」（点时钟可「现在重试 / 不发了」）；请求因为没网 / 超时失败也一样转成等待，
-    不弹错。重连且「更新中…」结束后按写的顺序自动发出（没打开的对话先拉一页最新消息，已经送到的会在 transcript 里出现、自动去掉）。
-    同一条消息重发带同一个 `client_msg_id`，不会打两遍。等待中的消息存盘（`Outbox.swift`），App 被杀掉也不丢。
-  - **op id**：发消息带 `X-Jarvis-Op-Id`（就是消息的 id，和 `client_msg_id` 相同），回答 / 批准每次点击一个；
-    hub 按它只做一次（`docs/protocol.md`「操作回执」）。重复请求 hub 回 `202 {"state":"pending"|"unknown"}` 时客户端不当成功：pending 接着重试，unknown 按「可能已经送到」处理。
-    「可能已经送到」的消息点重发时先查 `GET /api/v1/ops/{旧 id}`：`done` 就当已发出，不再发；别的情况照旧换新 id 重发。
-  - **批准 / 回答**：请求死在半路（连接被拒绝 / 重置、超时、不是 hub 自己给的 502 / 503 / 504）时卡片保持已提交的样子，用同一个 op id 重试，最多 60 秒（`OpRetry`），之后卡片放回去并提示。
-  - **其他一次性操作**：不排队（电脑上的状态可能已经变了）。没网时卡片原样不动；失败时卡片放回去，
-    弹一条蓝色提示「连不上 hub / 没有网络，刚才的操作没有生效」（4 秒内最多一条），不用红色报错。
-  - 没网 / 连不上 hub 的错误（`Error.isOffline`）和超时一样不显示在页面里（`Error.shown` 为 nil）；后台刷新、往上翻历史失败什么都不弹，标题已经在说了。
-    手表没有这个标题，手表上照旧显示。
-- 调试：`-showConnection waiting|connecting|updating` 固定显示某个状态，再加 `-openConnectionDetails YES` 打开说明；
-  `-simulateOffline YES` 让 NWPathMonitor 视为没网（模拟器总是有 Mac 的网）。mock 的断网 / 弱网开关见 `docs/testing.md`。
+- Three states (`Persona/App/ConnectionStatus.swift`): **Waiting for network** (`NWPathMonitor` says the phone is offline), **Connecting…** (network available but WebSocket disconnected,
+  reconnecting, or connected but ping unanswered for 5 seconds / answered after more than 5 seconds = slow network), **Updating…** (just connected, catching up: complete only after pending interactions and backlog for open chats arrive,
+  at most 8 seconds). Unpaired and backgrounded Apps (socket intentionally disconnected) are not problems.
+- Debounce: trouble must persist for 1.5 seconds before showing; reconnects completed within a second, such as foregrounding or switching networks, show nothing; restore the title immediately on recovery.
+- **A connected socket drops: stay silent first** (invisible hub restart, #1634, `docs/hub-restart.md`): `LiveConnection` records the drop (`drop`),
+  and during grace (`inGrace`: 8 seconds normally, 30 seconds after `hub_restarting` or close code 1001) still counts as connected: titles, status rows, Settings dots and the assistant page's device icons remain unchanged,
+  messages send normally (failures retry with the same id within grace, without becoming clock bubbles). If grace expires without reconnecting, show the title status immediately, with no additional 1.5 seconds.
+  Reconnect timing (`LinkDrop.retryDelay`, `Shared/Reconnect.swift`): during restart first at 150–400 ms, then every 0.5–1 second, no backoff for 30 seconds; ordinary disconnect first at 300–600 ms, then doubling from 1 second to 20 seconds (±20%).
+  Resume: remember hello's `event_stream` and the largest received `event_seq` (`EventCursor`, retained across reconnects, cleared on hub change / re-pairing, not persisted); put them in the socket URL on reconnect.
+  When hello says `resumed: true` (`ReconnectPlan`), do not refetch interactions, Inbox, to-dos, tasks, Lark or the Agents list, and do not show "Updating…"; just register the phone and resubscribe to open chats (`since_seq`) as usual,
+  keeping the answer being generated until the hub's replayed `delta` continues it. Non-`resumed` reconnects do the full refresh as before.
+- Slow network: only a timely pong clears "Connecting…" (late pongs still count as slow); ping every 5 seconds while slow so recovery is detected quickly,
+  otherwise the title flashes every 20 seconds (observed). The socket still waits for 45 seconds with no messages before declaring it dead and reconnecting.
+- Network recovery (path changes from unavailable to available) reconnects immediately without waiting for backoff (up to 20 seconds); switching networks (Wi-Fi ↔ cellular) pings immediately, exposing a dead connection on the old interface within seconds.
+- During hub self-update (`hub_update` `restarting` / `confirming`, `docs/hub-update.md`), disconnects are expected: "Connecting…" becomes "Hub updating…", and the opened explanation describes the restart.
+- Placement (`ConnectionTitle` / `ConnectionLabel`): center of the navigation bar (`.principal`) in Agents (normally no title, title area empty), Inbox, and Settings › Machines;
+  in the Persona tab, the name capsule below the avatar becomes the status (menu adds "Connection details"); the chat's expanded header keeps the session name but replaces the subtitle with status (like Telegram), while its collapsed small capsule is replaced entirely.
+  Tap status for an explanation (`ConnectionDetails`: cause, last failure, seconds until retry, last connection, queued message count, "Retry now").
+- Offline actions:
+  - **Send messages**: when unreachable, make no request; the bubble has a clock and "Sends automatically when connected" (tap the clock for "Retry now / Cancel send"); requests failing offline / on timeout also become waiting,
+    with no error alert. After reconnect and "Updating…" completion, send automatically in composition order (for unopened chats, first fetch one page of latest messages; delivered ones appear in the transcript and are removed automatically).
+    Resends use the same `client_msg_id`, preventing duplicates. Waiting messages persist (`Outbox.swift`) and survive App termination.
+  - **Op id**: messages carry `X-Jarvis-Op-Id` (the message id, equal to `client_msg_id`); each answer / approval tap gets one;
+    the hub executes it once (`docs/protocol.md` ("Operation receipts")). A duplicate request returning `202 {"state":"pending"|"unknown"}` is not success: pending keeps retrying, unknown is treated as "May already have been delivered".
+    Retrying a "May already have been delivered" message first checks `GET /api/v1/ops/{old id}`: `done` means sent, no resend; otherwise resend with a new id as before.
+  - **Approve / answer**: if a request dies in transit (connection refused / reset, timeout, 502 / 503 / 504 not issued by the hub), keep the card submitted and retry with the same op id for at most 60 seconds (`OpRetry`), then restore the card and show a notice.
+  - **Other one-shot actions**: never queue them (computer state may already have changed). Offline cards remain unchanged; failure restores the card,
+    with a blue "Can't reach the hub / No network; that action did not take effect" notice (at most one per 4 seconds), not a red error.
+  - Offline / unreachable-hub errors (`Error.isOffline`) are hidden in pages like timeouts (`Error.shown` is nil); background refresh and history-loading failures show nothing, as the title already explains it.
+    The watch lacks this title and keeps showing errors as before.
+- Debugging: `-showConnection waiting|connecting|updating` pins a state; add `-openConnectionDetails YES` to open the explanation;
+  `-simulateOffline YES` makes NWPathMonitor treat the network as unavailable (the simulator always has the Mac's network). Mock slow / offline switches are in `docs/testing.md`.
 
-## SSH 隧道（直连不通时的后备，#891）
+<a id="ssh-隧道直连不通时的后备891"></a>
 
-设备访问不到 hub 的地址时，经一台 SSH 服务器连过去。原理、服务器上怎么配、安全说明见 [network.md「经 SSH 隧道连 hub」](network.md#经-ssh-隧道连-hub直连不通时的后备)，这里是 App 这一侧。
+## SSH tunnels (fallback when direct connections fail, #891)
 
-- **代码**：隧道本身在共享 package `apple/Packages/PersonaSSH`（swift-nio-ssh + Network.framework，iOS 和 Mac 共用，手表不链接）；
-  App 侧 `Persona/App/SSHTunnels.swift`（每台 hub 一个隧道、密钥 `SSHKeys`、选路 `AppModel.sshRoute`）、
-  `Shared/HubTransport.swift`（hub 地址 → 隧道回环地址的映射，`SSHRoute` 配置）、`Persona/Views/Settings/SSHTunnelView.swift`。
-- **只换发出去的 URL**：`APIClient.url`、对话条目的 URL、`LiveConnection` 的 socket、端口转发拼地址时过一遍 `HubTransport.resolve`；
-  `ServerConfig`、配对注册表、`currentConfig` 和所有比较都还是 hub 自己的地址，所以多 hub 的分组、选路、凭据升级都不用知道隧道。
-  `HubRoute.healthProbe` 用 `direct: true`，问的永远是直连。
-- **选路**：组里有可用的 SSH 设置（主机、用户、已确认的指纹都有）时，`routePicker` 总是有值：每次连接前先 `HubRoute.answering` 问直连（单个地址也问），
-  都不应答才 `SSHTunnels.open`；「总是走 SSH」先开隧道。走隧道期间 `watchDirect` 每 2 分钟问一次直连，通了 `reroute()` 换回来。
-- **配置**存在 `PairedHub.ssh`（钥匙串里的配对注册表，按 hub）；私钥单独存钥匙串（`ssh.identity`，`AfterFirstUnlockThisDeviceOnly`）。
-  配对页设的 SSH 设置随新配对的 hub 保存，配对时开的隧道直接交给这台 hub（`SSHTunnels.adopt`），设备凭据升级接着走它。
-- **状态显示**（和现有口径一致）：连接详情多一行「线路：直连 / 经 SSH 隧道（user@host）」，隧道起不来时「SSH 隧道：<原因>」；
-  设置顶部「已连接 hub · 经 SSH 隧道」；设置 › hub 的在用 hub 带「SSH」小标签、页脚「已连接（经 SSH 隧道）」，「SSH 隧道」一行写 未设置 / 后备 / 总是 / 使用中。
-- **后台**：`suspendLinks` 关掉所有隧道（`SSHTunnels.closeAll`），回前台各组重新选路、重建（模拟器实测约 1 秒）。
-- **调试**：`-seedSSHTunnel <SSHRoute JSON 的 base64>` 给第一台 hub 预置 SSH 设置，`-seedSSHKey <32 字节种子的 base64>` 用给定的测试密钥（只在 DEBUG），
-  `-tab settings -openSSHTunnel YES` 打开第一台 hub 的 SSH 隧道页。端到端测试的搭法见 `docs/testing.md`「SSH 隧道」。
+When a device cannot reach the hub address, connect through an SSH server. For the mechanism, server setup and security, see [network.md, "Connect to the hub through an SSH tunnel"](network.md#经-ssh-隧道连-hub直连不通时的后备); this section covers the App side.
 
-## 文件查看器（2026-10-31）
+- **Code**: the tunnel itself is in the shared package `apple/Packages/PersonaSSH` (swift-nio-ssh + Network.framework, shared by iOS and Mac, not linked into the watch);
+  App-side `Persona/App/SSHTunnels.swift` (one tunnel per hub, `SSHKeys`, routing `AppModel.sshRoute`),
+  `Shared/HubTransport.swift` (maps hub addresses to tunnel loopback addresses, `SSHRoute` configuration), `Persona/Views/Settings/SSHTunnelView.swift`.
+- **Only outgoing URLs change**: `APIClient.url`, chat-item URLs, `LiveConnection` sockets and port-forwarding address construction pass through `HubTransport.resolve`;
+  `ServerConfig`, the pairing registry, `currentConfig` and all comparisons still use the hub's own address, so multi-hub grouping, routing and credential upgrades need no tunnel awareness.
+  `HubRoute.healthProbe` uses `direct: true`, always probing the direct route.
+- **Routing**: with usable SSH settings in a group (host, user, confirmed fingerprint), `routePicker` always has a value: before every connection, `HubRoute.answering` probes direct routes (even a single address),
+  and only if none answer calls `SSHTunnels.open`; "Always use SSH" opens the tunnel first. While tunneled, `watchDirect` probes direct routes every 2 minutes and calls `reroute()` when they work again.
+- **Configuration** lives in `PairedHub.ssh` (per-hub pairing registry in Keychain); private keys are separate in Keychain (`ssh.identity`, `AfterFirstUnlockThisDeviceOnly`).
+  SSH settings entered on the pairing page are saved with the newly paired hub; the tunnel opened for pairing is handed directly to it (`SSHTunnels.adopt`), and device-credential upgrading continues through it.
+- **Status** (consistent with existing wording): connection details add "Route: Direct / Via SSH tunnel (user@host)"; tunnel startup failures show "SSH tunnel: <reason>";
+  Settings top says "Hub connected · Via SSH tunnel"; the active hub in Settings › hub has an "SSH" tag and footer "Connected (via SSH tunnel)", with the SSH tunnel row showing Not configured / Fallback / Always / In use.
+- **Background**: `suspendLinks` closes every tunnel (`SSHTunnels.closeAll`); foregrounding reroutes and rebuilds each group (about 1 second measured in the simulator).
+- **Debugging**: `-seedSSHTunnel <base64 SSHRoute JSON>` seeds SSH settings for the first hub; `-seedSSHKey <base64 32-byte seed>` uses a supplied test key (DEBUG only),
+  `-tab settings -openSSHTunnel YES` opens the first hub's SSH tunnel page. End-to-end test setup is in `docs/testing.md` ("SSH tunnels").
 
-会话里提到的文件、工具行里的文件、会话页「文件」里点开的文件，都在 `FileViewer` 里看（`Views/Chat/FileViewer.swift`，`Persona/Code/`）。
+## File viewer (2026-10-31)
 
-**只链接真的打得开的路径。**
-- **以前的问题**：消息里识别出的路径（`FilePaths`）一律做成文件块，点开时按会话所在的机器去读。路径要是别的机器的（比如 hub 上的 `~/.persona/…`），或者文件早删了，点开只会看到「打不开这个文件」。
-- **现在的做法**：
-  1. 消息行出现时，把它的路径交给 `FilePresence`；
-  2. 一瞬间之后，按「机器 + 会话目录」批量问一次 `GET /api/v1/machines/{mid}/stat`，相对路径在会话的 cwd 里解析；
-  3. 只把 file / dir / denied 的路径做成链接。
-- **缓存**：结果按（机器, 目录, 路径）记住，在的记 30 分钟，不在的记 2 分钟（Agent 可能马上就写出来），问不到的 1 分钟后再问。
-- **问不到时**：答案没回来、旧 node 不认这个接口、没网时，路径都是普通文字，不确定就不链接。
-- **数量**：正文里最多认 40 个候选路径（`PathMarkdown` / `PathRefs`）；文件块最多认 12 个，显示其中在的前 6 个。
-- **工具行**（Read / Edit 的文件）不查：工具刚用过它。
+Files mentioned in chats, tool rows and the chat's Files page all open in `FileViewer` (`Views/Chat/FileViewer.swift`, `Persona/Code/`).
 
-**正文里的路径就是链接**（#1706，和网页 #1669 同一套规则，`apple/Packages/PersonaKit/Sources/PersonaKit/PathRefs.swift`，#2095）：
-- **认哪些**：`~/…`、至少两段的绝对路径（`/tmp` 不算）、带目录和字母开头扩展名的相对路径（`src/a.ts`；`deepseek/v4.1` 不算）。
-  后面可以带行号：`:12`、`:12:5`、`:12-20`（取起始行）、`#L12`；问 `stat` 的是去掉行号的路径。
-  反引号外只认 ASCII，紧跟中文或全角标点就结束（`/tmp/a.md里`），句末的 `.` 不算；反引号里的整段算一个路径（可含中文和空格），整段不在时再看段内的路径，按存在挑不重叠的，同一位置长的优先。
-  URL 里的片段、`and/or`、版本号不算；回复里的代码块、缩进代码、已有链接、公式不动。
-- **怎么画**：回复（`LinkedMarkdown`）里在的路径改写成 Markdown 链接（`persona-path:<路径>?line=N`，`PathLinkURL`），和别的链接同色（`.jarvis` 的 link 色）；反引号包着的整段路径整个行内代码可点。
-  用户气泡（`PathText`）里是带下划线的链接，颜色 `Theme.userBubbleLink`：浅色气泡用强调色，彩色气泡用气泡文字色（强调色在上面看不见）。
-  答案回来之前、问不到时是普通文字；换成链接只改颜色，字号不变、行不重排。
-- **流式**：正在写的那一段不认（最后一个词可能是写到一半的路径），写完的段落（`StreamChunk`）照常问、照常链接。
-- **点开**：会话页的 `openURL` 认出 `persona-path:`，在 `FileViewer` 里打开（`FileRef.line`）。有行号时直接看源码（渲染后的 Markdown、JSON 层级、表格没有行），读到那一行为止（最多再读 8 页），滚到那一行（屏幕上方三分之一处）并标出来（iPhone 是一条 `Theme.lineFocus` 的底色，Mac 是选中那一行）。目录打开目录。
-- **文件块**：内联了的路径不再在消息下面重复显示胶囊；没内联的（只在代码块里、超出数量的）照旧是胶囊；文档卡片、图片 / 视频 / 音频的胶囊照旧。
-- **还没做**：长按单个路径的菜单（拷贝路径 / 在文件页打开）和 Mac 悬停显示「路径 · 第 N 行」：SwiftUI 的 `Text` 里的链接没有单独的长按和悬停，消息的长按是整条消息的操作条；拷贝路径在文件查看器的 ⋯ 菜单里。
+**Link only paths that can actually open.**
+- **Previous problem**: every path recognized in messages (`FilePaths`) became a file block, read from the session's computer when tapped. Paths on another computer (such as the hub's `~/.persona/…`), or deleted files, only showed "Can't open this file".
+- **Now**:
+  1. When a message row appears, pass its paths to `FilePresence`;
+  2. A moment later, batch one `GET /api/v1/machines/{mid}/stat` by "machine + session directory", resolving relative paths against the session cwd;
+  3. Only file / dir / denied paths become links.
+- **Cache**: by (machine, directory, path), existing paths for 30 minutes, missing paths for 2 minutes (the Agent may create them soon), unavailable checks retried after 1 minute.
+- **If checks are unavailable**: before the answer arrives, with old nodes lacking the API, or offline, paths remain plain text; uncertain paths are not linked.
+- **Counts**: at most 40 candidate paths in body text (`PathMarkdown` / `PathRefs`); file blocks recognize at most 12, displaying the first 6 existing ones.
+- **Tool rows** (Read / Edit files) skip checks: the tool just used the file.
 
-**公式和图**（#1295，`apple/Packages/PersonaKit/Sources/PersonaKit/MathMarkdown.swift`、`Views/Chat/RenderedMarkdown.swift`）：对话、计划、文件页的 Markdown、知识库的人物页都画公式（KaTeX 0.16.22）和 Mermaid 图（12.3.0），两个都是 MIT，随 App 打包在 `Resources/Render/`（连同各自的 LICENSE），不联网。
-- **认哪些**：```math（也认 latex / tex / katex）和 ```mermaid 代码块；`$$…$$`、`\[…\]` 独占几行或一行只有一个公式时当独立公式；行内的 `$…$`、`\(…\)` 是行内公式。`$` 后面紧跟空格不算开始、前面是空格或后面紧跟数字不算结束（pandoc 的规矩），中间有中文、日文的不算（`\text{…}` 除外），`\$` 是美元符号，所以「$5 到 $10」照旧是文字。代码块、行内代码、缩进代码不动。
-- **怎么画**：一个藏起来的 WKWebView 加载打包的 `render.html`（内容安全策略只放行包里的脚本、样式、字体，另有一张规则表挡掉所有网络请求），一次画一个，截成图；要画的东西作为参数交给 `renderMath` / `renderMermaid`，不拼进页面。图按（种类, 源码, 深浅色, 字号）存在内存和缓存目录。公式画成黑色、当模板图用，跟着文字颜色走，深浅色共用一张；图按深浅色各画一张（Mermaid 自己的 default / dark 主题）。行内公式经 MarkdownUI 的行内图片（`![…](persona-math:…)`，`MathInlineImages` 挂在根视图上），独立公式和图替换代码块。
-- **画不出来时**：独立公式和图退回代码块，下面写 KaTeX / Mermaid 的原话；行内公式显示成等宽的原文。图点开全屏看（`ImageViewer`）。
+**Body paths are links** (#1706, same rules as web #1669, `apple/Packages/PersonaKit/Sources/PersonaKit/PathRefs.swift`, #2095):
+- **Recognized**: `~/…`, absolute paths with at least two segments (`/tmp` does not count), relative paths with a directory and a letter-starting extension (`src/a.ts`; not `deepseek/v4.1`).
+  Optional line suffixes: `:12`, `:12:5`, `:12-20` (start line), `#L12`; `stat` receives the path without line numbers.
+  Outside backticks only ASCII is recognized, stopping at Chinese or full-width punctuation (`/tmp/a.md里`, meaning "in /tmp/a.md"); sentence-final `.` is excluded. A whole backticked span counts as one path (may include Chinese and spaces); if it does not exist, check paths within the span and select existing non-overlapping ones, longer first at the same position.
+  URL fragments, `and/or` and version numbers do not count; code blocks, indented code, existing links and formulas in replies remain unchanged.
+- **Rendering**: existing paths in replies (`LinkedMarkdown`) become Markdown links (`persona-path:<path>?line=N`, `PathLinkURL`), colored like other links (`.jarvis` link color); an entire backticked path's inline code is tappable.
+  User bubbles (`PathText`) use underlined links in `Theme.userBubbleLink`: accent in light bubbles, bubble text color in colored bubbles (accent is invisible there).
+  Before answers or when checks fail, plain text; conversion to a link changes only color, not font size or line layout.
+- **Streaming**: the currently written chunk is not recognized (its final word might be an incomplete path); completed paragraphs (`StreamChunk`) are checked and linked normally.
+- **Opening**: the chat's `openURL` recognizes `persona-path:` and opens `FileViewer` (`FileRef.line`). With a line number, show source directly (rendered Markdown, JSON trees and tables have no lines), read through that line (at most 8 extra pages), scroll it to the upper third of the screen and highlight it (iPhone `Theme.lineFocus` background, Mac selected row). Directories open as directories.
+- **File blocks**: inline paths no longer repeat as capsules below the message; non-inline ones (only in code blocks, beyond the count limit) keep capsules; document cards and image / video / audio capsules remain.
+- **Not done**: a long-press menu on individual paths (copy path / open in Files) and Mac hover "path · Line N": links inside SwiftUI `Text` have no individual long-press or hover handling; message long-press opens the whole-message action bar. Copy path is in the file viewer's ⋯ menu.
 
-**这一轮看过的图片和文档卡片**（#1543，`Views/Chat/TurnAttachments.swift`、`ViewedImages.swift`）：
-- **看过的图片**：一轮里 Agent 看过的图片（规则见 `docs/protocol.md`「这一轮看过的图片」，`ViewedImages` 和 hub 的 `transcript.ViewedImages` 同一套）放在工作行和回复正文之间，是自己的一行（`ChatLine.viewed`）。流式中新图进来只是这一行横着变长，回复的字不重排、跟随不断。
-  - 不写任何说明文字，只有缩略图：多张是一条 64pt 高、可以横滑的条，伸到屏幕边，有更多时那一侧渐隐；一张时是一张 80pt 高的缩略图。截图和网页截图左下角有个小标记。
-  - 宽度按图的比例（¾ 到 1.6 倍高）：手机截图窄，屏幕截图宽，图到之前用懒加载图片带的宽高占好位置。
-  - 名字和来源（「屏幕截图 · Studio」「首页.png · 480×300」）只在长按的预览、Mac 的悬停和画廊里出现。
-  - 缩略图来源：带图的走 `ChatImageLoader`（懒加载、按尺寸降采样、内存 + 磁盘缓存）；只有路径的走 M0 的 `file/thumb`（`FileThumbnails`）。
-  - 点开是这一轮的画廊（`ImageViewer(items:)`）：左右滑、保存、分享、拷贝图片，有路径的另有拷贝路径和「在文件页打开」。
-  - 工作折叠时用 `fold.images`，展开后用真实的工具调用，两种结果一样。
-- **文档卡片**：回复里提到的 Word / Excel / PowerPoint / iWork / PDF（`FileThumbnails.isDocument`）不再是胶囊，而是回复文字下面的卡片：第一页的缩略图（M1 的 `FileThumbnailIcon`），加上文件名和类型（「Word 文档」）。点开是文件预览，长按拷贝路径。别的文件照旧是胶囊。
+**Math and diagrams** (#1295, `apple/Packages/PersonaKit/Sources/PersonaKit/MathMarkdown.swift`, `Views/Chat/RenderedMarkdown.swift`): chats, plans, Markdown in Files, and Knowledge person pages render formulas (KaTeX 0.16.22) and Mermaid diagrams (12.3.0), both MIT and bundled under `Resources/Render/` (with their LICENSE files), without networking.
+- **Recognized**: ```math (also latex / tex / katex) and ```mermaid code blocks; `$$…$$`, `\[…\]` over standalone lines or as a line's sole formula are block math; `$…$`, `\(…\)` are inline math. `$` immediately followed by whitespace is not an opening delimiter; preceded by whitespace or immediately followed by a digit is not closing (pandoc rules); Chinese or Japanese inside disqualifies it (except `\text{…}`); `\$` is a dollar sign, so "$5 to $10" remains text. Code blocks, inline code and indented code are untouched.
+- **Rendering**: a hidden WKWebView loads bundled `render.html` (CSP allows only bundled scripts, styles and fonts; a rule list blocks all network requests), renders one item at a time and snapshots it; content is passed as arguments to `renderMath` / `renderMermaid`, never concatenated into the page. Images are cached in memory and on disk by (kind, source, light/dark, font size). Formulas render black as template images following text color, sharing one image across light/dark; diagrams render once for each mode (Mermaid default / dark themes). Inline math uses MarkdownUI inline images (`![…](persona-math:…)`, `MathInlineImages` attached at the root); block math and diagrams replace code blocks.
+- **Failure**: block math and diagrams fall back to code blocks with KaTeX / Mermaid's message below; inline math shows monospace source. Tap diagrams for full-screen viewing (`ImageViewer`).
 
-**预览内的链接**
+**Images viewed this turn and document cards** (#1543, `Views/Chat/TurnAttachments.swift`, `ViewedImages.swift`):
+- **Viewed images**: images the Agent viewed during the turn (rules in `docs/protocol.md` ("Images viewed this turn"); `ViewedImages` follows the hub's `transcript.ViewedImages`) appear in their own row between work rows and the reply body (`ChatLine.viewed`). New streaming images only extend this row horizontally; reply text does not reflow and following stays intact.
+  - No explanatory text, only thumbnails: multiple images use a horizontally scrollable 64pt-high strip extending to screen edges with a fade on sides containing more; one image uses an 80pt-high thumbnail. Screenshots and webpage screenshots have a small bottom-left marker.
+  - Width follows aspect ratio (¾ to 1.6 times height): phone screenshots narrow, desktop screenshots wide; dimensions from lazy-loaded images reserve space before arrival.
+  - Names and sources ("Screenshot · Studio", "Home.png · 480×300") appear only in long-press previews, Mac hover and the gallery.
+  - Thumbnail sources: embedded images use `ChatImageLoader` (lazy loading, size-based downsampling, memory + disk cache); path-only images use M0 `file/thumb` (`FileThumbnails`).
+  - Tapping opens this turn's gallery (`ImageViewer(items:)`): swipe left/right, save, share, copy image; paths additionally offer copy path and "Open in Files".
+  - Folded work uses `fold.images`; expanded work uses actual tool calls, with identical results.
+- **Document cards**: Word / Excel / PowerPoint / iWork / PDF files mentioned in replies (`FileThumbnails.isDocument`) become cards below reply text, not capsules: first-page thumbnail (M1 `FileThumbnailIcon`), filename and type ("Word document"). Tap for file preview, long-press to copy path. Other files keep capsules.
 
-文件查看器在自己的展示层里打开 http(s) 链接：iPhone 的链接卡片叠在文件预览上方，Mac 的链接面板位于文件预览窗口内部。关闭链接返回原文件、保留阅读位置，不能让会话底层的链接抽屉等文件关闭后再出现。会话文件块和「文件」页均把原 `SessionKey` 交给预览，链接内的 AI 修改 / 作为上下文仍归原会话；没有会话的独立预览也能浏览网页。localhost / 机器地址的开发服务按文件所在机器经 hub 转发，其他 URL scheme 保留平台已有策略。
+**Links inside previews**
 
-**怎么显示**
+The file viewer opens http(s) links within its own presentation layer: on iPhone the link card sits above the file preview; on Mac the link panel is inside the file preview window. Closing the link returns to the original file and preserves the reading position; the chat's underlying link drawer must not wait until the file closes to appear. Both chat file blocks and the Files page pass the original `SessionKey` to the preview, so AI editing / adding context inside links still belongs to the original session; standalone previews without a session can also browse websites. Development services on localhost / machine addresses are forwarded through the hub to the computer holding the file; other URL schemes keep the platform's existing policy.
 
-| 文件 | 显示 |
+**Display**
+
+| File | Display |
 | --- | --- |
-| 代码、配置、日志 | 按语言上色，带行号，等宽不换行，可以横滑。行号固定在左边，长按一行可以「拷贝这一行 / 拷贝全部」 |
-| JSON | 先显示源码；整个文件读完（最多 24 MB）并解析后，换成可折叠的层级视图（键的顺序不变），见下 |
-| Markdown | 默认渲染，用的是对话里的那套（`.jarvis` 主题、`FittedTable`、`Links`），代码块按语言上色。菜单里能「查看源文件」 |
-| 图片、PDF、目录 | 和以前一样 |
-| 视频 | `video/*` 或常见视频扩展名进入原生播放器；先缓冲索引和首播所需片段，边读边播，可以暂停和拖动进度。拖动到未缓存位置时直接读取目标关键帧附近的片段；失败或编码不受系统支持时说明原因，关闭预览暂停播放器、取消读取并清理临时缓存 |
-| 音频 | mp3、m4a、aac、wav、flac、aiff、caf 等系统能放的音频（`audio/*` 或扩展名，#1298），下载到本次预览的临时文件后播放（`AudioFileView`）：文件名、播放 / 暂停、前进后退 15 秒、可拖的进度和剩余时间、0.75–2 倍速；格式放不了的说明原因。关闭预览停止并清理临时文件 |
-| HTML | .html / .htm 默认隔离预览（`HTMLFileView`，#1297）：单独的 WKWebView，不留网站数据，**脚本关、网络关**（规则表挡掉除页面本身和 data: 以外的所有加载），页面不能自己跳转，点链接走 App 的链接卡片；顶上一行写着现在开了什么。菜单里能「允许运行脚本」「允许联网」（只对这次预览，改了重新加载）和「查看源文件」。页面引用的同目录文件（图片、样式表和其中的 url() / @import、字体、脚本）先经 hub 从那台电脑读来，换成 data: 放进页面（`HTMLResources`，最多 64 个、单个 8 MB、合计 24 MB），网络照旧关着；顶上那行写着读到几个。本机 dev server 的站点预览走端口转发，不在这里 |
-| Jupyter 笔记本 | .ipynb（nbformat 4，#1296）读完整个文件后按单元显示（`NotebookFileView`）：Markdown 单元用对话的 Markdown 样式，代码单元按笔记本的语言显示并标「In [n]」，下面是输出：stdout / stderr（stderr 橙色）、结果文本、图片、错误（名字、信息和去掉颜色码的回溯）；HTML 结果（pandas 表格）放进和 HTML 预览同样的隔离 WKWebView 渲染（禁脚本和网络，按内容定高，`HTMLSnippetView`），下面能切「显示文本版」，加载失败时自动用文本版。超过 60 行的输出先折叠。菜单里能「查看源文件」；读不了的（nbformat 3、坏 JSON）按文本显示并说明 |
-| 表格 | CSV、TSV、xlsx 用原生表格（`TableFileView`，#1294），见下面「表格」；菜单里 CSV 能「查看源文件」，xlsx 能「用快速查看打开」 |
-| Office、iWork、RTF | docx、doc、xlsx、xls、pptx、ppt、pages、numbers、key、rtf 交给系统的 QuickLook（#1293）：经 `…/file/download` 下载到本次预览的临时文件，再嵌在页面里显示（iOS `QLPreviewController`，Mac `QLPreviewView`），不另弹一层；菜单里能「分享」这个文件（用别的 App 打开、存到文件）。关闭预览清理临时文件。以文本发来的 `.key`（PEM 私钥）照旧按代码显示；iWork 存成文件夹（包）的文档仍按目录列出 |
+| Code, config, logs | Language highlighting, line numbers, monospace without wrapping, horizontal scrolling. Line numbers stay fixed on the left; long-press a line to "Copy line / Copy all" |
+| JSON | Source first; after the whole file is read (at most 24 MB) and parsed, switches to a collapsible tree view (key order unchanged), see below |
+| Markdown | Rendered by default with the chat's renderer (`.jarvis` theme, `FittedTable`, `Links`); code blocks use language highlighting. The menu offers "View source" |
+| Images, PDFs, directories | As before |
+| Video | `video/*` or common video extensions use the native player; buffer the index and the segments needed to start playback, then play while reading, with pause and seeking. Seeking to an uncached position reads segments near the target keyframe directly; failures and unsupported codecs explain why. Closing the preview pauses the player, cancels reads and clears temporary caches |
+| Audio | System-playable audio such as mp3, m4a, aac, wav, flac, aiff, caf (`audio/*` or extension, #1298), downloaded to this preview's temporary file before playback (`AudioFileView`): filename, play / pause, skip forward / back 15 seconds, draggable progress and remaining time, 0.75–2× speed; unsupported formats explain why. Closing the preview stops playback and clears the temporary file |
+| HTML | .html / .htm default to an isolated preview (`HTMLFileView`, #1297): a separate WKWebView with no persistent website data, **scripts off, network off** (a rule list blocks every load except the page itself and data:). The page cannot navigate itself; tapped links use the App's link card; a line at the top states what is enabled. The menu offers "Allow scripts", "Allow network" (this preview only, reloads after changes) and "View source". Referenced files in the same directory (images, stylesheets and their url() / @import, fonts, scripts) are first read from that computer through the hub and embedded as data: (`HTMLResources`, at most 64 files, 8 MB each, 24 MB total), with networking still off; the top line says how many were read. Local dev-server site previews use port forwarding, not this viewer |
+| Jupyter notebooks | .ipynb (nbformat 4, #1296) shows cells after reading the whole file (`NotebookFileView`): Markdown cells use the chat's Markdown style; code cells use the notebook's language and show "In [n]", followed by outputs: stdout / stderr (stderr orange), result text, images, errors (name, message and traceback with color codes stripped). HTML results (pandas tables) render in the same isolated WKWebView as HTML previews (scripts and network disabled, height follows content, `HTMLSnippetView`), with "Show text version" below and automatic text fallback on load failure. Outputs longer than 60 lines are initially folded. The menu offers "View source"; unreadable notebooks (nbformat 3, invalid JSON) show as text with an explanation |
+| Tables | CSV, TSV, xlsx use a native table (`TableFileView`, #1294), see "Tables" below; the menu offers "View source" for CSV and "Open with Quick Look" for xlsx |
+| Office, iWork, RTF | docx, doc, xlsx, xls, pptx, ppt, pages, numbers, key, rtf use system QuickLook (#1293): downloaded through `…/file/download` to this preview's temporary file, then embedded in the page (iOS `QLPreviewController`, Mac `QLPreviewView`), without another presentation layer. The menu can "Share" the file (open in another App, save to Files). Closing the preview clears the temporary file. `.key` sent as text (PEM private key) still displays as code; iWork documents saved as folders (packages) are still listed as directories |
 
-**「文件」页的缩略图**（#1293）：图片、PDF、视频和上面这些文档，行出现时向文件所在的机器要缩略图（`GET …/file/thumb`，hub 特性 `file_thumb`，`docs/protocol.md`「文件预览」），尺寸按行里的格子乘屏幕倍数，同时最多三个（`FileThumbnails`）。结果按（hub 组, 机器, 路径, 大小, 修改时间）存在内存和缓存目录：文件变了键就变、重新要，没变就不再问。机器画不了（`no_thumbnail`：Linux 上的 Office、没装工具的）、旧 hub 没这个特性的，照旧显示图标，这次启动内不再问。代码、文本不要缩略图。文档的缩略图是一页深色的就不用，显示图标（Mac 深色模式下 Quick Look 给 RTF、文本画的是深底，列表里是个黑方块）。只知道路径的（对话里的文件卡片，`FileThumbnailIcon` 传大小 0、不传时间）按路径存，旁边记着 node 回的 ETag，每次启动后第一次出现时带 `If-None-Match` 问一次：304 用旧图，同一路径重新生成的文件拿到新图。卡片的格子用 `width` / `height` 调大，图按比例放进去。
+**Thumbnails on the Files page** (#1293): for images, PDFs, videos and the documents above, when a row appears it requests a thumbnail from the computer holding the file (`GET …/file/thumb`, hub feature `file_thumb`, `docs/protocol.md` ("File previews")), sized to the row's tile × screen scale, at most three concurrently (`FileThumbnails`). Results are stored in memory and the cache directory by (hub group, machine, path, size, modification time): a changed file changes the key and is requested again; an unchanged one is not. If the machine cannot render it (`no_thumbnail`: Office on Linux, missing tools), or an old hub lacks the feature, the icon stays and no further request is made in this launch. Code and text get no thumbnails. A dark-page document thumbnail is not used; the icon is shown instead (in Mac dark mode, Quick Look gives RTF and text a dark background, making a black square in the list). Items with only a path (file cards in chats; `FileThumbnailIcon` passes size 0 and no time) are stored by path alongside the node's ETag; on the first appearance after each launch, one request uses `If-None-Match`: 304 reuses the old image, while a file regenerated at the same path gets a new one. The card's tile can be enlarged with `width` / `height`, and the image fits proportionally.
 
-**二进制文件只取描述**：hub 有 `file_stream` 时，文件页用 `stream=1` 读，二进制文件只回大小、类型和 revision；图片、PDF 再从 `…/file/download` 整份取回（不再停在 2 MB），QuickLook 照旧下载到临时文件；视频按需分段读取（#706，见上面「视频」）。旧 hub 照旧整份 base64。
+**Binary files return only metadata**: when the hub has `file_stream`, the Files page reads with `stream=1` and binary files return only size, type and revision; images and PDFs are then fetched in full through `…/file/download` (no longer capped at 2 MB), QuickLook still downloads to a temporary file, and videos read segments on demand (#706, see "Video" above). Old hubs still return the entire file as base64.
 
-**对比**（#1299，`apple/Packages/PersonaKit/Sources/PersonaKit/DocumentText.swift`、`Views/Session/CompareView.swift`）：Git 页里改动的 PDF、docx、pptx、xlsx 和图片不再是「没有文本改动」，而是对比两个版本，和网页（#1452）一样：
-- **哪两个版本**：未暂存的改动是暂存区（INDEX）对工作区的文件，已暂存的是 HEAD 对暂存区，提交里的文件是「哈希^」对「哈希」。旧版本经 `GET …/git/blob`（hub 特性 `git_blob`）在 node 的缓存里写一份，再用 `/file/download` 读；工作区的直接读。新加的文件没有旧版、删掉的没有新版。hub 没有这个特性时照旧显示文本 diff。
-- **文档**：抽出文字按单元切开（PDF 按页、Word 按分页符、幻灯片一张一个连同备注、表格一个工作表一个），逐行比较（`CollectionDifference`），每处改动写在它的页 / 幻灯片 / 工作表下面，前后各留两行，没变的折叠成「… N 行没变」；文字一样时说明改的可能是格式或图片。每个版本最多比 2 万行。
-- **图片**：并排，或者新版压在旧版上、拖滑块看分界。
-- 底下「打开旧版 / 打开新版」用文件页打开那个版本（QuickLook、表格、PDF……）。
+**Compare** (#1299, `apple/Packages/PersonaKit/Sources/PersonaKit/DocumentText.swift`, `Views/Session/CompareView.swift`): changed PDFs, docx, pptx, xlsx and images on the Git page no longer say "No text changes"; they compare the two versions, like the web (#1452):
+- **Which versions**: unstaged changes compare the index (INDEX) with the working-tree file; staged changes compare HEAD with the index; files in a commit compare "hash^" with "hash". The old version is written to the node's cache by `GET …/git/blob` (hub feature `git_blob`), then read through `/file/download`; working-tree files are read directly. Added files have no old version; deleted files have no new version. Without this hub feature, the existing text diff remains.
+- **Documents**: extract text and split it into units (PDF by page, Word by page break, slides one each including notes, spreadsheets one worksheet each), compare line by line (`CollectionDifference`), and put each change under its page / slide / worksheet with two lines of context on either side; unchanged text folds into "… N unchanged lines". If the text is identical, explain that formatting or images may have changed. At most 20,000 lines per version.
+- **Images**: side by side, or the new image over the old one with a draggable divider.
+- "Open old version / Open new version" at the bottom opens that version in the Files viewer (QuickLook, tables, PDF…).
 
-**表格**（#1294，`apple/Packages/PersonaKit/Sources/PersonaKit/TableParsing.swift`、`Views/Chat/TableFileView.swift`）：
-- **读**：CSV / TSV 按 RFC 4180 解析（引号里的分隔符、换行、`""`），文件页的分页照旧，一页一页喂给解析器，被页尾切开的行由下一页接上；表格滑到离末尾 60 行时读下一页。`.csv` 第一行分号比逗号多就按分号分（逗号当小数点的地区）。xlsx 整份经 `…/file/download` 取回，自己读 zip（Compression 解 deflate）和 OOXML：共享字符串、内联字符串、数字（去掉浮点尾巴）、TRUE / FALSE、错误值，日期格式（内置 14–22、45–47 和带 y/m/d/h/s 的自定义格式）显示成 `yyyy-MM-dd [HH:mm]`。不引第三方库。旧 .xls、Numbers 仍走 QuickLook。每个工作表最多 20 万行。
-- **看**：第一行冻结在顶上（当表头），左边的行号冻结（Excel 的行号，表头是第 1 行），只画屏幕上的列。列宽按前 300 行最宽的内容估（CJK 算两格），在 56–240 pt 之间，拖表头右边缘可以改。数字右对齐。点一个单元格，底下显示它的位置（B12）和完整内容（可选中），能拷贝；长按有「拷贝单元格 / 拷贝整行」（整行是制表符分隔，粘到表格里还是一格一格）。多个工作表时顶上一排切换。
+**Tables** (#1294, `apple/Packages/PersonaKit/Sources/PersonaKit/TableParsing.swift`, `Views/Chat/TableFileView.swift`):
+- **Read**: CSV / TSV parses RFC 4180 (quoted delimiters, newlines, `""`); the Files page keeps its paging and feeds the parser page by page, with a row split at a page end continued by the next page; the next page loads when scrolling within 60 rows of the end. `.csv` uses semicolons if the first row has more semicolons than commas (regions using commas as decimal separators). xlsx downloads fully through `…/file/download`, then reads zip (Compression for deflate) and OOXML itself: shared strings, inline strings, numbers (floating-point tails removed), TRUE / FALSE, error values, and date formats (built-in 14–22, 45–47 and custom formats containing y/m/d/h/s) displayed as `yyyy-MM-dd [HH:mm]`. No third-party library. Old .xls and Numbers still use QuickLook. At most 200,000 rows per worksheet.
+- **View**: freeze the first row at the top (as headers) and row numbers on the left (Excel row numbers; the header is row 1); draw only visible columns. Estimate column width from the widest content in the first 300 rows (CJK counts as two cells), clamped to 56–240 pt; drag a header's right edge to resize. Numbers align right. Tap a cell to show its position (B12) and full content below (selectable), with copying; long-press offers "Copy cell / Copy row" (rows are tab-separated, preserving separate cells when pasted into a spreadsheet). Multiple worksheets get a switcher across the top.
 
-视频不使用旧接口返回的前 2 MiB 二进制片段。`VideoFileModel` 用 `GET …/file/download` 的两字节 Range 发现文件长度和版本，再通过 `VideoFileResource`（`AVAssetResourceLoaderDelegate`）读取播放器请求的区间。`VideoFileCache` 按 256 KiB 对齐分片，将已读取区间写到本次预览的稀疏临时文件；只把有记录的已缓存区间交给播放器，文件逻辑长度不代表下载完成。MP4 索引在尾部时可直接请求尾部，不下载中间的全部内容；seek 按索引跳到目标附近关键帧，不按时间比例猜字节位置。播放器控制预读，前向缓冲偏好为 3 秒，没有另一个从头下载完整文件的任务。
+Video does not use the first 2 MiB of binary data returned by the old API. `VideoFileModel` uses a two-byte Range request to `GET …/file/download` to discover file length and version, then `VideoFileResource` (`AVAssetResourceLoaderDelegate`) reads the ranges requested by the player. `VideoFileCache` aligns chunks to 256 KiB and writes read ranges into this preview's sparse temporary file; only recorded cached ranges are handed to the player, and logical file length does not mean downloading is complete. MP4 indexes at the end can be requested directly without downloading everything in between; seeking uses the index to find a nearby keyframe, never guesses a byte offset from a time ratio. The player controls prefetching, with a preferred forward buffer of 3 seconds; there is no separate task downloading the whole file from the start.
 
-鉴权只放在 HTTP 请求头；播放 URL 是本地自定义 scheme，只含随机标识和文件名，不含 hub 地址、远端路径或凭据。后续请求带 `If-Match`，每片还校验 `Content-Range`、长度与 ETag；文件改变、范围被忽略、片段不完整和旧 node 都报错，不静默退回整文件传输，也不允许鉴权请求跟随重定向。关闭页面时取消所有资源请求和网络任务、释放播放器、删除稀疏缓存，并检查任务与预览代次，避免迟到结果复活。支持的实际编码由系统决定，推荐 H.264 / HEVC 的 MP4；不会改写、转码或额外生成 HLS 文件。hub 和视频所在机器的 node 都需支持 `file_download`。
+Authentication goes only in HTTP headers; playback URLs use a local custom scheme containing only a random identifier and filename, never the hub address, remote path or credentials. Later requests carry `If-Match`, and every chunk validates `Content-Range`, length and ETag; changed files, ignored ranges, incomplete chunks and old nodes produce errors, never silently fall back to whole-file transfer, and authenticated requests may not follow redirects. Closing the page cancels all resource requests and network tasks, releases the player, deletes the sparse cache, and checks task and preview generations to prevent late results from reviving it. Actual codec support depends on the system; H.264 / HEVC MP4 is recommended. Nothing is rewritten, transcoded or additionally generated as HLS. Both the hub and the node on the video's computer must support `file_download`.
 
-**JSON 层级视图**
-- 格式化后显示，键是绿色，字符串、数字、常量各有颜色。
-- 点容器那一行展开或折叠，左边的三角表示状态。
-- 默认只展开前几层，展开到总行数约 400 行为止；6000 项的数组进来是折叠的。
-- 长按一行可以「拷贝这个值 / 拷贝路径（`.forecasts[3].rain`）」。
-- 菜单里有「全部折叠」；节点不多时（5 万以内）还有「全部展开」。
-- 不是有效 JSON（JSONL、写了一半的）就按文本显示，并说明原因。
+**JSON tree view**
+- Formatted display: keys green, strings, numbers and constants each have their own colors.
+- Tap a container row to expand or collapse; the triangle on the left shows its state.
+- By default, only the first few levels expand, stopping at about 400 total rows; a 6000-item array starts collapsed.
+- Long-press a row to "Copy value / Copy path (`.forecasts[3].rain`)".
+- The menu has "Collapse all" and, for smaller trees (up to 50,000 nodes), "Expand all".
+- Invalid JSON (JSONL, a half-written file) displays as text with an explanation.
 
-**语言**（`SyntaxLanguage`）
-- Swift、Go、Python、JS / TS（含 JSX / TSX）、Rust、Shell（bash / zsh）；
-- YAML、TOML、INI / .env、JSON、SQL；
-- C / C++ / Objective-C、Kotlin、Java / Gradle / Groovy / Scala、C#、Ruby、PHP、Lua、Dart、Protobuf、GraphQL、Terraform / HCL、CMake；
-- HTML / XML（plist、SVG、storyboard）、CSS / SCSS / Less、Dockerfile、Makefile、Markdown 源码、diff。
+**Languages** (`SyntaxLanguage`)
+- Swift, Go, Python, JS / TS (including JSX / TSX), Rust, Shell (bash / zsh);
+- YAML, TOML, INI / .env, JSON, SQL;
+- C / C++ / Objective-C, Kotlin, Java / Gradle / Groovy / Scala, C#, Ruby, PHP, Lua, Dart, Protobuf, GraphQL, Terraform / HCL, CMake;
+- HTML / XML (plist, SVG, storyboard), CSS / SCSS / Less, Dockerfile, Makefile, Markdown source, diff.
 
-识别顺序：
-1. 扩展名；
-2. 文件名（Dockerfile、Makefile、Podfile、.zshrc、.env…）；
-3. 第一行（`#!/usr/bin/env python3`、`<?xml`）。
+Detection order:
+1. Extension;
+2. Filename (Dockerfile, Makefile, Podfile, .zshrc, .env…);
+3. First line (`#!/usr/bin/env python3`, `<?xml`).
 
-**高亮器是自己写的词法器（`SyntaxLexer`），没有新依赖。**
-- 为什么不用 tree-sitter：每种语言一个 C 语法库，二十多种加起来包很大。
-- 为什么不用 highlight.js：要 JavaScriptCore 或 WebView，又慢又重。
-- 怎么做的：一个通用循环在 UTF-8 字节上跑，各语言只是表格（关键字、类型、常量、注释、字符串的样子）。YAML、TOML、HTML、CSS、Dockerfile、Makefile、Markdown、diff 各有一小段专门处理。
-  - 关键字按字节的哈希查表，不为每个词建 String。
-  - 块注释、多行字符串、HTML 注释和标签、Markdown 代码块、Dockerfile 的续行，都通过 `SyntaxState` 带到下一行。
-- **颜色**：用设计系统的 `Theme.Syntax`（GitHub 的配色）。代码背景在所有界面风格和主题色下都一样，所以语法色也不跟着变；每个颜色在浅色、深色下对代码背景都 ≥ 4.5:1（`SyntaxPaletteTests`）。
-- **踩过的坑**：`emit(s, i, word(…, &i, …))` 里 Swift 先按位置读出参数 `i`，再调用 `word`，宏的 `!` 就没算进 token；先把 `word` 的结果存成变量再用。
+**The highlighter is a custom lexer (`SyntaxLexer`), with no new dependencies.**
+- Why not tree-sitter: a C grammar library for every language; more than twenty makes a large package.
+- Why not highlight.js: needs JavaScriptCore or a WebView, both slow and heavy.
+- How it works: a generic loop over UTF-8 bytes; languages are just tables (keywords, types, constants, comment and string syntax). YAML, TOML, HTML, CSS, Dockerfile, Makefile, Markdown and diff each have a small specialized handler.
+  - Keywords use byte-hash lookups, without building a String for each word.
+  - Block comments, multiline strings, HTML comments and tags, Markdown code blocks and Dockerfile continuation lines carry state to the next line through `SyntaxState`.
+- **Colors**: design system `Theme.Syntax` (GitHub colors). Code backgrounds are identical across interface styles and theme colors, so syntax colors do not change either; every color has ≥ 4.5:1 contrast against the code background in light and dark modes (`SyntaxPaletteTests`).
+- **Pitfall**: in `emit(s, i, word(…, &i, …))`, Swift reads the argument `i` by position before calling `word`, leaving the macro's `!` outside the token; store `word`'s result in a variable first.
 
-**性能**
-- **取文件**：node 读文本文件每页最多 2 MB，停在行尾，再往下滑接着读下一页（`offset` / `next`）。JSON 会一次读完，因为要解析成层级。
-- **切行**：先在后台把字节切成行（`CodeDocument`），立刻显示纯文本。
-- **上色**：在后台从头往下每 2000 行一块，每块做完就刷新屏幕上的那几行。最多上色 10 万行或 8 MB，超过的部分是纯文本，并说明「只给前 N 行上了色」。
-- **超长的行**：超过 4000 字节截断显示（压缩过的 JS / JSON 就是一行）。
-- **代码视图**（`CodeLinesView`）：只把屏幕上的行做成 label，滚动时复用，几万行和十行一样轻。不用以前「整篇放进一个 UITextView」的做法，因为那样的排版跟着文件大小线性变慢。
-- **Markdown**：在顶层块之间切成每段约 12 行（`MarkdownChunks`，不切进代码块、缩进行），放进 LazyVStack，只排屏幕上的段。代码块的上色结果按内容缓存。
-- **不开文本选择**：渲染出来的 Markdown 不开文本选择。实测开了以后，打开慢约 40%（607 ms 对 435 ms），每段进屏的长帧从约 40 ms 变成约 60 ms。要拷贝就切到源码视图，或者用菜单里的「拷贝内容」。
+**Performance**
+- **Fetching files**: the node reads text in pages of at most 2 MB, ending at a line boundary, and scrolling further reads the next page (`offset` / `next`). JSON is read in full because it must be parsed as a tree.
+- **Splitting lines**: split bytes into lines in the background first (`CodeDocument`), then display plain text immediately.
+- **Highlighting**: background processing from the top in chunks of 2000 lines; after each chunk, refresh the visible lines. At most 100,000 lines or 8 MB are highlighted; the rest stays plain text with "Only the first N lines are highlighted".
+- **Very long lines**: display truncated after 4000 bytes (minified JS / JSON is often one line).
+- **Code view** (`CodeLinesView`): creates labels only for visible lines and reuses them while scrolling, so tens of thousands of lines are as light as ten. Not the old "whole document in one UITextView" approach, whose layout cost grows linearly with file size.
+- **Markdown**: split between top-level blocks into chunks of about 12 lines (`MarkdownChunks`, never inside code blocks or indented lines), placed in LazyVStack so only visible chunks are laid out. Highlighted code blocks are cached by content.
+- **No text selection**: rendered Markdown does not enable text selection. Measurements showed that enabling it slowed opening by about 40% (607 ms versus 435 ms), and long frames when a chunk entered the screen grew from about 40 ms to about 60 ms. To copy, switch to source view or use "Copy content" in the menu.
 
-**实测**（2026-10-31）
-- **环境**：iPhone 18 Pro 模拟器（iOS 27，Mac M1 Ultra），`-O` 优化的 Debug 构建，`MOCK_FILES=1` 的 mock hub 经本机回环。
-- **怎么测**：`FileViewerPerfTests` 加 `-showFilePerf YES -showFileAutoScroll YES`，从打开文件开始计时；滚动是 App 内匀速滚动，先往下 4 秒再往上 2 秒。
-- **为什么不用 XCUITest 拖动**：XCUITest 每次手势前都要在 App 主线程上抓一次无障碍快照，自己就会造成 40–100 ms 的长帧。
-- 下表「滚动」一列是滚动那几秒里每秒的帧数和最长的一帧，模拟器是 60 Hz。
+**Measurements** (2026-10-31)
+- **Environment**: iPhone 18 Pro simulator (iOS 27, Mac M1 Ultra), `-O` optimized Debug build, `MOCK_FILES=1` mock hub over local loopback.
+- **Method**: `FileViewerPerfTests` with `-showFilePerf YES -showFileAutoScroll YES`, timed from opening the file; scrolling runs at a constant speed inside the App, down for 4 seconds then up for 2 seconds.
+- **Why not XCUITest drags**: before each gesture XCUITest captures an accessibility snapshot on the App's main thread, itself causing 40–100 ms long frames.
+- The "Scrolling" column below gives frames per second and the longest frame during those scrolling seconds; the simulator runs at 60 Hz.
 
-| 文件 | 大小 | 取到第一页 | 出现在屏幕上 | 上色完 | 滚动 4000 pt/s |
+| File | Size | First page received | On screen | Highlighting finished | Scrolling at 4000 pt/s |
 | --- | --- | --- | --- | --- | --- |
-| Go，2 万行 | 795 KB | 178 ms | 273 ms | 257 ms | 60 fps，最长 16 ms |
-| JSON，6000 条（读两页） | 2.3 MB | 312 ms | 源码 439 ms，层级 494 ms | 460 ms | 层级展开 6000 项：60 fps，最长 22 ms |
-| 日志（第一页 2 MB，共 5 MB） | 5 MB | 306 ms | 432 ms | 不上色 | 60 fps，最长 16 ms |
-| Markdown，4176 行（含表格和代码块） | 169 KB | 258 ms | 566 ms（渲染） | 365 ms（源码） | 52–58 fps，最长 38–54 ms |
+| Go, 20,000 lines | 795 KB | 178 ms | 273 ms | 257 ms | 60 fps, longest 16 ms |
+| JSON, 6000 entries (two pages) | 2.3 MB | 312 ms | Source 439 ms, tree 494 ms | 460 ms | Tree with 6000 items expanded: 60 fps, longest 22 ms |
+| Log (first page 2 MB, 5 MB total) | 5 MB | 306 ms | 432 ms | No highlighting | 60 fps, longest 16 ms |
+| Markdown, 4176 lines (with tables and code blocks) | 169 KB | 258 ms | 566 ms (rendered) | 365 ms (source) | 52–58 fps, longest 38–54 ms |
 
-Markdown 的情况再说两点：
-- 按阅读速度 1500 pt/s 滚是 52–58 fps，最长 38–50 ms，慢帧都出在新的一段进屏时（MarkdownUI 排版表格和代码块）。
-- 两种速度下，开始滚的那一秒都有一帧约 0.24 秒。
+Two more points about Markdown:
+- Scrolling at reading speed, 1500 pt/s, gives 52–58 fps with a longest frame of 38–50 ms; slow frames all happen when a new chunk enters the screen (MarkdownUI laying out tables and code blocks).
+- At both speeds, the first second of scrolling has one frame of about 0.24 seconds.
 
-源码视图、代码、JSON、日志都稳定在 60 fps。
+Source view, code, JSON and logs all stay at 60 fps.
 
-**测试**
-- **单元测试**：
-  - `SyntaxTests`：各语言的词、跨行状态、识别、宽字符的偏移；
-  - `SyntaxPaletteTests`：语法色的对比度；
-  - `FileViewerTests`：切行、分页接上颜色、分块上色和上限、JSON 解析、默认折叠、行文字、Markdown 分块、路径批量查询和缓存。
-- **界面测试** `FileViewerUITests`（要 `MOCK_FILES=1`）：
-  - 只给在的路径做文件块；
-  - Go 打开有行号；
-  - JSON 是层级、点开数组；
-  - README 是渲染的。
+**Tests**
+- **Unit tests**:
+  - `SyntaxTests`: tokens in each language, multiline state, detection, wide-character offsets;
+  - `SyntaxPaletteTests`: syntax-color contrast;
+  - `FileViewerTests`: line splitting, continuing colors across pages, chunked highlighting and limits, JSON parsing, default folding, row text, Markdown chunks, batched path lookups and caching.
+- **UI tests** `FileViewerUITests` (requires `MOCK_FILES=1`):
+  - File blocks only for existing paths;
+  - Go opens with line numbers;
+  - JSON is a tree, with expandable arrays;
+  - README is rendered.
 
-## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
+## DEBUG launch arguments (Debug only; Release checks exclude these strings)
 
-`-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES|0.5`（Persona tab 的侧边栏开着 / 停在一半）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminalPane YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-showLark YES`（直接到收件箱）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开公司圈帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/app/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
-检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-showFromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
-`-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
-`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFilePath <路径>`（打开会话后打开这个文件，`-openFileLine <行>` 跳到那一行）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-showFromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
+`-pairURL jarvis://pair?...` (pair without scanning a QR code, no notification permission prompt), `-openSession <machine>/<session>`,
+`-showNewChat YES`, `-tab dev|mail|settings`, `-openAssistant <machine>/<session>`, `-newAssistant YES`, `-openAssistantSidebar YES|0.5` (Persona tab sidebar open / halfway open), `-openFirstImage YES` (open the viewer for the first image in the chat), `-showScrollState YES|visible` (chat-list position and following state, readable by UI tests; `visible` draws it), `-openTerminalPane YES`, `-showPad YES`, `-showKeyMods locked,once,held` (set the terminal key bar's ctrl / alt / shift to these states), `-terminalWrap NO`, `-terminalTheme ink|midnight|jarvis|solarized`, `-terminalInputMode direct|field` (terminal direct typing / input field), `-terminalTipsSeen YES` (skip "Terminal tips"), `-openTerminalTips YES` (show them again), `-focusTerminalInput YES` (shows the keyboard in direct-typing mode), `-openShortcutsPanel YES`, `-openTerminalSettings YES`, `-showLark YES` (go directly to Inbox), `-larkFocus <messageId>` (scroll to that message), `-larkProfile <userId>` (show this person's profile card in the chat), `-larkPicker YES` (show the reaction picker for the last message), `-larkMoments <postId>` (open a Moments post), `-openInboxFirst YES` (open the first unhandled Inbox item), `-larkTop YES` (show the Lark chat from its earliest message, for screenshots of long cards), `-addMail YES` (open Manage email accounts › Add email account), `-tab settings -openHubUpdate YES` (Settings › hub, `docs/hub-update.md`), `-tab settings -openSkills YES` (Settings › Assistant › Skills), `-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about` (pages under Settings › Assistant; `routine` opens the first scheduled task, `intervalTask` / `followup` the first interval / one-time task, `bypassTask` shows the "Allow everything?" confirmation in the editor, `newRoutine` shows the creation sheet with the "End-of-day review" template, `memoryFile` / `memoryEdit` opens the first memory / its editor). `scripts/app/sim.sh` wraps building, installation, pairing and launch (`SIM=<udid>` changes the simulator; concurrent agents must use separate simulators or overwrite each other's installs).
+Check history rendering: `-loadAll YES` (load all history and scroll to the top), `-showFromSeq <seq>` (display from the turn containing this user message; scroll positioning can drift in long histories),
+`-dropUsers YES` (hide that turn's user bubbles to fit its process rows and answer on one screen). `-openPane terminal|git|files` opens the chat page's terminal (from the bottom) / Git / Files;
+`-simulateTap <machine>/<session>` runs the notification-tap handler 4 seconds after launch; `-tab settings -openNotificationSettings YES` (Settings › Notifications; add `-openIslandSettings YES` for Dynamic Island); `-showFleetSample needsYou|working|done` (`-fleetDetails YES`, `-fleetIsland b|c|custom:<left>,<right>`) starts a Live Activity with fake data; `-showTestNotification permission|plan` shows a local notification matching an interaction push 3 seconds after backgrounding (UI tests use it to test buttons); `-openFilePath <path>` (open this file after opening the chat; `-openFileLine <line>` jumps to that line), `-showFilePerf YES` (write file-open timings and per-second frame rates to Caches/file-perf.log; `-showFileAutoScroll YES` scrolls the file at constant speed, `-showFileAutoScrollSpeed 1500` changes the speed); `-showMenu YES` opens the long-press action bar on the last reply (with `-showFromSeq`, that turn's reply); `-openWelcome YES` forgets pairing and exits demo mode at launch, stopping on the pairing page (`DemoModeTests`).
 
-`-showVoiceOrbs YES`：不连 hub、不开麦克风，弹一张表列出语音光球的每个相位（音量是编造的起伏）和两颗大的，配 `-ui.style`、`-ui.scheme` 截图（#3506）。
+`-showVoiceOrbs YES`: without connecting to the hub or opening the microphone, show a sheet listing every phase of the voice orb (fake fluctuating volume) and two large orbs; combine with `-ui.style`, `-ui.scheme` for screenshots (#3506).
 
-实时更新不打断操作的测试（`LiveUpdateTests`）用到两个：`-openChatsFresh YES` 启动时清掉磁盘上的对话缓存（上一次运行推进去的步骤不留下）；
-`-perfCounts YES` 计数：各视图 body 被算了几次、每次 hub 推送到主线程空闲用了多久，写在隐藏文字 `perf.counts` 里（JSON）给 UI 测试读
-（`PerfSignpost.swift`；同一处也发 os_signpost，Instruments 的 Points of Interest 能看到每个 body 和每次推送）。
+Tests that live updates do not interrupt interaction (`LiveUpdateTests`) use two arguments: `-openChatsFresh YES` clears the chat cache on disk at launch (steps pushed during the previous run do not remain);
+`-perfCounts YES` counts how often each view body is computed and how long each hub push takes until the main thread is idle, exposing JSON in hidden text `perf.counts` for UI tests
+(`PerfSignpost.swift`; the same instrumentation emits os_signpost, so Instruments Points of Interest shows every body and push).
 
-## 飞书消息渲染（`Persona/Views/Inbox/Lark/`）
+## Lark message rendering (`Persona/Views/Inbox/Lark/`)
 
-照搬飞书网关网页（上游的消息渲染器）的消息渲染，数据是 hub 原样转发的 `parts`：
+Reuses the Lark gateway web app's message rendering (the upstream message renderer), with `parts` forwarded unchanged by the hub:
 
-发消息不等飞书（`LarkOutbox.swift`）：点发送就清空输入框、把消息画在会话最下面（气泡旁一个小转圈，和飞书一样），后台按写的顺序一条条发；
-发出去后等飞书自己的那条（同样文字、我发的、不早于发送时间）出现就换掉，最多等 20 秒。顺序只管发送请求本身：等副本在旁边各自进行，下一条不用等上一条的副本（#851，会话页和话题面板都是）。没发出去的留在原处，气泡旁是红色的失败图标（`Theme.Icon.errorFilled`），点它可以重发、放回输入框或删除。还在发、没发出去的行和飞书的消息在同一个列表里，按写的时间排（`LarkChatRows`）：之后发出去的、别人之后的回答都排在它下面；重发不挪位置。
-已读回执（`LarkReadReceipts.swift`）：我的消息旁边，私聊写「已读 / 未读」，群里是进度圆环（全部已读换成勾）；没有回执（还没取到、飞书网关没给、旧 hub 没有这个路由）时什么都不画。
-只查屏幕上我的消息（`POST …/conversations/{id}/read-states`，一次最多 100 条），同一会话至少隔 3 秒查一次；全部已读的不再查；这个会话有实时更新（或前台时每分钟的兜底轮询）时，屏幕上还没全部已读的重查；旧 hub 回 404 后这次打开就不再查。
-收件箱里回复 AI 分身的草稿也一样：点发送就关掉、标为已处理，失败了放回未处理，再打开回复页时是刚才那段文字（`InboxStore.unsentReplies`）。
+Sending does not wait for Lark (`LarkOutbox.swift`): tapping Send clears the input and draws the message at the bottom of the chat immediately (a small spinner beside the bubble, like Lark), while the background sends messages one by one in composition order;
+after sending, it waits up to 20 seconds for Lark's own copy (same text, sent by me, no earlier than the send time) and replaces it. Ordering applies only to send requests: waiting for copies happens independently alongside them, so the next message does not wait for the previous copy (#851, both chat pages and topic panels). Unsent messages stay in place with a red failure icon beside the bubble (`Theme.Icon.errorFilled`); tapping it can retry, return the text to the input, or delete it. Sending and failed rows share the same list as Lark messages, ordered by composition time (`LarkChatRows`): later sent messages and others' later replies appear below them; retrying does not move a row.
+Read receipts (`LarkReadReceipts.swift`): beside my messages, direct chats say "Read / Unread"; groups show a progress ring (a checkmark once everyone has read). Without receipts (not fetched yet, absent from the Lark gateway, or an old hub without the route), nothing is drawn.
+Only my visible messages are queried (`POST …/conversations/{id}/read-states`, at most 100 per request), at least 3 seconds apart per conversation; fully read messages are not queried again. When this conversation gets live updates (or the once-a-minute foreground fallback poll), visible messages not fully read are rechecked; after an old hub returns 404, no more queries during this visit.
+The same applies to sending the AI twin's draft from the Inbox: tapping Send closes it and marks it handled; failure puts it back among unhandled items, and reopening the reply page restores the same text (`InboxStore.unsentReplies`).
 
-| 文件 | 对应飞书网关 | 内容 |
+| File | Lark gateway counterpart | Content |
 | --- | --- | --- |
-| `LarkModels.swift` | contracts `MessageView` / `MessagePart` | 线上类型、API |
-| `LarkMedia.swift` | `removedimage` / `image-viewer` / `message-video` / `chat-file-preview` | 带鉴权的媒体加载（内存 + 磁盘缓存、ImageIO 降采样）、表情目录、全屏图集、播放器、Quick Look |
-| `LarkInline.swift` | `card-style.ts` / `card-markdown-text.ts` | 飞书色板、行内 run（加粗 / 斜体 / 删除线 / 行内代码 / 链接 / 术语虚线 / 内嵌表情图）、流式布局 |
-| `LarkMessageContent.swift` | `index.tsx` `renderPart` / `rich-blocks.ts` | 富文本块树（段落、有序 / 无序列表、引用、标题）、图片、贴纸、文件卡、视频、语音、代码块（轻量高亮）、系统消息 |
-| `LarkCard.swift` | `card-renderer.tsx` | 卡片元素：header 主题色、markdown、column_set（权重 / 固定 / auto 列宽 + bisect / trisect / stretch 窄屏重排）、table、list、collapsible_panel、note、text_tag、icon、按钮（链接 / 回调）、select / input / picker（只读）、overflow、img、chart（Swift Charts）…… |
-| `LarkSummaryCards.swift` | `SummaryCardView` | 合并转发（点开看全部消息）、群 / 个人名片、视频会议、日程、投票等摘要卡 |
-| `LarkChatView.swift` | messenger 气泡 | 头像、发送者 + 机器人标、同一发送者（按 id）连发合并、时间只在居中的分隔里（换天或隔 5 分钟以上，`LarkChatLayout`）、回复引用、表情回应、已编辑；卡片 / 图片 / 文件无气泡；话题群（`is_topic`）照飞书网关网页一个话题一张卡片（`LarkTopicCard.swift`：头像、名字和时间各自带着，不按聊天合并；内容高过 320 pt 收起成「展开」；下面露出最新两条回复和「查看更早 N 条回复」，卡片上了屏才读、同时最多读 3 个、回复数没变不再读（`LarkTopicReplies`）；底部「表情回复」「回复」；点正文或回复打开「话题详情」；撤回和编辑过的话题、撤回的回复和聊天里的消息一样按「风灵月影」的防撤回、编辑历史显示，#1087） |
+| `LarkModels.swift` | contracts `MessageView` / `MessagePart` | Wire types, API |
+| `LarkMedia.swift` | `removedimage` / `image-viewer` / `message-video` / `chat-file-preview` | Authenticated media loading (memory + disk cache, ImageIO downsampling), emoji directory, full-screen gallery, player, Quick Look |
+| `LarkInline.swift` | `card-style.ts` / `card-markdown-text.ts` | Lark palette, inline runs (bold / italic / strikethrough / inline code / links / dashed terminology underline / embedded emoji images), flow layout |
+| `LarkMessageContent.swift` | `index.tsx` `renderPart` / `rich-blocks.ts` | Rich-text block tree (paragraphs, ordered / unordered lists, quotes, headings), images, stickers, file cards, video, voice, code blocks (lightweight highlighting), system messages |
+| `LarkCard.swift` | `card-renderer.tsx` | Card elements: header theme colors, markdown, column_set (weighted / fixed / auto column widths + bisect / trisect / stretch narrow-screen reflow), table, list, collapsible_panel, note, text_tag, icon, buttons (links / callbacks), select / input / picker (read-only), overflow, img, chart (Swift Charts)… |
+| `LarkSummaryCards.swift` | `SummaryCardView` | Forwarded-message bundles (tap for all messages), group / person cards, video meetings, calendar, polls and other summary cards |
+| `LarkChatView.swift` | messenger bubbles | Avatar, sender + bot badge, consecutive messages from one sender (by id) grouped, time only in centered separators (day change or gap over 5 minutes, `LarkChatLayout`), quoted replies, reactions, edited marker; cards / images / files have no bubble. Topic groups (`is_topic`) use one card per topic like the Lark gateway web app (`LarkTopicCard.swift`: avatar, name and time on each card, not chat-grouped; content taller than 320 pt folds into "Expand"; below are the latest two replies and "View N earlier replies"; replies load only when the card is visible, at most 3 concurrently, and not again if the reply count has not changed (`LarkTopicReplies`); "React" and "Reply" below; tapping the body or replies opens "Topic details"; recalled and edited topics and recalled replies follow the same "Message Tweaks" recall-protection and edit-history display as chat messages, #1087) |
 
-要点：
-- 行内内容拼成一个 `Text`（`Text("\(a)\(b)")` 插值拼接），表情图用 `Text(Image(uiImage:))` 嵌进行内，未加载时先显示 `[标签]`，
-  加载完 `LarkMedia.emojiVersion` 变化触发重绘。
-- 卡片里 `plain_text` 在 markdown 上下文要解 `&nbsp;` 等实体和 `<br>` / `<a href>` / `<font color>`（飞书网关留下的标记）。
-- 卡片回调按钮只在 `actionMethod == 2` 时可按（走飞书网关的 card-actions 接口）；select / input 等表单控件只显示当前值。
-- 自定义 `Layout` 拿到的 `proposal.width` 可能是 `.infinity`（ScrollView / 测量 ideal size 时），换算整数前必须判 `isFinite`，否则直接崩。
+Key points:
+- Inline content becomes one `Text` (`Text("\(a)\(b)")` interpolation); emoji images embed inline through `Text(Image(uiImage:))`, initially showing `[label]` before loading.
+  Changes to `LarkMedia.emojiVersion` trigger redraw after loading.
+- Card `plain_text` in Markdown contexts must decode entities such as `&nbsp;` and `<br>` / `<a href>` / `<font color>` (markup left by the Lark gateway).
+- Card callback buttons are enabled only when `actionMethod == 2` (through the Lark gateway's card-actions API); select / input and other form controls show only their current values.
+- Custom `Layout` can receive `.infinity` for `proposal.width` (ScrollView / ideal-size measurement); check `isFinite` before converting to an integer or it crashes.
 
-## 引擎选择
+## Engine selection
 
-每台机器只用一个终端引擎：herdr（终端里的 herdr）、Herdr App（桌面 App 里开的终端）或 Orca，默认 herdr。只显示所选引擎里的会话。选项按 hub 回报的 `engines` 显示（名字、说明原样），不写死。给用户的说明见 `docs/engines.md`。
+Each machine uses one terminal engine: herdr (herdr in the terminal), Herdr App (terminals opened in the desktop App), or Orca; the default is herdr. Only sessions in the selected engine are shown. Choices come from the `engines` reported by the hub (names and descriptions unchanged), never hard-coded. User-facing instructions are in `docs/engines.md`.
 
-扫码或手动配对成功后，先为 hub 所在的机器选择引擎；没有本地机器时用列表中的第一台。必须选一个才能继续，没有「跳过」：预选这台机器当前的引擎（没选过就是 herdr），确认调用 `PUT /api/v1/machines/{id}/engine`；保存失败停在这一页、提示重试（2026-11-01 用户要求）。hub 没报引擎检测信息（旧 hub）时不进这一步，免得存不了又出不去。设置 › 机器 › 机器详情 › 引擎可随时修改，离线保存后在连接时生效。检测信息缺失时显示「暂无检测信息」，不把未知状态说成未安装。
+After successful QR-code or manual pairing, first choose an engine for the hub machine; if there is no local machine, use the first in the list. One must be selected to continue; there is no Skip: preselect this machine's current engine (herdr if never selected), and confirm with `PUT /api/v1/machines/{id}/engine`; a save failure keeps this page open and asks to retry (requested 2026-11-01). If the hub does not report engine detection data (old hubs), skip this step to avoid a page that cannot save or exit. Settings › Machines › Machine details › Engine can change it at any time; saved changes while offline take effect on connection. Missing detection data shows "No detection data yet", never treats unknown as not installed.
 
-mock hub 和体验模式都支持选择与机器推送。截图可先用 `-openWelcome YES` 打开配对页，再打开指向 mock hub 的 `jarvis://pair` 链接进入真实的配对后步骤；设置详情沿用 `-tab settings -openMachines YES -openMachineDetail server`。不增加新的 DEBUG 参数。
+Both mock hub and demo mode support selection and machine pushes. For screenshots, first open the pairing page with `-openWelcome YES`, then open a `jarvis://pair` link to the mock hub to enter the real post-pairing flow; settings details keep using `-tab settings -openMachines YES -openMachineDetail server`. No new DEBUG arguments.
 
-待办页（iOS / Mac）和助手的任务共用 `apple/Shared/Tasks.swift` 中的 `TodoItem` / `TaskState`。待办页使用 `docs/todos.md` 规定的状态文案、排序和颜色。
+The To-dos page (iOS / Mac) and the assistant's tasks share `TodoItem` / `TaskState` in `apple/Shared/Tasks.swift`. The To-dos page uses the state labels, sorting and colors specified in `docs/todos.md`.

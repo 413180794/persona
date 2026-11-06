@@ -301,8 +301,10 @@ let loading: Promise<Lowlight> | null = null;
 const waiting = new Set<() => void>();
 
 function loadLowlight(): Promise<Lowlight> {
-  loading ??= import("lowlight").then((m) => {
-    lowlight = m.createLowlight(m.common) as unknown as Lowlight;
+  // Destructured so Rollup drops the entry's `all` re-export (every grammar, ~780 kB) and shares the common-grammar
+  // chunk rehype-highlight loads.
+  loading ??= import("lowlight").then(({ createLowlight, common }) => {
+    lowlight = createLowlight(common) as unknown as Lowlight;
     waiting.forEach((f) => f());
     waiting.clear();
     return lowlight;

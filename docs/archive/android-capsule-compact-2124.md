@@ -1,37 +1,37 @@
-# Android 紧凑胶囊与三个入口（#2124）
+# Android compact capsule and three entries (#2124)
 
-## 用户结果与证据
+## User outcome and evidence
 
-将过大的活动摘要收成固定小胶囊；展开只显示固定「未读 / 主对话 / 收件箱」三个入口。移除不直观的优先状态数 / 活跃总数分数。证据为专用模拟器在普通 App 上的收起尺寸、三个入口及其实际数据 / 路由、主对话发送、深浅色和键盘截图，相关测试与 APK / lint。
+The oversized activity summary shrinks into a fixed small capsule; expanding it shows only three fixed entries: Unread / Main chat / Inbox. The unintuitive priority-state count / active-total score is removed. Evidence: on a dedicated emulator over an ordinary App, the collapsed size, the three entries with their real data / routes, sending to the main chat, light and dark and keyboard screenshots, plus the related tests and APK / lint.
 
-## 交付范围
+## Scope
 
-- 收起约 64 × 40 dp，仅 Persona 头像与小提醒角标；展开约 300 dp 宽、最多 420 dp 高，并继续随键盘约束。
-- 未读复用 AgentState.Unread 及 seen 版本投影；列表预览和点选会话保留现有发送 / 完整页入口。
-- 主对话固定发送到 Persona 主会话，不随紧急 Agent 改变。
-- 收件箱复用主 App 的 action 分组，含事项与交互；事项属于当前选中 hub 组，按现有路由打开真实详情。
-- 静音 / quiet 对全局浮层提醒和自动出现的约束保持生效；未读的状态与 seen 判定沿用 Agents，胶囊列表继续排除静音 / quiet 会话；收件箱沿用主 App 的 action 行。收起角标只作提醒，具体数字在三个入口中明确标注。
-- 原生模块以通用 section / entry 数据接收业务投影，保持内容与动作扩展插槽；语音 / 屏幕上下文及更新链路 #2198 不属于本轮。
+- Collapsed is about 64 × 40 dp, showing only the Persona avatar and a small alert badge; expanded is about 300 dp wide and at most 420 dp tall, still constrained by the keyboard.
+- Unread reuses AgentState.Unread and the seen-version projection; list previews and tapping a session keep the existing send / full-page entry.
+- Main chat always sends to the Persona main session and does not follow an urgent Agent.
+- Inbox reuses the main App's action grouping, including items and interactions; items belong to the currently selected hub group and open the real detail through existing routes.
+- Mute / quiet constraints on the global overlay alerts and on auto-appearing stay in effect; Unread state and seen logic follow Agents, and the capsule list still excludes muted / quiet sessions; Inbox follows the main App's action rows. The collapsed badge is only an alert; the exact numbers are labeled in the three entries.
+- The native module receives business projections as generic section / entry data, keeping content and action extension slots; voice / screen context and the update path (#2198) are out of scope for this round.
 
-## 分工
+## Roles
 
-研究者核实未读 / 收件箱 / 多 hub 路由。原生实现负责通用 sections 合约、紧凑窗口与界面；App 实现负责三入口真实数据 / 行为 / 回归；独立验收负责模拟器与真实 HTTP mock 发送 / 入口跳转。主代理集成、文档、检查、PR / 发布。
+The researcher verifies Unread / Inbox / multi-hub routing. Native implementation owns the generic sections contract, the compact window and the UI; App implementation owns the three entries' real data / behavior / regressions; independent acceptance owns the emulator and real HTTP mock sending / entry navigation. The lead agent does integration, docs, checks, PR / release.
 
-## 阶段
+## Stages
 
-- [x] 记录反馈、查重、认领、确认数据与边界。
-- [x] 通用原生界面与窗口尺寸。
-- [x] 三入口的数据、计数与路由。
-- [x] 测试 / lint / 模拟器截图与复核。
-- [ ] PR 合并、更新包与下载入口。
+- [x] Record feedback, dedupe, claim, confirm data and boundaries.
+- [x] Generic native UI and window sizes.
+- [x] Data, counts and routes for the three entries.
+- [x] Tests / lint / emulator screenshots and review.
+- [ ] Merge the PR, update the package and the download entry.
 
-## 合并前验证记录（2026-11-05）
+## Pre-merge verification record (2026-11-05)
 
-- App 76、设置 189、导航 9、原生策略 / Compose 14，共 288 项相关测试通过；APK 与 lint 通过。独立源码审查、隐私扫描和文档路径检查通过。
-- 专用 Android 14 模拟器：收起实际 168 × 105 px（density 420，64 × 40 dp）；展开约 300 × 420 dp，浅深色输入框和发送键均在键盘上方。
-- 三次真实 mock HTTP 发送均到 Persona 主会话，未被需要处理的 Agent 劫持；未读预览保留数量，打开完整会话后由 2 减到 1。收件箱事项和交互跳转、最终同会话请求描述、插件插槽、左右停靠、旋转和三档开关均通过。
-- 48 秒实录、关键截图、mock 发送目标与验收 JSON 已保存为开发机交付证据；只使用虚拟数据。最终补截时模拟器宿主曾因图形错误退出，恢复安装后再次核验通过；未把宿主事件记为 App 崩溃。
-- 设计 token 基线检查在原基线 d5493d99 与本分支均报同一批既有问题，提取未改动基线重跑后的 JSON 报告完全相同；本轮没有增加硬编码。
-- 仓库 CI 被手动停用，未产生云端 CI 结果。以上是本地与模拟器验证。
+- App 76, Settings 189, Navigation 9, native policy / Compose 14: 288 related tests passed in total; APK and lint passed. Independent source review, privacy scan and doc-path check passed.
+- Dedicated Android 14 emulator: collapsed measures 168 × 105 px (density 420, 64 × 40 dp); expanded about 300 × 420 dp, with the input field and send button above the keyboard in both light and dark.
+- Three real mock HTTP sends all reached the Persona main session and were not hijacked by an Agent needing attention; the Unread preview kept its count, which went from 2 to 1 after opening the full session. Inbox item and interaction navigation, the final same-session request description, plugin slots, docking left and right, rotation and the three-level switch all passed.
+- A 48-second recording, key screenshots, mock send targets and the acceptance JSON are kept as delivery evidence on the dev machine; only fake data was used. During the final extra screenshots the emulator host exited on a graphics error; after reinstalling, verification passed again; the host event was not counted as an App crash.
+- The design-token baseline check reports the same set of pre-existing issues on the original baseline d5493d99 and on this branch; rerunning after extracting the unchanged baseline gave an identical JSON report. This round added no hard-coded values.
+- Repository CI was disabled manually, so there are no cloud CI results. The above is local and emulator verification.
 
-本记录截至 PR #2229 合并前；合并及安装包发布状态以 #2124 进展评论为准。0.2.1 的覆盖安装包已构建，HTTP 旧配对的下载限制仍由 #2198 跟进，本轮继续提供浏览器扫码下载。
+This record covers up to just before PR #2229 merged; for merge and package release status see the progress comments on #2124. The 0.2.1 upgrade-in-place package is built; the download restriction for old HTTP pairings is still tracked in #2198, and this round keeps offering the browser QR-code download.
