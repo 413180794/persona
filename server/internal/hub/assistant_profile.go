@@ -81,6 +81,19 @@ func (h *Hub) assistantProfile() assistantwire.Profile {
 	return out
 }
 
+// assistantProfileOf is the selected manager's last reported profile, falling back to the built-in's while it
+// has not reported one. A reported profile is used as a whole, including fields the manager left empty.
+func (h *Hub) assistantProfileOf(id string) assistantwire.Profile {
+	a := h.assistantOf(id)
+	a.mu.RLock()
+	p := a.profile
+	a.mu.RUnlock()
+	if p != nil {
+		return *p
+	}
+	return h.assistantProfile()
+}
+
 // isMainOn: session on machine is the assistant's main conversation, as it reported.
 func (h *Hub) isMainOn(machine, session string) bool { return h.mainOf(machine, session) }
 

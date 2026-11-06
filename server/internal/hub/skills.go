@@ -33,9 +33,13 @@ func (h *Hub) machineSkills(ctx context.Context, m *Machine) ([]skill, error) {
 	return out.Skills, nil
 }
 
-// serveSkills is GET /api/v1/skills: the skills of the machine that runs the assistant, read only.
+// serveSkills is GET /api/v1/skills: the skills of the requested (or default) manager's machine, read only.
 func (h *Hub) serveSkills(w http.ResponseWriter, r *http.Request) {
-	m := h.localMachine(h.assistantProfile().MachineID)
+	id, ok := h.owner(w, r, h.byRequest)
+	if !ok {
+		return
+	}
+	m := h.localMachine(h.assistantProfileOf(id).MachineID)
 	if m == nil {
 		writeErr(w, http.StatusConflict, errNoAssistantMachine)
 		return

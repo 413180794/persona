@@ -85,6 +85,15 @@ func TestTheHubStartsWithTheProfileItKept(t *testing.T) {
 	if _, err := (assistantLink{h}).Snapshot(ctx, snap); err != nil {
 		t.Fatal(err)
 	}
+	const other = "m-0a0b0c"
+	if _, err := (assistantLink{h}).snapshotFrom(ctx, other, assistantwire.Snapshot{
+		Epoch: "e", Seq: 1, Profile: &assistantwire.Profile{MachineID: "laptop", Timezone: "Asia/Tokyo"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if p := h.assistantProfileOf(other); p.MachineID != "laptop" || p.Timezone != "Asia/Tokyo" {
+		t.Fatalf("another manager's report: %+v", p)
+	}
 	next := newTestHub(t)
 	next.store = store
 	next.loadAssistantProfile(ctx)
@@ -93,5 +102,9 @@ func TestTheHubStartsWithTheProfileItKept(t *testing.T) {
 	}
 	if keep := next.assistantProfile().Keep; len(keep) != 1 || keep[0].SessionID != "main-2" {
 		t.Fatalf("kept: %v", keep)
+	}
+	// Only the built-in profile survives a restart; use it until the other manager reports again.
+	if p := next.assistantProfileOf(other); p.MachineID != "server" || p.Timezone != "Europe/Paris" {
+		t.Fatalf("another manager's startup fallback: %+v", p)
 	}
 }

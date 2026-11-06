@@ -17,8 +17,8 @@ import (
 // other manager has one of its own here, made when it first reports and dropped when it is removed. Nothing a manager
 // reports replaces another's. Where the hub needs one of a thing for itself:
 //
-//   - its profile (the user's time zone, where skills go): the assistant it starts; only that one is kept in the
-//     database (assistant_profile.go), the others' live in memory and say which conversation is their main one;
+//   - its profile (the user's time zone, where skills go): the requested manager's, else the default's, falling back
+//     to the built-in's until it reports one. Only the built-in's is kept in the database (assistant_profile.go);
 //   - the Live Activity's content: the default manager's, else the assistant's;
 //   - the extensions' report (features, prefixes, looks, each machine's extras): every manager's merged, a machine's
 //     extras from its own manager, a prefix served by the first manager that reports it (the assistant's first).
