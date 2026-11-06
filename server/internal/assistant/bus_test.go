@@ -2,12 +2,19 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -44,5 +51,56 @@ func TestBusErrorKinds(t *testing.T) {
 	}
 	if busError(nil) != nil {
 		t.Error("nil")
+	}
+}
+
+// The whole snapshot a new connection reports reaches the hub: it is sent once the connection counts as up, not
+// while the hello's answer is still being kept (bus.Client calls OnHello before the connection is up, and a snapshot
+// sent then was refused as offline, so the hub showed nothing of the assistant until its next change).
+func TestBusSnapshotWaitsForTheConnection(t *testing.T) {
+	snapshots := make(chan struct{}, 8)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := bus.NewConn(r.Context(), ws)
+		p := rpc.New("h", conn)
+		p.OnRequest = func(_ context.Context, method string, _ json.RawMessage) (any, error) {
+			switch method {
+			case assistantwire.MethodHello:
+				return map[string]any{}, nil
+			case assistantwire.MethodSnapshot:
+				snapshots <- struct{}{}
+				return map[string]any{}, nil
+			}
+			return nil, &rpc.Error{Code: "not_found", Message: method}
+		}
+		_ = p.Serve(r.Context(), conn)
+	}))
+	defer srv.Close()
+
+	b := NewBusHub(BusOptions{Hub: srv.URL, Token: "jb_x", Logf: testLogf(t)})
+	// Widen the gap between the hello's answer and the connection counting as up, so a snapshot sent in it fails.
+	onHello := b.client.OnHello
+	b.client.OnHello = func(res json.RawMessage) error {
+		err := onHello(res)
+		time.Sleep(100 * time.Millisecond)
+		return err
+	}
+	st := &memStore{}
+	svc := New(Options{Hub: b, Store: func() Store { return st }, Logf: testLogf(t)})
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	go func() { served <- b.Serve(ctx, svc) }()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	select {
+	case <-snapshots:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no snapshot reached the hub after connecting")
 	}
 }

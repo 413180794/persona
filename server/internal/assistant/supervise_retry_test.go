@@ -24,7 +24,7 @@ func TestDigestWaitsForTheMainConversation(t *testing.T) {
 	f.hello.Assistant.MachineID = "" // the hub is not reachable: no hello
 	f.mu.Unlock()
 	s.signal(superviseSignal{Todo: todo.ID, Kind: sigReview, Key: "1", Detail: "做完了"})
-	time.Sleep(10 * superviseGather) // the digest was due, and found nowhere to go
+	time.Sleep(10 * shortSuperviseTimings.gather) // the digest was due, and found nowhere to go
 	if n := f.notices(); len(n) != 0 {
 		t.Fatalf("sent with no main conversation: %q", n)
 	}

@@ -278,6 +278,7 @@ type inboxBook struct {
 	handing     sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
 	translating sync.Mutex // one translation pass at a time (inbox_translate.go)
 	replies     sync.Map   // item id -> *inboxReply: replies to one item, one at a time (inbox_triage.go)
+	telling     sync.Map   // item id -> *sync.Mutex: deliveries to one item's conversation, one at a time (deliverNotes)
 	mutes       []InboxMute
 	mutesMu     sync.Mutex // one read-change-save of the kept mutes at a time
 	policies    []InboxPolicy
@@ -550,8 +551,7 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 	batch.registered = r.Names
 	for id, it := range b.items {
 		if it.DoneAt != nil && time.Since(*it.DoneAt) > inboxForget {
-			delete(b.items, id)
-			b.replies.Delete(id)
+			b.drop(id)
 		}
 	}
 	now := time.Now()
@@ -567,6 +567,14 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 	s.translateInbox(ctx)
 	s.admitInbox(ctx, batch, todo)
 	return nil
+}
+
+// drop forgets an item, under b.mu, with its reply and delivery locks: they would otherwise stay for the life of the
+// hub. A delivery holding or waiting for the lock finds the item gone and stops (deliverNotes).
+func (b *inboxBook) drop(id string) {
+	delete(b.items, id)
+	b.replies.Delete(id)
+	b.telling.Delete(id)
 }
 
 // recordReads keeps which of a round's sources could not be read, under b.mu: a source read now (or off) is cleared,
@@ -1466,8 +1474,7 @@ func (s *Service) InboxForget(ctx context.Context, source string) (int, error) {
 	}
 	b.mu.Lock()
 	for _, id := range ids {
-		delete(b.items, id)
-		b.replies.Delete(id)
+		b.drop(id)
 	}
 	b.mu.Unlock()
 	b.saving.Unlock()

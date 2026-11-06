@@ -22,8 +22,8 @@ func newQuietService(t *testing.T) (*Service, *fakeHub) {
 	reachA, reachB, reachM := agentReachAttempts, agentReachBackoff, agentReachMax
 	agentReachAttempts, agentReachBackoff, agentReachMax = 2, time.Millisecond, 200*time.Millisecond
 	t.Cleanup(func() { agentReachAttempts, agentReachBackoff, agentReachMax = reachA, reachB, reachM })
-	shortSupervise(t)
 	s, f := newTaskService(t)
+	shortSupervise(t, s)
 	f.hello.Assistant.MachineID = "server"
 	setSettings(t, s, func(v *Settings) { v.Main = "conv1" })
 	f.known["conv1"] = true
@@ -166,7 +166,7 @@ func TestQuietNoticeWaitsForTheTurn(t *testing.T) {
 	waitFor(t, "the notice to queue", func() bool { return s.queuedFor("conv1") == 1 })
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, "第二次做完", 0)
-	time.Sleep(4 * superviseEvery) // the next message is due: it takes the queued one's place
+	time.Sleep(4 * shortSuperviseTimings.every) // the next message is due: it takes the queued one's place
 	if n := s.queuedFor("conv1"); n != 1 {
 		t.Fatalf("%d queued", n)
 	}
@@ -631,7 +631,7 @@ func TestReportingConversationAgentStartIsToldThere(t *testing.T) {
 	if n := sentTo("lark1")[0]; !strings.Contains(n, "做完了（box）") || !strings.Contains(n, "https://example.com/mr/8") {
 		t.Fatalf("notice:\n%s", n)
 	}
-	time.Sleep(4 * superviseEvery)
+	time.Sleep(4 * shortSuperviseTimings.every)
 	if got := f.notices(); len(got) != 0 {
 		t.Fatalf("the main conversation was told: %q", got)
 	}

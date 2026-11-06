@@ -485,3 +485,69 @@ func TestInboxRecapOnlyTurnGoesBack(t *testing.T) {
 		t.Fatalf("the standing suggestion was dropped: %+v %+v", it.Suggestion, it.Handling)
 	}
 }
+
+// tellingLocks counts the per-item delivery locks kept.
+func tellingLocks(h *inboxHub) int {
+	n := 0
+	h.inbox.telling.Range(func(any, any) bool { n++; return true })
+	return n
+}
+
+// An item delivered to, then forgotten (its source's data deleted, or done past inboxForget), takes its delivery lock
+// with it: the locks do not pile up for the life of the hub, and a late delivery to a forgotten item leaves none.
+func TestInboxForgottenItemsDropTheirDeliveryLocks(t *testing.T) {
+	h := agentHub(t)
+	ctx := context.Background()
+	const n = 6
+	old := time.Now().Add(-inboxForget - time.Hour)
+	var items []*InboxItem
+	for i := range n {
+		it := actionItem(fmt.Sprintf("x%d", i), time.Now())
+		it.Source = "gone"
+		it.Agent = &InboxAgent{State: AgentRunning, MachineID: "server", SessionID: fmt.Sprintf("s%d", i), Task: "查 1013 是否合入"}
+		h.inbox.mu.Lock()
+		h.inbox.items[it.ID] = it
+		h.inbox.tell(it, inboxNote{Name: prompts.NoteInstructed, Text: "再看看分支"}, false, time.Now())
+		h.inbox.mu.Unlock()
+		h.deliverNotes(ctx, it)
+		items = append(items, it)
+	}
+	if got := tellingLocks(h); got != n {
+		t.Fatalf("%d delivery locks after %d deliveries", got, n)
+	}
+	// Half are settled long ago: the next round forgets them.
+	h.inbox.mu.Lock()
+	for _, it := range items[:n/2] {
+		it.Source, it.DoneAt = "kept", &old
+	}
+	h.inbox.mu.Unlock()
+	h.collectInbox(ctx, roundPoll)
+	h.inbox.mu.Lock()
+	for _, it := range items[:n/2] {
+		if h.inbox.items[it.ID] != nil {
+			h.inbox.mu.Unlock()
+			t.Fatalf("%s not forgotten", it.ID)
+		}
+	}
+	h.inbox.mu.Unlock()
+	if got := tellingLocks(h); got != n-n/2 {
+		t.Fatalf("%d delivery locks after the round forgot %d of %d", got, n/2, n)
+	}
+	// The rest go with their source's data.
+	if got, err := h.InboxForget(ctx, "gone"); err != nil || got != n-n/2 {
+		t.Fatalf("forget: %d %v", got, err)
+	}
+	if got := tellingLocks(h); got != 0 {
+		t.Fatalf("%d delivery locks after every item was forgotten", got)
+	}
+	// A delivery still on its way to a forgotten item sends nothing and keeps no lock.
+	sentCount := func() int { h.f.mu.Lock(); defer h.f.mu.Unlock(); return len(h.f.agentSent) }
+	sent := sentCount()
+	h.inbox.mu.Lock()
+	h.inbox.tell(items[0], inboxNote{Name: prompts.NoteInstructed, Text: "迟到的一条"}, false, time.Now())
+	h.inbox.mu.Unlock()
+	h.deliverNotes(ctx, items[0])
+	if got, now := tellingLocks(h), sentCount(); got != 0 || now != sent {
+		t.Fatalf("a late delivery to a forgotten item: %d locks, %d sent (was %d)", got, now, sent)
+	}
+}

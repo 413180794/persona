@@ -301,16 +301,38 @@ func (b *superviseBook) init() {
 	}
 }
 
-// digestWait is how long until the pending signals are due (false: none): each waits superviseGather after it came,
-// and superviseEvery (superviseUrgentEvery for an urgent one) after the last message (last; zero: none yet).
-func digestWait(now, last time.Time, pending []superviseSignal) (time.Duration, bool) {
+// superviseTimings are how supervision messages gather and space out (Service.superviseTimes; a zero field: the
+// package's superviseGather, superviseEvery or superviseUrgentEvery).
+type superviseTimings struct {
+	gather, every, urgent time.Duration
+}
+
+// superviseTimings are s's own timings, the package's for each one it does not set. Tests set them on their Service,
+// so that a digest timer left over from one test never reads what another test's cleanup writes.
+func (s *Service) superviseTimings() superviseTimings {
+	p := s.superviseTimes
+	if p.gather <= 0 {
+		p.gather = superviseGather
+	}
+	if p.every <= 0 {
+		p.every = superviseEvery
+	}
+	if p.urgent <= 0 {
+		p.urgent = superviseUrgentEvery
+	}
+	return p
+}
+
+// digestWait is how long until the pending signals are due (false: none): each waits p.gather after it came, and
+// p.every (p.urgent for an urgent one) after the last message (last; zero: none yet).
+func digestWait(now, last time.Time, pending []superviseSignal, p superviseTimings) (time.Duration, bool) {
 	var due time.Time
 	for _, g := range pending {
-		at := g.At.Add(superviseGather)
+		at := g.At.Add(p.gather)
 		if !last.IsZero() {
-			gap := superviseEvery
+			gap := p.every
 			if g.urgent() {
-				gap = superviseUrgentEvery
+				gap = p.urgent
 			}
 			if next := last.Add(gap); next.After(at) {
 				at = next
@@ -363,7 +385,7 @@ func (s *Service) scheduleDigestLocked(now time.Time) {
 	for _, g := range b.pending {
 		list = append(list, g)
 	}
-	wait, ok := digestWait(now, b.last, list)
+	wait, ok := digestWait(now, b.last, list, s.superviseTimings())
 	if !ok {
 		return
 	}
@@ -603,7 +625,7 @@ func (s *Service) sendDigest(ctx context.Context) {
 		list = append(list, g)
 	}
 	now := time.Now()
-	if wait, ok := digestWait(now, b.last, list); !ok || wait > time.Second {
+	if wait, ok := digestWait(now, b.last, list, s.superviseTimings()); !ok || wait > time.Second {
 		if ok {
 			s.scheduleDigestLocked(now)
 		}
@@ -618,9 +640,10 @@ func (s *Service) sendDigest(ctx context.Context) {
 	if here.Main == "" || here.MachineID == "" {
 		// Nowhere to tell them now (no main conversation yet, or no machine: the hub's hello while the bus is down).
 		// They stay pending and untold, and go out on a later try (#5420).
-		s.logf("supervise: no main conversation; trying again in %s", superviseUrgentEvery)
+		retry := s.superviseTimings().urgent
+		s.logf("supervise: no main conversation; trying again in %s", retry)
 		b.mu.Lock()
-		s.retryDigestLocked(superviseUrgentEvery)
+		s.retryDigestLocked(retry)
 		b.mu.Unlock()
 		return
 	}

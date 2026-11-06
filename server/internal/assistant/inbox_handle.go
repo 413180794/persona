@@ -210,20 +210,26 @@ func (s *Service) deliverPending(ctx context.Context) {
 	}
 }
 
-// telling serializes the deliveries to one event's conversation.
-var telling sync.Map // item id → *sync.Mutex
-
 // deliverNotes sends what waits for the event's conversation into it. A conversation found gone is dropped: a note
 // that asks for work then queues a new one (carrying the recap and the chain); a send that failed otherwise is tried
 // again on the next pass.
 func (s *Service) deliverNotes(ctx context.Context, it *InboxItem) {
-	v, _ := telling.LoadOrStore(it.ID, &sync.Mutex{})
+	b := &s.inbox
+	v, _ := b.telling.LoadOrStore(it.ID, &sync.Mutex{})
 	mu := v.(*sync.Mutex)
 	mu.Lock()
 	defer mu.Unlock()
 	owner := s.owner(ctx)
-	b := &s.inbox
 	b.mu.Lock()
+	if cur := b.items[it.ID]; cur != it {
+		// Forgotten (drop) while this was on its way: nothing goes, and the lock this may have put back goes again. One
+		// of an item kept under the id since is another's, and stays.
+		if cur == nil {
+			b.telling.CompareAndDelete(it.ID, mu)
+		}
+		b.mu.Unlock()
+		return
+	}
 	a := it.Agent
 	if a == nil || a.SessionID == "" || len(a.Pending) == 0 {
 		b.mu.Unlock()

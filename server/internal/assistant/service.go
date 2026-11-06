@@ -54,6 +54,9 @@ type Service struct {
 	// taskRetry is how long a task waits before its one retry after a dropped link (0: taskStartRetryDelay; tests
 	// shorten it).
 	taskRetry time.Duration
+	// superviseTimes are how supervision messages gather and space out (zero fields: the package's; tests shorten
+	// them, supervise.go superviseTimings).
+	superviseTimes superviseTimings
 	// retryNow is the clock a due retry checks the task's time against (retryStillDue; nil: time.Now, tests set it).
 	retryNow func() time.Time
 

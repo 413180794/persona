@@ -12,12 +12,24 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// shortSupervise makes supervision messages come at once and often, for a test.
-func shortSupervise(t *testing.T) {
+// shortSuperviseTimings are the supervision timings shortSupervise gives a test's Service.
+var shortSuperviseTimings = superviseTimings{gather: 20 * time.Millisecond, every: 150 * time.Millisecond, urgent: 60 * time.Millisecond}
+
+// shortSupervise makes s's supervision messages come at once and often, for a test. The timings are s's own, not the
+// package's: a digest timer still running after the test ends reads only them, never another test's. The timer is
+// stopped when the test ends.
+func shortSupervise(t *testing.T, s *Service) {
 	t.Helper()
-	g, e, u := superviseGather, superviseEvery, superviseUrgentEvery
-	superviseGather, superviseEvery, superviseUrgentEvery = 20*time.Millisecond, 150*time.Millisecond, 60*time.Millisecond
-	t.Cleanup(func() { superviseGather, superviseEvery, superviseUrgentEvery = g, e, u })
+	s.superviseTimes = shortSuperviseTimings
+	t.Cleanup(func() {
+		b := &s.supervise
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if b.timer != nil {
+			b.timer.Stop()
+			b.timer, b.timerAt = nil, time.Time{}
+		}
+	})
 }
 
 // The first signal waits superviseGather; after a message, a signal waits superviseEvery (an urgent one
@@ -41,10 +53,29 @@ func TestDigestWait(t *testing.T) {
 		{"the soonest of them", now.Add(-time.Minute), []superviseSignal{review, needs}, superviseUrgentEvery - time.Minute, true},
 		{"long after", now.Add(-time.Hour), []superviseSignal{review}, superviseGather, true},
 	} {
-		got, ok := digestWait(now, c.last, c.pending)
+		got, ok := digestWait(now, c.last, c.pending, (&Service{}).superviseTimings())
 		if got != c.want || ok != c.ok {
 			t.Errorf("%s: digestWait = %v, %v; want %v, %v", c.name, got, ok, c.want, c.ok)
 		}
+	}
+}
+
+// A Service's own supervision timings take the place of the package's, each one it sets; the rest stay the package's.
+func TestSuperviseTimingsOnService(t *testing.T) {
+	want := superviseTimings{gather: superviseGather, every: superviseEvery, urgent: superviseUrgentEvery}
+	if got := (&Service{}).superviseTimings(); got != want {
+		t.Fatalf("defaults = %+v; want %+v", got, want)
+	}
+	s := &Service{superviseTimes: superviseTimings{every: time.Second}}
+	want.every = time.Second
+	if got := s.superviseTimings(); got != want {
+		t.Fatalf("with every set = %+v; want %+v", got, want)
+	}
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	short := &Service{superviseTimes: shortSuperviseTimings}
+	got, ok := digestWait(now, now, []superviseSignal{{Kind: sigNeedsYou, At: now}}, short.superviseTimings())
+	if !ok || got != shortSuperviseTimings.urgent {
+		t.Fatalf("digestWait with short timings = %v, %v; want %v, true", got, ok, shortSuperviseTimings.urgent)
 	}
 }
 
@@ -171,7 +202,7 @@ func TestSupervisedTaskRound(t *testing.T) {
 
 	// The same stop is told once.
 	s.taskTurnEnded(ctx, "box", "s1")
-	time.Sleep(4 * superviseEvery)
+	time.Sleep(4 * shortSuperviseTimings.every)
 	if got := len(f.notices()); got != 1 {
 		t.Fatalf("%d messages", got)
 	}
@@ -277,7 +308,7 @@ func TestDigestBatches(t *testing.T) {
 	s.signal(superviseSignal{Todo: ids[0], Kind: sigStalled, Key: "a", Minutes: 25})
 	waitFor(t, "the queued message", func() bool { return s.queuedFor("conv1") == 1 })
 	s.signal(superviseSignal{Todo: ids[1], Kind: sigIdle, Key: "b", Detail: "没做完"})
-	time.Sleep(3 * superviseEvery)
+	time.Sleep(3 * shortSuperviseTimings.every)
 	if got := s.queuedFor("conv1"); got != 1 {
 		t.Fatalf("%d queued", got)
 	}

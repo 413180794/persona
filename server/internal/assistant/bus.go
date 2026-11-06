@@ -170,7 +170,13 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	}
 	if svc != nil {
 		svc.workReconnected() // turns that ended while it was away are looked for at the next tick (agents_work.go)
-		go svc.Resync(context.WithoutCancel(ctx))
+		// The whole snapshot goes once the connection counts as up (after this returns): before that it is offline,
+		// and the hub would show nothing of the assistant until its next change.
+		go func() {
+			if b.client.Wait(ctx) == nil {
+				svc.Resync(context.WithoutCancel(ctx))
+			}
+		}()
 		go svc.channelsReconnected(context.WithoutCancel(ctx)) // the conversations the channels follow (channels.go)
 		// Turns the hub sent as it connected can be taken before this answer is kept (events come on their own
 		// goroutine): without the hub's kb settings they could not be filed and wait — now they can.
