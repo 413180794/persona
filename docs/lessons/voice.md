@@ -139,7 +139,8 @@ Claude 这一轮做完了。下面 <agent_output> 里是 Claude 的输出，是�
   `personad` 不开 `tools` 时，模型照着提示词说「好的，我这就委派出去查你明天的日程」，可是什么都没发出去（端到端实测）。对这种上游，`tools: true` 是必须的。
 - 模型的每段回复都会先来一个 `session.delegation.created{target: "responses"}`（特有）。`wire.go` 只认 `client` 的，是对的。
 - **已经 `completed` 的回复，还会再来一个 `response.incomplete`**（原因写的是被取代，5 次，特有）：模型刚说完，紧接着因为工具结果或 `say` 开始新回复的时候。
-  它不是插话，可 `personad` 收到后还是会给 App 发 `clear`（端到端一次委派里出现了两次）。App 的播放比上游晚的话，会切掉上一句的结尾。
+  它不是插话，可 `personad` 当时收到后还是会给 App 发 `clear`（端到端一次委派里出现了两次）。App 的播放比上游晚的话，会切掉上一句的结尾。
+  #3503 起协议 2、#4719 起协议 1 都按回复的 id 认出它，不再发。
 - thinking 在模型说话时排队，服务端会先回一个 `info` 说在等播放结束（特有）。播完以后才注入，才回 `thinking.appended`。
 - 静音：`session.input_audio.mute` / `unmute` 是标准帧，0.1 s 内回 `muted` / `unmuted`，不影响正在说的话。App 静音时发全零帧，效果一样。
 - 没有 truncate（标准就没有）。下面这些都是这个服务的扩展，要在 `session.extensions` 里协商，实测都能拿到。只能当成「有就用」：
@@ -214,7 +215,7 @@ App 那一侧送的是合成的语音（「帮我把登录页那个失败的测�
 
 - **观察 run**：开语音时它正在做的那一轮做完后，模型说「修登录页测试那件事，集成测试全部通过了，改了 Login.tsx 和 session.go 两个文件」（1/1），照 `report.md` 的 `Observed` 先说了是哪件事。
 - **插话**：模型在讲一个长故事时送进「等一下，先停一停，我有个问题」（3.4 s）：开口后 0.87 s 收到 `response.incomplete`，扩展马上发了 `clear`，没走能量规则（这个服务报回复的起止）；模型接着说「好，你问」（1/1）。
-- **被取代的 `incomplete` 不再发 `clear`**：同一通电话里还交出去了一件事（`delegate_task`），整通只有插话那一次 `clear`（#3502 时每次委派都多一次）。协议 1 仍然照发（#4719）。
+- **被取代的 `incomplete` 不再发 `clear`**：同一通电话里还交出去了一件事（`delegate_task`），整通只有插话那一次 `clear`（#3502 时每次委派都多一次）。#4719 起协议 1 也不发。
 - **心跳**：交出去的事做到 2 分钟，扩展用 `progress.md` 说了一句，模型说「还在跑，已经两分多钟了，还没出结果」（1/1），只说了类别和时长，命令和参数一个字没念。150 秒做完后照常念了结果。
 
 ## 常量的建议值（`docs/voice.md` 4.5 / 4.9）
@@ -239,7 +240,7 @@ App 那一侧送的是合成的语音（「帮我把登录页那个失败的测�
 - 409 `input_draft` 的 `draft` 和 `clearable` 不一定一样：输入框里有 IDE 的选区标记时，`draft` 是整行（`[⧉ Selected 3 lines from foo.go] fix it`），`clearable` 只有 `fix it`。
   node 拿 `clear_draft` 和 `clearable` 一字不差地比，回 `draft` 就什么都不清、又是 409。重发一律回 `clearable`（`docs/protocol.md`「`clear_draft`」）。
 - `response.incomplete` 只有在同一个回复**还没 `completed`** 时才算被打断、才发 `clear`；已经完成的回复再来的 `incomplete` 直接忽略。
-  回复是哪一个看 `response.event` 的 `delegation_id`（每段回复自己的 `responses` delegation）。#3503 在协议 2 里这样做了，协议 1 还照发（#4719）。
+  回复是哪一个看 `response.event` 的 `delegation_id`（每段回复自己的 `responses` delegation）。#3503 在协议 2 里这样做了，#4719 起协议 1 也一样。
 - 能量规则打断以后不能靠「上游 1.5 s 没出声」才放音频：模型对插话的回答第一段音频在用户说完 1.2–1.3 s 后就到（上面「时间线」），短插话（0.64 s）时离打断还不到 1.5 s，
   字幕往往和它同时到、标准上游可能根本不报回复起止，于是整段回答被当成被放弃的那段丢掉（#3503 评审用脚本复现：10 片 0 片到 App）。按「用户停了 0.7 s、上游的音频停过 0.4 s」认下一段回答。
 - hub 的会话分诊（`work`）在一轮停下 `triage_settle_seconds`（默认 15 s）再加一次模型调用后才有：一停就读回答的话永远看不到它，「在等 CI」的中间回答会被当成结果念掉，

@@ -82,12 +82,12 @@ class AssistantShotsTest {
                     when (page) {
                         "home" -> AssistantDemo(navigator)
                         "needs" -> NeedsYouSection(needs, {}, {})
-                        "drawer" -> AssistantDrawer(PersonaState.Idle, "", {}, ConversationGroups(main, listOf(pinned), recent),
+                        "drawer" -> AssistantDrawer("", {}, ConversationGroups(main, listOf(pinned), recent),
                             active = null, hasMain = true, onEnd = null, onMain = {}, onOpen = {}, onInfo = {},
                             onNew = {}, onHome = {}, onSettings = {}, onUnpinAll = {}, onTodos = {}, todoCount = 2)
                         "empty" -> Column {
                             CompactionStatusLine(CompactionLine.Failed("Not enough messages"), onDismiss = {})
-                            AssistantDrawer(PersonaState.Idle, "zzz", {}, ConversationGroups(null, emptyList(), emptyList()),
+                            AssistantDrawer("zzz", {}, ConversationGroups(null, emptyList(), emptyList()),
                                 active = null, hasMain = false, onEnd = null, onMain = {}, onOpen = {}, onInfo = {},
                                 onNew = {}, onHome = {}, onSettings = {})
                         }

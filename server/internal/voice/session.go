@@ -658,9 +658,10 @@ func (c *conversation) handle(gen int, e event) {
 		if e.id != "" {
 			c.signals = true
 		}
-		if c.version >= 2 && e.id != "" && slices.Contains(c.replied, e.id) {
+		if e.id != "" && slices.Contains(c.replied, e.id) {
 			// A reply that was over already, superseded by the next one (a tool's result, a say): nothing of it is left
-			// to drop, and a clear would cut the end of it the app still plays (docs/lessons/voice.md「其他行为」).
+			// to drop, and a clear would cut the end of it the app still plays (docs/lessons/voice.md「其他行为」). On
+			// either protocol (#4719): protocol 1's apps play behind the upstream the same way.
 			return
 		}
 		c.sendApp(map[string]any{"type": "clear"})

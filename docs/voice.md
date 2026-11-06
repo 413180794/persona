@@ -265,7 +265,7 @@ hub 经 `/api/v1/bus/relay` 把 App 的 HTTP / WS 原样交给管理者（先去
 | --- | --- | --- |
 | `ready` | 改：加 `protocol`、`features`、`target{machine_id, session_id, kind, title, agent_label, machine_name}` | 目标在这里固定下来，通话期间不再变 |
 | `transcript`、二进制 | 不变 | |
-| `clear` | 改（只限协议 2） | 用户插话超过门槛时，扩展主动发，并设 `dropAudio`（4.5 规则 7）。#3503：上游报了回复的起止（实测的服务的 `response.event`）就只跟着它的 `incomplete` 发，同一个回复已经 `completed` 后再来的 `incomplete`（被下一段取代）不发；上游不报时按 PCM 能量发。协议 1 不变（上游说中断就发，包括被取代的那种） |
+| `clear` | 改（只限协议 2） | 用户插话超过门槛时，扩展主动发，并设 `dropAudio`（4.5 规则 7）。#3503：上游报了回复的起止（实测的服务的 `response.event`）就只跟着它的 `incomplete` 发，同一个回复已经 `completed` 后再来的 `incomplete`（被下一段取代）不发；上游不报时按 PCM 能量发。协议 1 上游说中断就发，没有能量规则；#4719 起被取代的那种也不发 |
 | `tool` | 不变 | 协议 2 下只用于只读的函数工具（查知识库、看 Agents）；交出去的事看 `run`，重连状态改发 `link{reconnecting}` / `link{live}` |
 | `{"type":"run","id","task","state","msg_ids","base_seq","started_at","code?","message?","draft?","clearable?"}` | 新 | `state`：`sending`、`sent`、`working`、`needs_you`、`blocked`（在等外部或别的 Agent，#3503：hub 的分诊说这一轮在等部署、CI、另一个 Agent；分诊在一轮停下约 15 秒后才有，所以 `done` 之后还可能来 `blocked`，同一个 run 接着走，之后再到 `done`，4.3）、`held`（答了一次，后台还在跑）、`done`、`failed`、`refused`（带 `code`，包括 `unprompted`）、`unknown`（502）、`folded`（并进了后一条）。Hold 之后 `base_seq` 跟着更新。#3502 的写法：`id` 就是消息的 `client_msg_id`（`voice-<16 位十六进制>`），`msg_ids` 在发送前就有它（续接时按它找）；`started_at` 是 RFC 3339；`clearable` 是 hub 409 里的字符串原文（只有一行字、能清空时才有；`draft` 是输入框里的全部字，两者不一定相同），App 的「清空并发送」把它原样回成 `clear_draft`；Fold 之后后一条的 run 帧会再发一次，`msg_ids` 是并起来的全部（续接时靠它们找）；`code`：`refused` 时是 hub 的 409 code（`dialog_open`、`input_draft`、`open_elsewhere`…）或 `unprompted`、`empty`、`on_screen`（只有一个批准词，4.4），`failed` 时是 hub 的 code 或 `unreachable`，`unknown` 时是 `unknown`，叫停后的 `done` 是 `stopped`；`message` 是 hub 原话 |
 | `{"type":"ask","interaction_id","state":"asking"\|"answered"\|"released","by?":"voice"\|"elsewhere"}` | 新 | 哪张卡正在被语音问。#3504 的写法：问它的话真正交给快层时发 `asking`（还在等插话门槛时不发）；语音答上了发 `answered{by: voice}`；在屏幕或别的设备上答了（卡片没了，或 `resolve` 回 404 / 410 / `already` / 409 `prompt_changed`，或回别的 409 时卡片已经没了）发 `released{by: elsewhere}`；两次没听清交给屏幕、「停止：」叫停了这一轮、或者 `resolve` 没等到 hub 的回答而卡片已经没了（不知道是谁答的），发不带 `by` 的 `released`。没发过 `asking` 的卡不发后两种。一次只问一张卡 |
@@ -561,7 +561,7 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
      不能等原来的「上游 1.5 秒没出声」：回答的第一段音频在用户说完 1.2–1.3 秒后就到（lessons「时间线」），短插话（「等一下」0.64 秒）时离打断还不到 1.5 秒，字幕也常常和它同时到或者根本没有，回答会整段被丢；
    - 阈值的依据：实测 0.43 秒的「嗯嗯」模型不停，0.64 秒的「等一下」、0.70 秒的「对对对」都停；不拿模型自己停下的 0.8 秒当阈值，那样会漏掉它自己会停的短插话，而被放弃的回答大半已经在 App 里（音频 9–10 倍速到达）。
      真机上回声消除的残余和环境噪声会让能量更容易连成一段，0.5 秒要上真机再确认。
-   - 协议 1 不变：上游说中断就发 `clear`（包括被取代的那种），没有能量规则。
+   - 协议 1：上游说中断就发 `clear`，没有能量规则；已经 `completed` 的回复被下一段取代时来的 `incomplete` 不发（#4719，和协议 2 一样）。
 8. **心跳**（#3503，两种协议都有）：有 run 在工作中（不是 `held`，也不是别的渠道那一轮），通话里 `heartbeatAfter`（2 分钟）没人出声，就用 `progress.md` 说一句「还在做，做了多久」：
    「出声」是模型的话按播放结束时刻还没播完、App 的声音里有人声、用户的字幕或打的字，以及这个 run 上一次说过的话；
    只说 `activity` 的类别（「在跑测试 / 在读」，命令和路径不念）和从交代起做了多久（观察 run 从会话进入工作中算），不放 Agent 的文字，不关用户发言门槛。
@@ -777,7 +777,7 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
   分诊说做完了以后电脑上又开的一轮照常按观察 run 念；「停止：」以后会话还显示在工作的那一会儿不建观察 run，之后在电脑上开的一轮照常念；发送结果不明的那条其实到了，它那一轮按通话自己的 run 念（`unknown` → `working` → `done`）；
   心跳只说类别和时长（命令不念）、`heartbeatAfter` 内不说第二次、过期的心跳丢掉；心跳的类别用通话的语言（`activityIn`：英文、日文用 hub 给 App 的说法，不认识的不说）；
   协议 2 插话：0.4 秒的附和不 `clear`、字间停了 60 毫秒、一共 0.6 秒的人声 `clear`、模型播完以后说话不 `clear`、协议 1 同样的声音不 `clear`（回归）；报回复起止的上游：能量规则不用、跟着 `incomplete` 发、
-  已经 `completed` 的回复再来的 `incomplete` 协议 2 不发、协议 1 照发（回归）；能量规则打断「等一下」之后，被放弃的那段剩下的音频不放、1.2 秒后来的回答放（没有字幕）；`barge` 的累计规则。
+  已经 `completed` 的回复再来的 `incomplete` 两种协议都不发、协议 1 真的被打断照发（回归，#4719）；能量规则打断「等一下」之后，被放弃的那段剩下的音频不放、1.2 秒后来的回答放（没有字幕）；`barge` 的累计规则。
   测试结束前等插件的通话（连同跟踪 run 的循环和说话的循环）都结束，`-race` 下改调参变量不和上一个测试的循环抢（`converse` 返回前等这两个循环退出）。prompts 的 golden 加了 `progress.*`、`observed.*`、`report.observed*`、`report.error_*`、`report.partial_error`，断言都说了「还在做 / 做完了」、数据块完整、心跳不带 Agent 的文字。
   手动：这个分支的 `personad voice`（live 方言、`tools`、`key_file`）对着实测的服务和一个假 hub（Agent 的一轮做 150 秒），见 `docs/lessons/voice.md`「念别处那一轮、心跳和打断之后」。
 

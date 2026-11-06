@@ -60,7 +60,8 @@ internal fun conversationGroups(
     val others = matches.filter { it.key != snapshot.mainSession && it.key !in pinned }
     // A search finds every conversation, wherever it comes from; otherwise 最近 is the user's own.
     val searching = query.isNotBlank()
-    return ConversationGroups(matches.firstOrNull { it.key == snapshot.mainSession },
+    // The main conversation is the drawer's first row, above the search: a search does not take it away.
+    return ConversationGroups(snapshot.conversations.firstOrNull { it.key == snapshot.mainSession && !it.archived },
         matches.filter { it.key != snapshot.mainSession && it.key in pinned },
         if (searching) others else others.filter { it.autoOrigin() == null },
         if (searching) emptyList() else others.filter { it.autoOrigin() != null })

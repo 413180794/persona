@@ -80,7 +80,7 @@ class AssistantDrawerShotsTest {
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
                 Box(Modifier.testTag("shot").width(400.dp).height(1100.dp).background(PersonaTheme.palette.background)) {
-                    AssistantDrawer(PersonaState.Idle, "", {}, groups, active = null, hasMain = groups.main != null,
+                    AssistantDrawer("", {}, groups, active = null, hasMain = groups.main != null,
                         onEnd = null, onMain = { mainTapped = true }, onOpen = { opened = it }, onInfo = { info = it },
                         onNew = {}, onHome = {}, onSettings = { settingsTapped = true }, onTodos = {}, todoCount = 2)
                 }
@@ -90,9 +90,15 @@ class AssistantDrawerShotsTest {
         rule.onAllNodesWithText("主对话").assertCountEquals(0)
         rule.onAllNodesWithText("资料页").assertCountEquals(0)
         rule.onAllNodesWithText("认识 Persona").assertCountEquals(0)
-        rule.onAllNodesWithText("Persona").assertCountEquals(2) // Header and the main conversation, not an introduction.
-        rule.onAllNodesWithText("Persona")[1].performClick()
-        assertEquals(main.key, opened)
+        // #2004 on every platform: the first row is the main conversation as 「Persona」 with the app's mark, then a
+        // line; Persona is not listed again (no header of its own, no second main row).
+        rule.onAllNodesWithText("Persona").assertCountEquals(1)
+        val persona = rule.onNodeWithText("Persona").fetchSemanticsNode().boundsInRoot
+        val search = rule.onNodeWithText("搜索对话").fetchSemanticsNode().boundsInRoot
+        assertTrue("Persona is above the search", persona.bottom <= search.top)
+        rule.onNodeWithText("Persona").performClick()
+        assertTrue(mainTapped)
+        assertEquals(null, opened)
         rule.onNodeWithText("启动器").performClick()
         assertEquals(AssistantInfo.Launcher, info)
         rule.onNodeWithText("会话信息").performClick()
@@ -105,7 +111,9 @@ class AssistantDrawerShotsTest {
         }
         // No main conversation yet: the same row starts one.
         style = AppStyle.Glass; dark = false
+        mainTapped = false
         groups = ConversationGroups(null, emptyList(), recent)
+        rule.onAllNodesWithText("Persona").assertCountEquals(1)
         rule.onNodeWithText("开始主对话").performClick()
         assertTrue(mainTapped)
         capture("drawer-no-main-glass-light")
@@ -115,7 +123,7 @@ class AssistantDrawerShotsTest {
         var archived: Session? = null
         rule.setContent {
             PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
-                AssistantDrawer(PersonaState.Idle, "", {}, ConversationGroups(main, emptyList(), recent.take(1)), active = null,
+                AssistantDrawer("", {}, ConversationGroups(main, emptyList(), recent.take(1)), active = null,
                     hasMain = true, onEnd = null, onMain = {}, onOpen = {}, onInfo = {}, onNew = {}, onHome = {}, onSettings = {},
                     onArchive = { archived = it })
             }
@@ -127,6 +135,26 @@ class AssistantDrawerShotsTest {
         rule.onAllNodesWithContentDescription("对话操作")[1].performClick()
         rule.onNodeWithText("归档").performClick()
         assertEquals(recent.first(), archived)
+    }
+
+    // The Persona row says what the main conversation waits on: its pending count first, else working / unread.
+    @Test fun thePersonaRowShowsTheMainConversationsState() {
+        var groups by mutableStateOf(ConversationGroups(main.copy(pendingInteractions = 3, state = "working"), emptyList(), recent))
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
+                Box(Modifier.testTag("shot").width(400.dp).height(700.dp).background(PersonaTheme.palette.background)) {
+                    AssistantDrawer("", {}, groups, active = null, hasMain = true, onEnd = null, onMain = {}, onOpen = {},
+                        onInfo = {}, onNew = {}, onHome = {}, onSettings = {})
+                }
+            }
+        }
+        rule.onNodeWithText("3").assertExists()
+        capture("drawer-persona-pending-glass-light")
+        groups = ConversationGroups(main.copy(state = "working"), emptyList(), recent.drop(1))
+        rule.waitForIdle()
+        capture("drawer-persona-working-glass-light")
+        rule.onAllNodesWithText("3").assertCountEquals(0)
+        rule.onAllNodesWithText("工作中").assertCountEquals(1)
     }
 
     // #3264: 自动对话 folded (its count, the red count of those waiting for the user) and open (a chip per origin, the
@@ -146,7 +174,7 @@ class AssistantDrawerShotsTest {
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
                 Box(Modifier.testTag("shot").width(400.dp).height(1300.dp).background(PersonaTheme.palette.background)) {
-                    AssistantDrawer(PersonaState.Idle, "", {}, ConversationGroups(main, emptyList(), recent, auto), active = null,
+                    AssistantDrawer("", {}, ConversationGroups(main, emptyList(), recent, auto), active = null,
                         hasMain = true, onEnd = null, onMain = {}, onOpen = {}, onInfo = {}, onNew = {}, onHome = {}, onSettings = {},
                         autoOpen = open, onAutoOpen = { open = it })
                 }

@@ -32,7 +32,9 @@ class AssistantTest {
         assertEquals(main, mainOnly.main)
         assertTrue(mainOnly.recent.isEmpty())
         assertTrue(mainOnly.pinned.isEmpty())
-        assertNull(conversationGroups(AssistantSnapshot(main.key, listOf(main)), "周报", emptySet(), words).main)
+        // The main conversation is the drawer's first row, above the search: a search that misses it keeps it.
+        assertEquals(main, conversationGroups(AssistantSnapshot(main.key, listOf(main)), "周报", emptySet(), words).main)
+        assertNull(conversationGroups(AssistantSnapshot(main.key, listOf(main.copy(archived = true))), "", emptySet(), words).main)
     }
 
     @Test fun historyFormatting() {

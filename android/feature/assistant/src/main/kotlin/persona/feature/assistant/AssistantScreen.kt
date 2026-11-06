@@ -456,7 +456,7 @@ fun AssistantScreen(
         if (drawerOpen) scope.launch { drawerOpen = false } else newConversation()
     }
     val sidebar: @Composable () -> Unit = {
-        AssistantDrawer(faceState, query, { query = it }, groups, active, snapshot.mainSession != null,
+        AssistantDrawer(query, { query = it }, groups, active, snapshot.mainSession != null,
             onEnd = if (management != null) ({ ending = it }) else null,
             onMain = {
                 openedMain = true
@@ -816,7 +816,6 @@ private fun SuggestionCard(icon: PhIcon, title: String, detail: String?, onClick
 
 @Composable
 internal fun AssistantDrawer(
-    face: PersonaState,
     query: String, onQuery: (String) -> Unit, groups: ConversationGroups, active: SessionKey?, hasMain: Boolean,
     onEnd: ((Session) -> Unit)?,
     onMain: () -> Unit, onOpen: (SessionKey) -> Unit, onInfo: (AssistantInfo) -> Unit,
@@ -831,27 +830,16 @@ internal fun AssistantDrawer(
     var autoPicked by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxHeight().padding(horizontal = 12.dp)) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
-            item {
-                Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PersonaFace(face)
-                    Text(LocalPersonaName.current, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
-                }
+            // The first row is the main conversation, as 「Persona」 with the app's mark, then a line (#2004, the same on
+            // every platform): it is listed nowhere else, has no pin of its own, and is on show whatever the search.
+            // Its session keeps its id and title; only the row reads differently.
+            item(key = "persona") {
+                PersonaRow(groups.main, selected = groups.main != null && groups.main.key == active, hasMain = hasMain,
+                    onMain = onMain, onEnd = groups.main?.let { m -> onEnd?.let { action -> { action(m) } } },
+                    onCopy = { groups.main?.let(onCopy) })
+                JDivider(Modifier.padding(vertical = Tokens.Space.s))
             }
             item { JSearchField(query, onQuery, stringResource(R.string.assistant_search_chats)) }
-            // The main conversation is always first, under Persona's own name and face (iOS's sidebar): it has no pin
-            // of its own. Its session keeps its id and title; only the row reads differently.
-            if (groups.main != null) item {
-                ConversationRow(groups.main, main = true, selected = groups.main.key == active,
-                    modifier = Modifier.padding(top = Tokens.Space.m),
-                    onOpen = { onOpen(groups.main.key) }, onEnd = onEnd?.let { action -> { action(groups.main) } },
-                    onCopy = { onCopy(groups.main) })
-            } else if (query.isBlank()) item {
-                JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-                    JRow(LocalPersonaName.current, leading = { PersonaMark() }, onClick = onMain,
-                        subtitle = if (hasMain) null else stringResource(R.string.assistant_start_main))
-                }
-            }
             if (groups.pinned.isNotEmpty()) item(key = "pinned-header") {
                 var pinMenu by remember { mutableStateOf(false) }
                 JSectionHeader(stringResource(R.string.assistant_pinned), count = groups.pinned.size, action = if (onUnpinAll != null) ({
@@ -863,7 +851,7 @@ internal fun AssistantDrawer(
                 )
             }
             itemsIndexed(groups.pinned, key = { _, session -> session.key.path }) { index, session ->
-                ConversationRow(session, main = false, selected = session.key == active,
+                ConversationRow(session, selected = session.key == active,
                     position = GroupPosition.of(index, groups.pinned.size),
                     onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
                     pinned = true, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) },
@@ -874,7 +862,7 @@ internal fun AssistantDrawer(
             val recentCount = recent.shown.size + if (recent.hidden > 0) 1 else 0
             if (groups.recent.isNotEmpty()) item(key = "recent-header") { JSectionHeader(stringResource(R.string.assistant_recent), count = groups.recent.size) }
             itemsIndexed(recent.shown, key = { _, session -> session.key.path }) { index, session ->
-                ConversationRow(session, main = false, selected = session.key == active,
+                ConversationRow(session, selected = session.key == active,
                     position = GroupPosition.of(index, recentCount),
                     onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
                     pinned = false, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) },
@@ -902,7 +890,7 @@ internal fun AssistantDrawer(
                         JGroupItem(GroupPosition.of(1, autoCount)) { AutoOriginChips(origins, picked.origin) { autoPicked = it.wire } }
                     }
                     itemsIndexed(shown, key = { _, session -> "auto/" + session.key.path }) { index, session ->
-                        ConversationRow(session, main = false, selected = session.key == active,
+                        ConversationRow(session, selected = session.key == active,
                             position = GroupPosition.of(index + 2, autoCount),
                             onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
                             pinned = false, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) },
@@ -910,7 +898,7 @@ internal fun AssistantDrawer(
                     }
                 }
             }
-            if (groups.main == null && groups.pinned.isEmpty() && groups.recent.isEmpty() && groups.auto.isEmpty()) {
+            if (groups.pinned.isEmpty() && groups.recent.isEmpty() && groups.auto.isEmpty() && (groups.main == null || query.isNotBlank())) {
                 item { JEmptyState(stringResource(if (query.isBlank()) R.string.assistant_empty_title else R.string.assistant_no_match),
                     stringResource(if (query.isBlank()) R.string.assistant_empty_detail else R.string.assistant_no_match_detail)) }
             }
@@ -944,7 +932,7 @@ internal fun AssistantDrawer(
  */
 @Composable
 private fun ConversationRow(
-    session: Session, main: Boolean, selected: Boolean, onOpen: () -> Unit, onEnd: (() -> Unit)?,
+    session: Session, selected: Boolean, onOpen: () -> Unit, onEnd: (() -> Unit)?,
     modifier: Modifier = Modifier, position: GroupPosition = GroupPosition.Single,
     pinned: Boolean = false, onPin: (() -> Unit)? = null, onCopy: () -> Unit = {}, onArchive: (() -> Unit)? = null,
 ) {
@@ -952,14 +940,14 @@ private fun ConversationRow(
     // The channel its latest message came in from (WeChat, the Feishu bot…), as a small mark after the title.
     val channels = LocalChannels.current
     val channel = remember(session.channels, channels) { ChannelSources.latest(session.channels, channels) }
-    val title = if (main) LocalPersonaName.current else session.conversationTitle(conversationWords())
+    val title = session.conversationTitle(conversationWords())
     JGroupItem(position, modifier) {
         // The time goes on the line under the title, with the state: beside the title it left the title two or three
         // characters in the wide window's 300dp list (2026-11-02), and a narrow drawer cut it short too.
         JRow(title, onClick = onOpen, onLongClick = { menu = true },
             titleAccessory = channel?.let { c -> { JChannelMark(c, size = MarkSize.Inline) } },
             subtitle = session.lastText?.takeIf { it.isNotBlank() },
-            leading = { if (main) PersonaMark() else JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
+            leading = { JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
                 selected = selected, tint = if (selected) PersonaTheme.palette.accent else PersonaTheme.palette.ink2) },
             trailing = { JIconButton(PhIcons.DotsThree, stringResource(R.string.assistant_conversation_actions), { menu = true }) }, chevron = false)
         Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
@@ -1046,9 +1034,33 @@ private fun AutoOriginChips(origins: List<OriginTally>, picked: AutoOrigin?, onP
     }
 }
 
-/** Persona's face, still, in a row's icon slot: the main conversation's mark. */
+/**
+ * The drawer's first row: the main conversation ([main]; null before it has started, or not yet loaded), read as
+ * Persona's name after the app's mark. Beside it what it waits on (its pending count, else working / needs you /
+ * unread); its menu (⋯ or a long press) copies its session id and ends it while it runs. It cannot be pinned or archived.
+ */
 @Composable
-private fun PersonaMark() = PersonaFace(PersonaState.Idle, size = Tokens.Space.xxl)
+private fun PersonaRow(main: Session?, selected: Boolean, hasMain: Boolean, onMain: () -> Unit, onEnd: (() -> Unit)?, onCopy: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val name = LocalPersonaName.current
+    val status = main?.conversationStatus()
+    val pending = main?.pendingInteractions ?: 0
+    JRow(name, onClick = onMain, onLongClick = main?.let { { menu = true } }, selected = selected,
+        subtitle = if (main == null && !hasMain) stringResource(R.string.assistant_start_main) else null,
+        leading = { JAppMark(Tokens.Space.xxl) }, chevron = false,
+        trailing = if (main == null) null else ({
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
+                if (pending > 0) JBadge(pending)
+                else if (status == Status.Working || status == Status.NeedsYou || status == Status.Unread) StatusLabel(status)
+                JIconButton(PhIcons.DotsThree, stringResource(R.string.assistant_conversation_actions), { menu = true })
+            }
+        }))
+    if (menu && main != null) JActionSheet(
+        title = name, onDismiss = { menu = false },
+        actions = conversationActions(androidx.compose.ui.platform.LocalResources.current, pinned = false, main.isLive,
+            onPin = null, onCopy = onCopy, onEnd = onEnd),
+    )
+}
 
 @Composable
 private fun DrawerItem(title: String, icon: PhIcon, onClick: () -> Unit) {

@@ -723,7 +723,7 @@ func TestBargeInKeepsTheReply(t *testing.T) {
 }
 
 // On an upstream that says when the model is cut in on, clear follows its word, not the energy rule; a word about a
-// reply that was over already (superseded by the next one) clears nothing on protocol 2, and still does on protocol 1.
+// reply that was over already (superseded by the next one) clears nothing, on either protocol (#3503, #4719).
 func TestBargeInFollowsTheUpstream(t *testing.T) {
 	hub := agentHub(t)
 	var conns []*websocket.Conn
@@ -772,14 +772,25 @@ func TestBargeInFollowsTheUpstream(t *testing.T) {
 		t.Fatal("protocol 2 cleared for a reply that was over")
 	}
 
+	// Protocol 1 (Android, CarPlay) the same way (#4719): no clear for a reply that was over, a clear for a real cut-in.
 	one := dialApp(t, pl, map[string]any{"type": "start"})
 	one.until(ofType("ready"))
 	one.send(map[string]any{"type": "text", "text": "讲个长故事"})
 	one.heardAudio()
 	event(2, "response.completed")
-	event(2, "response.incomplete")
-	one.until(ofType("clear")) // protocol 1 as it always was
+	event(2, "response.incomplete") // superseded
+	if one.cleared(400 * time.Millisecond) {
+		t.Fatal("protocol 1 cleared for a reply that was over")
+	}
 	one.protocolOne()
+
+	cut := dialApp(t, pl, map[string]any{"type": "start"})
+	cut.until(ofType("ready"))
+	cut.send(map[string]any{"type": "text", "text": "讲个长故事"})
+	cut.heardAudio()
+	event(3, "response.incomplete") // cut in on while it was speaking
+	cut.until(ofType("clear"))
+	cut.protocolOne()
 }
 
 // The energy rule's stretch: voiced audio adds up across gaps up to bargeGap, a longer gap starts it over.
