@@ -554,6 +554,80 @@ describe("列表状态", () => {
     expect(byId(mail.id)).toEqual({ ...newerMail, done_at: undefined, done_by: undefined });
   });
 
+  it("a sent reply survives a reload that left before the send and lands after the hub answered", async () => {
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const replied = { ...dm, done_at: at(0), done_by: "replied", version: "v9" };
+    fetcher.mockResolvedValueOnce(ok(replied));
+    expect(await sendReply(dm, "on it")).toBe(true);
+    finishGet(ok({ items: [dm, doc, mail] })); // listed while dm was still open on the hub
+    await reload;
+    expect(byId(dm.id).done_by).toBe("replied");
+    // A list asked for after the answer is the hub's again.
+    fetcher.mockResolvedValueOnce(ok({ items: [dm, doc, mail] }));
+    await reloadInbox();
+    expect(byId(dm.id).done_at).toBeUndefined();
+  });
+
+  it("a failed reply after a reload keeps the newer copy and only reopens it", async () => {
+    const finishPost = held();
+    const p = sendReply(dm, "on it");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const newer = { ...dm, preview: "a newer message", version: "v2" };
+    fetcher.mockResolvedValueOnce(ok({ items: [newer, doc, mail] }));
+    await reloadInbox();
+    expect(byId(dm.id).done_by).toBe("replied");
+    finishPost(fail(502, "lark: send timed out"));
+    expect(await p).toBe(false);
+    expect(byId(dm.id)).toEqual({ ...newer, done_at: undefined, done_by: undefined });
+    expect(unsentReplies.get(dm.id)).toBe("on it");
+  });
+
+  it("a reply sent for an item the list does not have yet is not brought in open by an older list", async () => {
+    const fresh = item("lark:f6:1", {});
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    fetcher.mockResolvedValueOnce(ok({ ...fresh, done_at: at(0), done_by: "replied" }));
+    expect(await sendReply(fresh, "on it")).toBe(true);
+    finishGet(ok({ items: [dm, doc, mail, fresh] }));
+    await reload;
+    expect(byId(fresh.id).done_by).toBe("replied");
+  });
+
+  it("a mute survives a reload that left before it and lands after the hub took it", async () => {
+    const sender = { tag: "sender", value: "u1", name: "示例甲" };
+    const a = item("lark:f9:1", { mutes: [sender] });
+    const b = item("lark:f8:1", { mutes: [sender] });
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: [a, b] }));
+    await reloadInbox();
+    const finishGet = held();
+    const reload = reloadInbox();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    fetcher.mockResolvedValueOnce(ok({ mute: { id: "m1", source: "lark", ...sender }, settled: 2 }));
+    await muteItem(a, sender);
+    finishGet(ok({ items: [a, b] })); // listed before the hub filed them
+    await reload;
+    expect([byId(a.id).done_by, byId(b.id).done_by]).toEqual(["read", "read"]);
+    expect(byId(b.id).reason).toBe("已静音：示例甲");
+  });
+
+  it("a failed mute after a reload keeps the newer copies and only reopens them", async () => {
+    const sender = { tag: "sender", value: "u1", name: "示例甲" };
+    const a = item("lark:f9:1", { mutes: [sender] });
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: [a] }));
+    await reloadInbox();
+    const finishPost = held();
+    const p = muteItem(a, sender);
+    const newer = { ...a, preview: "a newer message", version: "v2" };
+    fetcher.mockResolvedValueOnce(ok({ items: [newer] }));
+    await reloadInbox();
+    finishPost(fail(503, "assistant_offline"));
+    await p;
+    expect(byId(a.id)).toEqual({ ...newer, done_at: undefined, done_by: undefined, reason: undefined });
+  });
+
   it("已静音：同一秒里带小数的按时间排，不按字符串", async () => {
     fetcher.mockResolvedValueOnce(ok({ mutes: [
       { id: "s0", source: "mail", tag: "sender", value: "a", name: "a", created_at: "2026-11-05T01:02:05Z" },

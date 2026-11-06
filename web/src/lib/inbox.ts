@@ -815,8 +815,9 @@ export function replaceItem(item: InboxItem) {
   if (item?.id) patchItem(item.id, () => item);
 }
 
-/** A done / open mark still being sent: what the item shows until the hub answers. */
-type DoneMark = Pick<InboxItem, "done_at" | "done_by">;
+/** A done / open mark still being sent: what the item shows until the hub answers. A mute's mark also carries its
+ * reason ("Muted: <name>"). */
+type DoneMark = Pick<InboxItem, "done_at" | "done_by" | "reason">;
 /** A mark and, once the hub took it, the last list request that may have left before that (see listSeq). */
 type MarkEntry = { mark: DoneMark; tookAt?: number };
 /** Marks by item: a list that left before the hub took one must not put it back here (every inbox push and hello
@@ -883,12 +884,14 @@ function settleMark(id: string, mark: DoneMark, taken: boolean, hub?: InboxItem)
 }
 
 /** Marks that did not go through, by item: the current copies (maybe fresher than when they were marked) take back the
- * done state they had, except those with a newer mark still out. */
-function undoMarks(was: Map<string, DoneMark>) {
+ * done state they had (and the reason, for a mark that set one), except those with a newer mark still out. */
+function undoMarks(was: Map<string, DoneMark>, withReason = false) {
   set({
     items: state.items.map((it) => {
       const w = was.get(it.id);
-      return w && !markOut(it.id) ? { ...it, done_at: w.done_at, done_by: w.done_by } : it;
+      if (!w || markOut(it.id)) return it;
+      const back = { ...it, done_at: w.done_at, done_by: w.done_by };
+      return withReason ? { ...back, reason: w.reason } : back;
     }),
   });
 }
@@ -997,13 +1000,17 @@ export function muteCovers(source: string, o: InboxMuteOption, it: InboxItem): b
 export async function muteItem(item: InboxItem, o: InboxMuteOption): Promise<void> {
   // Only the covered items are put back: a reload during the request (every hub inbox event reloads) keeps its items.
   const before = new Map(state.items.filter((it) => muteCovers(item.source, o, it)).map((it) => [it.id, it]));
-  const now = new Date().toISOString();
-  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, done_at: now, done_by: "read", reason: t("lib-inbox.muted_reason", { name: o.name }) } : it)) });
+  // A mark like setDone's: a list that left before the hub filed them does not put them back open.
+  const mark: DoneMark = { done_at: new Date().toISOString(), done_by: "read", reason: t("lib-inbox.muted_reason", { name: o.name }) };
+  for (const id of before.keys()) putMark(id, mark);
+  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, ...mark } : it)) });
   try {
     await api("/inbox/mutes", { method: "POST", json: { item_id: item.id, tag: o.tag } });
+    before.forEach((_, id) => settleMark(id, mark, true));
     toast(t("lib-inbox.muted", { name: o.name }), "ok");
   } catch (e) {
-    set({ items: state.items.map((it) => before.get(it.id) ?? it) });
+    before.forEach((_, id) => settleMark(id, mark, false));
+    undoMarks(before, true);
     toast(t("lib-inbox.mute_failed", { error: errorText(e) }), "error");
   }
 }
@@ -1108,15 +1115,21 @@ export async function sendReply(item: InboxItem, text: string, changes: DocChang
   if (state.sending.includes(item.id)) return false;
   const before = state.items.find((x) => x.id === item.id);
   set({ sending: [...state.sending, item.id] });
-  patchItem(item.id, (it) => ({ ...it, done_at: new Date().toISOString(), done_by: "replied" }));
+  // A mark like setDone's: a list that left before the hub filed it does not put it back open.
+  const mark: DoneMark = { done_at: new Date().toISOString(), done_by: "replied" };
+  // (Also for an item the list does not have yet: a list that left before the send must not bring it in open.)
+  putMark(item.id, mark);
+  patchItem(item.id, (it) => ({ ...it, ...mark }));
   unsentReplies.delete(item.id);
   try {
     const r = await api<InboxItem>(`${itemPath(item.id)}/reply`, { method: "POST", json: { text, changes: changes.length ? changes : undefined } });
-    if (r?.id === item.id) replaceItem(r);
+    settleMark(item.id, mark, true, r);
+    if (r?.id === item.id) replaceItem(withPending([r])[0]);
     toast(t("lib-inbox.sent_done"), "ok");
     return true;
   } catch (e) {
-    if (before) patchItem(item.id, () => before);
+    settleMark(item.id, mark, false);
+    undoMarks(new Map([[item.id, before ?? item]]));
     if (text) unsentReplies.set(item.id, text);
     toast(t("lib-inbox.reply_failed", { error: errorText(e) }), "error");
     return false;
