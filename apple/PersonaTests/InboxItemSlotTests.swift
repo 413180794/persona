@@ -179,8 +179,9 @@ import Testing
         #expect(item("persona://inbox/lark:F1:1051/source") == "lark:F1:1051")
         #expect(item("persona://inbox/mail%3Aacc1%2Ft1%3A501/source") == "mail:acc1/t1:501", "the id is path-escaped")
         #expect(item("PERSONA://Inbox/lark:F1:1051/source") == "lark:F1:1051")
+        #expect(item("persona://inbox/x/source") == "x", "item IDs are opaque, not restricted to known connectors")
         for not in ["persona://inbox/lark:F1:1051", "persona://inbox/lark:F1:1051/other", "persona://inbox//source",
-                    "persona://chat/lark:F1:1051/source", "https://inbox/lark:F1:1051/source", "persona://inbox/x/source"] {
+                    "persona://chat/lark:F1:1051/source", "https://inbox/lark:F1:1051/source", "otherapp://inbox/x/source"] {
             #expect(item(not) == nil, "\(not)")
         }
         // What a button may open: https anywhere; the item's own source only on that item's page.

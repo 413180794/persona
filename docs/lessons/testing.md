@@ -638,3 +638,11 @@ Walking files has pitfalls of its own. Reviews of `server/plugins/guard_test.go`
 - A package the guard lets through by its path (the SDK) must be read the same way: a link or a tagged file in it reaches past the guard. Likewise a local `replace` or a `go.work` module is this repository's code under another path: judge `go list` results by `.Dir` as well as by import path, for local code only (the main module and directory replacements: a module cache may sit inside a checkout). A `replace` by a published version of this repository's own module has no local directory to judge: refuse it in go.mod and go.work. And since a published module could import a plugin by its path, the programs that run no plugin are held to `go list -deps` too.
 - Decide what a directory is (a plugin's program or not) from its non-test files: a test importing a plugin is not linked into a program.
 - Skip files whose names start with `.` or `_` (the go tool never builds them; editors leave lock files so named), but not directories so named.
+
+## Apple 改名验收要区分测试语义、注册身份与升级版本（2026-11-07，#6152）
+
+- 批量改名可能把负向 URL fixture 变成合法链接。先按协议确认解析器契约，再用中性的其他 scheme 保留拒绝断言，并补上 canonical 链接的正向用例；不能为了旧断言限制合法的 opaque item ID。
+- 同一 Bundle ID 覆盖安装只是第一步。旧、新测试构建使用递增的 `CFBundleVersion`，区分「文件保留」「普通偏好保留」「改名键或类型转换」；不使用清配对或重新注入配对的参数证明升级首启。
+- Shortcut 先由旧 App 在系统 UI 中创建，再检查持久化 action 的 `AppIntentDescriptor.AppIntentIdentifier`。不能搜索整个记录中的旧命名空间来认定旧类型：必须保留的 `BundleIdentifier` 也可能匹配。测试标题只能用于定位，不能替代 action 身份检查。
+- 带一次性配对码的 mock 不能在独立 suite 或深浅色轮次之间复用。每组配对 UI 测试启动自己的新 mock；保存原始失败，再记录修正隔离后的重跑结果。
+- Debug 的主程序可能只是加载 `.debug.dylib` 的壳；检查 Swift 类型时同时看实际动态库。模拟器的授权信息可以放在 Mach-O 的 `__entitlements` 中，`codesign` 输出为空不等于缺失；正式签名和 production APNs 仍需单独检查。
