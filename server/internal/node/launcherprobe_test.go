@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -337,5 +338,57 @@ printf '\033]1337;ShellIntegrationVersion=14;shell=zsh\007{"type":"result","subt
 	}
 	if b, _ := os.ReadFile(seen); !strings.Contains(string(b), `"disableAllHooks":true`) {
 		t.Fatalf("settings it ran with: %s", b)
+	}
+}
+
+// checkWithFakeClaude runs "Test" against a fake claude, with the timeout cut to timeout (#5951).
+func checkWithFakeClaude(t *testing.T, script string, timeout time.Duration) proto.LauncherCheck {
+	t.Helper()
+	fakeClaudeHome(t, script)
+	was := launcherCheckTimeout
+	launcherCheckTimeout = timeout
+	t.Cleanup(func() { launcherCheckTimeout = was })
+	home := os.Getenv("HOME")
+	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	return n.launcherCheck(context.Background(), "claude")
+}
+
+// A check that runs out of time says what was printed before it did: the upstream's error, not only that no answer
+// came. Keys and gateway addresses stay out of it.
+func TestLauncherCheckTimeoutCarriesTheLastLines(t *testing.T) {
+	r := checkWithFakeClaude(t, `echo 'API Error: 402 {"error":"insufficient credits"} from https://gateway.example.com/v1 key sk-ant-api03-Abc123Def456Ghi789Jkl012'
+sleep 30
+`, 3*time.Second)
+	if r.OK || !strings.Contains(r.Error, "秒内没有回答；最后的输出：") || !strings.Contains(r.Error, "402") || !strings.Contains(r.Error, "insufficient credits") {
+		t.Fatalf("timeout error: %q", r.Error)
+	}
+	if strings.Contains(r.Error, "gateway.example.com") || strings.Contains(r.Error, "Abc123Def456") {
+		t.Fatalf("the error shows an address or a key: %q", r.Error)
+	}
+}
+
+// A check that printed nothing before its time ran out says how the command ended, so a command that never started
+// is told from an upstream that never answered.
+func TestLauncherCheckTimeoutWithoutOutputSaysHowItEnded(t *testing.T) {
+	r := checkWithFakeClaude(t, "sleep 30\n", 3*time.Second)
+	if r.OK || !strings.Contains(r.Error, "秒内没有回答；") {
+		t.Fatalf("timeout error: %q", r.Error)
+	}
+}
+
+// Output that is no claude result (a proxy refusing, a shell error) is the error as it is, last lines first; a result
+// that only names its kind gets what claude printed besides it.
+func TestLauncherCheckUnreadableOutputIsTheError(t *testing.T) {
+	r := checkWithFakeClaude(t, `echo 'Error: connect ECONNREFUSED 127.0.0.1:17890' >&2
+exit 1
+`, 30*time.Second)
+	if r.OK || !strings.Contains(r.Error, "ECONNREFUSED") || strings.Contains(r.Error, "127.0.0.1") {
+		t.Fatalf("parse-failure error: %q", r.Error)
+	}
+	r = checkWithFakeClaude(t, `echo 'upstream said: 401 Unauthorized' >&2
+printf '{"type":"result","subtype":"error_during_execution","is_error":true,"result":""}\n'
+`, 30*time.Second)
+	if r.OK || !strings.Contains(r.Error, "error_during_execution") || !strings.Contains(r.Error, "401 Unauthorized") {
+		t.Fatalf("bare result error: %q", r.Error)
 	}
 }
