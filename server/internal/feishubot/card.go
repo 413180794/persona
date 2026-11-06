@@ -206,8 +206,9 @@ var (
 )
 
 // CardMarkdown turns GitHub Markdown (a model's answer) into what a card shows as written: outside code, "<" is
-// escaped, since cards read <at>, <font>, <link>… as their own tags (and drop what they do not know). The assistant's
-// persona-card charts are written as numbers first (PersonaCards).
+// escaped, since cards read <at>, <font>, <link>… as their own tags (and drop what they do not know); an autolink
+// (<https://…>, <mailto:…>) becomes a card link first. The assistant's persona-card charts are written as numbers
+// first (PersonaCards).
 func CardMarkdown(s string) string {
 	s = PersonaCards(s)
 	var b strings.Builder
@@ -225,12 +226,68 @@ func cardProse(s string) string {
 	var b strings.Builder
 	last := 0
 	for _, loc := range inlineRe.FindAllStringIndex(s, -1) {
-		b.WriteString(strings.ReplaceAll(s[last:loc[0]], "<", "&#60;"))
+		b.WriteString(proseText(s[last:loc[0]]))
 		b.WriteString(s[loc[0]:loc[1]])
 		last = loc[1]
 	}
-	b.WriteString(strings.ReplaceAll(s[last:], "<", "&#60;"))
+	b.WriteString(proseText(s[last:]))
 	return b.String()
+}
+
+var (
+	// A CommonMark autolink a card can open: http(s) or mailto, the scheme in any case.
+	autolinkRe = regexp.MustCompile(`^<((?i:https?://|mailto:)[^\s<>]+)>`)
+	// Percent-encodes what would end a card link's address early. "[" and "]" stay in an http(s) host (IPv6).
+	hostEncoder = strings.NewReplacer("(", "%28", ")", "%29")
+	pathEncoder = strings.NewReplacer("(", "%28", ")", "%29", "[", "%5B", "]", "%5D")
+	// What in a link's text would end it or be read as italics / bold, as entities (the ones EscapeMarkdown uses).
+	labelEscaper = strings.NewReplacer("[", "&#91;", "]", "&#93;", "_", "&#95;", "*", "&#42;")
+)
+
+// proseText is prose outside code. Cards have no autolink form and read "<" as the start of their own tags, so an
+// autolink becomes [address](address) and every other "<" is escaped. A backslash-escaped "<" is not an autolink.
+func proseText(s string) string {
+	var b strings.Builder
+	for {
+		i := strings.IndexByte(s, '<')
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		b.WriteString(s[:i])
+		s = s[i:]
+		m := autolinkRe.FindStringSubmatch(s)
+		if m == nil || escapedAt(b.String()) {
+			b.WriteString("&#60;")
+			s = s[1:]
+			continue
+		}
+		if strings.HasSuffix(b.String(), "](") { // [text](<address>): only the address goes in
+			b.WriteString(linkAddress(m[1]))
+		} else {
+			b.WriteString("[" + labelEscaper.Replace(m[1]) + "](" + linkAddress(m[1]) + ")")
+		}
+		s = s[len(m[0]):]
+	}
+}
+
+// escapedAt reports whether before ends in an odd number of backslashes, which escape the character after it.
+func escapedAt(before string) bool {
+	n := len(before) - len(strings.TrimRight(before, `\`))
+	return n%2 == 1
+}
+
+// linkAddress is u as a card link's address, the same address with what would end it early percent-encoded.
+func linkAddress(u string) string {
+	i := strings.Index(u, "://")
+	if i < 0 { // mailto: has no host
+		return pathEncoder.Replace(u)
+	}
+	host := len(u)
+	if j := strings.IndexAny(u[i+3:], "/?#"); j >= 0 {
+		host = i + 3 + j
+	}
+	return hostEncoder.Replace(u[:host]) + pathEncoder.Replace(u[host:])
 }
 
 var mdEscaper = strings.NewReplacer("\\", "&#92;", "*", "&#42;", "_", "&#95;", "`", "&#96;", "[", "&#91;", "]", "&#93;",

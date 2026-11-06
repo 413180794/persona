@@ -147,6 +147,46 @@ func TestCardMarkdown(t *testing.T) {
 	}
 }
 
+// A CommonMark autolink (<https://…>, <mailto:…>) becomes a card link: cards have no autolink form, and escaping its
+// "<" like a card tag's left text that could not be clicked (#4727). Code, other schemes and a "<" that is not an
+// autolink stay as before.
+func TestCardMarkdownAutolinks(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"https", "见 <https://a.example/x>", "见 [https://a.example/x](https://a.example/x)"},
+		{"http with query", "<http://a.example/?q=1&r=2>", "[http://a.example/?q=1&r=2](http://a.example/?q=1&r=2)"},
+		{"scheme in any case", "<HTTPS://A.example/a>", "[HTTPS://A.example/a](HTTPS://A.example/a)"},
+		{"mailto", "写信到 <mailto:me@example.com>", "写信到 [mailto:me@example.com](mailto:me@example.com)"},
+		{"mailto with query", "<MailTo:me@example.com?subject=a_b>", "[MailTo:me@example.com?subject=a&#95;b](MailTo:me@example.com?subject=a_b)"},
+		{"parentheses encoded", "<https://a.example/x_(y)>", "[https://a.example/x&#95;(y)](https://a.example/x_%28y%29)"},
+		{"brackets past the host", "<https://a.example/q?x=[1]>", "[https://a.example/q?x=&#91;1&#93;](https://a.example/q?x=%5B1%5D)"},
+		{"IPv6 host keeps brackets", "<http://[::1]:8080/a>", "[http://&#91;::1&#93;:8080/a](http://[::1]:8080/a)"},
+		{"no italics or bold", "<https://a.example/a_1_b/c*d*e>", "[https://a.example/a&#95;1&#95;b/c&#42;d&#42;e](https://a.example/a_1_b/c*d*e)"},
+		{"already a link's address", "[文档](<https://a.example/x>)", "[文档](https://a.example/x)"},
+		{"two in a line", "<https://a.example> 和 <https://b.example>", "[https://a.example](https://a.example) 和 [https://b.example](https://b.example)"},
+		{"next to a tag", "<at id=1><https://a.example>", "&#60;at id=1>[https://a.example](https://a.example)"},
+		{"inline code", "`<https://a.example>` 和 <https://b.example>", "`<https://a.example>` 和 [https://b.example](https://b.example)"},
+		{"fenced code", "```\n<https://a.example>\n```\n<https://b.example>", "```\n<https://a.example>\n```\n[https://b.example](https://b.example)"},
+
+		{"card tag", "用 <at id=1> 和 <font color='red'>", "用 &#60;at id=1> 和 &#60;font color='red'>"},
+		{"javascript", "<javascript:alert(1)>", "&#60;javascript:alert(1)>"},
+		{"other scheme", "<ftp://a.example/x>", "&#60;ftp://a.example/x>"},
+		{"email autolink without mailto", "<me@example.com>", "&#60;me@example.com>"},
+		{"empty address", "<https://> <mailto:>", "&#60;https://> &#60;mailto:>"},
+		{"space inside", "<https://a.example/a b>", "&#60;https://a.example/a b>"},
+		{"not closed", "<https://a.example/x", "&#60;https://a.example/x"},
+		{"comparison", "a < b 且 c<d", "a &#60; b 且 c&#60;d"},
+		{"backslash-escaped", `\<https://a.example>`, `\&#60;https://a.example>`},
+		{"escaped backslash before it", `\\<https://a.example>`, `\\[https://a.example](https://a.example)`},
+		{"nested angle", "<<https://a.example>>", "&#60;[https://a.example](https://a.example)>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CardMarkdown(tc.in); got != tc.want {
+				t.Errorf("CardMarkdown(%q)\ngot  %q\nwant %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCardJSONIsVersion2(t *testing.T) {
 	c := NewCard("标题", Blue, "摘要").Markdown("**你好** <b>").Note("小字").
 		Buttons(Btn("好", Primary, map[string]any{"a": "1"}), LinkBtn("打开", "https://example.com")).

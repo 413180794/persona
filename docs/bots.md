@@ -116,6 +116,7 @@
   按钮的回传在 `behaviors: [{type: callback, value}]`；表单里的提交按钮要 `form_action_type: submit` 和卡片内唯一的 `name`；**多一个不认识的字段整张卡片就被拒**；
   回调里返回的新卡片也必须是 2.0。
 - 文字里的 `<` 在代码以外转成 `&#60;`（卡片会把 `<at>`、`<font>` 这类当成自己的标签吃掉）；名字、标题这类数据用 `EscapeMarkdown`。
+  例外是模型写的自动链接 `<https://…>`、`<mailto:…>`（CommonMark）：卡片不认这种写法，转义后是一段点不开的文字，所以先改成 `[地址](地址)`（#4727）。地址里的 `(` `)`、主机名之后的 `[` `]` 用百分号编码，链接文字里的 `_` `*` `[` `]` 写成实体；别的协议（`javascript:` 等）、`\<`、代码里的照旧。测试 `go test ./internal/feishubot -run CardMarkdownAutolinks`。
 - 助手回答里的 `persona-card`（图表卡片，#886）飞书画不了，先写成数字再发（`feishubot/personacard.go` 的 `PersonaCards`，`CardMarkdown` 第一步调它，所以所有经 `CardMarkdown` 发的文字都这样，不只健康空间）：
   `stat` 一行（`今天步数：**8,432 步** · 比昨天 +12%`）；`line` / `bar` 标题加一条 ▁…█ 小图，下一行逐个写数字（最多最近 31 个），单位写一次；`stacked_bar` 一张两列的小表，合计在表头，超过 31 行时后面的合成一行「其他」。
   数字的写法和各端一样（`wire.Number`），模型写的字一律 `EscapeMarkdown`；各端都画不出的卡片只留标题；`persona-view`、别的代码块、代码块里当例子的卡片不动。聊天列表的摘要里卡片只显示标题。测试 `go test ./internal/feishubot -run PersonaCards`。
