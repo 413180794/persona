@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/i18n"
 )
@@ -183,17 +184,14 @@ func (h *Hub) joinPeer(ctx context.Context, raw string) (*db.Peer, error) {
 		defer resp.Body.Close()
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		if resp.StatusCode != http.StatusOK {
-			var e struct {
-				Error string `json:"error"`
-			}
-			_ = json.Unmarshal(b, &e)
+			why := apierr.Reason(b) // the other hub's cause, not the summary it localized it into (#5728)
 			if resp.StatusCode == http.StatusUnauthorized {
-				e.Error = i18n.T(h.contextLang(ctx), "hub-peer_pair.code_invalid")
+				why = i18n.T(h.contextLang(ctx), "hub-peer_pair.code_invalid")
 			}
-			if e.Error == "" {
-				e.Error = resp.Status
+			if why == "" {
+				why = resp.Status
 			}
-			return peerInfo{}, i18n.Err("hub-peer_pair.refused", i18n.Args{"err": e.Error})
+			return peerInfo{}, i18n.Err("hub-peer_pair.refused", i18n.Args{"err": why})
 		}
 		var out peerInfo
 		if err := json.Unmarshal(b, &out); err != nil || out.Token == "" {

@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/apierr"
 )
 
 // The mesh from the command line on the hub's machine (docs/mesh.md "Command line"): the same peers API as the admin page,
@@ -194,14 +196,11 @@ func (c *Config) adminCall(ctx context.Context, method, path string, body, out a
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Error string `json:"error"`
+		why := apierr.Describe(b) // with the cause the hub moved to detail (#5728)
+		if why == "" {
+			why = resp.Status
 		}
-		_ = json.Unmarshal(b, &e)
-		if e.Error == "" {
-			e.Error = resp.Status
-		}
-		return fmt.Errorf("hub 回了 %d：%s", resp.StatusCode, e.Error)
+		return fmt.Errorf("hub 回了 %d：%s", resp.StatusCode, why)
 	}
 	if out != nil {
 		return json.Unmarshal(b, out)

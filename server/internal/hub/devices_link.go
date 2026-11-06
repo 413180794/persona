@@ -1251,11 +1251,8 @@ func (h *Hub) managerHTTP(ctx context.Context, method, path string, body any, ou
 		return err
 	}
 	if res.Status >= 300 {
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(res.Body, &e) == nil && e.Error != "" {
-			return errors.New(e.Error)
+		if why := apierr.Describe(res.Body); why != "" { // with the cause a localized summary moved to detail (#5728)
+			return errors.New(why)
 		}
 		return fmt.Errorf("%s %s: %d", method, path, res.Status)
 	}

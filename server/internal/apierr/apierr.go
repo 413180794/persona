@@ -323,3 +323,23 @@ func Reason(b []byte) string {
 	}
 	return e.Error
 }
+
+// Describe is an error body read back for a person with no "Details" to open (the command line): the summary and,
+// when the summary was localized or explained away from it, the cause after it (#5728).
+func Describe(b []byte) string {
+	var e struct {
+		Error  string          `json:"error"`
+		Detail json.RawMessage `json:"detail"`
+	}
+	if json.Unmarshal(b, &e) != nil {
+		return ""
+	}
+	var detail string
+	if json.Unmarshal(e.Detail, &detail) != nil || detail == "" || detail == e.Error {
+		return e.Error
+	}
+	if e.Error == "" {
+		return detail
+	}
+	return e.Error + "：" + detail
+}

@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
 )
 
@@ -198,14 +199,14 @@ func adminSetupCode(ctx context.Context, dir string, stdout io.Writer) error {
 	var out struct {
 		Code      string    `json:"code"`
 		ExpiresAt time.Time `json:"expires_at"`
-		Error     string    `json:"error"`
 	}
-	_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out)
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	_ = json.Unmarshal(raw, &out)
 	switch {
 	case resp.StatusCode == http.StatusConflict:
 		return errors.New("管理员密码已经设过了：直接登录，忘了就 personad hub admin reset-password")
 	case resp.StatusCode != http.StatusOK || out.Code == "":
-		return fmt.Errorf("hub 没给设置码（HTTP %d）：%s", resp.StatusCode, out.Error)
+		return fmt.Errorf("hub 没给设置码（HTTP %d）：%s", resp.StatusCode, apierr.Describe(raw)) // with the cause in detail (#5728)
 	}
 	fmt.Fprintf(stdout, "首次设置码：%s\n10 分钟内有效（到 %s），只能用一次；在 hub 机器上打开管理界面设置密码时填它。\n",
 		out.Code, out.ExpiresAt.UTC().Format(time.RFC3339))

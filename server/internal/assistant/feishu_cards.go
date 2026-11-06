@@ -1495,7 +1495,7 @@ func (s *Service) statusCard(ctx context.Context, t botTarget) (*feishubot.Card,
 	var head, fb strings.Builder
 	to := i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": feishubot.EscapeMarkdown(label)})
 	head.WriteString(to)
-	fmt.Fprintf(&fb, "%s\n", fallbackText.Replace(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": label})))
+	fb.WriteString(fallbackText.Replace(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": label}))) // ends its own line
 	if running := len(s.channelRuns(channel.Feishu)); running > 0 {
 		waiting := i18n.T(l, "assistant-feishu_cards.status_waiting", i18n.Args{"count": running})
 		head.WriteString(waiting)
@@ -1530,7 +1530,7 @@ func (s *Service) statusCard(ctx context.Context, t botTarget) (*feishubot.Card,
 	if sess.LastText != "" {
 		last := clip(oneLine(sess.LastText), 90)
 		line += "\n" + feishubot.EscapeMarkdown(last)
-		fb.WriteString(last + "\n")
+		fb.WriteString(fallbackText.Replace(last) + "\n")
 	}
 	if g := sess.Goal; g != nil && g.Objective != "" && (g.Status == "" || g.Status == proto.GoalActive) {
 		goal := i18n.T(l, "assistant-feishu_cards.status_goal", i18n.Args{"objective": feishubot.EscapeMarkdown(clip(oneLine(g.Objective), 90))})
@@ -1565,7 +1565,11 @@ func (s *Service) statusCard(ctx context.Context, t botTarget) (*feishubot.Card,
 		fmt.Fprintf(&fb, "- %s%s\n", ixIcons[ix.Kind], fallbackText.Replace(q))
 	}
 	if more := len(pending) - len(shown); more > 0 {
-		note := i18n.T(l, "assistant-feishu_cards.status_more_pending", i18n.Args{"count": more})
+		key := "assistant-feishu_cards.status_more_pending"
+		if open == nil { // no web app to send the reader to: just count them
+			key = "assistant-feishu_cards.status_more_pending_no_web"
+		}
+		note := i18n.T(l, key, i18n.Args{"count": more})
 		card.Note(note)
 		fb.WriteString(note + "\n")
 	}

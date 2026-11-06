@@ -103,6 +103,7 @@
   "status_pending": "**Pending questions**",
   "status_no_pending": "No pending questions.",
   "status_more_pending": "{count} more — open the web app",
+  "status_more_pending_no_web": "{count} more pending",
   "recent_chats": "Recent chats",
   "no_chats": "No chats yet. Send a message to start the main chat.",
   "chat_here": "Chat here",

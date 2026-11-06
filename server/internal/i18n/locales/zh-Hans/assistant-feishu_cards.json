@@ -103,6 +103,7 @@
   "status_pending": "**待答问题**",
   "status_no_pending": "没有待答问题。",
   "status_more_pending": "还有 {count} 个，去网页版看",
+  "status_more_pending_no_web": "还有 {count} 个待答",
   "recent_chats": "最近的对话",
   "no_chats": "还没有对话。直接发消息就会开始主对话。",
   "chat_here": "在这里聊",

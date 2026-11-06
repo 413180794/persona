@@ -413,14 +413,20 @@ func Pair(ctx context.Context, raw, machine, name, path string) (*Config, error)
 		defer resp.Body.Close()
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		if resp.StatusCode != http.StatusOK {
+			// With the cause a localized summary moved to detail (as apierr.Describe, #5728).
 			var e struct {
-				Error string `json:"error"`
+				Error  string `json:"error"`
+				Detail any    `json:"detail"`
 			}
 			_ = json.Unmarshal(b, &e)
-			if e.Error == "" {
-				e.Error = resp.Status
+			why := e.Error
+			if d, ok := e.Detail.(string); ok && d != "" && d != why {
+				why = strings.TrimPrefix(why+"：", "：") + d
 			}
-			return redeemed{}, fmt.Errorf("hub 拒绝了：%s", e.Error)
+			if why == "" {
+				why = resp.Status
+			}
+			return redeemed{}, fmt.Errorf("hub 拒绝了：%s", why)
 		}
 		var out redeemed
 		if err := json.Unmarshal(b, &out); err != nil || out.Token == "" || out.Role != "link" {

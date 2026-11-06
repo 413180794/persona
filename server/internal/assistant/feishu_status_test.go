@@ -155,3 +155,38 @@ func TestStatusCardRunCount(t *testing.T) {
 		t.Fatalf("card=%s fallback=%q", card.JSON(), fb)
 	}
 }
+
+// Without a public URL there is no web app to send the reader to: the "more" note just counts (#5677).
+func TestStatusCardPendingCapWithoutWeb(t *testing.T) {
+	ctx := context.Background()
+	for _, c := range []struct {
+		url     string
+		web     bool
+		message string
+	}{{"https://hub.test", true, "还有 3 个，去网页版看"}, {"", false, "还有 3 个待答"}, {"hub.test", false, "还有 3 个待答"}} {
+		s, f, _ := statusHub(t, c.url)
+		f.setSessions("server", proto.Session{SessionID: "agent0001", MachineID: "server", Agent: "claude", State: proto.StateNeedsYou})
+		for i := 0; i < statusPendingMax+3; i++ {
+			putStatusPending(s, fmt.Sprintf("ix%02d", i), proto.IxQuestion, fmt.Sprintf("问题 %02d", i), int64(i))
+		}
+		card, fb := s.statusCard(ctx, statusAgent)
+		got := card.JSON()
+		if !strings.Contains(got, c.message) || !strings.Contains(fb, c.message) ||
+			strings.Contains(got, "网页版") != c.web || strings.Contains(fb, "网页版") != c.web {
+			t.Fatalf("url %q: card=%s fallback=%q", c.url, got, fb)
+		}
+	}
+}
+
+// The fallback is plain text: the last activity loses its Markdown like every other line, and no line is doubled
+// into a blank one (#5677).
+func TestStatusCardFallbackPlain(t *testing.T) {
+	ctx := context.Background()
+	s, f, _ := statusHub(t, "")
+	f.setSessions("server", proto.Session{SessionID: "agent0001", MachineID: "server", Agent: "claude",
+		State: proto.StateIdle, LastText: "改好了 **foo_bar** 和 `x[1]`"})
+	_, fb := s.statusCard(ctx, statusAgent)
+	if strings.ContainsAny(fb, "*_[]`") || !strings.Contains(fb, "改好了 foobar 和 x1") || strings.Contains(fb, "\n\n") {
+		t.Fatalf("fallback=%q", fb)
+	}
+}

@@ -103,6 +103,7 @@
   "status_pending": "**未回答の質問**",
   "status_no_pending": "未回答の質問はありません。",
   "status_more_pending": "ほかに {count} 件（ウェブで確認）",
+  "status_more_pending_no_web": "ほかに {count} 件の未回答",
   "recent_chats": "最近のチャット",
   "no_chats": "まだチャットはありません。メッセージを送るとメインチャットが始まります。",
   "chat_here": "ここで話す",

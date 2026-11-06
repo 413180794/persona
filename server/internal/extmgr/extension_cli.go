@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
@@ -627,14 +628,11 @@ func (c *extensionClient) call(ctx context.Context, method, path string, body, o
 		return errNoRoute
 	}
 	if res.StatusCode != http.StatusOK {
-		var e struct {
-			Error string `json:"error"`
+		why := apierr.Describe(data) // with the cause the hub moved to detail (#5728)
+		if why == "" {
+			why = strings.TrimSpace(string(data))
 		}
-		_ = json.Unmarshal(data, &e)
-		if e.Error == "" {
-			e.Error = strings.TrimSpace(string(data))
-		}
-		return fmt.Errorf("%s（HTTP %d）", e.Error, res.StatusCode)
+		return fmt.Errorf("%s（HTTP %d）", why, res.StatusCode)
 	}
 	if out != nil {
 		return json.Unmarshal(data, out)

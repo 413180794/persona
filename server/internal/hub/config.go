@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/identity"
 
@@ -394,12 +395,13 @@ func (c *Config) requestPairCodeWith(ctx context.Context, reqBody map[string]any
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		if reqBody != nil {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 			var e struct {
-				Error string `json:"error"`
-				Code  string `json:"code"`
+				Code string `json:"code"`
 			}
-			_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&e)
-			return nil, &pairRefusal{status: resp.StatusCode, code: e.Code, msg: e.Error}
+			_ = json.Unmarshal(b, &e)
+			// With the cause the hub moved to detail (#5728).
+			return nil, &pairRefusal{status: resp.StatusCode, code: e.Code, msg: apierr.Describe(b)}
 		}
 		return nil, fmt.Errorf("本机 hub 生成临时 token 失败（HTTP %d）；请确认 hub 已升级且配置一致，或用 --legacy 打印旧格式二维码", resp.StatusCode)
 	}

@@ -189,3 +189,19 @@ func TestInvalidJSONAndInDoubtLocale(t *testing.T) {
 		t.Fatal("stream error not localized")
 	}
 }
+
+// Describe keeps the summary and adds the cause it hides; Reason gives only the cause (#5728).
+func TestDescribeKeepsTheSummaryAndTheCause(t *testing.T) {
+	for _, c := range []struct{ body, want string }{
+		{`{"error":"the request did not complete","detail":"connection refused"}`, "the request did not complete：connection refused"},
+		{`{"error":"plain"}`, "plain"},
+		{`{"error":"same","detail":"same"}`, "same"},
+		{`{"error":"summary","detail":{"k":1}}`, "summary"},
+		{`{"detail":"only the cause"}`, "only the cause"},
+		{`not json`, ""},
+	} {
+		if got := Describe([]byte(c.body)); got != c.want {
+			t.Errorf("Describe(%s) = %q, want %q", c.body, got, c.want)
+		}
+	}
+}

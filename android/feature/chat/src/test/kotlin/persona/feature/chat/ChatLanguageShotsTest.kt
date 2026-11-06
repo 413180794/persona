@@ -363,8 +363,15 @@ class ChatLanguageShotsTest {
             for ((s, d) in variants) {
                 style = s; darkNow = d
                 rule.mainClock.advanceTimeBy(1_500)
-                val roots = rule.onAllNodes(isRoot()).fetchSemanticsNodes()
-                val shown = roots.flatMap(::texts)
+                // Search works out its hits on Dispatchers.Default, in real time: under load 1.5 s of the frame clock can
+                // pass before they arrive (#5424), so give the scene up to 10 s of real time to show what it should.
+                fun shownNow() = rule.onAllNodes(isRoot()).fetchSemanticsNodes().flatMap(::texts)
+                val until = System.nanoTime() + 10_000_000_000L
+                while (shownNow().none { it.contains(expected) } && System.nanoTime() < until) {
+                    Thread.sleep(20)
+                    rule.mainClock.advanceTimeBy(100)
+                }
+                val shown = shownNow()
                 assertTrue("$name: no 「$expected」 in $shown", shown.any { it.contains(expected) })
                 assertFalse("$name: raw key in $shown", shown.any { it.contains("chat_") })
                 if (language == "en") {
