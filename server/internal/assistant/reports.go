@@ -182,7 +182,11 @@ func (s *Service) taskReport(t Todo, state, machine string, session [2]string, t
 func (s *Service) setTaskStage(ctx context.Context, id, stage, pr string) {
 	b := &s.reports
 	b.mu.Lock()
-	s.loadStagesLocked(ctx)
+	if !s.loadStagesLocked(ctx) {
+		b.mu.Unlock()
+		s.logf("task %s: stage %s not kept: the stages could not be read", id, stage)
+		return
+	}
 	cur := b.stages[id]
 	changed := false
 	if stageIndex(stage) > stageIndex(cur.Stage) {
@@ -211,22 +215,26 @@ func (s *Service) setTaskStage(ctx context.Context, id, stage, pr string) {
 	s.todosChanged(ctx)
 }
 
-// loadStagesLocked reads the stages once; s.reports.mu is held.
-func (s *Service) loadStagesLocked(ctx context.Context) {
+// loadStagesLocked reads the stages once and reports whether they are in memory; s.reports.mu is held. A failed read
+// leaves them unloaded (the next look tries again): writing the book after it would put one task's stage over every
+// other task's stage, PR and delivery.
+func (s *Service) loadStagesLocked(ctx context.Context) bool {
 	b := &s.reports
 	if b.loaded {
-		return
+		return true
 	}
-	b.loaded = true
-	b.stages = map[string]todoStage{}
+	stages := map[string]todoStage{}
 	if st := s.store(); st != nil {
-		if _, err := st.Setting(ctx, reportStagesKey, &b.stages); err != nil {
+		if _, err := st.Setting(ctx, reportStagesKey, &stages); err != nil {
 			s.logf("todo stages: %v", err)
+			return false
 		}
-		if b.stages == nil {
-			b.stages = map[string]todoStage{}
+		if stages == nil {
+			stages = map[string]todoStage{}
 		}
 	}
+	b.stages, b.loaded = stages, true
+	return true
 }
 
 // todoStages are the kept stages, for the todos as they are read.
@@ -234,7 +242,9 @@ func (s *Service) todoStages(ctx context.Context) map[string]todoStage {
 	b := &s.reports
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	s.loadStagesLocked(ctx)
+	if !s.loadStagesLocked(ctx) {
+		return map[string]todoStage{}
+	}
 	out := make(map[string]todoStage, len(b.stages))
 	for k, v := range b.stages {
 		out[k] = v

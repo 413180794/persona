@@ -126,7 +126,7 @@ func (s *Service) writeEnded(ctx context.Context, w http.ResponseWriter, id stri
 
 // localFleetDeviceCall answers the device methods the hub answered from what was its (the pending interactions, the
 // session lists as the apps get them, one session); false for the others.
-func (s *Service) localFleetDeviceCall(p DeviceCall) (json.RawMessage, bool, error) {
+func (s *Service) localFleetDeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage, bool, error) {
 	if !s.fleetOn() {
 		return nil, false, nil
 	}
@@ -147,7 +147,7 @@ func (s *Service) localFleetDeviceCall(p DeviceCall) (json.RawMessage, bool, err
 		if err := json.Unmarshal(p.Params, &a); err != nil || a.SessionID == "" {
 			return nil, true, fmt.Errorf("%s needs session_id", p.Method)
 		}
-		err := s.follow(context.Background(), m.ID, a.SessionID, p.Method == DeviceSessionFollow)
+		err := s.follow(ctx, m.ID, a.SessionID, p.Method == DeviceSessionFollow)
 		return json.RawMessage(`{}`), true, err
 	case p.Method == DeviceSessionsList:
 		m, ok := s.fleetMachine(p.Device)

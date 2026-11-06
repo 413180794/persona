@@ -707,19 +707,44 @@ func (d *Devices) Follow(ctx context.Context, machine, session string, on bool) 
 	if m.followed == nil {
 		m.followed = map[string]bool{}
 	}
-	had, hub := m.followed[session], m.watched[session]
+	had, hub, unsettled := m.followed[session], m.watched[session], m.unsettled[session]
 	since := m.lastSeq[session]
+	// The mark is what the manager wants, whatever the node answers: a new connection watches every followed session
+	// again (conn.go), so a follow that failed while the node was away is still repaired there.
 	if on {
 		m.followed[session] = true
 	} else {
 		delete(m.followed, session)
 	}
 	m.mu.Unlock()
+	var err error
 	switch {
-	case on && !had && !hub:
-		return m.call(ctx, "session.watch", map[string]any{"session_id": session, "since_seq": since}, nil)
-	case !on && had && !hub:
-		return m.call(ctx, "session.unwatch", map[string]any{"session_id": session}, nil)
+	case on && (!had || unsettled) && !hub:
+		err = m.call(ctx, "session.watch", map[string]any{"session_id": session, "since_seq": since}, nil)
+	case !on && (had || unsettled) && !hub:
+		err = m.call(ctx, "session.unwatch", map[string]any{"session_id": session}, nil)
+	default:
+		return nil
 	}
-	return nil
+	m.settleFollow(session, on, err)
+	return err
+}
+
+// settleFollow notes whether the node took Follow's watch / unwatch: one it did not take is unsettled, and the next
+// Follow of the session asks the node again even when the mark already says so. A later Follow that changed the mark
+// meanwhile settles it itself.
+func (m *Machine) settleFollow(session string, on bool, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.followed[session] != on {
+		return
+	}
+	if err == nil {
+		delete(m.unsettled, session)
+		return
+	}
+	if m.unsettled == nil {
+		m.unsettled = map[string]bool{}
+	}
+	m.unsettled[session] = true
 }

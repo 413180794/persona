@@ -305,10 +305,50 @@ func (s *Service) followSession(ctx context.Context, machine, session string) {
 	first := c.follows[k] == 1
 	c.mu.Unlock()
 	if first {
-		if err := s.call(ctx, machine, DeviceSessionFollow, map[string]any{"session_id": session}, nil); err != nil {
-			s.logf("channels: follow %s: %v", short(session), err)
-		}
+		s.askFollow(ctx, machine, session)
 	}
+}
+
+// followRetryEvery is how long a run's watcher waits before it asks again for a follow that failed.
+var followRetryEvery = 30 * time.Second
+
+// askFollow asks for session.follow; when it fails, a run's watcher asks again later (retryFollow): nothing else does
+// while the node stays connected, and a machine not known yet is not followed again when it connects.
+func (s *Service) askFollow(ctx context.Context, machine, session string) {
+	err := s.call(ctx, machine, DeviceSessionFollow, map[string]any{"session_id": session}, nil)
+	if err != nil {
+		s.logf("channels: follow %s: %v", short(session), err)
+	}
+	k := [2]string{machine, session}
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil || c.follows[k] <= 0 {
+		delete(c.followRetry, k)
+		return
+	}
+	if c.followRetry == nil {
+		c.followRetry = map[[2]string]time.Time{}
+	}
+	c.followRetry[k] = time.Now().Add(followRetryEvery)
+}
+
+// retryFollow asks again for a follow of the run's conversation that failed, once it is due. The caller is a run's
+// watcher, so the conversation stays followed by it while the call is out.
+func (s *Service) retryFollow(machine, session string) {
+	k := [2]string{machine, session}
+	c := &s.chans
+	c.mu.Lock()
+	at, ok := c.followRetry[k]
+	if !ok || time.Now().Before(at) {
+		c.mu.Unlock()
+		return
+	}
+	delete(c.followRetry, k) // one watcher asks; askFollow puts it back if it fails again
+	c.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	s.askFollow(ctx, machine, session)
 }
 
 func (s *Service) unfollowSession(machine, session string) {
@@ -319,6 +359,7 @@ func (s *Service) unfollowSession(machine, session string) {
 	last := c.follows[k] <= 0
 	if last {
 		delete(c.follows, k)
+		delete(c.followRetry, k)
 	}
 	c.mu.Unlock()
 	if last {
@@ -371,7 +412,9 @@ func (s *Service) watchChannelRun(r *channel.Run) {
 	prog := &chanLive{mu: newChanMutex(), checking: newChanMutex(), done: make(chan struct{})}
 	c.live[r.ID] = prog
 	c.mu.Unlock()
-	s.followSession(ctx, r.MachineID, r.SessionID)
+	fctx, fcancel := context.WithTimeout(ctx, 10*time.Second) // a node that never answers does not hold the watcher
+	s.followSession(fctx, r.MachineID, r.SessionID)
+	fcancel()
 	defer s.unfollowSession(r.MachineID, r.SessionID)
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -389,6 +432,7 @@ func (s *Service) watchChannelRun(r *channel.Run) {
 			c.mu.Unlock()
 			return
 		}
+		s.retryFollow(r.MachineID, r.SessionID)
 		s.checkChannelRun(r.ID)
 		s.channelProgressTick(r.ID)
 	}

@@ -35,12 +35,14 @@ func (s *Service) inOrder(fn func()) {
 	q.ch <- fn
 }
 
-// follow has the manager follow machine's session (or stop): device.call session.follow / session.unfollow.
+// follow has the manager follow machine's session (or stop): device.call session.follow / session.unfollow. The mark
+// is what the manager wants whatever the devices answer (the items a reconnect's watch brings are for the channels
+// then too); one the devices did not take is unsettled, and the next follow of the session asks them again.
 func (s *Service) follow(ctx context.Context, machine, session string, on bool) error {
 	f := &s.fleet
 	f.followMu.Lock()
 	k := [2]string{machine, session}
-	had := f.follows[k]
+	had, unsettled := f.follows[k], f.unsettled[k]
 	if on {
 		if f.follows == nil {
 			f.follows = map[[2]string]bool{}
@@ -50,10 +52,23 @@ func (s *Service) follow(ctx context.Context, machine, session string, on bool) 
 		delete(f.follows, k)
 	}
 	f.followMu.Unlock()
-	if had == on {
+	if had == on && !unsettled {
 		return nil
 	}
-	return s.devs.Follow(ctx, machine, session, on)
+	err := s.devs.Follow(ctx, machine, session, on)
+	f.followMu.Lock()
+	if f.follows[k] == on { // a later follow that changed the mark settles it itself
+		if err == nil {
+			delete(f.unsettled, k)
+		} else {
+			if f.unsettled == nil {
+				f.unsettled = map[[2]string]bool{}
+			}
+			f.unsettled[k] = true
+		}
+	}
+	f.followMu.Unlock()
+	return err
 }
 
 func (s *Service) followed(machine, session string) bool {

@@ -49,24 +49,33 @@ type acceptBook struct {
 	asks   map[string]*acceptAsk // by todo id
 }
 
-func (s *Service) loadAcceptLocked(ctx context.Context) {
+// loadAcceptLocked reads the asks once and reports whether they are in memory; s.accept.mu is held. A failed read
+// leaves them unloaded (the next look tries again): writing the book after it would put an empty or partial map over
+// the stored cards, whose replies, reminders and briefing lines would then be lost.
+func (s *Service) loadAcceptLocked(ctx context.Context) bool {
 	b := &s.accept
 	if b.loaded {
-		return
+		return true
 	}
-	b.loaded = true
-	b.asks = map[string]*acceptAsk{}
+	asks := map[string]*acceptAsk{}
 	if st := s.store(); st != nil {
-		if _, err := st.Setting(ctx, acceptanceKey, &b.asks); err != nil {
+		if _, err := st.Setting(ctx, acceptanceKey, &asks); err != nil {
 			s.logf("acceptance: load: %v", err)
+			return false
 		}
-		if b.asks == nil {
-			b.asks = map[string]*acceptAsk{}
+		if asks == nil {
+			asks = map[string]*acceptAsk{}
 		}
 	}
+	b.asks, b.loaded = asks, true
+	return true
 }
 
+// saveAcceptLocked writes the asks, once they were read (see loadAcceptLocked).
 func (s *Service) saveAcceptLocked(ctx context.Context) {
+	if !s.accept.loaded {
+		return
+	}
 	if st := s.store(); st != nil {
 		if err := st.PutSetting(ctx, acceptanceKey, s.accept.asks); err != nil {
 			s.logf("acceptance: save: %v", err)
@@ -82,7 +91,10 @@ func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 	defer cancel()
 	b := &s.accept
 	b.mu.Lock()
-	s.loadAcceptLocked(ctx)
+	if !s.loadAcceptLocked(ctx) {
+		b.mu.Unlock()
+		return
+	}
 	var earlier []string
 	if old := b.asks[t.ID]; old != nil && !acceptAskStale(old, t) {
 		b.mu.Unlock()
@@ -204,7 +216,9 @@ func (s *Service) acceptFor(ids ...string) (todo string, earlier bool) {
 	b := &s.accept
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	s.loadAcceptLocked(context.Background())
+	if !s.loadAcceptLocked(context.Background()) {
+		return "", false
+	}
 	for todo, a := range b.asks {
 		for _, id := range ids {
 			if id != "" && slices.Contains(a.Messages, id) {
@@ -315,7 +329,10 @@ func (s *Service) accepted(ctx context.Context, id, card string) bool {
 	t, todoOK := s.todoNow(id)
 	b := &s.accept
 	b.mu.Lock()
-	s.loadAcceptLocked(ctx)
+	if !s.loadAcceptLocked(ctx) {
+		b.mu.Unlock()
+		return false
+	}
 	a, ok := b.asks[id]
 	if !ok || a.MessageID == "" || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) || (card != "" && card != a.MessageID && !slices.Contains(a.Messages, card)) {
 		b.mu.Unlock()
@@ -362,7 +379,10 @@ func (s *Service) remindAcceptance(now time.Time) {
 	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
 	b := &s.accept
 	b.mu.Lock()
-	s.loadAcceptLocked(ctx)
+	if !s.loadAcceptLocked(ctx) {
+		b.mu.Unlock()
+		return
+	}
 	var due []string
 	seen := map[string]time.Time{} // each due card's AskedAt: the round the sweep judges
 	for id, a := range b.asks {
@@ -452,7 +472,10 @@ func (s *Service) briefingClock(ctx context.Context) (int, int) {
 func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([]prompts.SnapshotAccept, int) {
 	b := &s.accept
 	b.mu.Lock()
-	s.loadAcceptLocked(ctx)
+	if !s.loadAcceptLocked(ctx) {
+		b.mu.Unlock()
+		return nil, 0
+	}
 	type ask struct {
 		id string
 		a  acceptAsk

@@ -38,7 +38,7 @@ type fleetBook struct {
 	mu           sync.Mutex
 	interactions map[string]*pending
 	seen         map[[2]string]time.Time // (machine, session) -> when the user last looked at it
-	seenLoaded   bool
+	seenLoaded   bool                    // seen holds the table's times (loadSeen succeeded once)
 	stateSince   map[[2]string]stateMark // (machine, session) -> its state and when it entered it
 	notified     map[string]time.Time    // assistant conversation -> when it last pushed with notify_user
 	// reportSent: assistant conversation -> when a scheduled run or a task notice was sent into it (noteReportTurn):
@@ -94,6 +94,8 @@ type fleetBook struct {
 	q        fleetQueue // what the nodes' events start for the assistant, in order (fleet_follow.go)
 	followMu sync.Mutex
 	follows  map[[2]string]bool // the conversations the channels follow (fleet_follow.go)
+	// unsettled: follows the devices did not take (fleet_follow.go): the next follow asks them again
+	unsettled map[[2]string]bool
 }
 
 // fleetReport is what the session lists are decorated with from the assistant's snapshot.
@@ -187,17 +189,19 @@ func (g guardedStore) SeenTimes(ctx context.Context) (out map[[2]string]time.Tim
 // fleetOn: the manager carries the machines (its process has the devices; unit tests without them have no fleet).
 func (s *Service) fleetOn() bool { return s.devs != nil }
 
-// fleetStart starts the fleet's loops, once.
+// fleetStart starts the fleet's loops, once. The seen times are read again on each call until they could be: a
+// database that failed while the manager started does not leave every session the user had looked at unread.
+// restoreInteractions stays once: expiring the stale rows later would cancel the ones created since.
 func (s *Service) fleetStart(ctx context.Context) {
 	if !s.fleetOn() {
 		return
 	}
 	s.fleet.started.Do(func() {
 		s.restoreInteractions(ctx)
-		s.loadSeen(ctx)
 		go s.expireLoop(ctx)
 		go s.liveLoop(ctx)
 	})
+	s.loadSeen(ctx)
 }
 
 // ---- the machines, as the devices have them ----
@@ -928,24 +932,52 @@ func (s *Service) decorateTodos(mid string, list []proto.Session) {
 
 // ---- seen ----
 
-func (s *Service) loadSeen(ctx context.Context) {
+// loadSeen reads the seen times from the store, merging the ones marked meanwhile, unless that was done already. It
+// answers whether this call read them; a failed read is tried again by the next call.
+func (s *Service) loadSeen(ctx context.Context) bool {
+	s.fleet.mu.Lock()
+	loaded := s.fleet.seenLoaded
+	s.fleet.mu.Unlock()
+	if loaded {
+		return false
+	}
 	st := s.fleetStore()
 	if st == nil {
-		return
+		return false
 	}
 	m, err := st.SeenTimes(ctx)
 	if err != nil {
-		if !errors.Is(err, errNoTable) {
+		if errors.Is(err, errNoTable) { // a store that does not keep them: nothing to read again
+			s.fleet.mu.Lock()
+			s.fleet.seenLoaded = true
+			s.fleet.mu.Unlock()
+		} else {
 			s.logf("load seen times: %v", err)
 		}
-		return
+		return false
 	}
 	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	if s.fleet.seenLoaded { // another call read them meanwhile
+		return false
+	}
 	for k, v := range s.fleet.seen { // one marked meanwhile is newer
 		m[k] = v
 	}
 	s.fleet.seen = m
-	s.fleet.mu.Unlock()
+	s.fleet.seenLoaded = true
+	return true
+}
+
+// retrySeen reads the seen times again if they could not be read so far, and refreshes the session lists' states
+// once they are.
+func (s *Service) retrySeen(ctx context.Context) {
+	if !s.loadSeen(ctx) {
+		return
+	}
+	for _, m := range s.fleetMachines() {
+		s.publishSessions(m.ID)
+	}
 }
 
 func (s *Service) seenAt(machine, session string) time.Time {

@@ -79,6 +79,9 @@ type Machine struct {
 	watched   map[string]bool // sessions the hub watches (session.watch): watched again on a new connection
 	followed  map[string]bool // sessions the manager itself follows (Follow: a channel's turn): watched as well
 	lastSeq   map[string]int  // session id -> highest item seq seen
+	// unsettled: sessions whose last Follow the node did not take (the next Follow asks it again; a new connection
+	// settles them).
+	unsettled map[string]bool
 	kick      chan struct{}
 	// deploying: the manager is sending this machine the hub's node build (deploy.go); deployErr: why the last try
 	// failed.

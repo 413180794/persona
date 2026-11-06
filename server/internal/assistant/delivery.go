@@ -166,7 +166,11 @@ func deliveryStage(state string) string {
 func (s *Service) setTaskDelivery(ctx context.Context, id string, d TodoDelivery) {
 	b := &s.reports
 	b.mu.Lock()
-	s.loadStagesLocked(ctx)
+	if !s.loadStagesLocked(ctx) {
+		b.mu.Unlock()
+		s.logf("task %s: delivery %s not kept: the stages could not be read", id, d.State)
+		return
+	}
 	cur := b.stages[id]
 	if dd := cur.Delivery; dd != nil && dd.State == d.State && dd.Gate == d.Gate && dd.Unblock == d.Unblock {
 		b.mu.Unlock()

@@ -68,6 +68,8 @@ type channelsBook struct {
 	answering map[string]bool
 	// follows: how many runs follow each conversation (session.follow)
 	follows map[[2]string]int
+	// followRetry: the followed conversations whose session.follow failed -> when a run's watcher asks again
+	followRetry map[[2]string]time.Time
 	// announced: the cards this process heard of (interaction.announced, or pending when it first connected); one
 	// that came while it was not connected is taken when it is back (channelsCatchUp).
 	announced map[string]bool
@@ -766,9 +768,7 @@ func (s *Service) channelsReconnected(ctx context.Context) {
 	}
 	c.mu.Unlock()
 	for _, k := range keys {
-		if err := s.call(ctx, k[0], DeviceSessionFollow, map[string]any{"session_id": k[1]}, nil); err != nil {
-			s.logf("channels: follow %s again: %v", short(k[1]), err)
-		}
+		s.askFollow(ctx, k[0], k[1]) // a failure is asked again by the run's watcher
 	}
 	s.forgetChannelList()
 	s.feishuForgetStatus()

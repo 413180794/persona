@@ -183,7 +183,7 @@ func (s *Service) call(ctx context.Context, device, method string, params, out a
 		return err
 	}
 	p := DeviceCall{Device: device, Method: method, Params: raw}
-	res, ok, err := s.localFleetDeviceCall(p) // what the hub answered before the nodes' events were the manager's
+	res, ok, err := s.localFleetDeviceCall(ctx, p) // what the hub answered before the nodes' events were the manager's
 	if !ok {
 		res, err = s.hub.DeviceCall(ctx, p)
 	}

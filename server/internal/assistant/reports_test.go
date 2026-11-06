@@ -402,3 +402,55 @@ func TestTaskReportMergesChangeArrivedDuringPost(t *testing.T) {
 		return n == 0 && !timer
 	})
 }
+
+// A failed read of the stages keeps the book unloaded: a stage or delivery set meanwhile is not written over every
+// other task's, and the next look reads the stored stages again.
+func TestStagesReadFailureNeverOverwrites(t *testing.T) {
+	ctx := context.Background()
+	st := &downStore{memStore: &memStore{}}
+	keep := map[string]todoStage{"a": {Stage: "review", PR: "https://git.example.com/team/repo/pull/1",
+		Delivery: &TodoDelivery{State: deliveryPR}}}
+	if err := st.PutSetting(ctx, reportStagesKey, keep); err != nil {
+		t.Fatal(err)
+	}
+	s := newServiceOn(t, newFakeHub().withMachine(), st)
+
+	st.failing(true)
+	if got := s.todoStages(ctx); len(got) != 0 {
+		t.Fatalf("stages while unreadable: %v", got)
+	}
+	st.failing(false)
+	s.setTaskStage(ctx, "b", "review", "")
+	s.setTaskDelivery(ctx, "c", TodoDelivery{State: deliveryMerged})
+
+	var stored map[string]todoStage
+	if _, err := st.Setting(ctx, reportStagesKey, &stored); err != nil {
+		t.Fatal(err)
+	}
+	a := stored["a"]
+	if a.Stage != "review" || a.PR != keep["a"].PR || a.Delivery == nil || a.Delivery.State != deliveryPR {
+		t.Fatalf("task a after a failed read: %+v (stored %v)", a, stored)
+	}
+	if stored["b"].Stage != "review" || stored["c"].Delivery == nil || stored["c"].Stage != "merge" {
+		t.Fatalf("the later changes were not kept: %v", stored)
+	}
+
+	// While the read keeps failing, nothing is written and nothing is cached.
+	st.failing(true)
+	s.reports.mu.Lock()
+	s.reports.loaded, s.reports.stages = false, nil
+	s.reports.mu.Unlock()
+	s.setTaskStage(ctx, "d", "review", "")
+	s.setTaskDelivery(ctx, "e", TodoDelivery{State: deliveryPR})
+	st.failing(false)
+	stored = nil
+	if _, err := st.Setting(ctx, reportStagesKey, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := stored["d"]; ok || len(stored) != 3 {
+		t.Fatalf("written while unreadable: %v", stored)
+	}
+	if got := s.todoStages(ctx); len(got) != 3 {
+		t.Fatalf("stages after the store is back: %v", got)
+	}
+}

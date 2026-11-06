@@ -260,6 +260,11 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	for id := range m.followed { // the manager's own follows (Follow)
 		rewatch[id] = m.lastSeq[id]
 	}
+	for id := range m.unsettled { // a new connection watches nothing yet: an unwatch it did not take is moot
+		if !m.followed[id] {
+			delete(m.unsettled, id)
+		}
+	}
 	connectedAt := m.connectedAt
 	m.mu.Unlock()
 	if c.via == "ssh" && p.src != nil && p.src != m {
@@ -307,7 +312,13 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 		go f(m.cfg.ID)
 	}
 	for id, since := range rewatch {
-		_ = c.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil)
+		if c.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil) == nil {
+			m.mu.Lock()
+			if m.followed[id] {
+				delete(m.unsettled, id) // a Follow that failed is taken now
+			}
+			m.mu.Unlock()
+		}
 	}
 	go m.watchPaths(sctx, c)
 	if info.ClaudeVersion == "" {

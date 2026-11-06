@@ -511,3 +511,79 @@ func TestACallWaitsForTheFirstConnection(t *testing.T) {
 		t.Fatalf("a machine that cannot be reached: %v", err)
 	}
 }
+
+// A Follow whose session.watch the node refused is not remembered: the next one asks the node again. The same for an
+// unwatch.
+func TestAFailedFollowIsAskedAgain(t *testing.T) {
+	d := newTestDevices(t)
+	n := &testNode{}
+	connectedMachine(t, d, "box", n)
+	ctx := context.Background()
+	refuse := func(err error) { n.mu.Lock(); n.refuse = err; n.mu.Unlock() }
+	refused := errors.New("no")
+
+	refuse(refused)
+	if err := d.Follow(ctx, "box", "s1", true); err == nil {
+		t.Fatal("follow: no error from a refusing node")
+	}
+	refuse(nil)
+	if err := d.Follow(ctx, "box", "s1", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(n.seen("session.watch")); got != 2 {
+		t.Fatalf("session.watch sent %d times, want 2", got)
+	}
+	if err := d.Follow(ctx, "box", "s1", true); err != nil || len(n.seen("session.watch")) != 2 {
+		t.Fatalf("followed again: %v, %v", err, n.seen("session.watch"))
+	}
+
+	refuse(refused)
+	if err := d.Follow(ctx, "box", "s1", false); err == nil {
+		t.Fatal("unfollow: no error from a refusing node")
+	}
+	refuse(nil)
+	if err := d.Follow(ctx, "box", "s1", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(n.seen("session.unwatch")); got != 2 {
+		t.Fatalf("session.unwatch sent %d times, want 2", got)
+	}
+}
+
+// A Follow that failed stays followed: the node's next connection watches the session again (the only repair for a
+// follower that asks once), and that settles it. An unwatch that failed is not watched again.
+func TestAFailedFollowIsWatchedOnTheNextConnection(t *testing.T) {
+	d := newTestDevices(t)
+	n := &testNode{}
+	m := connectedMachine(t, d, "box", n)
+	ctx := context.Background()
+	refuse := func(err error) { n.mu.Lock(); n.refuse = err; n.mu.Unlock() }
+	refuse(errors.New("no"))
+	if err := d.Follow(ctx, "box", "s1", true); err == nil {
+		t.Fatal("follow: no error from a refusing node")
+	}
+	if err := d.Follow(ctx, "box", "s2", true); err == nil {
+		t.Fatal("follow s2: no error from a refusing node")
+	}
+	refuse(nil)
+	if err := d.Follow(ctx, "box", "s2", true); err != nil {
+		t.Fatal(err)
+	}
+	refuse(errors.New("no"))
+	if err := d.Follow(ctx, "box", "s2", false); err == nil {
+		t.Fatal("unfollow s2: no error from a refusing node")
+	}
+	refuse(nil)
+	before := len(n.seen(`session.watch {"session_id":"s2"`))
+	m.reconnect()
+	eventually(t, 5*time.Second, "s1 watched again", func() bool {
+		return len(n.seen(`session.watch {"session_id":"s1"`)) == 2
+	})
+	if got := len(n.seen(`session.watch {"session_id":"s2"`)); got != before {
+		t.Fatalf("an unfollowed session was watched again on the new connection (%d -> %d)", before, got)
+	}
+	eventually(t, 2*time.Second, "settled", func() bool { m.mu.Lock(); defer m.mu.Unlock(); return len(m.unsettled) == 0 })
+	if err := d.Follow(ctx, "box", "s1", true); err != nil || len(n.seen(`session.watch {"session_id":"s1"`)) != 2 {
+		t.Fatalf("followed once more: %v, %v", err, n.seen("session.watch"))
+	}
+}

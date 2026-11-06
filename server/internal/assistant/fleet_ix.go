@@ -908,6 +908,7 @@ func (s *Service) expireLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
+		s.retrySeen(ctx) // a database that failed when the manager started
 		s.fleet.mu.Lock()
 		var plans []string
 		seen := map[string]bool{}
