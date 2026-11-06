@@ -18,6 +18,7 @@
   "question_summary": "在问你：{question}",
   "or_write_answer": "或者直接写你的回答",
   "answer": "回答",
+  "answer_by_text": "也可以直接在聊天里回复序号或选项名",
   "pick_one": "选一个",
   "pick_some": "选一个或几个",
   "or_write": "或者直接写",

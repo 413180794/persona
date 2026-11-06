@@ -53,6 +53,9 @@ type inboxBulkResult struct {
 type doneState struct {
 	DoneAt *time.Time
 	DoneBy string
+	// the chain before (filing records an entry)
+	chain    []InboxChainEntry
+	chainSeq int
 }
 
 // inboxVersion names what an item holds now (its newest message / mail / notice): it changes when something new
@@ -159,9 +162,9 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 		case done && t.Version != "" && t.Version != inboxVersion(it):
 			res.Skipped = append(res.Skipped, inboxBulkSkip{t.ID, bulkSkipChanged})
 		default:
-			previous = append(previous, doneState{DoneAt: it.DoneAt, DoneBy: it.DoneBy})
+			previous = append(previous, doneState{DoneAt: it.DoneAt, DoneBy: it.DoneBy, chain: it.Chain, chainSeq: it.ChainSeq})
 			if done {
-				it.done(now, doneByOf(action == bulkDismiss))
+				b.file(it, now, doneByOf(action == bulkDismiss))
 			} else {
 				it.DoneAt, it.DoneBy = nil, ""
 			}
@@ -181,7 +184,7 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 			// file/reopen: its successful answer must not be rewound by our failed write. Otherwise restore the
 			// state our request overwrote.
 			if failed[it.ID] && b.items[it.ID] == it && b.mark[it.ID] == gens[i] && it.DoneAt == applied[i].DoneAt && it.DoneBy == applied[i].DoneBy {
-				it.DoneAt, it.DoneBy = previous[i].DoneAt, previous[i].DoneBy
+				it.DoneAt, it.DoneBy, it.Chain, it.ChainSeq = previous[i].DoneAt, previous[i].DoneBy, previous[i].chain, previous[i].chainSeq
 			}
 		}
 	})

@@ -226,6 +226,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 				s.logf("inbox: agent for %s: %v", j.it.ID, err)
 			} else {
 				a.MachineID, a.SessionID = machineID, sessionID
+				b.noteHandling(j.it, machineID, sessionID)
 			}
 		}
 		b.mu.Unlock()

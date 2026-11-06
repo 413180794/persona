@@ -27,6 +27,10 @@ func (s *Service) triageInbox(ctx context.Context) {
 	var todo []*InboxItem
 	for _, it := range b.items {
 		if it.open() && it.TriagedAt != it.Last && it.Context != "" {
+			if it.handled() { // what joins an event being handled follows it: its conversation decides (inbox_handle.go)
+				it.TriagedAt = it.Last
+				continue
+			}
 			todo = append(todo, it)
 		}
 	}
@@ -84,6 +88,7 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		return false
 	case v.state == "":
 		it.Tier, it.Summary, it.Reason = v.tier, v.summary, v.reason
+		it.Urgent = v.urgent && v.tier == TierAction
 	case fallback == "":
 		return false
 	default:
@@ -93,9 +98,10 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		it.Tier, it.Reason = fallback, b.byRules()
 	}
 	it.TriagedAt = last
+	b.noteTriaged(it)
 	// Triage can settle an item read elsewhere while it was still untriaged (not one filed while the model thought).
 	if it.Read && it.Tier != TierAction && it.open() {
-		it.done(time.Now(), "read")
+		b.file(it, time.Now(), "read")
 	}
 	return true
 }
@@ -114,6 +120,7 @@ var triageStates = []string{triageUnconfigured, triagePaused, triageFailed, tria
 // triageVerdict is the model's answer about one item, or (state) why there is none.
 type triageVerdict struct {
 	tier, summary, reason string
+	urgent                bool   // someone waits, a deadline is near (action only)
 	state                 string // "" when answered
 	why                   string // the state for people: 模型没有额度
 	err                   error
@@ -135,6 +142,7 @@ func (s *Service) askTriage(ctx context.Context, it *InboxItem, timeout time.Dur
 		Tier    string `json:"tier"`
 		Summary string `json:"summary"`
 		Reason  string `json:"reason"`
+		Urgent  bool   `json:"urgent"`
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	err := s.inboxModelJSON(cctx, purposeTriage, system, input, 0, &out)
@@ -150,6 +158,7 @@ func (s *Service) askTriage(ctx context.Context, it *InboxItem, timeout time.Dur
 		}
 	case out.Tier == TierAction || out.Tier == TierFYI || out.Tier == TierNoise:
 		v.tier, v.summary, v.reason = out.Tier, clip(oneLine(out.Summary), 80), clip(oneLine(out.Reason), 30)
+		v.urgent = out.Urgent && out.Tier == TierAction
 	case modelUnconfigured(err):
 		v.state, v.why = triageUnconfigured, i18n.T(l, "assistant-inbox_triage.unconfigured")
 	case slow:
@@ -388,6 +397,7 @@ func (s *Service) replyInboxFrom(ctx context.Context, id, text, clientID string,
 	// meanwhile (read elsewhere) is filed as replied.
 	kept := it.open() && it.Last != c.Last
 	once.keptOpen = kept
+	b.noteSent(it, now)
 	if !kept {
 		it.done(now, "replied")
 	}

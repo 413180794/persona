@@ -18,6 +18,7 @@
   "question_summary": "Asks: {question}",
   "or_write_answer": "Or write your answer",
   "answer": "Answer",
+  "answer_by_text": "You can also reply in chat with the option’s number or name",
   "pick_one": "Pick one",
   "pick_some": "Pick one or more",
   "or_write": "Or write it",

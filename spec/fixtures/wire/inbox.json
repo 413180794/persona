@@ -48,7 +48,29 @@
               "name": "示例讨论"
             }
           ],
-          "version": "d45aefe6809ea192"
+          "version": "d45aefe6809ea192",
+          "status": "action",
+          "chain": [
+            {
+              "id": "c1",
+              "at": "2026-01-02T03:04:05Z",
+              "kind": "received",
+              "text": "收到 1 条新消息 · 小王",
+              "count": 1,
+              "sender": "小王",
+              "link": {
+                "type": "source",
+                "position": "10"
+              }
+            },
+            {
+              "id": "c2",
+              "at": "2026-01-02T03:04:05Z",
+              "kind": "triaged",
+              "text": "分拣：需要你",
+              "detail": "需要你"
+            }
+          ]
         },
         {
           "id": "mail:account_example:thread_example:11",
@@ -85,7 +107,20 @@
               "name": "小王"
             }
           ],
-          "version": "e9cde9aed8019733"
+          "version": "e9cde9aed8019733",
+          "chain": [
+            {
+              "id": "c1",
+              "at": "2026-01-02T03:04:05Z",
+              "kind": "received",
+              "text": "收到 1 封邮件",
+              "count": 1,
+              "link": {
+                "type": "source",
+                "uid": 11
+              }
+            }
+          ]
         }
       ]
     },

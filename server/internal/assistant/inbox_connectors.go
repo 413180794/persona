@@ -60,7 +60,7 @@ func (s *Service) settleConnector(ctx context.Context, id string) []*InboxItem {
 			continue
 		}
 		if why, ok := res.Over[it.Connector.Thread]; ok {
-			it.done(now, "read")
+			b.file(it, now, "read")
 			it.Reason = why
 			changed = append(changed, it)
 		}
@@ -82,30 +82,33 @@ func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThin
 		open, done := index.openFor(t.Thread)
 		if t.Done != "" {
 			if open != nil {
-				open.done(now, t.Done)
-				if t.Why != "" {
-					open.Reason = t.Why
-				}
+				b.settleThing(open, t, now)
 				changed = append(changed, open)
 			}
 			continue
 		}
 		if open != nil {
 			if open.Last != t.Last {
+				prev := seenOf(open)
 				open.Count++
 				fillConnectorItem(open, t)
+				b.noteReceived(open, prev, nil)
+				if t.Tier != "" {
+					b.noteTriaged(open)
+				}
 				open.Read = false
 				b.offerParent(open, thingParent(t))
 				changed = append(changed, open)
 			} else if t.Tier != "" && (open.Tier != string(t.Tier) || open.Reason != t.Why) {
 				// The rules decide this one now (an item tiered before, or under other options).
 				setRuleTier(open, t)
+				b.noteTriaged(open)
 				changed = append(changed, open)
 			}
 			if t.Read && !open.Read {
 				open.Read = true
 				if open.Tier != "" && open.Tier != TierAction { // untriaged ones are settled by triage
-					open.done(now, "read")
+					b.file(open, now, "read")
 				}
 				if !containsItem(changed, open) {
 					changed = append(changed, open)
@@ -121,12 +124,30 @@ func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThin
 		it := &InboxItem{ID: id + ":" + hex.EncodeToString(sum[:8]), Source: id, Account: id, AccountName: name,
 			StartedAt: t.At, Count: 1}
 		fillConnectorItem(it, t)
+		b.noteReceived(it, inboxSeen{}, nil)
+		if t.Tier != "" {
+			b.noteTriaged(it)
+		}
 		b.offerParent(it, thingParent(t))
 		b.add(id, it)
 		index.note(it)
 		changed = append(changed, it)
 	}
 	return changed
+}
+
+// settleThing ends an open item a thing says is over: the user's own reply in the source is recorded as such (and the
+// processing conversation, if one works on it, is told), anything else as filed. Under b.mu.
+func (b *inboxBook) settleThing(open *InboxItem, t connector.InboxThing, now time.Time) {
+	if t.Done == connector.DoneReplied {
+		b.noteSelfReplied(open, now)
+		open.done(now, t.Done)
+	} else {
+		b.file(open, now, t.Done)
+	}
+	if t.Why != "" {
+		open.Reason = t.Why
+	}
 }
 
 func fillConnectorItem(it *InboxItem, t connector.InboxThing) {

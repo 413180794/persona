@@ -97,7 +97,7 @@ func (b *inboxBook) applyMutes(now time.Time) []*InboxItem {
 			continue
 		}
 		if m := mutedBy(b.mutes, it); m != nil {
-			it.done(now, "read")
+			b.file(it, now, "read")
 			it.Reason = b.mutedReason(m.Name)
 			changed = append(changed, it)
 		}

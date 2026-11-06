@@ -912,9 +912,10 @@ type ChannelReceive struct {
 }
 
 // FeishuMessage is feishu.message's params: im.message.receive_v1's event as Feishu sent it (the owner's, in the
-// bot's private chat).
+// bot's private chat), and the owner's action for what this message answers (InteractionsResolve).
 type FeishuMessage struct {
-	Event json.RawMessage `json:"event"`
+	Event  json.RawMessage `json:"event"`
+	Action string          `json:"action,omitempty"`
 }
 
 // FeishuAction is feishu.card_action's params: card.action.trigger's event as Feishu sent it (the owner's press), and

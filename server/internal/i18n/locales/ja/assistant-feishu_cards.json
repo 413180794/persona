@@ -18,6 +18,7 @@
   "question_summary": "質問：{question}",
   "or_write_answer": "または回答を入力",
   "answer": "回答",
+  "answer_by_text": "チャットで番号または選択肢名を返信しても回答できます",
   "pick_one": "1つ選択",
   "pick_some": "1つ以上選択",
   "or_write": "または入力",

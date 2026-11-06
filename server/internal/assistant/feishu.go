@@ -177,7 +177,9 @@ func (t *feishuTurn) pass() {
 
 type botCard struct {
 	MessageID string
+	Thread    string            // the topic the card was posted into (the run anchor it replies to); "" in the root chat
 	Ix        proto.Interaction // what it asks (to close it when it ended unseen)
+	At        time.Time         // when it was posted: the latest waiting card is the one a typed answer answers
 }
 
 func (b *feishuBook) clock() time.Time {
@@ -688,12 +690,12 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	go func() {
 		defer turn.pass()
 		turn.waitTurn()
-		s.feishuMessage(ev, st)
+		s.feishuMessage(ev, st, p.Action)
 	}()
 	return nil
 }
 
-func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus) {
+func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus, action string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	msg := ev.Message
@@ -711,6 +713,9 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus) {
 	}
 	if !content.Forward && s.acceptReply(ctx, msg.MessageID, content.Text, msg.ParentID, msg.RootID) {
 		return // about a 请验收 card (acceptance.go)
+	}
+	if !content.Forward && len(content.Media) == 0 && s.botAnswerQuestion(ctx, msg.MessageID, content.Text, action, msg.RootID, msg.ParentID) {
+		return // the answer to the card waiting in this topic (feishu_text_answer.go)
 	}
 	target := s.botTargetFor(msg.RootID, msg.ParentID)
 	if err := botAllowed(s.botLang(ctx), st.Features, target); err != nil {

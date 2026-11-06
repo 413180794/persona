@@ -248,7 +248,9 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 		}
 		b.mu.Unlock()
 	}
-	err := h.toAssistantSince(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw}, since)
+	// The owner wrote it (the hub checked the sender): what it answers, it answers once, like a card's press.
+	action := h.issueOwnerAction(channel.Feishu, "")
+	err := h.toAssistantSince(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw, Action: action}, since)
 	pass() // handed over (or not): the next one need not wait for the note below
 	if err == nil {
 		return

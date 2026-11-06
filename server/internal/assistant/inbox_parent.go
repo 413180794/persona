@@ -86,6 +86,9 @@ func (b *inboxBook) offerParent(it *InboxItem, p *InboxParent) {
 		return
 	}
 	it.Parent = p
+	if p.Kind == ParentInbox { // grown out of another chat / source's item: related across atoms (inbox_events.go)
+		relate(it, b.items[p.ID])
+	}
 }
 
 // parentFits says whether item id may hang under the item parent: not itself or one of its own descendants, and

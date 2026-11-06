@@ -56,10 +56,7 @@ func (b *inboxBook) applyMigrated(id string, things []connector.InboxThing, now 
 		open, done := index.openFor(source + "\x00" + t.Thread)
 		if t.Done != "" {
 			if open != nil {
-				open.done(now, t.Done)
-				if t.Why != "" {
-					open.Reason = t.Why
-				}
+				b.settleThing(open, t, now)
 				changed = append(changed, open)
 			}
 			continue
@@ -67,7 +64,9 @@ func (b *inboxBook) applyMigrated(id string, things []connector.InboxThing, now 
 		if open != nil {
 			switch {
 			case open.Last != t.Last:
+				prev := seenOf(open)
 				fillMigrated(open, t)
+				b.noteReceived(open, prev, nil)
 				open.Read = false
 				changed = append(changed, open)
 			case blocksDiffer(open, t.Extra):
@@ -79,7 +78,7 @@ func (b *inboxBook) applyMigrated(id string, things []connector.InboxThing, now 
 			if t.Read && !open.Read {
 				open.Read, open.Count = true, t.Extra.Count
 				if open.Tier != "" && open.Tier != TierAction { // untriaged ones are settled by triage
-					open.done(now, "read")
+					b.file(open, now, "read")
 				}
 				if !containsItem(changed, open) {
 					changed = append(changed, open)
@@ -100,6 +99,7 @@ func (b *inboxBook) applyMigrated(id string, things []connector.InboxThing, now 
 			it.StartedAt = t.At
 		}
 		fillMigrated(it, t)
+		b.noteReceived(it, inboxSeen{}, nil)
 		b.add(id, it)
 		index.note(it)
 		changed = append(changed, it)

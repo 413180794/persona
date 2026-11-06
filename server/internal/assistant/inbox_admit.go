@@ -50,7 +50,7 @@ func (b *inboxBook) sortBatch(batch *inboxBatch, changed []*InboxItem, now time.
 	}
 	for _, it := range batch.items {
 		if m := mutedBy(b.mutes, it); m != nil {
-			it.done(now, "read")
+			b.file(it, now, "read")
 			it.Reason = b.mutedReason(m.Name)
 		} else if it.TriagedAt != it.Last && it.Context != "" {
 			todo = append(todo, it)
@@ -141,6 +141,8 @@ func (s *Service) admit(ctx context.Context, batch *inboxBatch, todo []*InboxIte
 			continue
 		}
 		it.TriagedAt = it.Last
+		it.Urgent = v.state == "" && v.urgent && it.Tier == TierAction
+		b.noteTriaged(it)
 		b.items[it.ID] = it
 		in = append(in, it)
 	}

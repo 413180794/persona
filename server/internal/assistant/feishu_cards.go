@@ -86,7 +86,7 @@ func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction)
 		s.botCardDone(ctx, mid, ix, i18n.T(s.botLang(ctx), "assistant-feishu_cards.handled"))
 		return
 	}
-	b.cards[ix.ID] = botCard{MessageID: mid, Ix: ix}
+	b.cards[ix.ID] = botCard{MessageID: mid, Ix: ix, At: b.clock(), Thread: reply}
 	b.mu.Unlock()
 }
 
@@ -200,7 +200,7 @@ func (s *Service) feishuCardBack(ix proto.Interaction) {
 	if b.cards == nil {
 		b.cards = map[string]botCard{}
 	}
-	b.cards[ix.ID] = botCard{MessageID: d.card.MessageID, Ix: ix}
+	b.cards[ix.ID] = botCard{MessageID: d.card.MessageID, Thread: d.card.Thread, Ix: ix, At: b.clock()}
 	b.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -311,6 +311,9 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			c.Buttons(bs...)
 			c.Form("other", []any{feishubot.Input("text", "", i18n.T(l, "assistant-feishu_cards.or_write_answer"), false)},
 				feishubot.Submit(i18n.T(l, "assistant-feishu_cards.answer"), feishubot.Primary, "q_submit", val(map[string]any{"q": "0", "free": "1"})))
+			if len(q.Options) > 0 {
+				c.Note(i18n.T(l, "assistant-feishu_cards.answer_by_text"))
+			}
 		} else {
 			var fields []any
 			for i, q := range ix.Questions {
@@ -325,6 +328,11 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 				fields = append(fields, feishubot.Input("t"+strconv.Itoa(i), "", i18n.T(l, "assistant-feishu_cards.or_write"), false))
 			}
 			c.Form("answers", fields, feishubot.Submit(i18n.T(l, "assistant-feishu_cards.submit"), feishubot.Primary, "qs_submit", val(map[string]any{"form": "1"})))
+			// A form of one question with options also takes a plain reply; a form of several is submitted as one (a
+			// reply is not split over its questions), and a free-text question has no options.
+			if len(ix.Questions) == 1 && len(ix.Questions[0].Options) > 0 {
+				c.Note(i18n.T(l, "assistant-feishu_cards.answer_by_text"))
+			}
 		}
 		return c.Buttons(open, feishubot.Btn(i18n.T(l, "assistant-feishu_cards.dismiss"), feishubot.Default, val(map[string]any{"dismiss": "1"})))
 	case proto.IxPlan:

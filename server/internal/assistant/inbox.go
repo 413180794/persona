@@ -100,6 +100,17 @@ type InboxItem struct {
 	// Parent is what the item grew out of: another item, a todo or an agent session (inbox_parent.go, #2128).
 	Parent *InboxParent `json:"parent,omitempty"`
 
+	// The event's part (inbox_events.go, inbox_handling.go): its section (listed only), urgent (someone waits, a
+	// deadline is near), the manager's recap, the processing conversation, the one current suggestion, the 处理链条
+	// and the items related to it across atoms.
+	Status     string            `json:"status,omitempty"`
+	Urgent     bool              `json:"urgent,omitempty"`
+	Recap      string            `json:"recap,omitempty"`
+	Handling   *InboxHandling    `json:"handling,omitempty"`
+	Suggestion *InboxSuggestion  `json:"suggestion,omitempty"`
+	Chain      []InboxChainEntry `json:"chain,omitempty"`
+	Related    []InboxRelated    `json:"related,omitempty"`
+
 	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
 	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
 	Context   string `json:"context,omitempty"`    // the conversation as text, for triage and 交给 AI
@@ -116,6 +127,9 @@ type InboxItem struct {
 	// never read here. Group is the event's conversation (inbox_group.go).
 	Meta  json.RawMessage `json:"meta,omitempty"`
 	Group *InboxGroup     `json:"group,omitempty"`
+	// ChainSeq numbers the chain's entries; SuggestSeq is the last suggestion's version (a new one is the next).
+	ChainSeq   int `json:"chain_seq,omitempty"`
+	SuggestSeq int `json:"suggest_seq,omitempty"`
 }
 
 type InboxLark struct {
@@ -190,6 +204,19 @@ func (it *InboxItem) listed() InboxItem {
 	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt, c.Rules, c.ArrivedOf = "", "", "", "", "", "", ""
 	c.ArrivedAt = time.Time{}
 	c.Meta, c.Group = nil, nil
+	c.ChainSeq, c.SuggestSeq = 0, 0
+	c.Status = it.status()
+	c.Chain = listedChain(it)
+	c.Related = slices.Clone(it.Related)
+	if it.Handling != nil {
+		h := *it.Handling
+		c.Handling = &h
+	}
+	if it.Suggestion != nil {
+		g := *it.Suggestion
+		g.Changes = slices.Clone(g.Changes)
+		c.Suggestion = &g
+	}
 	c.Mutes = mutesOf(it)
 	c.Version = inboxVersion(it)
 	c.Conversation = conversationOf(it)
@@ -424,6 +451,10 @@ func (s *Service) loadInbox(ctx context.Context) bool {
 			b.larkRequestAccount(&it)
 			if it.ArrivedOf == "" { // stored before arrivals were stamped
 				it.ArrivedOf, it.ArrivedAt = it.Last, it.UpdatedAt
+			}
+			if len(it.Chain) == 0 { // stored before chains: received and triaged, from its fields
+				it.Chain = synthesizedChain(b.userLang(), &it)
+				it.ChainSeq = len(it.Chain)
 			}
 			b.items[it.ID] = &it
 		}
@@ -852,7 +883,7 @@ func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistant
 			if open != nil && !open.Read {
 				open.Read = true
 				if open.Tier != TierAction && open.Tier != "" {
-					open.done(now, "read")
+					b.file(open, now, "read")
 				}
 				changed = append(changed, open)
 			}
@@ -863,6 +894,10 @@ func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistant
 			continue
 		}
 		it := open
+		var prev inboxSeen
+		if it != nil {
+			prev = seenOf(it)
+		}
 		if it == nil {
 			it = &InboxItem{ID: fmt.Sprintf("mail:%s:%s:%d", a.ID, t, unseen[0].UID), Source: "mail", Kind: KindMail,
 				Account: a.ID, Mail: &InboxMail{AccountID: a.ID, Mailbox: newest.Mailbox, Thread: t}}
@@ -896,9 +931,31 @@ func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistant
 			}
 		}
 		it.Context = mailContext(a, unseen)
+		b.noteReceived(it, prev, mailMessages(unseen, prev.uids))
 		changed = append(changed, it)
 	}
 	return changed
+}
+
+// mailMessages are the mails of a batch (those not in the item before) for its received entry.
+func mailMessages(unseen []assistantwire.InboxMailSummary, had []uint32) []InboxChainMessage {
+	var out []InboxChainMessage
+	for _, m := range unseen {
+		if slices.Contains(had, m.UID) {
+			continue
+		}
+		sender := m.From.Name
+		if sender == "" {
+			sender = m.From.Email
+		}
+		msg := InboxChainMessage{Sender: sender, Text: clip(oneLine(m.Snippet), chainMessageText)}
+		if d, err := time.Parse(time.RFC3339, m.Date); err == nil {
+			d = d.UTC()
+			msg.At = &d
+		}
+		out = append(out, msg)
+	}
+	return out
 }
 
 func mailContext(a assistantwire.InboxMailAccount, msgs []assistantwire.InboxMailSummary) string {
@@ -1204,9 +1261,13 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 	}
 	// Keep the state we are changing so a failed write restores it: the request must not look done while the row
 	// (what a restart reads) still holds the other state.
-	prevDoneAt, prevDoneBy := it.DoneAt, it.DoneBy
+	prevDoneAt, prevDoneBy, prevChain, prevSeq := it.DoneAt, it.DoneBy, it.Chain, it.ChainSeq
 	if done {
-		it.done(time.Now(), doneByOf(dismiss))
+		if it.open() {
+			b.file(it, time.Now(), doneByOf(dismiss))
+		} else {
+			it.done(time.Now(), doneByOf(dismiss))
+		}
 	} else {
 		it.DoneAt, it.DoneBy = nil, ""
 	}
@@ -1218,7 +1279,7 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 		// Restore only when the item is still ours, still holds the state this request wrote and no same-valued
 		// mutation (a concurrent reopen) landed: a concurrent file/reopen must not be rewound by our failed write.
 		if failed[id] && b.items[id] == it && b.mark[id] == gen && it.DoneAt == newDoneAt && it.DoneBy == newDoneBy {
-			it.DoneAt, it.DoneBy = prevDoneAt, prevDoneBy
+			it.DoneAt, it.DoneBy, it.Chain, it.ChainSeq = prevDoneAt, prevDoneBy, prevChain, prevSeq
 		}
 	})
 	if failed[id] {

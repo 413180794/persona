@@ -137,6 +137,7 @@ type plannedEvent struct {
 	continues string
 	// The model's words for it; under the fallback only a new one's title and rule tier (the connector's).
 	title, summary, tier, reason string
+	urgent                       bool
 }
 
 // relateBatch relates one batch: by the model, else by the connector's fallback; then has each event written.
@@ -251,6 +252,7 @@ type groupAnswer struct {
 		Summary   string `json:"summary"`
 		Tier      string `json:"tier"`
 		Reason    string `json:"reason"`
+		Urgent    bool   `json:"urgent"`
 		Continues string `json:"continues"`
 	} `json:"events"`
 }
@@ -386,7 +388,8 @@ func checkGroupAnswer(out groupAnswer, fresh []string, seen map[string]groupEven
 		if strings.TrimSpace(d.Title) == "" {
 			return nil, fmt.Errorf("事件 %q 没有标题", ev)
 		}
-		pe := plannedEvent{messages: byEvent[ev], title: d.Title, summary: d.Summary, tier: d.Tier, reason: d.Reason}
+		pe := plannedEvent{messages: byEvent[ev], title: d.Title, summary: d.Summary, tier: d.Tier, reason: d.Reason,
+			urgent: d.Urgent && d.Tier == TierAction}
 		if isNewEvent(ev) {
 			news++
 			if d.Continues != "" {
@@ -498,6 +501,9 @@ func (s *Service) fallbackGroup(ctx context.Context, c assistantwire.InboxSource
 // meanwhile (the user filed it) gets a new one that continues it instead.
 func (s *Service) writeGroup(ctx context.Context, c assistantwire.InboxSource, t connector.InboxThing, plan *groupPlan) {
 	b := &s.inbox
+	b.mu.Lock()
+	b.foldNoise(c.ID, t.Thread, plan)
+	b.mu.Unlock()
 	var saved []*InboxItem
 	for _, e := range plan.events {
 		a := connector.GroupAppend{Thread: t.Thread, Messages: e.messages, Continues: e.continues}
@@ -585,6 +591,10 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 	if it != nil && it.Last == thing.Last {
 		return nil
 	}
+	var prev inboxSeen
+	if it != nil {
+		prev = seenOf(it)
+	}
 	if it == nil {
 		it = &InboxItem{ID: thing.ID, Source: c.ID, Account: c.ID, AccountName: c.Name, StartedAt: thing.At}
 		if x := thing.Extra; x != nil {
@@ -597,7 +607,7 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 			}
 		}
 	}
-	count, started := it.Count, it.StartedAt
+	count, started, title := it.Count, it.StartedAt, it.Title
 	if thing.Extra != nil {
 		fillMigrated(it, thing)
 	} else {
@@ -608,10 +618,18 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 	// event had count, it takes these. Its start is set once, when it is made.
 	it.Count, it.StartedAt = count+len(e.messages), started
 	it.Meta, it.Group, it.Read = thing.Meta, &InboxGroup{Connector: c.ID, Thread: thread}, false
-	if byModel {
+	b.noteReceived(it, prev, nil)
+	tierBefore := it.Tier
+	switch {
+	case prev.last != "" && it.handled():
+		// Messages that join an event being handled follow it: its tier, words and urgency stay; its processing
+		// conversation is told (inbox_handle.go).
+		it.Title, it.TriagedBy = title, orDefault(it.TriagedBy, "model")
+	case byModel:
 		it.Title, it.Summary, it.Tier, it.Reason, it.TriagedBy = clip(oneLine(e.title), 40), clip(oneLine(e.summary), 80), e.tier,
 			clip(oneLine(e.reason), 30), "model"
-	} else {
+		it.Urgent = e.urgent && e.tier == TierAction
+	default:
 		tier := e.tier
 		if tier == "" {
 			tier = eventRuleTier(thing)
@@ -628,16 +646,65 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 		it.Summary, it.Tier, it.Reason, it.TriagedBy = "", tier, b.byRules(), "rules"
 	}
 	it.TriagedAt = it.Last
+	if tierBefore != it.Tier || prev.last == "" {
+		b.noteTriaged(it)
+	}
 	if e.continues != "" && e.continues != it.ID {
 		b.offerParent(it, &InboxParent{Kind: ParentInbox, ID: e.continues, By: ParentByContinues})
 	}
 	b.offerParent(it, thingParent(thing))
 	if m := mutedBy(b.mutes, it); m != nil && it.open() {
-		it.done(time.Now(), "read")
+		b.file(it, time.Now(), "read")
 		it.Reason = b.mutedReason(m.Name)
 	}
 	b.items[it.ID] = it
 	return it
+}
+
+// foldNoise keeps noise one event per atom (docs/inbox.md「事件与处理链条」): the noise a plan opens goes into the
+// conversation's open noise event, or into one new event for all of it; an existing noise event never takes what
+// the model sorts higher (that opens its own event instead). Under b.mu.
+func (b *inboxBook) foldNoise(connectorID, thread string, plan *groupPlan) {
+	var open *InboxItem // the conversation's open noise event
+	for _, it := range b.items {
+		if it.Group != nil && it.Group.Connector == connectorID && it.Group.Thread == thread && it.open() && it.Tier == TierNoise &&
+			(open == nil || newerItem(it, open)) {
+			open = it
+		}
+	}
+	out := plan.events[:0:0]
+	noise := -1
+	for _, e := range plan.events {
+		cur := ""
+		if e.existing != "" {
+			if it := b.items[e.existing]; it != nil {
+				cur = it.Tier
+			}
+		}
+		if cur == TierNoise && e.tier != "" && e.tier != TierNoise {
+			e.existing = "" // a noise event is not escalated: the rest is an event of its own
+		}
+		isNoise := e.tier == TierNoise || e.tier == "" && cur == TierNoise
+		if isNoise {
+			if noise >= 0 {
+				out[noise].messages = append(out[noise].messages, e.messages...)
+				continue
+			}
+			if e.existing == "" && open != nil {
+				e.existing, e.continues = open.ID, ""
+			}
+			noise = len(out)
+		}
+		out = append(out, e)
+	}
+	plan.events = out
+}
+
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }
 
 // eventRuleTier is the tier the connector's rules give an event it wrote: extra's rule_tier, else its tier.

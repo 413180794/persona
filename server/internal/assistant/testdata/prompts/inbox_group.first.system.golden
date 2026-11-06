@@ -21,6 +21,7 @@
 title：这件事是什么，不超过 20 个字，比如「周四下午的发布评审改期」。
 summary：一句中文（不超过 40 个字），说清楚这件事现在是什么情况、要用户做什么。不要写「有人发了消息」这种空话。
 reason：不超过 12 个字，为什么这么分。
+urgent：急事才是 true：tier 是 action，而且有人正等着用户回、或截止时间就在眼前（今天、几个小时内）；其余一律 false。
 
 事件的 meta 是什么（连接器的说明）：
 示例 meta 说明：messages 是这件事的消息，旧的在前
@@ -35,7 +36,7 @@ reason：不超过 12 个字，为什么这么分。
 每次回复一个 JSON 对象，二选一：
 - 要查：{"tool": "messages_before", "args": {"message": "…", "n": 10}}
 - 想好了：{"assign": [{"message": "新消息的 id", "event": "已有事件的 id，或 new:1、new:2…"}],
-  "events": [{"event": "同上", "title": "…", "summary": "…", "tier": "action|fyi|noise", "reason": "…", "continues": "可省：接着哪件已处理的事"}]}
+  "events": [{"event": "同上", "title": "…", "summary": "…", "tier": "action|fyi|noise", "reason": "…", "urgent": false, "continues": "可省：接着哪件已处理的事"}]}
 
 每条新消息恰好归到一件事；assign 里用到的每件事在 events 里写一项（已有的事写动到之后的标题、总结和分级）；
 已有的事只能用查到的、还没处理完的。
