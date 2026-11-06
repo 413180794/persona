@@ -39,6 +39,7 @@ import { settingsTarget } from "../lib/channels";
 import { routeSub } from "../lib/extension-market";
 import { HubSettings } from "./settings/HubSettings";
 import { ManagersSettings } from "./settings/ManagersSettings";
+import { SentSettings } from "./settings/SentSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
 import { LauncherExtensionSections } from "./settings/ExtensionView";
 import { hubHasExt } from "../lib/extension-api";
@@ -215,6 +216,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
               <ChannelList onOpen={(id) => pick("channels", id)} onMarketItem={(market, id) => pick("extensions", routeSub({ kind: "item", market, id }))} />
             ))}
             {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("channels", id)} />}
+            {tab === "sent" && <SentSettings />}
             {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onChannel={(id) => pick("channels", id)} onConnector={(id) => pick("connectors", id)} />}
             {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
             {tab === "shortcuts" && <ShortcutSettings />}

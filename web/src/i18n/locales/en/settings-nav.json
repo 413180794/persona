@@ -30,5 +30,7 @@
   "hint_devices": "Signed-in phones and browsers",
   "hint_hub": "hub version and updates",
   "tab_managers": "Managers",
-  "hint_managers": "Where each assistant runs and whether it's online"
+  "hint_managers": "Where each assistant runs and whether it's online",
+  "tab_sent": "Sent as you",
+  "hint_sent": "What Persona sent in your name, and why it was allowed"
 }
