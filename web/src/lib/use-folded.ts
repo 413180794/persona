@@ -17,10 +17,18 @@ export function useFolded(key: string, initial = false, { follow = false, holds 
   const around = useContext(FoldScope);
   const within = scope ?? around;
   const [stored, setStored] = useState(() => localStorage.getItem(`fold:${key}`));
-  const [first] = useState(initial);
+  const [first, setFirst] = useState(initial);
   const [opened, setOpened] = useState(holds);
   const [held, setHeld] = useState(holds);
-  if (held !== holds) {
+  const [seen, setSeen] = useState(key);
+  if (seen !== key) {
+    // a mounted row given another key (a re-grouping, a renamed space) starts over from that key's fold, as on mount
+    setSeen(key);
+    setStored(localStorage.getItem(`fold:${key}`));
+    setFirst(initial);
+    setOpened(holds);
+    setHeld(holds);
+  } else if (held !== holds) {
     // adjusted while rendering, so the row is laid out (and scrolled to) in the same frame
     setHeld(holds);
     if (holds) setOpened(true);

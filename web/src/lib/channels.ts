@@ -5,7 +5,7 @@
 //
 // The pure parts (state words, sections, the source of a message, the bind steps) are plain functions for the tests.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatList, t } from "../i18n";
 import { api, enc } from "./api";
 import type { ConnectorPrompt } from "./connectors";
@@ -235,14 +235,40 @@ export function conversationChannel(ids: string[] | undefined, list: Pick<Channe
 }
 
 // The list, fetched once per hub (it changes when an extension comes or goes: the settings page reloads it), for the
-// source marks in conversations.
+// source marks in conversations. forgetChannels() starts a new generation: a read already out when it was called is
+// not cached, and the hooks already mounted read again. A read is shared by every hook asking under the same
+// generation and features key, and cached under the key it started with.
 let cached: { key: string; list: Channel[] } | null = null;
-let inflight: Promise<Channel[]> | null = null;
+let inflight: { gen: number; key: string; promise: Promise<Channel[]> } | null = null;
+let generation = 0;
+const listeners = new Set<() => void>();
+
+function subscribeGeneration(on: () => void) {
+  listeners.add(on);
+  return () => void listeners.delete(on);
+}
+
+const currentGeneration = () => generation;
+
+/** The shared read for this generation and features key, started when there is none. */
+function readChannels(key: string) {
+  if (inflight && inflight.gen === generation && inflight.key === key) return inflight;
+  const run = { gen: generation, key, promise: listChannels() };
+  inflight = run;
+  run.promise.then((l) => {
+    if (run.gen === generation) cached = { key: run.key, list: l };
+  }, () => {}).finally(() => {
+    if (inflight === run) inflight = null;
+  });
+  return run;
+}
 
 /** The channels as the conversations need them (names for the source marks); [] on a hub without them. */
 export function useChannels(): Channel[] {
   const has = useStore((s) => s.features.includes("channels"));
   const key = useStore((s) => s.features.join(","));
+  // The third argument is the server snapshot: renderToString (used by the bubble tests) needs one.
+  const gen = useSyncExternalStore(subscribeGeneration, currentGeneration, currentGeneration);
   const [list, setList] = useState<Channel[]>(() => (cached && cached.key === key ? cached.list : []));
   useEffect(() => {
     if (!has) return;
@@ -251,17 +277,18 @@ export function useChannels(): Channel[] {
       return;
     }
     let live = true;
-    inflight ??= listChannels().finally(() => (inflight = null));
-    inflight.then((l) => {
-      cached = { key, list: l };
+    readChannels(key).promise.then((l) => {
       if (live) setList(l);
     }, () => {});
     return () => void (live = false);
-  }, [has, key]);
+  }, [has, key, gen]);
   return has ? list : [];
 }
 
-/** Forget the list (the settings page changed something). */
+/** Forget the list (the settings page changed something): drop the read in flight and have mounted hooks read again. */
 export function forgetChannels() {
   cached = null;
+  inflight = null;
+  generation++;
+  for (const on of listeners) on();
 }

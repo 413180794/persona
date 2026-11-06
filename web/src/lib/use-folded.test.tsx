@@ -49,3 +49,44 @@ describe("folding one block", () => {
     expect([state("jarvis"), state("recent"), state("space:mac/a")]).toEqual(["folded", "open", "open"]);
   });
 });
+
+// A mounted row whose key changes (a re-grouping, a renamed space) takes the new key's fold, not the old one's.
+function Probe({ k, initial = false, holds = false }: { k: string; initial?: boolean; holds?: boolean }) {
+  const [folded, toggle] = useFolded(k, initial, { holds });
+  return <button data-k="probe" onClick={toggle}>{folded ? "folded" : "open"}</button>;
+}
+
+describe("changing the key", () => {
+  const probe = () => host.querySelector<HTMLButtonElement>('[data-k="probe"]')!;
+
+  it("reads the new key's stored fold and toggles it under the new key", () => {
+    localStorage.setItem("fold:a", "1");
+    localStorage.setItem("fold:b", "0");
+    act(() => root.render(<Probe k="a" />));
+    expect(probe().textContent).toBe("folded");
+    act(() => root.render(<Probe k="b" />));
+    expect(probe().textContent).toBe("open");
+    act(() => probe().click());
+    expect(probe().textContent).toBe("folded");
+    expect(localStorage.getItem("fold:b")).toBe("1");
+    expect(localStorage.getItem("fold:a")).toBe("1");
+  });
+
+  it("takes the new key's default when nothing is stored for it", () => {
+    act(() => root.render(<Probe k="a" initial={false} />));
+    expect(probe().textContent).toBe("open");
+    act(() => root.render(<Probe k="b" initial={true} />));
+    expect(probe().textContent).toBe("folded");
+  });
+
+  it("does not carry the old key's held-open state over", () => {
+    localStorage.setItem("fold:a", "1");
+    localStorage.setItem("fold:b", "1");
+    act(() => root.render(<Probe k="a" holds />));
+    expect(probe().textContent).toBe("open");
+    act(() => root.render(<Probe k="a" holds={false} />));
+    expect(probe().textContent).toBe("open");
+    act(() => root.render(<Probe k="b" holds={false} />));
+    expect(probe().textContent).toBe("folded");
+  });
+});

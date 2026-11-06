@@ -1,6 +1,6 @@
 // Each online machine's terminal panes (`GET /machines/{mid}/panes`): read when the consumer mounts, every few seconds
 // while the page is in front, and on demand. The "Terminal" page and the sidebar's terminal tree (when turned on) read them.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, enc, errorText } from "./api";
 import type { PanesResponse } from "./terminals";
 import type { Machine } from "./types";
@@ -20,35 +20,58 @@ export function usePanes(machines: Machine[], enabled = true) {
   const online = enabled ? machines.filter((m) => m.online).map((m) => m.id) : [];
   const key = online.join("\n");
 
+  // Per machine: the number of the last read started, and of the last reply shown. Reads overlap (the timer, refresh,
+  // reload), so a reply older than the one shown is dropped instead of putting an out-of-date list (or error) back.
+  const started = useRef(new Map<string, number>());
+  const shown = useRef(new Map<string, number>());
+  // The busy read that clears `busy`: only the last one started does, and a new key or unmount drops it.
+  const busyToken = useRef(0);
+
   const load = useCallback(async (ids: string[]) => {
     await Promise.all(
-      ids.map((mid) =>
-        api<PanesResponse>(`/machines/${enc(mid)}/panes`).then(
-          (data) => setListing((l) => ({ ...l, [mid]: { data } })),
+      ids.map((mid) => {
+        const n = (started.current.get(mid) ?? 0) + 1;
+        started.current.set(mid, n);
+        const fresh = () => {
+          if (n < (shown.current.get(mid) ?? 0)) return false;
+          shown.current.set(mid, n);
+          return true;
+        };
+        return api<PanesResponse>(`/machines/${enc(mid)}/panes`).then(
+          (data) => fresh() && setListing((l) => ({ ...l, [mid]: { data } })),
           // a failed read keeps what was seen: the list does not blink out
-          (e) => setListing((l) => ({ ...l, [mid]: { data: l[mid]?.data, error: errorText(e) } })),
-        ),
-      ),
+          (e) => fresh() && setListing((l) => ({ ...l, [mid]: { data: l[mid]?.data, error: errorText(e) } })),
+        );
+      }),
     );
   }, []);
+
+  const loadBusy = useCallback(
+    async (ids: string[]) => {
+      const token = ++busyToken.current;
+      setBusy(true);
+      try {
+        await load(ids);
+      } finally {
+        if (busyToken.current === token) setBusy(false);
+      }
+    },
+    [load],
+  );
 
   useEffect(() => {
     const ids = key ? key.split("\n") : [];
     if (!ids.length) return;
-    let dead = false;
-    setBusy(true);
-    void load(ids).finally(() => !dead && setBusy(false));
+    void loadBusy(ids);
     const t = setInterval(() => document.visibilityState === "visible" && void load(ids), REFRESH_MS);
     return () => {
-      dead = true;
       clearInterval(t);
+      // the read still out belongs to the old key: it no longer holds `busy` (with no machine left, nothing would clear it)
+      busyToken.current++;
+      setBusy(false);
     };
-  }, [key, load]);
+  }, [key, load, loadBusy]);
 
-  const refresh = useCallback(async () => {
-    setBusy(true);
-    await load(key ? key.split("\n") : []);
-    setBusy(false);
-  }, [key, load]);
+  const refresh = useCallback(() => loadBusy(key ? key.split("\n") : []), [key, loadBusy]);
   return { listing, busy, refresh, reload: load };
 }

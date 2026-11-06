@@ -154,11 +154,16 @@ export function useUsageWindows(): UsageAccount[] {
   const [accounts, setAccounts] = useState<UsageAccount[]>([]);
   useEffect(() => {
     let dead = false;
+    // The tab coming back to the front asks again while the poll's request may still be out; only the newest
+    // request's reply (or failure) counts, so an older one landing late cannot overwrite or blank the bars.
+    let seq = 0;
     const load = () => {
       if (document.visibilityState !== "visible") return;
+      const mine = ++seq;
+      const current = () => !dead && mine === seq;
       api<{ accounts?: UsageAccount[] }>("/usage/windows")
-        .then((r) => !dead && setAccounts(r.accounts ?? []))
-        .catch(() => !dead && setAccounts([])); // an older hub has no such route: nothing to show
+        .then((r) => current() && setAccounts(r.accounts ?? []))
+        .catch(() => current() && setAccounts([])); // an older hub has no such route: nothing to show
     };
     load();
     const t = setInterval(load, POLL_MS);
