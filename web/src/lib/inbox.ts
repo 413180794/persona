@@ -17,6 +17,7 @@ import { larkPath } from "./lark-accounts";
 import { baseName } from "./format";
 import type { Route } from "./router";
 import { isResumed } from "./reconnect";
+import { sameValue } from "./stable-lines";
 import { onHubEvent } from "./store";
 import type { AssistantInfo, Interaction, Session } from "./types";
 import { toast } from "../ui/atoms";
@@ -818,6 +819,20 @@ function start() {
   void reloadInbox();
 }
 
+/** `next` with every item that reads the same as the one of that id we have kept as our object, and our array when
+ *  nothing changed: a re-read is fresh JSON, and new objects would render every memoized row again on each push. */
+export function keepSameItems(prev: InboxItem[], next: InboxItem[]): InboxItem[] {
+  const before = new Map(prev.map((it) => [it.id, it]));
+  let all = prev.length === next.length;
+  const out = next.map((it, i) => {
+    const old = before.get(it.id);
+    const kept = old && sameValue(old, it) ? old : it;
+    if (kept !== prev[i]) all = false;
+    return kept;
+  });
+  return all ? prev : out;
+}
+
 /** Pulls the list; a request asked for while one is out runs once more after it (bursts of pushes collapse). */
 export function reloadInbox(): Promise<void> {
   if (inFlight) {
@@ -830,7 +845,7 @@ export function reloadInbox(): Promise<void> {
       do {
         again = false;
         const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox?sources=all");
-        set({ items: r.items ?? [], triage: r.triage ?? null, loaded: true, error: "" });
+        set({ items: keepSameItems(state.items, r.items ?? []), triage: r.triage ?? null, loaded: true, error: "" });
       } while (again);
     } catch (e) {
       set({ error: errorText(e), loaded: true });
@@ -847,7 +862,7 @@ export async function refreshInbox(): Promise<void> {
   set({ loading: true });
   try {
     const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox/refresh?sources=all", { method: "POST" });
-    set({ items: r.items ?? [], triage: r.triage ?? null, loaded: true, error: "" });
+    set({ items: keepSameItems(state.items, r.items ?? []), triage: r.triage ?? null, loaded: true, error: "" });
   } catch (e) {
     toast(t("lib-inbox.refresh_failed", { error: errorText(e) }), "error");
   } finally {

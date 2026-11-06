@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -104,5 +105,35 @@ func TestSetGoogleProxyValidates(t *testing.T) {
 	}
 	if err := s.SetGoogleProxy(""); err != nil || s.googleProxy != nil {
 		t.Fatalf("empty proxy: %v", err)
+	}
+}
+
+// A proxy that sends the server's first bytes in the same packet as its 200 must not lose them.
+func TestDialTCPKeepsBytesAfterConnectReply(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		if _, err := http.ReadRequest(bufio.NewReader(c)); err != nil {
+			return
+		}
+		io.WriteString(c, "HTTP/1.1 200 Connection established\r\n\r\n* OK IMAP4rev1 ready\r\n")
+	}()
+	u, _ := url.Parse("http://" + ln.Addr().String())
+	c, err := dialTCP(context.Background(), u, "imap.example.com:993")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	line, err := bufio.NewReader(c).ReadString(10)
+	if err != nil || line != "* OK IMAP4rev1 ready\r\n" {
+		t.Fatalf("greeting = %q, %v", line, err)
 	}
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The inbox list on a busy hub: a sessions or machines push that leaves the waiting agents as they were renders no row
-// again (ItemRow and AgentRow are memoized). An inbox push parses fresh items, so every item row renders again, but the
-// agent rows do not.
+// again (ItemRow and AgentRow are memoized). An inbox push re-reads the list as fresh JSON; items that read the same keep
+// their objects (#5400), so only the item that changed renders again, and no agent row.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,11 +100,22 @@ describe("收件箱：长列表少渲染", () => {
     expect(host.textContent).toContain("Mac Studio");
   });
 
-  it("an inbox push renders the item rows again but no agent row", async () => {
+  it("an inbox push renders only the item that changed, and no agent row", async () => {
     hub.items = [hub.items[0], { ...(hub.items[1] as object), title: "发布（改）" }, hub.items[2]];
     await act(() => reloadInbox());
     await flush();
-    expect([...renders.keys()].sort()).toEqual(["a", "b", "c"]);
+    expect([...renders.keys()].sort()).toEqual(["b"]);
     expect(host.textContent).toContain("发布（改）");
+  });
+
+  it("an inbox push that changes nothing renders no row, and a new item only itself", async () => {
+    await act(() => reloadInbox());
+    await flush();
+    expect([...renders.keys()]).toEqual([]);
+    hub.items = [item("d", "新邮件"), ...hub.items];
+    await act(() => reloadInbox());
+    await flush();
+    expect([...renders.keys()]).toEqual(["d"]);
+    expect(host.textContent).toContain("新邮件");
   });
 });

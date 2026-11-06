@@ -64,8 +64,9 @@ func dialTCP(ctx context.Context, proxy *url.URL, addr string) (net.Conn, error)
 		c.Close()
 		return nil, fmt.Errorf("proxy %s: %w", proxy.Host, err)
 	}
-	// Read the reply byte by byte up to the blank line, so nothing of the tunnelled stream is buffered away.
-	br := bufio.NewReaderSize(c, 1)
+	// bufio reads ahead (16 bytes at the least, whatever size is asked): bytes of the tunnelled stream that came in
+	// with the reply stay in br, so the returned conn reads them first.
+	br := bufio.NewReader(c)
 	resp, err := http.ReadResponse(br, &http.Request{Method: http.MethodConnect})
 	if err != nil {
 		c.Close()
@@ -77,8 +78,19 @@ func dialTCP(ctx context.Context, proxy *url.URL, addr string) (net.Conn, error)
 		return nil, fmt.Errorf("proxy %s: CONNECT %s: %s", proxy.Host, addr, resp.Status)
 	}
 	c.SetDeadline(time.Time{})
+	if br.Buffered() > 0 {
+		return &bufferedConn{Conn: c, r: br}, nil
+	}
 	return c, nil
 }
+
+// bufferedConn is a net.Conn whose reads go through r, a reader on the Conn holding bytes already read off it.
+type bufferedConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (b *bufferedConn) Read(p []byte) (int, error) { return b.r.Read(p) }
 
 // dialTLS connects and completes a TLS handshake for serverName.
 func dialTLS(ctx context.Context, proxy *url.URL, addr, serverName string) (net.Conn, error) {
